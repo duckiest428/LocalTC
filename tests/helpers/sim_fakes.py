@@ -69,16 +69,26 @@ def _reverse(mapping: dict[int, str]) -> dict[str, int]:
     return {v: k for k, v in mapping.items()}
 
 
-def facility_message(request_id: int, item: fac.FacilityItem, index: int, values: dict, *, bool8: bool = False) -> bytes:
+DOCUMENTED_IDS = {RecvId.FACILITY_DATA: 29, RecvId.FACILITY_DATA_END: 30}  # what the SDK docs say
+
+
+def _renumber(raw: bytes, recv_id: RecvId, documented: bool) -> bytes:
+    if not documented:
+        return raw
+    return raw[:8] + struct.pack("<I", DOCUMENTED_IDS[recv_id]) + raw[12:]
+
+
+def facility_message(request_id: int, item: fac.FacilityItem, index: int, values: dict, *, bool8: bool = False,
+                     documented_ids: bool = False) -> bytes:
     header = RecvFacilityData(UserRequestId=request_id, UniqueRequestId=index + 1, Type=item.type_hint,
                               IsListItem=int(item is not fac.AIRPORT), ItemIndex=index)
     raw = build_message(header, RecvId.FACILITY_DATA, fac.pack(item, values))
     if bool8:  # the 1-byte bool layout: drop 3 bytes of IsListItem and shrink dwSize
         raw = struct.pack("<I", len(raw) - 3) + raw[4:29] + raw[32:]
-    return raw
+    return _renumber(raw, RecvId.FACILITY_DATA, documented_ids)
 
 
-def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False) -> list[bytes]:
+def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False, documented_ids: bool = False) -> list[bytes]:
     """Serialize an Airport the way the Facilities API would deliver it."""
     cos_lat = math.cos(math.radians(airport.lat))
 
@@ -90,37 +100,38 @@ def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False) 
         _reverse(fac.TAXI_POINT_KINDS), _reverse(fac.TAXI_PATH_KINDS), _reverse(fac.PARKING_KINDS))
     msgs = [facility_message(request_id, fac.AIRPORT, 0, {
         "LATITUDE": airport.lat, "LONGITUDE": airport.lon, "ALTITUDE": airport.elev_ft / 3.28084,
-        "MAGVAR": airport.magvar, "NAME64": airport.name, "ICAO": airport.icao, "REGION": airport.region}, bool8=bool8)]
+        "MAGVAR": airport.magvar, "NAME64": airport.name, "ICAO": airport.icao, "REGION": airport.region}, bool8=bool8, documented_ids=documented_ids)]
     for i, r in enumerate(airport.runways):
         msgs.append(facility_message(request_id, fac.RUNWAY, i, {
             "LATITUDE": r.lat, "LONGITUDE": r.lon, "ALTITUDE": r.elev_ft / 3.28084, "HEADING": r.heading_true,
             "LENGTH": r.length_m, "WIDTH": r.width_m, "PATTERN_ALTITUDE": 300.0, "SURFACE": r.surface,
             "PRIMARY_NUMBER": r.primary.number, "PRIMARY_DESIGNATOR": designators[r.primary.designator],
             "SECONDARY_NUMBER": r.secondary.number, "SECONDARY_DESIGNATOR": designators[r.secondary.designator],
-            "PRIMARY_ILS_ICAO": r.primary.ils_ident, "SECONDARY_ILS_ICAO": r.secondary.ils_ident}, bool8=bool8))
+            "PRIMARY_ILS_ICAO": r.primary.ils_ident, "SECONDARY_ILS_ICAO": r.secondary.ils_ident}, bool8=bool8, documented_ids=documented_ids))
     for i, f in enumerate(airport.frequencies):
         msgs.append(facility_message(request_id, fac.FREQUENCY, i, {
-            "TYPE": freq_kinds[f.kind], "FREQUENCY": round(f.mhz * 1e6), "NAME": f.name}, bool8=bool8))
+            "TYPE": freq_kinds[f.kind], "FREQUENCY": round(f.mhz * 1e6), "NAME": f.name}, bool8=bool8, documented_ids=documented_ids))
     for p in airport.taxi_points:
         x, z = bias(p.lat, p.lon)
         msgs.append(facility_message(request_id, fac.TAXI_POINT, p.index, {
-            "TYPE": point_kinds[p.kind], "ORIENTATION": 0, "BIAS_X": x, "BIAS_Z": z}, bool8=bool8))
+            "TYPE": point_kinds[p.kind], "ORIENTATION": 0, "BIAS_X": x, "BIAS_Z": z}, bool8=bool8, documented_ids=documented_ids))
     for spot in airport.parking:
         x, z = bias(spot.lat, spot.lon)
         msgs.append(facility_message(request_id, fac.TAXI_PARKING, spot.index, {
             "TYPE": parking_kinds[spot.kind], "TAXI_POINT_TYPE": 0, "NAME": 1, "SUFFIX": 0,
             "NUMBER": int(spot.name.split()[-1]), "HEADING": spot.heading_true, "RADIUS": spot.radius_m,
-            "BIAS_X": x, "BIAS_Z": z}, bool8=bool8))
+            "BIAS_X": x, "BIAS_Z": z}, bool8=bool8, documented_ids=documented_ids))
     names = sorted({p.name for p in airport.taxi_paths if p.name})
     for i, p in enumerate(airport.taxi_paths):
         digits = "".join(c for c in p.runway if c.isdigit())
         msgs.append(facility_message(request_id, fac.TAXI_PATH, i, {
             "TYPE": path_kinds[p.kind], "WIDTH": p.width_m, "RUNWAY_NUMBER": int(digits or 0),
             "RUNWAY_DESIGNATOR": designators[p.runway[len(digits):]], "START": p.start, "END": p.end,
-            "NAME_INDEX": names.index(p.name) if p.name else 0xFFFF}, bool8=bool8))
+            "NAME_INDEX": names.index(p.name) if p.name else 0xFFFF}, bool8=bool8, documented_ids=documented_ids))
     for i, name in enumerate(names):
-        msgs.append(facility_message(request_id, fac.TAXI_NAME, i, {"NAME": name}, bool8=bool8))
-    msgs.append(build_message(RecvFacilityDataEnd(RequestId=request_id), RecvId.FACILITY_DATA_END))
+        msgs.append(facility_message(request_id, fac.TAXI_NAME, i, {"NAME": name}, bool8=bool8, documented_ids=documented_ids))
+    msgs.append(_renumber(build_message(RecvFacilityDataEnd(RequestId=request_id), RecvId.FACILITY_DATA_END),
+                          RecvId.FACILITY_DATA_END, documented_ids))
     return msgs
 
 

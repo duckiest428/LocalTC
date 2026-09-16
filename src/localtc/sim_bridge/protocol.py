@@ -65,9 +65,16 @@ class RecvId(enum.IntEnum):
     SIMOBJECT_DATA = 8
     SIMOBJECT_DATA_BYTYPE = 9
     AIRPORT_LIST = 18
-    FACILITY_DATA = 29
-    FACILITY_DATA_END = 30
-    FACILITY_MINIMAL_LIST = 31
+    # The docs number these 29/30/31, but MSFS 2024 was observed sending FACILITY_DATA_END as 29
+    # (so FACILITY_DATA = 28). parse_message() tells them apart by layout; see FACILITY_IDS.
+    FACILITY_DATA = 28
+    FACILITY_DATA_END = 29
+    FACILITY_MINIMAL_LIST = 30
+
+
+# Any of these IDs may carry a facility message, depending on which numbering the sim uses.
+FACILITY_IDS = {28, 29, 30, 31}
+FACILITY_DATA_END_SIZE = 16  # SIMCONNECT_RECV + RequestId
 
 
 class FacilityListType(enum.IntEnum):
@@ -316,8 +323,22 @@ def parse_message(buf: bytes) -> Message | None:
             out_of=m.dwoutof,
             payload=bytes(buf[SIMOBJECT_DATA_OFFSET:end]),
         )
-    if rid == RecvId.FACILITY_DATA:
-        m = _read(RecvFacilityData, buf)
+    if rid in FACILITY_IDS:
+        return _parse_facility(buf)
+    if rid == RecvId.AIRPORT_LIST:
+        return _parse_airport_list(buf)
+    return None
+
+
+def _parse_facility(buf: bytes) -> "FacilityData | FacilityDataEnd | None":
+    """FACILITY_DATA vs FACILITY_DATA_END by layout, not ID (the IDs differ between docs and sim)."""
+    size = _message_end(_read(Recv, buf).dwSize, buf)
+    if size == FACILITY_DATA_END_SIZE:
+        return FacilityDataEnd(request_id=_read(RecvFacilityDataEnd, buf).RequestId)
+    if size >= FACILITY_DATA_OFFSET_BOOL8:
+        m = _read(RecvFacilityData, buf) if size >= FACILITY_DATA_OFFSET else None
+        if m is None:
+            return None
         end = _message_end(m.dwSize, buf)
         index8, size8 = struct.unpack_from("<II", buf, FACILITY_DATA_OFFSET_BOOL8 - 8)
         return FacilityData(
@@ -332,11 +353,7 @@ def parse_message(buf: bytes) -> Message | None:
             item_index_bool8=index8,
             list_size_bool8=size8,
         )
-    if rid == RecvId.FACILITY_DATA_END:
-        return FacilityDataEnd(request_id=_read(RecvFacilityDataEnd, buf).RequestId)
-    if rid == RecvId.AIRPORT_LIST:
-        return _parse_airport_list(buf)
-    return None
+    return None  # FACILITY_MINIMAL_LIST and anything else we don't use
 
 
 def _parse_airport_list(buf: bytes) -> AirportList:

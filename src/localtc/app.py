@@ -187,8 +187,9 @@ async def debug_airport(
 
     def tap(buf: bytes) -> None:
         size, _, msg_id = struct.unpack_from("<III", buf)
-        type_field = struct.unpack_from("<I", buf, 24)[0] if msg_id == 29 and len(buf) >= 28 else None
-        counts[(msg_id, type_field, size - 40 if msg_id == 29 else size)] += 1
+        facility_data = msg_id in (28, 29, 30, 31) and size > 16
+        type_field = struct.unpack_from("<I", buf, 24)[0] if facility_data and len(buf) >= 28 else None
+        counts[(msg_id, type_field, size - 40 if facility_data else size)] += 1
         if raw_file:
             raw_file.write(struct.pack("<I", len(buf)) + buf)
 

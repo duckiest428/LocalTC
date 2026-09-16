@@ -36,6 +36,7 @@ from localtc.sim_bridge.protocol import (
     PAUSE_FLAGS,
     AirportList,
     DataType,
+    FACILITY_IDS,
     EventInfo,
     ExceptionInfo,
     FacilityData,
@@ -44,6 +45,7 @@ from localtc.sim_bridge.protocol import (
     ObjectData,
     OpenInfo,
     Period,
+    ProtocolError,
     QuitInfo,
     Recv,
     RecvId,
@@ -58,7 +60,7 @@ DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_FACILITY_AIRPORT = 1, 2, 3, 10
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST = 1, 2, 3, 4
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
-FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, RecvId.FACILITY_DATA, RecvId.FACILITY_DATA_END, RecvId.FACILITY_MINIMAL_LIST}
+FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
 SYSTEM_EVENTS = {
@@ -276,7 +278,12 @@ class SimConnectSource:
         """Handle one message; returns False when the sim has quit."""
         if self._raw_tap is not None and Recv.from_buffer_copy(buf[:12]).dwID in FACILITY_MESSAGES:
             self._raw_tap(buf)
-        msg = parse_message(buf)
+        try:
+            msg = parse_message(buf)
+        except ProtocolError as exc:
+            # One malformed or unexpected message must not drop the whole connection.
+            log.warning("Skipping unparseable SimConnect message: %s", exc)
+            return True
         t = self._clock.now()
         if isinstance(msg, OpenInfo):
             self._on_open(msg)

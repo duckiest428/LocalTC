@@ -38,10 +38,11 @@ def assemble(messages):
     return assembler
 
 
+@pytest.mark.parametrize("documented_ids", [False, True], ids=["sim-ids-28-29", "doc-ids-29-30"])
 @pytest.mark.parametrize("bool8", [False, True], ids=["BOOL-header", "bool-header"])
-def test_assembler_round_trip(bool8):
+def test_assembler_round_trip(bool8, documented_ids):
     source = kpae()
-    assembler = assemble(airport_messages(source, 101, bool8=bool8))
+    assembler = assemble(airport_messages(source, 101, bool8=bool8, documented_ids=documented_ids))
     airport = assembler.build()
     assert not assembler.unclassified
     assert set(assembler.offsets) == {37 if bool8 else 40}
@@ -144,7 +145,33 @@ def test_debug_airport_report(tmp_path, capsys):
     fake = FakeSimConnect(airports=(kpae(),))
     report = asyncio.run(debug_airport(cfg, "KPAE", raw_path=raw, timeout=3, dll_factory=lambda: fake))
     assert report.airport is not None and report.airport.icao == "KPAE"
-    assert (29, 0, 108) in report.messages  # airport item: id 29, type 0, 108 data bytes
+    assert (28, 0, 108) in report.messages  # airport item: id 28, type 0, 108 data bytes
     assert raw.stat().st_size > 0
     text = format_airport(report.airport)
     assert "16R/34L" in text and "tower" in text and "A1" in text and "(2 hold-short)" not in text
+
+
+def test_facility_data_end_with_the_id_msfs_2024_actually_sends():
+    """Regression: MSFS 2024 sent a 16-byte FACILITY_DATA_END with ID 29, which crashed the bridge."""
+    import struct as _struct
+
+    raw = _struct.pack("<IIII", 16, 1, 29, 101)
+    msg = parse_message(raw)
+    assert isinstance(msg, FacilityDataEnd) and msg.request_id == 101
+
+
+def test_unparseable_message_does_not_drop_the_connection():
+    import struct as _struct
+
+    fake = FakeSimConnect(airports=(kpae(),))
+
+    async def main():
+        source = SimConnectSource(FAST, dll_factory=lambda: fake)
+        await asyncio.wait_for(source.start(), 3)
+        fake.push(_struct.pack("<III", 12, 1, 29))  # truncated facility message
+        await source.send(RequestAirportData(icao="KPAE"))
+        airports = await _airports(source, 1)
+        await source.stop()
+        return airports
+
+    assert [a.icao for a in asyncio.run(main())] == ["KPAE"]

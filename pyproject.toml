@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "localtc"
+version = "0.1.0"
+description = "Free, offline-capable ATC for Microsoft Flight Simulator 2024"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["msgspec>=0.18"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "import-linter>=2.0"]
+
+[project.scripts]
+localtc = "localtc.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/localtc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+markers = ["windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)"]
+
+# Architecture rules. Run with `lint-imports`; tests/test_architecture.py checks the same rules.
+[tool.importlinter]
+root_package = "localtc"
+
+[[tool.importlinter.contracts]]
+name = "sim_api depends on nothing else in LocalTC"
+type = "forbidden"
+source_modules = ["localtc.sim_api"]
+forbidden_modules = [
+    "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config",
+    "localtc.dsp", "localtc.recorder", "localtc.replay", "localtc.sim_bridge",
+    "localtc.stt", "localtc.tts",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only app wiring may import the Windows-only SimConnect bridge"
+type = "forbidden"
+source_modules = [
+    "localtc.atc_core", "localtc.bus", "localtc.config", "localtc.dsp", "localtc.recorder",
+    "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts",
+]
+forbidden_modules = ["localtc.sim_bridge"]

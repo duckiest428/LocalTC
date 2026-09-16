@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.import_linter_cache/
+
+# Local sim recordings (committed test fixtures live in tests/fixtures/)
+/recordings/
+
+# Never commit the SimConnect DLL; it comes from the MSFS 2024 SDK
+SimConnect.dll

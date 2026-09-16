@@ -1,0 +1,27 @@
+# LocalTC configuration.
+# Override the source without editing this file: LOCALTC_SOURCE=live|replay
+# Use a different config file: LOCALTC_CONFIG=path/to/file.toml
+
+[source]
+kind = "replay"               # "live" (Windows + MSFS 2024) or "replay" (any OS)
+
+[live]
+dll_path = ""                 # blank = auto-detect (LOCALTC_SIMCONNECT_DLL, MSFS2024_SDK, MSFS_SDK, ./SimConnect.dll)
+app_name = "LocalTC"
+ownship_hz = 4.0              # own-aircraft state rate
+traffic_interval_s = 3.0      # nearby-traffic scan interval (0 disables)
+traffic_radius_m = 50000      # nearby-traffic scan radius
+retry_max_s = 15.0            # max back-off between connection attempts
+connect_timeout_s = 0.0       # 0 = wait for the sim indefinitely
+
+[replay]
+path = "tests/fixtures/pattern_short"
+speed = 1.0                   # 2.0 = twice as fast, 0 = as fast as possible
+start_at = 0.0                # seconds into the recording
+loop = false
+
+[recorder]
+enabled = true
+dir = "recordings"
+flush_interval_s = 1.0
+compress = false              # gzip session.jsonl when the session ends

@@ -60,7 +60,8 @@ Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) o
    1. `live.dll_path` in the config
    2. `LOCALTC_SIMCONNECT_DLL`
    3. `%MSFS2024_SDK%\SimConnect SDK\lib\SimConnect.dll` (or `%MSFS_SDK%`)
-   4. `.\SimConnect.dll`
+   4. `C:\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll` (the installer's default location)
+   5. `.\SimConnect.dll`
 2. **Connection.** The default local named pipe needs no setup. If connecting fails, check `SimConnect.xml`:
    - Steam: `%APPDATA%\Microsoft Flight Simulator 2024\`
    - MS Store: `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\`

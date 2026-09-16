@@ -19,7 +19,7 @@ class SimConnectUnavailable(SourceUnavailable):
 
 
 def find_dll(explicit: str | None = None) -> Path:
-    """Locate SimConnect.dll: explicit path, $LOCALTC_SIMCONNECT_DLL, the SDK install, then ./."""
+    """Locate SimConnect.dll: explicit path, $LOCALTC_SIMCONNECT_DLL, SDK env vars, the default SDK folder, then ./."""
     if sys.platform != "win32":
         raise SimConnectUnavailable(
             "The live SimConnect bridge only runs on Windows. "
@@ -33,6 +33,9 @@ def find_dll(explicit: str | None = None) -> Path:
     for var in ("MSFS2024_SDK", "MSFS_SDK"):
         if sdk := os.environ.get(var):
             candidates.append(Path(sdk) / "SimConnect SDK" / "lib" / "SimConnect.dll")
+    # The SDK installer's default location; it doesn't always set the variables above.
+    system_drive = os.environ.get("SystemDrive", "C:") + "\\"
+    candidates.append(Path(system_drive) / "MSFS 2024 SDK" / "SimConnect SDK" / "lib" / "SimConnect.dll")
     candidates.append(Path.cwd() / "SimConnect.dll")
     for candidate in candidates:
         if candidate.is_file():

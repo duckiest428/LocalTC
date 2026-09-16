@@ -1,0 +1,60 @@
+# Shared instructions and the fragments used to build corrections ("negative, ...")
+# and read-back requests. {slot} names are typed in phraseology/slots.py.
+
+[[template]]
+id = "common.contact"
+controller = "any"
+text = ["{callsign}, contact {station} {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "common.say_again"
+controller = "any"
+text = ["{callsign}, say again."]
+
+[[template]]
+id = "common.station_say_again"
+controller = "any"
+text = ["Station calling {station}, say again your callsign."]
+
+[[template]]
+id = "common.readback_correct"
+controller = "any"
+text = ["{callsign}, readback correct."]
+
+[[template]]
+id = "common.roger"
+controller = "any"
+text = ["{callsign}, roger."]
+
+[[template]]
+id = "common.negative"
+controller = "any"
+text = ["{callsign}, negative, {correction}."]
+
+[[template]]
+id = "common.read_back"
+controller = "any"
+text = ["{callsign}, read back {missing}."]
+
+[[template]]
+id = "common.emergency"
+controller = "any"
+text = ["{callsign}, roger, say nature of emergency, fuel remaining and souls on board."]
+
+[fragments]
+altitude = "maintain {altitude}"
+cruise = "expect {cruise}"
+frequency = "frequency {frequency}"
+squawk = "squawk {squawk}"
+runway = "runway {runway}"
+hold_short = "hold short runway {hold_short}"
+heading = "fly heading {heading}"
+taxi_route = "taxi via {taxi_route}"
+approach = "cleared {approach} approach"
+destination = "cleared to {destination}"
+cleared_for_takeoff = "cleared for takeoff"
+line_up_and_wait = "line up and wait"
+cleared_to_land = "cleared to land"
+hold_position = "hold position"

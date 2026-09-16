@@ -1,0 +1,9 @@
+[     0.0] PHASE     - -> PARKED (initial state)
+[    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
+[    92.0] ALERT     taxi_without_clearance: moving without a taxi clearance
+[    92.0] ATC       Paine Ground 121.8: N172LT, hold position, taxi clearance required.
+[   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
+[   391.0] ALERT     runway_incursion: entered a runway without clearance
+[   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
+[   426.0] ALERT     takeoff_without_clearance: takeoff roll without a takeoff clearance
+[   439.0] PHASE     TAKEOFF -> DEPARTURE (airborne)

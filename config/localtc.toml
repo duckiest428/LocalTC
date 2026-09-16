@@ -20,6 +20,22 @@ speed = 1.0                   # 2.0 = twice as fast, 0 = as fast as possible
 start_at = 0.0                # seconds into the recording
 loop = false
 
+[flight]
+rules = "IFR"
+destination = ""              # ICAO, e.g. "KBFI"
+cruise_ft = 0                 # planned cruise altitude; 0 = unknown
+callsign = ""                 # blank = the aircraft's ATC ID from the sim
+
+[atc]
+enabled = true
+seed = 0                      # 0 = derived from callsign + date (squawk, ATIS letter, phrasing variants)
+center_name = "Seattle"       # used when no airport lists a CENTER frequency
+center_mhz = 125.1
+strict_callsign = false       # true: a readback without the callsign is incomplete
+airport_dirs = []             # extra folders of <ICAO>.json airport files
+
+[atc.phase]                   # PhaseThresholds overrides, e.g. taxi_start_kt = 4
+
 [recorder]
 enabled = true
 dir = "recordings"

@@ -1,0 +1,13 @@
+[[template]]
+id = "approach.descend"
+controller = "approach"
+text = ["{callsign}, {station}, descend and maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Descend and maintain {altitude}, expect {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared"
+controller = "approach"
+text = ["{callsign}, cleared {approach} approach, contact {station} {frequency}."]
+readback = { required = ["approach", "frequency"] }
+pilot_readback = "Cleared {approach} approach, {station} {frequency}, {callsign_short}."

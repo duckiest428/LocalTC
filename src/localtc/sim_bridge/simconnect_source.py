@@ -8,6 +8,7 @@ thread reconnects with back-off and reports ``ConnectionStatus`` events.
 
 import asyncio
 import logging
+import queue
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
@@ -16,26 +17,36 @@ from typing import Protocol
 
 from localtc.config import LiveConfig
 from localtc.sim_api import (
+    AirportData,
     BusEvent,
     ConnectionStatus,
     SessionClock,
     SessionInfo,
+    RequestAirportData,
+    SimCommand,
     SimLifecycle,
     TrafficSnapshot,
     TrafficTarget,
 )
 from localtc.sim_bridge import definitions as defs
+from localtc.sim_bridge import facilities
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
     OBJECT_ID_USER,
     PAUSE_FLAGS,
+    AirportList,
     DataType,
     EventInfo,
     ExceptionInfo,
+    FacilityData,
+    FacilityDataEnd,
+    FacilityListType,
     ObjectData,
     OpenInfo,
     Period,
     QuitInfo,
+    Recv,
+    RecvId,
     RequestFlag,
     SimObjectType,
     parse_message,
@@ -43,8 +54,11 @@ from localtc.sim_bridge.protocol import (
 
 log = logging.getLogger(__name__)
 
-DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC = 1, 2, 3
-REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC = 1, 2, 3
+DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_FACILITY_AIRPORT = 1, 2, 3, 10
+REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST = 1, 2, 3, 4
+FIRST_FACILITY_REQUEST = 100
+FACILITY_TIMEOUT_S = 60.0
+FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, RecvId.FACILITY_DATA, RecvId.FACILITY_DATA_END, RecvId.FACILITY_MINIMAL_LIST}
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
 SYSTEM_EVENTS = {
@@ -81,6 +95,9 @@ class SimConnectApi(Protocol):
         self, handle: int, request_id: int, define_id: int, radius_m: int, object_type: SimObjectType
     ) -> None: ...
     def subscribe_to_system_event(self, handle: int, event_id: int, name: str) -> None: ...
+    def add_to_facility_definition(self, handle: int, define_id: int, field: str) -> None: ...
+    def request_facility_data(self, handle: int, define_id: int, request_id: int, icao: str, region: str = "") -> None: ...
+    def request_facilities_list(self, handle: int, list_type: FacilityListType, request_id: int) -> None: ...
     def get_next_dispatch(self, handle: int) -> bytes | None: ...
 
 
@@ -91,7 +108,9 @@ class SimConnectSource:
         *,
         dll_factory: Callable[[], SimConnectApi] | None = None,
         clock: SessionClock | None = None,
+        raw_tap: Callable[[bytes], None] | None = None,
     ) -> None:
+        """``raw_tap`` receives every raw facility message (for ``localtc debug``)."""
         self._cfg = cfg or LiveConfig()
         self._dll_factory = dll_factory or (lambda: SimConnectDll(find_dll(self._cfg.dll_path or None)))
         self._clock = clock or SessionClock()
@@ -105,6 +124,15 @@ class SimConnectSource:
         self._user_object_id: int | None = None
         self._traffic = _TrafficRound()
         self._last_connected: bool | None = None
+        self._raw_tap = raw_tap
+        self._commands: queue.SimpleQueue[SimCommand] = queue.SimpleQueue()
+        self._position: tuple[float, float] | None = None
+        self._assemblers: dict[int, facilities.AirportAssembler] = {}
+        self._fetched_airports: set[str] = set()
+        self._airport_list: list = []
+        self._airport_list_received = 0
+        self._nearest_to_fetch: str | None = None
+        self._next_facility_request = FIRST_FACILITY_REQUEST
 
     @property
     def clock(self) -> SessionClock:
@@ -140,6 +168,10 @@ class SimConnectSource:
                 self._queue.put_nowait(_STOP)
                 return
             yield item
+
+    async def send(self, command: SimCommand) -> None:
+        """Queue a command for the bridge thread; handled once connected."""
+        self._commands.put(command)
 
     async def stop(self) -> None:
         self._stop.set()
@@ -196,6 +228,12 @@ class SimConnectSource:
         dll.request_data_on_sim_object(
             handle, REQ_IDENTITY, DEF_IDENTITY, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
+        for line in facilities.definition_lines():
+            dll.add_to_facility_definition(handle, DEF_FACILITY_AIRPORT, line)
+        self._assemblers.clear()
+        self._fetched_airports.clear()
+        nearest_period = self._cfg.nearest_airport_interval_s if self._cfg.nearest_airport_interval_s > 0 else None
+        next_nearest = 0.0
 
         own_period = 1.0 / self._cfg.ownship_hz if self._cfg.ownship_hz > 0 else None
         traffic_period = self._cfg.traffic_interval_s if self._cfg.traffic_interval_s > 0 else None
@@ -223,10 +261,21 @@ class SimConnectSource:
                         handle, REQ_TRAFFIC, DEF_TRAFFIC, self._cfg.traffic_radius_m, SimObjectType.AIRCRAFT
                     )
                     next_traffic = _next_deadline(next_traffic, traffic_period, now)
+                if nearest_period and self._position is not None and now >= next_nearest:
+                    self._airport_list, self._airport_list_received = [], 0
+                    dll.request_facilities_list(handle, FacilityListType.AIRPORT, REQ_AIRPORT_LIST)
+                    next_nearest = now + nearest_period
+                self._run_commands(dll, handle)
+                if self._nearest_to_fetch:
+                    self._request_airport(dll, handle, self._nearest_to_fetch)
+                    self._nearest_to_fetch = None
+                self._expire_assemblers()
             self._stop.wait(POLL_INTERVAL_S)
 
     def _handle(self, buf: bytes) -> bool:
         """Handle one message; returns False when the sim has quit."""
+        if self._raw_tap is not None and Recv.from_buffer_copy(buf[:12]).dwID in FACILITY_MESSAGES:
+            self._raw_tap(buf)
         msg = parse_message(buf)
         t = self._clock.now()
         if isinstance(msg, OpenInfo):
@@ -240,7 +289,71 @@ class SimConnectSource:
                 self._emit(event)
         elif isinstance(msg, ObjectData):
             self._on_data(msg, t)
+        elif isinstance(msg, FacilityData):
+            if (assembler := self._assemblers.get(msg.request_id)) is not None:
+                assembler.add(msg)
+        elif isinstance(msg, FacilityDataEnd):
+            self._on_facility_end(msg, t)
+        elif isinstance(msg, AirportList) and msg.request_id == REQ_AIRPORT_LIST:
+            self._on_airport_list(msg)
         return True
+
+    # --- airport data -----------------------------------------------------------
+
+    def _run_commands(self, dll: SimConnectApi, handle: int) -> None:
+        while True:
+            try:
+                command = self._commands.get_nowait()
+            except queue.Empty:
+                return
+            if isinstance(command, RequestAirportData):
+                self._request_airport(dll, handle, command.icao.upper(), force=True)
+            else:
+                log.warning("unsupported command %r", command)
+
+    def _request_airport(self, dll: SimConnectApi, handle: int, icao: str, *, force: bool = False) -> None:
+        if not force and icao in self._fetched_airports:
+            return
+        if any(a.icao == icao for a in self._assemblers.values()):
+            return  # already in flight
+        request_id = self._next_facility_request
+        self._next_facility_request += 1
+        self._assemblers[request_id] = facilities.AirportAssembler(icao, started_t=time.monotonic())
+        self._fetched_airports.add(icao)
+        dll.request_facility_data(handle, DEF_FACILITY_AIRPORT, request_id, icao)
+        log.info("Requesting airport data for %s", icao)
+
+    def _on_facility_end(self, msg: FacilityDataEnd, t: float) -> None:
+        assembler = self._assemblers.pop(msg.request_id, None)
+        if assembler is None:
+            return
+        log.info("Facility data: %s", assembler.report())
+        airport = assembler.build()
+        if airport is None:
+            log.warning("No airport data returned for %s", assembler.icao)
+            self._fetched_airports.discard(assembler.icao)
+            return
+        self._emit(AirportData(t=t, airport=airport))
+
+    def _on_airport_list(self, msg: AirportList) -> None:
+        self._airport_list.extend(msg.airports)
+        self._airport_list_received += 1
+        if self._airport_list_received < max(msg.out_of, 1) or self._position is None:
+            return
+        lat, lon = self._position
+        candidates = [a for a in self._airport_list if a.icao]
+        if not candidates:
+            return
+        nearest = min(candidates, key=lambda a: facilities.haversine_nm(lat, lon, a.lat, a.lon))
+        self._nearest_to_fetch = nearest.icao
+
+    def _expire_assemblers(self) -> None:
+        now = time.monotonic()
+        for request_id, assembler in list(self._assemblers.items()):
+            if now - assembler.started_t > FACILITY_TIMEOUT_S:
+                log.warning("Timed out waiting for airport data for %s", assembler.icao)
+                self._fetched_airports.discard(assembler.icao)
+                del self._assemblers[request_id]
 
     def _on_open(self, msg: OpenInfo) -> None:
         self._open = msg
@@ -260,7 +373,9 @@ class SimConnectSource:
     def _on_data(self, msg: ObjectData, t: float) -> None:
         if msg.request_id == REQ_OWNSHIP:
             self._user_object_id = msg.object_id
-            self._emit(defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t))
+            ownship = defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t)
+            self._position = (ownship.lat, ownship.lon)
+            self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:
             self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
         elif msg.request_id == REQ_TRAFFIC:

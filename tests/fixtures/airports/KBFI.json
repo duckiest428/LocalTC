@@ -1,0 +1,240 @@
+{
+ "icao": "KBFI",
+ "name": "BOEING FLD/KING CO INTL",
+ "region": "K1",
+ "lat": 47.53,
+ "lon": -122.302,
+ "elev_ft": 21.0,
+ "magvar": 16.0,
+ "runways": [
+  {
+   "lat": 47.53,
+   "lon": -122.302,
+   "elev_ft": 21.0,
+   "heading_true": 140.0,
+   "length_m": 3000.0,
+   "width_m": 45.0,
+   "primary": {
+    "number": 14,
+    "designator": "R",
+    "ils_ident": "IBFI"
+   },
+   "secondary": {
+    "number": 32,
+    "designator": "L",
+    "ils_ident": ""
+   },
+   "surface": 0
+  }
+ ],
+ "frequencies": [
+  {
+   "kind": "atis",
+   "mhz": 127.75,
+   "name": "BOEING ATIS"
+  },
+  {
+   "kind": "ground",
+   "mhz": 121.9,
+   "name": "BOEING GROUND"
+  },
+  {
+   "kind": "tower",
+   "mhz": 120.6,
+   "name": "BOEING TOWER"
+  },
+  {
+   "kind": "approach",
+   "mhz": 119.2,
+   "name": "SEATTLE APPROACH"
+  }
+ ],
+ "taxi_points": [
+  {
+   "index": 0,
+   "kind": "normal",
+   "lat": 47.5317323,
+   "lon": -122.2989425
+  },
+  {
+   "index": 1,
+   "kind": "normal",
+   "lat": 47.5308661,
+   "lon": -122.3004712
+  },
+  {
+   "index": 2,
+   "kind": "normal",
+   "lat": 47.520888,
+   "lon": -122.2880711
+  },
+  {
+   "index": 3,
+   "kind": "hold_short",
+   "lat": 47.5203683,
+   "lon": -122.2889883
+  },
+  {
+   "index": 4,
+   "kind": "normal",
+   "lat": 47.5200219,
+   "lon": -122.2895998
+  },
+  {
+   "index": 5,
+   "kind": "normal",
+   "lat": 47.5408443,
+   "lon": -122.3128714
+  },
+  {
+   "index": 6,
+   "kind": "hold_short",
+   "lat": 47.5403246,
+   "lon": -122.3137887
+  },
+  {
+   "index": 7,
+   "kind": "normal",
+   "lat": 47.5399781,
+   "lon": -122.3144002
+  },
+  {
+   "index": 8,
+   "kind": "hold_short",
+   "lat": 47.5303465,
+   "lon": -122.3013885
+  },
+  {
+   "index": 9,
+   "kind": "normal",
+   "lat": 47.53,
+   "lon": -122.302
+  }
+ ],
+ "taxi_paths": [
+  {
+   "kind": "taxi",
+   "start": 0,
+   "end": 1,
+   "name": "C",
+   "runway": "",
+   "width_m": 15
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 2,
+   "name": "A",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 2,
+   "end": 3,
+   "name": "A1",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 3,
+   "end": 4,
+   "name": "A1",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 5,
+   "name": "A",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 5,
+   "end": 6,
+   "name": "A3",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 6,
+   "end": 7,
+   "name": "A3",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 8,
+   "name": "A2",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 8,
+   "end": 9,
+   "name": "A2",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "runway",
+   "start": 4,
+   "end": 9,
+   "name": "",
+   "runway": "32L",
+   "width_m": 45
+  },
+  {
+   "kind": "runway",
+   "start": 9,
+   "end": 7,
+   "name": "",
+   "runway": "32L",
+   "width_m": 45
+  },
+  {
+   "kind": "parking",
+   "start": 0,
+   "end": 0,
+   "name": "",
+   "runway": "",
+   "width_m": 15
+  },
+  {
+   "kind": "parking",
+   "start": 0,
+   "end": 1,
+   "name": "",
+   "runway": "",
+   "width_m": 15
+  }
+ ],
+ "parking": [
+  {
+   "index": 0,
+   "name": "PARKING 1",
+   "kind": "ramp_ga_small",
+   "lat": 47.531688,
+   "lon": -122.2981928,
+   "heading_true": 320.0,
+   "radius_m": 8
+  },
+  {
+   "index": 1,
+   "name": "PARKING 2",
+   "kind": "ramp_ga_small",
+   "lat": 47.5322385,
+   "lon": -122.2988769,
+   "heading_true": 320.0,
+   "radius_m": 8
+  }
+ ]
+}

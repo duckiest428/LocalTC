@@ -1,0 +1,18 @@
+[[template]]
+id = "center.checkin"
+controller = "center"
+text = ["{callsign}, {station}, roger."]
+
+[[template]]
+id = "center.descend"
+controller = "center"
+text = ["{callsign}, descend and maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_approach"
+controller = "center"
+text = ["{callsign}, contact {station} {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."

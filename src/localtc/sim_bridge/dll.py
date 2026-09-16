@@ -7,7 +7,7 @@ from ctypes import POINTER, byref, c_char_p, c_float, c_int, c_long, c_uint32, c
 from pathlib import Path
 
 from localtc.sim_api import SourceUnavailable
-from localtc.sim_bridge.protocol import S_OK, UNUSED, DataType, Period, SimObjectType
+from localtc.sim_bridge.protocol import S_OK, UNUSED, DataType, FacilityListType, Period, SimObjectType
 
 
 class SimConnectError(RuntimeError):
@@ -67,6 +67,14 @@ class SimConnectDll:
             lib, "SimConnect_RequestDataOnSimObjectType", [c_void_p, c_uint32, c_uint32, c_uint32, c_int]
         )
         self._subscribe_to_system_event = _bind(lib, "SimConnect_SubscribeToSystemEvent", [c_void_p, c_uint32, c_char_p])
+        self._add_to_facility_definition = _bind(lib, "SimConnect_AddToFacilityDefinition", [c_void_p, c_uint32, c_char_p])
+        self._request_facility_data = _bind(
+            lib, "SimConnect_RequestFacilityData", [c_void_p, c_uint32, c_uint32, c_char_p, c_char_p]
+        )
+        # The docs spell it "Facilites"; bind whichever the DLL exports.
+        self._request_facilities_list = _bind(
+            lib, ("SimConnect_RequestFacilitiesList_EX1", "SimConnect_RequestFacilitesList_EX1"), [c_void_p, c_int, c_uint32]
+        )
         self._get_next_dispatch = _bind(
             lib, "SimConnect_GetNextDispatch", [c_void_p, POINTER(c_void_p), POINTER(c_uint32)]
         )
@@ -113,6 +121,16 @@ class SimConnectDll:
     def subscribe_to_system_event(self, handle: int, event_id: int, name: str) -> None:
         _check(self._subscribe_to_system_event(handle, event_id, name.encode()), f"SubscribeToSystemEvent({name})")
 
+    def add_to_facility_definition(self, handle: int, define_id: int, field: str) -> None:
+        _check(self._add_to_facility_definition(handle, define_id, field.encode()), f"AddToFacilityDefinition({field})")
+
+    def request_facility_data(self, handle: int, define_id: int, request_id: int, icao: str, region: str = "") -> None:
+        hr = self._request_facility_data(handle, define_id, request_id, icao.encode(), region.encode())
+        _check(hr, f"RequestFacilityData({icao})")
+
+    def request_facilities_list(self, handle: int, list_type: FacilityListType, request_id: int) -> None:
+        _check(self._request_facilities_list(handle, int(list_type), request_id), "RequestFacilitiesList_EX1")
+
     def get_next_dispatch(self, handle: int) -> bytes | None:
         """Copy the next pending message out of SimConnect's buffer, or None if there isn't one."""
         ptr, size = c_void_p(), c_uint32()
@@ -121,8 +139,14 @@ class SimConnectDll:
         return ctypes.string_at(ptr.value, size.value)
 
 
-def _bind(lib: ctypes.CDLL, name: str, argtypes: list) -> "ctypes._CFuncPtr":
-    fn = getattr(lib, name)
+def _bind(lib: ctypes.CDLL, name: str | tuple[str, ...], argtypes: list) -> "ctypes._CFuncPtr":
+    names = (name,) if isinstance(name, str) else name
+    for candidate in names:
+        fn = getattr(lib, candidate, None)
+        if fn is not None:
+            break
+    else:
+        raise SimConnectUnavailable(f"SimConnect.dll has no {' / '.join(names)}; is it from the MSFS 2024 SDK?")
     fn.argtypes = argtypes
     fn.restype = c_long  # HRESULT
     return fn

@@ -6,6 +6,7 @@ tested on any OS; ``dll.py`` copies each dispatch buffer into bytes first.
 
 import ctypes
 import enum
+import struct
 from dataclasses import dataclass
 
 DWORD = ctypes.c_uint32
@@ -63,6 +64,17 @@ class RecvId(enum.IntEnum):
     EVENT_FRAME = 7
     SIMOBJECT_DATA = 8
     SIMOBJECT_DATA_BYTYPE = 9
+    AIRPORT_LIST = 18
+    FACILITY_DATA = 29
+    FACILITY_DATA_END = 30
+    FACILITY_MINIMAL_LIST = 31
+
+
+class FacilityListType(enum.IntEnum):
+    AIRPORT = 0
+    WAYPOINT = 1
+    NDB = 2
+    VOR = 3
 
 
 EXCEPTION_NAMES = {
@@ -142,6 +154,39 @@ class RecvSimObjectData(Recv):
 SIMOBJECT_DATA_OFFSET = ctypes.sizeof(RecvSimObjectData)  # 40
 
 
+class RecvFacilitiesList(Recv):
+    """Header of AIRPORT_LIST (and VOR/NDB/WAYPOINT lists); array elements follow."""
+
+    _pack_ = 1
+    _fields_ = [("dwRequestID", DWORD), ("dwArraySize", DWORD), ("dwEntryNumber", DWORD), ("dwOutOf", DWORD)]
+
+
+class RecvFacilityData(Recv):
+    """FACILITY_DATA header. The header declares ``IsListItem`` as a 4-byte BOOL (data at
+    offset 40); a 1-byte bool (offset 37) is also accepted, see ``parse_message``."""
+
+    _pack_ = 1
+    _fields_ = [
+        ("UserRequestId", DWORD),
+        ("UniqueRequestId", DWORD),
+        ("ParentUniqueRequestId", DWORD),
+        ("Type", DWORD),
+        ("IsListItem", DWORD),
+        ("ItemIndex", DWORD),
+        ("ListSize", DWORD),
+    ]
+
+
+class RecvFacilityDataEnd(Recv):
+    _pack_ = 1
+    _fields_ = [("RequestId", DWORD)]
+
+
+FACILITY_DATA_OFFSET = ctypes.sizeof(RecvFacilityData)  # 40
+FACILITY_DATA_OFFSET_BOOL8 = FACILITY_DATA_OFFSET - 3  # 37
+FACILITIES_LIST_OFFSET = ctypes.sizeof(RecvFacilitiesList)  # 28
+
+
 class ProtocolError(ValueError):
     pass
 
@@ -177,6 +222,43 @@ class EventInfo:
 
 
 @dataclass(frozen=True)
+class AirportListEntry:
+    icao: str
+    region: str
+    lat: float
+    lon: float
+    alt_m: float
+
+
+@dataclass(frozen=True)
+class AirportList:
+    request_id: int
+    entry: int
+    out_of: int
+    airports: tuple[AirportListEntry, ...]
+
+
+@dataclass(frozen=True)
+class FacilityData:
+    request_id: int
+    unique_id: int
+    parent_id: int
+    type: int
+    item_index: int
+    list_size: int
+    payload: bytes  # at offset 40
+    # The same message read with a 1-byte IsListItem (everything after it 3 bytes earlier).
+    payload_bool8: bytes
+    item_index_bool8: int
+    list_size_bool8: int
+
+
+@dataclass(frozen=True)
+class FacilityDataEnd:
+    request_id: int
+
+
+@dataclass(frozen=True)
 class ObjectData:
     request_id: int
     object_id: int
@@ -186,7 +268,9 @@ class ObjectData:
     payload: bytes
 
 
-Message = OpenInfo | QuitInfo | ExceptionInfo | EventInfo | ObjectData
+Message = (
+    OpenInfo | QuitInfo | ExceptionInfo | EventInfo | ObjectData | AirportList | FacilityData | FacilityDataEnd
+)
 
 
 def parse_message(buf: bytes) -> Message | None:
@@ -232,7 +316,55 @@ def parse_message(buf: bytes) -> Message | None:
             out_of=m.dwoutof,
             payload=bytes(buf[SIMOBJECT_DATA_OFFSET:end]),
         )
+    if rid == RecvId.FACILITY_DATA:
+        m = _read(RecvFacilityData, buf)
+        end = _message_end(m.dwSize, buf)
+        index8, size8 = struct.unpack_from("<II", buf, FACILITY_DATA_OFFSET_BOOL8 - 8)
+        return FacilityData(
+            request_id=m.UserRequestId,
+            unique_id=m.UniqueRequestId,
+            parent_id=m.ParentUniqueRequestId,
+            type=m.Type,
+            item_index=m.ItemIndex,
+            list_size=m.ListSize,
+            payload=bytes(buf[FACILITY_DATA_OFFSET:end]),
+            payload_bool8=bytes(buf[FACILITY_DATA_OFFSET_BOOL8:end]),
+            item_index_bool8=index8,
+            list_size_bool8=size8,
+        )
+    if rid == RecvId.FACILITY_DATA_END:
+        return FacilityDataEnd(request_id=_read(RecvFacilityDataEnd, buf).RequestId)
+    if rid == RecvId.AIRPORT_LIST:
+        return _parse_airport_list(buf)
     return None
+
+
+def _parse_airport_list(buf: bytes) -> AirportList:
+    """Element size is derived from the message, so 2020's 6-char and 2024's longer idents both parse."""
+    m = _read(RecvFacilitiesList, buf)
+    end = _message_end(m.dwSize, buf)
+    count = m.dwArraySize
+    airports = []
+    if count:
+        element = (end - FACILITIES_LIST_OFFSET) // count
+        text = element - 24  # three doubles follow ident + region
+        if text < 4:
+            raise ProtocolError(f"unexpected airport list element size {element}")
+        ident_len = text - 3
+        for i in range(count):
+            base = FACILITIES_LIST_OFFSET + i * element
+            chunk = buf[base : base + element]
+            lat, lon, alt = struct.unpack_from("<ddd", chunk, text)
+            airports.append(
+                AirportListEntry(
+                    icao=_cstr(chunk[:ident_len]), region=_cstr(chunk[ident_len:text]), lat=lat, lon=lon, alt_m=alt
+                )
+            )
+    return AirportList(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, airports=tuple(airports))
+
+
+def _message_end(declared_size: int, buf: bytes) -> int:
+    return declared_size if 0 < declared_size <= len(buf) else len(buf)
 
 
 def build_message(struct: Recv, recv_id: RecvId, payload: bytes = b"") -> bytes:

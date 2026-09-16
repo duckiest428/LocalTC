@@ -1,0 +1,120 @@
+# A by-the-book IFR flight Paine Field -> Boeing Field on the synthetic recording.
+[scenario]
+name = "ifr_happy_path"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+vars = { atis = "bravo" }
+
+[flight]
+destination = "KBFI"
+cruise_ft = 5000
+
+[atc]
+seed = 7
+
+# --- clearance and taxi ---------------------------------------------------------------
+[[pilot]]
+when = { phase = "PARKED", after_s = 5 }
+tune = "clearance"
+say = "Paine Clearance, {callsign}, IFR to Boeing Field, with information {atis}, ready to copy."
+
+[[pilot]]
+on = "clearance.ifr"
+say = "{readback}"
+
+[[pilot]]
+when = { phase = "PARKED", cleared = "ifr" }
+tune = "ground"
+delay_s = 5
+say = "Paine Ground, {callsign_short}, at parking, ready to taxi with information {atis}."
+
+[[pilot]]
+on = "ground.taxi_out"
+say = "{readback}"
+
+# --- tower ------------------------------------------------------------------------------
+[[pilot]]
+on = "ground.handoff_tower"
+say = "{readback}"
+
+[[pilot]]
+on = "ground.handoff_tower"
+tune = "handoff"
+delay_s = 8
+say = "Paine Tower, {callsign_short}, holding short runway {departure_runway}, ready for departure."
+
+[[pilot]]
+on = "tower.takeoff"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.handoff_departure"
+say = "{readback}"
+
+# --- enroute ------------------------------------------------------------------------------
+[[pilot]]
+on = "tower.handoff_departure"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Departure, {callsign_short}, {alt} climbing 5,000."
+
+[[pilot]]
+on = "departure.radar_contact"
+say = "{readback}"
+
+[[pilot]]
+on = "departure.handoff_center"
+say = "{readback}"
+
+[[pilot]]
+on = "departure.handoff_center"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Center, {callsign_short}, level 5,000."
+
+[[pilot]]
+on = "center.descend"
+say = "{readback}"
+
+[[pilot]]
+on = "center.handoff_approach"
+say = "{readback}"
+
+[[pilot]]
+on = "center.handoff_approach"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Approach, {callsign_short}, {alt} descending 3,000."
+
+# --- arrival ------------------------------------------------------------------------------
+[[pilot]]
+on = "approach.descend"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.cleared"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.cleared"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Tower, {callsign_short}, 6 mile final runway {arrival_runway}."
+
+[[pilot]]
+on = "tower.land"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Ground, {callsign_short}, clear of runway {arrival_runway}, taxi to parking."
+
+[[pilot]]
+on = "ground.taxi_in"
+say = "{readback}"

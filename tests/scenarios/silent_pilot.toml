@@ -1,0 +1,13 @@
+# The pilot never talks: ATC holds them on the taxiway and raises alerts.
+[scenario]
+name = "silent_pilot"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+end_t = 450
+
+[flight]
+destination = "KBFI"
+cruise_ft = 5000
+
+[atc]
+seed = 7

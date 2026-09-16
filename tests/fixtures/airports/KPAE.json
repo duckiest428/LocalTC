@@ -1,0 +1,250 @@
+{
+ "icao": "KPAE",
+ "name": "SNOHOMISH CO (PAINE FLD)",
+ "region": "K1",
+ "lat": 47.9063,
+ "lon": -122.2816,
+ "elev_ft": 606.0,
+ "magvar": 16.0,
+ "runways": [
+  {
+   "lat": 47.9063,
+   "lon": -122.2816,
+   "elev_ft": 606.0,
+   "heading_true": 160.0,
+   "length_m": 2700.0,
+   "width_m": 45.0,
+   "primary": {
+    "number": 16,
+    "designator": "R",
+    "ils_ident": ""
+   },
+   "secondary": {
+    "number": 34,
+    "designator": "L",
+    "ils_ident": "IPAE"
+   },
+   "surface": 0
+  }
+ ],
+ "frequencies": [
+  {
+   "kind": "atis",
+   "mhz": 128.65,
+   "name": "PAINE ATIS"
+  },
+  {
+   "kind": "clearance",
+   "mhz": 127.25,
+   "name": "PAINE CLEARANCE"
+  },
+  {
+   "kind": "ground",
+   "mhz": 121.8,
+   "name": "PAINE GROUND"
+  },
+  {
+   "kind": "tower",
+   "mhz": 120.2,
+   "name": "PAINE TOWER"
+  },
+  {
+   "kind": "departure",
+   "mhz": 124.675,
+   "name": "SEATTLE DEPARTURE"
+  },
+  {
+   "kind": "approach",
+   "mhz": 124.675,
+   "name": "SEATTLE APPROACH"
+  }
+ ],
+ "taxi_points": [
+  {
+   "index": 0,
+   "kind": "normal",
+   "lat": 47.9072217,
+   "lon": -122.2778222
+  },
+  {
+   "index": 1,
+   "kind": "normal",
+   "lat": 47.9067609,
+   "lon": -122.2797111
+  },
+  {
+   "index": 2,
+   "kind": "normal",
+   "lat": 47.8957871,
+   "lon": -122.2737528
+  },
+  {
+   "index": 3,
+   "kind": "hold_short",
+   "lat": 47.8955106,
+   "lon": -122.2748861
+  },
+  {
+   "index": 4,
+   "kind": "normal",
+   "lat": 47.8953262,
+   "lon": -122.2756417
+  },
+  {
+   "index": 5,
+   "kind": "normal",
+   "lat": 47.9177346,
+   "lon": -122.2856694
+  },
+  {
+   "index": 6,
+   "kind": "hold_short",
+   "lat": 47.9174581,
+   "lon": -122.2868028
+  },
+  {
+   "index": 7,
+   "kind": "normal",
+   "lat": 47.9172738,
+   "lon": -122.2875583
+  },
+  {
+   "index": 8,
+   "kind": "hold_short",
+   "lat": 47.9064843,
+   "lon": -122.2808444
+  },
+  {
+   "index": 9,
+   "kind": "normal",
+   "lat": 47.9063,
+   "lon": -122.2816
+  }
+ ],
+ "taxi_paths": [
+  {
+   "kind": "taxi",
+   "start": 0,
+   "end": 1,
+   "name": "C",
+   "runway": "",
+   "width_m": 15
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 2,
+   "name": "A",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 2,
+   "end": 3,
+   "name": "A1",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 3,
+   "end": 4,
+   "name": "A1",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 5,
+   "name": "A",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 5,
+   "end": 6,
+   "name": "A3",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 6,
+   "end": 7,
+   "name": "A3",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 1,
+   "end": 8,
+   "name": "A2",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "taxi",
+   "start": 8,
+   "end": 9,
+   "name": "A2",
+   "runway": "",
+   "width_m": 20
+  },
+  {
+   "kind": "runway",
+   "start": 4,
+   "end": 9,
+   "name": "",
+   "runway": "34L",
+   "width_m": 45
+  },
+  {
+   "kind": "runway",
+   "start": 9,
+   "end": 7,
+   "name": "",
+   "runway": "34L",
+   "width_m": 45
+  },
+  {
+   "kind": "parking",
+   "start": 0,
+   "end": 0,
+   "name": "",
+   "runway": "",
+   "width_m": 15
+  },
+  {
+   "kind": "parking",
+   "start": 0,
+   "end": 1,
+   "name": "",
+   "runway": "",
+   "width_m": 15
+  }
+ ],
+ "parking": [
+  {
+   "index": 0,
+   "name": "PARKING 1",
+   "kind": "ramp_ga_small",
+   "lat": 47.907007,
+   "lon": -122.2771352,
+   "heading_true": 340.0,
+   "radius_m": 8
+  },
+  {
+   "index": 1,
+   "name": "PARKING 2",
+   "kind": "ramp_ga_small",
+   "lat": 47.9076823,
+   "lon": -122.2775019,
+   "heading_true": 340.0,
+   "radius_m": 8
+  }
+ ]
+}

@@ -5,15 +5,24 @@ import asyncio
 import logging
 import sys
 import time
+from pathlib import Path
+
+import msgspec
 from typing import TextIO
 
 from localtc import __version__
-from localtc.app import run_session
+from localtc.airports import AirportCache, dump_airport, load_airport_dir
+from localtc.atc_core.phase import PhaseThresholds, PhaseTracker
+from localtc.app import debug_airport, run_session
 from localtc.config import ConfigError, load_config
 from localtc.replay import Recording, RecordingFormatError
 from localtc.replay.inspect import format_summary, summarize
 from localtc.sim_api import (
     AircraftIdentity,
+    AirportData,
+    AtcAlert,
+    PhaseChanged,
+    ReadbackEvaluated,
     AtcTransmission,
     BusEvent,
     ConnectionStatus,
@@ -53,6 +62,16 @@ def format_event(ev: BusEvent) -> str:
         body = f'PILOT "{ev.text}"'
     elif isinstance(ev, AtcTransmission):
         body = f'ATC   {ev.station} {ev.frequency_mhz:.3f}: "{ev.text}"'
+    elif isinstance(ev, PhaseChanged):
+        body = f"PHASE {ev.previous or '-'} -> {ev.phase} ({ev.reason})"
+    elif isinstance(ev, ReadbackEvaluated):
+        extra = f" missing={','.join(ev.missing)}" if ev.missing else ""
+        extra += f" heard={ev.mismatched}" if ev.mismatched else ""
+        body = f"RDBK  {ev.instruction_id}: {ev.status}{extra}"
+    elif isinstance(ev, AtcAlert):
+        body = f"ALERT {ev.kind}: {ev.detail}"
+    elif isinstance(ev, AirportData):
+        body = f"APT   {ev.airport.icao} {ev.airport.name}"
     else:
         body = repr(ev)
     return f"[{ev.t:8.2f}] {body}"
@@ -61,12 +80,15 @@ def format_event(ev: BusEvent) -> str:
 class EventPrinter:
     """Prints events, limiting own-ship lines to one per ``ownship_every_s`` of session time."""
 
-    def __init__(self, ownship_every_s: float = 1.0, out: TextIO | None = None) -> None:
+    def __init__(self, ownship_every_s: float = 1.0, out: TextIO | None = None, *, skip_traffic: bool = False) -> None:
         self._every = ownship_every_s
+        self._skip_traffic = skip_traffic
         self._out = out
         self._last_own: float | None = None
 
     def __call__(self, ev: BusEvent) -> None:
+        if self._skip_traffic and isinstance(ev, (TrafficSnapshot, OwnshipState)):
+            return
         if isinstance(ev, OwnshipState):
             if self._last_own is not None and ev.t - self._last_own < self._every:
                 return
@@ -79,7 +101,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if args.source:
         cfg.source.kind = args.source
     record = cfg.recorder.enabled and not args.no_record
-    return _run(cfg, record, EventPrinter() if args.print else None)
+    if args.destination:
+        cfg.flight.destination = args.destination
+    if args.cruise_ft:
+        cfg.flight.cruise_ft = args.cruise_ft
+    if args.no_atc:
+        cfg.atc.enabled = False
+    printer = EventPrinter(skip_traffic=True) if (args.print or args.type) else None
+    return _run(cfg, record, printer, typed_input=args.type)
 
 
 def _cmd_record(args: argparse.Namespace) -> int:
@@ -97,7 +126,39 @@ def _cmd_replay(args: argparse.Namespace) -> int:
     cfg.replay.end_at = args.end_at
     cfg.replay.loop = args.loop
     cfg.replay.include_radio = not args.no_radio
-    return _run(cfg, args.record, None if args.quiet else EventPrinter(args.ownship_every))
+    cfg.atc.enabled = args.atc
+    if args.destination:
+        cfg.flight.destination = args.destination
+    if args.cruise_ft:
+        cfg.flight.cruise_ft = args.cruise_ft
+    printer = None if args.quiet else EventPrinter(args.ownship_every, skip_traffic=args.atc)
+    return _run(cfg, args.record, printer, typed_input=args.type)
+
+
+def _cmd_phases(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    destination = (args.destination or cfg.flight.destination or "").upper() or None
+    cruise_ft = args.cruise_ft if args.cruise_ft is not None else (cfg.flight.cruise_ft or None)
+    tracker = PhaseTracker(
+        destination=destination, cruise_ft=cruise_ft, thresholds=msgspec.convert(cfg.atc.phase, PhaseThresholds)
+    )
+    for directory in [*cfg.atc.airport_dirs, *(args.airports or [])]:
+        for airport in load_airport_dir(directory):
+            tracker.context_builder.add_airport(airport)
+    if destination and destination not in tracker.context_builder.airports:
+        if (cached := AirportCache().get(destination)) is not None:
+            tracker.context_builder.add_airport(cached)
+    recording = Recording(args.path)
+    count = 0
+    for event in recording.events():
+        if isinstance(event, AirportData):
+            print(f"[{event.t:8.1f}] airport data: {event.airport.icao}")
+        if (change := tracker.handle(event)) is not None:
+            count += 1
+            print(f"[{change.t:8.1f}] {change.previous or '-':>11} -> {change.phase:<11} {change.reason}")
+    if destination and destination not in tracker.context_builder.airports:
+        print(f"note: no airport data for destination {destination}; arrival phases use telemetry only")
+    return 0 if count else 1
 
 
 def _cmd_inspect(args: argparse.Namespace) -> int:
@@ -105,9 +166,57 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run(cfg, record: bool, printer: EventPrinter | None) -> int:
+def _cmd_debug_airport(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    report = asyncio.run(debug_airport(cfg, args.icao, raw_path=args.raw, timeout=args.timeout))
+    print(f"Sim: {report.session.sim_product} {report.session.sim_version}")
+    print("Facility messages (id, Type field, bytes after 40-byte header): count")
+    for key, count in sorted(report.messages.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0, kv[0][2])):
+        print(f"  {key}: {count}")
+    airport = report.airport
+    if airport is None:
+        print(f"No airport data received for {args.icao or 'nearest airport'} within {args.timeout:.0f} s")
+        return 1
+    print(format_airport(airport))
+    if args.json:
+        dump_airport(airport, args.json)
+        print(f"Wrote {args.json}")
+    if args.raw:
+        print(f"Raw messages in {args.raw}")
+    return 0
+
+
+def format_airport(airport) -> str:
+    hold_shorts = sum(p.is_hold_short for p in airport.taxi_points)
+    names = sorted({p.name for p in airport.taxi_paths if p.name})
+    lines = [
+        f"{airport.icao} {airport.name} ({airport.region})  {airport.lat:.5f},{airport.lon:.5f}  "
+        f"elev {airport.elev_ft:.0f} ft  magvar {airport.magvar:+.1f}",
+        "Runways:",
+        *(f"  {r.name:<9} hdg {r.heading_true:5.1f}T  {r.length_m:5.0f} x {r.width_m:3.0f} m  "
+          f"ILS {r.primary.ils_ident or '-'}/{r.secondary.ils_ident or '-'}" for r in airport.runways),
+        "Frequencies:",
+        *(f"  {f.kind:<12} {f.mhz:7.3f}  {f.name}" for f in airport.frequencies),
+        f"Taxi points: {len(airport.taxi_points)} ({hold_shorts} hold-short)   paths: {len(airport.taxi_paths)}   "
+        f"parking: {len(airport.parking)}",
+        f"Taxiway names: {', '.join(names) or '(none)'}",
+    ]
+    return "\n".join(lines)
+
+
+def _cmd_atc(args: argparse.Namespace) -> int:
+    from localtc.scenario import run_scenario
+
+    result = run_scenario(args.scenario, recording=args.path)
+    sys.stdout.write(result.transcript)
+    if args.snapshot:
+        print(msgspec.json.format(msgspec.json.encode(result.engine.snapshot()), indent=2).decode())
+    return 0
+
+
+def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool = False) -> int:
     started = time.monotonic()
-    out_dir = asyncio.run(run_session(cfg, record=record, on_event=printer))
+    out_dir = asyncio.run(run_session(cfg, record=record, on_event=printer, typed_input=typed_input))
     if out_dir:
         print(f"Recording saved to {out_dir} ({time.monotonic() - started:.0f} s)")
     return 0
@@ -127,6 +236,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--source", choices=["live", "replay"], help="override source.kind")
     run.add_argument("--no-record", action="store_true", help="don't record this session")
     run.add_argument("--print", action="store_true", help="print events")
+    run.add_argument("--type", action="store_true", help="type pilot transmissions on stdin (implies --print)")
+    run.add_argument("--destination", help="destination ICAO (overrides [flight])")
+    run.add_argument("--cruise-ft", type=int, help="planned cruise altitude (overrides [flight])")
+    run.add_argument("--no-atc", action="store_true", help="don't run the ATC engine")
     run.set_defaults(func=_cmd_run)
 
     record = with_config(sub.add_parser("record", help="record a live MSFS 2024 session (Windows)"))
@@ -142,9 +255,35 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--no-radio", action="store_true", help="skip recorded PTT/transcript/ATC events")
     replay.add_argument("--record", action="store_true", help="also record the replayed session")
     replay.add_argument("--quiet", action="store_true", help="don't print events")
+    replay.add_argument("--atc", action="store_true", help="run the ATC engine on the replayed flight")
+    replay.add_argument("--type", action="store_true", help="type pilot transmissions on stdin (use with --atc)")
+    replay.add_argument("--destination", help="destination ICAO for --atc")
+    replay.add_argument("--cruise-ft", type=int, help="planned cruise altitude for --atc")
     replay.add_argument("--ownship-every", type=float, default=1.0, metavar="SECONDS",
                         help="print at most one own-ship line per this much session time")
     replay.set_defaults(func=_cmd_replay)
+
+    debug = sub.add_parser("debug", help="live SimConnect diagnostics (Windows)")
+    debug_sub = debug.add_subparsers(dest="debug_command", required=True)
+    airport = with_config(debug_sub.add_parser("airport", help="fetch an airport's layout and show raw message stats"))
+    airport.add_argument("icao", nargs="?", help="airport ICAO; omit for the nearest airport")
+    airport.add_argument("--json", type=Path, help="write the parsed airport as JSON")
+    airport.add_argument("--raw", type=Path, help="write raw facility messages (length-prefixed) to this file")
+    airport.add_argument("--timeout", type=float, default=60.0)
+    airport.set_defaults(func=_cmd_debug_airport)
+
+    phases = with_config(sub.add_parser("phases", help="print the flight phase timeline of a recording"))
+    phases.add_argument("path", help="recording directory or session.jsonl[.gz]")
+    phases.add_argument("--destination", help="destination ICAO (default: [flight] destination)")
+    phases.add_argument("--cruise-ft", type=float, help="planned cruise altitude (default: [flight] cruise_ft)")
+    phases.add_argument("--airports", action="append", help="folder of <ICAO>.json airport files (repeatable)")
+    phases.set_defaults(func=_cmd_phases)
+
+    atc = sub.add_parser("atc", help="run a scripted ATC scenario offline")
+    atc.add_argument("path", nargs="?", help="recording (default: the scenario's recording)")
+    atc.add_argument("--scenario", required=True, help="scenario TOML (see localtc/scenario.py)")
+    atc.add_argument("--snapshot", action="store_true", help="print the final session snapshot as JSON")
+    atc.set_defaults(func=_cmd_atc)
 
     inspect = sub.add_parser("inspect", help="summarize a recording")
     inspect.add_argument("path", help="recording directory or session.jsonl[.gz]")

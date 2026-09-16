@@ -1,0 +1,87 @@
+# Mistakes ATC must catch: wrong frequency, wrong and incomplete readbacks, gibberish, a second failed attempt.
+[scenario]
+name = "wrong_readbacks"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+end_t = 440
+
+[flight]
+destination = "KBFI"
+cruise_ft = 5000
+
+[atc]
+seed = 7
+
+# Asks ground for the IFR clearance -> sent to clearance delivery.
+[[pilot]]
+when = { phase = "PARKED", after_s = 5 }
+tune = "ground"
+say = "Paine Ground, {callsign}, IFR to Boeing Field, ready to copy."
+
+[[pilot]]
+on = "common.contact"
+when = { phase = "PARKED" }
+tune = "handoff"
+say = "Paine Clearance, {callsign}, IFR to Boeing Field, ready to copy."
+
+# Wrong squawk, then correct.
+[[pilot]]
+on = "clearance.ifr"
+say = "Cleared to Boeing Field, climb and maintain five thousand, departure one two four point six seven five, squawk one two three four, two lima tango."
+
+[[pilot]]
+on = "common.negative"
+when = { phase = "PARKED" }
+say = "Squawk {squawk}, two lima tango."
+
+# Taxi readback without the runway, then complete.
+[[pilot]]
+when = { phase = "PARKED", cleared = "ifr" }
+tune = "ground"
+delay_s = 5
+say = "Paine Ground, two lima tango, ready to taxi."
+
+[[pilot]]
+on = "ground.taxi_out"
+say = "Taxi via charlie, alpha, alpha one, two lima tango."
+
+[[pilot]]
+on = "common.read_back"
+say = "Runway three four left, taxi via charlie alpha alpha one, two lima tango."
+
+# Gibberish while taxiing.
+[[pilot]]
+when = { phase = "TAXI_OUT", after_s = 30 }
+say = "uh blah blah the thing with the stuff"
+
+[[pilot]]
+on = "common.say_again"
+when = { phase = "TAXI_OUT" }
+say = "Paine Ground, two lima tango, disregard."
+
+# Ignores the tower handoff and asks ground for takeoff -> sent to tower.
+[[pilot]]
+on = "ground.handoff_tower"
+say = "Paine Ground, two lima tango, holding short runway 34L, ready for departure."
+
+[[pilot]]
+on = "common.contact"
+when = { phase = "RUNWAY_HOLD" }
+tune = "handoff"
+delay_s = 4
+say = "Paine Tower, two lima tango, holding short runway 34L, ready for departure."
+
+# Takeoff readback missing "cleared for takeoff" twice: "read back", then the fallback's "say again".
+[[pilot]]
+on = "tower.takeoff"
+say = "Runway three four left, two lima tango."
+
+[[pilot]]
+on = "common.read_back"
+when = { phase = "RUNWAY_HOLD" }
+say = "Runway three four left, two lima tango."
+
+[[pilot]]
+on = "common.say_again"
+when = { phase = "RUNWAY_HOLD" }
+say = "Cleared for takeoff runway three four left, two lima tango."

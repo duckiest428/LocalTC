@@ -1,0 +1,14 @@
+[[template]]
+id = "clearance.ifr"
+controller = "clearance"
+text = [
+    "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+]
+readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise"] }
+pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+ack = "readback_correct"
+
+[[template]]
+id = "clearance.say_destination"
+controller = "clearance"
+text = ["{callsign}, say destination and requested altitude."]

@@ -29,6 +29,7 @@ class LiveConfig(_Section):
     traffic_radius_m: int = 50_000
     retry_max_s: float = 15.0
     connect_timeout_s: float = 0.0  # 0 = wait indefinitely
+    nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
 
 
 class ReplayConfig(_Section):
@@ -47,8 +48,27 @@ class RecorderConfig(_Section):
     compress: bool = False
 
 
+class FlightConfig(_Section):
+    rules: Literal["IFR"] = "IFR"
+    destination: str = ""  # ICAO
+    cruise_ft: int = 0  # 0 = unknown
+    callsign: str = ""  # override the sim's ATC ID, e.g. "N172LT" or "ASA123"
+
+
+class AtcConfig(_Section):
+    enabled: bool = True
+    seed: int = 0  # 0 = derived from the callsign and date
+    center_name: str = "Seattle"
+    center_mhz: float = 125.1
+    strict_callsign: bool = False
+    airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
+    phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
+
+
 class Config(_Section):
     source: SourceConfig = msgspec.field(default_factory=SourceConfig)
+    flight: FlightConfig = msgspec.field(default_factory=FlightConfig)
+    atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)

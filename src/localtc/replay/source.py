@@ -1,6 +1,7 @@
 """``ReplaySource``: plays a recording back through the ``SimSource`` interface."""
 
 import asyncio
+import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
@@ -11,17 +12,21 @@ from localtc.replay.reader import Recording
 from localtc.sim_api import (
     SIM_EVENT_TYPES,
     AircraftIdentity,
+    AirportData,
     BusEvent,
     ConnectionStatus,
     SessionInfo,
+    SimCommand,
     StreamClock,
 )
+
+log = logging.getLogger(__name__)
 
 # Gap inserted between loops so t keeps increasing.
 LOOP_GAP_S = 1.0
 
 # State that is still true at start_at even though its event came earlier.
-_PRIMER_TYPES = (ConnectionStatus, AircraftIdentity)
+_PRIMER_TYPES = (ConnectionStatus, AircraftIdentity, AirportData)
 
 
 class ReplaySource:
@@ -40,7 +45,8 @@ class ReplaySource:
         start_at: float = 0.0,
         end_at: float | None = None,
         loop: bool = False,
-        include_radio: bool = True,
+        include_radio: bool = True,  # False also drops recorded ATC events
+        exclude_types: tuple[type, ...] = (),
         time_fn: Callable[[], float] = time.monotonic,
         sleep_fn: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
@@ -52,6 +58,7 @@ class ReplaySource:
         self._end_at = end_at
         self._loop = loop
         self._include_radio = include_radio
+        self._exclude_types = exclude_types
         self._time_fn = time_fn
         self._sleep_fn = sleep_fn or self._interruptible_sleep
         self._clock = StreamClock()
@@ -84,7 +91,7 @@ class ReplaySource:
         offset = 0.0
         anchor: tuple[float, float] | None = None  # (wall time, t) of the first emitted event
         while not self._stop.is_set():
-            primer: dict[type, BusEvent] = {}
+            primer: dict[object, BusEvent] = {}
             pass_first_t: float | None = None
             last_out_t: float | None = None
             for event in recording.events():
@@ -92,9 +99,12 @@ class ReplaySource:
                     return
                 if not self._include_radio and not isinstance(event, SIM_EVENT_TYPES):
                     continue
+                if self._exclude_types and isinstance(event, self._exclude_types):
+                    continue
                 if event.t < self._start_at:
                     if isinstance(event, _PRIMER_TYPES):
-                        primer[type(event)] = event
+                        key = event.airport.icao if isinstance(event, AirportData) else type(event)
+                        primer[key] = event
                     continue
                 if self._end_at is not None and event.t > self._end_at:
                     break
@@ -125,6 +135,10 @@ class ReplaySource:
 
     async def stop(self) -> None:
         self._stop.set()
+
+    async def send(self, command: SimCommand) -> None:
+        # Recorded AirportData events are already in the stream; there's no sim to ask.
+        log.debug("replay ignores command %r", command)
 
     def _emit(self, event: BusEvent) -> BusEvent:
         self._clock.advance(event.t)

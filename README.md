@@ -8,7 +8,10 @@ Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. 
 
 Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
 
-> **Status: Phase 0 (foundations and recorder).** The sim bridge, recorder and replay work. ATC, STT, TTS and DSP are placeholders.
+> **Status: Phase 1 (deterministic IFR ATC).**
+> - **Working:** flight phase tracking, FAA phraseology templates, readback checking, and the full IFR dialogue from clearance delivery to taxi-in.
+> - **Pilot input:** typed or scripted for now.
+> - **Not yet:** speech-to-text, speech synthesis, radio DSP and the LLM fallback.
 
 ## Layout
 
@@ -19,14 +22,27 @@ src/localtc/
   bus/         In-process async pub/sub
   recorder/    Bus events -> timestamped JSONL + WAV sidecars
   replay/      ReplaySource: plays a recording through the SimSource interface
-  atc_core/ stt/ tts/ dsp/   Later phases
+  atc_core/    ATC logic (any OS)
+    airport/       runway/taxiway geometry, runway selection, taxi routing
+    phase/         flight phase detection from telemetry + geometry
+    phraseology/   FAA speech formatting, typed slots, TOML templates (templates/*.toml)
+    readback/      transcript normalizer, element extractors, intents, interpreter chain
+    engine.py      AtcEngine: the IFR dialogue, handle(event) -> events
+    session.py     SessionState + JSON SessionSnapshot (the Phase 2 LLM's view)
+    service.py     connects the engine to the bus
+  airports/    JSON airport cache (%LOCALAPPDATA%\LocalTC\airports)
+  scenario.py  offline scripted-pilot scenarios
+  stt/ tts/ dsp/   Later phases
   app.py       Wiring: config -> source -> bus -> recorder
   cli.py       `localtc run | record | replay | inspect`
 tools/         Script shortcuts, plus make_fixture.py for the synthetic test recording
 tests/         Runs on any OS; tests/windows/ needs a live sim
 ```
 
-**Dependency rule:** only `app.py` may import `sim_bridge`, and `sim_api` imports nothing else from LocalTC. `lint-imports` and `tests/test_architecture.py` both enforce this. Everything except the bridge can be built and tested on a Mac against recordings.
+**Dependency rules:**
+- Only `app.py` may import `sim_bridge`.
+- `sim_api` imports nothing else from LocalTC.
+- `atc_core` only imports `sim_api`, `bus` and `airports`. `lint-imports` and `tests/test_architecture.py` both enforce this. Everything except the bridge can be built and tested on a Mac against recordings.
 
 ## Setup
 
@@ -50,7 +66,17 @@ localtc replay tests/fixtures/pattern_short --speed 4     # play back a recordin
 localtc inspect tests/fixtures/pattern_short              # summarize a recording
 localtc record --print                                    # record a live session (Windows + MSFS 2024)
 localtc run --source replay --no-record --print           # run with config/localtc.toml
+
+# ATC (Phase 1)
+localtc phases tests/fixtures/ifr_kpae_kbfi --destination KBFI --cruise-ft 5000   # phase timeline
+localtc atc --scenario tests/scenarios/ifr_happy_path.toml                        # scripted IFR flight, offline
+localtc replay tests/fixtures/ifr_kpae_kbfi --atc --type --speed 20 \
+    --destination KBFI --cruise-ft 5000                   # type pilot calls against a replay
+localtc run --source live --type --destination KBFI --cruise-ft 5000              # fly it live (Windows)
+localtc debug airport KPAE --json KPAE.json --raw KPAE.bin                        # live airport data diagnostics
 ```
+
+With `--type`, each line you type is a pilot transmission on COM1, so tune COM1 in the sim first. The ATC engine answers whichever controller works that frequency.
 
 Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) or with `LOCALTC_SOURCE=live|replay`.
 
@@ -69,6 +95,39 @@ Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) o
 3. **Mute the built-in ATC.** SimConnect can't disable it. In MSFS, set Sound → Character voices to 0 and turn off ATC subtitles and assistance.
 
 On connect, LocalTC logs the sim version (major 12 = MSFS 2024, 11 = MSFS 2020) and saves it in each recording header.
+
+## ATC (Phase 1)
+
+**Flight phases** come only from telemetry and airport geometry (see `atc_core/phase/detector.py`):
+
+PARKED → TAXI_OUT → RUNWAY_HOLD → TAKEOFF → DEPARTURE → CRUISE → ARRIVAL → APPROACH → LANDING → TAXI_IN
+
+Every threshold can be overridden in `[atc.phase]`.
+
+**The IFR flow:**
+1. Clearance delivery gives the IFR clearance ("CRAFT").
+2. Ground gives the taxi route (computed from the sim's taxiway graph).
+3. Ground hands off to tower at the hold-short line; tower clears for takeoff.
+4. Tower hands off to departure, which gives radar contact and the climb.
+5. Departure hands off to center.
+6. Center gives the descent, then hands off to approach.
+7. Approach clears the approach and hands off to tower.
+8. Tower clears to land, then hands off to ground after the runway exit.
+9. Ground gives the taxi-to-parking route.
+
+**Automatic alerts:** moving without a taxi clearance, runway incursion, takeoff or landing without a clearance, and emergencies.
+
+**Phraseology** lives in `src/localtc/atc_core/phraseology/templates/*.toml`: one file per controller, with typed `{slots}`, required and optional readback elements, and an example pilot readback. Templates are validated when loaded.
+
+**Readbacks** go through the transcript normalizer and the element extractors. The result is `correct`, `incorrect` ("negative, squawk …") or `incomplete` ("read back …"). A second failure, an unparseable call or an ambiguous one goes to the fallback interpreter. In Phase 1 the fallback says "say again"; Phase 2 swaps in the LLM, which returns the same `Interpretation`.
+
+**Session snapshot:** `AtcEngine.snapshot()` is JSON covering phase, assignments, clearances, the pending readback, recent exchanges and alerts. It's the read-only context for the Phase 2 LLM. `localtc atc … --snapshot` prints it.
+
+**Scenarios** (`tests/scenarios/*.toml`) run a recording plus a scripted pilot through the engine. Each has a golden transcript. After an intended behavior change, run `pytest tests/test_scenarios.py --update-goldens` and review the diff.
+
+**Synthetic data:**
+- `tools/make_ifr_fixture.py` regenerates `tests/fixtures/ifr_kpae_kbfi` and the airport JSON files in `tests/fixtures/airports/`.
+- Those test airports are simplified stand-ins. Real layouts come from `localtc debug airport`.
 
 ## Recording format
 

@@ -19,6 +19,7 @@ def replay_config(tmp_path: Path, **replay) -> Config:
     for key, value in replay.items():
         setattr(cfg.replay, key, value)
     cfg.recorder.dir = str(tmp_path / "recordings")
+    cfg.atc.enabled = False  # these tests check plain replay/record
     return cfg
 
 

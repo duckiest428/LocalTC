@@ -46,3 +46,12 @@ source_modules = [
     "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts",
 ]
 forbidden_modules = ["localtc.sim_bridge"]
+
+[[tool.importlinter.contracts]]
+name = "ATC core depends only on sim_api, bus and airports"
+type = "forbidden"
+source_modules = ["localtc.atc_core"]
+forbidden_modules = [
+    "localtc.app", "localtc.cli", "localtc.dsp", "localtc.recorder", "localtc.replay",
+    "localtc.sim_bridge", "localtc.stt", "localtc.tts",
+]

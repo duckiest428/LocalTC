@@ -1,0 +1,275 @@
+# Readback corpus: pilot transmissions (as a speech recognizer might produce them) checked against a pending
+# instruction. The callsign is always N172LT (Skyhawk). Add a case whenever a real transcript is misjudged.
+#
+# status: correct | incorrect | incomplete   (no_match = not treated as a readback at all)
+
+[slots.ifr]
+destination = "Boeing Field"
+altitude = 5000
+cruise = 5000
+frequency = 124.675
+squawk = "4521"
+
+[slots.taxi]
+runway = "34L"
+taxi_route = ["C", "A", "A1"]
+
+[slots.taxi_hold]
+runway = "34L"
+hold_short = "16L"
+taxi_route = ["C", "A", "A1"]
+
+[slots.takeoff]
+runway = "34L"
+
+[slots.land]
+runway = "14R"
+wind = { direction_mag = 130, speed_kt = 8 }
+
+[slots.contact]
+station = "Seattle Departure"
+frequency = 124.675
+
+[slots.contact_tower]
+station = "Paine Tower"
+frequency = 120.2
+
+[slots.climb]
+station = "Seattle Departure"
+altitude = 5000
+
+[slots.cleared_approach]
+station = "Boeing Tower"
+frequency = 120.6
+approach = { kind = "ILS", runway = "14R" }
+
+# --- IFR clearance -----------------------------------------------------------------------
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "Cleared to Boeing Field as filed, climb and maintain 5,000, expect 5,000 10 minutes after, departure 124.675, squawk 4521, Skyhawk 2LT."
+status = "correct"
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "cleared to boeing as filed climb maintain five thousand departure one two four point six seven five squawk four five two one november one seven two lima tango"
+status = "correct"
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "Maintain 5000, departure one twenty four point six seven five, squawk 4521, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "Climb and maintain 5000, departure 124.675, squawk 4251, 2 Lima Tango"
+status = "incorrect"
+mismatched = ["squawk"]
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "Climb and maintain 5000, squawk 4521, 2 Lima Tango"
+status = "incomplete"
+missing = ["frequency"]
+
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "uh climb and maintain four thousand departure one two four six seven five squawk four five two one"
+status = "incorrect"
+mismatched = ["altitude"]
+
+# --- taxi --------------------------------------------------------------------------------
+
+[[case]]
+instruction = "ground.taxi_out"
+slots = "taxi"
+text = "Runway 34L, taxi via C, A, A1, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "ground.taxi_out"
+slots = "taxi"
+text = "three four left via charlie alpha alpha one skyhawk two lima tango"
+status = "correct"
+
+[[case]]
+instruction = "ground.taxi_out"
+slots = "taxi"
+text = "Runway 34 left, taxi via Charlie Bravo, 2LT"
+status = "incorrect"
+mismatched = ["taxi_route"]
+
+[[case]]
+instruction = "ground.taxi_out"
+slots = "taxi"
+text = "Taxi via Charlie, Alpha, Alpha 1, 2LT"
+status = "incomplete"
+missing = ["runway"]
+
+[[case]]
+instruction = "ground.taxi_out_hold_short"
+slots = "taxi_hold"
+text = "Runway 34 left via Charlie Alpha Alpha 1, hold short 16 left, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "ground.taxi_out_hold_short"
+slots = "taxi_hold"
+text = "Runway 34 left via Charlie Alpha Alpha 1, 2LT"
+status = "incomplete"
+missing = ["hold_short"]
+
+# --- tower -------------------------------------------------------------------------------
+
+[[case]]
+instruction = "tower.takeoff"
+slots = "takeoff"
+text = "Cleared for takeoff runway 34L, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "tower.takeoff"
+slots = "takeoff"
+text = "runway heading, three four left, cleared for take off, skyhawk two lima tango"
+status = "correct"
+
+[[case]]
+instruction = "tower.takeoff"
+slots = "takeoff"
+text = "Cleared for takeoff runway 16R, 2LT"
+status = "incorrect"
+mismatched = ["runway"]
+
+[[case]]
+instruction = "tower.takeoff"
+slots = "takeoff"
+text = "Runway 34 left, 2LT"
+status = "incomplete"
+missing = ["cleared_for_takeoff"]
+
+[[case]]
+instruction = "tower.land"
+slots = "land"
+text = "Cleared to land one four right, two lima tango"
+status = "correct"
+
+[[case]]
+instruction = "tower.land"
+slots = "land"
+text = "Cleared to land, 2LT"
+status = "incomplete"
+missing = ["runway"]
+
+# --- handoffs and altitudes --------------------------------------------------------------------
+
+[[case]]
+instruction = "tower.handoff_departure"
+slots = "contact"
+text = "Over to departure 124.675, good day, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "tower.handoff_departure"
+slots = "contact"
+text = "departure one two four point six five seven, two lima tango"
+status = "incorrect"
+mismatched = ["frequency"]
+
+[[case]]
+instruction = "ground.handoff_tower"
+slots = "contact_tower"
+text = "Tower 120.2, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "ground.handoff_tower"
+slots = "contact_tower"
+text = "Tower one twenty point two, two lima tango"
+status = "correct"
+
+[[case]]
+instruction = "departure.radar_contact"
+slots = "climb"
+text = "Up to five thousand, 2LT"
+status = "no_match"
+
+[[case]]
+instruction = "departure.radar_contact"
+slots = "climb"
+text = "Climb maintain 5000, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "approach.cleared"
+slots = "cleared_approach"
+text = "Cleared ILS 14R approach, tower 120.6, 2LT"
+status = "correct"
+
+[[case]]
+instruction = "approach.cleared"
+slots = "cleared_approach"
+text = "cleared I L S runway one four right approach, two lima tango"
+status = "incomplete"
+missing = ["frequency"]
+
+# --- intents ---------------------------------------------------------------------------------------
+
+[[intent]]
+text = "Paine Clearance, Skyhawk 172LT, IFR to Boeing Field, with information Bravo"
+intent = "request_ifr_clearance"
+values = { atis = "B" }
+
+[[intent]]
+text = "Paine Ground, Skyhawk one seven two lima tango, at parking, ready to taxi with information bravo"
+intent = "ready_to_taxi"
+values = { atis = "B" }
+
+[[intent]]
+text = "Paine Tower, Skyhawk 2LT, holding short runway 34 left, ready for departure"
+intent = "ready_for_departure"
+values = { runway = "34L" }
+
+[[intent]]
+text = "Seattle Departure, Skyhawk 2LT, 1,200 climbing 5,000"
+intent = "checkin"
+values = { altitude = 1200, assigned = 5000 }
+
+[[intent]]
+text = "Seattle Center, Skyhawk 2LT, level five thousand"
+intent = "checkin"
+values = { altitude = 5000 }
+
+[[intent]]
+text = "Boeing Tower, Skyhawk 2LT, 5 mile final runway 14R"
+intent = "report_final"
+values = { runway = "14R" }
+
+[[intent]]
+text = "Boeing Ground, Skyhawk 2LT, clear of runway 14R, taxi to parking"
+intent = "request_taxi_parking"
+
+[[intent]]
+text = "Say again for 2LT"
+intent = "say_again"
+
+[[intent]]
+text = "Mayday mayday mayday, Skyhawk 2LT, engine failure"
+intent = "emergency"
+
+[[intent]]
+text = "Roger, 2LT"
+intent = "acknowledge"
+
+[[intent]]
+text = "Paine Ground, two lima tango, disregard"
+intent = "acknowledge"
+
+[[intent]]
+text = "the quick brown fox"
+intent = ""

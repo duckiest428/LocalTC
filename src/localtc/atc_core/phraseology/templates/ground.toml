@@ -1,0 +1,46 @@
+[[template]]
+id = "ground.taxi_out"
+controller = "ground"
+text = ["{callsign}, runway {runway}, taxi via {taxi_route}."]
+readback = { required = ["runway"], optional = ["taxi_route"] }
+pilot_readback = "Runway {runway}, taxi via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+controller = "ground"
+text = ["{callsign}, runway {runway}, taxi via {taxi_route}, hold short runway {hold_short}."]
+readback = { required = ["runway", "hold_short"], optional = ["taxi_route"] }
+pilot_readback = "Runway {runway}, taxi via {taxi_route}, hold short runway {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_no_route"
+controller = "ground"
+text = ["{callsign}, runway {runway}, taxi to the runway."]
+readback = { required = ["runway"] }
+pilot_readback = "Runway {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.hold_position"
+controller = "ground"
+text = ["{callsign}, hold position, taxi clearance required."]
+readback = { required = ["hold_position"] }
+pilot_readback = "Holding position, {callsign_short}."
+
+[[template]]
+id = "ground.handoff_tower"
+controller = "ground"
+text = ["{callsign}, contact {station} {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in"
+controller = "ground"
+text = ["{callsign}, taxi to parking via {taxi_route}."]
+readback = { optional = ["taxi_route"] }
+pilot_readback = "Taxi to parking via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_no_route"
+controller = "ground"
+text = ["{callsign}, taxi to parking."]

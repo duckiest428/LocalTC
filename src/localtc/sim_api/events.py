@@ -12,6 +12,8 @@ from typing import Literal, Union, get_args
 
 import msgspec
 
+from localtc.sim_api.airport import Airport
+
 
 class Event(msgspec.Struct, frozen=True, kw_only=True, tag_field="type"):
     t: float
@@ -48,6 +50,12 @@ class OwnshipState(Event, tag="ownship_state"):
     flaps_index: int = 0
     parking_brake: bool = False
     engine_running: bool = False
+    # Added in Phase 1; defaults keep Phase 0 recordings loadable.
+    on_runway: bool = False
+    wind_dir_true: float = 0.0
+    wind_kt: float = 0.0
+    magvar: float = 0.0
+    altimeter_setting_inhg: float = 0.0
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):
@@ -92,6 +100,10 @@ class ConnectionStatus(Event, tag="connection_status"):
     detail: str = ""
 
 
+class AirportData(Event, tag="airport_data"):
+    airport: Airport
+
+
 # --- Radio events (produced by LocalTC itself, published on the bus) --------
 
 
@@ -106,24 +118,51 @@ class PttReleased(Event, tag="ptt_released"):
 
 class Transcript(Event, tag="transcript"):
     text: str
+    radio: int = 1
     confidence: float | None = None
     audio_ref: str | None = None
 
 
 class AtcTransmission(Event, tag="atc_transmission"):
-    station: str
+    station: str  # spoken station name, e.g. "Paine Tower"
     frequency_mhz: float
-    text: str
+    text: str  # display text
     audio_ref: str | None = None
+    controller: str = ""  # clearance, ground, tower, departure, center, approach
+    instruction_id: str | None = None  # phraseology template id
+    spoken: str = ""  # text normalized for speech synthesis
 
 
-SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus]
+# --- ATC core events (produced by localtc.atc_core) -------------------------
+
+
+class PhaseChanged(Event, tag="phase_changed"):
+    previous: str | None
+    phase: str
+    reason: str = ""
+
+
+class ReadbackEvaluated(Event, tag="readback_evaluated"):
+    instruction_id: str
+    status: str  # correct, incorrect, incomplete, no_match
+    missing: tuple[str, ...] = ()
+    mismatched: dict[str, str] = {}  # element -> what the pilot said
+
+
+class AtcAlert(Event, tag="atc_alert"):
+    kind: str  # runway_incursion, takeoff_without_clearance, emergency, ...
+    detail: str = ""
+
+
+SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-BusEvent = Union[SimEvent, RadioEvent]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert]
+BusEvent = Union[SimEvent, RadioEvent, AtcEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)
 RADIO_EVENT_TYPES: tuple[type, ...] = get_args(RadioEvent)
-BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES
+ATC_EVENT_TYPES: tuple[type, ...] = get_args(AtcEvent)
+BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES + ATC_EVENT_TYPES
 
 
 def event_type(event: Event) -> str:

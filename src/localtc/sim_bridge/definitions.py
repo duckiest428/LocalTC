@@ -51,6 +51,11 @@ OWNSHIP: tuple[Datum, ...] = (
     Datum("flaps_index", "FLAPS HANDLE INDEX", "Number", I32),
     Datum("parking_brake", "BRAKE PARKING POSITION", "Bool", I32),
     Datum("engine_running", "GENERAL ENG COMBUSTION:1", "Bool", I32),
+    Datum("on_runway", "ON ANY RUNWAY", "Bool", I32),
+    Datum("wind_dir_true", "AMBIENT WIND DIRECTION", "degrees"),
+    Datum("wind_kt", "AMBIENT WIND VELOCITY", "knots"),
+    Datum("magvar", "MAGVAR", "degrees"),
+    Datum("altimeter_setting_inhg", "SEA LEVEL PRESSURE", "inHg"),
 )
 
 # Requested with PERIOD_SECOND + FLAG_CHANGED, so it only arrives when something changes.
@@ -140,6 +145,11 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         flaps_index=int(raw["flaps_index"]),
         parking_brake=bool(raw["parking_brake"]),
         engine_running=bool(raw["engine_running"]),
+        on_runway=bool(raw["on_runway"]),
+        wind_dir_true=round(raw["wind_dir_true"], 1),
+        wind_kt=round(raw["wind_kt"], 1),
+        magvar=round(raw["magvar"], 1),
+        altimeter_setting_inhg=round(raw["altimeter_setting_inhg"], 2),
     )
 
 

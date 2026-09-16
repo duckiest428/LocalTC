@@ -1,0 +1,42 @@
+[[template]]
+id = "tower.takeoff"
+controller = "tower"
+text = [
+    "{callsign}, runway {runway}, fly runway heading, cleared for takeoff.",
+    "{callsign}, fly runway heading, runway {runway}, cleared for takeoff.",
+]
+readback = { required = ["runway", "cleared_for_takeoff"] }
+pilot_readback = "Runway heading, runway {runway}, cleared for takeoff, {callsign_short}."
+
+[[template]]
+id = "tower.luaw"
+controller = "tower"
+text = ["{callsign}, runway {runway}, line up and wait."]
+readback = { required = ["runway", "line_up_and_wait"] }
+pilot_readback = "Runway {runway}, line up and wait, {callsign_short}."
+
+[[template]]
+id = "tower.handoff_departure"
+controller = "tower"
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency}, good day."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.land"
+controller = "tower"
+text = ["{callsign}, runway {runway}, wind {wind}, cleared to land.", "{callsign}, wind {wind}, runway {runway}, cleared to land."]
+readback = { required = ["runway", "cleared_to_land"] }
+pilot_readback = "Cleared to land runway {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.continue"
+controller = "tower"
+text = ["{callsign}, continue, runway {runway}."]
+
+[[template]]
+id = "tower.exit_contact_ground"
+controller = "tower"
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency} when clear."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."

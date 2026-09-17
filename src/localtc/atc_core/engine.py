@@ -38,6 +38,7 @@ from localtc.sim_api import (
     BusEvent,
     OwnshipState,
     PhaseChanged,
+    RadioTuned,
     ReadbackEvaluated,
     SimLifecycle,
     Transcript,
@@ -109,7 +110,7 @@ class AtcEngine:
         self._requested: set[str] = set()
         self._scheduled: list[_Scheduled] = []
         self._rng: random.Random | None = None
-        self._was_on_runway = False
+        self._was_on_runway: bool | None = None  # None until the first tick
         self._t = 0.0
 
     # --- public ---------------------------------------------------------------------------
@@ -165,8 +166,13 @@ class AtcEngine:
             self._requested.add(dest)
             self.airport_requests.append(dest)
 
+        previous = (st.comms.tuned_mhz, st.comms.tuned)
         st.comms.tuned_mhz = own.com1_mhz
         st.comms.tuned = self._facility_for(own.com1_mhz)
+        if (st.comms.tuned_mhz, st.comms.tuned) != previous:
+            tuned = st.comms.tuned
+            out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz,
+                                  controller=tuned.controller if tuned else None, station=tuned.station if tuned else None))
 
         if change is not None:
             st.phase, st.phase_since_t = change.phase, change.t
@@ -199,7 +205,7 @@ class AtcEngine:
             st.flags.add("squawk_7700")
             out.append(self._alert(t, "emergency", "squawking 7700"))
 
-        entered_runway = ctx.on_runway and not self._was_on_runway
+        entered_runway = ctx.on_runway and self._was_on_runway is False  # starting on a runway isn't an incursion
         self._was_on_runway = ctx.on_runway
         if entered_runway and own.on_ground and st.phase in (P.TAXI_OUT, P.RUNWAY_HOLD):
             if not ({"takeoff", "line_up"} & st.clearances.keys()):
@@ -276,7 +282,8 @@ class AtcEngine:
         )
         st.exchanges.append(Exchange(t, "pilot", facility.controller if facility else None, ev.text, interp))
         if facility is None:
-            return []  # nobody on that frequency
+            where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
+            return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
         if interp.kind == "readback":
             return self._on_readback(interp, facility, t)
         if interp.intent == "emergency":
@@ -441,7 +448,8 @@ class AtcEngine:
         if runway is None or own is None:
             self._schedule(t, "common.say_again", {}, facility)
             return
-        wind = Wind(direction_mag=int(round((own.wind_dir_true - own.magvar) / 10) * 10) % 360 or 360, speed_kt=int(round(own.wind_kt)))
+        magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180  # east positive; sim MAGVAR sign conventions vary
+        wind = Wind(direction_mag=int(round((own.wind_dir_true - magvar) / 10) * 10) % 360 or 360, speed_kt=int(round(own.wind_kt)))
         self._schedule(t, "tower.land", {"runway": runway, "wind": wind}, facility, delay=delay, clearance="landing",
                        on_issue=lambda: self._assign(arrival_runway=runway))
 

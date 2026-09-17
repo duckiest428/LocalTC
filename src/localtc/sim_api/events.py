@@ -149,6 +149,15 @@ class ReadbackEvaluated(Event, tag="readback_evaluated"):
     mismatched: dict[str, str] = {}  # element -> what the pilot said
 
 
+class RadioTuned(Event, tag="radio_tuned"):
+    """COM1 changed frequency; says which ATC facility (if any) works it."""
+
+    frequency_mhz: float
+    radio: int = 1
+    controller: str | None = None
+    station: str | None = None
+
+
 class AtcAlert(Event, tag="atc_alert"):
     kind: str  # runway_incursion, takeoff_without_clearance, emergency, ...
     detail: str = ""
@@ -156,7 +165,7 @@ class AtcAlert(Event, tag="atc_alert"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

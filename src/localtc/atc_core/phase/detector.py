@@ -92,6 +92,11 @@ class PhaseDetector:
         self._timers.clear()
         self._last = None
 
+    def resume(self) -> None:
+        """After a pause: restart dwell timers and forget the last position (a slew during pause isn't a teleport)."""
+        self._timers.clear()
+        self._last = None
+
     def update(self, own: OwnshipState, ctx: PositionContext) -> PhaseChanged | None:
         last, self._last = self._last, own
         if last is not None and own.t > last.t:

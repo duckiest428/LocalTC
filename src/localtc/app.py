@@ -96,6 +96,7 @@ async def run_session(
     recorder: Recorder | None = None
     consumers: list[asyncio.Task] = []
     pump_task: asyncio.Task | None = None
+    typed_task: asyncio.Task | None = None
     try:
         if record:
             recorder = Recorder.create(
@@ -123,8 +124,7 @@ async def run_session(
                 for airport in load_airport_dir(directory):
                     engine.handle(AirportData(t=0.0, airport=airport))
             consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache()).run()))
-        if typed_input:
-            consumers.append(asyncio.create_task(_typed_transmissions(bus, source)))
+        typed_task = asyncio.create_task(_typed_transmissions(bus, source)) if typed_input else None
 
         pump_task = asyncio.create_task(pump(source, bus))
         if stop is None:
@@ -138,6 +138,8 @@ async def run_session(
         if pump_task is not None and not pump_task.done():
             with suppress(asyncio.CancelledError, TimeoutError):
                 await asyncio.wait_for(pump_task, timeout=2.0)
+        if typed_task is not None:
+            typed_task.cancel()  # its thread may sit in readline(); don't wait for another Enter
         bus.close()
         await asyncio.gather(*consumers, return_exceptions=True)
         if recorder is not None:
@@ -146,12 +148,18 @@ async def run_session(
     return recorder.session_dir if recorder else None
 
 
-async def _typed_transmissions(bus: EventBus, source: SimSource) -> None:
+async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None) -> None:
     """Each line typed on stdin is a pilot transmission on COM1 (a stand-in for push-to-talk + speech-to-text)."""
     import sys
 
+    stdin = stdin or sys.stdin
+    print(
+        "\n>>> Type a pilot transmission and press Enter (sent on COM1). Tune COM1 first:\n"
+        ">>> a 'TUNE' line shows which ATC facility answers on that frequency.\n",
+        flush=True,
+    )
     while True:
-        line = await asyncio.to_thread(sys.stdin.readline)
+        line = await asyncio.to_thread(stdin.readline)
         if not line:
             return
         if text := line.strip():

@@ -18,6 +18,7 @@ class PhaseTracker:
         self.detector = PhaseDetector(th, cruise_ft=cruise_ft)
         self.context = PositionContext()
         self.ownship: OwnshipState | None = None
+        self.paused = False
 
     @property
     def phase(self):
@@ -26,10 +27,18 @@ class PhaseTracker:
     def handle(self, event: BusEvent) -> PhaseChanged | None:
         if isinstance(event, AirportData):
             self.context_builder.add_airport(event.airport)
-        elif isinstance(event, SimLifecycle) and event.kind == "flight_loaded":
-            self.detector.reset()
+        elif isinstance(event, SimLifecycle):
+            if event.kind in ("flight_loaded", "sim_stop"):
+                self.detector.reset()
+            elif event.kind == "paused":
+                self.paused = True
+            elif event.kind == "unpaused" and self.paused:
+                self.paused = False
+                self.detector.resume()
         elif isinstance(event, OwnshipState):
             self.ownship = event
             self.context = self.context_builder.build(event)
+            if self.paused:
+                return None  # values in the pause menu can be garbage (e.g. on-ground); don't judge the phase
             return self.detector.update(event, self.context)
         return None

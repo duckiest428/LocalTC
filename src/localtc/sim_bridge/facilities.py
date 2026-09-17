@@ -215,7 +215,8 @@ class AirportAssembler:
             lat=lat,
             lon=lon,
             elev_ft=round(a["ALTITUDE"] * FEET_PER_METER, 1),
-            magvar=round(a["MAGVAR"], 1),
+            # MSFS reports KPAE's 16°E as 344: 0-360, east negative. Store east-positive -180..180.
+            magvar=round(-(((a["MAGVAR"] + 180) % 360) - 180), 1) + 0.0,
             runways=runways,
             frequencies=frequencies,
             taxi_points=tuple(points),

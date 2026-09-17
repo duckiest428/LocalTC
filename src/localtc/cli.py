@@ -22,6 +22,7 @@ from localtc.sim_api import (
     AirportData,
     AtcAlert,
     PhaseChanged,
+    RadioTuned,
     ReadbackEvaluated,
     AtcTransmission,
     BusEvent,
@@ -68,6 +69,9 @@ def format_event(ev: BusEvent) -> str:
         extra = f" missing={','.join(ev.missing)}" if ev.missing else ""
         extra += f" heard={ev.mismatched}" if ev.mismatched else ""
         body = f"RDBK  {ev.instruction_id}: {ev.status}{extra}"
+    elif isinstance(ev, RadioTuned):
+        who = ev.station or "no ATC on this frequency"
+        body = f"TUNE  COM{ev.radio} {ev.frequency_mhz:.3f} -> {who}"
     elif isinstance(ev, AtcAlert):
         body = f"ALERT {ev.kind}: {ev.detail}"
     elif isinstance(ev, AirportData):

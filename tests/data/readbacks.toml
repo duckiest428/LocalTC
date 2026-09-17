@@ -57,6 +57,13 @@ slots = "ifr"
 text = "cleared to boeing as filed climb maintain five thousand departure one two four point six seven five squawk four five two one november one seven two lima tango"
 status = "correct"
 
+# Whisper-style written numbers followed by spoken digits ("7,000 one zero minutes").
+[[case]]
+instruction = "clearance.ifr"
+slots = "ifr"
+text = "Cleared to Boeing Field as filed, climb and maintain 5,000, expect 5,000 one zero minutes after, departure 124.675, squawk 4521, Air Canada 326"
+status = "correct"
+
 [[case]]
 instruction = "clearance.ifr"
 slots = "ifr"

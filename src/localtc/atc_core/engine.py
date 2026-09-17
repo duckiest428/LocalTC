@@ -38,6 +38,8 @@ from localtc.sim_api import (
     BusEvent,
     OwnshipState,
     PhaseChanged,
+    PttPressed,
+    PttReleased,
     RadioTuned,
     ReadbackEvaluated,
     SimLifecycle,
@@ -47,6 +49,7 @@ from localtc.sim_api import (
 P = FlightPhase
 DEPARTURE_PHASES = {P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
+PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 
 # Which controller handles each pilot request (None: whoever is tuned).
 REQUEST_CONTROLLER = {
@@ -111,6 +114,7 @@ class AtcEngine:
         self._scheduled: list[_Scheduled] = []
         self._rng: random.Random | None = None
         self._was_on_runway: bool | None = None  # None until the first tick
+        self._ptt_since: float | None = None  # set while the pilot holds push-to-talk
         self._t = 0.0
 
     # --- public ---------------------------------------------------------------------------
@@ -124,12 +128,20 @@ class AtcEngine:
         elif isinstance(event, AircraftIdentity):
             if not self.cfg.callsign and event.atc_id:
                 self.state.flight.callsign = Callsign.from_sim(event.atc_id, event.airline, event.flight_number, event.atc_type)
+            elif self.cfg.callsign and self.state.flight.callsign is not None:
+                # Keep the type for abbreviated callsigns ("Boeing 38B") even when the ident is overridden.
+                self.state.flight.callsign = replace(self.state.flight.callsign, type_name=event.atc_type)
             self.state.flight.aircraft_type = event.atc_model
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
         elif isinstance(event, OwnshipState):
             out += self._on_ownship(event)
+        elif isinstance(event, PttPressed):
+            self._ptt_since = event.t
+        elif isinstance(event, PttReleased):
+            self._ptt_since = None
         elif isinstance(event, Transcript):
+            self._ptt_since = None
             out += self._on_pilot(event)
         out += self._flush(event.t)
         return out
@@ -263,7 +275,7 @@ class AtcEngine:
 
     def _can_call(self, t: float, own: OwnshipState) -> bool:
         st = self.state
-        if st.pending is not None or self._scheduled or own.com1_tx:
+        if st.pending is not None or self._scheduled or self._transmitting(t):
             return False
         last = max(x for x in (st.comms.last_atc_t, st.comms.last_pilot_t, -math.inf) if x is not None)
         return t - last >= self.cfg.min_gap_s
@@ -502,9 +514,21 @@ class AtcEngine:
         due = t + (self._random().uniform(*self.cfg.response_delay_s) if delay else 0.0)
         self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue))
 
+    def _transmitting(self, t: float) -> bool:
+        """True while the pilot holds push-to-talk.
+
+        The COM TRANSMIT simvar means "this radio is selected to transmit on", which is true for the
+        whole flight, so it says nothing about whether the mic is keyed.
+        """
+        if self._ptt_since is None:
+            return False
+        if t - self._ptt_since > PTT_TIMEOUT_S:  # a missed release must not mute ATC forever
+            self._ptt_since = None
+            return False
+        return True
+
     def _flush(self, t: float) -> list[BusEvent]:
-        own = self.state.aircraft
-        if own is not None and own.com1_tx:
+        if self._transmitting(t):
             return []  # never step on the pilot
         out: list[BusEvent] = []
         due = sorted((s for s in self._scheduled if s.due <= t), key=lambda s: s.due)

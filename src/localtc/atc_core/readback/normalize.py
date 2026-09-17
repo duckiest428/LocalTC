@@ -97,6 +97,11 @@ def _numbers(run: list[str]) -> list[str]:
             prev = current[-1].replace(",", "")
             if "." in prev or "." in word or len(prev) > 2 or len(word.replace(",", "")) > 2:
                 numbers.append([])
+        # Digits spoken after a written number are a new number too
+        # ("expect 7,000 one zero minutes after" is 7000 then 10, not 700010).
+        elif current and current[-1][0].isdigit() and word not in MULTIPLIERS and word not in POINT_WORDS:
+            if len(current[-1].replace(",", "").split(".")[0]) > 2:
+                numbers.append([])
         numbers[-1].append(word)
     return [value for part in numbers if part and (value := _resolve(part))]
 

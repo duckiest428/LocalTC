@@ -109,6 +109,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cfg.flight.destination = args.destination
     if args.cruise_ft:
         cfg.flight.cruise_ft = args.cruise_ft
+    if args.callsign:
+        cfg.flight.callsign = args.callsign
     if args.no_atc:
         cfg.atc.enabled = False
     printer = EventPrinter(skip_traffic=True) if (args.print or args.type) else None
@@ -135,6 +137,8 @@ def _cmd_replay(args: argparse.Namespace) -> int:
         cfg.flight.destination = args.destination
     if args.cruise_ft:
         cfg.flight.cruise_ft = args.cruise_ft
+    if args.callsign:
+        cfg.flight.callsign = args.callsign
     printer = None if args.quiet else EventPrinter(args.ownship_every, skip_traffic=args.atc)
     return _run(cfg, args.record, printer, typed_input=args.type)
 
@@ -243,6 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--type", action="store_true", help="type pilot transmissions on stdin (implies --print)")
     run.add_argument("--destination", help="destination ICAO (overrides [flight])")
     run.add_argument("--cruise-ft", type=int, help="planned cruise altitude (overrides [flight])")
+    run.add_argument("--callsign", help="callsign to use instead of the sim's (e.g. N738B on an airline livery)")
     run.add_argument("--no-atc", action="store_true", help="don't run the ATC engine")
     run.set_defaults(func=_cmd_run)
 
@@ -263,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--type", action="store_true", help="type pilot transmissions on stdin (use with --atc)")
     replay.add_argument("--destination", help="destination ICAO for --atc")
     replay.add_argument("--cruise-ft", type=int, help="planned cruise altitude for --atc")
+    replay.add_argument("--callsign", help="callsign to use instead of the sim's")
     replay.add_argument("--ownship-every", type=float, default=1.0, metavar="SECONDS",
                         help="print at most one own-ship line per this much session time")
     replay.set_defaults(func=_cmd_replay)

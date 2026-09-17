@@ -24,7 +24,10 @@ def default_cache_dir() -> Path:
 
 
 def load_airport(path: str | Path) -> Airport:
-    return _decoder.decode(Path(path).read_bytes())
+    airport = _decoder.decode(Path(path).read_bytes())
+    if abs(airport.magvar) > 180:  # cached before magvar normalization (the sim's 0-360, east negative)
+        airport = msgspec.structs.replace(airport, magvar=round(-(((airport.magvar + 180) % 360) - 180), 1) + 0.0)
+    return airport
 
 
 def dump_airport(airport: Airport, path: str | Path) -> None:

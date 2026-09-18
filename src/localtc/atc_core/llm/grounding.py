@@ -1,8 +1,9 @@
-"""Checks that a value the model reports was actually said.
+"""Checks that what the model reports was actually said.
 
 The model may understand a transmission; it may not invent one. Every number it
-returns must appear in the pilot's words (after number normalization), and every
-yes/no phrase needs a keyword from the transmission. Anything else is dropped.
+returns must appear in the pilot's words (after number normalization, with the
+callsign taken out), every yes/no phrase needs a keyword from the transmission,
+and every intent needs a word that signals it.
 """
 
 from typing import Any
@@ -27,10 +28,9 @@ def digit_stream(tokens: list[Token]) -> str:
 
 
 def _said_number(digits: str, tokens: list[Token]) -> bool:
+    """A whole number the pilot said. Not a substring: runway "6" is not in callsign "69"."""
     digits = digits.lstrip("0") or "0"
-    if any((n.split(".")[0].lstrip("0") or "0") == digits for n in number_tokens(tokens)):
-        return True
-    return digits in digit_stream(tokens)
+    return any((n.split(".")[0].lstrip("0") or "0") == digits for n in number_tokens(tokens))
 
 
 def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
@@ -40,7 +40,10 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
         return value is True and bool(words & set(PHRASE_STEMS[element]))
     if element in ("runway", "hold_short"):
         digits = "".join(c for c in str(value) if c.isdigit())
-        return bool(digits) and _said_number(digits, tokens)
+        side = str(value)[len(digits):].upper()
+        sides = {"L": {"left", "l"}, "R": {"right", "r"}, "C": {"center", "centre", "c"}}
+        said_side = not side or bool(sides[side] & ({t.text for t in tokens}))  # "06" must not come back as "06R"
+        return bool(digits) and _said_number(digits, tokens) and said_side
     if element == "frequency":
         full = f"{float(value):.3f}".replace(".", "").rstrip("0")
         name = full[:5] if len(full) == 6 else full  # 120.425 is also said "one two zero point four two"
@@ -62,3 +65,27 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
         kind_words = {"ILS": {"ils", "i", "localizer"}, "RNAV": {"rnav", "gps", "r", "area"}, "VISUAL": {"visual"}}
         return grounded("runway", value.runway, tokens) and bool(words & kind_words.get(value.kind, set()))
     return False
+
+
+# Words that must appear for the model's intent to be believed. A small model reaches for
+# request_altitude whenever an altitude is mentioned, including plain check-ins.
+REQUEST_WORDS = {"request", "requesting", "could", "can", "like", "want", "chance", "higher", "lower", "unable"}
+ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", "level", "thousand", "hundred"}
+INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one word
+    "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
+    "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
+    "ready_to_taxi": ({"taxi", "ready", "push", "pushback"},),
+    "ready_for_departure": ({"ready", "holding", "hold", "departure", "takeoff", "go", "short"},),
+    "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
+    "clear_of_runway": ({"clear", "vacated", "off", "exited"},),
+    "request_taxi_parking": ({"parking", "gate", "ramp", "stand", "apron", "taxi"},),
+}
+
+
+def missing_cue(intent: str, tokens: list[Token]) -> str | None:
+    """None if the words fit the intent; otherwise what's missing, for the retry message."""
+    words = {t.text for t in tokens if t.kind == "word"}
+    for cues in INTENT_CUES.get(intent, ()):
+        if not words & cues:
+            return f"{intent} needs a word like {', '.join(sorted(cues)[:5])}, and the pilot said none"
+    return None

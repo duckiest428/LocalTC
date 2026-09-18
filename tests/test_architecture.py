@@ -9,7 +9,7 @@ SRC = Path(__file__).parents[1] / "src" / "localtc"
 
 def imports_of(path: Path) -> set[str]:
     names: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:

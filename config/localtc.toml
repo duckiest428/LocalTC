@@ -38,12 +38,12 @@ airport_dirs = []             # extra folders of <ICAO>.json airport files
 
 [llm]                         # local language model via Ollama (https://ollama.com); nothing leaves this machine
 enabled = true
-base_url = "http://localhost:11434"
+base_url = "http://127.0.0.1:11434"
 model = "llama3.2:3b"         # ollama pull llama3.2:3b
 understanding = "primary"     # primary: reads every pilot call; fallback: only what the grammar can't; off
 phrasing = true               # word answers to questions and declined requests (routine calls stay templated)
-timeout_s = 2.5               # per model call; on timeout the grammar's answer is used
-budget_s = 4.0                # per pilot transmission, including one retry
+timeout_s = 3.0               # per model call; on timeout the grammar's answer is used
+budget_s = 5.0                # per pilot transmission, including one retry
 max_attempts = 2
 keep_alive = "1h"             # keep the model loaded between calls
 num_ctx = 4096

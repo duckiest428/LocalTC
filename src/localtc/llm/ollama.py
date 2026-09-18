@@ -29,7 +29,7 @@ class OllamaStatus:
 @dataclass
 class OllamaBackend:
     model: str = "llama3.2:3b"
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first and costs ~2 s a call
     keep_alive: str = "1h"  # keep the model loaded between transmissions
     num_ctx: int = 4096
     options: dict = field(default_factory=dict)

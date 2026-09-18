@@ -89,7 +89,7 @@ class Scenario(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
 
 
 def load_scenario(path: str | Path) -> Scenario:
-    return msgspec.convert(tomllib.loads(Path(path).read_text()), Scenario)
+    return msgspec.convert(tomllib.loads(Path(path).read_text(encoding="utf-8")), Scenario)
 
 
 @dataclass

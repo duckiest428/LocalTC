@@ -125,7 +125,7 @@ def test_airport_cache_round_trip(tmp_path):
     path = cache.put(kpae())
     assert path.name == "KPAE.json"
     assert cache.get("kpae") == kpae() == load_airport(path)
-    path.write_text("{broken")
+    path.write_text("{broken", encoding="utf-8")
     assert cache.get("KPAE") is None
 
 

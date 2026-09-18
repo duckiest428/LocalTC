@@ -32,7 +32,7 @@ DP69 = InterpretContext(callsign=Callsign("DP69"), phase="RUNWAY_HOLD", station=
 
 
 def edge_backend() -> ScriptedBackend:
-    answers = tomllib.loads(EDGE.with_suffix(".answers.toml").read_text())
+    answers = tomllib.loads(EDGE.with_suffix(".answers.toml").read_text(encoding="utf-8"))
     return ScriptedBackend(answers["understand"], answers["phrase"])
 
 
@@ -51,8 +51,8 @@ def test_seeded_cases_in_a_whole_flight(request):
     result = run_scenario(EDGE, interpreter=LlmInterpreter(backend, mode="fallback"), phraser=LlmPhraser(backend))
     golden = EDGE.with_suffix(".golden.txt")
     if request.config.getoption("--update-goldens") or not golden.exists():
-        golden.write_text(result.transcript)
-    assert result.transcript == golden.read_text()
+        golden.write_text(result.transcript, encoding="utf-8")
+    assert result.transcript == golden.read_text(encoding="utf-8")
     alerts = [o.kind for o in result.outputs if isinstance(o, AtcAlert)]
     assert alerts == ["emergency"]  # no readback loops, no incursions, and the emergency raised once
 
@@ -205,7 +205,7 @@ def test_the_budget_caps_retries():
     backend = Slow({"what's the altimeter": ["not json", {"kind": "question", "topic": "altimeter"}]})
     result = LlmInterpreter(backend, budget_s=4.0, clock=lambda: now[0]).interpret("what's the altimeter", None, DP69)
     assert [e.outcome for e in result.exchanges] == ["invalid"]  # no time left for a second try
-    assert result.intent == "say_again"
+    assert (result.intent, result.values) == ("question", {"topic": "altimeter"})  # the topic word is enough
 
 
 def test_an_intent_that_makes_no_sense_now_is_rejected():

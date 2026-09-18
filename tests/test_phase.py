@@ -151,7 +151,7 @@ def test_cli_phases(capsys, tmp_path):
 
     fixture = Path(__file__).parent / "fixtures" / "ifr_kpae_kbfi"
     config = tmp_path / "empty.toml"
-    config.write_text("")
+    config.write_text("", encoding="utf-8")
     assert main(["phases", str(fixture), "--destination", "KBFI", "--cruise-ft", "5000", "--config", str(config)]) == 0
     out = capsys.readouterr().out
     assert "ARRIVAL -> APPROACH" in out and "TAXI_IN -> PARKED" in out

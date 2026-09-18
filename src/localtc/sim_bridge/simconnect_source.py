@@ -236,7 +236,10 @@ class SimConnectSource:
         for event_id, name in SYSTEM_EVENTS.items():
             dll.subscribe_to_system_event(handle, event_id, name)
         for event_id, name in CLIENT_EVENTS.items():
-            dll.map_client_event_to_sim_event(handle, event_id, name)
+            try:
+                dll.map_client_event_to_sim_event(handle, event_id, name)
+            except SimConnectError as exc:  # the copilot can't tune, but everything else works
+                log.warning("Can't map %s: %s", name, exc)
         dll.request_data_on_sim_object(
             handle, REQ_IDENTITY, DEF_IDENTITY, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
@@ -327,9 +330,12 @@ class SimConnectSource:
                 self._request_airport(dll, handle, command.icao.upper(), force=True)
             elif isinstance(command, SetComFrequency):
                 event_id = EVT_COM2_SET_HZ if command.radio == 2 else EVT_COM1_SET_HZ
-                dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.hz, GROUP_PRIORITY_HIGHEST,
-                                          EVENT_FLAG_GROUPID_IS_PRIORITY)
-                log.info("Tuning COM%d to %.3f", command.radio, command.hz / 1e6)
+                try:
+                    dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.hz, GROUP_PRIORITY_HIGHEST,
+                                              EVENT_FLAG_GROUPID_IS_PRIORITY)
+                    log.info("Tuning COM%d to %.3f", command.radio, command.hz / 1e6)
+                except SimConnectError as exc:
+                    log.warning("Couldn't tune COM%d: %s", command.radio, exc)
             else:
                 log.warning("unsupported command %r", command)
 

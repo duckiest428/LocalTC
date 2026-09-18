@@ -14,7 +14,9 @@ pytestmark = pytest.mark.ollama
 
 
 @pytest.fixture(scope="module")
-def backend():
+def backend(request):
+    if "ollama" not in (request.config.getoption("markexpr") or ""):
+        pytest.skip("run with: pytest -m ollama -s")
     llm = load_config().llm
     backend = OllamaBackend(model=llm.model, base_url=llm.base_url)
     status = backend.status(timeout_s=1.0)

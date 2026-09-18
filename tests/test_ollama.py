@@ -78,9 +78,10 @@ def test_timeout(server):
 
 
 def test_not_running():
-    reply = OllamaBackend(base_url="http://127.0.0.1:9").complete(request(), timeout_s=1)
-    assert reply.text is None and reply.error.startswith("error:")
-    assert OllamaBackend(base_url="http://127.0.0.1:9").status().reachable is False
+    # Nothing listens on port 9. Refusal is instant on macOS/Linux; Windows can take ~2 s and time out instead.
+    reply = OllamaBackend(base_url="http://127.0.0.1:9").complete(request(), timeout_s=5)
+    assert reply.text is None and (reply.error == "timeout" or reply.error.startswith("error:"))
+    assert OllamaBackend(base_url="http://127.0.0.1:9").status(timeout_s=5).reachable is False
 
 
 def test_status(server):

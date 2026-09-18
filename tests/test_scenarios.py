@@ -17,10 +17,10 @@ def test_scenario_matches_golden(path, request):
     transcript = run_scenario(path).transcript
     golden = path.with_suffix(".golden.txt")
     if request.config.getoption("--update-goldens") or not golden.exists():
-        golden.write_text(transcript)
+        golden.write_text(transcript, encoding="utf-8")
         if not request.config.getoption("--update-goldens"):
             pytest.fail(f"wrote new golden {golden.name}; review and commit it")
-    assert transcript == golden.read_text()
+    assert transcript == golden.read_text(encoding="utf-8")
 
 
 def test_scenarios_are_deterministic():

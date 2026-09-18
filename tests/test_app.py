@@ -55,7 +55,7 @@ def test_make_source_selects_by_config(tmp_path):
 
 def test_config_file_and_env_override(tmp_path):
     path = tmp_path / "c.toml"
-    path.write_text('[source]\nkind = "replay"\n[live]\nownship_hz = 2.0\n[replay]\npath = "x"\n')
+    path.write_text('[source]\nkind = "replay"\n[live]\nownship_hz = 2.0\n[replay]\npath = "x"\n', encoding="utf-8")
     cfg = load_config(path, env={"LOCALTC_SOURCE": "live"})
     assert cfg.source.kind == "live" and cfg.live.ownship_hz == 2.0 and cfg.replay.path == "x"
     assert cfg.recorder.enabled is True
@@ -63,7 +63,7 @@ def test_config_file_and_env_override(tmp_path):
 
 def test_config_errors(tmp_path):
     path = tmp_path / "c.toml"
-    path.write_text("[live]\nownship_hertz = 2.0\n")
+    path.write_text("[live]\nownship_hertz = 2.0\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="ownship_hertz"):
         load_config(path, env={})
     with pytest.raises(ConfigError):
@@ -87,5 +87,5 @@ def test_cli_inspect_and_replay(capsys, tmp_path):
 
 def _empty_config(tmp_path: Path) -> Path:
     path = tmp_path / "empty.toml"
-    path.write_text("")
+    path.write_text("", encoding="utf-8")
     return path

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import shutil
 import struct
+import threading
 from collections import Counter
 from collections.abc import Callable
 from contextlib import suppress
@@ -86,7 +87,8 @@ async def language_model(cfg: Config, source: SimSource):
     if not status.has(llm.model):
         log.warning("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
         return None
-    asyncio.get_running_loop().run_in_executor(None, warm_up, backend)
+    # A daemon thread, not the default executor: exit mustn't wait for a slow first load.
+    threading.Thread(target=warm_up, args=(backend,), name="llm-warm-up", daemon=True).start()
     return backend
 
 

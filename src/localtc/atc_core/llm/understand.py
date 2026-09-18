@@ -26,7 +26,8 @@ from importlib import resources
 from typing import Any, Literal
 
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
-from localtc.atc_core.llm.grounding import PHRASE_STEMS, grounded
+from localtc.atc_core.llm.grounding import PHRASE_STEMS, grounded, missing_cue
+from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
 from localtc.atc_core.readback.extract import ELEMENTS, normalize_runway, values_equal, without_callsign
@@ -87,13 +88,17 @@ PLAUSIBLE_PHASES: dict[str, set[str | None]] = {
     "ready_for_departure": GROUND_OUT,
     "checkin": AIRBORNE,
     "report_final": {None, "ARRIVAL", "APPROACH", "LANDING"},
-    "clear_of_runway": {None, "LANDING", "TAXI_IN", "PARKED"},
-    "request_taxi_parking": {None, "LANDING", "TAXI_IN", "PARKED"},
+    "clear_of_runway": {None, "LANDING", "TAXI_IN"},
+    "request_taxi_parking": {None, "LANDING", "TAXI_IN"},
 }
 
 
 class AnswerError(ValueError):
     """The model's answer can't be used; the message is shown to the model on retry."""
+
+
+class IntentError(AnswerError):
+    """A request whose intent the pilot's words contradict (the kind "request" itself may be right)."""
 
 
 @dataclass(frozen=True)
@@ -119,7 +124,7 @@ class Example:
 
 
 def load_examples() -> list[Example]:
-    data = tomllib.loads((resources.files("localtc.atc_core.llm") / "examples.toml").read_text())
+    data = tomllib.loads((resources.files("localtc.atc_core.llm") / "examples.toml").read_text(encoding="utf-8"))
     return [Example(**{**e, "expect": tuple(e.get("expect", ()))}) for e in data["example"]]
 
 
@@ -146,7 +151,7 @@ def user_message(*, phase: str | None, station: str | None, atc: str | None, exp
 def _expected_items(pending: PendingReadback) -> list[tuple[str, str | None]]:
     items: list[tuple[str, str | None]] = []
     for element in (*pending.required, *pending.optional):
-        if element not in VALUE_ELEMENTS and element not in PHRASE_ELEMENTS:
+        if element == "callsign":
             continue
         value = pending.expected.get(element, True)
         if value is True:
@@ -178,7 +183,7 @@ def schema(pending: PendingReadback | None) -> dict[str, Any]:
 
 def build_request(text: str, pending: PendingReadback | None, context: InterpretContext,
                   examples: list[Example]) -> LlmRequest:
-    mode = "readback" if pending is not None and _model_elements(pending) else "request"
+    mode = "readback" if pending is not None else "request"
     messages: list[tuple[str, str]] = []
     for ex in examples:
         if ex.mode != mode:
@@ -279,9 +284,11 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
         raise AnswerError(f"kind must be one of {', '.join(KINDS)}")
     if intent and intent not in INTENTS:
         raise AnswerError(f"intent {intent!r} is not allowed")
+    topic = data.get("topic", "") or ""
+    if kind == "request" and not intent and topic in TOPICS:
+        kind = "question"  # small models file questions as requests with a topic; the meaning is clear
     if kind == "request" and not intent:
         raise AnswerError("a request needs an intent")
-    topic = data.get("topic", "") or ""
     if kind == "question":
         topic = topic if topic in TOPICS else "other"
 
@@ -305,6 +312,8 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
             values[name] = value
         else:
             dropped.append(f"{name}={data[name]}")
+    if kind == "request" and (problem := missing_cue(intent, tokens)):
+        raise IntentError(problem + "; pick the intent that matches the words, or other if none does")
     if dropped:
         # A model that invents one value has probably misread the whole call ("request direct" taken
         # as an altitude request with a made-up level), so the answer is retried, not patched.
@@ -353,9 +362,10 @@ class LlmInterpreter:
     def _ask(self, text: str, pending: PendingReadback | None, context: InterpretContext,
              reason: str | None) -> tuple[Answer | None, list[LlmExchange]]:
         assert self.backend is not None
-        tokens = normalize(text)
+        tokens = without_callsign(normalize(text), context.callsign)  # its digits are not values
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
+        intent_errors = 0
         deadline = self._clock() + self.budget_s
         for attempt in range(1, self.max_attempts + 1):
             remaining = deadline - self._clock()
@@ -378,6 +388,7 @@ class LlmInterpreter:
                 answer = parse_answer(reply.text, pending if readback_mode else None, tokens)
                 answer = self._check_phase(answer, context)
             except AnswerError as exc:
+                intent_errors += isinstance(exc, IntentError)
                 record("invalid", str(exc))
                 request = replace(request, messages=(
                     *request.messages, ("assistant", reply.text),
@@ -386,13 +397,20 @@ class LlmInterpreter:
                 continue
             record("used")
             return answer, exchanges
+        words = {t.text for t in tokens}
+        if exchanges and (topic := question_topic(text)) is not None:
+            return Answer(kind="question", topic=topic), exchanges  # "say the winds": clear enough without the model
+        if exchanges and intent_errors == len(exchanges) and words & {"request", "requesting"}:
+            # Every answer said "a request" and every intent it tried was contradicted by the words:
+            # it's a request the engine has no procedure for, which ATC declines.
+            return Answer(kind="request", intent="other"), exchanges
         return None, exchanges
 
     @staticmethod
     def _check_phase(answer: Answer, context: InterpretContext) -> Answer:
         allowed = PLAUSIBLE_PHASES.get(answer.intent)
         if answer.kind == "request" and allowed is not None and context.phase not in allowed:
-            raise AnswerError(f"{answer.intent} is not possible in phase {context.phase}")
+            raise IntentError(f"{answer.intent} is not possible in phase {context.phase}")
         return answer
 
     # -- combining with the grammar -------------------------------------------------------------------
@@ -411,6 +429,8 @@ class LlmInterpreter:
             details = {k: answer.values[k] for k in ("emergency", "souls", "fuel") if k in answer.values}
             return Interpretation(kind="request", intent=EMERGENCY, values=details, confidence=1.0, source="llm",
                                   callsign_heard=grammar.callsign_heard, text=text)
+        if grammar.kind == "readback" and answer.kind in ("request", "unintelligible") and answer.intent != "say_again":
+            return grammar  # the pilot repeated the pending instruction; that's a readback whatever the model says
         if pending is not None and answer.kind == "readback":
             readback = self._readback(without_callsign(tokens, context.callsign), answer, pending, grammar, text)
             if readback is not None:
@@ -420,8 +440,8 @@ class LlmInterpreter:
                                   source="llm", callsign_heard=grammar.callsign_heard, text=text)
         if answer.kind == "request":
             values = {**grammar.values, **{k: v for k, v in answer.values.items() if k in ("runway", "atis", "altitude")}}
-            if answer.intent == "checkin" and "altitude" in answer.values:
-                values = {"altitude": answer.values["altitude"], **{k: v for k, v in grammar.values.items() if k != "altitude"}}
+            if answer.intent == "checkin" and grammar.intent == "checkin" and "altitude" in grammar.values:
+                values["altitude"] = grammar.values["altitude"]  # "passing 6,000 for 12,000": the first is where we are
             return Interpretation(kind="request", intent=answer.intent, values=values, confidence=0.8, source="llm",
                                   callsign_heard=grammar.callsign_heard, text=text)
         # Unintelligible to the model (or a readback with nothing pending): the grammar may still know.

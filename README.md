@@ -96,12 +96,15 @@ Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) o
 
 Without Ollama, LocalTC logs a warning and runs on the grammar alone, exactly as in Phase 1. `--no-llm` does the same on purpose.
 
+With llama3.2:3b the edge cases pass 34/34, at about 1 s per call (median; the p95 is about 2 s including retries). If `llm check` shows slower answers on your machine, raise `[llm] timeout_s` and `budget_s`. Keep `base_url` on `127.0.0.1`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every call.
+
 **What the model does.** It fills in a small JSON form for each pilot call: the kind of call, the intent, and the values the pilot said. It never talks to the pilot and never decides anything. Its answer is checked before it's used:
 - The form must match the schema (Ollama enforces it). An answer that doesn't is retried once, with the problem named.
 - **Every value must have been said.** A squawk, frequency or altitude that isn't in the pilot's words (after number normalization) makes the whole answer invalid.
-- Readback values are compared with the same rules as the grammar, and a value the grammar heard wins over the model's.
+- **The intent has to fit the words.** An altitude request needs a request word ("request", "could we", "higher") and an altitude word. A small model otherwise calls every check-in an altitude request.
+- Readback values are compared with the same rules as the grammar, and a value the grammar heard wins over the model's. If the grammar recognized a readback, the model can't turn it into a request.
 - An intent that makes no sense in the current phase (ready to taxi while cruising) is rejected.
-- On a timeout, a missing model or two bad answers, the grammar's result is used.
+- On a timeout, a missing model or two bad answers, the grammar's result is used. There are two exceptions. A question with a clear topic word ("say the winds") is still answered. A call the model kept calling a request, where the pilot said "request", is declined as unsupported.
 
 **When it's asked** (`[llm] understanding`): `primary` asks it about every call. `fallback` asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). Either way the trigger is recorded.
 

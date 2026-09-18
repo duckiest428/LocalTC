@@ -18,7 +18,7 @@ from localtc.atc_core.readback import (
 from localtc.atc_core.readback.normalize import render
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind
 
-CORPUS = tomllib.loads((Path(__file__).parent / "data" / "readbacks.toml").read_text())
+CORPUS = tomllib.loads((Path(__file__).parent / "data" / "readbacks.toml").read_text(encoding="utf-8"))
 CALLSIGN = Callsign("N172LT", type_name="Skyhawk")
 CONTEXT = InterpretContext(callsign=CALLSIGN)
 LIBRARY = TemplateLibrary.load()

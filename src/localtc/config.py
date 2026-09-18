@@ -69,12 +69,12 @@ class LlmConfig(_Section):
     """The local language model (Ollama). Without it, or when it's slow, the grammar does the work."""
 
     enabled: bool = True
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://127.0.0.1:11434"
     model: str = "llama3.2:3b"
     understanding: Literal["primary", "fallback", "off"] = "primary"  # primary: every transmission; fallback: only
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
-    timeout_s: float = 2.5  # per model call
-    budget_s: float = 4.0  # per transmission, including one retry
+    timeout_s: float = 3.0  # per model call
+    budget_s: float = 5.0  # per transmission, including one retry
     max_attempts: int = 2
     keep_alive: str = "1h"
     num_ctx: int = 4096

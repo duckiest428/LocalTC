@@ -80,7 +80,8 @@ def test_render_errors():
 def test_validation_catches_bad_templates(tmp_path):
     (tmp_path / "bad.toml").write_text(
         '[[template]]\nid = "x.bad"\ncontroller = "tower"\ntext = ["{callsign}, {nonsense}"]\n'
-        'readback = { required = ["telepathy"] }\n'
+        'readback = { required = ["telepathy"] }\n',
+        encoding="utf-8",
     )
     with pytest.raises(TemplateError) as err:
         TemplateLibrary.load(tmp_path)
@@ -92,7 +93,8 @@ def test_validation_catches_bad_templates(tmp_path):
 
 def test_extra_template_dirs_override(tmp_path):
     (tmp_path / "custom.toml").write_text(
-        '[[template]]\nid = "common.roger"\ncontroller = "any"\ntext = ["{callsign}, copy that."]\n'
+        '[[template]]\nid = "common.roger"\ncontroller = "any"\ntext = ["{callsign}, copy that."]\n',
+        encoding="utf-8",
     )
     library = TemplateLibrary.load(tmp_path)
     assert library.render("common.roger", {"callsign": Callsign("N1")}).text == "N1, copy that."

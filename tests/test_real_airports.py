@@ -42,8 +42,8 @@ def first_ownship() -> OwnshipState:
 
 def test_magvar_is_east_positive(kpdx, kbfi, tmp_path):
     assert (kpdx.magvar, kbfi.magvar) == (16.0, 15.0)  # ~16°E in the Pacific Northwest
-    stale = json.loads((AIRPORTS / "KPDX.json").read_text()) | {"magvar": 344.0}  # cached before the fix
-    (tmp_path / "KPDX.json").write_text(json.dumps(stale))
+    stale = json.loads((AIRPORTS / "KPDX.json").read_text(encoding="utf-8")) | {"magvar": 344.0}  # cached before the fix
+    (tmp_path / "KPDX.json").write_text(json.dumps(stale), encoding="utf-8")
     assert load_airport(tmp_path / "KPDX.json").magvar == 16.0
 
 

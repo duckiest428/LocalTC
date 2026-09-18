@@ -38,7 +38,8 @@ class Case:
 
 
 def load_cases(path: str | Path | None = None) -> list[Case]:
-    text = Path(path).read_text() if path else (resources.files("localtc.llm") / "eval_cases.toml").read_text()
+    source = Path(path) if path else resources.files("localtc.llm") / "eval_cases.toml"
+    text = source.read_text(encoding="utf-8")  # not the Windows default code page
     return [Case(**c) for c in tomllib.loads(text)["case"]]
 
 

@@ -52,6 +52,43 @@ pilot = "montreal departure DP69 with you out of six thousand for one two thousa
 answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "6000", emergency = "", souls = "", fuel = "" }
 
 [[example]]
+# "<altitude> climbing <altitude>" is the standard check-in after a handoff.
+mode = "request"
+phase = "DEPARTURE"
+station = "Seattle Departure"
+pilot = "Seattle Departure, N172LT, two thousand three hundred climbing five thousand"
+answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "2300", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+# Reporting an altitude to a new controller is a check-in, not a request.
+mode = "request"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "Seattle Center, Alaska 123, level one one thousand"
+answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "11000", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "ARRIVAL"
+station = "Seattle Approach"
+pilot = "approach N172LT descending through four thousand five hundred for three thousand"
+answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "4500", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "PARKED"
+station = "Paine Ground"
+pilot = "ground N172LT at the west ramp with bravo, ready to taxi"
+answer = { kind = "request", intent = "ready_to_taxi", topic = "", runway = "", atis = "B", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "APPROACH"
+station = "Boeing Tower"
+pilot = "Boeing tower, N172LT, established on the localizer one four right"
+answer = { kind = "request", intent = "report_final", topic = "", runway = "14R", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
 mode = "request"
 phase = "RUNWAY_HOLD"
 station = "Montreal Tower"
@@ -84,6 +121,13 @@ mode = "request"
 phase = "CRUISE"
 station = "Montreal Center"
 pilot = "DP69 requesting direct Quebec"
+answer = { kind = "request", intent = "other", topic = "", runway = "", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "APPROACH"
+station = "Seattle Approach"
+pilot = "Alaska 123 would like to hold present position for a few minutes"
 answer = { kind = "request", intent = "other", topic = "", runway = "", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
 
 [[example]]

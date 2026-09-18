@@ -72,7 +72,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("ready_for_departure", runway=_any_runway(tokens))
     if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final")):
         add("report_final", runway=_any_runway(tokens))
-    checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",))
+    checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
+                     ("passing",), ("through",), ("out", "of"))
     if _has_any(tokens, *checkin_words) and not altitudes(tokens):
         reported = _reported_altitudes(tokens)
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None)

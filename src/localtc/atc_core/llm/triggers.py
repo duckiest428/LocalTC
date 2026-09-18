@@ -29,7 +29,10 @@ def is_question(text: str) -> bool:
     if "say" in words:  # "say altimeter", but not "say again"
         after = words[words.index("say") + 1 : words.index("say") + 2]
         return bool(after) and after[0] != "again"
-    return bool(set(words) & QUESTION_TOPICS) and not set(words) & {"cleared", "maintain", "squawk", "runway"}
+    # A topic word alone ("weather") makes a question, unless the pilot is asking for something
+    # ("request deviation for weather") or reading back ("runway", "squawk").
+    return bool(set(words) & QUESTION_TOPICS) and not set(words) & {"cleared", "maintain", "squawk", "runway",
+                                                                     "request", "requesting"}
 
 
 def trigger(grammar: Interpretation, text: str) -> str | None:
@@ -48,4 +51,20 @@ def trigger(grammar: Interpretation, text: str) -> str | None:
     off = (words & OFF_SCRIPT) - OWNS_WORD.get(grammar.intent or "", set())
     if off:
         return "out_of_grammar"
+    return None
+
+
+# Question topics recognisable from a single word; used when the model can't classify a question.
+TOPIC_WORDS = {"altimeter": "altimeter", "wind": "wind", "winds": "wind", "weather": "weather", "metar": "weather",
+               "runway": "runway", "squawk": "squawk", "code": "squawk", "altitude": "altitude", "frequency": "frequency",
+               "atis": "atis", "information": "atis"}
+
+
+def question_topic(text: str) -> str | None:
+    """The topic of a question from its words, or None."""
+    if not is_question(text):
+        return None
+    for token in normalize(text):
+        if token.kind == "word" and token.text in TOPIC_WORDS:
+            return TOPIC_WORDS[token.text]
     return None

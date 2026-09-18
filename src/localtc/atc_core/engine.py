@@ -28,7 +28,7 @@ from localtc.atc_core.readback import (
     SayAgainInterpreter,
 )
 from localtc.atc_core.session import Clearance, Exchange, IssuedInstruction, SessionSnapshot, SessionState, snapshot
-from localtc.atc_core.values import Approach, Callsign, Phrase, Wind
+from localtc.atc_core.values import Approach, Callsign, Phrase, Wind, clean_sim_name
 from localtc.sim_api import (
     AircraftIdentity,
     Airport,
@@ -130,8 +130,8 @@ class AtcEngine:
                 self.state.flight.callsign = Callsign.from_sim(event.atc_id, event.airline, event.flight_number, event.atc_type)
             elif self.cfg.callsign and self.state.flight.callsign is not None:
                 # Keep the type for abbreviated callsigns ("Boeing 38B") even when the ident is overridden.
-                self.state.flight.callsign = replace(self.state.flight.callsign, type_name=event.atc_type)
-            self.state.flight.aircraft_type = event.atc_model
+                self.state.flight.callsign = replace(self.state.flight.callsign, type_name=clean_sim_name(event.atc_type))
+            self.state.flight.aircraft_type = clean_sim_name(event.atc_model)
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
         elif isinstance(event, OwnshipState):

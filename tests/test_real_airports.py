@@ -14,9 +14,11 @@ import pytest
 from localtc.airports import load_airport
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, select_runway
 from localtc.atc_core.engine import AtcEngine, EngineConfig
-from localtc.atc_core.facilities import airport_facilities
+from localtc.atc_core.phase.context import ContextBuilder
+from localtc.atc_core.phraseology import speech
+from localtc.atc_core.facilities import airport_facilities, center_facility
 from localtc.replay import Recording
-from localtc.sim_api import SIM_EVENT_TYPES, AirportData, AtcTransmission, OwnshipState, PttPressed, PttReleased, Transcript
+from localtc.sim_api import SIM_EVENT_TYPES, AircraftIdentity, AirportData, AtcTransmission, OwnshipState, PttPressed, PttReleased, Transcript
 
 FIXTURES = Path(__file__).parent / "fixtures"
 AIRPORTS = FIXTURES / "airports_real"
@@ -126,3 +128,85 @@ def test_stuck_push_to_talk_does_not_mute_atc_forever(first_ownship):
     assert not [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 20)) if isinstance(o, AtcTransmission)]
     late = [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 40)) if isinstance(o, AtcTransmission)]
     assert [o.instruction_id for o in late] == ["clearance.ifr"]
+
+
+# --- Canada: CYUL -> CYQB, the second live flight -------------------------------------------------
+
+CANADA = FIXTURES / "real_cyul"
+
+
+@pytest.fixture(scope="module")
+def cyul():
+    return load_airport(AIRPORTS / "CYUL.json")
+
+
+@pytest.fixture(scope="module")
+def cyqb():
+    return load_airport(AIRPORTS / "CYQB.json")
+
+
+def test_25khz_channel_names_reach_the_controller(cyul):
+    """Regression: the sim names CYUL departure 120.42, the radio tunes 120.425 - it answered nobody."""
+    departure = next(f for f in airport_facilities(cyul, role="departure") if f.controller == "departure")
+    assert departure.mhz == 120.42 and departure.matches(120.425)
+    assert not departure.matches(120.43)  # an adjacent 8.33 kHz channel is still a different controller
+    tower = next(f for f in airport_facilities(cyul, role="departure") if f.controller == "tower")
+    assert tower.matches(119.3) and not tower.matches(119.305)
+
+
+def test_canadian_facility_names(cyul, cyqb):
+    assert [f.station for f in airport_facilities(cyul, role="departure")] == [
+        "Montreal Clearance", "Montreal Ground", "Montreal Tower", "Montreal Departure"
+    ]
+    assert [f.station for f in airport_facilities(cyqb, role="arrival")] == [
+        "Quebec Ground", "Quebec Tower", "Quebec Ground"  # no clearance delivery: ground issues clearances
+    ]
+    center = center_facility([cyqb], "Seattle", 125.1)
+    assert (center.station, center.mhz) == ("Montreal Center", 135.025)  # the airport's own, not the US default
+
+
+def test_untranslated_sim_names_stay_out_of_the_radio(cyul):
+    """Regression: MSFS 2024 returns "ATCCOM.ATC_NAME AIRBUS.0.text", which ATC read on the air."""
+    identity = next(e for e in Recording(CANADA).events() if isinstance(e, AircraftIdentity))
+    assert identity.atc_type == "ATCCOM.ATC_NAME AIRBUS.0.text"
+    engine = AtcEngine(EngineConfig(seed=5, destination="CYQB", cruise_ft=12000, callsign="DP69"))
+    engine.handle(AirportData(t=0.0, airport=cyul))
+    engine.handle(identity)
+    callsign = engine.state.flight.callsign
+    assert engine.state.flight.aircraft_type == "A330"
+    assert speech.callsign_display(callsign.short) == "DP69"  # a 4-character callsign is not abbreviated to "P69"
+    assert speech.callsign(callsign.short) == "delta papa six niner"
+
+
+def test_heliports_do_not_become_the_nearest_airport(cyul):
+    """The 60 s nearest-airport poll picks up hospital helipads; they have no runways and no geometry."""
+    builder = ContextBuilder(destination="CYQB")
+    builder.add_airport(cyul)
+    helipad = next(e.airport for e in Recording(CANADA).events()
+                   if isinstance(e, AirportData) and e.airport.icao == "CSZ8")  # a hospital helipad, 0 runways
+    builder.add_airport(helipad)
+    own = next(e for e in Recording(CANADA).events() if isinstance(e, OwnshipState))
+    assert builder.build(own).airport.icao == "CYUL"
+
+
+def test_holding_short_alone_asks_for_takeoff(cyul):
+    """The pilot said "Tower, DP69 holding short 06L" and got "say again"."""
+    engine = AtcEngine(EngineConfig(seed=5, destination="CYQB", cruise_ft=12000, callsign="DP69"))
+    engine.handle(AirportData(t=0.0, airport=cyul))
+    own = next(e for e in Recording(CANADA).events() if isinstance(e, OwnshipState))
+    engine.handle(msgspec.structs.replace(own, com1_mhz=119.3))
+    replies = [o for o in engine.handle(Transcript(t=own.t + 1, text="Tower, DP69 holding short 06L"))
+               if isinstance(o, AtcTransmission)]
+    replies += [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 8, com1_mhz=119.3))
+                if isinstance(o, AtcTransmission)]
+    assert [o.instruction_id for o in replies] == ["tower.takeoff"]
+
+
+def test_clear_for_takeoff_is_an_incomplete_readback_not_nonsense():
+    """"Clear for takeoff, DP69" used to match nothing at all and fall through to "say again"."""
+    from localtc.atc_core.readback.extract import ELEMENTS
+    from localtc.atc_core.readback.normalize import normalize
+
+    for text in ("clear for takeoff DP69", "cleared for take off", "clear takeoff"):
+        assert ELEMENTS["cleared_for_takeoff"](normalize(text)) == [True]
+    assert ELEMENTS["cleared_to_land"](normalize("clear to land, DP69")) == [True]

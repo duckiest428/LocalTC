@@ -280,9 +280,10 @@ ELEMENTS: dict[str, Extractor] = {
     "approach": approaches,
     "destination": destination,
     "callsign": callsigns,
-    "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off")),
+    "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
+                                 ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off")),
     "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"), ("position", "and", "hold")),
-    "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land")),
+    "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),
 }
 

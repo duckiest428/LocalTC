@@ -41,6 +41,9 @@ class ContextBuilder:
     def build(self, own: OwnshipState) -> PositionContext:
         nearest, nearest_nm = None, None
         for geometry in self.airports.values():
+            # Heliports and helipads (no runways) carry no usable geometry and would displace the real airport.
+            if not geometry.runways and geometry.icao != self.destination:
+                continue
             d = geometry.distance_nm(own.lat, own.lon)
             if nearest_nm is None or d < nearest_nm:
                 nearest, nearest_nm = geometry, d

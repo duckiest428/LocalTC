@@ -1,6 +1,19 @@
 """Value types that fill phraseology slots and that the readback parser compares against."""
 
+import re
 from dataclasses import dataclass, replace
+
+# MSFS 2024 hands out untranslated localization tokens for ATC TYPE and ATC MODEL.
+SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)\s+(.+?)\.\d+\.text", re.IGNORECASE)
+
+
+def clean_sim_name(value: str) -> str:
+    """ "ATCCOM.ATC_NAME AIRBUS.0.text" -> "Airbus", "ATCCOM.AC_MODEL A330.0.text" -> "A330"."""
+    value = value.strip()
+    if (match := SIM_TOKEN.search(value)) is not None:
+        word = match.group(1).strip()
+        return word.title() if word.isalpha() else word.upper()
+    return "" if ".text" in value else value
 
 
 @dataclass(frozen=True)
@@ -19,7 +32,8 @@ class Callsign:
 
     @property
     def short(self) -> "Callsign":
-        return replace(self, abbreviated=True)
+        """Abbreviating only makes sense for a registration: "DP69" must not become "P69"."""
+        return replace(self, abbreviated=len(self.ident.replace("-", "")) > 4)
 
     @property
     def suffix(self) -> str:
@@ -29,7 +43,12 @@ class Callsign:
     @classmethod
     def from_sim(cls, atc_id: str, airline: str = "", flight_number: str = "", atc_type: str = "") -> "Callsign":
         ident = atc_id.strip().upper()
-        return cls(ident=ident, telephony=airline.strip(), flight_number=flight_number.strip(), type_name=atc_type.strip())
+        return cls(
+            ident=ident,
+            telephony=airline.strip(),
+            flight_number=flight_number.strip(),
+            type_name=clean_sim_name(atc_type),
+        )
 
 
 @dataclass(frozen=True)

@@ -67,6 +67,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off")
     ):
         add("ready_for_departure", runway=_any_runway(tokens))
+    elif hold_short(tokens) and not _has_any(tokens, ("taxi",), ("via",), ("cleared",)):
+        # "Tower, holding short runway 06L" is a departure request; a taxi readback names a route instead.
+        add("ready_for_departure", runway=_any_runway(tokens))
     if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final")):
         add("report_final", runway=_any_runway(tokens))
     checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",))

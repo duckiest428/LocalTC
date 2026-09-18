@@ -26,7 +26,18 @@ class Facility:
     alternates: tuple[float, ...] = ()  # other frequencies the same controller works
 
     def matches(self, mhz: float) -> bool:
-        return any(abs(f - mhz) < 0.004 for f in (self.mhz, *self.alternates))
+        return any(channel_khz(f) == channel_khz(mhz) for f in (self.mhz, *self.alternates))
+
+
+def channel_khz(mhz: float) -> int:
+    """The radio channel a frequency names, in kHz.
+
+    25 kHz channels are written with two decimals: CYUL departure is named 120.42 in the sim's
+    facility data but the radio tunes 120.425. Only .x20/.x70 are such names - 8.33 kHz channels
+    skip those two slots - so expanding them is unambiguous.
+    """
+    khz = round(mhz * 1000)
+    return khz + 5 if khz % 100 in (20, 70) else khz
 
 
 def station_name(freq: Frequency, airport: Airport, controller: str) -> str:

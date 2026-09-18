@@ -138,6 +138,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cfg.voice.ptt_key = args.ptt_key
     if args.whisper_model:
         cfg.voice.model = args.whisper_model
+    if args.mic:
+        cfg.voice.input_device = args.mic
     show = args.print or args.type or cfg.copilot.mode != "off" or cfg.voice.enabled
     printer = EventPrinter(skip_traffic=True) if show else None
     return _run(cfg, record, printer, typed_input=args.type)
@@ -358,19 +360,37 @@ def _cmd_voice_test(args: argparse.Namespace) -> int:
     from localtc.stt.audio import SAMPLE_RATE, AudioCapture
     from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup
 
+    import sounddevice as sd
+
     cfg = load_config(args.config)
+    device = args.device if args.device is not None else (cfg.voice.input_device or None)
     transcriber = _transcriber(cfg, args.whisper_model)
     print(f"Loading {transcriber.description} ...")
     print(f"Ready in {transcriber.warm_up():.1f} s")
-    capture = AudioCapture(cfg.voice.input_device or None, pre_roll_s=cfg.voice.pre_roll_ms / 1000)
+    capture = AudioCapture(device, pre_roll_s=cfg.voice.pre_roll_ms / 1000)
     capture.start()
     latency = getattr(capture._stream, "latency", 0.0) or 0.0
-    print(f"Microphone open at {capture.rate} Hz, input latency {latency * 1000:.0f} ms")
+    index = capture.device if capture.device is not None else sd.default.device[0]
+    print(f"Microphone: [{index}] {sd.query_devices(index)['name']} at {capture.rate} Hz, "
+          f"input latency {latency * 1000:.0f} ms")
+    print("  (a different one: --device <number or part of its name>; list them: localtc voice devices)")
     prompt = build_prompt(VocabularyHints(callsign=cfg.flight.callsign or ""))
     released = threading.Event()
 
     def transcribe_clip() -> None:
+        import numpy as np
+
         audio = capture.end()
+        peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+        bar = "#" * min(40, int(peak * 40 / 0.5))
+        print(f"  level: {bar or '(nothing)'}  peak {peak:.3f}")
+        if peak == 0.0:
+            print("  The microphone sent pure silence. On macOS: System Settings > Privacy & Security > Microphone,")
+            print("  allow your terminal app (Terminal, iTerm, Claude...), then restart it. Otherwise pick another")
+            print("  microphone with --device (localtc voice devices).")
+            return
+        if peak < 0.01:
+            print("  Very quiet: is this the microphone you're talking into? Try --device (localtc voice devices).")
         result = transcriber.transcribe(audio, prompt=prompt)
         print(f"  heard: {fixup(result.text)!r}")
         print(f"  {len(audio) / SAMPLE_RATE:.1f} s of speech, transcribed in {result.latency_ms:.0f} ms "
@@ -517,6 +537,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--ptt", choices=["keyboard", "joystick", "enter"], help="push-to-talk switch (implies --voice)")
     run.add_argument("--ptt-key", help="keyboard push-to-talk key, e.g. ctrl_r, alt_r, f13")
     run.add_argument("--whisper-model", help="tiny.en, base.en, small.en, ... (default: auto)")
+    run.add_argument("--mic", help="microphone: its number or part of its name (see: localtc voice devices)")
     run.set_defaults(func=_cmd_run)
 
     record = with_config(sub.add_parser("record", help="record a live MSFS 2024 session (Windows)"))
@@ -588,6 +609,7 @@ def build_parser() -> argparse.ArgumentParser:
     vtest = with_config(voice_sub.add_parser("test", help="talk and see what Whisper hears, and how fast"))
     vtest.add_argument("--ptt", choices=["enter", "keyboard"], default="enter")
     vtest.add_argument("--whisper-model", help="default: [voice] model")
+    vtest.add_argument("--device", help="microphone: its number or part of its name (default: [voice] input_device)")
     vtest.set_defaults(func=_cmd_voice_test)
     veval = with_config(voice_sub.add_parser("eval", help="re-transcribe a recording's audio (or the spoken edge cases)"))
     veval.add_argument("path", nargs="?", help="recording with audio; omit for the built-in spoken edge cases")

@@ -8,10 +8,22 @@ version = "0.1.0"
 description = "Free, offline-capable ATC for Microsoft Flight Simulator 2024"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["msgspec>=0.18"]
+dependencies = [
+    "msgspec>=0.18",
+    # Voice input: speech-to-text, the microphone, and a push-to-talk key that works while the sim has focus.
+    "faster-whisper>=1.1",
+    "numpy>=1.26",
+    "sounddevice>=0.5",
+    "pynput>=1.7",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "import-linter>=2.0"]
+# Whisper on an NVIDIA GPU (the installer adds this when it finds one). CUDA 12 / cuDNN 9, as ctranslate2 needs.
+cuda = [
+    "nvidia-cublas-cu12>=12; sys_platform == 'win32' or sys_platform == 'linux'",
+    "nvidia-cudnn-cu12>=9,<10; sys_platform == 'win32' or sys_platform == 'linux'",
+]
 
 [project.scripts]
 localtc = "localtc.cli:main"
@@ -25,6 +37,7 @@ pythonpath = ["src", "tests"]
 markers = [
     "windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)",
     "ollama: needs a running Ollama with the configured model (skipped otherwise)",
+    "whisper: needs the Whisper base.en model (localtc setup); skipped otherwise",
 ]
 
 # Architecture rules. Run with `lint-imports`; tests/test_architecture.py checks the same rules.
@@ -51,10 +64,19 @@ source_modules = [
 forbidden_modules = ["localtc.sim_bridge"]
 
 [[tool.importlinter.contracts]]
+name = "Speech-to-text depends only on sim_api and bus"
+type = "forbidden"
+source_modules = ["localtc.stt"]
+forbidden_modules = [
+    "localtc.app", "localtc.atc_core", "localtc.cli", "localtc.copilot", "localtc.llm", "localtc.recorder",
+    "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.tts", "localtc.voice",
+]
+
+[[tool.importlinter.contracts]]
 name = "ATC core depends only on sim_api, bus and airports (no HTTP, no copilot)"
 type = "forbidden"
 source_modules = ["localtc.atc_core"]
 forbidden_modules = [
     "localtc.app", "localtc.cli", "localtc.copilot", "localtc.dsp", "localtc.llm", "localtc.recorder",
-    "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.stt", "localtc.tts",
+    "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.stt", "localtc.tts", "localtc.voice",
 ]

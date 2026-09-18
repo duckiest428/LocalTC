@@ -73,6 +73,11 @@ def runways(tokens: list[Token], expected: Any = None) -> list[str]:
             hit = _runway_at(tokens, i)
             if hit and hit[0] not in found:
                 found.append(hit[0])
+    # Straight after the clearance, a number is the runway: "cleared to land 06".
+    for phrase in (("to", "land"), ("for", "takeoff"), ("for", "take", "off")):
+        for i in _find_phrase(tokens, phrase):
+            if i < len(tokens) and tokens[i].kind == "number" and (hit := _runway_at(tokens, i)) and hit[0] not in found:
+                found.append(hit[0])
     return found
 
 

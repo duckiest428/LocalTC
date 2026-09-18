@@ -5,14 +5,34 @@ Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. 
 - A small local LLM (1B–4B, via Ollama) reads every pilot call; a grammar checks it and takes over when the model is slow, missing or wrong.
 - A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact FAA phraseology; the model words only replies that have no template.
 - An optional copilot works the radio for you: readbacks, frequency changes, or every call.
-- Pilot speech is transcribed locally with faster-whisper. ATC speaks through Piper with radio-effect DSP.
+- You talk to ATC with push-to-talk; faster-whisper transcribes locally. (ATC's own voice, Piper with radio effects, comes next.)
 
 Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
 
-> **Status: Phase 2 (local LLM + copilot).**
-> - **Working:** the full IFR dialogue from clearance delivery to taxi-in; the local model understanding pilot calls (with checks and grammar fallback); questions, altitude requests and emergencies; the copilot.
-> - **Pilot input:** typed, scripted, or the copilot.
-> - **Not yet:** speech-to-text, speech synthesis and radio DSP.
+> **Status: Phase 3 (voice in).**
+> - **Working:** the full IFR dialogue from clearance delivery to taxi-in; the local model understanding pilot calls (with checks and grammar fallback); questions, altitude requests and emergencies; the copilot; **push-to-talk speech with Whisper**.
+> - **Pilot input:** voice, typed, scripted, or the copilot.
+> - **Not yet:** ATC speech synthesis and radio DSP.
+
+## Install (Windows)
+
+Download or clone LocalTC, open PowerShell in its folder, and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install\install.ps1
+```
+
+It installs everything a flight needs and can be run again safely:
+- Python 3.12, via winget if you don't have Python yet.
+- LocalTC, with Whisper speech-to-text, microphone and push-to-talk support.
+- CUDA support for Whisper if there's an NVIDIA card.
+- Ollama and its language model.
+- The Whisper model. After that, flights work offline.
+- A **LocalTC** desktop shortcut.
+
+Options: `-Cpu` (no GPU support), `-NoOllama` (grammar only), `-WhisperModel small.en`.
+
+On macOS/Linux (development against recordings): `./install/install.sh`.
 
 ## Layout
 
@@ -112,6 +132,31 @@ With llama3.2:3b the edge cases pass 34/34, at about 1 s per call (median; the p
 
 **Recordings.** Every model call is recorded as an `llm_exchange` event: prompt, answer, outcome, latency. A replay reuses the recorded answers, so it behaves exactly like the flight did, without a model (`localtc replay ... --llm live` asks the model again instead). `localtc atc <recording> --llm live` runs the model offline against a recording.
 
+## Voice
+
+```bash
+localtc run --source live --voice --destination CYQB --cruise-ft 12000   # hold Right Ctrl and talk
+localtc voice devices                                                    # microphones
+localtc voice test                                                       # talk; see what Whisper heard and how fast
+localtc voice eval recordings/<session>                                  # re-transcribe a recorded flight
+localtc voice eval                                                       # the 34 spoken edge cases
+```
+
+**Push-to-talk** (`[voice] ptt`):
+- `keyboard` (default): hold `ptt_key` (Right Ctrl). It works while the sim has focus. On macOS, allow Input Monitoring for the terminal.
+- `joystick`: a yoke or joystick button (`ptt_joystick`, e.g. `joystick:0:button:3`), bound through SimConnect.
+- `enter`: Enter starts and stops a transmission in the LocalTC window. It needs no permissions, which makes it handy for testing.
+
+The microphone stays open and keeps 0.3 s from before the key went down, so the first word isn't cut off. Each clip is saved in the recording (`audio/*.wav`) with its transcript.
+
+**Whisper** (`[voice] model`, `device`): `auto` picks `small.en` on an NVIDIA GPU and `base.en` on the CPU. On a MacBook Air CPU, base.en takes about 0.4 s for a transmission and small.en about 1.3 s, with fewer errors. `localtc setup` downloads the model to `%LOCALAPPDATA%\LocalTC\models`.
+
+**Aviation vocabulary** (`[voice] vocabulary`): Whisper is prompted with standard phraseology and this flight's names: callsign, stations, airports, every runway, and the local taxiways. It is never given the numbers ATC just assigned. Priming it with the expected squawk could make it "hear" the right one when the pilot said another, and hide a readback error. Known mishearings are corrected afterwards: "whole short", "decent and maintain", "1-2000" for one two thousand, and "12,000,000 minutes" for "12,000, one zero minutes". On the spoken edge cases the prompt halves the word error rate (51% to 25%).
+
+**Into the parser.** A transcript goes to the same understanding path as typed text. ATC waits for it before answering, and it belongs to the frequency you keyed on, even if you switch before Whisper finishes. Whisper's confidence is a trigger: in `fallback` mode, a low-confidence transcript goes to the model even if the grammar parsed it. Push-to-talk with no speech gets no reply.
+
+**Testing without a sim or a microphone.** `tests/fixtures/voice_kpae` is a recording of the KPAE departure flown by voice, made with macOS speech voices (several accents, radio filtering, cockpit noise; `tools/make_voice_fixture.py`). `tests/fixtures/voice_clips` holds the 34 edge cases, spoken. `pytest -m whisper -s` checks that the departure flies identically from Whisper's transcripts: every readback correct, each under 0.7 s. It also runs the spoken edge cases; with Ollama, 30 of 34 are understood.
+
 ## Copilot
 
 ```bash
@@ -193,6 +238,7 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 .venv/bin/pytest
 .venv/bin/lint-imports
 .venv/bin/pytest -m ollama -s      # the edge cases against your real model (skipped without Ollama)
+.venv/bin/pytest -m whisper -s     # speech-to-text on the voice recordings (needs: localtc setup)
 ```
 
 **macOS: `No module named 'localtc'`.** If the project is in an iCloud-synced folder such as `~/Desktop`, macOS can mark the editable install's `.pth` file as hidden, and Python 3.12.13+ skips hidden `.pth` files. Tests aren't affected, because pytest adds `src` to the path itself. For the CLI, either move the project outside the synced folder, run `chflags nohidden .venv/lib/python3*/site-packages/*.pth`, or prefix commands with `PYTHONPATH=src`.

@@ -79,6 +79,15 @@ class SimConnectDll:
         self._transmit_client_event = _bind(
             lib, "SimConnect_TransmitClientEvent", [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32]
         )
+        self._add_client_event_to_group = _bind(
+            lib, "SimConnect_AddClientEventToNotificationGroup", [c_void_p, c_uint32, c_uint32, c_int]
+        )
+        self._set_group_priority = _bind(lib, "SimConnect_SetNotificationGroupPriority", [c_void_p, c_uint32, c_uint32])
+        self._map_input_event = _bind(
+            lib, ("SimConnect_MapInputEventToClientEvent_EX1", "SimConnect_MapInputEventToClientEvent"),
+            [c_void_p, c_uint32, c_char_p, c_uint32, c_uint32, c_uint32, c_uint32, c_int],
+        )
+        self._set_input_group_state = _bind(lib, "SimConnect_SetInputGroupState", [c_void_p, c_uint32, c_uint32])
         self._get_next_dispatch = _bind(
             lib, "SimConnect_GetNextDispatch", [c_void_p, POINTER(c_void_p), POINTER(c_uint32)]
         )
@@ -141,6 +150,17 @@ class SimConnectDll:
     def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None:
         hr = self._transmit_client_event(handle, object_id, event_id, data & 0xFFFFFFFF, group, flags)
         _check(hr, f"TransmitClientEvent({event_id}, {data})")
+
+    def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None:
+        """A key or joystick button (``definition``, e.g. "joystick:0:button:3") sends ``down_event`` when pressed
+        and ``up_event`` when released, without taking the input away from the sim."""
+        for event_id in (down_event, up_event):
+            _check(self._map_client_event(handle, event_id, b""), "MapClientEventToSimEvent(private)")
+            _check(self._add_client_event_to_group(handle, group, event_id, 0), "AddClientEventToNotificationGroup")
+        _check(self._set_group_priority(handle, group, 1), "SetNotificationGroupPriority")  # highest
+        hr = self._map_input_event(handle, group, definition.encode(), down_event, 0, up_event, 0, 0)
+        _check(hr, f"MapInputEventToClientEvent({definition})")
+        _check(self._set_input_group_state(handle, group, 1), "SetInputGroupState")  # on
 
     def get_next_dispatch(self, handle: int) -> bytes | None:
         """Copy the next pending message out of SimConnect's buffer, or None if there isn't one."""

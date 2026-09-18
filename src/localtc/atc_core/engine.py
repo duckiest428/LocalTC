@@ -52,6 +52,7 @@ DEPARTURE_PHASES = {P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE,
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
+STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
 
 # Which controller handles each pilot request (None: whoever is tuned).
 REQUEST_CONTROLLER = {
@@ -77,6 +78,7 @@ class EngineConfig:
     thresholds: PhaseThresholds = field(default_factory=PhaseThresholds)
     response_delay_s: tuple[float, float] = (1.5, 3.0)
     min_gap_s: float = 8.0  # quiet time before an automatic ATC call
+    await_transcripts: bool = False  # voice input: a transcript follows each push-to-talk release
 
 
 @dataclass
@@ -119,6 +121,8 @@ class AtcEngine:
         self._rng: random.Random | None = None
         self._was_on_runway: bool | None = None  # None until the first tick
         self._ptt_since: float | None = None  # set while the pilot holds push-to-talk
+        self._stt_since: float | None = None  # set from push-to-talk release until its transcript arrives
+        self._tx_mhz: float | None = None  # the frequency the pilot keyed the mic on
         self._t = 0.0
 
     # --- public ---------------------------------------------------------------------------
@@ -142,11 +146,18 @@ class AtcEngine:
             out += self._on_ownship(event)
         elif isinstance(event, PttPressed):
             self._ptt_since = event.t
+            own = self.state.aircraft
+            # A transcript arrives after the key is released, maybe after a frequency change: it belongs here.
+            self._tx_mhz = (own.com2_mhz if event.radio == 2 else own.com1_mhz) if own else None
         elif isinstance(event, PttReleased):
             self._ptt_since = None
+            if self.cfg.await_transcripts:
+                self._stt_since = event.t  # don't answer, or call, while the pilot's words are being transcribed
         elif isinstance(event, Transcript):
-            self._ptt_since = None
-            out += self._on_pilot(event)
+            self._ptt_since = self._stt_since = None
+            if event.text.strip():  # an empty one: push-to-talk carried no speech, nothing to answer
+                out += self._on_pilot(event)
+            self._tx_mhz = None
         out += self._flush(event.t)
         return out
 
@@ -295,7 +306,7 @@ class AtcEngine:
         st, t = self.state, ev.t
         st.comms.last_pilot_t = t
         own = st.aircraft
-        mhz = (own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None
+        mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None)
         facility = self._facility_for(mhz) if mhz is not None else None
         pending = st.pending if st.pending is not None and facility is not None and st.pending.controller == facility.controller else None
         if facility is None:
@@ -305,7 +316,7 @@ class AtcEngine:
         last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller), None)
         interp = self.interpreter.interpret(ev.text, pending, InterpretContext(
             callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
-            station=facility.station, last_atc=last_atc,
+            station=facility.station, last_atc=last_atc, confidence=ev.confidence,
         ))
         st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, interp))
         out: list[BusEvent] = list(interp.exchanges)
@@ -675,6 +686,10 @@ class AtcEngine:
         The COM TRANSMIT simvar means "this radio is selected to transmit on", which is true for the
         whole flight, so it says nothing about whether the mic is keyed.
         """
+        if self._stt_since is not None:
+            if t - self._stt_since <= STT_WAIT_S:
+                return True
+            self._stt_since = None  # the transcript never came; don't wait forever
         if self._ptt_since is None:
             return False
         if t - self._ptt_since > PTT_TIMEOUT_S:  # a missed release must not mute ATC forever

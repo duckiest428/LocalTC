@@ -30,6 +30,7 @@ class LiveConfig(_Section):
     retry_max_s: float = 15.0
     connect_timeout_s: float = 0.0  # 0 = wait indefinitely
     nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
+    ptt_input: str = ""  # a joystick button or key as push-to-talk through the sim, e.g. "joystick:0:button:3"
 
 
 class ReplayConfig(_Section):
@@ -81,6 +82,24 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
+class VoiceConfig(_Section):
+    """Speaking to ATC: push-to-talk, the microphone, and Whisper."""
+
+    enabled: bool = False
+    ptt: Literal["keyboard", "joystick", "enter"] = "keyboard"
+    ptt_key: str = "ctrl_r"  # keyboard: a key held to talk, works while the sim has focus
+    ptt_joystick: str = "joystick:0:button:0"  # joystick: an input as MSFS names it
+    input_device: str = ""  # blank = the system default microphone; or part of its name, or its number
+    model: str = "auto"  # auto: small.en with an NVIDIA GPU, base.en otherwise
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    compute_type: str = "auto"
+    models_dir: str = ""  # blank = %LOCALAPPDATA%\LocalTC\models
+    beam_size: int = 5
+    vocabulary: bool = True  # prompt Whisper with aviation words and this flight's names
+    pre_roll_ms: int = 300  # audio kept from just before the key went down
+    tail_ms: int = 250  # audio kept after it came up
+
+
 class CopilotConfig(_Section):
     mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
     delay_min_s: float = 2.0  # pilot reaction time before speaking
@@ -93,6 +112,7 @@ class Config(_Section):
     atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
+    voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)
@@ -100,6 +120,19 @@ class Config(_Section):
 
 class ConfigError(ValueError):
     pass
+
+
+def with_recorded(cfg: Config, recorded: dict) -> Config:
+    """``cfg`` with the flight and ATC settings a recording was made with (its header ``config``), so replaying it
+    reproduces the same decisions: the same squawk, runways and phrasing."""
+    data = msgspec.to_builtins(cfg)
+    for section in ("flight", "atc"):
+        if isinstance(recorded.get(section), dict):
+            data[section] = {**data[section], **recorded[section]}
+    try:
+        return msgspec.convert(data, Config)
+    except msgspec.ValidationError:
+        return cfg  # a recording from an older version with settings that no longer exist
 
 
 def load_config(path: str | Path | None = None, env: Mapping[str, str] = os.environ) -> Config:

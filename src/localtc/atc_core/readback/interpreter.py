@@ -35,6 +35,7 @@ class InterpretContext:
     t: float = 0.0  # event time of the transmission
     station: str | None = None  # who the pilot is talking to, e.g. "Montreal Tower"
     last_atc: str | None = None  # what that controller said last
+    confidence: float | None = None  # speech-to-text confidence (None: typed)
 
 
 @dataclass(frozen=True)

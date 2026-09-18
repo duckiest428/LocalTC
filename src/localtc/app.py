@@ -107,7 +107,7 @@ def warm_up(backend, timeout_s: float = 120.0) -> float | None:
     return reply.latency_ms / 1000
 
 
-def build_engine(cfg: Config, backend=None):
+def build_engine(cfg: Config, backend=None):  # noqa: C901
     """The ATC engine, with the language model when there is one."""
     from localtc.atc_core.engine import AtcEngine
     from localtc.atc_core.llm import LlmInterpreter, LlmPhraser
@@ -119,7 +119,9 @@ def build_engine(cfg: Config, backend=None):
                                      max_attempts=llm.max_attempts, budget_s=llm.budget_s)
     if backend is not None and llm.phrasing:
         phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s)
-    return AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
+    engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
+    engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
+    return engine
 
 
 def make_source(cfg: Config) -> SimSource:
@@ -155,6 +157,8 @@ async def run_session(
     lines typed on stdin become pilot transmissions (``Transcript`` events).
     """
     record = cfg.recorder.enabled if record is None else record
+    if cfg.voice.enabled and cfg.voice.ptt == "joystick" and not cfg.live.ptt_input:
+        cfg.live.ptt_input = cfg.voice.ptt_joystick  # the bridge binds it before connecting
     source = make_source(cfg)
     session = await source.start()
     log.info("Source ready: %s %s %s", session.source_kind, session.sim_product, session.sim_version)
@@ -197,7 +201,13 @@ async def run_session(
                 log.info("Copilot: %s", "reads back and changes frequencies" if cfg.copilot.mode == "assist"
                          else "works the radio for the whole flight")
             consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache(), copilot=copilot).run()))
-        typed_task = asyncio.create_task(_typed_transmissions(bus, source)) if typed_input else None
+        voice = None
+        if cfg.voice.enabled:
+            voice = await start_voice(cfg, bus, source, recorder, engine if cfg.atc.enabled else None)
+            consumers.append(asyncio.create_task(voice.service.run()))
+        enter_ptt = voice.service if voice is not None and cfg.voice.ptt == "enter" else None
+        typed_task = (asyncio.create_task(_typed_transmissions(bus, source, ptt=enter_ptt))
+                      if (typed_input or enter_ptt) else None)
 
         pump_task = asyncio.create_task(pump(source, bus))
         if stop is None:
@@ -213,6 +223,8 @@ async def run_session(
                 await asyncio.wait_for(pump_task, timeout=2.0)
         if typed_task is not None:
             typed_task.cancel()  # its thread may sit in readline(); don't wait for another Enter
+        if voice is not None:
+            voice.close()
         bus.close()
         await asyncio.gather(*consumers, return_exceptions=True)
         if recorder is not None:
@@ -221,22 +233,76 @@ async def run_session(
     return recorder.session_dir if recorder else None
 
 
-async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None) -> None:
-    """Each line typed on stdin is a pilot transmission on COM1 (a stand-in for push-to-talk + speech-to-text)."""
+async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None, *, ptt=None) -> None:
+    """Each line typed on stdin is a pilot transmission on COM1. With ``ptt`` (voice with ptt = "enter"), an
+    empty line starts and ends a spoken transmission instead."""
     import sys
 
     stdin = stdin or sys.stdin
-    print(
-        "\n>>> Type a pilot transmission and press Enter (sent on COM1). Tune COM1 first:\n"
-        ">>> a 'TUNE' line shows which ATC facility answers on that frequency.\n",
-        flush=True,
-    )
+    if ptt is not None:
+        print("\n>>> Press Enter to start talking and Enter again to stop (or type a transmission).\n"
+              ">>> Tune COM1 first: a 'TUNE' line shows which ATC facility answers.\n", flush=True)
+    else:
+        print(
+            "\n>>> Type a pilot transmission and press Enter (sent on COM1). Tune COM1 first:\n"
+            ">>> a 'TUNE' line shows which ATC facility answers on that frequency.\n",
+            flush=True,
+        )
+    talking = False
     while True:
         line = await asyncio.to_thread(stdin.readline)
         if not line:
             return
         if text := line.strip():
-            bus.publish(Transcript(t=source.clock.now(), text=text))
+            bus.publish(Transcript(t=source.clock.now(), text=text, source="typed"))
+        elif ptt is not None:
+            talking = not talking
+            (ptt.press if talking else ptt.release)()
+            print(">>> talking... (Enter to stop)" if talking else ">>> sent", flush=True)
+
+
+@dataclass
+class VoiceInput:
+    service: object
+    capture: object
+    ptt: object | None = None
+
+    def close(self) -> None:
+        if self.ptt is not None:
+            self.ptt.stop()
+        self.capture.close()
+
+
+async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, engine) -> VoiceInput:
+    """Microphone, Whisper and the push-to-talk switch for a session."""
+    from localtc.stt.audio import AudioCapture
+    from localtc.stt.service import VoiceService
+    from localtc.stt.whisper import WhisperTranscriber
+
+    v = cfg.voice
+    transcriber = WhisperTranscriber(v.model, device=v.device, compute_type=v.compute_type, models_dir=v.models_dir or None,
+                                     beam_size=v.beam_size)
+    log.info("Loading %s ...", transcriber.description)
+    seconds = await asyncio.to_thread(transcriber.warm_up)
+    log.info("%s ready (%.1f s)", transcriber.description, seconds)
+    capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000)
+    capture.start()
+    hints = None
+    if engine is not None:
+        from localtc.voice import flight_hints
+
+        hints = lambda: flight_hints(engine)  # noqa: E731
+    service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
+                           vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000)
+    ptt = None
+    if v.ptt == "keyboard":
+        from localtc.stt.ptt import KeyboardPtt
+
+        ptt = KeyboardPtt(v.ptt_key, service.press, service.release)
+        ptt.start()
+    elif v.ptt == "joystick":
+        log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick)
+    return VoiceInput(service, capture, ptt)
 
 
 async def _cache_airports(sub: Subscription, cache: AirportCache) -> None:

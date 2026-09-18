@@ -68,6 +68,30 @@ class OllamaBackend:
             return OllamaStatus(False, error=str(getattr(exc, "reason", exc)))
         return OllamaStatus(True, tuple(m.get("name", "") for m in tags.get("models", [])), version=version)
 
+    def pull(self, *, print_progress: bool = False) -> bool:
+        """Download the model through Ollama (``ollama pull``). Returns True when it's installed."""
+        req = urllib.request.Request(self.base_url.rstrip("/") + "/api/pull",
+                                     data=json.dumps({"model": self.model, "stream": True}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        last = ""
+        try:
+            with urllib.request.urlopen(req, timeout=3600) as resp:
+                for line in resp:
+                    update = json.loads(line or b"{}")
+                    if "error" in update:
+                        print(f"  {update['error']}") if print_progress else None
+                        return False
+                    status = update.get("status", "")
+                    if update.get("total") and update.get("completed") is not None:
+                        status += f" {100 * update['completed'] // update['total']}%"
+                    if print_progress and status != last:
+                        print(f"  {status}", flush=True)
+                        last = status
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            print(f"  failed: {exc}") if print_progress else None
+            return False
+        return self.status().has(self.model)
+
     def _post(self, path: str, body: dict, timeout_s: float) -> dict:
         req = urllib.request.Request(self.base_url.rstrip("/") + path, data=json.dumps(body).encode(),
                                      headers={"Content-Type": "application/json"}, method="POST")

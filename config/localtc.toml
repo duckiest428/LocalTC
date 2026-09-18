@@ -49,6 +49,21 @@ keep_alive = "1h"             # keep the model loaded between calls
 num_ctx = 4096
 replay = "recorded"           # in replays: "recorded" answers, "live" model, or "off"
 
+[voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
+enabled = false
+ptt = "keyboard"              # keyboard | joystick | enter (Enter in this window starts and stops a transmission)
+ptt_key = "ctrl_r"            # keyboard: hold to talk; works while the sim has focus (ctrl_r, alt_r, f13, a letter...)
+ptt_joystick = "joystick:0:button:0"   # joystick: the button as MSFS names it (bound through SimConnect)
+input_device = ""             # blank = default microphone; or part of its name (localtc voice devices)
+model = "auto"                # auto: small.en with an NVIDIA GPU, base.en otherwise; tiny.en ... large-v3
+device = "auto"               # auto | cpu | cuda
+compute_type = "auto"
+models_dir = ""               # blank = %LOCALAPPDATA%\LocalTC\models (filled by localtc setup)
+beam_size = 5
+vocabulary = true             # prime Whisper with aviation words and this flight's callsign, stations, runways
+pre_roll_ms = 300
+tail_ms = 250
+
 [copilot]                     # works the radio for you (or use --copilot)
 mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)
 delay_min_s = 2.0             # reaction time before the copilot speaks

@@ -30,7 +30,7 @@ def _reported_altitudes(tokens: list[Token]) -> list[int]:
         if token.kind == "number" and token.text.isdigit() and 500 <= int(token.text) <= 60000 and int(token.text) % 100 == 0:
             found.append(int(token.text))
         if token.text == "level" and i + 1 < len(tokens) and (num := _number(tokens, i + 1)) and num.isdigit():
-            value = int(num) * 100 if int(num) < 1000 and i > 0 and tokens[i - 1].text == "flight" else int(num)
+            value = int(num) * 100 if int(num) < 1000 else int(num)  # "level 120" is flight level 120
             if value not in found:
                 found.append(value)
     return found

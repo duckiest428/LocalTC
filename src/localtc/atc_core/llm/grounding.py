@@ -79,6 +79,9 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
     "clear_of_runway": ({"clear", "vacated", "off", "exited"},),
     "request_taxi_parking": ({"parking", "gate", "ramp", "stand", "apron", "taxi"},),
+    # A request ATC can't grant still has to be a request; noise the model can't place is not one.
+    "other": (REQUEST_WORDS | {"requesting", "direct", "deviation", "deviate", "vectors", "hold", "permission", "we'd",
+                               "would", "need", "may"},),
 }
 
 

@@ -19,7 +19,9 @@ OFF_SCRIPT = {"request", "requesting", "unable", "negative", "direct", "higher",
 # Grammar intents whose own phrases use one of those words ("request taxi").
 OWNS_WORD = {"ready_to_taxi": {"request"}, "request_taxi_parking": {"request"}, "request_ifr_clearance": {"request"}}
 
-REASONS = ("emergency", "question", "parser_failure", "ambiguous", "readback_rejected", "out_of_grammar")
+REASONS = ("emergency", "question", "parser_failure", "ambiguous", "readback_rejected", "out_of_grammar",
+           "low_confidence")
+LOW_CONFIDENCE = 0.5  # speech-to-text confidence below which the words themselves are in doubt
 
 
 def is_question(text: str) -> bool:
@@ -35,7 +37,8 @@ def is_question(text: str) -> bool:
                                                                      "request", "requesting"}
 
 
-def trigger(grammar: Interpretation, text: str) -> str | None:
+def trigger(grammar: Interpretation, text: str, confidence: float | None = None,
+            low_confidence: float = LOW_CONFIDENCE) -> str | None:
     """Why the model should look at this transmission, or None if the grammar handled it."""
     if grammar.intent == EMERGENCY:
         return "emergency"
@@ -51,6 +54,8 @@ def trigger(grammar: Interpretation, text: str) -> str | None:
     off = (words & OFF_SCRIPT) - OWNS_WORD.get(grammar.intent or "", set())
     if off:
         return "out_of_grammar"
+    if confidence is not None and confidence < low_confidence:
+        return "low_confidence"  # the grammar found something, but the words may be misheard
     return None
 
 

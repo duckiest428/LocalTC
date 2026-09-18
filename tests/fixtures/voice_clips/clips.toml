@@ -1,0 +1,205 @@
+# Spoken edge cases (tools/make_voice_fixture.py): name -> the WAV, the voice, and the words.
+
+[[clip]]
+case = "takeoff readback without the runway, '-ed' dropped"
+file = "45c48c5b8f.wav"
+voice = "Samantha"
+text = "Clear for takeoff, DP69"
+
+[[clip]]
+case = "takeoff readback with extra words"
+file = "92edef181a.wav"
+voice = "Daniel"
+text = "rolling zero six left, cleared for take off, delta papa six niner"
+
+[[clip]]
+case = "IFR clearance readback, speech recognizer style"
+file = "8b79d11bd8.wav"
+voice = "Karen"
+text = "cleared to quebec as filed, climb maintain 5000, expect 12,000 10 minutes after, departure 120.42, squawk 5015, DP69"
+
+[[clip]]
+case = "wrong squawk; the model copies the expected one instead of what was said"
+file = "e83b2dcaae.wav"
+voice = "Rishi"
+text = "climb and maintain five thousand, departure one two zero point four two, squawk five zero five one, DP69"
+
+[[clip]]
+case = "frequency read back without 'point'"
+file = "e9ef3b3a86.wav"
+voice = "Moira"
+text = "tower one one niner three, DP69"
+
+[[clip]]
+case = "frequency read back with 'decimal'"
+file = "5a38c4d075.wav"
+voice = "Reed (English (US))"
+text = "one twenty decimal four two, DP69"
+
+[[clip]]
+case = "wrong frequency read back"
+file = "ac1fd1b894.wav"
+voice = "Eddy (English (UK))"
+text = "departure one two zero point five two, DP69"
+
+[[clip]]
+case = "asking for a repeat while a readback is due"
+file = "190929cf66.wav"
+voice = "Albert"
+text = "say again the squawk for DP69"
+
+[[clip]]
+case = "altitude read back as 'up to'"
+file = "fdd031224a.wav"
+voice = "Samantha"
+text = "up to one two thousand, DP69"
+
+[[clip]]
+case = "landing clearance read back, '-ed' dropped"
+file = "9b59ba5846.wav"
+voice = "Daniel"
+text = "clear to land zero six, DP69"
+
+[[clip]]
+case = "'standby' is not a readback"
+file = "ec89c8146d.wav"
+voice = "Karen"
+text = "DP69 standby"
+
+[[clip]]
+case = "hallucination: the model invents a readback the pilot never made"
+file = "95de114564.wav"
+voice = "Rishi"
+text = "roger, DP69"
+
+[[clip]]
+case = "holding short without 'ready'"
+file = "81d1a60b7c.wav"
+voice = "Moira"
+text = "tower DP69 holding short zero six left"
+
+[[clip]]
+case = "check-in with 'passing ... for ...'"
+file = "2041ac26f5.wav"
+voice = "Reed (English (US))"
+text = "montreal departure DP69 passing six thousand for twelve thousand"
+
+[[clip]]
+case = "final report in plain words"
+file = "497168231e.wav"
+voice = "Eddy (English (UK))"
+text = "quebec tower DP69 eight miles out on the ILS runway zero six"
+
+[[clip]]
+case = "request a flight level"
+file = "6563e809f5.wav"
+voice = "Albert"
+text = "DP69 request higher, flight level two four zero"
+
+[[clip]]
+case = "request lower, phrased as a question"
+file = "896f758a46.wav"
+voice = "Samantha"
+text = "could we get lower, one zero thousand, DP69"
+
+[[clip]]
+case = "question: altimeter"
+file = "1d36243d43.wav"
+voice = "Daniel"
+text = "what's the altimeter"
+
+[[clip]]
+case = "question: winds"
+file = "d6bd2c1a1a.wav"
+voice = "Karen"
+text = "say the winds at quebec, DP69"
+
+[[clip]]
+case = "question: landing runway"
+file = "e09a66bd0d.wav"
+voice = "Rishi"
+text = "which runway are we landing on"
+
+[[clip]]
+case = "question: weather"
+file = "148ea66098.wav"
+voice = "Moira"
+text = "any weather to report at quebec?"
+
+[[clip]]
+case = "unsupported request: direct"
+file = "7037791f0a.wav"
+voice = "Reed (English (US))"
+text = "DP69 requesting direct Quebec"
+
+[[clip]]
+case = "unsupported request: weather deviation"
+file = "bbb3daa3fb.wav"
+voice = "Eddy (English (UK))"
+text = "request deviation twenty degrees left for weather, DP69"
+
+[[clip]]
+case = "mayday"
+file = "80022e40a2.wav"
+voice = "Albert"
+text = "Mayday mayday mayday, DP69, engine failure, returning to Montreal"
+
+[[clip]]
+case = "emergency without a keyword"
+file = "7ff64bc241.wav"
+voice = "Samantha"
+text = "DP69 we have smoke in the cockpit, request immediate return"
+
+[[clip]]
+case = "pan-pan with souls and fuel"
+file = "95873b98c7.wav"
+voice = "Daniel"
+text = "pan pan pan pan, DP69, sick passenger, one hundred fifty souls, three hours of fuel"
+
+[[clip]]
+case = "IFR clearance request"
+file = "97b4404c5c.wav"
+voice = "Karen"
+text = "Montreal Clearance DP69 IFR to Quebec ready to copy"
+
+[[clip]]
+case = "ready to taxi with the ATIS letter"
+file = "f940a23790.wav"
+voice = "Rishi"
+text = "ground, DP69, at gate 5, ready to taxi with information alpha"
+
+[[clip]]
+case = "clear of the runway, to the gate"
+file = "4c74c1d4ec.wav"
+voice = "Moira"
+text = "clear of the runway at bravo, DP69, taxi to the gate"
+
+[[clip]]
+case = "check-in, level"
+file = "a8911acc3e.wav"
+voice = "Reed (English (US))"
+text = "Montreal center, DP69, level one two thousand"
+
+[[clip]]
+case = "say again"
+file = "761eefbfc7.wav"
+voice = "Eddy (English (UK))"
+text = "say again for DP69"
+
+[[clip]]
+case = "wilco"
+file = "4ee54ea980.wav"
+voice = "Albert"
+text = "wilco, DP69"
+
+[[clip]]
+case = "mumbling"
+file = "3174a4aa38.wav"
+voice = "Samantha"
+text = "uh um the uh"
+
+[[clip]]
+case = "trap: ready for departure while cruising"
+file = "10d3f5745e.wav"
+voice = "Daniel"
+text = "DP69 is ready when you are"

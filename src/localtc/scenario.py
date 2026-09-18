@@ -48,6 +48,8 @@ from localtc.sim_api import (
     OwnshipState,
     PhaseChanged,
     LlmExchange,
+    PttPressed,
+    PttReleased,
     ReadbackEvaluated,
     Transcript,
 )
@@ -149,12 +151,22 @@ def run(
     interpreter: Interpreter | None = None,
     phraser: LlmPhraser | None = None,
     copilot: str | None = None,
+    voice: Any = None,
+    on_input: Any = None,
 ) -> ScenarioResult:
-    """Run a scenario; ``base`` is the folder its relative paths start from."""
+    """Run a scenario; ``base`` is the folder its relative paths start from.
+
+    ``voice``: the pilot speaks instead of typing. Its ``speak(text, t)`` returns a clip (``duration_s``,
+    ``text`` as heard, ``audio_ref``, ``confidence``); the transmission takes that long, with push-to-talk
+    around it. ``on_input``: called with every event the engine is given (to write a recording).
+    """
     from localtc.app import engine_config
     from localtc.copilot import Copilot, Note, Say, Tune
 
     engine = AtcEngine(engine_config(scenario.flight, scenario.atc), interpreter=interpreter, phraser=phraser)
+    if voice is not None:
+        engine.cfg.await_transcripts = True
+    speaking: list[tuple[float, BusEvent]] = []  # push-to-talk releases and transcripts still to come
     result = ScenarioResult(engine=engine)
     mode = copilot if copilot is not None else scenario.scenario.copilot
     pilot = Copilot(engine, mode=mode) if mode else None
@@ -176,6 +188,8 @@ def run(
         queue.sort(key=lambda item: (item[0], item[1]))
 
     def feed(event: BusEvent) -> None:
+        if on_input is not None:
+            on_input(event)
         if pilot is not None:
             pilot.observe(event)
         for output in engine.handle(event):
@@ -201,13 +215,37 @@ def run(
                 state["last_own"] = own
                 feed(own)
         text = rule.say.format_map(_SafeDict(_placeholders(engine, own, context, scenario.scenario.vars)))
+        say_text(text, at)
+
+    def say_text(text: str, at: float) -> None:
+        own = state["last_own"]
         mhz = state["com1"] if state["com1"] is not None else (own.com1_mhz if own else 0.0)
-        result.lines.append(f"[{at:8.1f}] PILOT     {speech.frequency_display(mhz)}: {text}")
-        feed(Transcript(t=at, text=text))
+        if voice is None:
+            result.lines.append(f"[{at:8.1f}] PILOT     {speech.frequency_display(mhz)}: {text}")
+            feed(Transcript(t=at, text=text))
+            return
+        feed(PttPressed(t=at))
+        clip = voice.speak(text, at)
+        done = round(at + clip.duration_s, 2)
+        heard = f"{clip.text}" + ("" if clip.text == text else f"   (said: {text})")
+        speaking.append((done, PttReleased(t=done)))
+        speaking.append((done, Transcript(t=done, text=clip.text, confidence=clip.confidence, audio_ref=clip.audio_ref,
+                                          source="voice")))
+        speaking.sort(key=lambda item: item[0])
+        result.lines.append(f"[{done:8.1f}] PILOT     {speech.frequency_display(mhz)}: {heard}")
 
     def run_due(until: float) -> None:
-        while queue and queue[0][0] <= until:
-            due, _, rule, context = queue.pop(0)
+        while (queue and queue[0][0] <= until) or (speaking and speaking[0][0] <= until):
+            if speaking and (not queue or speaking[0][0] <= queue[0][0]) and speaking[0][0] <= until:
+                feed(speaking.pop(0)[1])
+                continue
+            due, seq, rule, context = queue.pop(0)
+            busy_until = max((t for t, e in speaking if isinstance(e, PttReleased)), default=None)
+            if busy_until is not None and due < busy_until:
+                # One microphone: a spoken call waits until the pilot has finished the last one.
+                queue.append((busy_until + 0.5, seq, rule, context))
+                queue.sort(key=lambda item: (item[0], item[1]))
+                continue
             speak(rule, due, context)
 
     def copilot_acts(at: float) -> None:
@@ -221,9 +259,7 @@ def run(
                     state["last_own"] = msgspec.structs.replace(state["last_own"], t=at, com1_mhz=state["com1"])
                     feed(state["last_own"])
             elif isinstance(action, Say):
-                mhz = state["com1"] if state["com1"] is not None else (state["last_own"].com1_mhz if state["last_own"] else 0.0)
-                result.lines.append(f"[{at:8.1f}] PILOT     {speech.frequency_display(mhz)}: {action.text}")
-                feed(Transcript(t=at, text=action.text))
+                say_text(action.text, at)
             elif isinstance(action, Note):
                 result.lines.append(f"[{at:8.1f}] NOTE      {action.text}")
 

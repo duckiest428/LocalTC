@@ -63,7 +63,12 @@ def format_event(ev: BusEvent) -> str:
     elif isinstance(ev, PttReleased):
         body = f"PTT   up COM{ev.radio} audio={ev.audio_ref}"
     elif isinstance(ev, Transcript):
-        body = f'PILOT "{ev.text}"'
+        how = ""
+        if ev.source == "voice":
+            how = f"  (voice, {ev.stt_ms:.0f} ms" + (f", confidence {ev.confidence:.2f})" if ev.confidence is not None else ")")
+        elif ev.source == "copilot":
+            how = "  (copilot)"
+        body = f'PILOT "{ev.text}"{how}' if ev.text else "PILOT (no speech heard)"
     elif isinstance(ev, AtcTransmission):
         body = f'ATC   {ev.station} {ev.frequency_mhz:.3f}: "{ev.text}"'
     elif isinstance(ev, PhaseChanged):
@@ -125,7 +130,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cfg.llm.model = args.llm_model
     if args.copilot:
         cfg.copilot.mode = args.copilot
-    show = args.print or args.type or cfg.copilot.mode != "off"
+    if args.voice or args.ptt:
+        cfg.voice.enabled = True
+    if args.ptt:
+        cfg.voice.ptt = args.ptt
+    if args.ptt_key:
+        cfg.voice.ptt_key = args.ptt_key
+    if args.whisper_model:
+        cfg.voice.model = args.whisper_model
+    show = args.print or args.type or cfg.copilot.mode != "off" or cfg.voice.enabled
     printer = EventPrinter(skip_traffic=True) if show else None
     return _run(cfg, record, printer, typed_input=args.type)
 
@@ -318,6 +331,157 @@ def _cmd_llm_eval(args: argparse.Namespace) -> int:
     return 0 if all(r.passed for r in results) else 1
 
 
+def _transcriber(cfg, model: str | None = None):
+    from localtc.stt.whisper import WhisperTranscriber
+
+    v = cfg.voice
+    return WhisperTranscriber(model or v.model, device=v.device, compute_type=v.compute_type,
+                              models_dir=v.models_dir or None, beam_size=v.beam_size)
+
+
+def _cmd_voice_devices(args: argparse.Namespace) -> int:
+    from localtc.stt.audio import input_devices
+
+    import sounddevice as sd
+
+    default = sd.default.device[0]
+    for index, name, rate in input_devices():
+        print(f"{'*' if index == default else ' '} {index:3}  {name}  ({rate} Hz)")
+    print("\n* = default. Set [voice] input_device to a number or part of a name.")
+    return 0
+
+
+def _cmd_voice_test(args: argparse.Namespace) -> int:
+    """Talk, and see what Whisper hears and how long each step takes: the input-latency check for a new PC."""
+    import threading
+
+    from localtc.stt.audio import SAMPLE_RATE, AudioCapture
+    from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup
+
+    cfg = load_config(args.config)
+    transcriber = _transcriber(cfg, args.whisper_model)
+    print(f"Loading {transcriber.description} ...")
+    print(f"Ready in {transcriber.warm_up():.1f} s")
+    capture = AudioCapture(cfg.voice.input_device or None, pre_roll_s=cfg.voice.pre_roll_ms / 1000)
+    capture.start()
+    latency = getattr(capture._stream, "latency", 0.0) or 0.0
+    print(f"Microphone open at {capture.rate} Hz, input latency {latency * 1000:.0f} ms")
+    prompt = build_prompt(VocabularyHints(callsign=cfg.flight.callsign or ""))
+    released = threading.Event()
+
+    def transcribe_clip() -> None:
+        audio = capture.end()
+        result = transcriber.transcribe(audio, prompt=prompt)
+        print(f"  heard: {fixup(result.text)!r}")
+        print(f"  {len(audio) / SAMPLE_RATE:.1f} s of speech, transcribed in {result.latency_ms:.0f} ms "
+              f"(+{cfg.voice.tail_ms} ms tail after release), confidence {result.confidence:.2f}\n")
+
+    try:
+        if args.ptt == "keyboard":
+            from localtc.stt.ptt import KeyboardPtt
+
+            ptt = KeyboardPtt(cfg.voice.ptt_key, capture.begin, lambda: (time.sleep(cfg.voice.tail_ms / 1000),
+                                                                         transcribe_clip()))
+            ptt.start()
+            print(f"Hold {cfg.voice.ptt_key} and talk; Ctrl-C to quit.")
+            released.wait()
+        while True:
+            input("Press Enter, talk, then press Enter again (Ctrl-C to quit) ")
+            capture.begin()
+            input("  talking... Enter to stop ")
+            time.sleep(cfg.voice.tail_ms / 1000)
+            transcribe_clip()
+    except (KeyboardInterrupt, EOFError):
+        return 0
+    finally:
+        capture.close()
+
+
+def _cmd_voice_eval(args: argparse.Namespace) -> int:
+    from localtc.atc_core.llm import LlmInterpreter
+    from localtc.voice import evaluate_clips, format_clip_results, token_error_rate, transcribe_recording
+
+    cfg = load_config(args.config)
+    transcriber = _transcriber(cfg, args.whisper_model)
+    print(f"Loading {transcriber.description} ...")
+    transcriber.warm_up()
+    vocabulary = not args.no_vocabulary
+    backend = None
+    if args.llm == "live":
+        from localtc.app import ollama_backend
+
+        backend = ollama_backend(cfg.llm)
+        if not backend.status().reachable:
+            print("Ollama isn't running: understanding with the grammar only")
+            backend = None
+    if args.path is None:
+        from importlib import resources
+
+        folder = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "voice_clips"
+        if not folder.is_dir():
+            folder = Path(str(resources.files("localtc"))) / "voice_clips"
+        interpreter = LlmInterpreter(backend, timeout_s=cfg.llm.timeout_s, budget_s=cfg.llm.budget_s)
+        print(format_clip_results(evaluate_clips(folder, transcriber, interpreter, vocabulary=vocabulary)))
+        return 0
+    from localtc.app import build_engine
+    from localtc.scenario import format_output
+
+    from localtc.config import with_recorded
+
+    recording = Recording(args.path)
+    engine = build_engine(with_recorded(cfg, recording.header.config), backend)  # as the flight was flown
+    engine.cfg.await_transcripts = True
+    run = transcribe_recording(recording, transcriber, engine=engine, vocabulary=vocabulary)
+    for line in filter(None, (format_output(o) for o in run.outputs)):
+        print(line)
+    print()
+    for clip in run.clips:
+        wer = token_error_rate(clip.reference, clip.heard)
+        print(f"[{clip.released_t:8.1f}] {clip.stt_ms:5.0f} ms  wer {wer:4.0%}  {clip.heard}")
+        if wer:
+            print(f"{'':12}recorded: {clip.reference}")
+    return 0
+
+
+def _cmd_setup(args: argparse.Namespace) -> int:
+    """Everything a flight needs offline: Whisper model(s), the Ollama model, a microphone."""
+    from localtc.stt.whisper import choose, default_models_dir, download
+
+    cfg = load_config(args.config)
+    ok = True
+    models = args.whisper_model or [choose(cfg.voice.model, cfg.voice.device, cfg.voice.compute_type).model]
+    models_dir = Path(cfg.voice.models_dir) if cfg.voice.models_dir else default_models_dir()
+    for model in models:
+        print(f"Whisper {model}: downloading to {models_dir} (once) ...")
+        print(f"  ready: {download(model, models_dir)}")
+    choice = choose(cfg.voice.model, cfg.voice.device, cfg.voice.compute_type)
+    print(f"Speech-to-text will run on {choice.device.upper()} ({choice.model})")
+    try:
+        from localtc.stt.audio import input_devices
+
+        mics = input_devices()
+        print(f"Microphones: {len(mics)} found" + (f", e.g. {mics[0][1]}" if mics else " - plug one in"))
+        ok &= bool(mics)
+    except Exception as exc:
+        print(f"Microphone check failed: {exc}")
+        ok = False
+    if not args.no_llm:
+        from localtc.app import ollama_backend
+
+        backend = ollama_backend(cfg.llm)
+        status = backend.status()
+        if not status.reachable:
+            print(f"Ollama isn't running at {cfg.llm.base_url}: install it from https://ollama.com and run setup again")
+            ok = False
+        elif status.has(cfg.llm.model):
+            print(f"Ollama model {cfg.llm.model}: installed")
+        else:
+            print(f"Ollama model {cfg.llm.model}: downloading (about 2 GB, once) ...")
+            ok &= backend.pull(print_progress=True)
+    print("Setup complete." if ok else "Setup finished with problems (see above).")
+    return 0 if ok else 1
+
+
 def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool = False) -> int:
     started = time.monotonic()
     out_dir = asyncio.run(run_session(cfg, record=record, on_event=printer, typed_input=typed_input))
@@ -349,6 +513,10 @@ def build_parser() -> argparse.ArgumentParser:
                      help="copilot works the radio: assist = readbacks + frequency changes, full = every call")
     run.add_argument("--no-llm", action="store_true", help="don't use the language model (grammar only)")
     run.add_argument("--llm-model", help="Ollama model (overrides [llm] model)")
+    run.add_argument("--voice", action="store_true", help="talk to ATC: push-to-talk + Whisper ([voice] config)")
+    run.add_argument("--ptt", choices=["keyboard", "joystick", "enter"], help="push-to-talk switch (implies --voice)")
+    run.add_argument("--ptt-key", help="keyboard push-to-talk key, e.g. ctrl_r, alt_r, f13")
+    run.add_argument("--whisper-model", help="tiny.en, base.en, small.en, ... (default: auto)")
     run.set_defaults(func=_cmd_run)
 
     record = with_config(sub.add_parser("record", help="record a live MSFS 2024 session (Windows)"))
@@ -412,6 +580,26 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--model", help="model to test (default: [llm] model)")
     evaluate.add_argument("--cases", help="cases TOML (default: the built-in set)")
     evaluate.set_defaults(func=_cmd_llm_eval)
+
+    voice = sub.add_parser("voice", help="microphone and speech-to-text")
+    voice_sub = voice.add_subparsers(dest="voice_command", required=True)
+    devices = voice_sub.add_parser("devices", help="list microphones")
+    devices.set_defaults(func=_cmd_voice_devices)
+    vtest = with_config(voice_sub.add_parser("test", help="talk and see what Whisper hears, and how fast"))
+    vtest.add_argument("--ptt", choices=["enter", "keyboard"], default="enter")
+    vtest.add_argument("--whisper-model", help="default: [voice] model")
+    vtest.set_defaults(func=_cmd_voice_test)
+    veval = with_config(voice_sub.add_parser("eval", help="re-transcribe a recording's audio (or the spoken edge cases)"))
+    veval.add_argument("path", nargs="?", help="recording with audio; omit for the built-in spoken edge cases")
+    veval.add_argument("--whisper-model", help="default: [voice] model")
+    veval.add_argument("--no-vocabulary", action="store_true", help="without the aviation prompt, for comparison")
+    veval.add_argument("--llm", choices=["off", "live"], default="live", help="understand with the model (default) or not")
+    veval.set_defaults(func=_cmd_voice_eval)
+
+    setup = with_config(sub.add_parser("setup", help="download the speech and language models, check the microphone"))
+    setup.add_argument("--whisper-model", action="append", help="model(s) to download (default: the one [voice] uses)")
+    setup.add_argument("--no-llm", action="store_true", help="don't pull the Ollama model")
+    setup.set_defaults(func=_cmd_setup)
 
     inspect = sub.add_parser("inspect", help="summarize a recording")
     inspect.add_argument("path", help="recording directory or session.jsonl[.gz]")

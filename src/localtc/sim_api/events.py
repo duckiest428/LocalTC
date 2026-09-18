@@ -117,10 +117,12 @@ class PttReleased(Event, tag="ptt_released"):
 
 
 class Transcript(Event, tag="transcript"):
-    text: str
+    text: str  # "" when push-to-talk carried no speech
     radio: int = 1
-    confidence: float | None = None
+    confidence: float | None = None  # speech-to-text confidence, 0-1
     audio_ref: str | None = None
+    stt_ms: float = 0.0  # speech-to-text time
+    source: str = ""  # voice, typed, copilot, or "" (older recordings, scripts)
 
 
 class AtcTransmission(Event, tag="atc_transmission"):

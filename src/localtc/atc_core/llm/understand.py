@@ -347,7 +347,7 @@ class LlmInterpreter:
 
     def interpret(self, text: str, pending: PendingReadback | None, context: InterpretContext) -> Interpretation:
         grammar = self.grammar.interpret(text, pending, context)
-        reason = find_trigger(grammar, text)
+        reason = find_trigger(grammar, text, context.confidence)
         if self.mode == "off" or (self.mode == "fallback" and reason is None):
             return self._grammar_only(grammar, text, pending, context, reason)
         answer, exchanges = self._ask(text, pending, context, reason)

@@ -162,7 +162,8 @@ class FakeSimConnect:
         self.definitions: dict[int, list[str]] = {}
         self.system_events: dict[str, int] = {}
         self.client_events: dict[int, str] = {}
-        self.transmitted: list[tuple] = []  # (sim event name, data, object id, group, flags)
+        self.transmitted: list[tuple] = []
+        self.input_maps: list[tuple] = []  # (definition, down event, up event)  # (sim event name, data, object id, group, flags)
         self._inbox: deque[bytes] = deque()
         self._lock = threading.Lock()
 
@@ -205,6 +206,9 @@ class FakeSimConnect:
 
     def map_client_event_to_sim_event(self, handle, event_id, name) -> None:
         self.client_events[event_id] = name
+
+    def map_input_to_events(self, handle, group, definition, down_event, up_event) -> None:
+        self.input_maps.append((definition, down_event, up_event))
 
     def transmit_client_event(self, handle, object_id, event_id, data, group, flags) -> None:
         self.transmitted.append((self.client_events.get(event_id, str(event_id)), data, object_id, group, flags))

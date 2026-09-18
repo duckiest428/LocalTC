@@ -27,6 +27,7 @@ from localtc.sim_api import (
     AtcTransmission,
     BusEvent,
     ConnectionStatus,
+    LlmExchange,
     OwnshipState,
     PttPressed,
     PttReleased,
@@ -47,7 +48,9 @@ def format_event(ev: BusEvent) -> str:
             f"SQ {ev.squawk} {ev.xpdr_mode}  COM1 {ev.com1_mhz:.3f}{flags}"
         )
     elif isinstance(ev, AircraftIdentity):
-        body = f"ACFT  {ev.atc_id} {ev.atc_type} {ev.atc_model} '{ev.title}'"
+        from localtc.atc_core.values import clean_sim_name
+
+        body = f"ACFT  {ev.atc_id} {clean_sim_name(ev.atc_type)} {clean_sim_name(ev.atc_model)} '{ev.title}'"
     elif isinstance(ev, TrafficSnapshot):
         names = ", ".join(tgt.atc_id or str(tgt.object_id) for tgt in ev.targets[:6])
         body = f"TFC   {len(ev.targets)} targets" + (f": {names}" if names else "")
@@ -76,6 +79,9 @@ def format_event(ev: BusEvent) -> str:
         body = f"ALERT {ev.kind}: {ev.detail}"
     elif isinstance(ev, AirportData):
         body = f"APT   {ev.airport.icao} {ev.airport.name}"
+    elif isinstance(ev, LlmExchange):
+        detail = f" ({ev.detail})" if ev.detail else ""
+        body = f"LLM   {ev.purpose} {ev.outcome} {ev.latency_ms:.0f} ms{detail}: {ev.response}"
     else:
         body = repr(ev)
     return f"[{ev.t:8.2f}] {body}"
@@ -113,7 +119,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cfg.flight.callsign = args.callsign
     if args.no_atc:
         cfg.atc.enabled = False
-    printer = EventPrinter(skip_traffic=True) if (args.print or args.type) else None
+    if args.no_llm:
+        cfg.llm.enabled = False
+    if args.llm_model:
+        cfg.llm.model = args.llm_model
+    if args.copilot:
+        cfg.copilot.mode = args.copilot
+    show = args.print or args.type or cfg.copilot.mode != "off"
+    printer = EventPrinter(skip_traffic=True) if show else None
     return _run(cfg, record, printer, typed_input=args.type)
 
 
@@ -139,6 +152,7 @@ def _cmd_replay(args: argparse.Namespace) -> int:
         cfg.flight.cruise_ft = args.cruise_ft
     if args.callsign:
         cfg.flight.callsign = args.callsign
+    cfg.llm.replay = args.llm
     printer = None if args.quiet else EventPrinter(args.ownship_every, skip_traffic=args.atc)
     return _run(cfg, args.record, printer, typed_input=args.type)
 
@@ -213,13 +227,95 @@ def format_airport(airport) -> str:
 
 
 def _cmd_atc(args: argparse.Namespace) -> int:
-    from localtc.scenario import run_scenario
+    from localtc.app import build_engine, ollama_backend
+    from localtc.config import FlightConfig
+    from localtc.scenario import Scenario, ScenarioMeta, load_scenario, run
 
-    result = run_scenario(args.scenario, recording=args.path)
+    cfg = load_config(args.config)
+    if args.scenario:
+        scenario, base = load_scenario(args.scenario), Path(args.scenario).parent
+    elif args.path and args.copilot:
+        scenario = Scenario(scenario=ScenarioMeta(recording=str(Path(args.path).resolve()), airports=[]),
+                            flight=FlightConfig(), atc=cfg.atc)
+        base = Path.cwd()
+    else:
+        print("localtc atc: give --scenario, or a recording and --copilot", file=sys.stderr)
+        return 2
+    if args.destination:
+        scenario.flight.destination = args.destination
+    if args.cruise_ft:
+        scenario.flight.cruise_ft = args.cruise_ft
+    if args.callsign:
+        scenario.flight.callsign = args.callsign
+    scenario.scenario.airports = [*scenario.scenario.airports, *(str(Path(a).resolve()) for a in args.airports or [])]
+    interpreter = phraser = None
+    if args.llm == "live":
+        backend = ollama_backend(cfg.llm)
+        if not backend.status().reachable:
+            print(f"localtc atc: Ollama isn't running at {cfg.llm.base_url}", file=sys.stderr)
+            return 2
+        engine = build_engine(cfg, backend)
+        interpreter, phraser = engine.interpreter, engine.phraser
+    result = run(scenario, base, recording=args.path, interpreter=interpreter, phraser=phraser, copilot=args.copilot)
     sys.stdout.write(result.transcript)
     if args.snapshot:
         print(msgspec.json.format(msgspec.json.encode(result.engine.snapshot()), indent=2).decode())
     return 0
+
+
+def _cmd_llm_check(args: argparse.Namespace) -> int:
+    from localtc.app import ollama_backend, warm_up
+    from localtc.atc_core.llm import LlmInterpreter
+    from localtc.atc_core.readback import InterpretContext
+
+    cfg = load_config(args.config)
+    if args.model:
+        cfg.llm.model = args.model
+    backend = ollama_backend(cfg.llm)
+    status = backend.status()
+    if not status.reachable:
+        print(f"Ollama isn't running at {cfg.llm.base_url} ({status.error}). Start the Ollama app and try again.")
+        return 1
+    print(f"Ollama {status.version} at {cfg.llm.base_url}; models: {', '.join(status.models) or '(none)'}")
+    if not status.has(cfg.llm.model):
+        print(f"Model {cfg.llm.model} isn't installed. Run: ollama pull {cfg.llm.model}")
+        return 1
+    print(f"Loading {cfg.llm.model} ...")
+    seconds = warm_up(backend)
+    if seconds is None:
+        print("The model didn't answer.")
+        return 1
+    print(f"Loaded and answered in {seconds:.1f} s (first call; later ones reuse the loaded model)")
+    interpreter = LlmInterpreter(backend, timeout_s=30.0, budget_s=60.0)
+    for phase, station, text in (("RUNWAY_HOLD", "Montreal Tower", "tower DP69 holding short zero six left"),
+                                 ("CRUISE", "Montreal Center", "what's the altimeter in quebec"),
+                                 ("CRUISE", "Montreal Center", "request flight level two four zero, DP69")):
+        result = interpreter.interpret(text, None, InterpretContext(phase=phase, station=station))
+        took = sum(e.latency_ms for e in result.exchanges)
+        print(f"  {took:6.0f} ms  {text!r} -> {result.intent} {dict(result.values)}")
+    print(f"Timeout per call is {cfg.llm.timeout_s} s ([llm] timeout_s). Run 'localtc llm eval' for the full test.")
+    return 0
+
+
+def _cmd_llm_eval(args: argparse.Namespace) -> int:
+    from localtc.app import ollama_backend
+    from localtc.atc_core.llm import LlmInterpreter
+    from localtc.llm.eval import format_results, load_cases, run_cases
+
+    cfg = load_config(args.config)
+    if args.model:
+        cfg.llm.model = args.model
+    backend = ollama_backend(cfg.llm)
+    if not backend.status().reachable:
+        print(f"Ollama isn't running at {cfg.llm.base_url}. Start the Ollama app and try again.")
+        return 1
+    cases = load_cases(args.cases)
+    print(f"Running {len(cases)} cases against {cfg.llm.model} (timeout {cfg.llm.timeout_s} s per call) ...")
+    interpreter = LlmInterpreter(backend, mode="primary", timeout_s=cfg.llm.timeout_s, budget_s=cfg.llm.budget_s,
+                                 max_attempts=cfg.llm.max_attempts)
+    results = run_cases(interpreter, cases)
+    print(format_results(results))
+    return 0 if all(r.passed for r in results) else 1
 
 
 def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool = False) -> int:
@@ -249,6 +345,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--cruise-ft", type=int, help="planned cruise altitude (overrides [flight])")
     run.add_argument("--callsign", help="callsign to use instead of the sim's (e.g. N738B on an airline livery)")
     run.add_argument("--no-atc", action="store_true", help="don't run the ATC engine")
+    run.add_argument("--copilot", choices=["assist", "full"],
+                     help="copilot works the radio: assist = readbacks + frequency changes, full = every call")
+    run.add_argument("--no-llm", action="store_true", help="don't use the language model (grammar only)")
+    run.add_argument("--llm-model", help="Ollama model (overrides [llm] model)")
     run.set_defaults(func=_cmd_run)
 
     record = with_config(sub.add_parser("record", help="record a live MSFS 2024 session (Windows)"))
@@ -269,6 +369,8 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument("--destination", help="destination ICAO for --atc")
     replay.add_argument("--cruise-ft", type=int, help="planned cruise altitude for --atc")
     replay.add_argument("--callsign", help="callsign to use instead of the sim's")
+    replay.add_argument("--llm", choices=["recorded", "live", "off"], default="recorded",
+                        help="language model answers: as recorded (default), from the live model, or none")
     replay.add_argument("--ownship-every", type=float, default=1.0, metavar="SECONDS",
                         help="print at most one own-ship line per this much session time")
     replay.set_defaults(func=_cmd_replay)
@@ -289,11 +391,27 @@ def build_parser() -> argparse.ArgumentParser:
     phases.add_argument("--airports", action="append", help="folder of <ICAO>.json airport files (repeatable)")
     phases.set_defaults(func=_cmd_phases)
 
-    atc = sub.add_parser("atc", help="run a scripted ATC scenario offline")
+    atc = with_config(sub.add_parser("atc", help="run ATC offline on a recording: a scripted scenario or the copilot"))
     atc.add_argument("path", nargs="?", help="recording (default: the scenario's recording)")
-    atc.add_argument("--scenario", required=True, help="scenario TOML (see localtc/scenario.py)")
+    atc.add_argument("--scenario", help="scenario TOML (see localtc/scenario.py)")
+    atc.add_argument("--copilot", choices=["assist", "full"], help="let the copilot work the radio")
+    atc.add_argument("--destination", help="destination ICAO")
+    atc.add_argument("--cruise-ft", type=int, help="planned cruise altitude")
+    atc.add_argument("--callsign", help="callsign to use instead of the sim's")
+    atc.add_argument("--airports", action="append", help="folder of <ICAO>.json airport files (repeatable)")
+    atc.add_argument("--llm", choices=["off", "live"], default="off", help="use the live language model (Ollama)")
     atc.add_argument("--snapshot", action="store_true", help="print the final session snapshot as JSON")
     atc.set_defaults(func=_cmd_atc)
+
+    llm = sub.add_parser("llm", help="the local language model (Ollama)")
+    llm_sub = llm.add_subparsers(dest="llm_command", required=True)
+    check = with_config(llm_sub.add_parser("check", help="is Ollama running, is the model there, how fast is it"))
+    check.add_argument("--model", help="model to check (default: [llm] model)")
+    check.set_defaults(func=_cmd_llm_check)
+    evaluate = with_config(llm_sub.add_parser("eval", help="run the seeded edge cases against the model"))
+    evaluate.add_argument("--model", help="model to test (default: [llm] model)")
+    evaluate.add_argument("--cases", help="cases TOML (default: the built-in set)")
+    evaluate.set_defaults(func=_cmd_llm_eval)
 
     inspect = sub.add_parser("inspect", help="summarize a recording")
     inspect.add_argument("path", help="recording directory or session.jsonl[.gz]")

@@ -1,13 +1,13 @@
 """Interpreting pilot transmissions: the grammar interpreter, the fallback hook, and the chain.
 
-Phase 2 replaces only the fallback with an LLM that returns the same
-``Interpretation``, so the dialogue engine doesn't change.
+``atc_core.llm.LlmInterpreter`` wraps the grammar with a local language model and
+returns the same ``Interpretation``, so the dialogue engine doesn't care which one ran.
 """
 
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from localtc.atc_core.readback.extract import ELEMENTS, values_equal
+from localtc.atc_core.readback.extract import ELEMENTS, values_equal, without_callsign
 from localtc.atc_core.readback.intents import EMERGENCY, match_intents, resolve
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
@@ -32,6 +32,9 @@ class InterpretContext:
     callsign: Callsign | None = None
     phase: str | None = None
     strict_callsign: bool = False
+    t: float = 0.0  # event time of the transmission
+    station: str | None = None  # who the pilot is talking to, e.g. "Montreal Tower"
+    last_atc: str | None = None  # what that controller said last
 
 
 @dataclass(frozen=True)
@@ -45,8 +48,10 @@ class Interpretation:
     callsign_heard: bool = False
     confidence: float = 0.0
     needs_fallback: bool = False
-    source: str = "grammar"
+    source: str = "grammar"  # grammar, llm, fallback
     text: str = ""
+    trigger: str | None = None  # why the language model was asked (atc_core.llm.triggers)
+    exchanges: tuple[Any, ...] = ()  # LlmExchange events from interpreting this transmission
 
 
 class Interpreter(Protocol):
@@ -94,9 +99,10 @@ class GrammarInterpreter:
         mismatched: dict[str, Any] = {}
         missing: list[str] = []
         present = 0
+        values_only = without_callsign(tokens, context.callsign)
         for element in (*pending.required, *pending.optional):
             expected = pending.expected.get(element, True)
-            candidates = ELEMENTS[element](tokens, expected)
+            candidates = ELEMENTS[element](values_only, expected)
             if not candidates:
                 if element in pending.required:
                     missing.append(element)

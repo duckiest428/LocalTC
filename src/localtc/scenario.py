@@ -20,6 +20,9 @@ A scenario TOML::
 Placeholders in ``say``: {callsign}, {callsign_short}, {readback} (the ideal
 readback of the instruction that triggered the rule), {alt}, {departure_runway},
 {arrival_runway}, plus anything in ``[scenario] vars``.
+
+``[scenario] copilot = "full"`` (or "assist") lets ``localtc.copilot`` work the radio
+instead of, or alongside, the scripted ``[[pilot]]`` rules.
 """
 
 import tomllib
@@ -31,6 +34,8 @@ import msgspec
 
 from localtc.airports import load_airport_dir
 from localtc.atc_core.engine import AtcEngine
+from localtc.atc_core.llm import LlmPhraser
+from localtc.atc_core.readback import Interpreter
 from localtc.atc_core.phraseology import speech
 from localtc.config import AtcConfig, FlightConfig
 from localtc.replay import Recording
@@ -42,6 +47,7 @@ from localtc.sim_api import (
     BusEvent,
     OwnshipState,
     PhaseChanged,
+    LlmExchange,
     ReadbackEvaluated,
     Transcript,
 )
@@ -72,6 +78,7 @@ class ScenarioMeta(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     end_t: float | None = None
     tail_s: float = 30.0
     vars: dict[str, str] = {}
+    copilot: str = ""  # "", "assist" or "full"
 
 
 class Scenario(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
@@ -110,6 +117,9 @@ def format_output(event: BusEvent) -> str | None:
         return f"[{event.t:8.1f}] READBACK  {event.instruction_id} {event.status}{detail}"
     if isinstance(event, AtcAlert):
         return f"[{event.t:8.1f}] ALERT     {event.kind}: {event.detail}"
+    if isinstance(event, LlmExchange):
+        return f"[{event.t:8.1f}] LLM       {event.purpose} {event.outcome}: {event.response}" + (
+            f" ({event.detail})" if event.detail else "")
     return None
 
 
@@ -118,14 +128,36 @@ class _SafeDict(dict):
         return "{" + key + "}"
 
 
-def run_scenario(path: str | Path, *, recording: str | Path | None = None) -> ScenarioResult:
-    from localtc.app import engine_config
-
+def run_scenario(
+    path: str | Path,
+    *,
+    recording: str | Path | None = None,
+    interpreter: Interpreter | None = None,
+    phraser: LlmPhraser | None = None,
+    copilot: str | None = None,
+) -> ScenarioResult:
     path = Path(path)
-    scenario = load_scenario(path)
-    base = path.parent
-    engine = AtcEngine(engine_config(scenario.flight, scenario.atc))
+    return run(load_scenario(path), path.parent, recording=recording, interpreter=interpreter, phraser=phraser,
+               copilot=copilot)
+
+
+def run(
+    scenario: Scenario,
+    base: Path,
+    *,
+    recording: str | Path | None = None,
+    interpreter: Interpreter | None = None,
+    phraser: LlmPhraser | None = None,
+    copilot: str | None = None,
+) -> ScenarioResult:
+    """Run a scenario; ``base`` is the folder its relative paths start from."""
+    from localtc.app import engine_config
+    from localtc.copilot import Copilot, Note, Say, Tune
+
+    engine = AtcEngine(engine_config(scenario.flight, scenario.atc), interpreter=interpreter, phraser=phraser)
     result = ScenarioResult(engine=engine)
+    mode = copilot if copilot is not None else scenario.scenario.copilot
+    pilot = Copilot(engine, mode=mode) if mode else None
     for directory in scenario.scenario.airports:
         for airport in load_airport_dir(base / directory):
             engine.handle(AirportData(t=0.0, airport=airport))
@@ -144,8 +176,12 @@ def run_scenario(path: str | Path, *, recording: str | Path | None = None) -> Sc
         queue.sort(key=lambda item: (item[0], item[1]))
 
     def feed(event: BusEvent) -> None:
+        if pilot is not None:
+            pilot.observe(event)
         for output in engine.handle(event):
             result.outputs.append(output)
+            if pilot is not None:
+                pilot.observe(output)
             if (line := format_output(output)) is not None:
                 result.lines.append(line)
             if isinstance(output, AtcTransmission):
@@ -174,6 +210,23 @@ def run_scenario(path: str | Path, *, recording: str | Path | None = None) -> Sc
             due, _, rule, context = queue.pop(0)
             speak(rule, due, context)
 
+    def copilot_acts(at: float) -> None:
+        if pilot is None:
+            return
+        for action in pilot.due(at):
+            if isinstance(action, Tune):
+                state["com1"] = action.hz / 1e6
+                result.lines.append(f"[{at:8.1f}] TUNE      COM1 {speech.frequency_display(state['com1'])}")
+                if state["last_own"] is not None:
+                    state["last_own"] = msgspec.structs.replace(state["last_own"], t=at, com1_mhz=state["com1"])
+                    feed(state["last_own"])
+            elif isinstance(action, Say):
+                mhz = state["com1"] if state["com1"] is not None else (state["last_own"].com1_mhz if state["last_own"] else 0.0)
+                result.lines.append(f"[{at:8.1f}] PILOT     {speech.frequency_display(mhz)}: {action.text}")
+                feed(Transcript(t=at, text=action.text))
+            elif isinstance(action, Note):
+                result.lines.append(f"[{at:8.1f}] NOTE      {action.text}")
+
     def check_when(own: OwnshipState) -> None:
         for index, rule in enumerate(scenario.pilot):
             if rule.when is None or rule.on is not None or index in fired or not _when_matches(rule.when, engine, own):
@@ -192,6 +245,7 @@ def run_scenario(path: str | Path, *, recording: str | Path | None = None) -> Sc
         feed(event)
         if isinstance(event, OwnshipState):
             check_when(event)
+            copilot_acts(event.t)
 
     last: OwnshipState | None = state["last_own"]
     if last is not None:
@@ -200,6 +254,7 @@ def run_scenario(path: str | Path, *, recording: str | Path | None = None) -> Sc
             run_due(tick.t)
             state["last_own"] = tick
             feed(tick)
+            copilot_acts(tick.t)
     return result
 
 

@@ -18,7 +18,7 @@ import msgspec
 
 from localtc.airports import AirportCache
 from localtc.bus import EventBus, Subscription, pump
-from localtc.config import AtcConfig, Config, ConfigError, FlightConfig
+from localtc.config import AtcConfig, Config, ConfigError, FlightConfig, LlmConfig
 from localtc.recorder import Recorder
 from localtc.recorder.format import AUDIO_DIR
 from localtc.replay import ReplaySource
@@ -53,6 +53,71 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         seed=atc.seed,
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
     )
+
+
+def ollama_backend(llm: LlmConfig):
+    from localtc.llm import OllamaBackend
+
+    return OllamaBackend(model=llm.model, base_url=llm.base_url, keep_alive=llm.keep_alive, num_ctx=llm.num_ctx)
+
+
+async def language_model(cfg: Config, source: SimSource):
+    """The model backend for this session, or None (grammar only). Never fails the session."""
+    llm = cfg.llm
+    if not llm.enabled or (llm.understanding == "off" and not llm.phrasing):
+        return None
+    if isinstance(source, ReplaySource) and llm.replay != "live":
+        if llm.replay == "off":
+            return None
+        from localtc.atc_core.llm import RecordedBackend
+
+        recorded = RecordedBackend.from_events(source.recording.events())
+        if not len(recorded):
+            log.info("Recording has no language model answers; replaying with the grammar only (--llm live to ask the model)")
+            return None
+        log.info("Replaying %d recorded language model answers (%s)", len(recorded), recorded.model)
+        return recorded
+    backend = ollama_backend(llm)
+    status = await asyncio.to_thread(backend.status)
+    if not status.reachable:
+        log.warning("Ollama isn't running at %s (%s): using the grammar only. Start Ollama, or set [llm] enabled = false.",
+                    llm.base_url, status.error)
+        return None
+    if not status.has(llm.model):
+        log.warning("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
+        return None
+    asyncio.get_running_loop().run_in_executor(None, warm_up, backend)
+    return backend
+
+
+def warm_up(backend, timeout_s: float = 120.0) -> float | None:
+    """Load the model and its prompt before the first real call; returns seconds taken."""
+    from localtc.atc_core.llm import build_request
+    from localtc.atc_core.llm.understand import load_examples
+    from localtc.atc_core.readback import InterpretContext
+
+    request = build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples())
+    reply = backend.complete(request, timeout_s=timeout_s)
+    if reply.text is None:
+        log.warning("Language model warm-up failed (%s); the first calls may be slow or use the grammar", reply.error)
+        return None
+    log.info("Language model %s ready (warm-up %.1f s)", backend.model, reply.latency_ms / 1000)
+    return reply.latency_ms / 1000
+
+
+def build_engine(cfg: Config, backend=None):
+    """The ATC engine, with the language model when there is one."""
+    from localtc.atc_core.engine import AtcEngine
+    from localtc.atc_core.llm import LlmInterpreter, LlmPhraser
+
+    llm = cfg.llm
+    interpreter = phraser = None
+    if backend is not None and llm.understanding != "off":
+        interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=llm.timeout_s,
+                                     max_attempts=llm.max_attempts, budget_s=llm.budget_s)
+    if backend is not None and llm.phrasing:
+        phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s)
+    return AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
 
 
 def make_source(cfg: Config) -> SimSource:
@@ -116,14 +181,20 @@ async def run_session(
             consumers.append(asyncio.create_task(_cache_airports(bus.subscribe(AirportData), AirportCache())))
         if cfg.atc.enabled:
             from localtc.airports import load_airport_dir
-            from localtc.atc_core.engine import AtcEngine
             from localtc.atc_core.service import AtcService
 
-            engine = AtcEngine(engine_config(cfg.flight, cfg.atc))
+            engine = build_engine(cfg, await language_model(cfg, source))
             for directory in cfg.atc.airport_dirs:
                 for airport in load_airport_dir(directory):
                     engine.handle(AirportData(t=0.0, airport=airport))
-            consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache()).run()))
+            copilot = None
+            if cfg.copilot.mode != "off":
+                from localtc.copilot import Copilot
+
+                copilot = Copilot(engine, mode=cfg.copilot.mode, delay_s=(cfg.copilot.delay_min_s, cfg.copilot.delay_max_s))
+                log.info("Copilot: %s", "reads back and changes frequencies" if cfg.copilot.mode == "assist"
+                         else "works the radio for the whole flight")
+            consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache(), copilot=copilot).run()))
         typed_task = asyncio.create_task(_typed_transmissions(bus, source)) if typed_input else None
 
         pump_task = asyncio.create_task(pump(source, bus))

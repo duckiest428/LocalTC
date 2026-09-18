@@ -1,0 +1,17 @@
+# The copilot on the real CYUL recording (MSFS 2024, A330, DP69): the flight the pilot had to type by hand.
+# The recording ends in the climb, so this covers clearance through the departure check-in.
+[scenario]
+name = "copilot on the real CYUL departure"
+recording = "../fixtures/real_cyul"
+airports = ["../fixtures/airports_real"]
+copilot = "full"
+
+[flight]
+destination = "CYQB"
+cruise_ft = 12000
+callsign = "DP69"
+
+[atc]
+seed = 7
+center_name = "Montreal"
+center_mhz = 135.025

@@ -253,6 +253,27 @@ def callsigns(tokens: list[Token], expected: Callsign | None = None) -> list[Cal
     return []
 
 
+def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Token]:
+    """The tokens with the callsign taken out, so its letters can't be read as taxiways
+    ("taxi via alpha four, delta papa six niner" is route A4 from DP69, not A4, D, P69)."""
+    if callsign is None or callsign.is_airline:
+        return tokens
+    ident = callsign.ident.lower().replace("-", "")
+    forms = {ident, callsign.suffix.lower()} | ({ident[1:]} if len(ident) > 4 else set())
+    best: tuple[int, int] | None = None  # the longest span that spells the callsign; the last one on a tie
+    for first in range(len(tokens)):
+        if tokens[first].kind not in ("letter", "number") and len(tokens[first].text) > 2:
+            continue
+        compact = ""
+        for last in range(first, min(len(tokens), first + 10)):
+            compact += tokens[last].text.replace(".", "")
+            if len(compact) > len(ident):
+                break
+            if compact in forms and (best is None or last - first >= best[1] - best[0]):
+                best = (first, last)
+    return tokens if best is None else tokens[: best[0]] + tokens[best[1] + 1 :]
+
+
 def phrase(*phrases: tuple[str, ...]) -> Extractor:
     def extract(tokens: list[Token], expected: Any = None) -> list[bool]:
         return [True] if _has_any(tokens, *phrases) else []

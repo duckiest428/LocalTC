@@ -9,7 +9,7 @@ from helpers.sim_fakes import FakeSimConnect, airport_list_message, airport_mess
 
 from localtc.airports import AirportCache, load_airport
 from localtc.config import LiveConfig
-from localtc.sim_api import AirportData, RequestAirportData
+from localtc.sim_api import AirportData, RequestAirportData, SetComFrequency
 from localtc.sim_bridge import facilities as fac
 from localtc.sim_bridge.protocol import AirportList, FacilityData, FacilityDataEnd, parse_message
 from localtc.sim_bridge.simconnect_source import SimConnectSource
@@ -175,3 +175,25 @@ def test_unparseable_message_does_not_drop_the_connection():
         return airports
 
     assert [a.icao for a in asyncio.run(main())] == ["KPAE"]
+
+
+def test_bridge_tunes_com1_for_the_copilot():
+    fake = FakeSimConnect()
+
+    async def main():
+        source = SimConnectSource(FAST, dll_factory=lambda: fake)
+        await asyncio.wait_for(source.start(), 3)
+        await source.send(SetComFrequency(hz=120_425_000))
+        await source.send(SetComFrequency(hz=121_500_000, radio=2))
+        for _ in range(100):
+            if len(fake.transmitted) >= 2:
+                break
+            await asyncio.sleep(0.02)
+        await source.stop()
+
+    asyncio.run(main())
+    assert fake.client_events == {20: "COM_RADIO_SET_HZ", 21: "COM2_RADIO_SET_HZ"}
+    assert [(name, data) for name, data, *_ in fake.transmitted] == [
+        ("COM_RADIO_SET_HZ", 120_425_000), ("COM2_RADIO_SET_HZ", 121_500_000)
+    ]
+    assert all(obj == 0 and flags == 0x10 for _, _, obj, _, flags in fake.transmitted)  # user aircraft, priority group

@@ -22,7 +22,10 @@ packages = ["src/localtc"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
-markers = ["windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)"]
+markers = [
+    "windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)",
+    "ollama: needs a running Ollama with the configured model (skipped otherwise)",
+]
 
 # Architecture rules. Run with `lint-imports`; tests/test_architecture.py checks the same rules.
 [tool.importlinter]
@@ -33,8 +36,8 @@ name = "sim_api depends on nothing else in LocalTC"
 type = "forbidden"
 source_modules = ["localtc.sim_api"]
 forbidden_modules = [
-    "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config",
-    "localtc.dsp", "localtc.recorder", "localtc.replay", "localtc.sim_bridge",
+    "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config", "localtc.copilot",
+    "localtc.dsp", "localtc.llm", "localtc.recorder", "localtc.replay", "localtc.scenario", "localtc.sim_bridge",
     "localtc.stt", "localtc.tts",
 ]
 
@@ -42,16 +45,16 @@ forbidden_modules = [
 name = "Only app wiring may import the Windows-only SimConnect bridge"
 type = "forbidden"
 source_modules = [
-    "localtc.atc_core", "localtc.bus", "localtc.config", "localtc.dsp", "localtc.recorder",
-    "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts",
+    "localtc.atc_core", "localtc.bus", "localtc.config", "localtc.copilot", "localtc.dsp", "localtc.llm",
+    "localtc.recorder", "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts",
 ]
 forbidden_modules = ["localtc.sim_bridge"]
 
 [[tool.importlinter.contracts]]
-name = "ATC core depends only on sim_api, bus and airports"
+name = "ATC core depends only on sim_api, bus and airports (no HTTP, no copilot)"
 type = "forbidden"
 source_modules = ["localtc.atc_core"]
 forbidden_modules = [
-    "localtc.app", "localtc.cli", "localtc.dsp", "localtc.recorder", "localtc.replay",
-    "localtc.sim_bridge", "localtc.stt", "localtc.tts",
+    "localtc.app", "localtc.cli", "localtc.copilot", "localtc.dsp", "localtc.llm", "localtc.recorder",
+    "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.stt", "localtc.tts",
 ]

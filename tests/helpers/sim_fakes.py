@@ -161,6 +161,8 @@ class FakeSimConnect:
         self.closes = 0
         self.definitions: dict[int, list[str]] = {}
         self.system_events: dict[str, int] = {}
+        self.client_events: dict[int, str] = {}
+        self.transmitted: list[tuple] = []  # (sim event name, data, object id, group, flags)
         self._inbox: deque[bytes] = deque()
         self._lock = threading.Lock()
 
@@ -200,6 +202,12 @@ class FakeSimConnect:
 
     def subscribe_to_system_event(self, handle, event_id, name) -> None:
         self.system_events[name] = event_id
+
+    def map_client_event_to_sim_event(self, handle, event_id, name) -> None:
+        self.client_events[event_id] = name
+
+    def transmit_client_event(self, handle, object_id, event_id, data, group, flags) -> None:
+        self.transmitted.append((self.client_events.get(event_id, str(event_id)), data, object_id, group, flags))
 
     def request_data_on_sim_object(self, handle, request_id, define_id, object_id, period, flags=0, *rest) -> None:
         if request_id == REQ_OWNSHIP and period == Period.ONCE:

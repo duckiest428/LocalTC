@@ -1,0 +1,311 @@
+# Seeded edge cases for the understanding path: transmissions the grammar alone gets wrong or
+# can't handle, plus traps for the model. Each case is graded on the FINAL interpretation
+# (model + grammar + checks), which is what ATC acts on.
+#
+#   localtc llm eval            run them against your local model
+#   pytest tests/test_llm.py    run them offline with the scripted `model` answers below
+#
+# `model` is a plausible answer from a small model (sometimes a deliberately bad one) used by the
+# offline tests; fields left out are filled with "" / false.
+# expect: kind (readback | request | unknown), intent (or intent_any), status, missing, mismatched,
+#         values (subset), not_kind.
+
+# --- readbacks ---------------------------------------------------------------------------------
+
+[[case]]
+name = "takeoff readback without the runway, '-ed' dropped"
+phase = "RUNWAY_HOLD"
+station = "Montreal Tower"
+instruction = "tower.takeoff"
+slots = { runway = "06L" }
+pilot = "Clear for takeoff, DP69"
+model = { kind = "readback", cleared_for_takeoff = true }
+expect = { kind = "readback", status = "incomplete", missing = ["runway"] }
+
+[[case]]
+name = "takeoff readback with extra words"
+phase = "RUNWAY_HOLD"
+station = "Montreal Tower"
+instruction = "tower.takeoff"
+slots = { runway = "06L" }
+pilot = "rolling zero six left, cleared for take off, delta papa six niner"
+model = { kind = "readback", runway = "06L", cleared_for_takeoff = true }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "IFR clearance readback, speech recognizer style"
+phase = "PARKED"
+station = "Montreal Clearance"
+instruction = "clearance.ifr"
+slots = { destination = "Quebec", altitude = 5000, cruise = 12000, frequency = 120.42, squawk = "5015" }
+pilot = "cleared to quebec as filed, climb maintain 5000, expect 12,000 10 minutes after, departure 120.42, squawk 5015, DP69"
+model = { kind = "readback", altitude = "5000", cruise = "12000", frequency = "120.42", squawk = "5015" }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "wrong squawk; the model copies the expected one instead of what was said"
+phase = "PARKED"
+station = "Montreal Clearance"
+instruction = "clearance.ifr"
+slots = { destination = "Quebec", altitude = 5000, cruise = 12000, frequency = 120.42, squawk = "5015" }
+pilot = "climb and maintain five thousand, departure one two zero point four two, squawk five zero five one, DP69"
+model = { kind = "readback", altitude = "5000", frequency = "120.42", squawk = "5015" }
+expect = { kind = "readback", status = "incorrect", mismatched = ["squawk"] }
+
+[[case]]
+name = "frequency read back without 'point'"
+phase = "RUNWAY_HOLD"
+station = "Montreal Ground"
+instruction = "ground.handoff_tower"
+slots = { station = "Montreal Tower", frequency = 119.3 }
+pilot = "tower one one niner three, DP69"
+model = { kind = "readback", frequency = "119.3" }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "frequency read back with 'decimal'"
+phase = "DEPARTURE"
+station = "Montreal Tower"
+instruction = "tower.handoff_departure"
+slots = { station = "Montreal Departure", frequency = 120.42 }
+pilot = "one twenty decimal four two, DP69"
+model = { kind = "readback", frequency = "120.42" }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "wrong frequency read back"
+phase = "DEPARTURE"
+station = "Montreal Tower"
+instruction = "tower.handoff_departure"
+slots = { station = "Montreal Departure", frequency = 120.42 }
+pilot = "departure one two zero point five two, DP69"
+model = { kind = "readback", frequency = "120.52" }
+expect = { kind = "readback", status = "incorrect", mismatched = ["frequency"] }
+
+[[case]]
+name = "asking for a repeat while a readback is due"
+phase = "PARKED"
+station = "Montreal Clearance"
+instruction = "clearance.ifr"
+slots = { destination = "Quebec", altitude = 5000, cruise = 12000, frequency = 120.42, squawk = "5015" }
+pilot = "say again the squawk for DP69"
+model = { kind = "request", intent = "say_again" }
+expect = { kind = "request", intent = "say_again" }
+
+[[case]]
+name = "altitude read back as 'up to'"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+instruction = "departure.radar_contact"
+slots = { station = "Montreal Departure", altitude = 12000 }
+pilot = "up to one two thousand, DP69"
+model = { kind = "readback", altitude = "12000" }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "landing clearance read back, '-ed' dropped"
+phase = "APPROACH"
+station = "Quebec Tower"
+instruction = "tower.land"
+slots = { runway = "06", wind = "060@8" }
+pilot = "clear to land zero six, DP69"
+model = { kind = "readback", runway = "06", cleared_to_land = true }
+expect = { kind = "readback", status = "correct" }
+
+[[case]]
+name = "'standby' is not a readback"
+phase = "PARKED"
+station = "Montreal Clearance"
+instruction = "clearance.ifr"
+slots = { destination = "Quebec", altitude = 5000, cruise = 12000, frequency = 120.42, squawk = "5015" }
+pilot = "DP69 standby"
+model = { kind = "unintelligible" }
+expect = { not_kind = "readback" }
+
+[[case]]
+name = "hallucination: the model invents a readback the pilot never made"
+phase = "DEPARTURE"
+station = "Montreal Tower"
+instruction = "tower.handoff_departure"
+slots = { station = "Montreal Departure", frequency = 120.42 }
+pilot = "roger, DP69"
+model = { kind = "readback", frequency = "120.42" }
+expect = { kind = "request", intent = "acknowledge" }
+
+# --- requests, reports, questions --------------------------------------------------------------------
+
+[[case]]
+name = "holding short without 'ready'"
+phase = "RUNWAY_HOLD"
+station = "Montreal Tower"
+pilot = "tower DP69 holding short zero six left"
+model = { kind = "request", intent = "ready_for_departure", runway = "06L" }
+expect = { kind = "request", intent = "ready_for_departure", values = { runway = "06L" } }
+
+[[case]]
+name = "check-in with 'passing ... for ...'"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+pilot = "montreal departure DP69 passing six thousand for twelve thousand"
+model = { kind = "request", intent = "checkin", altitude = "6000" }
+expect = { kind = "request", intent = "checkin", values = { altitude = "6000" } }
+
+[[case]]
+name = "final report in plain words"
+phase = "APPROACH"
+station = "Quebec Tower"
+pilot = "quebec tower DP69 eight miles out on the ILS runway zero six"
+model = { kind = "request", intent = "report_final", runway = "06" }
+expect = { kind = "request", intent = "report_final", values = { runway = "06" } }
+
+[[case]]
+name = "request a flight level"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "DP69 request higher, flight level two four zero"
+model = { kind = "request", intent = "request_altitude", altitude = "24000" }
+expect = { kind = "request", intent = "request_altitude", values = { altitude = "24000" } }
+
+[[case]]
+name = "request lower, phrased as a question"
+phase = "ARRIVAL"
+station = "Montreal Center"
+pilot = "could we get lower, one zero thousand, DP69"
+model = { kind = "request", intent = "request_altitude", altitude = "10000" }
+expect = { kind = "request", intent = "request_altitude", values = { altitude = "10000" } }
+
+[[case]]
+name = "question: altimeter"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "what's the altimeter"
+model = { kind = "question", topic = "altimeter" }
+expect = { kind = "request", intent = "question", values = { topic = "altimeter" } }
+
+[[case]]
+name = "question: winds"
+phase = "APPROACH"
+station = "Quebec Approach"
+pilot = "say the winds at quebec, DP69"
+model = { kind = "question", topic = "wind" }
+expect = { kind = "request", intent = "question", values = { topic = "wind" } }
+
+[[case]]
+name = "question: landing runway"
+phase = "ARRIVAL"
+station = "Quebec Approach"
+pilot = "which runway are we landing on"
+model = { kind = "question", topic = "runway" }
+expect = { kind = "request", intent = "question", values = { topic = "runway" } }
+
+[[case]]
+name = "question: weather"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "any weather to report at quebec?"
+model = { kind = "question", topic = "weather" }
+expect = { kind = "request", intent = "question", values = { topic = "weather" } }
+
+[[case]]
+name = "unsupported request: direct"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "DP69 requesting direct Quebec"
+model = { kind = "request", intent = "other" }
+expect = { kind = "request", intent = "other" }
+
+[[case]]
+name = "unsupported request: weather deviation"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "request deviation twenty degrees left for weather, DP69"
+model = { kind = "request", intent = "other" }
+expect = { kind = "request", intent = "other" }
+
+[[case]]
+name = "mayday"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+pilot = "Mayday mayday mayday, DP69, engine failure, returning to Montreal"
+model = { kind = "request", intent = "emergency", emergency = "engine failure" }
+expect = { kind = "request", intent = "emergency", values = { emergency = "engine failure" } }
+
+[[case]]
+name = "emergency without a keyword"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "DP69 we have smoke in the cockpit, request immediate return"
+model = { kind = "request", intent = "emergency", emergency = "smoke in the cockpit" }
+expect = { kind = "request", intent = "emergency" }
+
+[[case]]
+name = "pan-pan with souls and fuel"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "pan pan pan pan, DP69, sick passenger, one hundred fifty souls, three hours of fuel"
+model = { kind = "request", intent = "emergency", emergency = "sick passenger", souls = "150", fuel = "3 hours" }
+expect = { kind = "request", intent = "emergency", values = { souls = "150", fuel = "3 hours" } }
+
+[[case]]
+name = "IFR clearance request"
+phase = "PARKED"
+station = "Montreal Clearance"
+pilot = "Montreal Clearance DP69 IFR to Quebec ready to copy"
+model = { kind = "request", intent = "request_ifr_clearance" }
+expect = { kind = "request", intent = "request_ifr_clearance" }
+
+[[case]]
+name = "ready to taxi with the ATIS letter"
+phase = "PARKED"
+station = "Montreal Ground"
+pilot = "ground, DP69, at gate 5, ready to taxi with information alpha"
+model = { kind = "request", intent = "ready_to_taxi", atis = "A" }
+expect = { kind = "request", intent = "ready_to_taxi", values = { atis = "A" } }
+
+[[case]]
+name = "clear of the runway, to the gate"
+phase = "TAXI_IN"
+station = "Quebec Tower"
+pilot = "clear of the runway at bravo, DP69, taxi to the gate"
+model = { kind = "request", intent = "request_taxi_parking" }
+expect = { kind = "request", intent_any = ["request_taxi_parking", "clear_of_runway"] }
+
+[[case]]
+name = "check-in, level"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "Montreal center, DP69, level one two thousand"
+model = { kind = "request", intent = "checkin", altitude = "12000" }
+expect = { kind = "request", intent = "checkin", values = { altitude = "12000" } }
+
+[[case]]
+name = "say again"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+pilot = "say again for DP69"
+model = { kind = "request", intent = "say_again" }
+expect = { kind = "request", intent = "say_again" }
+
+[[case]]
+name = "wilco"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "wilco, DP69"
+model = { kind = "request", intent = "acknowledge" }
+expect = { kind = "request", intent = "acknowledge" }
+
+[[case]]
+name = "mumbling"
+phase = "PARKED"
+station = "Montreal Ground"
+pilot = "uh um the uh"
+model = { kind = "unintelligible" }
+expect = { kind = "unknown", intent = "say_again" }
+
+[[case]]
+name = "trap: ready for departure while cruising"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "DP69 is ready when you are"
+model = { kind = "request", intent = "ready_for_departure" }
+expect = { not_intent = "ready_for_departure" }

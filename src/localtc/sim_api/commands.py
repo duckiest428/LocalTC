@@ -15,4 +15,11 @@ class RequestAirportData(SimCommand, tag="request_airport_data"):
     icao: str
 
 
-AnySimCommand = Union[RequestAirportData]
+class SetComFrequency(SimCommand, tag="set_com_frequency"):
+    """Tune a COM radio's active frequency (the copilot changing frequencies)."""
+
+    hz: int  # e.g. 120425000; 25 kHz channel names like "120.42" must already be expanded
+    radio: int = 1
+
+
+AnySimCommand = Union[RequestAirportData, SetComFrequency]

@@ -14,6 +14,8 @@ DWORD = ctypes.c_uint32
 S_OK = 0
 UNUSED = 0xFFFFFFFF
 OBJECT_ID_USER = 0
+GROUP_PRIORITY_HIGHEST = 1
+EVENT_FLAG_GROUPID_IS_PRIORITY = 0x00000010  # TransmitClientEvent: GroupID is a priority, not a group
 
 
 class DataType(enum.IntEnum):

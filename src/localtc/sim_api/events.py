@@ -163,9 +163,27 @@ class AtcAlert(Event, tag="atc_alert"):
     detail: str = ""
 
 
+class LlmExchange(Event, tag="llm_exchange"):
+    """One call to the local language model, recorded so a replay reproduces it without the model.
+
+    ``key`` identifies the request (model, prompts, schema); replay looks the response up by it.
+    """
+
+    purpose: str  # "understand" or "phrase"
+    model: str
+    key: str
+    prompt: str  # the final user message; the system prompt and examples are fixed per LocalTC version
+    response: str  # raw model output, "" on timeout or error
+    outcome: str  # used, invalid, rejected, timeout, error, recorded_miss
+    detail: str = ""  # why it was invalid or rejected, or the error
+    trigger: str = ""  # why the model was asked (see atc_core.llm.triggers)
+    latency_ms: float = 0.0
+    attempt: int = 1
+
+
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

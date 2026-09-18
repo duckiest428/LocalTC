@@ -16,6 +16,7 @@ from typing import Any
 
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, select_runway
 from localtc.atc_core.facilities import Facility, airport_facilities, center_facility
+from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
 from localtc.atc_core.readback import (
@@ -50,6 +51,7 @@ P = FlightPhase
 DEPARTURE_PHASES = {P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
+MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 
 # Which controller handles each pilot request (None: whoever is tuned).
 REQUEST_CONTROLLER = {
@@ -96,10 +98,12 @@ class AtcEngine:
         *,
         library: TemplateLibrary | None = None,
         interpreter: Interpreter | None = None,
+        phraser: LlmPhraser | None = None,
     ) -> None:
         self.cfg = config or EngineConfig()
         self.library = library or TemplateLibrary.load()
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
+        self.phraser = phraser  # words replies that have no template; None: they get "unable"
         self.state = SessionState()
         flight = self.state.flight
         flight.rules = self.cfg.rules
@@ -148,6 +152,11 @@ class AtcEngine:
 
     def snapshot(self) -> SessionSnapshot:
         return snapshot(self.state, self._t)
+
+    @property
+    def idle(self) -> bool:
+        """Nothing scheduled to say and the pilot isn't transmitting: a good moment for the pilot to call."""
+        return not self._scheduled and not self._transmitting(self._t)
 
     def facility(self, controller: str) -> Facility | None:
         """The facility for a controller in the current flight context (origin before arrival, destination after)."""
@@ -289,25 +298,29 @@ class AtcEngine:
         mhz = (own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None
         facility = self._facility_for(mhz) if mhz is not None else None
         pending = st.pending if st.pending is not None and facility is not None and st.pending.controller == facility.controller else None
-        interp = self.interpreter.interpret(
-            ev.text, pending, InterpretContext(callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign)
-        )
-        st.exchanges.append(Exchange(t, "pilot", facility.controller if facility else None, ev.text, interp))
         if facility is None:
+            st.exchanges.append(Exchange(t, "pilot", None, ev.text, None))
             where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
             return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
+        last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller), None)
+        interp = self.interpreter.interpret(ev.text, pending, InterpretContext(
+            callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
+            station=facility.station, last_atc=last_atc,
+        ))
+        st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, interp))
+        out: list[BusEvent] = list(interp.exchanges)
         if interp.kind == "readback":
-            return self._on_readback(interp, facility, t)
+            return out + self._on_readback(interp, facility, t)
         if interp.intent == "emergency":
-            self._schedule(t, "common.emergency", {}, facility)
-            return [self._alert(t, "emergency", ev.text)]
+            return out + self._emergency(interp, facility, t)
         if interp.kind == "request":
-            self._on_request(interp, facility, t)
-            return []
+            return out + self._on_request(interp, facility, t)
         if st.pending is not None and pending is not None:
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
+            if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
+                return out + self._give_up_readback(facility, t)
         self._schedule(t, "common.say_again", {}, facility)
-        return []
+        return out
 
     def _on_readback(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         st = self.state
@@ -329,6 +342,8 @@ class AtcEngine:
             if self.library.get(pending.instruction_id).ack == "readback_correct":
                 self._schedule(t, "common.readback_correct", {}, facility)
             return out
+        if pending.attempts + 1 >= MAX_READBACK_ATTEMPTS:
+            return out + self._give_up_readback(facility, t)
         # The follow-up only has to fix what was wrong or missing.
         st.pending = replace(
             pending, attempts=pending.attempts + 1, required=tuple([*interp.mismatched, *interp.missing]), optional=()
@@ -341,10 +356,30 @@ class AtcEngine:
                            expects_readback=False)
         return out
 
-    def _on_request(self, interp: Interpretation, facility: Facility, t: float) -> None:
+    def _give_up_readback(self, facility: Facility, t: float) -> list[BusEvent]:
+        """Several tries and still no good readback: say the instruction once more, then stop asking.
+        Without this, a readback the parser can't match turns into "say again" forever."""
+        st = self.state
+        pending = st.pending
+        assert pending is not None
+        st.pending = None
+        issued = st.issued.get(pending.instruction_id)
+        if issued is not None:
+            self._schedule(t, pending.instruction_id, issued.slots, facility, expects_readback=False)
+        return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: no correct readback after "
+                                                       f"{MAX_READBACK_ATTEMPTS} tries")]
+
+    def _on_request(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         st = self.state
         intent = interp.intent
         own = st.aircraft
+        if intent == "question":
+            return self._answer(interp, facility, t)
+        if intent == "request_altitude":
+            self._altitude_request(interp, facility, t, own)
+            return []
+        if intent == "other":
+            return self._decline(interp, facility, t)
         target = REQUEST_CONTROLLER.get(intent or "")
         if target is not None and facility.controller != target:
             target_facility = self.facility(target)
@@ -352,7 +387,7 @@ class AtcEngine:
                 facility = target_facility  # e.g. ground also works clearance delivery
             elif target_facility is not None:
                 self._handoff(t, "common.contact", facility, target_facility, delay=True)
-                return
+                return []
         if intent == "request_ifr_clearance":
             self._ifr_clearance(t, facility, interp)
         elif intent == "ready_to_taxi":
@@ -363,7 +398,7 @@ class AtcEngine:
             runway = st.assignments.departure_runway or interp.values.get("runway") or self._departure_runway(own)
             if runway is None:
                 self._schedule(t, "common.say_again", {}, facility)
-                return
+                return []
             self._schedule(t, "tower.takeoff", {"runway": runway}, facility, clearance="takeoff",
                            on_issue=lambda: self._assign(departure_runway=runway))
         elif intent == "checkin":
@@ -379,6 +414,128 @@ class AtcEngine:
             else:
                 self._schedule(t, "common.say_again", {}, facility)
         # acknowledge: nothing to say
+        return []
+
+    # --- non-routine: emergencies, questions, requests without a procedure --------------------------------
+
+    def _emergency(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
+        st = self.state
+        out: list[BusEvent] = []
+        if "emergency" not in st.flags:
+            st.flags.add("emergency")
+            out.append(self._alert(t, "emergency", interp.text))
+        details = interp.values
+        if details:
+            parts = [details.get("emergency", ""), f"{details['souls']} souls" if "souls" in details else "",
+                     f"{details['fuel']} of fuel" if "fuel" in details else ""]
+            text = ", ".join(p for p in parts if p)
+            self._schedule(t, "common.emergency_copied", {"message": Phrase(text, text)}, facility)
+        else:
+            self._schedule(t, "common.emergency", {}, facility)
+        return out
+
+    def _answer(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
+        """Information the engine has (altimeter, wind, runway, ...) is answered from sim data; the rest is
+        worded by the language model from the same facts, or "unable"."""
+        st, own = self.state, self.state.aircraft
+        topic = interp.values.get("topic", "other")
+        if topic == "frequency" and st.comms.expected is not None and st.comms.expected != facility:
+            self._handoff(t, "common.contact", facility, st.comms.expected, delay=True)
+            return []
+        parts: list[tuple[str, dict[str, Any]]] = []
+        altimeter = round(own.altimeter_setting_inhg, 2) if own and 25 < own.altimeter_setting_inhg < 33 else None
+        if topic in ("altimeter", "weather", "atis") and altimeter is not None:
+            parts.append(("altimeter {altimeter}", {"altimeter": altimeter}))
+        if topic in ("wind", "weather") and own is not None:
+            parts.insert(0, ("wind {wind}", {"wind": self._wind(own)}))
+        if topic == "atis" and st.assignments.atis:
+            parts.insert(0, ("information {atis} is current", {"atis": st.assignments.atis}))
+        if topic == "runway" and (runway := self._runway_in_use(own)) is not None:
+            parts.append(("runway {runway}", {"runway": runway}))
+        if topic == "squawk" and st.assignments.squawk:
+            parts.append(("squawk {squawk}", {"squawk": st.assignments.squawk}))
+        if topic == "altitude" and st.assignments.altitude_ft:
+            parts.append(("maintain {altitude}", {"altitude": st.assignments.altitude_ft}))
+        if parts:
+            phrases = [Phrase(*self.library.fill(text, slots, context=f"answer {topic}")) for text, slots in parts]
+            self._schedule(t, "common.info", {"message": sum(phrases[1:], phrases[0])}, facility)
+            return []
+        return self._phrase(interp, facility, t, "answer")
+
+    def _decline(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
+        return self._phrase(interp, facility, t, "decline")
+
+    def _phrase(self, interp: Interpretation, facility: Facility, t: float, decision: str) -> list[BusEvent]:
+        if self.phraser is None:
+            self._schedule(t, "common.unable", {}, facility)
+            return []
+        callsign = self._callsign()
+        callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
+        message, exchanges = self.phraser.reply(
+            pilot=interp.text, decision=decision, facts=self._facts(), callsigns=callsigns, t=t,
+            trigger="question" if decision == "answer" else "unsupported_request",
+        )
+        if message is None:
+            self._schedule(t, "common.unable", {}, facility)
+        else:
+            self._schedule(t, "common.info", {"message": message}, facility)
+        return list(exchanges)
+
+    def _altitude_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        st = self.state
+        wanted = interp.values.get("altitude")
+        if facility.controller not in ("departure", "center", "approach") or own is None or own.on_ground:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        if not isinstance(wanted, int):
+            self._schedule(t, "common.say_altitude", {}, facility)
+            return
+        if not 1000 <= wanted <= 45000 or st.phase in (P.APPROACH, P.LANDING):
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        climbing = wanted > own.alt_indicated_ft
+
+        def approve() -> None:
+            self._assign(altitude_ft=wanted)
+            if st.phase in (P.DEPARTURE, P.CRUISE) and climbing:
+                st.flight.cruise_ft = wanted
+                self._assign(cruise_ft=wanted)
+                self.tracker.detector.cruise_ft = wanted  # cruise is wherever the pilot now levels off
+
+        self._schedule(t, "common.climb" if climbing else "common.descend", {"altitude": wanted}, facility, on_issue=approve)
+
+    def _facts(self) -> dict[str, str]:
+        """What the phrasing model may use, in display form. Nothing here is an instruction to fly."""
+        st, own = self.state, self.state.aircraft
+        facts: dict[str, str] = {}
+        dest = self.geometry(st.flight.destination)
+        if dest is not None:
+            facts["destination"] = speech.airport_name(dest.airport.name, dest.airport.icao)
+        if own is not None:
+            facts["wind"] = speech.wind_display(self._wind(own))
+            if 25 < own.altimeter_setting_inhg < 33:
+                facts["altimeter"] = f"{own.altimeter_setting_inhg:.2f}"
+        if st.assignments.departure_runway:
+            facts["departure runway"] = st.assignments.departure_runway
+        if st.assignments.arrival_runway:
+            facts["arrival runway"] = st.assignments.arrival_runway
+        if st.phase:
+            facts["phase"] = st.phase.lower().replace("_", " ")
+        return facts
+
+    def _runway_in_use(self, own: OwnshipState | None) -> str | None:
+        st = self.state
+        if st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
+            if st.assignments.arrival_runway:
+                return st.assignments.arrival_runway
+            plan = self._arrival_plan(own) if own is not None else None
+            return plan["approach"].runway if plan else None
+        return st.assignments.departure_runway or self._departure_runway(own)
+
+    @staticmethod
+    def _wind(own: OwnshipState) -> Wind:
+        magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180  # east positive; sim MAGVAR sign conventions vary
+        return Wind(direction_mag=int(round((own.wind_dir_true - magvar) / 10) * 10) % 360 or 360, speed_kt=int(round(own.wind_kt)))
 
     # --- instructions ----------------------------------------------------------------------------------
 
@@ -460,9 +617,7 @@ class AtcEngine:
         if runway is None or own is None:
             self._schedule(t, "common.say_again", {}, facility)
             return
-        magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180  # east positive; sim MAGVAR sign conventions vary
-        wind = Wind(direction_mag=int(round((own.wind_dir_true - magvar) / 10) * 10) % 360 or 360, speed_kt=int(round(own.wind_kt)))
-        self._schedule(t, "tower.land", {"runway": runway, "wind": wind}, facility, delay=delay, clearance="landing",
+        self._schedule(t, "tower.land", {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
                        on_issue=lambda: self._assign(arrival_runway=runway))
 
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None) -> None:

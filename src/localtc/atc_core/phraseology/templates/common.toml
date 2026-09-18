@@ -43,6 +43,42 @@ id = "common.emergency"
 controller = "any"
 text = ["{callsign}, roger, say nature of emergency, fuel remaining and souls on board."]
 
+[[template]]
+id = "common.emergency_copied"
+controller = "any"
+text = ["{callsign}, roger, {message}. Say intentions."]
+
+# Replies with no fixed wording: answers to questions ("altimeter 29.92") and declined requests.
+# {message} is built by the engine from sim data, or worded by the language model and checked.
+[[template]]
+id = "common.info"
+controller = "any"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "common.unable"
+controller = "any"
+text = ["{callsign}, unable."]
+
+[[template]]
+id = "common.climb"
+controller = "any"
+text = ["{callsign}, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.descend"
+controller = "any"
+text = ["{callsign}, descend and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.say_altitude"
+controller = "any"
+text = ["{callsign}, say requested altitude."]
+
 [fragments]
 altitude = "maintain {altitude}"
 cruise = "expect {cruise}"

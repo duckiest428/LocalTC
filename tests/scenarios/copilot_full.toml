@@ -1,0 +1,15 @@
+# The copilot works the radio for the whole synthetic KPAE -> KBFI flight: no scripted pilot at all.
+[scenario]
+name = "copilot flies the radio, KPAE to KBFI"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+copilot = "full"
+tail_s = 60
+
+[flight]
+destination = "KBFI"
+cruise_ft = 5000
+callsign = "N172LT"
+
+[atc]
+seed = 7

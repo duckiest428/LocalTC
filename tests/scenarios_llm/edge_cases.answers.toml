@@ -1,0 +1,25 @@
+# Scripted model answers for edge_cases.toml, keyed by the pilot's exact words.
+# A list is one answer per attempt (the second after the interpreter's correction).
+
+[understand]
+"uh Paine Ground, Skyhawk 172LT, what's the altimeter?" = { kind = "question", topic = "altimeter" }
+"tower one two zero two, two lima tango" = { kind = "readback", frequency = "120.2" }
+"Seattle Departure, Cessna two lima tango, passing two thousand for five thousand" = { kind = "request", intent = "checkin", altitude = "2000" }
+"up to five thousand, two lima tango" = { kind = "readback", altitude = "5000" }
+# First a hallucinated flight level the pilot never said (rejected), then the right answer.
+"Seattle Center, two lima tango, request direct Boeing Field" = [
+    { kind = "request", intent = "request_altitude", altitude = "35000" },
+    { kind = "request", intent = "other" },
+]
+"any chance of higher, six thousand?" = { kind = "request", intent = "request_altitude", altitude = "6000" }
+"Seattle Center, confirm the weather at Boeing" = "TIMEOUT"
+"Seattle Center, two lima tango, we have a sick passenger on board, requesting priority" = { kind = "request", intent = "emergency", emergency = "sick passenger" }
+"Seattle Approach, say the winds at Boeing, two lima tango" = { kind = "question", topic = "wind" }
+"Boeing Tower, Cessna two lima tango, eight miles out on the ILS one four right" = { kind = "request", intent = "report_final", runway = "14R" }
+
+[phrase]
+# First answer approves the request (not allowed), the retry declines it.
+"Seattle Center, two lima tango, request direct Boeing Field" = [
+    '{"reply":"proceed direct Boeing Field, approved"}',
+    '{"reply":"unable direct at this time, continue as filed"}',
+]

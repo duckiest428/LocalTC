@@ -61,6 +61,10 @@ def normalize(text: str) -> list[Token]:
         )
         if word == "oh" and not run:
             numeric = False  # "oh" only counts as zero inside a number
+        if word == "and" and run and run[-1] == "hundred" and i + 1 < len(raw) and (
+            raw[i + 1] in TENS_WORDS or raw[i + 1] in TEEN_WORDS or raw[i + 1] in DIGIT_WORDS
+        ):
+            continue  # "one hundred and fifty": the "and" is part of the number
         if numeric:
             run.append(word)
             continue
@@ -88,7 +92,12 @@ def _numbers(run: list[str]) -> list[str]:
         # ("five thousand five hundred" vs "maintain five thousand, one two four point six").
         if current and any(w in MULTIPLIERS for w in current) and word not in MULTIPLIERS and word not in POINT_WORDS:
             leads_to_hundred = i + 1 < len(run) and run[i + 1] == "hundred" and "hundred" not in current
-            if not leads_to_hundred:
+            # "one hundred fifty" is 150; after "thousand", words start a new number ("5,000, one two four ...").
+            after_hundred = (current[-1] == "hundred" and (word in TENS_WORDS or word in TEEN_WORDS)) or (
+                len(current) >= 2 and current[-2] == "hundred" and current[-1] in TENS_WORDS
+                and DIGIT_WORDS.get(word, 0) > 0  # "one hundred fifty five"
+            )
+            if not leads_to_hundred and not after_hundred:
                 numbers.append([])
                 current = numbers[-1]
         # A written multi-digit number after another written number starts a new number

@@ -41,6 +41,7 @@ SLOTS: dict[str, SlotType] = {
     "destination": TEXT,  # spoken airport name, e.g. "Boeing Field"
     "missing": PHRASE,  # pre-rendered fragments ("read back {missing}")
     "correction": PHRASE,
+    "message": PHRASE,  # free wording: an answer or a declined request
     "runway": RUNWAY,
     "hold_short": RUNWAY,
     "frequency": FREQUENCY,

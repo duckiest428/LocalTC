@@ -75,6 +75,10 @@ class SimConnectDll:
         self._request_facilities_list = _bind(
             lib, ("SimConnect_RequestFacilitiesList_EX1", "SimConnect_RequestFacilitesList_EX1"), [c_void_p, c_int, c_uint32]
         )
+        self._map_client_event = _bind(lib, "SimConnect_MapClientEventToSimEvent", [c_void_p, c_uint32, c_char_p])
+        self._transmit_client_event = _bind(
+            lib, "SimConnect_TransmitClientEvent", [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32]
+        )
         self._get_next_dispatch = _bind(
             lib, "SimConnect_GetNextDispatch", [c_void_p, POINTER(c_void_p), POINTER(c_uint32)]
         )
@@ -130,6 +134,13 @@ class SimConnectDll:
 
     def request_facilities_list(self, handle: int, list_type: FacilityListType, request_id: int) -> None:
         _check(self._request_facilities_list(handle, int(list_type), request_id), "RequestFacilitiesList_EX1")
+
+    def map_client_event_to_sim_event(self, handle: int, event_id: int, name: str) -> None:
+        _check(self._map_client_event(handle, event_id, name.encode()), f"MapClientEventToSimEvent({name})")
+
+    def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None:
+        hr = self._transmit_client_event(handle, object_id, event_id, data & 0xFFFFFFFF, group, flags)
+        _check(hr, f"TransmitClientEvent({event_id}, {data})")
 
     def get_next_dispatch(self, handle: int) -> bytes | None:
         """Copy the next pending message out of SimConnect's buffer, or None if there isn't one."""

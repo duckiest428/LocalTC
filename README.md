@@ -2,16 +2,17 @@
 
 Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. No cloud, no API keys.
 
-- A deterministic state machine handles standard ATC (clearances, handoffs, sequencing).
-- A small local LLM (1B–4B, via Ollama) handles the hard cases.
+- A small local LLM (1B–4B, via Ollama) reads every pilot call; a grammar checks it and takes over when the model is slow, missing or wrong.
+- A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact FAA phraseology; the model words only replies that have no template.
+- An optional copilot works the radio for you: readbacks, frequency changes, or every call.
 - Pilot speech is transcribed locally with faster-whisper. ATC speaks through Piper with radio-effect DSP.
 
 Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
 
-> **Status: Phase 1 (deterministic IFR ATC).**
-> - **Working:** flight phase tracking, FAA phraseology templates, readback checking, and the full IFR dialogue from clearance delivery to taxi-in.
-> - **Pilot input:** typed or scripted for now.
-> - **Not yet:** speech-to-text, speech synthesis, radio DSP and the LLM fallback.
+> **Status: Phase 2 (local LLM + copilot).**
+> - **Working:** the full IFR dialogue from clearance delivery to taxi-in; the local model understanding pilot calls (with checks and grammar fallback); questions, altitude requests and emergencies; the copilot.
+> - **Pilot input:** typed, scripted, or the copilot.
+> - **Not yet:** speech-to-text, speech synthesis and radio DSP.
 
 ## Layout
 
@@ -27,10 +28,13 @@ src/localtc/
     phase/         flight phase detection from telemetry + geometry
     phraseology/   FAA speech formatting, typed slots, TOML templates (templates/*.toml)
     readback/      transcript normalizer, element extractors, intents, interpreter chain
+    llm/           the model's two jobs: understanding (prompt, few-shot examples, checks) and phrasing
     engine.py      AtcEngine: the IFR dialogue, handle(event) -> events
     session.py     SessionState + JSON SessionSnapshot (the Phase 2 LLM's view)
     service.py     connects the engine to the bus
   airports/    JSON airport cache (%LOCALAPPDATA%\LocalTC\airports)
+  llm/         Ollama client (standard library HTTP) and the edge-case evaluation (eval_cases.toml)
+  copilot.py   the copilot: reads back, changes frequencies, makes calls
   scenario.py  offline scripted-pilot scenarios
   stt/ tts/ dsp/   Later phases
   app.py       Wiring: config -> source -> bus -> recorder
@@ -42,7 +46,7 @@ tests/         Runs on any OS; tests/windows/ needs a live sim
 **Dependency rules:**
 - Only `app.py` may import `sim_bridge`.
 - `sim_api` imports nothing else from LocalTC.
-- `atc_core` only imports `sim_api`, `bus` and `airports`. `lint-imports` and `tests/test_architecture.py` both enforce this. Everything except the bridge can be built and tested on a Mac against recordings.
+- `atc_core` only imports `sim_api`, `bus` and `airports`: no HTTP, no copilot. `lint-imports` and `tests/test_architecture.py` both enforce this. Everything except the bridge can be built and tested on a Mac against recordings.
 
 ## Setup
 
@@ -84,6 +88,41 @@ A `TUNE` line shows which facility LocalTC thinks is on COM1. If a call goes una
 
 Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) or with `LOCALTC_SOURCE=live|replay`.
 
+## Language model (Phase 2)
+
+1. Install [Ollama](https://ollama.com/download) and pull the model: `ollama pull llama3.2:3b`. It runs locally; nothing leaves the machine.
+2. `localtc llm check`: is Ollama running, is the model installed, how fast does it answer.
+3. `localtc llm eval`: runs the seeded edge cases (`src/localtc/llm/eval_cases.toml`) against your model and shows what it got right, what it got wrong and how long it took.
+
+Without Ollama, LocalTC logs a warning and runs on the grammar alone, exactly as in Phase 1. `--no-llm` does the same on purpose.
+
+**What the model does.** It fills in a small JSON form for each pilot call: the kind of call, the intent, and the values the pilot said. It never talks to the pilot and never decides anything. Its answer is checked before it's used:
+- The form must match the schema (Ollama enforces it). An answer that doesn't is retried once, with the problem named.
+- **Every value must have been said.** A squawk, frequency or altitude that isn't in the pilot's words (after number normalization) makes the whole answer invalid.
+- Readback values are compared with the same rules as the grammar, and a value the grammar heard wins over the model's.
+- An intent that makes no sense in the current phase (ready to taxi while cruising) is rejected.
+- On a timeout, a missing model or two bad answers, the grammar's result is used.
+
+**When it's asked** (`[llm] understanding`): `primary` asks it about every call. `fallback` asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). Either way the trigger is recorded.
+
+**Phrasing** (`[llm] phrasing`): routine calls stay exactly as the templates say. The model only words replies with no template: answers the sim can't give (altimeter, wind, runway, squawk and assigned altitude come straight from sim data) and declined requests ("unable direct at this time, continue as filed"). The reply may not contain an instruction or approval ("cleared", "climb", "contact", "approved", ...) or any number that isn't in the facts it was given. Otherwise ATC says "unable".
+
+**Recordings.** Every model call is recorded as an `llm_exchange` event: prompt, answer, outcome, latency. A replay reuses the recorded answers, so it behaves exactly like the flight did, without a model (`localtc replay ... --llm live` asks the model again instead). `localtc atc <recording> --llm live` runs the model offline against a recording.
+
+## Copilot
+
+```bash
+localtc run --source live --copilot full --destination CYQB --cruise-ft 12000     # it works the radio
+localtc run --source live --copilot assist --type --destination CYQB              # you talk, it reads back
+localtc atc tests/fixtures/real_cyul --copilot full --destination CYQB --cruise-ft 12000 \
+    --callsign DP69 --airports tests/fixtures/airports_real                         # the same, offline
+```
+
+- **assist:** reads back every instruction and tunes COM1 whenever ATC hands you off. You make the requests and check-ins.
+- **full:** also makes every call itself: IFR clearance, taxi, ready for departure, check-ins, final, clear of the runway.
+
+It tunes COM1 through SimConnect (`COM_RADIO_SET_HZ`). Two-decimal frequency names are the 25 kHz channel ("120.42" is 120.425). If the aircraft doesn't follow, the copilot retries once and then logs a `copilot` alert and skips the call. It won't say the same thing a third time in a row.
+
 ## Live bridge setup (Windows)
 
 1. **SimConnect.dll.** Install the MSFS 2024 SDK (in the sim: Options → General → Developers → enable Developer Mode, then download the SDK). LocalTC finds the DLL in this order:
@@ -123,7 +162,7 @@ Every threshold can be overridden in `[atc.phase]`.
 
 **Phraseology** lives in `src/localtc/atc_core/phraseology/templates/*.toml`: one file per controller, with typed `{slots}`, required and optional readback elements, and an example pilot readback. Templates are validated when loaded.
 
-**Readbacks** go through the transcript normalizer and the element extractors. The result is `correct`, `incorrect` ("negative, squawk …") or `incomplete` ("read back …"). A second failure, an unparseable call or an ambiguous one goes to the fallback interpreter. In Phase 1 the fallback says "say again"; Phase 2 swaps in the LLM, which returns the same `Interpretation`.
+**Readbacks** go through the transcript normalizer and the element extractors. The result is `correct`, `incorrect` ("negative, squawk …") or `incomplete` ("read back …"). An unparseable or ambiguous call gets "say again". After three failed tries ATC repeats the instruction once and stops asking, with a `readback_unresolved` alert. With the language model, the model reads the call first (see above) and returns the same `Interpretation`.
 
 **Session snapshot:** `AtcEngine.snapshot()` is JSON covering phase, assignments, clearances, the pending readback, recent exchanges and alerts. It's the read-only context for the Phase 2 LLM. `localtc atc … --snapshot` prints it.
 
@@ -150,6 +189,7 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 ```bash
 .venv/bin/pytest
 .venv/bin/lint-imports
+.venv/bin/pytest -m ollama -s      # the edge cases against your real model (skipped without Ollama)
 ```
 
 **macOS: `No module named 'localtc'`.** If the project is in an iCloud-synced folder such as `~/Desktop`, macOS can mark the editable install's `.pth` file as hidden, and Python 3.12.13+ skips hidden `.pth` files. Tests aren't affected, because pytest adds `src` to the path itself. For the CLI, either move the project outside the synced folder, run `chflags nohidden .venv/lib/python3*/site-packages/*.pth`, or prefix commands with `PYTHONPATH=src`.

@@ -1,0 +1,154 @@
+# Deliberately awkward pilot calls seeded into the full synthetic KPAE -> KBFI IFR flight, with the language
+# model in "fallback" mode: routine calls stay with the grammar, the rest go to the (scripted) model.
+# Model answers are in edge_cases.answers.toml. Run by tests/test_llm.py against edge_cases.golden.txt.
+[scenario]
+name = "edge cases with the language model"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+tail_s = 40
+
+[flight]
+destination = "KBFI"
+cruise_ft = 5000
+callsign = "N172LT"
+
+[atc]
+seed = 7
+
+# --- ground: a question before the routine calls --------------------------------------------
+[[pilot]]
+when = { phase = "PARKED", after_s = 3 }
+tune = "ground"
+say = "uh Paine Ground, Skyhawk 172LT, what's the altimeter?"
+
+[[pilot]]
+when = { phase = "PARKED", after_s = 12 }
+tune = "clearance"
+say = "Paine Clearance, {callsign}, IFR to Boeing Field, ready to copy."
+
+[[pilot]]
+on = "clearance.ifr"
+say = "cleared to boeing, maintain five thousand, one two four point six seven five, squawk {squawk}, two lima tango"
+
+[[pilot]]
+when = { phase = "PARKED", cleared = "ifr" }
+tune = "ground"
+delay_s = 5
+say = "Paine Ground, {callsign_short}, ready to taxi."
+
+[[pilot]]
+on = "ground.taxi_out"
+say = "{readback}"
+
+# --- tower: a frequency without "point", holding short without "ready" -----------------------
+[[pilot]]
+on = "ground.handoff_tower"
+say = "tower one two zero two, two lima tango"
+
+[[pilot]]
+on = "ground.handoff_tower"
+tune = "handoff"
+delay_s = 8
+say = "Paine Tower, {callsign_short}, holding short three four left"
+
+[[pilot]]
+on = "tower.takeoff"
+say = "clear for take off three four left, two lima tango"
+
+[[pilot]]
+on = "tower.handoff_departure"
+say = "{readback}"
+
+# --- departure: check-in the grammar doesn't know, readback as "up to" ---------------------------
+[[pilot]]
+on = "tower.handoff_departure"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Departure, {callsign_short}, passing two thousand for five thousand"
+
+[[pilot]]
+on = "departure.radar_contact"
+say = "up to five thousand, two lima tango"
+
+[[pilot]]
+on = "departure.handoff_center"
+say = "{readback}"
+
+[[pilot]]
+on = "departure.handoff_center"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Center, {callsign_short}, level 5,000."
+
+# --- center: an unsupported request, an altitude request, a question the model times out on,
+#     an emergency without a keyword -------------------------------------------------------------
+[[pilot]]
+when = { phase = "CRUISE", after_s = 90 }
+say = "Seattle Center, two lima tango, request direct Boeing Field"
+
+[[pilot]]
+when = { phase = "CRUISE", after_s = 130 }
+say = "any chance of higher, six thousand?"
+
+[[pilot]]
+on = "common.climb"
+say = "{readback}"
+
+[[pilot]]
+when = { phase = "CRUISE", after_s = 200 }
+say = "Seattle Center, confirm the weather at Boeing"
+
+[[pilot]]
+when = { phase = "CRUISE", after_s = 260 }
+say = "Seattle Center, two lima tango, we have a sick passenger on board, requesting priority"
+
+# --- arrival ---------------------------------------------------------------------------------------
+[[pilot]]
+on = "center.descend"
+say = "{readback}"
+
+[[pilot]]
+on = "center.handoff_approach"
+say = "{readback}"
+
+[[pilot]]
+on = "center.handoff_approach"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Approach, {callsign_short}, {alt} descending 3,000."
+
+[[pilot]]
+on = "approach.descend"
+say = "{readback}"
+
+[[pilot]]
+when = { phase = "APPROACH", after_s = 20 }
+say = "Seattle Approach, say the winds at Boeing, two lima tango"
+
+[[pilot]]
+on = "approach.cleared"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.cleared"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Tower, {callsign_short}, eight miles out on the ILS one four right"
+
+[[pilot]]
+on = "tower.land"
+say = "clear to land one four right, two lima tango"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Ground, {callsign_short}, clear at alpha, taxi to the ramp."
+
+[[pilot]]
+on = "ground.taxi_in"
+say = "{readback}"

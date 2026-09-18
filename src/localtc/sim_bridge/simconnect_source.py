@@ -23,6 +23,7 @@ from localtc.sim_api import (
     SessionClock,
     SessionInfo,
     RequestAirportData,
+    SetComFrequency,
     SimCommand,
     SimLifecycle,
     TrafficSnapshot,
@@ -32,6 +33,8 @@ from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import facilities
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
+    EVENT_FLAG_GROUPID_IS_PRIORITY,
+    GROUP_PRIORITY_HIGHEST,
     OBJECT_ID_USER,
     PAUSE_FLAGS,
     AirportList,
@@ -63,6 +66,9 @@ FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
+# Client events LocalTC sends to the sim (same ID space as the system events above).
+EVT_COM1_SET_HZ, EVT_COM2_SET_HZ = 20, 21
+CLIENT_EVENTS = {EVT_COM1_SET_HZ: "COM_RADIO_SET_HZ", EVT_COM2_SET_HZ: "COM2_RADIO_SET_HZ"}
 SYSTEM_EVENTS = {
     EVT_SIM_START: "SimStart",
     EVT_SIM_STOP: "SimStop",
@@ -100,6 +106,8 @@ class SimConnectApi(Protocol):
     def add_to_facility_definition(self, handle: int, define_id: int, field: str) -> None: ...
     def request_facility_data(self, handle: int, define_id: int, request_id: int, icao: str, region: str = "") -> None: ...
     def request_facilities_list(self, handle: int, list_type: FacilityListType, request_id: int) -> None: ...
+    def map_client_event_to_sim_event(self, handle: int, event_id: int, name: str) -> None: ...
+    def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None: ...
     def get_next_dispatch(self, handle: int) -> bytes | None: ...
 
 
@@ -227,6 +235,8 @@ class SimConnectSource:
                 dll.add_to_data_definition(handle, define_id, d.simvar, d.units, d.datatype)
         for event_id, name in SYSTEM_EVENTS.items():
             dll.subscribe_to_system_event(handle, event_id, name)
+        for event_id, name in CLIENT_EVENTS.items():
+            dll.map_client_event_to_sim_event(handle, event_id, name)
         dll.request_data_on_sim_object(
             handle, REQ_IDENTITY, DEF_IDENTITY, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
@@ -315,6 +325,11 @@ class SimConnectSource:
                 return
             if isinstance(command, RequestAirportData):
                 self._request_airport(dll, handle, command.icao.upper(), force=True)
+            elif isinstance(command, SetComFrequency):
+                event_id = EVT_COM2_SET_HZ if command.radio == 2 else EVT_COM1_SET_HZ
+                dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.hz, GROUP_PRIORITY_HIGHEST,
+                                          EVENT_FLAG_GROUPID_IS_PRIORITY)
+                log.info("Tuning COM%d to %.3f", command.radio, command.hz / 1e6)
             else:
                 log.warning("unsupported command %r", command)
 

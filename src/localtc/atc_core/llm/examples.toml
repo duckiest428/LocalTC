@@ -1,0 +1,94 @@
+# Few-shot examples for the understanding prompt. Each one is a (context, pilot) -> JSON pair
+# shown to the model before the real transmission. They cover the edge cases a small model
+# gets wrong without them. Keep them short: every token here is paid on every call.
+#
+# mode = "readback" (a readback is expected) or "request" (none is).
+# expect lists the readback elements for readback-mode examples, as "element=value".
+
+[[example]]
+mode = "readback"
+phase = "RUNWAY_HOLD"
+station = "Montreal Tower"
+atc = "DP69, runway 06L, fly runway heading, cleared for takeoff."
+expect = ["runway=06L", "cleared_for_takeoff"]
+pilot = "clear for take off zero six left, delta papa six nine"
+answer = { kind = "readback", intent = "", runway = "06L", cleared_for_takeoff = true }
+
+[[example]]
+# The pilot said a different squawk: report what the pilot said, never the expected value.
+mode = "readback"
+phase = "PARKED"
+station = "Montreal Clearance"
+atc = "DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015."
+expect = ["altitude=5000", "frequency=120.42", "squawk=5015"]
+pilot = "cleared as filed, five thousand, one twenty point four two, squawk five zero five one, DP69"
+answer = { kind = "readback", intent = "", altitude = "5000", frequency = "120.42", squawk = "5051" }
+
+[[example]]
+# Only part of the instruction read back: leave the rest empty.
+mode = "readback"
+phase = "CRUISE"
+station = "Montreal Departure"
+atc = "Air Canada 326, contact Montreal Center 135.025."
+expect = ["frequency=135.025"]
+pilot = "over to center, air canada three twenty six"
+answer = { kind = "readback", intent = "", frequency = "" }
+
+[[example]]
+# Asking for a repeat is not a readback.
+mode = "readback"
+phase = "PARKED"
+station = "Montreal Clearance"
+atc = "DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015."
+expect = ["altitude=5000", "frequency=120.42", "squawk=5015"]
+pilot = "say again the squawk for DP69"
+answer = { kind = "request", intent = "say_again", altitude = "", frequency = "", squawk = "" }
+
+[[example]]
+mode = "request"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+pilot = "montreal departure DP69 with you out of six thousand for one two thousand"
+answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "6000", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "RUNWAY_HOLD"
+station = "Montreal Tower"
+pilot = "tower DP69 holding short zero six left"
+answer = { kind = "request", intent = "ready_for_departure", topic = "", runway = "06L", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "what's the altimeter in quebec"
+answer = { kind = "question", intent = "", topic = "altimeter", runway = "", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "Air Canada 326 request flight level two four zero"
+answer = { kind = "request", intent = "request_altitude", topic = "", runway = "", atis = "", altitude = "24000", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "DEPARTURE"
+station = "Montreal Departure"
+pilot = "mayday mayday mayday DP69 engine fire, two souls on board, one hour of fuel"
+answer = { kind = "request", intent = "emergency", topic = "", runway = "", atis = "", altitude = "", emergency = "engine fire", souls = "2", fuel = "1 hour" }
+
+[[example]]
+mode = "request"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "DP69 requesting direct Quebec"
+answer = { kind = "request", intent = "other", topic = "", runway = "", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "PARKED"
+station = "Montreal Ground"
+pilot = "uh the uh we're uh"
+answer = { kind = "unintelligible", intent = "", topic = "", runway = "", atis = "", altitude = "", emergency = "", souls = "", fuel = "" }

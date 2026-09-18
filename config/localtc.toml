@@ -36,6 +36,24 @@ airport_dirs = []             # extra folders of <ICAO>.json airport files
 
 [atc.phase]                   # PhaseThresholds overrides, e.g. taxi_start_kt = 4
 
+[llm]                         # local language model via Ollama (https://ollama.com); nothing leaves this machine
+enabled = true
+base_url = "http://localhost:11434"
+model = "llama3.2:3b"         # ollama pull llama3.2:3b
+understanding = "primary"     # primary: reads every pilot call; fallback: only what the grammar can't; off
+phrasing = true               # word answers to questions and declined requests (routine calls stay templated)
+timeout_s = 2.5               # per model call; on timeout the grammar's answer is used
+budget_s = 4.0                # per pilot transmission, including one retry
+max_attempts = 2
+keep_alive = "1h"             # keep the model loaded between calls
+num_ctx = 4096
+replay = "recorded"           # in replays: "recorded" answers, "live" model, or "off"
+
+[copilot]                     # works the radio for you (or use --copilot)
+mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)
+delay_min_s = 2.0             # reaction time before the copilot speaks
+delay_max_s = 4.0
+
 [recorder]
 enabled = true
 dir = "recordings"

@@ -65,10 +65,34 @@ class AtcConfig(_Section):
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
 
 
+class LlmConfig(_Section):
+    """The local language model (Ollama). Without it, or when it's slow, the grammar does the work."""
+
+    enabled: bool = True
+    base_url: str = "http://localhost:11434"
+    model: str = "llama3.2:3b"
+    understanding: Literal["primary", "fallback", "off"] = "primary"  # primary: every transmission; fallback: only
+    phrasing: bool = True  # word replies that have no template (questions, declined requests)
+    timeout_s: float = 2.5  # per model call
+    budget_s: float = 4.0  # per transmission, including one retry
+    max_attempts: int = 2
+    keep_alive: str = "1h"
+    num_ctx: int = 4096
+    replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
+
+
+class CopilotConfig(_Section):
+    mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
+    delay_min_s: float = 2.0  # pilot reaction time before speaking
+    delay_max_s: float = 4.0
+
+
 class Config(_Section):
     source: SourceConfig = msgspec.field(default_factory=SourceConfig)
     flight: FlightConfig = msgspec.field(default_factory=FlightConfig)
     atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
+    llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
+    copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)

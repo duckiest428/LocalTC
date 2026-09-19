@@ -56,6 +56,12 @@ class OwnshipState(Event, tag="ownship_state"):
     wind_kt: float = 0.0
     magvar: float = 0.0
     altimeter_setting_inhg: float = 0.0
+    # Added in Phase 4 (ATIS and weather); None where a recording predates them.
+    temperature_c: float | None = None  # outside air temperature at the aircraft
+    visibility_m: float | None = None
+    precip: int = 0  # AMBIENT PRECIP STATE bits: 2 none, 4 rain, 8 snow
+    in_cloud: bool = False
+    zulu_s: float | None = None  # sim time of day, seconds since 00:00Z
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):
@@ -183,9 +189,20 @@ class LlmExchange(Event, tag="llm_exchange"):
     attempt: int = 1
 
 
+class AtisBroadcast(Event, tag="atis_broadcast"):
+    """An airport's ATIS, sent when the pilot tunes its frequency and again whenever the letter changes."""
+
+    airport: str
+    station: str  # "Phoenix Sky Harbor"
+    frequency_mhz: float
+    letter: str
+    text: str
+    spoken: str
+
+
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

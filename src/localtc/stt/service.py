@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from localtc.bus import EventBus
-from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16
+from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16, trim_silence
 from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup, hotwords
 from localtc.sim_api import PttPressed, PttReleased, Transcript
 
@@ -66,17 +66,39 @@ class VoiceService:
                     log.exception("Speech-to-text failed")
                     self.bus.publish(Transcript(t=self.now(), text="", radio=self._radio, source="voice"))
 
+    async def _silent_microphone(self, audio_s: float) -> None:
+        """The microphone sent silence. Reopen it: if the system default input was changed (Windows
+        Settings > Sound > Input) the new one is used from the next transmission."""
+        before = getattr(self.capture, "name", "the microphone")
+        log.warning("Push-to-talk for %.1f s but %s heard nothing", audio_s, before)
+        if not hasattr(self.capture, "refresh"):
+            return
+        try:
+            after = await asyncio.to_thread(self.capture.refresh)
+        except Exception as exc:  # a missing device: keep going, the next press tries again
+            log.warning("Could not reopen the microphone: %s", exc)
+            return
+        if after != before:
+            log.warning("Microphone is now %s (the system default input)", after)
+        else:
+            log.warning("Still using %s. Check that it's the right input in your sound settings, or pick one "
+                        "with --mic (see: localtc voice devices)", after)
+
     async def _transcribe(self, audio) -> Transcript:
         audio_s = len(audio) / SAMPLE_RATE
-        if audio_s < MIN_CLIP_S or rms(audio) < SILENCE_RMS:
-            log.info("Push-to-talk with no speech (%.1f s)", audio_s)
+        if audio_s < MIN_CLIP_S:
+            log.info("Push-to-talk too short for speech (%.1f s)", audio_s)
+            return Transcript(t=self.now(), text="", radio=self._radio, source="voice")
+        if rms(audio) < SILENCE_RMS:
+            await self._silent_microphone(audio_s)
             return Transcript(t=self.now(), text="", radio=self._radio, source="voice")
         ref = self.recorder.save_audio(to_pcm16(audio), sample_rate=SAMPLE_RATE) if self.recorder else None
         hints = self.hints() if (self.hints and self.vocabulary) else VocabularyHints()
         prompt = build_prompt(hints) if self.vocabulary else ""
-        result = await asyncio.to_thread(self.transcriber.transcribe, audio, prompt=prompt, hotwords=hotwords(hints))
+        speech = trim_silence(audio)
+        result = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt=prompt, hotwords=hotwords(hints))
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
-        log.info("Heard %r in %.1f s of audio (%.0f ms, confidence %.2f)", text, result.audio_s, result.latency_ms,
-                 result.confidence)
+        log.info("Heard %r in %.1f s of audio (%.1f s with speech, %.0f ms, confidence %.2f)", text, audio_s,
+                 result.audio_s, result.latency_ms, result.confidence)
         return Transcript(t=self.now(), text=text, radio=self._radio, confidence=result.confidence, audio_ref=ref,
                           stt_ms=result.latency_ms, source="voice")

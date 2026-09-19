@@ -10,6 +10,14 @@ text = ["{callsign}, descend and maintain {altitude}, expect {approach} approach
 readback = { required = ["altitude"] }
 pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
 
+# Already at or below the arrival altitude (a low cruise): no descent, just the plan.
+[[template]]
+id = "center.maintain"
+controller = "center"
+text = ["{callsign}, maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, {callsign_short}."
+
 [[template]]
 id = "center.handoff_approach"
 controller = "center"

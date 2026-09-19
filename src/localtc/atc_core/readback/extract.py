@@ -6,12 +6,23 @@ incorrect, and no candidates means missing.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from localtc.atc_core.readback.normalize import Token
 from localtc.atc_core.values import Approach, Callsign
 
 Extractor = Callable[[list[Token], Any], list[Any]]
+
+
+@dataclass(frozen=True)
+class Unclear:
+    """A value that isn't a valid one but is probably the expected one misheard ("12.1" for 120.1)."""
+
+    heard: str
+
+    def __str__(self) -> str:
+        return self.heard
 
 SIDE_WORDS = {"left": "L", "right": "R", "center": "C", "centre": "C", "l": "L", "r": "R", "c": "C"}
 NOT_CALLSIGN_WORDS = {
@@ -115,8 +126,12 @@ def _altitude_value(tokens: list[Token], i: int) -> int | None:
 
 def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
-    for i in _find_phrase(tokens, ("maintain",)):
-        if (value := _altitude_value(tokens, i)) is not None:
+    starts = _find_phrase(tokens, ("maintain",)) + [  # "climb to 3,200", "descend 3,000"
+        i for word in ("climb", "descend")  # not "climbing 5,000": that's a check-in report
+        for i in _find_phrase(tokens, (word, "to")) + _find_phrase(tokens, (word,))
+    ]
+    for i in sorted(set(starts)):
+        if (value := _altitude_value(tokens, i)) is not None and value not in found:
             found.append(value)
     for i, token in enumerate(tokens):  # "5000 feet"
         if token.kind == "number" and i + 1 < len(tokens) and tokens[i + 1].text in ("feet", "ft"):
@@ -143,6 +158,18 @@ def _as_frequency(text: str) -> float | None:
     return round(value, 3) if 118.0 <= value <= 136.975 else None
 
 
+def _dropped_digit(text: str, expected: Any) -> bool:
+    """ "12.1" for 120.1, "119.7" for 119.75: speech-to-text lost one digit of the expected frequency."""
+    try:
+        want = f"{float(expected):.3f}".rstrip("0").rstrip(".").replace(".", "")
+    except (TypeError, ValueError):
+        return False
+    heard = text.replace(".", "").replace(",", "")
+    if not heard.isdigit() or len(heard) != len(want) - 1 or len(heard) < 3:
+        return False
+    return any(want[:i] + want[i + 1:] == heard for i in range(len(want)))
+
+
 def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
     found = []
     for i, token in enumerate(tokens):
@@ -152,6 +179,8 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
             continue
         if (value := _as_frequency(token.text)) is not None:
             found.append(value)
+        elif "." in token.text and expected is not None and _dropped_digit(token.text, expected):
+            found.append(Unclear(token.text))
     return found
 
 
@@ -294,6 +323,22 @@ def destination(tokens: list[Token], expected: Any = None) -> list[str]:
     return [expected] if significant and all(w in words for w in significant) else []
 
 
+def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
+    """ "direct BLAKO": the words after "direct", compared loosely with the fix ATC gave."""
+    words = _words(tokens)
+    found = []
+    for i in _find_phrase(tokens, ("direct",)):
+        rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
+        if isinstance(expected, str):
+            wanted = [w.lower() for w in expected.replace(" airport", "").split()]
+            if wanted and all(w in rest or w in words for w in wanted):
+                found.append(expected)
+                continue
+        if rest:
+            found.append(" ".join(rest[:2]).upper())
+    return found
+
+
 ELEMENTS: dict[str, Extractor] = {
     "runway": runways,
     "hold_short": hold_short,
@@ -305,6 +350,7 @@ ELEMENTS: dict[str, Extractor] = {
     "taxi_route": taxi_routes,
     "approach": approaches,
     "destination": destination,
+    "fix": fixes,
     "callsign": callsigns,
     "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
                                  ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off")),
@@ -314,7 +360,42 @@ ELEMENTS: dict[str, Extractor] = {
 }
 
 
+CORRECTIONS = (("correction",), ("i", "mean"), ("excuse", "me"), ("sorry",))
+
+
+def candidates(element: str, tokens: list[Token], expected: Any) -> list[Any]:
+    """What the pilot said for ``element``. After "correction" (or "I mean", "excuse me") only the
+    corrected part counts: "cleared to land 08 left, correction 08" is runway 08."""
+    found = ELEMENTS[element](tokens, expected)
+    fixes = [(end - len(phrase), end) for phrase in CORRECTIONS for end in _find_phrase(tokens, phrase)]
+    if not found or not fixes:
+        return found
+    start, end = max(fixes)
+    if corrected := ELEMENTS[element](tokens[end:], expected):
+        return corrected
+    # A bare value after the correction replaces the one before it: "cleared to land 08 left, correction 08".
+    last = next((i for i in range(start - 1, -1, -1) if tokens[i].kind == "number"), None)
+    if last is not None and end < len(tokens) and tokens[end].kind == "number":
+        if corrected := ELEMENTS[element](tokens[:last] + tokens[end:], expected):
+            return corrected
+    return found
+
+
+def values_close(element: str, heard: Any, expected: Any) -> bool:
+    """Not what ATC said, but probably it, misheard or misspoken: worth a "confirm", not a "negative"."""
+    if isinstance(heard, Unclear):
+        return True
+    if element in ("runway", "hold_short"):
+        heard, expected = normalize_runway(heard), normalize_runway(expected)
+        return expected[-1:].isdigit() and heard != expected and heard.rstrip("LRC") == expected  # "08 left" for 08
+    if element in ("altitude", "cruise"):
+        return int(heard) % 100 != 0 and abs(int(heard) - int(expected)) < 50  # "1508" for 1,500
+    return False
+
+
 def values_equal(element: str, heard: Any, expected: Any) -> bool:
+    if isinstance(heard, Unclear):
+        return False
     if element == "frequency":
         return abs(float(heard) - float(expected)) < 0.0005
     if element in ("runway", "hold_short"):
@@ -325,4 +406,6 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
         return int(heard) == int(expected)
     if element == "taxi_route":
         return tuple(heard) == tuple(n.upper() for n in expected)
+    if element == "fix":
+        return str(heard).lower() == str(expected).lower()
     return heard == expected

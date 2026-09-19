@@ -18,7 +18,7 @@ from localtc.config import Config, with_recorded
 from localtc.replay import Recording
 from localtc.scenario import load_scenario, run
 from localtc.sim_api import AtcTransmission, PttPressed, PttReleased, Transcript
-from localtc.stt.audio import AudioCapture, read_wav, resample, write_wav
+from localtc.stt.audio import AudioCapture, read_wav, resample, trim_silence, write_wav
 from localtc.stt.service import VoiceService
 from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup
 from localtc.voice import flight_hints, recorded_clips, spoken_callsign, token_error_rate
@@ -43,6 +43,10 @@ HAPPY = HERE / "scenarios" / "ifr_happy_path.toml"
     ("Rolling 0-6 left, Delta Papa 6-9er", "Rolling 06 left, Delta Papa 69"),
     ("squawk 5-0-1-5", "squawk 5015"),
     ("FL240", "flight level 240"),
+    ("We are on short file right now.", "We are on short final right now."),
+    ("Expect RNA runway 08", "Expect RNAV runway 08"),
+    ("for the R-NAF 08", "for the RNAV 08"),
+    ("Time maintain 1500", "climb and maintain 1500"),
     ("Cleared for takeoff runway 34L", "Cleared for takeoff runway 34L"),  # nothing to fix
 ])
 def test_fixups(heard, fixed):
@@ -179,6 +183,36 @@ def test_no_speech_gives_an_empty_transcript(capture):
     transcriber = FakeTranscriber()
     [transcript] = talk(capture, transcriber)
     assert transcript.text == "" and transcriber.calls == []
+
+
+class SilentMic(FakeCapture):
+    """The Windows default input pointed at a device with nothing plugged in; then the pilot fixed it."""
+
+    def __init__(self) -> None:
+        super().__init__(2.0, level=0.0)
+        self.name, self.refreshed = "Line In (nothing connected)", 0
+
+    def refresh(self) -> str:
+        self.refreshed += 1
+        self.name = "Headset Microphone"
+        return self.name
+
+
+def test_a_silent_microphone_is_reopened_to_follow_the_system_default(caplog):
+    capture = SilentMic()
+    [transcript] = talk(capture, FakeTranscriber())
+    assert transcript.text == "" and capture.refreshed == 1
+    assert "Line In (nothing connected) heard nothing" in caplog.text
+    assert "now Headset Microphone" in caplog.text
+
+
+def test_the_quiet_around_the_words_is_trimmed():
+    rng = np.random.default_rng(0)
+    quiet = lambda s: (rng.standard_normal(int(s * 16000)) * 0.002).astype(np.float32)  # noqa: E731
+    words = (np.sin(np.arange(int(1.5 * 16000)) / 5) * 0.3).astype(np.float32)
+    trimmed = trim_silence(np.concatenate([quiet(6.0), words, quiet(8.0)]))
+    assert 1.5 <= len(trimmed) / 16000 <= 2.4  # the words plus a little on each side
+    assert len(trim_silence(quiet(3.0))) == 3 * 16000  # nothing louder than the rest: left alone
 
 
 def test_a_failing_model_does_not_stop_voice_input():

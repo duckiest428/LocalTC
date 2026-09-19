@@ -39,7 +39,7 @@ class KeyboardPtt:
         self._listener = keyboard.Listener(on_press=self._press, on_release=self._release)
         self._listener.daemon = True
         self._listener.start()
-        log.info("Push-to-talk: hold %s", self.key_name)
+        log.info("Push-to-talk: hold %s", self.key_name, extra={"console": True})
 
     def stop(self) -> None:
         if self._listener is not None:

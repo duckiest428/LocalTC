@@ -70,7 +70,8 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
 # Words that must appear for the model's intent to be believed. A small model reaches for
 # request_altitude whenever an altitude is mentioned, including plain check-ins.
 REQUEST_WORDS = {"request", "requesting", "could", "can", "like", "want", "chance", "higher", "lower", "unable"}
-ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", "level", "thousand", "hundred"}
+ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", "level", "thousand", "hundred", "maintain",
+                  "feet"}
 INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one word
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
@@ -79,6 +80,14 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
     "clear_of_runway": ({"clear", "vacated", "off", "exited"},),
     "request_taxi_parking": ({"parking", "gate", "ramp", "stand", "apron", "taxi"},),
+    "request_direct": ({"direct", "straight", "shortcut"},),
+    "request_vectors": ({"vectors", "vector", "heading"},),
+    "request_runway": (REQUEST_WORDS | {"prefer", "instead"}, {"runway", "ils", "rnav", "gps", "visual", "localizer", "approach"}),
+    "request_return": ({"return", "returning", "divert", "diverting", "back"},),
+    "going_around": ({"around", "missed", "overshoot"},),
+    "report_conditions": ({"turbulence", "chop", "choppy", "smooth", "icing", "ice", "bumpy", "ride", "shear", "rough",
+                           "downdraft", "updraft"},),
+    "traffic_report": ({"traffic", "looking", "contact", "sight"},),
     # A request ATC can't grant still has to be a request; noise the model can't place is not one.
     "other": (REQUEST_WORDS | {"requesting", "direct", "deviation", "deviate", "vectors", "hold", "permission", "we'd",
                                "would", "need", "may"},),

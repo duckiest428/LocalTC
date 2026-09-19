@@ -34,6 +34,7 @@ OWNSHIP_VALUES = {
     "com1_mhz": 118.30000305, "com2_mhz": 121.5, "com1_tx": 0, "com2_tx": 0, "com1_type": "TWR",
     "com1_ident": "KPAE", "gear_down": 1, "flaps_index": 1, "parking_brake": 1, "engine_running": 1,
     "on_runway": 0, "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,
+    "temperature_c": 12.0, "visibility_m": 16000.0, "precip": 2, "in_cloud": 0, "zulu_s": 64800.0,
 }
 
 IDENTITY_VALUES = {

@@ -132,7 +132,7 @@ def wind(value: Wind) -> str:
 
 
 def wind_display(value: Wind) -> str:
-    return "calm" if value.speed_kt < 3 else f"{value.direction_mag % 360 or 360:03d}@{value.speed_kt}"
+    return "calm" if value.speed_kt < 3 else f"{value.direction_mag % 360 or 360:03d} at {value.speed_kt}"
 
 
 def approach(value: Approach) -> str:
@@ -170,9 +170,9 @@ def airport_name(name: str, icao: str) -> str:
     name = name.split("/")[0].strip()
     if not name:
         return digits(icao)
-    return " ".join(ABBREVIATIONS.get(w, w.capitalize()) for w in name.split())
+    return " ".join(ABBREVIATIONS.get(w.upper(), w.capitalize()) for w in name.split())
 
 
 def station_name(name: str) -> str:
     """Frequency names like "PAINE TOWER" -> "Paine Tower"."""
-    return " ".join(ABBREVIATIONS.get(w, w.capitalize()) for w in name.split())
+    return " ".join(ABBREVIATIONS.get(w.upper(), w.capitalize()) for w in name.split())

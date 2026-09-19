@@ -34,6 +34,11 @@ controller = "any"
 text = ["{callsign}, negative, {correction}."]
 
 [[template]]
+id = "common.confirm"
+controller = "any"
+text = ["{callsign}, confirm {correction}."]
+
+[[template]]
 id = "common.read_back"
 controller = "any"
 text = ["{callsign}, read back {missing}."]
@@ -75,9 +80,78 @@ readback = { required = ["altitude"] }
 pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
 
 [[template]]
+id = "common.maintain"
+controller = "any"
+text = ["{callsign}, maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, {callsign_short}."
+
+[[template]]
 id = "common.say_altitude"
 controller = "any"
 text = ["{callsign}, say requested altitude."]
+
+# --- unscripted moments ------------------------------------------------------------------------------
+
+[[template]]
+id = "common.direct"
+controller = "any"
+text = ["{callsign}, cleared direct {fix}.", "{callsign}, proceed direct {fix}."]
+readback = { required = ["fix"] }
+pilot_readback = "Direct {fix}, {callsign_short}."
+
+[[template]]
+id = "common.expect_runway"
+controller = "any"
+text = ["{callsign}, roger, expect runway {runway}."]
+readback = { required = ["runway"] }
+pilot_readback = "Expect runway {runway}, {callsign_short}."
+
+[[template]]
+id = "common.expect_approach"
+controller = "any"
+text = ["{callsign}, roger, expect {approach} approach."]
+readback = { required = ["approach"] }
+pilot_readback = "Expect {approach}, {callsign_short}."
+
+[[template]]
+id = "common.unable_runway"
+controller = "any"
+text = ["{callsign}, unable runway {runway}, wind {wind}."]
+
+[[template]]
+id = "common.return"
+controller = "any"
+text = ["{callsign}, roger, cleared direct {destination} airport, maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"], optional = ["approach"] }
+pilot_readback = "Direct {destination}, maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.pirep"
+controller = "any"
+text = ["{callsign}, roger, thanks for the report.", "{callsign}, thank you, I'll pass that along."]
+
+[[template]]
+id = "common.traffic"
+controller = "any"
+text = ["{callsign}, traffic, {message}."]
+
+[[template]]
+id = "common.check_altitude"
+controller = "any"
+text = ["{callsign}, check altitude, maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.how_read"
+controller = "any"
+text = ["{callsign}, {station}, how do you read?", "{callsign}, did you copy?"]
+
+[[template]]
+id = "clearance.standby"
+controller = "clearance"
+text = ["{callsign}, clearance on request, stand by.", "{callsign}, stand by for your clearance."]
 
 [fragments]
 altitude = "maintain {altitude}"
@@ -94,3 +168,4 @@ cleared_for_takeoff = "cleared for takeoff"
 line_up_and_wait = "line up and wait"
 cleared_to_land = "cleared to land"
 hold_position = "hold position"
+fix = "direct {fix}"

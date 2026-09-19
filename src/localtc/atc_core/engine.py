@@ -15,8 +15,9 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, select_runway
-from localtc.atc_core.facilities import Facility, airport_facilities, center_facility
+from localtc.atc_core.facilities import Facility, airport_facilities, center_facility, channel_khz
 from localtc.atc_core.llm import LlmPhraser
+from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
 from localtc.atc_core.readback import (
@@ -30,12 +31,14 @@ from localtc.atc_core.readback import (
 )
 from localtc.atc_core.session import Clearance, Exchange, IssuedInstruction, SessionSnapshot, SessionState, snapshot
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind, clean_sim_name
+from localtc.atc_core.weather import AtisBoard, AtisInfo, WeatherTracker, components, magnetic_wind
 from localtc.sim_api import (
     AircraftIdentity,
     Airport,
     AirportData,
     AtcAlert,
     AtcTransmission,
+    AtisBroadcast,
     BusEvent,
     OwnshipState,
     PhaseChanged,
@@ -44,6 +47,8 @@ from localtc.sim_api import (
     RadioTuned,
     ReadbackEvaluated,
     SimLifecycle,
+    TrafficSnapshot,
+    TrafficTarget,
     Transcript,
 )
 
@@ -51,8 +56,23 @@ P = FlightPhase
 DEPARTURE_PHASES = {P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
+NM_M = 1852.0
+AIRBORNE_PHASES = {P.DEPARTURE, P.CRUISE, P.ARRIVAL, P.APPROACH}
+SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?", then once more, then give up
+MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
+NOT_SWITCHED_S = 45.0  # still on the old frequency this long after reading back a handoff: say it again
+TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 5.0, 1200.0, 300.0
+STANDBY_CHANCE = 0.3  # clearance delivery sometimes has to go get it
+MAX_TAILWIND_REQUEST_KT = 10.0  # a pilot's runway request is granted up to this much tailwind
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
+APPROACH_CLEARANCE_NM = 12.0  # approach clears the approach and hands off to tower within this of the field
+ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
+ATIS_KINDS = ("atis", "awos", "asos")
+REPEAT_WINDOW_S = 180.0  # a readback repeated within this long of the instruction is just a repeat
+LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
+CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
+                    "departure": "departure", "center": "center", "approach": "approach"}
 
 # Which controller handles each pilot request (None: whoever is tuned).
 REQUEST_CONTROLLER = {
@@ -79,6 +99,8 @@ class EngineConfig:
     response_delay_s: tuple[float, float] = (1.5, 3.0)
     min_gap_s: float = 8.0  # quiet time before an automatic ATC call
     await_transcripts: bool = False  # voice input: a transcript follows each push-to-talk release
+    speech_s_per_char: float = 0.0  # voice out: how long speech takes; the frequency is busy meanwhile (0: instant)
+    unscripted: bool = True  # ATC starts things too: traffic, altitude checks, "how do you read", stand by
 
 
 @dataclass
@@ -91,6 +113,7 @@ class _Scheduled:
     handoff_to: Facility | None = None
     expects_readback: bool = True
     on_issue: Callable[[], None] | None = None
+    note: Phrase | None = None  # said after the instruction: weather, the ATIS, a caution
 
 
 class AtcEngine:
@@ -123,6 +146,23 @@ class AtcEngine:
         self._ptt_since: float | None = None  # set while the pilot holds push-to-talk
         self._stt_since: float | None = None  # set from push-to-talk release until its transcript arrives
         self._tx_mhz: float | None = None  # the frequency the pilot keyed the mic on
+        self._radio_busy_until = -math.inf  # voice out: until ATC (or the copilot) has finished speaking
+        self._departure_override: str | None = None  # a departure runway the pilot asked for
+        self._approach_kind: str | None = None  # an approach type the pilot asked for
+        self._going_around = False
+        self._traffic: dict[int, TrafficTarget] = {}
+        self._traffic_nm: dict[int, float] = {}  # distance at the previous snapshot, to see who's closing
+        self._traffic_called: dict[int, float] = {}  # object id -> when ATC last called it
+        self._tuned_since = 0.0
+        self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
+        self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
+        self._deviation_since: float | None = None
+        self._altitude_checked_t = -math.inf
+        self.weather = WeatherTracker()
+        self.atis = AtisBoard(self.cfg.seed)
+        self._atis_checked_t = -math.inf
+        self._atis_tuned: str | None = None  # airport whose ATIS COM1 is on
+        self._atis_news: set[str] = set()  # airports whose ATIS letter changed; tell the pilot
         self._t = 0.0
 
     # --- public ---------------------------------------------------------------------------
@@ -142,6 +182,8 @@ class AtcEngine:
             self.state.flight.aircraft_type = clean_sim_name(event.atc_model)
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
+        elif isinstance(event, TrafficSnapshot):
+            self._traffic = {target.object_id: target for target in event.targets if not target.on_ground}
         elif isinstance(event, OwnshipState):
             out += self._on_ownship(event)
         elif isinstance(event, PttPressed):
@@ -155,6 +197,8 @@ class AtcEngine:
                 self._stt_since = event.t  # don't answer, or call, while the pilot's words are being transcribed
         elif isinstance(event, Transcript):
             self._ptt_since = self._stt_since = None
+            if event.source == "copilot":
+                self._radio_busy_until = max(self._radio_busy_until, event.t + self._speech_s(event.text))
             if event.text.strip():  # an empty one: push-to-talk carried no speech, nothing to answer
                 out += self._on_pilot(event)
             self._tx_mhz = None
@@ -167,7 +211,7 @@ class AtcEngine:
     @property
     def idle(self) -> bool:
         """Nothing scheduled to say and the pilot isn't transmitting: a good moment for the pilot to call."""
-        return not self._scheduled and not self._transmitting(self._t)
+        return not self._scheduled and not self._transmitting(self._t) and self._t >= self._radio_busy_until
 
     def facility(self, controller: str) -> Facility | None:
         """The facility for a controller in the current flight context (origin before arrival, destination after)."""
@@ -180,6 +224,88 @@ class AtcEngine:
 
     def geometry(self, icao: str | None) -> AirportGeometry | None:
         return self.tracker.context_builder.airports.get(icao) if icao else None
+
+    # --- ATIS and weather ------------------------------------------------------------------------
+
+    def _airport_name(self, icao: str) -> str:
+        geo = self.geometry(icao)
+        return speech.airport_name(geo.airport.name, icao) if geo is not None else icao
+
+    def _atis_airport(self, mhz: float) -> str | None:
+        """The airport whose ATIS (or AWOS/ASOS) broadcasts on ``mhz``, if any."""
+        for icao, geo in self.tracker.context_builder.airports.items():
+            if any(f.kind in ATIS_KINDS and channel_khz(f.mhz) == channel_khz(mhz) for f in geo.airport.frequencies):
+                return icao
+        return None
+
+    def current_atis(self, icao: str | None) -> AtisInfo | None:
+        return self.atis.current.get(icao) if icao else None
+
+    def _refresh_atis(self, own: OwnshipState, *, force: bool = False) -> list[BusEvent]:
+        """Keep the flight's airports' ATIS current (every ``ATIS_CHECK_S``); broadcast the tuned one."""
+        if not force and own.t - self._atis_checked_t < ATIS_CHECK_S:
+            return []
+        self._atis_checked_t = own.t
+        st = self.state
+        airports = self.tracker.context_builder.airports
+        out: list[BusEvent] = []
+        for icao in dict.fromkeys(a for a in (st.flight.origin, st.flight.destination, self._atis_tuned) if a):
+            geo = airports.get(icao)
+            weather = self.weather.surface(icao, airports) if geo is not None else None
+            if geo is None or weather is None:
+                continue
+            had = icao in self.atis.current
+            info = self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t)
+            if info is not None and had:
+                self._atis_news.add(icao)
+            if icao == self._atis_tuned and (info is not None or force):
+                current = self.atis.current[icao]
+                mhz = next(f.mhz for f in geo.airport.frequencies if f.kind in ATIS_KINDS)
+                out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz,
+                                         letter=current.letter, text=current.text, spoken=current.spoken))
+        return out
+
+    def _runway_end(self, icao: str | None, own: OwnshipState):
+        """The runway in use at an airport: its ATIS runway, or the best one for the wind."""
+        geo = self.geometry(icao)
+        if geo is None:
+            return None
+        if icao == self.state.flight.origin and self._departure_override and (end := geo.end(self._departure_override)):
+            return end
+        info = self.atis.current.get(icao or "")
+        if info is not None and (end := geo.end(info.runway)) is not None:
+            return end
+        return select_runway(geo, own.wind_dir_true, own.wind_kt)
+
+    def _atis_note(self, icao: str | None, reported: str | None) -> Phrase | None:
+        """"information Charlie is current, altimeter 29.92" when the pilot didn't report the current ATIS."""
+        info = self.current_atis(icao)
+        if info is None or (reported or "").upper() == info.letter:
+            return None
+        parts = [("information {atis} is current", {"atis": info.letter})]
+        if info.weather.altimeter_inhg is not None:
+            parts.append(("altimeter {altimeter}", {"altimeter": info.weather.altimeter_inhg}))
+        return self._phrases(parts)
+
+    def _caution_note(self, icao: str | None, *, wind: bool = False) -> Phrase | None:
+        """Cautions for the weather at an airport ("caution gusty winds"), and optionally the wind."""
+        info, own = self.current_atis(icao), self.state.aircraft
+        parts: list[tuple[str, dict[str, Any]]] = []
+        if wind and own is not None:
+            parts.append(("wind {wind}", {"wind": self._wind(own)}))
+        if info is not None:
+            parts += [(remark, {}) for remark in info.remarks if remark.startswith("caution")]
+        return self._phrases(parts) if parts else None
+
+    def _altimeter_note(self, icao: str | None) -> Phrase | None:
+        altimeter = self.weather.altimeter_inhg
+        if altimeter is None or icao is None:
+            return None
+        return self._phrases([(f"{self._airport_name(icao).split()[0]} altimeter {{altimeter}}", {"altimeter": altimeter})])
+
+    def _phrases(self, parts: list[tuple[str, dict[str, Any]]]) -> Phrase:
+        phrases = [Phrase(*self.library.fill(text, slots, context="note")) for text, slots in parts]
+        return sum(phrases[1:], phrases[0])
 
     # --- telemetry ------------------------------------------------------------------------------
 
@@ -198,13 +324,24 @@ class AtcEngine:
             self._requested.add(dest)
             self.airport_requests.append(dest)
 
-        previous = (st.comms.tuned_mhz, st.comms.tuned)
+        self.weather.update(own, self.tracker.context_builder.airports)
+        previous = (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned)
         st.comms.tuned_mhz = own.com1_mhz
         st.comms.tuned = self._facility_for(own.com1_mhz)
-        if (st.comms.tuned_mhz, st.comms.tuned) != previous:
+        self._atis_tuned = self._atis_airport(own.com1_mhz) if st.comms.tuned is None else None
+        if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous:
             tuned = st.comms.tuned
-            out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz,
-                                  controller=tuned.controller if tuned else None, station=tuned.station if tuned else None))
+            self._tuned_since = own.t
+            expected = st.comms.expected
+            if st.pending is not None and expected is not None and tuned == expected and st.pending.controller != tuned.controller:
+                st.pending = None  # switched to the new frequency without reading it back: that's the answer
+            if self._atis_tuned is not None:
+                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="atis",
+                                      station=f"{self._airport_name(self._atis_tuned)} ATIS"))
+            else:
+                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz,
+                                      controller=tuned.controller if tuned else None, station=tuned.station if tuned else None))
+        out += self._refresh_atis(own, force=self._atis_tuned is not None and self._atis_tuned != previous[2])
 
         if change is not None:
             st.phase, st.phase_since_t = change.phase, change.t
@@ -227,6 +364,8 @@ class AtcEngine:
             out.append(self._alert(t, "takeoff_without_clearance", "takeoff roll without a takeoff clearance"))
         elif phase is P.TAXI_IN and change.previous == P.LANDING and "landing" not in st.clearances:
             out.append(self._alert(t, "landed_without_clearance", "landed without a landing clearance"))
+        elif phase is P.DEPARTURE and change.previous == P.LANDING and st.comms.tuned is not None:
+            self._go_around(None, st.comms.tuned, t, own)  # went around without saying so: tower gives the instructions
         return out
 
     def _monitor(self, own: OwnshipState) -> list[BusEvent]:
@@ -244,10 +383,15 @@ class AtcEngine:
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
                 out.append(self._alert(t, "runway_incursion", f"entered {where} without clearance"))
 
+        if self.cfg.unscripted and st.phase is not None:
+            out += self._watch(own)
         if st.phase is None or not self._can_call(t, own):
             return out
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
+        if self.cfg.unscripted and phase in AIRBORNE_PHASES:
+            if self._traffic_advisory(own) or self._altitude_check(own):
+                return out
 
         def once(flag: str) -> bool:
             if flag in st.flags:
@@ -255,7 +399,17 @@ class AtcEngine:
             st.flags.add(flag)
             return True
 
-        if phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances and once("handoff_tower"):
+        spoke_here = (st.comms.last_pilot_t or -math.inf) >= self._tuned_since  # news waits for the check-in
+        if self._atis_news and spoke_here and (news := self._atis_update(phase, tuned)) is not None:
+            icao, info = news
+            self._atis_news.discard(icao)
+            parts = [("information {atis} is now current", {"atis": info.letter})]
+            if info.weather.altimeter_inhg is not None:
+                parts.append(("altimeter {altimeter}", {"altimeter": info.weather.altimeter_inhg}))
+            self._schedule(t, "common.info", {"message": self._phrases(parts)}, st.comms.tuned, delay=False,
+                           on_issue=lambda: self._assign(**({"arrival_atis": info.letter} if icao == st.flight.destination
+                                                            else {"atis": info.letter})))
+        elif phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
                 self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
         elif phase is P.DEPARTURE and own.alt_agl_ft > 500 and tuned == "tower" and once("handoff_departure"):
@@ -266,10 +420,12 @@ class AtcEngine:
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
             if "descend" not in st.flags and (plan := self._arrival_plan(own)) is not None:
                 st.flags.add("descend")
+                altitude, instruction = self._arrival_altitude(plan["arrival_alt"], own, "center")
                 self._schedule(
-                    t, "center.descend", {"altitude": plan["arrival_alt"], "approach": plan["approach"]}, st.comms.tuned,
-                    delay=False, on_issue=lambda: self._assign(altitude_ft=plan["arrival_alt"], approach=plan["approach"].display,
+                    t, instruction, {"altitude": altitude, "approach": plan["approach"]}, st.comms.tuned,
+                    delay=False, on_issue=lambda: self._assign(altitude_ft=altitude, approach=plan["approach"].display,
                                                               arrival_runway=plan["approach"].runway),
+                    note=self._altimeter_note(st.flight.destination),
                 )
             elif (
                 ctx.destination_distance_nm is not None and ctx.destination_distance_nm <= 40
@@ -277,21 +433,138 @@ class AtcEngine:
             ):
                 self._handoff(t, "center.handoff_approach", st.comms.tuned, approach)
         elif phase in (P.APPROACH, P.LANDING) and tuned == "approach" and "approach" not in st.clearances:
-            near = ctx.final is not None and ctx.final.distance_nm <= 12
-            close = ctx.destination_distance_nm is not None and ctx.destination_distance_nm <= 8
-            if (near or close) and (plan := self._arrival_plan(own)) is not None and (tower := self.facility("tower")) is not None:
-                self._schedule(
-                    t, "approach.cleared", {"approach": plan["approach"], "station": tower.station, "frequency": tower.mhz},
-                    st.comms.tuned, delay=False, clearance="approach", handoff_to=tower,
-                    on_issue=lambda: self._assign(approach=plan["approach"].display, arrival_runway=plan["approach"].runway),
-                )
+            # Early enough that tower can clear the pilot to land well before short final.
+            near = ctx.final is not None and ctx.final.distance_nm <= APPROACH_CLEARANCE_NM
+            close = ctx.destination_distance_nm is not None and ctx.destination_distance_nm <= APPROACH_CLEARANCE_NM
+            if (near or close) and (spoke_here or t - self._tuned_since >= MISSED_CHECKIN_S):
+                self._clear_approach(t, own, st.comms.tuned, delay=False)
         elif phase in (P.APPROACH, P.LANDING) and tuned == "tower" and "landing" not in st.clearances:
-            if phase is P.LANDING or (ctx.final is not None and ctx.final.distance_nm <= 3):
+            if phase is P.LANDING or (ctx.final is not None and ctx.final.distance_nm <= LANDING_CLEARANCE_NM):
                 self._clear_to_land(t, own, st.comms.tuned, delay=False)
         elif phase is P.TAXI_IN and tuned == "tower" and once("exit_contact_ground"):
             if (ground := self.facility("ground")) is not None:
                 self._handoff(t, "tower.exit_contact_ground", st.comms.tuned, ground)
         return out
+
+    def _atis_update(self, phase: FlightPhase, tuned: str | None) -> tuple[str, AtisInfo] | None:
+        """A changed ATIS worth telling the pilot about: the origin's while on its ground or tower frequency,
+        the destination's once talking to approach or tower there."""
+        st = self.state
+        for icao in list(self._atis_news):
+            info = self.current_atis(icao)
+            if info is None:
+                self._atis_news.discard(icao)
+                continue
+            departing = icao == st.flight.origin and phase in (P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD) and tuned in ("ground", "tower")
+            arriving = icao == st.flight.destination and phase in (P.ARRIVAL, P.APPROACH) and tuned in ("approach", "center")
+            if departing or arriving:
+                return icao, info
+            if not (icao in (st.flight.origin, st.flight.destination)):
+                self._atis_news.discard(icao)
+        return None
+
+    # --- ATC starts something: the unscripted moments ------------------------------------------------------
+
+    def _watch(self, own: OwnshipState) -> list[BusEvent]:
+        """A silent pilot, a missed check-in, a handoff not taken. These run even with a readback pending."""
+        st, t = self.state, own.t
+        if self._scheduled or self._transmitting(t) or t < self._radio_busy_until:
+            return []
+        last_pilot = st.comms.last_pilot_t if st.comms.last_pilot_t is not None else -math.inf
+        last_atc = st.comms.last_atc_t if st.comms.last_atc_t is not None else -math.inf
+        pending = st.pending
+        if pending is not None and last_pilot < pending.issued_t and t - last_atc >= SILENT_PILOT_S:
+            issued = st.issued.get(pending.instruction_id)
+            if issued is None or st.comms.tuned is None or not issued.facility.matches(st.comms.tuned_mhz or 0.0):
+                return []  # the pilot isn't on that frequency: they can't hear it
+            if not pending.nudged:
+                st.pending = replace(pending, nudged=True)
+                self._schedule(t, "common.how_read", {"station": issued.facility.station}, issued.facility, delay=False,
+                               expects_readback=False)
+            elif pending.instruction_id not in self._repeated:
+                self._repeated.add(pending.instruction_id)
+                self._schedule(t, pending.instruction_id, issued.slots, issued.facility, delay=False)
+            else:
+                st.pending = None
+                return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: no answer from the pilot")]
+            return []
+        if self._last_handoff is not None and not own.on_ground:
+            handed_t, old, new = self._last_handoff
+            tuned = st.comms.tuned
+            if tuned == new and last_pilot < self._tuned_since and t - self._tuned_since >= MISSED_CHECKIN_S \
+                    and new.controller in ("departure", "approach"):
+                self._last_handoff = None  # on frequency but quiet: the new controller calls first
+                st.comms.contacted.add(new.controller)
+                self._checkin(t, new, own)
+            elif tuned == old and st.pending is None and t - max(handed_t, last_pilot) >= NOT_SWITCHED_S:
+                self._last_handoff = None  # still on the old frequency: say it once more
+                self._handoff_again(t, old, new)
+        return []
+
+    def _handoff_again(self, t: float, old: Facility, new: Facility) -> None:
+        self._schedule(t, "common.contact", {"station": new.station, "frequency": new.mhz}, old, delay=False, handoff_to=new)
+
+    def _traffic_advisory(self, own: OwnshipState) -> bool:
+        """Real AI traffic nearby and converging: "traffic, two o'clock, four miles, opposite direction, 3,500"."""
+        st, t = self.state, own.t
+        tuned = st.comms.tuned
+        if tuned is None or tuned.controller not in ("tower", "departure", "center", "approach") or not self._traffic:
+            return False
+        best: tuple[float, TrafficTarget] | None = None
+        ground_ft = self.tracker.context.airport.airport.elev_ft if self.tracker.context.airport is not None else 0.0
+        for oid, target in self._traffic.items():
+            nm = _distance_nm(own.lat, own.lon, target.lat, target.lon)
+            closing = nm < self._traffic_nm.get(oid, math.inf) - 0.05
+            self._traffic_nm[oid] = nm
+            if abs(target.alt_ft - own.alt_msl_ft) > TRAFFIC_ALT_FT or nm > TRAFFIC_NM or (not closing and nm > 2.5):
+                continue
+            if target.alt_ft - ground_ft < 500:
+                continue  # landing or just off the runway: the tower is sequencing it, not worth a call
+            if t - self._traffic_called.get(oid, -math.inf) < TRAFFIC_REPEAT_S:
+                continue
+            if best is None or nm < best[0]:
+                best = (nm, target)
+        if best is None:
+            return False
+        nm, target = best
+        self._traffic_called[target.object_id] = t
+        bearing = _bearing(own.lat, own.lon, target.lat, target.lon)
+        clock = round(((bearing - own.hdg_true) % 360) / 30) % 12 or 12
+        relative = (target.hdg_true - own.hdg_true) % 360
+        direction = ("same direction" if relative < 30 or relative > 330 else "opposite direction" if 150 <= relative <= 210
+                     else "crossing left to right" if relative < 180 else "crossing right to left")
+        miles = max(1, round(nm))
+        altitude = int(round(target.alt_ft / 100) * 100)
+        kind = clean_sim_name(target.atc_model)
+        display = f"{clock} o'clock, {miles} mile{'s' if miles != 1 else ''}, {direction}, {speech.altitude_display(altitude)}"
+        spoken = (f"{speech.number_words(clock)} o'clock, {speech.number_words(min(miles, 99))} "
+                  f"mile{'s' if miles != 1 else ''}, {direction}, {speech.altitude(altitude)}")
+        if kind:
+            display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
+        self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
+        return True
+
+    def _altitude_check(self, own: OwnshipState) -> bool:
+        """Level at the assigned altitude, then drifting 300 ft off it for 15 s: "check altitude"."""
+        st, t = self.state, own.t
+        assigned = st.assignments.altitude_ft
+        if assigned is None or "approach" in st.clearances or P(st.phase) not in (P.DEPARTURE, P.CRUISE, P.ARRIVAL):
+            self._deviation_since = None
+            return False
+        off = abs(own.alt_indicated_ft - assigned)
+        if off <= 200:
+            st.flags.add(f"reached:{assigned}")
+            self._deviation_since = None
+            return False
+        if f"reached:{assigned}" not in st.flags or off <= 300:
+            return False  # still climbing or descending to it
+        if self._deviation_since is None:
+            self._deviation_since = t
+        if t - self._deviation_since < 15 or t - self._altitude_checked_t < 180 or st.comms.tuned is None:
+            return False
+        self._altitude_checked_t = t
+        self._schedule(t, "common.check_altitude", {"altitude": assigned}, st.comms.tuned, delay=False)
+        return True
 
     def _can_call(self, t: float, own: OwnshipState) -> bool:
         st = self.state
@@ -308,16 +581,30 @@ class AtcEngine:
         own = st.aircraft
         mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None)
         facility = self._facility_for(mhz) if mhz is not None else None
+        if st.pending is not None and mhz is not None and facility is not None and facility.controller != st.pending.controller:
+            # One frequency, two controllers (ground also works clearance delivery; KPHX approach also
+            # lists departure's frequency): the one waiting for a readback is the one listening.
+            issued = st.issued.get(st.pending.instruction_id)
+            waiting = issued.facility if issued is not None else self.facility(st.pending.controller)
+            if waiting is not None and waiting.matches(mhz):
+                facility = waiting
         pending = st.pending if st.pending is not None and facility is not None and st.pending.controller == facility.controller else None
         if facility is None:
             st.exchanges.append(Exchange(t, "pilot", None, ev.text, None))
             where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
             return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
+        if pending is None and self._repeats_readback(ev.text, facility, mhz, t):
+            # The pilot read it back again (maybe didn't hear "readback correct"): nothing to add.
+            st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+            return []
         last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller), None)
         interp = self.interpreter.interpret(ev.text, pending, InterpretContext(
             callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
             station=facility.station, last_atc=last_atc, confidence=ev.confidence,
         ))
+        if interp.kind == "unknown" and (topic := question_topic(ev.text)) is not None:
+            # Without the language model: "request frequency for tower" is still clearly a question.
+            interp = replace(interp, kind="request", intent="question", values={"topic": topic}, needs_fallback=False)
         st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, interp))
         out: list[BusEvent] = list(interp.exchanges)
         if interp.kind == "readback":
@@ -333,6 +620,17 @@ class AtcEngine:
         self._schedule(t, "common.say_again", {}, facility)
         return out
 
+    def _repeats_readback(self, text: str, facility: Facility, mhz: float | None, t: float) -> bool:
+        done = self.state.read_back
+        if done is None or t - done.issued_t > REPEAT_WINDOW_S:
+            return False
+        issued = self.state.issued.get(done.instruction_id)
+        same_frequency = issued is not None and mhz is not None and issued.facility.matches(mhz)
+        if done.controller != facility.controller and not same_frequency:
+            return False
+        again = GrammarInterpreter().interpret(text, done, InterpretContext(callsign=self._callsign()))
+        return again.kind == "readback" and not again.mismatched
+
     def _on_readback(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         st = self.state
         pending = st.pending
@@ -342,14 +640,14 @@ class AtcEngine:
         out: list[BusEvent] = [
             ReadbackEvaluated(
                 t=t, instruction_id=pending.instruction_id, status=interp.status, missing=interp.missing,
-                mismatched={k: _display(v) for k, v in interp.mismatched.items()},
+                mismatched={k: _display(v) for k, v in {**interp.mismatched, **interp.unclear}.items()},
             )
         ]
         for clearance in st.clearances.values():
             if clearance.instruction_id == pending.instruction_id and clearance.readback in ("pending", "incorrect", "incomplete"):
                 clearance.readback = interp.status
         if interp.status == "correct":
-            st.pending = None
+            st.pending, st.read_back = None, st.pending
             if self.library.get(pending.instruction_id).ack == "readback_correct":
                 self._schedule(t, "common.readback_correct", {}, facility)
             return out
@@ -357,9 +655,13 @@ class AtcEngine:
             return out + self._give_up_readback(facility, t)
         # The follow-up only has to fix what was wrong or missing.
         st.pending = replace(
-            pending, attempts=pending.attempts + 1, required=tuple([*interp.mismatched, *interp.missing]), optional=()
+            pending, attempts=pending.attempts + 1, required=tuple([*interp.mismatched, *interp.unclear, *interp.missing]),
+            optional=(), confirming=interp.status == "unclear",
         )
-        if interp.status == "incorrect":
+        if interp.status == "unclear":  # probably right, misheard: "confirm frequency 120.1"
+            self._schedule(t, "common.confirm", {"correction": self._fragments(list(interp.unclear), slots)}, facility,
+                           expects_readback=False)
+        elif interp.status == "incorrect":
             correction = self._fragments(list(interp.mismatched), slots)
             self._schedule(t, "common.negative", {"correction": correction}, facility, expects_readback=False)
         else:
@@ -384,6 +686,8 @@ class AtcEngine:
         st = self.state
         intent = interp.intent
         own = st.aircraft
+        if (letter := interp.values.get("atis")) and st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
+            self._assign(arrival_atis=letter)  # "with information Delta" on arrival: the destination's ATIS
         if intent == "question":
             return self._answer(interp, facility, t)
         if intent == "request_altitude":
@@ -391,7 +695,17 @@ class AtcEngine:
             return []
         if intent == "other":
             return self._decline(interp, facility, t)
+        unscripted = {
+            "request_direct": self._direct, "request_vectors": self._vectors, "request_runway": self._runway_request,
+            "request_return": self._return, "going_around": self._go_around, "report_conditions": self._pirep,
+            "traffic_report": self._traffic_reply,
+        }
+        if intent in unscripted:
+            return unscripted[intent](interp, facility, t, own) or []
         target = REQUEST_CONTROLLER.get(intent or "")
+        if intent == "report_final" and facility.controller == "approach" and "approach" not in st.clearances and own is not None:
+            self._clear_approach(t, own, facility, delay=True)  # "cleared to land?" on approach: clear it, send to tower
+            return []
         if target is not None and facility.controller != target:
             target_facility = self.facility(target)
             if target_facility is not None and target_facility.matches(facility.mhz):
@@ -404,18 +718,23 @@ class AtcEngine:
         elif intent == "ready_to_taxi":
             if interp.values.get("atis"):
                 self._assign(atis=interp.values["atis"])
-            self._taxi_out(t, facility, own)
+            self._taxi_out(t, facility, own, atis=interp.values.get("atis"))
         elif intent == "ready_for_departure":
             runway = st.assignments.departure_runway or interp.values.get("runway") or self._departure_runway(own)
             if runway is None:
                 self._schedule(t, "common.say_again", {}, facility)
                 return []
             self._schedule(t, "tower.takeoff", {"runway": runway}, facility, clearance="takeoff",
-                           on_issue=lambda: self._assign(departure_runway=runway))
+                           on_issue=lambda: self._assign(departure_runway=runway),
+                           note=self._caution_note(st.flight.origin, wind=True))
         elif intent == "checkin":
             self._checkin(t, facility, own)
         elif intent == "report_final":
-            self._clear_to_land(t, own, facility, delay=True, runway=interp.values.get("runway"))
+            landing = st.clearances.get("landing")
+            if landing is not None and landing.readback == "correct":
+                self._schedule(t, "common.roger", {}, facility)  # already cleared: the pilot is just reporting
+            else:
+                self._clear_to_land(t, own, facility, delay=True, runway=interp.values.get("runway"))
         elif intent in ("request_taxi_parking", "clear_of_runway"):
             self._taxi_in(t, facility, own)
         elif intent == "say_again":
@@ -426,6 +745,170 @@ class AtcEngine:
                 self._schedule(t, "common.say_again", {}, facility)
         # acknowledge: nothing to say
         return []
+
+    # --- unscripted moments: requests off the standard flow ----------------------------------------------
+
+    def _airborne_controller(self, facility: Facility, own: OwnshipState | None) -> bool:
+        return facility.controller in ("departure", "center", "approach") and own is not None and not own.on_ground
+
+    def _direct(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        st = self.state
+        fix = interp.values.get("fix")
+        if not self._airborne_controller(facility, own) or "approach" in st.clearances:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        if not fix:
+            self._schedule(t, "common.say_again", {}, facility)
+            return
+        dest = st.flight.destination
+        name = self._airport_name(dest) if dest else ""
+        words = set(str(fix).lower().split())
+        if dest and (words & {"airport", "field", "destination"} or str(fix).upper() == dest
+                     or words & {w.lower() for w in name.split() if len(w) > 3}):
+            fix = name  # "direct to the airport", "direct KBFI", "direct Boeing": the destination
+        self._schedule(t, "common.direct", {"fix": str(fix)}, facility)
+
+    def _vectors(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        st = self.state
+        if not self._airborne_controller(facility, own) or "approach" in st.clearances:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        if interp.values.get("runway") or interp.values.get("approach"):
+            if self._set_arrival(interp.values.get("runway"), interp.values.get("approach"), own) is None:
+                self._schedule(t, "common.unable", {}, facility)
+                return
+        plan = self._arrival_plan(own)
+        heading = self._vector_heading(own, plan["approach"].runway) if plan else None
+        if plan is None or heading is None:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        self._schedule(t, "approach.vectors", {"heading": heading, "approach": plan["approach"]}, facility,
+                       on_issue=lambda: self._assign(approach=plan["approach"].display, arrival_runway=plan["approach"].runway))
+
+    def _vector_heading(self, own: OwnshipState, runway: str) -> int | None:
+        """A magnetic heading toward a point 8 nm out on the runway's final; near it, a 30 degree intercept."""
+        geo = self.geometry(self.state.flight.destination)
+        end = geo.end(runway) if geo is not None else None
+        if geo is None or end is None:
+            return None
+        course = math.radians(end.heading_true)
+        gate = (end.threshold[0] - 8 * NM_M * math.sin(course), end.threshold[1] - 8 * NM_M * math.cos(course))
+        x, y = geo.xy(own.lat, own.lon)
+        if math.hypot(gate[0] - x, gate[1] - y) < 3 * NM_M:
+            # Close to the gate: join the final at 30 degrees from whichever side the aircraft is on.
+            side = math.sin(course) * (y - end.threshold[1]) - math.cos(course) * (x - end.threshold[0])
+            true = end.heading_true + (30 if side > 0 else -30)
+        else:
+            true = math.degrees(math.atan2(gate[0] - x, gate[1] - y))
+        magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
+        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360
+
+    def _set_arrival(self, runway: str | None, kind: str | None, own: OwnshipState | None) -> Approach | None:
+        """The pilot's choice of arrival runway and approach, if the airport and the weather allow it."""
+        st = self.state
+        geo = self.geometry(st.flight.destination)
+        plan = self._arrival_plan(own) if own is not None else None
+        runway = runway or (plan["approach"].runway if plan else None)
+        end = geo.end(runway) if geo is not None and runway else None
+        if end is None or own is None:
+            return None
+        weather = self.weather.surface(st.flight.destination or "", self.tracker.context_builder.airports)
+        if weather is not None and components(end, weather)[0] < -MAX_TAILWIND_REQUEST_KT:
+            return None
+        if kind == "VISUAL" and weather is not None and weather.visibility_sm is not None and weather.visibility_sm < 3:
+            return None
+        kind = kind if kind in ("ILS", "RNAV", "VISUAL") and (kind != "ILS" or end.has_ils) else ("ILS" if end.has_ils else "RNAV")
+        self._approach_kind = kind
+        self._assign(arrival_runway=end.ident, approach=Approach(kind, end.ident).display)
+        return Approach(kind, end.ident)
+
+    def _runway_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        st = self.state
+        runway, kind = interp.values.get("runway"), interp.values.get("approach")
+        if own is not None and own.on_ground and st.phase in (P.PARKED, P.TAXI_OUT):
+            geo = self.geometry(st.flight.origin)
+            end = geo.end(runway) if geo is not None and runway else None
+            weather = self.weather.surface(st.flight.origin or "", self.tracker.context_builder.airports)
+            if end is None or "takeoff" in st.clearances:
+                self._schedule(t, "common.unable", {}, facility)
+                return
+            if weather is not None and components(end, weather)[0] < -MAX_TAILWIND_REQUEST_KT:
+                self._schedule(t, "common.unable_runway", {"runway": end.ident, "wind": weather.wind}, facility)
+                return
+            self._departure_override = end.ident
+            if "taxi" in st.clearances and facility.controller == "ground":
+                self._taxi_out(t, facility, own, atis=st.assignments.atis)  # a new route to the new runway
+            else:
+                self._schedule(t, "common.expect_runway", {"runway": end.ident}, facility,
+                               on_issue=lambda: self._assign(departure_runway=end.ident))
+            return
+        if not self._airborne_controller(facility, own) or "approach" in st.clearances:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        approach = self._set_arrival(runway, kind, own)
+        if approach is None:
+            weather = self.weather.surface(st.flight.destination or "", self.tracker.context_builder.airports)
+            geo = self.geometry(st.flight.destination)
+            if runway and weather is not None and geo is not None and geo.end(runway) is not None:  # too much tailwind
+                self._schedule(t, "common.unable_runway", {"runway": runway, "wind": weather.wind}, facility)
+            else:
+                self._schedule(t, "common.unable", {}, facility)
+            return
+        self._schedule(t, "common.expect_approach", {"approach": approach}, facility)
+
+    def _return(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        """Back to the departure airport: it becomes the destination, and the arrival flow starts over."""
+        st = self.state
+        origin = st.flight.origin
+        if not self._airborne_controller(facility, own) or origin is None or self.geometry(origin) is None:
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        st.flight.destination = origin
+        self.tracker.context_builder.destination = origin
+        self._assign(arrival_runway=None, approach=None, arrival_atis=None)
+        self._approach_kind = None
+        for flag in ("descend", "handoff_approach", "handoff_center"):
+            st.flags.discard(flag)
+        for kind in ("approach", "landing"):
+            st.clearances.pop(kind, None)
+        self._rebuild_facilities()
+        plan = self._arrival_plan(own)
+        if plan is None:
+            self._schedule(t, "common.roger", {}, facility)
+            return
+        altitude, _ = self._arrival_altitude(plan["arrival_alt"], own, "center")
+        self._schedule(t, "common.return", {"destination": self._airport_name(origin), "altitude": altitude,
+                                            "approach": plan["approach"]}, facility,
+                       on_issue=lambda: self._assign(altitude_ft=altitude, approach=plan["approach"].display,
+                                                     arrival_runway=plan["approach"].runway),
+                       note=self._altimeter_note(origin))
+        st.flags.add("descend")  # the return clearance is the descent
+
+    def _go_around(self, interp: Interpretation | None, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        """Runway heading, climb, and back to approach for another try."""
+        st = self.state
+        if own is None or self._going_around:
+            return
+        self._going_around = True  # until approach clears the next approach
+        for kind in ("approach", "landing"):
+            st.clearances.pop(kind, None)
+        st.pending = None
+        plan = self._arrival_plan(own)
+        geo = self.geometry(st.flight.destination)
+        altitude = plan["approach_alt"] if plan else int(math.ceil(((geo.airport.elev_ft if geo else 0) + 2000) / 100) * 100)
+        radar = self.facility("approach") or self._center()
+        if facility.controller == "tower" and radar is not None:
+            self._schedule(t, "tower.go_around", {"altitude": altitude, "station": radar.station, "frequency": radar.mhz},
+                           facility, handoff_to=radar, on_issue=lambda: self._assign(altitude_ft=altitude))
+        else:
+            self._schedule(t, "approach.missed", {"altitude": altitude}, facility, on_issue=lambda: self._assign(altitude_ft=altitude))
+
+    def _pirep(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        self._schedule(t, "common.pirep", {}, facility)
+
+    def _traffic_reply(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        if interp.values.get("traffic") == "in_sight" or "sight" in interp.text.lower():
+            self._schedule(t, "common.roger", {}, facility)  # "looking" and "negative contact" need no answer
 
     # --- non-routine: emergencies, questions, requests without a procedure --------------------------------
 
@@ -450,17 +933,25 @@ class AtcEngine:
         worded by the language model from the same facts, or "unable"."""
         st, own = self.state, self.state.aircraft
         topic = interp.values.get("topic", "other")
-        if topic == "frequency" and st.comms.expected is not None and st.comms.expected != facility:
-            self._handoff(t, "common.contact", facility, st.comms.expected, delay=True)
-            return []
+        if topic == "frequency":
+            named = next((CONTROLLER_WORDS[w] for w in interp.text.lower().replace("?", " ").replace(".", " ").split()
+                          if w in CONTROLLER_WORDS and CONTROLLER_WORDS[w] != facility.controller), None)
+            target = self.facility(named) if named else st.comms.expected
+            if target is not None and target != facility:
+                if named == "tower" and facility.controller == "ground":
+                    st.flags.add("handoff_tower")  # the pilot has it now; no second "contact tower"
+                self._handoff(t, "common.contact", facility, target, delay=True)
+                return []
         parts: list[tuple[str, dict[str, Any]]] = []
         altimeter = round(own.altimeter_setting_inhg, 2) if own and 25 < own.altimeter_setting_inhg < 33 else None
         if topic in ("altimeter", "weather", "atis") and altimeter is not None:
             parts.append(("altimeter {altimeter}", {"altimeter": altimeter}))
         if topic in ("wind", "weather") and own is not None:
             parts.insert(0, ("wind {wind}", {"wind": self._wind(own)}))
-        if topic == "atis" and st.assignments.atis:
-            parts.insert(0, ("information {atis} is current", {"atis": st.assignments.atis}))
+        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        info = self.current_atis(st.flight.destination if arriving else st.flight.origin)
+        if topic == "atis" and info is not None:
+            parts.insert(0, ("information {atis} is current", {"atis": info.letter}))
         if topic == "runway" and (runway := self._runway_in_use(own)) is not None:
             parts.append(("runway {runway}", {"runway": runway}))
         if topic == "squawk" and st.assignments.squawk:
@@ -501,10 +992,15 @@ class AtcEngine:
         if not isinstance(wanted, int):
             self._schedule(t, "common.say_altitude", {}, facility)
             return
-        if not 1000 <= wanted <= 45000 or st.phase in (P.APPROACH, P.LANDING):
+        assigned = st.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
+        arriving = st.phase in (P.APPROACH, P.LANDING)
+        if not 1000 <= wanted <= 45000 or st.phase is P.LANDING or (arriving and wanted > assigned):
             self._schedule(t, "common.unable", {}, facility)
             return
         climbing = wanted > own.alt_indicated_ft
+        if abs(wanted - own.alt_indicated_ft) < 200:  # "request to maintain 1,500" at 1,500
+            self._schedule(t, "common.maintain", {"altitude": wanted}, facility, on_issue=lambda: self._assign(altitude_ft=wanted))
+            return
 
         def approve() -> None:
             self._assign(altitude_ft=wanted)
@@ -564,6 +1060,11 @@ class AtcEngine:
         dest_geo = self.geometry(dest)
         destination = speech.airport_name(dest_geo.airport.name, dest) if dest_geo else dest
         squawk = self._squawk()
+        if any(item.instruction_id == "clearance.ifr" for item in self._scheduled):
+            return  # asked again while we're getting it
+        if self.cfg.unscripted and random.Random(zlib.crc32(f"standby{self._callsign().ident}{self.cfg.seed}".encode())).random() < STANDBY_CHANCE:
+            self._schedule(t, "clearance.standby", {}, facility)
+            t += random.Random(self.cfg.seed + 1).uniform(12, 25)  # the clearance comes a little later
         self._schedule(
             t, "clearance.ifr",
             {"destination": destination, "altitude": initial, "cruise": cruise, "frequency": departure.mhz, "squawk": squawk},
@@ -575,22 +1076,23 @@ class AtcEngine:
         geo = self.geometry(self.state.flight.origin)
         if geo is None or own is None:
             return None
-        end = select_runway(geo, own.wind_dir_true, own.wind_kt)
+        end = self._runway_end(self.state.flight.origin, own)
         return end.ident if end else None
 
-    def _taxi_out(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
+    def _taxi_out(self, t: float, facility: Facility, own: OwnshipState | None, atis: str | None = None) -> None:
         geo = self.geometry(self.state.flight.origin)
         if geo is None or own is None:
             self._schedule(t, "common.roger", {}, facility)
             return
-        end = select_runway(geo, own.wind_dir_true, own.wind_kt)
+        end = self._runway_end(self.state.flight.origin, own)
+        note = self._atis_note(self.state.flight.origin, atis)
         route = TaxiGraph(geo).departure_route(own.lat, own.lon, end) if end else None
         if end is None:
             self._schedule(t, "common.roger", {}, facility)
             return
         if route is None or not route.taxiways:
             self._schedule(t, "ground.taxi_out_no_route", {"runway": end.ident}, facility, clearance="taxi",
-                           on_issue=lambda: self._assign(departure_runway=end.ident))
+                           on_issue=lambda: self._assign(departure_runway=end.ident), note=note)
             return
         slots: dict[str, Any] = {"runway": end.ident, "taxi_route": route.taxiways}
         instruction = "ground.taxi_out"
@@ -598,7 +1100,7 @@ class AtcEngine:
             instruction = "ground.taxi_out_hold_short"
             slots["hold_short"] = route.crossings[0].split("/")[0]
         self._schedule(t, instruction, slots, facility, clearance="taxi",
-                       on_issue=lambda: self._assign(departure_runway=end.ident, taxi_route=route.taxiways))
+                       on_issue=lambda: self._assign(departure_runway=end.ident, taxi_route=route.taxiways), note=note)
 
     def _checkin(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         st = self.state
@@ -614,22 +1116,53 @@ class AtcEngine:
         elif facility.controller == "approach" and "approach" not in st.clearances and own is not None:
             plan = self._arrival_plan(own)
             if plan is not None:
+                altitude, instruction = self._arrival_altitude(plan["approach_alt"], own, "approach")
                 self._schedule(
-                    t, "approach.descend", {"station": facility.station, "altitude": plan["approach_alt"], "approach": plan["approach"]},
-                    facility, on_issue=lambda: self._assign(altitude_ft=plan["approach_alt"], approach=plan["approach"].display,
+                    t, instruction, {"station": facility.station, "altitude": altitude, "approach": plan["approach"]},
+                    facility, on_issue=lambda: self._assign(altitude_ft=altitude, approach=plan["approach"].display,
                                                             arrival_runway=plan["approach"].runway),
+                    note=self._atis_note(st.flight.destination, st.assignments.arrival_atis)
+                    or self._altimeter_note(st.flight.destination),
                 )
                 return
+        elif facility.controller == "tower" and st.phase in (P.APPROACH, P.LANDING) and "landing" not in st.clearances:
+            self._clear_to_land(t, own, facility, delay=True)  # checking in inbound: cleared to land straight away
+            return
         self._schedule(t, "common.roger", {}, facility)
+
+    def _clear_approach(self, t: float, own: OwnshipState, facility: Facility, *, delay: bool) -> None:
+        plan = self._arrival_plan(own)
+        tower = self.facility("tower")
+        if plan is None or tower is None:
+            self._schedule(t, "common.roger", {}, facility)
+            return
+        self._schedule(
+            t, "approach.cleared", {"approach": plan["approach"], "station": tower.station, "frequency": tower.mhz},
+            facility, delay=delay, clearance="approach", handoff_to=tower,
+            on_issue=lambda: (self._assign(approach=plan["approach"].display, arrival_runway=plan["approach"].runway),
+                              setattr(self, "_going_around", False)),
+        )
+
+    def _arrival_altitude(self, planned: int, own: OwnshipState, controller: str) -> tuple[int, str]:
+        """An arrival altitude and the instruction for it: descend to ``planned``, or, when the aircraft is
+        already at or below it (a low cruise), maintain where it is. Arrivals are never told to climb."""
+        current = self.state.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
+        if planned < current:
+            return planned, f"{controller}.descend"
+        return current, f"{controller}.maintain"
 
     def _clear_to_land(self, t: float, own: OwnshipState | None, facility: Facility, *, delay: bool, runway: str | None = None) -> None:
         st, ctx = self.state, self.tracker.context
-        runway = runway or st.assignments.arrival_runway or (ctx.final.end.ident if ctx.final else None)
+        geo = self.geometry(st.flight.destination)
+        if runway is not None and geo is not None and geo.end(runway) is None:
+            runway = None  # the pilot named a runway the airport doesn't have ("08 left" at KPHX): use the real one
+        runway = runway or (ctx.final.end.ident if ctx.final else None) or st.assignments.arrival_runway
         if runway is None or own is None:
-            self._schedule(t, "common.say_again", {}, facility)
+            if delay:  # the pilot asked, and we can't tell which runway; an automatic call just waits
+                self._schedule(t, "common.say_again", {}, facility)
             return
         self._schedule(t, "tower.land", {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
-                       on_issue=lambda: self._assign(arrival_runway=runway))
+                       on_issue=lambda: self._assign(arrival_runway=runway), note=self._caution_note(st.flight.destination))
 
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         ctx = self.tracker.context
@@ -651,13 +1184,14 @@ class AtcEngine:
             return None
         # Once an arrival runway is assigned, stick with it; later wind samples shouldn't flip the plan.
         assigned = self.state.assignments.arrival_runway
-        end = geo.end(assigned) if assigned else select_runway(geo, own.wind_dir_true, own.wind_kt)
+        end = geo.end(assigned) if assigned else self._runway_end(self.state.flight.destination, own)
         if end is None:
             return None
         elev = geo.airport.elev_ft
         cruise = self.state.flight.cruise_ft or 10000
+        kind = self._approach_kind or ("ILS" if end.has_ils else "RNAV")
         return {
-            "approach": Approach("ILS" if end.has_ils else "RNAV", end.ident),
+            "approach": Approach(kind, end.ident),
             "arrival_alt": int(min(cruise, max(3000, math.ceil((elev + 2500) / 1000) * 1000))),
             "approach_alt": int(math.ceil((elev + 2000) / 100) * 100),
         }
@@ -676,9 +1210,11 @@ class AtcEngine:
         handoff_to: Facility | None = None,
         expects_readback: bool = True,
         on_issue: Callable[[], None] | None = None,
+        note: Phrase | None = None,
     ) -> None:
         due = t + (self._random().uniform(*self.cfg.response_delay_s) if delay else 0.0)
-        self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue))
+        self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue,
+                                          note))
 
     def _transmitting(self, t: float) -> bool:
         """True while the pilot holds push-to-talk.
@@ -697,9 +1233,12 @@ class AtcEngine:
             return False
         return True
 
+    def _speech_s(self, text: str) -> float:
+        return 0.5 + len(text) * self.cfg.speech_s_per_char if self.cfg.speech_s_per_char > 0 else 0.0
+
     def _flush(self, t: float) -> list[BusEvent]:
-        if self._transmitting(t):
-            return []  # never step on the pilot
+        if self._transmitting(t) or t < self._radio_busy_until:
+            return []  # never step on the pilot, or on ourselves
         out: list[BusEvent] = []
         due = sorted((s for s in self._scheduled if s.due <= t), key=lambda s: s.due)
         for item in due:
@@ -715,8 +1254,12 @@ class AtcEngine:
             callsign = callsign.short
         slots = {**item.slots, "callsign": callsign}
         rendered = self.library.render(item.instruction_id, slots, rng=self._random(), controller=facility.controller)
+        if item.note is not None:
+            rendered = replace(rendered, text=f"{rendered.text.rstrip('.')}, {item.note.display}.",
+                               spoken=f"{rendered.spoken.rstrip('.')}, {item.note.spoken}.")
         st.comms.contacted.add(facility.controller)
-        st.comms.last_atc_t = t
+        self._radio_busy_until = t + self._speech_s(rendered.spoken)
+        st.comms.last_atc_t = max(t, self._radio_busy_until)
         st.exchanges.append(Exchange(t, "atc", facility.controller, rendered.text))
         issued = IssuedInstruction(item.instruction_id, slots, facility, t)
         st.issued[item.instruction_id] = issued
@@ -733,6 +1276,7 @@ class AtcEngine:
             )
         if item.handoff_to is not None:
             st.comms.expected = item.handoff_to
+            self._last_handoff = (t, facility, item.handoff_to)
         if item.on_issue is not None:
             item.on_issue()
         return AtcTransmission(
@@ -750,6 +1294,8 @@ class AtcEngine:
             facilities += airport_facilities(airports[origin].airport, role="departure")
         if dest and dest in airports and dest != origin:
             facilities += airport_facilities(airports[dest].airport, role="arrival")
+        elif dest and dest == origin and dest in airports:  # returning: the departure airport's approach controller
+            facilities += [f for f in airport_facilities(airports[dest].airport, role="arrival") if f.controller == "approach"]
         known: list[Airport] = [g.airport for g in airports.values()]
         facilities.append(center_facility(known, self.cfg.center_name, self.cfg.center_mhz))
         self.facilities = facilities
@@ -767,6 +1313,9 @@ class AtcEngine:
             return matches[0] if matches else None
         expected = self.state.comms.expected
         if expected is not None and expected in matches:
+            handed_from = self._last_handoff[1] if self._last_handoff is not None else None
+            if handed_from in matches and channel_khz(mhz) != channel_khz(expected.mhz):
+                return handed_from  # a frequency both work, and not the one ATC sent the pilot to: not switched yet
             return expected
         arriving = self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES
         preferred_airport = self.state.flight.destination if arriving else self.state.flight.origin
@@ -806,6 +1355,17 @@ class AtcEngine:
             except Exception:
                 parts.append(Phrase(element.replace("_", " "), element.replace("_", " ")))
         return sum(parts[1:], parts[0]) if parts else Phrase("", "")
+
+
+def _distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return math.hypot(dlat, dlon) * 3440.065
+
+
+def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    dlon = math.radians(lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
+    return math.degrees(math.atan2(dlon, math.radians(lat2 - lat1))) % 360
 
 
 def _display(value: Any) -> str:

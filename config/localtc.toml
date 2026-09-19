@@ -32,6 +32,7 @@ seed = 0                      # 0 = derived from callsign + date (squawk, ATIS l
 center_name = "Seattle"       # used when no airport lists a CENTER frequency
 center_mhz = 125.1
 strict_callsign = false       # true: a readback without the callsign is incomplete
+unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"
 airport_dirs = []             # extra folders of <ICAO>.json airport files
 
 [atc.phase]                   # PhaseThresholds overrides, e.g. taxi_start_kt = 4
@@ -42,8 +43,8 @@ base_url = "http://127.0.0.1:11434"
 model = "llama3.2:3b"         # ollama pull llama3.2:3b
 understanding = "primary"     # primary: reads every pilot call; fallback: only what the grammar can't; off
 phrasing = true               # word answers to questions and declined requests (routine calls stay templated)
-timeout_s = 3.0               # per model call; on timeout the grammar's answer is used
-budget_s = 5.0                # per pilot transmission, including one retry
+timeout_s = 4.0               # per model call; on timeout the grammar's answer is used
+budget_s = 6.0                # per pilot transmission, including one retry
 max_attempts = 2
 keep_alive = "1h"             # keep the model loaded between calls
 num_ctx = 4096
@@ -63,6 +64,18 @@ beam_size = 5
 vocabulary = true             # prime Whisper with aviation words and this flight's callsign, stations, runways
 pre_roll_ms = 300
 tail_ms = 250
+
+[tts]                         # ATC talks back (Piper); --no-tts for text only
+enabled = true
+voice = "en_US-libritts_r-medium"   # multi-speaker: every controller gets its own voice (localtc setup downloads it)
+voices_dir = ""               # blank = %LOCALAPPDATA%\LocalTC\voices
+output_device = ""            # blank = default speakers/headset; or part of its name (localtc tts devices)
+volume = 0.8
+rate = 1.15                   # speaking speed (1 = Piper's normal pace)
+radio_effect = true           # band-pass, compression, static and squelch
+static = 0.35                 # 0-1
+atis = true                   # read the ATIS aloud while it's tuned
+copilot = true                # speak the copilot's calls too
 
 [copilot]                     # works the radio for you (or use --copilot)
 mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)

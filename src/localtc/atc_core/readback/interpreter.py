@@ -7,13 +7,18 @@ returns the same ``Interpretation``, so the dialogue engine doesn't care which o
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from localtc.atc_core.readback.extract import ELEMENTS, values_equal, without_callsign
+from localtc.atc_core.readback.extract import ELEMENTS, candidates, values_close, values_equal, without_callsign
 from localtc.atc_core.readback.intents import EMERGENCY, match_intents, resolve
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
 
 Kind = Literal["readback", "request", "unknown"]
-Status = Literal["correct", "incorrect", "incomplete", "no_match"]
+# A transmission with one of these asks for something; it isn't a readback even if it repeats a value
+# ("negative, request to maintain 1,500").
+ASKING = {"request", "requesting", "unable"}
+Status = Literal["correct", "incorrect", "unclear", "incomplete", "no_match"]
+# "Affirm" answers a "confirm ...".
+AFFIRM = {"affirm", "affirmative", "correct", "yes", "yep", "confirmed", "confirm"}
 
 
 @dataclass(frozen=True)
@@ -25,6 +30,8 @@ class PendingReadback:
     optional: tuple[str, ...] = ()
     issued_t: float = 0.0
     attempts: int = 0
+    confirming: bool = False  # ATC asked "confirm ...": "affirm" is enough
+    nudged: bool = False  # ATC asked "how do you read?" about it
 
 
 @dataclass(frozen=True)
@@ -46,6 +53,7 @@ class Interpretation:
     status: Status = "no_match"
     missing: tuple[str, ...] = ()
     mismatched: dict[str, Any] = field(default_factory=dict)  # element -> what the pilot said
+    unclear: dict[str, Any] = field(default_factory=dict)  # element -> a near miss ATC should have confirmed
     callsign_heard: bool = False
     confidence: float = 0.0
     needs_fallback: bool = False
@@ -75,10 +83,15 @@ class GrammarInterpreter:
                 kind="request", intent=EMERGENCY, callsign_heard=callsign_heard, confidence=1.0, needs_fallback=True, text=text
             )
 
-        if pending is not None:
+        words = {t.text for t in tokens if t.kind == "word"}
+        if pending is not None and not words & ASKING:
             readback = self._readback(tokens, pending, context, callsign_heard, text)
             if readback is not None:
                 return readback
+            if pending.confirming and words & AFFIRM:
+                return Interpretation(kind="readback", intent=pending.instruction_id, status="correct",
+                                      values={e: pending.expected.get(e, True) for e in pending.required},
+                                      callsign_heard=callsign_heard, confidence=0.9, text=text)
 
         if chosen is not None:
             return Interpretation(
@@ -98,28 +111,34 @@ class GrammarInterpreter:
     ) -> Interpretation | None:
         heard: dict[str, Any] = {}
         mismatched: dict[str, Any] = {}
+        unclear: dict[str, Any] = {}
         missing: list[str] = []
         present = 0
         values_only = without_callsign(tokens, context.callsign)
         for element in (*pending.required, *pending.optional):
             expected = pending.expected.get(element, True)
-            candidates = ELEMENTS[element](values_only, expected)
-            if not candidates:
+            found = candidates(element, values_only, expected)
+            if not found:
                 if element in pending.required:
                     missing.append(element)
                 continue
             present += 1
-            match = next((c for c in candidates if values_equal(element, c, expected)), None)
+            match = next((c for c in found if values_equal(element, c, expected)), None)
+            close = next((c for c in found if values_close(element, c, expected)), None)
             if match is not None:
                 heard[element] = match
+            elif close is not None:
+                unclear[element] = close
             else:
-                mismatched[element] = candidates[0]
+                mismatched[element] = found[0]
         if present == 0:
             return None  # not a readback of the pending instruction
         if context.strict_callsign and not callsign_heard:
             missing.append("callsign")
         if mismatched:
             status: Status = "incorrect"
+        elif unclear:
+            status = "unclear"
         elif missing:
             status = "incomplete"
         else:
@@ -132,6 +151,7 @@ class GrammarInterpreter:
             status=status,
             missing=tuple(missing),
             mismatched=mismatched,
+            unclear=unclear,
             callsign_heard=callsign_heard,
             confidence=present / total if total else 1.0,
             needs_fallback=status != "correct" and pending.attempts + 1 >= self.max_attempts,

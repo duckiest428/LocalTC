@@ -1,6 +1,7 @@
 """Readback checking and intent recognition: the TOML corpus, the interpreter chain, and round-trip properties."""
 
 import random
+from dataclasses import replace
 import tomllib
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from localtc.atc_core.readback import (
     SayAgainInterpreter,
     normalize,
 )
+from localtc.atc_core.readback.extract import values_close
 from localtc.atc_core.readback.normalize import render
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind
 
@@ -56,6 +58,7 @@ def test_readback_corpus(case):
     assert result.status == case["status"], (debug, result)
     assert sorted(result.missing) == sorted(case.get("missing", [])), (debug, result)
     assert sorted(result.mismatched) == sorted(case.get("mismatched", [])), (debug, result)
+    assert sorted(result.unclear) == sorted(case.get("unclear", result.unclear)), (debug, result)
 
 
 @pytest.mark.parametrize("case", CORPUS["intent"], ids=lambda c: c["text"][:40])
@@ -136,6 +139,7 @@ def random_slots(rng: random.Random) -> dict:
         "taxi_route": tuple(rng.choice(names) + rng.choice(["", "", str(rng.randint(1, 9))]) for _ in range(rng.randint(1, 4))),
         "approach": Approach(rng.choice(["ILS", "RNAV"]), runway()),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
+        "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),
     }
 
 
@@ -175,8 +179,19 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
             if element == "destination":
                 continue  # matched by name presence only, so a different airport reads as "not mentioned"
             other = random_slots(random.Random(rng.random()))
-            if element not in other or other[element] == slots[element]:
-                continue
+            if element not in other or other[element] == slots[element] or values_close(element, other[element], slots[element]):
+                continue  # a near miss ("15 left" for 15) gets "confirm", tested in the corpus
             text = readback(changed={element: other[element]})
             result = GrammarInterpreter().interpret(text, pending, CONTEXT)
             assert result.status == "incorrect" and element in result.mismatched, (element, text, render(normalize(text)), result)
+
+
+def test_affirm_answers_a_confirm():
+    slots = slots_from_toml(CORPUS["slots"]["contact_tower"])
+    pending = pending_for("ground.handoff_tower", slots)
+    unclear = GrammarInterpreter().interpret("Paine Tower on 12.2, 2LT", pending, CONTEXT)
+    assert unclear.status == "unclear" and list(unclear.unclear) == ["frequency"]
+    confirming = replace(pending, required=("frequency",), confirming=True)
+    assert GrammarInterpreter().interpret("Affirm, 2LT", confirming, CONTEXT).status == "correct"
+    assert GrammarInterpreter().interpret("120.2, 2LT", confirming, CONTEXT).status == "correct"
+    assert GrammarInterpreter().interpret("Affirm, 2LT", pending, CONTEXT).kind != "readback"  # nothing to confirm

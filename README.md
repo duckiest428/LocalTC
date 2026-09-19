@@ -94,6 +94,7 @@ localtc run --source replay --no-record --print           # run with config/loca
 # ATC (Phase 1)
 localtc phases tests/fixtures/ifr_kpae_kbfi --destination KBFI --cruise-ft 5000   # phase timeline
 localtc atc --scenario tests/scenarios/ifr_happy_path.toml                        # scripted IFR flight, offline
+localtc atc recordings/<session> --pilot recorded [--llm live]                   # your flight's calls, answered by today's ATC
 localtc replay tests/fixtures/ifr_kpae_kbfi --atc --type --speed 20 \
     --destination KBFI --cruise-ft 5000                   # type pilot calls against a replay
 localtc run --source live --type --destination KBFI --cruise-ft 5000              # fly it live (Windows)
@@ -147,15 +148,78 @@ localtc voice eval                                                       # the 3
 - `joystick`: a yoke or joystick button (`ptt_joystick`, e.g. `joystick:0:button:3`), bound through SimConnect.
 - `enter`: Enter starts and stops a transmission in the LocalTC window. It needs no permissions, which makes it handy for testing.
 
-The microphone stays open and keeps 0.3 s from before the key went down, so the first word isn't cut off. Each clip is saved in the recording (`audio/*.wav`) with its transcript.
+The microphone stays open and keeps 0.3 s from before the key went down, so the first word isn't cut off. Each clip is saved in the recording (`audio/*.wav`) with its transcript. The quiet before and after the words is trimmed before Whisper hears it.
 
-**Whisper** (`[voice] model`, `device`): `auto` picks `small.en` on an NVIDIA GPU and `base.en` on the CPU. On a MacBook Air CPU, base.en takes about 0.4 s for a transmission and small.en about 1.3 s, with fewer errors. `localtc setup` downloads the model to `%LOCALAPPDATA%\LocalTC\models`.
+**Microphone** (`[voice] input_device`, `--mic`): blank uses the system's default input; the log names it at startup. If a transmission comes through silent, LocalTC reopens the microphone, so a default you change in Windows Settings > Sound > Input takes effect on the next press, without a restart. To pin one, give part of its name (`--mic "Headset"`; `localtc voice devices` lists them).
+
+**Whisper** (`[voice] model`, `device`): `auto` picks `small.en` on an NVIDIA GPU and `base.en` on the CPU. On a MacBook Air CPU, base.en takes about 0.4 s for a transmission and small.en about 1.3 s, with fewer errors. With an NVIDIA card, `pip install -e ".[cuda]"` (the installer does this) gets small.en on the GPU. To compare models on your own voice, re-transcribe a flight: `localtc voice eval recordings/<session> --whisper-model small.en`. `localtc setup` downloads the model to `%LOCALAPPDATA%\LocalTC\models`.
 
 **Aviation vocabulary** (`[voice] vocabulary`): Whisper is prompted with standard phraseology and this flight's names: callsign, stations, airports, every runway, and the local taxiways. It is never given the numbers ATC just assigned. Priming it with the expected squawk could make it "hear" the right one when the pilot said another, and hide a readback error. Known mishearings are corrected afterwards: "whole short", "decent and maintain", "1-2000" for one two thousand, and "12,000,000 minutes" for "12,000, one zero minutes". On the spoken edge cases the prompt halves the word error rate (51% to 25%).
 
 **Into the parser.** A transcript goes to the same understanding path as typed text. ATC waits for it before answering, and it belongs to the frequency you keyed on, even if you switch before Whisper finishes. Whisper's confidence is a trigger: in `fallback` mode, a low-confidence transcript goes to the model even if the grammar parsed it. Push-to-talk with no speech gets no reply.
 
 **Testing without a sim or a microphone.** `tests/fixtures/voice_kpae` is a recording of the KPAE departure flown by voice, made with macOS speech voices (several accents, radio filtering, cockpit noise; `tools/make_voice_fixture.py`). `tests/fixtures/voice_clips` holds the 34 edge cases, spoken. `pytest -m whisper -s` checks that the departure flies identically from Whisper's transcripts: every readback correct, each under 0.7 s. It also runs the spoken edge cases; with Ollama, 30 of 34 are understood.
+
+## ATC's voice (Phase 4)
+
+```bash
+localtc tts say                                   # hear a tower transmission
+localtc tts say "..." --station "Phoenix Approach" --out approach.wav
+localtc tts devices                               # speakers and headsets
+localtc run ... --no-tts                          # text only
+```
+
+ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for Windows, macOS and Linux, so there's no separate binary to install). The voice is `en_US-libritts_r-medium`: one 80 MB download (`localtc setup`, or automatically on the first flight) with 904 speakers. Every station gets its own speaker, and the same one every time: Phoenix Tower never sounds like Phoenix Approach. The pool is the 40 speakers Whisper understood best reading ATC phraseology over the radio (`tools/pick_speakers.py`). Synthesis takes about 0.3 s for a 10 s clearance.
+
+**Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
+
+**Pacing.** Transmissions never overlap, and the ATC engine knows how long its words take, so it doesn't start the next call (or answer the copilot) until the frequency is quiet.
+
+## ATIS and weather
+
+MSFS doesn't give add-ons its ATIS or METARs, only the weather where the aircraft is, so LocalTC builds each airport's ATIS itself: wind (with gusts), visibility and precipitation, temperature, altimeter, the approach and runway in use, and cautions (gusty winds, strong crosswind, low visibility, wet runway, high density altitude). Surface weather is sampled on or near the airport. Until you get to the destination, its ATIS uses the freshest surface sample from an airport within 150 nm; the altimeter is always current.
+
+- Tune an ATIS frequency and it's printed in the console and read aloud on a loop until you tune away.
+- The letter advances when the weather really changes (at most every 10 minutes). If you're on ground, tower or approach when it does, ATC tells you: "information Charlie is now current, altimeter 29.90".
+- **The runway in use comes from the ATIS**, for taxi clearances and arrivals alike, and it only changes when the tailwind on it passes 5 kt.
+- ATC uses it: a taxi clearance adds "information Charlie is current, altimeter 29.92" if you didn't report the current letter ("with information Charlie"). The takeoff clearance gives the wind and any cautions. Descents give the destination altimeter, and approach checks you have the current ATIS. The landing clearance adds cautions.
+
+## Unscripted moments
+
+The language model reads what you say, the engine decides, and the templates speak. So you can go off script and still get a real answer:
+
+| You say | ATC |
+|---|---|
+| "request direct BLAKO" / "direct to the airport" | "cleared direct BLAKO" (read it back) |
+| "request vectors (for the ILS 26)" | a heading to an 8 nm final, then the approach as usual |
+| "could we get runway 16R" (on the ground) | a new taxi route to it, or "expect runway 16R"; "unable, wind ..." if the tailwind is over 10 kt |
+| "we'd like the visual runway 26" (arriving) | "expect visual runway 26 approach"; unable in low visibility |
+| "request return to Paine" | the departure airport becomes the destination: "cleared direct Paine Field airport, maintain ..., expect ..." |
+| "going around" (or a go-around without a word) | "fly runway heading, climb and maintain ..., contact approach", then a new approach |
+| "moderate chop at 7,000" | "roger, thanks for the report" |
+| "traffic in sight" / "looking" | "roger" / nothing |
+| "request higher, 9,000" | climb (or unable on the approach) |
+| a question it has no answer for | a short answer from the model, or "unable" |
+
+And ATC starts things too (`[atc] unscripted`, on by default):
+
+- **Traffic advisories** from the sim's real AI traffic within 5 nm and 1,200 ft that's converging: "traffic, two o'clock, four miles, opposite direction, 3,500, B738". Each airplane is called at most every 5 minutes, and never one that's just landing or taking off.
+- **Altitude checks:** once you've reached your altitude, drifting 300 ft off it for 15 s gets "check altitude, maintain 5,000".
+- **A quiet pilot:** an instruction nobody reads back gets "how do you read?" after 30 s, is said once more, then dropped.
+- **Missed check-in:** switched to the new frequency and said nothing for 45 s? Departure or approach calls you first. Still on the old frequency 45 s after reading back a handoff? You're told again.
+- **"Clearance on request, stand by":** clearance delivery sometimes needs a moment.
+
+The copilot answers these too ("looking", "loud and clear").
+
+`localtc llm eval` has 48 cases, including the new requests: all 48 pass with llama3.2:3b, at about 1.2-1.7 s per call.
+
+## Readback strictness
+
+Exact readbacks pass. A wrong value gets "negative, ..." and a missing one "read back ...". A value that's probably right but misheard or misspoken gets **"confirm ..."**: a frequency missing a digit ("12.1" for 120.1), "1508" for 1,500, or "08 left" for runway 08. Answer "affirm" or read it again. Self-corrections count: "cleared to land 08 left, correction 08" is fine.
+
+## The flight console
+
+`localtc run` prints the radio, not the plumbing: ATC's words wrapped under the station name, your transmissions, COM1 changes, ATIS, phase changes, readback results and alerts. Timings, language model calls and push-to-talk edges go to `%LOCALAPPDATA%\LocalTC\logs\localtc.log`. `-v` shows them on the console, and `--events` prints the raw event stream.
 
 ## Copilot
 

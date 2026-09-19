@@ -4,7 +4,9 @@ import re
 from dataclasses import dataclass, replace
 
 # MSFS 2024 hands out untranslated localization tokens for ATC TYPE and ATC MODEL.
-SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)\s+(.+?)\.\d+\.text", re.IGNORECASE)
+SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)\s+(.+?)\.\d+\.(?:text|tts)", re.IGNORECASE)
+# Three letters and a number (EXP69, ASA123): an airline-style callsign, said in full every time.
+AIRLINE_STYLE = re.compile(r"[A-Z]{3}\d{1,4}[A-Z]{0,2}")
 
 
 def clean_sim_name(value: str) -> str:
@@ -13,7 +15,7 @@ def clean_sim_name(value: str) -> str:
     if (match := SIM_TOKEN.search(value)) is not None:
         word = match.group(1).strip()
         return word.title() if word.isalpha() else word.upper()
-    return "" if ".text" in value else value
+    return "" if ".text" in value or ".tts" in value or value.upper().startswith("ATCCOM") else value
 
 
 @dataclass(frozen=True)
@@ -32,8 +34,11 @@ class Callsign:
 
     @property
     def short(self) -> "Callsign":
-        """Abbreviating only makes sense for a registration: "DP69" must not become "P69"."""
-        return replace(self, abbreviated=len(self.ident.replace("-", "")) > 4)
+        """Abbreviating only makes sense for a registration: "DP69" must not become "P69", and "EXP69"
+        (an airline-style callsign) must not become "Cessna P69"."""
+        ident = self.ident.replace("-", "")
+        registration = len(ident) > 4 and (ident.startswith("N") and ident[1:2].isdigit() or not AIRLINE_STYLE.fullmatch(ident))
+        return replace(self, abbreviated=registration)
 
     @property
     def suffix(self) -> str:

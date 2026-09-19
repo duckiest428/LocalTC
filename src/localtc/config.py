@@ -64,6 +64,7 @@ class AtcConfig(_Section):
     strict_callsign: bool = False
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
+    unscripted: bool = True  # traffic calls, altitude checks, "how do you read?", "stand by"
 
 
 class LlmConfig(_Section):
@@ -74,8 +75,8 @@ class LlmConfig(_Section):
     model: str = "llama3.2:3b"
     understanding: Literal["primary", "fallback", "off"] = "primary"  # primary: every transmission; fallback: only
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
-    timeout_s: float = 3.0  # per model call
-    budget_s: float = 5.0  # per transmission, including one retry
+    timeout_s: float = 4.0  # per model call
+    budget_s: float = 6.0  # per transmission, including one retry
     max_attempts: int = 2
     keep_alive: str = "1h"
     num_ctx: int = 4096
@@ -100,6 +101,21 @@ class VoiceConfig(_Section):
     tail_ms: int = 250  # audio kept after it came up
 
 
+class TtsConfig(_Section):
+    """ATC's voice: Piper speech, through a radio effect, out of the speakers or headset."""
+
+    enabled: bool = True
+    voice: str = "en_US-libritts_r-medium"  # a Piper voice; multi-speaker voices give each controller its own
+    voices_dir: str = ""  # blank = %LOCALAPPDATA%\LocalTC\voices
+    output_device: str = ""  # blank = the system default output; or part of its name, or its number
+    volume: float = 0.8
+    rate: float = 1.15  # speaking speed; controllers talk quickly
+    radio_effect: bool = True
+    static: float = 0.35  # 0-1: hiss and squelch under the voice
+    atis: bool = True  # read the ATIS aloud while it's tuned
+    copilot: bool = True  # the copilot's calls are spoken too (in a different voice)
+
+
 class CopilotConfig(_Section):
     mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
     delay_min_s: float = 2.0  # pilot reaction time before speaking
@@ -113,6 +129,7 @@ class Config(_Section):
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
+    tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)

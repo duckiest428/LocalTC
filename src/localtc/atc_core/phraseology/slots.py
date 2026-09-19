@@ -30,7 +30,7 @@ ALTITUDE = SlotType("altitude", int, speech.altitude_display, speech.altitude)
 HEADING = SlotType("heading", int, lambda v: f"{int(v) % 360 or 360:03d}", speech.heading)
 TAXI_ROUTE = SlotType("taxi_route", tuple, lambda v: ", ".join(v), speech.taxi_route)
 APPROACH = SlotType("approach", Approach, lambda v: v.display, speech.approach)
-ATIS = SlotType("atis", str, lambda v: v.upper(), speech.letter)
+ATIS = SlotType("atis", str, lambda v: speech.letter(v).capitalize(), speech.letter)
 WIND = SlotType("wind", Wind, speech.wind_display, speech.wind)
 ALTIMETER = SlotType("altimeter", float, lambda v: f"{v:.2f}", speech.altimeter)
 
@@ -39,6 +39,7 @@ SLOTS: dict[str, SlotType] = {
     "callsign": CALLSIGN,
     "station": TEXT,  # spoken station name, e.g. "Seattle Departure"
     "destination": TEXT,  # spoken airport name, e.g. "Boeing Field"
+    "fix": TEXT,  # a waypoint or airport the pilot asked to go direct to
     "missing": PHRASE,  # pre-rendered fragments ("read back {missing}")
     "correction": PHRASE,
     "message": PHRASE,  # free wording: an answer or a declined request

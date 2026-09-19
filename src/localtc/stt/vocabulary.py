@@ -76,6 +76,9 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\b(\d{1,2}),000,000 minutes\b", r"\1,000, 10 minutes"),  # "expect 12,000 one zero minutes" run together
     (r"(\d)er\b", r"\1"),  # "6-9er"
     (r"\b(\d),? (\d),?000\b", r"\1\g<2>000"),  # "level 1 2000", "1, 2000": one two thousand
+    (r"\bshort (?:file|finale|fine|find)\b", "short final"),
+    (r"\b(?:r-?naf|r-?nav|rnf|rna)\b", "RNAV"),
+    (r"\btime (?:and )?maintain\b", "climb and maintain"),
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in FIXUPS]
 

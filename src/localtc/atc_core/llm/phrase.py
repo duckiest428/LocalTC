@@ -44,6 +44,9 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
 
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
           "proceed", "vectors", "expect", "line", "takeoff", "monitor", "identify"}
+# The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
+INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
+NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 MAX_WORDS = 25
 
@@ -76,6 +79,11 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...]) -> 
         raise PhraseError(f"reply is longer than {MAX_WORDS} words")
     if banned := sorted(set(words) & BANNED):
         raise PhraseError(f"reply gives an instruction ({', '.join(banned)}); only answer or say unable")
+    if internal := sorted(set(words) & INTERNAL):
+        raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
+    fact_words = set(re.findall(r"[a-z]+", " ".join(facts.values()).lower()))
+    if navaids := sorted(set(words) & NAVAIDS - fact_words):
+        raise PhraseError(f"reply mentions {', '.join(navaids)}, which is not in the facts")
     known = set(NUMBER_RE.findall(" ".join(facts.values())))
     if invented := [n for n in NUMBER_RE.findall(text) if n not in known]:
         raise PhraseError(f"reply has numbers that are not in the facts: {', '.join(invented)}")

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalTC</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232f5d5a'/%3E%3Ctext x='32' y='42' font-size='28' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3ETC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar: the radios, settings and alerts, and the flight's on/off switch -->
+  <header class="topbar">
+    <div class="logo">LocalTC</div>
+    <div class="radios" id="radios">
+      <span class="radio"><span class="rlabel">COM1</span> <span class="freq active" id="com1">---.---</span></span>
+      <span class="radio"><span class="rlabel">COM2</span> <span class="freq" id="com2">OFF</span></span>
+      <span class="radio xpdr"><span class="rlabel">XPDR</span> <span class="code" id="squawk">----</span> <span class="xmode" id="xmode"></span></span>
+    </div>
+    <button class="iconbtn" id="btn-settings" title="Quick settings">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.3 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+    </button>
+    <button class="iconbtn" id="btn-alerts" title="Alerts">
+      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 1 21h22L12 2zm1 16h-2v-2h2v2zm0-4h-2v-5h2v5z"/></svg>
+      <span class="badge" id="alert-count" hidden>0</span>
+    </button>
+    <div class="flightctl">
+      <span class="status" id="status"><span class="dot"></span><span id="status-text">Not flying</span></span>
+      <button class="btn small" id="btn-startstop">Start</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="atc">ATC</button>
+    <button class="tab" data-tab="settings">Quick Settings</button>
+    <button class="tab" data-tab="map">Live Map</button>
+    <button class="tab" data-tab="lookup">Airport Lookup</button>
+  </nav>
+
+  <main>
+    <!-- ATC -->
+    <section class="page active" id="page-atc">
+      <div class="panel airport" id="airport-box">
+        <div class="arow">
+          <div class="aname"><span class="icao" id="ap-icao">----</span> <span id="ap-name" class="muted">No airport yet</span></div>
+          <div class="acall"><span id="fl-callsign">—</span> <span class="muted" id="fl-type"></span>
+            <span class="check" id="fl-plan-ok" title="Flight plan loaded" hidden>&#9745;</span>
+            <span class="plane" title="Flight">&#9992;</span></div>
+        </div>
+        <div class="freqs" id="ap-freqs"><div class="muted small">Frequencies appear when the flight starts.</div></div>
+      </div>
+
+      <div class="panel flightrow" id="flight-box">
+        <div class="kv"><span class="k">Dest</span><span class="v green" id="fl-dest">—</span></div>
+        <div class="kv"><span class="k">Assnd Xpdr</span><span class="v green" id="fl-squawk">—</span></div>
+        <div class="kv"><span class="k">Alt</span><span class="v" id="fl-alt">—</span></div>
+        <div class="kv"><span class="k" id="fl-rwy-label">Rwy</span><span class="v" id="fl-rwy">—</span></div>
+        <div class="kv wide"><span class="k">Phase</span><span class="v" id="fl-phase">—</span></div>
+        <div class="kv wide"><span class="k">Next</span><span class="v muted" id="fl-next">—</span></div>
+      </div>
+
+      <div class="panel log" id="log">
+        <div class="empty" id="log-empty">
+          <p><b>No flight yet.</b></p>
+          <p class="muted">Press <b>New Flight</b> to import your SimBrief plan or type one in, or <b>Start</b> to fly with the one you have.</p>
+        </div>
+      </div>
+
+      <div class="devbar" id="devbar" hidden>
+        <span class="devtag">DEV</span>
+        <input id="note-text" type="text" placeholder="Mark this moment: what went wrong?" maxlength="300">
+        <button class="btn small" id="btn-note">Mark</button>
+        <button class="btn small" id="btn-export" title="Zip this flight's recording, logs and settings to send in">Export session</button>
+      </div>
+    </section>
+
+    <!-- Quick Settings -->
+    <section class="page" id="page-settings">
+      <div class="settings" id="settings-body"><div class="muted pad">Loading ...</div></div>
+    </section>
+
+    <!-- Live Map -->
+    <section class="page" id="page-map">
+      <div id="map"></div>
+      <div class="mapctl">
+        <button class="btn small" id="map-follow" aria-pressed="true">Follow</button>
+        <button class="btn small" id="map-route">Route</button>
+      </div>
+      <div class="mapinfo" id="map-info"></div>
+    </section>
+
+    <!-- Airport Lookup -->
+    <section class="page" id="page-lookup">
+      <div class="lookup">
+        <div class="searchrow">
+          <input id="lookup-q" type="text" placeholder="ICAO or name, e.g. KSEA or Paine" autocomplete="off" spellcheck="false">
+          <button class="btn" id="lookup-go">Look up</button>
+        </div>
+        <div class="muted small" id="lookup-hint"></div>
+        <div id="lookup-results" class="results"></div>
+        <div id="lookup-detail"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom: talk or type, the ATC voice and copilot switches, and the flight buttons -->
+  <footer>
+    <div class="txrow">
+      <button class="ptt" id="btn-ptt" title="Hold to talk (or your push-to-talk key)">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M12 36v-4a20 20 0 0 1 40 0v4" fill="none" stroke="currentColor" stroke-width="6"/>
+          <rect x="6" y="34" width="12" height="20" rx="4" fill="currentColor"/><rect x="46" y="34" width="12" height="20" rx="4" fill="currentColor"/>
+          <path d="M52 50q0 8-12 8h-6" fill="none" stroke="currentColor" stroke-width="4"/></svg>
+      </button>
+      <input id="tx-text" type="text" placeholder="Type a transmission and press Enter" autocomplete="off" spellcheck="false">
+      <button class="btn com" id="btn-send" title="Transmit on COM1">COM</button>
+      <button class="btn x" id="btn-clear" title="Clear">&#10005;</button>
+      <div class="switches">
+        <button class="switch on" id="sw-atc" title="ATC's voice (off: text only)">ATC</button>
+        <button class="switch" id="sw-copilot" title="Copilot works the radio with ATC">Copilot</button>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn wide" id="btn-newflight">New Flight</button>
+      <button class="btn wide" id="btn-help">Getting Started</button>
+    </div>
+  </footer>
+</div>
+
+<!-- New Flight -->
+<dialog id="dlg-flight" class="dialog">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><h2>New Flight</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="subtabs">
+      <button type="button" class="subtab active" data-sub="simbrief">SimBrief</button>
+      <button type="button" class="subtab" data-sub="manual">Manual</button>
+    </div>
+    <div class="sub active" id="sub-simbrief">
+      <p class="muted small">Imports your latest SimBrief plan. Make one at <a href="https://dispatch.simbrief.com/options/custom" target="_blank" rel="noopener">simbrief.com</a> first. Your Pilot ID is on the SimBrief Account Settings page.</p>
+      <label>SimBrief username or Pilot ID
+        <div class="inline"><input id="sb-user" type="text" autocomplete="off" spellcheck="false"><button type="button" class="btn" id="sb-fetch">Fetch</button></div>
+      </label>
+      <div id="sb-result" class="planbox" hidden></div>
+    </div>
+    <div class="sub" id="sub-manual">
+      <div class="grid2">
+        <label>Callsign <input id="mp-callsign" placeholder="blank = the sim's" autocomplete="off"></label>
+        <label>Aircraft <input id="mp-aircraft" placeholder="e.g. C172, B738" autocomplete="off"></label>
+        <label>Origin <input id="mp-origin" placeholder="blank = where you are" autocomplete="off"></label>
+        <label>Destination <input id="mp-destination" placeholder="e.g. KBFI" autocomplete="off" required></label>
+        <label>Cruise altitude <input id="mp-cruise" placeholder="e.g. 5500 or FL350" autocomplete="off"></label>
+        <label>Alternate <input id="mp-alternate" autocomplete="off"></label>
+      </div>
+      <label>Route <textarea id="mp-route" rows="2" placeholder="e.g. DCT SEA J5 MWH (shown only; ATC clears you 'as filed')"></textarea></label>
+    </div>
+    <div class="error" id="plan-error" hidden></div>
+    <div class="dlgfoot">
+      <span class="muted small" id="plan-note"></span>
+      <button type="button" class="btn" id="plan-save">Save plan</button>
+      <button type="button" class="btn primary" id="plan-start">Save and start flight</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Getting Started -->
+<dialog id="dlg-help" class="dialog">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><h2>Getting Started</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="help">
+      <ol>
+        <li><b>Models.</b> In <b>Quick Settings</b>, pick a profile that suits your computer and press <b>Download</b> for anything not yet installed. Everything runs on this computer; after the downloads, flights work offline.</li>
+        <li><b>Flight plan.</b> <b>New Flight</b> imports your latest SimBrief plan, or type one in. ATC clears you to the destination at the cruise altitude, with your callsign.</li>
+        <li><b>Start.</b> Load the aircraft in MSFS 2024 (cold and dark or ready to taxi), then press <b>Start</b>. The status turns green when the sim is connected.</li>
+        <li><b>Tune and talk.</b> Tune COM1 in the cockpit (or click a frequency above the radio log). Hold your push-to-talk key (<b id="help-ptt">Right Ctrl</b>) and speak, or type into the box at the bottom and press Enter.</li>
+        <li><b>The flow.</b> Clearance: "Request IFR to Boeing Field". Ground: "ready to taxi with information Alpha". Tower: "holding short runway 34L, ready for departure". Then read back each instruction and check in after every handoff: "Seattle Departure, N172LT, 2,000 climbing 5,000".</li>
+        <li><b>Copilot.</b> Flip the <b>Copilot</b> switch and it works the radio with ATC for you: every call, or only readbacks and frequency changes (Quick Settings).</li>
+      </ol>
+      <p class="muted small">Something went wrong? Turn on <b>Developer mode</b> in Quick Settings. Every flight is then recorded with its audio. Press <b>Mark</b> at the moment it happens, then <b>Export session</b> and send the zip.</p>
+    </div>
+  </form>
+</dialog>
+
+<!-- Alerts -->
+<dialog id="dlg-alerts" class="dialog">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><h2>Alerts</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div id="alerts-list" class="alerts"><p class="muted">None this flight.</p></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -32,6 +32,8 @@ from localtc.sim_api import (
     BusEvent,
     RequestAirportData,
     SessionInfo,
+    SessionNote,
+    SetComFrequency,
     SimSource,
     Transcript,
 )
@@ -157,11 +159,13 @@ async def run_session(
     on_event: Callable[[BusEvent], None] | None = None,
     stop: asyncio.Event | None = None,
     typed_input: bool = False,
+    on_ready: Callable[["LiveSession"], None] | None = None,
 ) -> Path | None:
     """Run the source until it ends, ``stop`` is set, or the task is cancelled (Ctrl-C).
 
     Returns the recording directory if recording was enabled. With ``typed_input``,
-    lines typed on stdin become pilot transmissions (``Transcript`` events).
+    lines typed on stdin become pilot transmissions (``Transcript`` events). ``on_ready`` gets
+    the running session's controls (the app uses them) once everything has started.
     """
     record = cfg.recorder.enabled if record is None else record
     if cfg.voice.enabled and cfg.voice.ptt == "joystick" and not cfg.live.ptt_input:
@@ -176,6 +180,7 @@ async def run_session(
     pump_task: asyncio.Task | None = None
     typed_task: asyncio.Task | None = None
     voice = speaker = None
+    engine = atc_service = None
     try:
         if record:
             recorder = Recorder.create(
@@ -208,7 +213,8 @@ async def run_session(
                 copilot = Copilot(engine, mode=cfg.copilot.mode, delay_s=(cfg.copilot.delay_min_s, cfg.copilot.delay_max_s))
                 log.info("Copilot: %s", "reads back and changes frequencies" if cfg.copilot.mode == "assist"
                          else "works the radio for the whole flight", extra=CONSOLE)
-            consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache(), copilot=copilot).run()))
+            atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
+            consumers.append(asyncio.create_task(atc_service.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
             consumers.append(asyncio.create_task(speaker.service.run()))
@@ -221,6 +227,9 @@ async def run_session(
                       if (typed_input or enter_ptt) else None)
 
         pump_task = asyncio.create_task(pump(source, bus))
+        if on_ready is not None:
+            on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
+                                 voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None))
         if stop is None:
             await pump_task
         else:
@@ -244,6 +253,75 @@ async def run_session(
             await recorder.close()
             log.info("Recording saved to %s", recorder.session_dir)
     return recorder.session_dir if recorder else None
+
+
+@dataclass
+class LiveSession:
+    """A running session's controls, for the app: everything it can do while a flight is on."""
+
+    cfg: Config
+    bus: EventBus
+    source: SimSource
+    session: SessionInfo
+    engine: object | None = None  # AtcEngine
+    atc: object | None = None  # AtcService
+    voice: "VoiceInput | None" = None
+    speaker: "VoiceOutput | None" = None
+    recording: Path | None = None
+
+    def now(self) -> float:
+        return self.source.clock.now()
+
+    def say(self, text: str) -> None:
+        """A typed pilot transmission on COM1."""
+        if text.strip():
+            self.bus.publish(Transcript(t=self.now(), text=text.strip(), source="typed"))
+
+    def note(self, text: str) -> None:
+        self.bus.publish(SessionNote(t=self.now(), text=text))
+
+    def ptt(self, down: bool) -> bool:
+        """Push-to-talk from the app's button. False without voice input."""
+        if self.voice is None:
+            return False
+        (self.voice.service.press if down else self.voice.service.release)()
+        return True
+
+    async def tune(self, mhz: float, radio: int = 1) -> None:
+        from localtc.atc_core.facilities import channel_khz
+
+        await self.source.send(SetComFrequency(hz=channel_khz(mhz) * 1000, radio=radio))
+
+    async def request_airport(self, icao: str) -> None:
+        await self.source.send(RequestAirportData(icao=icao.upper()))
+
+    def set_copilot(self, mode: str) -> bool:
+        """"off", "assist" or "full", mid-flight. The copilot picks up from where the flight is."""
+        if self.atc is None or self.engine is None:
+            return False
+        if mode == "off":
+            self.atc.copilot = None
+            return True
+        from localtc.copilot import Copilot
+
+        current = self.atc.copilot or getattr(self, "_copilot", None)
+        if current is None:
+            c = self.cfg.copilot
+            current = Copilot(self.engine, mode=mode, delay_s=(c.delay_min_s, c.delay_max_s))
+        current.mode = mode
+        self._copilot = current
+        self.atc.copilot = current
+        return True
+
+    @property
+    def copilot_mode(self) -> str:
+        copilot = getattr(self.atc, "copilot", None)
+        return copilot.mode if copilot is not None else "off"
+
+    def mute(self, muted: bool) -> None:
+        """ATC's voice off (text only) or back on."""
+        if self.speaker is not None:
+            self.speaker.player.volume = 0.0 if muted else self.cfg.tts.volume
 
 
 async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None, *, ptt=None) -> None:

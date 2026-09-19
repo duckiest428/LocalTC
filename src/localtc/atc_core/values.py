@@ -34,11 +34,13 @@ class Callsign:
 
     @property
     def short(self) -> "Callsign":
-        """Abbreviating only makes sense for a registration: "DP69" must not become "P69", and "EXP69"
-        (an airline-style callsign) must not become "Cessna P69"."""
+        """Abbreviating only makes sense for a registration: an N-number (N172LT), an all-letter one (CFABC,
+        GABCD) or a hyphenated one (C-FABC). "DP69" must not become "P69", "EXP69" (airline-style) must not
+        become "Cessna P69", and "NZXT42" (letters then digits: a flight callsign) must not become "T42"."""
         ident = self.ident.replace("-", "")
-        registration = len(ident) > 4 and (ident.startswith("N") and ident[1:2].isdigit() or not AIRLINE_STYLE.fullmatch(ident))
-        return replace(self, abbreviated=registration)
+        n_number = ident.startswith("N") and ident[1:2].isdigit()
+        lettered = ident.isalpha() or ("-" in self.ident and not AIRLINE_STYLE.fullmatch(ident))
+        return replace(self, abbreviated=len(ident) > 4 and (n_number or lettered))
 
     @property
     def suffix(self) -> str:

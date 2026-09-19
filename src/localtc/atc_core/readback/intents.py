@@ -91,7 +91,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("say_again")
     landing = _has_any(tokens, ("clear", "to", "land"), ("cleared", "to", "land"), ("clearance", "to", "land"),
                        ("landing", "clearance"), ("clear", "for", "landing"), ("cleared", "for", "landing"))
-    if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy")) and not _has_any(
+    if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy"), ("request", "ifr"),
+                ("requesting", "ifr")) and not _has_any(
         tokens, ("cleared",)
     ) and not landing:
         add("request_ifr_clearance", atis=_atis(tokens))
@@ -103,7 +104,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi")):
         add("ready_to_taxi", atis=_atis(tokens))
     if _has_any(
-        tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off")
+        tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
+        ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures")
     ):
         add("ready_for_departure", runway=_any_runway(tokens))
     elif hold_short(tokens) and not _has_any(tokens, ("taxi",), ("via",), ("cleared",)):
@@ -140,7 +142,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
             atis=_atis(tokens))
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
-                                ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day")):
+                                ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
+                                ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by")):
         add("acknowledge")
     return matches
 

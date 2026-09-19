@@ -9,6 +9,7 @@ the first event at or after their due time.
 
 import math
 import random
+import re
 import zlib
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -59,6 +60,7 @@ PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 NM_M = 1852.0
 AIRBORNE_PHASES = {P.DEPARTURE, P.CRUISE, P.ARRIVAL, P.APPROACH}
 SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?", then once more, then give up
+STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
 MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
 NOT_SWITCHED_S = 45.0  # still on the old frequency this long after reading back a handoff: say it again
 TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 5.0, 1200.0, 300.0
@@ -69,7 +71,8 @@ STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for 
 APPROACH_CLEARANCE_NM = 12.0  # approach clears the approach and hands off to tower within this of the field
 ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
-REPEAT_WINDOW_S = 180.0  # a readback repeated within this long of the instruction is just a repeat
+REPEAT_WINDOW_S = 180.0
+CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
@@ -155,6 +158,7 @@ class AtcEngine:
         self._traffic_called: dict[int, float] = {}  # object id -> when ATC last called it
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
+        self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
         self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
         self._deviation_since: float | None = None
         self._altitude_checked_t = -math.inf
@@ -488,6 +492,18 @@ class AtcEngine:
                 st.pending = None
                 return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: no answer from the pilot")]
             return []
+        if pending is not None and last_pilot >= pending.issued_t and t - max(last_atc, last_pilot) >= STALE_READBACK_S:
+            # The pilot answered with something else (a question, a request) and never read it back. Say it
+            # once more, then stop waiting: a readback that never comes mustn't silence ATC for the whole flight.
+            issued = st.issued.get(pending.instruction_id)
+            if issued is not None and pending.instruction_id not in self._repeated and st.comms.tuned is not None \
+                    and issued.facility.matches(st.comms.tuned_mhz or 0.0):
+                self._repeated.add(pending.instruction_id)
+                st.pending = replace(pending, issued_t=t)
+                self._schedule(t, pending.instruction_id, issued.slots, issued.facility, delay=False, expects_readback=False)
+                return []
+            st.pending = None
+            return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: never read back")]
         if self._last_handoff is not None and not own.on_ground:
             handed_t, old, new = self._last_handoff
             tuned = st.comms.tuned
@@ -497,8 +513,10 @@ class AtcEngine:
                 st.comms.contacted.add(new.controller)
                 self._checkin(t, new, own)
             elif tuned == old and st.pending is None and t - max(handed_t, last_pilot) >= NOT_SWITCHED_S:
-                self._last_handoff = None  # still on the old frequency: say it once more
-                self._handoff_again(t, old, new)
+                self._last_handoff = None  # still on the old frequency: say it once more (once: then it's the pilot's call)
+                if (old.station, new.station) not in self._rehanded:
+                    self._rehanded.add((old.station, new.station))
+                    self._handoff_again(t, old, new)
         return []
 
     def _handoff_again(self, t: float, old: Facility, new: Facility) -> None:
@@ -593,6 +611,11 @@ class AtcEngine:
             st.exchanges.append(Exchange(t, "pilot", None, ev.text, None))
             where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
             return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
+        if pending is None and CONFIRM_WORDS & set(re.findall(r"[a-z]+", ev.text.lower())):
+            answer = self._confirm_query(ev.text, facility, mhz, t)
+            if answer is not None:  # "just to confirm, taxi to 06L?": affirmative, or negative with the right value
+                st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+                return answer
         if pending is None and self._repeats_readback(ev.text, facility, mhz, t):
             # The pilot read it back again (maybe didn't hear "readback correct"): nothing to add.
             st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
@@ -619,6 +642,25 @@ class AtcEngine:
                 return out + self._give_up_readback(facility, t)
         self._schedule(t, "common.say_again", {}, facility)
         return out
+
+    def _confirm_query(self, text: str, facility: Facility, mhz: float | None, t: float) -> list[BusEvent] | None:
+        """The pilot checks something from the last instruction this controller gave. None: not about that."""
+        done = self.state.read_back
+        if done is None or t - done.issued_t > REPEAT_WINDOW_S:
+            return None
+        issued = self.state.issued.get(done.instruction_id)
+        same_frequency = issued is not None and mhz is not None and issued.facility.matches(mhz)
+        if done.controller != facility.controller and not same_frequency:
+            return None
+        heard = GrammarInterpreter().interpret(text, done, InterpretContext(callsign=self._callsign()))
+        if heard.kind != "readback" or not (set(heard.values) & set(done.expected)):
+            return None
+        if heard.mismatched:
+            correction = self._fragments(list(heard.mismatched), issued.slots if issued else {})
+            self._schedule(t, "common.negative", {"correction": correction}, facility, expects_readback=False)
+        else:
+            self._schedule(t, "common.affirmative", {}, facility, expects_readback=False)
+        return []
 
     def _repeats_readback(self, text: str, facility: Facility, mhz: float | None, t: float) -> bool:
         done = self.state.read_back
@@ -1060,13 +1102,13 @@ class AtcEngine:
         dest_geo = self.geometry(dest)
         destination = speech.airport_name(dest_geo.airport.name, dest) if dest_geo else dest
         squawk = self._squawk()
-        if any(item.instruction_id == "clearance.ifr" for item in self._scheduled):
+        if any(item.instruction_id.startswith("clearance.ifr") for item in self._scheduled):
             return  # asked again while we're getting it
         if self.cfg.unscripted and random.Random(zlib.crc32(f"standby{self._callsign().ident}{self.cfg.seed}".encode())).random() < STANDBY_CHANCE:
             self._schedule(t, "clearance.standby", {}, facility)
             t += random.Random(self.cfg.seed + 1).uniform(12, 25)  # the clearance comes a little later
         self._schedule(
-            t, "clearance.ifr",
+            t, "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise",
             {"destination": destination, "altitude": initial, "cruise": cruise, "frequency": departure.mhz, "squawk": squawk},
             facility, clearance="ifr",
             on_issue=lambda: self._assign(squawk=squawk, altitude_ft=initial, cruise_ft=cruise, departure_mhz=departure.mhz),
@@ -1144,12 +1186,16 @@ class AtcEngine:
         )
 
     def _arrival_altitude(self, planned: int, own: OwnshipState, controller: str) -> tuple[int, str]:
-        """An arrival altitude and the instruction for it: descend to ``planned``, or, when the aircraft is
-        already at or below it (a low cruise), maintain where it is. Arrivals are never told to climb."""
-        current = self.state.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
-        if planned < current:
+        """An arrival altitude and the instruction for it. Above ``planned``: descend to it. Below it and still
+        climbing toward a higher assigned altitude (a short hop): maintain ``planned``, which stops the climb
+        there. Assigned lower than planned (a low cruise): maintain that. Arrivals are never told to climb."""
+        assigned = self.state.assignments.altitude_ft
+        flying = int(round(own.alt_indicated_ft, -2))
+        if flying > planned + 200 and (assigned is None or assigned > planned):
             return planned, f"{controller}.descend"
-        return current, f"{controller}.maintain"
+        if assigned is not None and assigned < planned:
+            return assigned, f"{controller}.maintain"
+        return planned, f"{controller}.maintain"
 
     def _clear_to_land(self, t: float, own: OwnshipState | None, facility: Facility, *, delay: bool, runway: str | None = None) -> None:
         st, ctx = self.state, self.tracker.context

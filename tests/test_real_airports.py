@@ -117,7 +117,7 @@ def test_push_to_talk_holds_atc_off_until_released(first_ownship):
     quiet = [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 8)) if isinstance(o, AtcTransmission)]
     assert quiet == []
     spoken = [o for o in engine.handle(PttReleased(t=own.t + 9)) if isinstance(o, AtcTransmission)]
-    assert [o.instruction_id for o in spoken] == ["clearance.ifr"]  # goes out as soon as the mic is free
+    assert [o.instruction_id.split("_")[0] for o in spoken] == ["clearance.ifr"]  # goes out as soon as the mic is free
 
 
 def test_stuck_push_to_talk_does_not_mute_atc_forever(first_ownship):
@@ -128,7 +128,7 @@ def test_stuck_push_to_talk_does_not_mute_atc_forever(first_ownship):
     engine.handle(PttPressed(t=own.t + 2))  # release never arrives
     assert not [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 20)) if isinstance(o, AtcTransmission)]
     late = [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 40)) if isinstance(o, AtcTransmission)]
-    assert [o.instruction_id for o in late] == ["clearance.ifr"]
+    assert [o.instruction_id.split("_")[0] for o in late] == ["clearance.ifr"]
 
 
 # --- Canada: CYUL -> CYQB, the second live flight -------------------------------------------------

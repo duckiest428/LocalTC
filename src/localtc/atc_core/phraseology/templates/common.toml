@@ -34,6 +34,11 @@ controller = "any"
 text = ["{callsign}, negative, {correction}."]
 
 [[template]]
+id = "common.affirmative"
+controller = "any"
+text = ["{callsign}, affirmative.", "{callsign}, affirm."]
+
+[[template]]
 id = "common.confirm"
 controller = "any"
 text = ["{callsign}, confirm {correction}."]

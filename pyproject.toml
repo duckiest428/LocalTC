@@ -17,6 +17,8 @@ dependencies = [
     "pynput>=1.7",
     # Voice out: Piper speech synthesis (prebuilt wheels for Windows, macOS and Linux; no separate binary).
     "piper-tts>=1.3",
+    # The app's window (Edge WebView2, built into Windows 10/11). Elsewhere the app opens in the browser.
+    "pywebview>=5.3; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +31,9 @@ cuda = [
 
 [project.scripts]
 localtc = "localtc.cli:main"
+
+[project.gui-scripts]
+localtc-app = "localtc.ui:main"  # the app without a console window (the desktop shortcut)
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/localtc"]
@@ -53,7 +58,7 @@ source_modules = ["localtc.sim_api"]
 forbidden_modules = [
     "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config", "localtc.copilot",
     "localtc.dsp", "localtc.llm", "localtc.recorder", "localtc.replay", "localtc.scenario", "localtc.sim_bridge",
-    "localtc.stt", "localtc.tts",
+    "localtc.stt", "localtc.tts", "localtc.ui", "localtc.flightplan", "localtc.models",
 ]
 
 [[tool.importlinter.contracts]]
@@ -61,7 +66,8 @@ name = "Only app wiring may import the Windows-only SimConnect bridge"
 type = "forbidden"
 source_modules = [
     "localtc.atc_core", "localtc.bus", "localtc.config", "localtc.copilot", "localtc.dsp", "localtc.llm",
-    "localtc.recorder", "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts",
+    "localtc.recorder", "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts", "localtc.flightplan",
+    "localtc.models",
 ]
 forbidden_modules = ["localtc.sim_bridge"]
 

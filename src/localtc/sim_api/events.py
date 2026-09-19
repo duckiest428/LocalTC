@@ -200,15 +200,23 @@ class AtisBroadcast(Event, tag="atis_broadcast"):
     spoken: str
 
 
+class SessionNote(Event, tag="session_note"):
+    """A note the pilot added to the recording (the app's dev mode): "ATC should have cleared me here"."""
+
+    text: str
+
+
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast]
-BusEvent = Union[SimEvent, RadioEvent, AtcEvent]
+AppEvent = Union[SessionNote]
+BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)
 RADIO_EVENT_TYPES: tuple[type, ...] = get_args(RadioEvent)
 ATC_EVENT_TYPES: tuple[type, ...] = get_args(AtcEvent)
-BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES + ATC_EVENT_TYPES
+APP_EVENT_TYPES: tuple[type, ...] = get_args(AppEvent)
+BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES + ATC_EVENT_TYPES + APP_EVENT_TYPES
 
 
 def event_type(event: Event) -> str:

@@ -78,6 +78,8 @@ def normalize(text: str) -> list[Token]:
         flush()
         if word in FILLERS or word == "." or word in BREAKS:
             continue
+        if word == "a" and tokens and tokens[-1].text == "maintain" and i + 1 < len(raw) and _is_digitish(raw[i + 1]):
+            continue  # "climb maintain a 3,500": Whisper's "and", not taxiway alpha
         if word in PHONETIC:
             tokens.append(Token("letter", PHONETIC[word]))
         else:
@@ -90,11 +92,20 @@ def _single_digit(word: str) -> bool:
     return (len(word) == 1 and word.isdigit()) or word in DIGIT_WORDS
 
 
+def _last_digit_with_decimals(word: str) -> bool:
+    """ "5.15" ending digits said one by one: "1, 2, 5.15" is 125.15."""
+    return bool(re.fullmatch(r"\d\.\d+", word))
+
+
 def _digit_list(run: list[str], raw: list[str], comma: int) -> bool:
     """True if the comma at ``raw[comma]`` sits inside digits said one at a time and written with
     commas between them: "3, 2, 0, 0" or "0, 8". Not "8, 3 miles" (two numbers), and not
     "one two three four, two lima tango" (a group, then a new number)."""
-    if not run or not _single_digit(raw[comma - 1]) or comma + 1 >= len(raw) or not _single_digit(raw[comma + 1]):
+    if not run or not _single_digit(raw[comma - 1]) or comma + 1 >= len(raw):
+        return False
+    if _last_digit_with_decimals(raw[comma + 1]):
+        return len(run) >= 2 and all(_single_digit(w) for w in run)  # "1, 2, 5.15"
+    if not _single_digit(raw[comma + 1]):
         return False
     count, k = 0, comma - 1  # digits before, each separated by a comma
     while k >= 0 and _single_digit(raw[k]):
@@ -112,6 +123,8 @@ def _digit_list(run: list[str], raw: list[str], comma: int) -> bool:
             j += 2
         else:
             break
+    if j < len(raw) and j > comma + 1 and _last_digit_with_decimals(raw[j]):
+        count += 1  # "1, 2, 5.15"
     return count >= 3 or raw[comma - 1] in ("0", "zero", "oh")
 
 
@@ -140,7 +153,8 @@ def _numbers(run: list[str]) -> list[str]:
         # ("runway 34 120.2"), but short written groups merge ("squawk 45 21").
         if word[0].isdigit() and current and current[-1][0].isdigit():
             prev = current[-1].replace(",", "")
-            one_by_one = len(word) == 1 and all(len(w) == 1 and w.isdigit() for w in current)  # "3 2 0 0"
+            singles = all(len(w) == 1 and w.isdigit() for w in current)
+            one_by_one = singles and (len(word) == 1 or (len(current) >= 2 and _last_digit_with_decimals(word)))  # "3 2 0 0"
             if not one_by_one and ("." in prev or "." in word or len(prev) > 2 or len(word.replace(",", "")) > 2):
                 numbers.append([])
         # Digits spoken after a written number are a new number too
@@ -185,7 +199,7 @@ def _resolve(words: list[str]) -> str:
             digits += str(DIGIT_WORDS[word])
         elif word[0].isdigit():
             if "." in word:
-                return word
+                return digits + word  # "1 2 5.15" said one by one: 125.15
             digits += word
         i += 1
     if used_multiplier:

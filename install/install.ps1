@@ -1,13 +1,16 @@
 <#
 .SYNOPSIS
-    Installs LocalTC on Windows: Python, LocalTC with Whisper speech-to-text and Piper voices for ATC, GPU
-    support when there's an NVIDIA card, Ollama with its language model, and the downloaded models, so flights
-    work offline.
+    Installs LocalTC on Windows: Python, the LocalTC app with Whisper speech-to-text and Piper voices for ATC,
+    GPU support when there's an NVIDIA card, Ollama with its language model, and the downloaded models, so
+    flights work offline.
 
 .DESCRIPTION
-    Run it from the LocalTC folder (the one with pyproject.toml), in PowerShell:
+    Double-click "Install LocalTC.cmd" in the LocalTC folder, or run in PowerShell from that folder:
 
         powershell -ExecutionPolicy Bypass -File install\install.ps1
+
+    The models are picked for this computer (-Quality auto): its RAM and graphics card decide between the
+    light, balanced and quality sets. Change them any time in the app's Quick Settings.
 
     It is safe to run again: finished steps are skipped. Nothing is sent anywhere; downloads come from
     python.org/winget, PyPI, Hugging Face (Whisper model, Piper voice) and ollama.com.
@@ -16,12 +19,15 @@
     Don't install GPU support even if an NVIDIA card is present.
 .PARAMETER NoOllama
     Skip Ollama and the language model (LocalTC then understands pilots with its grammar only).
+.PARAMETER Quality
+    Which models to install: auto (picked from this computer's hardware), light, balanced or quality.
 .PARAMETER WhisperModel
-    Whisper model to download (default: small.en with an NVIDIA GPU, base.en otherwise).
+    Also download this Whisper model (tiny.en, base.en, small.en, medium.en).
 #>
 param(
     [switch]$Cpu,
     [switch]$NoOllama,
+    [ValidateSet("auto", "light", "balanced", "quality")][string]$Quality = "auto",
     [string]$WhisperModel = ""
 )
 
@@ -143,7 +149,7 @@ if (-not $NoOllama) {
 
 # --- 5. Models -------------------------------------------------------------------------------------------------
 Step "Downloading models (once; flights then work offline)"
-$SetupArgs = @("setup")
+$SetupArgs = @("setup", "--profile", $Quality)
 if ($WhisperModel) { $SetupArgs += @("--whisper-model", $WhisperModel) }
 if ($NoOllama) { $SetupArgs += "--no-llm" }
 Push-Location $Root
@@ -164,28 +170,46 @@ $Dll = @(
 if ($Dll) { Ok "Found $Dll" }
 else { Note "SimConnect.dll not found. In MSFS 2024: Options > General > Developers > Developer Mode, then install the SDK." }
 
-# --- 7. Shortcut ---------------------------------------------------------------------------------------------------
-Step "Shortcut"
+# --- 7. The app window ---------------------------------------------------------------------------------------------
+Step "App window"
+$WebView2 = @(
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+    "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+    "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($WebView2) { Ok "Microsoft Edge WebView2 is installed" }
+elseif (Get-Command winget -ErrorAction SilentlyContinue) {
+    Note "Installing Microsoft Edge WebView2 (the app's window) with winget ..."
+    & winget install --exact --id Microsoft.EdgeWebView2Runtime --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) { Note "WebView2 didn't install; LocalTC will open in your browser instead." }
+} else { Note "WebView2 is missing; LocalTC will open in your browser instead." }
+
+# --- 8. Shortcuts -------------------------------------------------------------------------------------------------
+Step "Shortcuts"
+$App = Join-Path $Venv "Scripts\localtc-app.exe"
 $Launcher = Join-Path $Root "LocalTC.cmd"
 @"
 @echo off
-rem Starts LocalTC for a live flight with voice. Add options after it, e.g.:
-rem   LocalTC.cmd --destination CYQB --cruise-ft 12000 --copilot assist
+rem LocalTC from a console: the app, or a command, e.g.
+rem   LocalTC.cmd run --source live --voice --destination CYQB --cruise-ft 12000
 cd /d "%~dp0"
-".venv\Scripts\localtc.exe" run --source live --voice %*
-pause
+".venv\Scripts\localtc.exe" %*
+if errorlevel 1 pause
 "@ | Set-Content -Path $Launcher -Encoding ASCII
 try {
     $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "LocalTC.lnk"))
-    $link.TargetPath = $Launcher
-    $link.WorkingDirectory = $Root
-    $link.Save()
-    Ok "Desktop shortcut: LocalTC"
-} catch { Note "Couldn't create a desktop shortcut; start $Launcher instead." }
+    foreach ($folder in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Programs"))) {
+        $link = $shell.CreateShortcut((Join-Path $folder "LocalTC.lnk"))
+        $link.TargetPath = $App
+        $link.WorkingDirectory = $Root
+        $link.Description = "LocalTC: offline ATC for MSFS 2024"
+        $link.Save()
+    }
+    Ok "Desktop and Start menu shortcuts: LocalTC"
+} catch { Note "Couldn't create shortcuts; start $App instead." }
 
 Write-Host "`nLocalTC is installed." -ForegroundColor Green
-Write-Host "  Start a flight:   LocalTC shortcut, or: $Launcher --destination <ICAO> --cruise-ft <feet>"
-Write-Host "  Push-to-talk:     hold Right Ctrl (change [voice] ptt_key in config\localtc.toml)"
-Write-Host "  Check your mic:   .venv\Scripts\localtc voice test"
-Write-Host "  Hear ATC's voice: .venv\Scripts\localtc tts say"
+Write-Host "  Start it:         the LocalTC shortcut on the desktop or in the Start menu"
+Write-Host "  Then:             New Flight (SimBrief or typed in), Start, and hold Right Ctrl to talk"
+Write-Host "  Models, voice, push-to-talk key: the app's Quick Settings"
+Write-Host "  From a console:   $Launcher run --source live --voice --destination <ICAO> --cruise-ft <feet>"

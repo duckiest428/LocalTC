@@ -3,12 +3,12 @@
 [     9.0] ATC       Paine Ground 121.8: N172LT, contact Paine Clearance 127.25.
 [    11.0] PILOT     127.25: Paine Clearance, november one seven two lima tango, IFR to Boeing Field, ready to copy.
 [    13.0] ATC       Paine Clearance 127.25: N172LT, clearance on request, stand by.
-[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field airport as filed, climb and maintain 5,000, expect 5,000 one zero minutes after departure, departure frequency 124.675, squawk 3260.
+[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field airport as filed, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    31.0] PILOT     127.25: Cleared to Boeing Field, climb and maintain five thousand, departure one two four point six seven five, squawk one two three four, two lima tango.
-[    31.0] READBACK  clearance.ifr incorrect heard=squawk:1234
+[    31.0] READBACK  clearance.ifr_at_cruise incorrect heard=squawk:1234
 [    34.0] ATC       Paine Clearance 127.25: Cessna 2LT, negative, squawk 3260.
 [    36.0] PILOT     127.25: Squawk three two six zero, two lima tango.
-[    36.0] READBACK  clearance.ifr correct
+[    36.0] READBACK  clearance.ifr_at_cruise correct
 [    38.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct.
 [    41.0] PILOT     121.8: Paine Ground, two lima tango, ready to taxi.
 [    44.0] ATC       Paine Ground 121.8: Cessna 2LT, runway 34L, taxi via C, A, A1, information Oscar is current, altimeter 29.92.

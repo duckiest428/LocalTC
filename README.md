@@ -4,35 +4,59 @@ Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. 
 
 - A small local LLM (1B–4B, via Ollama) reads every pilot call; a grammar checks it and takes over when the model is slow, missing or wrong.
 - A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact FAA phraseology; the model words only replies that have no template.
+- You talk with push-to-talk; faster-whisper transcribes locally. ATC answers in Piper voices through a radio effect, one voice per controller.
 - An optional copilot works the radio for you: readbacks, frequency changes, or every call.
-- You talk to ATC with push-to-talk; faster-whisper transcribes locally. (ATC's own voice, Piper with radio effects, comes next.)
+- **The LocalTC app**: the radio log, frequencies to click, a live map, airport lookup, SimBrief import, and settings for models, voice and push-to-talk.
 
 Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
 
-> **Status: Phase 3 (voice in).**
-> - **Working:** the full IFR dialogue from clearance delivery to taxi-in; the local model understanding pilot calls (with checks and grammar fallback); questions, altitude requests and emergencies; the copilot; **push-to-talk speech with Whisper**.
-> - **Pilot input:** voice, typed, scripted, or the copilot.
-> - **Not yet:** ATC speech synthesis and radio DSP.
+> **Status: Phase 5 (the app).**
+> - **Working:** the full IFR flow, from clearance delivery to taxi-in; voice in and out; ATIS and weather; unscripted moments; the copilot; the app.
+> - **Not yet:** SIDs, STARs and published arrivals (ATC clears "as filed" and gives vectors or a straight-in approach), and AI traffic on the frequency.
 
 ## Install (Windows)
 
-Download or clone LocalTC, open PowerShell in its folder, and run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File install\install.ps1
-```
+Download or clone LocalTC, then double-click **`Install LocalTC.cmd`** in its folder. From PowerShell, run
+`powershell -ExecutionPolicy Bypass -File install\install.ps1`.
 
 It installs everything a flight needs and can be run again safely:
 - Python 3.12, via winget if you don't have Python yet.
-- LocalTC, with Whisper speech-to-text, microphone and push-to-talk support.
+- LocalTC, with Whisper, Piper and push-to-talk support, and the app window (Edge WebView2).
 - CUDA support for Whisper if there's an NVIDIA card.
-- Ollama and its language model.
-- The Whisper model. After that, flights work offline.
-- A **LocalTC** desktop shortcut.
+- Ollama.
+- **The models, picked for this computer**: its RAM and graphics card choose the *light*, *balanced* or
+  *quality* set, and downloads them. After that, flights work offline.
+- **LocalTC** shortcuts on the desktop and in the Start menu.
 
-Options: `-Cpu` (no GPU support), `-NoOllama` (grammar only), `-WhisperModel small.en`.
+Options: `-Quality light|balanced|quality` (instead of automatic), `-Cpu` (no GPU support), `-NoOllama` (grammar only).
 
 On macOS/Linux (development against recordings): `./install/install.sh`.
+
+## The app
+
+Start **LocalTC** from the shortcut, or run `.venv\Scripts\localtc` with no command.
+
+| Tab | |
+|---|---|
+| **ATC** | COM1/COM2 and the transponder at the top. The airport's frequencies: click one to tune COM1. Your callsign, destination, assigned squawk, altitude, runway or approach, the phase, and what ATC expects next. Below that, the radio log. |
+| **Quick Settings** | Performance profiles and the models (language model, Whisper size, ATC voice), each with its speed, quality and size, a **Download** button and a voice **Preview**. Also the push-to-talk key (press **Change**, then the key), yoke button, microphone, speakers, volume and speed, the copilot, ATC options, and developer mode. |
+| **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. |
+| **Airport Lookup** | Frequencies, runways (length, heading, ILS) and taxiways for any airport a flight has visited. During a flight, any other ICAO is fetched from the sim. |
+
+- **New Flight**: import your latest **SimBrief** plan (username or Pilot ID), or type one in (**Manual**). Then **Save and start flight**.
+- **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
+- **Talk**: hold your push-to-talk key (Right Ctrl by default) or the headset button next to the text box. You can also type a call and press Enter.
+- **ATC** switch: ATC's voice on or off (text only). **Copilot** switch: the copilot works the radio with ATC.
+- **Developer mode** (Quick Settings): every flight is recorded with its audio. **Mark** notes the moment something goes wrong, and **Export session** zips the recording, logs, settings and flight plan into your Downloads folder, ready to send.
+
+Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Only the changes from
+`config/localtc.toml` are written, and the command line uses them too.
+
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md): the pieces, the event bus, a transmission end to end, the app.
+- [docs/phraseology.md](docs/phraseology.md): adding phraseology templates.
+- [docs/state-machine.md](docs/state-machine.md): extending the phases and the dialogue for new scenarios.
 
 ## Layout
 
@@ -56,9 +80,13 @@ src/localtc/
   llm/         Ollama client (standard library HTTP) and the edge-case evaluation (eval_cases.toml)
   copilot.py   the copilot: reads back, changes frequencies, makes calls
   scenario.py  offline scripted-pilot scenarios
-  stt/ tts/ dsp/   Later phases
-  app.py       Wiring: config -> source -> bus -> recorder
-  cli.py       `localtc run | record | replay | inspect`
+  stt/         microphone, push-to-talk, Whisper
+  tts/ dsp/    Piper voices, the radio effect, audio out
+  ui/          the app: local HTTP/SSE server, controller, static page (HTML/CSS/JS, Leaflet)
+  flightplan.py  SimBrief import and typed flight plans
+  models.py    model catalog, hardware profiles, downloads
+  app.py       Wiring: config -> source -> bus -> engine, voice, recorder; LiveSession controls
+  cli.py       `localtc app | run | record | replay | atc | setup | ...`
 tools/         Script shortcuts, plus make_fixture.py for the synthetic test recording
 tests/         Runs on any OS; tests/windows/ needs a live sim
 ```

@@ -487,6 +487,20 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     from localtc.stt.whisper import choose, default_models_dir, download
 
     cfg = load_config(args.config)
+    if args.profile:
+        from localtc import models as catalog
+        from localtc.config import save_settings
+
+        hw = catalog.detect_hardware()
+        chosen = catalog.recommend(hw) if args.profile == "auto" else catalog.profile(args.profile)
+        print(f"This computer: {hw.cpu_cores} CPU threads, {hw.ram_gb} GB RAM, "
+              f"{hw.gpu or 'no NVIDIA GPU'}. Profile: {chosen.label} ({chosen.description})")
+        catalog.apply_profile(cfg, chosen)
+        cfg.voice.enabled = True
+        if args.no_llm:
+            cfg.llm.enabled = False
+        print(f"  language model {chosen.llm}, Whisper {chosen.whisper}, voice {chosen.voice}")
+        print(f"  saved to {save_settings(cfg, base=load_config(args.config, settings=None))} (change them in the app)")
     ok = True
     models = args.whisper_model or [choose(cfg.voice.model, cfg.voice.device, cfg.voice.compute_type).model]
     models_dir = Path(cfg.voice.models_dir) if cfg.voice.models_dir else default_models_dir()
@@ -566,6 +580,12 @@ def _cmd_tts_say(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_app(args: argparse.Namespace) -> int:
+    from localtc.ui import run_app
+
+    return run_app(config_path=args.config, port=args.port, browser=args.browser, open_page=not args.no_open)
+
+
 def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool = False) -> int:
     started = time.monotonic()
     out_dir = asyncio.run(run_session(cfg, record=record, on_event=printer, typed_input=typed_input))
@@ -578,7 +598,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="localtc", description="Offline ATC for MSFS 2024")
     parser.add_argument("--version", action="version", version=f"localtc {__version__}")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
 
     def with_config(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
         p.add_argument("--config", help="config TOML (default: $LOCALTC_CONFIG or config/localtc.toml)")
@@ -702,7 +722,15 @@ def build_parser() -> argparse.ArgumentParser:
     setup = with_config(sub.add_parser("setup", help="download the speech, voice and language models; check the microphone"))
     setup.add_argument("--whisper-model", action="append", help="model(s) to download (default: the one [voice] uses)")
     setup.add_argument("--no-llm", action="store_true", help="don't pull the Ollama model")
+    setup.add_argument("--profile", choices=["auto", "light", "balanced", "quality"],
+                       help="pick the models for this computer (auto: from its RAM and GPU) and save them as settings")
     setup.set_defaults(func=_cmd_setup)
+
+    app = with_config(sub.add_parser("app", help="the LocalTC app window (the default with no command)"))
+    app.add_argument("--port", type=int, help="serve on this port (default: [ui] port, 0 = any free port)")
+    app.add_argument("--browser", action="store_true", help="open in the default browser instead of a window")
+    app.add_argument("--no-open", action="store_true", help="don't open anything; print the address")
+    app.set_defaults(func=_cmd_app)
 
     inspect = sub.add_parser("inspect", help="summarize a recording")
     inspect.add_argument("path", help="recording directory or session.jsonl[.gz]")
@@ -715,11 +743,13 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")  # e.g. a redirected Windows console in cp1252
     args = build_parser().parse_args(argv)
+    if args.command is None:  # plain `localtc`: the app
+        args = build_parser().parse_args([*(argv or sys.argv[1:]), "app"])
     from localtc.console import log_dir, setup_logging
 
-    flying = args.command == "run" and not getattr(args, "events", False)
+    flying = args.command in ("run", "app") and not getattr(args, "events", False)
     log_file = setup_logging(verbose=args.verbose, quiet_console=flying,
-                             log_file=log_dir() / "localtc.log" if args.command in ("run", "record") else None)
+                             log_file=log_dir() / "localtc.log" if args.command in ("run", "record", "app") else None)
     if flying and log_file is not None and not args.verbose:
         print(f"Details go to {log_file} (-v shows them here)")
     try:

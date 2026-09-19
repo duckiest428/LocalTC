@@ -16,3 +16,6 @@ SimConnect.dll
 src/.DS_Store
 src/localtc/.DS_Store
 config/localtc.toml
+
+# Made by the installer on Windows
+/LocalTC.cmd

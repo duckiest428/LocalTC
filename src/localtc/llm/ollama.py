@@ -68,8 +68,13 @@ class OllamaBackend:
             return OllamaStatus(False, error=str(getattr(exc, "reason", exc)))
         return OllamaStatus(True, tuple(m.get("name", "") for m in tags.get("models", [])), version=version)
 
-    def pull(self, *, print_progress: bool = False) -> bool:
-        """Download the model through Ollama (``ollama pull``). Returns True when it's installed."""
+    def pull(self, *, print_progress: bool = False, on_progress=None) -> bool:
+        """Download the model through Ollama (``ollama pull``). Returns True when it's installed.
+        ``on_progress(text, fraction or None)`` hears each step."""
+        def report(text: str, fraction: float | None = None) -> None:
+            if on_progress is not None:
+                on_progress(text, fraction)
+
         req = urllib.request.Request(self.base_url.rstrip("/") + "/api/pull",
                                      data=json.dumps({"model": self.model, "stream": True}).encode(),
                                      headers={"Content-Type": "application/json"}, method="POST")
@@ -80,15 +85,20 @@ class OllamaBackend:
                     update = json.loads(line or b"{}")
                     if "error" in update:
                         print(f"  {update['error']}") if print_progress else None
+                        report(f"failed: {update['error']}")
                         return False
                     status = update.get("status", "")
+                    fraction = None
                     if update.get("total") and update.get("completed") is not None:
+                        fraction = update["completed"] / update["total"]
                         status += f" {100 * update['completed'] // update['total']}%"
-                    if print_progress and status != last:
-                        print(f"  {status}", flush=True)
+                    if status != last:
+                        print(f"  {status}", flush=True) if print_progress else None
+                        report(status, fraction)
                         last = status
         except (urllib.error.URLError, OSError, ValueError) as exc:
             print(f"  failed: {exc}") if print_progress else None
+            report(f"failed: {exc}")
             return False
         return self.status().has(self.model)
 

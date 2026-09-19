@@ -51,8 +51,8 @@ def test_assist_mode_reads_back_and_changes_frequency_but_makes_no_calls():
     pilot = [line.split(": ", 1)[1] for line in lines if " PILOT " in line]
     assert pilot == [
         "Paine Clearance, november one seven two lima tango, IFR to Boeing Field, ready to copy",
-        "Cleared to Boeing Field as filed, climb and maintain five thousand, expect five thousand one zero minutes "
-        "after, departure one two four point six seven five, squawk three two six zero, Cessna two lima tango.",
+        "Cleared to Boeing Field as filed, climb and maintain five thousand, departure one two four point six seven "
+        "five, squawk three two six zero, Cessna two lima tango.",
         "Paine Ground, Cessna two lima tango, ready to taxi",
         "Runway three four left, taxi via charlie, alpha, alpha one, Cessna two lima tango.",
         "Paine Tower one two zero point two, Cessna two lima tango.",  # the handoff at the hold short line

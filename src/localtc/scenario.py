@@ -206,7 +206,7 @@ def run(
             if isinstance(output, AtcTransmission):
                 issued = engine.state.issued.get(output.instruction_id or "")
                 for index, rule in enumerate(scenario.pilot):
-                    if rule.on == output.instruction_id and index not in fired and (
+                    if _instruction_matches(rule.on, output.instruction_id) and index not in fired and (
                         rule.when is None or _when_matches(rule.when, engine, state["last_own"])
                     ):
                         schedule(index, rule, output.t + rule.delay_s, {"instruction": output.instruction_id, "issued": issued})
@@ -358,3 +358,8 @@ def _when_matches(when: When, engine: AtcEngine, own: OwnshipState) -> bool:
         if clearance is None or clearance.readback != "correct":
             return False
     return True
+
+
+def _instruction_matches(on: str | None, instruction_id: str | None) -> bool:
+    """``on = "clearance.ifr"`` also answers its variants (``clearance.ifr_at_cruise``)."""
+    return on is not None and instruction_id is not None and (instruction_id == on or instruction_id.startswith(on + "_"))

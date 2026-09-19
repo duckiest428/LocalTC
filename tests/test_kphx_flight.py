@@ -36,7 +36,7 @@ def after(lines: list[str], text: str, count: int = 3) -> list[str]:
 
 def test_the_clearance_readback_reaches_ground_working_clearance(replay):
     # KGYR has no clearance delivery; ground issues the clearance and must accept the readback.
-    assert "READBACK  clearance.ifr correct" in after(replay, "Clear to Phoenix Sky Harbor as filed")[0]
+    assert re.search(r"READBACK  clearance\.ifr\w* correct", after(replay, "Clear to Phoenix Sky Harbor as filed")[0])
 
 
 def test_a_repeated_readback_gets_no_reply(replay):

@@ -242,19 +242,23 @@ def format_airport(airport) -> str:
 
 
 def _cmd_atc(args: argparse.Namespace) -> int:
-    from localtc.app import build_engine, ollama_backend
-    from localtc.config import FlightConfig
+    from localtc.app import build_engine, ollama_backend, warm_up
+    from localtc.config import FlightConfig, with_recorded
     from localtc.scenario import Scenario, ScenarioMeta, load_scenario, run
 
     cfg = load_config(args.config)
     if args.scenario:
         scenario, base = load_scenario(args.scenario), Path(args.scenario).parent
-    elif args.path and args.copilot:
+    elif args.path and (args.copilot or args.pilot == "recorded"):
+        flight, atc = FlightConfig(), cfg.atc
+        if args.pilot == "recorded":
+            recorded = with_recorded(cfg, Recording(args.path).header.config)
+            flight, atc = recorded.flight, recorded.atc
         scenario = Scenario(scenario=ScenarioMeta(recording=str(Path(args.path).resolve()), airports=[]),
-                            flight=FlightConfig(), atc=cfg.atc)
+                            flight=flight, atc=atc)
         base = Path.cwd()
     else:
-        print("localtc atc: give --scenario, or a recording and --copilot", file=sys.stderr)
+        print("localtc atc: give --scenario, or a recording and --copilot or --pilot recorded", file=sys.stderr)
         return 2
     if args.destination:
         scenario.flight.destination = args.destination
@@ -269,9 +273,11 @@ def _cmd_atc(args: argparse.Namespace) -> int:
         if not backend.status().reachable:
             print(f"localtc atc: Ollama isn't running at {cfg.llm.base_url}", file=sys.stderr)
             return 2
+        warm_up(backend)  # a cold model times out on the first calls
         engine = build_engine(cfg, backend)
         interpreter, phraser = engine.interpreter, engine.phraser
-    result = run(scenario, base, recording=args.path, interpreter=interpreter, phraser=phraser, copilot=args.copilot)
+    result = run(scenario, base, recording=args.path, interpreter=interpreter, phraser=phraser, copilot=args.copilot,
+                 recorded_pilot=args.pilot == "recorded")
     sys.stdout.write(result.transcript)
     if args.snapshot:
         print(msgspec.json.format(msgspec.json.encode(result.engine.snapshot()), indent=2).decode())
@@ -589,6 +595,8 @@ def build_parser() -> argparse.ArgumentParser:
     atc.add_argument("--callsign", help="callsign to use instead of the sim's")
     atc.add_argument("--airports", action="append", help="folder of <ICAO>.json airport files (repeatable)")
     atc.add_argument("--llm", choices=["off", "live"], default="off", help="use the live language model (Ollama)")
+    atc.add_argument("--pilot", choices=["recorded"],
+                     help="replay the pilot's recorded calls (voice or typed) and let today's ATC answer them")
     atc.add_argument("--snapshot", action="store_true", help="print the final session snapshot as JSON")
     atc.set_defaults(func=_cmd_atc)
 

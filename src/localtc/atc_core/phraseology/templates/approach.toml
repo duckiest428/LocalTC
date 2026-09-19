@@ -6,8 +6,16 @@ readback = { required = ["altitude"] }
 pilot_readback = "Descend and maintain {altitude}, expect {approach}, {callsign_short}."
 
 [[template]]
+id = "approach.maintain"
+controller = "approach"
+text = ["{callsign}, {station}, maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, expect {approach}, {callsign_short}."
+
+# The frequency is what matters on a busy final; repeating the approach name is welcome, not required.
+[[template]]
 id = "approach.cleared"
 controller = "approach"
 text = ["{callsign}, cleared {approach} approach, contact {station} {frequency}."]
-readback = { required = ["approach", "frequency"] }
+readback = { required = ["frequency"], optional = ["approach"] }
 pilot_readback = "Cleared {approach} approach, {station} {frequency}, {callsign_short}."

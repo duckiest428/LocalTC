@@ -94,6 +94,7 @@ localtc run --source replay --no-record --print           # run with config/loca
 # ATC (Phase 1)
 localtc phases tests/fixtures/ifr_kpae_kbfi --destination KBFI --cruise-ft 5000   # phase timeline
 localtc atc --scenario tests/scenarios/ifr_happy_path.toml                        # scripted IFR flight, offline
+localtc atc recordings/<session> --pilot recorded [--llm live]                   # your flight's calls, answered by today's ATC
 localtc replay tests/fixtures/ifr_kpae_kbfi --atc --type --speed 20 \
     --destination KBFI --cruise-ft 5000                   # type pilot calls against a replay
 localtc run --source live --type --destination KBFI --cruise-ft 5000              # fly it live (Windows)
@@ -147,9 +148,11 @@ localtc voice eval                                                       # the 3
 - `joystick`: a yoke or joystick button (`ptt_joystick`, e.g. `joystick:0:button:3`), bound through SimConnect.
 - `enter`: Enter starts and stops a transmission in the LocalTC window. It needs no permissions, which makes it handy for testing.
 
-The microphone stays open and keeps 0.3 s from before the key went down, so the first word isn't cut off. Each clip is saved in the recording (`audio/*.wav`) with its transcript.
+The microphone stays open and keeps 0.3 s from before the key went down, so the first word isn't cut off. Each clip is saved in the recording (`audio/*.wav`) with its transcript. The quiet before and after the words is trimmed before Whisper hears it.
 
-**Whisper** (`[voice] model`, `device`): `auto` picks `small.en` on an NVIDIA GPU and `base.en` on the CPU. On a MacBook Air CPU, base.en takes about 0.4 s for a transmission and small.en about 1.3 s, with fewer errors. `localtc setup` downloads the model to `%LOCALAPPDATA%\LocalTC\models`.
+**Microphone** (`[voice] input_device`, `--mic`): blank uses the system's default input; the log names it at startup. If a transmission comes through silent, LocalTC reopens the microphone, so a default you change in Windows Settings > Sound > Input takes effect on the next press, without a restart. To pin one, give part of its name (`--mic "Headset"`; `localtc voice devices` lists them).
+
+**Whisper** (`[voice] model`, `device`): `auto` picks `small.en` on an NVIDIA GPU and `base.en` on the CPU. On a MacBook Air CPU, base.en takes about 0.4 s for a transmission and small.en about 1.3 s, with fewer errors. With an NVIDIA card, `pip install -e ".[cuda]"` (the installer does this) gets small.en on the GPU. To compare models on your own voice, re-transcribe a flight: `localtc voice eval recordings/<session> --whisper-model small.en`. `localtc setup` downloads the model to `%LOCALAPPDATA%\LocalTC\models`.
 
 **Aviation vocabulary** (`[voice] vocabulary`): Whisper is prompted with standard phraseology and this flight's names: callsign, stations, airports, every runway, and the local taxiways. It is never given the numbers ATC just assigned. Priming it with the expected squawk could make it "hear" the right one when the pilot said another, and hide a readback error. Known mishearings are corrected afterwards: "whole short", "decent and maintain", "1-2000" for one two thousand, and "12,000,000 minutes" for "12,000, one zero minutes". On the spoken edge cases the prompt halves the word error rate (51% to 25%).
 

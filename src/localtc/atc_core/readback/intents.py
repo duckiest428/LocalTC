@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from localtc.atc_core.readback.extract import _find_phrase, _has_any, _number, altitudes, hold_short, runways
+from localtc.atc_core.readback.extract import _find_phrase, _has_any, _number, _runway_at, altitudes, hold_short, runways
 from localtc.atc_core.readback.normalize import Token
 
 EMERGENCY = "emergency"
@@ -37,7 +37,14 @@ def _reported_altitudes(tokens: list[Token]) -> list[int]:
 
 
 def _any_runway(tokens: list[Token]) -> str | None:
-    """A runway mentioned in a report ("holding short runway 34L", "clear of 14R", "final runway 14R")."""
+    """A runway mentioned in a report ("holding short runway 34L", "clear of 14R", "final runway 14R");
+    after "correction", the corrected one."""
+    for i in reversed(range(len(tokens))):
+        if tokens[i].text == "correction":
+            if found := runways(tokens[i:]) + hold_short(tokens[i:]):
+                return found[0]
+            if (hit := _runway_at(tokens, i + 1)) is not None:  # "..., correction 08"
+                return hit[0]
     return next(iter(runways(tokens) + hold_short(tokens)), None)
 
 
@@ -52,9 +59,11 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add(EMERGENCY)
     if _has_any(tokens, ("say", "again"), ("repeat",), ("didn't", "copy"), ("did", "not", "copy"), ("say", "that", "again")):
         add("say_again")
+    landing = _has_any(tokens, ("clear", "to", "land"), ("cleared", "to", "land"), ("clearance", "to", "land"),
+                       ("landing", "clearance"), ("clear", "for", "landing"), ("cleared", "for", "landing"))
     if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy")) and not _has_any(
         tokens, ("cleared",)
-    ):
+    ) and not landing:
         add("request_ifr_clearance", atis=_atis(tokens))
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"))
     if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of")):
@@ -70,14 +79,17 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     elif hold_short(tokens) and not _has_any(tokens, ("taxi",), ("via",), ("cleared",)):
         # "Tower, holding short runway 06L" is a departure request; a taxi readback names a route instead.
         add("ready_for_departure", runway=_any_runway(tokens))
-    if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final")):
-        add("report_final", runway=_any_runway(tokens))
+    if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",)) or landing:
+        add("report_final", runway=_any_runway(tokens))  # also "are we cleared to land?"
+    if _has_any(tokens, ("request",), ("requesting",)) and (wanted := altitudes(tokens)):
+        add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "requesting 8,000 feet"
     checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
                      ("passing",), ("through",), ("out", "of"))
     if _has_any(tokens, *checkin_words) and not altitudes(tokens):
         reported = _reported_altitudes(tokens)
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None)
-    if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",)):
+    if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
+                                ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day")):
         add("acknowledge")
     return matches
 

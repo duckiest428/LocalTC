@@ -132,7 +132,7 @@ def wind(value: Wind) -> str:
 
 
 def wind_display(value: Wind) -> str:
-    return "calm" if value.speed_kt < 3 else f"{value.direction_mag % 360 or 360:03d}@{value.speed_kt}"
+    return "calm" if value.speed_kt < 3 else f"{value.direction_mag % 360 or 360:03d} at {value.speed_kt}"
 
 
 def approach(value: Approach) -> str:

@@ -28,6 +28,8 @@ def is_question(text: str) -> bool:
     words = [t.text for t in normalize(text) if t.kind == "word"]
     if "?" in text or (words and words[0] in QUESTION_OPENERS):
         return True
+    if "frequency" in words and not any(t.kind == "number" and len(t.text.replace(".", "")) >= 3 for t in normalize(text)):
+        return True  # "request frequency for tower"; a handoff readback has the number in it (a callsign's "69" is not one)
     if "say" in words:  # "say altimeter", but not "say again"
         after = words[words.index("say") + 1 : words.index("say") + 2]
         return bool(after) and after[0] != "again"

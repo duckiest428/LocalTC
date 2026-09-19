@@ -287,6 +287,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     log.info("%s ready (%.1f s)", transcriber.description, seconds)
     capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000)
     capture.start()
+    log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)")
     hints = None
     if engine is not None:
         from localtc.voice import flight_hints

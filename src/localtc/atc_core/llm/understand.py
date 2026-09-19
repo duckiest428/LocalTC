@@ -27,10 +27,11 @@ from typing import Any, Literal
 
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
 from localtc.atc_core.llm.grounding import PHRASE_STEMS, grounded, missing_cue
-from localtc.atc_core.llm.triggers import question_topic
+from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
-from localtc.atc_core.readback.extract import ELEMENTS, normalize_runway, values_equal, without_callsign
+from localtc.atc_core.readback.extract import candidates as find_candidates
+from localtc.atc_core.readback.extract import normalize_runway, values_equal, without_callsign
 from localtc.atc_core.readback.intents import EMERGENCY
 from localtc.atc_core.readback.interpreter import (
     GrammarInterpreter,
@@ -107,6 +108,7 @@ class Answer:
     intent: str = ""
     topic: str = ""
     values: dict[str, Any] = field(default_factory=dict)  # typed, and every one was said
+    guessed: bool = False  # not the model's answer: inferred from the words after its answers failed
 
 
 # --- the prompt -----------------------------------------------------------------------------------------
@@ -239,7 +241,8 @@ def parse_value(element: str, raw: Any) -> Any:
         if not digits.isdigit():
             raise AnswerError(f"{element} {raw!r} is not a number of feet")
         feet = int(digits)
-        feet = feet * 100 if feet < 1000 and value.upper().startswith("FL") else feet
+        # "FL150", or "015" (flight level zero one five: 1,500 ft)
+        feet = feet * 100 if feet < 1000 and (value.upper().startswith("FL") or digits.startswith("0")) else feet
         if not 100 <= feet <= 60000:
             raise AnswerError(f"{element} {raw!r} is out of range")
         return feet
@@ -351,7 +354,9 @@ class LlmInterpreter:
         if self.mode == "off" or (self.mode == "fallback" and reason is None):
             return self._grammar_only(grammar, text, pending, context, reason)
         answer, exchanges = self._ask(text, pending, context, reason)
-        if answer is None:
+        grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback
+        if answer is None or (answer.guessed and grammar_knows):
+            # No usable answer from the model: the grammar's reading, if it has one, beats a guess.
             result = self._grammar_only(grammar, text, pending, context, reason)
         else:
             result = self._merge(grammar, answer, text, pending, context)
@@ -399,11 +404,13 @@ class LlmInterpreter:
             return answer, exchanges
         words = {t.text for t in tokens}
         if exchanges and (topic := question_topic(text)) is not None:
-            return Answer(kind="question", topic=topic), exchanges  # "say the winds": clear enough without the model
+            return Answer(kind="question", topic=topic, guessed=True), exchanges  # "say the winds": clear enough
         if exchanges and intent_errors == len(exchanges) and words & {"request", "requesting"}:
             # Every answer said "a request" and every intent it tried was contradicted by the words:
             # it's a request the engine has no procedure for, which ATC declines.
-            return Answer(kind="request", intent="other"), exchanges
+            return Answer(kind="request", intent="other", guessed=True), exchanges
+        if exchanges and is_question(text):
+            return Answer(kind="question", topic="other", guessed=True), exchanges  # heard fine, just off-script
         return None, exchanges
 
     @staticmethod
@@ -417,6 +424,9 @@ class LlmInterpreter:
 
     def _grammar_only(self, grammar: Interpretation, text: str, pending: PendingReadback | None,
                       context: InterpretContext, reason: str | None) -> Interpretation:
+        if grammar.kind == "unknown" and (topic := question_topic(text)) is not None:
+            return Interpretation(kind="request", intent="question", values={"topic": topic}, confidence=0.6,
+                                  callsign_heard=grammar.callsign_heard, text=text, trigger=reason)
         if grammar.needs_fallback and grammar.intent != EMERGENCY:
             return replace(self.say_again.interpret(text, pending, context), trigger=reason)
         return replace(grammar, trigger=reason)
@@ -457,7 +467,7 @@ class LlmInterpreter:
         missing: list[str] = []
         for element in (*pending.required, *pending.optional):
             expected = pending.expected.get(element, True)
-            candidates = ELEMENTS[element](tokens, expected)
+            candidates = find_candidates(element, tokens, expected)
             from_grammar = next((c for c in candidates if values_equal(element, c, expected)), None)
             from_model = answer.values.get(element)
             if from_grammar is not None:

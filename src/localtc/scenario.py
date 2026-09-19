@@ -153,12 +153,15 @@ def run(
     copilot: str | None = None,
     voice: Any = None,
     on_input: Any = None,
+    recorded_pilot: bool = False,
 ) -> ScenarioResult:
     """Run a scenario; ``base`` is the folder its relative paths start from.
 
     ``voice``: the pilot speaks instead of typing. Its ``speak(text, t)`` returns a clip (``duration_s``,
     ``text`` as heard, ``audio_ref``, ``confidence``); the transmission takes that long, with push-to-talk
     around it. ``on_input``: called with every event the engine is given (to write a recording).
+    ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
+    the current ATC).
     """
     from localtc.app import engine_config
     from localtc.copilot import Copilot, Note, Say, Tune
@@ -269,8 +272,17 @@ def run(
                 continue
             schedule(index, rule, own.t + rule.delay_s, {})
 
-    events = (e for e in Recording(recording or base / scenario.scenario.recording).events() if isinstance(e, SIM_EVENT_TYPES))
+    pilot_types = (PttPressed, PttReleased, Transcript) if recorded_pilot else ()
+    events = (
+        e for e in Recording(recording or base / scenario.scenario.recording).events()
+        if isinstance(e, SIM_EVENT_TYPES) or (isinstance(e, pilot_types) and getattr(e, "source", "") != "copilot")
+    )
     for event in events:
+        if isinstance(event, Transcript):
+            if event.source == "voice":
+                engine.cfg.await_transcripts = True
+            freq = state["last_own"].com1_mhz if state["last_own"] is not None else 0.0
+            result.lines.append(f"[{event.t:8.1f}] PILOT     {speech.frequency_display(freq)}: {event.text}")
         if scenario.scenario.end_t is not None and event.t > scenario.scenario.end_t:
             break
         run_due(event.t)

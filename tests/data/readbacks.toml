@@ -34,6 +34,10 @@ frequency = 124.675
 station = "Paine Tower"
 frequency = 120.2
 
+[slots.land_08]
+runway = "08"
+wind = { direction_mag = 210, speed_kt = 10 }
+
 [slots.climb]
 station = "Seattle Departure"
 altitude = 5000
@@ -227,6 +231,63 @@ missing = ["frequency"]
 
 # --- intents ---------------------------------------------------------------------------------------
 
+# --- KGYR -> KPHX voice flight (2026-09-18) --------------------------------------------------------
+
+# Speech-to-text lost the zero: "12.1" for 120.1.
+[[case]]
+instruction = "ground.handoff_tower"
+slots = "contact_tower"
+text = "Paine Tower on 12.2, 2LT."
+status = "correct"
+
+# "1508": 1,500 misheard; altitudes come in hundreds.
+[[case]]
+instruction = "common.climb"
+slots = "climb"
+text = "Maintain 5008, 2LT."
+status = "correct"
+
+[[case]]
+instruction = "common.climb"
+slots = "climb"
+text = "Maintain 5500, 2LT."
+status = "incorrect"
+mismatched = ["altitude"]
+
+# Digits said one at a time, written with commas.
+[[case]]
+instruction = "common.climb"
+slots = "climb"
+text = "We'll climb to 5, 0, 0, 0, 2LT."
+status = "correct"
+
+# The pilot corrects themself: only the corrected value counts.
+[[case]]
+instruction = "tower.land"
+slots = "land"
+text = "Cleared to land 14 left, correction 14 right, 2LT."
+status = "correct"
+
+# A side on a runway that has none still names it.
+[[case]]
+instruction = "tower.land"
+slots = "land_08"
+text = "Clear to land, 08 left. Correction 08, 2LT."
+status = "correct"
+
+[[case]]
+instruction = "tower.land"
+slots = "land_08"
+text = "Cleared to land 08 left, 2LT."
+status = "correct"
+
+# Asking for something isn't a readback, even with an altitude in it.
+[[case]]
+instruction = "common.climb"
+slots = "climb"
+text = "Negative, request to maintain 3000."
+status = "no_match"
+
 [[intent]]
 text = "Paine Clearance, Skyhawk 172LT, IFR to Boeing Field, with information Bravo"
 intent = "request_ifr_clearance"
@@ -280,3 +341,28 @@ intent = "acknowledge"
 [[intent]]
 text = "the quick brown fox"
 intent = ""
+
+# --- KGYR -> KPHX voice flight (2026-09-18) ---
+
+[[intent]]
+text = "2LT, are we clear to land? We are on short final right now."
+intent = "report_final"
+
+[[intent]]
+text = "Boeing Tower, Skyhawk 2LT, inbound runway 14R"
+intent = "report_final"
+values = { runway = "14R" }
+
+[[intent]]
+text = "Clear to land, 08 left. Correction 08, 2LT."
+intent = "report_final"
+values = { runway = "08" }
+
+[[intent]]
+text = "Negative, request to maintain 1500."
+intent = "request_altitude"
+values = { altitude = 1500 }
+
+[[intent]]
+text = "Thanks, 2LT"
+intent = "acknowledge"

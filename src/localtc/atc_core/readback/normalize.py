@@ -43,7 +43,12 @@ class Token:
 
 
 def normalize(text: str) -> list[Token]:
-    raw = TOKEN_RE.findall(text.lower().replace("-", " ").replace("x ray", "x-ray"))
+    lowered = text.lower().replace("-", " ").replace("x ray", "x-ray")
+    matches = list(TOKEN_RE.finditer(lowered))
+    raw = [m.group() for m in matches]
+    # Digits glued to letters ("2LT", "EXP69") belong to a word; they're never one of a list of digits.
+    glued = {i for i in range(len(matches) - 1) if matches[i].end() == matches[i + 1].start() and raw[i][0].isdigit()
+             and raw[i + 1][0].isalpha()}
     tokens: list[Token] = []
     run: list[str] = []
 
@@ -61,6 +66,8 @@ def normalize(text: str) -> list[Token]:
         )
         if word == "oh" and not run:
             numeric = False  # "oh" only counts as zero inside a number
+        if word == "," and i + 1 not in glued and _digit_list(run, raw, i):
+            continue  # Whisper writes digits said one by one as "3, 2, 0, 0": that's 3200
         if word == "and" and run and run[-1] == "hundred" and i + 1 < len(raw) and (
             raw[i + 1] in TENS_WORDS or raw[i + 1] in TEEN_WORDS or raw[i + 1] in DIGIT_WORDS
         ):
@@ -77,6 +84,35 @@ def normalize(text: str) -> list[Token]:
             tokens.append(Token("word", word))
     flush()
     return tokens
+
+
+def _single_digit(word: str) -> bool:
+    return (len(word) == 1 and word.isdigit()) or word in DIGIT_WORDS
+
+
+def _digit_list(run: list[str], raw: list[str], comma: int) -> bool:
+    """True if the comma at ``raw[comma]`` sits inside digits said one at a time and written with
+    commas between them: "3, 2, 0, 0" or "0, 8". Not "8, 3 miles" (two numbers), and not
+    "one two three four, two lima tango" (a group, then a new number)."""
+    if not run or not _single_digit(raw[comma - 1]) or comma + 1 >= len(raw) or not _single_digit(raw[comma + 1]):
+        return False
+    count, k = 0, comma - 1  # digits before, each separated by a comma
+    while k >= 0 and _single_digit(raw[k]):
+        count += 1
+        if k >= 1 and _single_digit(raw[k - 1]):
+            return False  # "... three four, two": the comma ends a spoken group
+        if k >= 2 and raw[k - 1] == ",":
+            k -= 2
+        else:
+            break
+    j = comma + 1  # and after
+    while j < len(raw) and _single_digit(raw[j]):
+        count += 1
+        if j + 2 < len(raw) and raw[j + 1] == ",":
+            j += 2
+        else:
+            break
+    return count >= 3 or raw[comma - 1] in ("0", "zero", "oh")
 
 
 def _is_digitish(word: str) -> bool:
@@ -104,7 +140,8 @@ def _numbers(run: list[str]) -> list[str]:
         # ("runway 34 120.2"), but short written groups merge ("squawk 45 21").
         if word[0].isdigit() and current and current[-1][0].isdigit():
             prev = current[-1].replace(",", "")
-            if "." in prev or "." in word or len(prev) > 2 or len(word.replace(",", "")) > 2:
+            one_by_one = len(word) == 1 and all(len(w) == 1 and w.isdigit() for w in current)  # "3 2 0 0"
+            if not one_by_one and ("." in prev or "." in word or len(prev) > 2 or len(word.replace(",", "")) > 2):
                 numbers.append([])
         # Digits spoken after a written number are a new number too
         # ("expect 7,000 one zero minutes after" is 7000 then 10, not 700010).

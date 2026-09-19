@@ -70,7 +70,8 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
 # Words that must appear for the model's intent to be believed. A small model reaches for
 # request_altitude whenever an altitude is mentioned, including plain check-ins.
 REQUEST_WORDS = {"request", "requesting", "could", "can", "like", "want", "chance", "higher", "lower", "unable"}
-ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", "level", "thousand", "hundred"}
+ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", "level", "thousand", "hundred", "maintain",
+                  "feet"}
 INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one word
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),

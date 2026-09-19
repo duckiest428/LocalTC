@@ -88,6 +88,7 @@ class SessionState:
     assignments: Assignments = field(default_factory=Assignments)
     clearances: dict[str, Clearance] = field(default_factory=dict)
     pending: PendingReadback | None = None
+    read_back: PendingReadback | None = None  # the last instruction read back correctly
     exchanges: deque = field(default_factory=lambda: deque(maxlen=30))
     alerts: list[AtcAlert] = field(default_factory=list)
     issued: dict[str, IssuedInstruction] = field(default_factory=dict)  # last issue of each instruction id

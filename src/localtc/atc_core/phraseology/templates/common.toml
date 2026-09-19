@@ -75,6 +75,13 @@ readback = { required = ["altitude"] }
 pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
 
 [[template]]
+id = "common.maintain"
+controller = "any"
+text = ["{callsign}, maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, {callsign_short}."
+
+[[template]]
 id = "common.say_altitude"
 controller = "any"
 text = ["{callsign}, say requested altitude."]

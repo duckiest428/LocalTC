@@ -7,12 +7,15 @@ returns the same ``Interpretation``, so the dialogue engine doesn't care which o
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from localtc.atc_core.readback.extract import ELEMENTS, values_equal, without_callsign
+from localtc.atc_core.readback.extract import ELEMENTS, candidates, values_equal, without_callsign
 from localtc.atc_core.readback.intents import EMERGENCY, match_intents, resolve
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
 
 Kind = Literal["readback", "request", "unknown"]
+# A transmission with one of these asks for something; it isn't a readback even if it repeats a value
+# ("negative, request to maintain 1,500").
+ASKING = {"request", "requesting", "unable"}
 Status = Literal["correct", "incorrect", "incomplete", "no_match"]
 
 
@@ -75,7 +78,8 @@ class GrammarInterpreter:
                 kind="request", intent=EMERGENCY, callsign_heard=callsign_heard, confidence=1.0, needs_fallback=True, text=text
             )
 
-        if pending is not None:
+        words = {t.text for t in tokens if t.kind == "word"}
+        if pending is not None and not words & ASKING:
             readback = self._readback(tokens, pending, context, callsign_heard, text)
             if readback is not None:
                 return readback
@@ -103,17 +107,17 @@ class GrammarInterpreter:
         values_only = without_callsign(tokens, context.callsign)
         for element in (*pending.required, *pending.optional):
             expected = pending.expected.get(element, True)
-            candidates = ELEMENTS[element](values_only, expected)
-            if not candidates:
+            found = candidates(element, values_only, expected)
+            if not found:
                 if element in pending.required:
                     missing.append(element)
                 continue
             present += 1
-            match = next((c for c in candidates if values_equal(element, c, expected)), None)
+            match = next((c for c in found if values_equal(element, c, expected)), None)
             if match is not None:
                 heard[element] = match
             else:
-                mismatched[element] = candidates[0]
+                mismatched[element] = found[0]
         if present == 0:
             return None  # not a readback of the pending instruction
         if context.strict_callsign and not callsign_heard:

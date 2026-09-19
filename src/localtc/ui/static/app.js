@@ -505,9 +505,9 @@ const Settings = {
 
       <div class="card">
         <h3>Sim</h3>
-        <div class="row"><label>Connect to<select id="s-source"><option value="live" ${st.source.kind === "live" ? "selected" : ""}>MSFS 2024 (live)</option>
+        <div class="row" ${st.ui.dev_mode ? "" : "hidden"}><label>Connect to (developer mode)<select id="s-source"><option value="live" ${st.source.kind === "live" ? "selected" : ""}>MSFS 2024 (live)</option>
           <option value="replay" ${st.source.kind === "replay" ? "selected" : ""}>A recorded flight (replay, for development)</option></select></label></div>
-        <div class="row" ${st.source.kind === "replay" ? "" : "hidden"}><label>Recording<input id="s-replay" value="${esc(st.replay.path)}"></label>
+        <div class="row" ${st.ui.dev_mode && st.source.kind === "replay" ? "" : "hidden"}><label>Recording<input id="s-replay" value="${esc(st.replay.path)}"></label>
           <label style="flex:0 1 100px">Speed<input id="s-replay-speed" type="number" step="0.5" min="0" value="${st.replay.speed}"></label></div>
         <label class="check-row"><input type="checkbox" id="s-tiles" ${st.ui.map_tiles ? "checked" : ""}> Map background from OpenStreetMap (needs the internet)</label>
       </div>

@@ -145,7 +145,7 @@ class AppController:
     def state(self) -> dict:
         return {
             "status": self.status, "detail": self.status_detail,
-            "source": self.cfg.source.kind, "plan": msgspec.to_builtins(self.plan) if self.plan else None,
+            "source": self.source_kind, "plan": msgspec.to_builtins(self.plan) if self.plan else None,
             "flight": self.flight, "copilot": self.live.copilot_mode if self.live else self.cfg.copilot.mode,
             "copilot_mode": self.cfg.ui.copilot,
             "muted": self.muted, "dev_mode": self.cfg.ui.dev_mode, "voice": self.cfg.voice.enabled,
@@ -173,9 +173,16 @@ class AppController:
     def flight_config(self) -> Config:
         """The config a flight starts with: the settings, plus the flight plan."""
         cfg = msgspec.convert(msgspec.to_builtins(self.cfg), Config)
+        cfg.source.kind = self.source_kind
         if self.plan is not None:
             apply_plan(self.plan, cfg.flight)
         return cfg
+
+    @property
+    def source_kind(self) -> str:
+        """The app always flies the sim. Replaying a recording is a developer-mode tool only: config/localtc.toml's
+        ``source = "replay"`` is the command line's development default and must never reach a pilot."""
+        return self.cfg.source.kind if self.cfg.ui.dev_mode else "live"
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -187,6 +194,11 @@ class AppController:
         self.radio.clear()
         self.publish("radio_history", [])
         self._set_status("starting", "Loading the models ...")
+        if cfg.source.kind == "replay":
+            self.system(f"Developer mode: replaying the recording {cfg.replay.path}, not the sim "
+                        "(Quick Settings > Sim to change)", "warn")
+        else:
+            self.system("Connecting to MSFS 2024 ...")
         self._task = asyncio.create_task(self._run(cfg, record))
 
     async def _run(self, cfg: Config, record: bool) -> None:

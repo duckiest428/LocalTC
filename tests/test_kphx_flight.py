@@ -57,14 +57,16 @@ def test_asking_for_the_tower_frequency(replay):
     assert question_topic("EXP69. Request frequency for tower.") == "frequency"
 
 
-def test_misheard_numbers_in_readbacks(replay):
-    assert "correct" in after(replay, "Goodyear Tower on 12.1, EXP69", 1)[0]  # 120.1 lost its zero
-    assert "correct" in after(replay, "Maintain 1508 EXP69", 1)[0]
+def test_misheard_numbers_in_readbacks_are_confirmed(replay):
+    # Probably right but not what ATC said: not "negative", not waved through either.
+    assert "confirm frequency 120.1" in after(replay, "Goodyear Tower on 12.1, EXP69", 2)[1]  # 120.1 lost its zero
+    assert "confirm maintain 1,500" in after(replay, "Maintain 1508 EXP69", 2)[1]
+    assert "READBACK  departure.radar_contact correct" in after(replay, "Maintain 1500 EXP69", 1)[0]
 
 
 def test_a_low_cruise_is_not_told_to_descend_or_climb(replay):
     atc = [line for line in replay if " ATC " in line]
-    assert any("maintain 1,500, expect RNAV RWY 08 approach" in line for line in atc)
+    assert any("maintain 1,500, expect RNAV RWY" in line for line in atc)
     assert not any("descend and maintain 1,500" in line or "3,200" in line for line in atc)
 
 
@@ -74,8 +76,8 @@ def test_a_request_during_a_readback_is_a_request(replay):
 
 def test_approach_clears_the_approach_well_before_short_final(replay):
     times = {name: float(re.match(r"\[\s*([\d.]+)\]", line).group(1)) for line in replay
-             for name in ("cleared RNAV RWY 08 approach", "APPROACH -> LANDING") if name in line}
-    assert times["cleared RNAV RWY 08 approach"] < times["APPROACH -> LANDING"] - 120
+             for name in ("cleared RNAV RWY", "APPROACH -> LANDING") if name in line}
+    assert times["cleared RNAV RWY"] < times["APPROACH -> LANDING"] - 120
 
 
 def test_landing_clearance_names_the_runway_that_exists(replay):

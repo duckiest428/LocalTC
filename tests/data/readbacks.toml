@@ -233,19 +233,19 @@ missing = ["frequency"]
 
 # --- KGYR -> KPHX voice flight (2026-09-18) --------------------------------------------------------
 
-# Speech-to-text lost the zero: "12.1" for 120.1.
+# Speech-to-text lost the zero: "12.1" for 120.1. Probably right: ATC asks to confirm.
 [[case]]
 instruction = "ground.handoff_tower"
 slots = "contact_tower"
 text = "Paine Tower on 12.2, 2LT."
-status = "correct"
+status = "unclear"
 
-# "1508": 1,500 misheard; altitudes come in hundreds.
+# "1508": 1,500 misheard (altitudes come in hundreds): confirm.
 [[case]]
 instruction = "common.climb"
 slots = "climb"
 text = "Maintain 5008, 2LT."
-status = "correct"
+status = "unclear"
 
 [[case]]
 instruction = "common.climb"
@@ -268,7 +268,7 @@ slots = "land"
 text = "Cleared to land 14 left, correction 14 right, 2LT."
 status = "correct"
 
-# A side on a runway that has none still names it.
+# A side on a runway that has none: confirm. A correction to the right one: fine.
 [[case]]
 instruction = "tower.land"
 slots = "land_08"
@@ -279,7 +279,7 @@ status = "correct"
 instruction = "tower.land"
 slots = "land_08"
 text = "Cleared to land 08 left, 2LT."
-status = "correct"
+status = "unclear"
 
 # Asking for something isn't a readback, even with an altitude in it.
 [[case]]

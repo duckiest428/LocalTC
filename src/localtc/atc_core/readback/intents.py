@@ -87,7 +87,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
                      ("passing",), ("through",), ("out", "of"))
     if _has_any(tokens, *checkin_words) and not altitudes(tokens):
         reported = _reported_altitudes(tokens)
-        add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None)
+        add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
+            atis=_atis(tokens))
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day")):
         add("acknowledge")

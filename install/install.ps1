@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
-    Installs LocalTC on Windows: Python, LocalTC with Whisper speech-to-text, GPU support when there's an
-    NVIDIA card, Ollama with its language model, and the downloaded models, so flights work offline.
+    Installs LocalTC on Windows: Python, LocalTC with Whisper speech-to-text and Piper voices for ATC, GPU
+    support when there's an NVIDIA card, Ollama with its language model, and the downloaded models, so flights
+    work offline.
 
 .DESCRIPTION
     Run it from the LocalTC folder (the one with pyproject.toml), in PowerShell:
@@ -9,7 +10,7 @@
         powershell -ExecutionPolicy Bypass -File install\install.ps1
 
     It is safe to run again: finished steps are skipped. Nothing is sent anywhere; downloads come from
-    python.org/winget, PyPI, Hugging Face (Whisper) and ollama.com.
+    python.org/winget, PyPI, Hugging Face (Whisper model, Piper voice) and ollama.com.
 
 .PARAMETER Cpu
     Don't install GPU support even if an NVIDIA card is present.
@@ -89,13 +90,13 @@ if (-not $Python) {
 Ok "Using $Python"
 
 # --- 2. LocalTC and Whisper ------------------------------------------------------------------------------
-Step "LocalTC with Whisper speech-to-text"
+Step "LocalTC with Whisper speech-to-text and Piper ATC voices"
 if (-not (Test-Path $VenvPython)) {
     Invoke-Checked $Python @("-m", "venv", $Venv) "Creating the Python environment"
 }
 Invoke-Checked $VenvPython @("-m", "pip", "install", "--upgrade", "--quiet", "pip") "Updating pip"
 Invoke-Checked $VenvPython @("-m", "pip", "install", "--quiet", "-e", $Root) "Installing LocalTC"
-Ok "Installed (Whisper, microphone and push-to-talk support included)"
+Ok "Installed (Whisper, Piper, microphone and push-to-talk support included)"
 
 # --- 3. GPU ---------------------------------------------------------------------------------------------------
 Step "Graphics card"
@@ -187,3 +188,4 @@ Write-Host "`nLocalTC is installed." -ForegroundColor Green
 Write-Host "  Start a flight:   LocalTC shortcut, or: $Launcher --destination <ICAO> --cruise-ft <feet>"
 Write-Host "  Push-to-talk:     hold Right Ctrl (change [voice] ptt_key in config\localtc.toml)"
 Write-Host "  Check your mic:   .venv\Scripts\localtc voice test"
+Write-Host "  Hear ATC's voice: .venv\Scripts\localtc tts say"

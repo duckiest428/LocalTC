@@ -160,6 +160,38 @@ The microphone stays open and keeps 0.3 s from before the key went down, so the 
 
 **Testing without a sim or a microphone.** `tests/fixtures/voice_kpae` is a recording of the KPAE departure flown by voice, made with macOS speech voices (several accents, radio filtering, cockpit noise; `tools/make_voice_fixture.py`). `tests/fixtures/voice_clips` holds the 34 edge cases, spoken. `pytest -m whisper -s` checks that the departure flies identically from Whisper's transcripts: every readback correct, each under 0.7 s. It also runs the spoken edge cases; with Ollama, 30 of 34 are understood.
 
+## ATC's voice (Phase 4)
+
+```bash
+localtc tts say                                   # hear a tower transmission
+localtc tts say "..." --station "Phoenix Approach" --out approach.wav
+localtc tts devices                               # speakers and headsets
+localtc run ... --no-tts                          # text only
+```
+
+ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for Windows, macOS and Linux, so there's no separate binary to install). The voice is `en_US-libritts_r-medium`: one 80 MB download (`localtc setup`, or automatically on the first flight) with 904 speakers. Every station gets its own speaker, and the same one every time: Phoenix Tower never sounds like Phoenix Approach. The pool is the 40 speakers Whisper understood best reading ATC phraseology over the radio (`tools/pick_speakers.py`). Synthesis takes about 0.3 s for a 10 s clearance.
+
+**Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
+
+**Pacing.** Transmissions never overlap, and the ATC engine knows how long its words take, so it doesn't start the next call (or answer the copilot) until the frequency is quiet.
+
+## ATIS and weather
+
+MSFS doesn't give add-ons its ATIS or METARs, only the weather where the aircraft is, so LocalTC builds each airport's ATIS itself: wind (with gusts), visibility and precipitation, temperature, altimeter, the approach and runway in use, and cautions (gusty winds, strong crosswind, low visibility, wet runway, high density altitude). Surface weather is sampled on or near the airport. Until you get to the destination, its ATIS uses the freshest surface sample from an airport within 150 nm; the altimeter is always current.
+
+- Tune an ATIS frequency and it's printed in the console and read aloud on a loop until you tune away.
+- The letter advances when the weather really changes (at most every 10 minutes). If you're on ground, tower or approach when it does, ATC tells you: "information Charlie is now current, altimeter 29.90".
+- **The runway in use comes from the ATIS**, for taxi clearances and arrivals alike, and it only changes when the tailwind on it passes 5 kt.
+- ATC uses it: a taxi clearance adds "information Charlie is current, altimeter 29.92" if you didn't report the current letter ("with information Charlie"). The takeoff clearance gives the wind and any cautions. Descents give the destination altimeter, and approach checks you have the current ATIS. The landing clearance adds cautions.
+
+## Readback strictness
+
+Exact readbacks pass. A wrong value gets "negative, ..." and a missing one "read back ...". A value that's probably right but misheard or misspoken gets **"confirm ..."**: a frequency missing a digit ("12.1" for 120.1), "1508" for 1,500, or "08 left" for runway 08. Answer "affirm" or read it again. Self-corrections count: "cleared to land 08 left, correction 08" is fine.
+
+## The flight console
+
+`localtc run` prints the radio, not the plumbing: ATC's words wrapped under the station name, your transmissions, COM1 changes, ATIS, phase changes, readback results and alerts. Timings, language model calls and push-to-talk edges go to `%LOCALAPPDATA%\LocalTC\logs\localtc.log`. `-v` shows them on the console, and `--events` prints the raw event stream.
+
 ## Copilot
 
 ```bash

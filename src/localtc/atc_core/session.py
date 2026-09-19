@@ -48,7 +48,8 @@ class Assignments:
     taxi_route: tuple[str, ...] = ()
     departure_mhz: float | None = None
     approach: str | None = None  # display, e.g. "ILS RWY 14R"
-    atis: str | None = None
+    atis: str | None = None  # the origin's ATIS letter the pilot reported
+    arrival_atis: str | None = None  # the destination's
 
 
 @dataclass

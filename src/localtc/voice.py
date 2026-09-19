@@ -13,7 +13,7 @@ from localtc.atc_core.phraseology import speech
 from localtc.atc_core.readback.normalize import normalize
 from localtc.replay import Recording
 from localtc.sim_api import SIM_EVENT_TYPES, BusEvent, PttPressed, PttReleased, Transcript
-from localtc.stt.audio import read_wav
+from localtc.stt.audio import read_wav, trim_silence
 from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup, hotwords
 
 PHONETIC_WORDS = {k: v.capitalize() for k, v in speech.PHONETIC.items()}
@@ -123,7 +123,7 @@ def transcribe_recording(recording: Recording, transcriber: Any, *, engine: AtcE
         if isinstance(event, PttReleased) and event.t in clips:
             clip = clips[event.t]
             hints = flight_hints(engine) if (engine is not None and vocabulary) else VocabularyHints()
-            result = transcriber.transcribe(read_wav(clip.audio), prompt=build_prompt(hints) if vocabulary else "",
+            result = transcriber.transcribe(trim_silence(read_wav(clip.audio)), prompt=build_prompt(hints) if vocabulary else "",
                                             hotwords=hotwords(hints) if vocabulary else "")
             clip.heard, clip.confidence, clip.stt_ms = fixup(result.text), result.confidence, result.latency_ms
             if engine is not None:

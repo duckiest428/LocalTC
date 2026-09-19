@@ -31,7 +31,7 @@ from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
 from localtc.atc_core.readback.extract import candidates as find_candidates
-from localtc.atc_core.readback.extract import normalize_runway, values_equal, without_callsign
+from localtc.atc_core.readback.extract import normalize_runway, values_close, values_equal, without_callsign
 from localtc.atc_core.readback.intents import EMERGENCY
 from localtc.atc_core.readback.interpreter import (
     GrammarInterpreter,
@@ -464,6 +464,7 @@ class LlmInterpreter:
                   text: str) -> Interpretation | None:
         heard: dict[str, Any] = {}
         mismatched: dict[str, Any] = {}
+        unclear: dict[str, Any] = {}
         missing: list[str] = []
         for element in (*pending.required, *pending.optional):
             expected = pending.expected.get(element, True)
@@ -474,21 +475,23 @@ class LlmInterpreter:
                 heard[element] = from_grammar
             elif from_model is not None and values_equal(element, from_model, expected):
                 heard[element] = from_model
+            elif (close := next((c for c in candidates if values_close(element, c, expected)), None)) is not None:
+                unclear[element] = close
             elif candidates:
                 mismatched[element] = candidates[0]
             elif from_model is not None:
                 mismatched[element] = from_model
             elif element in pending.required:
                 missing.append(element)
-        if not heard and not mismatched:
+        if not heard and not mismatched and not unclear:
             return None
         if "callsign" in grammar.missing:
             missing.append("callsign")
-        status: Status = "incorrect" if mismatched else ("incomplete" if missing else "correct")
+        status: Status = "incorrect" if mismatched else ("unclear" if unclear else ("incomplete" if missing else "correct"))
         total = len(pending.required) + len(pending.optional)
         return Interpretation(
             kind="readback", intent=pending.instruction_id, values=heard, status=status, missing=tuple(missing),
-            mismatched=mismatched, callsign_heard=grammar.callsign_heard,
-            confidence=(len(heard) + len(mismatched)) / total if total else 1.0,
+            mismatched=mismatched, unclear=unclear, callsign_heard=grammar.callsign_heard,
+            confidence=(len(heard) + len(mismatched) + len(unclear)) / total if total else 1.0,
             needs_fallback=False, source="llm", text=text,
         )

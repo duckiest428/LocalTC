@@ -136,7 +136,8 @@ class Copilot:
         if phase == "PARKED" and "ifr" not in st.clearances and st.flight.destination:
             self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)
         elif phase == "PARKED" and self._cleared("ifr") and "taxi" not in st.clearances:
-            self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi")
+            self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
+                            + self._with_atis(st.flight.origin))
         elif phase == "RUNWAY_HOLD" and not ({"takeoff", "line_up"} & st.clearances.keys()):
             if tuned is not None and tuned.controller == "ground" and engine.facility("tower") is not None:
                 return  # ground hands off to tower on its own at the hold short line
@@ -152,6 +153,11 @@ class Copilot:
             after = self._push("tune", t, facility=facility).due + 1.0
         self._push("say", t, text=text(facility), facility=facility, after=after)
 
+    def _with_atis(self, icao: str | None) -> str:
+        """", with information Charlie": the copilot listens to the ATIS first."""
+        info = self.engine.current_atis(icao)
+        return f", with information {speech.letter(info.letter).capitalize()}" if info is not None else ""
+
     def _ifr_request(self, f: Facility) -> str:
         return f"{f.station}, {self._callsign()}, IFR to {self._destination()}, ready to copy"
 
@@ -166,7 +172,7 @@ class Copilot:
         if f.controller == "clearance":
             return self._ifr_request(f)
         if f.controller == "ground" and st.phase in ("PARKED", "TAXI_OUT"):
-            return f"{f.station}, {cs}, ready to taxi"
+            return f"{f.station}, {cs}, ready to taxi" + self._with_atis(st.flight.origin)
         if f.controller == "tower" and st.phase in ("RUNWAY_HOLD", "TAXI_OUT"):
             return self._ready_for_departure(f)
         if f.controller == "tower":
@@ -182,10 +188,11 @@ class Copilot:
             return f"{f.station}, {cs}, with you"
         alt = int(round(own.alt_indicated_ft / 100.0) * 100)
         assigned = st.assignments.altitude_ft
+        atis = self._with_atis(st.flight.destination) if f.controller == "approach" else ""
         if assigned and abs(assigned - alt) > 300:
             verb = "climbing" if assigned > alt else "descending"
-            return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}"
-        return f"{f.station}, {cs}, level {alt:,}"
+            return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}" + atis
+        return f"{f.station}, {cs}, level {alt:,}" + atis
 
     # --- queue ------------------------------------------------------------------------------------------
 

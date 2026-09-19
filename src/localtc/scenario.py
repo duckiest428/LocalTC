@@ -154,6 +154,7 @@ def run(
     voice: Any = None,
     on_input: Any = None,
     recorded_pilot: bool = False,
+    speech_s_per_char: float = 0.0,
 ) -> ScenarioResult:
     """Run a scenario; ``base`` is the folder its relative paths start from.
 
@@ -167,6 +168,7 @@ def run(
     from localtc.copilot import Copilot, Note, Say, Tune
 
     engine = AtcEngine(engine_config(scenario.flight, scenario.atc), interpreter=interpreter, phraser=phraser)
+    engine.cfg.speech_s_per_char = speech_s_per_char  # as with voice out: ATC's words take time to say
     if voice is not None:
         engine.cfg.await_transcripts = True
     speaking: list[tuple[float, BusEvent]] = []  # push-to-talk releases and transcripts still to come

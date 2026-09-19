@@ -10,7 +10,7 @@
 [    20.0] READBACK  clearance.ifr correct
 [    22.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct.
 [    25.0] PILOT     121.8: Paine Ground, two lima tango, ready to taxi.
-[    28.0] ATC       Paine Ground 121.8: Cessna 2LT, runway 34L, taxi via C, A, A1.
+[    28.0] ATC       Paine Ground 121.8: Cessna 2LT, runway 34L, taxi via C, A, A1, information Oscar is current, altimeter 29.92.
 [    30.0] PILOT     121.8: Taxi via charlie, alpha, alpha one, two lima tango.
 [    30.0] READBACK  ground.taxi_out incomplete missing=runway
 [    33.0] ATC       Paine Ground 121.8: Cessna 2LT, read back runway 34L.
@@ -25,7 +25,7 @@
 [   356.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
 [   359.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.
 [   363.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
-[   365.0] ATC       Paine Tower 120.2: N172LT, fly runway heading, runway 34L, cleared for takeoff.
+[   365.0] ATC       Paine Tower 120.2: N172LT, fly runway heading, runway 34L, cleared for takeoff, wind 130 at 3.
 [   367.0] PILOT     120.2: Runway three four left, two lima tango.
 [   367.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
 [   370.0] ATC       Paine Tower 120.2: Cessna 2LT, read back cleared for takeoff.

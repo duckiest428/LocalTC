@@ -20,6 +20,7 @@ import msgspec
 from localtc.airports import AirportCache
 from localtc.bus import EventBus, Subscription, pump
 from localtc.config import AtcConfig, Config, ConfigError, FlightConfig, LlmConfig
+from localtc.console import CONSOLE
 from localtc.recorder import Recorder
 from localtc.recorder.format import AUDIO_DIR
 from localtc.replay import ReplaySource
@@ -103,8 +104,11 @@ def warm_up(backend, timeout_s: float = 120.0) -> float | None:
     if reply.text is None:
         log.warning("Language model warm-up failed (%s); the first calls may be slow or use the grammar", reply.error)
         return None
-    log.info("Language model %s ready (warm-up %.1f s)", backend.model, reply.latency_ms / 1000)
+    log.info("Language model %s ready (warm-up %.1f s)", backend.model, reply.latency_ms / 1000, extra=CONSOLE)
     return reply.latency_ms / 1000
+
+
+PIPER_S_PER_CHAR = 0.063  # Piper at rate 1, measured over ATC phraseology (tools/pick_speakers.py)
 
 
 def build_engine(cfg: Config, backend=None):  # noqa: C901
@@ -121,6 +125,8 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
         phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
+    if cfg.tts.enabled:
+        engine.cfg.speech_s_per_char = PIPER_S_PER_CHAR / cfg.tts.rate  # ATC waits for its own words to finish
     return engine
 
 
@@ -168,6 +174,7 @@ async def run_session(
     consumers: list[asyncio.Task] = []
     pump_task: asyncio.Task | None = None
     typed_task: asyncio.Task | None = None
+    voice = speaker = None
     try:
         if record:
             recorder = Recorder.create(
@@ -199,8 +206,11 @@ async def run_session(
 
                 copilot = Copilot(engine, mode=cfg.copilot.mode, delay_s=(cfg.copilot.delay_min_s, cfg.copilot.delay_max_s))
                 log.info("Copilot: %s", "reads back and changes frequencies" if cfg.copilot.mode == "assist"
-                         else "works the radio for the whole flight")
+                         else "works the radio for the whole flight", extra=CONSOLE)
             consumers.append(asyncio.create_task(AtcService(engine, bus, source, AirportCache(), copilot=copilot).run()))
+        speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
+        if speaker is not None:
+            consumers.append(asyncio.create_task(speaker.service.run()))
         voice = None
         if cfg.voice.enabled:
             voice = await start_voice(cfg, bus, source, recorder, engine if cfg.atc.enabled else None)
@@ -225,6 +235,8 @@ async def run_session(
             typed_task.cancel()  # its thread may sit in readline(); don't wait for another Enter
         if voice is not None:
             voice.close()
+        if speaker is not None:
+            speaker.close()
         bus.close()
         await asyncio.gather(*consumers, return_exceptions=True)
         if recorder is not None:
@@ -241,11 +253,11 @@ async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None, *, 
     stdin = stdin or sys.stdin
     if ptt is not None:
         print("\n>>> Press Enter to start talking and Enter again to stop (or type a transmission).\n"
-              ">>> Tune COM1 first: a 'TUNE' line shows which ATC facility answers.\n", flush=True)
+              ">>> Tune COM1 first: its line shows which ATC facility answers there.\n", flush=True)
     else:
         print(
             "\n>>> Type a pilot transmission and press Enter (sent on COM1). Tune COM1 first:\n"
-            ">>> a 'TUNE' line shows which ATC facility answers on that frequency.\n",
+            ">>> its line shows which ATC facility answers on that frequency.\n",
             flush=True,
         )
     talking = False
@@ -259,6 +271,41 @@ async def _typed_transmissions(bus: EventBus, source: SimSource, stdin=None, *, 
             talking = not talking
             (ptt.press if talking else ptt.release)()
             print(">>> talking... (Enter to stop)" if talking else ">>> sent", flush=True)
+
+
+@dataclass
+class VoiceOutput:
+    service: object
+    player: object
+
+    def close(self) -> None:
+        self.player.close()
+
+
+async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
+    """Piper, the radio effect and the speakers. Never fails the session: without them ATC is text only."""
+    t = cfg.tts
+    try:
+        from localtc.tts.player import AudioPlayer
+        from localtc.tts.service import VoiceOut
+        from localtc.tts.synth import PiperSynth
+        from localtc.tts.voices import download, installed
+    except ImportError as exc:
+        log.warning("ATC voice unavailable (%s): text only. Reinstall with the installer, or pip install piper-tts", exc)
+        return None
+    voices_dir = Path(t.voices_dir) if t.voices_dir else None
+    try:
+        if not installed(t.voice, voices_dir):
+            log.info("Downloading ATC voice %s (about 80 MB, once) ...", t.voice, extra=CONSOLE)
+        voice_file = await asyncio.to_thread(download, t.voice, voices_dir)
+        synth = await asyncio.to_thread(PiperSynth, voice_file, rate=t.rate)
+        player = AudioPlayer(t.output_device or None, volume=t.volume)
+    except Exception as exc:  # no network for the first download, a bad device name, a broken voice file
+        log.warning("ATC voice unavailable (%s): text only", exc)
+        return None
+    log.info("ATC voice: %s through %s", t.voice, player.name, extra=CONSOLE)
+    service = VoiceOut(bus, synth, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot)
+    return VoiceOutput(service, player)
 
 
 @dataclass
@@ -282,12 +329,12 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     v = cfg.voice
     transcriber = WhisperTranscriber(v.model, device=v.device, compute_type=v.compute_type, models_dir=v.models_dir or None,
                                      beam_size=v.beam_size)
-    log.info("Loading %s ...", transcriber.description)
+    log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await asyncio.to_thread(transcriber.warm_up)
-    log.info("%s ready (%.1f s)", transcriber.description, seconds)
+    log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
     capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000)
     capture.start()
-    log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)")
+    log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)", extra=CONSOLE)
     hints = None
     if engine is not None:
         from localtc.voice import flight_hints
@@ -302,7 +349,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         ptt = KeyboardPtt(v.ptt_key, service.press, service.release)
         ptt.start()
     elif v.ptt == "joystick":
-        log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick)
+        log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick, extra=CONSOLE)
     return VoiceInput(service, capture, ptt)
 
 

@@ -56,6 +56,11 @@ OWNSHIP: tuple[Datum, ...] = (
     Datum("wind_kt", "AMBIENT WIND VELOCITY", "knots"),
     Datum("magvar", "MAGVAR", "degrees"),
     Datum("altimeter_setting_inhg", "SEA LEVEL PRESSURE", "inHg"),
+    Datum("temperature_c", "AMBIENT TEMPERATURE", "celsius"),
+    Datum("visibility_m", "AMBIENT VISIBILITY", "meters"),
+    Datum("precip", "AMBIENT PRECIP STATE", "mask", I32),
+    Datum("in_cloud", "AMBIENT IN CLOUD", "Bool", I32),
+    Datum("zulu_s", "ZULU TIME", "seconds"),
 )
 
 # Requested with PERIOD_SECOND + FLAG_CHANGED, so it only arrives when something changes.
@@ -150,6 +155,11 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         wind_kt=round(raw["wind_kt"], 1),
         magvar=round(raw["magvar"], 1),
         altimeter_setting_inhg=round(raw["altimeter_setting_inhg"], 2),
+        temperature_c=round(raw["temperature_c"], 1),
+        visibility_m=round(raw["visibility_m"]),
+        precip=int(raw["precip"]),
+        in_cloud=bool(raw["in_cloud"]),
+        zulu_s=round(raw["zulu_s"], 1),
     )
 
 

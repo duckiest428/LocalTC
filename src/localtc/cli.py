@@ -140,8 +140,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
         cfg.voice.model = args.whisper_model
     if args.mic:
         cfg.voice.input_device = args.mic
-    show = args.print or args.type or cfg.copilot.mode != "off" or cfg.voice.enabled
-    printer = EventPrinter(skip_traffic=True) if show else None
+    if args.no_tts:
+        cfg.tts.enabled = False
+    if args.events:
+        printer = EventPrinter(skip_traffic=True)
+    else:
+        from localtc.console import FlightConsole
+
+        printer = FlightConsole()
     return _run(cfg, record, printer, typed_input=args.type)
 
 
@@ -461,11 +467,18 @@ def _cmd_voice_eval(args: argparse.Namespace) -> int:
     for line in filter(None, (format_output(o) for o in run.outputs)):
         print(line)
     print()
+    changes = []
     for clip in run.clips:
         wer = token_error_rate(clip.reference, clip.heard)
+        changes.append(wer)
         print(f"[{clip.released_t:8.1f}] {clip.stt_ms:5.0f} ms  wer {wer:4.0%}  {clip.heard}")
         if wer:
             print(f"{'':12}recorded: {clip.reference}")
+    if run.clips:
+        times = sorted(c.stt_ms for c in run.clips)
+        print(f"\n{transcriber.description}: {len(run.clips)} clips, median {times[len(times) // 2]:.0f} ms, "
+              f"slowest {times[-1]:.0f} ms; words different from the flight's transcripts: "
+              f"{sum(changes) / len(changes):.0%} (listen to audio/*.wav to judge which model heard you right)")
     return 0
 
 
@@ -482,6 +495,14 @@ def _cmd_setup(args: argparse.Namespace) -> int:
         print(f"  ready: {download(model, models_dir)}")
     choice = choose(cfg.voice.model, cfg.voice.device, cfg.voice.compute_type)
     print(f"Speech-to-text will run on {choice.device.upper()} ({choice.model})")
+    try:
+        from localtc.tts.voices import download as download_voice
+
+        print(f"ATC voice {cfg.tts.voice}: downloading (about 80 MB, once) ...")
+        print(f"  ready: {download_voice(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None)}")
+    except Exception as exc:
+        print(f"ATC voice download failed: {exc}")
+        ok = False
     try:
         from localtc.stt.audio import input_devices
 
@@ -508,6 +529,43 @@ def _cmd_setup(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _cmd_tts_devices(args: argparse.Namespace) -> int:
+    import sounddevice as sd
+
+    from localtc.tts.player import output_devices
+
+    default = sd.default.device[1]
+    for index, name, rate in output_devices():
+        print(f"{'*' if index == default else ' '} {index:3d}  {name}  ({rate} Hz)")
+    print("* = system default. Choose one with [tts] output_device (part of its name).")
+    return 0
+
+
+def _cmd_tts_say(args: argparse.Namespace) -> int:
+    from localtc.dsp.radio import clean, radio_effect
+    from localtc.stt.audio import write_wav
+    from localtc.tts.player import AudioPlayer, Clip
+    from localtc.tts.service import radio_words
+    from localtc.tts.synth import PiperSynth
+    from localtc.tts.voices import download, speaker_for
+
+    cfg = load_config(args.config)
+    voice_file = download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None)
+    synth = PiperSynth(voice_file, rate=cfg.tts.rate)
+    speaker = speaker_for(args.station, synth.speakers)
+    speech = synth.synthesize(radio_words(args.text), speaker)
+    audio = clean(speech.audio) if args.no_effect else radio_effect(speech.audio, speech.rate, static=cfg.tts.static)
+    print(f"{args.station}: speaker {speaker}, {speech.seconds:.1f} s of speech in {speech.latency_ms:.0f} ms")
+    if args.out:
+        write_wav(args.out, audio, speech.rate)
+        print(f"Wrote {args.out}")
+        return 0
+    player = AudioPlayer(args.device or cfg.tts.output_device or None, volume=cfg.tts.volume)
+    print(f"Playing on {player.name} ...")
+    player.play(Clip(audio, speech.rate)).done.wait()
+    return 0
+
+
 def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool = False) -> int:
     started = time.monotonic()
     out_dir = asyncio.run(run_session(cfg, record=record, on_event=printer, typed_input=typed_input))
@@ -529,7 +587,9 @@ def build_parser() -> argparse.ArgumentParser:
     run = with_config(sub.add_parser("run", help="run with the configured source"))
     run.add_argument("--source", choices=["live", "replay"], help="override source.kind")
     run.add_argument("--no-record", action="store_true", help="don't record this session")
-    run.add_argument("--print", action="store_true", help="print events")
+    run.add_argument("--print", action="store_true", help=argparse.SUPPRESS)  # the flight console is always on now
+    run.add_argument("--events", action="store_true", help="print every event (debugging) instead of the flight console")
+    run.add_argument("--no-tts", action="store_true", help="don't speak ATC (text only)")
     run.add_argument("--type", action="store_true", help="type pilot transmissions on stdin (implies --print)")
     run.add_argument("--destination", help="destination ICAO (overrides [flight])")
     run.add_argument("--cruise-ft", type=int, help="planned cruise altitude (overrides [flight])")
@@ -626,7 +686,20 @@ def build_parser() -> argparse.ArgumentParser:
     veval.add_argument("--llm", choices=["off", "live"], default="live", help="understand with the model (default) or not")
     veval.set_defaults(func=_cmd_voice_eval)
 
-    setup = with_config(sub.add_parser("setup", help="download the speech and language models, check the microphone"))
+    tts = sub.add_parser("tts", help="ATC's voice (Piper)")
+    tts_sub = tts.add_subparsers(dest="tts_command", required=True)
+    tdevices = tts_sub.add_parser("devices", help="list speakers and headsets")
+    tdevices.set_defaults(func=_cmd_tts_devices)
+    tsay = with_config(tts_sub.add_parser("say", help="speak a line as ATC would (or write it to a WAV file)"))
+    tsay.add_argument("text", nargs="?", default="Skyhawk one seven two lima tango, runway three four left, "
+                      "wind three three zero at eight, cleared for takeoff.")
+    tsay.add_argument("--station", default="Paine Tower", help="whose voice (each station has its own)")
+    tsay.add_argument("--no-effect", action="store_true", help="without the radio effect")
+    tsay.add_argument("--out", help="write a WAV file instead of playing it")
+    tsay.add_argument("--device", help="output: its number or part of its name (default: [tts] output_device)")
+    tsay.set_defaults(func=_cmd_tts_say)
+
+    setup = with_config(sub.add_parser("setup", help="download the speech, voice and language models; check the microphone"))
     setup.add_argument("--whisper-model", action="append", help="model(s) to download (default: the one [voice] uses)")
     setup.add_argument("--no-llm", action="store_true", help="don't pull the Ollama model")
     setup.set_defaults(func=_cmd_setup)
@@ -642,10 +715,13 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")  # e.g. a redirected Windows console in cp1252
     args = build_parser().parse_args(argv)
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-    )
+    from localtc.console import log_dir, setup_logging
+
+    flying = args.command == "run" and not getattr(args, "events", False)
+    log_file = setup_logging(verbose=args.verbose, quiet_console=flying,
+                             log_file=log_dir() / "localtc.log" if args.command in ("run", "record") else None)
+    if flying and log_file is not None and not args.verbose:
+        print(f"Details go to {log_file} (-v shows them here)")
     try:
         return args.func(args)
     except KeyboardInterrupt:

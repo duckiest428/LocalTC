@@ -100,6 +100,21 @@ class VoiceConfig(_Section):
     tail_ms: int = 250  # audio kept after it came up
 
 
+class TtsConfig(_Section):
+    """ATC's voice: Piper speech, through a radio effect, out of the speakers or headset."""
+
+    enabled: bool = True
+    voice: str = "en_US-libritts_r-medium"  # a Piper voice; multi-speaker voices give each controller its own
+    voices_dir: str = ""  # blank = %LOCALAPPDATA%\LocalTC\voices
+    output_device: str = ""  # blank = the system default output; or part of its name, or its number
+    volume: float = 0.8
+    rate: float = 1.15  # speaking speed; controllers talk quickly
+    radio_effect: bool = True
+    static: float = 0.35  # 0-1: hiss and squelch under the voice
+    atis: bool = True  # read the ATIS aloud while it's tuned
+    copilot: bool = True  # the copilot's calls are spoken too (in a different voice)
+
+
 class CopilotConfig(_Section):
     mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
     delay_min_s: float = 2.0  # pilot reaction time before speaking
@@ -113,6 +128,7 @@ class Config(_Section):
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
+    tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)

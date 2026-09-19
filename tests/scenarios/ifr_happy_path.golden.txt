@@ -5,7 +5,7 @@
 [    11.0] READBACK  clearance.ifr correct
 [    13.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct.
 [    16.0] PILOT     121.8: Paine Ground, Cessna two lima tango, at parking, ready to taxi with information bravo.
-[    19.0] ATC       Paine Ground 121.8: N172LT, runway 34L, taxi via C, A, A1.
+[    19.0] ATC       Paine Ground 121.8: N172LT, runway 34L, taxi via C, A, A1, information Oscar is current, altimeter 29.92.
 [    21.0] PILOT     121.8: Runway three four left, taxi via charlie, alpha, alpha one, Cessna two lima tango.
 [    21.0] READBACK  ground.taxi_out correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
@@ -14,7 +14,7 @@
 [   356.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
 [   356.0] READBACK  ground.handoff_tower correct
 [   362.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short runway 34L, ready for departure.
-[   364.0] ATC       Paine Tower 120.2: N172LT, runway 34L, fly runway heading, cleared for takeoff.
+[   364.0] ATC       Paine Tower 120.2: N172LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
 [   366.0] PILOT     120.2: Runway heading, runway three four left, cleared for takeoff, Cessna two lima tango.
 [   366.0] READBACK  tower.takeoff correct
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
@@ -33,14 +33,14 @@
 [   881.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
 [   884.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, roger.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
-[  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, descend and maintain 3,000, expect ILS RWY 14R approach.
+[  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, descend and maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
 [  1364.0] PILOT     125.1: Descend and maintain three thousand, Cessna two lima tango.
 [  1364.0] READBACK  center.descend correct
 [  1372.0] ATC       Seattle Center 125.1: Cessna 2LT, contact Seattle Approach 119.2.
 [  1374.0] PILOT     125.1: Seattle Approach one one niner point two, Cessna two lima tango.
 [  1374.0] READBACK  center.handoff_approach correct
 [  1380.0] PILOT     119.2: Seattle Approach, Cessna two lima tango, 4,500 descending 3,000.
-[  1382.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, descend and maintain 2,100, expect ILS RWY 14R approach.
+[  1382.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, descend and maintain 2,100, expect ILS RWY 14R approach, information Bravo is current, altimeter 29.92.
 [  1384.0] PILOT     119.2: Descend and maintain two thousand one hundred, expect I L S runway one four right, Cessna two lima tango.
 [  1384.0] READBACK  approach.descend correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)

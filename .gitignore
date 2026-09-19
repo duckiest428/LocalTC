@@ -12,3 +12,7 @@ dist/
 
 # Never commit the SimConnect DLL; it comes from the MSFS 2024 SDK
 SimConnect.dll
+.DS_Store
+src/.DS_Store
+src/localtc/.DS_Store
+config/localtc.toml

@@ -29,7 +29,7 @@ callsign = ""                 # blank = the aircraft's ATC ID from the sim
 [atc]
 enabled = true
 seed = 0                      # 0 = derived from callsign + date (squawk, ATIS letter, phrasing variants)
-center_name = "Seattle"       # used when no airport lists a CENTER frequency
+center_name = "Montreal"       # used when no airport lists a CENTER frequency
 center_mhz = 125.1
 strict_callsign = false       # true: a readback without the callsign is incomplete
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"

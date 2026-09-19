@@ -130,7 +130,8 @@ def test_prompt_is_narrow():
 
     open_request = build_request("what's the altimeter", None, context, load_examples())
     assert list(open_request.schema["properties"]) == [
-        "kind", "intent", "topic", "runway", "atis", "altitude", "emergency", "souls", "fuel"]
+        "kind", "intent", "topic", "runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls",
+        "fuel"]
     assert all("Readback expected: none" in text for role, text in open_request.messages if role == "user")
 
 

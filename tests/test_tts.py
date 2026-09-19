@@ -166,7 +166,7 @@ def test_the_atis_repeats_until_tuned_away():
 
 def _engine(speech_s_per_char: float) -> tuple[AtcEngine, OwnshipState]:
     engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7,
-                                    speech_s_per_char=speech_s_per_char))
+                                    speech_s_per_char=speech_s_per_char, unscripted=False))
     for airport in load_airport_dir(FIXTURES / "airports"):
         engine.handle(AirportData(t=0.0, airport=airport))
     own = next(e for e in Recording(FIXTURES / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))

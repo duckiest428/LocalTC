@@ -16,6 +16,7 @@ from localtc.atc_core.readback import (
     SayAgainInterpreter,
     normalize,
 )
+from localtc.atc_core.readback.extract import values_close
 from localtc.atc_core.readback.normalize import render
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind
 
@@ -138,6 +139,7 @@ def random_slots(rng: random.Random) -> dict:
         "taxi_route": tuple(rng.choice(names) + rng.choice(["", "", str(rng.randint(1, 9))]) for _ in range(rng.randint(1, 4))),
         "approach": Approach(rng.choice(["ILS", "RNAV"]), runway()),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
+        "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),
     }
 
 
@@ -177,8 +179,8 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
             if element == "destination":
                 continue  # matched by name presence only, so a different airport reads as "not mentioned"
             other = random_slots(random.Random(rng.random()))
-            if element not in other or other[element] == slots[element]:
-                continue
+            if element not in other or other[element] == slots[element] or values_close(element, other[element], slots[element]):
+                continue  # a near miss ("15 left" for 15) gets "confirm", tested in the corpus
             text = readback(changed={element: other[element]})
             result = GrammarInterpreter().interpret(text, pending, CONTEXT)
             assert result.status == "incorrect" and element in result.mismatched, (element, text, render(normalize(text)), result)

@@ -2,6 +2,10 @@
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
 [    92.0] ALERT     taxi_without_clearance: moving without a taxi clearance
 [    92.0] ATC       Paine Ground 121.8: N172LT, hold position, taxi clearance required.
+[   122.0] ATC       Paine Ground 121.8: Cessna 2LT, did you copy?
+[   152.0] ATC       Paine Ground 121.8: Cessna 2LT, hold position, taxi clearance required.
+[   182.0] ATC       Paine Ground 121.8: Cessna 2LT, Paine Ground, how do you read?
+[   212.0] ALERT     readback_unresolved: ground.hold_position: no answer from the pilot
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
 [   391.0] ALERT     runway_incursion: entered a runway without clearance
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)

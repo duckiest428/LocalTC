@@ -39,6 +39,7 @@ SLOTS: dict[str, SlotType] = {
     "callsign": CALLSIGN,
     "station": TEXT,  # spoken station name, e.g. "Seattle Departure"
     "destination": TEXT,  # spoken airport name, e.g. "Boeing Field"
+    "fix": TEXT,  # a waypoint or airport the pilot asked to go direct to
     "missing": PHRASE,  # pre-rendered fragments ("read back {missing}")
     "correction": PHRASE,
     "message": PHRASE,  # free wording: an answer or a declined request

@@ -184,6 +184,35 @@ MSFS doesn't give add-ons its ATIS or METARs, only the weather where the aircraf
 - **The runway in use comes from the ATIS**, for taxi clearances and arrivals alike, and it only changes when the tailwind on it passes 5 kt.
 - ATC uses it: a taxi clearance adds "information Charlie is current, altimeter 29.92" if you didn't report the current letter ("with information Charlie"). The takeoff clearance gives the wind and any cautions. Descents give the destination altimeter, and approach checks you have the current ATIS. The landing clearance adds cautions.
 
+## Unscripted moments
+
+The language model reads what you say, the engine decides, and the templates speak. So you can go off script and still get a real answer:
+
+| You say | ATC |
+|---|---|
+| "request direct BLAKO" / "direct to the airport" | "cleared direct BLAKO" (read it back) |
+| "request vectors (for the ILS 26)" | a heading to an 8 nm final, then the approach as usual |
+| "could we get runway 16R" (on the ground) | a new taxi route to it, or "expect runway 16R"; "unable, wind ..." if the tailwind is over 10 kt |
+| "we'd like the visual runway 26" (arriving) | "expect visual runway 26 approach"; unable in low visibility |
+| "request return to Paine" | the departure airport becomes the destination: "cleared direct Paine Field airport, maintain ..., expect ..." |
+| "going around" (or a go-around without a word) | "fly runway heading, climb and maintain ..., contact approach", then a new approach |
+| "moderate chop at 7,000" | "roger, thanks for the report" |
+| "traffic in sight" / "looking" | "roger" / nothing |
+| "request higher, 9,000" | climb (or unable on the approach) |
+| a question it has no answer for | a short answer from the model, or "unable" |
+
+And ATC starts things too (`[atc] unscripted`, on by default):
+
+- **Traffic advisories** from the sim's real AI traffic within 5 nm and 1,200 ft that's converging: "traffic, two o'clock, four miles, opposite direction, 3,500, B738". Each airplane is called at most every 5 minutes, and never one that's just landing or taking off.
+- **Altitude checks:** once you've reached your altitude, drifting 300 ft off it for 15 s gets "check altitude, maintain 5,000".
+- **A quiet pilot:** an instruction nobody reads back gets "how do you read?" after 30 s, is said once more, then dropped.
+- **Missed check-in:** switched to the new frequency and said nothing for 45 s? Departure or approach calls you first. Still on the old frequency 45 s after reading back a handoff? You're told again.
+- **"Clearance on request, stand by":** clearance delivery sometimes needs a moment.
+
+The copilot answers these too ("looking", "loud and clear").
+
+`localtc llm eval` has 48 cases, including the new requests: all 48 pass with llama3.2:3b, at about 1.2-1.7 s per call.
+
 ## Readback strictness
 
 Exact readbacks pass. A wrong value gets "negative, ..." and a missing one "read back ...". A value that's probably right but misheard or misspoken gets **"confirm ..."**: a frequency missing a digit ("12.1" for 120.1), "1508" for 1,500, or "08 left" for runway 08. Answer "affirm" or read it again. Self-corrections count: "cleared to land 08 left, correction 08" is fine.

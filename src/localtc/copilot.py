@@ -110,6 +110,11 @@ class Copilot:
         if tx.instruction_id == "common.say_again" and self._last_said:
             self._push("say", tx.t, text=self._last_said)
             return
+        if tx.instruction_id == "common.traffic":
+            self._push("say", tx.t, text=f"Looking, {self._callsign()}")
+            return
+        if tx.instruction_id == "common.how_read":
+            self._push("say", tx.t, text=f"Loud and clear, {self._callsign()}")
         pending = st.pending
         if pending is None or (pending.instruction_id, tx.t) in self._answered:
             return

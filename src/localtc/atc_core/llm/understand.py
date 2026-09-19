@@ -26,7 +26,7 @@ from importlib import resources
 from typing import Any, Literal
 
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
-from localtc.atc_core.llm.grounding import PHRASE_STEMS, grounded, missing_cue
+from localtc.atc_core.llm.grounding import PHRASE_STEMS, REQUEST_WORDS, grounded, missing_cue
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
@@ -41,7 +41,7 @@ from localtc.atc_core.readback.interpreter import (
     SayAgainInterpreter,
     Status,
 )
-from localtc.atc_core.readback.normalize import Token, normalize
+from localtc.atc_core.readback.normalize import PHONETIC, Token, normalize
 from localtc.atc_core.values import Approach
 from localtc.sim_api import LlmExchange
 
@@ -67,18 +67,25 @@ kind:
 intent (only for "request"): request_ifr_clearance = asks for the IFR clearance; ready_to_taxi; \
 ready_for_departure = holding short or ready for takeoff; checkin = first call to a new controller, like \
 "with you at 6000"; report_final = "5 mile final"; clear_of_runway; request_taxi_parking; request_altitude = asks \
-for higher, lower or a new altitude; say_again = asks ATC to repeat; acknowledge = roger, wilco; emergency = \
-mayday, pan-pan or any emergency; other = any other request.
+for higher, lower or a new altitude; request_direct = asks to fly direct to a fix or airport (fix: its name); \
+request_vectors = asks for vectors or a heading; request_runway = asks for a different runway or a type of \
+approach (runway, approach: "ILS", "RNAV" or "VISUAL"); request_return = wants to return to the departure airport \
+or divert; going_around = going around or missed approach; report_conditions = reports turbulence, icing or the \
+ride (conditions: the words used); traffic_report = "traffic in sight", "looking" or "negative contact"; \
+say_again = asks ATC to repeat; acknowledge = roger, wilco, thanks; emergency = mayday, pan-pan or any \
+emergency; other = any other request.
 topic (only for "question"): altimeter, wind, weather, runway, squawk, altitude, frequency, atis, other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
 INTENTS = ["request_ifr_clearance", "ready_to_taxi", "ready_for_departure", "checkin", "report_final", "clear_of_runway",
-           "request_taxi_parking", "request_altitude", "say_again", "acknowledge", "emergency", "other"]
+           "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
+           "request_return", "going_around", "report_conditions", "traffic_report", "say_again", "acknowledge",
+           "emergency", "other"]
 TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "other"]
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
 VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "squawk", "heading", "approach")
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
-REQUEST_FIELDS = ("runway", "atis", "altitude", "emergency", "souls", "fuel")
+REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
 
 # Phases in which a request makes sense (None = before the first phase is known). Others are rejected.
 GROUND_OUT = {None, "PARKED", "TAXI_OUT", "RUNWAY_HOLD"}
@@ -91,6 +98,12 @@ PLAUSIBLE_PHASES: dict[str, set[str | None]] = {
     "report_final": {None, "ARRIVAL", "APPROACH", "LANDING"},
     "clear_of_runway": {None, "LANDING", "TAXI_IN"},
     "request_taxi_parking": {None, "LANDING", "TAXI_IN"},
+    "request_direct": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
+    "request_vectors": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
+    "request_return": AIRBORNE,
+    "going_around": {None, "TAKEOFF", "DEPARTURE", "APPROACH", "LANDING"},
+    "report_conditions": AIRBORNE,
+    "traffic_report": AIRBORNE,
 }
 
 
@@ -266,6 +279,7 @@ def parse_value(element: str, raw: Any) -> Any:
 
 def _said_words(value: str, tokens: list[Token]) -> bool:
     words = {t.text for t in tokens}
+    words |= {name for t in tokens if t.kind == "letter" for name, letter in PHONETIC.items() if letter == t.text}  # "Quebec"
     wanted = [w for w in re.findall(r"[a-z]+", value.lower()) if len(w) > 2]
     return bool(wanted) and any(w in words for w in wanted)
 
@@ -300,6 +314,22 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
     fields = _model_elements(pending) if pending is not None else REQUEST_FIELDS
     for name in fields:
         if name not in data:
+            continue
+        if name in ("fix", "conditions"):
+            text = str(data[name]).strip()
+            if text and _said_words(text, tokens):
+                values[name] = text
+            elif text:
+                dropped.append(f"{name}={text}")
+            continue
+        if name == "approach" and kind == "request":
+            text = str(data[name]).strip().upper()
+            kind_word = next((k for k in ("ILS", "RNAV", "GPS", "VISUAL", "LOC") if k in text), "")
+            said = {t.text for t in tokens}
+            if kind_word and (kind_word.lower() in said or (kind_word in ("RNAV", "GPS") and {"rnav", "nav", "gps"} & said)):
+                values[name] = {"GPS": "RNAV", "LOC": "ILS"}.get(kind_word, kind_word)
+            elif text:
+                dropped.append(f"{name}={text}")
             continue
         if name in ("emergency", "souls", "fuel"):
             text = str(data[name]).strip()
@@ -405,7 +435,7 @@ class LlmInterpreter:
         words = {t.text for t in tokens}
         if exchanges and (topic := question_topic(text)) is not None:
             return Answer(kind="question", topic=topic, guessed=True), exchanges  # "say the winds": clear enough
-        if exchanges and intent_errors == len(exchanges) and words & {"request", "requesting"}:
+        if exchanges and intent_errors == len(exchanges) and words & (REQUEST_WORDS - {"higher", "lower"}):
             # Every answer said "a request" and every intent it tried was contradicted by the words:
             # it's a request the engine has no procedure for, which ATC declines.
             return Answer(kind="request", intent="other", guessed=True), exchanges
@@ -434,7 +464,7 @@ class LlmInterpreter:
     def _merge(self, grammar: Interpretation, answer: Answer, text: str, pending: PendingReadback | None,
                context: InterpretContext) -> Interpretation:
         tokens = normalize(text)
-        if grammar.intent == EMERGENCY or answer.intent == "emergency":
+        if grammar.intent == EMERGENCY or answer.intent == "emergency" or answer.values.get("emergency"):
             # Keywords like "mayday" always count; the model adds the details.
             details = {k: answer.values[k] for k in ("emergency", "souls", "fuel") if k in answer.values}
             return Interpretation(kind="request", intent=EMERGENCY, values=details, confidence=1.0, source="llm",
@@ -449,7 +479,8 @@ class LlmInterpreter:
             return Interpretation(kind="request", intent="question", values={"topic": answer.topic}, confidence=0.8,
                                   source="llm", callsign_heard=grammar.callsign_heard, text=text)
         if answer.kind == "request":
-            values = {**grammar.values, **{k: v for k, v in answer.values.items() if k in ("runway", "atis", "altitude")}}
+            values = {**grammar.values, **{k: v for k, v in answer.values.items()
+                                          if k in ("runway", "atis", "altitude", "fix", "approach", "conditions")}}
             if answer.intent == "checkin" and grammar.intent == "checkin" and "altitude" in grammar.values:
                 values["altitude"] = grammar.values["altitude"]  # "passing 6,000 for 12,000": the first is where we are
             return Interpretation(kind="request", intent=answer.intent, values=values, confidence=0.8, source="llm",

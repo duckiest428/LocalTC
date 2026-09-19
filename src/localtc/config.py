@@ -64,6 +64,7 @@ class AtcConfig(_Section):
     strict_callsign: bool = False
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
+    unscripted: bool = True  # traffic calls, altitude checks, "how do you read?", "stand by"
 
 
 class LlmConfig(_Section):
@@ -74,8 +75,8 @@ class LlmConfig(_Section):
     model: str = "llama3.2:3b"
     understanding: Literal["primary", "fallback", "off"] = "primary"  # primary: every transmission; fallback: only
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
-    timeout_s: float = 3.0  # per model call
-    budget_s: float = 5.0  # per transmission, including one retry
+    timeout_s: float = 4.0  # per model call
+    budget_s: float = 6.0  # per transmission, including one retry
     max_attempts: int = 2
     keep_alive: str = "1h"
     num_ctx: int = 4096

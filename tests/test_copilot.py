@@ -85,7 +85,7 @@ def test_the_service_carries_out_the_copilots_actions():
 
     async def main():
         bus = EventBus()
-        engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7))
+        engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, unscripted=False))
         for airport in load_airport_dir(FIXTURES / "airports"):
             engine.handle(AirportData(t=0.0, airport=airport))
         source = Source()

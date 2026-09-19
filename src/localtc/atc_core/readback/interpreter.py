@@ -31,6 +31,7 @@ class PendingReadback:
     issued_t: float = 0.0
     attempts: int = 0
     confirming: bool = False  # ATC asked "confirm ...": "affirm" is enough
+    nudged: bool = False  # ATC asked "how do you read?" about it
 
 
 @dataclass(frozen=True)

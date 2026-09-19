@@ -323,6 +323,22 @@ def destination(tokens: list[Token], expected: Any = None) -> list[str]:
     return [expected] if significant and all(w in words for w in significant) else []
 
 
+def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
+    """ "direct BLAKO": the words after "direct", compared loosely with the fix ATC gave."""
+    words = _words(tokens)
+    found = []
+    for i in _find_phrase(tokens, ("direct",)):
+        rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
+        if isinstance(expected, str):
+            wanted = [w.lower() for w in expected.replace(" airport", "").split()]
+            if wanted and all(w in rest or w in words for w in wanted):
+                found.append(expected)
+                continue
+        if rest:
+            found.append(" ".join(rest[:2]).upper())
+    return found
+
+
 ELEMENTS: dict[str, Extractor] = {
     "runway": runways,
     "hold_short": hold_short,
@@ -334,6 +350,7 @@ ELEMENTS: dict[str, Extractor] = {
     "taxi_route": taxi_routes,
     "approach": approaches,
     "destination": destination,
+    "fix": fixes,
     "callsign": callsigns,
     "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
                                  ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off")),
@@ -389,4 +406,6 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
         return int(heard) == int(expected)
     if element == "taxi_route":
         return tuple(heard) == tuple(n.upper() for n in expected)
+    if element == "fix":
+        return str(heard).lower() == str(expected).lower()
     return heard == expected

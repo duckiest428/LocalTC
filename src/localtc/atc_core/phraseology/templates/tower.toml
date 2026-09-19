@@ -40,3 +40,10 @@ controller = "tower"
 text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency} when clear."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around"
+controller = "tower"
+text = ["{callsign}, roger, fly runway heading, climb and maintain {altitude}, contact {station} {frequency}."]
+readback = { required = ["altitude", "frequency"] }
+pilot_readback = "Runway heading, climb and maintain {altitude}, {station} {frequency}, {callsign_short}."

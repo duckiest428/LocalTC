@@ -48,6 +48,36 @@ def _any_runway(tokens: list[Token]) -> str | None:
     return next(iter(runways(tokens) + hold_short(tokens)), None)
 
 
+FIX_STOP = {"to", "the", "a", "direct", "please", "for", "if", "able", "possible", "when", "request", "requesting"}
+CONDITION_WORDS = ("turbulence", "chop", "choppy", "icing", "ice", "bumpy", "smooth", "shear", "rough")
+APPROACH_WORDS = {"ils": "ILS", "localizer": "ILS", "rnav": "RNAV", "gps": "RNAV", "visual": "VISUAL"}
+
+
+def _fix(tokens: list[Token]) -> str | None:
+    """What follows "direct": "request direct BLAKO" -> "BLAKO", "direct to the airport" -> "airport"."""
+    for i in _find_phrase(tokens, ("direct",)):
+        words = []
+        for token in tokens[i:]:
+            if token.text in FIX_STOP and not words:
+                continue
+            if token.kind != "word" or token.text in FIX_STOP or len(words) == 2:
+                break
+            words.append(token.text)
+        if words:
+            return " ".join(words).upper() if len(words[0]) <= 5 and len(words) == 1 else " ".join(words).title()
+    return None
+
+
+def _traffic(tokens: list[Token]) -> str | None:
+    if _has_any(tokens, ("negative", "contact"), ("not", "in", "sight"), ("no", "joy")):
+        return "negative"
+    if _has_any(tokens, ("in", "sight"), ("have", "the", "traffic"), ("got", "the", "traffic"), ("traffic", "insight")):
+        return "in_sight"
+    if _has_any(tokens, ("looking",)):
+        return "looking"
+    return None
+
+
 def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     """All intents present, most specific first."""
     matches: list[IntentMatch] = []
@@ -81,8 +111,28 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("ready_for_departure", runway=_any_runway(tokens))
     if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",)) or landing:
         add("report_final", runway=_any_runway(tokens))  # also "are we cleared to land?"
-    if _has_any(tokens, ("request",), ("requesting",)) and (wanted := altitudes(tokens)):
-        add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "requesting 8,000 feet"
+    wanted = altitudes(tokens) or ([n for n in _reported_altitudes(tokens) if n >= 1000]
+                                   if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])
+    if _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and wanted:
+        add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "request higher, 7000"
+    asking = _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we"), ("able", "to"),
+                      ("want",), ("need",))
+    if _has_any(tokens, ("going", "around"), ("go", "around"), ("missed", "approach"), ("executing", "missed")):
+        add("going_around")
+    if (traffic := _traffic(tokens)) is not None and (_has_any(tokens, ("traffic",)) or traffic != "in_sight"):
+        add("traffic_report", traffic=traffic)
+    if _has_any(tokens, ("direct",)) and (fix := _fix(tokens)):
+        add("request_direct", fix=fix)
+    approach = next((APPROACH_WORDS[t.text] for t in tokens if t.text in APPROACH_WORDS), None)
+    if _has_any(tokens, ("vectors",), ("vector",)):
+        add("request_vectors", runway=next(iter(runways(tokens)), None), approach=approach)
+    if asking and _has_any(tokens, ("return",), ("divert",), ("back", "to", "the", "field"), ("back", "to", "the", "airport")):
+        add("request_return")
+    if asking and (approach or runways(tokens)) and not _has_any(tokens, ("taxi",), ("final",)):
+        add("request_runway", runway=next(iter(runways(tokens)), None), approach=approach)
+    if any(t.text in CONDITION_WORDS for t in tokens) and not asking:
+        add("report_conditions", conditions=" ".join(t.text for t in tokens if t.kind == "word" and t.text in (
+            *CONDITION_WORDS, "light", "moderate", "severe", "occasional", "continuous")))
     checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
                      ("passing",), ("through",), ("out", "of"))
     if _has_any(tokens, *checkin_words) and not altitudes(tokens):
@@ -98,6 +148,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
 # Intents that legitimately appear together; the first one is used.
 COMPATIBLE = [
     {"request_taxi_parking", "clear_of_runway"},
+    {"going_around", "report_final"},  # "going around, runway 08": no longer a final report
+    {"request_vectors", "request_runway"},  # "request vectors for the ILS 26"
+    {"request_direct", "request_runway"},
     {"ready_for_departure", "checkin"},  # "holding short, ready" can contain "level"-like noise
 ]
 

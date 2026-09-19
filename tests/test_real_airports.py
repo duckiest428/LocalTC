@@ -91,6 +91,7 @@ def test_live_recording_gets_an_answer(first_ownship):
     """Regression: COM TRANSMIT is true for the whole flight, which used to mute ATC completely."""
     assert first_ownship.com1_tx is True and first_ownship.com1_mhz == 124.85
     engine = engine_with_real_airports(destination="KBFI", cruise_ft=7000)
+    engine.cfg.unscripted = False  # just the answer; the "how do you read?" that follows is tested elsewhere
     replies: list[AtcTransmission] = []
     said = False
     for event in Recording(RECORDING).events():

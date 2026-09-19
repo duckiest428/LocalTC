@@ -207,12 +207,12 @@ model = { kind = "question", topic = "weather" }
 expect = { kind = "request", intent = "question", values = { topic = "weather" } }
 
 [[case]]
-name = "unsupported request: direct"
+name = "direct to an airport named like a phonetic letter"
 phase = "CRUISE"
 station = "Montreal Center"
 pilot = "DP69 requesting direct Quebec"
-model = { kind = "request", intent = "other" }
-expect = { kind = "request", intent = "other" }
+model = { kind = "request", intent = "request_direct", fix = "QUEBEC" }
+expect = { kind = "request", intent = "request_direct", values = { fix = "QUEBEC" } }
 
 [[case]]
 name = "unsupported request: weather deviation"
@@ -309,3 +309,117 @@ station = "Montreal Center"
 pilot = "DP69 is ready when you are"
 model = { kind = "request", intent = "ready_for_departure" }
 expect = { not_intent = "ready_for_departure" }
+
+# --- unscripted moments (Phase 4) -----------------------------------------------------------------------
+
+[[case]]
+name = "request direct to a fix"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "Seattle Center, DP69, request direct BLAKO when able"
+model = { kind = "request", intent = "request_direct", fix = "BLAKO" }
+expect = { kind = "request", intent = "request_direct", values = { fix = "BLAKO" } }
+
+[[case]]
+name = "direct to the destination, in plain words"
+phase = "CRUISE"
+station = "Montreal Center"
+pilot = "any chance we could go straight to Quebec, DP69"
+model = { kind = "request", intent = "request_direct", fix = "Quebec" }
+expect = { kind = "request", intent_any = ["request_direct", "other"] }
+
+[[case]]
+name = "vectors for the ILS"
+phase = "APPROACH"
+station = "Seattle Approach"
+pilot = "Approach, 2LT, request vectors for the ILS one four right"
+model = { kind = "request", intent = "request_vectors", runway = "14R", approach = "ILS" }
+expect = { kind = "request", intent = "request_vectors" }
+
+[[case]]
+name = "a different runway for departure"
+phase = "PARKED"
+station = "Paine Ground"
+pilot = "Paine Ground, 2LT, could we get runway one six right for departure"
+model = { kind = "request", intent = "request_runway", runway = "16R" }
+expect = { kind = "request", intent = "request_runway", values = { runway = "16R" } }
+
+[[case]]
+name = "the visual approach instead"
+phase = "APPROACH"
+station = "Phoenix Approach"
+pilot = "EXP69, we'd like the visual approach runway two six"
+model = { kind = "request", intent = "request_runway", runway = "26", approach = "VISUAL" }
+expect = { kind = "request", intent = "request_runway", values = { runway = "26", approach = "VISUAL" } }
+
+[[case]]
+name = "return to the departure airport"
+phase = "DEPARTURE"
+station = "Seattle Departure"
+pilot = "Departure, 2LT, we've got a rough running engine, we'd like to return to Paine"
+model = { kind = "request", intent = "request_return" }
+expect = { kind = "request", intent_any = ["request_return", "emergency"] }
+
+[[case]]
+name = "going around"
+phase = "LANDING"
+station = "Boeing Tower"
+pilot = "Boeing Tower, two lima tango, going around"
+model = { kind = "request", intent = "going_around" }
+expect = { kind = "request", intent = "going_around" }
+
+[[case]]
+name = "missed approach"
+phase = "APPROACH"
+station = "Seattle Approach"
+pilot = "2LT missed approach"
+model = { kind = "request", intent = "going_around" }
+expect = { kind = "request", intent = "going_around" }
+
+[[case]]
+name = "pilot report: turbulence"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "Center, 2LT, heads up we're getting moderate turbulence at five thousand"
+model = { kind = "request", intent = "report_conditions", conditions = "moderate turbulence", altitude = "5000" }
+expect = { kind = "request", intent = "report_conditions" }
+
+[[case]]
+name = "pilot report: smooth ride"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "ride's smooth up here, two lima tango"
+model = { kind = "request", intent = "report_conditions", conditions = "smooth" }
+expect = { kind = "request", intent = "report_conditions" }
+
+[[case]]
+name = "traffic in sight"
+phase = "DEPARTURE"
+station = "Seattle Departure"
+pilot = "traffic in sight, two lima tango"
+model = { kind = "request", intent = "traffic_report" }
+expect = { kind = "request", intent = "traffic_report" }
+
+[[case]]
+name = "looking for traffic"
+phase = "ARRIVAL"
+station = "Seattle Approach"
+pilot = "looking, 2LT"
+model = { kind = "request", intent = "traffic_report" }
+expect = { kind = "request", intent = "traffic_report" }
+
+[[case]]
+name = "request higher without a number"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "Center, 2LT, request higher for the ride"
+model = { kind = "request", intent = "request_altitude" }
+expect = { kind = "request", intent = "request_altitude" }
+
+[[case]]
+name = "a thank-you is an acknowledgement"
+phase = "CRUISE"
+station = "Seattle Center"
+pilot = "thanks for the help, two lima tango"
+model = { kind = "request", intent = "acknowledge" }
+expect = { kind = "request", intent = "acknowledge" }

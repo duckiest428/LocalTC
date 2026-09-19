@@ -54,6 +54,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         strict_callsign=atc.strict_callsign,
         seed=atc.seed,
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
+        unscripted=atc.unscripted,
     )
 
 

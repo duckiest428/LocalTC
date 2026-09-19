@@ -19,3 +19,17 @@ controller = "approach"
 text = ["{callsign}, cleared {approach} approach, contact {station} {frequency}."]
 readback = { required = ["frequency"], optional = ["approach"] }
 pilot_readback = "Cleared {approach} approach, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.vectors"
+controller = "approach"
+text = ["{callsign}, fly heading {heading}, vectors for the {approach} approach."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.missed"
+controller = "approach"
+text = ["{callsign}, roger, fly runway heading, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Runway heading, climb and maintain {altitude}, {callsign_short}."

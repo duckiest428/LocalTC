@@ -43,6 +43,7 @@ ALERTS = {
     "readback_unresolved": "ATC gave up on a readback",
     "no_atc_on_frequency": "Nobody answers on this frequency",
     "emergency": "Emergency",
+    "pilot_problem": "Problem reported",
 }
 
 

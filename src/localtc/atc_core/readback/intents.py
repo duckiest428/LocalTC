@@ -93,7 +93,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
                        ("landing", "clearance"), ("clear", "for", "landing"), ("cleared", "for", "landing"))
     if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy"), ("request", "ifr"),
                 ("requesting", "ifr")) and not _has_any(
-        tokens, ("cleared",)
+        tokens, ("cleared",), ("taxi",)  # "Clearance, request taxi": the station's name, not an IFR request
     ) and not landing:
         add("request_ifr_clearance", atis=_atis(tokens))
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"))
@@ -101,7 +101,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("clear_of_runway", runway=_any_runway(tokens))
     if parking and _has_any(tokens, ("taxi",)):
         add("request_taxi_parking")
-    elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi")):
+    elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
+                  ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),
+                  ("taxi", "to", "the", "runway")):
         add("ready_to_taxi", atis=_atis(tokens))
     if _has_any(
         tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
@@ -123,7 +125,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("going_around")
     if (traffic := _traffic(tokens)) is not None and (_has_any(tokens, ("traffic",)) or traffic != "in_sight"):
         add("traffic_report", traffic=traffic)
-    if _has_any(tokens, ("direct",)) and (fix := _fix(tokens)):
+    if _has_any(tokens, ("direct",)) and not _has_any(tokens, ("disregard",)) and (fix := _fix(tokens)):
         add("request_direct", fix=fix)
     approach = next((APPROACH_WORDS[t.text] for t in tokens if t.text in APPROACH_WORDS), None)
     if _has_any(tokens, ("vectors",), ("vector",)):
@@ -141,11 +143,26 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         reported = _reported_altitudes(tokens)
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
             atis=_atis(tokens))
+    if not matches and reports_problem(tokens):
+        add("report_problem")  # alone; with other calls the engine hears it anyway (AtcEngine._problem)
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
                                 ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by")):
         add("acknowledge")
     return matches
+
+
+# Something wrong that isn't a mayday or pan-pan: ATC acknowledges, and rolls the trucks if asked.
+EQUIPMENT_WORDS = (("trucks",), ("fire", "trucks"), ("crash", "trucks"), ("emergency", "equipment"), ("equipment",),
+                   ("emergency", "services"), ("fire", "services"))
+PROBLEM_WORDS = (("failure",), ("failed",), ("inoperative",), ("malfunction",), ("not", "working"), ("unreliable",))
+
+
+def reports_problem(tokens: list[Token]) -> str | None:
+    """ "equipment" when the pilot asks for the trucks, "problem" for a failure report, else None."""
+    if _has_any(tokens, *EQUIPMENT_WORDS):
+        return "equipment"
+    return "problem" if _has_any(tokens, *PROBLEM_WORDS) else None
 
 
 # Intents that legitimately appear together; the first one is used.

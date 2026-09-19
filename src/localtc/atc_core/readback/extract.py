@@ -179,6 +179,8 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
             continue
         if (value := _as_frequency(token.text)) is not None:
             found.append(value)
+        elif token.text.isdigit() and isinstance(expected, float) and expected == int(token.text):
+            found.append(expected)  # "tower on 121" for 121.0
         elif "." in token.text and expected is not None and _dropped_digit(token.text, expected):
             found.append(Unclear(token.text))
     return found

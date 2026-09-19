@@ -73,6 +73,7 @@ ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
 REPEAT_WINDOW_S = 180.0
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
+LINED_UP_NM = 4.0  # this close on a runway's final, the pilot has chosen it
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
@@ -630,6 +631,11 @@ class AtcEngine:
             interp = replace(interp, kind="request", intent="question", values={"topic": topic}, needs_fallback=False)
         st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, interp))
         out: list[BusEvent] = list(interp.exchanges)
+        if interp.intent != "emergency" and (problem := self._problem(ev.text, facility, t)) is not None:
+            out.append(problem)
+            if interp.kind == "unknown" or (interp.kind != "readback" and interp.intent in (
+                    None, "other", "question", "report_problem", "acknowledge")):
+                return out  # the problem was the message: acknowledged, nothing to decline or ask again
         if interp.kind == "readback":
             return out + self._on_readback(interp, facility, t)
         if interp.intent == "emergency":
@@ -642,6 +648,18 @@ class AtcEngine:
                 return out + self._give_up_readback(facility, t)
         self._schedule(t, "common.say_again", {}, facility)
         return out
+
+    def _problem(self, text: str, facility: Facility, t: float) -> BusEvent | None:
+        """A failure or a request for the crash trucks, short of a mayday: acknowledged once, then the flight goes on."""
+        from localtc.atc_core.readback.intents import reports_problem
+        from localtc.atc_core.readback.normalize import normalize
+
+        kind = reports_problem(normalize(text))
+        if kind is None or f"problem:{kind}" in self.state.flags:
+            return None
+        self.state.flags.add(f"problem:{kind}")
+        self._schedule(t, f"common.{kind}", {}, facility, expects_readback=False)
+        return self._alert(t, "pilot_problem", text)
 
     def _confirm_query(self, text: str, facility: Facility, mhz: float | None, t: float) -> list[BusEvent] | None:
         """The pilot checks something from the last instruction this controller gave. None: not about that."""
@@ -884,6 +902,9 @@ class AtcEngine:
                 self._schedule(t, "common.expect_runway", {"runway": end.ident}, facility,
                                on_issue=lambda: self._assign(departure_runway=end.ident))
             return
+        if facility.controller == "tower" and own is not None and not own.on_ground and runway:
+            self._tower_runway(runway, facility, t, own)  # "request runway 01" on final: cleared to land there
+            return
         if not self._airborne_controller(facility, own) or "approach" in st.clearances:
             self._schedule(t, "common.unable", {}, facility)
             return
@@ -897,6 +918,20 @@ class AtcEngine:
                 self._schedule(t, "common.unable", {}, facility)
             return
         self._schedule(t, "common.expect_approach", {"approach": approach}, facility)
+
+    def _tower_runway(self, runway: str, facility: Facility, t: float, own: OwnshipState) -> None:
+        st = self.state
+        geo = self.geometry(st.flight.destination)
+        end = geo.end(runway) if geo is not None else None
+        weather = self.weather.surface(st.flight.destination or "", self.tracker.context_builder.airports)
+        if end is None:
+            self._schedule(t, "common.unable", {}, facility)
+        elif weather is not None and components(end, weather)[0] < -MAX_TAILWIND_REQUEST_KT:
+            self._schedule(t, "common.unable_runway", {"runway": end.ident, "wind": weather.wind}, facility)
+        else:
+            self._assign(arrival_runway=end.ident)
+            st.clearances.pop("landing", None)
+            self._clear_to_land(t, own, facility, delay=True, runway=end.ident)
 
     def _return(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
         """Back to the departure airport: it becomes the destination, and the arrival flow starts over."""
@@ -1202,7 +1237,11 @@ class AtcEngine:
         geo = self.geometry(st.flight.destination)
         if runway is not None and geo is not None and geo.end(runway) is None:
             runway = None  # the pilot named a runway the airport doesn't have ("08 left" at KPHX): use the real one
-        runway = runway or (ctx.final.end.ident if ctx.final else None) or st.assignments.arrival_runway
+        # Lined up close in: that runway. Further out (maneuvering onto the approach, maybe across the other
+        # end's centerline): the runway of the approach ATC cleared.
+        close_final = ctx.final.end.ident if ctx.final is not None and ctx.final.distance_nm <= LINED_UP_NM else None
+        cleared = st.assignments.arrival_runway if "approach" in st.clearances else None
+        runway = runway or close_final or cleared or (ctx.final.end.ident if ctx.final else None) or st.assignments.arrival_runway
         if runway is None or own is None:
             if delay:  # the pilot asked, and we can't tell which runway; an automatic call just waits
                 self._schedule(t, "common.say_again", {}, facility)

@@ -33,6 +33,17 @@ id = "common.negative"
 controller = "any"
 text = ["{callsign}, negative, {correction}."]
 
+# A failure that isn't a mayday or pan-pan ("airspeed indicator failed, request the trucks").
+[[template]]
+id = "common.equipment"
+controller = "any"
+text = ["{callsign}, roger, emergency equipment will be standing by.", "{callsign}, roger, we'll have the equipment standing by."]
+
+[[template]]
+id = "common.problem"
+controller = "any"
+text = ["{callsign}, roger, advise if you need any assistance.", "{callsign}, roger, say if you need assistance."]
+
 [[template]]
 id = "common.affirmative"
 controller = "any"

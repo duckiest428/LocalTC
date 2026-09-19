@@ -166,7 +166,7 @@ def test_the_app_flies_a_replay_end_to_end(tmp_path, monkeypatch):
     cfg = load_config(ROOT / "config" / "localtc.toml", env={}, settings=None)
     cfg.source.kind, cfg.replay.path, cfg.replay.speed = "replay", str(ROOT / "tests/fixtures/ifr_kpae_kbfi"), 0.0
     cfg.replay.end_at = 60.0
-    cfg.ui.dev_mode = True  # replays are a developer-mode tool; the app otherwise always flies the sim
+    cfg.ui.source = "replay"  # the app's own setting; config/localtc.toml's [source] never applies to it
     cfg.voice.enabled = cfg.tts.enabled = cfg.recorder.enabled = cfg.llm.enabled = False
     controller = AppController(cfg, plan_path=tmp_path / "flightplan.json", cache=None)
     lines: list[dict] = []
@@ -226,10 +226,11 @@ def test_flight_plan_round_trips_through_json(tmp_path):
     assert isinstance(msgspec.convert(msgspec.to_builtins(plan), FlightPlan), FlightPlan)
 
 
-def test_the_app_flies_the_sim_unless_in_developer_mode(tmp_path):
+def test_the_app_flies_the_sim_whatever_the_config_file_says(tmp_path):
     cfg = Config()
-    cfg.source.kind = "replay"  # config/localtc.toml's development default
+    cfg.source.kind = "replay"  # config/localtc.toml's development default, and developer mode on: still live
+    cfg.ui.dev_mode = True
     controller = AppController(cfg, plan_path=tmp_path / "plan.json")
     assert controller.flight_config().source.kind == "live" and controller.state()["source"] == "live"
-    cfg.ui.dev_mode = True
+    cfg.ui.source = "replay"  # only the app's own setting switches it
     assert controller.flight_config().source.kind == "replay"

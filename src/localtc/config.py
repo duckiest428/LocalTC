@@ -158,6 +158,9 @@ class UiConfig(_Section):
     window: bool = True  # a window of its own (pywebview); false = the default browser
     simbrief_user: str = ""  # SimBrief username or pilot ID, remembered for "New flight"
     copilot: Literal["assist", "full"] = "full"  # what the app's copilot switch turns on
+    # What the app connects to. Its own setting, never [source] kind: that is the command line's development
+    # default (a recording), and the app must always fly the sim unless the pilot asks for a replay here.
+    source: SourceKind = "live"
     map_tiles: bool = True  # map background from OpenStreetMap (needs the internet; the rest works offline)
 
 

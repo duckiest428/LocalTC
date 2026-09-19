@@ -180,9 +180,9 @@ class AppController:
 
     @property
     def source_kind(self) -> str:
-        """The app always flies the sim. Replaying a recording is a developer-mode tool only: config/localtc.toml's
-        ``source = "replay"`` is the command line's development default and must never reach a pilot."""
-        return self.cfg.source.kind if self.cfg.ui.dev_mode else "live"
+        """What the app flies: its own ``[ui] source`` setting, which starts as the live sim. ``[source] kind`` in
+        config/localtc.toml is the command line's development default (a recording) and never applies here."""
+        return self.cfg.ui.source
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():

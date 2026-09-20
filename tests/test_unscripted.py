@@ -115,3 +115,29 @@ def test_an_empty_transcript_is_not_a_check_in():
     engine, own = cruising_engine()
     engine.handle(Transcript(t=own.t + 1, text=""))
     assert engine.state.comms.last_pilot_t is None
+
+
+def test_a_level_offered_enroute_becomes_an_instruction_when_taken():
+    """ "advise if you can accept FL370" is an offer, not a clearance: nothing is outstanding until the
+    pilot takes it, and then it is assigned and read back like any other altitude."""
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.facilities import Facility
+    from localtc.atc_core.readback import Interpretation
+
+    engine = AtcEngine(EngineConfig(callsign="DAL42", seed=3))
+    centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
+    engine._offered_level = (100.0, 37000)
+    engine._on_request(Interpretation(kind="request", intent="acknowledge"), centre, 130.0)
+    assert [item.instruction_id for item in engine._scheduled] == ["common.climb"]
+    assert engine._scheduled[0].slots["altitude"] == 37000
+    assert engine._offered_level is None
+
+
+def test_an_offer_not_taken_expires():
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.facilities import Facility
+
+    engine = AtcEngine(EngineConfig(callsign="DAL42", seed=3))
+    centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
+    engine._offered_level = (100.0, 37000)
+    assert not engine._accepts_higher(100_000.0, centre)

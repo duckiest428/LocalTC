@@ -85,6 +85,11 @@ LINED_UP_NM = 4.0  # this close on a runway's final, the pilot has chosen it
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
 PUSHBACK_LOOK_M = 40.0  # how far along the taxi route to look for the direction the tail should go
 PUSHBACK_STRAIGHT_DEG = 25.0  # the route this close to straight ahead: push straight back
+CHAT_GAP_S = 1800.0  # quiet between one centre starting a conversation and the next
+CHAT_SETTLE_S = 120.0  # settled on a centre's frequency before it starts a conversation
+OFFER_HIGHER_CHANCE = 0.5
+OFFER_WINDOW_S = 180.0  # how long an offered level stays on the table
+MAX_OFFERED_FT = 41000
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
@@ -177,6 +182,9 @@ class AtcEngine:
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
         self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
+        self._chat_t = -math.inf  # when a centre last started a conversation of its own
+        self._chatted: set[str] = set()  # centres that have already started one
+        self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
         self._sector_since = -math.inf
         self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
         self._deviation_since: float | None = None
@@ -418,7 +426,7 @@ class AtcEngine:
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
-            if self._traffic_advisory(own) or self._altitude_check(own):
+            if self._traffic_advisory(own) or self._altitude_check(own) or self._enroute_chat(own):
                 return out
 
         def once(flag: str) -> bool:
@@ -595,6 +603,45 @@ class AtcEngine:
         if kind:
             display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
         self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
+        return True
+
+    def _enroute_chat(self, own: OwnshipState) -> bool:
+        """Something for the long quiet hours: a centre asking after the ride, or offering a higher level.
+
+        Neither is an instruction. The ride report wants no readback and the level is only offered, so a
+        pilot who is away from the desk or simply not interested is not left with something outstanding.
+        """
+        st, t = self.state, own.t
+        tuned = st.comms.tuned
+        if P(st.phase) is not P.CRUISE or tuned is None or tuned.controller != "center":
+            return False
+        if t - self._chat_t < CHAT_GAP_S or t - self._tuned_since < CHAT_SETTLE_S:
+            return False
+        # One conversation per controller. A centre that asked after the ride and heard nothing back
+        # doesn't ask again every three quarters of an hour for the rest of the crossing.
+        if tuned.station in self._chatted:
+            return False
+        level = int(round(own.alt_indicated_ft / 100.0) * 100)
+        if level < 10000:
+            return False
+        self._chatted.add(tuned.station)
+        self._chat_t = t
+        higher = level + 2000
+        if self._offered_level is None and higher <= MAX_OFFERED_FT and self._random().random() < OFFER_HIGHER_CHANCE:
+            self._offered_level = (t, higher)
+            self._schedule(t, "center.offer_higher", {"altitude": higher}, tuned, delay=False, expects_readback=False)
+        else:
+            self._schedule(t, "center.say_ride", {"altitude": level}, tuned, delay=False, expects_readback=False)
+        return True
+
+    def _accepts_higher(self, t: float, facility: Facility) -> bool:
+        """The pilot takes a level that was offered: now it is an instruction, to be read back."""
+        if self._offered_level is None or t - self._offered_level[0] > OFFER_WINDOW_S:
+            return False
+        altitude = self._offered_level[1]
+        self._offered_level = None
+        self._schedule(t, "common.climb", {"altitude": altitude}, facility,
+                       on_issue=lambda: self._assign(altitude_ft=altitude, cruise_ft=altitude))
         return True
 
     def _altitude_check(self, own: OwnshipState) -> bool:
@@ -803,6 +850,8 @@ class AtcEngine:
         own = st.aircraft
         if (letter := interp.values.get("atis")) and st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
             self._assign(arrival_atis=letter)  # "with information Delta" on arrival: the destination's ATIS
+        if intent in ("acknowledge", "request_altitude") and self._accepts_higher(t, facility):
+            return []  # "we can take it" after a level was offered: now it's assigned
         if intent == "question":
             return self._answer(interp, facility, t)
         if intent == "request_altitude":

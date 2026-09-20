@@ -115,8 +115,11 @@ MAX_ALTITUDE_FT = 60000
 
 
 def _altitude_value(tokens: list[Token], i: int) -> int | None:
-    if i < len(tokens) and tokens[i].text == "flight" and i + 1 < len(tokens) and tokens[i + 1].text == "level":
-        num = _number(tokens, i + 2)
+    # "flight level 350", or "FL350" the way it is written on the screen and typed back.
+    spelled = i < len(tokens) and tokens[i].text == "flight" and i + 1 < len(tokens) and tokens[i + 1].text == "level"
+    short = i < len(tokens) and tokens[i].text == "fl" and _number(tokens, i + 1) is not None
+    if spelled or short:
+        num = _number(tokens, i + (2 if spelled else 1))
         if num is None or not num.isdigit():
             return None
         # A flight level is three digits. Words that follow run into it when they are digits too:

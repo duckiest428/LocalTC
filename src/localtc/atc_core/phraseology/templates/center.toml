@@ -32,3 +32,14 @@ controller = "center"
 text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} on {frequency}, good day."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
+
+# Enroute, where the hours are long: a centre asking after the ride, and a higher level offered.
+[[template]]
+id = "center.say_ride"
+controller = "center"
+text = ["{callsign}, say ride conditions at {altitude}.", "{callsign}, how's the ride at {altitude}?"]
+
+[[template]]
+id = "center.offer_higher"
+controller = "center"
+text = ["{callsign}, advise if you can accept {altitude}.", "{callsign}, {altitude} is available, advise if you can take it."]

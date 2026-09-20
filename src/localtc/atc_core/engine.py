@@ -79,6 +79,7 @@ STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for 
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
 CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
+RIDE_ANSWER_S = 120.0  # a ride report answered within this of being asked for
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
@@ -198,11 +199,13 @@ class AtcEngine:
         self._crossed: set[str] = set()  # ... and the ones already cleared to cross
         self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
         self._chat_t = -math.inf  # when a centre last started a conversation of its own
+        self._asked_ride_t = -math.inf  # when a centre last asked after the ride
         self._vector_t = -math.inf  # when approach last gave a vector or a speed
         self._chatted: set[str] = set()  # centres that have already started one
         self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
         self._sector_since = -math.inf
         self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
+        self._nudged: set[str] = set()  # ... and the ones already asked "how do you read" about
         self._deviation_since: float | None = None
         self._altitude_checked_t = -math.inf
         self.weather = WeatherTracker()
@@ -554,7 +557,10 @@ class AtcEngine:
             issued = st.issued.get(pending.instruction_id)
             if issued is None or st.comms.tuned is None or not issued.facility.matches(st.comms.tuned_mhz or 0.0):
                 return []  # the pilot isn't on that frequency: they can't hear it
-            if not pending.nudged:
+            # Asked once, said once more, then let go. Re-issuing makes a fresh pending, so without
+            # keeping these per instruction the pair would start over and never stop.
+            if pending.instruction_id not in self._nudged:
+                self._nudged.add(pending.instruction_id)
                 st.pending = replace(pending, nudged=True)
                 self._schedule(t, "common.how_read", {"station": issued.facility.station}, issued.facility, delay=False,
                                expects_readback=False)
@@ -657,18 +663,19 @@ class AtcEngine:
         # doesn't ask again every three quarters of an hour for the rest of the crossing.
         if tuned.station in self._chatted:
             return False
-        level = int(round(own.alt_indicated_ft / 100.0) * 100)
+        # Cruising levels are thousands of feet, and the aircraft's own altitude wanders a little: a
+        # flight at 35,200 is at FL350, not FL352.
+        level = int(round(own.alt_indicated_ft / 1000.0) * 1000)
         if level < 10000:
             return False
         self._chatted.add(tuned.station)
         self._chat_t = t
-        # Cruising levels are thousands of feet. The aircraft's own altitude wanders a little, so round
-        # it before stepping up, or a flight at 35,200 gets offered FL372.
-        higher = (level // 1000) * 1000 + 2000
+        higher = level + 2000
         if self._offered_level is None and higher <= MAX_OFFERED_FT and self._random().random() < OFFER_HIGHER_CHANCE:
             self._offered_level = (t, higher)
             self._schedule(t, "center.offer_higher", {"altitude": higher}, tuned, delay=False, expects_readback=False)
         else:
+            self._asked_ride_t = t
             self._schedule(t, "center.say_ride", {"altitude": level}, tuned, delay=False, expects_readback=False)
         return True
 
@@ -788,6 +795,12 @@ class AtcEngine:
             return out + self._on_request(interp, facility, t)
         if self._answer_offer(ev.text, facility, t):
             return out  # an answer to a level that was offered, in whatever words
+        if t - self._asked_ride_t <= RIDE_ANSWER_S:
+            # ATC asked after the ride, which invites an answer in the pilot's own words. Whatever
+            # comes back is the answer, not something to ask again about.
+            self._asked_ride_t = -math.inf
+            self._schedule(t, "common.pirep", {}, facility, expects_readback=False)
+            return out
         if st.pending is not None and pending is not None:
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
             if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
@@ -894,7 +907,7 @@ class AtcEngine:
         st = self.state
         pending = st.pending
         assert pending is not None
-        st.pending = None
+        st.pending, st.read_back = None, pending  # a late readback is then recognised, not "say again"
         issued = st.issued.get(pending.instruction_id)
         if issued is not None:
             self._schedule(t, pending.instruction_id, issued.slots, facility, expects_readback=False)

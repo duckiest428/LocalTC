@@ -174,6 +174,7 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
         i for word in ("climb", "descend")  # not "climbing 5,000": that's a check-in report
         for i in _find_phrase(tokens, (word, "to")) + _find_phrase(tokens, (word,))
     ]
+
     for i in sorted(set(starts)):
         if (value := _altitude_value(tokens, i)) is not None:
             if (value := _bare_flight_level(value, expected)) not in found:
@@ -182,6 +183,16 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
         if token.kind == "number" and i + 1 < len(tokens) and tokens[i + 1].text in ("feet", "ft"):
             if (value := _altitude_value(tokens, i)) is not None and value not in found:
                 found.append(value)
+    if not found and expected is not None:
+        # "Climb and maintain" came out of speech-to-text as "climateane", leaving only "flight level
+        # three five zero" to go on. A flight level that is the one ATC gave is the readback, whatever
+        # the words before it became. Only ever the expected value, so a wrong level stays wrong, and
+        # only a stated flight level, so "up to five thousand" is still too vague to accept.
+        levels = [i for i, token in enumerate(tokens) if token.text == "flight" and i + 1 < len(tokens)
+                  and tokens[i + 1].text == "level" and (i == 0 or tokens[i - 1].text != "expect")]
+        if any((value := _altitude_value(tokens, i)) is not None and _bare_flight_level(value, expected) == int(expected)
+               for i in levels):
+            found.append(int(expected))
     return found
 
 
@@ -413,7 +424,19 @@ def callsigns(tokens: list[Token], expected: Callsign | None = None) -> list[Cal
 def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Token]:
     """The tokens with the callsign taken out, so its letters can't be read as taxiways
     ("taxi via alpha four, delta papa six niner" is route A4 from DP69, not A4, D, P69)."""
-    if callsign is None or callsign.is_airline:
+    if callsign is None:
+        return tokens
+    if callsign.is_airline:
+        # "Air Canada 216, flight level 350": the flight number is not an altitude, a heading or a speed.
+        telephony = callsign.telephony.lower().split()
+        number = callsign.flight_number.lstrip("0")
+        words = _words(tokens)
+        for i in range(len(words) - len(telephony)):
+            if words[i : i + len(telephony)] == telephony:
+                end = i + len(telephony)
+                if end < len(tokens) and tokens[end].kind == "number" and tokens[end].text.lstrip("0") == number:
+                    end += 1
+                return tokens[:i] + tokens[end:]
         return tokens
     ident = callsign.ident.lower().replace("-", "")
     forms = {ident, callsign.suffix.lower()} | ({ident[1:]} if len(ident) > 4 else set())

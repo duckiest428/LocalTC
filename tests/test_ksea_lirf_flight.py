@@ -80,12 +80,13 @@ def test_the_flight_is_handed_from_one_centre_to_the_next(replay):
     assert len(centres) >= 3, centres
 
 
-def test_departure_hands_the_cruise_on_to_a_centre(replay):
+def test_departure_hands_the_climb_on_to_a_centre(replay):
     """Seattle Departure worked the whole crossing because nothing ever took it off them."""
-    cruise = next(i for i, line in enumerate(replay) if "-> CRUISE" in line)
     arrival = next(i for i, line in enumerate(replay) if "-> ARRIVAL" in line)
-    handoff = [line for line in replay[cruise:arrival] if "Seattle Departure" in line and "contact" in line]
-    assert handoff and "Center" in handoff[0], handoff
+    # Lines the departure controller spoke: the station comes before the colon, the words after it.
+    handoff = [line for line in replay[:arrival]
+               if "Departure" in line.split(":")[0] and "Center" in line.split(":", 1)[-1]]
+    assert handoff, [line for line in replay[:arrival] if "Departure" in line.split(":")[0]]
 
 
 # --- the calls this flight made ------------------------------------------------------------------

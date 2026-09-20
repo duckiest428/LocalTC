@@ -33,6 +33,7 @@ seed = 0                      # 0 = derived from callsign + date (squawk, ATIS l
 center_name = "Seattle"       # the first centre after departure, when no airport lists a CENTER
 center_mhz = 125.1            # frequency. Enroute, centres are named after the region flown over.
 strict_callsign = false       # true: a readback without the callsign is incomplete
+transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"
 airport_dirs = []             # extra folders of <ICAO>.json airport files
 

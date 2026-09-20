@@ -76,7 +76,7 @@ STANDBY_CHANCE = 0.3  # clearance delivery sometimes has to go get it
 MAX_TAILWIND_REQUEST_KT = 10.0  # a pilot's runway request is granted up to this much tailwind
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
-APPROACH_CLEARANCE_NM = 12.0  # approach clears the approach and hands off to tower within this of the field
+APPROACH_CLEARANCE_NM = 18.0  # approach clears the approach and hands off to tower within this of the field
 ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
 REPEAT_WINDOW_S = 180.0
@@ -92,6 +92,8 @@ OFFER_WINDOW_S = 180.0  # how long an offered level stays on the table
 ACCEPT_WORDS = {"affirmative", "affirm", "yes", "accept", "take", "climb", "climbing", "able", "wilco"}
 DECLINE_WORDS = {"negative", "unable", "no", "stay", "staying", "remain", "remaining", "keep", "prefer", "happy"}
 MAX_OFFERED_FT = 41000
+DEPARTURE_ENDS_FT = 15000.0  # above this the departure controller hands the climb to a centre
+DEPARTURE_ENDS_NM = 40.0  # or this far from the field, whichever comes first
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
@@ -128,6 +130,7 @@ class EngineConfig:
     unscripted: bool = True  # ATC starts things too: traffic, altitude checks, "how do you read", stand by
     approach: str = "auto"  # "auto": what the airport publishes, the weather and the aircraft allow
     sid: str | None = None  # departure procedure from the flight plan, named in the IFR clearance
+    transition_ft: int = 18000  # at or above this everyone flies the standard altimeter setting
 
 
 @dataclass
@@ -334,6 +337,11 @@ class AtcEngine:
         altimeter = self.weather.altimeter_inhg
         if altimeter is None or icao is None:
             return None
+        # Above the transition altitude everyone is on the standard setting and a local altimeter means
+        # nothing yet; it comes with the descent through the transition level.
+        own = self.state.aircraft
+        if own is not None and own.alt_indicated_ft >= self.cfg.transition_ft:
+            return None
         return self._phrases([(f"{self._airport_name(icao).split()[0]} altimeter {{altimeter}}", {"altimeter": altimeter})])
 
     def _phrases(self, parts: list[tuple[str, dict[str, Any]]]) -> Phrase:
@@ -414,8 +422,12 @@ class AtcEngine:
             st.flags.add("squawk_7700")
             out.append(self._alert(t, "emergency", "squawking 7700"))
 
-        entered_runway = ctx.on_runway and self._was_on_runway is False  # starting on a runway isn't an incursion
-        self._was_on_runway = ctx.on_runway
+        # Accusing a pilot of a runway incursion takes the sim's own word for it. The runway polygon is
+        # built from a centre point, a length and a width, and where a taxiway runs close alongside one
+        # -- Vancouver's INNER past runway 13 -- it covers ground the aircraft is entitled to be on.
+        on_runway_now = ctx.on_runway and own.on_runway
+        entered_runway = on_runway_now and self._was_on_runway is False  # starting on a runway isn't an incursion
+        self._was_on_runway = on_runway_now
         if entered_runway and own.on_ground and st.phase in (P.TAXI_OUT, P.RUNWAY_HOLD):
             if not ({"takeoff", "line_up"} & st.clearances.keys()):
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
@@ -453,7 +465,7 @@ class AtcEngine:
         elif phase is P.DEPARTURE and own.alt_agl_ft > 500 and tuned == "tower" and once("handoff_departure"):
             if (departure := self.facility("departure") or self._center()) is not None:
                 self._handoff(t, "tower.handoff_departure", st.comms.tuned, departure)
-        elif phase is P.CRUISE and t - st.phase_since_t >= 30 and tuned == "departure" and once("handoff_center"):
+        elif tuned == "departure" and self._leaving_departure(own, phase) and once("handoff_center"):
             center = self._center()
             self._sector, self._sector_since = center, t  # the first sector of the cruise
             self._handoff(t, "departure.handoff_center", st.comms.tuned, center)
@@ -475,8 +487,10 @@ class AtcEngine:
                 and (approach := self.facility("approach")) is not None and once("handoff_approach")
             ):
                 self._handoff(t, "center.handoff_approach", st.comms.tuned, approach)
-        elif phase in (P.APPROACH, P.LANDING) and tuned == "approach" and "approach" not in st.clearances:
-            # Early enough that tower can clear the pilot to land well before short final.
+        elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "approach" and "approach" not in st.clearances:
+            # The approach is cleared well before the aircraft is established, not as it crosses the
+            # threshold of the approach phase: a pilot flying an ILS wants the clearance before
+            # intercepting, with time to brief it and change to tower.
             near = ctx.final is not None and ctx.final.distance_nm <= APPROACH_CLEARANCE_NM
             close = ctx.destination_distance_nm is not None and ctx.destination_distance_nm <= APPROACH_CLEARANCE_NM
             if (near or close) and (spoke_here or t - self._tuned_since >= MISSED_CHECKIN_S):
@@ -1611,6 +1625,21 @@ class AtcEngine:
         return next(f for f in self.facilities if f.controller == "center") if self.facilities else center_facility(
             [], self.cfg.center_name, self.cfg.center_mhz
         )
+
+    def _leaving_departure(self, own: OwnshipState, phase: FlightPhase) -> bool:
+        """Departure has finished with the flight and centre takes it.
+
+        Waiting for the cruise means a jet climbing to FL350 spends twenty minutes on a terminal
+        frequency it left behind long ago. A departure controller's airspace ends within a few tens of
+        miles of the field and a few thousand feet, whichever the flight reaches first.
+        """
+        if phase is P.CRUISE:
+            return own.t - self.state.phase_since_t >= 30
+        if phase is not P.DEPARTURE:
+            return False
+        origin = self.geometry(self.state.flight.origin)
+        away = origin is not None and origin.distance_nm(own.lat, own.lon) >= DEPARTURE_ENDS_NM
+        return own.alt_agl_ft >= DEPARTURE_ENDS_FT or away
 
     def _sector_candidate(self, own: OwnshipState) -> Facility | None:
         """The enroute centre for where the aircraft is now, from the nearest airport big enough to name

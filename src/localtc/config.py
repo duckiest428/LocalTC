@@ -93,6 +93,7 @@ class AtcConfig(_Section):
     center_name: str = "Seattle"
     center_mhz: float = 125.1
     strict_callsign: bool = False
+    transition_ft: int = 18000  # at or above this ATC talks in flight levels and gives no local altimeter
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
     unscripted: bool = True  # traffic calls, altitude checks, "how do you read?", "stand by"

@@ -152,6 +152,7 @@ class AppController:
             "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick},
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
+            "simbrief_user": self.cfg.ui.simbrief_user,
         }
 
     def _push_state(self) -> None:

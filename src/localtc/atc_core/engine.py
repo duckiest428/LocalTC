@@ -67,6 +67,7 @@ PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 NM_M = 1852.0
 AIRBORNE_PHASES = {P.DEPARTURE, P.CRUISE, P.ARRIVAL, P.APPROACH}
 SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?", then once more, then give up
+NUDGE_REPLY_S = 4.0  # after the pilot answers "how do you read", the instruction follows this soon
 STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
 MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
 NOT_SWITCHED_S = 45.0  # still on the old frequency this long after reading back a handoff: say it again
@@ -516,15 +517,21 @@ class AtcEngine:
                 st.pending = None
                 return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: no answer from the pilot")]
             return []
-        if pending is not None and last_pilot >= pending.issued_t and t - max(last_atc, last_pilot) >= STALE_READBACK_S:
-            # The pilot answered with something else (a question, a request) and never read it back. Say it
-            # once more, then stop waiting: a readback that never comes mustn't silence ATC for the whole flight.
+        if pending is not None and last_pilot >= pending.issued_t:
+            # The pilot answered with something else and never read it back. Say it once more, then stop
+            # waiting: a readback that never comes mustn't silence ATC for the whole flight. Answering
+            # "how do you read" is the exception -- the point of asking was to say it again, so that
+            # follows straight away and the readback is still expected.
+            answered_check = pending.nudged and pending.instruction_id not in self._repeated
+            if t - max(last_atc, last_pilot) < (NUDGE_REPLY_S if answered_check else STALE_READBACK_S):
+                return []
             issued = st.issued.get(pending.instruction_id)
             if issued is not None and pending.instruction_id not in self._repeated and st.comms.tuned is not None \
                     and issued.facility.matches(st.comms.tuned_mhz or 0.0):
                 self._repeated.add(pending.instruction_id)
-                st.pending = replace(pending, issued_t=t)
-                self._schedule(t, pending.instruction_id, issued.slots, issued.facility, delay=False, expects_readback=False)
+                st.pending = replace(pending, issued_t=t, nudged=False)
+                self._schedule(t, pending.instruction_id, issued.slots, issued.facility, delay=False,
+                               expects_readback=answered_check)
                 return []
             st.pending = None
             return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: never read back")]

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from localtc.atc_core.phraseology import speech
 from localtc.sim_api import Airport, Frequency
 
+ABBREVIATION_STEM = 4  # letters that must agree for a frequency name to be the airport name shortened
 CONTROLLERS = ("clearance", "ground", "tower", "departure", "center", "approach")
 SUFFIXES = {"clearance": "Clearance", "ground": "Ground", "tower": "Tower", "departure": "Departure",
             "approach": "Approach", "center": "Center"}
@@ -50,7 +51,25 @@ def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
     if not words:
         words = speech.airport_name(airport.name, airport.icao).split()
         words = [w for w in words if w.upper() not in NOISE_WORDS] or words
-    return " ".join(w.capitalize() for w in words) + f" {suffix}"
+    return " ".join(w.capitalize() for w in _unabbreviate(words, airport)) + f" {suffix}"
+
+
+def _unabbreviate(words: list[str], airport: Airport) -> list[str]:
+    """Put back a name the sim's frequency data cut short.
+
+    Fiumicino's tower is named FIUME in the sim while its approach is ROME, so a flight would be
+    handed from "Rome Approach" to "Fiume Tower". A shortened name starts like the airport's own
+    word but isn't always a prefix of it -- FIUME has an E where FIUMICINO has an I -- so they are
+    matched on their first few letters. A name the sim did not shorten is the same length and stays.
+    """
+    full = re.split(r"[-/(]", airport.name.upper())[0].split()
+    out = []
+    for word in words:
+        stem = word[:ABBREVIATION_STEM]
+        match = next((f for f in full if len(word) >= ABBREVIATION_STEM and len(f) > len(word)
+                      and f.startswith(stem)), None)
+        out.append(match or word)
+    return out
 
 
 def _facility(airport: Airport, controller: str, kinds: tuple[str, ...]) -> Facility | None:

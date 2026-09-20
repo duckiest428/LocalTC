@@ -270,7 +270,7 @@ const Flight = {
   open() {
     const plan = S.state.plan;
     $("#plan-error").hidden = true;
-    $("#sb-user").value = S.settings?.settings?.ui?.simbrief_user || localStorage.getItem("sbUser") || "";
+    $("#sb-user").value = S.state.simbrief_user || S.settings?.settings?.ui?.simbrief_user || localStorage.getItem("sbUser") || "";
     if (plan && plan.source === "manual") this.fill(plan);
     this.fetched = null;
     $("#sb-result").hidden = true;
@@ -504,6 +504,15 @@ const Settings = {
       </div>
 
       <div class="card">
+        <h3>Third party</h3>
+        <p class="muted small">Accounts LocalTC reads flight plans from. Nothing is sent anywhere else.</p>
+        <div class="row"><label>SimBrief username or Pilot ID<input id="s-simbrief" value="${esc(st.ui.simbrief_user)}"
+          placeholder="e.g. 1207576" autocomplete="off" spellcheck="false"></label>
+          <div><button class="btn small" id="s-simbrief-fetch">Import latest plan</button></div></div>
+        <span class="hint">Your Pilot ID is on the SimBrief Account Settings page. <b>New Flight</b> uses this too.</span>
+      </div>
+
+      <div class="card">
         <h3>Sim</h3>
         <div class="row"><label>Connect to<select id="s-source"><option value="live" ${st.ui.source === "live" ? "selected" : ""}>MSFS 2024 (live)</option>
           <option value="replay" ${st.ui.source === "replay" ? "selected" : ""}>A recorded flight (replay, for development)</option></select></label></div>
@@ -565,6 +574,17 @@ const Settings = {
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-understand", "change", () => this.save("llm", "understanding", val("#s-understand")));
+    on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
+    on("#s-simbrief-fetch", "click", async (e) => {
+      const user = val("#s-simbrief").trim();
+      if (!user) { toast("Enter your SimBrief username or Pilot ID first", true); return; }
+      const b = e.target; b.disabled = true; b.textContent = "Fetching ...";
+      try {
+        const r = await api("flight/simbrief", { user });
+        const saved = await api("flight/plan", { plan: r.plan });
+        toast(`Plan imported: ${saved.summary}`);
+      } catch (err) { fail(err); } finally { b.disabled = false; b.textContent = "Import latest plan"; }
+    });
     on("#s-source", "change", async () => { await this.save("ui", "source", val("#s-source")); this.render(); });
     on("#s-replay", "change", () => this.save("replay", "path", val("#s-replay").trim()));
     on("#s-replay-speed", "change", () => this.save("replay", "speed", Number(val("#s-replay-speed"))));
@@ -633,7 +653,7 @@ const MapView = {
   init() {
     this.map = L.map("map", { zoomControl: true, attributionControl: true, worldCopyJump: true }).setView([47.9, -122.28], 9);
     this.tiles();
-    this.trail = L.polyline([], { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
+    this.trail = L.polyline(this.trailPts, { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
     this.map.on("dragstart", () => this.setFollow(false));
     $("#map-follow").onclick = () => this.setFollow(!this.follow);
     $("#map-route").onclick = () => { this.setFollow(false); if (this.route) this.map.fitBounds(this.route.getBounds(), { padding: [30, 30] }); else toast("No flight plan route"); };
@@ -656,16 +676,18 @@ const MapView = {
     if (on && S.own) this.map.panTo([S.own.lat, S.own.lon]);
   },
   own(o) {
-    if (!this.map) return;
-    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${PLANE("#5fd068")}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
-    if (!this.ownMarker) { this.ownMarker = L.marker([o.lat, o.lon], { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView([o.lat, o.lon], 11); }
-    else { this.ownMarker.setLatLng([o.lat, o.lon]); this.ownMarker.setIcon(icon); }
+    // The track is kept whether or not the map has ever been opened, so opening it mid-flight shows
+    // where the flight has been rather than starting a line from that moment.
     const last = this.trailPts[this.trailPts.length - 1];
     if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.0015) {
       this.trailPts.push([o.lat, o.lon]);
       if (this.trailPts.length > 3000) this.trailPts.shift();
-      this.trail.setLatLngs(this.trailPts);
+      if (this.trail) this.trail.setLatLngs(this.trailPts);
     }
+    if (!this.map) return;
+    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${PLANE("#5fd068")}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    if (!this.ownMarker) { this.ownMarker = L.marker([o.lat, o.lon], { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView([o.lat, o.lon], 11); }
+    else { this.ownMarker.setLatLng([o.lat, o.lon]); this.ownMarker.setIcon(icon); }
     if (this.follow) this.map.panTo([o.lat, o.lon], { animate: false });
     $("#map-info").textContent = `${o.alt.toLocaleString()} ft  ${o.gs} kt  HDG ${String(o.hdg_mag).padStart(3, "0")}  VS ${o.vs > 0 ? "+" : ""}${o.vs}`;
   },

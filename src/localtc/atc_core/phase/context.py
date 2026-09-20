@@ -6,6 +6,7 @@ from localtc.atc_core.airport import AirportGeometry, FinalApproach, HoldShort, 
 from localtc.sim_api import Airport, OwnshipState
 
 NEAR_AIRPORT_NM = 10.0
+DESTINATION_ONLY_NM = 25.0  # this close to where you are going, "lined up" can only mean one of its runways
 
 
 @dataclass(frozen=True)
@@ -62,8 +63,11 @@ class ContextBuilder:
 
         destination = self.airports.get(self.destination) if self.destination else None
         dest_nm = destination.distance_nm(own.lat, own.lon) if destination else None
+        # Close to the destination, only its runways count. Airfields crowd together near a big airport, and
+        # lining up with one of their runways on the way in is a coincidence, not the approach being flown.
+        arriving = dest_nm is not None and dest_nm <= DESTINATION_ONLY_NM
         final = None
-        for candidate in (destination, nearest):
+        for candidate in (destination, None if arriving else nearest):
             if candidate is not None and not own.on_ground:
                 final = candidate.final_approach(own.lat, own.lon, own.hdg_true)
                 if final is not None:

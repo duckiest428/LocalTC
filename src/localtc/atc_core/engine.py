@@ -1206,6 +1206,9 @@ class AtcEngine:
         end = self._runway_end(self.state.flight.origin, own)
         note = self._atis_note(self.state.flight.origin, atis)
         route = TaxiGraph(geo).departure_route(own.lat, own.lon, end) if end else None
+        if route is not None and end is not None and self.state.assignments.departure_runway == end.ident \
+                and self.state.assignments.taxi_route:
+            route = replace(route, taxiways=self.state.assignments.taxi_route)  # asked twice: the same route again
         if end is None:
             self._schedule(t, "common.roger", {}, facility)
             return
@@ -1297,10 +1300,15 @@ class AtcEngine:
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         ctx = self.tracker.context
         geo = ctx.airport
-        route = TaxiGraph(geo).parking_route(own.lat, own.lon) if geo is not None and own is not None else None
-        if route is not None and route.taxiways:
-            self._schedule(t, "ground.taxi_in", {"taxi_route": route.taxiways}, facility, clearance="taxi_in",
-                           on_issue=lambda: self._assign(taxi_route=route.taxiways))
+        # Asked again, ATC repeats the route it gave, it doesn't invent a new one: the search starts from
+        # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time.
+        taxiways = self.state.assignments.taxi_route if "taxi_in" in self.state.clearances else None
+        if taxiways is None:
+            route = TaxiGraph(geo).parking_route(own.lat, own.lon) if geo is not None and own is not None else None
+            taxiways = route.taxiways if route is not None else None
+        if taxiways:
+            self._schedule(t, "ground.taxi_in", {"taxi_route": taxiways}, facility, clearance="taxi_in",
+                           on_issue=lambda: self._assign(taxi_route=taxiways))
         else:
             self._schedule(t, "ground.taxi_in_no_route", {}, facility, clearance="taxi_in")
 

@@ -16,14 +16,16 @@ import random
 from dataclasses import dataclass, field
 from typing import Literal
 
-from localtc.atc_core.engine import AtcEngine
+from localtc.atc_core.engine import LINED_UP_NM, AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
 from localtc.atc_core.phraseology import speech
-from localtc.sim_api import AtcTransmission, BusEvent, OwnshipState
+from localtc.sim_api import AtcTransmission, BusEvent, OwnshipState, ReadbackEvaluated
 
 CopilotMode = Literal["assist", "full"]
 QUIET_S = 4.0  # radio silence before the copilot starts a call of its own
 MAX_REPEATS = 2  # the same words twice in a row; a third time won't go better
+REPEAT_WINDOW_S = 120.0  # the same words again after this long are a new call, not a repeat
+CORRECTING = ("common.negative", "common.read_back", "common.confirm")  # ATC named what was wrong
 
 
 @dataclass(frozen=True)
@@ -76,8 +78,10 @@ class Copilot:
         self._queue: list[_Queued] = []
         self._seq = 0
         self._answered: set[tuple[str, float]] = set()  # (instruction id, ATC transmission time) read back
+        self._evaluated: dict[str, ReadbackEvaluated] = {}  # how ATC judged the last readback of each instruction
         self._done: set[str] = set()  # one-shot calls already made
         self._last_said = ""
+        self._last_said_t = -1e9
         self._repeats = 0
         self._last_radio_t = -1e9
         self._t = 0.0
@@ -86,7 +90,9 @@ class Copilot:
 
     def observe(self, event: BusEvent) -> None:
         self._t = max(self._t, event.t)
-        if isinstance(event, AtcTransmission):
+        if isinstance(event, ReadbackEvaluated):
+            self._evaluated[event.instruction_id] = event
+        elif isinstance(event, AtcTransmission):
             self._last_radio_t = event.t
             self._on_atc(event)
 
@@ -122,13 +128,28 @@ class Copilot:
         if issued is None or not self.engine.library.get(pending.instruction_id).pilot_readback:
             return
         self._answered.add((pending.instruction_id, tx.t))
-        # Corrections ("negative, squawk 5015") are answered with the whole instruction again.
-        readback = self._push("say", tx.t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
+        words = self._correction(pending.instruction_id, issued.slots) if tx.instruction_id in CORRECTING else None
+        readback = self._push("say", tx.t, text=words or self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
         handoff = st.comms.expected
         if handoff is not None and "frequency" in issued.slots and handoff.matches(float(issued.slots["frequency"])):
             tune = self._push("tune", tx.t, facility=handoff, after=readback.due + 1.0)
             if self.mode == "full":
                 self._push("checkin", tx.t, facility=handoff, after=tune.due + self._delay())
+
+    def _correction(self, instruction_id: str, slots: dict) -> str | None:
+        """Told "negative" or "read back ...", answer with the part ATC picked out rather than saying the
+        whole thing over again. Repeating words that were just rejected only gets them rejected again."""
+        evaluated = self._evaluated.get(instruction_id)
+        if evaluated is None:
+            return None
+        elements = [e for e in (*evaluated.mismatched, *evaluated.missing) if e in self.engine.library.fragments]
+        if not elements:
+            return None
+        parts = []
+        for element in dict.fromkeys(elements):
+            if element in slots:
+                parts.append(str(self.engine.library.fragment(element, slots)).capitalize())
+        return ", ".join(parts) + f", {self._callsign()}" if parts else None
 
     # --- calls the copilot starts (full mode) ------------------------------------------------------------
 
@@ -182,7 +203,10 @@ class Copilot:
             return self._ready_for_departure(f)
         if f.controller == "tower":
             final = self.engine.tracker.context.final
-            runway = st.assignments.arrival_runway or (final.end.ident if final else "")
+            # Report the runway being flown to, not the one expected earlier: lined up on final, what the
+            # aircraft is pointing at is the truth, and tower clears the runway the pilot names.
+            lined_up = final.end.ident if final is not None and final.distance_nm <= LINED_UP_NM else None
+            runway = lined_up or st.assignments.arrival_runway or (final.end.ident if final else "")
             miles = f"{max(1, round(final.distance_nm))} mile final" if final else "inbound"
             return f"{f.station}, {cs}, {miles} runway {runway}".rstrip()
         if f.controller == "ground":
@@ -233,10 +257,13 @@ class Copilot:
             return [Tune(t, item.facility.mhz)] if item.tries == 2 else []
         if not text:
             return []
-        self._repeats = self._repeats + 1 if text == self._last_said else 1
+        # Only words repeated straight away are a copilot stuck in a loop. The same short answer hours
+        # later ("Looking, DAL42" to a second traffic call) is a new call and must not be held against it.
+        again = text == self._last_said and t - self._last_said_t <= REPEAT_WINDOW_S
+        self._repeats = self._repeats + 1 if again else 1
         if self._repeats > MAX_REPEATS:
             return [Note(t, f"ATC keeps rejecting this; not repeating it again: {text}")]
-        self._last_said = text
+        self._last_said, self._last_said_t = text, t
         self._last_radio_t = t
         return [Say(t, text)]
 

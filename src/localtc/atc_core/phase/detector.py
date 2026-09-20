@@ -51,6 +51,7 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     cruise_no_plan_s: float = 60.0
     descent_vs_fpm: float = -400.0
     descent_s: float = 30.0
+    descent_max_nm: float = 300.0  # a descent further out than this from the destination isn't the arrival
     tod_nm_per_1000ft: float = 3.0
     tod_min_nm: float = 30.0
     tod_s: float = 5.0
@@ -145,7 +146,8 @@ class PhaseDetector:
             return FlightPhase.APPROACH
         if own.vs_fpm > th.level_vs_fpm:
             return FlightPhase.DEPARTURE
-        if own.vs_fpm < -th.level_vs_fpm:
+        far = ctx.destination_distance_nm is not None and ctx.destination_distance_nm > th.descent_max_nm
+        if own.vs_fpm < -th.level_vs_fpm and not far:
             return FlightPhase.ARRIVAL
         return FlightPhase.CRUISE
 
@@ -159,7 +161,11 @@ class PhaseDetector:
 
     def _arrival_due(self, own: OwnshipState, ctx: PositionContext) -> str | None:
         th = self.th
-        if self._held("descent", own.vs_fpm < th.descent_vs_fpm, own.t, th.descent_s):
+        # A long descent means the arrival only near the destination. On a long flight there are plenty of
+        # others -- avoiding traffic, a step down to a new cruise level, weather -- and taking one of those
+        # for the arrival puts the whole flight in the wrong phase for hours.
+        near_enough = ctx.destination_distance_nm is None or ctx.destination_distance_nm <= th.descent_max_nm
+        if near_enough and self._held("descent", own.vs_fpm < th.descent_vs_fpm, own.t, th.descent_s):
             return "sustained descent"
         # Top of descent only counts once the climb is over (a short hop starts inside the TOD distance).
         if ctx.destination is not None and ctx.destination_distance_nm is not None and own.vs_fpm < th.level_vs_fpm:

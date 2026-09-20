@@ -111,17 +111,24 @@ def normalize_runway(ident: str) -> str:
 # --- numbers ---------------------------------------------------------------------------
 
 
+MAX_ALTITUDE_FT = 60000
+
+
 def _altitude_value(tokens: list[Token], i: int) -> int | None:
     if i < len(tokens) and tokens[i].text == "flight" and i + 1 < len(tokens) and tokens[i + 1].text == "level":
         num = _number(tokens, i + 2)
-        return int(num) * 100 if num and num.isdigit() else None
+        if num is None or not num.isdigit():
+            return None
+        # A flight level is three digits. Words that follow run into it when they are digits too:
+        # "flight level three five zero, one zero minutes after departure" is FL350, not FL35010.
+        return int(num[:3]) * 100
     num = _number(tokens, i)
     if num is None or not num.isdigit():
         return None
     value = int(num)
     if value < 100:  # "maintain one zero" is not an altitude; "maintain 5" isn't either
         return None
-    return value
+    return value if value <= MAX_ALTITUDE_FT else None
 
 
 def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
@@ -206,6 +213,11 @@ def headings(tokens: list[Token], expected: Any = None) -> list[int]:
 
 # --- taxi routes, approaches, callsigns -------------------------------------------------------------
 
+# Words that sit between taxiway names without ending the route: "via B, holding point C",
+# "via A then B". "hold short runway 25L" ends it anyway, because "runway" is not one of these.
+ROUTE_FILLER = ("and", "then", "hold", "holding", "short", "point", "at", "to")
+
+
 def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ...]]:
     found = []
     for start in _find_phrase(tokens, ("via",)):
@@ -215,7 +227,7 @@ def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ..
             token = tokens[i]
             letter = token.text if token.kind == "letter" or (token.kind == "word" and len(token.text) == 1) else None
             if letter is None:
-                if token.kind == "word" and token.text in ("and", "then") and names:
+                if token.kind == "word" and token.text in ROUTE_FILLER and names:
                     i += 1
                     continue
                 break
@@ -228,6 +240,28 @@ def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ..
         if names:
             found.append(tuple(names))
     return found
+
+
+def taxi_route_matches(heard: Any, expected: Any) -> bool:
+    """Does the pilot's route agree with the one ATC gave?
+
+    An exact comparison is wrong for one reason: a taxiway whose name is more than one letter is
+    spoken letter by letter, so "taxi via delta golf, charlie hotel" comes back as D, G, C, H and
+    has to be glued into DG, CH before it can be compared. The route is walked in order, taking as
+    many letters as each assigned name needs.
+    """
+    said = [str(n).upper() for n in heard]
+    want = [str(n).upper() for n in expected]
+    if said == want:
+        return True
+    i = 0
+    for name in want:
+        size = next((k for k in range(1, len(name) + 1)  # one entry, or several letters spelling this name
+                     if i + k <= len(said) and "".join(said[i : i + k]) == name), None)
+        if size is None:
+            return False
+        i += size
+    return i == len(said)
 
 
 APPROACH_KINDS = {"ils": "ILS", "rnav": "RNAV", "gps": "RNAV", "visual": "VISUAL", "localizer": "LOC", "loc": "LOC"}
@@ -407,7 +441,7 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
     if element == "altitude" or element == "cruise":
         return int(heard) == int(expected)
     if element == "taxi_route":
-        return tuple(heard) == tuple(n.upper() for n in expected)
+        return taxi_route_matches(heard, expected)
     if element == "fix":
         return str(heard).lower() == str(expected).lower()
     return heard == expected

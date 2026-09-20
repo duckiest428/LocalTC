@@ -148,7 +148,7 @@ class Copilot:
         parts = []
         for element in dict.fromkeys(elements):
             if element in slots:
-                parts.append(str(self.engine.library.fragment(element, slots)).capitalize())
+                parts.append(self.engine.library.fragment(element, slots).display.capitalize())
         return ", ".join(parts) + f", {self._callsign()}" if parts else None
 
     # --- calls the copilot starts (full mode) ------------------------------------------------------------

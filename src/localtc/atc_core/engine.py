@@ -16,7 +16,14 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, published, select_approach, select_runway
-from localtc.atc_core.facilities import Facility, airport_facilities, center_facility, channel_khz
+from localtc.atc_core.facilities import (
+    Facility,
+    airport_facilities,
+    center_facility,
+    channel_khz,
+    is_sector_airport,
+    sector_center,
+)
 from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
@@ -75,6 +82,9 @@ REPEAT_WINDOW_S = 180.0
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
 LINED_UP_NM = 4.0  # this close on a runway's final, the pilot has chosen it
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
+SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
+SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
+SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
 
@@ -161,6 +171,8 @@ class AtcEngine:
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
+        self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
+        self._sector_since = -math.inf
         self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
         self._deviation_since: float | None = None
         self._altitude_checked_t = -math.inf
@@ -422,7 +434,12 @@ class AtcEngine:
             if (departure := self.facility("departure") or self._center()) is not None:
                 self._handoff(t, "tower.handoff_departure", st.comms.tuned, departure)
         elif phase is P.CRUISE and t - st.phase_since_t >= 30 and tuned == "departure" and once("handoff_center"):
-            self._handoff(t, "departure.handoff_center", st.comms.tuned, self._center())
+            center = self._center()
+            self._sector, self._sector_since = center, t  # the first sector of the cruise
+            self._handoff(t, "departure.handoff_center", st.comms.tuned, center)
+        elif phase is P.CRUISE and tuned == "center" and (crossing := self._sector_crossing(own)) is not None:
+            self._sector, self._sector_since = crossing, t
+            self._handoff(t, "center.handoff_center", st.comms.tuned, crossing)
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
             if "descend" not in st.flags and (plan := self._arrival_plan(own)) is not None:
                 st.flags.add("descend")
@@ -1453,14 +1470,45 @@ class AtcEngine:
             facilities += airport_facilities(airports[dest].airport, role="arrival")
         elif dest and dest == origin and dest in airports:  # returning: the departure airport's approach controller
             facilities += [f for f in airport_facilities(airports[dest].airport, role="arrival") if f.controller == "approach"]
-        known: list[Airport] = [g.airport for g in airports.values()]
-        facilities.append(center_facility(known, self.cfg.center_name, self.cfg.center_mhz))
+        ends = [airports[icao].airport for icao in (origin, dest) if icao and icao in airports]
+        facilities.append(self._sector or center_facility(ends, self.cfg.center_name, self.cfg.center_mhz))
         self.facilities = facilities
 
     def _center(self) -> Facility:
+        if self._sector is not None:
+            return self._sector
         return next(f for f in self.facilities if f.controller == "center") if self.facilities else center_facility(
             [], self.cfg.center_name, self.cfg.center_mhz
         )
+
+    def _sector_candidate(self, own: OwnshipState) -> Facility | None:
+        """The enroute centre for where the aircraft is now, from the nearest airport big enough to name
+        one. Over the ocean, or anywhere the sim has sent nothing sizeable, there is no candidate and the
+        flight stays with the centre it is on."""
+        # The biggest field in range, not the closest: centres take their name from the major airport of
+        # a region, and a small field next door shouldn't outrank the international airport beside it.
+        in_range = [g.airport for g in self.tracker.context_builder.airports.values()
+                    if is_sector_airport(g.airport) and g.distance_nm(own.lat, own.lon) < SECTOR_NEAREST_NM]
+        best = max(in_range, key=lambda a: (max(r.length_m for r in a.runways), a.icao), default=None)
+        if best is None:
+            return None
+        taken = tuple(f.mhz for f in self.facilities if f.controller != "center")
+        return sector_center(best, taken)
+
+    def _sector_crossing(self, own: OwnshipState) -> Facility | None:
+        """A new centre to be handed to, or None to stay put. Sectors are wide: a handoff needs a
+        genuinely different centre and a decent stretch of flying since the last one, so that passing
+        an airport doesn't set off a string of frequency changes."""
+        if own.t - self._sector_since < SECTOR_MIN_S:
+            return None
+        candidate = self._sector_candidate(own)
+        if candidate is None or self._sector is None or candidate.station == self._sector.station:
+            return None
+        # Close to the destination the arrival takes over; no point changing centre first.
+        destination_nm = self.tracker.context.destination_distance_nm
+        if destination_nm is not None and destination_nm <= SECTOR_LAST_NM:
+            return None
+        return candidate
 
     def _facility_for(self, mhz: float | None) -> Facility | None:
         if mhz is None:

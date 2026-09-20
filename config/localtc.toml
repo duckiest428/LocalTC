@@ -30,8 +30,8 @@ approach = "auto"             # auto: what the airport publishes, the weather an
 [atc]
 enabled = true
 seed = 0                      # 0 = derived from callsign + date (squawk, ATIS letter, phrasing variants)
-center_name = "Montreal"       # used when no airport lists a CENTER frequency
-center_mhz = 125.1
+center_name = "Seattle"       # the first centre after departure, when no airport lists a CENTER
+center_mhz = 125.1            # frequency. Enroute, centres are named after the region flown over.
 strict_callsign = false       # true: a readback without the callsign is incomplete
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"
 airport_dirs = []             # extra folders of <ICAO>.json airport files

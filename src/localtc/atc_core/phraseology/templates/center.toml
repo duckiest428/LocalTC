@@ -24,3 +24,11 @@ controller = "center"
 text = ["{callsign}, contact {station} {frequency}."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
+
+# Crossing into the next sector enroute.
+[[template]]
+id = "center.handoff_center"
+controller = "center"
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} on {frequency}, good day."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."

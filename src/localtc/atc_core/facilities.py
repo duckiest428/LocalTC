@@ -1,6 +1,7 @@
 """ATC facilities (controllers) for a flight: who works which frequency, and what they're called on the radio."""
 
 import re
+import zlib
 from dataclasses import dataclass
 
 from localtc.atc_core.phraseology import speech
@@ -14,6 +15,7 @@ NOISE_WORDS = {
     "INTL", "INTERNATIONAL", "AIRPORT", "ARPT", "FLD", "FIELD", "CO", "COUNTY", "MUNI", "MUNICIPAL", "RGNL",
     "REGIONAL", "APP", "APPR", "APPROACH", "DEP", "DEPARTURE", "TWR", "TOWER", "GND", "GROUND", "CLNC", "CLR",
     "CLEARANCE", "DELIVERY", "DEL", "CTR", "CENTER", "CENTRE", "ATIS", "MEM", "MEMORIAL", "EXEC", "EXECUTIVE",
+    "MIL", "AB", "AFB", "BASE",
 }
 
 
@@ -83,8 +85,53 @@ def airport_facilities(airport: Airport, *, role: str) -> list[Facility]:
 
 
 def center_facility(airports: list[Airport], name: str, mhz: float) -> Facility:
+    """The centre the flight starts its cruise with.
+
+    ``airports`` is the origin and destination only. Every airport the sim has streamed along the way
+    would do just as well at having a centre frequency, and picking one of those hands a flight out of
+    Seattle to a centre named after somewhere in British Columbia.
+    """
     for airport in airports:
         facility = _facility(airport, "center", ("center",))
         if facility is not None:
             return Facility("center", facility.station, facility.mhz, None, facility.alternates)
     return Facility("center", f"{name} Center", mhz)
+
+
+# An airport big enough for the enroute centre around it to be named after: a real field with real ATC,
+# not a farm strip or a hospital helipad.
+SECTOR_RUNWAY_M = 1800.0
+SECTOR_MHZ = (132.0, 135.975)  # centres live up here; a made-up sector frequency is picked from this band
+
+
+def sector_name(airport: Airport) -> str:
+    """ "Kelowna" from an airport, for the centre working the airspace around it.
+
+    The place, not the field: "Seattle-Tacoma Intl" is Seattle, "Wainwright(Field 21)" is Wainwright.
+    """
+    first = re.split(r"[-/(]", airport.name or airport.icao)[0]
+    words = [w for w in first.split() if w.upper() not in NOISE_WORDS]
+    return " ".join(w.capitalize() for w in words[:2]) if words else airport.icao.upper()
+
+
+def is_sector_airport(airport: Airport) -> bool:
+    if not any(f.kind in ("tower", "approach", "departure", "center") for f in airport.frequencies):
+        return False
+    return any(r.length_m >= SECTOR_RUNWAY_M for r in airport.runways)
+
+
+def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
+    """The enroute centre around ``airport``: "Edmonton Center" on its own frequency.
+
+    Real sector boundaries and frequencies aren't in the sim's data, so a centre is named after the
+    nearest sizeable airport and given a frequency of its own, derived from that name so the same
+    place is always the same frequency. ``taken`` keeps it off a frequency another controller works.
+    """
+    if (published := _facility(airport, "center", ("center",))) is not None:
+        return Facility("center", published.station, published.mhz, None, published.alternates)
+    name = sector_name(airport)
+    low, high = (round(f * 1000) for f in SECTOR_MHZ)
+    slots = [f / 1000 for f in range(low, high + 1, 25)]
+    busy = {channel_khz(f) for f in taken}
+    free = [f for f in slots if channel_khz(f) not in busy] or slots
+    return Facility("center", f"{name} Center", free[zlib.crc32(name.encode()) % len(free)])

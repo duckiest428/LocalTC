@@ -52,6 +52,10 @@ OWNSHIP: tuple[Datum, ...] = (
     Datum("parking_brake", "BRAKE PARKING POSITION", "Bool", I32),
     Datum("engine_running", "GENERAL ENG COMBUSTION:1", "Bool", I32),
     Datum("on_runway", "ON ANY RUNWAY", "Bool", I32),
+    # Fuel and weight: what an emergency call and a realistic clearance limit are worked out from.
+    Datum("fuel_lb", "FUEL TOTAL QUANTITY WEIGHT", "pounds"),
+    Datum("fuel_flow_pph", "ENG FUEL FLOW PPH:1", "pounds per hour"),
+    Datum("gross_weight_lb", "TOTAL WEIGHT", "pounds"),
     Datum("wind_dir_true", "AMBIENT WIND DIRECTION", "degrees"),
     Datum("wind_kt", "AMBIENT WIND VELOCITY", "knots"),
     Datum("magvar", "MAGVAR", "degrees"),

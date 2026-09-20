@@ -33,7 +33,8 @@ OWNSHIP_VALUES = {
     "gs_kt": 0.0, "vs_fpm": 0.0, "on_ground": 1, "xpdr_code": 0x1200, "xpdr_state": 4, "xpdr_ident": 0,
     "com1_mhz": 118.30000305, "com2_mhz": 121.5, "com1_tx": 0, "com2_tx": 0, "com1_type": "TWR",
     "com1_ident": "KPAE", "gear_down": 1, "flaps_index": 1, "parking_brake": 1, "engine_running": 1,
-    "on_runway": 0, "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,
+    "on_runway": 0, "fuel_lb": 318.0, "fuel_flow_pph": 0.0, "gross_weight_lb": 2320.0,
+    "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,
     "temperature_c": 12.0, "visibility_m": 16000.0, "precip": 2, "in_cloud": 0, "zulu_s": 64800.0,
 }
 

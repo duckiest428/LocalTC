@@ -62,6 +62,10 @@ class OwnshipState(Event, tag="ownship_state"):
     precip: int = 0  # AMBIENT PRECIP STATE bits: 2 none, 4 rain, 8 snow
     in_cloud: bool = False
     zulu_s: float | None = None  # sim time of day, seconds since 00:00Z
+    # Fuel and weight; None where a recording predates them.
+    fuel_lb: float | None = None  # total fuel on board
+    fuel_flow_pph: float | None = None  # burn on engine 1, for an endurance estimate
+    gross_weight_lb: float | None = None
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):

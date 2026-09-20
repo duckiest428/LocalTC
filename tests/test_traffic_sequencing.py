@@ -78,3 +78,43 @@ def test_traffic_ahead_on_the_same_final_gets_a_landing_order():
     assert "tower.sequence" in said(engine, out), said(engine, out)
     spoken = next(e.text for e in out if isinstance(e, AtcTransmission))
     assert "number two" in spoken and "737" in spoken, spoken
+
+
+def taxiing(engine: AtcEngine, *, heading: float = 90.0) -> object:
+    """An own-ship taxiing on KBFI's apron, talking to ground."""
+    return own(900.0, lat=47.5300, lon=-122.3020, hdg_true=heading, hdg_mag=heading, on_ground=True,
+               alt_msl_ft=21, alt_indicated_ft=21, alt_agl_ft=0, gs_kt=12, ias_kt=12, com1_mhz=121.9)
+
+
+def crossing_ahead(lat: float, lon: float, heading: float) -> TrafficTarget:
+    return TrafficTarget(object_id=7, atc_id="ASA55", atc_model="A320", lat=lat, lon=lon, alt_ft=21.0,
+                         hdg_true=heading, gs_kt=10.0, on_ground=True)
+
+
+def ground_engine() -> AtcEngine:
+    engine = AtcEngine(EngineConfig(callsign="N172LT", destination="KBFI", seed=3))
+    engine.handle(AirportData(t=0.0, airport=kbfi()))
+    engine.state.phase = "TAXI_OUT"
+    return engine
+
+
+def test_traffic_crossing_in_front_while_taxiing_holds_this_one():
+    engine = ground_engine()
+    # 100 m east of us, crossing from our left to our right while we taxi east.
+    engine.handle(TrafficSnapshot(t=1.0, targets=(crossing_ahead(47.5300, -122.30067, 180.0),)))
+    out = engine.handle(taxiing(engine))
+    assert "ground.give_way" in said(engine, out), said(engine, out)
+
+
+def test_traffic_going_the_same_way_is_not_in_the_way():
+    engine = ground_engine()
+    engine.handle(TrafficSnapshot(t=1.0, targets=(crossing_ahead(47.5300, -122.30067, 90.0),)))
+    out = engine.handle(taxiing(engine))
+    assert "ground.give_way" not in said(engine, out)
+
+
+def test_traffic_behind_is_not_in_the_way():
+    engine = ground_engine()
+    engine.handle(TrafficSnapshot(t=1.0, targets=(crossing_ahead(47.5300, -122.30333, 180.0),)))
+    out = engine.handle(taxiing(engine))
+    assert "ground.give_way" not in said(engine, out)

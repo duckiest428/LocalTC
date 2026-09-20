@@ -71,3 +71,9 @@ controller = "ground"
 text = ["{callsign}, cross runway {runway}.", "{callsign}, cross runway {runway}, remain this frequency."]
 readback = { required = ["runway"] }
 pilot_readback = "Cross runway {runway}, {callsign_short}."
+
+# Another aircraft in the way on the ground.
+[[template]]
+id = "ground.give_way"
+controller = "ground"
+text = ["{callsign}, hold position, {message}.", "{callsign}, give way to the {message}, then continue taxi."]

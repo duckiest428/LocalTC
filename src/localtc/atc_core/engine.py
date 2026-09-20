@@ -79,11 +79,17 @@ STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for 
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
 CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
+GIVE_WAY_NM = 0.15  # traffic this close on the ground is close enough to wait for
+GIVE_WAY_MOVING_KT = 3.0  # both have to be moving for one to be in the other's way
+GIVE_WAY_AHEAD_DEG = 60.0  # how far off the nose it can be and still be in front
+GIVE_WAY_CROSSING_DEG = 45.0  # anything straighter than this is going our way, not across us
+GIVE_WAY_GAP_S = 90.0  # quiet between one of these and the next
 GO_AROUND_NM = 1.5  # short final: an aircraft still on the runway means going around
 RUNWAY_CLEAR_KT = 40.0  # faster than this on the runway and it is getting off it
 SEQUENCE_NM = 12.0  # where the landing order is given
 SEQUENCE_ALT_FT = 3000.0  # traffic within this of our altitude counts as being on the same final
 RIDE_ANSWER_S = 120.0  # a ride report answered within this of being asked for
+MAX_ENDURANCE_MIN = 20 * 60  # beyond this the numbers are not telling us anything useful
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
@@ -204,6 +210,7 @@ class AtcEngine:
         self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
         self._chat_t = -math.inf  # when a centre last started a conversation of its own
         self._asked_ride_t = -math.inf  # when a centre last asked after the ride
+        self._gave_way_t = -math.inf  # when ground last held this aircraft for another
         self._vector_t = -math.inf  # when approach last gave a vector or a speed
         self._chatted: set[str] = set()  # centres that have already started one
         self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
@@ -456,6 +463,9 @@ class AtcEngine:
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
                 out.append(self._alert(t, "runway_incursion", f"entered {where} without clearance"))
 
+        if self.cfg.unscripted and st.phase is not None and own.on_ground and self._can_call(t, own) \
+                and self._ground_conflict(own):
+            return out
         if self.cfg.unscripted and st.phase is not None:
             out += self._watch(own)
         if st.phase is None or not self._can_call(t, own):
@@ -655,6 +665,41 @@ class AtcEngine:
             display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
         self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
         return True
+
+    def _ground_conflict(self, own: OwnshipState) -> bool:
+        """Another aircraft taxiing across in front of this one: hold position and let it go by.
+
+        Close quarters on the ground is the other thing ground control is for, and until now a flight
+        taxied through the traffic as though it were not there.
+        """
+        st, t = self.state, own.t
+        tuned = st.comms.tuned
+        if tuned is None or tuned.controller != "ground" or not own.on_ground:
+            return False
+        if P(st.phase) not in (P.TAXI_OUT, P.TAXI_IN) or own.gs_kt < GIVE_WAY_MOVING_KT:
+            return False
+        if t - self._gave_way_t < GIVE_WAY_GAP_S:
+            return False
+        for target in self._traffic.values():
+            if not target.on_ground or target.gs_kt < GIVE_WAY_MOVING_KT:
+                continue
+            nm = _distance_nm(own.lat, own.lon, target.lat, target.lon)
+            if nm > GIVE_WAY_NM:
+                continue
+            ahead = abs(((_bearing(own.lat, own.lon, target.lat, target.lon) - own.hdg_true + 540) % 360) - 180)
+            crossing = abs(((target.hdg_true - own.hdg_true + 540) % 360) - 180)
+            if ahead > GIVE_WAY_AHEAD_DEG or crossing < GIVE_WAY_CROSSING_DEG:
+                continue  # not in front, or going the same way as us
+            self._gave_way_t = t
+            side = "left" if ((target.hdg_true - own.hdg_true) % 360) < 180 else "right"
+            kind = clean_sim_name(target.atc_model) or "traffic"
+            display = f"{kind} crossing {side} to {'right' if side == 'left' else 'left'}"
+            spoken = (f"{speech.digits(kind) if any(c.isdigit() for c in kind) else kind} "
+                      f"crossing {side} to {'right' if side == 'left' else 'left'}")
+            self._schedule(t, "ground.give_way", {"message": Phrase(display, spoken)}, tuned, delay=False,
+                           expects_readback=False)
+            return True
+        return False
 
     def _landing_runway(self, own: OwnshipState) -> str | None:
         ctx = self.tracker.context
@@ -1361,7 +1406,9 @@ class AtcEngine:
         if "emergency" not in st.flags:
             st.flags.add("emergency")
             out.append(self._alert(t, "emergency", interp.text))
-        details = interp.values
+        details = dict(interp.values)
+        if details and "fuel" not in details and (endurance := self._endurance()) is not None:
+            details["fuel"] = endurance  # the sim knows; no need to make the pilot work it out
         if details:
             parts = [details.get("emergency", ""), f"{details['souls']} souls" if "souls" in details else "",
                      f"{details['fuel']} of fuel" if "fuel" in details else ""]
@@ -1380,6 +1427,17 @@ class AtcEngine:
             self._schedule(t, "common.emergency_priority", {"destination": destination}, facility, delay=True,
                            expects_readback=False)
         return out
+
+    def _endurance(self) -> str | None:
+        """How long the fuel on board lasts at the current burn, as ATC would write it down."""
+        own = self.state.aircraft
+        if own is None or own.fuel_lb is None or not own.fuel_flow_pph or own.fuel_flow_pph <= 0:
+            return None
+        minutes = int(round(own.fuel_lb / own.fuel_flow_pph * 60))
+        if minutes < 1 or minutes > MAX_ENDURANCE_MIN:
+            return None
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours} plus {minutes:02d}" if hours else f"{minutes} minutes"
 
     def _emergency_handling(self, own: OwnshipState) -> bool:
         """With an emergency running, get the aircraft down: clear the approach as soon as there is one

@@ -64,7 +64,8 @@ kind:
 - "question": the pilot asks ATC for information; topic says what.
 - "unintelligible": you cannot tell what the pilot wants.
 
-intent (only for "request"): request_ifr_clearance = asks for the IFR clearance; ready_to_taxi; \
+intent (only for "request"): request_ifr_clearance = asks for the IFR clearance; request_pushback = asks to \
+push back off the gate or to push and start; ready_to_taxi; \
 ready_for_departure = holding short or ready for takeoff; checkin = first call to a new controller, like \
 "with you at 6000"; report_final = "5 mile final"; clear_of_runway; request_taxi_parking; request_altitude = asks \
 for higher, lower or a new altitude; request_direct = asks to fly direct to a fix or airport (fix: its name); \
@@ -77,7 +78,7 @@ emergency; other = any other request.
 topic (only for "question"): altimeter, wind, weather, runway, squawk, altitude, frequency, atis, other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
-INTENTS = ["request_ifr_clearance", "ready_to_taxi", "ready_for_departure", "checkin", "report_final", "clear_of_runway",
+INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "ready_for_departure", "checkin", "report_final", "clear_of_runway",
            "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
            "request_return", "going_around", "report_conditions", "traffic_report", "say_again", "acknowledge",
            "emergency", "other"]
@@ -88,10 +89,11 @@ PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
 REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
 
 # Phases in which a request makes sense (None = before the first phase is known). Others are rejected.
-GROUND_OUT = {None, "PARKED", "TAXI_OUT", "RUNWAY_HOLD"}
+GROUND_OUT = {None, "PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD"}
 AIRBORNE = {None, "TAKEOFF", "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH", "LANDING"}
 PLAUSIBLE_PHASES: dict[str, set[str | None]] = {
     "request_ifr_clearance": GROUND_OUT,
+    "request_pushback": {None, "PARKED", "PUSHBACK"},
     "ready_to_taxi": GROUND_OUT,
     "ready_for_departure": GROUND_OUT,
     "checkin": AIRBORNE,

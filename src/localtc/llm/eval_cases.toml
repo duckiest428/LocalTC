@@ -423,3 +423,11 @@ station = "Seattle Center"
 pilot = "thanks for the help, two lima tango"
 model = { kind = "request", intent = "acknowledge" }
 expect = { kind = "request", intent = "acknowledge" }
+
+[[case]]
+name = "push and start, with the gate named"
+phase = "PARKED"
+station = "Seattle Ground"
+pilot = "DAL42, request pushback and start, gate S9"
+model = { kind = "request", intent = "request_pushback" }
+expect = { kind = "request", intent = "request_pushback" }

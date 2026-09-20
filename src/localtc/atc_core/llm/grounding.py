@@ -75,6 +75,7 @@ ALTITUDE_WORDS = {"higher", "lower", "climb", "descend", "descent", "altitude", 
 INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one word
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
+    "request_pushback": ({"push", "pushback", "pushing"},),
     "ready_to_taxi": ({"taxi", "ready", "push", "pushback"},),
     "ready_for_departure": ({"ready", "holding", "hold", "departure", "takeoff", "go", "short"},),
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),

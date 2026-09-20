@@ -77,6 +77,13 @@ answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis =
 [[example]]
 mode = "request"
 phase = "PARKED"
+station = "Seattle Ground"
+pilot = "DAL42, request pushback and start, gate S9"
+answer = { kind = "request", intent = "request_pushback", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+
+[[example]]
+mode = "request"
+phase = "PARKED"
 station = "Paine Ground"
 pilot = "ground N172LT at the west ramp with bravo, ready to taxi"
 answer = { kind = "request", intent = "ready_to_taxi", topic = "", runway = "", atis = "B", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }

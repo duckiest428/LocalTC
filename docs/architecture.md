@@ -70,6 +70,19 @@ bridge needs Windows. Everything else is built and tested on a Mac against recor
    words take (`speech_s_per_char`).
 8. The **recorder** writes every event. The **app** shows it in the radio log.
 
+## Controllers
+
+The airport's own frequency data names the clearance, ground, tower and approach/departure controllers
+(`atc_core/facilities.py`). A frequency name that is the airport's own name cut short is put back, so
+Fiumicino's FIUME tower and its ROME approach don't sound like two different places.
+
+Enroute there is no sector data to work from, so a centre is named after the biggest airport within
+150 nm -- the major field a region's centre takes its name from -- and given a frequency derived from
+that name, so the same place is always the same frequency. Crossing into the next sector needs a
+genuinely different centre and twenty minutes since the last handoff; the last 250 nm belong to the
+arrival. Over the ocean nothing is in range and the flight stays where it is. The first centre after
+departure is `[atc] center_name`, used until the flight is near an airport big enough to name one.
+
 ## Determinism and recordings
 
 `AtcEngine.handle(event)` is synchronous and depends only on the events, the config and a seed:

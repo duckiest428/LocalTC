@@ -14,19 +14,22 @@ tested alone against a recording.
 ## Phases
 
 ```
-PARKED ─► TAXI_OUT ─► RUNWAY_HOLD ─► TAKEOFF ─► DEPARTURE ─► CRUISE ─► ARRIVAL ─► APPROACH ─► LANDING ─► TAXI_IN ─► PARKED
-            ▲  │           │   ▲        │  (rejected)  ▲                                          │ (go-around)
-            └──┴───────────┘   └────────┘              └──────────────────────────────────────────┘
+PARKED ─► PUSHBACK ─► TAXI_OUT ─► RUNWAY_HOLD ─► TAKEOFF ─► DEPARTURE ─► CRUISE ─► ARRIVAL ─► APPROACH ─► LANDING ─► TAXI_IN ─► PARKED
+   ▲          │          ▲  │          │   ▲        │  (rejected)  ▲                                          │ (go-around)
+   └──────────┘          └──┴──────────┘   └────────┘              └──────────────────────────────────────────┘
 ```
 
 | Transition | When (each held for a dwell time) |
 |---|---|
+| PARKED → PUSHBACK | creeping along the ground in the direction the tail points |
+| PUSHBACK → TAXI_OUT | moving forward faster than `taxi_start_kt` |
+| PUSHBACK → PARKED | stopped again |
 | PARKED → TAXI_OUT | on the ground, moving faster than `taxi_start_kt` |
 | TAXI_OUT → RUNWAY_HOLD | stopped at a hold-short point, or lined up on a runway |
 | TAXI_OUT/RUNWAY_HOLD → TAKEOFF | aligned on a runway, faster than `takeoff_gs_kt` |
 | TAKEOFF → DEPARTURE | airborne above `airborne_agl_ft` |
 | DEPARTURE → CRUISE | level within `cruise_alt_tol_ft` of the planned cruise |
-| DEPARTURE/CRUISE → ARRIVAL | sustained descent, or inside the top-of-descent distance of the destination |
+| DEPARTURE/CRUISE → ARRIVAL | sustained descent within `descent_max_nm` of the destination, or inside the top-of-descent distance |
 | ARRIVAL → APPROACH | near the destination and low, lined up with a runway, or gear and flaps out |
 | APPROACH → LANDING | on final within `landing_dist_nm`, below `landing_agl_ft` |
 | LANDING → DEPARTURE | climbing away after getting low: a go-around |

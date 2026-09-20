@@ -57,3 +57,17 @@ text = ["{callsign}, {turn} turn approved."]
 id = "tower.turn_unable"
 controller = "tower"
 text = ["{callsign}, unable {turn} turn, fly runway heading."]
+
+# Another aircraft still on the runway as this one comes down on it.
+[[template]]
+id = "tower.go_around_traffic"
+controller = "tower"
+text = ["{callsign}, go around, traffic on the runway, fly runway heading, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Going around, runway heading, climb and maintain {altitude}, {callsign_short}."
+
+# Where this one fits in the landing order.
+[[template]]
+id = "tower.sequence"
+controller = "tower"
+text = ["{callsign}, {message}."]

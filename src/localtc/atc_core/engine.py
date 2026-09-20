@@ -79,6 +79,10 @@ STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for 
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
 CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
+GO_AROUND_NM = 1.5  # short final: an aircraft still on the runway means going around
+RUNWAY_CLEAR_KT = 40.0  # faster than this on the runway and it is getting off it
+SEQUENCE_NM = 12.0  # where the landing order is given
+SEQUENCE_ALT_FT = 3000.0  # traffic within this of our altitude counts as being on the same final
 RIDE_ANSWER_S = 120.0  # a ride report answered within this of being asked for
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
@@ -233,7 +237,9 @@ class AtcEngine:
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
         elif isinstance(event, TrafficSnapshot):
-            self._traffic = {target.object_id: target for target in event.targets if not target.on_ground}
+            # Aircraft on the ground are kept too: they are the ones occupying a runway or crossing in
+            # front of a taxiing aircraft. The advisory call is the only thing that wants them left out.
+            self._traffic = {target.object_id: target for target in event.targets}
         elif isinstance(event, OwnshipState):
             out += self._on_ownship(event)
         elif isinstance(event, PttPressed):
@@ -457,8 +463,9 @@ class AtcEngine:
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
-            if self._emergency_handling(own) or self._radar_vectors(own) or self._traffic_advisory(own) \
-                    or self._altitude_check(own) or self._enroute_chat(own):
+            if self._runway_conflict(own) or self._emergency_handling(own) or self._sequence_on_final(own) \
+                    or self._radar_vectors(own) or self._traffic_advisory(own) or self._altitude_check(own) \
+                    or self._enroute_chat(own):
                 return out
 
         def once(flag: str) -> bool:
@@ -616,6 +623,8 @@ class AtcEngine:
         best: tuple[float, TrafficTarget] | None = None
         ground_ft = self.tracker.context.airport.airport.elev_ft if self.tracker.context.airport is not None else 0.0
         for oid, target in self._traffic.items():
+            if target.on_ground:
+                continue  # traffic advisories are for aircraft in the air
             nm = _distance_nm(own.lat, own.lon, target.lat, target.lon)
             closing = nm < self._traffic_nm.get(oid, math.inf) - 0.05
             self._traffic_nm[oid] = nm
@@ -645,6 +654,85 @@ class AtcEngine:
         if kind:
             display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
         self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
+        return True
+
+    def _landing_runway(self, own: OwnshipState) -> str | None:
+        ctx = self.tracker.context
+        if ctx.final is not None and ctx.final.distance_nm <= LINED_UP_NM:
+            return ctx.final.end.ident
+        return self.state.assignments.arrival_runway or (ctx.final.end.ident if ctx.final else None)
+
+    def _traffic_on_runway(self, own: OwnshipState, runway: str) -> TrafficTarget | None:
+        """An aircraft sitting on, or rolling down, the runway this one is about to land on."""
+        geo = self.geometry(self.state.flight.destination)
+        end = geo.end(runway) if geo is not None else None
+        if geo is None or end is None:
+            return None
+        for target in self._traffic.values():
+            if not target.on_ground or target.gs_kt > RUNWAY_CLEAR_KT:
+                continue
+            on = geo.runway_at(target.lat, target.lon)
+            if on is not None and on.name == end.runway.name:
+                return target
+        return None
+
+    def _runway_conflict(self, own: OwnshipState) -> bool:
+        """Short final with somebody still on the runway: send this one around.
+
+        Tower's whole job at this moment. Landing over the top of a stationary aircraft is the one
+        thing a controller is there to prevent, and the sim's traffic is right there in the data.
+        """
+        st, ctx, t = self.state, self.tracker.context, own.t
+        tuned = st.comms.tuned
+        if tuned is None or tuned.controller != "tower" or own.on_ground or self._going_around:
+            return False
+        if P(st.phase) not in (P.APPROACH, P.LANDING) or ctx.final is None or ctx.final.distance_nm > GO_AROUND_NM:
+            return False
+        runway = self._landing_runway(own)
+        if runway is None or self._traffic_on_runway(own, runway) is None:
+            return False
+        geo = self.geometry(st.flight.destination)
+        altitude = int(math.ceil((((geo.airport.elev_ft if geo else 0) + 2000) / 100)) * 100)
+        self._going_around = True
+        for kind in ("approach", "landing"):
+            st.clearances.pop(kind, None)
+        st.pending = None
+        self._schedule(t, "tower.go_around_traffic", {"altitude": altitude}, tuned, delay=False,
+                       on_issue=lambda: self._assign(altitude_ft=altitude))
+        return True
+
+    def _sequence_on_final(self, own: OwnshipState) -> bool:
+        """Where this aircraft fits in the landing order: "number two, follow the 737 on a four mile final"."""
+        st, ctx, t = self.state, self.tracker.context, own.t
+        tuned = st.comms.tuned
+        if tuned is None or tuned.controller != "tower" or own.on_ground or "sequenced" in st.flags:
+            return False
+        if P(st.phase) not in (P.APPROACH, P.LANDING) or ctx.final is None or ctx.final.distance_nm > SEQUENCE_NM:
+            return False
+        runway = self._landing_runway(own)
+        geo = self.geometry(st.flight.destination)
+        end = geo.end(runway) if geo is not None and runway else None
+        if end is None:
+            return False
+        ahead = []
+        for target in self._traffic.values():
+            if target.on_ground or abs(target.alt_ft - own.alt_msl_ft) > SEQUENCE_ALT_FT:
+                continue
+            their_final = geo.final_approach(target.lat, target.lon, target.hdg_true)
+            if their_final is not None and their_final.end.ident == end.ident \
+                    and their_final.distance_nm < ctx.final.distance_nm:
+                ahead.append((their_final.distance_nm, target.object_id, target))
+        if not ahead:
+            return False
+        st.flags.add("sequenced")
+        distance, _, target = min(ahead)
+        kind = clean_sim_name(target.atc_model) or "traffic"
+        miles = max(1, round(distance))
+        display = f"number two, follow the {kind} on a {miles} mile final"
+        spoken = (f"number two, follow the {speech.digits(kind) if any(c.isdigit() for c in kind) else kind} "
+                  f"on a {speech.number_words(min(miles, 99))} mile final")
+        self._schedule(t, "tower.sequence", {"message": Phrase(display, spoken)}, tuned, delay=False,
+                       expects_readback=False)
         return True
 
     def _enroute_chat(self, own: OwnshipState) -> bool:

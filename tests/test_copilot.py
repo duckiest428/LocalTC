@@ -54,7 +54,7 @@ def test_assist_mode_reads_back_and_changes_frequency_but_makes_no_calls():
         "Cleared to Boeing Field as filed, climb and maintain five thousand, departure one two four point six seven "
         "five, squawk three two six zero, Cessna two lima tango.",
         "Paine Ground, Cessna two lima tango, ready to taxi",
-        "Runway three four left, taxi via charlie, alpha, alpha one, Cessna two lima tango.",
+        "Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.",
         "Paine Tower one two zero point two, Cessna two lima tango.",  # the handoff at the hold short line
     ]
     assert any("TUNE      COM1 120.2" in line for line in lines)  # tuned tower for the pilot
@@ -112,4 +112,4 @@ def test_the_service_carries_out_the_copilots_actions():
     pilot = [e.text for e in events if isinstance(e, Transcript)]
     assert pilot[0] == "Paine Clearance, N172LT, IFR to Boeing Field, ready to copy"
     assert pilot[1].startswith("Cleared to Boeing Field as filed")
-    assert any(isinstance(e, AtcTransmission) and e.instruction_id == "ground.taxi_out" for e in events)
+    assert any(isinstance(e, AtcTransmission) and (e.instruction_id or "").startswith("ground.taxi_out") for e in events)

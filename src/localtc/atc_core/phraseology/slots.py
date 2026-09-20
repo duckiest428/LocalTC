@@ -29,6 +29,7 @@ SQUAWK = SlotType("squawk", str, _text, speech.squawk)
 ALTITUDE = SlotType("altitude", int, speech.altitude_display, speech.altitude)
 HEADING = SlotType("heading", int, lambda v: f"{int(v) % 360 or 360:03d}", speech.heading)
 TAXI_ROUTE = SlotType("taxi_route", tuple, lambda v: ", ".join(v), speech.taxi_route)
+TAXI_POINT = SlotType("taxi_point", str, _text, lambda v: speech.taxi_route((v,)))  # one taxiway: "Delta", "C7"
 APPROACH = SlotType("approach", Approach, lambda v: v.display, speech.approach)
 ATIS = SlotType("atis", str, lambda v: speech.letter(v).capitalize(), speech.letter)
 WIND = SlotType("wind", Wind, speech.wind_display, speech.wind)
@@ -51,6 +52,8 @@ SLOTS: dict[str, SlotType] = {
     "cruise": ALTITUDE,
     "heading": HEADING,
     "taxi_route": TAXI_ROUTE,
+    "hold_point": TAXI_POINT,  # where a taxi clearance meets the runway
+    "turn": TEXT,  # "left" or "right"
     "approach": APPROACH,
     "atis": ATIS,
     "wind": WIND,

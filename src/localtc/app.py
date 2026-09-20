@@ -57,6 +57,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         seed=atc.seed,
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
         unscripted=atc.unscripted,
+        approach=flight.approach,
     )
 
 

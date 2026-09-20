@@ -15,7 +15,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
-from localtc.sim_api import Airport, Frequency, ParkingSpot, Runway, RunwayEnd, TaxiPath, TaxiPoint
+from localtc.sim_api import Airport, ApproachProcedure, Frequency, ParkingSpot, Runway, RunwayEnd, TaxiPath, TaxiPoint
 from localtc.sim_api.airport import FEET_PER_METER
 from localtc.sim_api.geo import METERS_PER_DEG_LAT, haversine_nm  # noqa: F401  (re-exported)
 from localtc.sim_bridge.protocol import FacilityData
@@ -74,7 +74,14 @@ TAXI_PATH = FacilityItem("TAXI_PATH", _fields(
 
 TAXI_NAME = FacilityItem("TAXI_NAME", _fields(("NAME", "32s")), 17)
 
-CHILDREN = (RUNWAY, FREQUENCY, TAXI_POINT, TAXI_PARKING, TAXI_PATH, TAXI_NAME)
+# Which instrument approaches the airport publishes, and to which runway. A subset of the SDK's APPROACH
+# fields: enough to say "expect the ILS runway 16R" only where there is one.
+APPROACH = FacilityItem("APPROACH", _fields(
+    ("TYPE", "i"), ("SUFFIX", "i"), ("RUNWAY_NUMBER", "i"), ("RUNWAY_DESIGNATOR", "i"),
+    ("FAF_ALTITUDE", "f"), ("MISSED_ALTITUDE", "f"),
+), 4)
+
+CHILDREN = (RUNWAY, FREQUENCY, TAXI_POINT, TAXI_PARKING, TAXI_PATH, TAXI_NAME, APPROACH)
 ALL_ITEMS = (AIRPORT, *CHILDREN)
 assert len({item.size for item in ALL_ITEMS}) == len(ALL_ITEMS), "facility item sizes must be unique"
 
@@ -100,6 +107,10 @@ PARKING_NAMES = {
     **{12 + i: f"GATE {chr(ord('A') + i)}" for i in range(26)},
 }
 RUNWAY_DESIGNATORS = {0: "", 1: "L", 2: "R", 3: "C", 4: "W", 5: "A", 6: "B"}
+APPROACH_KINDS = {
+    0: "none", 1: "gps", 2: "vor", 3: "ndb", 4: "ils", 5: "localizer", 6: "sdf", 7: "lda", 8: "vordme", 9: "ndbdme",
+    10: "rnav", 11: "backcourse",
+}
 
 
 def definition_lines() -> list[str]:
@@ -197,6 +208,15 @@ class AirportAssembler:
                     lat=plat, lon=plon, heading_true=round(p["HEADING"], 1), radius_m=round(p["RADIUS"], 1),
                 )
             )
+        approaches = []
+        for _, ap in sorted(self.items["APPROACH"].items()):
+            kind = APPROACH_KINDS.get(ap["TYPE"], "other")
+            if kind in ("none", "other"):
+                continue
+            number, designator = ap["RUNWAY_NUMBER"], RUNWAY_DESIGNATORS.get(ap["RUNWAY_DESIGNATOR"], "")
+            suffix = chr(ap["SUFFIX"]) if 65 <= ap["SUFFIX"] <= 90 else ""
+            approaches.append(ApproachProcedure(kind=kind, runway=f"{number:02d}{designator}" if number else "",
+                                                suffix=suffix))
         names = {index: n["NAME"] for index, n in self.items["TAXI_NAME"].items()}
         paths = []
         for _, p in sorted(self.items["TAXI_PATH"].items()):
@@ -219,6 +239,7 @@ class AirportAssembler:
             magvar=round(-(((a["MAGVAR"] + 180) % 360) - 180), 1) + 0.0,
             runways=runways,
             frequencies=frequencies,
+            approaches=tuple(approaches),
             taxi_points=tuple(points),
             taxi_paths=tuple(paths),
             parking=tuple(parking),

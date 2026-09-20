@@ -19,6 +19,7 @@ class TaxiRoute:
     hold_short: str | None  # runway to hold short of at the end
     length_m: float
     nodes: tuple[Node, ...]
+    hold_point: str = ""  # the taxiway the hold-short point is on ("D", "C7"), "" when it has no name
 
     @property
     def via(self) -> str:
@@ -115,6 +116,7 @@ class TaxiGraph:
             taxiways=tuple(names),
             crossings=tuple(crossings),
             hold_short=hold_short,
+            hold_point=edges[-1].name if edges and hold_short else "",
             length_m=round(sum(e.length for e in edges), 1),
             nodes=tuple(node for node, _ in path),
         )

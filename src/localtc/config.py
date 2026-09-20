@@ -82,6 +82,7 @@ class FlightConfig(_Section):
     origin: str = ""  # blank = the airport the flight starts at
     alternate: str = ""
     route: str = ""
+    approach: Literal["auto", "visual", "ils", "rnav"] = "auto"  # auto: what the airport has, the weather and the aircraft allow
 
 
 class AtcConfig(_Section):

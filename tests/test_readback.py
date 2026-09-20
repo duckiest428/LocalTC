@@ -137,6 +137,8 @@ def random_slots(rng: random.Random) -> dict:
         "cruise": rng.randrange(3000, 17001, 1000),
         "heading": rng.randint(1, 360),
         "taxi_route": tuple(rng.choice(names) + rng.choice(["", "", str(rng.randint(1, 9))]) for _ in range(rng.randint(1, 4))),
+        "hold_point": rng.choice(names) + rng.choice(["", str(rng.randint(1, 9))]),
+        "turn": rng.choice(["left", "right"]),
         "approach": Approach(rng.choice(["ILS", "RNAV"]), runway()),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
         "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),

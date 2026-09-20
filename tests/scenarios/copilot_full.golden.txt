@@ -8,9 +8,9 @@
 [    28.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct.
 [    33.0] TUNE      COM1 121.8
 [    38.0] PILOT     121.8: Paine Ground, N172LT, ready to taxi, with information Oscar
-[    41.0] ATC       Paine Ground 121.8: N172LT, runway 34L, taxi via C, A, A1.
-[    44.0] PILOT     121.8: Runway three four left, taxi via charlie, alpha, alpha one, Cessna two lima tango.
-[    44.0] READBACK  ground.taxi_out correct
+[    41.0] ATC       Paine Ground 121.8: N172LT, runway 34L at A1, taxi via C, A, A1.
+[    44.0] PILOT     121.8: Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.
+[    44.0] READBACK  ground.taxi_out_at correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
 [   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.

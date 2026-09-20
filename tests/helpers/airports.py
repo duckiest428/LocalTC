@@ -8,7 +8,7 @@ detection, taxi routing and dialogue tests; real layouts come from
 
 import math
 
-from localtc.sim_api import Airport, Frequency, ParkingSpot, Runway, RunwayEnd, TaxiPath, TaxiPoint
+from localtc.sim_api import Airport, ApproachProcedure, Frequency, ParkingSpot, Runway, RunwayEnd, TaxiPath, TaxiPoint
 
 M_PER_DEG = 111_320.0
 
@@ -35,6 +35,7 @@ def make_airport(
     magvar: float = 16.0,
     ils: str = "",
     ils_end: str = "secondary",
+    approaches: tuple = (),  # (kind, runway) pairs, e.g. (("ils", "34L"), ("rnav", "16R"))
 ) -> Airport:
     lat0, lon0 = ref
     half = length_m / 2
@@ -90,6 +91,7 @@ def make_airport(
         icao=icao, name=name, region="K1", lat=lat0, lon=lon0, elev_ft=elev_ft, magvar=magvar, runways=(rwy,),
         frequencies=tuple(Frequency(kind=k, mhz=mhz, name=n) for k, (mhz, n) in frequencies.items()),
         taxi_points=points, taxi_paths=paths, parking=parking,
+        approaches=tuple(ApproachProcedure(kind=kind, runway=rw) for kind, rw in approaches),
     )
 
 

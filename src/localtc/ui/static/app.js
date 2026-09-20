@@ -759,8 +759,9 @@ const Lookup = {
         <table><tr><th></th><th>MHz</th><th>Name</th></tr>${a.all_frequencies.map((f) => `<tr class="${running ? "tunable" : ""}" data-mhz="${f.mhz}" title="${running ? "Tune COM1" : ""}">
           <td><b>${esc(f.label)}</b></td><td class="mono">${mhz(f.mhz)}</td><td class="muted">${esc(f.name)}</td></tr>`).join("") || '<tr><td colspan="3" class="muted">None listed</td></tr>'}</table>
         <h3>Runways</h3>
-        <table><tr><th>Runway</th><th>Length</th><th>Width</th><th>Heading</th><th>ILS</th></tr>${a.runways.map((r) => `<tr>
-          <td><b>${esc(r.name)}</b></td><td>${r.length_ft.toLocaleString()} ft</td><td>${r.width_ft} ft</td><td>${String(r.heading_mag).padStart(3, "0")}&deg;</td><td>${esc(r.ils.join(", ") || "—")}</td></tr>`).join("")}</table>
+        <table><tr><th>Runway</th><th>Length</th><th>Width</th><th>Heading</th><th>ILS</th><th>Approaches</th></tr>${a.runways.map((r) => `<tr>
+          <td><b>${esc(r.name)}</b></td><td>${r.length_ft.toLocaleString()} ft</td><td>${r.width_ft} ft</td><td>${String(r.heading_mag).padStart(3, "0")}&deg;</td><td>${esc(r.ils.join(", ") || "—")}</td>
+          <td>${esc(Object.entries(r.approaches || {}).filter(([, v]) => v.length).map(([end, v]) => `${end}: ${v.join(", ")}`).join("  ·  ") || "visual only")}</td></tr>`).join("")}</table>
         ${a.taxiways.length ? `<h3>Taxiways</h3><div class="muted small">${esc(a.taxiways.join(", "))}</div>` : ""}
         <div class="muted small" style="margin-top:8px">${a.parking} parking spots</div></div>`;
       $("#lk-map").onclick = () => MapView.focus(a);

@@ -5,6 +5,14 @@ text = ["{callsign}, runway {runway}, taxi via {taxi_route}."]
 readback = { required = ["runway"], optional = ["taxi_route"] }
 pilot_readback = "Runway {runway}, taxi via {taxi_route}, {callsign_short}."
 
+# The hold-short point named, as a controller does: "runway 25L at Delta, taxi via Charlie, Delta".
+[[template]]
+id = "ground.taxi_out_at"
+controller = "ground"
+text = ["{callsign}, runway {runway} at {hold_point}, taxi via {taxi_route}."]
+readback = { required = ["runway"], optional = ["taxi_route"] }
+pilot_readback = "Runway {runway} at {hold_point}, taxi via {taxi_route}, {callsign_short}."
+
 [[template]]
 id = "ground.taxi_out_hold_short"
 controller = "ground"

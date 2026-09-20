@@ -15,7 +15,7 @@ import zlib
 from collections import deque
 from dataclasses import dataclass, field
 
-from localtc.atc_core.airport import AirportGeometry, select_runway
+from localtc.atc_core.airport import AirportGeometry, select_approach, select_runway
 from localtc.atc_core.airport.geometry import RunwayEndGeometry
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.values import Wind
@@ -207,7 +207,7 @@ class AtisBoard:
         end = self._runway(geo, weather, old.runway if old else None)
         if end is None:
             return None
-        approach = "ILS" if end.has_ils else "RNAV"
+        approach = select_approach(geo.airport, end.ident, has_ils=end.has_ils, visibility_sm=weather.visibility_sm)
         notes = remarks(geo, end, weather)
         if old is not None and not _changed(old, weather, end.ident, notes):
             return None

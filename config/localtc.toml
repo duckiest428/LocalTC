@@ -25,6 +25,7 @@ rules = "IFR"
 destination = ""              # ICAO, e.g. "KBFI"
 cruise_ft = 0                 # planned cruise altitude; 0 = unknown
 callsign = ""                 # blank = the aircraft's ATC ID from the sim
+approach = "auto"             # auto: what the airport publishes, the weather and the aircraft allow; or visual|ils|rnav
 
 [atc]
 enabled = true

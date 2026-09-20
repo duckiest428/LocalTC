@@ -48,6 +48,14 @@ class Frequency(msgspec.Struct, frozen=True, kw_only=True):
     name: str = ""
 
 
+class ApproachProcedure(msgspec.Struct, frozen=True, kw_only=True):
+    """An instrument approach the airport publishes, e.g. ILS 16R or RNAV (GPS) 01."""
+
+    kind: str  # ils, localizer, rnav, gps, vor, ndb, lda, sdf, visual, ...
+    runway: str = ""  # "16R"; "" for an approach not tied to a runway (circling)
+    suffix: str = ""  # "Y"/"Z" when an airport has several of the same kind
+
+
 class TaxiPoint(msgspec.Struct, frozen=True, kw_only=True):
     index: int
     # normal, hold_short, ils_hold_short, hold_short_no_draw, ils_hold_short_no_draw, other
@@ -89,9 +97,13 @@ class Airport(msgspec.Struct, frozen=True, kw_only=True):
     magvar: float = 0.0  # degrees, east positive
     runways: tuple[Runway, ...] = ()
     frequencies: tuple[Frequency, ...] = ()
+    approaches: tuple[ApproachProcedure, ...] = ()
     taxi_points: tuple[TaxiPoint, ...] = ()
     taxi_paths: tuple[TaxiPath, ...] = ()
     parking: tuple[ParkingSpot, ...] = ()
 
     def frequencies_of(self, *kinds: str) -> tuple[Frequency, ...]:
         return tuple(f for f in self.frequencies if f.kind in kinds)
+
+    def approaches_to(self, runway: str) -> tuple[ApproachProcedure, ...]:
+        return tuple(a for a in self.approaches if a.runway == runway)

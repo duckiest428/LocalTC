@@ -648,10 +648,15 @@ def airport_summary(airport, engine=None) -> dict:
 def airport_detail(airport) -> dict:
     from localtc.sim_api.airport import FEET_PER_METER
 
+    from localtc.atc_core.airport import published
+
     runways = []
     for rw in airport.runways:
         heading = rw.heading_true - airport.magvar
-        runways.append({"name": rw.name, "length_ft": round(rw.length_m * FEET_PER_METER),
+        runways.append({"name": rw.name,
+                        "approaches": {end.ident: list(published(airport, end.ident)) for end in (rw.primary, rw.secondary)
+                                       if end.ident},
+                        "length_ft": round(rw.length_m * FEET_PER_METER),
                         "width_ft": round(rw.width_m * FEET_PER_METER), "heading_mag": round(heading % 360),
                         "ils": [e.ident + (f" ({e.ils_ident})" if e.ils_ident else "") for e in (rw.primary, rw.secondary)
                                 if e.ils_ident],

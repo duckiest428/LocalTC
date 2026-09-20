@@ -68,6 +68,17 @@ def _fix(tokens: list[Token]) -> str | None:
     return None
 
 
+def _turn(tokens: list[Token]) -> str | None:
+    """ "we'd like a left turn after departure": a turn on departure, not a heading."""
+    if not _has_any(tokens, ("after", "departure"), ("after", "takeoff"), ("on", "departure"), ("out", "of", "here")):
+        return None
+    if _has_any(tokens, ("left", "turn"), ("turn", "left"), ("left", "downwind"), ("left", "crosswind")):
+        return "left"
+    if _has_any(tokens, ("right", "turn"), ("turn", "right"), ("right", "downwind"), ("right", "crosswind")):
+        return "right"
+    return None
+
+
 def _traffic(tokens: list[Token]) -> str | None:
     if _has_any(tokens, ("negative", "contact"), ("not", "in", "sight"), ("no", "joy")):
         return "negative"
@@ -107,13 +118,17 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("ready_to_taxi", atis=_atis(tokens))
     if _has_any(
         tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
-        ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures")
+        ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures"),
+        ("like", "to", "get", "the", "departure"), ("get", "the", "departure"), ("request", "departure"),
+        ("request", "the", "departure"), ("like", "the", "departure"), ("ready", "in", "sequence")
     ):
         add("ready_for_departure", runway=_any_runway(tokens))
     elif hold_short(tokens) and not _has_any(tokens, ("taxi",), ("via",), ("cleared",)):
         # "Tower, holding short runway 06L" is a departure request; a taxi readback names a route instead.
         add("ready_for_departure", runway=_any_runway(tokens))
-    if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",)) or landing:
+    if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",),
+                ("on", "the", "approach"), ("on", "approach"), ("established",), ("for", "the", "visual"),
+                ("field", "in", "sight"), ("runway", "in", "sight")) or landing:
         add("report_final", runway=_any_runway(tokens))  # also "are we cleared to land?"
     wanted = altitudes(tokens) or ([n for n in _reported_altitudes(tokens) if n >= 1000]
                                    if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])
@@ -121,6 +136,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "request higher, 7000"
     asking = _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we"), ("able", "to"),
                       ("want",), ("need",))
+    if (turn := _turn(tokens)) is not None:
+        add("request_turn", turn=turn)
     if _has_any(tokens, ("going", "around"), ("go", "around"), ("missed", "approach"), ("executing", "missed")):
         add("going_around")
     if (traffic := _traffic(tokens)) is not None and (_has_any(tokens, ("traffic",)) or traffic != "in_sight"):
@@ -171,6 +188,7 @@ COMPATIBLE = [
     {"going_around", "report_final"},  # "going around, runway 08": no longer a final report
     {"request_vectors", "request_runway"},  # "request vectors for the ILS 26"
     {"request_direct", "request_runway"},
+    {"ready_for_departure", "request_turn"},  # "holding short, ready, request a left turn out"
     {"ready_for_departure", "checkin"},  # "holding short, ready" can contain "level"-like noise
 ]
 

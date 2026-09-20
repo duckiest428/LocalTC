@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from localtc.atc_core.airport import AirportGeometry, TaxiGraph, select_runway
+from localtc.atc_core.airport import AirportGeometry, TaxiGraph, published, select_approach, select_runway
 from localtc.atc_core.facilities import Facility, airport_facilities, center_facility, channel_khz
 from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.triggers import question_topic
@@ -105,6 +105,7 @@ class EngineConfig:
     await_transcripts: bool = False  # voice input: a transcript follows each push-to-talk release
     speech_s_per_char: float = 0.0  # voice out: how long speech takes; the frequency is busy meanwhile (0: instant)
     unscripted: bool = True  # ATC starts things too: traffic, altitude checks, "how do you read", stand by
+    approach: str = "auto"  # "auto": what the airport publishes, the weather and the aircraft allow
 
 
 @dataclass
@@ -612,6 +613,14 @@ class AtcEngine:
             st.exchanges.append(Exchange(t, "pilot", None, ev.text, None))
             where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
             return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
+        if pending is None and self._handed_off_from(facility) is not None:
+            # The pilot is still on the old frequency after reading back the handoff: send them again,
+            # whatever they said. Nothing else on this frequency is theirs to ask for any more.
+            new = self._handed_off_from(facility)
+            st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+            self._schedule(t, "common.contact", {"station": new.station, "frequency": new.mhz}, facility,
+                           handoff_to=new, expects_readback=False)  # already read back once: just the reminder
+            return []
         if pending is None and CONFIRM_WORDS & set(re.findall(r"[a-z]+", ev.text.lower())):
             answer = self._confirm_query(ev.text, facility, mhz, t)
             if answer is not None:  # "just to confirm, taxi to 06L?": affirmative, or negative with the right value
@@ -660,6 +669,19 @@ class AtcEngine:
         self.state.flags.add(f"problem:{kind}")
         self._schedule(t, f"common.{kind}", {}, facility, expects_readback=False)
         return self._alert(t, "pilot_problem", text)
+
+    def _handed_off_from(self, facility: Facility) -> Facility | None:
+        """The facility the pilot should be talking to instead of ``facility``: they read back a handoff off
+        this frequency and haven't switched. None when this controller is still theirs."""
+        st = self.state
+        expected = st.comms.expected
+        if expected is None or expected == facility or self._last_handoff is None:
+            return None
+        _, old, new = self._last_handoff
+        if old != facility or new != expected:
+            return None
+        done = st.read_back
+        return new if done is not None and done.controller == facility.controller else None
 
     def _confirm_query(self, text: str, facility: Facility, mhz: float | None, t: float) -> list[BusEvent] | None:
         """The pilot checks something from the last instruction this controller gave. None: not about that."""
@@ -758,6 +780,7 @@ class AtcEngine:
         unscripted = {
             "request_direct": self._direct, "request_vectors": self._vectors, "request_runway": self._runway_request,
             "request_return": self._return, "going_around": self._go_around, "report_conditions": self._pirep,
+            "request_turn": self._turn_request,
             "traffic_report": self._traffic_reply,
         }
         if intent in unscripted:
@@ -877,14 +900,33 @@ class AtcEngine:
             return None
         if kind == "VISUAL" and weather is not None and weather.visibility_sm is not None and weather.visibility_sm < 3:
             return None
-        kind = kind if kind in ("ILS", "RNAV", "VISUAL") and (kind != "ILS" or end.has_ils) else ("ILS" if end.has_ils else "RNAV")
+        wanted = kind if kind in ("ILS", "RNAV", "VISUAL") else None
+        kind = self._approach_for(end.ident, has_ils=end.has_ils, requested=wanted)
+        if wanted is not None and kind != wanted:
+            return None  # the airport doesn't have that approach: "unable", with the wind or as it stands
         self._approach_kind = kind
         self._assign(arrival_runway=end.ident, approach=Approach(kind, end.ident).display)
         return Approach(kind, end.ident)
 
+    def _turn_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+        """"Left turn after departure": tower approves it, or asks for runway heading."""
+        turn = interp.values.get("turn", "left")
+        st = self.state
+        if facility.controller != "tower" or st.phase is None or P(st.phase) not in (P.RUNWAY_HOLD, P.TAXI_OUT, P.TAKEOFF,
+                                                                                      P.DEPARTURE):
+            self._schedule(t, "common.unable", {}, facility)
+            return
+        approved = self._random().random() < 0.85
+        self._schedule(t, "tower.turn_approved" if approved else "tower.turn_unable", {"turn": turn}, facility,
+                       expects_readback=False)
+
     def _runway_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
         st = self.state
         runway, kind = interp.values.get("runway"), interp.values.get("approach")
+        if facility.controller == "tower" and st.phase is not None and P(st.phase) is P.RUNWAY_HOLD:
+            # "Tower, holding short 25L, we'd like the departure": a departure request, not a runway change.
+            self._on_request(replace(interp, intent="ready_for_departure"), facility, t)
+            return
         if own is not None and own.on_ground and st.phase in (P.PARKED, P.TAXI_OUT):
             geo = self.geometry(st.flight.origin)
             end = geo.end(runway) if geo is not None and runway else None
@@ -1176,6 +1218,9 @@ class AtcEngine:
         if route.crossings:
             instruction = "ground.taxi_out_hold_short"
             slots["hold_short"] = route.crossings[0].split("/")[0]
+        elif route.hold_point:  # "runway 25L at Delta, taxi via Charlie, Delta"
+            instruction = "ground.taxi_out_at"
+            slots["hold_point"] = route.hold_point
         self._schedule(t, instruction, slots, facility, clearance="taxi",
                        on_issue=lambda: self._assign(departure_runway=end.ident, taxi_route=route.taxiways), note=note)
 
@@ -1263,6 +1308,25 @@ class AtcEngine:
         self._schedule(t, instruction_id, {"station": to_facility.station, "frequency": to_facility.mhz}, from_facility,
                        delay=delay, handoff_to=to_facility)
 
+    def _approach_for(self, runway: str, *, has_ils: bool, requested: str | None = None) -> str:
+        """What to expect for a runway: what the destination publishes, what the weather allows, and what this
+        aircraft can fly (``[flight] approach`` forces one)."""
+        st = self.state
+        geo = self.geometry(st.flight.destination)
+        weather = self.weather.surface(st.flight.destination or "", self.tracker.context_builder.airports)
+        own = st.aircraft
+        return select_approach(
+            geo.airport if geo is not None else None, runway, has_ils=has_ils,
+            visibility_sm=weather.visibility_sm if weather is not None else None,
+            in_cloud=own.in_cloud if own is not None else False,
+            aircraft_type=st.flight.aircraft_type, requested=requested, override=self.cfg.approach,
+        )
+
+    def approaches_at(self, icao: str | None, runway: str) -> tuple[str, ...]:
+        """What the airport publishes for a runway (the app and tests show this)."""
+        geo = self.geometry(icao)
+        return published(geo.airport, runway) if geo is not None else ()
+
     def _arrival_plan(self, own: OwnshipState) -> dict[str, Any] | None:
         geo = self.geometry(self.state.flight.destination)
         if geo is None:
@@ -1274,7 +1338,7 @@ class AtcEngine:
             return None
         elev = geo.airport.elev_ft
         cruise = self.state.flight.cruise_ft or 10000
-        kind = self._approach_kind or ("ILS" if end.has_ils else "RNAV")
+        kind = self._approach_kind or self._approach_for(end.ident, has_ils=end.has_ils)
         return {
             "approach": Approach(kind, end.ident),
             "arrival_alt": int(min(cruise, max(3000, math.ceil((elev + 2500) / 1000) * 1000))),

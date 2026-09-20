@@ -4,7 +4,7 @@ import asyncio
 import math
 
 import pytest
-from helpers.airports import kbfi, kpae
+from helpers.airports import kbfi, kpae, make_airport
 from helpers.sim_fakes import FakeSimConnect, airport_list_message, airport_messages
 
 from localtc.airports import AirportCache, load_airport
@@ -197,3 +197,23 @@ def test_bridge_tunes_com1_for_the_copilot():
         ("COM_RADIO_SET_HZ", 120_425_000), ("COM2_RADIO_SET_HZ", 121_500_000)
     ]
     assert all(obj == 0 and flags == 0x10 for _, _, obj, _, flags in fake.transmitted)  # user aircraft, priority group
+
+
+def test_published_approaches_are_read_and_offered():
+    from localtc.atc_core.airport import published, select_approach
+
+    source = make_airport(
+        "KTST", "TEST FIELD", (47.0, -122.0), 500.0, 340.0, ("16R", "34L"), {"tower": (120.0, "TEST TOWER")},
+        approaches=(("ils", "34L"), ("rnav", "34L"), ("vor", "16R")),
+    )
+    airport = assemble(airport_messages(source, 7)).build()
+    assert [(a.kind, a.runway) for a in airport.approaches] == [("ils", "34L"), ("rnav", "34L"), ("vor", "16R")]
+    assert published(airport, "34L") == ("ILS", "RNAV")
+    assert published(airport, "16R") == ("VOR",)
+    assert select_approach(airport, "34L", has_ils=True) == "ILS"
+    assert select_approach(airport, "16R", visibility_sm=10.0) == "VISUAL"  # only a VOR approach: the visual is simpler
+    assert select_approach(airport, "16R", visibility_sm=1.0) == "VOR"  # in the weather, fly the VOR
+    assert select_approach(airport, "05", visibility_sm=10.0) == "VISUAL"  # nothing published to that runway
+    assert select_approach(airport, "34L", aircraft_type="Piper Cub") == "VISUAL"  # no instrument capability
+    assert select_approach(None, "34L", has_ils=True) == "ILS"  # airport data with no approaches at all
+    assert select_approach(None, "34L", has_ils=False) == "RNAV"

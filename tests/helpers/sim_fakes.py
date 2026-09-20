@@ -131,6 +131,13 @@ def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False, 
             "NAME_INDEX": names.index(p.name) if p.name else 0xFFFF}, bool8=bool8, documented_ids=documented_ids))
     for i, name in enumerate(names):
         msgs.append(facility_message(request_id, fac.TAXI_NAME, i, {"NAME": name}, bool8=bool8, documented_ids=documented_ids))
+    approach_kinds = _reverse(fac.APPROACH_KINDS)
+    for i, a in enumerate(airport.approaches):
+        digits = "".join(c for c in a.runway if c.isdigit())
+        msgs.append(facility_message(request_id, fac.APPROACH, i, {
+            "TYPE": approach_kinds[a.kind], "SUFFIX": ord(a.suffix) if a.suffix else 0,
+            "RUNWAY_NUMBER": int(digits or 0), "RUNWAY_DESIGNATOR": designators[a.runway[len(digits):]],
+            "FAF_ALTITUDE": 600.0, "MISSED_ALTITUDE": 900.0}, bool8=bool8, documented_ids=documented_ids))
     msgs.append(_renumber(build_message(RecvFacilityDataEnd(RequestId=request_id), RecvId.FACILITY_DATA_END),
                           RecvId.FACILITY_DATA_END, documented_ids))
     return msgs

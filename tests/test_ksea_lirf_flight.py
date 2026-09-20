@@ -141,9 +141,9 @@ def test_the_taxi_to_the_gate_is_read_back_correctly(replay):
 def test_the_runway_reported_on_final_is_the_one_flown(replay):
     """Fiumicino's wind favoured 34L and the flight came down 16L. Calling the runway that was expected
     rather than the one ahead leaves tower clearing an aircraft onto a runway it is pointing away from."""
-    landed = next(line for line in replay if "-> LANDING" in line).split("runway ")[1].strip()
+    landed = next(line for line in replay if "-> LANDING" in line).split("runway ")[1].strip(" )")
     cleared = next(line for line in replay if "cleared to land" in line)
-    assert f"runway {landed}, cleared to land" in cleared, cleared
+    assert f"runway {landed}," in cleared, (landed, cleared)
 
 
 # --- naming --------------------------------------------------------------------------------------

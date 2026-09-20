@@ -100,6 +100,24 @@ def hold_short(tokens: list[Token], expected: Any = None) -> list[str]:
             j += 1
         if (hit := _runway_at(tokens, j)) is not None:
             found.append(hit[0])
+    if found or expected is None:
+        return found
+    # "Hold short" is two quiet words that speech-to-text mangles into one ("holshore", "holtoire",
+    # even "portrait"), and no list of spellings will cover them all. The runway is the part that
+    # matters and it comes through clearly, so naming the one ATC said to hold short of is enough.
+    wanted = normalize_runway(str(expected))
+    bare = wanted.rstrip("LRC")
+    for i, token in enumerate(tokens):
+        if token.kind != "number":
+            continue
+        hit = _runway_at(tokens, i)
+        if hit is None:
+            continue
+        heard = normalize_runway(hit[0])
+        # A runway with no side takes the next letter it hears, and the next letter is often the ATIS
+        # ("hold short runway 13 ... Romeo is current" reads as 13R), so compare without one.
+        if heard == wanted or (wanted == bare and heard.rstrip("LRC") == bare):
+            return [wanted]
     return found
 
 
@@ -134,6 +152,22 @@ def _altitude_value(tokens: list[Token], i: int) -> int | None:
     return value if value <= MAX_ALTITUDE_FT else None
 
 
+TRANSITION_FT = 18000  # at or above this ATC talks in flight levels, so a bare "350" is one
+
+
+def _bare_flight_level(value: int, expected: Any) -> int:
+    """ "maintain 350" for FL350: above the transition altitude the words "flight level" get dropped.
+
+    Only when ATC's own value is a flight level, so "maintain 500" for a helicopter at 500 feet keeps
+    its meaning and a genuinely wrong number is still wrong.
+    """
+    try:
+        wanted = int(expected)
+    except (TypeError, ValueError):
+        return value
+    return wanted if 100 <= value <= 600 and wanted >= TRANSITION_FT and value * 100 == wanted else value
+
+
 def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
     starts = _find_phrase(tokens, ("maintain",)) + [  # "climb to 3,200", "descend 3,000"
@@ -141,8 +175,9 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
         for i in _find_phrase(tokens, (word, "to")) + _find_phrase(tokens, (word,))
     ]
     for i in sorted(set(starts)):
-        if (value := _altitude_value(tokens, i)) is not None and value not in found:
-            found.append(value)
+        if (value := _altitude_value(tokens, i)) is not None:
+            if (value := _bare_flight_level(value, expected)) not in found:
+                found.append(value)
     for i, token in enumerate(tokens):  # "5000 feet"
         if token.kind == "number" and i + 1 < len(tokens) and tokens[i + 1].text in ("feet", "ft"):
             if (value := _altitude_value(tokens, i)) is not None and value not in found:
@@ -151,7 +186,12 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
 
 
 def cruise_altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
-    return [v for i in _find_phrase(tokens, ("expect",)) if (v := _altitude_value(tokens, i)) is not None]
+    found = []
+    for i in _find_phrase(tokens, ("expect",)):
+        if (value := _altitude_value(tokens, i)) is not None:
+            if (value := _bare_flight_level(value, expected)) not in found:
+                found.append(value)
+    return found
 
 
 def _as_frequency(text: str) -> float | None:

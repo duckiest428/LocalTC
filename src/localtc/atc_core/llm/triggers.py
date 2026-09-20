@@ -11,7 +11,8 @@ from localtc.atc_core.readback.normalize import normalize
 
 QUESTION_OPENERS = {"what", "what's", "whats", "which", "when", "where", "how", "who", "why", "is", "are", "can", "could",
                     "may", "do", "does", "did", "will", "would", "confirm"}
-QUESTION_TOPICS = {"altimeter", "wind", "winds", "weather", "metar", "time", "visibility", "ceiling", "active"}
+QUESTION_TOPICS = {"altimeter", "wind", "winds", "weather", "metar", "time", "visibility", "ceiling", "active",
+                   "baro", "barometer", "qnh", "barrow"}  # "barrow": what speech-to-text makes of "baro"
 # Words that mean the pilot wants something the grammar has no intent for.
 OFF_SCRIPT = {"request", "requesting", "unable", "negative", "direct", "higher", "lower", "deviation", "deviate", "deviating",
               "turbulence", "chop", "icing", "vectors", "shortcut", "delay", "problem", "medical", "sick", "passenger",
@@ -33,6 +34,13 @@ def is_question(text: str) -> bool:
     if "say" in words:  # "say altimeter", but not "say again"
         after = words[words.index("say") + 1 : words.index("say") + 2]
         return bool(after) and after[0] != "again"
+    # "request altimeter", "request the current baro": asking for a topic straight out is a question,
+    # even though "request" usually means the pilot wants something done rather than told.
+    for opener in ("request", "requesting"):
+        if opener in words:
+            after = words[words.index(opener) + 1 : words.index(opener) + 3]
+            if set(after) & QUESTION_TOPICS:
+                return True
     # A topic word alone ("weather") makes a question, unless the pilot is asking for something
     # ("request deviation for weather") or reading back ("runway", "squawk").
     return bool(set(words) & QUESTION_TOPICS) and not set(words) & {"cleared", "maintain", "squawk", "runway",
@@ -62,7 +70,8 @@ def trigger(grammar: Interpretation, text: str, confidence: float | None = None,
 
 
 # Question topics recognisable from a single word; used when the model can't classify a question.
-TOPIC_WORDS = {"altimeter": "altimeter", "wind": "wind", "winds": "wind", "weather": "weather", "metar": "weather",
+TOPIC_WORDS = {"altimeter": "altimeter", "baro": "altimeter", "barometer": "altimeter", "qnh": "altimeter",
+               "barrow": "altimeter", "wind": "wind", "winds": "wind", "weather": "weather", "metar": "weather",
                "runway": "runway", "squawk": "squawk", "code": "squawk", "altitude": "altitude", "frequency": "frequency",
                "atis": "atis", "information": "atis"}
 

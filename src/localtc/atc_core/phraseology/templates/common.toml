@@ -186,3 +186,8 @@ line_up_and_wait = "line up and wait"
 cleared_to_land = "cleared to land"
 hold_position = "hold position"
 fix = "direct {fix}"
+
+[[template]]
+id = "common.radio_check"
+controller = "any"
+text = ["{callsign}, {station}, read you five by five.", "{callsign}, {station}, loud and clear."]

@@ -98,6 +98,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
 
     if _has_any(tokens, ("mayday",), ("pan", "pan"), ("emergency",)):
         add(EMERGENCY)
+    if _has_any(tokens, ("radio", "check"), ("comm", "check"), ("how", "do", "you", "read"), ("radio", "test")):
+        add("radio_check")
     if _has_any(tokens, ("say", "again"), ("repeat",), ("didn't", "copy"), ("did", "not", "copy"), ("say", "that", "again")):
         add("say_again")
     landing = _has_any(tokens, ("clear", "to", "land"), ("cleared", "to", "land"), ("clearance", "to", "land"),
@@ -123,6 +125,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
         ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures"),
         ("like", "to", "get", "the", "departure"), ("get", "the", "departure"), ("request", "departure"),
+        ("for", "departure"), ("to", "depart"), ("for", "takeoff"),
         ("request", "the", "departure"), ("like", "the", "departure"), ("ready", "in", "sequence")
     ):
         add("ready_for_departure", runway=_any_runway(tokens))
@@ -165,6 +168,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
             atis=_atis(tokens))
     if not matches and reports_problem(tokens):
         add("report_problem")  # alone; with other calls the engine hears it anyway (AtcEngine._problem)
+    if not matches and _has_any(tokens, ("tail", "left"), ("tail", "right"), ("push", "approved")):
+        add("acknowledge")  # reading back a pushback approval
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
                                 ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by")):

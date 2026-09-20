@@ -89,6 +89,8 @@ CHAT_GAP_S = 1800.0  # quiet between one centre starting a conversation and the 
 CHAT_SETTLE_S = 120.0  # settled on a centre's frequency before it starts a conversation
 OFFER_HIGHER_CHANCE = 0.5
 OFFER_WINDOW_S = 180.0  # how long an offered level stays on the table
+ACCEPT_WORDS = {"affirmative", "affirm", "yes", "accept", "take", "climb", "climbing", "able", "wilco"}
+DECLINE_WORDS = {"negative", "unable", "no", "stay", "staying", "remain", "remaining", "keep", "prefer", "happy"}
 MAX_OFFERED_FT = 41000
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
@@ -160,7 +162,7 @@ class AtcEngine:
         flight.destination = self.cfg.destination.upper() if self.cfg.destination else None
         flight.cruise_ft = self.cfg.cruise_ft
         if self.cfg.callsign:
-            flight.callsign = Callsign(self.cfg.callsign.upper())
+            flight.callsign = Callsign.named(self.cfg.callsign)
         self.tracker = PhaseTracker(destination=flight.destination, cruise_ft=flight.cruise_ft, thresholds=self.cfg.thresholds)
         self.facilities: list[Facility] = []
         self.airport_requests: list[str] = []  # airports the engine needs; the service fetches them
@@ -626,7 +628,9 @@ class AtcEngine:
             return False
         self._chatted.add(tuned.station)
         self._chat_t = t
-        higher = level + 2000
+        # Cruising levels are thousands of feet. The aircraft's own altitude wanders a little, so round
+        # it before stepping up, or a flight at 35,200 gets offered FL372.
+        higher = (level // 1000) * 1000 + 2000
         if self._offered_level is None and higher <= MAX_OFFERED_FT and self._random().random() < OFFER_HIGHER_CHANCE:
             self._offered_level = (t, higher)
             self._schedule(t, "center.offer_higher", {"altitude": higher}, tuned, delay=False, expects_readback=False)
@@ -634,9 +638,24 @@ class AtcEngine:
             self._schedule(t, "center.say_ride", {"altitude": level}, tuned, delay=False, expects_readback=False)
         return True
 
+    def _offer_open(self, t: float) -> bool:
+        return self._offered_level is not None and t - self._offered_level[0] <= OFFER_WINDOW_S
+
+    def _answer_offer(self, text: str, facility: Facility, t: float) -> bool:
+        """A level was offered; did the pilot take it? Taking it makes it an instruction, turning it down
+        withdraws it. Anything else leaves it on the table until it lapses."""
+        if not self._offer_open(t):
+            return False
+        words = set(re.findall(r"[a-z']+", text.lower()))
+        if words & DECLINE_WORDS:
+            self._offered_level = None
+            self._schedule(t, "common.roger", {}, facility, expects_readback=False)
+            return True
+        return bool(words & ACCEPT_WORDS) and self._accepts_higher(t, facility)
+
     def _accepts_higher(self, t: float, facility: Facility) -> bool:
         """The pilot takes a level that was offered: now it is an instruction, to be read back."""
-        if self._offered_level is None or t - self._offered_level[0] > OFFER_WINDOW_S:
+        if not self._offer_open(t):
             return False
         altitude = self._offered_level[1]
         self._offered_level = None
@@ -731,6 +750,8 @@ class AtcEngine:
             return out + self._emergency(interp, facility, t)
         if interp.kind == "request":
             return out + self._on_request(interp, facility, t)
+        if self._answer_offer(ev.text, facility, t):
+            return out  # an answer to a level that was offered, in whatever words
         if st.pending is not None and pending is not None:
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
             if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
@@ -850,8 +871,11 @@ class AtcEngine:
         own = st.aircraft
         if (letter := interp.values.get("atis")) and st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
             self._assign(arrival_atis=letter)  # "with information Delta" on arrival: the destination's ATIS
-        if intent in ("acknowledge", "request_altitude") and self._accepts_higher(t, facility):
-            return []  # "we can take it" after a level was offered: now it's assigned
+        if intent == "radio_check":
+            self._schedule(t, "common.radio_check", {"station": facility.station}, facility, expects_readback=False)
+            return []
+        if self._answer_offer(interp.text or "", facility, t):
+            return []  # a level was offered: taken, or turned down
         if intent == "question":
             return self._answer(interp, facility, t)
         if intent == "request_altitude":

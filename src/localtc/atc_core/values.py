@@ -3,6 +3,8 @@
 import re
 from dataclasses import dataclass, replace
 
+from localtc.atc_core import airlines
+
 # MSFS 2024 hands out untranslated localization tokens for ATC TYPE and ATC MODEL.
 SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)\s+(.+?)\.\d+\.(?:text|tts)", re.IGNORECASE)
 # Three letters and a number (EXP69, ASA123): an airline-style callsign, said in full every time.
@@ -48,12 +50,29 @@ class Callsign:
         return self.ident.replace("-", "")[-3:]
 
     @classmethod
+    def named(cls, ident: str, type_name: str = "") -> "Callsign":
+        """A callsign from a flight plan or the command line: "ACA216" is Air Canada 216, "N172LT" is not."""
+        ident = ident.strip().upper()
+        parts = airlines.split(ident)
+        if parts is None:
+            return cls(ident=ident, type_name=type_name)
+        _, telephony, number = parts
+        return cls(ident=ident, telephony=telephony, flight_number=number, type_name=type_name)
+
+    @classmethod
     def from_sim(cls, atc_id: str, airline: str = "", flight_number: str = "", atc_type: str = "") -> "Callsign":
-        ident = atc_id.strip().upper()
+        ident, airline, flight_number = atc_id.strip().upper(), airline.strip(), flight_number.strip()
+        if not ident and airline and flight_number:
+            # Some aircraft carry the airline and flight number but no ATC ID. Its code makes the ident.
+            code = airlines.code_for(airline)
+            ident = f"{code}{flight_number}" if code else flight_number
+        telephony = airline
+        if not telephony and (parts := airlines.split(ident)) is not None:
+            _, telephony, flight_number = parts  # an ident that is itself a flight number
         return cls(
             ident=ident,
-            telephony=airline.strip(),
-            flight_number=flight_number.strip(),
+            telephony=telephony,
+            flight_number=flight_number,
             type_name=clean_sim_name(atc_type),
         )
 

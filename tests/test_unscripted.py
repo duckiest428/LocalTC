@@ -127,7 +127,8 @@ def test_a_level_offered_enroute_becomes_an_instruction_when_taken():
     engine = AtcEngine(EngineConfig(callsign="DAL42", seed=3))
     centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
     engine._offered_level = (100.0, 37000)
-    engine._on_request(Interpretation(kind="request", intent="acknowledge"), centre, 130.0)
+    engine._on_request(Interpretation(kind="request", intent="acknowledge",
+                                      text="affirmative, we can accept FL370"), centre, 130.0)
     assert [item.instruction_id for item in engine._scheduled] == ["common.climb"]
     assert engine._scheduled[0].slots["altitude"] == 37000
     assert engine._offered_level is None
@@ -141,3 +142,16 @@ def test_an_offer_not_taken_expires():
     centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
     engine._offered_level = (100.0, 37000)
     assert not engine._accepts_higher(100_000.0, centre)
+
+
+def test_a_level_offered_enroute_can_be_turned_down():
+    """ "Negative, we'd like to stay at our cruising level" left the offer open and got "say again"."""
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.facilities import Facility
+
+    engine = AtcEngine(EngineConfig(callsign="ACA216", seed=3))
+    centre = Facility(controller="center", station="Edmonton Center", mhz=124.525)
+    engine._offered_level = (100.0, 37000)
+    assert engine._answer_offer("Negative. We'd like to stay on our cruising.", centre, 130.0)
+    assert [item.instruction_id for item in engine._scheduled] == ["common.roger"]
+    assert engine._offered_level is None

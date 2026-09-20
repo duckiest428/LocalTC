@@ -78,6 +78,7 @@ MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stop
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
+CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
@@ -193,6 +194,8 @@ class AtcEngine:
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
+        self._crossings: tuple[str, ...] = ()  # runways the taxi route goes across
+        self._crossed: set[str] = set()  # ... and the ones already cleared to cross
         self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
         self._chat_t = -math.inf  # when a centre last started a conversation of its own
         self._vector_t = -math.inf  # when approach last gave a vector or a speed
@@ -439,7 +442,8 @@ class AtcEngine:
         entered_runway = on_runway_now and self._was_on_runway is False  # starting on a runway isn't an incursion
         self._was_on_runway = on_runway_now
         if entered_runway and own.on_ground and st.phase in (P.TAXI_OUT, P.RUNWAY_HOLD):
-            if not ({"takeoff", "line_up"} & st.clearances.keys()):
+            crossing = ctx.runway is not None and ctx.runway.name in self._crossings
+            if not ({"takeoff", "line_up"} & st.clearances.keys()) and not crossing:
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
                 out.append(self._alert(t, "runway_incursion", f"entered {where} without clearance"))
 
@@ -470,6 +474,9 @@ class AtcEngine:
             self._schedule(t, "common.info", {"message": self._phrases(parts)}, st.comms.tuned, delay=False,
                            on_issue=lambda: self._assign(**({"arrival_atis": info.letter} if icao == st.flight.destination
                                                             else {"atis": info.letter})))
+        elif phase in (P.TAXI_OUT, P.RUNWAY_HOLD) and tuned == "ground" and (crossing := self._crossing_due(own)) is not None:
+            self._crossed.add(crossing)
+            self._schedule(t, "ground.cross_runway", {"runway": crossing}, st.comms.tuned, delay=False)
         elif phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
                 self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
@@ -1503,6 +1510,7 @@ class AtcEngine:
         if route.crossings:
             instruction = "ground.taxi_out_hold_short"
             slots["hold_short"] = route.crossings[0].split("/")[0]
+            self._crossings = route.crossings
         elif route.hold_point:  # "runway 25L at Delta, taxi via Charlie, Delta"
             instruction = "ground.taxi_out_at"
             slots["hold_point"] = route.hold_point
@@ -1518,7 +1526,14 @@ class AtcEngine:
                                on_issue=lambda: self._assign(altitude_ft=cruise))
                 return
         elif facility.controller == "center":
-            self._schedule(t, "center.checkin", {"station": facility.station}, facility)
+            # A handoff carries the flight with it: the next centre already has what it was assigned,
+            # and says so, rather than starting the conversation again from nothing.
+            assigned = st.assignments.altitude_ft
+            if assigned is not None:
+                self._schedule(t, "center.checkin_level", {"station": facility.station, "altitude": assigned},
+                               facility, expects_readback=False)  # confirming what is already assigned
+            else:
+                self._schedule(t, "center.checkin", {"station": facility.station}, facility)
             return
         elif facility.controller == "approach" and "approach" not in st.clearances and own is not None:
             plan = self._arrival_plan(own)
@@ -1745,6 +1760,22 @@ class AtcEngine:
         return next(f for f in self.facilities if f.controller == "center") if self.facilities else center_facility(
             [], self.cfg.center_name, self.cfg.center_mhz
         )
+
+    def _crossing_due(self, own: OwnshipState) -> str | None:
+        """A runway the taxi route goes across, with the aircraft nearly at it.
+
+        Being routed over a runway and never cleared across it leaves the pilot either stopping for a
+        clearance that never comes or being blamed for crossing. The clearance comes as they reach it.
+        """
+        ctx = self.tracker.context
+        if not self._crossings or ctx.hold_short is None or ctx.hold_short_distance_m is None:
+            return None
+        if ctx.hold_short_distance_m > CROSSING_CLEARANCE_M or "taxi" not in self.state.clearances:
+            return None
+        runway = ctx.hold_short.runway.name
+        if runway not in self._crossings or runway in self._crossed:
+            return None
+        return runway.split("/")[0]
 
     def _leaving_departure(self, own: OwnshipState, phase: FlightPhase) -> bool:
         """Departure has finished with the flight and centre takes it.

@@ -37,7 +37,7 @@
 [   877.0] READBACK  departure.handoff_center correct
 [   879.0] TUNE      COM1 125.1
 [   884.0] PILOT     125.1: Seattle Center, N172LT, level 5,000
-[   887.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, roger.
+[   887.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 5,000.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
 [  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, descend and maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
 [  1366.0] PILOT     125.1: Descend and maintain three thousand, Cessna two lima tango.

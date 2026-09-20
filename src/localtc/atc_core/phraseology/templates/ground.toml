@@ -63,3 +63,11 @@ text = ["{callsign}, push and start approved, tail {turn}.", "{callsign}, push a
 id = "ground.pushback_straight"
 controller = "ground"
 text = ["{callsign}, push and start approved.", "{callsign}, push and start at your discretion."]
+
+# A runway the taxi route crosses: the clearance to cross it comes as the aircraft reaches it.
+[[template]]
+id = "ground.cross_runway"
+controller = "ground"
+text = ["{callsign}, cross runway {runway}.", "{callsign}, cross runway {runway}, remain this frequency."]
+readback = { required = ["runway"] }
+pilot_readback = "Cross runway {runway}, {callsign_short}."

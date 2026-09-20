@@ -32,7 +32,7 @@
 [   875.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
 [   875.0] READBACK  departure.handoff_center correct
 [   881.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
-[   884.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, roger.
+[   884.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 5,000.
 [   904.0] PILOT     125.1: Center, Cessna two lima tango, request direct Boeing Field.
 [   906.0] ATC       Seattle Center 125.1: Cessna 2LT, cleared direct Boeing Field.
 [   908.0] PILOT     125.1: Direct Boeing Field, Cessna two lima tango.

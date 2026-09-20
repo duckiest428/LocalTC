@@ -3,6 +3,12 @@ id = "center.checkin"
 controller = "center"
 text = ["{callsign}, {station}, roger."]
 
+# The new controller already has the flight: it reads back what it has rather than starting over.
+[[template]]
+id = "center.checkin_level"
+controller = "center"
+text = ["{callsign}, {station}, radar contact, maintain {altitude}."]
+
 [[template]]
 id = "center.descend"
 controller = "center"

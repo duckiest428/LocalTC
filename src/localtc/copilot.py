@@ -16,7 +16,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Literal
 
-from localtc.atc_core.engine import LINED_UP_NM, AtcEngine
+from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
 from localtc.atc_core.phraseology import speech
 from localtc.sim_api import AtcTransmission, BusEvent, OwnshipState, ReadbackEvaluated
@@ -203,10 +203,10 @@ class Copilot:
             return self._ready_for_departure(f)
         if f.controller == "tower":
             final = self.engine.tracker.context.final
-            # Report the runway being flown to, not the one expected earlier: lined up on final, what the
-            # aircraft is pointing at is the truth, and tower clears the runway the pilot names.
-            lined_up = final.end.ident if final is not None and final.distance_nm <= LINED_UP_NM else None
-            runway = lined_up or st.assignments.arrival_runway or (final.end.ident if final else "")
+            # Report the runway being flown to, not the one expected earlier. Being on a runway's final at
+            # all means lined up with it, and calling the other one leaves tower clearing a runway the
+            # aircraft is pointing away from.
+            runway = (final.end.ident if final is not None else "") or st.assignments.arrival_runway
             miles = f"{max(1, round(final.distance_nm))} mile final" if final else "inbound"
             return f"{f.station}, {cs}, {miles} runway {runway}".rstrip()
         if f.controller == "ground":

@@ -90,6 +90,7 @@ Most new behavior doesn't need a phase. It's a reaction in the engine:
 | time and position while nothing else is going on ("contact approach within 40 nm") | `AtcEngine._monitor`, one `elif` per automatic call, guarded by `once("flag")` so it happens once |
 | something that must work even with a readback pending ("how do you read?") | `AtcEngine._watch` |
 | a pilot request | an intent (below), then a branch in `_on_request` or the `unscripted` table |
+| the sim's other aircraft | `AtcEngine._traffic` (every target, airborne and on the ground); see `_runway_conflict`, `_sequence_on_final`, `_ground_conflict` |
 
 A new automatic call in `_monitor`:
 

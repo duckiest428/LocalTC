@@ -83,6 +83,16 @@ genuinely different centre and twenty minutes since the last handoff; the last 2
 arrival. Over the ocean nothing is in range and the flight stays where it is. The first centre after
 departure is `[atc] center_name`, used until the flight is near an airport big enough to name one.
 
+## Traffic
+
+The sim's AI aircraft arrive as `TrafficSnapshot` events and are kept whether they are flying or on the
+ground. Airborne ones give the traffic advisories. The ones on the ground are the ones that matter near a
+runway: tower sends a landing aircraft around when somebody is still sitting on the runway it is a mile
+from, puts it in the landing order behind whoever is ahead on the same final, and ground holds a taxiing
+aircraft for another crossing in front of it.
+
+Nothing is injected into the sim: this is the traffic MSFS already has, and it never hears ATC.
+
 ## Determinism and recordings
 
 `AtcEngine.handle(event)` is synchronous and depends only on the events, the config and a seed:

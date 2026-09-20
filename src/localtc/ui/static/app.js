@@ -392,10 +392,12 @@ const Settings = {
   async save(section, key, value) {
     try {
       const r = await api("settings", { settings: { [section]: { [key]: value } } });
-      S.settings.settings[section][key] = value;
-      $("#restart-bar").hidden = !r.restart;
-      $("#saved-note").textContent = "Saved";
-      setTimeout(() => ($("#saved-note").textContent = ""), 1500);
+      if (S.settings) S.settings.settings[section][key] = value;
+      if ($("#restart-bar")) $("#restart-bar").hidden = !r.restart;
+      if ($("#saved-note")) {
+        $("#saved-note").textContent = "Saved";
+        setTimeout(() => ($("#saved-note").textContent = ""), 1500);
+      }
       return true;
     } catch (e) { fail(e); return false; }
   },
@@ -753,17 +755,43 @@ const MapView = {
 
 /* ---------- Airport Lookup ---------- */
 
+const KINDS = [["international", "International"], ["airport", "Other airports"], ["heliport", "Helipads"]];
+
 const Lookup = {
   shown: false,
+  kinds: null,
   show() {
-    if (!this.shown) { this.shown = true; this.search(""); }
+    if (!this.shown) { this.shown = true; this.kinds = null; this.filters(); this.search($("#lookup-q").value.trim()); }
     $("#lookup-q").focus();
+  },
+  chosen() {
+    if (this.kinds === null) this.kinds = (S.state.lookup_kinds || ["international"]).slice();
+    return this.kinds;
+  },
+  filters(counts) {
+    const on = this.chosen();
+    $("#lookup-filters").innerHTML = KINDS.map(([id, label]) => {
+      const n = counts ? ` <span class="muted">${counts[id] || 0}</span>` : "";
+      return `<button class="switch ${on.includes(id) ? "on" : ""}" data-kind="${id}">${label}${n}</button>`;
+    }).join("");
+    $$("#lookup-filters [data-kind]").forEach((b) => (b.onclick = () => this.toggle(b.dataset.kind)));
+  },
+  async toggle(kind) {
+    const on = this.chosen();
+    const next = on.includes(kind) ? on.filter((k) => k !== kind) : [...on, kind];
+    this.kinds = next.length ? next : KINDS.map(([id]) => id);  // none chosen means show everything
+    this.filters();
+    await this.search($("#lookup-q").value.trim());
+    Settings.save("ui", "lookup_kinds", this.kinds).catch(() => {});
   },
   async search(q) {
     try {
-      const r = await api(`airports/search?q=${encodeURIComponent(q)}`);
-      $("#lookup-hint").textContent = `${r.known} airport${r.known === 1 ? "" : "s"} known on this computer (every airport a flight visits is saved). Any other ICAO is fetched from the sim during a flight.`;
-      $("#lookup-results").innerHTML = r.airports.map((a) => `<span class="chip" data-icao="${esc(a.icao)}"><b>${esc(a.icao)}</b>${esc(a.name)}</span>`).join("");
+      const kinds = this.chosen().map((k) => `&kinds=${encodeURIComponent(k)}`).join("");
+      const r = await api(`airports/search?q=${encodeURIComponent(q)}${kinds}`);
+      this.filters(r.counts);
+      $("#lookup-hint").textContent = `${r.matching} of ${r.known} airport${r.known === 1 ? "" : "s"} known on this computer (every airport a flight visits is saved). Any other ICAO is fetched from the sim during a flight.`;
+      $("#lookup-results").innerHTML = r.airports.map((a) => `<span class="chip" data-icao="${esc(a.icao)}"><b>${esc(a.icao)}</b>${esc(a.name)}</span>`).join("")
+        || '<p class="muted small">Nothing matches these filters.</p>';
     } catch (e) { fail(e); }
   },
   async open(icao) {

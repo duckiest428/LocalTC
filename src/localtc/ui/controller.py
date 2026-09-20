@@ -152,7 +152,7 @@ class AppController:
             "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick},
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
-            "simbrief_user": self.cfg.ui.simbrief_user,
+            "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
         }
 
     def _push_state(self) -> None:
@@ -532,12 +532,19 @@ class AppController:
             self._index = await asyncio.to_thread(_build_index, self.cache)
             for airport in self.airports.values():
                 self._index[airport.icao] = _index_entry(airport)
+        wanted = args.get("kinds")
+        if isinstance(wanted, str):
+            wanted = [wanted]  # one filter chosen: the query carries it as a single value
+        kinds = {k for k in wanted if k in AIRPORT_KINDS} if isinstance(wanted, list) else set(AIRPORT_KINDS)
+        kinds = kinds or set(AIRPORT_KINDS)
+        pool = [a for a in self._index.values() if a["kind"] in kinds]
         if not query:
-            hits = list(self._index.values())[:50]
+            hits = pool[:50]
         else:
-            hits = [a for a in self._index.values() if a["icao"].startswith(query)]
-            hits += [a for a in self._index.values() if query in a["name"].upper() and a not in hits]
-        return {"airports": hits[:50], "known": len(self._index)}
+            hits = [a for a in pool if a["icao"].startswith(query)]
+            hits += [a for a in pool if query in a["name"].upper() and a not in hits]
+        counts = {kind: sum(1 for a in self._index.values() if a["kind"] == kind) for kind in AIRPORT_KINDS}
+        return {"airports": hits[:50], "known": len(self._index), "matching": len(pool), "counts": counts}
 
     async def api_note(self, args: dict) -> dict:
         text = str(args.get("text", "")).strip() or "(marked)"
@@ -683,8 +690,31 @@ def _model(atc_model: str) -> str:
     return match.group(1) if match else ""
 
 
+# What a cached airport is, for the lookup's filters. The sim's data carries no such label, so it is
+# read off the field itself: how long its longest runway is and whether anyone works a frequency there.
+AIRPORT_KINDS = ("international", "airport", "heliport")
+INTERNATIONAL_RUNWAY_M = 2000.0
+ATC_FREQUENCIES = ("tower", "approach", "departure", "center")
+
+
+def _airport_kind(longest_m: float, has_atc: bool, name: str) -> str:
+    if not longest_m:
+        return "heliport"  # helipads, hospital pads and the like: somewhere to land, but no runway
+    if "INTERNATIONAL" in name.upper() or "INTL" in name.upper():
+        return "international"
+    return "international" if longest_m >= INTERNATIONAL_RUNWAY_M and has_atc else "airport"
+
+
+def _entry(icao: str, name: str, lat: float, lon: float, runways, frequencies) -> dict:
+    longest = max((float(r["length_m"] if isinstance(r, dict) else r.length_m) for r in runways), default=0.0)
+    kinds = {f["kind"] if isinstance(f, dict) else f.kind for f in frequencies}
+    return {"icao": icao, "name": _title(name), "lat": lat, "lon": lon,
+            "kind": _airport_kind(longest, bool(kinds & set(ATC_FREQUENCIES)), name),
+            "runway_m": round(longest)}
+
+
 def _index_entry(airport) -> dict:
-    return {"icao": airport.icao, "name": _title(airport.name), "lat": airport.lat, "lon": airport.lon}
+    return _entry(airport.icao, airport.name, airport.lat, airport.lon, airport.runways, airport.frequencies)
 
 
 def _build_index(cache: AirportCache) -> dict[str, dict]:
@@ -696,8 +726,8 @@ def _build_index(cache: AirportCache) -> dict[str, dict]:
     for path in sorted(cache.directory.glob("*.json")):
         try:  # only the header fields: the files carry whole taxiway graphs
             data = json.loads(path.read_bytes())
-            index[data["icao"]] = {"icao": data["icao"], "name": _title(data.get("name", "")), "lat": data["lat"],
-                                   "lon": data["lon"]}
+            index[data["icao"]] = _entry(data["icao"], data.get("name", ""), data["lat"], data["lon"],
+                                         data.get("runways", ()), data.get("frequencies", ()))
         except (OSError, ValueError, KeyError):
             continue
     return index

@@ -166,6 +166,8 @@ class UiConfig(_Section):
     # default (a recording), and the app must always fly the sim unless the pilot asks for a replay here.
     source: SourceKind = "live"
     map_tiles: bool = True  # map background from OpenStreetMap (needs the internet; the rest works offline)
+    # Which airports Airport Lookup starts with; the page writes back whatever the filters are set to.
+    lookup_kinds: list[str] = msgspec.field(default_factory=lambda: ["international"])
 
 
 class Config(_Section):

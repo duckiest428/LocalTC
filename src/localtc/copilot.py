@@ -100,6 +100,8 @@ class Copilot:
         """Actions whose time has come; call after every event."""
         self._t = max(self._t, t)
         out: list[Action] = []
+        if not self._queue:
+            self._catch_up(t)
         if not self._queue and self.mode == "full":
             self._initiate(t)
         while self._queue and self._queue[0].due <= t:
@@ -108,6 +110,24 @@ class Copilot:
             item = self._queue.pop(0)
             out += self._fire(item, t)
         return out
+
+    def _catch_up(self, t: float) -> None:
+        """Switched on with an instruction already waiting, answer it.
+
+        The copilot normally replies to a transmission as it happens, so one flipped on halfway through
+        a flight would sit silent while ATC waited for a readback it never heard.
+        """
+        st = self.engine.state
+        pending = st.pending
+        if pending is None or not self.engine.idle:
+            return
+        issued = st.issued.get(pending.instruction_id)
+        if issued is None or not self.engine.library.get(pending.instruction_id).pilot_readback:
+            return
+        if any(key[0] == pending.instruction_id for key in self._answered):
+            return  # already answered this one; ATC is waiting on a correction, not on silence
+        self._answered.add((pending.instruction_id, pending.issued_t))
+        self._push("say", t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
 
     # --- reacting to ATC --------------------------------------------------------------------------------
 

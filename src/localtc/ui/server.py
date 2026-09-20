@@ -105,7 +105,9 @@ class AppServer:
             if handler is None:
                 return 404, "application/json", b'{"error":"no such call"}'
             try:
-                args = {k: v[-1] for k, v in urllib.parse.parse_qs(query).items()}
+                # A name given once is its value; given more than once it is the list of them, so a
+                # query can carry a set ("?kinds=international&kinds=heliport").
+                args = {k: (v[-1] if len(v) == 1 else v) for k, v in urllib.parse.parse_qs(query).items()}
                 if body:
                     parsed = json.loads(body)
                     if not isinstance(parsed, dict):

@@ -357,7 +357,11 @@ class AtcEngine:
             self._tuned_since = own.t
             expected = st.comms.expected
             if st.pending is not None and expected is not None and tuned == expected and st.pending.controller != tuned.controller:
-                st.pending = None  # switched to the new frequency without reading it back: that's the answer
+                # Switched to the new frequency without reading it back: that's the answer. It counts as
+                # read back, so a readback that lands a moment later -- the copilot changes frequency the
+                # instant it is told to, and the two controllers may even share one -- isn't a stray call
+                # to the new controller, who would have nothing to make of it but "say again".
+                st.pending, st.read_back = None, st.pending
             if self._atis_tuned is not None:
                 out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="atis",
                                       station=f"{self._airport_name(self._atis_tuned)} ATIS"))

@@ -55,6 +55,7 @@
 [  1105.0] LLM       understand used: {"kind": "request", "intent": "emergency", "topic": "", "runway": "", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "sick passenger", "souls": "", "fuel": ""}
 [  1105.0] ALERT     emergency: Seattle Center, two lima tango, we have a sick passenger on board, requesting priority
 [  1108.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, sick passenger. Say intentions.
+[  1108.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, you are number one, cleared direct Boeing Field, descend at your discretion, emergency equipment is standing by.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
 [  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, descend and maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
 [  1364.0] PILOT     125.1: Descend and maintain three thousand, Cessna two lima tango.
@@ -66,14 +67,14 @@
 [  1383.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, descend and maintain 2,100, expect ILS RWY 14R approach, information Bravo is current, altimeter 29.92.
 [  1385.0] PILOT     119.2: Descend and maintain two thousand one hundred, expect I L S runway one four right, Cessna two lima tango.
 [  1385.0] READBACK  approach.descend correct
-[  1682.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared ILS RWY 14R approach, contact Boeing Tower 120.6.
-[  1684.0] PILOT     119.2: Cleared I L S runway one four right approach, Boeing Tower one two zero point six, Cessna two lima tango.
-[  1684.0] READBACK  approach.cleared correct
-[  1690.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, eight miles out on the ILS one four right
-[  1690.0] LLM       understand used: {"kind": "request", "intent": "report_final", "topic": "", "runway": "14R", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""}
-[  1693.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, wind 130 at 3, cleared to land.
-[  1695.0] PILOT     120.6: clear to land one four right, two lima tango
-[  1695.0] READBACK  tower.land correct
+[  1393.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared ILS RWY 14R approach, contact Boeing Tower 120.6.
+[  1395.0] PILOT     119.2: Cleared I L S runway one four right approach, Boeing Tower one two zero point six, Cessna two lima tango.
+[  1395.0] READBACK  approach.cleared correct
+[  1401.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, eight miles out on the ILS one four right
+[  1401.0] LLM       understand used: {"kind": "request", "intent": "report_final", "topic": "", "runway": "14R", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""}
+[  1404.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, wind 130 at 3, cleared to land.
+[  1406.0] PILOT     120.6: clear to land one four right, two lima tango
+[  1406.0] READBACK  tower.land correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1792.0] PILOT     120.6: Seattle Approach, say the winds at Boeing, two lima tango
 [  1792.0] LLM       understand used: {"kind": "question", "intent": "", "topic": "wind", "runway": "", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""}

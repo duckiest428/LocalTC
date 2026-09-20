@@ -192,3 +192,31 @@ fix = "direct {fix}"
 id = "common.radio_check"
 controller = "any"
 text = ["{callsign}, {station}, read you five by five.", "{callsign}, {station}, loud and clear."]
+
+# --- an emergency: priority, then the shortest way to the ground ------------------------------------
+
+[[template]]
+id = "common.emergency_priority"
+controller = "any"
+text = ["{callsign}, roger, you are number one, cleared direct {destination}, descend at your discretion, emergency equipment is standing by."]
+readback = { required = ["destination"] }
+pilot_readback = "Direct {destination}, descending at our discretion, {callsign_short}."
+
+[[template]]
+id = "common.emergency_approach"
+controller = "any"
+text = ["{callsign}, cleared {approach} approach, you are number one, the equipment is rolling."]
+readback = { required = ["approach"] }
+pilot_readback = "Cleared {approach} approach, {callsign_short}."
+
+[[template]]
+id = "common.emergency_land"
+controller = "any"
+text = ["{callsign}, runway {runway}, cleared to land, wind {wind}, emergency equipment is standing by."]
+readback = { required = ["runway", "cleared_to_land"] }
+pilot_readback = "Cleared to land runway {runway}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_intentions"
+controller = "any"
+text = ["{callsign}, say souls on board and fuel remaining."]

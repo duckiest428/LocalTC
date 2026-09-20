@@ -78,6 +78,7 @@ MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stop
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
+EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
@@ -449,8 +450,8 @@ class AtcEngine:
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
-            if self._radar_vectors(own) or self._traffic_advisory(own) or self._altitude_check(own) \
-                    or self._enroute_chat(own):
+            if self._emergency_handling(own) or self._radar_vectors(own) or self._traffic_advisory(own) \
+                    or self._altitude_check(own) or self._enroute_chat(own):
                 return out
 
         def once(flag: str) -> bool:
@@ -537,6 +538,8 @@ class AtcEngine:
         st, t = self.state, own.t
         if self._scheduled or self._transmitting(t) or t < self._radio_busy_until:
             return []
+        if "emergency" in st.flags:
+            return []  # nothing is chased while an emergency is running
         last_pilot = st.comms.last_pilot_t if st.comms.last_pilot_t is not None else -math.inf
         last_atc = st.comms.last_atc_t if st.comms.last_atc_t is not None else -math.inf
         pending = st.pending
@@ -639,7 +642,7 @@ class AtcEngine:
         """
         st, t = self.state, own.t
         tuned = st.comms.tuned
-        if P(st.phase) is not P.CRUISE or tuned is None or tuned.controller != "center":
+        if P(st.phase) is not P.CRUISE or tuned is None or tuned.controller != "center" or "emergency" in st.flags:
             return False
         if t - self._chat_t < CHAT_GAP_S or t - self._tuned_since < CHAT_SETTLE_S:
             return False
@@ -690,6 +693,8 @@ class AtcEngine:
     def _altitude_check(self, own: OwnshipState) -> bool:
         """Level at the assigned altitude, then drifting 300 ft off it for 15 s: "check altitude"."""
         st, t = self.state, own.t
+        if "emergency" in st.flags:
+            return False  # an aircraft in trouble is not chased about its altitude
         assigned = st.assignments.altitude_ft
         if assigned is None or "approach" in st.clearances or P(st.phase) not in (P.DEPARTURE, P.CRUISE, P.ARRIVAL):
             self._deviation_since = None
@@ -1236,7 +1241,14 @@ class AtcEngine:
     # --- non-routine: emergencies, questions, requests without a procedure --------------------------------
 
     def _emergency(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
+        """An emergency declared, and everything that follows from it.
+
+        The first call gets the questions; once the details are in, the flight is given priority and
+        the shortest way to the ground. After that ``_emergency_handling`` keeps it: the approach is
+        cleared early, tower clears the landing whatever the sequence, and nobody chases readbacks.
+        """
         st = self.state
+        own = st.aircraft
         out: list[BusEvent] = []
         if "emergency" not in st.flags:
             st.flags.add("emergency")
@@ -1247,9 +1259,35 @@ class AtcEngine:
                      f"{details['fuel']} of fuel" if "fuel" in details else ""]
             text = ", ".join(p for p in parts if p)
             self._schedule(t, "common.emergency_copied", {"message": Phrase(text, text)}, facility)
+        elif "emergency_asked" in st.flags:
+            self._schedule(t, "common.emergency_intentions", {}, facility, expects_readback=False)
         else:
+            st.flags.add("emergency_asked")
             self._schedule(t, "common.emergency", {}, facility)
+        if "emergency_priority" not in st.flags and own is not None and not own.on_ground \
+                and facility.controller in ("departure", "center", "approach"):
+            st.flags.add("emergency_priority")
+            destination = self._airport_name(st.flight.destination)
+            # Told, not asked: a crew dealing with an emergency is not chased for a readback.
+            self._schedule(t, "common.emergency_priority", {"destination": destination}, facility, delay=True,
+                           expects_readback=False)
         return out
+
+    def _emergency_handling(self, own: OwnshipState) -> bool:
+        """With an emergency running, get the aircraft down: clear the approach as soon as there is one
+        to clear, and let tower clear the landing without waiting for a report from the pilot."""
+        st, ctx, t = self.state, self.tracker.context, own.t
+        tuned = st.comms.tuned
+        if "emergency" not in st.flags or tuned is None or own.on_ground:
+            return False
+        if tuned.controller == "approach" and "approach" not in st.clearances and self._arrival_plan(own) is not None:
+            self._clear_approach(t, own, tuned, delay=False)
+            return True
+        if tuned.controller == "tower" and "landing" not in st.clearances and ctx.destination_distance_nm is not None \
+                and ctx.destination_distance_nm <= EMERGENCY_LAND_NM:
+            self._clear_to_land(t, own, tuned, delay=False)
+            return True
+        return False
 
     def _answer(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         """Information the engine has (altimeter, wind, runway, ...) is answered from sim data; the rest is

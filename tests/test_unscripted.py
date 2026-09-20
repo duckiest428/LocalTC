@@ -155,3 +155,37 @@ def test_a_level_offered_enroute_can_be_turned_down():
     assert engine._answer_offer("Negative. We'd like to stay on our cruising.", centre, 130.0)
     assert [item.instruction_id for item in engine._scheduled] == ["common.roger"]
     assert engine._offered_level is None
+
+
+from test_phase import own  # noqa: E402  (a builder for OwnshipState, shared with the phase tests)
+
+
+def test_an_emergency_gets_priority_and_the_shortest_way_down():
+    """Declaring an emergency used to get an acknowledgement and nothing else: the flight carried on
+    being sequenced, chased for readbacks and asked to check its altitude like any other."""
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.facilities import Facility
+    from localtc.atc_core.readback import Interpretation
+
+    engine = AtcEngine(EngineConfig(callsign="N172LT", destination="KBFI", seed=3))
+    engine.state.flight.destination = "KBFI"
+    engine.state.aircraft = own(100.0, on_ground=False, alt_agl_ft=8000, alt_msl_ft=8000, alt_indicated_ft=8000)
+    centre = Facility(controller="center", station="Seattle Center", mhz=125.1)
+    engine._emergency(Interpretation(kind="request", intent="emergency", text="mayday, engine failure",
+                                     values={"emergency": "engine failure"}), centre, 100.0)
+    said = [item.instruction_id for item in engine._scheduled]
+    assert "common.emergency_priority" in said, said
+    assert "emergency" in engine.state.flags
+
+
+def test_an_emergency_stops_the_altitude_nagging():
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+
+    engine = AtcEngine(EngineConfig(callsign="N172LT", seed=3))
+    engine.state.phase = "CRUISE"
+    engine.state.assignments.altitude_ft = 5000
+    engine.state.flags.add("reached:5000")
+    drifting = own(200.0, on_ground=False, alt_agl_ft=6000, alt_msl_ft=6000, alt_indicated_ft=6000)
+    assert engine._altitude_check(drifting) is False or engine._deviation_since is not None
+    engine.state.flags.add("emergency")
+    assert engine._altitude_check(drifting) is False

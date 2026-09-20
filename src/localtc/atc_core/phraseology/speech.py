@@ -121,6 +121,29 @@ def taxiway(name: str) -> str:
     return " ".join(PHONETIC[c] if c.isalpha() else DIGITS[int(c)] for c in name if c.isalnum())
 
 
+def procedure(name: str) -> str:
+    """A SID or STAR ident as it is said: "MONTN2" -> "montn two", "XIBI3A" -> "xibi three alpha".
+
+    The published spoken name ("MONTANA TWO") isn't in the sim's data, so the letters are left as a
+    word and only the digits and any trailing letter are spelled out, the way a controller reads them.
+    """
+    said, word = [], ""
+    for char in name.upper():
+        if char.isdigit():
+            if word:
+                said.append(word.lower())
+                word = ""
+            said.append(DIGITS[int(char)])
+        elif char.isalnum():
+            if said and not word:  # a letter after the number is spelled: "xibi three alpha"
+                said.append(PHONETIC[char])
+            else:
+                word += char
+    if word:
+        said.append(word.lower())
+    return " ".join(said)
+
+
 def taxi_route(names: tuple[str, ...]) -> str:
     return ", ".join(taxiway(n) for n in names)
 

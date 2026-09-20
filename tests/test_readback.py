@@ -140,6 +140,7 @@ def random_slots(rng: random.Random) -> dict:
         "hold_point": rng.choice(names) + rng.choice(["", str(rng.randint(1, 9))]),
         "turn": rng.choice(["left", "right"]),
         "approach": Approach(rng.choice(["ILS", "RNAV"]), runway()),
+        "procedure": rng.choice(["MONTN2", "SEA9", "XIBI3A", "BAYST1"]),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
         "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),
     }

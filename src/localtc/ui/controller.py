@@ -57,7 +57,7 @@ FREQ_LABELS = {"atis": "ATIS", "awos": "AWOS", "asos": "ASOS", "clearance": "CLR
                "departure": "DEP", "approach": "APP", "center": "CTR", "unicom": "UNICOM", "ctaf": "CTAF",
                "multicom": "MULTICOM", "fss": "FSS"}
 FREQ_ORDER = list(FREQ_LABELS)
-DEPARTING = {"PARKED", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
+DEPARTING = {"PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
 
 
 class AppController:

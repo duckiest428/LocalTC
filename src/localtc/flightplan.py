@@ -238,3 +238,5 @@ def apply_plan(plan: FlightPlan, flight: Any) -> None:
     flight.alternate = plan.alternate
     flight.cruise_ft = plan.cruise_ft
     flight.route = plan.route
+    flight.sid = plan.sid
+    flight.star = plan.star

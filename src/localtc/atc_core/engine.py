@@ -61,7 +61,7 @@ from localtc.sim_api import (
 )
 
 P = FlightPhase
-DEPARTURE_PHASES = {P.PARKED, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
+DEPARTURE_PHASES = {P.PARKED, P.PUSHBACK, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 NM_M = 1852.0
@@ -82,6 +82,8 @@ REPEAT_WINDOW_S = 180.0
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
 LINED_UP_NM = 4.0  # this close on a runway's final, the pilot has chosen it
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
+PUSHBACK_LOOK_M = 40.0  # how far along the taxi route to look for the direction the tail should go
+PUSHBACK_STRAIGHT_DEG = 25.0  # the route this close to straight ahead: push straight back
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
@@ -91,6 +93,7 @@ CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground":
 # Which controller handles each pilot request (None: whoever is tuned).
 REQUEST_CONTROLLER = {
     "request_ifr_clearance": "clearance",
+    "request_pushback": "ground",
     "ready_to_taxi": "ground",
     "ready_for_departure": "tower",
     "report_final": "tower",
@@ -116,6 +119,7 @@ class EngineConfig:
     speech_s_per_char: float = 0.0  # voice out: how long speech takes; the frequency is busy meanwhile (0: instant)
     unscripted: bool = True  # ATC starts things too: traffic, altitude checks, "how do you read", stand by
     approach: str = "auto"  # "auto": what the airport publishes, the weather and the aircraft allow
+    sid: str | None = None  # departure procedure from the flight plan, named in the IFR clearance
 
 
 @dataclass
@@ -373,7 +377,8 @@ class AtcEngine:
         st, t = self.state, change.t
         out: list[BusEvent] = []
         phase = P(change.phase)
-        if phase is P.TAXI_OUT and change.previous == P.PARKED and "taxi" not in st.clearances and st.flight.origin:
+        if phase is P.TAXI_OUT and change.previous in (P.PARKED, P.PUSHBACK) and "taxi" not in st.clearances \
+                and st.flight.origin:
             out.append(self._alert(t, "taxi_without_clearance", "moving without a taxi clearance"))
             ground = self.facility("ground")
             if ground is not None and st.comms.tuned is not None and st.comms.tuned.controller == "ground":
@@ -815,6 +820,8 @@ class AtcEngine:
                 return []
         if intent == "request_ifr_clearance":
             self._ifr_clearance(t, facility, interp)
+        elif intent == "request_pushback":
+            self._pushback(t, facility, own)
         elif intent == "ready_to_taxi":
             if interp.values.get("atis"):
                 self._assign(atis=interp.values["atis"])
@@ -1201,10 +1208,14 @@ class AtcEngine:
         if self.cfg.unscripted and random.Random(zlib.crc32(f"standby{self._callsign().ident}{self.cfg.seed}".encode())).random() < STANDBY_CHANCE:
             self._schedule(t, "clearance.standby", {}, facility)
             t += random.Random(self.cfg.seed + 1).uniform(12, 25)  # the clearance comes a little later
+        slots: dict[str, Any] = {"destination": destination, "altitude": initial, "cruise": cruise,
+                                 "frequency": departure.mhz, "squawk": squawk}
+        instruction = "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise"
+        if self.cfg.sid:  # the flight plan files a SID: ATC clears the flight on it by name
+            slots["procedure"] = self.cfg.sid
+            instruction = "clearance.ifr_sid" if cruise > initial else "clearance.ifr_sid_at_cruise"
         self._schedule(
-            t, "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise",
-            {"destination": destination, "altitude": initial, "cruise": cruise, "frequency": departure.mhz, "squawk": squawk},
-            facility, clearance="ifr",
+            t, instruction, slots, facility, clearance="ifr",
             on_issue=lambda: self._assign(squawk=squawk, altitude_ft=initial, cruise_ft=cruise, departure_mhz=departure.mhz),
         )
 
@@ -1214,6 +1225,42 @@ class AtcEngine:
             return None
         end = self._runway_end(self.state.flight.origin, own)
         return end.ident if end else None
+
+    def _pushback(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
+        """Push and start, with the tail sent the way the aircraft is about to taxi.
+
+        A pushback goes tail first, so the tail is told to swing towards the taxi route and the nose
+        comes round already pointing at it. Straight back when the route leads off the nose or the
+        airport's taxiways aren't known.
+        """
+        turn = self._pushback_turn(own)
+        if turn is None:
+            self._schedule(t, "ground.pushback_straight", {}, facility, clearance="pushback")
+        else:
+            self._schedule(t, "ground.pushback", {"turn": turn}, facility, clearance="pushback")
+
+    def _pushback_turn(self, own: OwnshipState | None) -> str | None:
+        geo = self.geometry(self.state.flight.origin)
+        end = self._runway_end(self.state.flight.origin, own) if own is not None else None
+        if geo is None or own is None or end is None:
+            return None
+        route = TaxiGraph(geo).departure_route(own.lat, own.lon, end)
+        if route is None:
+            return None
+        here = geo.xy(own.lat, own.lon)
+        graph = TaxiGraph(geo)
+        for node in route.nodes:  # the first point far enough along the route to give a direction
+            position = graph.positions.get(node)
+            if position is None:
+                continue
+            east, north = position[0] - here[0], position[1] - here[1]
+            if math.hypot(east, north) < PUSHBACK_LOOK_M:
+                continue
+            relative = (math.degrees(math.atan2(east, north)) - own.hdg_true + 540) % 360 - 180
+            if abs(relative) < PUSHBACK_STRAIGHT_DEG:
+                return None
+            return "right" if relative > 0 else "left"
+        return None
 
     def _taxi_out(self, t: float, facility: Facility, own: OwnshipState | None, atis: str | None = None) -> None:
         geo = self.geometry(self.state.flight.origin)

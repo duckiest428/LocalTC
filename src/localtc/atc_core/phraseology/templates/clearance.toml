@@ -23,3 +23,24 @@ ack = "readback_correct"
 id = "clearance.say_destination"
 controller = "clearance"
 text = ["{callsign}, say destination and requested altitude."]
+
+# Departing on a SID from the flight plan: it is named, and the rest of the route is "as filed".
+[[template]]
+id = "clearance.ifr_sid"
+controller = "clearance"
+text = [
+    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+]
+readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise", "procedure"] }
+pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+ack = "readback_correct"
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+controller = "clearance"
+text = [
+    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
+]
+readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "procedure"] }
+pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
+ack = "readback_correct"

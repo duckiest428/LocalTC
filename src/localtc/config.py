@@ -82,6 +82,8 @@ class FlightConfig(_Section):
     origin: str = ""  # blank = the airport the flight starts at
     alternate: str = ""
     route: str = ""
+    sid: str = ""  # named in the IFR clearance ("via the MONTN2 departure, then as filed")
+    star: str = ""
     approach: Literal["auto", "visual", "ils", "rnav"] = "auto"  # auto: what the airport has, the weather and the aircraft allow
 
 

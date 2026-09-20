@@ -58,6 +58,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
         unscripted=atc.unscripted,
         approach=flight.approach,
+        sid=flight.sid or None,
     )
 
 

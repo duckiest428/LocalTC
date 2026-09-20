@@ -52,3 +52,14 @@ pilot_readback = "Taxi to parking via {taxi_route}, {callsign_short}."
 id = "ground.taxi_in_no_route"
 controller = "ground"
 text = ["{callsign}, taxi to parking."]
+
+# Push and start. The tail goes the way the aircraft will taxi, so the nose comes round facing it.
+[[template]]
+id = "ground.pushback"
+controller = "ground"
+text = ["{callsign}, push and start approved, tail {turn}.", "{callsign}, push and start at your discretion, tail {turn}."]
+
+[[template]]
+id = "ground.pushback_straight"
+controller = "ground"
+text = ["{callsign}, push and start approved.", "{callsign}, push and start at your discretion."]

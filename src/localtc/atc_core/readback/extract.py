@@ -242,6 +242,32 @@ def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ..
     return found
 
 
+PROCEDURE_END = ("departure", "arrival", "transition")
+
+
+def procedures(tokens: list[Token], expected: Any = None) -> list[str]:
+    """A SID or STAR read back: "via the montn two departure" -> "MONTN2".
+
+    Only counted when the naming word follows, so a taxi route ("taxi via bravo, charlie") is never
+    mistaken for one.
+    """
+    found = []
+    for start in _find_phrase(tokens, ("via",)) + _find_phrase(tokens, ("expect",)):
+        i = start
+        if i < len(tokens) and tokens[i].text == "the":
+            i += 1
+        name = ""
+        while i < len(tokens) and tokens[i].text not in PROCEDURE_END:
+            token = tokens[i]
+            if token.kind not in ("word", "number", "letter") or not token.text.isalnum():
+                break
+            name += token.text.upper()
+            i += 1
+        if name and i < len(tokens) and tokens[i].text in PROCEDURE_END and name not in found:
+            found.append(name)
+    return found
+
+
 def taxi_route_matches(heard: Any, expected: Any) -> bool:
     """Does the pilot's route agree with the one ATC gave?
 
@@ -385,6 +411,7 @@ ELEMENTS: dict[str, Extractor] = {
     "heading": headings,
     "taxi_route": taxi_routes,
     "approach": approaches,
+    "procedure": procedures,
     "destination": destination,
     "fix": fixes,
     "callsign": callsigns,

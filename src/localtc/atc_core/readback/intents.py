@@ -107,6 +107,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         tokens, ("cleared",), ("taxi",)  # "Clearance, request taxi": the station's name, not an IFR request
     ) and not landing:
         add("request_ifr_clearance", atis=_atis(tokens))
+    if _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
+                ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push")):
+        add("request_pushback")
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"))
     if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of")):
         add("clear_of_runway", runway=_any_runway(tokens))

@@ -31,7 +31,7 @@ from localtc.sim_api import (
 CONSOLE = {"console": True}  # log.info(..., extra=CONSOLE): also show this INFO line on the console
 
 PHASES = {
-    "PARKED": "Parked", "TAXI_OUT": "Taxiing", "RUNWAY_HOLD": "Holding short", "TAKEOFF": "Takeoff roll",
+    "PARKED": "Parked", "PUSHBACK": "Pushing back", "TAXI_OUT": "Taxiing", "RUNWAY_HOLD": "Holding short", "TAKEOFF": "Takeoff roll",
     "DEPARTURE": "Airborne", "CRUISE": "Cruise", "ARRIVAL": "Arrival", "APPROACH": "Approach",
     "LANDING": "Final", "TAXI_IN": "Landed, taxiing in",
 }

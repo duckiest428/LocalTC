@@ -11,11 +11,12 @@ import msgspec
 
 from localtc.atc_core.phase.context import PositionContext
 from localtc.sim_api import OwnshipState, PhaseChanged
-from localtc.sim_api.geo import haversine_nm
+from localtc.sim_api.geo import METERS_PER_NM, angle_diff, bearing_deg, haversine_nm
 
 
 class FlightPhase(enum.StrEnum):
     PARKED = "PARKED"
+    PUSHBACK = "PUSHBACK"
     TAXI_OUT = "TAXI_OUT"
     RUNWAY_HOLD = "RUNWAY_HOLD"
     TAKEOFF = "TAKEOFF"
@@ -27,7 +28,9 @@ class FlightPhase(enum.StrEnum):
     TAXI_IN = "TAXI_IN"
 
 
-GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD, FlightPhase.TAXI_IN}
+TRACK_BASELINE_M = 4.0  # ground covered before the direction of travel is recomputed
+GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.PUSHBACK, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD,
+                 FlightPhase.TAXI_IN}
 
 
 class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
@@ -36,6 +39,10 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     stopped_kt: float = 1.0
     taxi_start_kt: float = 3.0
     taxi_start_s: float = 2.0
+    pushback_kt: float = 0.4  # moving at all
+    pushback_max_kt: float = 8.0  # faster than a tug can push: that is taxiing
+    pushback_astern_deg: float = 110.0  # how far the track must be off the nose to be going backwards
+    pushback_s: float = 3.0
     hold_stop_s: float = 3.0
     hold_short_radius_m: float = 50.0
     leave_hold_s: float = 2.0
@@ -86,17 +93,21 @@ class PhaseDetector:
         self._timers: dict[str, float] = {}
         self._last: OwnshipState | None = None
         self._min_agl_in_phase = float("inf")
+        self._track_from: tuple[float, float] | None = None
+        self._track_deg: float | None = None
 
     def reset(self) -> None:
         """Forget the phase; the next tick is classified from scratch (flight loaded, teleport)."""
         self.phase = None
         self._timers.clear()
         self._last = None
+        self._track_from = self._track_deg = None
 
     def resume(self) -> None:
         """After a pause: restart dwell timers and forget the last position (a slew during pause isn't a teleport)."""
         self._timers.clear()
         self._last = None
+        self._track_from = self._track_deg = None
 
     def update(self, own: OwnshipState, ctx: PositionContext) -> PhaseChanged | None:
         last, self._last = self._last, own
@@ -108,6 +119,7 @@ class PhaseDetector:
             return self._set(own, self._classify(own, ctx), "initial state")
 
         self._min_agl_in_phase = min(self._min_agl_in_phase, own.alt_agl_ft)
+        self._update_track(own)
         result = self._transition(own, ctx)
         if result is None:
             return None
@@ -154,6 +166,27 @@ class PhaseDetector:
     def _at_hold_short(self, ctx: PositionContext) -> bool:
         return ctx.hold_short_distance_m is not None and ctx.hold_short_distance_m <= self.th.hold_short_radius_m
 
+    def _update_track(self, own: OwnshipState) -> None:
+        """The direction the aircraft is actually travelling, measured over enough ground to be meaningful.
+
+        At a walking pace one tick covers a few centimetres, so the track has to be taken between
+        positions several metres apart rather than between consecutive ticks.
+        """
+        reference = self._track_from
+        if reference is None:
+            self._track_from = (own.lat, own.lon)
+            return
+        if haversine_nm(reference[0], reference[1], own.lat, own.lon) * METERS_PER_NM >= TRACK_BASELINE_M:
+            self._track_deg = bearing_deg(reference[0], reference[1], own.lat, own.lon)
+            self._track_from = (own.lat, own.lon)
+
+    def _moving_astern(self, own: OwnshipState) -> bool:
+        """Being pushed off the gate: creeping along the ground, going the way the tail points."""
+        th = self.th
+        if self._track_deg is None or not own.on_ground or not (th.pushback_kt <= own.gs_kt <= th.pushback_max_kt):
+            return False
+        return angle_diff(self._track_deg, own.hdg_true) >= th.pushback_astern_deg
+
     def _takeoff_roll(self, own: OwnshipState, ctx: PositionContext) -> bool:
         return self._held(
             "takeoff", own.on_ground and ctx.aligned_on_runway and own.gs_kt >= self.th.takeoff_gs_kt, own.t, self.th.takeoff_s
@@ -185,8 +218,17 @@ class PhaseDetector:
                 return FlightPhase.LANDING, "on the ground"
 
         if phase is FlightPhase.PARKED:
+            if self._held("pushback", self._moving_astern(own), t, th.pushback_s):
+                return FlightPhase.PUSHBACK, "being pushed back"
             if self._held("taxi", own.on_ground and own.gs_kt > th.taxi_start_kt, t, th.taxi_start_s):
                 return FlightPhase.TAXI_OUT, "started moving"
+
+        elif phase is FlightPhase.PUSHBACK:
+            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own)
+            if self._held("taxi", moving_off, t, th.taxi_start_s):
+                return FlightPhase.TAXI_OUT, "taxiing off the gate"
+            if self._held("push_done", own.gs_kt < th.stopped_kt, t, th.parked_s):
+                return FlightPhase.PARKED, "pushback complete"
 
         elif phase is FlightPhase.TAXI_OUT:
             if self._takeoff_roll(own, ctx):

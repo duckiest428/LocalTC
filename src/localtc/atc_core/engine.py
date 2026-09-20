@@ -76,6 +76,12 @@ STANDBY_CHANCE = 0.3  # clearance delivery sometimes has to go get it
 MAX_TAILWIND_REQUEST_KT = 10.0  # a pilot's runway request is granted up to this much tailwind
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
+VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
+VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
+MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
+REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
+SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
+SPEED_GATES = ((30.0, 250, "speed250"), (18.0, 210, "speed210"), (10.0, 180, "speed180"))
 APPROACH_CLEARANCE_NM = 18.0  # approach clears the approach and hands off to tower within this of the field
 ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
@@ -188,6 +194,7 @@ class AtcEngine:
         self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
         self._sector: Facility | None = None  # the enroute centre working the airspace the flight is in
         self._chat_t = -math.inf  # when a centre last started a conversation of its own
+        self._vector_t = -math.inf  # when approach last gave a vector or a speed
         self._chatted: set[str] = set()  # centres that have already started one
         self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
         self._sector_since = -math.inf
@@ -380,6 +387,8 @@ class AtcEngine:
                 # instant it is told to, and the two controllers may even share one -- isn't a stray call
                 # to the new controller, who would have nothing to make of it but "say again".
                 st.pending, st.read_back = None, st.pending
+            elif st.pending is not None and tuned is not None and st.pending.controller != tuned.controller:
+                st.pending = None  # left that controller: whatever they were waiting for is moot now
             if self._atis_tuned is not None:
                 out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="atis",
                                       station=f"{self._airport_name(self._atis_tuned)} ATIS"))
@@ -440,7 +449,8 @@ class AtcEngine:
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
-            if self._traffic_advisory(own) or self._altitude_check(own) or self._enroute_chat(own):
+            if self._radar_vectors(own) or self._traffic_advisory(own) or self._altitude_check(own) \
+                    or self._enroute_chat(own):
                 return out
 
         def once(flag: str) -> bool:
@@ -990,8 +1000,79 @@ class AtcEngine:
         self._schedule(t, "approach.vectors", {"heading": heading, "approach": plan["approach"]}, facility,
                        on_issue=lambda: self._assign(approach=plan["approach"].display, arrival_runway=plan["approach"].runway))
 
+    def _radar_vectors(self, own: OwnshipState) -> bool:
+        """Approach turning the aircraft onto the final and slowing it down, without being asked.
+
+        Until now a flight was left to find its own way to the runway and only heard from approach when
+        the clearance came. A radar controller turns you onto the localiser and manages your speed, and
+        that is most of what talking to approach sounds like.
+        """
+        st, ctx, t = self.state, self.tracker.context, own.t
+        tuned = st.comms.tuned
+        if tuned is None or tuned.controller != "approach" or "approach" in st.clearances:
+            return False
+        if t - self._vector_t < VECTOR_GAP_S or (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
+            return False  # wait for the check-in, and leave room between instructions
+        plan = self._arrival_plan(own)
+        runway = plan["approach"].runway if plan else st.assignments.arrival_runway
+        # Vectoring belongs before the approach clearance, not instead of it: once the aircraft is close
+        # enough to be cleared, the clearance is the next thing said.
+        distance = ctx.destination_distance_nm
+        if runway is None or distance is None or not APPROACH_CLEARANCE_NM < distance <= VECTOR_FROM_NM:
+            return False
+        if self._speed_control(own, t, tuned):
+            return True
+        established = ctx.final is not None and ctx.final.end.ident == runway
+        if established:
+            return False  # on the final already: nothing to vector
+        vector = self._vector_plan(own, runway)
+        if vector is None:
+            return False
+        heading, joining = vector
+        turn = self._turn_towards(own.hdg_mag, heading)
+        if turn is None:
+            return False  # already pointing that way
+        assigned = st.assignments.heading
+        if assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG:
+            return False  # the same vector again: the aircraft is still turning onto the last one
+        self._vector_t = t
+        self._schedule(t, "approach.intercept" if joining else "approach.turn",
+                       {"heading": heading, "turn": turn, "approach": plan["approach"]}, tuned, delay=False,
+                       on_issue=lambda: self._assign(heading=heading))
+        return True
+
+    def _speed_control(self, own: OwnshipState, t: float, facility: Facility) -> bool:
+        """ "Reduce speed to 210 knots": only worth saying to something fast enough to need it."""
+        ctx = self.tracker.context
+        if own.ias_kt < SPEED_CONTROL_MIN_KT or ctx.destination_distance_nm is None:
+            return False
+        for distance, speed, flag in SPEED_GATES:
+            if ctx.destination_distance_nm <= distance and own.ias_kt > speed + 20 and flag not in self.state.flags:
+                self.state.flags.add(flag)
+                self._vector_t = t
+                self._schedule(t, "approach.speed", {"speed": speed}, facility, delay=False,
+                               on_issue=lambda s=speed: self._assign(speed_kt=s))
+                return True
+        return False
+
+    @staticmethod
+    def _turn_towards(current: float, target: int) -> str | None:
+        """ "left" or "right" for the shorter way round, or None when it is barely a turn at all."""
+        difference = ((target - current + 540) % 360) - 180
+        if abs(difference) < MIN_TURN_DEG:
+            return None
+        return "right" if difference > 0 else "left"
+
     def _vector_heading(self, own: OwnshipState, runway: str) -> int | None:
-        """A magnetic heading toward a point 8 nm out on the runway's final; near it, a 30 degree intercept."""
+        plan = self._vector_plan(own, runway)
+        return plan[0] if plan is not None else None
+
+    def _vector_plan(self, own: OwnshipState, runway: str) -> tuple[int, bool] | None:
+        """A magnetic heading toward a point 8 nm out on the runway's final, and whether it joins it.
+
+        Far from that gate the heading is a leg towards it; close to it the turn is a 30 degree
+        intercept of the final approach course, which is a different thing to say on the radio.
+        """
         geo = self.geometry(self.state.flight.destination)
         end = geo.end(runway) if geo is not None else None
         if geo is None or end is None:
@@ -999,14 +1080,15 @@ class AtcEngine:
         course = math.radians(end.heading_true)
         gate = (end.threshold[0] - 8 * NM_M * math.sin(course), end.threshold[1] - 8 * NM_M * math.cos(course))
         x, y = geo.xy(own.lat, own.lon)
-        if math.hypot(gate[0] - x, gate[1] - y) < 3 * NM_M:
+        joining = math.hypot(gate[0] - x, gate[1] - y) < 3 * NM_M
+        if joining:
             # Close to the gate: join the final at 30 degrees from whichever side the aircraft is on.
             side = math.sin(course) * (y - end.threshold[1]) - math.cos(course) * (x - end.threshold[0])
             true = end.heading_true + (30 if side > 0 else -30)
         else:
             true = math.degrees(math.atan2(gate[0] - x, gate[1] - y))
         magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
-        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360
+        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360, joining
 
     def _set_arrival(self, runway: str | None, kind: str | None, own: OwnshipState | None) -> Approach | None:
         """The pilot's choice of arrival runway and approach, if the airport and the weather allow it."""

@@ -33,3 +33,26 @@ controller = "approach"
 text = ["{callsign}, roger, fly runway heading, climb and maintain {altitude}."]
 readback = { required = ["altitude"] }
 pilot_readback = "Runway heading, climb and maintain {altitude}, {callsign_short}."
+
+# Vectors ATC gives without being asked, turning the aircraft onto the final.
+[[template]]
+id = "approach.turn"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, vector for the {approach} approach.",
+        "{callsign}, fly heading {heading}, vector for the {approach} approach."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, join the final approach course, {approach} approach."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading} to join, {callsign_short}."
+
+[[template]]
+id = "approach.speed"
+controller = "approach"
+text = ["{callsign}, reduce speed to {speed} knots.", "{callsign}, maintain {speed} knots."]
+readback = { required = ["speed"] }
+pilot_readback = "{speed} knots, {callsign_short}."

@@ -43,6 +43,8 @@ class Assignments:
     squawk: str | None = None
     altitude_ft: int | None = None
     cruise_ft: int | None = None
+    heading: int | None = None  # a vector being flown
+    speed_kt: int | None = None  # an assigned airspeed
     departure_runway: str | None = None
     arrival_runway: str | None = None
     taxi_route: tuple[str, ...] = ()

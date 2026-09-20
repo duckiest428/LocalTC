@@ -136,6 +136,7 @@ def random_slots(rng: random.Random) -> dict:
         "altitude": rng.randrange(2000, 17001, 500),
         "cruise": rng.randrange(3000, 17001, 1000),
         "heading": rng.randint(1, 360),
+        "speed": rng.randrange(160, 301, 10),
         "taxi_route": tuple(rng.choice(names) + rng.choice(["", "", str(rng.randint(1, 9))]) for _ in range(rng.randint(1, 4))),
         "hold_point": rng.choice(names) + rng.choice(["", str(rng.randint(1, 9))]),
         "turn": rng.choice(["left", "right"]),

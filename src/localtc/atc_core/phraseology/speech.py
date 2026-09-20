@@ -103,6 +103,11 @@ def heading(degrees: int) -> str:
     return digits(f"{int(degrees) % 360 or 360:03d}")
 
 
+def speed(knots: int) -> str:
+    """ "210" -> "two one zero": an airspeed assignment is read digit by digit."""
+    return digits(str(int(knots)))
+
+
 def squawk(code: str) -> str:
     return digits(code)
 

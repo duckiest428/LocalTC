@@ -245,6 +245,24 @@ def squawks(tokens: list[Token], expected: Any = None) -> list[str]:
     return found
 
 
+SPEED_WORDS = (("speed",), ("knots",), ("kts",), ("slow",), ("maintain",), ("reduce",), ("increase",))
+
+
+def speeds(tokens: list[Token], expected: Any = None) -> list[int]:
+    """An assigned airspeed: "reduce speed to 210 knots", "210 knots", "maintain 180"."""
+    found = []
+    for i, token in enumerate(tokens):
+        if token.kind != "number" or not token.text.isdigit():
+            continue
+        value = int(token.text)
+        if not 60 <= value <= 400:
+            continue
+        near = [tok.text for tok in tokens[max(0, i - 3) : i + 3]]
+        if any(word[0] in near for word in SPEED_WORDS) and value not in found:
+            found.append(value)
+    return found
+
+
 def headings(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
     for i in _find_phrase(tokens, ("heading",)):
@@ -452,6 +470,7 @@ ELEMENTS: dict[str, Extractor] = {
     "frequency": frequencies,
     "squawk": squawks,
     "heading": headings,
+    "speed": speeds,
     "taxi_route": taxi_routes,
     "approach": approaches,
     "procedure": procedures,

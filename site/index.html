@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalTC — offline ATC for Microsoft Flight Simulator 2024</title>
+<meta name="description" content="Free, open-source air traffic control for MSFS 2024. Runs entirely on your PC: local speech recognition, local voices, a local language model. No cloud, no API keys, no subscription.">
+<meta property="og:title" content="LocalTC — offline ATC for MSFS 2024">
+<meta property="og:description" content="Real ATC that runs on your own machine. No cloud, no account, no monthly fee.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232f5d5a'/%3E%3Ctext x='32' y='42' font-size='28' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3ETC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#top"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="#features">Features</a>
+    <a href="#why">Why not a subscription</a>
+    <a href="#install">Install</a>
+    <a href="#status">Status</a>
+  </nav>
+  <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
+</header>
+
+<main id="top">
+
+<!-- ------------------------------------------------------------------ hero -->
+<section class="hero">
+  <div class="scope" aria-hidden="true"><span class="sweep"></span></div>
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <p class="eyebrow">Microsoft Flight Simulator 2024 &middot; Windows</p>
+      <h1>Air traffic control that never leaves your computer.</h1>
+      <p class="lede">
+        LocalTC gives you a full IFR flight on the radio — clearance delivery to taxi&#8209;in — with your
+        voice, real phraseology and readbacks that are actually checked. Speech recognition, the
+        voices and the language model all run on your own machine.
+      </p>
+      <p class="lede lede-strong">No cloud. No account. No API keys. No monthly fee. Ever.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="#install">Install it free</a>
+        <a class="btn btn-coffee" href="https://buymeacoffee.com/petey1" rel="noopener">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 7h13a3 3 0 0 1 0 6h-1.1l-.5 4.2A3 3 0 0 1 12.4 20H8.6a3 3 0 0 1-3-2.8L4 7Zm12 2v2h1a1 1 0 0 0 0-2h-1ZM5 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3ZM8 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3Z"/></svg>
+          Buy me a coffee
+        </a>
+      </div>
+      <ul class="hero-facts">
+        <li><b>$0</b> forever</li>
+        <li><b>Offline</b> after setup</li>
+        <li><b>Open source</b></li>
+      </ul>
+    </div>
+
+    <!-- a working mock of the app's radio log -->
+    <div class="window" aria-label="The LocalTC radio log">
+      <div class="window-bar">
+        <span class="logo">LocalTC</span>
+        <span class="lcd">
+          <span class="rad"><i>COM1</i> <b class="on">118.300</b></span>
+          <span class="rad"><i>COM2</i> <b>121.700</b></span>
+          <span class="rad xpdr"><i>XPDR</i> <b class="on">4512</b></span>
+        </span>
+        <span class="pill live"><i></i>Flying</span>
+      </div>
+      <div class="window-tabs">
+        <span class="wtab active">ATC</span><span class="wtab">Quick Settings</span>
+        <span class="wtab">Live Map</span><span class="wtab">Airport Lookup</span>
+      </div>
+      <div class="strip">
+        <div><i>Dest</i><b>CYYC</b></div><div><i>Squawk</i><b>4512</b></div>
+        <div><i>Alt</i><b>FL350</b></div><div><i>Rwy</i><b>08R</b></div>
+      </div>
+      <ol class="log" id="log"></ol>
+      <div class="ptt"><span class="key">Right Ctrl</span> held — talking</div>
+    </div>
+  </div>
+</section>
+
+<!-- --------------------------------------------------------------- features -->
+<section id="features" class="band">
+  <h2 class="section-title">What it does</h2>
+  <p class="section-lede">
+    Everything below runs on your PC while you fly. Nothing here is a demo or a mock-up —
+    it is what LocalTC does today.
+  </p>
+
+  <div class="grid">
+    <article class="card">
+      <span class="ico">🎙️</span>
+      <h3>You talk, it listens</h3>
+      <p>
+        Hold push&#8209;to&#8209;talk (a key or a yoke button) and speak. <b>faster&#8209;whisper</b>
+        transcribes locally and is primed with this flight's callsign, stations, runways and taxiways,
+        so it hears "hold short runway one three", not "whole short".
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🔊</span>
+      <h3>Every controller has a voice</h3>
+      <p>
+        ATC answers through <b>Piper</b> with a proper radio effect — band-pass, compression, carrier
+        fade, a squelch burst at the end. Each station draws its own speaker from a pool of 40, and
+        keeps it: Phoenix Tower never sounds like Phoenix Approach.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">📋</span>
+      <h3>A real IFR flight, in order</h3>
+      <p>
+        Clearance delivery → ground → tower → departure → centre → approach → tower → ground.
+        Taxi routes are computed from the sim's own taxiway graph. Phraseology comes from FAA
+        templates, so routine calls are word-for-word correct every time.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">✅</span>
+      <h3>Readbacks that count</h3>
+      <p>
+        Get it right and you get "readback correct". Get it wrong and you get
+        <span class="q">"negative, squawk 4512"</span>. Miss something and you get
+        <span class="q">"read back hold short runway 13"</span>. Nearly right — "12.1" for 120.1 —
+        gets <span class="q">"confirm"</span>. Self-corrections count.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🧠</span>
+      <h3>A small language model, kept on a leash</h3>
+      <p>
+        A 1B–4B model via <b>Ollama</b> reads what you said and fills in a small form. It never talks
+        to you and never decides anything: every value it reports must actually appear in your words,
+        or the whole answer is thrown away and the grammar wins.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">💬</span>
+      <h3>Go off script</h3>
+      <p>
+        "Request direct BLAKO." "Request vectors for the ILS." "Could we get runway 16R?"
+        "We'd like the visual." "Moderate chop at seven thousand." "Going around."
+        You get a real answer — or a real <span class="q">"unable"</span>, with the reason.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">📡</span>
+      <h3>Radar vectors and sequencing</h3>
+      <p>
+        Headings and altitudes mid-flight, speed control on the arrival, a turn to intercept the
+        final. Tower sequences you against the sim's real traffic — "number two, follow the 737 on a
+        four mile final" — and sends you around if the runway is still occupied.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🌦️</span>
+      <h3>ATIS and weather it builds itself</h3>
+      <p>
+        MSFS won't hand out its ATIS, so LocalTC makes one: wind and gusts, visibility, temperature,
+        altimeter, approach and runway in use, and cautions. Tune it and hear it on a loop. The letter
+        advances when the weather really changes, and ATC tells you when it does.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🚨</span>
+      <h3>ATC starts things too</h3>
+      <p>
+        Traffic advisories on the sim's real AI traffic. "Check altitude, maintain five thousand" when
+        you drift. "How do you read?" when you go quiet. A nudge when you sit on the old frequency
+        after a handoff. And a full emergency tree when you declare one.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🧑‍✈️</span>
+      <h3>An optional copilot</h3>
+      <p>
+        <b>Assist</b> reads back every instruction and tunes COM1 for you. <b>Full</b> works the whole
+        radio — clearance, taxi, ready for departure, check-ins, final — while you just fly. Turn it
+        on or off mid-flight with a switch.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🗺️</span>
+      <h3>The app</h3>
+      <p>
+        Radios and transponder up top, the airport's frequencies to click, your clearance at a glance,
+        and the radio log underneath. Plus a live map with your track and AI traffic, an airport
+        lookup with runways and taxiways, and one-click <b>SimBrief</b> import.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">🔒</span>
+      <h3>Private by construction</h3>
+      <p>
+        Your microphone audio is transcribed on your CPU or GPU. The model runs on your machine.
+        There is no server to talk to, no account to make, no telemetry. Pull the network cable and
+        the whole thing still flies.
+      </p>
+    </article>
+  </div>
+</section>
+
+<!-- -------------------------------------------------------------------- why -->
+<section id="why" class="band band-alt">
+  <h2 class="section-title">Why pay monthly for this?</h2>
+  <p class="section-lede">
+    The good paid ATC add-ons are genuinely good. They also bill you every month, need a live
+    internet connection, and send your voice to somebody else's server. LocalTC trades that for
+    a one-time install.
+  </p>
+
+  <div class="compare">
+    <table>
+      <thead>
+        <tr><th>&nbsp;</th><th class="us">LocalTC</th><th>A typical ATC subscription</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Price</td><td class="us"><b>$0</b>, forever</td><td>Usually $10–$20 a month</td></tr>
+        <tr><td>Works without internet</td><td class="us yes">Yes — that's the point</td><td class="no">No, it's a cloud service</td></tr>
+        <tr><td>Where your voice goes</td><td class="us yes">Your CPU or GPU</td><td class="no">Uploaded and processed remotely</td></tr>
+        <tr><td>Account, login, DRM</td><td class="us yes">None</td><td class="no">Required</td></tr>
+        <tr><td>If the company folds</td><td class="us yes">Still on your disk, still flies</td><td class="no">It stops working</td></tr>
+        <tr><td>Change the phraseology</td><td class="us yes">Edit a text file</td><td class="no">File a feature request</td></tr>
+        <tr><td>Read the code</td><td class="us yes">All of it, on GitHub</td><td class="no">Closed</td></tr>
+        <tr><td>Usage limits</td><td class="us yes">None — it's your hardware</td><td>Often tiered by hours</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="calc" id="calc">
+    <h3>What a subscription costs you while you fly</h3>
+    <div class="calc-row">
+      <label for="rate">Monthly price</label>
+      <input type="range" id="rate" min="5" max="25" step="1" value="15">
+      <output id="rate-out">$15</output>
+    </div>
+    <div class="calc-row">
+      <label for="years">You keep simming for</label>
+      <input type="range" id="years" min="1" max="10" step="1" value="3">
+      <output id="years-out">3 years</output>
+    </div>
+    <div class="calc-result">
+      <div class="calc-side">
+        <span class="calc-label">Subscription</span>
+        <span class="calc-big" id="sub-total">$540</span>
+      </div>
+      <div class="calc-side win">
+        <span class="calc-label">LocalTC</span>
+        <span class="calc-big">$0</span>
+      </div>
+    </div>
+    <p class="calc-note">
+      If LocalTC saves you that, and you want to say thanks,
+      <a href="https://buymeacoffee.com/petey1" rel="noopener">a coffee</a> is plenty.
+    </p>
+  </div>
+
+  <p class="fineprint">
+    Honest caveat: a subscription buys you a team, a support desk and a roadmap. LocalTC is one
+    person and an open repo. If a bug annoys you, you can file it — or fix it.
+  </p>
+</section>
+
+<!-- ---------------------------------------------------------------- install -->
+<section id="install" class="band">
+  <h2 class="section-title">Install</h2>
+  <p class="section-lede">
+    Windows, with MSFS 2024. One installer does the lot: Python, LocalTC, Whisper, Piper, Ollama,
+    CUDA if you have an NVIDIA card, and the models sized for your machine.
+  </p>
+
+  <div class="steps">
+    <div class="step">
+      <span class="num">1</span>
+      <h3>Get the files</h3>
+      <p>Download or clone the repository from GitHub.</p>
+      <div class="code"><code>git clone https://github.com/duckiest428/LocalTC.git</code><button class="copy" type="button">Copy</button></div>
+    </div>
+    <div class="step">
+      <span class="num">2</span>
+      <h3>Run the installer</h3>
+      <p>Double-click <code class="inline">Install LocalTC.cmd</code>, or from PowerShell:</p>
+      <div class="code"><code>powershell -ExecutionPolicy Bypass -File install\install.ps1</code><button class="copy" type="button">Copy</button></div>
+      <p class="hint">It picks the <i>light</i>, <i>balanced</i> or <i>quality</i> model set from your RAM and
+      graphics card. After this, flights work offline.</p>
+    </div>
+    <div class="step">
+      <span class="num">3</span>
+      <h3>Fly</h3>
+      <p>
+        Open <b>LocalTC</b> from the desktop shortcut. Import your SimBrief plan or type one in,
+        press <b>Start</b>, and call for your clearance. Mute the sim's own ATC first:
+        Sound → Character voices → 0.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h3>No NVIDIA card?</h3>
+    <p>
+      It runs on the CPU. Whisper's <code class="inline">base.en</code> transcribes a transmission in
+      about 0.4 s on a laptop CPU, and ATC's voice takes about 0.3 s to synthesise. Pass
+      <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code> to run on
+      the grammar alone.
+    </p>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------------- status -->
+<section id="status" class="band band-alt">
+  <h2 class="section-title">Where it is</h2>
+  <div class="status-cols">
+    <div class="status-col">
+      <h3 class="ok">Working today</h3>
+      <ul>
+        <li>The full IFR flow, clearance delivery to taxi-in</li>
+        <li>Voice in and voice out, with push-to-talk</li>
+        <li>ATIS, weather and the runway in use</li>
+        <li>Radar vectors, speed control, approach clearances</li>
+        <li>Traffic sequencing and go-arounds against the sim's AI</li>
+        <li>Emergencies, and off-script requests</li>
+        <li>The copilot, in assist or full</li>
+        <li>The app: map, airport lookup, SimBrief, settings</li>
+      </ul>
+    </div>
+    <div class="status-col">
+      <h3 class="todo">Not yet</h3>
+      <ul>
+        <li>SIDs, STARs and published arrivals — ATC clears "as filed" and vectors you instead</li>
+        <li>AI aircraft talking on the frequency alongside you</li>
+        <li>VFR and ICAO phraseology (it speaks FAA)</li>
+        <li>macOS and Linux at the controls — they're for development against recordings</li>
+      </ul>
+      <p class="hint">
+        Nothing here is hidden behind a paywall or a "pro" tier. When it's built, it ships.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ---------------------------------------------------------------- support -->
+<section class="band support">
+  <h2 class="section-title">Free, and staying free</h2>
+  <p class="section-lede">
+    LocalTC is built in spare time and given away. There's no tip jar in the app, no nag screen and
+    no locked feature. If it made a flight better, that's the whole reward — and if you'd like to
+    buy the coffee that wrote the next feature, the door's open.
+  </p>
+  <div class="cta cta-center">
+    <a class="btn btn-coffee btn-lg" href="https://buymeacoffee.com/petey1" rel="noopener">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 7h13a3 3 0 0 1 0 6h-1.1l-.5 4.2A3 3 0 0 1 12.4 20H8.6a3 3 0 0 1-3-2.8L4 7Zm12 2v2h1a1 1 0 0 0 0-2h-1ZM5 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3ZM8 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3Z"/></svg>
+      Buy me a coffee
+    </a>
+    <a class="btn btn-ghost btn-lg" href="https://github.com/duckiest428/LocalTC">Star it on GitHub</a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span class="brand-mark">LocalTC</span>
+    <nav>
+      <a href="https://github.com/duckiest428/LocalTC">Source</a>
+      <a href="https://github.com/duckiest428/LocalTC/blob/master/README.md">Documentation</a>
+      <a href="https://github.com/duckiest428/LocalTC/issues">Report a bug</a>
+      <a href="https://buymeacoffee.com/petey1" rel="noopener">Buy me a coffee</a>
+    </nav>
+    <p class="fineprint">
+      Not affiliated with Microsoft or Asobo. Microsoft Flight Simulator is a trademark of Microsoft
+      Corporation. LocalTC is for simulated flight only and is not for real-world navigation.
+    </p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

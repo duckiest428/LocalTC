@@ -36,6 +36,12 @@ On macOS/Linux (development against recordings): `./install/install.sh`.
 
 Start **LocalTC** from the shortcut, or run `.venv\Scripts\localtc` with no command.
 
+To open it in a browser instead of its own window — handy for working on the page itself, and the
+only way on macOS or Linux — run `localtc app --port 8765 --browser`. With `--no-open` it prints the
+address and waits, so you can point any browser at `http://127.0.0.1:8765/`. It listens on the
+loopback address only; nothing on the network can reach it. The page runs without the sim: the
+tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
+
 | Tab | |
 |---|---|
 | **ATC** | COM1/COM2 and the transponder at the top. The airport's frequencies: click one to tune COM1. Your callsign, destination, assigned squawk, altitude, runway or approach, the phase, and what ATC expects next. Below that, the radio log. |
@@ -57,6 +63,7 @@ Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Onl
 - [docs/architecture.md](docs/architecture.md): the pieces, the event bus, a transmission end to end, the app.
 - [docs/phraseology.md](docs/phraseology.md): adding phraseology templates.
 - [docs/state-machine.md](docs/state-machine.md): extending the phases and the dialogue for new scenarios.
+- [site/](site/): the project's website, published to GitHub Pages by `.github/workflows/pages.yml`.
 
 ## Layout
 

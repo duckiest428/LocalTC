@@ -343,3 +343,12 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 **macOS: `No module named 'localtc'`.** If the project is in an iCloud-synced folder such as `~/Desktop`, macOS can mark the editable install's `.pth` file as hidden, and Python 3.12.13+ skips hidden `.pth` files. Tests aren't affected, because pytest adds `src` to the path itself. For the CLI, either move the project outside the synced folder, run `chflags nohidden .venv/lib/python3*/site-packages/*.pth`, or prefix commands with `PYTHONPATH=src`.
 
 `tests/windows/` runs the SimSource contract against the live sim. It only runs on Windows with MSFS 2024 running and `LOCALTC_LIVE_SIM=1`.
+
+## Licence
+
+LocalTC is free software under the [GNU Affero General Public License v3 or later](LICENSE). Run it
+for anything, read and change the source, pass it on — and if you distribute a modified version, or
+run one as a service other people use, those people get your source under the same licence.
+
+Third-party components keep their own licences: the Whisper models, the Piper voices, and the Inter
+and JetBrains Mono typefaces bundled with [the website](site/fonts/) under the SIL Open Font License.

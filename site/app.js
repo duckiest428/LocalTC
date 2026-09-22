@@ -1,5 +1,36 @@
-/* Three small things, no dependencies: the radio log types itself, the subscription sum adds up,
-   and the install commands copy. */
+/* Four small things, no dependencies: sections arrive as you reach them, the radio log types
+   itself, the subscription sum adds up, and the install commands copy. */
+
+// --- sections arrive ------------------------------------------------------------------------------
+// The class is added here rather than in the HTML, so a page with no JavaScript simply shows
+// everything at once instead of hiding it forever.
+function reveals() {
+  const quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (quiet || !("IntersectionObserver" in window)) return;
+  const groups = ".section-title, .section-lede, .card, .compare, .calc, .fineprint, .step," +
+                 " .callout, .status-col, .cta-center, .window";
+  const seen = new IntersectionObserver((entries, self) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add("in");
+      self.unobserve(entry.target);
+    }
+  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+
+  for (const el of document.querySelectorAll(groups)) {
+    // Anything already on screen — the hero, or wherever a #link dropped you — is left alone. It
+    // has nothing to arrive from, and hiding it first would only make the page flash.
+    if (el.getBoundingClientRect().top < window.innerHeight) continue;
+    el.classList.add("reveal");
+    // Siblings in a grid come in one after another, not all at once.
+    const siblings = [...(el.parentElement?.children ?? [])].filter((n) => n.matches(groups));
+    el.style.setProperty("--delay", `${Math.min(siblings.indexOf(el), 5) * 70}ms`);
+    seen.observe(el);
+  }
+}
+// Two frames late, so a #link in the address bar has already jumped and we measure where the
+// reader actually is.
+requestAnimationFrame(() => requestAnimationFrame(reveals));
 
 // --- the radio log -------------------------------------------------------------------------------
 // A real CYVR departure, in the words LocalTC actually uses.

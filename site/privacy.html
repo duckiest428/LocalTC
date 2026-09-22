@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — LocalTC</title>
+<meta name="description" content="What LocalTC's website and software do with your data: as close to nothing as it is possible to get.">
+<meta name="robots" content="index, follow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232f5d5a'/%3E%3Ctext x='32' y='42' font-size='28' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3ETC%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="index.html#features">Features</a>
+    <a href="index.html#why">Why not a subscription</a>
+    <a href="index.html#install">Install</a>
+    <a href="index.html#status">Status</a>
+  </nav>
+  <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
+</header>
+
+<main class="legal">
+  <p class="kicker">Privacy</p>
+  <h1>What we know about you.</h1>
+  <p class="updated">Nothing. Last updated 21 September 2026.</p>
+
+  <p>
+    LocalTC is a hobby project, not a company. It has no servers, no accounts and no analytics. The
+    long version is below, split into the two things that could plausibly touch your data: this
+    website, and the program you install.
+  </p>
+
+  <div class="note">
+    <p>
+      <strong>The short version.</strong> This website stores nothing on your device and collects
+      nothing about you. The software processes your voice entirely on your own computer and sends
+      it nowhere. Neither one has any way to identify you, so there is no profile to see, export or
+      delete.
+    </p>
+  </div>
+
+  <h2>1. This website</h2>
+  <p>
+    The site is a handful of static files. There are no cookies, no local or session storage, no
+    analytics, no tag manager, no advertising, no tracking pixels and no embedded third-party
+    content. The two fonts are served from this site rather than from a font CDN, specifically so
+    that loading the page does not tell anyone else that you did.
+  </p>
+  <p>
+    There is no form, no sign-up, no newsletter and no comment box anywhere on it, so there is
+    nothing for you to submit and nothing for us to store.
+  </p>
+
+  <h3>Hosting</h3>
+  <p>
+    The site is hosted on GitHub Pages. To serve a page to you, GitHub necessarily handles technical
+    data such as your IP address, the browser you use and the time of the request, and may retain
+    it to keep the service running and to prevent abuse. That processing is GitHub's, under the
+    <a href="https://docs.github.com/site-policy/privacy-policies/github-privacy-statement" rel="noopener">GitHub
+    Privacy Statement</a>. GitHub Pages gives the owner of a site no access to those logs and no
+    visitor statistics, so we never see any of it.
+  </p>
+
+  <h3>Links that leave</h3>
+  <p>
+    Links to GitHub, Buy Me a Coffee and other sites are ordinary links: nothing is loaded from
+    those services until you click. Once you do, you are on their site under their policies. If you
+    choose to donate, Buy Me a Coffee handles the entire transaction — your payment details never
+    pass through this site and are never seen by the author, who sees only what Buy Me a Coffee
+    shows a creator: a name or handle, an amount and any message you write.
+  </p>
+
+  <h2>2. The software</h2>
+  <p>
+    LocalTC runs on your computer and is built to keep working with the network cable pulled out.
+  </p>
+  <ul>
+    <li>
+      <strong>Your voice</strong> is captured by push-to-talk and transcribed on your own CPU or
+      GPU. It is never uploaded, and there is nowhere for it to be uploaded to.
+    </li>
+    <li>
+      <strong>The language model</strong> runs locally through Ollama, on
+      <code class="inline">127.0.0.1</code> — your own machine talking to itself.
+    </li>
+    <li>
+      <strong>Recordings, logs and settings</strong> are written to your own disk, under
+      <code class="inline">%LOCALAPPDATA%\LocalTC</code> and the project's
+      <code class="inline">recordings</code> folder. They are yours: nothing reads them but you, and
+      deleting them is deleting them.
+    </li>
+    <li>
+      <strong>There is no telemetry</strong>, no crash reporting, no usage counting, no update check
+      and no licence check.
+    </li>
+  </ul>
+
+  <h3>The connections it does make</h3>
+  <p>These are the only times LocalTC reaches the network, and each one is something you asked for:</p>
+  <ul>
+    <li>
+      <strong>Setup.</strong> Downloading the speech model, the ATC voice and the language model from
+      the services that publish them. After that, flights work offline.
+    </li>
+    <li>
+      <strong>SimBrief import,</strong> if you use it. The username or Pilot ID you type is sent from
+      your machine to SimBrief to fetch your own flight plan, and their privacy policy covers what
+      they do with it. Type a plan in by hand and this never happens.
+    </li>
+  </ul>
+
+  <h3>Sending a bug report</h3>
+  <p>
+    Developer mode records your flight, including the audio of everything you said, and
+    <em>Export session</em> packs that into a zip in your Downloads folder. Nothing is sent anywhere
+    by the program. If you decide to attach that zip to a bug report, you are choosing to share your
+    voice recordings, your settings and your flight plan — it is worth opening it first to see what
+    is in it. Anything you post in a public issue is public, and held by GitHub.
+  </p>
+
+  <h2>3. Your rights</h2>
+  <p>
+    Privacy law gives you the right to see, correct, export and erase the personal data an
+    organisation holds about you. We hold none, so there is nothing to act on — which is the point.
+    If you have written to us on GitHub, that correspondence sits in GitHub's systems and their
+    privacy statement governs it.
+  </p>
+
+  <h2>4. Children</h2>
+  <p>
+    This site is not directed at children and knowingly collects nothing from anyone, of any age.
+  </p>
+
+  <h2>5. Changes, and how to check</h2>
+  <p>
+    If this policy changes, the date at the top changes with it. Every edit is in the public commit
+    history of the repository, so you can read exactly what changed and when.
+  </p>
+  <p>
+    You do not have to take any of this on faith. Open your browser's developer tools on this page:
+    the network tab shows only files from this domain, and the storage tab is empty.
+  </p>
+
+  <h2>6. Contact</h2>
+  <p>
+    Questions about any of this belong in
+    <a href="https://github.com/duckiest428/LocalTC/issues" rel="noopener">the project's issue
+    tracker</a>, where the answer helps the next person too.
+  </p>
+
+  <nav class="legal-nav">
+    <a href="index.html">&larr; Back to LocalTC</a>
+    <a href="terms.html">Terms</a>
+    <a href="cookies.html">Cookie policy</a>
+  </nav>
+</main>
+
+</body>
+</html>

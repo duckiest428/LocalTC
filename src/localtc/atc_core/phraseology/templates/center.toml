@@ -5,6 +5,13 @@ text = ["{callsign}, {station}, roger."]
 
 # The new controller already has the flight: it reads back what it has rather than starting over.
 [[template]]
+id = "center.radar_contact"
+controller = "center"
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
+
+[[template]]
 id = "center.checkin_level"
 controller = "center"
 text = ["{callsign}, {station}, radar contact, maintain {altitude}."]

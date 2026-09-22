@@ -23,7 +23,7 @@ TENS_WORDS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
 MULTIPLIERS = {"hundred": 100, "thousand": 1000}
 POINT_WORDS = {"point", "decimal", "."}
 PHONETIC = {
-    "alpha": "a", "alfa": "a", "bravo": "b", "charlie": "c", "delta": "d", "echo": "e", "foxtrot": "f", "golf": "g",
+    "alpha": "a", "alfa": "a", "bravo": "b", "charlie": "c", "charley": "c", "delta": "d", "echo": "e", "foxtrot": "f", "golf": "g",
     "hotel": "h", "india": "i", "juliet": "j", "juliett": "j", "kilo": "k", "lima": "l", "mike": "m",
     "november": "n", "oscar": "o", "papa": "p", "quebec": "q", "romeo": "r", "sierra": "s", "tango": "t",
     "uniform": "u", "victor": "v", "whiskey": "w", "whisky": "w", "xray": "x", "x-ray": "x", "yankee": "y", "zulu": "z",
@@ -66,6 +66,8 @@ def normalize(text: str) -> list[Token]:
         )
         if word == "oh" and not run:
             numeric = False  # "oh" only counts as zero inside a number
+        if word == "." and numeric and not _decimal_point(run, raw[i + 1]):
+            numeric = False  # "Frontier 2084. 1300 feet": a full stop between two numbers, not "2084.1300"
         if word == "," and i + 1 not in glued and _digit_list(run, raw, i):
             continue  # Whisper writes digits said one by one as "3, 2, 0, 0": that's 3200
         if word == "and" and run and run[-1] == "hundred" and i + 1 < len(raw) and (
@@ -126,6 +128,18 @@ def _digit_list(run: list[str], raw: list[str], comma: int) -> bool:
     if j < len(raw) and j > comma + 1 and _last_digit_with_decimals(raw[j]):
         count += 1  # "1, 2, 5.15"
     return count >= 3 or raw[comma - 1] in ("0", "zero", "oh")
+
+
+def _decimal_point(run: list[str], following: str) -> bool:
+    """Whether a written "." after ``run`` is a decimal point. The tokenizer already keeps "120.2" in
+    one piece, so a "." standing alone had a space after it: usually the end of a sentence. It is only
+    read as a point where the two sides make a frequency ("121. 7"), which a callsign followed by an
+    altitude ("2084. 1300") never does."""
+    if not run or not all(w[0].isdigit() for w in run):
+        return True  # spoken digits ("one two one . seven"): speech-to-text doesn't end sentences there
+    whole, fraction = "".join(run).replace(",", ""), following.replace(",", "")
+    return (len(whole) == 3 and whole.isdigit() and 108 <= int(whole) <= 137
+            and fraction.isdigit() and len(fraction) <= 3)
 
 
 def _is_digitish(word: str) -> bool:

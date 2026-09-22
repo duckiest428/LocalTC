@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from localtc.atc_core.readback import GrammarInterpreter, InterpretContext
+from localtc.atc_core.readback import (
+    GrammarInterpreter,
+    InterpretContext,
+    PendingReadback,
+)
+from localtc.atc_core.values import Approach
 from localtc.config import load_config, with_recorded
 from localtc.replay import Recording
 from localtc.scenario import Scenario, ScenarioMeta, run
@@ -43,7 +48,9 @@ def test_disregarded_direct_is_not_a_request():
 def test_trucks_are_rolled_and_the_landing_runway_is_the_cleared_approach(replay):
     answers = after(replay, "some trucks on the ground", 2)
     assert "equipment standing by" in answers[0]
-    assert "runway 01, cleared to land" in answers[1]  # not 19: the aircraft was maneuvering 8 nm north of the field
+    # Runway 01, not 19: the aircraft was maneuvering 8 nm north of the field. And "continue", not yet
+    # cleared to land: that waits for a final with the runway seen empty.
+    assert "continue, runway 01" in answers[1], answers[1]
 
 
 def test_an_instrument_failure_is_acknowledged_not_say_again(replay):
@@ -51,8 +58,14 @@ def test_an_instrument_failure_is_acknowledged_not_say_again(replay):
     assert "assistance" in answer and "say again" not in answer
 
 
-def test_tower_on_121_reads_back_121_0(replay):
-    assert "approach.cleared correct" in next(line for line in replay if "READBACK" in line and "approach.cleared" in line)
+def test_tower_on_121_reads_back_121_0():
+    """ "Glendale Tower on 121" is 121.0: the pilot drops the ".0" and the readback is still right."""
+    pending = PendingReadback(instruction_id="approach.cleared", controller="approach",
+                              expected={"approach": Approach("RNAV", "01"), "frequency": 121.0},
+                              required=("frequency",), optional=("approach",))  # as approach.cleared has them
+    heard = GrammarInterpreter().interpret("Glendale Tower on 121. Cleared for the RNAV on 01. DP32.", pending,
+                                           InterpretContext(phase="APPROACH"))
+    assert heard.status == "correct", (heard.status, heard.missing, heard.mismatched)
 
 
 def test_asking_tower_for_another_runway_on_final(replay):

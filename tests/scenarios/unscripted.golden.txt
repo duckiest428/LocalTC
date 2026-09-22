@@ -58,14 +58,15 @@
 [  1401.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 160, vectors for the RNAV RWY 14R approach.
 [  1403.0] PILOT     119.2: Heading one six zero, Cessna two lima tango.
 [  1403.0] READBACK  approach.vectors correct
-[  1682.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared RNAV RWY 14R approach, contact Boeing Tower 120.6.
-[  1684.0] PILOT     119.2: Cleared R-NAV runway one four right approach, Boeing Tower one two zero point six, Cessna two lima tango.
-[  1684.0] READBACK  approach.cleared correct
-[  1690.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, 6 mile final runway 14R.
-[  1693.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, wind 130 at 3, cleared to land.
-[  1695.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
-[  1695.0] READBACK  tower.land correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
+[  1778.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared RNAV RWY 14R approach, contact Boeing Tower 120.6.
+[  1780.0] PILOT     119.2: Cleared R-NAV runway one four right approach, Boeing Tower one two zero point six, Cessna two lima tango.
+[  1780.0] READBACK  approach.cleared correct
+[  1786.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, 6 mile final runway 14R.
+[  1789.0] ATC       Boeing Tower 120.6: Cessna 2LT, continue, runway 14R.
+[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, wind 130 at 8, cleared to land.
+[  2070.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
+[  2070.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
 [  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground 121.9 when clear.

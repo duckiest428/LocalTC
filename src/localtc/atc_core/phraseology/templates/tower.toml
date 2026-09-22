@@ -16,6 +16,13 @@ readback = { required = ["runway", "line_up_and_wait"] }
 pilot_readback = "Runway {runway}, line up and wait, {callsign_short}."
 
 [[template]]
+id = "tower.hold_short_traffic"
+controller = "tower"
+text = ["{callsign}, hold short runway {hold_short}, {message}."]
+readback = { required = ["hold_short"] }
+pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
+
+[[template]]
 id = "tower.handoff_departure"
 controller = "tower"
 text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency}, good day."]

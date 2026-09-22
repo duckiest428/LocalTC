@@ -19,7 +19,13 @@ from typing import Literal
 from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
 from localtc.atc_core.phraseology import speech
-from localtc.sim_api import AtcTransmission, BusEvent, OwnshipState, ReadbackEvaluated
+from localtc.sim_api import (
+    AtcTransmission,
+    BusEvent,
+    OwnshipState,
+    ReadbackEvaluated,
+    Transcript,
+)
 
 CopilotMode = Literal["assist", "full"]
 QUIET_S = 4.0  # radio silence before the copilot starts a call of its own
@@ -84,6 +90,7 @@ class Copilot:
         self._last_said_t = -1e9
         self._repeats = 0
         self._last_radio_t = -1e9
+        self._pilot_spoke_last = False  # the last call on the radio was the pilot's own, not the copilot's
         self._t = 0.0
 
     # --- inputs -------------------------------------------------------------------------------------
@@ -92,6 +99,8 @@ class Copilot:
         self._t = max(self._t, event.t)
         if isinstance(event, ReadbackEvaluated):
             self._evaluated[event.instruction_id] = event
+        elif isinstance(event, Transcript):
+            self._pilot_spoke_last = event.source != "copilot"
         elif isinstance(event, AtcTransmission):
             self._last_radio_t = event.t
             self._on_atc(event)
@@ -134,7 +143,8 @@ class Copilot:
     def _on_atc(self, tx: AtcTransmission) -> None:
         st = self.engine.state
         if tx.instruction_id == "common.say_again" and self._last_said:
-            self._push("say", tx.t, text=self._last_said)
+            if not self._pilot_spoke_last:  # "say again" to the pilot's own call is theirs to answer
+                self._push("say", tx.t, text=self._last_said)
             return
         if tx.instruction_id == "common.traffic":
             self._push("say", tx.t, text=f"Looking, {self._callsign()}")

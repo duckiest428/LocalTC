@@ -7,7 +7,15 @@ returns the same ``Interpretation``, so the dialogue engine doesn't care which o
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-from localtc.atc_core.readback.extract import ELEMENTS, candidates, values_close, values_equal, without_callsign
+from localtc.atc_core.readback.extract import (
+    CONTRARY_TO_HOLDING,
+    ELEMENTS,
+    _has_any,
+    candidates,
+    values_close,
+    values_equal,
+    without_callsign,
+)
 from localtc.atc_core.readback.intents import EMERGENCY, match_intents, resolve
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
@@ -131,6 +139,12 @@ class GrammarInterpreter:
                 unclear[element] = close
             else:
                 mismatched[element] = found[0]
+        if "hold_short" in missing and _has_any(values_only, *CONTRARY_TO_HOLDING):
+            # Told to hold short, read back as going onto the runway ("cleared for takeoff runway 27"):
+            # the one readback that must be corrected, never let through or answered with "say again".
+            missing.remove("hold_short")
+            mismatched["hold_short"] = "onto the runway"
+            present += 1
         if present == 0:
             return None  # not a readback of the pending instruction
         if context.strict_callsign and not callsign_heard:

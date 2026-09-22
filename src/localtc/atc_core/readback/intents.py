@@ -3,7 +3,15 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from localtc.atc_core.readback.extract import _find_phrase, _has_any, _number, _runway_at, altitudes, hold_short, runways
+from localtc.atc_core.readback.extract import (
+    _find_phrase,
+    _has_any,
+    _number,
+    _runway_at,
+    altitudes,
+    hold_short,
+    runways,
+)
 from localtc.atc_core.readback.normalize import Token
 
 EMERGENCY = "emergency"
@@ -46,6 +54,27 @@ def _any_runway(tokens: list[Token]) -> str | None:
             if (hit := _runway_at(tokens, i + 1)) is not None:  # "..., correction 08"
                 return hit[0]
     return next(iter(runways(tokens) + hold_short(tokens)), None)
+
+
+REQUEST_WORDS = (("request",), ("requesting",), ("ready", "for"), ("ready", "to"), ("can", "we"), ("could", "we"),
+                 ("like", "to"), ("looking", "for"))
+PUSH_READBACK = (("approved",), ("discretion",), ("tail",), ("facing",), ("face",))
+
+
+def _instructed(tokens: list[Token]) -> bool:
+    """An altitude given as an instruction ("climb and maintain 5,000", "descend to 3,000"), which makes a
+    call a readback. "1,300 feet climbing 5,000 feet" only reports altitudes: a check-in."""
+    return any(t.text in ("maintain", "climb", "descend") for t in tokens) and bool(altitudes(tokens))
+
+
+def _direction(tokens: list[Token]) -> str | None:
+    """ "request climb" / "higher": up; "request descent" / "lower": down; else None."""
+    # Only words that mean a level change: "up" and "down" turn up in everything ("people up there").
+    if _has_any(tokens, ("climb",), ("higher",)):
+        return "up"
+    if _has_any(tokens, ("descent",), ("descend",), ("lower",)):
+        return "down"
+    return None
 
 
 FIX_STOP = {"to", "the", "a", "direct", "please", "for", "if", "able", "possible", "when", "request", "requesting"}
@@ -109,8 +138,11 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         tokens, ("cleared",), ("taxi",)  # "Clearance, request taxi": the station's name, not an IFR request
     ) and not landing:
         add("request_ifr_clearance", atis=_atis(tokens))
-    if _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
-                ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push")):
+    pushing = _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
+                       ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push"))
+    if pushing and _has_any(tokens, *PUSH_READBACK) and not _has_any(tokens, *REQUEST_WORDS):
+        add("acknowledge")  # "push back at my discretion, tail right": reading back the approval, not asking again
+    elif pushing:
         add("request_pushback")
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"))
     if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of")):
@@ -129,8 +161,10 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         ("request", "the", "departure"), ("like", "the", "departure"), ("ready", "in", "sequence")
     ):
         add("ready_for_departure", runway=_any_runway(tokens))
-    elif hold_short(tokens) and not _has_any(tokens, ("taxi",), ("via",), ("cleared",)):
-        # "Tower, holding short runway 06L" is a departure request; a taxi readback names a route instead.
+    elif (hold_short(tokens) or _has_any(tokens, ("holding", "point"), ("at", "the", "holding"))) and not _has_any(
+            tokens, ("taxi",), ("via",), ("cleared",), ("hold", "position"), ("holding", "position")):
+        # "Tower, holding short runway 06L" / "holding point Charlie 1" is a departure request; a taxi
+        # readback names a route instead.
         add("ready_for_departure", runway=_any_runway(tokens))
     if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",),
                 ("on", "the", "approach"), ("on", "approach"), ("established",), ("for", "the", "visual"),
@@ -140,6 +174,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
                                    if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])
     if _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and wanted:
         add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "request higher, 7000"
+    elif _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and (
+            direction := _direction(tokens)) is not None:
+        add("request_altitude", direction=direction)  # "request climb": ATC picks the altitude
     asking = _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we"), ("able", "to"),
                       ("want",), ("need",))
     if (turn := _turn(tokens)) is not None:
@@ -162,14 +199,17 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
             *CONDITION_WORDS, "light", "moderate", "severe", "occasional", "continuous")))
     checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
                      ("passing",), ("through",), ("out", "of"))
-    if _has_any(tokens, *checkin_words) and not altitudes(tokens):
+    if _has_any(tokens, *checkin_words) and not _instructed(tokens):
         reported = _reported_altitudes(tokens)
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
             atis=_atis(tokens))
     if not matches and reports_problem(tokens):
         add("report_problem")  # alone; with other calls the engine hears it anyway (AtcEngine._problem)
-    if not matches and _has_any(tokens, ("tail", "left"), ("tail", "right"), ("push", "approved")):
+    if not matches and _has_any(tokens, ("tail", "left"), ("tail", "right"), ("push", "approved"), ("face", "east"),
+                                ("face", "west"), ("face", "north"), ("face", "south"), ("facing",)):
         add("acknowledge")  # reading back a pushback approval
+    if not matches and _has_any(tokens, ("hold", "position"), ("holding", "position"), ("holding", "short", "of", "traffic")):
+        add("acknowledge")  # "hold position, B737 crossing": the pilot stops, nothing to answer
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
                                 ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by")):
@@ -198,6 +238,7 @@ COMPATIBLE = [
     {"request_direct", "request_runway"},
     {"ready_for_departure", "request_turn"},  # "holding short, ready, request a left turn out"
     {"ready_for_departure", "checkin"},  # "holding short, ready" can contain "level"-like noise
+    {"ready_for_departure", "request_runway"},  # "holding short runway 25L, we'd like the departure"
 ]
 
 

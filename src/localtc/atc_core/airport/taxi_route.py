@@ -8,6 +8,7 @@ from localtc.atc_core.airport.geometry import AirportGeometry, RunwayEndGeometry
 
 ROUTABLE = {"taxi", "path", "runway", "parking"}
 RUNWAY_EDGE_PENALTY = 4.0  # prefer taxiways over rolling along runways
+FULL_LENGTH_SLACK_M = 150.0  # hold points this much further from the threshold still give a full-length departure
 
 Node = tuple[str, int]  # ("point", index) or ("parking", index)
 
@@ -112,6 +113,12 @@ class TaxiGraph:
         for runway in crossed:
             if runway is not None and runway is not target and runway.name not in crossings:
                 crossings.append(runway.name)
+        # The runway being taxied to is crossed too when the route goes over it to reach a taxiway on the
+        # far side: San Diego's B to C1 crosses 09/27 at B6/C6 before lining up on it. Passing over its
+        # surface on the way, not stopping at its hold line, is what makes it a crossing.
+        if target is not None and target.name not in crossings and any(
+                target.contains(self.positions[node]) for node, _ in path[1:-1]):
+            crossings.append(target.name)
         return TaxiRoute(
             taxiways=tuple(names),
             crossings=tuple(crossings),
@@ -126,11 +133,22 @@ class TaxiGraph:
         candidates = [h for h in self.geometry.hold_shorts if h.runway is end.runway]
         if not candidates:
             return None
-        best = min(candidates, key=lambda h: math.dist(h.xy, end.threshold))
         start = self.nearest_node(lat, lon, kinds=("point", "parking"))
         if start is None:
             return None
-        return self.route(start, {("point", best.point.index)}, hold_short=end.ident)
+        # A runway usually has a hold line on each side of its threshold. The one nearest the threshold
+        # is not the one to use if reaching it means crossing the runway first: San Diego's C1 is a few
+        # metres closer to 27 than B1, and choosing it sent a south-side departure across 09/27 to line
+        # up on the runway it had just crossed. Every hold point near the threshold is tried: one this side
+        # of the runway wins, and among those the one nearest the threshold, for the full length.
+        nearest = min(math.dist(h.xy, end.threshold) for h in candidates)
+        near = [h for h in candidates if math.dist(h.xy, end.threshold) <= nearest + FULL_LENGTH_SLACK_M]
+        routes = [(r, math.dist(h.xy, end.threshold)) for h in near
+                  if (r := self.route(start, {("point", h.point.index)}, hold_short=end.ident))]
+        if not routes:
+            return None
+        best, _ = min(routes, key=lambda rd: (end.runway.name in rd[0].crossings, len(rd[0].crossings), rd[1], rd[0].length_m))
+        return best
 
     def parking_route(self, lat: float, lon: float) -> TaxiRoute | None:
         goals = {n for n in self.positions if n[0] == "parking"}

@@ -79,6 +79,11 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\bshort (?:file|finale|fine|find)\b", "short final"),
     (r"\b(?:r-?naf|r-?nav|rnf|rna)\b", "RNAV"),
     (r"\btime (?:and )?maintain\b", "climb and maintain"),
+    (r"\btail ?(?:rite|write|wright)\b|\btill right\b|\btale right\b", "tail right"),  # a pushback turn
+    (r"\btail ?lift\b|\btill left\b|\btale left\b", "tail left"),
+    (r"^(?:a|uh) (?:from|firm)\b|\ba firm\b", "affirm"),  # "affirm" said quickly: two words, one of them wrong
+    (r"\bholding (?:port|pint|pointe)\b", "holding point"),
+    (r"\bon my discussion\b|\bat my discussion\b|\bat your discussion\b", "at my discretion"),
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in FIXUPS]
 

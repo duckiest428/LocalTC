@@ -14,6 +14,7 @@ AIRLINE_STYLE = re.compile(r"[A-Z]{3}\d{1,4}[A-Z]{0,2}")
 def clean_sim_name(value: str) -> str:
     """ "ATCCOM.ATC_NAME AIRBUS.0.text" -> "Airbus", "ATCCOM.AC_MODEL A330.0.text" -> "A330"."""
     value = value.strip()
+    value = value.removeprefix("$$:")  # "$$:E170": how some add-on liveries carry the type
     if (match := SIM_TOKEN.search(value)) is not None:
         word = match.group(1).strip()
         return word.title() if word.isalpha() else word.upper()

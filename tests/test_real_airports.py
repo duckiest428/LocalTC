@@ -66,7 +66,9 @@ def test_taxi_routing_on_the_real_kpdx_layout(kpdx, first_ownship):
     end = select_runway(geometry, first_ownship.wind_dir_true, first_ownship.wind_kt)
     assert end.ident == "10R"  # calm wind: PDX uses the 10s
     route = TaxiGraph(geometry).departure_route(first_ownship.lat, first_ownship.lon, end)
-    assert route.taxiways == ("C3", "C", "C1", "B1") and route.hold_short == "10R"
+    # C1 holds short of 10R on this side. B1 is 4 m nearer the threshold but across 10R/28L: getting
+    # there meant crossing the runway about to be departed from, so it isn't the hold point to use.
+    assert route.taxiways == ("C3", "C", "C1") and route.hold_short == "10R" and route.crossings == ()
     assert 1000 < route.length_m < 3000
     assert all(name.isalnum() for name in route.taxiways)
 

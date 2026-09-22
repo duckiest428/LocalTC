@@ -144,6 +144,7 @@ def random_slots(rng: random.Random) -> dict:
         "procedure": rng.choice(["MONTN2", "SEA9", "XIBI3A", "BAYST1"]),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
         "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),
+        "message": Phrase(m := rng.choice(["traffic on 3 mile final", "traffic B737 on 5 mile final", "traffic landing"]), m),
     }
 
 
@@ -175,9 +176,10 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
             parts = [LIBRARY.fragment(e, {**slots, **(changed or {})}) for e in elements if e != omit]
             return (sum(parts[1:], parts[0]) if parts else Phrase("", "")).spoken + ", " + LIBRARY.fill("{callsign_short}", slots)[1]
 
+        context = InterpretContext(callsign=slots["callsign"])  # the callsign the readback is signed with
         for element in template.readback.required:
             if len(elements) > 1:
-                result = GrammarInterpreter().interpret(readback(omit=element), pending, CONTEXT)
+                result = GrammarInterpreter().interpret(readback(omit=element), pending, context)
                 assert result.status == "incomplete" and element in result.missing, (element, readback(omit=element), result)
         for element in elements:
             if element == "destination":
@@ -186,7 +188,7 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
             if element not in other or other[element] == slots[element] or values_close(element, other[element], slots[element]):
                 continue  # a near miss ("15 left" for 15) gets "confirm", tested in the corpus
             text = readback(changed={element: other[element]})
-            result = GrammarInterpreter().interpret(text, pending, CONTEXT)
+            result = GrammarInterpreter().interpret(text, pending, context)
             assert result.status == "incorrect" and element in result.mismatched, (element, text, render(normalize(text)), result)
 
 

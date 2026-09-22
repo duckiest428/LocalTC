@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from localtc.atc_core.readback.normalize import Token
+from localtc.atc_core.readback.normalize import FILLERS, Token
 from localtc.atc_core.values import Approach, Callsign
 
 Extractor = Callable[[list[Token], Any], list[Any]]
@@ -36,8 +36,12 @@ def _words(tokens: list[Token]) -> list[str]:
 
 
 def _find_phrase(tokens: list[Token], phrase: tuple[str, ...], start: int = 0) -> list[int]:
-    """Indices just after each occurrence of ``phrase`` (word tokens)."""
+    """Indices just after each occurrence of ``phrase`` (word tokens).
+
+    Filler words are dropped from the phrase as well as from the tokens: normalize() never keeps
+    "the", so a phrase written with it ("get the departure") would otherwise never match at all."""
     words = _words(tokens)
+    phrase = tuple(w for w in phrase if w not in FILLERS)
     n = len(phrase)
     return [i + n for i in range(start, len(words) - n + 1) if tuple(words[i : i + n]) == phrase]
 
@@ -102,6 +106,10 @@ def hold_short(tokens: list[Token], expected: Any = None) -> list[str]:
             found.append(hit[0])
     if found or expected is None:
         return found
+    if _has_any(tokens, *CONTRARY_TO_HOLDING):
+        # "Cleared for takeoff runway 27" answering "hold short runway 27" names the right runway and
+        # the opposite instruction: the most dangerous readback there is, never a hold short.
+        return found
     # "Hold short" is two quiet words that speech-to-text mangles into one ("holshore", "holtoire",
     # even "portrait"), and no list of spellings will cover them all. The runway is the part that
     # matters and it comes through clearly, so naming the one ATC said to hold short of is enough.
@@ -119,6 +127,11 @@ def hold_short(tokens: list[Token], expected: Any = None) -> list[str]:
         if heard == wanted or (wanted == bare and heard.rstrip("LRC") == bare):
             return [wanted]
     return found
+
+
+# Words that say the aircraft is going onto the runway, which a hold-short readback can't contain.
+CONTRARY_TO_HOLDING = (("takeoff",), ("take", "off"), ("line", "up"), ("lining", "up"), ("cross",), ("crossing",),
+                       ("cleared", "to", "land"), ("clear", "to", "land"))
 
 
 def normalize_runway(ident: str) -> str:
@@ -291,27 +304,52 @@ ROUTE_FILLER = ("and", "then", "hold", "holding", "short", "point", "at", "to")
 
 
 def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ...]]:
-    found = []
-    for start in _find_phrase(tokens, ("via",)):
-        names: list[str] = []
-        i = start
-        while i < len(tokens):
-            token = tokens[i]
-            letter = token.text if token.kind == "letter" or (token.kind == "word" and len(token.text) == 1) else None
-            if letter is None:
-                if token.kind == "word" and token.text in ROUTE_FILLER and names:
-                    i += 1
-                    continue
-                break
-            name = letter.upper()
-            if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
-                name += tokens[i + 1].text
-                i += 1
-            names.append(name)
-            i += 1
-        if names:
-            found.append(tuple(names))
+    found = [names for start in _find_phrase(tokens, ("via",)) if (names := _route_at(tokens, start))]
+    if not found and expected is not None:
+        # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against,
+        # the longest run of taxiway names is the route, skipping the letter of a runway ("25 L").
+        skip = _runway_letters(tokens)
+        runs = [_route_at(tokens, i) for i, tok in enumerate(tokens)
+                if i not in skip and (tok.kind == "letter" or (tok.kind == "word" and len(tok.text) == 1))
+                and (i == 0 or i - 1 in skip or not _is_route_token(tokens[i - 1]))]
+        if (longest := max(runs, key=len, default=())) and len(longest) >= 2:
+            found.append(longest)
     return found
+
+
+def _is_route_token(token: Token) -> bool:
+    return token.kind == "letter" or (token.kind == "word" and len(token.text) == 1)
+
+
+def _runway_letters(tokens: list[Token]) -> set[int]:
+    """Indices of the letters that are part of a runway ("runway 25 L"), not a taxiway."""
+    skip = set()
+    for i, token in enumerate(tokens[:-1]):
+        if token.kind == "number" and token.text.isdigit() and 1 <= int(token.text) <= 36 \
+                and tokens[i + 1].text in ("l", "r", "c") and (i > 0 and tokens[i - 1].text == "runway"):
+            skip.add(i + 1)
+    return skip
+
+
+def _route_at(tokens: list[Token], start: int) -> tuple[str, ...]:
+    """Taxiway names from ``start``: letters, each maybe with a number ("B6"), joined by filler words."""
+    names: list[str] = []
+    i = start
+    while i < len(tokens):
+        token = tokens[i]
+        letter = token.text if _is_route_token(token) else None
+        if letter is None:
+            if token.kind == "word" and token.text in ROUTE_FILLER and names:
+                i += 1
+                continue
+            break
+        name = letter.upper()
+        if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
+            name += tokens[i + 1].text
+            i += 1
+        names.append(name)
+        i += 1
+    return tuple(names)
 
 
 PROCEDURE_END = ("departure", "arrival", "transition")

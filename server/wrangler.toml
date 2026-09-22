@@ -13,6 +13,9 @@ ALLOWED_ORIGINS = "https://localtc.tech,https://www.localtc.tech"
 COOKIE_DOMAIN = ""  # host-only: the cookie goes to api.localtc.tech alone (the dashboard is same-site)
 MAIL_FROM = "LocalTC <accounts@localtc.tech>"
 EMAIL_MODE = "resend"  # "resend" sends with Resend (RESEND_API_KEY secret); "log" prints links (local dev)
+# The Workers Free plan allows ~10 ms of CPU per request; 100000 iterations needs the Paid plan. Stored per
+# hash, so raising it later upgrades new passwords.
+PBKDF2_ITERATIONS = "10000"
 APNS_HOST = "api.push.apple.com"  # api.sandbox.push.apple.com for development builds of the iOS app
 APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the APNS_* secrets are set
 # Secrets (wrangler secret put NAME): RESEND_API_KEY, APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY
@@ -20,7 +23,7 @@ APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the A
 [[d1_databases]]
 binding = "DB"
 database_name = "localtc"
-database_id = "REPLACE_WITH_THE_ID_FROM_wrangler_d1_create"
+database_id = "4726c6a6-fc3d-4a9f-ab01-892c7dea9129"
 migrations_dir = "migrations"
 
 [[durable_objects.bindings]]

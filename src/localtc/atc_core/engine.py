@@ -2192,6 +2192,10 @@ class AtcEngine:
             return center_facility(ends, self.cfg.center_name, self.cfg.center_mhz)
         return area_center(area.name, ends, self.cfg.center_mhz)
 
+    def current_center(self) -> Facility:
+        """The enroute centre working the flight now, or the one it will be handed to first."""
+        return self._center()
+
     def _center(self) -> Facility:
         if self._sector is not None:
             return self._sector

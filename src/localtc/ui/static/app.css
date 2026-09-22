@@ -251,3 +251,40 @@ tr.tunable:hover td { background: var(--panel-2); }
   .switches { margin-left: 0; }
   .switch { padding: 6px 8px; }
 }
+
+/* --- ATC zones on the map: what the engine hands over at, coloured by who works it --- */
+:root { --z-clearance: #3d8bfd; --z-ground: #22a55b; --z-tower: #e2574c; --z-terminal: #2fb67c; --z-final: #e7b24a; --z-center: #d9dde2; }
+.maplegend { position: absolute; right: 10px; bottom: 28px; z-index: 500; background: rgba(20, 23, 27, .9); border: 1px solid var(--line);
+  border-radius: 3px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5; max-width: 300px; }
+.maplegend[hidden] { display: none; }
+.lg-row { display: flex; align-items: center; gap: 7px; color: #c8ced5; flex-wrap: wrap; }
+.lg-badges { gap: 4px 10px; margin-top: 3px; }
+.lg-badges > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.lg-src { color: var(--muted); font-size: 10.5px; margin-top: 4px; }
+.lg-talk { font-family: var(--mono); font-size: 12px; margin-bottom: 5px; color: var(--text); }
+.lg-talk:empty { display: none; }
+.lg-talk .now { color: var(--green); }
+.lg-talk .then { color: var(--amber); }
+.sw { width: 18px; height: 10px; flex: none; border-radius: 2px; }
+.sw-center { border: 1.5px solid var(--z-center); }
+.sw-terminal { background: rgba(47, 182, 124, .35); border: 1.5px solid var(--z-terminal); }
+.sw-final { background: rgba(231, 178, 74, .25); border: 1.5px dashed var(--z-final); }
+.sw-tower { border: 1.5px dashed var(--z-tower); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.atc-badge { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 3px;
+  font: 700 11px/1 var(--font); color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
+.b-clearance { background: var(--z-clearance); }
+.b-ground { background: var(--z-ground); }
+.b-tower { background: var(--z-tower); }
+.b-terminal { background: var(--z-terminal); }
+.b-center { background: #5b6470; }
+.atc-badges { display: flex; gap: 3px; transform: translate(-50%, -150%); }
+.atc-badge.tuned { box-shadow: 0 0 0 2px #fff, 0 0 10px 2px rgba(95, 208, 104, .9); }
+.atc-badge.next { animation: badge-next 1.2s ease-in-out infinite; }
+@keyframes badge-next { 50% { box-shadow: 0 0 0 2px var(--z-final), 0 0 10px 2px rgba(231, 178, 74, .8); } }
+.zone-label { font: 600 11px/1.1 var(--font); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000;
+  transform: translate(-50%, -50%); pointer-events: none; }
+.zone-label.center { color: #e8ecf0; letter-spacing: .02em; }
+.zone-label.center.dim { color: #8d959e; font-weight: 500; }
+.zone-label.center.here { color: var(--green); }
+.zone-label.terminal { color: #7fe0b3; }
+@media (prefers-reduced-motion: reduce) { .atc-badge.next { animation: none; box-shadow: 0 0 0 2px var(--z-final); } }

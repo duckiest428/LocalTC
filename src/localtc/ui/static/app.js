@@ -42,7 +42,7 @@ function connect() {
   on("radio", addLine);
   on("own", setOwn);
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
-  on("flight", setFlight);
+  on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
   on("ptt", (p) => $("#btn-ptt").classList.toggle("down", p.down));
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
   on("dev", (d) => Dev.event(d));
@@ -652,6 +652,7 @@ const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path 
 
 const MapView = {
   map: null, ownMarker: null, trail: null, trailPts: [], tfc: new Map(), route: null, routeFixes: null, follow: true, tileLayer: null, airports: new Set(),
+  zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "",
   show() {
     if (!this.map) this.init();
     setTimeout(() => this.map.invalidateSize(), 0);
@@ -659,6 +660,11 @@ const MapView = {
   init() {
     this.map = L.map("map", { zoomControl: true, attributionControl: true, worldCopyJump: true }).setView([47.9, -122.28], 9);
     this.tiles();
+    this.zoneLayer = L.layerGroup().addTo(this.map);  // under the route, the track and the aircraft
+    try { this.zonesOn = localStorage.getItem("map-zones") !== "off"; } catch { /* storage unavailable: default on */ }
+    this.setZones(this.zonesOn);
+    $("#map-zones").onclick = () => this.setZones(!this.zonesOn);
+    this.map.on("moveend", () => this.zonesSoon());
     this.trail = L.polyline(this.trailPts, { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
     this.map.on("dragstart", () => this.setFollow(false));
     $("#map-follow").onclick = () => this.setFollow(!this.follow);
@@ -727,6 +733,7 @@ const MapView = {
       L.marker([f.lat, f.lon], { icon: L.divIcon({ className: "", html: `<div class="fix-label" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }), interactive: false }).addTo(this.routeFixes);
     }
     if (pts.length > 1) this.route = L.polyline(pts, { color: "#e978d6", weight: 2, opacity: 0.85 }).addTo(this.map);
+    this.zonesSoon();
     Promise.all([p.origin, p.destination].map((icao) => (icao ? this.airport(icao) : null))).then(([from, to]) => {
       if (!this.route && from && to && this.planKey === key)  // a typed plan: no fixes, a straight line
         this.route = L.polyline([[from.lat, from.lon], [to.lat, to.lon]], { color: "#e978d6", weight: 2, dashArray: "6 6" }).addTo(this.map);
@@ -754,6 +761,73 @@ const MapView = {
     this.drawAirport(a);
     this.setFollow(false);
     this.map.setView([a.lat, a.lon], 13);
+  },
+
+  /* ATC zones: the airspace the engine hands over at, drawn from the same data it uses. */
+  setZones(on) {
+    this.zonesOn = on;
+    $("#map-zones").setAttribute("aria-pressed", String(on));
+    $("#map-legend").hidden = !on;
+    try { localStorage.setItem("map-zones", on ? "on" : "off"); } catch { /* not remembered: fine */ }
+    if (on) this.zonesSoon(0); else this.zoneLayer?.clearLayers();
+  },
+  zonesSoon(delay = 400) {
+    if (!this.map || !this.zonesOn) return;
+    clearTimeout(this.zonesTimer);
+    this.zonesTimer = setTimeout(() => this.zones(), delay);
+  },
+  flightChanged(f) {
+    // A handoff changes who is highlighted; otherwise the zones only need an occasional refresh.
+    const who = `${f?.tuned?.station || ""}|${f?.expected?.station || ""}`;
+    if (who !== this.zonesWho || Date.now() - this.zonesAt > 20000) { this.zonesWho = who; this.zonesSoon(); }
+  },
+  async zones() {
+    if (!this.map || !this.zonesOn) return;
+    const b = this.map.getBounds();
+    let z;
+    try {
+      z = await api(`zones?south=${b.getSouth().toFixed(3)}&west=${b.getWest().toFixed(3)}&north=${b.getNorth().toFixed(3)}&east=${b.getEast().toFixed(3)}`);
+    } catch { return; /* nothing to draw yet */ }
+    this.zonesAt = Date.now();
+    if (!this.zonesOn) return;
+    const layer = this.zoneLayer;
+    layer.clearLayers();
+    const label = (at, text, cls) => L.marker(at, { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
+    for (const c of z.centers) {
+      const on = c.active || c.working;
+      L.polygon(c.rings, { color: "#d9dde2", weight: on ? 2.2 : 1, opacity: c.route ? 0.85 : 0.35, dashArray: c.route ? null : "4 6",
+        fill: on, fillColor: "#d9dde2", fillOpacity: 0.04, interactive: false }).addTo(layer);
+      label(c.label, c.name, `center ${c.active ? "here" : c.route ? "" : "dim"}`);
+    }
+    for (const a of z.terminals) {
+      L.polygon(a.rings, { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
+        fillOpacity: a.working ? 0.22 : 0.12 }).addTo(layer)
+        .bindTooltip(`${esc(a.name)} — ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
+      label(a.label, a.name, "terminal");
+    }
+    if (z.final) {
+      L.polygon(z.final.ring, { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
+        .bindTooltip(`Joining final for ${esc(z.final.runway)}: approach clears the approach here and sends you to tower`);
+    }
+    const KIND = { clearance: ["D", "b-clearance"], ground: ["G", "b-ground"], tower: ["T", "b-tower"], departure: ["A", "b-terminal"], approach: ["A", "b-terminal"] };
+    for (const ap of z.airports) {
+      if (ap.tower_nm) L.circle([ap.lat, ap.lon], { radius: ap.tower_nm * 1852, color: "#e2574c", weight: 1.3, dashArray: "4 5", fillColor: "#e2574c", fillOpacity: 0.05, interactive: false }).addTo(layer);
+      const seen = new Set();
+      const badges = ap.stations.filter((s) => KIND[s.controller] && !seen.has(KIND[s.controller][0]) && seen.add(KIND[s.controller][0]))
+        .map((s) => {
+          const all = ap.stations.filter((o) => KIND[o.controller]?.[0] === KIND[s.controller][0]);
+          const state = all.some((o) => o.tuned) ? "tuned" : all.some((o) => o.next) ? "next" : "";
+          return `<span class="atc-badge ${KIND[s.controller][1]} ${state}">${KIND[s.controller][0]}</span>`;
+        }).join("");
+      const tip = ap.stations.map((s) => `${esc(s.station)} ${Number(s.mhz).toFixed(3)}${s.tuned ? " ◀ tuned" : s.next ? " ◀ next" : ""}`).join("<br>");
+      L.marker([ap.lat, ap.lon], { icon: L.divIcon({ className: "", html: `<div class="atc-badges">${badges}</div>`, iconSize: [0, 0] }) })
+        .addTo(layer).bindTooltip(`<b>${esc(ap.icao)}</b> ${esc(ap.name || "")}<br>${tip}`);
+    }
+    const talk = [];
+    if (z.tuned) talk.push(`<span class="now">▶ ${esc(z.tuned.station)} ${Number(z.tuned.mhz).toFixed(3)}</span>`);
+    if (z.next) talk.push(`<span class="then">next: ${esc(z.next.station)} ${Number(z.next.mhz).toFixed(3)}</span>`);
+    if (!z.tuned && z.center) talk.push(`in ${esc(z.center)} airspace`);
+    $("#map-talk").innerHTML = talk.join("<br>");
   },
 };
 

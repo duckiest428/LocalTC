@@ -87,8 +87,20 @@
       <div class="mapctl">
         <button class="btn small" id="map-follow" aria-pressed="true">Follow</button>
         <button class="btn small" id="map-route">Route</button>
+        <button class="btn small" id="map-zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
       </div>
       <div class="mapinfo" id="map-info"></div>
+      <div class="maplegend" id="map-legend">
+        <div class="lg-talk" id="map-talk"></div>
+        <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
+        <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
+        <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
+        <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
+        <div class="lg-row lg-badges"><span><span class="atc-badge b-clearance">D</span>Clearance</span>
+          <span><span class="atc-badge b-ground">G</span>Ground</span> <span><span class="atc-badge b-tower">T</span>Tower</span>
+          <span><span class="atc-badge b-terminal">A</span>Dep/App</span></div>
+        <div class="lg-src">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
+      </div>
     </section>
 
     <!-- Airport Lookup -->

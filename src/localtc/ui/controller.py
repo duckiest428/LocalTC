@@ -113,6 +113,7 @@ class AppController:
             (get, "devices"): self.api_devices,
             (post, "voice/preview"): self.api_preview,
             (get, "airport"): self.api_airport,
+            (get, "zones"): self.api_zones,
             (get, "airports/search"): self.api_search,
             (post, "dev/note"): self.api_note,
             (get, "dev/sessions"): self.api_sessions,
@@ -525,6 +526,23 @@ class AppController:
             hint = "" if self.live else " Start a flight to look it up in the sim."
             raise HttpError(404, f"No data for {icao} yet.{hint}")
         return airport_detail(airport)
+
+    async def api_zones(self, args: dict) -> dict:
+        """The Live Map's ATC layer: who works which airspace, and who the flight is talking to."""
+        from localtc.ui.zones import zones
+
+        try:
+            bounds = tuple(float(args[k]) for k in ("south", "west", "north", "east"))
+        except (KeyError, TypeError, ValueError):
+            bounds = None
+        engine = self.live.engine if self.live else None
+
+        def airport(icao: str):
+            if engine is not None and (geo := engine.geometry(icao)) is not None:
+                return geo.airport
+            return self.airports.get(icao) or self.cache.get(icao)
+
+        return await asyncio.to_thread(zones, engine, self.plan, airport, bounds)
 
     async def api_search(self, args: dict) -> dict:
         query = str(args.get("q", "")).strip().upper()

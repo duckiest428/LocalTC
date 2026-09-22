@@ -46,7 +46,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 |---|---|
 | **ATC** | COM1/COM2 and the transponder at the top. The airport's frequencies: click one to tune COM1. Your callsign, destination, assigned squawk, altitude, runway or approach, the phase, and what ATC expects next. Below that, the radio log. |
 | **Quick Settings** | Performance profiles and the models (language model, Whisper size, ATC voice), each with its speed, quality and size, a **Download** button and a voice **Preview**. Also the push-to-talk key (press **Change**, then the key), yoke button, microphone, speakers, volume and speed, the copilot, ATC options, and developer mode. |
-| **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. |
+| **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. **ATC zones** (on by default) draws who controls what: the enroute centres on your route, the departure and approach areas, each airport's Clearance, Ground, Tower and Dep/App, the tower's zone, and the stretch of final where approach clears you and sends you to tower. These are the same outlines ATC hands you over at, so the map explains every handoff; the one you're talking to and the one you're about to be sent to are highlighted. |
 | **Airport Lookup** | Frequencies, runways (length, heading, ILS) and taxiways for any airport a flight has visited. During a flight, any other ICAO is fetched from the sim. |
 
 - **New Flight**: import your latest **SimBrief** plan (username or Pilot ID), or type one in (**Manual**). Then **Save and start flight**.
@@ -76,6 +76,8 @@ src/localtc/
   replay/      ReplaySource: plays a recording through the SimSource interface
   atc_core/    ATC logic (any OS)
     airport/       runway/taxiway geometry, runway selection, taxi routing
+    airspace/      the world's enroute centres and approach areas (CC BY-SA data; tools/make_airspace.py)
+    route.py       the filed route: when the climb ends and where the descent begins
     phase/         flight phase detection from telemetry + geometry
     phraseology/   FAA speech formatting, typed slots, TOML templates (templates/*.toml)
     readback/      transcript normalizer, element extractors, intents, interpreter chain
@@ -352,3 +354,5 @@ run one as a service other people use, those people get your source under the sa
 
 Third-party components keep their own licences: the Whisper models, the Piper voices, and the Inter
 and JetBrains Mono typefaces bundled with [the website](site/fonts/) under the SIL Open Font License.
+The airspace outlines in [`src/localtc/atc_core/airspace/`](src/localtc/atc_core/airspace/README.md) come
+from the VATSIM community's VATSpy Data Project and SimAware TRACON Project and are CC BY-SA 4.0.

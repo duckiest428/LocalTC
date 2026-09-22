@@ -1,0 +1,13 @@
+# What a release zip (git archive) leaves out: the release is what the installer sets up and the updater
+# mirrors over an install, so only what LocalTC needs to run goes in.
+/tests export-ignore
+/docs export-ignore
+/site export-ignore
+/tools export-ignore
+/server export-ignore
+/.github export-ignore
+/CNAME export-ignore
+/LocalTC[[:space:]]Companion[[:space:]]App* export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+.DS_Store export-ignore

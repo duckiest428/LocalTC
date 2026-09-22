@@ -290,3 +290,6 @@ tr.tunable:hover td { background: var(--panel-2); }
 .zone-label.center.here { color: var(--green); }
 .zone-label.terminal { color: #7fe0b3; }
 @media (prefers-reduced-motion: reduce) { .atc-badge.next { animation: none; box-shadow: 0 0 0 2px var(--z-final); } }
+
+/* Updates: the release notes */
+pre.notes { white-space: pre-wrap; font: inherit; margin: 6px 0; max-height: 220px; overflow: auto; }

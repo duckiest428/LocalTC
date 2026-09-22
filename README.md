@@ -18,8 +18,20 @@ Windows is the only supported runtime. Development works on macOS too, using rec
 
 ## Install (Windows)
 
-Download or clone LocalTC, then double-click **`Install LocalTC.cmd`** in its folder. From PowerShell, run
-`powershell -ExecutionPolicy Bypass -File install\install.ps1`.
+Download **[LocalTC-Setup.exe](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)**
+and run it. It needs no administrator rights and no git: it fetches the latest release from GitHub, checks
+it against the release's `SHA256SUMS`, installs it to `%LOCALAPPDATA%\Programs\LocalTC`, and runs the setup
+below. Windows may warn that the installer is from an unknown publisher (it isn't code-signed): choose
+**More info → Run anyway**.
+
+**Updates:** the app checks GitHub once a day (Quick Settings → Updates) and says when a new version is
+out. Install it with one click, let it install itself when LocalTC closes, or turn the check off. It never
+updates during a flight, and keeps the Python environment, recordings and downloaded models. What changed
+is in [CHANGELOG.md](CHANGELOG.md).
+
+**From source** (developers, or without the installer): clone LocalTC and double-click
+**`Install LocalTC.cmd`** in its folder, or run `powershell -ExecutionPolicy Bypass -File install\install.ps1`.
+Update a clone with `git pull`, then run it again.
 
 It installs everything a flight needs and can be run again safely:
 - Python 3.12, via winget if you don't have Python yet.
@@ -347,6 +359,17 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 **macOS: `No module named 'localtc'`.** If the project is in an iCloud-synced folder such as `~/Desktop`, macOS can mark the editable install's `.pth` file as hidden, and Python 3.12.13+ skips hidden `.pth` files. Tests aren't affected, because pytest adds `src` to the path itself. For the CLI, either move the project outside the synced folder, run `chflags nohidden .venv/lib/python3*/site-packages/*.pth`, or prefix commands with `PYTHONPATH=src`.
 
 `tests/windows/` runs the SimSource contract against the live sim. It only runs on Windows with MSFS 2024 running and `LOCALTC_LIVE_SIM=1`.
+
+## Releasing
+
+1. Bump the version in `pyproject.toml` and `src/localtc/__init__.py`, and add a `## [X.Y.Z] - date` section
+   to `CHANGELOG.md` (the release notes, and what the app shows under "What's new").
+2. Commit, then tag and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+`.github/workflows/release.yml` checks that the three versions agree, runs the tests, and publishes
+`LocalTC-X.Y.Z.zip` (the source tree, minus what `.gitattributes` marks `export-ignore`),
+`LocalTC-Setup.exe` (Inno Setup, `installer/localtc.iss`) and `SHA256SUMS` as a GitHub release. A tag with a
+suffix (`v0.3.0-rc1`) is a pre-release, which neither the installer nor the updater picks up.
 
 ## Licence
 

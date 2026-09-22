@@ -55,6 +55,20 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
         return 1
     url = box["url"]
     window = not browser and controller.cfg.ui.window and open_page
+
+    def quit_app() -> None:
+        """Close LocalTC from the page (to install an update): the window if there is one, then the server."""
+        try:
+            import webview
+
+            for w in list(webview.windows):
+                w.destroy()
+        except Exception as exc:  # no pywebview (browser mode): stopping the server is enough
+            log.debug("No window to close: %s", exc)
+        if "set" in stop:
+            stop["set"]()
+
+    controller.updates.quit = quit_app
     try:
         if window and _open_window(url):
             pass  # returns when the window is closed
@@ -70,6 +84,7 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
         if "set" in stop:
             stop["set"]()
         thread.join(timeout=20)
+        controller.updates.on_exit()
     return 0
 
 

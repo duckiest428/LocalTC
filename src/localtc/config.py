@@ -180,6 +180,9 @@ class UiConfig(_Section):
     map_tiles: bool = True  # map background from OpenStreetMap (needs the internet; the rest works offline)
     # Which airports Airport Lookup starts with; the page writes back whatever the filters are set to.
     lookup_kinds: list[str] = msgspec.field(default_factory=lambda: ["international"])
+    # New versions from GitHub Releases: "notify" says so and installs when asked, "auto" downloads and
+    # installs when LocalTC closes, "off" never asks GitHub.
+    updates: Literal["notify", "auto", "off"] = "notify"
 
 
 class Config(_Section):

@@ -1,0 +1,65 @@
+name: Release
+
+# Push a tag to release:  git tag v0.2.0 && git push origin v0.2.0
+# The tag must match pyproject.toml, localtc.__version__ and a "## [0.2.0]" section in CHANGELOG.md.
+# Publishes LocalTC-X.Y.Z.zip (what installs and updates use), LocalTC-Setup.exe and SHA256SUMS.
+# A tag with a suffix (v0.3.0-rc1) is a pre-release: the app's updater and the setup ignore it.
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Versions agree
+        shell: bash
+        run: python tools/release.py check "$GITHUB_REF_NAME"
+      - name: Tests
+        run: |
+          pytest -q
+          lint-imports
+      - name: Release zip and notes
+        shell: bash
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          git archive --format=zip --prefix="LocalTC-$V/" -o "dist/LocalTC-$V.zip" HEAD
+          python tools/release.py notes "$V" > dist/notes.md
+          echo "V=$V" >> "$GITHUB_ENV"
+      - name: The zip runs
+        shell: pwsh
+        run: |
+          Expand-Archive "dist/LocalTC-$env:V.zip" -DestinationPath smoke
+          python -m venv smoke/venv
+          smoke/venv/Scripts/pip install --quiet "smoke/LocalTC-$env:V"
+          $out = smoke/venv/Scripts/localtc --version
+          if ($out -ne "localtc $env:V") { throw "localtc --version printed '$out'" }
+      - name: LocalTC-Setup.exe
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:V" installer\localtc.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+      - name: Checksums
+        shell: bash
+        working-directory: dist
+        run: sha256sum "LocalTC-$V.zip" LocalTC-Setup.exe > SHA256SUMS
+      - name: Publish
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRE=""; [[ "$V" == *-* ]] && PRE="--prerelease"
+          gh release create "$GITHUB_REF_NAME" $PRE --title "LocalTC $V" --notes-file dist/notes.md \
+            "dist/LocalTC-$V.zip" dist/LocalTC-Setup.exe dist/SHA256SUMS

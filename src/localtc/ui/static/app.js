@@ -45,6 +45,7 @@ function connect() {
   on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
   on("ptt", (p) => $("#btn-ptt").classList.toggle("down", p.down));
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
+  on("update", (u) => { S.state.update = u; Settings.update(u); });
   on("dev", (d) => Dev.event(d));
   on("airport", ({ icao }) => {  // the flight fetched an airport's layout: draw it if it's on the route
     const wanted = [S.state.plan?.origin, S.state.plan?.destination, S.flight.origin, S.flight.destination];
@@ -526,6 +527,8 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-tiles" ${st.ui.map_tiles ? "checked" : ""}> Map background from OpenStreetMap (needs the internet)</label>
       </div>
 
+      <div class="card" id="s-update-card"></div>
+
       <div class="card">
         <h3>Developer mode</h3>
         <label class="check-row"><input type="checkbox" id="s-dev" ${st.ui.dev_mode ? "checked" : ""}> Record every flight with its audio, and show Mark and Export session</label>
@@ -538,6 +541,7 @@ const Settings = {
         <span id="restart-bar" hidden><button class="btn small primary" id="s-restart">Restart flight to apply</button></span></div>`;
     this.wire();
     this.jobs(S.state.jobs || {});
+    this.update(S.state.update);
     if (st.ui.dev_mode) this.sessions();
   },
   wire() {
@@ -600,6 +604,32 @@ const Settings = {
     on("#s-restart", "click", async () => {
       try { await api("flight/stop", {}); await api("flight/start", {}); $("#restart-bar").hidden = true; showTab("atc"); } catch (e) { fail(e); }
     });
+  },
+  update(u) {
+    const card = $("#s-update-card");
+    if (!card || !u) return;
+    const st = S.settings.settings.ui;
+    const r = u.release;
+    const busy = u.state === "checking" || u.state === "downloading";
+    const action = u.state === "available" && u.can_apply ? `<button class="btn small primary" id="u-download">Download ${esc(r.version)}</button>`
+      : u.state === "ready" && u.can_apply ? `<button class="btn small primary" id="u-install">Install and restart</button>` : "";
+    card.innerHTML = `
+      <h3>Updates</h3>
+      <div class="row"><span>LocalTC <b>${esc(u.current)}</b></span>
+        <button class="btn small" id="u-check" ${busy ? "disabled" : ""}>${u.state === "checking" ? "Checking ..." : "Check now"}</button> ${action}</div>
+      ${u.message ? `<p class="small ${u.state === "failed" ? "error" : "muted"}">${esc(u.message)}</p>` : ""}
+      ${r && !u.can_apply && u.why_not ? `<p class="muted small">${esc(u.why_not)}</p>` : ""}
+      ${r ? `<details class="small"><summary>What's new in ${esc(r.version)}</summary><pre class="notes">${esc(r.notes || "No notes.")}</pre>
+        ${r.page ? `<a href="${esc(r.page)}" target="_blank" rel="noopener">The release on GitHub</a>` : ""}</details>` : ""}
+      <div class="row"><label>Look for new versions
+        <select id="u-mode"><option value="notify" ${st.updates === "notify" ? "selected" : ""}>Tell me, and install when I say (recommended)</option>
+        <option value="auto" ${st.updates === "auto" ? "selected" : ""}>Download by itself, install when LocalTC closes</option>
+        <option value="off" ${st.updates === "off" ? "selected" : ""}>Never (LocalTC won't contact GitHub)</option></select></label></div>
+      <span class="hint">Checks GitHub once a day at most, and never installs during a flight.</span>`;
+    $("#u-check").onclick = () => api("update/check", {}).then((v) => this.update(v)).catch(fail);
+    if ($("#u-download")) $("#u-download").onclick = () => api("update/download", {}).catch(fail);
+    if ($("#u-install")) $("#u-install").onclick = () => api("update/install", {}).catch(fail);
+    $("#u-mode").onchange = async (e) => { if (await this.save("ui", "updates", e.target.value)) this.update(u); };
   },
   captureKey() {
     const cap = $("#s-key"), hint = $("#s-key-hint");

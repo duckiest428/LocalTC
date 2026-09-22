@@ -20,12 +20,27 @@ from typing import Any
 
 import msgspec
 
-from localtc import models
+from localtc import __version__, models
 from localtc.airports import AirportCache, load_airport
 from localtc.app import LiveSession, run_session
-from localtc.config import Config, ConfigError, data_dir, load_config, save_settings, settings_path
+from localtc.config import (
+    Config,
+    ConfigError,
+    data_dir,
+    load_config,
+    save_settings,
+    settings_path,
+)
 from localtc.console import ALERTS, PHASES, log_dir
-from localtc.flightplan import FlightPlan, FlightPlanError, apply_plan, fetch_simbrief, load_plan, manual_plan, save_plan
+from localtc.flightplan import (
+    FlightPlan,
+    FlightPlanError,
+    apply_plan,
+    fetch_simbrief,
+    load_plan,
+    manual_plan,
+    save_plan,
+)
 from localtc.sim_api import (
     AirportData,
     AtcAlert,
@@ -47,6 +62,7 @@ from localtc.sim_api import (
     encode_event,
 )
 from localtc.ui.server import EventStream, HttpError, sse
+from localtc.ui.updates import Updates
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +105,7 @@ class AppController:
         self._airport_waiters: dict[str, list[asyncio.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._last_recording: Path | None = None
+        self.updates = Updates(lambda: self.cfg.ui.updates, self.publish, lambda: self.live is not None)
 
     # --- wiring ---------------------------------------------------------------------------------------------
 
@@ -119,12 +136,18 @@ class AppController:
             (get, "dev/sessions"): self.api_sessions,
             (post, "dev/export"): self.api_export,
             (post, "open"): self.api_open,
+            (get, "update"): self.api_update,
+            (post, "update/check"): self.api_update_check,
+            (post, "update/download"): self.api_update_download,
+            (post, "update/install"): self.api_update_install,
         }
 
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
         self._log_handler = _UiLogHandler(self, loop)
         logging.getLogger().addHandler(self._log_handler)
+        if self.cfg.ui.updates != "off":
+            loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
 
     def detach(self) -> None:
         if getattr(self, "_log_handler", None) is not None:
@@ -154,6 +177,7 @@ class AppController:
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
+            "version": __version__, "update": self.updates.view(),
         }
 
     def _push_state(self) -> None:
@@ -324,6 +348,21 @@ class AppController:
                 self.publish("flight", self.flight)
 
     # --- the page's calls ----------------------------------------------------------------------------------------
+
+    async def api_update(self, args: dict) -> dict:
+        return self.updates.view()
+
+    async def api_update_check(self, args: dict) -> dict:
+        return await self.updates.check(force=True)
+
+    async def api_update_download(self, args: dict) -> dict:
+        return await self.updates.download()
+
+    async def api_update_install(self, args: dict) -> dict:
+        try:
+            return await self.updates.install_now()
+        except RuntimeError as exc:
+            raise HttpError(409, str(exc)) from None
 
     async def api_state(self, args: dict) -> dict:
         return self.state()
@@ -672,9 +711,8 @@ def airport_summary(airport, engine=None) -> dict:
 
 
 def airport_detail(airport) -> dict:
-    from localtc.sim_api.airport import FEET_PER_METER
-
     from localtc.atc_core.airport import published
+    from localtc.sim_api.airport import FEET_PER_METER
 
     runways = []
     for rw in airport.runways:

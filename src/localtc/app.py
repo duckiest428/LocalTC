@@ -45,6 +45,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
     """Map ``[flight]`` and ``[atc]`` config to the ATC engine's settings."""
     from localtc.atc_core.engine import EngineConfig
     from localtc.atc_core.phase import PhaseThresholds
+    from localtc.atc_core.route import RouteFix
 
     return EngineConfig(
         destination=flight.destination or None,
@@ -60,6 +61,9 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         unscripted=atc.unscripted,
         approach=flight.approach,
         sid=flight.sid or None,
+        star=flight.star or None,
+        route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
+                    for f in flight.fixes),
     )
 
 

@@ -66,6 +66,9 @@ def cruising_engine() -> tuple[AtcEngine, OwnshipState]:
     own = next(e for e in events if not e.on_ground and e.alt_indicated_ft > 4900 and e.t > 900)
     engine.state.phase = "CRUISE"
     engine.state.assignments.altitude_ft = 5000
+    # Twenty miles from Boeing Field at 5,000 ft is past the top of descent, so centre would clear the
+    # descent before anything else. These tests are about what comes after; that part is done.
+    engine.state.flags.add("descend")
     return engine, msgspec.structs.replace(own, com1_mhz=125.1)  # Seattle Center
 
 

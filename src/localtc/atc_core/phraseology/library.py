@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 import msgspec
 
-from localtc.atc_core.phraseology.slots import SLOTS
+from localtc.atc_core.phraseology.slots import SLOT_DEFAULTS, SLOTS
 from localtc.atc_core.readback.extract import ELEMENTS
 from localtc.atc_core.values import Phrase
 
@@ -155,7 +155,7 @@ class TemplateLibrary:
                 slot_type, value = SLOTS["callsign"], slots.get("callsign")
                 value = value.short if value is not None else None
             else:
-                slot_type, value = SLOTS[name], slots.get(name)
+                slot_type, value = SLOTS[name], slots.get(name, SLOT_DEFAULTS.get(name))
             if value is None:
                 raise TemplateError(f"{context}: missing slot {{{name}}}")
             if not isinstance(value, slot_type.value_type):

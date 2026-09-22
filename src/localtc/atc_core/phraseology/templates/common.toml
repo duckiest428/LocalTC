@@ -186,6 +186,7 @@ cleared_for_takeoff = "cleared for takeoff"
 line_up_and_wait = "line up and wait"
 cleared_to_land = "cleared to land"
 hold_position = "hold position"
+descend_via = "descend via"
 fix = "direct {fix}"
 
 [[template]]

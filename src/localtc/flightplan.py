@@ -11,10 +11,12 @@ in the JSON is a string. The fields used here:
 - ``atc.callsign`` (what ATC calls the flight, e.g. ``DAL123``)
 - ``aircraft.icaocode``, ``aircraft.reg``
 - ``navlog.fix[]``: ``ident``, ``type``, ``pos_lat``, ``pos_long``, ``altitude_feet``, ``via_airway``,
-  ``is_sid_star``, ``stage`` (CLB/CRZ/DSC). The SID and STAR are the airways of the SID/STAR fixes.
+  ``is_sid_star``, ``stage`` (CLB/CRZ/DSC), ``time_total`` (seconds from takeoff). The SID and STAR are
+  the airways of the SID/STAR fixes; ``TOC`` and ``TOD`` are fixes of their own.
 
-The plan is kept in ``flightplan.json`` in the LocalTC data folder. ATC uses its callsign,
-destination and cruise altitude today. The route, SID, STAR and fixes are shown and drawn on the map.
+The plan is kept in ``flightplan.json`` in the LocalTC data folder. ATC uses its callsign, destination,
+cruise altitude, SID and STAR, and its fixes for when the climb ends and the descent should begin.
+The route and fixes are also drawn on the map.
 """
 
 import json
@@ -41,6 +43,7 @@ class Fix(msgspec.Struct, frozen=True, kw_only=True):
     via: str = ""  # airway, SID or STAR name, or DCT
     kind: str = ""  # wpt, vor, ndb, apt, ...
     stage: str = ""  # CLB, CRZ, DSC
+    time_s: int = 0  # planned seconds from takeoff (SimBrief's time_total); 0 when not known
 
 
 class FlightPlan(msgspec.Struct, kw_only=True):
@@ -166,7 +169,8 @@ def parse_simbrief(data: dict[str, Any]) -> FlightPlan:
         try:
             fixes.append(Fix(ident=str(fix.get("ident", "")), lat=float(fix["pos_lat"]), lon=float(fix["pos_long"]),
                              alt_ft=_int(fix.get("altitude_feet")), via=str(fix.get("via_airway") or ""),
-                             kind=str(fix.get("type") or ""), stage=str(fix.get("stage") or "")))
+                             kind=str(fix.get("type") or ""), stage=str(fix.get("stage") or ""),
+                             time_s=_int(fix.get("time_total"))))
         except (KeyError, TypeError, ValueError):
             continue
     navlog = _as_list(_get(data, "navlog", "fix"))
@@ -232,6 +236,7 @@ def load_plan(path: Path) -> FlightPlan | None:
 
 def apply_plan(plan: FlightPlan, flight: Any) -> None:
     """Put the plan into a ``FlightConfig``: what ATC clears the flight with."""
+    from localtc.config import RouteFix
     flight.callsign = plan.callsign
     flight.origin = plan.origin
     flight.destination = plan.destination
@@ -240,3 +245,5 @@ def apply_plan(plan: FlightPlan, flight: Any) -> None:
     flight.route = plan.route
     flight.sid = plan.sid
     flight.star = plan.star
+    flight.fixes = [RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
+                    for f in plan.fixes]

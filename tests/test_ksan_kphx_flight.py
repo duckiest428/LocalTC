@@ -23,6 +23,11 @@ from localtc.atc_core.engine import (
     AtcEngine,
     EngineConfig,
 )
+from localtc.atc_core.readback import (
+    GrammarInterpreter,
+    InterpretContext,
+    PendingReadback,
+)
 from localtc.atc_core.readback.extract import taxi_routes
 from localtc.atc_core.readback.intents import match_intents
 from localtc.atc_core.readback.normalize import normalize
@@ -296,3 +301,77 @@ def test_the_copilot_repeats_only_its_own_calls():
     copilot.observe(AtcTransmission(t=22.0, station="Seattle Center", frequency_mhz=125.1, text="N172LT, say again",
                                     instruction_id="common.say_again"))
     assert copilot._queue
+
+
+# --- the flight plan: when the climb ends and the descent begins -------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def planned() -> list[str]:
+    """The flight again with its SimBrief plan's fixes, as the app now passes them to ATC."""
+    from localtc.config import RouteFix
+
+    cfg = with_recorded(load_config(), Recording(FLIGHT).header.config)
+    plan = json.loads((FLIGHT / "flightplan.json").read_text(encoding="utf-8"))
+    cfg.flight.fixes = [RouteFix(ident=f["ident"], lat=f["lat"], lon=f["lon"], alt_ft=f["alt_ft"], stage=f["stage"])
+                        for f in plan["fixes"]]
+    scenario = Scenario(scenario=ScenarioMeta(recording=str(FLIGHT)), flight=cfg.flight, atc=cfg.atc)
+    return run(scenario, FLIGHT, recording=FLIGHT, recorded_pilot=True).lines
+
+
+def test_the_clearance_expects_the_cruise_when_the_plan_reaches_it(planned):
+    """Always "one zero minutes" before. The plan's top of climb says about twenty, and the flight took 20.6."""
+    clearance = next(line for line in planned if "cleared to Phoenix" in line)
+    assert "expect FL350 two zero minutes after departure" in clearance, clearance
+
+
+def test_the_descent_is_cleared_before_the_aircraft_starts_down(planned):
+    """The FMS began the descent at t=3000, 106 nm out, and ATC only answered it. With the plan's top of
+    descent ATC clears it first: descend via the filed arrival, when the crew is ready."""
+    descent = next(line for line in planned if "descend via the HYDRR1 arrival" in line)
+    assert float(descent.split("]")[0].strip("[ ")) < 2990, descent
+
+
+@pytest.mark.parametrize("said", [
+    "Descend via the hydra one arrival, Frontier 2084",
+    "Descending via Hydra 1, Frontier 2084",
+    "descend via, Frontier 2084",
+])
+def test_descend_via_read_back_however_the_star_is_spelled(said):
+    pending = PendingReadback(instruction_id="center.descend_via", controller="center",
+                              expected={"descend_via": True, "procedure": "HYDRR1"},
+                              required=("descend_via",), optional=("procedure",))
+    heard = GrammarInterpreter().interpret(said, pending, InterpretContext(phase="CRUISE"))
+    assert heard.status == "correct", (heard.status, heard.mismatched)
+
+
+def test_procedure_names_match_by_sound_and_number_exactly():
+    from localtc.atc_core.readback.extract import procedure_matches
+
+    assert procedure_matches("HYDRA1", "HYDRR1") and procedure_matches("ZOO4", "ZZOOO4") and procedure_matches("HOGS1", "HOGGZ1")
+    assert not procedure_matches("HYDRA2", "HYDRR1")  # the number is not a matter of spelling
+    assert not procedure_matches("EAGUL5", "HYDRR5")
+
+
+def test_minutes_to_cruise_from_the_plan_its_distance_or_the_altitude():
+    from localtc.atc_core.route import Route, RouteFix
+
+    timed = Route((RouteFix("A", 32.7, -117.3, stage="CLB", time_s=300), RouteFix("TOC", 32.8, -115.3, stage="CLB", time_s=1080)))
+    assert timed.minutes_to_cruise(35000) == 18
+    untimed = Route((RouteFix("A", 32.7, -117.3, stage="CLB"), RouteFix("TOC", 32.75, -115.29, stage="CLB")))
+    assert 18 <= untimed.minutes_to_cruise(35000) <= 22  # ~100 nm at a jet's climb groundspeed
+    assert Route().minutes_to_cruise(35000) == 19  # FL350 at 1,800 fpm
+    assert Route().minutes_to_cruise(5000) == 8 and Route().minutes_to_cruise(3000) == 5  # never under five
+
+
+def test_simbrief_fix_times_reach_the_flight_config():
+    from localtc.config import FlightConfig
+    from localtc.flightplan import apply_plan, parse_simbrief
+
+    data = {"fetch": {"status": "Success"}, "origin": {"icao_code": "KSAN"}, "destination": {"icao_code": "KPHX"},
+            "general": {"initial_altitude": "35000"}, "atc": {"callsign": "FFT2084"},
+            "navlog": {"fix": [{"ident": "TOC", "pos_lat": "32.75", "pos_long": "-115.29", "altitude_feet": "35000",
+                                "stage": "CLB", "time_total": "1234"}]}}
+    flight = FlightConfig()
+    apply_plan(parse_simbrief(data), flight)
+    assert flight.fixes[0].ident == "TOC" and flight.fixes[0].time_s == 1234

@@ -16,6 +16,7 @@ PHRASE_STEMS: dict[str, tuple[str, ...]] = {
     "line_up_and_wait": ("line", "lineup", "lining", "position"),
     "cleared_to_land": ("land", "landing"),
     "hold_position": ("hold", "holding"),
+    "descend_via": ("via",),
 }
 
 

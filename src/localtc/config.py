@@ -73,18 +73,30 @@ class RecorderConfig(_Section):
     compress: bool = False
 
 
+class RouteFix(msgspec.Struct, frozen=True, kw_only=True):
+    """A fix of the filed route, as ATC needs it (see atc_core.route)."""
+
+    ident: str
+    lat: float
+    lon: float
+    alt_ft: int = 0
+    stage: str = ""  # CLB, CRZ, DSC
+    time_s: int = 0  # planned seconds from takeoff
+
+
 class FlightConfig(_Section):
     rules: Literal["IFR"] = "IFR"
     destination: str = ""  # ICAO
     cruise_ft: int = 0  # 0 = unknown
     callsign: str = ""  # override the sim's ATC ID, e.g. "N172LT" or "ASA123"
-    # From the flight plan (SimBrief or typed in the app); shown and recorded, not yet used by ATC.
+    # From the flight plan (SimBrief or typed in the app): recorded with the flight, and used by ATC.
     origin: str = ""  # blank = the airport the flight starts at
     alternate: str = ""
     route: str = ""
     sid: str = ""  # named in the IFR clearance ("via the MONTN2 departure, then as filed")
     star: str = ""
     approach: Literal["auto", "visual", "ils", "rnav"] = "auto"  # auto: what the airport has, the weather and the aircraft allow
+    fixes: list[RouteFix] = []  # the plan's route; set from the flight plan for each flight, not saved
 
 
 class AtcConfig(_Section):

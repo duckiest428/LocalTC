@@ -37,6 +37,14 @@ ATIS = SlotType("atis", str, lambda v: speech.letter(v).capitalize(), speech.let
 WIND = SlotType("wind", Wind, speech.wind_display, speech.wind)
 ALTIMETER = SlotType("altimeter", float, lambda v: f"{v:.2f}", speech.altimeter)
 
+
+def _minutes(v: int) -> str:
+    """Minutes as ATC says them: "five" under ten, digit by digit above ("one seven")."""
+    return speech.number_words(int(v)) if int(v) < 10 else speech.digits(str(int(v)))
+
+
+MINUTES = SlotType("minutes", int, _minutes, _minutes)
+
 # Slot name used in templates -> its type. Names double as readback element names.
 SLOTS: dict[str, SlotType] = {
     "callsign": CALLSIGN,
@@ -62,4 +70,9 @@ SLOTS: dict[str, SlotType] = {
     "atis": ATIS,
     "wind": WIND,
     "altimeter": ALTIMETER,
+    "minutes": MINUTES,  # "expect FL350 one seven minutes after departure"
 }
+
+# What a slot says when nothing better is known. "Expect FL350 one zero minutes after departure" is what a
+# real clearance says without a flight plan's climb to go on; the engine always works out its own.
+SLOT_DEFAULTS: dict[str, Any] = {"minutes": 10}

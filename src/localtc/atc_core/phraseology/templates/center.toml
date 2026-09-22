@@ -25,6 +25,20 @@ pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
 
 # Already at or below the arrival altitude (a low cruise): no descent, just the plan.
 [[template]]
+id = "center.descend_pd"
+controller = "center"
+text = ["{callsign}, descend at pilot's discretion, maintain {altitude}, expect {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Pilot's discretion, descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_via"
+controller = "center"
+text = ["{callsign}, descend via the {procedure} arrival, expect {approach} approach."]
+readback = { required = ["descend_via"], optional = ["procedure"] }
+pilot_readback = "Descend via the {procedure} arrival, {callsign_short}."
+
+[[template]]
 id = "center.maintain"
 controller = "center"
 text = ["{callsign}, maintain {altitude}, expect {approach} approach."]

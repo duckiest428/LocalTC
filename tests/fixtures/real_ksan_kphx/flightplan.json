@@ -1,0 +1,200 @@
+{
+ "source": "simbrief",
+ "callsign": "FFT2084",
+ "origin": "KSAN",
+ "destination": "KPHX",
+ "alternate": "KTUS",
+ "cruise_ft": 35000,
+ "route": "ZZOOO4 HOGGZ HYDRR1",
+ "aircraft": "A20N",
+ "registration": "G-INEO",
+ "sid": "ZZOOO4",
+ "star": "HYDRR1",
+ "dep_runway": "27",
+ "arr_runway": "26",
+ "origin_name": "SAN DIEGO INTL",
+ "destination_name": "PHOENIX SKY HARBOR INTL",
+ "fixes": [
+  {
+   "ident": "JETTI",
+   "lat": 32.76375,
+   "lon": -117.31455,
+   "alt_ft": 5200,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "ZZOOO",
+   "lat": 32.631456,
+   "lon": -117.245828,
+   "alt_ft": 11000,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "ANRMN",
+   "lat": 32.618622,
+   "lon": -117.104553,
+   "alt_ft": 13900,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "JORRJ",
+   "lat": 32.666281,
+   "lon": -116.958697,
+   "alt_ft": 17300,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "GRIDR",
+   "lat": 32.671136,
+   "lon": -116.753242,
+   "alt_ft": 20800,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "GUUSE",
+   "lat": 32.665794,
+   "lon": -116.425169,
+   "alt_ft": 25600,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "BLUZE",
+   "lat": 32.701256,
+   "lon": -116.031181,
+   "alt_ft": 29300,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB"
+  },
+  {
+   "ident": "IPL",
+   "lat": 32.748867,
+   "lon": -115.508583,
+   "alt_ft": 33500,
+   "via": "ZZOOO4",
+   "kind": "vor",
+   "stage": "CLB"
+  },
+  {
+   "ident": "TOC",
+   "lat": 32.754089,
+   "lon": -115.290831,
+   "alt_ft": 35000,
+   "via": "ZZOOO4",
+   "kind": "ltlg",
+   "stage": "CLB"
+  },
+  {
+   "ident": "BZA",
+   "lat": 32.768108,
+   "lon": -114.602947,
+   "alt_ft": 35000,
+   "via": "ZZOOO4",
+   "kind": "vor",
+   "stage": "CRZ"
+  },
+  {
+   "ident": "HOGGZ",
+   "lat": 32.774861,
+   "lon": -114.0692,
+   "alt_ft": 35000,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CRZ"
+  },
+  {
+   "ident": "JUDTH",
+   "lat": 32.816503,
+   "lon": -113.688394,
+   "alt_ft": 35000,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "CRZ"
+  },
+  {
+   "ident": "TOD",
+   "lat": 32.960003,
+   "lon": -113.49531,
+   "alt_ft": 35000,
+   "via": "HYDRR1",
+   "kind": "ltlg",
+   "stage": "CRZ"
+  },
+  {
+   "ident": "RKDAM",
+   "lat": 33.054156,
+   "lon": -113.368064,
+   "alt_ft": 31600,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "HYDRR",
+   "lat": 33.274306,
+   "lon": -113.069672,
+   "alt_ft": 24000,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "GEELA",
+   "lat": 33.280497,
+   "lon": -112.821597,
+   "alt_ft": 19400,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "AGGLA",
+   "lat": 33.323642,
+   "lon": -112.357483,
+   "alt_ft": 10700,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "CHAVO",
+   "lat": 33.347611,
+   "lon": -112.092906,
+   "alt_ft": 5700,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "LEMOE",
+   "lat": 33.345631,
+   "lon": -111.936239,
+   "alt_ft": 3600,
+   "via": "HYDRR1",
+   "kind": "wpt",
+   "stage": "DSC"
+  },
+  {
+   "ident": "KPHX",
+   "lat": 33.434278,
+   "lon": -112.011583,
+   "alt_ft": 3600,
+   "via": "HYDRR1",
+   "kind": "apt",
+   "stage": "DSC"
+  }
+ ],
+ "simbrief_id": "1789953458"
+}

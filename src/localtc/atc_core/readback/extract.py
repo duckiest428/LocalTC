@@ -5,6 +5,7 @@ the expected value among the candidates means correct, other candidates mean
 incorrect, and no candidates means missing.
 """
 
+import difflib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -543,6 +544,7 @@ ELEMENTS: dict[str, Extractor] = {
     "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"), ("position", "and", "hold")),
     "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),
+    "descend_via": phrase(("descend", "via"), ("descending", "via"), ("descent", "via"), ("down", "via")),
 }
 
 
@@ -594,4 +596,26 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
         return taxi_route_matches(heard, expected)
     if element == "fix":
         return str(heard).lower() == str(expected).lower()
+    if element == "procedure":
+        return procedure_matches(str(heard), str(expected))
     return heard == expected
+
+
+def procedure_matches(heard: str, expected: str) -> bool:
+    """A SID or STAR as speech-to-text spells it. The five-letter names are made to be said like words
+    (HYDRR, "Hydra"; ZZOOO, "Zoo"; HOGGZ, "Hoggs"), so they never come back spelled as charted. The
+    number must match; the name only has to sound like it: doubled letters count once and the letters
+    left have to be mostly the same, in order."""
+
+    def split(name: str) -> tuple[str, str]:
+        letters = "".join(c for c in name.upper() if c.isalpha())
+        squeezed = "".join(c for i, c in enumerate(letters) if i == 0 or c != letters[i - 1])
+        return squeezed, "".join(c for c in name if c.isdigit())
+
+    (heard_name, heard_number), (name, number) = split(heard), split(expected)
+    if heard_number != number:
+        return False
+    return heard_name == name or difflib.SequenceMatcher(None, heard_name, name).ratio() >= PROCEDURE_LIKENESS
+
+
+PROCEDURE_LIKENESS = 0.6  # how alike two spellings of a procedure's name must be to be the same one

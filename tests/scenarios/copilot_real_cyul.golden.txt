@@ -2,8 +2,8 @@
 [     1.1] TUNE      COM1 125.6
 [     4.6] PILOT     125.6: Montreal Clearance, DP69, IFR to Quebec, ready to copy
 [     6.6] ATC       Montreal Clearance 125.6: DP69, clearance on request, stand by.
-[    21.3] ATC       Montreal Clearance 125.6: DP69, cleared to Quebec airport as filed, climb and maintain 5,000, expect 12,000 one zero minutes after departure, departure frequency 120.42, squawk 3260.
-[    25.1] PILOT     125.6: Cleared to Quebec as filed, climb and maintain five thousand, expect one two thousand one zero minutes after, departure one two zero point four two, squawk three two six zero, delta papa six niner.
+[    21.3] ATC       Montreal Clearance 125.6: DP69, cleared to Quebec airport as filed, climb and maintain 5,000, expect 12,000 one two minutes after departure, departure frequency 120.42, squawk 3260.
+[    25.1] PILOT     125.6: Cleared to Quebec as filed, climb and maintain five thousand, expect one two thousand one two minutes after, departure one two zero point four two, squawk three two six zero, delta papa six niner.
 [    25.1] READBACK  clearance.ifr correct
 [    26.9] ATC       Montreal Clearance 125.6: DP69, readback correct.
 [    32.1] TUNE      COM1 121.0

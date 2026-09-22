@@ -2,10 +2,10 @@
 id = "clearance.ifr"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise"] }
-pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 
 # Cruising at the initial altitude (a short hop): nothing to expect later.
@@ -29,10 +29,10 @@ text = ["{callsign}, say destination and requested altitude."]
 id = "clearance.ifr_sid"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise", "procedure"] }
-pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} one zero minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 
 [[template]]

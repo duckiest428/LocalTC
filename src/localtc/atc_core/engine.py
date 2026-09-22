@@ -37,6 +37,7 @@ from localtc.atc_core.readback import (
     PendingReadback,
     SayAgainInterpreter,
 )
+from localtc.atc_core.route import Route, RouteFix
 from localtc.atc_core.session import Clearance, Exchange, IssuedInstruction, SessionSnapshot, SessionState, snapshot
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind, clean_sim_name
 from localtc.atc_core.weather import AtisBoard, AtisInfo, WeatherTracker, components, magnetic_wind
@@ -99,6 +100,7 @@ REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by 
 SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
 SPEED_GATES = ((30.0, 250, "speed250"), (18.0, 210, "speed210"), (10.0, 180, "speed180"))
 APPROACH_CLEARANCE_NM = 18.0  # approach clears the approach and hands off to tower within this of the field
+DESCENT_LEAD_MIN = 5.0  # the descent is cleared this long before the top of descent, at the current groundspeed
 # Joining the final: within this of the extended centreline, this far out or less, pointing no further off
 # the final course than this (so a base leg counts and a downwind doesn't).
 JOIN_LATERAL_NM, JOIN_FINAL_NM, JOIN_HEADING_DEG = 3.0, 20.0, 100.0
@@ -157,6 +159,8 @@ class EngineConfig:
     unscripted: bool = True  # ATC starts things too: traffic, altitude checks, "how do you read", stand by
     approach: str = "auto"  # "auto": what the airport publishes, the weather and the aircraft allow
     sid: str | None = None  # departure procedure from the flight plan, named in the IFR clearance
+    star: str | None = None  # arrival procedure from the flight plan: "descend via" it
+    route: tuple[RouteFix, ...] = ()  # the plan's fixes: when the climb ends, where the descent begins
     transition_ft: int = 18000  # at or above this everyone flies the standard altimeter setting
 
 
@@ -183,6 +187,7 @@ class AtcEngine:
         phraser: LlmPhraser | None = None,
     ) -> None:
         self.cfg = config or EngineConfig()
+        self.route = Route(self.cfg.route)
         self.library = library or TemplateLibrary.load()
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
         self.phraser = phraser  # words replies that have no template; None: they get "unable"
@@ -216,6 +221,7 @@ class AtcEngine:
         self._crossings: tuple[str, ...] = ()  # runways the taxi route goes across
         self._crossed: set[str] = set()  # ... and the ones already cleared to cross (full names, "09/27")
         self._crossing: str | None = None  # the runway cleared across and not yet left behind
+        self._via_floor: int | None = None  # the altitude a "descend via" ends at, while it is the clearance
         self._takeoff_wait: str | None = None  # the runway a departure is being held for
         self._takeoff_hold: str | None = None  # why: "arrival" (holding short) or "occupied" (lined up)
         self._expected: dict[str, dict[str, Any]] = {}  # every value each instruction gave, by instruction id
@@ -535,6 +541,9 @@ class AtcEngine:
         elif phase is P.CRUISE and tuned == "center" and (crossing := self._sector_crossing(own)) is not None:
             self._sector, self._sector_since = crossing, t
             self._handoff(t, "center.handoff_center", st.comms.tuned, crossing)
+        elif phase is P.CRUISE and tuned == "center" and "descend" not in st.flags and self._descent_due(own) \
+                and (plan := self._arrival_plan(own)) is not None:
+            self._clear_descent(t, own, st.comms.tuned, plan)
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
             if "descend" not in st.flags and (plan := self._arrival_plan(own)) is not None:
                 st.flags.add("descend")
@@ -930,6 +939,8 @@ class AtcEngine:
         if assigned is None or "approach" in st.clearances or P(st.phase) not in (P.DEPARTURE, P.CRUISE, P.ARRIVAL):
             self._deviation_since = None
             return False
+        if self._via_floor is not None and assigned == self._via_floor:
+            return False  # descending via the arrival: its own restrictions set the altitudes, not one number
         off = abs(own.alt_indicated_ft - assigned)
         if off <= 200:
             st.flags.add(f"reached:{assigned}")
@@ -1739,7 +1750,8 @@ class AtcEngine:
             self._schedule(t, "clearance.standby", {}, facility)
             t += random.Random(self.cfg.seed + 1).uniform(12, 25)  # the clearance comes a little later
         slots: dict[str, Any] = {"destination": destination, "altitude": initial, "cruise": cruise,
-                                 "frequency": departure.mhz, "squawk": squawk}
+                                 "frequency": departure.mhz, "squawk": squawk,
+                                 "minutes": self.route.minutes_to_cruise(cruise)}
         instruction = "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise"
         if self.cfg.sid:  # the flight plan files a SID: ATC clears the flight on it by name
             slots["procedure"] = self.cfg.sid
@@ -1891,6 +1903,44 @@ class AtcEngine:
         if assigned is not None and assigned < planned:
             return assigned, f"{controller}.maintain"
         return planned, f"{controller}.maintain"
+
+    def _descent_due(self, own: OwnshipState) -> bool:
+        """Time to clear the descent: DESCENT_LEAD_MIN before the top of descent.
+
+        Waiting for the aircraft to start down means it starts down without a clearance: an FMS works out
+        its own top of descent from the arrival's restrictions, and on the San Diego to Phoenix flight it
+        began 23 nm before the one SimBrief planned. Given early, at pilot's discretion (or "descend via"
+        the arrival), the crew starts down when their numbers say to.
+        """
+        st = self.state
+        geo = self.geometry(st.flight.destination)
+        if geo is None:
+            return False
+        level = st.assignments.altitude_ft or int(own.alt_indicated_ft)
+        start_nm = self.route.descent_distance_nm(geo.airport.lat, geo.airport.lon, level, geo.airport.elev_ft)
+        return geo.distance_nm(own.lat, own.lon) <= start_nm + own.gs_kt / 60 * DESCENT_LEAD_MIN
+
+    def _clear_descent(self, t: float, own: OwnshipState, facility: Facility, plan: dict[str, Any]) -> None:
+        """The descent from cruise, ahead of the top of descent: "descend via" the filed arrival when there is
+        one, otherwise at pilot's discretion to the arrival altitude."""
+        st = self.state
+        st.flags.add("descend")
+        approach = plan["approach"]
+
+        def assigned(altitude: int, via: bool) -> Callable[[], None]:
+            def apply() -> None:
+                self._via_floor = altitude if via else None
+                self._assign(altitude_ft=altitude, approach=approach.display, arrival_runway=approach.runway)
+            return apply
+
+        if self.cfg.star:
+            floor = self.route.arrival_floor_ft or plan["arrival_alt"]
+            self._schedule(t, "center.descend_via", {"procedure": self.cfg.star, "approach": approach}, facility,
+                           delay=False, on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
+            return
+        altitude, _ = self._arrival_altitude(plan["arrival_alt"], own, "center")
+        self._schedule(t, "center.descend_pd", {"altitude": altitude, "approach": approach}, facility, delay=False,
+                       on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))
 
     def _joining_final(self, own: OwnshipState) -> bool:
         """About to join the final approach course: the moment approach clears the approach.

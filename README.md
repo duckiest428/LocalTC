@@ -358,3 +358,6 @@ Third-party components keep their own licences: the Whisper models, the Piper vo
 and JetBrains Mono typefaces bundled with [the website](site/fonts/) under the SIL Open Font License.
 The airspace outlines in [`src/localtc/atc_core/airspace/`](src/localtc/atc_core/airspace/README.md) come
 from the VATSIM community's VATSpy Data Project and SimAware TRACON Project and are CC BY-SA 4.0.
+
+
+_Shamelessly vibecoded_

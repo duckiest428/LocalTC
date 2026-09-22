@@ -44,6 +44,7 @@ def _minutes(v: int) -> str:
 
 
 MINUTES = SlotType("minutes", int, _minutes, _minutes)
+GATE = SlotType("gate", str, _text, speech.gate)
 
 # Slot name used in templates -> its type. Names double as readback element names.
 SLOTS: dict[str, SlotType] = {
@@ -70,7 +71,8 @@ SLOTS: dict[str, SlotType] = {
     "atis": ATIS,
     "wind": WIND,
     "altimeter": ALTIMETER,
-    "minutes": MINUTES,  # "expect FL350 one seven minutes after departure"
+    "minutes": MINUTES,
+    "gate": GATE,  # "Gate B25", "Parking 3"  # "expect FL350 one seven minutes after departure"
 }
 
 # What a slot says when nothing better is known. "Expect FL350 one zero minutes after departure" is what a

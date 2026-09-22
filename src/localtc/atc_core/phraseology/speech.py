@@ -149,6 +149,12 @@ def procedure(name: str) -> str:
     return " ".join(said)
 
 
+def gate(display: str) -> str:
+    """ "Gate B25" -> "gate bravo two five", "Parking 3" -> "parking three"."""
+    word, _, label = display.partition(" ")
+    return f"{word.lower()} {taxiway(label)}".strip()
+
+
 def taxi_route(names: tuple[str, ...]) -> str:
     return ", ".join(taxiway(n) for n in names)
 

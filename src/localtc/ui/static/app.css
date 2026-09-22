@@ -270,6 +270,8 @@ tr.tunable:hover td { background: var(--panel-2); }
 .sw-terminal { background: rgba(47, 182, 124, .35); border: 1.5px solid var(--z-terminal); }
 .sw-final { background: rgba(231, 178, 74, .25); border: 1.5px dashed var(--z-final); }
 .sw-tower { border: 1.5px dashed var(--z-tower); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.atc-gate { background: #8a6cf0; color: #fff; border: 0; font-weight: 600; font-size: 11px; padding: 1px 6px; box-shadow: none; }
+.atc-gate::before { display: none; }
 .atc-badge { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 3px;
   font: 700 11px/1 var(--font); color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
 .b-clearance { background: var(--z-clearance); }

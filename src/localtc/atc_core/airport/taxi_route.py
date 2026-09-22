@@ -150,8 +150,9 @@ class TaxiGraph:
         best, _ = min(routes, key=lambda rd: (end.runway.name in rd[0].crossings, len(rd[0].crossings), rd[1], rd[0].length_m))
         return best
 
-    def parking_route(self, lat: float, lon: float) -> TaxiRoute | None:
-        goals = {n for n in self.positions if n[0] == "parking"}
+    def parking_route(self, lat: float, lon: float, spot: int | None = None) -> TaxiRoute | None:
+        """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned)."""
+        goals = {n for n in self.positions if n[0] == "parking" and (spot is None or n[1] == spot)}
         start = self.nearest_node(lat, lon)
         if start is None or not goals:
             return None

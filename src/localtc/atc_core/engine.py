@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from localtc.atc_core.airport import gates as stands
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, published, select_approach, select_runway
 from localtc.atc_core.airspace import Airspace, Area
 from localtc.atc_core.facilities import (
@@ -461,6 +462,10 @@ class AtcEngine:
         st, t = self.state, change.t
         out: list[BusEvent] = []
         phase = P(change.phase)
+        if change.previous is not None and P(change.previous) is P.PARKED and st.assignments.departure_gate is None:
+            geo = self.geometry(st.flight.origin) if st.flight.origin else None
+            gate = stands.parked_at(geo, own.lat, own.lon) if geo is not None else None
+            self._assign(departure_gate=gate.display if gate is not None else None)
         if phase is P.TAXI_OUT and change.previous in (P.PARKED, P.PUSHBACK) and "taxi" not in st.clearances \
                 and st.flight.origin:
             out.append(self._alert(t, "taxi_without_clearance", "moving without a taxi clearance"))
@@ -2019,17 +2024,36 @@ class AtcEngine:
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         ctx = self.tracker.context
         geo = ctx.airport
+        a = self.state.assignments
         # Asked again, ATC repeats the route it gave, it doesn't invent a new one: the search starts from
         # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time.
-        taxiways = self.state.assignments.taxi_route if "taxi_in" in self.state.clearances else None
+        taxiways = a.taxi_route if "taxi_in" in self.state.clearances else None
+        gate = self._gate(geo) if taxiways is None else None
         if taxiways is None:
-            route = TaxiGraph(geo).parking_route(own.lat, own.lon) if geo is not None and own is not None else None
+            graph = TaxiGraph(geo) if geo is not None and own is not None else None
+            route = graph.parking_route(own.lat, own.lon, gate.index) if graph is not None and gate is not None else None
+            if route is None and graph is not None:
+                gate, route = None, graph.parking_route(own.lat, own.lon)
             taxiways = route.taxiways if route is not None else None
-        if taxiways:
+            self._assign(gate=gate.display if gate else None, gate_index=gate.index if gate else None)
+        where = a.gate if a.gate and taxiways else None
+        if where:
+            self._schedule(t, "ground.taxi_to_gate", {"taxi_route": taxiways, "gate": where}, facility, clearance="taxi_in",
+                           on_issue=lambda: self._assign(taxi_route=taxiways))
+        elif taxiways:
             self._schedule(t, "ground.taxi_in", {"taxi_route": taxiways}, facility, clearance="taxi_in",
                            on_issue=lambda: self._assign(taxi_route=taxiways))
         else:
             self._schedule(t, "ground.taxi_in_no_route", {}, facility, clearance="taxi_in")
+
+    def _gate(self, geo: AirportGeometry | None) -> "stands.Gate | None":
+        """A free gate at the destination for an airline flight. GA is sent to parking, not a numbered stand:
+        "taxi to parking" is what a GA pilot hears, and the nearest ramp is where they go."""
+        callsign = self._callsign()
+        if geo is None or not callsign.is_airline:
+            return None
+        return stands.assign(geo, airline=callsign.is_airline, aircraft_type=self.state.flight.aircraft_type or "",
+                             traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}")
 
     def _handoff(self, t: float, instruction_id: str, from_facility: Facility, to_facility: Facility, *, delay: bool = False) -> None:
         self._schedule(t, instruction_id, {"station": to_facility.station, "frequency": to_facility.mhz}, from_facility,

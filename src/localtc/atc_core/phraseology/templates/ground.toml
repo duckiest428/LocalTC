@@ -49,6 +49,13 @@ readback = { optional = ["taxi_route"] }
 pilot_readback = "Taxi to parking via {taxi_route}, {callsign_short}."
 
 [[template]]
+id = "ground.taxi_to_gate"
+controller = "ground"
+text = ["{callsign}, taxi to {gate} via {taxi_route}.", "{callsign}, {gate}, taxi via {taxi_route}."]
+readback = { optional = ["taxi_route"] }
+pilot_readback = "Taxi to {gate} via {taxi_route}, {callsign_short}."
+
+[[template]]
 id = "ground.taxi_in_no_route"
 controller = "ground"
 text = ["{callsign}, taxi to parking."]

@@ -75,6 +75,7 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
             final = _final(engine, found, plan)
 
     return {
+        "gate": _gate(engine),
         "centers": centers, "terminals": terminals, "airports": airports, "final": final,
         "tuned": {"station": tuned.station, "controller": tuned.controller, "mhz": tuned.mhz} if tuned else None,
         "next": {"station": expected.station, "controller": expected.controller, "mhz": expected.mhz}
@@ -129,6 +130,16 @@ def _final(engine: Any, found: Airport, plan: Any) -> dict[str, Any] | None:
     corners = [at(near_m, -side_m), at(near_m, side_m), at(out_m, side_m), at(out_m, -side_m)]
     ring = [list(geo.frame.to_latlon(x, y)) for x, y in corners]
     return {"icao": found.icao, "runway": end.ident, "ring": [[round(a, 5), round(b, 5)] for a, b in ring]}
+
+
+def _gate(engine: Any) -> dict[str, Any] | None:
+    """The stand ground assigned at the destination, once it has."""
+    a = engine.state.assignments if engine is not None else None
+    geo = engine.geometry(engine.state.flight.destination) if a is not None and a.gate_index is not None else None
+    spot = next((s for s in geo.airport.parking if s.index == a.gate_index), None) if geo is not None else None
+    if spot is None:
+        return None
+    return {"icao": geo.airport.icao, "name": a.gate, "lat": spot.lat, "lon": spot.lon}
 
 
 def _area(area: Area, **flags: bool) -> dict[str, Any]:

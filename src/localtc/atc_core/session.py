@@ -52,6 +52,9 @@ class Assignments:
     approach: str | None = None  # display, e.g. "ILS RWY 14R"
     atis: str | None = None  # the origin's ATIS letter the pilot reported
     arrival_atis: str | None = None  # the destination's
+    departure_gate: str | None = None  # the stand the flight started from ("Gate B25")
+    gate: str | None = None  # the stand ground sent the arrival to
+    gate_index: int | None = None  # its parking spot, for the route and the map
 
 
 @dataclass

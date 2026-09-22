@@ -1,0 +1,129 @@
+"""The optional account's client, against a fake server: sign in, sync the logbook, sign out, delete."""
+
+import pytest
+
+from localtc.account import Account, AccountError, TokenStore
+from localtc.logbook import FlightRecord, Logbook
+
+
+class MemoryStore(TokenStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self._keyring = lambda: None  # never the real credential store in tests
+
+
+class FakeServer:
+    """Just enough of server/ to exercise the client."""
+
+    def __init__(self) -> None:
+        self.flights: dict[str, dict] = {}
+        self.tokens = {"good-token"}
+        self.requests: list[tuple[str, str, dict | None, dict]] = []
+
+    def __call__(self, method: str, url: str, body: dict | None, headers: dict) -> tuple[int, object]:
+        path = url.split("https://api.test", 1)[1]
+        self.requests.append((method, path, body, headers))
+        authed = headers.get("Authorization", "").removeprefix("Bearer ") in self.tokens
+        if path == "/v1/auth/login":
+            if body["password"] != "correct horse":
+                return 401, {"error": "Wrong email or password."}
+            return 200, {"token": "good-token", "user": {"email": body["email"]}}
+        if not authed:
+            return 401, {"error": "Sign in again."}
+        if path == "/v1/flights" and method == "POST":
+            for f in body["flights"]:
+                assert set(f) == set(FlightRecord.__dataclass_fields__) - {"synced_at"}  # summaries, nothing else
+                self.flights[f["id"]] = f
+            return 200, {"accepted": [f["id"] for f in body["flights"]]}
+        if path == "/v1/auth/logout":
+            self.tokens.discard("good-token")
+            return 200, {}
+        if path == "/v1/me" and method == "DELETE":
+            self.flights.clear()
+            return 200, {}
+        if path == "/v1/live":
+            return 200, {}
+        return 404, {"error": "no"}
+
+
+def record(i: int) -> FlightRecord:
+    return FlightRecord(id=f"f{i}", started_at=f"2026-09-{10 + i:02d}T10:00:00Z", ended_at=f"2026-09-{10 + i:02d}T12:00:00Z",
+                        origin="KSAN", destination="KPHX", air_min=60.0, landed=True)
+
+
+@pytest.fixture
+def setup(tmp_path):
+    book = Logbook(tmp_path / "logbook.db")
+    server = FakeServer()
+    return Account("https://api.test", store=MemoryStore(), transport=server, logbook=book), server, book
+
+
+def test_nothing_is_sent_until_signed_in(setup):
+    account, server, book = setup
+    book.add(record(1))
+    assert not account.signed_in
+    assert account.live({"active": True}) is False
+    with pytest.raises(AccountError):
+        account.sync()
+    assert server.requests == []
+
+
+def test_a_wrong_password_is_said_plainly(setup):
+    account, _, _ = setup
+    with pytest.raises(AccountError, match="Wrong email or password"):
+        account.login("pilot@example.com", "nope", "PC")
+    assert not account.signed_in
+
+
+def test_sign_in_and_sync_uploads_each_flight_once(setup):
+    account, server, book = setup
+    for i in range(1, 4):
+        book.add(record(i))
+    account.login("pilot@example.com", "correct horse", "PC")
+    assert account.signed_in and account.email == "pilot@example.com"
+    assert account.sync().uploaded == 3
+    assert set(server.flights) == {"f1", "f2", "f3"}
+    book.add(record(4))
+    assert account.sync().uploaded == 1
+    assert account.sync().uploaded == 0
+
+
+def test_a_token_revoked_on_the_website_signs_out_here(setup):
+    account, server, book = setup
+    account.login("pilot@example.com", "correct horse", "PC")
+    server.tokens.clear()
+    book.add(record(1))
+    with pytest.raises(AccountError):
+        account.sync()
+    assert not account.signed_in
+
+
+def test_signing_out_makes_every_flight_local_again(setup):
+    account, _, book = setup
+    book.add(record(1))
+    account.login("pilot@example.com", "correct horse", "PC")
+    account.sync()
+    account.logout()
+    assert not account.signed_in and len(book.unsynced()) == 1
+
+
+def test_deleting_the_account_keeps_the_local_logbook(setup):
+    account, server, book = setup
+    book.add(record(1))
+    account.login("pilot@example.com", "correct horse", "PC")
+    account.sync()
+    account.delete_account("correct horse")
+    assert server.flights == {} and not account.signed_in
+    assert [f.id for f in book.flights()] == ["f1"]
+
+
+def test_the_companion_gets_changes_not_a_stream(setup):
+    account, server, _ = setup
+    account.login("pilot@example.com", "correct horse", "PC")
+    status = {"active": True, "phase": "CRUISE"}
+    assert account.live(status, now=100.0)
+    assert not account.live(status, now=200.0)  # nothing changed
+    assert not account.live({**status, "phase": "ARRIVAL"}, now=101.0)  # too soon
+    assert account.live({**status, "phase": "ARRIVAL"}, now=101.0, force=True)  # a handoff: at once
+    live = [r for r in server.requests if r[1] == "/v1/live"]
+    assert len(live) == 2 and all("lat" not in r[2] for r in live)

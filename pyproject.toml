@@ -21,6 +21,8 @@ dependencies = [
     "piper-tts>=1.3",
     # The app's window (Edge WebView2, built into Windows 10/11). Elsewhere the app opens in the browser.
     "pywebview>=5.3; sys_platform == 'win32'",
+    # The optional account's sign-in, kept in Windows Credential Manager / the macOS Keychain.
+    "keyring>=25",
 ]
 
 [project.optional-dependencies]
@@ -61,6 +63,7 @@ forbidden_modules = [
     "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config", "localtc.copilot",
     "localtc.dsp", "localtc.llm", "localtc.recorder", "localtc.replay", "localtc.scenario", "localtc.sim_bridge",
     "localtc.stt", "localtc.tts", "localtc.ui", "localtc.flightplan", "localtc.models",
+    "localtc.account", "localtc.logbook", "localtc.update",
 ]
 
 [[tool.importlinter.contracts]]
@@ -98,4 +101,11 @@ source_modules = ["localtc.atc_core"]
 forbidden_modules = [
     "localtc.app", "localtc.cli", "localtc.copilot", "localtc.dsp", "localtc.llm", "localtc.recorder",
     "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.stt", "localtc.tts", "localtc.voice",
+    "localtc.account", "localtc.logbook", "localtc.update",
 ]
+
+[[tool.importlinter.contracts]]
+name = "The ATC never reaches the network: accounts, the logbook and updates stay outside it"
+type = "forbidden"
+source_modules = ["localtc.atc_core", "localtc.stt", "localtc.tts", "localtc.dsp", "localtc.copilot", "localtc.llm"]
+forbidden_modules = ["localtc.account", "localtc.update", "localtc.ui"]

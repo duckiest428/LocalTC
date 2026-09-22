@@ -62,12 +62,27 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 | **Quick Settings** | Performance profiles and the models (language model, Whisper size, ATC voice), each with its speed, quality and size, a **Download** button and a voice **Preview**. Also the push-to-talk key (press **Change**, then the key), yoke button, microphone, speakers, volume and speed, the copilot, ATC options, and developer mode. |
 | **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. **ATC zones** (on by default) draws who controls what: the enroute centres on your route, the departure and approach areas, each airport's Clearance, Ground, Tower and Dep/App, the tower's zone, and the stretch of final where approach clears you and sends you to tower. These are the same outlines ATC hands you over at, so the map explains every handoff; the one you're talking to and the one you're about to be sent to are highlighted. |
 | **Airport Lookup** | Frequencies, runways (length, heading, ILS) and taxiways for any airport a flight has visited. During a flight, any other ICAO is fetched from the sim. |
+| **Logbook** | Every live flight, kept on this computer: date, callsign, route, air and block time, the landing rate, and totals (hours, airports, distance, readbacks right). |
 
 - **New Flight**: import your latest **SimBrief** plan (username or Pilot ID), or type one in (**Manual**). Then **Save and start flight**.
 - **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
 - **Talk**: hold your push-to-talk key (Right Ctrl by default) or the headset button next to the text box. You can also type a call and press Enter.
 - **ATC** switch: ATC's voice on or off (text only). **Copilot** switch: the copilot works the radio with ATC.
 - **Developer mode** (Quick Settings): every flight is recorded with its audio. **Mark** notes the moment something goes wrong, and **Export session** zips the recording, logs, settings and flight plan into your Downloads folder, ready to send.
+
+### The logbook and the optional account
+
+When a live flight ends, LocalTC writes a line to the logbook (`%LOCALAPPDATA%\LocalTC\logbook.db`):
+airports, gates, runways, block and air time, distance flown, highest altitude, the vertical speed at
+touchdown, and how many readbacks and alerts there were. It needs no account and nothing leaves the computer.
+Turn it off with `[logbook] enabled = false`.
+
+An **account is optional** (Quick Settings → Account). It copies those logbook lines to
+[localtc.tech](https://localtc.tech/dashboard.html), where there are totals, a map of the airports and routes,
+an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
+and next, and ATC's last call). It never sends your position, voice, transcripts, recordings or settings. The
+sign-in is kept in Windows Credential Manager (or the macOS Keychain), not in a file. The server is in
+[`server/`](server/README.md).
 
 Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Only the changes from
 `config/localtc.toml` are written, and the command line uses them too.

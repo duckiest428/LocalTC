@@ -46,6 +46,7 @@ function connect() {
   on("ptt", (p) => $("#btn-ptt").classList.toggle("down", p.down));
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); });
+  on("account", (a) => { S.account = a; Settings.account(); });
   on("dev", (d) => Dev.event(d));
   on("airport", ({ icao }) => {  // the flight fetched an airport's layout: draw it if it's on the route
     const wanted = [S.state.plan?.origin, S.state.plan?.destination, S.flight.origin, S.flight.destination];
@@ -250,6 +251,7 @@ function showTab(name) {
   if (name === "settings") Settings.load();
   if (name === "map") MapView.show();
   if (name === "lookup") Lookup.show();
+  if (name === "logbook") Logbook.load();
 }
 $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
 $("#btn-settings").onclick = () => showTab("settings");
@@ -377,6 +379,41 @@ function keyLabel(name) {
   if (!name) return "none";
   return labels[name] || (name.length === 1 ? name.toUpperCase() : name.replace(/^f(\d+)$/, "F$1").replace(/_/g, " "));
 }
+
+/* ---------- Logbook ---------- */
+
+const Logbook = {
+  async load() {
+    const body = $("#logbook-body");
+    try { this.render(await api("logbook")); } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+  },
+  render(r) {
+    const t = r.totals;
+    const hm = (min) => (min == null ? "—" : `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, "0")}`);
+    const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    const stat = (v, k) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`;
+    $("#logbook-body").innerHTML = `
+      <div class="stats">
+        ${stat(t.flights, "flights")}${stat(t.air_hours, "hours flown")}${stat(t.airports.length, "airports")}
+        ${stat(t.distance_nm.toLocaleString(), "nm")}${stat(t.average_landing_fpm == null ? "—" : `${t.average_landing_fpm}`, "avg landing fpm")}
+        ${stat(t.readback_accuracy == null ? "—" : `${Math.round(t.readback_accuracy * 100)}%`, "readbacks right")}
+      </div>
+      ${r.flights.length ? `<table class="lb"><thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead><tbody>
+        ${r.flights.map((f) => `<tr title="${esc([f.aircraft, f.departure_gate && `from ${f.departure_gate}`, f.arrival_gate && `to ${f.arrival_gate}`, f.max_alt_ft && `max ${f.max_alt_ft.toLocaleString()} ft`, `${f.distance_nm} nm`].filter(Boolean).join(" · "))}">
+          <td>${esc(day(f.started_at))}</td><td class="mono">${esc(f.callsign || "—")}</td>
+          <td class="mono">${esc(f.origin || "?")} → ${esc(f.destination || "?")}${f.landed ? "" : ' <span class="muted small">(no landing)</span>'}</td>
+          <td class="mono">${hm(f.air_min)}</td><td class="mono">${hm(f.block_min)}</td>
+          <td class="mono">${f.landing_vs_fpm == null ? "—" : `${f.landing_vs_fpm} fpm`}</td>
+          <td><span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
+            <button class="linkbtn" data-del="${esc(f.id)}" title="Delete from this computer">&times;</button></td></tr>`).join("")}
+      </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
+      <p class="muted small pad">The logbook is kept on this computer (${t.flights} flight${t.flights === 1 ? "" : "s"}).
+        An optional account in Quick Settings can copy it to localtc.tech.</p>`;
+    $$("[data-del]").forEach((b) => (b.onclick = () => {
+      if (confirm("Delete this flight from the logbook on this computer?")) api("logbook/delete", { id: b.dataset.del }).then((v) => this.render(v)).catch(fail);
+    }));
+  },
+};
 
 /* ---------- Quick Settings ---------- */
 
@@ -527,6 +564,8 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-tiles" ${st.ui.map_tiles ? "checked" : ""}> Map background from OpenStreetMap (needs the internet)</label>
       </div>
 
+      <div class="card" id="s-account-card"></div>
+
       <div class="card" id="s-update-card"></div>
 
       <div class="card">
@@ -542,6 +581,7 @@ const Settings = {
     this.wire();
     this.jobs(S.state.jobs || {});
     this.update(S.state.update);
+    api("account").then((a) => { S.account = a; this.account(); }).catch(() => {});
     if (st.ui.dev_mode) this.sessions();
   },
   wire() {
@@ -630,6 +670,52 @@ const Settings = {
     if ($("#u-download")) $("#u-download").onclick = () => api("update/download", {}).catch(fail);
     if ($("#u-install")) $("#u-install").onclick = () => api("update/install", {}).catch(fail);
     $("#u-mode").onchange = async (e) => { if (await this.save("ui", "updates", e.target.value)) this.update(u); };
+  },
+  account() {
+    const card = $("#s-account-card"), a = S.account;
+    if (!card || !a) return;
+    if (!a.signed_in) {
+      card.innerHTML = `
+        <h3>Account <span class="muted small">(optional)</span></h3>
+        <p class="muted small">LocalTC works fully without one, and your logbook stays on this computer either way.
+          An account copies the logbook to <a href="${esc(a.dashboard)}" target="_blank" rel="noopener">localtc.tech</a>
+          and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while
+          you fly, the phase and frequencies: never your position, voice, transcripts or recordings.</p>
+        <div class="row"><label>Email<input id="a-email" type="email" autocomplete="username" spellcheck="false"></label>
+          <label>Password<input id="a-password" type="password" autocomplete="current-password"></label></div>
+        <div class="row"><button class="btn small primary" id="a-login">Sign in</button>
+          <button class="btn small" id="a-register">Create account</button>
+          <button class="btn small" id="a-reset">Forgot password</button></div>
+        <p class="small muted" id="a-msg"></p>`;
+      const creds = () => ({ email: $("#a-email").value.trim(), password: $("#a-password").value });
+      const msg = (t, err) => { $("#a-msg").textContent = t; $("#a-msg").className = `small ${err ? "error" : "muted"}`; };
+      $("#a-login").onclick = () => api("account/login", creds()).then((v) => { S.account = v; this.account(); toast("Signed in"); }).catch((e) => msg(e.message, true));
+      $("#a-register").onclick = () => {
+        const c = creds();
+        if (c.password.length < 10) { msg("Use at least 10 characters for the password.", true); return; }
+        api("account/register", c).then((v) => msg(v.message)).catch((e) => msg(e.message, true));
+      };
+      $("#a-reset").onclick = () => api("account/reset", { email: creds().email }).then((v) => msg(v.message)).catch((e) => msg(e.message, true));
+      return;
+    }
+    card.innerHTML = `
+      <h3>Account</h3>
+      <div class="row"><span>Signed in as <b>${esc(a.email || "")}</b></span>
+        <a class="btn small" href="${esc(a.dashboard)}" target="_blank" rel="noopener">Open dashboard</a></div>
+      <label class="check-row"><input type="checkbox" id="a-sync" ${a.sync ? "checked" : ""}> Copy each flight's logbook line to my account</label>
+      <label class="check-row"><input type="checkbox" id="a-companion" ${a.companion ? "checked" : ""}> Show the flight in the companion app (phase, frequencies, ATC's last call)</label>
+      <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
+        <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
+      <div class="row"><button class="btn small" id="a-logout">Sign out</button>
+        <button class="btn small danger" id="a-delete">Delete account</button></div>`;
+    $("#a-sync").onchange = (e) => this.save("account", "sync", e.target.checked).then(() => (a.sync = e.target.checked));
+    $("#a-companion").onchange = (e) => this.save("account", "companion", e.target.checked).then(() => (a.companion = e.target.checked));
+    $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
+    $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
+    $("#a-delete").onclick = () => {
+      const password = prompt("Deleting the account removes it and every flight synced to it from the server, for good. Your logbook on this computer stays.\n\nType your password to delete the account:");
+      if (password) api("account/delete", { password }).then((v) => { S.account = v; this.account(); toast("Account deleted"); }).catch(fail);
+    };
   },
   captureKey() {
     const cap = $("#s-key"), hint = $("#s-key-hint");

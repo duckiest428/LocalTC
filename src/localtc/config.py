@@ -73,6 +73,21 @@ class RecorderConfig(_Section):
     compress: bool = False
 
 
+class LogbookConfig(_Section):
+    """The logbook: a line per live flight, kept on this computer (see localtc.logbook)."""
+
+    enabled: bool = True
+
+
+class AccountConfig(_Section):
+    """The optional account (see localtc.account). Nothing is sent anywhere until the pilot signs in."""
+
+    api_url: str = "https://api.localtc.tech"
+    dashboard_url: str = "https://localtc.tech/dashboard.html"
+    sync: bool = True  # upload new logbook lines after each flight, when signed in
+    companion: bool = True  # the flight's status for the companion app, when signed in
+
+
 class RouteFix(msgspec.Struct, frozen=True, kw_only=True):
     """A fix of the filed route, as ATC needs it (see atc_core.route)."""
 
@@ -196,6 +211,8 @@ class Config(_Section):
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)
+    logbook: LogbookConfig = msgspec.field(default_factory=LogbookConfig)
+    account: AccountConfig = msgspec.field(default_factory=AccountConfig)
     ui: UiConfig = msgspec.field(default_factory=UiConfig)
 
 

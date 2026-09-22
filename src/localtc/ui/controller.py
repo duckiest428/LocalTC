@@ -62,6 +62,7 @@ from localtc.sim_api import (
     encode_event,
 )
 from localtc.ui.server import EventStream, HttpError, sse
+from localtc.ui.pilot import PilotRoutes
 from localtc.ui.updates import Updates
 
 log = logging.getLogger(__name__)
@@ -105,6 +106,8 @@ class AppController:
         self._airport_waiters: dict[str, list[asyncio.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._last_recording: Path | None = None
+        self.pilot = PilotRoutes(lambda: self.cfg, self.publish)
+        self._last_atc: AtcTransmission | None = None
         self.updates = Updates(lambda: self.cfg.ui.updates, self.publish, lambda: self.live is not None)
 
     # --- wiring ---------------------------------------------------------------------------------------------
@@ -140,6 +143,7 @@ class AppController:
             (post, "update/check"): self.api_update_check,
             (post, "update/download"): self.api_update_download,
             (post, "update/install"): self.api_update_install,
+            **self.pilot.routes(),
         }
 
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -233,6 +237,8 @@ class AppController:
                                           on_ready=self._on_ready)
             self._last_recording = recording or self._last_recording
             self.system(f"Flight ended. Recording: {recording}" if recording else "Flight ended.")
+            asyncio.create_task(self.pilot.live({"active": False}, force=True))
+            asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
             self._set_status("idle")
         except asyncio.CancelledError:
             self._set_status("idle")
@@ -274,6 +280,7 @@ class AppController:
             try:
                 self.flight = self.flight_view()
                 self.publish("flight", self.flight)
+                await self.pilot.live(self.companion_view())
             except Exception:
                 log.exception("Flight view failed")
             await asyncio.sleep(FLIGHT_EVERY_S)
@@ -343,9 +350,25 @@ class AppController:
         elif isinstance(ev, PttPressed | PttReleased):
             self.publish("ptt", {"down": isinstance(ev, PttPressed)})
         elif isinstance(ev, PhaseChanged | RadioTuned | AtcTransmission):
+            if isinstance(ev, AtcTransmission):
+                self._last_atc = ev
             if self.live is not None and self.live.engine is not None:
                 self.flight = self.flight_view()
                 self.publish("flight", self.flight)
+                asyncio.create_task(self.pilot.live(self.companion_view(), force=not isinstance(ev, AtcTransmission)))
+
+    def companion_view(self) -> dict:
+        """What the companion app shows: the flight's phase, who to talk to, and ATC's last words. No position."""
+        f = self.flight or {}
+        atc = self._last_atc
+        return {
+            "active": True, "callsign": f.get("callsign"), "aircraft": f.get("aircraft"),
+            "origin": f.get("origin"), "destination": f.get("destination"), "phase": f.get("phase"),
+            "phase_label": f.get("phase_label"), "squawk": f.get("squawk"), "altitude_ft": f.get("altitude_ft"),
+            "runway": f.get("runway"), "tuned": _station(f.get("tuned")), "next": _station(f.get("expected")),
+            "ete": f.get("ete"),
+            "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
+        }
 
     # --- the page's calls ----------------------------------------------------------------------------------------
 
@@ -905,3 +928,7 @@ class _UiLogHandler(logging.Handler):
 
 
 __all__ = ["AppController", "airport_detail", "airport_summary", "export_report", "load_airport", "radio_line"]
+
+
+def _station(facility: dict | None) -> dict | None:
+    return {"station": facility.get("station"), "mhz": facility.get("mhz")} if facility else None

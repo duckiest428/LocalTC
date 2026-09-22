@@ -1,0 +1,52 @@
+# The optional LocalTC account server. See README.md for setting it up on a Cloudflare account.
+name = "localtc-api"
+main = "src/index.ts"
+compatibility_date = "2026-08-15"
+compatibility_flags = ["nodejs_compat"]
+
+# api.localtc.tech -> this Worker. Needs the localtc.tech zone on the same Cloudflare account.
+routes = [{ pattern = "api.localtc.tech", custom_domain = true }]
+
+[vars]
+SITE_URL = "https://localtc.tech"
+ALLOWED_ORIGINS = "https://localtc.tech,https://www.localtc.tech"
+COOKIE_DOMAIN = ".localtc.tech"
+MAIL_FROM = "LocalTC <accounts@localtc.tech>"
+EMAIL_MODE = "resend"  # "resend" sends with Resend (RESEND_API_KEY secret); "log" prints links (local dev)
+APNS_HOST = "api.push.apple.com"  # api.sandbox.push.apple.com for development builds of the iOS app
+APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the APNS_* secrets are set
+# Secrets (wrangler secret put NAME): RESEND_API_KEY, APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY
+
+[[d1_databases]]
+binding = "DB"
+database_name = "localtc"
+database_id = "REPLACE_WITH_THE_ID_FROM_wrangler_d1_create"
+migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveRoom"]
+
+# Daily: expired sessions and links, old rate-limit counters, accounts never confirmed.
+[triggers]
+crons = ["17 3 * * *"]
+
+[env.dev.vars]
+SITE_URL = "http://localhost:8000"
+ALLOWED_ORIGINS = "http://localhost:8000"
+COOKIE_DOMAIN = ""
+EMAIL_MODE = "log"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "localtc"
+database_id = "local-dev"
+migrations_dir = "migrations"
+
+[[env.dev.durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveRoom"

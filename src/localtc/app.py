@@ -188,6 +188,7 @@ async def run_session(
     typed_task: asyncio.Task | None = None
     voice = speaker = None
     engine = atc_service = None
+    flight_log = None
     try:
         if record:
             recorder = Recorder.create(
@@ -205,6 +206,12 @@ async def run_session(
             consumers.append(asyncio.create_task(_dispatch(bus.subscribe(), on_event)))
         if session.source_kind == "live":
             consumers.append(asyncio.create_task(_cache_airports(bus.subscribe(AirportData), AirportCache())))
+        flight_log = None
+        if session.source_kind == "live" and cfg.logbook.enabled:
+            from localtc.logbook import FlightLog
+
+            flight_log = FlightLog()
+            consumers.append(asyncio.create_task(_dispatch(bus.subscribe(), flight_log.feed)))
         if cfg.atc.enabled:
             from localtc.airports import load_airport_dir
             from localtc.atc_core.service import AtcService
@@ -259,7 +266,22 @@ async def run_session(
         if recorder is not None:
             await recorder.close()
             log.info("Recording saved to %s", recorder.session_dir)
+        if flight_log is not None:
+            _save_flight(flight_log, engine)
     return recorder.session_dir if recorder else None
+
+
+def _save_flight(flight_log, engine: object | None) -> None:
+    """The flight's line in the logbook, if it went anywhere. A failure here must not lose the session."""
+    from localtc.logbook import Logbook
+
+    try:
+        record = flight_log.finish(engine)
+        if record is not None:
+            Logbook().add(record)
+            log.info("Logbook: %s %s -> %s", record.callsign, record.origin or "?", record.destination or "?")
+    except Exception:
+        log.exception("Couldn't write the logbook")
 
 
 @dataclass

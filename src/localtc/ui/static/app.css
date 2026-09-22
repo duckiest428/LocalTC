@@ -293,3 +293,16 @@ tr.tunable:hover td { background: var(--panel-2); }
 
 /* Updates: the release notes */
 pre.notes { white-space: pre-wrap; font: inherit; margin: 6px 0; max-height: 220px; overflow: auto; }
+
+/* Logbook */
+.logbook { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.stat { background: #262a2f; border: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: column; }
+.stat b { font-size: 18px; color: #eef1f4; font-family: var(--mono); }
+.stat span { font-size: 11px; color: var(--muted); }
+table.lb td { white-space: nowrap; }
+.sync.on { color: var(--green); }
+.linkbtn { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 4px; }
+.linkbtn:hover { color: #e2574c; }
+.btn.danger { color: #ff8a80; border-color: #6b3a36; }
+.error:not(.dot) { color: var(--red); }

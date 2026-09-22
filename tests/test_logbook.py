@@ -41,6 +41,7 @@ def test_the_flight_is_summed_up(ksan_kphx):
     assert -1000 < r.landing_vs_fpm < 0
     assert r.readbacks > 10 and 0 < r.readbacks_correct <= r.readbacks
     assert r.departure_gate  # it pushed back from a gate at San Diego
+    assert abs(r.origin_lat - 32.73) < 0.05 and abs(r.destination_lon + 112.01) < 0.05
 
 
 def test_nothing_is_logged_for_a_session_that_never_moved():

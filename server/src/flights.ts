@@ -16,6 +16,10 @@ const NUMBERS: Record<string, [number, number, boolean]> = {
   readbacks: [0, 100000, false],
   readbacks_correct: [0, 100000, false],
   alerts: [0, 100000, false],
+  origin_lat: [-90, 90, true],
+  origin_lon: [-180, 180, true],
+  destination_lat: [-90, 90, true],
+  destination_lon: [-180, 180, true],
 };
 const COLUMNS = ["id", "started_at", "ended_at", ...TEXT, ...Object.keys(NUMBERS), "landed"];
 
@@ -92,11 +96,11 @@ export async function stats(env: Env, auth: Auth): Promise<Response> {
      FROM flights WHERE user_id = ?1`,
   ).bind(auth.user.id).first<Record<string, number | null>>();
   const { results: airports } = await env.DB.prepare(
-    `SELECT icao, COUNT(*) AS visits FROM (
-       SELECT origin AS icao FROM flights WHERE user_id = ?1 AND origin != ''
-       UNION ALL SELECT destination FROM flights WHERE user_id = ?1 AND destination != '')
+    `SELECT icao, COUNT(*) AS visits, MAX(lat) AS lat, MAX(lon) AS lon FROM (
+       SELECT origin AS icao, origin_lat AS lat, origin_lon AS lon FROM flights WHERE user_id = ?1 AND origin != ''
+       UNION ALL SELECT destination, destination_lat, destination_lon FROM flights WHERE user_id = ?1 AND destination != '')
      GROUP BY icao ORDER BY visits DESC, icao`,
-  ).bind(auth.user.id).all<{ icao: string; visits: number }>();
+  ).bind(auth.user.id).all<{ icao: string; visits: number; lat: number | null; lon: number | null }>();
   const { results: routes } = await env.DB.prepare(
     `SELECT origin, destination, COUNT(*) AS flights FROM flights
      WHERE user_id = ?1 AND origin != '' AND destination != '' GROUP BY origin, destination ORDER BY flights DESC LIMIT 200`,

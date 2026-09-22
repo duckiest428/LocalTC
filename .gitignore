@@ -19,3 +19,6 @@ config/localtc.toml
 
 # Made by the installer on Windows
 /LocalTC.cmd
+
+# Built by tools/build_site.py when the site is published
+/site/changelog.html

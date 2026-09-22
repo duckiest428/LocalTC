@@ -43,6 +43,7 @@ export function flight(id: string, extra: Record<string, unknown> = {}): Record<
     id, started_at: "2026-09-20T21:26:00Z", ended_at: "2026-09-20T22:46:38Z", callsign: "FFT2084", aircraft: "A320neo",
     origin: "KSAN", destination: "KPHX", departure_gate: "Gate 17", arrival_gate: "Gate C14", departure_runway: "27",
     arrival_runway: "26", block_min: 65.0, air_min: 51.8, distance_nm: 321.1, max_alt_ft: 36246, landing_vs_fpm: -235,
-    readbacks: 23, readbacks_correct: 22, alerts: 2, landed: true, ...extra,
+    readbacks: 23, readbacks_correct: 22, alerts: 2, landed: true,
+    origin_lat: 32.7336, origin_lon: -117.1897, destination_lat: 33.4343, destination_lon: -112.0116, ...extra,
   };
 }

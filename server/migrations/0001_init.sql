@@ -52,6 +52,10 @@ CREATE TABLE flights (
   readbacks_correct INTEGER NOT NULL DEFAULT 0,
   alerts INTEGER NOT NULL DEFAULT 0,
   landed INTEGER NOT NULL DEFAULT 0,
+  origin_lat REAL,                  -- the airports' reference points, for the map; not the aircraft's position
+  origin_lon REAL,
+  destination_lat REAL,
+  destination_lon REAL,
   received_at TEXT NOT NULL,
   PRIMARY KEY (user_id, id)
 );

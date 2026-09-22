@@ -686,6 +686,8 @@ const Settings = {
         <div class="row"><button class="btn small primary" id="a-login">Sign in</button>
           <button class="btn small" id="a-register">Create account</button>
           <button class="btn small" id="a-reset">Forgot password</button></div>
+        <p class="small muted">Creating an account means agreeing to the <a href="https://localtc.tech/terms.html#account" target="_blank" rel="noopener">terms</a>
+          and <a href="https://localtc.tech/privacy.html#account" target="_blank" rel="noopener">privacy policy</a> (16 or over).</p>
         <p class="small muted" id="a-msg"></p>`;
       const creds = () => ({ email: $("#a-email").value.trim(), password: $("#a-password").value });
       const msg = (t, err) => { $("#a-msg").textContent = t; $("#a-msg").className = `small ${err ? "error" : "muted"}`; };

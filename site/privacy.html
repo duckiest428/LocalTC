@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy — LocalTC</title>
-<meta name="description" content="What LocalTC's website and software do with your data: as close to nothing as it is possible to get.">
+<meta name="description" content="What LocalTC's website, software and optional account do with your data. Without an account: nothing.">
 <meta name="robots" content="index, follow">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -26,130 +26,197 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Nothing. Last updated 21 September 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 22 September 2026.</p>
 
   <p>
-    LocalTC is a hobby project, not a company. It has no servers, no accounts and no analytics. The
-    long version is below, split into the two things that could plausibly touch your data: this
-    website, and the program you install.
+    LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
+    is one optional thing that involves a server, the account behind the online logbook and the
+    companion app, and it only exists for you if you create one. This policy covers this website, the
+    program you install, and that optional account.
   </p>
 
   <div class="note">
     <p>
-      <strong>The short version.</strong> This website stores nothing on your device and collects
-      nothing about you. The software processes your voice entirely on your own computer and sends
-      it nowhere. Neither one has any way to identify you, so there is no profile to see, export or
-      delete.
+      <strong>The short version.</strong> This website stores nothing on your device and runs no
+      analytics. The software processes your voice entirely on your own computer and sends it nowhere.
+      Once a day it asks GitHub whether there's a new version, and you can turn that off. If you create
+      an account, we store your email address, a hash of your password and a summary of each flight you
+      sync, never your position, voice, transcripts or recordings, and you can export or delete all of
+      it yourself at any time.
     </p>
   </div>
 
   <h2>1. This website</h2>
   <p>
-    The site is a handful of static files. There are no cookies, no local or session storage, no
-    analytics, no tag manager, no advertising, no tracking pixels and no embedded third-party
-    content. The two fonts are served from this site rather than from a font CDN, specifically so
-    that loading the page does not tell anyone else that you did.
-  </p>
-  <p>
-    There is no form, no sign-up, no newsletter and no comment box anywhere on it, so there is
-    nothing for you to submit and nothing for us to store.
+    The site is a handful of static files. There are no analytics, no tag manager, no advertising, no
+    tracking pixels and no embedded third-party content. The two fonts are served from this site rather
+    than from a font CDN, so loading the page does not tell anyone else that you did. There are no
+    cookies and nothing in local or session storage, with one exception: if you sign in to the
+    <a href="dashboard.html">logbook</a>, the account server sets one sign-in cookie (see
+    <a href="cookies.html">the cookie policy</a>). Only the logbook page talks to that server, and only
+    when you use it.
   </p>
 
   <h3>Hosting</h3>
   <p>
-    The site is hosted on GitHub Pages. To serve a page to you, GitHub necessarily handles technical
-    data such as your IP address, the browser you use and the time of the request, and may retain
-    it to keep the service running and to prevent abuse. That processing is GitHub's, under the
+    The site is hosted on GitHub Pages and served through Cloudflare. To deliver a page, they handle
+    technical data such as your IP address, your browser and the time of the request, and may keep it
+    for a short time to run the service and stop abuse. That processing is theirs, under the
     <a href="https://docs.github.com/site-policy/privacy-policies/github-privacy-statement" rel="noopener">GitHub
-    Privacy Statement</a>. GitHub Pages gives the owner of a site no access to those logs and no
-    visitor statistics, so we never see any of it.
+    Privacy Statement</a> and the <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare
+    Privacy Policy</a>. We don't use their visitor statistics.
   </p>
 
   <h3>Links that leave</h3>
   <p>
-    Links to GitHub, Buy Me a Coffee and other sites are ordinary links: nothing is loaded from
-    those services until you click. Once you do, you are on their site under their policies. If you
-    choose to donate, Buy Me a Coffee handles the entire transaction — your payment details never
-    pass through this site and are never seen by the author, who sees only what Buy Me a Coffee
-    shows a creator: a name or handle, an amount and any message you write.
+    Links to GitHub, Buy Me a Coffee and other sites are ordinary links: nothing is loaded from those
+    services until you click. If you donate, Buy Me a Coffee handles the whole transaction; your payment
+    details never pass through this site, and the author sees only what Buy Me a Coffee shows a creator:
+    a name or handle, an amount and any message you write.
   </p>
 
   <h2>2. The software</h2>
-  <p>
-    LocalTC runs on your computer and is built to keep working with the network cable pulled out.
-  </p>
+  <p>LocalTC runs on your computer and is built to keep working with the network cable pulled out.</p>
   <ul>
     <li>
-      <strong>Your voice</strong> is captured by push-to-talk and transcribed on your own CPU or
-      GPU. It is never uploaded, and there is nowhere for it to be uploaded to.
+      <strong>Your voice</strong> is captured by push-to-talk and transcribed on your own CPU or GPU. It
+      is never uploaded.
     </li>
     <li>
       <strong>The language model</strong> runs locally through Ollama, on
-      <code class="inline">127.0.0.1</code> — your own machine talking to itself.
+      <code class="inline">127.0.0.1</code>: your own machine talking to itself.
     </li>
     <li>
-      <strong>Recordings, logs and settings</strong> are written to your own disk, under
-      <code class="inline">%LOCALAPPDATA%\LocalTC</code> and the project's
-      <code class="inline">recordings</code> folder. They are yours: nothing reads them but you, and
-      deleting them is deleting them.
+      <strong>Recordings, logs, settings and the logbook</strong> are written to your own disk, under
+      <code class="inline">%LOCALAPPDATA%\LocalTC</code> and the <code class="inline">recordings</code>
+      folder. Nothing reads them but you.
     </li>
     <li>
-      <strong>There is no telemetry</strong>, no crash reporting, no usage counting, no update check
-      and no licence check.
+      <strong>There is no telemetry</strong>, no crash reporting, no usage counting and no licence check.
     </li>
   </ul>
 
-  <h3>The connections it does make</h3>
-  <p>These are the only times LocalTC reaches the network, and each one is something you asked for:</p>
+  <h3>The connections it makes</h3>
   <ul>
     <li>
-      <strong>Setup.</strong> Downloading the speech model, the ATC voice and the language model from
-      the services that publish them. After that, flights work offline.
+      <strong>Setup.</strong> Downloading LocalTC, the speech model, the ATC voice and the language model
+      from the services that publish them (GitHub, PyPI, Hugging Face, Ollama). After that, flights work
+      offline.
     </li>
     <li>
-      <strong>SimBrief import,</strong> if you use it. The username or Pilot ID you type is sent from
-      your machine to SimBrief to fetch your own flight plan, and their privacy policy covers what
-      they do with it. Type a plan in by hand and this never happens.
+      <strong>The update check.</strong> At most once a day, the app asks GitHub's public API what the
+      latest release is. GitHub sees an ordinary request from your IP address with LocalTC's version in
+      it; nothing about you or your flights is sent. Turn it off in Quick Settings → Updates.
     </li>
+    <li>
+      <strong>SimBrief import,</strong> if you use it: the username or Pilot ID you type is sent to
+      SimBrief to fetch your own flight plan, under their privacy policy.
+    </li>
+    <li>
+      <strong>Map background,</strong> if it's on: the Live Map loads tiles from OpenStreetMap, which
+      sees which area of the map you're looking at. Turn it off in Quick Settings → Sim.
+    </li>
+    <li><strong>The optional account,</strong> if you create one: section 3.</li>
   </ul>
 
   <h3>Sending a bug report</h3>
   <p>
     Developer mode records your flight, including the audio of everything you said, and
-    <em>Export session</em> packs that into a zip in your Downloads folder. Nothing is sent anywhere
-    by the program. If you decide to attach that zip to a bug report, you are choosing to share your
-    voice recordings, your settings and your flight plan — it is worth opening it first to see what
-    is in it. Anything you post in a public issue is public, and held by GitHub.
+    <em>Export session</em> packs that into a zip in your Downloads folder. The program sends nothing.
+    If you attach that zip to a bug report, you are choosing to share your voice recordings, settings and
+    flight plan, so open it first to see what's in it. Anything posted in a public issue is public.
   </p>
 
-  <h2>3. Your rights</h2>
+  <h2 id="account">3. The optional account</h2>
   <p>
-    Privacy law gives you the right to see, correct, export and erase the personal data an
-    organisation holds about you. We hold none, so there is nothing to act on — which is the point.
-    If you have written to us on GitHub, that correspondence sits in GitHub's systems and their
-    privacy statement governs it.
+    An account copies your logbook to this website and lets the companion app follow your flight. You
+    don't need one for anything else, and creating one changes nothing about how LocalTC works.
+  </p>
+
+  <h3>What it stores, and why</h3>
+  <ul>
+    <li><strong>Your email address</strong>: to sign you in, and to send the confirmation and password-reset
+      emails. We send no newsletters or marketing.</li>
+    <li><strong>A hash of your password</strong> (PBKDF2-SHA256, salted). The password itself is never stored.</li>
+    <li><strong>Your signed-in devices</strong>: the kind (app, companion, browser), a name such as
+      "Firefox on Windows", and when each was last used, so you can sign them out. Only a hash of each
+      sign-in token is stored.</li>
+    <li><strong>A summary of each flight you sync</strong>: the date and times, callsign, aircraft type,
+      the departure and arrival airports and their published coordinates, gates and runways, block and air
+      time, distance flown, highest altitude, the vertical speed at touchdown, and how many readbacks
+      were right and alerts were raised.</li>
+    <li><strong>While you fly, if the companion is on</strong>: the phase of flight, the frequency you're
+      tuned to and the next one, and ATC's last transmission. Only the latest status is kept, and a new one
+      replaces it.</li>
+    <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
+    <li><strong>Short-lived counters</strong> of sign-in attempts per IP address and email address, to stop
+      password guessing. They're deleted within a day.</li>
+  </ul>
+  <p>
+    We never receive your position or track, your voice or transcripts, your recordings or your settings.
+    The server drops any field it doesn't expect.
+  </p>
+
+  <h3>Legal basis</h3>
+  <p>
+    Providing the account you asked for (performance of a contract, GDPR Art. 6(1)(b)). The rate-limit
+    counters are kept to keep accounts secure (legitimate interest, Art. 6(1)(f)).
+  </p>
+
+  <h3>Who processes it</h3>
+  <ul>
+    <li><strong>Cloudflare</strong> runs the account server and its database
+      (<a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">privacy policy</a>).</li>
+    <li><strong>Resend</strong> delivers the confirmation and password-reset emails
+      (<a href="https://resend.com/legal/privacy-policy" rel="noopener">privacy policy</a>).</li>
+    <li><strong>Apple</strong> delivers the companion app's notifications, if you turn them on.</li>
+  </ul>
+  <p>
+    These providers may process data in the United States and other countries, under their standard
+    contractual clauses. We don't sell, rent or share your data with anyone else, and nothing is used for
+    advertising.
+  </p>
+
+  <h3>How long</h3>
+  <p>
+    Until you delete it. An account whose email address is never confirmed is deleted after 7 days.
+    Sign-ins expire after 30 days on the website and a year in the apps; expired ones are deleted daily.
+  </p>
+
+  <h3>Your rights</h3>
+  <p>
+    You can see, export and delete everything yourself on the <a href="dashboard.html">logbook page</a>:
+    <b>Download my data</b> gives you all of it as a JSON file, individual flights can be deleted, and
+    <b>Delete everything</b> removes the account and all its data at once, for good. You also have the
+    right to correct your data, to object, and to complain to your data protection authority. For anything
+    you can't do yourself, contact us (section 6).
   </p>
 
   <h2>4. Children</h2>
   <p>
-    This site is not directed at children and knowingly collects nothing from anyone, of any age.
+    LocalTC isn't directed at children. Accounts are for people aged 16 or over; if you're younger, use
+    LocalTC without one, which works just the same.
   </p>
 
   <h2>5. Changes, and how to check</h2>
   <p>
-    If this policy changes, the date at the top changes with it. Every edit is in the public commit
-    history of the repository, so you can read exactly what changed and when.
+    If this policy changes, the date at the top changes with it, and every edit is in the public commit
+    history of the repository. If a change affects account holders, we'll email them before it takes
+    effect.
   </p>
   <p>
-    You do not have to take any of this on faith. Open your browser's developer tools on this page:
-    the network tab shows only files from this domain, and the storage tab is empty.
+    You don't have to take any of this on trust. The <a href="https://github.com/duckiest428/LocalTC" rel="noopener">source
+    code</a>, including the account server in <code class="inline">server/</code>, is public: what it
+    stores is written down in its database schema.
   </p>
 
   <h2>6. Contact</h2>
   <p>
-    Questions about any of this belong in
-    <a href="https://github.com/duckiest428/LocalTC/issues" rel="noopener">the project's issue
-    tracker</a>, where the answer helps the next person too.
+    LocalTC is maintained by its author, <a href="https://github.com/duckiest428" rel="noopener">duckiest428</a>
+    on GitHub, who is responsible for the account data. General questions belong in
+    <a href="https://github.com/duckiest428/LocalTC/issues" rel="noopener">the issue tracker</a>. For
+    anything about your own account, email <a href="mailto:privacy@localtc.tech">privacy@localtc.tech</a>
+    rather than posting in public.
   </p>
 
   <nav class="legal-nav">

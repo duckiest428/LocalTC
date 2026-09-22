@@ -1,12 +1,15 @@
 # The LocalTC website
 
-Static files, no build step and no dependencies.
+Static files and no dependencies. One page is built: `changelog.html`, from `CHANGELOG.md`, by
+`python tools/build_site.py` (the Pages workflow runs it; it isn't committed).
 
 ```
 index.html      the landing page
-privacy.html    what we know about you (nothing)
-terms.html      the AGPL, the no-warranty, the "not for real flight"
-cookies.html    there are none, and how to check
+privacy.html    what we know about you (nothing, without an account)
+terms.html      the AGPL, the no-warranty, the "not for real flight", the optional account
+cookies.html    there are none, except the logbook's sign-in cookie, and how to check
+dashboard.html  the optional account's logbook (dashboard.js): sign in, flights, stats, map, export, delete
+changelog.html  built from CHANGELOG.md
 styles.css      the whole design system
 app.js          reveals, the typing radio log, the subscription sum, copy buttons
 fonts/          Inter and JetBrains Mono, served from here on purpose
@@ -36,10 +39,13 @@ python3 -m http.server 8080 --directory site
 ## The rules it keeps
 
 - **No third-party requests.** Nothing is loaded from a CDN, an analytics service or a font host.
+  The one exception is the logbook page calling LocalTC's own account server, `api.localtc.tech`
+  (`server/`), and only while someone uses it.
   The fonts are files in `fonts/` for exactly this reason. Adding an embed or a script tag pointing
   somewhere else makes the privacy and cookie pages untrue, so don't, or change them first.
 - **No cookies and no browser storage.** Same reason. There is no consent banner because there is
-  nothing to consent to.
+  nothing to consent to. Signing in to the logbook sets one strictly necessary, HttpOnly cookie on
+  `api.localtc.tech`; the page itself stores nothing.
 - **Contrast.** Every text colour clears WCAG AA against the surface it sits on (4.5:1 for body,
   3:1 for large text). The three `--text*` tokens are the palette; new greys need checking.
 - **One radius scale** (`--r1`…`--r4`) and **elevation instead of borders**. If something needs

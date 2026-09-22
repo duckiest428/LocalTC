@@ -8,6 +8,8 @@ on:
     branches: [master]
     paths:
       - "site/**"
+      - "CHANGELOG.md"
+      - "tools/build_site.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -28,6 +30,11 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Changelog page
+        run: python tools/build_site.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

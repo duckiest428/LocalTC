@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cookies — LocalTC</title>
-<meta name="description" content="LocalTC's website sets no cookies and stores nothing in your browser, which is why it has no consent banner.">
+<meta name="description" content="LocalTC's website sets no cookies and stores nothing in your browser, except one strictly necessary sign-in cookie if you use the optional logbook.">
 <meta name="robots" content="index, follow">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -26,7 +26,7 @@
 <main class="legal">
   <p class="kicker">Cookie policy</p>
   <h1>There are no cookies.</h1>
-  <p class="updated">Last updated 21 September 2026.</p>
+  <p class="updated">Unless you sign in to the logbook. Last updated 22 September 2026.</p>
 
   <p>
     This is the whole policy: <strong>this website does not set cookies.</strong> It also writes
@@ -44,6 +44,24 @@
     </p>
   </div>
 
+  <h2 id="signin">The one exception: signing in to the logbook</h2>
+  <p>
+    If you sign in to the optional <a href="dashboard.html">logbook</a>, the account server sets one
+    cookie. Nothing is set until you do, and never if you don't have an account.
+  </p>
+  <ul>
+    <li><strong>Name:</strong> <code class="inline">ltc_session</code>, set by <code class="inline">api.localtc.tech</code> only.</li>
+    <li><strong>Purpose:</strong> keeping you signed in. It holds a random token; the server stores only a hash of it.</li>
+    <li><strong>Lifetime:</strong> 30 days, or until you sign out, which deletes it.</li>
+    <li><strong>Type:</strong> strictly necessary. <code class="inline">HttpOnly</code> (the page's scripts can't read it),
+      <code class="inline">Secure</code> (HTTPS only) and <code class="inline">SameSite=Lax</code>. It's never used for
+      tracking or shared with anyone.</li>
+  </ul>
+  <p>
+    Because it's strictly necessary for something you asked for, it doesn't need a consent banner. The
+    logbook page stores nothing else: no local storage, no analytics.
+  </p>
+
   <h2>What that means in practice</h2>
   <ul>
     <li><strong>No analytics.</strong> No Google Analytics, Plausible, Fathom or anything else. Nobody counts you.</li>
@@ -59,8 +77,8 @@
     (<code class="inline">F12</code>, or Cmd&#8209;Option&#8209;I) and look:
   </p>
   <ul>
-    <li>The <strong>Application</strong> (or <strong>Storage</strong>) tab: cookies, local storage and session storage are all empty for this domain.</li>
-    <li>The <strong>Network</strong> tab: every request goes to this domain. Nothing is fetched from anywhere else.</li>
+    <li>The <strong>Application</strong> (or <strong>Storage</strong>) tab: cookies, local storage and session storage are all empty for this domain (and for <code class="inline">api.localtc.tech</code>, until you sign in to the logbook).</li>
+    <li>The <strong>Network</strong> tab: every request goes to this domain. Nothing is fetched from anywhere else, except the logbook page's calls to <code class="inline">api.localtc.tech</code>.</li>
   </ul>
   <p>
     The source of this page is public, so you can also just

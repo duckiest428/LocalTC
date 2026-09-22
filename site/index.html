@@ -6,7 +6,7 @@
 <title>LocalTC — offline ATC for Microsoft Flight Simulator 2024</title>
 <meta name="description" content="Free, open-source air traffic control for MSFS 2024. Runs entirely on your PC: local speech recognition, local voices, a local language model. No cloud, no API keys, no subscription.">
 <meta property="og:title" content="LocalTC — offline ATC for MSFS 2024">
-<meta property="og:description" content="Real ATC that runs on your own machine. No cloud, no account, no monthly fee.">
+<meta property="og:description" content="Real ATC that runs on your own machine. No cloud, no account needed, no monthly fee.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://duckiest428.github.io/LocalTC/og.png">
 <meta property="og:image:width" content="1200">
@@ -25,6 +25,8 @@
     <a href="#why">Why not a subscription</a>
     <a href="#install">Install</a>
     <a href="#status">Status</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="dashboard.html">Logbook</a>
   </nav>
   <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
 </header>
@@ -43,7 +45,7 @@
         voice, real phraseology and readbacks that are actually checked. Speech recognition, the
         voices and the language model all run on your own machine.
       </p>
-      <p class="lede lede-strong">No cloud. No account. No API keys. No monthly fee. Ever.</p>
+      <p class="lede lede-strong">No cloud. No account needed. No API keys. No monthly fee. Ever.</p>
       <div class="cta">
         <a class="btn btn-primary" href="#install">Install it free</a>
         <a class="btn btn-coffee" href="https://buymeacoffee.com/petey1" rel="noopener">
@@ -208,7 +210,7 @@
       <h3>Private by construction</h3>
       <p>
         Your microphone audio is transcribed on your CPU or GPU. The model runs on your machine.
-        There is no server to talk to, no account to make, no telemetry. Pull the network cable and
+        There is no server it needs, no account to make, no telemetry. Pull the network cable and
         the whole thing still flies.
       </p>
     </article>
@@ -233,7 +235,7 @@
         <tr><td>Price</td><td class="us"><b>$0</b>, forever</td><td>Usually $10–$20 a month</td></tr>
         <tr><td>Works without internet</td><td class="us yes">Yes — that's the point</td><td class="no">No, it's a cloud service</td></tr>
         <tr><td>Where your voice goes</td><td class="us yes">Your CPU or GPU</td><td class="no">Uploaded and processed remotely</td></tr>
-        <tr><td>Account, login, DRM</td><td class="us yes">None</td><td class="no">Required</td></tr>
+        <tr><td>Account, login, DRM</td><td class="us yes">None needed</td><td class="no">Required</td></tr>
         <tr><td>If the company folds</td><td class="us yes">Still on your disk, still flies</td><td class="no">It stops working</td></tr>
         <tr><td>Change the phraseology</td><td class="us yes">Edit a text file</td><td class="no">File a feature request</td></tr>
         <tr><td>Read the code</td><td class="us yes">All of it, on GitHub</td><td class="no">Closed</td></tr>
@@ -281,23 +283,24 @@
   <h2 class="section-title">Install</h2>
   <p class="section-lede">
     Windows, with MSFS 2024. One installer does the lot: Python, LocalTC, Whisper, Piper, Ollama,
-    CUDA if you have an NVIDIA card, and the models sized for your machine.
+    CUDA if you have an NVIDIA card, and the models sized for your machine. No git, no admin rights.
   </p>
 
   <div class="steps">
     <div class="step">
       <span class="num">1</span>
-      <h3>Get the files</h3>
-      <p>Download or clone the repository from GitHub.</p>
-      <div class="code"><code>git clone https://github.com/duckiest428/LocalTC.git</code><button class="copy" type="button">Copy</button></div>
+      <h3>Download the installer</h3>
+      <p>A small setup that fetches the latest release from GitHub and checks it before installing.</p>
+      <p><a class="btn btn-primary" href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a></p>
+      <p class="hint"><a href="changelog.html">What's new</a> · <a href="https://github.com/duckiest428/LocalTC/releases/latest">Release and checksums</a></p>
     </div>
     <div class="step">
       <span class="num">2</span>
-      <h3>Run the installer</h3>
-      <p>Double-click <code class="inline">Install LocalTC.cmd</code>, or from PowerShell:</p>
-      <div class="code"><code>powershell -ExecutionPolicy Bypass -File install\install.ps1</code><button class="copy" type="button">Copy</button></div>
-      <p class="hint">It picks the <i>light</i>, <i>balanced</i> or <i>quality</i> model set from your RAM and
-      graphics card. After this, flights work offline.</p>
+      <h3>Run it</h3>
+      <p>It installs to your user folder and sets up everything, picking the <i>light</i>, <i>balanced</i> or
+      <i>quality</i> models from your RAM and graphics card. After this, flights work offline.</p>
+      <p class="hint">The installer isn't code-signed yet, so Windows may say it's from an unknown publisher:
+      <b>More info → Run anyway</b>. LocalTC then updates itself, when you say so, and never mid-flight.</p>
     </div>
     <div class="step">
       <span class="num">3</span>
@@ -308,6 +311,14 @@
         Sound → Character voices → 0.
       </p>
     </div>
+  </div>
+
+  <div class="callout">
+    <h3>From source</h3>
+    <p>
+      Prefer git? Clone the repository and double-click <code class="inline">Install LocalTC.cmd</code>
+      (or run <code class="inline">install\install.ps1</code>); update with <code class="inline">git pull</code>.
+    </p>
   </div>
 
   <div class="callout">
@@ -335,7 +346,8 @@
         <li>Traffic sequencing and go-arounds against the sim's AI</li>
         <li>Emergencies, and off-script requests</li>
         <li>The copilot, in assist or full</li>
-        <li>The app: map, airport lookup, SimBrief, settings</li>
+        <li>The app: map with ATC zones, airport lookup, SimBrief, settings</li>
+        <li>Gates at the destination, a logbook of every flight, one-click updates</li>
       </ul>
     </div>
     <div class="status-col">
@@ -380,13 +392,16 @@
       <a href="https://github.com/duckiest428/LocalTC/blob/master/README.md">Documentation</a>
       <a href="https://github.com/duckiest428/LocalTC/issues">Report a bug</a>
       <a href="https://buymeacoffee.com/petey1" rel="noopener">Buy me a coffee</a>
+      <a href="changelog.html">Changelog</a>
+      <a href="dashboard.html">Logbook</a>
       <a href="privacy.html">Privacy</a>
       <a href="terms.html">Terms</a>
       <a href="cookies.html">Cookies</a>
     </nav>
     <p class="fineprint">
       This site sets no cookies, runs no analytics and collects nothing about you — there is no
-      banner because there is nothing to consent to. LocalTC is free software under the
+      banner because there is nothing to consent to. The optional logbook sets one sign-in cookie,
+      and only once you sign in. LocalTC is free software under the
       <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener">GNU AGPL&nbsp;v3</a>.
     </p>
     <p class="fineprint">

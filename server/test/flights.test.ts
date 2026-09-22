@@ -14,6 +14,7 @@ describe("the logbook", () => {
     expect(stats.flights).toBe(2);
     expect(stats.airports.map((a: any) => a.icao).sort()).toEqual(["KBFI", "KPAE", "KPHX", "KSAN"]);
     expect(stats.air_hours).toBeCloseTo(1.7, 1);
+    expect(stats.airports.find((a: any) => a.icao === "KSAN").lat).toBeCloseTo(32.73, 1);
     expect((await call("DELETE", "/v1/flights/a", undefined, bearer(token))).status).toBe(200);
     expect((await data(await call("GET", "/v1/flights", undefined, bearer(token)))).flights).toHaveLength(1);
   });

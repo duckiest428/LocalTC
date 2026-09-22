@@ -46,6 +46,11 @@ class FlightRecord:
     readbacks_correct: int = 0
     alerts: int = 0
     landed: bool = False
+    # The airports' reference points (published data, not where the aircraft was), for the dashboard's map.
+    origin_lat: float | None = None
+    origin_lon: float | None = None
+    destination_lat: float | None = None
+    destination_lon: float | None = None
     synced_at: str | None = None  # when an account last took it; None = not synced
 
     def to_dict(self) -> dict[str, Any]:
@@ -138,7 +143,16 @@ class FlightLog:
             readbacks_correct=self.readbacks_correct,
             alerts=self.alerts,
             landed=self.landing_t is not None,
+            **_airport_points(engine, f.origin if f is not None else None, "origin"),
+            **_airport_points(engine, f.destination if f is not None else None, "destination"),
         )
+
+
+def _airport_points(engine: Any, icao: str | None, prefix: str) -> dict[str, float]:
+    geo = engine.geometry(icao) if engine is not None and icao else None
+    if geo is None:
+        return {}
+    return {f"{prefix}_lat": round(geo.airport.lat, 4), f"{prefix}_lon": round(geo.airport.lon, 4)}
 
 
 def _iso(when: datetime) -> str:
@@ -146,7 +160,8 @@ def _iso(when: datetime) -> str:
 
 
 _COLUMNS = [f.name for f in fields(FlightRecord)]
-_TYPES = {"block_min": "REAL", "air_min": "REAL", "distance_nm": "REAL", "max_alt_ft": "INTEGER",
+_TYPES = {"origin_lat": "REAL", "origin_lon": "REAL", "destination_lat": "REAL", "destination_lon": "REAL",
+          "block_min": "REAL", "air_min": "REAL", "distance_nm": "REAL", "max_alt_ft": "INTEGER",
           "landing_vs_fpm": "INTEGER", "readbacks": "INTEGER", "readbacks_correct": "INTEGER", "alerts": "INTEGER",
           "landed": "INTEGER"}
 
@@ -159,6 +174,10 @@ class Logbook:
             columns = ", ".join(f"{c} {_TYPES.get(c, 'TEXT')}{' PRIMARY KEY' if c == 'id' else ''}" for c in _COLUMNS)
             db.execute(f"CREATE TABLE IF NOT EXISTS flights ({columns})")
             db.execute("CREATE INDEX IF NOT EXISTS flights_started ON flights (started_at)")
+            have = {row[1] for row in db.execute("PRAGMA table_info(flights)")}
+            for c in _COLUMNS:  # a logbook from an older LocalTC gains the newer columns
+                if c not in have:
+                    db.execute(f"ALTER TABLE flights ADD COLUMN {c} {_TYPES.get(c, 'TEXT')}")
 
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path)

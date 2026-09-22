@@ -10,7 +10,7 @@ routes = [{ pattern = "api.localtc.tech", custom_domain = true }]
 [vars]
 SITE_URL = "https://localtc.tech"
 ALLOWED_ORIGINS = "https://localtc.tech,https://www.localtc.tech"
-COOKIE_DOMAIN = ".localtc.tech"
+COOKIE_DOMAIN = ""  # host-only: the cookie goes to api.localtc.tech alone (the dashboard is same-site)
 MAIL_FROM = "LocalTC <accounts@localtc.tech>"
 EMAIL_MODE = "resend"  # "resend" sends with Resend (RESEND_API_KEY secret); "log" prints links (local dev)
 APNS_HOST = "api.push.apple.com"  # api.sandbox.push.apple.com for development builds of the iOS app

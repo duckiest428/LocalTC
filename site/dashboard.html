@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logbook — LocalTC</title>
+<meta name="description" content="Your LocalTC logbook: every flight synced from the app, with totals and a map. Optional; LocalTC works without an account.">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="index.html"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="index.html#features">Features</a>
+    <a href="index.html#install">Install</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="dashboard.html" aria-current="page">Logbook</a>
+  </nav>
+  <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
+</header>
+
+<main class="dash">
+  <div class="dash-head">
+    <div>
+      <p class="kicker">Logbook</p>
+      <h1 id="dash-title">Your flights.</h1>
+    </div>
+    <div class="dash-who" id="dash-who" hidden>
+      <span id="who-email"></span>
+      <button class="btn btn-ghost" id="btn-signout" type="button">Sign out</button>
+    </div>
+  </div>
+
+  <p class="dash-msg" id="msg" role="status" aria-live="polite" hidden></p>
+
+  <!-- Signed out -->
+  <section class="dash-auth" id="auth" hidden>
+    <div class="auth-card">
+      <h2 id="auth-title">Sign in</h2>
+      <form id="auth-form" novalidate>
+        <label>Email <input id="f-email" type="email" autocomplete="username" required spellcheck="false"></label>
+        <label id="f-password-row">Password <input id="f-password" type="password" autocomplete="current-password" required minlength="10"></label>
+        <p class="hint" id="f-hint" hidden>At least 10 characters. A passphrase of a few words is easiest.</p>
+        <label class="consent" id="f-consent-row" hidden>
+          <input id="f-consent" type="checkbox">
+          <span>I've read the <a href="privacy.html#account">privacy policy</a> and the <a href="terms.html#account">terms</a>.
+            LocalTC stores my email, a hash of my password and the flight summaries I sync, until I delete the account.</span>
+        </label>
+        <button class="btn btn-primary" id="f-submit" type="submit">Sign in</button>
+      </form>
+      <p class="auth-links">
+        <button class="linklike" id="to-register" type="button">Create an account</button>
+        <button class="linklike" id="to-reset" type="button">Forgot the password?</button>
+        <button class="linklike" id="to-signin" type="button" hidden>Back to sign in</button>
+      </p>
+    </div>
+    <div class="note">
+      <p><strong>An account is optional.</strong> LocalTC works fully without one, and the app keeps your
+        logbook on your own computer either way (the <b>Logbook</b> tab). Signing in to the app copies each
+        flight's summary here: airports, gates, runways, times, distance and the landing. Never your position,
+        voice, transcripts or recordings.</p>
+    </div>
+  </section>
+
+  <!-- Choosing a new password from an email link -->
+  <section class="dash-auth" id="reset" hidden>
+    <div class="auth-card">
+      <h2>Choose a new password</h2>
+      <form id="reset-form" novalidate>
+        <label>New password <input id="r-password" type="password" autocomplete="new-password" required minlength="10"></label>
+        <button class="btn btn-primary" type="submit">Change password</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Signed in -->
+  <section id="dash" hidden>
+    <div class="live" id="live" hidden></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="panel map-panel">
+      <svg id="map" viewBox="0 0 1000 500" role="img" aria-label="Map of the airports and routes flown"></svg>
+    </div>
+    <div class="panel">
+      <h2>Flights</h2>
+      <div class="table-wrap"><table class="flights">
+        <thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Aircraft</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead>
+        <tbody id="flights"></tbody>
+      </table></div>
+      <button class="btn btn-ghost" id="more" type="button" hidden>Load more</button>
+      <p class="hint" id="empty" hidden>No flights yet. Sign in to the account in the app (Quick Settings → Account), fly, and each flight appears here when it ends.</p>
+    </div>
+    <div class="panel-row">
+      <div class="panel">
+        <h2>Signed-in devices</h2>
+        <ul class="devices" id="devices"></ul>
+      </div>
+      <div class="panel">
+        <h2>Your data</h2>
+        <p class="hint">Everything the account holds, as a JSON file.</p>
+        <button class="btn btn-ghost" id="btn-export" type="button">Download my data</button>
+        <h3>Change password</h3>
+        <form id="pw-form" class="inline-form" novalidate>
+          <input id="pw-current" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
+          <input id="pw-new" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password">
+          <button class="btn btn-ghost" type="submit">Change</button>
+        </form>
+        <h3>Delete the account</h3>
+        <p class="hint">Removes the account and every flight synced to it, for good. The logbook in the app stays.</p>
+        <form id="del-form" class="inline-form" novalidate>
+          <input id="del-password" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password to confirm">
+          <button class="btn btn-danger" type="submit">Delete everything</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <nav class="legal-nav">
+    <a href="index.html">&larr; Back to LocalTC</a>
+    <a href="privacy.html#account">Privacy</a>
+    <a href="terms.html#account">Terms</a>
+    <a href="cookies.html">Cookies</a>
+  </nav>
+</main>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

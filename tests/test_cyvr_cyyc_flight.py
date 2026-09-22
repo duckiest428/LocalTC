@@ -124,7 +124,8 @@ def test_no_incursion_crossing_a_runway_the_route_goes_across(replay):
 
 
 def test_the_climb_is_handed_to_a_centre_before_the_top_of_it(replay):
-    handoff = next((line for line in replay if "Center" in line.split(":", 1)[-1] and "contact" in line), None)
+    """To Vancouver Centre, whose airspace Vancouver is in, spelled the Canadian way."""
+    handoff = next((line for line in replay if "Vancouver Centre" in line.split(":", 1)[-1] and "contact" in line), None)
     cruise = next((line for line in replay if "-> CRUISE" in line), None)
     assert handoff is not None and cruise is not None
     assert float(handoff.split("]")[0].strip("[ ")) < float(cruise.split("]")[0].strip("[ "))

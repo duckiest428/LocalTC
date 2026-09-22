@@ -28,24 +28,24 @@
 [   490.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
 [   490.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
-[   873.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
-[   875.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
-[   875.0] READBACK  departure.handoff_center correct
-[   881.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
-[   884.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 5,000.
-[   892.0] ATC       Seattle Center 125.1: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
-[   894.0] PILOT     125.1: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
-[   894.0] READBACK  center.descend_pd correct
-[   898.0] PILOT     125.1: Center, Cessna two lima tango, request the RNAV runway 14R instead.
-[   900.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, expect RNAV RWY 14R approach.
-[   902.0] PILOT     125.1: Expect R-NAV runway one four right, Cessna two lima tango.
-[   902.0] READBACK  common.expect_approach correct
-[   904.0] PILOT     125.1: Center, Cessna two lima tango, request direct Boeing Field.
-[   906.0] ATC       Seattle Center 125.1: Cessna 2LT, proceed direct Boeing Field.
-[   908.0] PILOT     125.1: Direct Boeing Field, Cessna two lima tango.
-[   908.0] READBACK  common.direct correct
-[   931.0] PILOT     125.1: Center, Cessna two lima tango, light chop at five thousand.
-[   933.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, thanks for the report.
+[   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
+[   845.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
+[   845.0] READBACK  center.descend_pd correct
+[   849.0] PILOT     124.675: Center, Cessna two lima tango, request the RNAV runway 14R instead.
+[   852.0] ATC       Seattle Departure 124.675: Cessna 2LT, roger, expect RNAV RWY 14R approach.
+[   854.0] PILOT     124.675: Expect R-NAV runway one four right, Cessna two lima tango.
+[   854.0] READBACK  common.expect_approach correct
+[  1072.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
+[  1074.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
+[  1074.0] READBACK  departure.handoff_center correct
+[  1080.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
+[  1082.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 3,000.
+[  1102.0] PILOT     125.1: Center, Cessna two lima tango, request direct Boeing Field.
+[  1104.0] ATC       Seattle Center 125.1: Cessna 2LT, proceed direct Boeing Field.
+[  1106.0] PILOT     125.1: Direct Boeing Field, Cessna two lima tango.
+[  1106.0] READBACK  common.direct correct
+[  1129.0] PILOT     125.1: Center, Cessna two lima tango, light chop at five thousand.
+[  1131.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, thanks for the report.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
 [  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, contact Seattle Approach 119.2.
 [  1364.0] PILOT     125.1: Seattle Approach one one niner point two, Cessna two lima tango.

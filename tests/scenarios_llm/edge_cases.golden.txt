@@ -32,28 +32,28 @@
 [   490.0] LLM       understand used: {"kind": "readback", "intent": "", "altitude": "5000"}
 [   490.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
-[   873.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
-[   875.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
-[   875.0] READBACK  departure.handoff_center correct
-[   881.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
-[   884.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 5,000.
-[   892.0] ATC       Seattle Center 125.1: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
-[   894.0] PILOT     125.1: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
-[   894.0] READBACK  center.descend_pd correct
-[   935.0] PILOT     125.1: Seattle Center, two lima tango, request direct Boeing Field
+[   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
+[   845.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
+[   845.0] READBACK  center.descend_pd correct
+[   935.0] PILOT     124.675: Seattle Center, two lima tango, request direct Boeing Field
 [   935.0] LLM       understand invalid: {"kind": "request", "intent": "request_altitude", "topic": "", "runway": "", "atis": "", "altitude": "35000", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""} (request_altitude needs a word like altitude, climb, descend, descent, feet, and the pilot said none; pick the intent that matches the words, or other if none does)
 [   935.0] LLM       understand used: {"kind": "request", "intent": "other", "topic": "", "runway": "", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""}
 [   935.0] LLM       phrase invalid: {"reply":"proceed direct Boeing Field, approved"} (reply gives an instruction (approved, proceed); only answer or say unable)
 [   935.0] LLM       phrase used: {"reply":"unable direct at this time, continue as filed"}
-[   937.0] ATC       Seattle Center 125.1: Cessna 2LT, unable direct at this time, continue as filed.
-[   975.0] PILOT     125.1: any chance of higher, six thousand?
+[   938.0] ATC       Seattle Departure 124.675: Cessna 2LT, unable direct at this time, continue as filed.
+[   975.0] PILOT     124.675: any chance of higher, six thousand?
 [   975.0] LLM       understand used: {"kind": "request", "intent": "request_altitude", "topic": "", "runway": "", "atis": "", "altitude": "6000", "fix": "", "approach": "", "conditions": "", "emergency": "", "souls": "", "fuel": ""}
-[   978.0] ATC       Seattle Center 125.1: Cessna 2LT, climb and maintain 6,000.
-[   980.0] PILOT     125.1: Climb and maintain six thousand, Cessna two lima tango.
-[   980.0] READBACK  common.climb correct
-[  1045.0] PILOT     125.1: Seattle Center, confirm the weather at Boeing
+[   977.0] ATC       Seattle Departure 124.675: Cessna 2LT, climb and maintain 6,000.
+[   979.0] PILOT     124.675: Climb and maintain six thousand, Cessna two lima tango.
+[   979.0] READBACK  common.climb correct
+[  1045.0] PILOT     124.675: Seattle Center, confirm the weather at Boeing
 [  1045.0] LLM       understand timeout:  (timeout)
-[  1047.0] ATC       Seattle Center 125.1: Cessna 2LT, wind 130 at 3, altimeter 29.92.
+[  1048.0] ATC       Seattle Departure 124.675: Cessna 2LT, wind 130 at 3, altimeter 29.92.
+[  1071.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
+[  1073.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
+[  1073.0] READBACK  departure.handoff_center correct
+[  1079.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
+[  1081.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 6,000.
 [  1105.0] PILOT     125.1: Seattle Center, two lima tango, we have a sick passenger on board, requesting priority
 [  1105.0] LLM       understand used: {"kind": "request", "intent": "emergency", "topic": "", "runway": "", "atis": "", "altitude": "", "fix": "", "approach": "", "conditions": "", "emergency": "sick passenger", "souls": "", "fuel": ""}
 [  1105.0] ALERT     emergency: Seattle Center, two lima tango, we have a sick passenger on board, requesting priority

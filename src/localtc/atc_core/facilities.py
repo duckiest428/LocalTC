@@ -139,6 +139,28 @@ def is_sector_airport(airport: Airport) -> bool:
     return any(r.length_m >= SECTOR_RUNWAY_M for r in airport.runways)
 
 
+def area_center(name: str, airports: list[Airport], mhz: float | None = None, taken: tuple[float, ...] = ()) -> Facility:
+    """The centre working a real enroute area ("Albuquerque Center"), on the frequency the sim publishes for
+    it at an airport under it if there is one ("EDMONTON CENTER 124.525" at Calgary), else ``mhz``, else
+    one of its own from the centre band, the same for the same name every time."""
+    place = name.split()[0].lower()
+    for airport in airports:
+        published = _facility(airport, "center", ("center",))
+        if published is not None and published.station.lower().startswith(place):
+            return Facility("center", name, published.mhz, None, published.alternates)
+    if mhz is not None:
+        return Facility("center", name, mhz)
+    return Facility("center", name, _band_frequency(name, taken))
+
+
+def _band_frequency(name: str, taken: tuple[float, ...]) -> float:
+    low, high = (round(f * 1000) for f in SECTOR_MHZ)
+    slots = [f / 1000 for f in range(low, high + 1, 25)]
+    busy = {channel_khz(f) for f in taken}
+    free = [f for f in slots if channel_khz(f) not in busy] or slots
+    return free[zlib.crc32(name.encode()) % len(free)]
+
+
 def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
     """The enroute centre around ``airport``: "Edmonton Center" on its own frequency.
 
@@ -148,9 +170,5 @@ def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
     """
     if (published := _facility(airport, "center", ("center",))) is not None:
         return Facility("center", published.station, published.mhz, None, published.alternates)
-    name = sector_name(airport)
-    low, high = (round(f * 1000) for f in SECTOR_MHZ)
-    slots = [f / 1000 for f in range(low, high + 1, 25)]
-    busy = {channel_khz(f) for f in taken}
-    free = [f for f in slots if channel_khz(f) not in busy] or slots
-    return Facility("center", f"{name} Center", free[zlib.crc32(name.encode()) % len(free)])
+    name = f"{sector_name(airport)} Center"
+    return Facility("center", name, _band_frequency(name.removesuffix(" Center"), taken))

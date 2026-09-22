@@ -16,9 +16,11 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core.airport import AirportGeometry, TaxiGraph, published, select_approach, select_runway
+from localtc.atc_core.airspace import Airspace, Area
 from localtc.atc_core.facilities import (
     Facility,
     airport_facilities,
+    area_center,
     center_facility,
     channel_khz,
     is_sector_airport,
@@ -126,6 +128,9 @@ DEPARTURE_ENDS_NM = 40.0  # or this far from the field, whichever comes first
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
+SECTOR_DWELL_S = 30.0  # across a real centre boundary this long before the handoff: not skimming it
+AREA_RECHECK_S = 5.0  # how often the aircraft's position is checked against the airspace outlines
+APPROACH_CEILING_FT = 17000.0  # inside the destination's approach area and below this, approach takes the arrival
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
 
@@ -188,6 +193,8 @@ class AtcEngine:
     ) -> None:
         self.cfg = config or EngineConfig()
         self.route = Route(self.cfg.route)
+        self.airspace = Airspace.load()
+        self._area_cache: dict[str, tuple[float, Any]] = {}  # lookups, reused for AREA_RECHECK_S of sim time
         self.library = library or TemplateLibrary.load()
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
         self.phraser = phraser  # words replies that have no template; None: they get "unable"
@@ -234,6 +241,7 @@ class AtcEngine:
         self._chatted: set[str] = set()  # centres that have already started one
         self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
         self._sector_since = -math.inf
+        self._sector_next: tuple[str, float] | None = None  # a new centre's area entered, and since when
         self._repeated: set[str] = set()  # instructions already said a second time for a silent pilot
         self._nudged: set[str] = set()  # ... and the ones already asked "how do you read" about
         self._deviation_since: float | None = None
@@ -536,12 +544,16 @@ class AtcEngine:
                 self._handoff(t, "tower.handoff_departure", st.comms.tuned, departure)
         elif tuned == "departure" and self._leaving_departure(own, phase) and once("handoff_center"):
             center = self._center()
+            if self.center_area(own) is not None and (here := self._sector_candidate(own)) is not None \
+                    and here.station != center.station:
+                center = here  # climbed out into the next centre's airspace already: that one takes it
             self._sector, self._sector_since = center, t  # the first sector of the cruise
             self._handoff(t, "departure.handoff_center", st.comms.tuned, center)
-        elif phase is P.CRUISE and tuned == "center" and (crossing := self._sector_crossing(own)) is not None:
+        elif phase in (P.CRUISE, P.ARRIVAL) and tuned == "center" and not self._arriving_in_area(own) \
+                and (crossing := self._sector_crossing(own)) is not None:
             self._sector, self._sector_since = crossing, t
             self._handoff(t, "center.handoff_center", st.comms.tuned, crossing)
-        elif phase is P.CRUISE and tuned == "center" and "descend" not in st.flags and self._descent_due(own) \
+        elif phase is P.CRUISE and tuned in ("center", "departure") and "descend" not in st.flags and self._descent_due(own) \
                 and (plan := self._arrival_plan(own)) is not None:
             self._clear_descent(t, own, st.comms.tuned, plan)
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
@@ -555,7 +567,7 @@ class AtcEngine:
                     note=self._altimeter_note(st.flight.destination),
                 )
             elif (
-                ctx.destination_distance_nm is not None and ctx.destination_distance_nm <= 40
+                self._arriving_in_area(own)
                 and (approach := self.facility("approach")) is not None and once("handoff_approach")
             ):
                 self._handoff(t, "center.handoff_approach", st.comms.tuned, approach)
@@ -676,6 +688,8 @@ class AtcEngine:
                 continue
             if target.alt_ft - ground_ft < 500:
                 continue  # landing or just off the runway: the tower is sequencing it, not worth a call
+            if self._on_a_final(target):
+                continue  # lined up to land: in the landing order, not in anyone's way up here
             if t - self._traffic_called.get(oid, -math.inf) < TRAFFIC_REPEAT_S:
                 continue
             if best is None or nm < best[0]:
@@ -683,10 +697,12 @@ class AtcEngine:
         if best is None:
             return False
         nm, target = best
-        self._traffic_called[target.object_id] = t
         bearing = _bearing(own.lat, own.lon, target.lat, target.lon)
         clock = round(((bearing - own.hdg_true) % 360) / 30) % 12 or 12
         relative = (target.hdg_true - own.hdg_true) % 360
+        if 5 <= clock <= 7 and (relative < 30 or relative > 330):
+            return False  # behind and going the same way: it can't be seen, and it isn't closing on anything
+        self._traffic_called[target.object_id] = t
         direction = ("same direction" if relative < 30 or relative > 330 else "opposite direction" if 150 <= relative <= 210
                      else "crossing left to right" if relative < 180 else "crossing right to left")
         miles = max(1, round(nm))
@@ -699,6 +715,14 @@ class AtcEngine:
             display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
         self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
         return True
+
+    def _on_a_final(self, target: TrafficTarget) -> bool:
+        """Established on a final approach within 10 nm of a runway at the airport nearby."""
+        geo = self.tracker.context.airport
+        if geo is None:
+            return False
+        final = geo.final_approach(target.lat, target.lon, target.hdg_true, max_distance_nm=10.0)
+        return final is not None and target.alt_ft - geo.airport.elev_ft < final.distance_nm * 400 + 1000
 
     def _ground_conflict(self, own: OwnshipState) -> bool:
         """Another aircraft taxiing across in front of this one: hold position and let it go by.
@@ -941,6 +965,8 @@ class AtcEngine:
             return False
         if self._via_floor is not None and assigned == self._via_floor:
             return False  # descending via the arrival: its own restrictions set the altitudes, not one number
+        if P(st.phase) is P.ARRIVAL and "descend" not in st.flags:
+            return False  # starting down with the descent still to come: the answer is the descent, not "check"
         off = abs(own.alt_indicated_ft - assigned)
         if off <= 200:
             st.flags.add(f"reached:{assigned}")
@@ -2063,6 +2089,10 @@ class AtcEngine:
         note: Phrase | None = None,
     ) -> None:
         due = t + (self._random().uniform(*self.cfg.response_delay_s) if delay else 0.0)
+        if self._scheduled:
+            # Replies decided together go out in the order they were decided: "equipment standing by" to the
+            # problem the pilot reported, then the answer to the rest of the call, never the other way round.
+            due = max(due, max(item.due for item in self._scheduled))
         self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue,
                                           note))
 
@@ -2149,8 +2179,18 @@ class AtcEngine:
         elif dest and dest == origin and dest in airports:  # returning: the departure airport's approach controller
             facilities += [f for f in airport_facilities(airports[dest].airport, role="arrival") if f.controller == "approach"]
         ends = [airports[icao].airport for icao in (origin, dest) if icao and icao in airports]
-        facilities.append(self._sector or center_facility(ends, self.cfg.center_name, self.cfg.center_mhz))
+        facilities.append(self._sector or self._first_center(ends))
         self.facilities = facilities
+
+    def _first_center(self, ends: list) -> Facility:
+        """The centre that takes the flight from departure: the one whose airspace the departure airport is
+        in. San Diego is Los Angeles Center, whatever [atc] center_name says; that is only for a flight from
+        somewhere the airspace data doesn't cover."""
+        home = ends[0] if ends else None
+        area = self.airspace.center_at(home.lat, home.lon) if home is not None else None
+        if area is None:
+            return center_facility(ends, self.cfg.center_name, self.cfg.center_mhz)
+        return area_center(area.name, ends, self.cfg.center_mhz)
 
     def _center(self) -> Facility:
         if self._sector is not None:
@@ -2182,32 +2222,88 @@ class AtcEngine:
         frequency it left behind long ago. A departure controller's airspace ends within a few tens of
         miles of the field and a few thousand feet, whichever the flight reaches first.
         """
-        if phase is P.CRUISE:
-            return own.t - self.state.phase_since_t >= 30
-        if phase is not P.DEPARTURE:
+        if phase not in (P.DEPARTURE, P.CRUISE):
             return False
-        origin = self.geometry(self.state.flight.origin)
-        away = origin is not None and origin.distance_nm(own.lat, own.lon) >= DEPARTURE_ENDS_NM
-        return own.alt_agl_ft >= DEPARTURE_ENDS_FT or away
+        above = own.alt_agl_ft >= DEPARTURE_ENDS_FT
+        area = self.terminal_area(self.state.flight.origin, "departure")
+        if area is not None:  # the real outline: departure works the flight until it leaves it
+            away = not self._in_area(area, own)
+        else:
+            origin = self.geometry(self.state.flight.origin)
+            away = origin is not None and origin.distance_nm(own.lat, own.lon) >= DEPARTURE_ENDS_NM
+        if phase is P.CRUISE and area is None:
+            return own.t - self.state.phase_since_t >= 30  # level, with nothing to say where departure ends
+        return above or away
+
+    def terminal_area(self, icao: str | None, role: str) -> Area | None:
+        """The approach (or departure) area working ``icao``, if the airspace data has one around it."""
+        geo = self.geometry(icao)
+        if geo is None:
+            return None
+        key = f"{role}:{icao}"
+        if key not in self._area_cache:
+            area = self.airspace.approach_for(geo.icao, geo.airport.lat, geo.airport.lon, role=role)
+            # An area named for the airport but drawn somewhere else would hand the flight off on the ground.
+            self._area_cache[key] = (0.0, area if area is not None and area.contains(geo.airport.lat, geo.airport.lon)
+                                     else None)
+        return self._area_cache[key][1]
+
+    def _in_area(self, area: Area, own: OwnshipState) -> bool:
+        key = f"in:{area.id}"
+        cached = self._area_cache.get(key)
+        if cached is None or own.t - cached[0] >= AREA_RECHECK_S or own.t < cached[0]:
+            self._area_cache[key] = (own.t, area.contains(own.lat, own.lon))
+        return self._area_cache[key][1]
+
+    def center_area(self, own: OwnshipState) -> Area | None:
+        """The enroute centre whose airspace the aircraft is in."""
+        cached = self._area_cache.get("center")
+        if cached is None or own.t - cached[0] >= AREA_RECHECK_S or own.t < cached[0]:
+            self._area_cache["center"] = (own.t, self.airspace.center_at(own.lat, own.lon))
+        return self._area_cache["center"][1]
+
+    def _arriving_in_area(self, own: OwnshipState) -> bool:
+        """Centre hands an arrival to approach: inside the destination's approach area and down below its
+        ceiling, or, where there is no area to go by, within DEPARTURE_ENDS_NM of the field."""
+        area = self.terminal_area(self.state.flight.destination, "approach")
+        if area is None:
+            distance = self.tracker.context.destination_distance_nm
+            return distance is not None and distance <= DEPARTURE_ENDS_NM
+        return self._in_area(area, own) and own.alt_indicated_ft <= APPROACH_CEILING_FT
 
     def _sector_candidate(self, own: OwnshipState) -> Facility | None:
         """The enroute centre for where the aircraft is now, from the nearest airport big enough to name
         one. Over the ocean, or anywhere the sim has sent nothing sizeable, there is no candidate and the
         flight stays with the centre it is on."""
-        # The biggest field in range, not the closest: centres take their name from the major airport of
-        # a region, and a small field next door shouldn't outrank the international airport beside it.
+        taken = tuple(f.mhz for f in self.facilities if f.controller != "center")
+        if (area := self.center_area(own)) is not None:
+            nearby = [g.airport for g in self.tracker.context_builder.airports.values()
+                      if g.distance_nm(own.lat, own.lon) < SECTOR_NEAREST_NM]
+            return area_center(area.name, nearby, None, taken)
+        # Without airspace data: named after the biggest field in range, not the closest. Centres take
+        # their name from the major airport of a region, and a small field next door shouldn't outrank
+        # the international airport beside it.
         in_range = [g.airport for g in self.tracker.context_builder.airports.values()
                     if is_sector_airport(g.airport) and g.distance_nm(own.lat, own.lon) < SECTOR_NEAREST_NM]
         best = max(in_range, key=lambda a: (max(r.length_m for r in a.runways), a.icao), default=None)
         if best is None:
             return None
-        taken = tuple(f.mhz for f in self.facilities if f.controller != "center")
         return sector_center(best, taken)
 
     def _sector_crossing(self, own: OwnshipState) -> Facility | None:
         """A new centre to be handed to, or None to stay put. Sectors are wide: a handoff needs a
         genuinely different centre and a decent stretch of flying since the last one, so that passing
         an airport doesn't set off a string of frequency changes."""
+        if self.center_area(own) is not None:
+            # A real boundary: handed over on crossing it, once the flight is clearly across (not skimming it).
+            candidate = self._sector_candidate(own)
+            if candidate is None or self._sector is None or candidate.station == self._sector.station:
+                self._sector_next = None
+                return None
+            if self._sector_next is None or self._sector_next[0] != candidate.station:
+                self._sector_next = (candidate.station, own.t)
+                return None
+            return candidate if own.t - self._sector_next[1] >= SECTOR_DWELL_S else None
         if own.t - self._sector_since < SECTOR_MIN_S:
             return None
         candidate = self._sector_candidate(own)
@@ -2223,8 +2319,10 @@ class AtcEngine:
         if mhz is None:
             return None
         matches = [f for f in self.facilities if f.matches(mhz)]
-        if len(matches) <= 1:
-            return matches[0] if matches else None
+        if not matches:
+            return self._center_here(mhz)
+        if len(matches) == 1:
+            return matches[0]
         expected = self.state.comms.expected
         if expected is not None and expected in matches:
             handed_from = self._last_handoff[1] if self._last_handoff is not None else None
@@ -2235,6 +2333,20 @@ class AtcEngine:
         preferred_airport = self.state.flight.destination if arriving else self.state.flight.origin
         ranked = sorted(matches, key=lambda f: (f.airport != preferred_airport, f.controller == ("departure" if arriving else "approach")))
         return ranked[0]
+
+    def _center_here(self, mhz: float) -> Facility | None:
+        """The centre whose airspace the aircraft is in, if the pilot has tuned its frequency without being
+        sent there: a crew changing over early, or one that knows the airspace. That centre answers, and it
+        is the flight's centre from now on."""
+        own = self.state.aircraft
+        if own is None or own.on_ground or self.center_area(own) is None:
+            return None
+        here = self._sector_candidate(own)
+        if here is None or not here.matches(mhz):
+            return None
+        self._sector, self._sector_since, self._sector_next = here, own.t, None
+        self._rebuild_facilities()
+        return here
 
     def _callsign(self) -> Callsign:
         return self.state.flight.callsign or Callsign("UNKNOWN")

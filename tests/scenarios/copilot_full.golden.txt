@@ -32,15 +32,15 @@
 [   493.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
 [   493.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
-[   873.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
-[   877.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
-[   877.0] READBACK  departure.handoff_center correct
-[   879.0] TUNE      COM1 125.1
-[   884.0] PILOT     125.1: Seattle Center, N172LT, level 5,000
-[   887.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 5,000.
-[   895.0] ATC       Seattle Center 125.1: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
-[   899.0] PILOT     125.1: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
-[   899.0] READBACK  center.descend_pd correct
+[   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
+[   847.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
+[   847.0] READBACK  center.descend_pd correct
+[  1070.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
+[  1073.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
+[  1073.0] READBACK  departure.handoff_center correct
+[  1075.0] TUNE      COM1 125.1
+[  1081.0] PILOT     125.1: Seattle Center, N172LT, 5,000 descending 3,000
+[  1084.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, maintain 3,000.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
 [  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, contact Seattle Approach 119.2.
 [  1365.0] PILOT     125.1: Seattle Approach one one niner point two, Cessna two lima tango.

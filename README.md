@@ -1,3 +1,5 @@
+# https://buymeacoffee.com/petey1
+
 # LocalTC
 
 Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. No cloud, no API keys.

@@ -203,6 +203,8 @@ try {
         $link.TargetPath = $App
         $link.WorkingDirectory = $Root
         $link.Description = "LocalTC: offline ATC for MSFS 2024"
+        $icon = Join-Path $Root "install\localtc.ico"
+        if (Test-Path $icon) { $link.IconLocation = "$icon,0" }
         $link.Save()
     }
     Ok "Desktop and Start menu shortcuts: LocalTC"

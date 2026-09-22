@@ -1,0 +1,31 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="56" fill="#0a0e0c"/>
+  <!-- A320-style top-down aircraft silhouette -->
+  <g transform="translate(128,128)">
+    <path d="M0 -70
+             C5 -70 8 -64 8 -56
+             L8 -22
+             L74 8
+             L74 18
+             L8 2
+             L8 28
+             L26 40
+             L26 48
+             L4 42
+             L4 54
+             C4 60 2 64 0 66
+             C-2 64 -4 60 -4 54
+             L-4 42
+             L-26 48
+             L-26 40
+             L-8 28
+             L-8 2
+             L-74 18
+             L-74 8
+             L-8 -22
+             L-8 -56
+             C-8 -64 -5 -70 0 -70
+             Z"
+          fill="#f5f7f6"/>
+  </g>
+</svg>

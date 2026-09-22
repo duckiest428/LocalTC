@@ -10,7 +10,14 @@ cookies.html    there are none, and how to check
 styles.css      the whole design system
 app.js          reveals, the typing radio log, the subscription sum, copy buttons
 fonts/          Inter and JetBrains Mono, served from here on purpose
+logo.svg        the mark (the same file the app serves)
+icon-180.png    apple-touch-icon
+og.png          the link preview card
 ```
+
+`logo.svg` is the source of truth for the mark. `icon-180.png`, `og.png` and the Windows icon at
+`install/localtc.ico` are all generated from it by `python tools/make_icons.py` — change the SVG,
+rerun that, and nothing drifts.
 
 ## Publishing
 

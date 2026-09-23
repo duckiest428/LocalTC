@@ -42,6 +42,7 @@ public struct FlightStatus: Codable, Sendable, Equatable {
     public var altitudeFt: Int?
     public var runway: String?
     public var gate: String?
+    public var rules: String?  // "IFR" or "VFR": which map the phone opens on
     public var tuned: Station?
     public var next: Station?
     public var ete: ETE?

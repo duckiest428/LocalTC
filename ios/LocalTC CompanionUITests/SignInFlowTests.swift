@@ -45,6 +45,16 @@ final class SignInFlowTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 45), .completed, "connection badge: \(badge.label)")
         attach(app, "2 map")
 
+        // The replayed flight is IFR, so the map opens on IFR; VFR (terrain) is a tap away.
+        let mapMode = app.segmentedControls["mapMode"]
+        XCTAssertTrue(mapMode.waitForExistence(timeout: 10))
+        XCTAssertTrue(mapMode.buttons["IFR"].isSelected)
+        mapMode.buttons["VFR"].tap()
+        let vfr = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: mapMode.buttons["VFR"])
+        XCTAssertEqual(XCTWaiter.wait(for: [vfr], timeout: 5), .completed, "the VFR map")
+        attach(app, "2b vfr map")
+        mapMode.buttons["IFR"].tap()
+
         app.tabBars.buttons["Radio"].tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'Frontier'")).firstMatch.waitForExistence(timeout: 30))
         attach(app, "3 radio")

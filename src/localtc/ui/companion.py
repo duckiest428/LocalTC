@@ -39,7 +39,7 @@ RADIO_BACKLOG = 50
 REMOTE_OWN_EVERY_S = 1.0
 REMOTE_TRAFFIC_EVERY_S = 5.0
 STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
-               "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate")
+               "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules")
 
 # What deserves a banner on the phone. Handoffs and the clearances that change what the pilot does next;
 # not every "roger".

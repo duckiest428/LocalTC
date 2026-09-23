@@ -5,6 +5,7 @@ struct MapTab: View {
     @Environment(AppModel.self) private var model
     @State private var position: MapCameraPosition = .automatic
     @State private var follow = true
+    @State private var mapMode = MapMode()  // IFR or VFR: follows the flight's rules, switchable any time
 
     var body: some View {
         let store = model.store
@@ -29,7 +30,10 @@ struct MapTab: View {
                 }
             }
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        .mapStyle(mapMode.kind == .vfr
+                  // VFR: terrain and the airports, like a chart. IFR: a quiet map under the route and traffic.
+                  ? .hybrid(elevation: .realistic, pointsOfInterest: .including([.airport]))
+                  : .standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { MapCompass(); MapScaleView() }
         .onMapCameraChange(frequency: .onEnd) { context in
             // The pilot moved the map by hand: stop following until they ask again.
@@ -38,6 +42,21 @@ struct MapTab: View {
                 let centre = CLLocation(latitude: context.region.center.latitude, longitude: context.region.center.longitude)
                 if here.distance(from: centre) > 20_000 { follow = false }
             }
+        }
+        .onChange(of: store.status.rules, initial: true) { _, rules in
+            mapMode.follow(rules: rules)
+        }
+        .overlay(alignment: .top) {
+            Picker("Map", selection: Binding(get: { mapMode.kind }, set: { mapMode.pick($0) })) {
+                ForEach(MapMode.Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 140)
+            .padding(6)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.top, 8)
+            .accessibilityIdentifier("mapMode")
+            .accessibilityLabel("Map type: IFR or VFR")
         }
         .onChange(of: store.own) { _, own in
             guard follow, let own else { return }

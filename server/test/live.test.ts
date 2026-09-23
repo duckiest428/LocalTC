@@ -23,6 +23,12 @@ describe("the companion's live view", () => {
     expect(s).not.toHaveProperty("alt_msl_ft");
   });
 
+  it("passes the flight rules on, as IFR or VFR only", () => {
+    expect(cleanStatus({ ...cruise, rules: "VFR" }).rules).toBe("VFR");
+    expect(cleanStatus({ ...cruise, rules: "<script>" }).rules).toBe("IFR");
+    expect(cleanStatus(cruise)).not.toHaveProperty("rules");
+  });
+
   it("notifies on a handoff and when the flight ends, not on every update", () => {
     const handoff = { ...cruise, next: { station: "Albuquerque Center", mhz: 133.65 } };
     expect(pushFor(cruise, handoff)?.title).toBe("Contact Albuquerque Center");

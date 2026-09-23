@@ -1,0 +1,116 @@
+# A VFR hop Paine Field -> Boeing Field with flight following, on the synthetic recording. It flies through
+# the Seattle Class B at 5,000 ft, so the pilot asks for (and gets) a Class Bravo clearance on the way.
+[scenario]
+name = "vfr_flight_following"
+recording = "../fixtures/ifr_kpae_kbfi"
+airports = ["../fixtures/airports"]
+vars = { atis = "bravo" }
+
+[flight]
+destination = "KBFI"
+cruise_ft = 4500
+rules = "VFR"
+
+[atc]
+seed = 7
+
+# --- ground and tower: no clearance needed out of Class D ---------------------------------
+[[pilot]]
+when = { phase = "PARKED", after_s = 5 }
+tune = "ground"
+say = "Paine Ground, {callsign}, at parking, VFR to Boeing Field, southbound, with information {atis}, ready to taxi."
+
+[[pilot]]
+on = "ground.taxi_out"
+say = "{readback}"
+
+[[pilot]]
+on = "ground.handoff_tower"
+say = "{readback}"
+
+[[pilot]]
+on = "ground.handoff_tower"
+tune = "handoff"
+delay_s = 8
+say = "Paine Tower, {callsign_short}, holding short runway {departure_runway}, ready for departure, southbound."
+
+[[pilot]]
+on = "vfr.takeoff"
+say = "{readback}"
+
+[[pilot]]
+on = "vfr.frequency_change"
+say = "Frequency change approved, {callsign_short}."
+
+# --- flight following -----------------------------------------------------------------------
+[[pilot]]
+on = "vfr.frequency_change"
+tune = "departure"
+delay_s = 10
+say = "Seattle Departure, {callsign_short}, {alt} climbing 4,500, request flight following to Boeing Field and a Class Bravo clearance."
+
+[[pilot]]
+on = "vfr.squawk"
+squawk = "assigned"
+say = "{readback}"
+
+[[pilot]]
+on = "vfr.cleared_class_b"
+say = "{readback}"
+
+[[pilot]]
+on = "departure.handoff_center"
+say = "{readback}"
+
+[[pilot]]
+on = "departure.handoff_center"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Center, {callsign_short}, level 4,500."
+
+[[pilot]]
+on = "center.handoff_approach"
+say = "{readback}"
+
+[[pilot]]
+on = "center.handoff_approach"
+tune = "handoff"
+delay_s = 8
+say = "Seattle Approach, {callsign_short}, level 4,500."
+
+[[pilot]]
+on = "vfr.service_terminated"
+say = "{readback}"
+
+# --- the pattern at Boeing Field -------------------------------------------------------------
+[[pilot]]
+on = "vfr.service_terminated"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Tower, {callsign_short}, 10 miles north, inbound for landing with information {atis}."
+
+[[pilot]]
+on = "vfr.enter_downwind"
+say = "{readback}"
+
+[[pilot]]
+on = "vfr.straight_in"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.land"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+tune = "handoff"
+delay_s = 8
+say = "Boeing Ground, {callsign_short}, clear of runway {arrival_runway}, taxi to parking."
+
+[[pilot]]
+on = "ground.taxi_in"
+say = "{readback}"

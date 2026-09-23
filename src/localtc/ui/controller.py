@@ -354,7 +354,7 @@ class AppController:
             "tuned": msgspec.to_builtins(snap.tuned) if snap.tuned else None,
             "expected": msgspec.to_builtins(snap.expected_contact) if snap.expected_contact else None,
             "pending": msgspec.to_builtins(snap.pending) if snap.pending else None,
-            "ete": ete,
+            "ete": ete, "rules": getattr(engine.state.flight, "rules", "IFR"),
         }
 
     # --- bus events -> the page --------------------------------------------------------------------------------
@@ -411,7 +411,7 @@ class AppController:
             "origin": f.get("origin"), "destination": f.get("destination"), "phase": f.get("phase"),
             "phase_label": f.get("phase_label"), "squawk": f.get("squawk"), "altitude_ft": f.get("altitude_ft"),
             "runway": f.get("runway"), "tuned": _station(f.get("tuned")), "next": _station(f.get("expected")),
-            "ete": f.get("ete"), "gate": self._gate(),
+            "ete": f.get("ete"), "gate": self._gate(), "rules": f.get("rules"),
             "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
         }
 
@@ -452,7 +452,7 @@ class AppController:
                 plan = manual_plan(callsign=args.get("callsign", ""), origin=args.get("origin", ""),
                                    destination=args.get("destination", ""), cruise=args.get("cruise", ""),
                                    alternate=args.get("alternate", ""), route=args.get("route", ""),
-                                   aircraft=args.get("aircraft", ""))
+                                   aircraft=args.get("aircraft", ""), rules=args.get("rules", "IFR"))
         except (FlightPlanError, msgspec.ValidationError) as exc:
             raise HttpError(400, str(exc)) from None
         self.plan = plan
@@ -651,14 +651,19 @@ class AppController:
                 return geo.airport
             return self.airports.get(icao) or self.cache.get(icao)
 
-        return await asyncio.to_thread(zones, engine, self.plan, airport, bounds)
+        known = list((await self._airport_index()).values())
+        return await asyncio.to_thread(zones, engine, self.plan, airport, bounds, known)
 
-    async def api_search(self, args: dict) -> dict:
-        query = str(args.get("q", "")).strip().upper()
+    async def _airport_index(self) -> dict[str, dict]:
         if self._index is None:
             self._index = await asyncio.to_thread(_build_index, self.cache)
             for airport in self.airports.values():
                 self._index[airport.icao] = _index_entry(airport)
+        return self._index
+
+    async def api_search(self, args: dict) -> dict:
+        query = str(args.get("q", "")).strip().upper()
+        await self._airport_index()
         wanted = args.get("kinds")
         if isinstance(wanted, str):
             wanted = [wanted]  # one filter chosen: the query carries it as a single value
@@ -831,16 +836,18 @@ def _airport_kind(longest_m: float, has_atc: bool, name: str) -> str:
     return "international" if longest_m >= INTERNATIONAL_RUNWAY_M and has_atc else "airport"
 
 
-def _entry(icao: str, name: str, lat: float, lon: float, runways, frequencies) -> dict:
+def _entry(icao: str, name: str, lat: float, lon: float, runways, frequencies, elev_ft: float = 0.0) -> dict:
     longest = max((float(r["length_m"] if isinstance(r, dict) else r.length_m) for r in runways), default=0.0)
     kinds = {f["kind"] if isinstance(f, dict) else f.kind for f in frequencies}
     return {"icao": icao, "name": _title(name), "lat": lat, "lon": lon,
             "kind": _airport_kind(longest, bool(kinds & set(ATC_FREQUENCIES)), name),
-            "runway_m": round(longest)}
+            "runway_m": round(longest), "elev_ft": round(float(elev_ft or 0)),
+            "tower": "tower" in kinds, "approach": bool(kinds & {"approach", "departure"})}
 
 
 def _index_entry(airport) -> dict:
-    return _entry(airport.icao, airport.name, airport.lat, airport.lon, airport.runways, airport.frequencies)
+    return _entry(airport.icao, airport.name, airport.lat, airport.lon, airport.runways, airport.frequencies,
+                  getattr(airport, "elev_ft", 0.0))
 
 
 def _build_index(cache: AirportCache) -> dict[str, dict]:
@@ -853,7 +860,7 @@ def _build_index(cache: AirportCache) -> dict[str, dict]:
         try:  # only the header fields: the files carry whole taxiway graphs
             data = json.loads(path.read_bytes())
             index[data["icao"]] = _entry(data["icao"], data.get("name", ""), data["lat"], data["lon"],
-                                         data.get("runways", ()), data.get("frequencies", ()))
+                                         data.get("runways", ()), data.get("frequencies", ()), data.get("elev_ft", 0))
         except (OSError, ValueError, KeyError):
             continue
     return index

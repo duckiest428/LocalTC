@@ -37,6 +37,7 @@ export interface Status {
   altitude_ft?: number;
   runway?: string;
   gate?: string;
+  rules?: "IFR" | "VFR";
   tuned?: Station;
   next?: Station;
   ete?: { nm: number; min: number } | null;
@@ -45,7 +46,7 @@ export interface Status {
 }
 
 const STATUS_KEYS = ["active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
-  "altitude_ft", "runway", "gate", "tuned", "next", "ete", "last_atc"] as const;
+  "altitude_ft", "runway", "gate", "rules", "tuned", "next", "ete", "last_atc"] as const;
 const OWN_KEYS = ["t", "lat", "lon", "alt", "agl", "hdg", "hdg_mag", "gs", "vs", "ground", "com1", "com2", "squawk"] as const;
 const TRAFFIC_KEYS = ["id", "callsign", "type", "lat", "lon", "alt", "hdg", "gs", "ground"] as const;
 const RADIO_KEYS = ["kind", "t", "station", "mhz", "text", "ok", "level", "unclear", "radio"] as const;
@@ -62,6 +63,7 @@ function pick(raw: unknown, keys: readonly string[]): Record<string, unknown> {
 export function cleanStatus(raw: Record<string, unknown>): Status {
   const out = pick(raw, STATUS_KEYS);
   out.active = !!raw.active;
+  if ("rules" in out) out.rules = out.rules === "VFR" ? "VFR" : "IFR";
   if (JSON.stringify(out).length > MAX_STATUS) throw new HttpError(413, "The status is too big.");
   return out as unknown as Status;
 }

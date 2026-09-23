@@ -5,7 +5,7 @@
 Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. No cloud, no API keys.
 
 - A small local LLM (1B–4B, via Ollama) reads every pilot call; a grammar checks it and takes over when the model is slow, missing or wrong.
-- A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact FAA phraseology; the model words only replies that have no template.
+- A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact phraseology (FAA in the US and Canada, ICAO elsewhere, or forced either way) for IFR and VFR flights; the model words only replies that have no template.
 - You talk with push-to-talk; faster-whisper transcribes locally. ATC answers in Piper voices through a radio effect, one voice per controller.
 - An optional copilot works the radio for you: readbacks, frequency changes, or every call.
 - **The LocalTC app**: the radio log, frequencies to click, a live map, airport lookup, SimBrief import, and settings for models, voice and push-to-talk.
@@ -60,7 +60,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 |---|---|
 | **ATC** | COM1/COM2 and the transponder at the top. The airport's frequencies: click one to tune COM1. Your callsign, destination, assigned squawk, altitude, runway or approach, the phase, and what ATC expects next. Below that, the radio log. |
 | **Quick Settings** | Performance profiles and the models (language model, Whisper size, ATC voice), each with its speed, quality and size, a **Download** button and a voice **Preview**. Also the push-to-talk key (press **Change**, then the key), yoke button, microphone, speakers, volume and speed, the copilot, ATC options, and developer mode. |
-| **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. **ATC zones** (on by default) draws who controls what: the enroute centres on your route, the departure and approach areas, each airport's Clearance, Ground, Tower and Dep/App, the tower's zone, and the stretch of final where approach clears you and sends you to tower. These are the same outlines ATC hands you over at, so the map explains every handoff; the one you're talking to and the one you're about to be sent to are highlighted. |
+| **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. Two maps, switched with **IFR / VFR**: it opens on your flight's rules and follows them when they change. **VFR** is terrain (OpenTopoMap) with the airspace class around each airport in view: Class B shelves, C, D, or an ICAO control zone or traffic zone, labelled ceiling over floor in hundreds of feet like a sectional (simplified sizes, not for real navigation). On the **IFR** map, **ATC zones** (on by default) draws who controls what: the enroute centres on your route, the departure and approach areas, each airport's Clearance, Ground, Tower and Dep/App, the tower's zone, and the stretch of final where approach clears you and sends you to tower. These are the same outlines ATC hands you over at, so the map explains every handoff; the one you're talking to and the one you're about to be sent to are highlighted. |
 | **Airport Lookup** | Frequencies, runways (length, heading, ILS) and taxiways for any airport a flight has visited. During a flight, any other ICAO is fetched from the sim. |
 | **Logbook** | Every live flight, kept on this computer: date, callsign, route, air and block time, the landing rate, and totals (hours, airports, distance, readbacks right). |
 
@@ -80,7 +80,9 @@ Turn it off with `[logbook] enabled = false`.
 An **account is optional** (Quick Settings → Account). It copies those logbook lines to
 [localtc.tech](https://localtc.tech/dashboard.html), where there are totals, a map of the airports and routes,
 an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
-and next, and ATC's last call). It never sends your position, voice, transcripts, recordings or settings. There's
+and next, and ATC's last call). Only while the companion app watches from away from your PC's network
+(and you allow it) do your position, traffic and radio pass through the server, held in memory and never
+stored; on the same Wi-Fi the phone talks to the PC directly. It never sends voice, recordings or settings. There's
 no password: signing in emails you a 6-digit code to type in. The sign-in is then kept in Windows Credential
 Manager (or the macOS Keychain), not in a file. The server is in
 [`server/`](server/README.md).
@@ -339,7 +341,7 @@ Every threshold can be overridden in `[atc.phase]`.
 
 **Automatic alerts:** moving without a taxi clearance, runway incursion, takeoff or landing without a clearance, and emergencies.
 
-**Phraseology** lives in `src/localtc/atc_core/phraseology/templates/*.toml`: one file per controller, with typed `{slots}`, required and optional readback elements, and an example pilot readback. Templates are validated when loaded.
+**Phraseology** lives in `src/localtc/atc_core/phraseology/templates/*.toml`: one file per controller, with typed `{slots}`, required and optional readback elements, and an example pilot readback. Templates are validated when loaded. ICAO wording overlays the same ids from `templates/icao/*.toml` (text and pilot readback only, so readback checking is identical); which one a controller uses comes from its region (`atc_core/region.py`). VFR flights (`[flight] rules = "VFR"`) take the calls in `templates/vfr.toml`, handled by `atc_core/vfr.py`; the airspace class around an airport (Class B/C/D, ICAO CTR/ATZ) is in `atc_core/airport/classes.py`, with the Class B and C airport lists kept by hand.
 
 **Readbacks** go through the transcript normalizer and the element extractors. The result is `correct`, `incorrect` ("negative, squawk …") or `incomplete` ("read back …"). An unparseable or ambiguous call gets "say again". After three failed tries ATC repeats the instruction once and stops asking, with a `readback_unresolved` alert. With the language model, the model reads the call first (see above) and returns the same `Interpretation`.
 

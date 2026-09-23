@@ -118,12 +118,59 @@ def _traffic(tokens: list[Token]) -> str | None:
     return None
 
 
+FOLLOWING_WORDS = (("flight", "following"), ("vfr", "advisories"), ("traffic", "advisories"), ("radar", "advisories"),
+                   ("flight", "information", "service"), ("basic", "service"), ("traffic", "service"),
+                   ("radar", "service"))
+OPTION_WORDS = {("touch", "and", "go"): "touch_and_go", ("touch", "go"): "touch_and_go", ("the", "option"): "option",
+                ("stop", "and", "go"): "option", ("low", "approach"): "option", ("full", "stop"): "full_stop"}
+PATTERN_LEGS = (("midfield",), ("downwind",), ("base",), ("crosswind",), ("upwind",))
+PATTERN_WORDS = (*PATTERN_LEGS, ("in", "the", "pattern"), ("in", "the", "circuit"))  # "remaining in the pattern" asks
+CLOSED_WORDS = (("closed", "traffic"), ("remain", "in", "the", "pattern"), ("remaining", "in", "the", "pattern"),
+                ("staying", "in", "the", "pattern"), ("pattern", "work"), ("remain", "in", "the", "circuit"),
+                ("remaining", "in", "the", "circuit"), ("circuit", "work"), ("circuits",))
+COMPASS = ("north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest")
+
+
+def _vfr_direction(tokens: list[Token]) -> str | None:
+    """A VFR departure's way out, as ATC approves it: "to the north" and "northbound" are "northbound";
+    "straight out" is "straight-out"."""
+    if _has_any(tokens, ("straight", "out")):
+        return "straight-out"
+    if _has_any(tokens, *CLOSED_WORDS):
+        return "closed-traffic"
+    words = [t.text for t in tokens]
+    for word in words:
+        for point in COMPASS:
+            if word in (point, f"{point}bound"):
+                return f"{point}bound"
+    return None
+
+
+def _option(tokens: list[Token]) -> str | None:
+    """ "touch_and_go", "option" or "full_stop" when the pilot asks for one."""
+    return next((kind for phrase, kind in OPTION_WORDS.items() if _has_any(tokens, phrase)), None)
+
+
 def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     """All intents present, most specific first."""
     matches: list[IntentMatch] = []
 
     def add(intent: str, **values: Any) -> None:
         matches.append(IntentMatch(intent, {k: v for k, v in values.items() if v is not None}))
+
+    # VFR: flight following, a Class B clearance, the option and the way out ride along with the main call
+    # ("ready to taxi, VFR to the north, request flight following"), or stand alone (end of this function).
+    following = True if _has_any(tokens, *FOLLOWING_WORDS) else None
+    class_b = True if _has_any(tokens, ("class", "b"), ("b", "airspace"), ("b", "clearance"), ("into", "b"),
+                                ("b", "departure"), ("class", "bravo"), ("bravo", "airspace"), ("bravo", "clearance"),
+                                ("into", "the", "bravo"), ("control", "zone")) and _has_any(tokens, *REQUEST_WORDS) else None
+    option = _option(tokens)
+    direction = _vfr_direction(tokens)
+    vfr = {"flight_following": following, "class_b": class_b, "direction": direction}
+    checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
+                     ("passing",), ("through",), ("out", "of"))
+    # "climbing 4,500, request a Class Bravo clearance": a check-in asking for Class B, not an IFR clearance
+    b_in_flight = bool(class_b) and _has_any(tokens, *checkin_words)
 
     if _has_any(tokens, ("mayday",), ("pan", "pan"), ("emergency",)):
         add(EMERGENCY)
@@ -136,8 +183,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy"), ("request", "ifr"),
                 ("requesting", "ifr")) and not _has_any(
         tokens, ("cleared",), ("taxi",)  # "Clearance, request taxi": the station's name, not an IFR request
-    ) and not landing:
-        add("request_ifr_clearance", atis=_atis(tokens))
+    ) and not landing and not b_in_flight:
+        add("request_ifr_clearance", atis=_atis(tokens), **vfr)
     pushing = _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
                        ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push"))
     if pushing and _has_any(tokens, *PUSH_READBACK) and not _has_any(tokens, *REQUEST_WORDS):
@@ -152,7 +199,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
                   ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),
                   ("taxi", "to", "the", "runway")):
-        add("ready_to_taxi", atis=_atis(tokens))
+        add("ready_to_taxi", atis=_atis(tokens), **vfr)
     if _has_any(
         tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
         ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures"),
@@ -160,7 +207,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         ("for", "departure"), ("to", "depart"), ("for", "takeoff"),
         ("request", "the", "departure"), ("like", "the", "departure"), ("ready", "in", "sequence")
     ):
-        add("ready_for_departure", runway=_any_runway(tokens))
+        add("ready_for_departure", runway=_any_runway(tokens), **vfr)
     elif (hold_short(tokens) or _has_any(tokens, ("holding", "point"), ("at", "the", "holding"))) and not _has_any(
             tokens, ("taxi",), ("via",), ("cleared",), ("hold", "position"), ("holding", "position")):
         # "Tower, holding short runway 06L" / "holding point Charlie 1" is a departure request; a taxi
@@ -169,7 +216,10 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",),
                 ("on", "the", "approach"), ("on", "approach"), ("established",), ("for", "the", "visual"),
                 ("field", "in", "sight"), ("runway", "in", "sight")) or landing:
-        add("report_final", runway=_any_runway(tokens))  # also "are we cleared to land?"
+        add("report_final", runway=_any_runway(tokens), option=option)  # also "are we cleared to land?"
+    elif _has_any(tokens, *(PATTERN_LEGS if direction == "closed-traffic" else PATTERN_WORDS)) and not _instructed(tokens) \
+            and not _has_any(tokens, ("enter",), ("join",), ("make",)):
+        add("position_report", option=option)  # "midfield left downwind 27": a pattern report
     wanted = altitudes(tokens) or ([n for n in _reported_altitudes(tokens) if n >= 1000]
                                    if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])
     if _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and wanted:
@@ -197,12 +247,18 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if any(t.text in CONDITION_WORDS for t in tokens) and not asking:
         add("report_conditions", conditions=" ".join(t.text for t in tokens if t.kind == "word" and t.text in (
             *CONDITION_WORDS, "light", "moderate", "severe", "occasional", "continuous")))
-    checkin_words = (("climbing",), ("descending",), ("level",), ("with", "you"), ("checking", "in"), ("leaving",),
-                     ("passing",), ("through",), ("out", "of"))
     if _has_any(tokens, *checkin_words) and not _instructed(tokens):
         reported = _reported_altitudes(tokens)
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
-            atis=_atis(tokens))
+            atis=_atis(tokens), **vfr)
+    carried = {"request_ifr_clearance", "ready_to_taxi", "ready_for_departure", "checkin"}
+    if not any(m.intent in carried for m in matches):
+        if following:
+            add("request_flight_following", direction=direction)
+        elif class_b:
+            add("request_class_b")
+    if option and not any(m.intent in ("report_final", "position_report") for m in matches):
+        add("request_option", option=option)
     if not matches and reports_problem(tokens):
         add("report_problem")  # alone; with other calls the engine hears it anyway (AtcEngine._problem)
     if not matches and _has_any(tokens, ("tail", "left"), ("tail", "right"), ("push", "approved"), ("face", "east"),
@@ -212,7 +268,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("acknowledge")  # "hold position, B737 crossing": the pilot stops, nothing to answer
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
-                                ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by")):
+                                ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by"),
+                                ("frequency", "change", "approved"), ("squawk", "vfr"), ("squawking", "vfr")):
         add("acknowledge")
     return matches
 
@@ -239,6 +296,9 @@ COMPATIBLE = [
     {"ready_for_departure", "request_turn"},  # "holding short, ready, request a left turn out"
     {"ready_for_departure", "checkin"},  # "holding short, ready" can contain "level"-like noise
     {"ready_for_departure", "request_runway"},  # "holding short runway 25L, we'd like the departure"
+    {"ready_for_departure", "position_report"},  # "ready for departure, remaining in the pattern"
+    {"position_report", "request_runway"},  # "midfield downwind 34, request touch and go"
+    {"position_report", "request_turn"},
 ]
 
 

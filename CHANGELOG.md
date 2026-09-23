@@ -4,6 +4,29 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
+## [0.3.0] - 2026-09-23
+
+### Added
+- **VFR.** Pick IFR or VFR in New Flight (a SimBrief plan fills it in). VFR flights get VFR ATC: a way out
+  ("southbound departure approved"), "frequency change approved" or flight following with a code, radar
+  contact and handoffs, a Class Bravo clearance when you ask (and an alert if you fly into Class B without
+  one), "radar service terminated" near the destination, and pattern entry from wherever you are (downwind
+  on your side, or straight-in). Pattern work too: closed traffic, touch and go, the option, full stop.
+- **A VFR map.** The Live Map has an IFR / VFR switch. VFR shows terrain (OpenTopoMap) and the airspace
+  class around every airport in view (Class B shelves, C, D, or an ICAO control zone or traffic zone) with
+  its ceiling and floor like a sectional. The map opens on your flight's rules and switches with them; the
+  switch works any time.
+- **ICAO phraseology.** Outside the US and Canada, ATC talks ICAO: QNH in hectopascals, "holding point",
+  "decimal", "vacate", flight levels above the local transition altitude, circuits instead of patterns.
+  Automatic by region (Quick Settings > ATC), or forced to FAA or ICAO.
+- **LocalTC Companion for iPhone** (in `ios/`): sign in with the same email, and the phone shows the map,
+  the radio and the flight, with alerts for handoffs and clearances. On the same Wi-Fi it talks to the PC
+  directly; elsewhere through the account server, which holds position and radio in memory only. The map
+  has the same IFR / VFR switch. Cockpit and Flight Bag tabs are previews for now.
+
+### Changed
+- The account server passes the flight rules to the phone (redeploy the Worker for it).
+
 ## [0.2.0] - 2026-09-22
 
 ### Added

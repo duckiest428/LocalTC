@@ -15,6 +15,7 @@ A scenario TOML::
     [[pilot]]
     when = { phase = "PARKED", after_s = 10 }   # or on = "<instruction id>" to react to ATC
     tune = "clearance"                          # controller name, a frequency, or "handoff"
+    squawk = "assigned"                         # optional: set the transponder (a code, or the one ATC gave)
     say = "Paine Clearance, {callsign}, IFR to Boeing Field, ready to copy"
 
 Placeholders in ``say``: {callsign}, {callsign_short}, {readback} (the ideal
@@ -69,6 +70,7 @@ class PilotRule(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     when: When | None = None  # alone: fires when true; with ``on``: an extra condition
     on: str | None = None  # AtcTransmission.instruction_id that triggers this rule
     tune: str | float | None = None
+    squawk: str | None = None  # set the transponder: a code, or "assigned" for the one ATC gave
     delay_s: float = 2.0
     repeat: bool = False
 
@@ -181,7 +183,7 @@ def run(
 
     queue: list[tuple[float, int, PilotRule, dict[str, Any]]] = []
     fired: set[int] = set()
-    state = {"com1": None, "last_own": None}
+    state = {"com1": None, "last_own": None, "squawk": None}
     counter = 0
 
     def schedule(rule_index: int, rule: PilotRule, due: float, context: dict[str, Any]) -> None:
@@ -213,10 +215,14 @@ def run(
 
     def speak(rule: PilotRule, at: float, context: dict[str, Any]) -> None:
         own: OwnshipState | None = state["last_own"]
-        if rule.tune is not None:
-            state["com1"] = _resolve_tune(rule.tune, engine, context)
+        if rule.squawk is not None:
+            state["squawk"] = engine.state.assignments.squawk if rule.squawk == "assigned" else rule.squawk
+        if rule.tune is not None or rule.squawk is not None:
+            if rule.tune is not None:
+                state["com1"] = _resolve_tune(rule.tune, engine, context)
             if own is not None:
-                own = msgspec.structs.replace(own, t=at, com1_mhz=state["com1"])
+                own = msgspec.structs.replace(own, t=at, com1_mhz=state["com1"] or own.com1_mhz,
+                                              squawk=state["squawk"] or own.squawk)
                 state["last_own"] = own
                 feed(own)
         text = rule.say.format_map(_SafeDict(_placeholders(engine, own, context, scenario.scenario.vars)))
@@ -291,6 +297,8 @@ def run(
         if isinstance(event, OwnshipState):
             if state["com1"] is not None:
                 event = msgspec.structs.replace(event, com1_mhz=state["com1"])
+            if state["squawk"] is not None:
+                event = msgspec.structs.replace(event, squawk=state["squawk"])
             state["last_own"] = event
         feed(event)
         if isinstance(event, OwnshipState):

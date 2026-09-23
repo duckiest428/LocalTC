@@ -38,6 +38,7 @@ from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
+from localtc.atc_core.vfr import VfrMixin, VfrState
 from localtc.atc_core.readback import (
     ChainInterpreter,
     GrammarInterpreter,
@@ -204,7 +205,7 @@ class _Scheduled:
     note: Phrase | None = None  # said after the instruction: weather, the ATIS, a caution
 
 
-class AtcEngine:
+class AtcEngine(VfrMixin):
     def __init__(
         self,
         config: EngineConfig | None = None,
@@ -219,6 +220,7 @@ class AtcEngine:
         self._area_cache: dict[str, tuple[float, Any]] = {}  # lookups, reused for AREA_RECHECK_S of sim time
         self.libraries = {"faa": library or TemplateLibrary.load(), "icao": TemplateLibrary.load(style="icao")}
         self.region = regions.FAA  # the phraseology region of the current step (see _region)
+        self.vfr = VfrState()  # what a VFR flight asked for (atc_core/vfr.py)
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
         self.phraser = phraser  # words replies that have no template; None: they get "unable"
         self.state = SessionState()
@@ -535,6 +537,8 @@ class AtcEngine:
             out.append(self._alert(t, "takeoff_without_clearance", "takeoff roll without a takeoff clearance"))
         elif phase is P.TAXI_IN and change.previous == P.LANDING and "landing" not in st.clearances:
             out.append(self._alert(t, "landed_without_clearance", "landed without a landing clearance"))
+        elif phase is P.DEPARTURE and change.previous == P.LANDING and self._vfr:
+            self._vfr_touch_and_go(t)  # a touch and go, or a VFR go-around: round the pattern again
         elif phase is P.DEPARTURE and change.previous == P.LANDING and st.comms.tuned is not None:
             self._go_around(None, st.comms.tuned, t, own)  # went around without saying so: tower gives the instructions
         return out
@@ -562,6 +566,8 @@ class AtcEngine:
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
                 out.append(self._alert(t, "runway_incursion", f"entered {where} without clearance"))
 
+        if (entered := self._vfr_class_b_watch(own)) is not None:
+            out.append(entered)
         if self.cfg.unscripted and st.phase is not None and own.on_ground and self._can_call(t, own) \
                 and self._ground_conflict(own):
             return out
@@ -572,9 +578,10 @@ class AtcEngine:
         phase = P(st.phase)
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
+            ifr = not self._vfr  # vectors, altitude checks and level offers are for IFR flights
             if self._runway_conflict(own) or self._emergency_handling(own) or self._sequence_on_final(own) \
-                    or self._radar_vectors(own) or self._traffic_advisory(own) or self._altitude_check(own) \
-                    or self._enroute_chat(own):
+                    or (ifr and self._radar_vectors(own)) or self._traffic_advisory(own) \
+                    or (ifr and self._altitude_check(own)) or (ifr and self._enroute_chat(own)):
                 return out
 
         def once(flag: str) -> bool:
@@ -603,6 +610,8 @@ class AtcEngine:
         elif phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
                 self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
+        elif self._vfr and self._vfr_monitor(t, own, phase, tuned, once):
+            pass  # VFR: frequency change, flight following, pattern (atc_core/vfr.py)
         elif phase is P.DEPARTURE and own.alt_agl_ft > 500 and tuned == "tower" and once("handoff_departure"):
             if (departure := self.facility("departure") or self._center()) is not None:
                 self._handoff(t, "tower.handoff_departure", st.comms.tuned, departure)
@@ -834,7 +843,8 @@ class AtcEngine:
         blocked = self._departure_blocked(runway, lined_up=self._takeoff_hold == "occupied")
         if blocked is None:
             self._takeoff_wait = self._takeoff_hold = None
-            self._schedule(t, "tower.takeoff", {"runway": runway}, facility, clearance="takeoff", delay=answering,
+            instruction, slots = self._vfr_takeoff(runway) if self._vfr else ("tower.takeoff", {"runway": runway})
+            self._schedule(t, instruction, slots, facility, clearance="takeoff", delay=answering,
                            on_issue=lambda: self._assign(departure_runway=runway),
                            note=self._caution_note(st.flight.origin, wind=True))
             return
@@ -1218,7 +1228,11 @@ class AtcEngine:
         if done.controller != facility.controller and not same_frequency:
             return False
         again = GrammarInterpreter().interpret(text, done, InterpretContext(callsign=self._callsign()))
-        return again.kind == "readback" and not again.mismatched
+        if again.kind != "readback" or again.mismatched:
+            return False
+        # "Midfield left downwind 34L" names the runway just read back, but it's a report, not a repeat.
+        fresh = GrammarInterpreter().interpret(text, None, InterpretContext(callsign=self._callsign()))
+        return fresh.intent not in ("position_report", "report_final")
 
     def _on_readback(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         st = self.state
@@ -1289,6 +1303,8 @@ class AtcEngine:
             return []
         if intent == "other":
             return self._decline(interp, facility, t)
+        if self._vfr and self._vfr_request(interp, facility, t, own):
+            return []
         unscripted = {
             "request_direct": self._direct, "request_vectors": self._vectors, "request_runway": self._runway_request,
             "request_return": self._return, "going_around": self._go_around, "report_conditions": self._pirep,
@@ -1927,6 +1943,8 @@ class AtcEngine:
     def _checkin(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         st = self.state
         self._checked_in.add(facility.station)
+        if self._vfr and self._vfr_checkin(t, facility, own):
+            return
         if facility.controller == "departure":
             cruise = st.assignments.cruise_ft or st.flight.cruise_ft
             if cruise:
@@ -2077,7 +2095,8 @@ class AtcEngine:
             if delay:  # the pilot asked, and we can't tell which runway; an automatic call just waits
                 self._schedule(t, "common.say_again", {}, facility)
             return
-        self._schedule(t, "tower.land", {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
+        landing = self._vfr_landing() if self._vfr else "tower.land"
+        self._schedule(t, landing, {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
                        on_issue=lambda: self._assign(arrival_runway=runway), note=self._caution_note(st.flight.destination))
 
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None) -> None:

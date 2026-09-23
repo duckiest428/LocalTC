@@ -64,6 +64,7 @@ class FlightPlan(msgspec.Struct, kw_only=True):
     destination_name: str = ""
     fixes: list[Fix] = []
     simbrief_id: str = ""  # SimBrief's static id or request time: tells one plan from the next
+    rules: Literal["IFR", "VFR"] = "IFR"
 
     def summary(self) -> str:
         parts = [self.callsign or "(sim callsign)", f"{self.origin or '?'}-{self.destination or '?'}"]
@@ -97,7 +98,7 @@ def parse_altitude(text: str | int) -> int:
 
 
 def manual_plan(*, callsign: str = "", origin: str = "", destination: str, cruise: str | int = "",
-                alternate: str = "", route: str = "", aircraft: str = "") -> FlightPlan:
+                alternate: str = "", route: str = "", aircraft: str = "", rules: str = "IFR") -> FlightPlan:
     """A plan typed into the app; checks it and puts it in ATC's format."""
     def icao(value: str, what: str, required: bool = False) -> str:
         value = value.strip().upper()
@@ -113,7 +114,7 @@ def manual_plan(*, callsign: str = "", origin: str = "", destination: str, cruis
     return FlightPlan(source="manual", callsign=sign, origin=icao(origin, "origin"),
                       destination=icao(destination, "destination", required=True), alternate=icao(alternate, "alternate"),
                       cruise_ft=parse_altitude(cruise), route=" ".join(route.upper().split()),
-                      aircraft=aircraft.strip().upper())
+                      aircraft=aircraft.strip().upper(), rules="VFR" if str(rules).upper() == "VFR" else "IFR")
 
 
 # --- SimBrief ----------------------------------------------------------------------------------------------------
@@ -195,6 +196,7 @@ def parse_simbrief(data: dict[str, Any]) -> FlightPlan:
         destination_name=str(_get(data, "destination", "name")),
         fixes=fixes,
         simbrief_id=str(_get(data, "params", "static_id") or _get(data, "params", "time_generated")),
+        rules="VFR" if str(atc.get("flight_rules") or "I").upper() == "V" else "IFR",  # Y/Z (mixed) fly IFR here
     )
 
 
@@ -238,6 +240,7 @@ def apply_plan(plan: FlightPlan, flight: Any) -> None:
     """Put the plan into a ``FlightConfig``: what ATC clears the flight with."""
     from localtc.config import RouteFix
     flight.callsign = plan.callsign
+    flight.rules = plan.rules
     flight.origin = plan.origin
     flight.destination = plan.destination
     flight.alternate = plan.alternate

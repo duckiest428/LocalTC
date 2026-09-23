@@ -83,9 +83,12 @@
     </section>
 
     <!-- Live Map -->
-    <section class="page" id="page-map">
+    <section class="page" id="page-map" data-mode="ifr">
       <div id="map"></div>
       <div class="mapctl">
+        <div class="seg" id="map-mode" role="group" aria-label="Map type" title="IFR: who controls what, enroute. VFR: terrain and airspace classes. Opens on the flight's rules.">
+          <button class="btn small" data-mode="ifr" aria-pressed="true">IFR</button><button class="btn small" data-mode="vfr" aria-pressed="false">VFR</button>
+        </div>
         <button class="btn small" id="map-follow" aria-pressed="true">Follow</button>
         <button class="btn small" id="map-route">Route</button>
         <button class="btn small" id="map-zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
@@ -93,14 +96,24 @@
       <div class="mapinfo" id="map-info"></div>
       <div class="maplegend" id="map-legend">
         <div class="lg-talk" id="map-talk"></div>
-        <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
-        <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
-        <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
-        <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
+        <div class="lg-ifr">
+          <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
+          <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
+          <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
+          <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
+        </div>
+        <div class="lg-vfr">
+          <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
+          <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
+          <div class="lg-row"><span class="sw sw-d"></span>Class D / control zone: call the tower first</div>
+          <div class="lg-row"><span class="sw sw-atz"></span>Traffic zone (ATZ)</div>
+          <div class="lg-row lg-muted">Labels: ceiling / floor in hundreds of feet MSL (SFC = surface)</div>
+        </div>
         <div class="lg-row lg-badges"><span><span class="atc-badge b-clearance">D</span>Clearance</span>
           <span><span class="atc-badge b-ground">G</span>Ground</span> <span><span class="atc-badge b-tower">T</span>Tower</span>
           <span><span class="atc-badge b-terminal">A</span>Dep/App</span></div>
-        <div class="lg-src">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
+        <div class="lg-src lg-ifr">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
+        <div class="lg-src lg-vfr">Airspace classes are simplified (typical sizes), not for real navigation</div>
       </div>
     </section>
 
@@ -170,6 +183,7 @@
         <label>Destination <input id="mp-destination" placeholder="e.g. KBFI" autocomplete="off" required></label>
         <label>Cruise altitude <input id="mp-cruise" placeholder="e.g. 5500 or FL350" autocomplete="off"></label>
         <label>Alternate <input id="mp-alternate" autocomplete="off"></label>
+        <label>Flight rules <select id="mp-rules"><option value="IFR">IFR</option><option value="VFR">VFR</option></select></label>
       </div>
       <label>Route <textarea id="mp-route" rows="2" placeholder="e.g. DCT SEA J5 MWH (shown only; ATC clears you 'as filed')"></textarea></label>
     </div>

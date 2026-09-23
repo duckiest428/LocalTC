@@ -1,0 +1,94 @@
+# VFR (FAA). ICAO wording for the same ids is in icao/vfr.toml.
+
+# Class B: a VFR departure needs its clearance before it goes.
+[[template]]
+id = "vfr.class_b_departure"
+controller = "clearance"
+text = ["{callsign}, cleared out of the Class Bravo airspace {direction}, maintain VFR at or below {altitude}, departure frequency {frequency}, squawk {squawk}."]
+readback = { required = ["altitude", "frequency", "squawk"] }
+pilot_readback = "Cleared out of the Bravo {direction}, VFR at or below {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff"
+controller = "tower"
+text = ["{callsign}, runway {runway}, {direction} departure approved, cleared for takeoff."]
+readback = { required = ["runway", "cleared_for_takeoff"] }
+pilot_readback = "Runway {runway}, cleared for takeoff, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff_closed"
+controller = "tower"
+text = ["{callsign}, runway {runway}, make {turn} closed traffic, cleared for takeoff."]
+readback = { required = ["runway", "cleared_for_takeoff"] }
+pilot_readback = "{turn} closed traffic, runway {runway}, cleared for takeoff, {callsign_short}."
+
+[[template]]
+id = "vfr.frequency_change"
+controller = "tower"
+text = ["{callsign}, frequency change approved.", "{callsign}, frequency change approved, good day."]
+
+[[template]]
+id = "vfr.closed_traffic"
+controller = "tower"
+text = ["{callsign}, make {turn} closed traffic runway {runway}, report midfield downwind."]
+readback = { required = ["runway"] }
+pilot_readback = "{turn} closed traffic runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.squawk"
+controller = "any"
+text = ["{callsign}, squawk {squawk}."]
+readback = { required = ["squawk"] }
+pilot_readback = "Squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.radar_contact"
+controller = "any"
+text = ["{callsign}, {station}, radar contact, {message}."]
+
+[[template]]
+id = "vfr.cleared_class_b"
+controller = "any"
+text = ["{callsign}, cleared into the Class Bravo airspace, maintain VFR at or below {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Cleared into the Bravo, VFR at or below {altitude}, {callsign_short}."
+
+[[template]]
+id = "vfr.remain_clear_b"
+controller = "any"
+text = ["{callsign}, remain clear of the Class Bravo airspace."]
+
+[[template]]
+id = "vfr.service_terminated"
+controller = "any"
+text = ["{callsign}, radar service terminated, squawk VFR, contact {station} {frequency}.", "{callsign}, radar service terminated, squawk VFR, frequency change approved, contact {station} {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "Squawk VFR, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.enter_downwind"
+controller = "tower"
+text = ["{callsign}, {station}, enter {turn} downwind runway {runway}, report midfield."]
+readback = { required = ["runway"] }
+pilot_readback = "Enter {turn} downwind runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.straight_in"
+controller = "tower"
+text = ["{callsign}, {station}, make straight-in runway {runway}, report three mile final."]
+readback = { required = ["runway"] }
+pilot_readback = "Straight-in runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.option"
+controller = "tower"
+text = ["{callsign}, runway {runway}, wind {wind}, cleared for the option."]
+readback = { required = ["runway"] }
+pilot_readback = "Cleared for the option runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.touch_and_go"
+controller = "tower"
+text = ["{callsign}, runway {runway}, wind {wind}, cleared touch and go."]
+readback = { required = ["runway"] }
+pilot_readback = "Cleared touch and go runway {runway}, {callsign_short}."

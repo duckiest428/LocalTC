@@ -105,7 +105,7 @@ class RouteFix(msgspec.Struct, frozen=True, kw_only=True):
 
 
 class FlightConfig(_Section):
-    rules: Literal["IFR"] = "IFR"
+    rules: Literal["IFR", "VFR"] = "IFR"
     destination: str = ""  # ICAO
     cruise_ft: int = 0  # 0 = unknown
     callsign: str = ""  # override the sim's ATC ID, e.g. "N172LT" or "ASA123"

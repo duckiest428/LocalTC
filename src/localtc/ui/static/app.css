@@ -289,6 +289,26 @@ tr.tunable:hover td { background: var(--panel-2); }
 .zone-label.center.dim { color: #8d959e; font-weight: 500; }
 .zone-label.center.here { color: var(--green); }
 .zone-label.terminal { color: #7fe0b3; }
+/* The VFR map: terrain, and the airspace classes a VFR pilot needs a word with ATC before entering */
+:root { --z-b: #2b6fd8; --z-c: #b23a9e; --z-d: #2b6fd8; --z-atz: #b23a9e; }
+.seg { display: inline-flex; }
+.seg .btn { border-radius: 0; }
+.seg .btn:first-child { border-radius: 3px 0 0 3px; }
+.seg .btn:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
+#page-map[data-mode="ifr"] .lg-vfr, #page-map[data-mode="vfr"] .lg-ifr { display: none; }
+.lg-muted { color: var(--muted); }
+.sw-b { border: 2px solid var(--z-b); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.sw-c { border: 2px solid var(--z-c); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.sw-d { border: 1.5px dashed var(--z-d); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.sw-atz { border: 1.5px dashed var(--z-atz); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
+.vfr-alt { font: 700 10.5px/1 var(--font); white-space: nowrap; transform: translate(-50%, -50%); pointer-events: none;
+  display: inline-flex; flex-direction: column; align-items: center; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
+.vfr-alt i { font-style: normal; border-top: 1.5px solid currentColor; }
+.vfr-alt.b { color: var(--z-b); } .vfr-alt.c { color: var(--z-c); }
+.vfr-alt.d { color: var(--z-d); } .vfr-alt.atz { color: var(--z-atz); }
+.vfr-apt { font: 700 11px/1 var(--font); white-space: nowrap; transform: translate(8px, -50%); pointer-events: none;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
+.vfr-apt.towered { color: #1d5bbf; } .vfr-apt.other { color: #8e2c7c; }
 @media (prefers-reduced-motion: reduce) { .atc-badge.next { animation: none; box-shadow: 0 0 0 2px var(--z-final); } }
 
 /* Updates: the release notes */

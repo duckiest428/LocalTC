@@ -1,0 +1,45 @@
+[     0.0] PHASE     - -> PARKED (initial state)
+[     7.0] PILOT     121.8: Paine Ground, november one seven two lima tango, at parking, VFR, for circuits, with information bravo, ready to taxi.
+[     9.0] ATC       Paine Ground 121.8: N172LT, taxi to holding point A1 runway 34L via C, A, A1, information Oscar is current, QNH 1013.
+[    11.0] PILOT     121.8: Holding point alpha one runway three four left via charlie, alpha, alpha one, Cessna two lima tango.
+[    11.0] READBACK  ground.taxi_out_at correct
+[    62.0] PHASE     PARKED -> TAXI_OUT (started moving)
+[   324.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
+[   324.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.
+[   326.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
+[   326.0] READBACK  ground.handoff_tower correct
+[   332.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short runway 34L, ready for departure, remaining in the circuit.
+[   334.0] ATC       Paine Tower 120.2: N172LT, runway 34L, cleared for takeoff, left hand circuit, wind 310 degrees 8 knots.
+[   336.0] PILOT     120.2: Runway three four left, cleared for takeoff, left hand circuit, Cessna two lima tango.
+[   336.0] READBACK  vfr.takeoff_closed correct
+[   396.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
+[   409.0] PHASE     TAKEOFF -> DEPARTURE (airborne)
+[   522.0] PHASE     DEPARTURE -> CRUISE (level at 1600 ft)
+[   528.0] PHASE     CRUISE -> ARRIVAL (within 30 nm of KPAE)
+[   532.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
+[   594.0] PILOT     120.2: Paine Tower, Cessna two lima tango, downwind runway 34L, touch and go.
+[   597.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, wind 310 degrees 8 knots, cleared touch and go.
+[   599.0] PILOT     120.2: Cleared touch and go runway three four left, Cessna two lima tango.
+[   599.0] READBACK  vfr.touch_and_go correct
+[   726.0] PHASE     APPROACH -> LANDING (short final runway 34L)
+[   820.0] PHASE     LANDING -> DEPARTURE (go-around)
+[   820.0] ATC       Paine Tower 120.2: Cessna 2LT, join left hand circuit runway 34L, report downwind.
+[   822.0] PILOT     120.2: left hand circuit runway three four left, Cessna two lima tango.
+[   822.0] READBACK  vfr.closed_traffic correct
+[   933.0] PHASE     DEPARTURE -> CRUISE (level at 1600 ft)
+[   939.0] PHASE     CRUISE -> ARRIVAL (within 30 nm of KPAE)
+[   943.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
+[   970.0] PILOT     120.2: Paine Tower, Cessna two lima tango, downwind runway 34L, full stop.
+[   972.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, wind 310 degrees 8 knots, cleared to land.
+[   974.0] PILOT     120.2: Cleared to land runway three four left, Cessna two lima tango.
+[   974.0] READBACK  tower.land correct
+[  1143.0] PHASE     APPROACH -> LANDING (short final runway 34L)
+[  1234.0] PHASE     LANDING -> TAXI_IN (rollout complete)
+[  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, vacate when able, contact Paine Ground 121.8.
+[  1236.0] PILOT     120.2: Paine Ground one two one point eight, Cessna two lima tango.
+[  1236.0] READBACK  tower.exit_contact_ground correct
+[  1242.0] PILOT     121.8: Paine Ground, Cessna two lima tango, clear of runway 34L, taxi to parking.
+[  1245.0] ATC       Paine Ground 121.8: Cessna 2LT, taxi to the apron via A1, A, C.
+[  1247.0] PILOT     121.8: Taxi to the apron via alpha one, alpha, charlie, Cessna two lima tango.
+[  1247.0] READBACK  ground.taxi_in correct
+[  1602.0] PHASE     TAXI_IN -> PARKED (stopped with brake set)

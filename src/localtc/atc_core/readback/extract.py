@@ -187,6 +187,8 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     starts = _find_phrase(tokens, ("maintain",)) + [  # "climb to 3,200", "descend 3,000"
         i for word in ("climb", "descend")  # not "climbing 5,000": that's a check-in report
         for i in _find_phrase(tokens, (word, "to")) + _find_phrase(tokens, (word,))
+    ] + [  # VFR limits: "at or below 4,500" (FAA), "not above 3,000 feet" (ICAO)
+        i for phrase in (("at", "or", "below"), ("not", "above")) for i in _find_phrase(tokens, phrase)
     ]
 
     for i in sorted(set(starts)):

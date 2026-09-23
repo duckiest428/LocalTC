@@ -69,6 +69,7 @@ SLOTS: dict[str, SlotType] = {
     "taxi_route": TAXI_ROUTE,
     "hold_point": TAXI_POINT,  # where a taxi clearance meets the runway
     "turn": TEXT,  # "left" or "right"
+    "direction": TEXT,  # a VFR departure's way out: "northbound", "straight-out"
     "approach": APPROACH,
     "procedure": PROCEDURE,  # a SID or STAR ident from the flight plan
     "atis": ATIS,

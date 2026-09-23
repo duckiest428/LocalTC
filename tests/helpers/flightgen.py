@@ -220,8 +220,10 @@ class FlightBuilder:
             self.tick()
         return self
 
-    def final_approach(self, end: RunwayEndGeometry, geometry: AirportGeometry, *, gs: float = 85) -> "FlightBuilder":
-        """From the current position (roughly on the extended centerline) down a 3° path to touchdown."""
+    def final_approach(self, end: RunwayEndGeometry, geometry: AirportGeometry, *, gs: float = 85,
+                       touch_and_go: bool = False) -> "FlightBuilder":
+        """From the current position (roughly on the extended centerline) down a 3° path to touchdown; then a
+        rollout, or with ``touch_and_go`` a few seconds on the runway and off again."""
         s = self.s
         s.flaps = 2
         threshold = geometry.frame.to_latlon(*end.threshold)
@@ -240,7 +242,49 @@ class FlightBuilder:
             s.lat, s.lon = move(s.lat, s.lon, s.hdg_true, s.gs_kt * KT_TO_MPS * self.dt)
             s.on_runway = past or dist_nm < 0.02
             self.tick()
-        return self.rollout()
+        if not touch_and_go:
+            return self.rollout()
+        s.on_ground, s.on_runway, s.vs_fpm, s.alt_msl_ft = True, True, 0.0, field
+        for _ in range(int(6 / self.dt)):  # flaps up, power in
+            s.gs_kt = max(50.0, s.gs_kt - 2 * self.dt)
+            s.lat, s.lon = move(s.lat, s.lon, s.hdg_true, s.gs_kt * KT_TO_MPS * self.dt)
+            self.tick()
+        return self.takeoff(end)
+
+    def circuit(self, end: RunwayEndGeometry, geometry: AirportGeometry, *, side: str = "left",
+                pattern_agl: float = 1000, touch_and_go: bool = False) -> "FlightBuilder":
+        """One lap of the traffic pattern from the climb-out: crosswind, downwind, base, final, touchdown."""
+        ux, uy = unit(end.heading_true)
+        lx, ly = (-uy, ux) if side == "left" else (uy, -ux)
+        x0, y0 = end.threshold
+        length = end.runway.half_length * 2
+        nm = METERS_PER_NM
+
+        def at(along: float, across: float) -> tuple[float, float]:
+            return geometry.frame.to_latlon(x0 + ux * along + lx * across, y0 + uy * along + ly * across)
+
+        alt = geometry.airport.elev_ft + pattern_agl
+        self.fly_to(*at(length + 0.8 * nm, 0), alt, gs=80, vs=700)  # upwind
+        self.fly_to(*at(length + 0.8 * nm, 1.0 * nm), alt, gs=90)  # crosswind
+        self.fly_to(*at(-0.8 * nm, 1.0 * nm), alt, gs=90)  # downwind, past the threshold
+        self.fly_to(*at(-1.6 * nm, 0.6 * nm), alt - 300, gs=80, vs=500)  # base
+        self.fly_to(*at(-1.4 * nm, 0), alt - 500, gs=75, vs=500, stop_nm=0.15)  # turning final
+        return self.final_approach(end, geometry, gs=70, touch_and_go=touch_and_go)
+
+
+def vfr_kpae_pattern(kpae_airport: Airport, *, dt: float = 1.0) -> FlightBuilder:
+    """Paine Field closed traffic, runway 34L: take off, a touch and go, a second circuit, full stop, park."""
+    b = FlightBuilder(kpae_airport, dt=dt, wind=(330, 8))
+    origin = b.origin
+    end = origin.end("34L")
+    b.park(60)
+    b.taxi_route(origin, TaxiGraph(origin).departure_route(b.s.lat, b.s.lon, end))
+    b.park(40, parking_brake=False)
+    b.line_up(end, origin)
+    b.takeoff(end)
+    b.circuit(end, origin, touch_and_go=True)
+    b.circuit(end, origin)
+    return b.exit_and_park(origin)
 
 
 def ifr_kpae_kbfi(kpae_airport: Airport, kbfi_airport: Airport, *, dt: float = 1.0) -> FlightBuilder:

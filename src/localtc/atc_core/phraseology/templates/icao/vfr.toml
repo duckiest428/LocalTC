@@ -1,0 +1,53 @@
+# VFR in ICAO wording (Doc 4444 / Doc 9432): control zones and circuits instead of Class B and patterns.
+
+[[template]]
+id = "vfr.class_b_departure"
+text = ["{callsign}, cleared to leave the control zone {direction}, VFR, not above {altitude}, departure frequency {frequency}, squawk {squawk}."]
+pilot_readback = "Cleared to leave the control zone {direction}, VFR not above {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff"
+text = ["{callsign}, runway {runway}, cleared for takeoff, {direction} departure."]
+
+[[template]]
+id = "vfr.takeoff_closed"
+text = ["{callsign}, runway {runway}, cleared for takeoff, {turn} hand circuit."]
+pilot_readback = "Runway {runway}, cleared for takeoff, {turn} hand circuit, {callsign_short}."
+
+[[template]]
+id = "vfr.closed_traffic"
+text = ["{callsign}, join {turn} hand circuit runway {runway}, report downwind."]
+pilot_readback = "{turn} hand circuit runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.radar_contact"
+text = ["{callsign}, {station}, identified, {message}."]
+
+[[template]]
+id = "vfr.cleared_class_b"
+text = ["{callsign}, cleared to enter the control zone, VFR, not above {altitude}."]
+pilot_readback = "Cleared to enter the control zone, VFR not above {altitude}, {callsign_short}."
+
+[[template]]
+id = "vfr.remain_clear_b"
+text = ["{callsign}, remain outside the control zone."]
+
+[[template]]
+id = "vfr.service_terminated"
+text = ["{callsign}, identification terminated, squawk seven thousand, contact {station} {frequency}."]
+pilot_readback = "Squawk seven thousand, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.enter_downwind"
+text = ["{callsign}, {station}, join {turn} downwind runway {runway}, report downwind."]
+pilot_readback = "Join {turn} downwind runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.straight_in"
+text = ["{callsign}, {station}, join straight in runway {runway}, report final."]
+pilot_readback = "Straight in runway {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.option"
+text = ["{callsign}, runway {runway}, wind {wind}, cleared touch and go."]
+pilot_readback = "Cleared touch and go runway {runway}, {callsign_short}."

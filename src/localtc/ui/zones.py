@@ -4,6 +4,10 @@ It draws what the engine uses, not a picture of it: the centre outlines ATC hand
 areas that decide when departure lets go and approach takes over, and the stretch of final where approach
 clears the approach and sends the flight to tower. Before a flight starts, the same comes from the flight
 plan, so the zones can be looked at while planning.
+
+For the VFR map it also gives the airspace class around every airport in view (``atc_core/airport/classes.py``):
+Class B shelves, Class C's inner and outer circles, Class D, or an ICAO control zone or traffic zone, each
+with its floor and ceiling the way a VFR chart prints them.
 """
 
 import math
@@ -11,21 +15,26 @@ from collections.abc import Callable
 from itertools import pairwise
 from typing import Any
 
-from localtc.atc_core.airport import AirportGeometry
+from localtc.atc_core.airport import AirportGeometry, classes
 from localtc.atc_core.airspace import Airspace, Area
 from localtc.atc_core.engine import JOIN_FINAL_NM, JOIN_LATERAL_NM
 from localtc.atc_core.facilities import airport_facilities
+from localtc.atc_core.region import region_for
 from localtc.sim_api import Airport
 from localtc.sim_api.geo import unit
 
 TOWER_NM = 5.0  # a tower's control zone as drawn: the usual surface area around a towered field
 ROUTE_SAMPLE_NM = 20.0  # how finely the route is walked to find the centres it passes through
+VFR_MAX_AREA = 60.0  # square degrees: zoomed out further, the VFR layer shows only the flight's own airports
+VFR_MAX_AIRPORTS = 400
 
 
 def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
-          bounds: tuple[float, float, float, float] | None) -> dict[str, Any]:
+          bounds: tuple[float, float, float, float] | None, known: list[dict] | None = None) -> dict[str, Any]:
     """The map's ATC layer. ``engine`` is the running flight's (None before one starts), ``plan`` the flight
-    plan, ``airport`` finds an airport's data, ``bounds`` (south, west, north, east) is the map's view."""
+    plan, ``airport`` finds an airport's data, ``bounds`` (south, west, north, east) is the map's view, and
+    ``known`` the airports LocalTC has data for (the lookup index: icao, name, lat, lon, elev_ft, tower,
+    approach), for the VFR layer."""
     airspace = engine.airspace if engine is not None else Airspace.load()
     origin, destination = _ends(engine, plan)
     own = engine.state.aircraft if engine is not None else None
@@ -81,7 +90,57 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
         "next": {"station": expected.station, "controller": expected.controller, "mhz": expected.mhz}
         if expected is not None and expected != tuned else None,
         "center": here.name if here is not None else None,
+        "rules": _rules(engine, plan),
+        "classes": vfr_classes(known or [], bounds, [a["icao"] for a in airports]),
     }
+
+
+def _rules(engine: Any, plan: Any) -> str:
+    """IFR or VFR: the running flight's, else the flight plan's. The map opens in the matching view."""
+    if engine is not None:
+        return getattr(engine.state.flight, "rules", "IFR") or "IFR"
+    return getattr(plan, "rules", "IFR") if plan is not None else "IFR"
+
+
+def vfr_classes(known: list[dict], bounds: tuple[float, float, float, float] | None,
+                always: list[str] = ()) -> list[dict[str, Any]]:
+    """The controlled airspace around the airports in view, and the other airports as plain markers.
+
+    Each ring has a radius and the floor and ceiling in feet MSL (floor 0 is the surface), for labels like
+    a VFR chart's "100/SFC". ``always`` are the flight's own airports, drawn even zoomed far out."""
+    if bounds is not None:
+        south, west, north, east = bounds
+        wide = (north - south) * (east - west) > VFR_MAX_AREA
+
+        def inside(a: dict) -> bool:
+            lon = a["lon"] if west <= east or a["lon"] >= west else a["lon"] + 360  # across the date line
+            return south <= a["lat"] <= north and west <= lon <= (east if west <= east else east + 360)
+    else:
+        wide, inside = True, (lambda a: False)
+    chosen = [a for a in known if a["icao"] in always or (not wide and inside(a))]
+    chosen.sort(key=lambda a: (a["icao"] not in always, not a.get("tower"), -a.get("runway_m", 0)))
+    return [_vfr_airport(a) for a in chosen[:VFR_MAX_AIRPORTS]]
+
+
+def _vfr_airport(a: dict) -> dict[str, Any]:
+    icao, elev = a["icao"], float(a.get("elev_ft") or 0)
+    zone = classes.zone_for(icao, towered=bool(a.get("tower")), approach=bool(a.get("approach")),
+                            icao_region=region_for(icao).icao)
+
+    def agl(ft: float) -> int:  # above the field, in feet MSL, rounded to the hundred as a chart prints it
+        return round((elev + ft) / 100) * 100
+
+    if zone.kind == "B":
+        rings = [{"nm": 10, "floor": 0, "ceiling": 10000}, {"nm": 20, "floor": agl(3000), "ceiling": 10000},
+                 {"nm": 30, "floor": agl(6000), "ceiling": 10000}]
+    elif zone.kind == "C":
+        rings = [{"nm": 5, "floor": 0, "ceiling": agl(4000)}, {"nm": 10, "floor": agl(1200), "ceiling": agl(4000)}]
+    elif zone.kind:
+        rings = [{"nm": zone.radius_nm, "floor": 0, "ceiling": agl(zone.ceiling_agl_ft)}]
+    else:
+        rings = []
+    return {"icao": icao, "name": a.get("name", ""), "lat": a["lat"], "lon": a["lon"], "class": zone.kind,
+            "label": zone.name, "towered": bool(a.get("tower")), "rings": rings}
 
 
 def _ends(engine: Any, plan: Any) -> tuple[str | None, str | None]:

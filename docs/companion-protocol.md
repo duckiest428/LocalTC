@@ -29,11 +29,12 @@ The relay's `hello` has no `route` (the phone gets it on the local network only)
 ```json
 {"active": true, "callsign": "FFT2084", "aircraft": "A320neo", "origin": "KSAN", "destination": "KPHX",
  "phase": "CRUISE", "phase_label": "Cruise", "squawk": "4512", "altitude_ft": 35000, "runway": "26",
- "gate": "Gate C14", "tuned": {"station": "Albuquerque Center", "mhz": 133.65},
+ "gate": "Gate C14", "rules": "IFR", "tuned": {"station": "Albuquerque Center", "mhz": 133.65},
  "next": {"station": "Phoenix Approach", "mhz": 119.2}, "ete": {"nm": 80, "min": 11},
  "last_atc": {"station": "Albuquerque Center", "mhz": 133.65, "text": "Frontier 2084, roger."}}
 ```
-`{"active": false}` when no flight is running.
+`{"active": false}` when no flight is running. `rules` is `"IFR"` or `"VFR"`: the map opens on the matching
+view (the pilot can switch). Older desktops leave it out; read that as IFR.
 
 ### `own` (about 4 Hz locally, 1 Hz over the relay)
 ```json

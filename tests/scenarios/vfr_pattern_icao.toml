@@ -1,0 +1,78 @@
+# The same circuits in ICAO wording (forced: Paine is FAA by region): circuits off 34L, a touch and go, a second
+# circuit, a full stop.
+[scenario]
+name = "vfr_pattern_icao"
+recording = "../fixtures/vfr_kpae_pattern"
+airports = ["../fixtures/airports"]
+vars = { atis = "bravo" }
+
+[flight]
+destination = "KPAE"
+cruise_ft = 1600
+rules = "VFR"
+
+[atc]
+seed = 7
+phraseology = "icao"
+
+[[pilot]]
+when = { phase = "PARKED", after_s = 5 }
+tune = "ground"
+say = "Paine Ground, {callsign}, at parking, VFR, for circuits, with information {atis}, ready to taxi."
+
+[[pilot]]
+on = "ground.taxi_out"
+say = "{readback}"
+
+[[pilot]]
+on = "ground.handoff_tower"
+say = "{readback}"
+
+[[pilot]]
+on = "ground.handoff_tower"
+tune = "handoff"
+delay_s = 8
+say = "Paine Tower, {callsign_short}, holding short runway {departure_runway}, ready for departure, remaining in the circuit."
+
+[[pilot]]
+on = "vfr.takeoff_closed"
+say = "{readback}"
+
+# --- first circuit: a touch and go ------------------------------------------------------------
+# The phases in the pattern run DEPARTURE -> CRUISE (level) -> ARRIVAL -> APPROACH (the field is the
+# destination); midfield downwind is about 70 s after levelling off.
+[[pilot]]
+when = { phase = "APPROACH", after_s = 60 }
+say = "Paine Tower, {callsign_short}, downwind runway 34L, touch and go."
+
+[[pilot]]
+on = "vfr.touch_and_go"
+say = "{readback}"
+
+[[pilot]]
+on = "vfr.closed_traffic"
+say = "{readback}"
+
+# --- second circuit: full stop ----------------------------------------------------------------
+[[pilot]]
+on = "vfr.closed_traffic"
+delay_s = 150
+say = "Paine Tower, {callsign_short}, downwind runway 34L, full stop."
+
+[[pilot]]
+on = "tower.land"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+say = "{readback}"
+
+[[pilot]]
+on = "tower.exit_contact_ground"
+tune = "handoff"
+delay_s = 8
+say = "Paine Ground, {callsign_short}, clear of runway {arrival_runway}, taxi to parking."
+
+[[pilot]]
+on = "ground.taxi_in"
+say = "{readback}"

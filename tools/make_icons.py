@@ -7,7 +7,8 @@ page of code, and PNG and ICO are both simple enough containers to write directl
 
     python tools/make_icons.py
 
-Writes install/localtc.ico (the Windows shortcut icon), site/icon-180.png (apple-touch-icon) and
+Writes install/localtc.ico (the Windows shortcut icon), the companion app's iOS icon, site/icon-180.png
+(apple-touch-icon) and
 site/og.png (the link preview card).
 """
 
@@ -103,10 +104,10 @@ def rgb(colour: str) -> tuple[int, int, int]:
     return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
 
 
-def render(size: int) -> bytes:
-    """The icon at `size`, as raw RGBA rows."""
+def render(size: int, *, square: bool = False) -> bytes:
+    """The icon at `size`, as raw RGBA rows. `square`: full-bleed, for iOS, which rounds the corners itself."""
     tile, mark = rgb(TILE), rgb(MARK)
-    back = coverage(rounded_rect(size), size)
+    back = [1.0] * (size * size) if square else coverage(rounded_rect(size), size)
     plane = coverage(aircraft(size), size)
     out = bytearray()
     for i in range(size * size):
@@ -181,6 +182,9 @@ def main() -> None:
     print("site/icon-180.png")
     (ROOT / "site" / "og.png").write_bytes(og_card())
     print("site/og.png")
+    icon = ROOT / "ios" / "LocalTC Companion" / "Assets.xcassets" / "AppIcon.appiconset" / "icon-1024.png"
+    icon.write_bytes(png(render(1024, square=True), 1024))
+    print(icon.relative_to(ROOT))
 
 
 if __name__ == "__main__":

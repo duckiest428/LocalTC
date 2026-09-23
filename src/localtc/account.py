@@ -52,10 +52,12 @@ class TokenStore:
         self._memory: dict[str, str] = {}
 
     def _keyring(self):
+        """The system credential store, or None without a usable one (the "null" and "fail" backends
+        accept a token and forget it: memory is better than that)."""
         try:
             import keyring
 
-            return keyring
+            return keyring if getattr(keyring.get_keyring(), "priority", 1) > 0 else None
         except ImportError:
             return None
 

@@ -5,6 +5,7 @@
 /site export-ignore
 /tools export-ignore
 /server export-ignore
+/ios export-ignore
 /.github export-ignore
 /CNAME export-ignore
 /LocalTC[[:space:]]Companion[[:space:]]App* export-ignore

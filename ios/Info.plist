@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Merged with the generated Info.plist (GENERATE_INFOPLIST_FILE). Only what build settings can't say. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>LocalTC Companion connects to LocalTC on your PC over your Wi-Fi to show the flight's map and radio.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_localtc._tcp</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- LocalTC on the PC speaks plain HTTP on the local network, protected by its per-launch key.
+		     Everything on the internet (the account) stays HTTPS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

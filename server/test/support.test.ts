@@ -1,39 +1,47 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { outbox } from "../src/email";
-import { call, data } from "./helpers";
+import { bearer, call, data, signIn } from "./helpers";
 
-const message = { kind: "bug", email: "pilot@example.com", name: "Pilot", message: "Tower cleared me to land on the wrong runway.", version: "0.3.0", platform: "Windows" };
+const message = { kind: "bug", message: "Tower cleared me to land on the wrong runway.", version: "0.3.0", platform: "Windows" };
 
 describe("support messages", () => {
-  it("emails the maintainer, with the sender as Reply-To", async () => {
+  it("emails the maintainer, with the account's address as Reply-To", async () => {
     (env as any).SUPPORT_EMAIL = "maintainer@example.com";
-    const res = await call("POST", "/v1/support", message);
+    const { email, token } = await signIn();
+    const res = await call("POST", "/v1/support", { ...message, email: "someone-else@example.com" }, bearer(token));
     expect(res.status).toBe(200);
     const sent = [...outbox].reverse().find((e) => e.to === "maintainer@example.com")!;
     expect(sent.subject).toContain("bug report");
-    expect(sent.replyTo).toBe("pilot@example.com");
+    expect(sent.replyTo).toBe(email); // never an address the sender typed
     expect(sent.text).toContain("wrong runway");
     expect(sent.text).toContain("LocalTC 0.3.0 Windows");
   });
 
-  it("needs a message and an address to answer", async () => {
-    expect((await call("POST", "/v1/support", { ...message, message: "" })).status).toBe(400);
-    expect((await call("POST", "/v1/support", { ...message, email: "nope" })).status).toBe(400);
-    expect((await data(await call("POST", "/v1/support", { ...message, email: "" }))).error).toMatch(/email/i);
+  it("needs an account", async () => {
+    const res = await call("POST", "/v1/support", message);
+    expect(res.status).toBe(401);
   });
 
-  it("quietly drops what a bot fills in", async () => {
-    const before = outbox.length;
-    expect((await call("POST", "/v1/support", { ...message, website: "http://spam.example" })).status).toBe(200);
-    expect(outbox.length).toBe(before);
+  it("needs the CSRF header from the website", async () => {
+    const { res } = await signIn(undefined, "web");
+    const cookie = res.headers.get("Set-Cookie")!.split(";")[0];
+    expect((await call("POST", "/v1/support", message, { Cookie: cookie })).status).toBe(403);
+    expect((await call("POST", "/v1/support", message, { Cookie: cookie, "X-LocalTC": "1" })).status).toBe(200);
   });
 
-  it("limits how often one address can write", async () => {
-    const headers = { "CF-Connecting-IP": "203.0.113.9" };
+  it("needs a message", async () => {
+    const { token } = await signIn();
+    const res = await call("POST", "/v1/support", { ...message, message: "" }, bearer(token));
+    expect(res.status).toBe(400);
+    expect((await data(res)).error).toMatch(/message/i);
+  });
+
+  it("limits how often one account can write", async () => {
+    const { token } = await signIn();
     const statuses = [];
-    for (let i = 0; i < 7; i++) statuses.push((await call("POST", "/v1/support", message, headers)).status);
-    expect(statuses.slice(0, 5)).toEqual([200, 200, 200, 200, 200]);
+    for (let i = 0; i < 12; i++) statuses.push((await call("POST", "/v1/support", message, bearer(token))).status);
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
     expect(statuses).toContain(429);
   });
 });

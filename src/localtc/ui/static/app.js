@@ -598,11 +598,10 @@ const Settings = {
 
       <div class="card" id="s-support-card">
         <h3>Support &amp; feedback</h3>
-        <p class="muted small">Goes straight to LocalTC's developer by email. Your address is only used to answer you.</p>
+        <p class="muted small" id="sup-who">Goes straight to LocalTC's developer by email. Needs the account (above): the answer goes to its address.</p>
         <div class="row">
           <label>About <select id="sup-kind"><option value="feedback">Feedback or an idea</option><option value="bug">Something went wrong</option>
             <option value="support">Help setting it up</option></select></label>
-          <label>Your email <input id="sup-email" type="email" autocomplete="email" placeholder="for the answer" value="${esc(S.account?.email || "")}"></label>
         </div>
         <textarea id="sup-msg" rows="4" maxlength="8000" placeholder="What happened (the airport, what ATC said), or what would make LocalTC better?"></textarea>
         <div class="row" style="margin-top:8px"><button class="btn small primary" id="sup-send">Send</button><span class="small" id="sup-note"></span></div>
@@ -622,11 +621,12 @@ const Settings = {
     this.wire();
     this.jobs(S.state.jobs || {});
     this.update(S.state.update);
-    api("account").then((a) => { S.account = a; this.account(); if (a.email && !$("#sup-email").value) $("#sup-email").value = a.email; }).catch(() => {});
+    this.supportCard();
+    api("account").then((a) => { S.account = a; this.account(); }).catch(() => {});
     if (st.ui.dev_mode) this.sessions();
     $("#sup-send").onclick = async () => {
       const note = $("#sup-note"), button = $("#sup-send");
-      const body = { kind: $("#sup-kind").value, email: $("#sup-email").value.trim(), message: $("#sup-msg").value.trim() };
+      const body = { kind: $("#sup-kind").value, message: $("#sup-msg").value.trim() };
       if (!body.message) { note.className = "small error"; note.textContent = "Write a message first."; return; }
       button.disabled = true;
       try {
@@ -725,8 +725,18 @@ const Settings = {
     if ($("#u-install")) $("#u-install").onclick = () => api("update/install", {}).catch(fail);
     $("#u-mode").onchange = async (e) => { if (await this.save("ui", "updates", e.target.value)) this.update(u); };
   },
+  /** Support messages need the account: the answer goes to its address. */
+  supportCard() {
+    const who = $("#sup-who"), signedIn = Boolean(S.account?.signed_in && S.account.email);
+    if (!who) return;
+    $("#sup-send").disabled = !signedIn;
+    who.textContent = signedIn
+      ? `Goes straight to LocalTC's developer by email. The answer comes to ${S.account.email}.`
+      : "Sign in to the account (above) to send a message: the answer goes to its email address.";
+  },
   account() {
     const card = $("#s-account-card"), a = S.account;
+    this.supportCard();
     if (!card || !a) return;
     if (!a.signed_in) {
       card.innerHTML = `

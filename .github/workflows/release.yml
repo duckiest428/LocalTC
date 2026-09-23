@@ -48,9 +48,9 @@ jobs:
       - name: LocalTC-Setup.exe
         shell: pwsh
         run: |
-          choco install innosetup --no-progress -y
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:V" installer\localtc.iss
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          choco install nsis --no-progress -y
+          python tools/build_installer.py --out dist/LocalTC-Setup.exe
+          if ($LASTEXITCODE -ne 0) { throw "Building the setup failed" }
       - name: Checksums
         shell: bash
         working-directory: dist

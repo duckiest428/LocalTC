@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dashboard — LocalTC</title>
-<meta name="description" content="Your LocalTC dashboard: the flight you're flying now, and every flight synced from the app, with totals and a map. Optional; LocalTC works without an account.">
+<meta name="description" content="Your LocalTC dashboard: the Flight Tracker, your logbook with a map of every flight, and support. Needs the optional account.">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
@@ -20,31 +20,22 @@
     <a href="index.html#features">Features</a>
     <a href="index.html#install">Install</a>
     <a href="changelog.html">Changelog</a>
-    <a href="support.html">Support</a>
+    <a href="dashboard.html#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
   <a class="btn btn-ghost" href="dashboard.html" aria-current="page">Dashboard</a>
 </header>
 
 <main class="dash">
-  <div class="dash-head">
-    <div>
-      <p class="kicker">Dashboard</p>
-      <h1 id="dash-title">Your flights.</h1>
-    </div>
-    <div class="dash-who" id="dash-who" hidden>
-      <span id="who-email"></span>
-      <button class="btn btn-ghost" id="btn-signout" type="button">Sign out</button>
-    </div>
-  </div>
-
   <p class="dash-msg" id="msg" role="status" aria-live="polite" hidden></p>
 
-  <!-- Signed out -->
+  <!-- Signed out: nothing but the sign-in -->
   <section class="dash-auth" id="auth" hidden>
     <div class="auth-card">
-      <h2>Sign in</h2>
-      <p class="hint">No password. We email you a link and a code; the first sign-in creates the account.</p>
+      <p class="kicker">Dashboard</p>
+      <h1 class="auth-h">Sign in</h1>
+      <p class="hint">The Flight Tracker, your logbook and support need an account. No password: we email you a
+        link and a code, and the first sign-in creates the account.</p>
       <form id="start-form" novalidate>
         <label>Email <input id="f-email" type="email" autocomplete="email" required spellcheck="false"></label>
         <button class="btn btn-primary" id="f-start" type="submit">Email me a sign-in link</button>
@@ -61,85 +52,134 @@
     </div>
     <div class="note">
       <p><strong>An account is optional.</strong> LocalTC works fully without one, and the app keeps your
-        logbook on your own computer either way (the <b>Logbook</b> tab). Signing in to the app copies each
-        flight's summary here: airports, gates, runways, times, distance and the landing. The Flight Tracker
-        follows the flight you're flying right now, like the companion app. Never your voice or recordings.</p>
+        logbook on your own computer either way (the <b>Logbook</b> tab). Signed in, you get:</p>
+      <ul class="perks">
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7a5 5 0 1 0 5 5"/><path d="M12 12 20 4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span><b>Flight Tracker</b>: the flight you're flying right now, live on a map, like the companion app.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6"/></svg><span><b>Logbook</b>: every flight synced from the app, with totals and a map of your routes.</span></li>
+        <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span><b>Support</b>: write to the developer; the answer comes to your email.</span></li>
+      </ul>
+      <p>Each flight's summary is synced: airports, gates, runways, times, distance and the landing. Never your
+        voice or recordings.</p>
     </div>
   </section>
 
-  <!-- Signed in -->
-  <section id="dash" hidden>
-    <nav class="dash-tabs" aria-label="Dashboard sections">
-      <a href="#tracker">Flight Tracker</a><a href="#logbook">Logbook</a><a href="#account">Account</a>
-    </nav>
-
-    <section class="dash-section" id="tracker" aria-labelledby="tracker-h">
-      <div class="section-head">
-        <h2 id="tracker-h">Flight Tracker</h2>
-        <span class="tr-conn" id="tr-conn">Connecting ...</span>
+  <!-- Signed in: a sidebar and one section at a time -->
+  <div class="dash-app" id="dash" hidden>
+    <aside class="dash-side">
+      <p class="kicker">Dashboard</p>
+      <nav class="side-nav" aria-label="Dashboard">
+        <a href="#tracker" data-page="tracker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7a5 5 0 1 0 5 5"/><path d="M12 12 20 4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span>Flight Tracker</span><i class="side-live" id="side-live" hidden></i></a>
+        <a href="#logbook" data-page="logbook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6"/></svg><span>Logbook</span></a>
+        <a href="#support" data-page="support"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>Support</span></a>
+        <a href="#account" data-page="account" class="side-account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Account</span></a>
+      </nav>
+      <div class="side-who">
+        <span class="who-email"></span>
+        <button class="linklike signout" type="button">Sign out</button>
       </div>
-      <div class="panel tracker">
-        <div class="tr-status" id="tr-status">
-          <p class="hint">Looking for a flight ...</p>
+    </aside>
+
+    <div class="dash-main">
+      <section class="dash-page" id="tracker" aria-labelledby="tracker-h" hidden>
+        <div class="page-head">
+          <h1 id="tracker-h">Flight Tracker</h1>
+          <span class="tr-conn" id="tr-conn">Connecting ...</span>
         </div>
-        <div class="tr-body" id="tr-body" hidden>
-          <div class="tr-map" id="tr-map" aria-label="Your aircraft and the traffic around it"></div>
-          <div class="tr-side">
-            <dl class="tr-facts" id="tr-facts"></dl>
-            <h3>Radio</h3>
-            <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
+        <div class="panel tracker">
+          <div class="tr-status" id="tr-status">
+            <p class="hint">Looking for a flight ...</p>
+          </div>
+          <div class="tr-body" id="tr-body" hidden>
+            <div class="tr-map" id="tr-map" aria-label="Your aircraft and the traffic around it"></div>
+            <div class="tr-side">
+              <dl class="tr-facts" id="tr-facts"></dl>
+              <h3>Radio</h3>
+              <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
+            </div>
+          </div>
+          <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →
+            Account → turn on "Away from this Wi-Fi, send the map ...".</p>
+        </div>
+      </section>
+
+      <section class="dash-page" id="logbook" aria-labelledby="logbook-h" hidden>
+        <div class="page-head"><h1 id="logbook-h">Logbook</h1></div>
+        <div class="tiles" id="tiles"></div>
+        <div class="panel map-panel">
+          <div id="lb-map" class="lb-map" aria-label="Map of every flight: click a route, or a flight below"></div>
+        </div>
+        <div class="panel">
+          <h3 class="flights-h">Flights</h3>
+          <div class="table-wrap"><table class="flights">
+            <thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Aircraft</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead>
+            <tbody id="flights"></tbody>
+          </table></div>
+          <button class="btn btn-ghost" id="more" type="button" hidden>Load more</button>
+          <p class="hint" id="empty" hidden>No flights yet. Sign in to the account in the app (Quick Settings → Account), fly, and each flight appears here when it ends.</p>
+        </div>
+      </section>
+
+      <section class="dash-page" id="support" aria-labelledby="support-h" hidden>
+        <div class="page-head"><h1 id="support-h">Support</h1></div>
+        <div class="panel-row support-row">
+          <div class="panel">
+            <form id="support-form" novalidate>
+              <fieldset class="kinds">
+                <legend>What's it about?</legend>
+                <label><input type="radio" name="kind" value="bug" checked> Something went wrong</label>
+                <label><input type="radio" name="kind" value="support"> Help setting it up</label>
+                <label><input type="radio" name="kind" value="feedback"> Feedback or an idea</label>
+              </fieldset>
+              <label>Message <textarea id="s-message" rows="8" maxlength="8000" required
+                placeholder="What happened: the airport, the phase of flight, what ATC said and what you expected. Or what would make LocalTC better."></textarea></label>
+              <button class="btn btn-primary" id="s-send" type="submit">Send</button>
+              <p class="dash-msg" id="s-msg" role="status" aria-live="polite" hidden></p>
+            </form>
+            <p class="hint small-print">Emailed to LocalTC's developer and not stored anywhere else. The answer comes to
+              <b id="s-from"></b>. See <a href="privacy.html#support">the privacy policy</a>.</p>
+          </div>
+          <div class="note">
+            <p><strong>A flight went wrong?</strong> The fastest fix starts with a recording. In the app, turn on
+              <b>Quick Settings → Developer mode</b>, fly it again, press <b>Mark</b> when it goes wrong, then
+              <b>Export session</b>. Say you have one, and the reply tells you where to send it.</p>
+            <p>You can also write from the app itself: <b>Quick Settings → Support &amp; feedback</b>.</p>
+            <p>Prefer public? <a href="https://github.com/duckiest428/LocalTC/issues">Open an issue on GitHub</a>.
+              And if LocalTC made a flight better, <a href="https://buymeacoffee.com/petey1" rel="noopener">a coffee</a>
+              keeps it going.</p>
           </div>
         </div>
-        <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →
-          Account → turn on "Away from this Wi-Fi, send the map ...".</p>
-      </div>
-    </section>
+      </section>
 
-    <section class="dash-section" id="logbook" aria-labelledby="logbook-h">
-      <div class="section-head"><h2 id="logbook-h">Logbook</h2></div>
-      <div class="tiles" id="tiles"></div>
-      <div class="panel map-panel">
-        <div id="lb-map" class="lb-map" aria-label="Map of every flight: click a route, or a flight below"></div>
-      </div>
-      <div class="panel">
-        <h3 class="flights-h">Flights</h3>
-        <div class="table-wrap"><table class="flights">
-          <thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Aircraft</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead>
-          <tbody id="flights"></tbody>
-        </table></div>
-        <button class="btn btn-ghost" id="more" type="button" hidden>Load more</button>
-        <p class="hint" id="empty" hidden>No flights yet. Sign in to the account in the app (Quick Settings → Account), fly, and each flight appears here when it ends.</p>
-      </div>
-    </section>
-
-    <section class="dash-section" id="account" aria-labelledby="account-h">
-      <div class="section-head"><h2 id="account-h">Account</h2></div>
-      <div class="panel-row">
-        <div class="panel">
-          <h3>Signed-in devices</h3>
-          <ul class="devices" id="devices"></ul>
+      <section class="dash-page" id="account" aria-labelledby="account-h" hidden>
+        <div class="page-head"><h1 id="account-h">Account</h1></div>
+        <p class="acct-who"><span>Signed in as <b class="who-email"></b></span>
+          <button class="btn btn-ghost signout" type="button">Sign out</button></p>
+        <div class="panel-row">
+          <div class="panel">
+            <h3>Signed-in devices</h3>
+            <ul class="devices" id="devices"></ul>
+          </div>
+          <div class="panel">
+            <h3>Your data</h3>
+            <p class="hint">Everything the account holds, as a JSON file.</p>
+            <button class="btn btn-ghost" id="btn-export" type="button">Download my data</button>
+            <h3>Delete the account</h3>
+            <p class="hint">Removes the account and every flight synced to it, for good. The logbook in the app stays.</p>
+            <form id="del-form" class="inline-form" novalidate>
+              <input id="del-email" type="email" placeholder="Type your email address to confirm" aria-label="Your email address, to confirm">
+              <button class="btn btn-danger" type="submit">Delete everything</button>
+            </form>
+          </div>
         </div>
-        <div class="panel">
-          <h3>Your data</h3>
-          <p class="hint">Everything the account holds, as a JSON file.</p>
-          <button class="btn btn-ghost" id="btn-export" type="button">Download my data</button>
-          <h3>Delete the account</h3>
-          <p class="hint">Removes the account and every flight synced to it, for good. The logbook in the app stays.</p>
-          <form id="del-form" class="inline-form" novalidate>
-            <input id="del-email" type="email" placeholder="Type your email address to confirm" aria-label="Your email address, to confirm">
-            <button class="btn btn-danger" type="submit">Delete everything</button>
-          </form>
-        </div>
-      </div>
-    </section>
-  </section>
+      </section>
+    </div>
+  </div>
 
   <nav class="legal-nav">
     <a href="index.html">&larr; Back to LocalTC</a>
     <a href="privacy.html#account">Privacy</a>
     <a href="terms.html#account">Terms</a>
     <a href="cookies.html">Cookies</a>
-    <a href="support.html">Support</a>
   </nav>
 </main>
 

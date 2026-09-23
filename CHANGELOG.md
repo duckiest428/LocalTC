@@ -24,12 +24,12 @@ a new minor version adds features, a patch fixes them.
   directly; elsewhere through the account server, which holds position and radio in memory only. The map
   has the same IFR / VFR switch. Cockpit and Flight Bag tabs are previews for now.
 
-- **The website's Dashboard** (was Logbook): a live **Flight Tracker** for the flight you're flying (the map,
-  traffic, frequencies and radio, like the companion app), and the logbook with an interactive map of every
-  flight.
+- **The website's Dashboard** (was Logbook), behind the sign-in, with a sidebar of sections: a live **Flight
+  Tracker** for the flight you're flying (the map, traffic, frequencies and radio, like the companion app), the
+  **Logbook** with an interactive map of every flight, **Support**, and the account.
 - **A map of your flights** in the app's Logbook tab too: click a route for its flights, a flight for its route.
-- **Support**: write to the developer from the website's Support page or the app (Quick Settings > Support &
-  feedback). It's emailed on; nothing is stored.
+- **Support**: write to the developer from the Dashboard or the app (Quick Settings > Support & feedback), signed
+  in to the account; the answer comes to its address. It's emailed on; nothing is stored.
 - **The companion app's new tabs**: My Flight, Comms (with COM1/COM2 and typing a call to ATC on the same
   Wi-Fi), Frequencies, Airports, and EFB (coming soon).
 - A **Buy me a coffee** button in the app. One click and it's gone for good.

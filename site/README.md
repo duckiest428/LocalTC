@@ -8,9 +8,10 @@ index.html      the landing page
 privacy.html    what we know about you (nothing, without an account)
 terms.html      the AGPL, the no-warranty, the "not for real flight", the optional account
 cookies.html    there are none, except the dashboard's sign-in cookie, and how to check
-dashboard.html  the optional account (dashboard.js): the Flight Tracker (the flight in progress, live), the
-                logbook (stats, the flights map, the flights), devices, export, delete
-support.html    feedback and support requests, emailed to the developer by the account server
+dashboard.html  the optional account (dashboard.js): sign in, then a sidebar of sections, one at a time
+                (#tracker, #logbook, #support, #account): the Flight Tracker (the flight in progress, live), the
+                logbook (stats, the flights map, the flights), support (emailed to the developer by the
+                account server), devices, export, delete
 flightsmap.js   the flights map, also used by the app's Logbook tab (the same file: a test checks)
 vendor/leaflet  Leaflet, for the maps (served from here; the tiles come from OpenStreetMap)
 changelog.html  built from CHANGELOG.md

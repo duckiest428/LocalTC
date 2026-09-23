@@ -68,7 +68,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 - **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
 - **Talk**: hold your push-to-talk key (Right Ctrl by default) or the headset button next to the text box. You can also type a call and press Enter.
 - **ATC** switch: ATC's voice on or off (text only). **Copilot** switch: the copilot works the radio with ATC.
-- **Support & feedback** (Quick Settings): write to the developer from the app. It's emailed on, with your address to answer you. There's a [Support page](https://localtc.tech/support.html) on the website too.
+- **Support & feedback** (Quick Settings): write to the developer from the app, signed in to the account. It's emailed on, and the answer comes to the account's address. The website's [Dashboard](https://localtc.tech/dashboard.html#support) has a Support section too.
 - **Buy me a coffee** (top right): if LocalTC made a flight better. Click it once and it's gone for good.
 - **Developer mode** (Quick Settings): every flight is recorded with its audio. **Mark** notes the moment something goes wrong, and **Export session** zips the recording, logs, settings and flight plan into your Downloads folder, ready to send.
 
@@ -388,8 +388,12 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 
 `.github/workflows/release.yml` checks that the three versions agree, runs the tests, and publishes
 `LocalTC-X.Y.Z.zip` (the source tree, minus what `.gitattributes` marks `export-ignore`),
-`LocalTC-Setup.exe` (Inno Setup, `installer/localtc.iss`) and `SHA256SUMS` as a GitHub release. A tag with a
+`LocalTC-Setup.exe` (NSIS, `installer/localtc.nsi`, built by `tools/build_installer.py`) and `SHA256SUMS` as a GitHub release. A tag with a
 suffix (`v0.3.0-rc1`) is a pre-release, which neither the installer nor the updater picks up.
+
+To try the installer before a release exists, `python tools/build_installer.py --offline` builds
+`installer/LocalTC-Setup.exe` carrying the committed source (git `HEAD`) instead of downloading a release.
+It needs NSIS: `brew install makensis` on a Mac, `winget install NSIS.NSIS` on Windows.
 
 ## Licence
 

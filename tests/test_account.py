@@ -47,6 +47,8 @@ class FakeServer:
             return 200, {}
         if path == "/v1/live":
             return 200, {"watchers": 0}
+        if path == "/v1/support":
+            return 200, {"message": "Sent. Thanks!"}
         return 404, {"error": "no"}
 
 
@@ -140,3 +142,15 @@ def test_the_companion_gets_changes_not_a_stream(setup):
     assert account.live({**status, "phase": "ARRIVAL"}, now=116.0)  # the heartbeat: is a phone watching?
     live = [r for r in server.requests if r[1] == "/v1/live"]
     assert len(live) == 3 and all("lat" not in r[2] for r in live)
+
+
+def test_support_messages_need_the_account(setup):
+    account, server, _ = setup
+    with pytest.raises(AccountError, match="Sign in"):
+        account.support({"kind": "bug", "message": "Tower cleared me onto the wrong runway."})
+    assert server.requests == []
+    sign_in(account)
+    assert account.support({"kind": "bug", "message": "Tower cleared me onto the wrong runway."}) == "Sent. Thanks!"
+    method, path, body, headers = server.requests[-1]
+    assert (method, path) == ("POST", "/v1/support") and headers["Authorization"] == "Bearer good-token"
+    assert "email" not in body  # the server answers the account's own address

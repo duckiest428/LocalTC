@@ -20,7 +20,7 @@ const signedIn = (fn: (env: Env, request: Request, a: auth.Auth, url: URL, param
 
 const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/health$/, async () => json({ ok: true })],
-  ["POST", /^\/v1\/support$/, (env, req) => support.submit(env, req)],
+  ["POST", /^\/v1\/support$/, signedIn((env, req, a) => support.submit(env, req, a))],
   ["POST", /^\/v1\/auth\/start$/, (env, req) => auth.start(env, req)],
   ["POST", /^\/v1\/auth\/finish$/, (env, req) => auth.finish(env, req)],
   ["POST", /^\/v1\/auth\/logout$/, signedIn((env, _req, a) => auth.logout(env, a))],

@@ -50,7 +50,7 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |
 | `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |
 | `POST /v1/push-tokens` `{token}`, `DELETE /v1/push-tokens/:token` | APNs, for the iOS app |
-| `POST /v1/support` `{kind: bug\|support\|feedback, email, name?, message, version?, platform?, source?}` | no sign-in; emailed to `SUPPORT_EMAIL` with the sender as Reply-To, stored nowhere; 5 an hour per address |
+| `POST /v1/support` `{kind: bug\|support\|feedback, message, version?, platform?, source?}` | signed in; emailed to `SUPPORT_EMAIL` with the account's address as Reply-To, stored nowhere; 5 an hour per IP, 10 a day per account |
 
 ## Setting it up
 
@@ -63,7 +63,7 @@ npx wrangler login
 npx wrangler d1 create localtc          # copy the database_id into wrangler.toml
 npm run migrate                         # creates the tables
 npx wrangler secret put RESEND_API_KEY  # the sign-in emails: a Resend account with localtc.tech verified
-npx wrangler secret put SUPPORT_EMAIL   # where the Support page's messages go (your own inbox)
+npx wrangler secret put SUPPORT_EMAIL   # where the Dashboard's and the app's support messages go (your own inbox)
 npm run deploy                          # also creates the api.localtc.tech custom domain
 ```
 

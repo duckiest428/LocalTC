@@ -520,7 +520,7 @@ class AppController:
         """Feedback or a support request from Quick Settings, emailed to the maintainer through the server."""
         from localtc.account import AccountError
 
-        message = {k: str(args.get(k, "")).strip() for k in ("kind", "email", "name", "message")}
+        message = {k: str(args.get(k, "")).strip() for k in ("kind", "message")}
         message.update(version=__version__, platform=_platform_name(), source="app")
         try:
             answer = await asyncio.to_thread(self.pilot.account.support, message)

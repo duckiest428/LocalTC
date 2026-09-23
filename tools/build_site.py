@@ -32,7 +32,7 @@ PAGE = """<!DOCTYPE html>
     <a href="index.html#features">Features</a>
     <a href="index.html#install">Install</a>
     <a href="changelog.html" aria-current="page">Changelog</a>
-    <a href="support.html">Support</a>
+    <a href="dashboard.html#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
   <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>

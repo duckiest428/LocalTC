@@ -12,10 +12,14 @@
     Where LocalTC goes. The installer passes its folder (%LOCALAPPDATA%\Programs\LocalTC by default).
 .PARAMETER Version
     A specific release (e.g. 0.2.0) instead of the latest.
+.PARAMETER Zip
+    Install from this source zip instead of a release (what a test build of the setup carries; nothing is
+    downloaded from GitHub).
 #>
 param(
     [string]$Root = (Join-Path $env:LOCALAPPDATA "Programs\LocalTC"),
     [string]$Version = "",
+    [string]$Zip = "",
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$InstallArgs
 )
 
@@ -26,33 +30,42 @@ $Repo = "duckiest428/LocalTC"
 $Headers = @{ "User-Agent" = "LocalTC-Setup"; "Accept" = "application/vnd.github+json" }
 
 try {
-    Write-Host "== Finding the latest LocalTC release" -ForegroundColor Cyan
-    $url = if ($Version) { "https://api.github.com/repos/$Repo/releases/tags/v$Version" } else { "https://api.github.com/repos/$Repo/releases/latest" }
-    $release = Invoke-RestMethod -Uri $url -Headers $Headers
-    $v = $release.tag_name.TrimStart("v")
-    $zipAsset = $release.assets | Where-Object { $_.name -eq "LocalTC-$v.zip" } | Select-Object -First 1
-    $sumAsset = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
-    if (-not $zipAsset -or -not $sumAsset) { throw "Release $v is missing LocalTC-$v.zip or SHA256SUMS." }
-    Write-Host "   LocalTC $v" -ForegroundColor Green
+    if ($Zip) {
+        $v = "local"
+        $work = Join-Path $env:TEMP "LocalTC-setup-local"
+        if (Test-Path $work) { Remove-Item -Recurse -Force $work }
+        New-Item -ItemType Directory -Path $work | Out-Null
+        $zip = $Zip
+        Write-Host "== Installing the source this setup carries" -ForegroundColor Cyan
+    } else {
+        Write-Host "== Finding the latest LocalTC release" -ForegroundColor Cyan
+        $url = if ($Version) { "https://api.github.com/repos/$Repo/releases/tags/v$Version" } else { "https://api.github.com/repos/$Repo/releases/latest" }
+        $release = Invoke-RestMethod -Uri $url -Headers $Headers
+        $v = $release.tag_name.TrimStart("v")
+        $zipAsset = $release.assets | Where-Object { $_.name -eq "LocalTC-$v.zip" } | Select-Object -First 1
+        $sumAsset = $release.assets | Where-Object { $_.name -eq "SHA256SUMS" } | Select-Object -First 1
+        if (-not $zipAsset -or -not $sumAsset) { throw "Release $v is missing LocalTC-$v.zip or SHA256SUMS." }
+        Write-Host "   LocalTC $v" -ForegroundColor Green
 
-    $work = Join-Path $env:TEMP "LocalTC-setup-$v"
-    if (Test-Path $work) { Remove-Item -Recurse -Force $work }
-    New-Item -ItemType Directory -Path $work | Out-Null
-    $zip = Join-Path $work "LocalTC-$v.zip"
-    $sums = Join-Path $work "SHA256SUMS"
-    Write-Host "== Downloading" -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zip -Headers $Headers
-    Invoke-WebRequest -Uri $sumAsset.browser_download_url -OutFile $sums -Headers $Headers
+        $work = Join-Path $env:TEMP "LocalTC-setup-$v"
+        if (Test-Path $work) { Remove-Item -Recurse -Force $work }
+        New-Item -ItemType Directory -Path $work | Out-Null
+        $zip = Join-Path $work "LocalTC-$v.zip"
+        $sums = Join-Path $work "SHA256SUMS"
+        Write-Host "== Downloading" -ForegroundColor Cyan
+        Invoke-WebRequest -Uri $zipAsset.browser_download_url -OutFile $zip -Headers $Headers
+        Invoke-WebRequest -Uri $sumAsset.browser_download_url -OutFile $sums -Headers $Headers
 
-    $line = Get-Content $sums | Where-Object { $_ -match "\s\*?LocalTC-$([regex]::Escape($v))\.zip$" } | Select-Object -First 1
-    if (-not $line) { throw "SHA256SUMS doesn't list LocalTC-$v.zip." }
-    $want = ($line -split "\s+")[0].ToLower()
-    $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-    if ($got -ne $want) { throw "The download is corrupt or was tampered with (sha256 $got, expected $want)." }
-    Write-Host "   Checked: sha256 matches the release" -ForegroundColor Green
+        $line = Get-Content $sums | Where-Object { $_ -match "\s\*?LocalTC-$([regex]::Escape($v))\.zip$" } | Select-Object -First 1
+        if (-not $line) { throw "SHA256SUMS doesn't list LocalTC-$v.zip." }
+        $want = ($line -split "\s+")[0].ToLower()
+        $got = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+        if ($got -ne $want) { throw "The download is corrupt or was tampered with (sha256 $got, expected $want)." }
+        Write-Host "   Checked: sha256 matches the release" -ForegroundColor Green
+    }
 
     Expand-Archive -Path $zip -DestinationPath (Join-Path $work "tree") -Force
-    $tree = Join-Path $work "tree\LocalTC-$v"
+    $tree = Get-ChildItem (Join-Path $work "tree") -Directory | Select-Object -First 1 -ExpandProperty FullName
     if (-not (Test-Path (Join-Path $tree "pyproject.toml"))) { throw "The release zip isn't laid out as expected." }
 
     Write-Host "== Installing into $Root" -ForegroundColor Cyan

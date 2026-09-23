@@ -10,7 +10,10 @@ zip in Downloads. The zip is the most useful thing you can send back.
 
 ## 1. Install and update (Windows)
 
-- [ ] `LocalTC-Setup.exe` from the GitHub release installs without admin rights, and the Start menu shortcut opens the app.
+- [ ] `installer\LocalTC-Setup.exe` (in the LocalTC folder after pulling; a test build carrying the code itself, so it
+      needs no GitHub release) installs without admin rights into `%LOCALAPPDATA%\Programs\LocalTC`, and the
+      Start menu shortcut opens the app. Windows SmartScreen warns (it isn't code-signed): More info → Run anyway.
+      Settings → Apps lists LocalTC, and uninstalling it from there works.
       *If not:* a screenshot, plus `%LOCALAPPDATA%\LocalTC\logs\`.
 - [ ] The app window opens; all five tabs load (ATC, Quick Settings, Live Map, Airport Lookup, Logbook).
 - [ ] Quick Settings → Performance: the models download (language model, Whisper, voice) and **Preview** speaks.
@@ -61,11 +64,12 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 
 - [ ] Quick Settings → Account: the email code signs you in, and a finished flight syncs (the cloud mark in the Logbook).
 - [ ] The Logbook tab's map shows your flights; clicking a route marks its rows, and clicking a row shows its route.
-- [ ] localtc.tech → **Dashboard**: sign in with the code or the link; the Logbook section shows the same flights on the map.
+- [ ] localtc.tech → **Dashboard**: signed out, only the sign-in shows. Sign in with the code or the link; the sidebar
+      switches between Flight Tracker, Logbook, Support and Account, and Logbook shows the same flights on the map.
 - [ ] Dashboard → **Flight Tracker** while flying: the phase, the frequencies, the aircraft on the map, traffic and the radio log.
       (The map needs Quick Settings → Account → "Away from this Wi-Fi, send the map ..." on.)
-- [ ] localtc.tech → **Support**: send yourself a test message. It arrives at your email with the sender as the reply-to.
-- [ ] Quick Settings → **Support & feedback** in the app sends one too.
+- [ ] Dashboard → **Support**: send yourself a test message. It arrives at your email with the account's address as the reply-to.
+- [ ] Quick Settings → **Support & feedback** in the app sends one too (signed in; signed out, Send is greyed).
 - [ ] Dashboard → devices: signing out another device works; **Download my data** gives a JSON file.
 
 ## 6. The iPhone companion app

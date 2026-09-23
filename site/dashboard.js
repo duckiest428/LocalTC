@@ -1,5 +1,5 @@
-/* The dashboard: signs in to the optional LocalTC account, follows the flight in progress (the Flight
-   Tracker) and shows the logbook synced from the app. Leaflet draws the maps (vendor/leaflet, served from
+/* The dashboard: signs in to the optional LocalTC account, then a sidebar of sections, one shown at a time:
+   the Flight Tracker (the flight in progress), the logbook synced from the app, support, and the account. Leaflet draws the maps (vendor/leaflet, served from
    here; the tiles come from OpenStreetMap). The sign-in is an HttpOnly cookie on api.localtc.tech, which
    this page can't read; nothing is kept in this browser's storage. */
 
@@ -43,8 +43,38 @@ function say(text, error = false) {
 
 function show(which) {
   for (const id of ["auth", "dash"]) $(`#${id}`).hidden = id !== which;
-  $("#dash-who").hidden = which !== "dash";
+  if (which === "auth") { Tracker.stop(); page = null; document.title = "Dashboard — LocalTC"; }
 }
+
+// --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
+
+const PAGES = ["tracker", "logbook", "support", "account"];
+let page = null;
+
+function go(name, { push = false } = {}) {
+  if (!PAGES.includes(name)) name = "tracker";
+  if (push && name !== page) history.pushState(null, "", `#${name}`);
+  page = name;
+  for (const p of PAGES) $(`#${p}`).hidden = p !== name;
+  document.querySelectorAll(".side-nav a").forEach((a) => {
+    if (a.dataset.page === name) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  document.title = `${$(`#${name}-h`).textContent} — LocalTC`;
+  // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
+  if (name === "tracker") Tracker.start(); else Tracker.stop();
+  if (name === "logbook" && flightsMap) setTimeout(() => flightsMap.fit(), 0);  // Leaflet measures a shown map
+  if (name === "tracker" && Tracker.map) setTimeout(() => Tracker.map.invalidateSize(), 0);
+}
+
+$(".side-nav").onclick = (e) => {
+  const a = e.target.closest("a[data-page]");
+  if (!a) return;
+  e.preventDefault();
+  go(a.dataset.page, { push: true });
+  window.scrollTo(0, 0);
+};
+window.addEventListener("popstate", () => { if (!$("#dash").hidden) go(location.hash.slice(1)); });
 
 // --- signing in: a link or a code by email, no password ----------------------------------------------------
 
@@ -89,12 +119,11 @@ $("#code-form").onsubmit = async (e) => {
 
 $("#f-again").onclick = () => { awaitingCode(null); say(""); };
 
-$("#btn-signout").onclick = async () => {
+document.querySelectorAll(".signout").forEach((b) => b.onclick = async () => {
   try { await api("POST", "/v1/auth/logout"); } catch { /* signed out either way */ }
-  Tracker.stop();
   show("auth");
   say("Signed out.");
-};
+});
 
 // --- the dashboard --------------------------------------------------------------------------------------
 
@@ -111,14 +140,15 @@ async function load() {
     return;
   }
   show("dash");
-  $("#who-email").textContent = me.email;
+  document.querySelectorAll(".who-email").forEach((el) => { el.textContent = me.email; });
+  $("#s-from").textContent = me.email;
   devices(me.sessions);
-  const [stats, page] = await Promise.all([api("GET", "/v1/stats"), api("GET", "/v1/flights?limit=50")]);
+  go(location.hash.slice(1));
+  const [stats, first] = await Promise.all([api("GET", "/v1/stats"), api("GET", "/v1/flights?limit=50")]);
   tiles(stats);
   map(stats);
   $("#flights").innerHTML = "";
-  rows(page);
-  Tracker.start();
+  rows(first);
 }
 
 function hm(min) {
@@ -134,7 +164,6 @@ function tiles(s) {
     tile(s.average_landing_fpm == null ? "—" : `${s.average_landing_fpm} fpm`, "average landing"),
     tile(s.readback_accuracy == null ? "—" : `${Math.round(s.readback_accuracy * 100)}%`, "readbacks right"),
   ].join("");
-  $("#dash-title").textContent = s.flights ? "Your flights." : "No flights yet.";
   $(".flights-h").textContent = s.flights ? `Flights (${s.flights})` : "Flights";
 }
 
@@ -212,10 +241,36 @@ $("#del-form").onsubmit = async (e) => {
   if (!confirm("Delete the account and every flight in it, for good?")) return;
   try {
     await api("DELETE", "/v1/me", { email });
-    Tracker.stop();
     show("auth");
     say("The account and everything in it are deleted.");
   } catch (err) { say(err.message, true); }
+};
+
+// --- support: a message to the developer, answered at the account's address ---------------------------------
+
+function note(text, error = false) {
+  const m = $("#s-msg");
+  m.hidden = !text;
+  m.textContent = text || "";
+  m.classList.toggle("error", error);
+}
+
+$("#support-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const message = $("#s-message").value.trim();
+  if (message.length < 5) return note("Write a little more, so there's something to go on.", true);
+  const button = $("#s-send");
+  button.disabled = true;
+  try {
+    const r = await api("POST", "/v1/support", { kind: document.querySelector("input[name=kind]:checked").value, message, source: "web" });
+    note(r.message || "Sent. Thanks!");
+    $("#s-message").value = "";
+  } catch (err) {
+    if (err.status === 401) { show("auth"); say("Your sign-in has expired. Sign in again to send it.", true); return; }
+    note(err.message === "Failed to fetch" ? "Can't reach the LocalTC server right now. Try again in a bit, or open a GitHub issue." : err.message, true);
+  } finally {
+    button.disabled = false;
+  }
 };
 
 // --- the logbook's map: every airport and route (flightsmap.js, shared with the app) -------------------------
@@ -241,6 +296,7 @@ const Tracker = {
   status: { active: false }, gotOwn: false, follow: true, wanted: false,
 
   start() {
+    if (this.wanted) return;
     this.wanted = true;
     this.connect();
     document.addEventListener("visibilitychange", this.onVisibility);
@@ -306,6 +362,7 @@ const Tracker = {
   statusIs(s) {
     const was = this.status.active;
     this.status = s;
+    $("#side-live").hidden = !s.active;
     $("#tr-body").hidden = !s.active;
     if (!s.active) {
       $("#tr-status").innerHTML = `<p class="hint">No flight right now. Start one in the LocalTC app, signed in with this

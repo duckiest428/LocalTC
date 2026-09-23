@@ -250,8 +250,10 @@ class Account:
         self.watchers = int((data or {}).get("watchers", 0) or 0)
 
     def support(self, message: dict) -> str:
-        """Feedback or a support request, emailed to LocalTC's maintainer. Needs no account."""
-        data = self._call("POST", "/v1/support", message, auth=False)
+        """Feedback or a support request, emailed to LocalTC's maintainer. The answer goes to the account's email."""
+        if not self.signed_in:
+            raise AccountError("Sign in to your LocalTC account first (Account, above).", 401)
+        data = self._call("POST", "/v1/support", message)
         return (data or {}).get("message", "Sent. Thanks!")
 
     def alert(self, alert: dict) -> None:

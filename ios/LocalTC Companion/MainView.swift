@@ -7,11 +7,11 @@ struct MainView: View {
 
     var body: some View {
         TabView {
-            Tab("Map", systemImage: "map") { screen { MapTab() } }
-            Tab("Radio", systemImage: "waveform") { screen { RadioTab() } }
-            Tab("Flight", systemImage: "airplane.departure") { screen { FlightTab() } }
-            Tab("Cockpit", systemImage: "gauge.with.dots.needle.33percent") { screen { ComingSoonView(section: .cockpit) } }
-            Tab("Flight Bag", systemImage: "book.closed") { screen { ComingSoonView(section: .flightBag) } }
+            Tab("My Flight", systemImage: "airplane") { screen { MapTab() } }
+            Tab("Comms", systemImage: "headset") { screen { CommsTab() } }
+            Tab("Frequencies", systemImage: "antenna.radiowaves.left.and.right") { screen { FrequenciesTab() } }
+            Tab("Airports", systemImage: "mappin.and.ellipse") { screen { AirportsTab() } }
+            Tab("EFB", systemImage: "book.closed") { screen { ComingSoonView() } }
         }
         .overlay(alignment: .top) {
             if let banner {

@@ -16,7 +16,8 @@ MAIL_FROM = "LocalTC <accounts@localtc.tech>"
 EMAIL_MODE = "resend"  # "resend" sends with Resend (RESEND_API_KEY secret); "log" prints links (local dev)
 APNS_HOST = "api.push.apple.com"  # api.sandbox.push.apple.com for development builds of the iOS app
 APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the APNS_* secrets are set
-# Secrets (wrangler secret put NAME): RESEND_API_KEY, APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY
+# Secrets (wrangler secret put NAME): RESEND_API_KEY, SUPPORT_EMAIL (where Support messages go),
+# APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY
 
 [[d1_databases]]
 binding = "DB"

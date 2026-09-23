@@ -13,6 +13,7 @@ public final class FlightStore {
     public private(set) var traffic: [Int: TrafficTarget] = [:]
     public private(set) var route: Route?
     public private(set) var radio: [RadioLine] = []
+    public private(set) var airports: [FlightAirport] = []
     /// Banners waiting to be shown, oldest first. The app removes each as it shows it.
     public var alerts: [FlightAlert] = []
     public private(set) var lastMessage: Date?
@@ -33,8 +34,9 @@ public final class FlightStore {
             if let t = hello.traffic { setTraffic(t) }
             if let r = hello.route { route = r }
             if let lines = hello.radio { radio = Array(lines.suffix(Self.radioKeep)) }
+            if let a = hello.airports { airports = a }
         case .status(let s):
-            if !s.active && status.active { trail = [] }  // the flight ended: the next one starts clean
+            if !s.active && status.active { trail = []; airports = [] }  // the flight ended: the next one starts clean
             status = s
         case .own(let o): setOwn(o)
         case .traffic(let t): setTraffic(t)
@@ -45,6 +47,7 @@ public final class FlightStore {
             let known = Set(radio.map { "\($0.t ?? -1)|\($0.text ?? "")" })
             append(lines.filter { !known.contains("\($0.t ?? -1)|\($0.text ?? "")") })
         case .alert(let a): alerts.append(a)
+        case .airports(let a): airports = a
         }
     }
 
@@ -55,7 +58,15 @@ public final class FlightStore {
         traffic = [:]
         route = nil
         radio = []
+        airports = []
         alerts = []
+    }
+
+    /// Which COM a radio line was on: its own mark, else the frequency against COM1 and COM2 (1 by default).
+    public func com(of line: RadioLine) -> Int {
+        if let radio = line.radio { return radio }
+        if let mhz = line.mhz, let com2 = own?.com2, abs(mhz - com2) < 0.003, abs(mhz - (own?.com1 ?? 0)) >= 0.003 { return 2 }
+        return 1
     }
 
     private func setOwn(_ o: OwnAircraft) {

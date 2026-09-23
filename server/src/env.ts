@@ -7,6 +7,7 @@ export interface Env {
   MAIL_FROM?: string;
   EMAIL_MODE: string; // resend, log, test
   RESEND_API_KEY?: string;
+  SUPPORT_EMAIL?: string; // where Support messages go (a secret: it's the maintainer's own address)
   APNS_HOST?: string;
   APNS_TOPIC?: string;
   APNS_KEY_ID?: string;

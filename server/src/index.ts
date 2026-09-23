@@ -9,6 +9,7 @@ import type { Env } from "./env";
 import * as flights from "./flights";
 import { HttpError, cors, json } from "./http";
 import * as live from "./live";
+import * as support from "./support";
 
 export { LiveRoom } from "./live";
 
@@ -19,6 +20,7 @@ const signedIn = (fn: (env: Env, request: Request, a: auth.Auth, url: URL, param
 
 const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/health$/, async () => json({ ok: true })],
+  ["POST", /^\/v1\/support$/, (env, req) => support.submit(env, req)],
   ["POST", /^\/v1\/auth\/start$/, (env, req) => auth.start(env, req)],
   ["POST", /^\/v1\/auth\/finish$/, (env, req) => auth.finish(env, req)],
   ["POST", /^\/v1\/auth\/logout$/, signedIn((env, _req, a) => auth.logout(env, a))],
@@ -36,6 +38,7 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["PUT", /^\/v1\/live\/frame$/, signedIn((env, req, a) => live.frame(env, req, a))],
   ["POST", /^\/v1\/live\/radio$/, signedIn((env, req, a) => live.radio(env, req, a))],
   ["POST", /^\/v1\/live\/alert$/, signedIn((env, req, a) => live.alert(env, req, a))],
+  ["PUT", /^\/v1\/live\/airports$/, signedIn((env, req, a) => live.airports(env, req, a))],
   ["PUT", /^\/v1\/live\/connect$/, signedIn((env, req, a) => live.putConnect(env, req, a))],
   ["GET", /^\/v1\/live\/connect$/, signedIn((env, _req, a) => live.getConnect(env, a))],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],

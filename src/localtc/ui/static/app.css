@@ -124,7 +124,7 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .devbar input { flex: 1; min-width: 0; }
 
 /* --- controls --- */
-input[type=text], input:not([type]), input[type=number], select, textarea { background: #15181b; border: 1px solid var(--line-2); border-radius: 2px; padding: 6px 8px; outline: none; min-width: 0; }
+input[type=text], input[type=email], input:not([type]), input[type=number], select, textarea { background: #15181b; border: 1px solid var(--line-2); border-radius: 2px; padding: 6px 8px; outline: none; min-width: 0; }
 input:focus, select:focus, textarea:focus { border-color: var(--green-dim); }
 .btn { background: #4a4f56; border: 1px solid #5a6068; color: #eef0f2; padding: 6px 12px; border-radius: 2px; cursor: pointer; white-space: nowrap; }
 .btn:hover { background: #575d65; }
@@ -316,6 +316,29 @@ pre.notes { white-space: pre-wrap; font: inherit; margin: 6px 0; max-height: 220
 
 /* Logbook */
 .logbook { padding: 10px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.lb-map { height: 320px; flex: none; border: 1px solid var(--line); border-radius: 2px; }
+table.lb tr[data-route] { cursor: pointer; }
+table.lb tr.picked td { background: rgba(233, 120, 214, .12); }
+
+/* The flights map (flightsmap.js), shared with localtc.tech */
+.flights-map { background: #2b2f33; }  /* close to the darkened tiles, so the seams between them don't show */
+.fm-tiles .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4); }
+/* Darkened tiles show hairline seams where they meet; overlapping them by a fraction of a pixel hides it. */
+.fm-tiles .leaflet-tile-container img.leaflet-tile, .tiles-dark .leaflet-tile-container img.leaflet-tile {
+  width: 256.6px !important; height: 256.6px !important; }
+.fm-route { stroke: #e978d6; fill: none; cursor: pointer; }
+.fm-focus { stroke: #ffd166; fill: none; }
+.fm-airport { stroke: #0e1114; fill: #5fd068; }
+.fm-label { font: 600 11px/1 var(--font); color: #e8ecf0; white-space: nowrap; transform: translate(8px, -50%);
+  text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
+
+#s-support-card textarea { display: block; width: 100%; box-sizing: border-box; resize: vertical; }
+
+/* Buy me a coffee: a small, polite button that goes away for good once clicked */
+.coffee { margin-left: auto; margin-right: 8px; padding: 4px 10px; border-radius: 12px; background: #ffdd00; color: #1b1b1b;
+  font-weight: 600; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.coffee:hover { background: #ffe433; }
+.coffee[hidden] { display: none; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
 .stat { background: #262a2f; border: 1px solid var(--line); padding: 8px 10px; display: flex; flex-direction: column; }
 .stat b { font-size: 18px; color: #eef1f4; font-family: var(--mono); }

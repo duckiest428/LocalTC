@@ -39,7 +39,7 @@ final class SignInFlowTests: XCTestCase {
         app.buttons["finish"].tap()
 
         // Signed in: the tabs, and the connection the harness set up.
-        XCTAssertTrue(app.tabBars.buttons["Map"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.tabBars.buttons["My Flight"].waitForExistence(timeout: 15))
         let badge = app.descendants(matching: .any)["connection"].firstMatch
         let connected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", expect), object: badge)
         XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 45), .completed, "connection badge: \(badge.label)")
@@ -55,25 +55,38 @@ final class SignInFlowTests: XCTestCase {
         attach(app, "2b vfr map")
         mapMode.buttons["IFR"].tap()
 
-        app.tabBars.buttons["Radio"].tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'Frontier'")).firstMatch.waitForExistence(timeout: 30))
-        attach(app, "3 radio")
-
-        app.tabBars.buttons["Flight"].tap()
-        // Whatever the sim calls the aircraft, the row is filled in (not "—").
+        // The flight card under the map opens the details. Whatever the sim calls the aircraft, the row is filled in.
+        let card = app.buttons["flightCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 20))
+        card.tap()
         let callsign = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Callsign, ' AND NOT (label ENDSWITH '—')")).firstMatch
         XCTAssertTrue(callsign.waitForExistence(timeout: 20))
-        attach(app, "4 flight")
+        attach(app, "3 flight details")
 
-        app.tabBars.buttons["Cockpit"].tap()
+        app.tabBars.buttons["Comms"].tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'Frontier'")).firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.segmentedControls["comFilter"].exists)
+        let message = app.textFields["message"]
+        XCTAssertTrue(message.exists)
+        XCTAssertEqual(message.isEnabled, expect == "Same Wi-Fi", "typing to ATC is for the same Wi-Fi")
+        attach(app, "4 comms")
+
+        app.tabBars.buttons["Frequencies"].tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'KSAN · '")).firstMatch.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Los Angeles Center"].exists || app.staticTexts["Tuned"].exists)
+        attach(app, "5 frequencies")
+
+        app.tabBars.buttons["Airports"].tap()
+        XCTAssertTrue(app.staticTexts["KSAN"].waitForExistence(timeout: 10))
+        attach(app, "6 airports")
+
+        app.tabBars.buttons["EFB"].tap()
         XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5))
-        attach(app, "5 cockpit")
-        app.tabBars.buttons["Flight Bag"].tap()
-        XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.buttons["Cockpit"].exists)
 
         try XCTUnwrap(visible(app.buttons.matching(identifier: "settings"))).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", email)).firstMatch.waitForExistence(timeout: 10))
-        attach(app, "6 settings")
+        attach(app, "7 settings")
         app.buttons["Sign out"].firstMatch.tap()
         XCTAssertTrue(app.textFields["email"].waitForExistence(timeout: 10))
     }

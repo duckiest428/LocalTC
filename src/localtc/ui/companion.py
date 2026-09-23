@@ -1,7 +1,7 @@
 """The companion app's feed: what a phone shows of the flight, on the same network or through the account.
 
 ``CompanionHub`` keeps the picture a phone needs (the status, the aircraft, the traffic, the route, the
-radio log) from what the app already publishes, and hands it out two ways:
+radio log, the flight's airports) from what the app already publishes, and hands it out two ways:
 
 - **On the same network**, a small server (``CompanionServer``) on port 47800 streams it directly, as
   Server-Sent Events, to a phone that has the key. The key is made fresh at every start and reaches the
@@ -105,6 +105,7 @@ class CompanionHub:
         self.own: dict | None = None
         self.traffic: list[dict] = []
         self.route: dict | None = None
+        self.airports: list[dict] = []  # origin and destination: frequencies, runways, ATIS (published data)
         self.radio: deque[dict] = deque(maxlen=RADIO_BACKLOG)
         self.remote: Callable[[str, Any], None] | None = None  # to the relay; set while signed in
         self.remote_map = True
@@ -137,6 +138,14 @@ class CompanionHub:
         self.route = route
         self._local("route", route)
 
+    def set_airports(self, airports: list[dict]) -> None:
+        if airports == self.airports:
+            return
+        self.airports = airports
+        self._local("airports", airports)
+        if self._remote_ok():
+            self._send("airports", airports)
+
     def add_radio(self, line: dict) -> None:
         self.radio.append(line)
         self._local("radio", line)
@@ -159,12 +168,14 @@ class CompanionHub:
         elif self._remote_ok() and (was == 0 or not self._backlog_sent):
             self._backlog_sent = True
             self._send("radio", list(self.radio))
+            if self.airports:
+                self._send("airports", self.airports)
             if self.own is not None:
                 self._send("frame", {"own": self.own, "traffic": self.traffic})
 
     def snapshot(self) -> dict:
         return {"protocol": PROTOCOL, "version": __version__, "status": self.status, "own": self.own,
-                "traffic": self.traffic, "route": self.route, "radio": list(self.radio)}
+                "traffic": self.traffic, "route": self.route, "radio": list(self.radio), "airports": self.airports}
 
     def _local(self, kind: str, data: Any) -> None:
         self.stream.publish(kind, data)
@@ -180,9 +191,11 @@ class CompanionHub:
 class CompanionServer:
     """The phone's direct line on the local network: an SSE stream and the ATC zones, behind the key."""
 
-    def __init__(self, hub: CompanionHub, zones: Callable[[dict], Any] | None = None) -> None:
+    def __init__(self, hub: CompanionHub, zones: Callable[[dict], Any] | None = None,
+                 say: Callable[[str], None] | None = None) -> None:
         self.hub = hub
         self.zones = zones
+        self.say = say  # a call typed on the phone, transmitted as if typed in the app
         self._server: asyncio.base_events.Server | None = None
         self._zeroconf: Any = None
         self._clients: set[asyncio.Task] = set()  # open connections, closed with the server
@@ -242,7 +255,7 @@ class CompanionServer:
             request = await _read_request(reader)
             if request is None:
                 return
-            method, target, headers, _ = request
+            method, target, headers, body = request
             path = target.partition("?")[0]
             given = headers.get("authorization", "").removeprefix("Bearer ").strip()
             if not hmac.compare_digest(given.encode(), self.hub.key.encode()):
@@ -254,6 +267,9 @@ class CompanionServer:
             elif method == "GET" and path == "/companion/v1/hello":
                 body = json.dumps({"protocol": PROTOCOL, "version": __version__, "name": platform.node()}).encode()
                 _write_response(writer, 200, "application/json", body, keep_alive=False)
+            elif method == "POST" and path == "/companion/v1/say" and self.say is not None:
+                status, answer = self._say(body)
+                _write_response(writer, status, "application/json", json.dumps(answer).encode(), keep_alive=False)
             elif method == "GET" and path == "/companion/v1/zones" and self.zones is not None:
                 body = json.dumps(await self.zones({}), default=str).encode()
                 _write_response(writer, 200, "application/json", body, keep_alive=False)
@@ -267,6 +283,19 @@ class CompanionServer:
         finally:
             writer.close()
             self._clients.discard(task)
+
+    def _say(self, body: bytes) -> tuple[int, dict]:
+        try:
+            text = str(json.loads(body or b"{}").get("text", "")).strip()[:300]
+        except (ValueError, AttributeError):
+            return 400, {"error": "send {\"text\": ...}"}
+        if not text:
+            return 400, {"error": "nothing to say"}
+        try:
+            self.say(text)
+        except (RuntimeError, ValueError) as exc:  # no flight running: the phone shows why
+            return 409, {"error": str(exc) or "LocalTC isn't flying"}
+        return 200, {"ok": True}
 
     async def _stream(self, writer: asyncio.StreamWriter) -> None:
         writer.write(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n"

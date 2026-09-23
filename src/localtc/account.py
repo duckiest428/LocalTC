@@ -244,6 +244,16 @@ class Account:
         data = self._call("POST", "/v1/live/radio", {"lines": lines})
         self.watchers = int((data or {}).get("watchers", 0) or 0)
 
+    def airports(self, airports: list[dict]) -> None:
+        """The flight's airports (frequencies, runways, ATIS) for a phone watching through the server."""
+        data = self._call("PUT", "/v1/live/airports", {"airports": airports})
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
+
+    def support(self, message: dict) -> str:
+        """Feedback or a support request, emailed to LocalTC's maintainer. Needs no account."""
+        data = self._call("POST", "/v1/support", message, auth=False)
+        return (data or {}).get("message", "Sent. Thanks!")
+
     def alert(self, alert: dict) -> None:
         """A handoff, clearance, traffic call or emergency, for the phone's banner (and later, push)."""
         self._call("POST", "/v1/live/alert", alert)

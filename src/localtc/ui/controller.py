@@ -126,6 +126,7 @@ class AppController:
             (post, "flight/plan"): self.api_plan,
             (post, "flight/simbrief"): self.api_simbrief,
             (post, "radio/say"): self.api_say,
+            (post, "support"): self.api_support,
             (post, "radio/ptt"): self.api_ptt,
             (post, "radio/tune"): self.api_tune,
             (post, "radio/copilot"): self.api_copilot,
@@ -166,7 +167,7 @@ class AppController:
         if not (c.companion and c.companion_lan) or not await asyncio.to_thread(lambda: self.pilot.account.signed_in):
             return
         if self.companion_server is None:
-            self.companion_server = CompanionServer(self.companion, zones=self.api_zones)
+            self.companion_server = CompanionServer(self.companion, zones=self.api_zones, say=self._phone_say)
             try:
                 port = await self.companion_server.start(c.companion_port)
                 log.info("Companion app: listening on the local network, port %d", port)
@@ -205,6 +206,7 @@ class AppController:
             self.companion.add_radio(data)
         elif kind == "flight":
             self.companion.set_status(self.companion_view() if data else {"active": False})
+            self.companion.set_airports(self.companion_airports() if data else [])
 
     def state(self) -> dict:
         return {
@@ -217,7 +219,7 @@ class AppController:
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
-            "version": __version__, "update": self.updates.view(),
+            "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
         }
 
     def _push_state(self) -> None:
@@ -415,6 +417,35 @@ class AppController:
             "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
         }
 
+    def companion_airports(self) -> list[dict]:
+        """The flight's airports for the phone's Frequencies and Airports tabs: published data only."""
+        engine = self.live.engine if self.live else None
+        if engine is None:
+            return []
+        out = []
+        for icao, role in ((engine.state.flight.origin, "departure"), (engine.state.flight.destination, "arrival")):
+            geo = engine.geometry(icao) if icao else None
+            if geo is None or any(a["icao"] == icao for a in out):
+                continue
+            detail = airport_detail(geo.airport)
+            atis = engine.current_atis(icao)
+            out.append({
+                "icao": icao, "name": detail["name"], "role": role, "lat": detail["lat"], "lon": detail["lon"],
+                "elev_ft": detail["elev_ft"], "atis": atis.letter if atis else None,
+                "frequencies": sorted(({k: f[k] for k in ("label", "kind", "mhz", "name")} for f in detail["all_frequencies"]),
+                                      key=lambda f: FREQ_ORDER.index(f["kind"]) if f["kind"] in FREQ_ORDER else 99),
+                "runways": [{"name": r["name"], "length_ft": r["length_ft"], "heading_mag": r["heading_mag"], "ils": r["ils"]}
+                            for r in detail["runways"]],
+            })
+        return out
+
+    def _phone_say(self, text: str) -> None:
+        """A call typed on the companion app: transmitted on COM1 like one typed here."""
+        try:
+            self._need_live().say(text)
+        except HttpError as exc:
+            raise RuntimeError(str(exc)) from None
+
     # --- the page's calls ----------------------------------------------------------------------------------------
 
     async def api_update(self, args: dict) -> dict:
@@ -484,6 +515,18 @@ class AppController:
     async def api_say(self, args: dict) -> dict:
         self._need_live().say(str(args.get("text", "")))
         return {}
+
+    async def api_support(self, args: dict) -> dict:
+        """Feedback or a support request from Quick Settings, emailed to the maintainer through the server."""
+        from localtc.account import AccountError
+
+        message = {k: str(args.get(k, "")).strip() for k in ("kind", "email", "name", "message")}
+        message.update(version=__version__, platform=_platform_name(), source="app")
+        try:
+            answer = await asyncio.to_thread(self.pilot.account.support, message)
+        except AccountError as exc:
+            raise HttpError(exc.status if 400 <= exc.status < 500 else 502, str(exc)) from None
+        return {"message": answer}
 
     async def api_ptt(self, args: dict) -> dict:
         if not self._need_live().ptt(bool(args.get("down"))):
@@ -807,6 +850,12 @@ def airport_detail(airport) -> dict:
         "all_frequencies": [{"kind": f.kind, "label": FREQ_LABELS.get(f.kind, f.kind.upper()), "mhz": f.mhz,
                              "name": f.name} for f in airport.frequencies],
     }
+
+
+def _platform_name() -> str:
+    import platform
+
+    return f"{platform.system()} {platform.release()}".strip()
 
 
 def _title(name: str) -> str:

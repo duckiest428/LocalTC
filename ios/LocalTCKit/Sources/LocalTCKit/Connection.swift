@@ -48,6 +48,8 @@ public final class ConnectionManager {
 
     public private(set) var state: State = .offline
     public private(set) var lastError: String?
+    /// The PC's address and key while connected on the same Wi-Fi: what "say" needs.
+    public private(set) var local: (url: URL, key: String)?
     public var mode: ConnectionMode = .automatic
 
     let api: APIClient
@@ -75,6 +77,7 @@ public final class ConnectionManager {
         task?.cancel()
         task = nil
         state = .offline
+        local = nil
     }
 
     public func restart() {
@@ -88,7 +91,9 @@ public final class ConnectionManager {
             if let (url, key) = await findLocal() {
                 state = .wifi
                 lastError = nil
+                local = (url, key)
                 await consume(feeds.local(url, key: key))
+                local = nil
                 continue  // the PC went away (LocalTC closed, Wi-Fi changed): look again
             }
             if mode != .wifiOnly, let relay = feeds.relay() {
@@ -99,6 +104,32 @@ public final class ConnectionManager {
             }
             state = .offline
             try? await Task.sleep(for: retryAfter)
+        }
+    }
+
+    /// A call typed on the phone, transmitted by LocalTC on COM1. Only on the same Wi-Fi: the relay is one-way.
+    public func say(_ text: String, session: URLSession = .shared) async throws {
+        guard let (url, key) = local else { throw SayError.notLocal }
+        var request = URLRequest(url: url.appending(path: "/companion/v1/say"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
+        request.timeoutInterval = 5
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode != 200 else { return }
+        let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+        throw SayError.refused(message ?? "LocalTC said \(http.statusCode)")
+    }
+
+    public enum SayError: LocalizedError, Equatable {
+        case notLocal, refused(String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .notLocal: "Talking to ATC from the phone works on the same Wi-Fi as the PC."
+            case .refused(let why): why
+            }
         }
     }
 

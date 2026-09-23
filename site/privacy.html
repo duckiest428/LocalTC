@@ -19,8 +19,10 @@
     <a href="index.html#why">Why not a subscription</a>
     <a href="index.html#install">Install</a>
     <a href="index.html#status">Status</a>
+    <a href="support.html">Support</a>
+    <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
-  <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
+  <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>
 </header>
 
 <main class="legal">
@@ -30,7 +32,7 @@
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
-    is one optional thing that involves a server, the account behind the online logbook and the
+    is one optional thing that involves a server, the account behind the online dashboard and the
     companion app, and it only exists for you if you create one. This policy covers this website, the
     program you install, and that optional account.
   </p>
@@ -52,9 +54,21 @@
     tracking pixels and no embedded third-party content. The two fonts are served from this site rather
     than from a font CDN, so loading the page does not tell anyone else that you did. There are no
     cookies and nothing in local or session storage, with one exception: if you sign in to the
-    <a href="dashboard.html">logbook</a>, the account server sets one sign-in cookie (see
-    <a href="cookies.html">the cookie policy</a>). Only the logbook page talks to that server, and only
-    when you use it.
+    <a href="dashboard.html">dashboard</a>, the account server sets one sign-in cookie (see
+    <a href="cookies.html">the cookie policy</a>). Only the dashboard and the support page talk to that server,
+    and only when you use them. The dashboard's two maps (your flights, and the Flight Tracker) load map
+    tiles from <a href="https://wiki.osmfoundation.org/wiki/Privacy_Policy" rel="noopener">OpenStreetMap</a>,
+    which sees your IP address and which part of the map you're looking at.
+  </p>
+
+  <h3 id="support">Support messages</h3>
+  <p>
+    The <a href="support.html">Support page</a> and the app's Support card send what you write, your email
+    address, the name you give (if any) and, from the app, the LocalTC version and your operating system.
+    The account server doesn't store it: it's emailed straight to LocalTC's developer through Resend, with
+    your address set as the reply-to, and kept in that inbox to answer you and fix what you reported. Ask
+    and it's deleted. The server keeps a short-lived counter per IP address and email address to stop spam,
+    deleted within a day. Legal basis: answering you (legitimate interest, GDPR Art. 6(1)(f)).
   </p>
 
   <h3>Hosting</h3>
@@ -152,9 +166,10 @@
     <li><strong>Your PC's local-network address</strong> (a private address such as 192.168.1.20) and a key
       that changes every time LocalTC starts, so the companion app on the same Wi-Fi can connect to the PC
       directly. When it does, nothing about the flight goes through the server at all.</li>
-    <li><strong>Only while the companion app watches from outside your Wi-Fi</strong>, and only if you leave
+    <li><strong>Only while the companion app watches from outside your Wi-Fi, or the dashboard's Flight Tracker
+      is open</strong>, and only if you leave
       the setting on: your aircraft's position, nearby AI traffic and the radio log (ATC's transmissions and
-      the text of your own calls). The server passes these straight to your phone and keeps them in memory
+      the text of your own calls). The server passes these straight to your phone (or browser) and keeps them in memory
       only. They're never written to the database or to disk, and they're gone when the flight ends or the
       server's memory is cleared. Turn it off in the app's Quick Settings → Account.</li>
     <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
@@ -177,7 +192,8 @@
     <li><strong>Cloudflare</strong> runs the account server and its database
       (<a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">privacy policy</a>).</li>
     <li><strong>Resend</strong> delivers the sign-in emails
-      (<a href="https://resend.com/legal/privacy-policy" rel="noopener">privacy policy</a>).</li>
+      (<a href="https://resend.com/legal/privacy-policy" rel="noopener">privacy policy</a>), and support
+      messages to the developer.</li>
     <li><strong>Apple</strong> delivers the companion app's notifications, if you turn them on.</li>
   </ul>
   <p>
@@ -194,7 +210,7 @@
 
   <h3>Your rights</h3>
   <p>
-    You can see, export and delete everything yourself on the <a href="dashboard.html">logbook page</a>:
+    You can see, export and delete everything yourself on the <a href="dashboard.html">dashboard</a>:
     <b>Download my data</b> gives you all of it as a JSON file, individual flights can be deleted, and
     <b>Delete everything</b> removes the account and all its data at once, for good. You also have the
     right to correct your data, to object, and to complain to your data protection authority. For anything

@@ -74,6 +74,36 @@ describe("the relay's map and radio log", () => {
     socket.close();
   });
 
+  it("passes the flight's airports on, whitelisted", async () => {
+    const { token } = await signIn();
+    const ws = await call("GET", "/v1/live/ws", undefined, { ...bearer(token), Upgrade: "websocket" });
+    const socket = ws.webSocket!;
+    const got: any[] = [];
+    socket.accept();
+    socket.addEventListener("message", (e) => got.push(JSON.parse(e.data as string)));
+    const airports = [{ icao: "KPHX", name: "Phoenix Sky Harbor", role: "arrival", lat: 33.43, lon: -112.01, elev_ft: 1135, atis: "D",
+      owner: "x", frequencies: [{ label: "TWR", kind: "tower", mhz: 118.7, name: "Phoenix Tower", secret: 1 }],
+      runways: [{ name: "08/26", length_ft: 11489, heading_mag: 76, ils: ["26 (IPHX)"], lat: 1 }] }];
+    expect((await call("PUT", "/v1/live/airports", { airports }, bearer(token))).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    const sent = got.find((m) => m.type === "airports").data[0];
+    expect(sent).not.toHaveProperty("owner");
+    expect(sent.frequencies[0]).toEqual({ label: "TWR", kind: "tower", mhz: 118.7, name: "Phoenix Tower" });
+    expect(sent.runways[0]).toEqual({ name: "08/26", length_ft: 11489, heading_mag: 76, ils: ["26 (IPHX)"] });
+    socket.close();
+  });
+
+  it("lets the website's tracker open the socket with its cookie, from its own pages only", async () => {
+    const { res } = await signIn(undefined, "web");
+    const cookie = res.headers.get("Set-Cookie")!.split(";")[0];
+    const fromSite = await call("GET", "/v1/live/ws", undefined, { Cookie: cookie, Origin: "https://localtc.test", Upgrade: "websocket" });
+    expect(fromSite.status).toBe(101);
+    fromSite.webSocket!.accept();
+    fromSite.webSocket!.close();
+    const elsewhere = await call("GET", "/v1/live/ws", undefined, { Cookie: cookie, Origin: "https://evil.example", Upgrade: "websocket" });
+    expect(elsewhere.status).toBe(403);
+  });
+
   it("keeps position, traffic and radio in memory only", async () => {
     const { env, runInDurableObject } = await import("cloudflare:test");
     const { token } = await signIn();

@@ -100,8 +100,9 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
     public var text: String?
     public var ok: Bool?
     public var level: String?
+    public var radio: Int?  // 1 or 2: which COM, when the desktop knows
 
-    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level }
+    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level, radio }
 
     public init(kind: String, text: String?, station: String? = nil, mhz: Double? = nil) {
         self.kind = kind
@@ -141,6 +142,51 @@ public struct FlightAlert: Codable, Sendable, Equatable, Identifiable {
     }
 }
 
+/// One of the flight's airports (origin, destination) for the Frequencies and Airports tabs: published data.
+public struct FlightAirport: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { icao }
+    public var icao: String
+    public var name: String?
+    public var role: String?  // "departure" or "arrival"
+    public var lat: Double?
+    public var lon: Double?
+    public var elevFt: Int?
+    public var atis: String?
+    public var frequencies: [Frequency]
+    public var runways: [Runway]
+
+    enum CodingKeys: String, CodingKey { case icao, name, role, lat, lon, elevFt, atis, frequencies, runways }
+
+    public struct Frequency: Codable, Sendable, Equatable, Hashable {
+        public var label: String?
+        public var kind: String?
+        public var mhz: Double
+        public var name: String?
+
+        public var display: String { String(format: "%.3f", mhz) }
+    }
+
+    public struct Runway: Codable, Sendable, Equatable, Hashable {
+        public var name: String
+        public var lengthFt: Int?
+        public var headingMag: Int?
+        public var ils: [String]?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        icao = try c.decode(String.self, forKey: .icao)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        role = try c.decodeIfPresent(String.self, forKey: .role)
+        lat = try c.decodeIfPresent(Double.self, forKey: .lat)
+        lon = try c.decodeIfPresent(Double.self, forKey: .lon)
+        elevFt = try c.decodeIfPresent(Int.self, forKey: .elevFt)
+        atis = try c.decodeIfPresent(String.self, forKey: .atis)
+        frequencies = try c.decodeIfPresent([Frequency].self, forKey: .frequencies) ?? []
+        runways = try c.decodeIfPresent([Runway].self, forKey: .runways) ?? []
+    }
+}
+
 public struct Hello: Codable, Sendable, Equatable {
     public var `protocol`: Int?
     public var version: String?
@@ -149,6 +195,7 @@ public struct Hello: Codable, Sendable, Equatable {
     public var traffic: [TrafficTarget]?
     public var route: Route?
     public var radio: [RadioLine]?
+    public var airports: [FlightAirport]?
 }
 
 public enum LiveMessage: Sendable, Equatable {
@@ -160,6 +207,7 @@ public enum LiveMessage: Sendable, Equatable {
     case radio(RadioLine)
     case radioBacklog([RadioLine])
     case alert(FlightAlert)
+    case airports([FlightAirport])
 
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -181,6 +229,7 @@ public enum LiveMessage: Sendable, Equatable {
             if let line = try? d.decode(RadioLine.self, from: data) { return .radio(line) }
             return .radioBacklog(try d.decode([RadioLine].self, from: data))
         case "alert": return .alert(try d.decode(FlightAlert.self, from: data))
+        case "airports": return .airports(try d.decode([FlightAirport].self, from: data))
         default: return nil
         }
     }

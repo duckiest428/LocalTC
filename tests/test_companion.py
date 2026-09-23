@@ -122,3 +122,59 @@ def test_the_local_stream_starts_with_the_whole_picture():
     assert hello["status"] == {"active": True, "callsign": "FFT2084", "phase": "CRUISE"}  # nothing unlisted
     assert hello["own"]["lat"] == 33.0 and hello["route"]["destination"] == "KPHX"
     assert hello["radio"][0]["text"] == "Frontier 2084, roger."
+
+
+KPHX = {"icao": "KPHX", "name": "Phoenix Sky Harbor", "role": "arrival", "lat": 33.43, "lon": -112.01, "elev_ft": 1135,
+        "atis": "D", "frequencies": [{"label": "TWR", "kind": "tower", "mhz": 118.7, "name": "Phoenix Tower"}],
+        "runways": [{"name": "08/26", "length_ft": 11489, "heading_mag": 76, "ils": ["26 (IPHX)"]}]}
+
+
+def test_the_airports_go_out_once_and_again_to_a_new_phone():
+    hub, relay = CompanionHub(), Relay()
+    hub.remote = relay
+    hub.set_airports([KPHX])
+    assert relay.sent == []  # nobody watching remotely
+    hub.watching(1)
+    assert ("airports", [KPHX]) in relay.sent
+    relay.sent.clear()
+    hub.set_airports([KPHX])  # unchanged: nothing new to send
+    assert relay.sent == []
+    assert hub.snapshot()["airports"] == [KPHX]
+
+
+async def post(port: int, path: str, key: str, body: dict) -> tuple[int, dict]:
+    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+    payload = json.dumps(body).encode()
+    writer.write(f"POST {path} HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {key}\r\nContent-Type: application/json\r\n"
+                 f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload)
+    await writer.drain()
+    head = await reader.readuntil(b"\r\n\r\n")
+    data = await asyncio.wait_for(reader.read(4096), timeout=2)
+    writer.close()
+    return int(head.split(b" ")[1]), json.loads(data)
+
+
+def test_a_call_typed_on_the_phone_is_transmitted():
+    said: list[str] = []
+
+    def say(text: str) -> None:
+        if text == "boom":
+            raise RuntimeError("start a flight first")
+        said.append(text)
+
+    async def go():
+        hub = CompanionHub()
+        server = CompanionServer(hub, say=say)
+        port = await server.start(0, "127.0.0.1", advertise=False)
+        try:
+            ok = await post(port, "/companion/v1/say", hub.key, {"text": "Phoenix Approach, Frontier 2084, with you"})
+            empty = await post(port, "/companion/v1/say", hub.key, {"text": "  "})
+            idle = await post(port, "/companion/v1/say", hub.key, {"text": "boom"})
+            return ok, empty, idle
+        finally:
+            await server.close()
+
+    ok, empty, idle = asyncio.run(go())
+    assert ok == (200, {"ok": True}) and said == ["Phoenix Approach, Frontier 2084, with you"]
+    assert empty[0] == 400
+    assert idle == (409, {"error": "start a flight first"})

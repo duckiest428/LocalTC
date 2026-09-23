@@ -12,7 +12,8 @@ or by Bonjour (`_localtc._tcp`), tries each local URL with `GET /companion/v1/he
 falls back to the relay. The companion key is made fresh each time LocalTC starts and reaches the phone only
 through the signed-in account.
 
-Over the relay, `own`, `traffic`, `radio` and `alert` flow only while a phone is connected and the pilot allows
+Over the relay, `own`, `traffic`, `radio`, `airports` and `alert` flow only while a phone (or the website's
+Flight Tracker) is connected and the pilot allows
 it (`[account] companion_remote_map`); the server holds them in memory and never stores them. `status` always
 flows while the account's companion setting is on.
 
@@ -21,7 +22,7 @@ flows while the account's companion setting is on.
 ### `hello` (first message on either path)
 ```json
 {"protocol": 1, "version": "0.3.0", "status": {...}, "own": {...}|null, "traffic": [...],
- "route": {...}|null, "radio": [...]}
+ "route": {...}|null, "radio": [...], "airports": [...]}
 ```
 The relay's `hello` has no `route` (the phone gets it on the local network only) and no `version`.
 
@@ -67,3 +68,19 @@ Only `kind`, `t` and `text` are always present.
  "body": "Frontier 2084, contact Phoenix Approach 119.2.", "mhz": 133.65}
 ```
 The phone shows a banner, and a local notification if it's in the background.
+
+### `airports` (when the flight's airports are known, and again when the ATIS changes)
+```json
+[{"icao": "KPHX", "name": "Phoenix Sky Harbor Intl", "role": "arrival", "lat": 33.43, "lon": -112.01,
+  "elev_ft": 1135, "atis": "D",
+  "frequencies": [{"label": "TWR", "kind": "tower", "mhz": 118.7, "name": "Phoenix Tower"}],
+  "runways": [{"name": "08/26", "length_ft": 11489, "heading_mag": 76, "ils": ["26 (IPHX)"]}]}]
+```
+The departure and arrival airports (one if they're the same): published data for the Frequencies and
+Airports tabs.
+
+## Talking from the phone (local network only)
+
+`POST http://<pc>:47800/companion/v1/say` with the companion key and `{"text": "Phoenix Approach, Frontier
+2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app. `200 {"ok": true}`, or
+`409 {"error": ...}` when no flight is running. The relay is one-way, so this works on the same Wi-Fi only.

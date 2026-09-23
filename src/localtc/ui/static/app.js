@@ -64,6 +64,7 @@ function setState(st) {
   $("#sw-copilot").title = `Copilot ${st.copilot !== "off" ? "on" : "off"}: ${st.copilot_mode === "assist" ? "reads back and changes frequencies" : "works the whole radio"}`;
   $("#sw-atc").classList.toggle("on", !st.muted);
   $("#devbar").hidden = !st.dev_mode;
+  $("#btn-coffee").hidden = !!st.coffee_clicked;
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -252,12 +253,19 @@ function showTab(name) {
   if (name === "settings") Settings.load();
   if (name === "map") MapView.show();
   if (name === "lookup") Lookup.show();
-  if (name === "logbook") Logbook.load();
+  if (name === "logbook") Logbook.load().then(() => Logbook.map?.fit());
 }
 $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
 $("#btn-settings").onclick = () => showTab("settings");
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
 $("#btn-help").onclick = () => $("#dlg-help").showModal();
+
+// Buy me a coffee: shown until it's been clicked once, then never again.
+$("#btn-coffee").addEventListener("click", () => {
+  $("#btn-coffee").hidden = true;
+  S.state.coffee_clicked = true;
+  api("settings", { settings: { ui: { coffee_clicked: true } } }).catch(() => {});
+});
 
 // Links open in the real browser, not inside the app window.
 document.addEventListener("click", (e) => {
@@ -385,6 +393,7 @@ function keyLabel(name) {
 /* ---------- Logbook ---------- */
 
 const Logbook = {
+  map: null,
   async load() {
     const body = $("#logbook-body");
     try { this.render(await api("logbook")); } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
@@ -394,14 +403,16 @@ const Logbook = {
     const hm = (min) => (min == null ? "—" : `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, "0")}`);
     const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
     const stat = (v, k) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`;
+    if (this.map) { this.map.map.remove(); this.map = null; }
     $("#logbook-body").innerHTML = `
       <div class="stats">
         ${stat(t.flights, "flights")}${stat(t.air_hours, "hours flown")}${stat(t.airports.length, "airports")}
         ${stat(t.distance_nm.toLocaleString(), "nm")}${stat(t.average_landing_fpm == null ? "—" : `${t.average_landing_fpm}`, "avg landing fpm")}
         ${stat(t.readback_accuracy == null ? "—" : `${Math.round(t.readback_accuracy * 100)}%`, "readbacks right")}
       </div>
+      ${r.flights.length ? '<div class="lb-map" id="lb-map" aria-label="Map of every flight in the logbook"></div>' : ""}
       ${r.flights.length ? `<table class="lb"><thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead><tbody>
-        ${r.flights.map((f) => `<tr title="${esc([f.aircraft, f.departure_gate && `from ${f.departure_gate}`, f.arrival_gate && `to ${f.arrival_gate}`, f.max_alt_ft && `max ${f.max_alt_ft.toLocaleString()} ft`, `${f.distance_nm} nm`].filter(Boolean).join(" · "))}">
+        ${r.flights.map((f) => `<tr data-route="${esc(`${f.origin}>${f.destination}`)}" title="${esc([f.aircraft, f.departure_gate && `from ${f.departure_gate}`, f.arrival_gate && `to ${f.arrival_gate}`, f.max_alt_ft && `max ${f.max_alt_ft.toLocaleString()} ft`, `${f.distance_nm} nm`].filter(Boolean).join(" · "))}">
           <td>${esc(day(f.started_at))}</td><td class="mono">${esc(f.callsign || "—")}</td>
           <td class="mono">${esc(f.origin || "?")} → ${esc(f.destination || "?")}${f.landed ? "" : ' <span class="muted small">(no landing)</span>'}</td>
           <td class="mono">${hm(f.air_min)}</td><td class="mono">${hm(f.block_min)}</td>
@@ -411,8 +422,19 @@ const Logbook = {
       </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
       <p class="muted small pad">The logbook is kept on this computer (${t.flights} flight${t.flights === 1 ? "" : "s"}).
         An optional account in Quick Settings can copy it to localtc.tech.</p>`;
-    $$("[data-del]").forEach((b) => (b.onclick = () => {
+    $$("[data-del]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
       if (confirm("Delete this flight from the logbook on this computer?")) api("logbook/delete", { id: b.dataset.del }).then((v) => this.render(v)).catch(fail);
+    }));
+    if (!r.flights.length) return;
+    // Every flight on a map; a click on a route marks its rows, a click on a row shows its route.
+    const pick = (o, d) => $$("#logbook-body tr[data-route]").forEach((tr) => tr.classList.toggle("picked", tr.dataset.route === `${o}>${d}`));
+    this.map = new FlightsMap($("#lb-map"), { tiles: S.state.map_tiles !== false, onRoute: pick });
+    this.map.show(FlightsMap.summarize(r.flights));
+    $$("#logbook-body tr[data-route]").forEach((tr) => (tr.onclick = () => {
+      const [o, d] = tr.dataset.route.split(">");
+      pick(o, d);
+      this.map.focus(o, d);
     }));
   },
 };
@@ -574,6 +596,19 @@ const Settings = {
 
       <div class="card" id="s-update-card"></div>
 
+      <div class="card" id="s-support-card">
+        <h3>Support &amp; feedback</h3>
+        <p class="muted small">Goes straight to LocalTC's developer by email. Your address is only used to answer you.</p>
+        <div class="row">
+          <label>About <select id="sup-kind"><option value="feedback">Feedback or an idea</option><option value="bug">Something went wrong</option>
+            <option value="support">Help setting it up</option></select></label>
+          <label>Your email <input id="sup-email" type="email" autocomplete="email" placeholder="for the answer" value="${esc(S.account?.email || "")}"></label>
+        </div>
+        <textarea id="sup-msg" rows="4" maxlength="8000" placeholder="What happened (the airport, what ATC said), or what would make LocalTC better?"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn small primary" id="sup-send">Send</button><span class="small" id="sup-note"></span></div>
+        <p class="muted small">For a problem in a flight, turn on Developer mode below and fly it again: Export session makes a zip that shows exactly what happened. Mention it, and the reply says where to send it.</p>
+      </div>
+
       <div class="card">
         <h3>Developer mode</h3>
         <label class="check-row"><input type="checkbox" id="s-dev" ${st.ui.dev_mode ? "checked" : ""}> Record every flight with its audio, and show Mark and Export session</label>
@@ -587,8 +622,20 @@ const Settings = {
     this.wire();
     this.jobs(S.state.jobs || {});
     this.update(S.state.update);
-    api("account").then((a) => { S.account = a; this.account(); }).catch(() => {});
+    api("account").then((a) => { S.account = a; this.account(); if (a.email && !$("#sup-email").value) $("#sup-email").value = a.email; }).catch(() => {});
     if (st.ui.dev_mode) this.sessions();
+    $("#sup-send").onclick = async () => {
+      const note = $("#sup-note"), button = $("#sup-send");
+      const body = { kind: $("#sup-kind").value, email: $("#sup-email").value.trim(), message: $("#sup-msg").value.trim() };
+      if (!body.message) { note.className = "small error"; note.textContent = "Write a message first."; return; }
+      button.disabled = true;
+      try {
+        const r = await api("support", body);
+        note.className = "small green"; note.textContent = r.message;
+        $("#sup-msg").value = "";
+      } catch (e) { note.className = "small error"; note.textContent = e.message; }
+      finally { button.disabled = false; }
+    };
   },
   wire() {
     const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);
@@ -717,7 +764,7 @@ const Settings = {
       <label class="check-row"><input type="checkbox" id="a-sync" ${a.sync ? "checked" : ""}> Copy each flight's logbook line to my account</label>
       <label class="check-row"><input type="checkbox" id="a-companion" ${a.companion ? "checked" : ""}> Show the flight in the companion app (phase, frequencies, ATC's last call)</label>
       <label class="check-row"><input type="checkbox" id="a-lan" ${a.companion_lan ? "checked" : ""} ${a.companion ? "" : "disabled"}> On the same Wi-Fi, the phone connects to this PC directly (map, traffic, radio log; nothing goes online)</label>
-      <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone watches (held in memory there, never stored)</label>
+      <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)</label>
       <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
         <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
       <div class="row"><button class="btn small" id="a-logout">Sign out</button>

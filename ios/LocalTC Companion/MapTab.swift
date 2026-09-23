@@ -46,18 +46,6 @@ struct MapTab: View {
         .onChange(of: store.status.rules, initial: true) { _, rules in
             mapMode.follow(rules: rules)
         }
-        .overlay(alignment: .top) {
-            Picker("Map", selection: Binding(get: { mapMode.kind }, set: { mapMode.pick($0) })) {
-                ForEach(MapMode.Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 140)
-            .padding(6)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .padding(.top, 8)
-            .accessibilityIdentifier("mapMode")
-            .accessibilityLabel("Map type: IFR or VFR")
-        }
         .onChange(of: store.own) { _, own in
             guard follow, let own else { return }
             withAnimation(.linear(duration: 0.4)) {
@@ -65,33 +53,52 @@ struct MapTab: View {
                                              distance: distance(for: own)))
             }
         }
-        .overlay(alignment: .bottomTrailing) {
-            Button { follow = true } label: {
-                Image(systemName: follow ? "location.fill" : "location")
-                    .font(.title3)
-                    .padding(12)
-                    .background(.regularMaterial, in: Circle())
-            }
-            .padding()
-            .accessibilityLabel("Follow the aircraft")
-        }
-        .overlay(alignment: .bottomLeading) {
-            if let own = store.own {
-                HStack(spacing: 14) {
-                    stat("ALT", own.alt.map { $0.formatted() } ?? "—")
-                    stat("GS", own.gs.map(String.init) ?? "—")
-                    stat("HDG", own.hdg.map { String(format: "%03d", $0) } ?? "—")
-                    stat("VS", own.vs.map { ($0 > 0 ? "+" : "") + String($0) } ?? "—")
+        .safeAreaInset(edge: .bottom) {
+            // One panel at the bottom: the top of the screen stays clear for the alert banners.
+            VStack(spacing: 8) {
+                HStack {
+                    Picker("Map", selection: Binding(get: { mapMode.kind }, set: { mapMode.pick($0) })) {
+                        ForEach(MapMode.Kind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .padding(6)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityIdentifier("mapMode")
+                    .accessibilityLabel("Map type: IFR or VFR")
+                    Spacer()
+                    Button { follow = true } label: {
+                        Image(systemName: follow ? "location.fill" : "location")
+                            .font(.title3)
+                            .padding(12)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .accessibilityLabel("Follow the aircraft")
                 }
-                .padding(10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .padding()
+                if store.status.active {
+                    NavigationLink { FlightTab() } label: { FlightCard(status: store.status, own: store.own) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("flightCard")
+                }
             }
+            .padding(.horizontal)
+            .padding(.bottom, 6)
         }
         .overlay {
-            if store.own == nil { NotFlying() }
+            if !store.status.active && store.own == nil { NotFlying() }
         }
-        .navigationTitle(store.status.callsign ?? "Map")
+        .overlay(alignment: .top) {
+            if store.status.active && store.own == nil {
+                // Flying, but no position yet (the server passes it on a few seconds after the phone connects),
+                // or the pilot keeps it at home (Quick Settings → Account on the PC).
+                Label("Waiting for the aircraft's position", systemImage: "location.slash")
+                    .font(.footnote)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.top, 12)
+            }
+        }
+        .navigationTitle(store.status.callsign ?? "My Flight")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -113,11 +120,54 @@ struct MapTab: View {
             .rotationEffect(.degrees(Double(heading ?? 0) - 90))
     }
 
+}
+
+/// The flight at a glance under the map: tap for everything.
+struct FlightCard: View {
+    let status: FlightStatus
+    let own: OwnAircraft?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            summary
+            if let own {
+                HStack {
+                    stat("ALT", own.alt.map { $0.formatted() } ?? "—")
+                    stat("GS", own.gs.map(String.init) ?? "—")
+                    stat("HDG", own.hdg.map { String(format: "%03d", $0) } ?? "—")
+                    stat("VS", own.vs.map { ($0 > 0 ? "+" : "") + String($0) } ?? "—")
+                }
+            }
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var summary: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text([status.callsign, status.phaseLabel ?? status.phase].compactMap { $0 }.joined(separator: " · "))
+                    .font(.subheadline.bold())
+                Text([status.origin, status.destination].compactMap { $0 }.joined(separator: " → "))
+                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(status.tuned?.label ?? "—").font(.caption.monospacedDigit()).lineLimit(1)
+                if let next = status.next, next != status.tuned {
+                    Text("next \(next.label)").font(.caption2.monospacedDigit()).foregroundStyle(.orange).lineLimit(1)
+                }
+            }
+            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(.tertiary)
+        }
+    }
+
     private func stat(_ name: String, _ value: String) -> some View {
         VStack(spacing: 0) {
             Text(name).font(.caption2).foregroundStyle(.secondary)
             Text(value).font(.callout.monospacedDigit().bold())
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

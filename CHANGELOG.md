@@ -24,8 +24,19 @@ a new minor version adds features, a patch fixes them.
   directly; elsewhere through the account server, which holds position and radio in memory only. The map
   has the same IFR / VFR switch. Cockpit and Flight Bag tabs are previews for now.
 
+- **The website's Dashboard** (was Logbook): a live **Flight Tracker** for the flight you're flying (the map,
+  traffic, frequencies and radio, like the companion app), and the logbook with an interactive map of every
+  flight.
+- **A map of your flights** in the app's Logbook tab too: click a route for its flights, a flight for its route.
+- **Support**: write to the developer from the website's Support page or the app (Quick Settings > Support &
+  feedback). It's emailed on; nothing is stored.
+- **The companion app's new tabs**: My Flight, Comms (with COM1/COM2 and typing a call to ATC on the same
+  Wi-Fi), Frequencies, Airports, and EFB (coming soon).
+- A **Buy me a coffee** button in the app. One click and it's gone for good.
+
 ### Changed
-- The account server passes the flight rules to the phone (redeploy the Worker for it).
+- The account server passes the flight rules and the flight's airports to the phone, handles support
+  messages, and lets the Dashboard's tracker connect (redeploy the Worker, and set its SUPPORT_EMAIL secret).
 
 ## [0.2.0] - 2026-09-22
 

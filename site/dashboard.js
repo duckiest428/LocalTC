@@ -1,6 +1,7 @@
-/* The logbook dashboard: signs in to the optional LocalTC account and shows the flights synced from
-   the app. No dependencies. The sign-in is an HttpOnly cookie on api.localtc.tech, which this page
-   can't read; nothing is kept in this browser's storage. */
+/* The dashboard: signs in to the optional LocalTC account, follows the flight in progress (the Flight
+   Tracker) and shows the logbook synced from the app. Leaflet draws the maps (vendor/leaflet, served from
+   here; the tiles come from OpenStreetMap). The sign-in is an HttpOnly cookie on api.localtc.tech, which
+   this page can't read; nothing is kept in this browser's storage. */
 
 const API = ["localhost", "127.0.0.1"].includes(location.hostname) ? "http://localhost:8787" : "https://api.localtc.tech";
 const $ = (s) => document.querySelector(s);
@@ -90,7 +91,7 @@ $("#f-again").onclick = () => { awaitingCode(null); say(""); };
 
 $("#btn-signout").onclick = async () => {
   try { await api("POST", "/v1/auth/logout"); } catch { /* signed out either way */ }
-  stopLive();
+  Tracker.stop();
   show("auth");
   say("Signed out.");
 };
@@ -117,7 +118,7 @@ async function load() {
   map(stats);
   $("#flights").innerHTML = "";
   rows(page);
-  startLive();
+  Tracker.start();
 }
 
 function hm(min) {
@@ -134,12 +135,13 @@ function tiles(s) {
     tile(s.readback_accuracy == null ? "—" : `${Math.round(s.readback_accuracy * 100)}%`, "readbacks right"),
   ].join("");
   $("#dash-title").textContent = s.flights ? "Your flights." : "No flights yet.";
+  $(".flights-h").textContent = s.flights ? `Flights (${s.flights})` : "Flights";
 }
 
 function rows(page) {
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
   const html = page.flights.map((f) => `
-    <tr data-id="${esc(f.id)}">
+    <tr data-id="${esc(f.id)}" data-route="${esc(`${f.origin}>${f.destination}`)}">
       <td>${esc(day(f.started_at))}</td>
       <td class="mono">${esc(f.callsign || "—")}</td>
       <td class="mono">${esc(f.origin || "?")} → ${esc(f.destination || "?")}${f.arrival_gate ? ` <span class="sub">${esc(f.arrival_gate)}</span>` : ""}</td>
@@ -159,7 +161,11 @@ $("#more").onclick = async () => rows(await api("GET", `/v1/flights?limit=50&bef
 
 $("#flights").onclick = async (e) => {
   const button = e.target.closest(".del");
-  if (!button) return;
+  if (!button) {  // a click on a flight shows its route on the map
+    const tr = e.target.closest("tr[data-route]");
+    if (tr && flightsMap) { pick(...tr.dataset.route.split(">")); flightsMap.focus(...tr.dataset.route.split(">")); }
+    return;
+  }
   const row = button.closest("tr");
   if (!confirm("Delete this flight from your account? The app's logbook keeps its copy.")) return;
   try {
@@ -206,84 +212,194 @@ $("#del-form").onsubmit = async (e) => {
   if (!confirm("Delete the account and every flight in it, for good?")) return;
   try {
     await api("DELETE", "/v1/me", { email });
-    stopLive();
+    Tracker.stop();
     show("auth");
     say("The account and everything in it are deleted.");
   } catch (err) { say(err.message, true); }
 };
 
-// --- the map: airports and the routes between them, no map tiles (nothing loaded from elsewhere) --------
+// --- the logbook's map: every airport and route (flightsmap.js, shared with the app) -------------------------
+
+let flightsMap = null;
+
+function pick(origin, destination) {
+  document.querySelectorAll("#flights tr[data-route]").forEach((tr) => tr.classList.toggle("picked", tr.dataset.route === `${origin}>${destination}`));
+}
 
 function map(stats) {
-  const svg = $("#map");
-  const places = stats.airports.filter((a) => a.lat != null && a.lon != null);
-  const where = Object.fromEntries(places.map((a) => [a.icao, a]));
-  if (!places.length) {
-    svg.setAttribute("viewBox", "0 0 1000 300");
-    svg.innerHTML = '<text x="500" y="150" text-anchor="middle" class="map-empty">The airports you fly appear here.</text>';
-    return;
-  }
-  let [s, n, w, e] = [Math.min(...places.map((a) => a.lat)), Math.max(...places.map((a) => a.lat)),
-    Math.min(...places.map((a) => a.lon)), Math.max(...places.map((a) => a.lon))];
-  // Keep the aspect of the box, with room around the edges, and never zoomed in past a few degrees.
-  const midLat = (s + n) / 2;
-  const k = Math.cos((midLat * Math.PI) / 180);
-  let spanX = Math.max((e - w) * k, 4) * 1.3, spanY = Math.max(n - s, 2) * 1.3;
-  // The map takes the shape of what was flown, between a wide strip and a near square.
-  const ratio = Math.min(Math.max(spanY / spanX, 0.35), 0.75);
-  if (spanY / spanX < ratio) spanY = spanX * ratio; else spanX = spanY / ratio;
-  const H = Math.round(1000 * ratio);
-  svg.setAttribute("viewBox", `0 0 1000 ${H}`);
-  const cx = ((w + e) / 2) * k, cy = midLat;
-  const x = (lon) => ((lon * k - (cx - spanX / 2)) / spanX) * 1000;
-  const y = (lat) => ((cy + spanY / 2 - lat) / spanY) * H;
-  const grid = [];
-  const step = spanY > 40 ? 20 : spanY > 15 ? 10 : 5;
-  for (let lat = Math.ceil((cy - spanY / 2) / step) * step; lat < cy + spanY / 2; lat += step) grid.push(`<line x1="0" x2="1000" y1="${y(lat)}" y2="${y(lat)}"/>`);
-  for (let lon = Math.ceil((cx - spanX / 2) / k / step) * step; lon * k < cx + spanX / 2; lon += step) grid.push(`<line y1="0" y2="${H}" x1="${x(lon)}" x2="${x(lon)}"/>`);
-  const most = Math.max(1, ...stats.routes.map((r) => r.flights));
-  const routes = stats.routes.filter((r) => where[r.origin] && where[r.destination]).map((r) => {
-    const a = where[r.origin], b = where[r.destination];
-    const [x1, y1, x2, y2] = [x(a.lon), y(a.lat), x(b.lon), y(b.lat)];
-    const bend = Math.hypot(x2 - x1, y2 - y1) * 0.12;  // a slight arc reads as a flight, not a border
-    const mx = (x1 + x2) / 2 - ((y2 - y1) / (Math.hypot(x2 - x1, y2 - y1) || 1)) * bend;
-    const my = (y1 + y2) / 2 + ((x2 - x1) / (Math.hypot(x2 - x1, y2 - y1) || 1)) * bend;
-    return `<path d="M${x1},${y1} Q${mx},${my} ${x2},${y2}" stroke-width="${1.2 + 2.5 * (r.flights / most)}"><title>${esc(r.origin)} → ${esc(r.destination)}: ${esc(r.flights)}</title></path>`;
-  });
-  const dots = places.map((a) => `<g transform="translate(${x(a.lon)},${y(a.lat)})"><circle r="${3 + Math.min(a.visits, 8)}"><title>${esc(a.icao)}: ${esc(a.visits)} visits</title></circle><text x="9" y="4">${esc(a.icao)}</text></g>`);
-  svg.innerHTML = `<g class="grid">${grid.join("")}</g><g class="routes">${routes.join("")}</g><g class="airports">${dots.join("")}</g>`;
+  if (!flightsMap) flightsMap = new FlightsMap($("#lb-map"), { tiles: true, onRoute: pick });
+  const shown = flightsMap.show({ airports: stats.airports, routes: stats.routes });
+  $("#lb-map").classList.toggle("empty", !shown);
 }
 
-// --- the flight in progress, as the companion app sees it -----------------------------------------------
+// --- the Flight Tracker: the flight in progress, live, as the companion app sees it ------------------------
+// A WebSocket to the account's relay. While it's open the app sends the aircraft, traffic and radio (if its
+// "map away from home" setting is on); they pass through the server's memory and are never stored.
 
-let liveTimer = null;
+const Tracker = {
+  ws: null, retry: 0, timer: null, ping: null, map: null, plane: null, trail: null, trailPts: [], tfc: new Map(),
+  status: { active: false }, gotOwn: false, follow: true, wanted: false,
 
-async function refreshLive() {
-  try {
-    const s = await api("GET", "/v1/live");
-    const box = $("#live");
-    box.hidden = !s.active;
-    if (!s.active) return;
-    const f = (st) => (st && st.station ? `${esc(st.station)} ${st.mhz ? Number(st.mhz).toFixed(3) : ""}` : "—");
-    box.innerHTML = `<span class="live-dot"></span><b>${esc(s.callsign || "Flying")}</b>
+  start() {
+    this.wanted = true;
+    this.connect();
+    document.addEventListener("visibilitychange", this.onVisibility);
+  },
+  stop() {
+    this.wanted = false;
+    document.removeEventListener("visibilitychange", this.onVisibility);
+    this.close();
+  },
+  // Hidden tab: let go, so the app stops sending the position for nobody.
+  onVisibility: () => (document.hidden ? Tracker.close() : Tracker.wanted && Tracker.connect()),
+
+  connect() {
+    if (this.ws || !this.wanted) return;
+    clearTimeout(this.timer);
+    this.conn("Connecting ...");
+    const ws = new WebSocket(`${API.replace(/^http/, "ws")}/v1/live/ws`);
+    this.ws = ws;
+    ws.onopen = () => {
+      this.retry = 0;
+      this.conn("Live", "on");
+      this.ping = setInterval(() => ws.readyState === 1 && ws.send("ping"), 30000);
+    };
+    ws.onmessage = (e) => {
+      if (e.data === "pong") return;
+      try { const m = JSON.parse(e.data); this.handle(m.type, m.data); } catch { /* not ours */ }
+    };
+    ws.onclose = () => {
+      clearInterval(this.ping);
+      this.ws = null;
+      if (!this.wanted || document.hidden) return;
+      this.retry = Math.min(this.retry + 1, 6);
+      this.conn("Reconnecting ...");
+      this.timer = setTimeout(() => this.connect(), 1000 * 2 ** this.retry);
+    };
+  },
+  close() {
+    clearTimeout(this.timer);
+    clearInterval(this.ping);
+    if (this.ws) { const ws = this.ws; this.ws = null; ws.onclose = null; ws.close(); }
+    this.conn("Paused");
+  },
+  conn(text, cls = "") {
+    const c = $("#tr-conn");
+    c.textContent = text;
+    c.className = `tr-conn ${cls}`;
+  },
+
+  handle(type, data) {
+    if (type === "hello") {
+      this.statusIs(data.status || { active: false });
+      this.clearMap();
+      if (data.own) this.own(data.own);
+      if (data.traffic) this.traffic(data.traffic);
+      $("#tr-radio").innerHTML = "";
+      for (const line of data.radio || []) this.radio(line);
+    } else if (type === "status") this.statusIs(data);
+    else if (type === "own") this.own(data);
+    else if (type === "traffic") this.traffic(data);
+    else if (type === "radio") this.radio(data);
+  },
+
+  statusIs(s) {
+    const was = this.status.active;
+    this.status = s;
+    $("#tr-body").hidden = !s.active;
+    if (!s.active) {
+      $("#tr-status").innerHTML = `<p class="hint">No flight right now. Start one in the LocalTC app, signed in with this
+        account and the companion on (Quick Settings → Account), and it shows up here.</p>`;
+      $("#tr-nomap").hidden = true;
+      if (was) this.clearMap();
+      return;
+    }
+    const st = (x) => (x && x.station ? `${esc(x.station)} <span class="mono">${x.mhz ? Number(x.mhz).toFixed(3) : ""}</span>` : "—");
+    $("#tr-status").innerHTML = `<div class="tr-head"><span class="live-dot"></span><b>${esc(s.callsign || "Flying")}</b>
       <span class="mono">${esc(s.origin || "?")} → ${esc(s.destination || "?")}</span>
-      <span>${esc(s.phase_label || s.phase || "")}</span>
-      <span>On ${f(s.tuned)}</span>${s.next && s.next.station ? `<span>Next ${f(s.next)}</span>` : ""}
-      ${s.last_atc && s.last_atc.text ? `<span class="last-atc">“${esc(s.last_atc.text)}”</span>` : ""}`;
-  } catch { /* the next try will do */ }
-}
+      <span class="tr-phase">${esc(s.phase_label || s.phase || "")}</span>
+      ${s.rules ? `<span class="tr-rules">${esc(s.rules)}</span>` : ""}</div>
+      ${s.last_atc && s.last_atc.text ? `<p class="last-atc">“${esc(s.last_atc.text)}”</p>` : ""}`;
+    const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
+    $("#tr-facts").innerHTML = [
+      fact("On", st(s.tuned)), fact("Next", st(s.next)),
+      fact("Squawk", `<span class="mono">${esc(s.squawk || "—")}</span>`),
+      fact("Assigned", s.altitude_ft ? `<span class="mono">${Number(s.altitude_ft).toLocaleString()} ft</span>` : "—"),
+      fact("Runway", esc(s.runway || "—")),
+      fact("To go", s.ete ? `<span class="mono">${esc(s.ete.nm)} nm · ${esc(s.ete.min)} min</span>` : "—"),
+      ...(s.gate ? [fact("Gate", esc(s.gate))] : []),
+    ].join("");
+    this.ensureMap();
+    // No position a while into the flight: the app keeps it at home (its setting), say so.
+    clearTimeout(this.noMapTimer);
+    this.noMapTimer = setTimeout(() => { $("#tr-nomap").hidden = this.gotOwn || !this.status.active; }, 12000);
+  },
 
-function startLive() {
-  stopLive();
-  refreshLive();
-  liveTimer = setInterval(() => { if (!document.hidden) refreshLive(); }, 15000);
-}
-
-function stopLive() {
-  if (liveTimer) clearInterval(liveTimer);
-  liveTimer = null;
-  $("#live").hidden = true;
-}
+  ensureMap() {
+    if (this.map) { setTimeout(() => this.map.invalidateSize(), 0); return; }
+    this.map = L.map("tr-map", { worldCopyJump: true }).setView([39, -98], 4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
+    $("#tr-map").classList.add("fm-tiles");
+    this.trail = L.polyline([], { className: "tr-trail", weight: 2.5 }).addTo(this.map);
+    this.map.on("dragstart", () => { this.follow = false; });
+    const follow = L.control({ position: "topright" });
+    follow.onAdd = () => {
+      const b = L.DomUtil.create("button", "tr-follow");
+      b.type = "button"; b.textContent = "Follow";
+      L.DomEvent.on(b, "click", (e) => { L.DomEvent.stop(e); this.follow = true; if (this.plane) this.map.panTo(this.plane.getLatLng()); });
+      return b;
+    };
+    follow.addTo(this.map);
+  },
+  clearMap() {
+    this.gotOwn = false;
+    this.trailPts = [];
+    if (this.trail) this.trail.setLatLngs([]);
+    if (this.plane) { this.plane.remove(); this.plane = null; }
+    for (const m of this.tfc.values()) m.remove();
+    this.tfc.clear();
+  },
+  icon(hdg, cls, size) {
+    const svg = `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
+    return L.divIcon({ className: `tr-plane ${cls}`, html: `<div style="transform:rotate(${Number(hdg) || 0}deg)">${svg}</div>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+  },
+  own(o) {
+    if (!this.status.active || o.lat == null) return;
+    this.ensureMap();
+    this.gotOwn = true;
+    $("#tr-nomap").hidden = true;
+    const at = [o.lat, o.lon];
+    if (!this.plane) { this.plane = L.marker(at, { icon: this.icon(o.hdg, "own", 30), zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, o.ground ? 13 : 9); }
+    else { this.plane.setLatLng(at); this.plane.setIcon(this.icon(o.hdg, "own", 30)); }
+    const last = this.trailPts[this.trailPts.length - 1];
+    if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.002) { this.trailPts.push(at); this.trail.setLatLngs(this.trailPts); }
+    if (this.follow) this.map.panTo(at, { animate: false });
+    this.plane.bindTooltip(`${Number(o.alt || 0).toLocaleString()} ft · ${o.gs ?? "—"} kt · ${String(o.hdg ?? 0).padStart(3, "0")}°`);
+  },
+  traffic(list) {
+    if (!this.map) return;
+    const seen = new Set();
+    for (const t of list || []) {
+      seen.add(t.id);
+      const label = `${esc(t.callsign || "")} ${t.ground ? "GND" : Math.round((t.alt || 0) / 100).toString().padStart(3, "0")}`;
+      const m = this.tfc.get(t.id);
+      if (m) { m.setLatLng([t.lat, t.lon]); m.setIcon(this.icon(t.hdg, t.ground ? "ground" : "air", 18)); }
+      else this.tfc.set(t.id, L.marker([t.lat, t.lon], { icon: this.icon(t.hdg, t.ground ? "ground" : "air", 18) })
+        .bindTooltip(label).addTo(this.map));
+    }
+    for (const [id, m] of this.tfc) if (!seen.has(id)) { m.remove(); this.tfc.delete(id); }
+  },
+  radio(line) {
+    if (!["atc", "pilot", "copilot"].includes(line.kind) || !line.text) return;
+    const list = $("#tr-radio");
+    const who = line.kind === "atc" ? esc(line.station || "ATC") : line.kind === "copilot" ? "Copilot" : "You";
+    list.insertAdjacentHTML("beforeend", `<li class="${esc(line.kind)}"><span class="who">${who}</span> ${esc(line.text)}</li>`);
+    while (list.children.length > 40) list.firstElementChild.remove();
+    list.scrollTop = list.scrollHeight;
+  },
+};
 
 // --- arriving from the email's link --------------------------------------------------------------------
 

@@ -46,10 +46,11 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
 | `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | |
-| `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message |
-| `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert` | desktop → phone, in memory only |
+| `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message (the website's Flight Tracker opens it with its cookie, from `ALLOWED_ORIGINS` only) |
+| `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |
 | `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |
 | `POST /v1/push-tokens` `{token}`, `DELETE /v1/push-tokens/:token` | APNs, for the iOS app |
+| `POST /v1/support` `{kind: bug\|support\|feedback, email, name?, message, version?, platform?, source?}` | no sign-in; emailed to `SUPPORT_EMAIL` with the sender as Reply-To, stored nowhere; 5 an hour per address |
 
 ## Setting it up
 
@@ -62,6 +63,7 @@ npx wrangler login
 npx wrangler d1 create localtc          # copy the database_id into wrangler.toml
 npm run migrate                         # creates the tables
 npx wrangler secret put RESEND_API_KEY  # the sign-in emails: a Resend account with localtc.tech verified
+npx wrangler secret put SUPPORT_EMAIL   # where the Support page's messages go (your own inbox)
 npm run deploy                          # also creates the api.localtc.tech custom domain
 ```
 

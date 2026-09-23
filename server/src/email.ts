@@ -4,6 +4,7 @@ export interface Email {
   to: string;
   subject: string;
   text: string;
+  replyTo?: string;
 }
 
 /** EMAIL_MODE=test keeps what would have been sent here, for the tests to read. */
@@ -21,7 +22,8 @@ export async function send(env: Env, email: Email): Promise<void> {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.MAIL_FROM ?? "LocalTC <accounts@localtc.tech>", to: [email.to], subject: email.subject, text: email.text }),
+    body: JSON.stringify({ from: env.MAIL_FROM ?? "LocalTC <accounts@localtc.tech>", to: [email.to], subject: email.subject,
+      text: email.text, ...(email.replyTo ? { reply_to: email.replyTo } : {}) }),
   });
   if (!res.ok) console.error(`Email to ${email.to} failed: ${res.status} ${await res.text()}`);
 }

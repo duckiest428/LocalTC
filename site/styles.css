@@ -422,12 +422,72 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .panel-row .panel { margin: 0; }
 .map-panel { padding: 8px; overflow: hidden; }
-#map { display: block; width: 100%; height: auto; background: var(--lcd); border-radius: calc(var(--r3) - 6px); }
-#map .grid line { stroke: rgba(255, 255, 255, .05); stroke-width: 1; }
-#map .routes path { fill: none; stroke: var(--green); stroke-opacity: .55; stroke-linecap: round; }
-#map .airports circle { fill: var(--bg-0); stroke: var(--cyan); stroke-width: 2; }
-#map .airports text { fill: var(--text-2); font: 500 12px var(--mono); }
-#map .map-empty { fill: var(--text-3); font: 14px var(--sans); }
+.lb-map { height: clamp(300px, 46vw, 480px); border-radius: calc(var(--r3) - 6px); }
+.lb-map.empty::after { content: "The airports you fly appear here."; position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--text-3); font-size: 14px; z-index: 500; pointer-events: none; }
+table.flights tr[data-route] { cursor: pointer; }
+table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
+
+/* The flights map (flightsmap.js, the same file as the app's) and the tracker's map */
+.flights-map, .tr-map { background: #2b2f33; font-family: var(--sans); z-index: 0; }  /* its own stacking context: the controls stay under the header */
+.fm-tiles .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.35); }
+/* Darkened tiles show hairline seams where they meet; overlapping them by a fraction of a pixel hides it. */
+.fm-tiles .leaflet-tile-container img.leaflet-tile { width: 256.6px !important; height: 256.6px !important; }
+.fm-route { stroke: #e978d6; fill: none; cursor: pointer; }
+.fm-focus { stroke: var(--amber); fill: none; }
+.fm-airport { stroke: var(--bg-0); fill: var(--green); }
+.fm-label { font: 600 11px/1 var(--mono); color: var(--text); white-space: nowrap; transform: translate(8px, -50%);
+  text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
+.leaflet-container .leaflet-tooltip { background: var(--bg-3); color: var(--text); border: 0; box-shadow: var(--e1); font: 12.5px/1.4 var(--sans); }
+.leaflet-container .leaflet-tooltip::before { display: none; }
+.leaflet-container a { color: var(--cyan); }
+.leaflet-control-attribution { background: rgba(14, 16, 19, .75) !important; color: var(--text-3); }
+.leaflet-bar a { background: var(--bg-3); color: var(--text); border-color: rgba(255, 255, 255, .08); }
+
+/* Dashboard sections */
+.dash-tabs { position: sticky; top: 64px; z-index: 40; display: flex; gap: 6px; margin: 0 0 22px; padding: 6px; width: fit-content;
+  border-radius: 999px; background: rgba(20, 23, 27, .85); backdrop-filter: blur(10px); box-shadow: var(--ring), var(--e1); }
+.dash-tabs a { color: var(--text-2); font-size: 14px; padding: 6px 14px; border-radius: 999px; }
+.dash-tabs a:hover { color: var(--text); background: rgba(255, 255, 255, .06); text-decoration: none; }
+.dash-section { scroll-margin-top: 130px; margin-bottom: 36px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.section-head h2 { margin: 0; }
+.flights-h { margin-top: 0 !important; font-size: 15px !important; }
+
+/* The Flight Tracker */
+.tracker { padding: 18px 20px; }
+.tr-conn { font-size: 12.5px; color: var(--text-3); font-family: var(--mono); }
+.tr-conn.on { color: var(--green); }
+.tr-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 15px; }
+.tr-phase { color: var(--text-2); }
+.tr-rules { font: 600 11px var(--mono); padding: 2px 8px; border-radius: 999px; background: rgba(108, 201, 232, .12); color: var(--cyan); }
+.tracker .last-atc { color: var(--cyan); font-family: var(--mono); font-size: 13px; margin: 8px 0 0; }
+.tr-body { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+.tr-map { height: 440px; border-radius: var(--r2); }
+.tr-side h3 { margin: 14px 0 6px !important; }
+.tr-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0; }
+.tr-facts div { min-width: 0; }
+.tr-facts dt { font-size: 11.5px; color: var(--text-3); }
+.tr-facts dd { margin: 0; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.tr-radio { list-style: none; margin: 0; padding: 0; max-height: 250px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.tr-radio li { line-height: 1.45; }
+.tr-radio .who { font-weight: 600; color: var(--text-3); margin-right: 4px; }
+.tr-radio li.atc .who { color: var(--cyan); }
+.tr-radio li.pilot .who, .tr-radio li.copilot .who { color: var(--green); }
+.tr-nomap { margin: 10px 0 0 !important; }
+.tr-trail { stroke: var(--green); fill: none; opacity: .75; }
+.tr-plane { background: none; border: 0; }
+.tr-plane svg path { stroke: #000; stroke-width: 1; }
+.tr-plane.own svg path { fill: var(--green); }
+.tr-plane.air svg path { fill: var(--cyan); }
+.tr-plane.ground svg path { fill: var(--text-3); }
+.tr-follow { font: 600 12px var(--sans); padding: 6px 10px; border-radius: 8px; border: 0; background: var(--bg-3); color: var(--text);
+  box-shadow: var(--e1); cursor: pointer; }
+@media (max-width: 860px) {
+  .tr-body { grid-template-columns: 1fr; }
+  .tr-map { height: 340px; }
+  .dash-tabs { top: 58px; }
+}
 .table-wrap { overflow-x: auto; margin: 0 -6px; }
 table.flights { border-collapse: collapse; width: 100%; font-size: 14px; }
 table.flights th { text-align: left; font-size: 12px; font-weight: 550; color: var(--text-3); padding: 8px 6px; }
@@ -470,3 +530,15 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
   * { transition-duration: .01ms !important; }
 }
 .dash .small-print { font-size: 12.5px; margin: 16px 0 0; }
+
+/* Support */
+.support-page textarea { font: inherit; font-size: 15px; color: var(--text); background: var(--bg-0); border: 0; border-radius: var(--r1);
+  padding: 11px 13px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); resize: vertical; min-height: 140px; }
+.support-page textarea:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--green); }
+.support-page .kinds { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.support-page .kinds legend { font-size: 13.5px; color: var(--text-3); margin-bottom: 6px; }
+.support-page .kinds label { flex-direction: row; align-items: center; gap: 10px; color: var(--text-2); font-size: 15px; }
+.support-page .kinds input { accent-color: var(--green); }
+.support-page .opt { color: var(--text-3); font-size: 12px; }
+.support-page .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.support-page .note p { margin: 0 0 1em; }

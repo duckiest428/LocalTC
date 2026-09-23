@@ -1,8 +1,14 @@
 # LocalTC Companion (iOS)
 
-The phone app for LocalTC: your flight's live map with AI traffic and the route, the radio log as it happens,
-the flight's details, and banners for handoffs, clearances, traffic calls and emergencies. **Cockpit** and
-**Flight Bag** are there, greyed out: they're coming.
+The phone app for LocalTC, in five tabs:
+
+- **My Flight**: the live map (IFR or VFR) with AI traffic and the route, and a card that opens the flight's details.
+- **Comms**: the radio log as it happens, by COM1 or COM2, and a box to type a call to ATC (on the same Wi-Fi).
+- **Frequencies**: who you're talking to and who's next, and every frequency at the departure and arrival airports.
+- **Airports**: the departure and arrival airports' runways, ILS and ATIS.
+- **EFB**: charts, checklists and performance, greyed out for now: it's coming.
+
+Banners pop up for handoffs, clearances, traffic calls and emergencies.
 
 It needs the optional LocalTC account. Sign in with the same email on the phone and in LocalTC on the PC
 (Quick Settings → Account). No password: an emailed 6-digit code signs you in.

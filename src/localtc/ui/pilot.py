@@ -179,6 +179,7 @@ class PilotRoutes:
             frame: dict = {}
             radio: list = []
             alerts: list = []
+            airports: list | None = None
             for kind, data in batch:
                 if kind == "frame":
                     frame.update(data)
@@ -186,11 +187,15 @@ class PilotRoutes:
                     radio.extend(data)
                 elif kind == "alert":
                     alerts.append(data)
+                elif kind == "airports":
+                    airports = data
             try:
                 if frame:
                     await asyncio.to_thread(self._account.frame, **frame)
                 if radio:
                     await asyncio.to_thread(self._account.radio, radio[-50:])
+                if airports is not None:
+                    await asyncio.to_thread(self._account.airports, airports)
                 for alert in alerts:
                     await asyncio.to_thread(self._account.alert, alert)
             except AccountError as exc:

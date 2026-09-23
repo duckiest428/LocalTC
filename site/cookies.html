@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cookies — LocalTC</title>
-<meta name="description" content="LocalTC's website sets no cookies and stores nothing in your browser, except one strictly necessary sign-in cookie if you use the optional logbook.">
+<meta name="description" content="LocalTC's website sets no cookies and stores nothing in your browser, except one strictly necessary sign-in cookie if you use the optional dashboard.">
 <meta name="robots" content="index, follow">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -19,14 +19,16 @@
     <a href="index.html#why">Why not a subscription</a>
     <a href="index.html#install">Install</a>
     <a href="index.html#status">Status</a>
+    <a href="support.html">Support</a>
+    <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
-  <a class="btn btn-ghost" href="https://github.com/duckiest428/LocalTC">GitHub</a>
+  <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>
 </header>
 
 <main class="legal">
   <p class="kicker">Cookie policy</p>
   <h1>There are no cookies.</h1>
-  <p class="updated">Unless you sign in to the logbook. Last updated 22 September 2026.</p>
+  <p class="updated">Unless you sign in to the dashboard. Last updated 22 September 2026.</p>
 
   <p>
     This is the whole policy: <strong>this website does not set cookies.</strong> It also writes
@@ -44,9 +46,9 @@
     </p>
   </div>
 
-  <h2 id="signin">The one exception: signing in to the logbook</h2>
+  <h2 id="signin">The one exception: signing in to the dashboard</h2>
   <p>
-    If you sign in to the optional <a href="dashboard.html">logbook</a>, the account server sets one
+    If you sign in to the optional <a href="dashboard.html">dashboard</a>, the account server sets one
     cookie. Nothing is set until you do, and never if you don't have an account.
   </p>
   <ul>
@@ -59,7 +61,7 @@
   </ul>
   <p>
     Because it's strictly necessary for something you asked for, it doesn't need a consent banner. The
-    logbook page stores nothing else: no local storage, no analytics.
+    dashboard stores nothing else: no local storage, no analytics.
   </p>
 
   <h2>What that means in practice</h2>
@@ -77,8 +79,8 @@
     (<code class="inline">F12</code>, or Cmd&#8209;Option&#8209;I) and look:
   </p>
   <ul>
-    <li>The <strong>Application</strong> (or <strong>Storage</strong>) tab: cookies, local storage and session storage are all empty for this domain (and for <code class="inline">api.localtc.tech</code>, until you sign in to the logbook).</li>
-    <li>The <strong>Network</strong> tab: every request goes to this domain. Nothing is fetched from anywhere else, except the logbook page's calls to <code class="inline">api.localtc.tech</code>.</li>
+    <li>The <strong>Application</strong> (or <strong>Storage</strong>) tab: cookies, local storage and session storage are all empty for this domain (and for <code class="inline">api.localtc.tech</code>, until you sign in to the dashboard).</li>
+    <li>The <strong>Network</strong> tab: every request goes to this domain. Nothing is fetched from anywhere else, except the dashboard's and the support page's calls to <code class="inline">api.localtc.tech</code>, and the dashboard maps' tiles from <code class="inline">tile.openstreetmap.org</code> (which set no cookies).</li>
   </ul>
   <p>
     The source of this page is public, so you can also just

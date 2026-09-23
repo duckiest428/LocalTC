@@ -2,14 +2,15 @@ import { DurableObject } from "cloudflare:workers";
 import type { Auth } from "./auth";
 import { es256Jwt } from "./crypto";
 import type { Env } from "./env";
-import { HttpError, json, now, readJson, str } from "./http";
+import { HttpError, allowedOrigin, json, now, readJson, str } from "./http";
 
 /*
  * The companion app's live view, one LiveRoom (Durable Object) per account.
  *
  * - The flight's status (phase, frequencies, ATC's last line) is kept in storage, so a phone opening the
  *   app sees the latest even after the room was evicted.
- * - Position, traffic and the radio log arrive only while a phone is watching through the server (the
+ * - Position, traffic, the radio log and the flight's airports arrive only while a phone (or the website's
+ *   Flight Tracker) is watching through the server (the
  *   desktop checks the watcher count in every answer). They're held in memory and passed on, never
  *   written to storage: when the room is evicted, they're gone.
  * - Where the phone can reach the PC on the local network, and the key it needs there, is stored until the
@@ -23,6 +24,7 @@ const CONNECT_MS = 24 * 3600_000; // local-network details older than this are d
 const MAX_STATUS = 8 * 1024;
 const MAX_FRAME = 64 * 1024;
 const RADIO_KEEP = 50;
+const MAX_AIRPORTS = 32 * 1024;
 
 type Station = { station?: string; mhz?: number } | null;
 export interface Status {
@@ -85,6 +87,28 @@ export function cleanRadio(raw: unknown): Record<string, unknown>[] {
   });
 }
 
+const AIRPORT_KEYS = ["icao", "name", "role", "lat", "lon", "elev_ft", "atis"] as const;
+const FREQUENCY_KEYS = ["label", "kind", "mhz", "name"] as const;
+const RUNWAY_KEYS = ["name", "length_ft", "heading_mag", "ils"] as const;
+
+/** The flight's airports for the phone's Frequencies and Airports tabs: published data, nothing personal. */
+export function cleanAirports(raw: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(raw)) throw new HttpError(400, "Send the airports as a list.");
+  const out = raw.slice(0, 4).map((a) => {
+    const airport = pick(a, AIRPORT_KEYS);
+    const src = (a ?? {}) as Record<string, unknown>;
+    airport.frequencies = Array.isArray(src.frequencies) ? src.frequencies.slice(0, 40).map((f) => pick(f, FREQUENCY_KEYS)) : [];
+    airport.runways = Array.isArray(src.runways) ? src.runways.slice(0, 20).map((r) => {
+      const runway = pick(r, RUNWAY_KEYS);
+      runway.ils = Array.isArray(runway.ils) ? runway.ils.slice(0, 4).map(String) : [];
+      return runway;
+    }) : [];
+    return airport;
+  });
+  if (JSON.stringify(out).length > MAX_AIRPORTS) throw new HttpError(413, "Too much airport data.");
+  return out;
+}
+
 export function cleanAlert(raw: Record<string, unknown>): { kind: string; title: string; body: string; mhz?: number } {
   const kind = String(raw.kind ?? "");
   if (!ALERT_KINDS.includes(kind)) throw new HttpError(400, "Unknown alert kind.");
@@ -125,6 +149,7 @@ export class LiveRoom extends DurableObject<Env> {
   private own: Record<string, unknown> | null = null;
   private traffic: Record<string, unknown>[] = [];
   private radio: Record<string, unknown>[] = [];
+  private airports: Record<string, unknown>[] = [];
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -133,7 +158,7 @@ export class LiveRoom extends DurableObject<Env> {
       case "POST /wipe": {
         for (const ws of this.ctx.getWebSockets()) ws.close(1000, "account deleted");
         await this.ctx.storage.deleteAll();
-        this.own = null; this.traffic = []; this.radio = [];
+        this.own = null; this.traffic = []; this.radio = []; this.airports = [];
         return json({ ok: true });
       }
       case "GET /ws": {
@@ -141,7 +166,7 @@ export class LiveRoom extends DurableObject<Env> {
         const pair = new WebSocketPair();
         this.ctx.acceptWebSocket(pair[1]);
         pair[1].send(JSON.stringify({ type: "hello", data: { protocol: 1, status: await this.current(), own: this.own,
-          traffic: this.traffic, radio: this.radio } }));
+          traffic: this.traffic, radio: this.radio, airports: this.airports } }));
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       case "PUT /status": {
@@ -149,7 +174,7 @@ export class LiveRoom extends DurableObject<Env> {
         const before = await this.current();
         const after = { ...status, updated_at: now() };
         await this.ctx.storage.put("status", after);
-        if (!after.active) { this.own = null; this.traffic = []; this.radio = []; }
+        if (!after.active) { this.own = null; this.traffic = []; this.radio = []; this.airports = []; }
         this.broadcast("status", after);
         const push = pushFor(before.active ? before : null, after);
         if (push) this.ctx.waitUntil(notify(this.env, userId, push));
@@ -165,6 +190,11 @@ export class LiveRoom extends DurableObject<Env> {
         const lines = (await request.json()) as Record<string, unknown>[];
         for (const line of lines) this.broadcast("radio", line);
         this.radio = this.radio.concat(lines).slice(-RADIO_KEEP);
+        return json({ ok: true, watchers: watchers() });
+      }
+      case "PUT /airports": {
+        this.airports = (await request.json()) as Record<string, unknown>[];
+        this.broadcast("airports", this.airports);
         return json({ ok: true, watchers: watchers() });
       }
       case "POST /alert": {
@@ -183,7 +213,7 @@ export class LiveRoom extends DurableObject<Env> {
         return json({ lan: c.lan, key: c.key });
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
-        return json({ own: this.own, traffic: this.traffic, radio: this.radio, stored: [...(await this.ctx.storage.list()).keys()] });
+        return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
     }
@@ -251,7 +281,15 @@ export async function getConnect(env: Env, auth: Auth): Promise<Response> {
   return send(env, auth, "GET", "/connect");
 }
 
+export async function airports(env: Env, request: Request, auth: Auth): Promise<Response> {
+  const body = await readJson<{ airports?: unknown }>(request, MAX_AIRPORTS);
+  return send(env, auth, "PUT", "/airports", cleanAirports(body.airports));
+}
+
 export async function socket(env: Env, request: Request, auth: Auth): Promise<Response> {
+  // The website's Flight Tracker signs in with the cookie, which a browser sends by itself: only the
+  // site's own pages may open the socket that way (the app and the phone use a bearer token).
+  if (auth.viaCookie && !allowedOrigin(env, request.headers.get("Origin"))) throw new HttpError(403, "Not from this site.");
   return room(env, auth).fetch(new Request("https://live/ws", request));
 }
 

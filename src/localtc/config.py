@@ -205,6 +205,7 @@ class UiConfig(_Section):
     # New versions from GitHub Releases: "notify" says so and installs when asked, "auto" downloads and
     # installs when LocalTC closes, "off" never asks GitHub.
     updates: Literal["notify", "auto", "off"] = "notify"
+    coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
 
 
 class Config(_Section):

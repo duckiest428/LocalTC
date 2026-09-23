@@ -1,14 +1,18 @@
 # The LocalTC website
 
-Static files and no dependencies. One page is built: `changelog.html`, from `CHANGELOG.md`, by
+Static files; the only library is Leaflet, served from `vendor/`. One page is built: `changelog.html`, from `CHANGELOG.md`, by
 `python tools/build_site.py` (the Pages workflow runs it; it isn't committed).
 
 ```
 index.html      the landing page
 privacy.html    what we know about you (nothing, without an account)
 terms.html      the AGPL, the no-warranty, the "not for real flight", the optional account
-cookies.html    there are none, except the logbook's sign-in cookie, and how to check
-dashboard.html  the optional account's logbook (dashboard.js): sign in, flights, stats, map, export, delete
+cookies.html    there are none, except the dashboard's sign-in cookie, and how to check
+dashboard.html  the optional account (dashboard.js): the Flight Tracker (the flight in progress, live), the
+                logbook (stats, the flights map, the flights), devices, export, delete
+support.html    feedback and support requests, emailed to the developer by the account server
+flightsmap.js   the flights map, also used by the app's Logbook tab (the same file: a test checks)
+vendor/leaflet  Leaflet, for the maps (served from here; the tiles come from OpenStreetMap)
 changelog.html  built from CHANGELOG.md
 styles.css      the whole design system
 app.js          reveals, the typing radio log, the subscription sum, copy buttons

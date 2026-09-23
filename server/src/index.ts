@@ -33,6 +33,11 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["PUT", /^\/v1\/live$/, signedIn((env, req, a) => live.put(env, req, a))],
   ["GET", /^\/v1\/live$/, signedIn((env, _req, a) => live.get(env, a))],
   ["GET", /^\/v1\/live\/ws$/, signedIn((env, req, a) => live.socket(env, req, a))],
+  ["PUT", /^\/v1\/live\/frame$/, signedIn((env, req, a) => live.frame(env, req, a))],
+  ["POST", /^\/v1\/live\/radio$/, signedIn((env, req, a) => live.radio(env, req, a))],
+  ["POST", /^\/v1\/live\/alert$/, signedIn((env, req, a) => live.alert(env, req, a))],
+  ["PUT", /^\/v1\/live\/connect$/, signedIn((env, req, a) => live.putConnect(env, req, a))],
+  ["GET", /^\/v1\/live\/connect$/, signedIn((env, _req, a) => live.getConnect(env, a))],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],
   ["DELETE", /^\/v1\/push-tokens\/(\w+)$/, signedIn((env, _req, a, _u, p) => live.removePushToken(env, a, p[0]))],
 ];

@@ -709,12 +709,16 @@ const Settings = {
         <a class="btn small" href="${esc(a.dashboard)}" target="_blank" rel="noopener">Open dashboard</a></div>
       <label class="check-row"><input type="checkbox" id="a-sync" ${a.sync ? "checked" : ""}> Copy each flight's logbook line to my account</label>
       <label class="check-row"><input type="checkbox" id="a-companion" ${a.companion ? "checked" : ""}> Show the flight in the companion app (phase, frequencies, ATC's last call)</label>
+      <label class="check-row"><input type="checkbox" id="a-lan" ${a.companion_lan ? "checked" : ""} ${a.companion ? "" : "disabled"}> On the same Wi-Fi, the phone connects to this PC directly (map, traffic, radio log; nothing goes online)</label>
+      <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone watches (held in memory there, never stored)</label>
       <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
         <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
       <div class="row"><button class="btn small" id="a-logout">Sign out</button>
         <button class="btn small danger" id="a-delete">Delete account</button></div>`;
     $("#a-sync").onchange = (e) => this.save("account", "sync", e.target.checked).then(() => (a.sync = e.target.checked));
-    $("#a-companion").onchange = (e) => this.save("account", "companion", e.target.checked).then(() => (a.companion = e.target.checked));
+    $("#a-companion").onchange = (e) => this.save("account", "companion", e.target.checked).then(() => { a.companion = e.target.checked; this.account(); });
+    $("#a-lan").onchange = (e) => this.save("account", "companion_lan", e.target.checked).then(() => { a.companion_lan = e.target.checked; $("#restart-bar").hidden = false; });
+    $("#a-remote").onchange = (e) => this.save("account", "companion_remote_map", e.target.checked).then(() => (a.companion_remote_map = e.target.checked));
     $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
     $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
     $("#a-delete").onclick = () => {

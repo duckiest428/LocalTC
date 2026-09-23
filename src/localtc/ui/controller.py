@@ -62,6 +62,7 @@ from localtc.sim_api import (
     encode_event,
 )
 from localtc.ui.server import EventStream, HttpError, sse
+from localtc.ui.companion import CompanionHub, CompanionServer
 from localtc.ui.pilot import PilotRoutes
 from localtc.ui.updates import Updates
 
@@ -106,7 +107,11 @@ class AppController:
         self._airport_waiters: dict[str, list[asyncio.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._last_recording: Path | None = None
-        self.pilot = PilotRoutes(lambda: self.cfg, self.publish)
+        self.companion = CompanionHub()
+        self.companion.set_route(route_view(self.plan))
+        self.companion_server: CompanionServer | None = None
+        self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
+                                 on_signed_in=self._companion_on, on_signed_out=self._companion_off)
         self._last_atc: AtcTransmission | None = None
         self.updates = Updates(lambda: self.cfg.ui.updates, self.publish, lambda: self.live is not None)
 
@@ -150,8 +155,31 @@ class AppController:
         self._loop = loop
         self._log_handler = _UiLogHandler(self, loop)
         logging.getLogger().addHandler(self._log_handler)
+        loop.create_task(self._companion_on())
         if self.cfg.ui.updates != "off":
             loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
+
+    async def _companion_on(self) -> None:
+        """The phone's direct line on this network: only for a signed-in account, with the companion on."""
+        c = self.cfg.account
+        self.companion.remote_map = c.companion_remote_map
+        if not (c.companion and c.companion_lan) or not await asyncio.to_thread(lambda: self.pilot.account.signed_in):
+            return
+        if self.companion_server is None:
+            self.companion_server = CompanionServer(self.companion, zones=self.api_zones)
+            try:
+                port = await self.companion_server.start(c.companion_port)
+                log.info("Companion app: listening on the local network, port %d", port)
+            except OSError as exc:
+                log.warning("Companion app: can't listen on the local network (%s)", exc)
+                self.companion_server = None
+                return
+        await self.pilot.share_connect(self.companion_server.urls(), self.companion.key)
+
+    async def _companion_off(self) -> None:
+        if self.companion_server is not None:
+            await self.companion_server.close()
+            self.companion_server = None
 
     def detach(self) -> None:
         if getattr(self, "_log_handler", None) is not None:
@@ -169,6 +197,14 @@ class AppController:
 
     def publish(self, kind: str, data: Any) -> None:
         self.stream.publish(kind, data)
+        if kind == "own":
+            self.companion.set_own(data)
+        elif kind == "traffic":
+            self.companion.set_traffic(data)
+        elif kind == "radio":
+            self.companion.add_radio(data)
+        elif kind == "flight":
+            self.companion.set_status(self.companion_view() if data else {"active": False})
 
     def state(self) -> dict:
         return {
@@ -237,6 +273,7 @@ class AppController:
                                           on_ready=self._on_ready)
             self._last_recording = recording or self._last_recording
             self.system(f"Flight ended. Recording: {recording}" if recording else "Flight ended.")
+            self.companion.set_status({"active": False})
             asyncio.create_task(self.pilot.live({"active": False}, force=True))
             asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
             self._set_status("idle")
@@ -273,6 +310,7 @@ class AppController:
 
     async def shutdown(self) -> None:
         await self.stop()
+        await self._companion_off()
         self.detach()
 
     async def _tick(self) -> None:
@@ -339,6 +377,8 @@ class AppController:
         line = radio_line(ev)
         if line is not None:
             self._radio(line)
+        if isinstance(ev, AtcAlert):
+            self.companion.on_event(ev)
         if isinstance(ev, AirportData):
             self.airports[ev.airport.icao] = ev.airport
             if self._index is not None:
@@ -352,10 +392,15 @@ class AppController:
         elif isinstance(ev, PhaseChanged | RadioTuned | AtcTransmission):
             if isinstance(ev, AtcTransmission):
                 self._last_atc = ev
+                self.companion.on_event(ev)
             if self.live is not None and self.live.engine is not None:
                 self.flight = self.flight_view()
                 self.publish("flight", self.flight)
                 asyncio.create_task(self.pilot.live(self.companion_view(), force=not isinstance(ev, AtcTransmission)))
+
+    def _gate(self) -> str | None:
+        engine = self.live.engine if self.live else None
+        return engine.state.assignments.gate if engine is not None else None
 
     def companion_view(self) -> dict:
         """What the companion app shows: the flight's phase, who to talk to, and ATC's last words. No position."""
@@ -366,7 +411,7 @@ class AppController:
             "origin": f.get("origin"), "destination": f.get("destination"), "phase": f.get("phase"),
             "phase_label": f.get("phase_label"), "squawk": f.get("squawk"), "altitude_ft": f.get("altitude_ft"),
             "runway": f.get("runway"), "tuned": _station(f.get("tuned")), "next": _station(f.get("expected")),
-            "ete": f.get("ete"),
+            "ete": f.get("ete"), "gate": self._gate(),
             "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
         }
 
@@ -411,6 +456,7 @@ class AppController:
         except (FlightPlanError, msgspec.ValidationError) as exc:
             raise HttpError(400, str(exc)) from None
         self.plan = plan
+        self.companion.set_route(route_view(plan))
         await asyncio.to_thread(save_plan, plan, self.plan_path)
         if args.get("start"):
             if self._task is not None and not self._task.done():
@@ -503,6 +549,7 @@ class AppController:
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
         self.cfg = cfg
+        self.companion.remote_map = cfg.account.companion_remote_map
         if self.live is not None and self.live.speaker is not None and not self.muted:
             self.live.speaker.player.volume = cfg.tts.volume
         self._push_state()
@@ -932,3 +979,11 @@ __all__ = ["AppController", "airport_detail", "airport_summary", "export_report"
 
 def _station(facility: dict | None) -> dict | None:
     return {"station": facility.get("station"), "mhz": facility.get("mhz")} if facility else None
+
+
+def route_view(plan: FlightPlan | None) -> dict | None:
+    """The planned route for the companion's map."""
+    if plan is None:
+        return None
+    return {"origin": plan.origin, "destination": plan.destination,
+            "fixes": [{"ident": f.ident, "lat": f.lat, "lon": f.lon} for f in plan.fixes]}

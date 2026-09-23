@@ -16,10 +16,13 @@ Durable Object per account for the live view. It lives at `https://api.localtc.t
 | `flights` | the app's logbook lines: airports, gates, runways, times, distance, max altitude, landing rate, readback and alert counts | the dashboard and stats |
 | `push_tokens` | APNs device tokens | companion notifications |
 | `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping code guessing and email floods |
-| `LiveRoom` (Durable Object) | the flight's latest status: phase, frequencies, ATC's last line | the companion app |
+| `LiveRoom` (Durable Object) | stored: the flight's latest status (phase, frequencies, ATC's last line) and the PC's local-network address and key; **in memory only**, while a phone watches remotely: position, traffic, the radio log | the companion app |
 
-Never stored or accepted: positions or tracks, audio, transcripts, recordings, settings. Fields the server
-doesn't know are dropped (`src/flights.ts` `clean`, `src/live.ts` `cleanStatus`).
+Never stored: positions or tracks, the radio log, audio, recordings, settings. Position, traffic and radio
+text pass through `LiveRoom`'s memory to a phone watching away from the PC's network (the desktop sends them
+only while one is), and are gone when the room is evicted. Fields the server doesn't know are dropped
+(`src/flights.ts` `clean`, `src/live.ts` `cleanStatus`, `cleanFrame`, `cleanRadio`). The messages are in
+[`docs/companion-protocol.md`](../docs/companion-protocol.md).
 
 **There are no passwords.** Signing in (and creating an account, the first time) emails a 6-digit code and a
 link: the apps take the code, the website either. Each works once, for 15 minutes, only from the
@@ -43,7 +46,9 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
 | `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | |
-| `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the companion's view; the WebSocket gets each update |
+| `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message |
+| `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert` | desktop → phone, in memory only |
+| `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |
 | `POST /v1/push-tokens` `{token}`, `DELETE /v1/push-tokens/:token` | APNs, for the iOS app |
 
 ## Setting it up

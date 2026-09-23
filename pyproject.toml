@@ -23,6 +23,8 @@ dependencies = [
     "pywebview>=5.3; sys_platform == 'win32'",
     # The optional account's sign-in, kept in Windows Credential Manager / the macOS Keychain.
     "keyring>=25",
+    # The companion app finds LocalTC on the local network by Bonjour (_localtc._tcp).
+    "zeroconf>=0.136",
 ]
 
 [project.optional-dependencies]

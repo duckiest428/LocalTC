@@ -86,6 +86,11 @@ class AccountConfig(_Section):
     dashboard_url: str = "https://localtc.tech/dashboard.html"
     sync: bool = True  # upload new logbook lines after each flight, when signed in
     companion: bool = True  # the flight's status for the companion app, when signed in
+    companion_lan: bool = True  # a phone on the same network connects to this PC directly (port below)
+    companion_port: int = 47800
+    # Away from this network, the phone's map and radio log come through the server: position, traffic and
+    # the radio text, only while a phone watches, held in memory there and never stored.
+    companion_remote_map: bool = True
 
 
 class RouteFix(msgspec.Struct, frozen=True, kw_only=True):

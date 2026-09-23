@@ -5,12 +5,16 @@ exactly the same, and the logbook is still kept on this computer.
 
 What an account sends to the LocalTC server (``[account] api_url``, a Cloudflare Worker, ``server/``):
 - the logbook's summary lines (``logbook.FlightRecord``: airports, times, distance, the landing rate);
-- while flying, if the companion app is on: the phase, the frequency tuned and next, and ATC's last line.
-Never positions, audio, transcripts, recordings or settings.
+- while flying, if the companion app is on: the phase, the frequency tuned and next, and ATC's last line;
+- only while a phone is watching away from the PC's network, and if the pilot allows it
+  (``[account] companion_remote_map``): the aircraft's position, nearby traffic and the radio log. The
+  server passes these to the phone and keeps them in memory only; they're never stored.
+Never audio, recordings or settings. On the same network the phone talks to the PC directly
+(``ui/companion.py``) and none of that goes through the server.
 
 There are no passwords. Signing in sends a 6-digit code to the email address; typing it in the app signs
-this computer in. The sign-in token that comes back is kept in the system's credential store (Windows Credential Manager, the macOS
-Keychain) through ``keyring``, never in a file. Without a credential store the token lasts until LocalTC
+this computer in. The sign-in token that comes back is kept in the system's credential store (Windows
+Credential Manager, the macOS Keychain) through ``keyring``, never in a file. Without a credential store the token lasts until LocalTC
 closes.
 """
 
@@ -31,6 +35,7 @@ log = logging.getLogger(__name__)
 KEYRING_SERVICE = "LocalTC"
 BATCH = 100  # flights per upload
 LIVE_EVERY_S = 5.0  # the companion's status at most this often, except when something changes
+LIVE_HEARTBEAT_S = 15.0  # and at least this often while flying: the answer says whether a phone is watching
 
 
 class AccountError(Exception):
@@ -129,6 +134,7 @@ class Account:
         self.last_sync: str | None = None
         self._live_sent = 0.0
         self._live_last: dict | None = None
+        self.watchers = 0  # phones following the flight through the server, as of the last answer
 
     @property
     def logbook(self) -> Logbook:
@@ -212,12 +218,34 @@ class Account:
         return SyncResult(uploaded=uploaded, remaining=len(pending) - uploaded)
 
     def live(self, status: dict, *, force: bool = False, now: float | None = None) -> bool:
-        """The companion app's view of the flight. Sent when it changes, at most every few seconds."""
+        """The companion app's view of the flight: sent when it changes (at most every few seconds, at once
+        when ``force``), and as a heartbeat otherwise. Each answer says how many phones watch remotely."""
         if not self.signed_in:
             return False
         now = time.monotonic() if now is None else now
-        if status == self._live_last or (not force and now - self._live_sent < LIVE_EVERY_S):
+        since = now - self._live_sent
+        changed = status != self._live_last
+        if not (changed and (force or since >= LIVE_EVERY_S)) and since < LIVE_HEARTBEAT_S:
             return False
-        self._call("PUT", "/v1/live", status)
+        data = self._call("PUT", "/v1/live", status)
         self._live_sent, self._live_last = now, status
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
         return True
+
+    def frame(self, *, own: dict | None = None, traffic: list | None = None) -> None:
+        """Position and traffic for a phone watching through the server. Held in memory there, never stored."""
+        data = self._call("PUT", "/v1/live/frame", {k: v for k, v in (("own", own), ("traffic", traffic)) if v is not None})
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
+
+    def radio(self, lines: list[dict]) -> None:
+        """Radio log lines for a phone watching through the server. Held in memory there, never stored."""
+        data = self._call("POST", "/v1/live/radio", {"lines": lines})
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
+
+    def alert(self, alert: dict) -> None:
+        """A handoff, clearance, traffic call or emergency, for the phone's banner (and later, push)."""
+        self._call("POST", "/v1/live/alert", alert)
+
+    def connect_info(self, lan: list[str], key: str) -> None:
+        """Where the phone can reach this PC on the local network, and the key it needs there."""
+        self._call("PUT", "/v1/live/connect", {"lan": lan, "key": key})

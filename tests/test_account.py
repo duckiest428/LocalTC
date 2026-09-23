@@ -46,7 +46,7 @@ class FakeServer:
             self.flights.clear()
             return 200, {}
         if path == "/v1/live":
-            return 200, {}
+            return 200, {"watchers": 0}
         return 404, {"error": "no"}
 
 
@@ -134,8 +134,9 @@ def test_the_companion_gets_changes_not_a_stream(setup):
     sign_in(account)
     status = {"active": True, "phase": "CRUISE"}
     assert account.live(status, now=100.0)
-    assert not account.live(status, now=200.0)  # nothing changed
+    assert not account.live(status, now=108.0)  # nothing changed
     assert not account.live({**status, "phase": "ARRIVAL"}, now=101.0)  # too soon
     assert account.live({**status, "phase": "ARRIVAL"}, now=101.0, force=True)  # a handoff: at once
+    assert account.live({**status, "phase": "ARRIVAL"}, now=116.0)  # the heartbeat: is a phone watching?
     live = [r for r in server.requests if r[1] == "/v1/live"]
-    assert len(live) == 2 and all("lat" not in r[2] for r in live)
+    assert len(live) == 3 and all("lat" not in r[2] for r in live)

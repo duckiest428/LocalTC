@@ -7,7 +7,7 @@ never contacts the server.
 import asyncio
 import logging
 import platform
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from localtc.account import Account, AccountError
@@ -20,12 +20,21 @@ log = logging.getLogger(__name__)
 
 class PilotRoutes:
     def __init__(self, cfg: Callable[[], Config], publish: Callable[[str, Any], None],
-                 logbook: Logbook | None = None, account: Account | None = None) -> None:
+                 logbook: Logbook | None = None, account: Account | None = None, *, hub: Any = None,
+                 on_signed_in: Callable[[], Awaitable[None]] | None = None,
+                 on_signed_out: Callable[[], Awaitable[None]] | None = None) -> None:
         self.cfg = cfg
         self.publish = publish
         self._logbook = logbook
         self._account = account
         self.sync_state = ""  # the last sync's outcome, for the settings card
+        self.hub = hub  # ui.companion.CompanionHub: what goes to a phone watching through the server
+        self.on_signed_in = on_signed_in
+        self.on_signed_out = on_signed_out
+        self._outbox: list[tuple[str, Any]] = []
+        self._relay_task: asyncio.Task | None = None
+        if hub is not None:
+            hub.remote = self.relay
 
     @property
     def logbook(self) -> Logbook:
@@ -71,7 +80,8 @@ class PilotRoutes:
     def view(self) -> dict:
         a, c = self.account, self.cfg().account  # reads the credential store; no network
         return {"signed_in": a.signed_in, "email": a.email, "api_url": c.api_url, "dashboard": c.dashboard_url,
-                "sync": c.sync, "companion": c.companion, "last_sync": self.sync_state}
+                "sync": c.sync, "companion": c.companion, "companion_lan": c.companion_lan,
+                "companion_remote_map": c.companion_remote_map, "last_sync": self.sync_state}
 
     async def _do(self, fn: Callable, *args: Any) -> Any:
         try:
@@ -95,11 +105,15 @@ class PilotRoutes:
         await self._do(self.account.finish, _email(args), code, f"LocalTC on {platform.node() or 'this PC'}")
         if self.cfg().account.sync:
             await self.sync()
+        if self.on_signed_in is not None:
+            await self.on_signed_in()
         return await self.api_account({})
 
     async def api_logout(self, args: dict) -> dict:
         await self._do(self.account.logout)
         self.sync_state = ""
+        if self.on_signed_out is not None:
+            await self.on_signed_out()
         return await self.api_account({})
 
     async def api_sync(self, args: dict) -> dict:
@@ -109,6 +123,8 @@ class PilotRoutes:
     async def api_delete(self, args: dict) -> dict:
         await self._do(self.account.delete_account, _email(args))
         self.sync_state = ""
+        if self.on_signed_out is not None:
+            await self.on_signed_out()
         return await self.api_account({})
 
     async def sync(self, *, raise_errors: bool = False) -> None:
@@ -136,6 +152,51 @@ class PilotRoutes:
             await asyncio.to_thread(self._account.live, status, force=force)
         except AccountError as exc:
             log.debug("Companion update failed: %s", exc)
+        if self.hub is not None:
+            self.hub.watching(self._account.watchers)
+
+    async def share_connect(self, lan: list[str], key: str) -> None:
+        """Tell the account where the phone can find this PC on the local network."""
+        if not lan or not self.cfg().account.companion:
+            return
+        try:
+            await self._do(self.account.connect_info, lan, key)
+        except HttpError as exc:
+            log.info("Couldn't share the companion address with the account: %s", exc)
+
+    def relay(self, kind: str, data: Any) -> None:
+        """Queue something for a phone watching through the server. One sender drains the queue, merging
+        position updates, so a slow connection falls behind by frames rather than piling up requests."""
+        if not self.cfg().account.companion or self._account is None:
+            return
+        self._outbox.append((kind, data))
+        if self._relay_task is None or self._relay_task.done():
+            self._relay_task = asyncio.get_running_loop().create_task(self._drain())
+
+    async def _drain(self) -> None:
+        while self._outbox:
+            batch, self._outbox = self._outbox, []
+            frame: dict = {}
+            radio: list = []
+            alerts: list = []
+            for kind, data in batch:
+                if kind == "frame":
+                    frame.update(data)
+                elif kind == "radio":
+                    radio.extend(data)
+                elif kind == "alert":
+                    alerts.append(data)
+            try:
+                if frame:
+                    await asyncio.to_thread(self._account.frame, **frame)
+                if radio:
+                    await asyncio.to_thread(self._account.radio, radio[-50:])
+                for alert in alerts:
+                    await asyncio.to_thread(self._account.alert, alert)
+            except AccountError as exc:
+                log.debug("Companion relay failed: %s", exc)
+            if self.hub is not None:
+                self.hub.watching(self._account.watchers)
 
 
 def _email(args: dict) -> str:

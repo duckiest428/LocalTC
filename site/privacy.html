@@ -26,7 +26,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 22 September 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 23 September 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -148,13 +148,21 @@
     <li><strong>While you fly, if the companion is on</strong>: the phase of flight, the frequency you're
       tuned to and the next one, and ATC's last transmission. Only the latest status is kept, and a new one
       replaces it.</li>
+    <li><strong>Your PC's local-network address</strong> (a private address such as 192.168.1.20) and a key
+      that changes every time LocalTC starts, so the companion app on the same Wi-Fi can connect to the PC
+      directly. When it does, nothing about the flight goes through the server at all.</li>
+    <li><strong>Only while the companion app watches from outside your Wi-Fi</strong>, and only if you leave
+      the setting on: your aircraft's position, nearby AI traffic and the radio log (ATC's transmissions and
+      the text of your own calls). The server passes these straight to your phone and keeps them in memory
+      only. They're never written to the database or to disk, and they're gone when the flight ends or the
+      server's memory is cleared. Turn it off in the app's Quick Settings → Account.</li>
     <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
     <li><strong>Short-lived counters</strong> of sign-in attempts per IP address and email address, to stop
       code guessing and email flooding. They're deleted within a day.</li>
   </ul>
   <p>
-    We never receive your position or track, your voice or transcripts, your recordings or your settings.
-    The server drops any field it doesn't expect.
+    We never store your position or track, the radio log, your voice, your recordings or your settings.
+    Your voice never leaves your PC. The server drops any field it doesn't expect.
   </p>
 
   <h3>Legal basis</h3>

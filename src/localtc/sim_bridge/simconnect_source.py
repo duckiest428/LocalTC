@@ -20,6 +20,8 @@ from localtc.sim_api import (
     AirportData,
     BusEvent,
     ConnectionStatus,
+    NearbyAirport,
+    NearbyAirports,
     SessionClock,
     SessionInfo,
     PttPressed,
@@ -66,6 +68,7 @@ REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST = 1, 2, 3, 4
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
+NEARBY_AIRPORTS, NEARBY_NM = 40, 150.0  # the airports around the aircraft reported to ATC, for diversions
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
 # Client events LocalTC sends to the sim (same ID space as the system events above).
@@ -387,8 +390,13 @@ class SimConnectSource:
         candidates = [a for a in self._airport_list if a.icao]
         if not candidates:
             return
-        nearest = min(candidates, key=lambda a: facilities.haversine_nm(lat, lon, a.lat, a.lon))
-        self._nearest_to_fetch = nearest.icao
+        by_distance = sorted(candidates, key=lambda a: facilities.haversine_nm(lat, lon, a.lat, a.lon))
+        self._nearest_to_fetch = by_distance[0].icao
+        # The ones around, for ATC to pick a diversion from in an emergency (their layouts are fetched then).
+        near = [a for a in by_distance[:NEARBY_AIRPORTS] if facilities.haversine_nm(lat, lon, a.lat, a.lon) <= NEARBY_NM]
+        self._emit(NearbyAirports(t=self._clock.now(), airports=tuple(
+            NearbyAirport(icao=a.icao, lat=round(a.lat, 5), lon=round(a.lon, 5), elev_ft=round(a.alt_m * 3.28084))
+            for a in near)))
 
     def _expire_assemblers(self) -> None:
         now = time.monotonic()

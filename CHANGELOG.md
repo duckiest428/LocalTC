@@ -16,6 +16,10 @@ a new minor version adds features, a patch fixes them.
   class around every airport in view (Class B shelves, C, D, or an ICAO control zone or traffic zone) with
   its ceiling and floor like a sectional. The map opens on your flight's rules and switches with them; the
   switch works any time.
+- **Emergency diversions.** Declare an emergency far from your destination and ATC finds the nearest
+  suitable airport (a runway long enough for your aircraft, an ILS and a tower preferred), offers it, and
+  vectors you there when you ask ("request vectors to the nearest suitable airport", or "divert to" a place
+  you name), with a new heading if you wander off.
 - **ICAO phraseology.** Outside the US and Canada, ATC talks ICAO: QNH in hectopascals, "holding point",
   "decimal", "vacate", flight levels above the local transition altitude, circuits instead of patterns.
   Automatic by region (Quick Settings > ATC), or forced to FAA or ICAO.

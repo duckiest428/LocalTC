@@ -54,7 +54,8 @@ CLEARANCE_IDS = {
 }
 TRAFFIC_IDS = {"common.traffic", "tower.sequence"}
 EMERGENCY_IDS = {"common.emergency_copied", "common.emergency_priority", "common.emergency_approach",
-                 "common.emergency_land", "common.emergency_intentions"}
+                 "common.emergency_land", "common.emergency_intentions", "common.emergency_nearest", "common.divert",
+                 "common.divert_level"}
 
 
 def alert_for(ev: object) -> dict | None:

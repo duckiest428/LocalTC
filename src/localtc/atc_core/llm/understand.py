@@ -70,8 +70,8 @@ ready_for_departure = holding short or ready for takeoff; checkin = first call t
 "with you at 6000"; report_final = "5 mile final"; clear_of_runway; request_taxi_parking; request_altitude = asks \
 for higher, lower or a new altitude; request_direct = asks to fly direct to a fix or airport (fix: its name); \
 request_vectors = asks for vectors or a heading; request_runway = asks for a different runway or a type of \
-approach (runway, approach: "ILS", "RNAV" or "VISUAL"); request_return = wants to return to the departure airport \
-or divert; going_around = going around or missed approach; report_conditions = reports turbulence, icing or the \
+approach (runway, approach: "ILS", "RNAV" or "VISUAL"); request_return = wants to return to the departure airport; \
+request_diversion = wants to divert: to the nearest suitable airport, or to one it names (fix: its name); going_around = going around or missed approach; report_conditions = reports turbulence, icing or the \
 ride (conditions: the words used); traffic_report = "traffic in sight", "looking" or "negative contact"; \
 say_again = asks ATC to repeat; acknowledge = roger, wilco, thanks; emergency = mayday, pan-pan or any \
 emergency; other = any other request.
@@ -80,7 +80,7 @@ topic (only for "question"): altimeter, wind, weather, runway, squawk, altitude,
 KINDS = ["readback", "request", "question", "unintelligible"]
 INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "ready_for_departure", "checkin", "report_final", "clear_of_runway",
            "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
-           "request_return", "going_around", "report_conditions", "traffic_report", "say_again", "acknowledge",
+           "request_return", "request_diversion", "going_around", "report_conditions", "traffic_report", "say_again", "acknowledge",
            "emergency", "other"]
 TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "other"]
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
@@ -103,6 +103,7 @@ PLAUSIBLE_PHASES: dict[str, set[str | None]] = {
     "request_direct": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
     "request_vectors": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
     "request_return": AIRBORNE,
+    "request_diversion": AIRBORNE,
     "going_around": {None, "TAKEOFF", "DEPARTURE", "APPROACH", "LANDING"},
     "report_conditions": AIRBORNE,
     "traffic_report": AIRBORNE,

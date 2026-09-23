@@ -43,6 +43,21 @@ def number_words(n: int) -> str:
     return TENS[tens] + (f"-{ONES[ones]}" if ones else "")
 
 
+def miles(n: int) -> str:
+    """A distance: 38 -> "thirty-eight", 120 -> "one hundred twenty"."""
+    n = max(0, int(n))
+    if n < 100:
+        return number_words(n)
+    hundreds, rest = divmod(n, 100)
+    head = f"{number_words(hundreds)} hundred"
+    return f"{head} {number_words(rest)}" if rest else head
+
+
+def feet(n: int) -> str:
+    """A runway length, to the nearest hundred: 13300 -> "one three thousand three hundred"."""
+    return _feet(int(round(n / 100.0) * 100))
+
+
 def group_form(number: str) -> str:
     """Airline flight numbers: 123 -> "one twenty-three", 1234 -> "twelve thirty-four", 1200 -> "twelve hundred"."""
     num = number.lstrip("0") or "0"
@@ -223,6 +238,8 @@ def callsign_display(value: Callsign) -> str:
 ABBREVIATIONS = {
     "FLD": "Field", "INTL": "International", "CO": "County", "MUNI": "Municipal", "RGNL": "Regional",
     "MEM": "Memorial", "ARPT": "Airport", "EXEC": "Executive", "NATL": "National", "ST": "Saint",
+    # Military fields keep their letters: "Yuma MCAS", "El Centro NAF".
+    "MCAS": "MCAS", "NAS": "NAS", "NAF": "NAF", "AFB": "AFB", "AAF": "AAF", "ANGB": "ANGB", "ARB": "ARB",
 }
 
 

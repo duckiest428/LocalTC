@@ -221,3 +221,36 @@ pilot_readback = "Cleared to land runway {runway}, {callsign_short}."
 id = "common.emergency_intentions"
 controller = "any"
 text = ["{callsign}, say souls on board and fuel remaining."]
+
+# --- a diversion: the nearest suitable airport, and vectors to it (atc_core/diversion.py) -------------
+
+[[template]]
+id = "common.emergency_nearest"
+controller = "any"
+text = ["{callsign}, roger, you are number one. The nearest suitable airport is {message}. Say intentions."]
+
+[[template]]
+id = "common.nearest"
+controller = "any"
+text = ["{callsign}, the nearest suitable airport is {message}. Say intentions."]
+
+[[template]]
+id = "common.divert"
+controller = "any"
+text = ["{callsign}, turn {turn} heading {heading}, vectors to {destination}, {distance} miles, descend at your discretion, maintain {altitude}, expect runway {runway}, emergency equipment will be standing by."]
+readback = { required = ["heading", "altitude"], optional = ["destination"] }
+pilot_readback = "Turn {turn} heading {heading}, descend and maintain {altitude}, vectors to {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_level"
+controller = "any"
+text = ["{callsign}, turn {turn} heading {heading}, vectors to {destination}, {distance} miles, maintain {altitude}, expect runway {runway}, emergency equipment will be standing by."]
+readback = { required = ["heading", "altitude"], optional = ["destination"] }
+pilot_readback = "Turn {turn} heading {heading}, maintain {altitude}, vectors to {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_vector"
+controller = "any"
+text = ["{callsign}, turn {turn} heading {heading}, {destination} {distance} miles.", "{callsign}, turn {turn} heading {heading}, vectors to {destination}."]
+readback = { required = ["heading"] }
+pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."

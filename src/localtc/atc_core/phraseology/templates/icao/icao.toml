@@ -146,5 +146,28 @@ text = ["{callsign}, runway {runway}, wind {wind}, cleared to land, emergency se
 id = "common.equipment"
 text = ["{callsign}, roger, emergency services will be standing by."]
 
+[[template]]
+id = "common.emergency_nearest"
+text = ["{callsign}, roger, you are number one. The nearest suitable aerodrome is {message}. Report intentions."]
+
+[[template]]
+id = "common.nearest"
+text = ["{callsign}, the nearest suitable aerodrome is {message}. Report intentions."]
+
+[[template]]
+id = "common.divert"
+text = ["{callsign}, turn {turn} heading {heading}, radar vectors to {destination}, {distance} miles, descend to {altitude} when ready, expect runway {runway}, emergency services will be standing by."]
+pilot_readback = "Turn {turn} heading {heading}, descend to {altitude}, vectors to {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_level"
+text = ["{callsign}, turn {turn} heading {heading}, radar vectors to {destination}, {distance} miles, maintain {altitude}, expect runway {runway}, emergency services will be standing by."]
+pilot_readback = "Turn {turn} heading {heading}, maintain {altitude}, vectors to {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_vector"
+text = ["{callsign}, turn {turn} heading {heading}, {destination} {distance} miles."]
+pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."
+
 [fragments]
 hold_short = "hold short of runway {hold_short}"

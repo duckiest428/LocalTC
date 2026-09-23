@@ -119,6 +119,29 @@ def test_bridge_fetches_nearest_and_requested_airports():
     assert fake.facility_definition == fac.definition_lines()
 
 
+def test_bridge_lists_the_airports_around_for_diversions():
+    from localtc.sim_api import NearbyAirports
+
+    fake = FakeSimConnect(airports=(kpae(), kbfi()), facility_bool8=True)
+
+    async def main():
+        source = SimConnectSource(FAST, dll_factory=lambda: fake)
+        await asyncio.wait_for(source.start(), 3)
+
+        async def first():
+            async for ev in source.events():
+                if isinstance(ev, NearbyAirports):
+                    return ev
+
+        found = await asyncio.wait_for(first(), 3)
+        await source.stop()
+        return found
+
+    found = asyncio.run(main())
+    assert [a.icao for a in found.airports] == ["KPAE", "KBFI"]  # nearest first (the fake sits at Paine)
+    assert found.airports[1].lat == pytest.approx(kbfi().lat, abs=1e-4)
+
+
 def test_airport_cache_round_trip(tmp_path):
     cache = AirportCache(tmp_path)
     assert cache.get("KPAE") is None

@@ -114,6 +114,19 @@ class AirportData(Event, tag="airport_data"):
     airport: Airport
 
 
+class NearbyAirport(msgspec.Struct, frozen=True, kw_only=True):
+    icao: str
+    lat: float
+    lon: float
+    elev_ft: float = 0.0
+
+
+class NearbyAirports(Event, tag="nearby_airports"):
+    """The airports the sim knows around the aircraft, nearest first: where ATC looks for a diversion."""
+
+    airports: tuple[NearbyAirport, ...] = ()
+
+
 # --- Radio events (produced by LocalTC itself, published on the bus) --------
 
 
@@ -210,7 +223,8 @@ class SessionNote(Event, tag="session_note"):
     text: str
 
 
-SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData]
+SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
+                 NearbyAirports]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast]
 AppEvent = Union[SessionNote]

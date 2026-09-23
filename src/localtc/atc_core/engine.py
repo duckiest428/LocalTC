@@ -38,6 +38,7 @@ from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
+from localtc.atc_core.diversion import DiversionMixin, DiversionState
 from localtc.atc_core.vfr import VfrMixin, VfrState
 from localtc.atc_core.readback import (
     ChainInterpreter,
@@ -48,6 +49,8 @@ from localtc.atc_core.readback import (
     PendingReadback,
     SayAgainInterpreter,
 )
+from localtc.atc_core.readback.intents import match_intents
+from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.route import Route, RouteFix
 from localtc.atc_core.session import (
     Clearance,
@@ -73,6 +76,7 @@ from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
     BusEvent,
+    NearbyAirports,
     OwnshipState,
     PhaseChanged,
     PttPressed,
@@ -205,7 +209,7 @@ class _Scheduled:
     note: Phrase | None = None  # said after the instruction: weather, the ATIS, a caution
 
 
-class AtcEngine(VfrMixin):
+class AtcEngine(VfrMixin, DiversionMixin):
     def __init__(
         self,
         config: EngineConfig | None = None,
@@ -221,6 +225,7 @@ class AtcEngine(VfrMixin):
         self.libraries = {"faa": library or TemplateLibrary.load(), "icao": TemplateLibrary.load(style="icao")}
         self.region = regions.FAA  # the phraseology region of the current step (see _region)
         self.vfr = VfrState()  # what a VFR flight asked for (atc_core/vfr.py)
+        self.diversion = DiversionState()  # the airports around, and a diversion (atc_core/diversion.py)
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
         self.phraser = phraser  # words replies that have no template; None: they get "unable"
         self.state = SessionState()
@@ -335,6 +340,8 @@ class AtcEngine(VfrMixin):
             self.state.flight.aircraft_type = clean_sim_name(event.atc_model)
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
+        elif isinstance(event, NearbyAirports):
+            self._on_nearby(event)
         elif isinstance(event, TrafficSnapshot):
             # Aircraft on the ground are kept too: they are the ones occupying a runway or crossing in
             # front of a taxiing aircraft. The advisory call is the only thing that wants them left out.
@@ -579,7 +586,8 @@ class AtcEngine(VfrMixin):
         tuned = st.comms.tuned.controller if st.comms.tuned else None
         if self.cfg.unscripted and phase in AIRBORNE_PHASES:
             ifr = not self._vfr  # vectors, altitude checks and level offers are for IFR flights
-            if self._runway_conflict(own) or self._emergency_handling(own) or self._sequence_on_final(own) \
+            if self._runway_conflict(own) or self._emergency_handling(own) or self._diversion_vectors(own) \
+                    or self._sequence_on_final(own) \
                     or (ifr and self._radar_vectors(own)) or self._traffic_advisory(own) \
                     or (ifr and self._altitude_check(own)) or (ifr and self._enroute_chat(own)):
                 return out
@@ -1307,7 +1315,7 @@ class AtcEngine(VfrMixin):
             return []
         unscripted = {
             "request_direct": self._direct, "request_vectors": self._vectors, "request_runway": self._runway_request,
-            "request_return": self._return, "going_around": self._go_around, "report_conditions": self._pirep,
+            "request_return": self._return, "request_diversion": self._divert, "going_around": self._go_around, "report_conditions": self._pirep,
             "request_turn": self._turn_request,
             "traffic_report": self._traffic_reply,
         }
@@ -1589,15 +1597,7 @@ class AtcEngine(VfrMixin):
         if not self._airborne_controller(facility, own) or origin is None or self.geometry(origin) is None:
             self._schedule(t, "common.unable", {}, facility)
             return
-        st.flight.destination = origin
-        self.tracker.context_builder.destination = origin
-        self._assign(arrival_runway=None, approach=None, arrival_atis=None)
-        self._approach_kind = None
-        for flag in ("descend", "handoff_approach", "handoff_center"):
-            st.flags.discard(flag)
-        for kind in ("approach", "landing"):
-            st.clearances.pop(kind, None)
-        self._rebuild_facilities()
+        self._new_destination(origin)
         plan = self._arrival_plan(own)
         if plan is None:
             self._schedule(t, "common.roger", {}, facility)
@@ -1651,6 +1651,7 @@ class AtcEngine(VfrMixin):
         if "emergency" not in st.flags:
             st.flags.add("emergency")
             out.append(self._alert(t, "emergency", interp.text))
+            self._emergency_started(t)
         details = dict(interp.values)
         if details and "fuel" not in details and (endurance := self._endurance()) is not None:
             details["fuel"] = endurance  # the sim knows; no need to make the pilot work it out
@@ -1664,13 +1665,18 @@ class AtcEngine(VfrMixin):
         else:
             st.flags.add("emergency_asked")
             self._schedule(t, "common.emergency", {}, facility)
+        # "Mayday, engine fire, request vectors to the nearest airport": the intentions come with the call.
+        divert = next((m for m in match_intents(normalize(interp.text)) if m.intent == "request_diversion"), None)
+        if divert is not None:
+            self.diversion.asked, self.diversion.asked_fix = True, divert.values.get("fix")
         if "emergency_priority" not in st.flags and own is not None and not own.on_ground \
                 and facility.controller in ("departure", "center", "approach"):
-            st.flags.add("emergency_priority")
-            destination = self._airport_name(st.flight.destination)
-            # Told, not asked: a crew dealing with an emergency is not chased for a readback.
-            self._schedule(t, "common.emergency_priority", {"destination": destination}, facility, delay=True,
-                           expects_readback=False)
+            if not self._priority_ready(t):
+                st.flags.add("emergency_priority_due")  # the airports around are on their way: then
+            elif self.diversion.asked:
+                self._divert_asked(t, own, facility)
+            else:
+                self._emergency_priority(t, own, facility)
         return out
 
     def _endurance(self) -> str | None:
@@ -1691,6 +1697,13 @@ class AtcEngine(VfrMixin):
         tuned = st.comms.tuned
         if "emergency" not in st.flags or tuned is None or own.on_ground:
             return False
+        if "emergency_priority_due" in st.flags and tuned.controller in ("departure", "center", "approach") \
+                and self._priority_ready(t):
+            if self.diversion.asked:
+                self._divert_asked(t, own, tuned)
+            else:
+                self._emergency_priority(t, own, tuned)
+            return True
         if tuned.controller == "approach" and "approach" not in st.clearances and self._arrival_plan(own) is not None:
             self._clear_approach(t, own, tuned, delay=False)
             return True

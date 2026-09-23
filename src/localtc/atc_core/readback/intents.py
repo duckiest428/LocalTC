@@ -97,6 +97,38 @@ def _fix(tokens: list[Token]) -> str | None:
     return None
 
 
+# A diversion: "request vectors to the nearest suitable airport", "we need to divert to Yuma".
+DIVERT_WORDS = (("divert",), ("diverting",), ("diversion",), ("nearest",), ("closest",), ("alternate",),
+                ("land", "as", "soon", "as", "possible"))
+RETURN_WORDS = (("return",), ("returning",), ("back", "to"))
+DIVERT_SKIP = FIX_STOP | {"nearest", "closest", "suitable", "airport", "airfield", "field", "aerodrome", "an", "alternate",
+                          "vectors", "vector", "divert", "diverting", "diversion", "please", "immediate", "immediately"}
+NOT_A_PLACE = {"final", "runway", "ils", "rnav", "gps", "visual", "localizer", "approach", "heading", "downwind", "base"}
+
+
+def _divert_to(tokens: list[Token]) -> str | None:
+    """Where a diversion is to, after the last "to": "Yuma", "Palm Springs", "KNYL" (spelled out). None for "the
+    nearest suitable airport": ATC picks."""
+    asked = next((i for i, t in enumerate(tokens) if t.text in ("vectors", "vector", "divert", "diverting", "diversion")), 0)
+    starts = [i for i, t in enumerate(tokens) if t.text == "to" and i > asked]  # not "unable to make it"
+    if not starts:
+        return None
+    words: list[str] = []
+    for token in tokens[starts[-1] + 1:]:
+        if token.text in DIVERT_SKIP or token.kind not in ("word", "letter") or token.text in NOT_A_PLACE:
+            if words or token.text in NOT_A_PLACE:
+                break
+            continue
+        words.append(token.text)
+        if len(words) == 4:
+            break
+    if not words:
+        return None
+    if all(len(w) == 1 for w in words) and len(words) in (3, 4):
+        return "".join(words).upper()  # an ICAO code, spelled out: "kilo november yankee lima"
+    return " ".join(w for w in words if len(w) > 1).title() or None
+
+
 def _turn(tokens: list[Token]) -> str | None:
     """ "we'd like a left turn after departure": a turn on departure, not a heading."""
     if not _has_any(tokens, ("after", "departure"), ("after", "takeoff"), ("on", "departure"), ("out", "of", "here")):
@@ -238,9 +270,15 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if _has_any(tokens, ("direct",)) and not _has_any(tokens, ("disregard",)) and (fix := _fix(tokens)):
         add("request_direct", fix=fix)
     approach = next((APPROACH_WORDS[t.text] for t in tokens if t.text in APPROACH_WORDS), None)
-    if _has_any(tokens, ("vectors",), ("vector",)):
+    returning = _has_any(tokens, *RETURN_WORDS)
+    place = _divert_to(tokens) if _has_any(tokens, ("vectors",), ("vector",), *DIVERT_WORDS) else None
+    diverting = not returning and (_has_any(tokens, *DIVERT_WORDS) or (
+        place is not None and not approach and not runways(tokens)))  # "vectors to Yuma": somewhere else to land
+    if diverting:
+        add("request_diversion", fix=place)
+    elif _has_any(tokens, ("vectors",), ("vector",)):
         add("request_vectors", runway=next(iter(runways(tokens)), None), approach=approach)
-    if asking and _has_any(tokens, ("return",), ("divert",), ("back", "to", "the", "field"), ("back", "to", "the", "airport")):
+    if asking and returning and not diverting:
         add("request_return")
     if asking and (approach or runways(tokens)) and not _has_any(tokens, ("taxi",), ("final",)):
         add("request_runway", runway=next(iter(runways(tokens)), None), approach=approach)

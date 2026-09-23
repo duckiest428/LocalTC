@@ -40,6 +40,12 @@ Fly a SimBrief flight you know, for example KSAN → KPHX, with the copilot **of
 - [ ] ATC's voice is clear, each station sounds different, and nothing talks over you.
 - [ ] Send me the **Export session** zip from this flight either way. It's the best test data I can get.
 
+- [ ] Emergency diversion (on a later flight, or at the end of this one, over open country far from the
+      destination): "Mayday mayday mayday, [callsign], engine fire". ATC asks nature, fuel and souls, then
+      within about 15 seconds names the nearest suitable airport. "Request vectors to the nearest suitable
+      airport" gets a heading and a descent; the flight's destination (ATC tab, phone) changes to it; flying well off the
+      heading for a minute gets a new one; approach and tower take you in.
+
 Things to watch for: calls ATC never answers, "say again" when you said it right, readbacks marked wrong
 when they were right, handoffs too early or late, ATC talking when it shouldn't.
 

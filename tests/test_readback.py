@@ -146,6 +146,7 @@ def random_slots(rng: random.Random) -> dict:
         "procedure": rng.choice(["MONTN2", "SEA9", "XIBI3A", "BAYST1"]),
         "wind": Wind(rng.randrange(10, 361, 10), rng.randint(0, 25)),
         "fix": rng.choice(["BLAKO", "SEA", "Boeing Field", "Olympia"]),
+        "distance": rng.randint(5, 180),
         "message": Phrase(m := rng.choice(["traffic on 3 mile final", "traffic B737 on 5 mile final", "traffic landing"]), m),
     }
 

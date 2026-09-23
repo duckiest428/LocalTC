@@ -41,58 +41,31 @@ function say(text, error = false) {
 }
 
 function show(which) {
-  for (const id of ["auth", "reset", "dash"]) $(`#${id}`).hidden = id !== which;
+  for (const id of ["auth", "dash"]) $(`#${id}`).hidden = id !== which;
   $("#dash-who").hidden = which !== "dash";
 }
 
-// --- signing in, creating an account, the reset link --------------------------------------------------
+// --- signing in: a link or a code by email, no password ----------------------------------------------------
 
-let mode = "signin";
+let pendingEmail = null;
 
-function setMode(next) {
-  mode = next;
-  const titles = { signin: "Sign in", register: "Create an account", forgot: "Reset the password" };
-  $("#auth-title").textContent = titles[mode];
-  $("#f-submit").textContent = { signin: "Sign in", register: "Create account", forgot: "Send the link" }[mode];
-  $("#f-password-row").hidden = mode === "forgot";
-  $("#f-hint").hidden = mode !== "register";
-  $("#f-consent-row").hidden = mode !== "register";
-  $("#f-password").autocomplete = mode === "register" ? "new-password" : "current-password";
-  $("#to-register").hidden = mode !== "signin";
-  $("#to-reset").hidden = mode !== "signin";
-  $("#to-signin").hidden = mode === "signin";
-  say("");
+function awaitingCode(email) {
+  pendingEmail = email;
+  $("#start-form").hidden = !!email;
+  $("#code-form").hidden = !email;
+  if (email) $("#f-code").focus();
 }
 
-$("#to-register").onclick = () => setMode("register");
-$("#to-reset").onclick = () => setMode("forgot");
-$("#to-signin").onclick = () => setMode("signin");
-
-$("#auth-form").onsubmit = async (e) => {
+$("#start-form").onsubmit = async (e) => {
   e.preventDefault();
   const email = $("#f-email").value.trim();
-  const password = $("#f-password").value;
-  const button = $("#f-submit");
   if (!email) return say("Enter your email address.", true);
-  if (mode !== "forgot" && !password) return say("Enter the password.", true);
-  if (mode === "register" && password.length < 10) return say("Use at least 10 characters for the password.", true);
-  if (mode === "register" && !$("#f-consent").checked) return say("Tick the box to say you've read the privacy policy and terms.", true);
+  const button = $("#f-start");
   button.disabled = true;
   try {
-    if (mode === "signin") {
-      await api("POST", "/v1/auth/login", { email, password, kind: "web", device: deviceName() });
-      $("#f-password").value = "";
-      say("");
-      await load();
-    } else if (mode === "register") {
-      const r = await api("POST", "/v1/auth/register", { email, password });
-      setMode("signin");
-      say(r.message);
-    } else {
-      const r = await api("POST", "/v1/auth/reset/request", { email });
-      setMode("signin");
-      say(r.message);
-    }
+    const r = await api("POST", "/v1/auth/start", { email });
+    awaitingCode(email);
+    say(r.message);
   } catch (err) {
     say(err.message, true);
   } finally {
@@ -100,25 +73,25 @@ $("#auth-form").onsubmit = async (e) => {
   }
 };
 
-let resetToken = null;
-$("#reset-form").onsubmit = async (e) => {
+$("#code-form").onsubmit = async (e) => {
   e.preventDefault();
-  const password = $("#r-password").value;
-  if (password.length < 10) return say("Use at least 10 characters for the password.", true);
+  const code = $("#f-code").value.replace(/\D/g, "");
+  if (code.length !== 6) return say("Enter the 6-digit code from the email.", true);
   try {
-    const r = await api("POST", "/v1/auth/reset", { token: resetToken, password });
-    resetToken = null;
-    show("auth");
-    setMode("signin");
-    say(r.message);
+    await api("POST", "/v1/auth/finish", { email: pendingEmail, code, kind: "web", device: deviceName() });
+    $("#f-code").value = "";
+    awaitingCode(null);
+    say("");
+    await load();
   } catch (err) { say(err.message, true); }
 };
+
+$("#f-again").onclick = () => { awaitingCode(null); say(""); };
 
 $("#btn-signout").onclick = async () => {
   try { await api("POST", "/v1/auth/logout"); } catch { /* signed out either way */ }
   stopLive();
   show("auth");
-  setMode("signin");
   say("Signed out.");
 };
 
@@ -226,26 +199,15 @@ $("#btn-export").onclick = async () => {
   } catch (err) { say(err.message, true); }
 };
 
-$("#pw-form").onsubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const r = await api("POST", "/v1/auth/password", { current: $("#pw-current").value, password: $("#pw-new").value });
-    $("#pw-current").value = $("#pw-new").value = "";
-    say(r.message);
-    devices((await api("GET", "/v1/me")).sessions);
-  } catch (err) { say(err.message, true); }
-};
-
 $("#del-form").onsubmit = async (e) => {
   e.preventDefault();
-  const password = $("#del-password").value;
-  if (!password) return say("Enter the password to confirm.", true);
+  const email = $("#del-email").value.trim();
+  if (!email) return say("Type your email address to confirm.", true);
   if (!confirm("Delete the account and every flight in it, for good?")) return;
   try {
-    await api("DELETE", "/v1/me", { password });
+    await api("DELETE", "/v1/me", { email });
     stopLive();
     show("auth");
-    setMode("signin");
     say("The account and everything in it are deleted.");
   } catch (err) { say(err.message, true); }
 };
@@ -323,20 +285,15 @@ function stopLive() {
   $("#live").hidden = true;
 }
 
-// --- arriving from an email link --------------------------------------------------------------------------
+// --- arriving from the email's link --------------------------------------------------------------------
 
 (async function start() {
-  const params = new URLSearchParams(location.search);
-  const verify = params.get("verify");
-  resetToken = params.get("reset");
-  if (verify || resetToken) history.replaceState(null, "", location.pathname);  // the token leaves the address bar
-  setMode("signin");
-  if (verify) {
+  const token = new URLSearchParams(location.search).get("login");
+  if (token) {
+    history.replaceState(null, "", location.pathname);  // the token leaves the address bar
     try {
-      const r = await api("POST", "/v1/auth/verify", { token: verify });
-      say(r.message);
+      await api("POST", "/v1/auth/finish", { token, kind: "web", device: deviceName() });
     } catch (err) { say(err.message, true); }
   }
-  if (resetToken) { show("reset"); return; }
   await load();
 })();

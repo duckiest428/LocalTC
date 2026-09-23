@@ -402,7 +402,7 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .auth-card { padding: 28px; }
 .auth-card form { display: flex; flex-direction: column; gap: 14px; }
 .dash label { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--text-3); }
-.dash input[type=email], .dash input[type=password] {
+.dash input:not([type=checkbox]) {
   font: inherit; font-size: 15px; color: var(--text); background: var(--bg-0); border: 0; border-radius: var(--r1);
   padding: 11px 13px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
 .dash input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--green); }
@@ -469,3 +469,4 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
   .btn:hover, .card:hover { transform: none; }
   * { transition-duration: .01ms !important; }
 }
+.dash .small-print { font-size: 12.5px; margin: 16px 0 0; }

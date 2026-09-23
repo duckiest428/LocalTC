@@ -80,8 +80,9 @@ Turn it off with `[logbook] enabled = false`.
 An **account is optional** (Quick Settings → Account). It copies those logbook lines to
 [localtc.tech](https://localtc.tech/dashboard.html), where there are totals, a map of the airports and routes,
 an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
-and next, and ATC's last call). It never sends your position, voice, transcripts, recordings or settings. The
-sign-in is kept in Windows Credential Manager (or the macOS Keychain), not in a file. The server is in
+and next, and ATC's last call). It never sends your position, voice, transcripts, recordings or settings. There's
+no password: signing in emails you a 6-digit code to type in. The sign-in is then kept in Windows Credential
+Manager (or the macOS Keychain), not in a file. The server is in
 [`server/`](server/README.md).
 
 Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Only the changes from

@@ -15,7 +15,6 @@ export default defineConfig(async () => {
             ALLOWED_ORIGINS: "https://localtc.test",
             COOKIE_DOMAIN: "",
             APNS_TOPIC: "",
-            PBKDF2_ITERATIONS: "1000", // fast tests; production uses 100000
           },
         },
       }),

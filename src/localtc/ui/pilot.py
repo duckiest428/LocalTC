@@ -45,10 +45,9 @@ class PilotRoutes:
             (get, "logbook"): self.api_logbook,
             (post, "logbook/delete"): self.api_logbook_delete,
             (get, "account"): self.api_account,
-            (post, "account/register"): self.api_register,
-            (post, "account/login"): self.api_login,
+            (post, "account/start"): self.api_start,
+            (post, "account/finish"): self.api_finish,
             (post, "account/logout"): self.api_logout,
-            (post, "account/reset"): self.api_reset,
             (post, "account/sync"): self.api_sync,
             (post, "account/delete"): self.api_delete,
         }
@@ -85,12 +84,15 @@ class PilotRoutes:
         view["unsynced"] = len(await asyncio.to_thread(self.logbook.unsynced))
         return view
 
-    async def api_register(self, args: dict) -> dict:
-        message = await self._do(self.account.register, _email(args), _password(args))
+    async def api_start(self, args: dict) -> dict:
+        message = await self._do(self.account.start, _email(args))
         return {**(await self.api_account({})), "message": message}
 
-    async def api_login(self, args: dict) -> dict:
-        await self._do(self.account.login, _email(args), _password(args), f"LocalTC on {platform.node() or 'this PC'}")
+    async def api_finish(self, args: dict) -> dict:
+        code = "".join(ch for ch in str(args.get("code", "")) if ch.isdigit())
+        if len(code) != 6:
+            raise HttpError(400, "Enter the 6-digit code from the email.")
+        await self._do(self.account.finish, _email(args), code, f"LocalTC on {platform.node() or 'this PC'}")
         if self.cfg().account.sync:
             await self.sync()
         return await self.api_account({})
@@ -100,15 +102,12 @@ class PilotRoutes:
         self.sync_state = ""
         return await self.api_account({})
 
-    async def api_reset(self, args: dict) -> dict:
-        return {"message": await self._do(self.account.reset_password, _email(args))}
-
     async def api_sync(self, args: dict) -> dict:
         await self.sync(raise_errors=True)
         return await self.api_account({})
 
     async def api_delete(self, args: dict) -> dict:
-        await self._do(self.account.delete_account, _password(args))
+        await self._do(self.account.delete_account, _email(args))
         self.sync_state = ""
         return await self.api_account({})
 
@@ -145,9 +144,3 @@ def _email(args: dict) -> str:
         raise HttpError(400, "Enter an email address.")
     return email
 
-
-def _password(args: dict) -> str:
-    password = str(args.get("password", ""))
-    if not password:
-        raise HttpError(400, "Enter the password.")
-    return password

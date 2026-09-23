@@ -7,7 +7,6 @@ export interface Env {
   MAIL_FROM?: string;
   EMAIL_MODE: string; // resend, log, test
   RESEND_API_KEY?: string;
-  PBKDF2_ITERATIONS?: string; // default 100000, the most Workers' WebCrypto allows
   APNS_HOST?: string;
   APNS_TOPIC?: string;
   APNS_KEY_ID?: string;

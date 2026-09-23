@@ -40,7 +40,7 @@
       <strong>The short version.</strong> This website stores nothing on your device and runs no
       analytics. The software processes your voice entirely on your own computer and sends it nowhere.
       Once a day it asks GitHub whether there's a new version, and you can turn that off. If you create
-      an account, we store your email address, a hash of your password and a summary of each flight you
+      an account, we store your email address and a summary of each flight you
       sync, never your position, voice, transcripts or recordings, and you can export or delete all of
       it yourself at any time.
     </p>
@@ -135,9 +135,9 @@
 
   <h3>What it stores, and why</h3>
   <ul>
-    <li><strong>Your email address</strong>: to sign you in, and to send the confirmation and password-reset
-      emails. We send no newsletters or marketing.</li>
-    <li><strong>A hash of your password</strong> (PBKDF2-SHA256, salted). The password itself is never stored.</li>
+    <li><strong>Your email address</strong>: to sign you in. There are no passwords: each sign-in is a code
+      and a link we email you, valid once for 15 minutes, stored only as a hash. We send no newsletters or
+      marketing.</li>
     <li><strong>Your signed-in devices</strong>: the kind (app, companion, browser), a name such as
       "Firefox on Windows", and when each was last used, so you can sign them out. Only a hash of each
       sign-in token is stored.</li>
@@ -150,7 +150,7 @@
       replaces it.</li>
     <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
     <li><strong>Short-lived counters</strong> of sign-in attempts per IP address and email address, to stop
-      password guessing. They're deleted within a day.</li>
+      code guessing and email flooding. They're deleted within a day.</li>
   </ul>
   <p>
     We never receive your position or track, your voice or transcripts, your recordings or your settings.
@@ -167,7 +167,7 @@
   <ul>
     <li><strong>Cloudflare</strong> runs the account server and its database
       (<a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">privacy policy</a>).</li>
-    <li><strong>Resend</strong> delivers the confirmation and password-reset emails
+    <li><strong>Resend</strong> delivers the sign-in emails
       (<a href="https://resend.com/legal/privacy-policy" rel="noopener">privacy policy</a>).</li>
     <li><strong>Apple</strong> delivers the companion app's notifications, if you turn them on.</li>
   </ul>
@@ -179,7 +179,7 @@
 
   <h3>How long</h3>
   <p>
-    Until you delete it. An account whose email address is never confirmed is deleted after 7 days.
+    Until you delete it. An account that's asked for but never signed in to is deleted after a day.
     Sign-ins expire after 30 days on the website and a year in the apps; expired ones are deleted daily.
   </p>
 

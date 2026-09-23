@@ -8,7 +8,8 @@ What an account sends to the LocalTC server (``[account] api_url``, a Cloudflare
 - while flying, if the companion app is on: the phase, the frequency tuned and next, and ATC's last line.
 Never positions, audio, transcripts, recordings or settings.
 
-The sign-in token is kept in the system's credential store (Windows Credential Manager, the macOS
+There are no passwords. Signing in sends a 6-digit code to the email address; typing it in the app signs
+this computer in. The sign-in token that comes back is kept in the system's credential store (Windows Credential Manager, the macOS
 Keychain) through ``keyring``, never in a file. Without a credential store the token lasts until LocalTC
 closes.
 """
@@ -162,13 +163,15 @@ class Account:
         self.email = None
         self.logbook.forget_sync()  # a different account may sign in next: everything uploads again
 
-    def register(self, email: str, password: str) -> str:
-        data = self._call("POST", "/v1/auth/register", {"email": email, "password": password}, auth=False)
-        return (data or {}).get("message", "Check your email to confirm the account, then sign in.")
+    def start(self, email: str) -> str:
+        """Email a sign-in code to the address (creating the account the first time)."""
+        data = self._call("POST", "/v1/auth/start", {"email": email}, auth=False)
+        return (data or {}).get("message", "Check your email for the sign-in code.")
 
-    def login(self, email: str, password: str, device: str) -> None:
-        data = self._call("POST", "/v1/auth/login", {"email": email, "password": password, "kind": "desktop",
-                                                     "device": device}, auth=False)
+    def finish(self, email: str, code: str, device: str) -> None:
+        """Sign this computer in with the code from the email."""
+        data = self._call("POST", "/v1/auth/finish", {"email": email, "code": code, "kind": "desktop",
+                                                      "device": device}, auth=False)
         if self.email is not None and self.email != data["user"]["email"]:
             self.logbook.forget_sync()
         self.store.set("token", data["token"])
@@ -183,16 +186,13 @@ class Account:
             log.info("Signing out on the server failed (signed out here anyway): %s", exc)
         self._forget()
 
-    def reset_password(self, email: str) -> str:
-        data = self._call("POST", "/v1/auth/reset/request", {"email": email}, auth=False)
-        return (data or {}).get("message", "If there's an account for that address, a reset link is on its way.")
-
     def me(self) -> dict:
         return self._call("GET", "/v1/me")
 
-    def delete_account(self, password: str) -> None:
-        """Deletes the account and every flight synced to it, on the server. The local logbook stays."""
-        self._call("DELETE", "/v1/me", {"password": password})
+    def delete_account(self, confirm_email: str) -> None:
+        """Deletes the account and every flight synced to it, on the server. The local logbook stays.
+        ``confirm_email`` is the account's address, typed again."""
+        self._call("DELETE", "/v1/me", {"email": confirm_email})
         self._forget()
 
     def sync(self) -> SyncResult:

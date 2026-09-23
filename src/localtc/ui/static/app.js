@@ -681,23 +681,26 @@ const Settings = {
           An account copies the logbook to <a href="${esc(a.dashboard)}" target="_blank" rel="noopener">localtc.tech</a>
           and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while
           you fly, the phase and frequencies: never your position, voice, transcripts or recordings.</p>
-        <div class="row"><label>Email<input id="a-email" type="email" autocomplete="username" spellcheck="false"></label>
-          <label>Password<input id="a-password" type="password" autocomplete="current-password"></label></div>
-        <div class="row"><button class="btn small primary" id="a-login">Sign in</button>
-          <button class="btn small" id="a-register">Create account</button>
-          <button class="btn small" id="a-reset">Forgot password</button></div>
-        <p class="small muted">Creating an account means agreeing to the <a href="https://localtc.tech/terms.html#account" target="_blank" rel="noopener">terms</a>
+        <div class="row"><label>Email<input id="a-email" type="email" autocomplete="email" spellcheck="false" value="${esc(this.pendingEmail || "")}"></label>
+          <div><button class="btn small primary" id="a-start">${this.pendingEmail ? "Send a new code" : "Email me a code"}</button></div></div>
+        <div class="row" id="a-code-row" ${this.pendingEmail ? "" : "hidden"}><label>6-digit code from the email
+          <input id="a-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456"></label>
+          <div><button class="btn small primary" id="a-finish">Sign in</button></div></div>
+        <p class="small muted">No password: each sign-in is a code sent to your email. The first one creates the account,
+          which means agreeing to the <a href="https://localtc.tech/terms.html#account" target="_blank" rel="noopener">terms</a>
           and <a href="https://localtc.tech/privacy.html#account" target="_blank" rel="noopener">privacy policy</a> (16 or over).</p>
         <p class="small muted" id="a-msg"></p>`;
-      const creds = () => ({ email: $("#a-email").value.trim(), password: $("#a-password").value });
       const msg = (t, err) => { $("#a-msg").textContent = t; $("#a-msg").className = `small ${err ? "error" : "muted"}`; };
-      $("#a-login").onclick = () => api("account/login", creds()).then((v) => { S.account = v; this.account(); toast("Signed in"); }).catch((e) => msg(e.message, true));
-      $("#a-register").onclick = () => {
-        const c = creds();
-        if (c.password.length < 10) { msg("Use at least 10 characters for the password.", true); return; }
-        api("account/register", c).then((v) => msg(v.message)).catch((e) => msg(e.message, true));
+      $("#a-start").onclick = () => {
+        const email = $("#a-email").value.trim();
+        api("account/start", { email }).then((v) => { this.pendingEmail = email; this.account(); $("#a-code").focus(); msg(v.message); })
+          .catch((e) => msg(e.message, true));
       };
-      $("#a-reset").onclick = () => api("account/reset", { email: creds().email }).then((v) => msg(v.message)).catch((e) => msg(e.message, true));
+      const finish = () => api("account/finish", { email: this.pendingEmail, code: $("#a-code").value })
+        .then((v) => { this.pendingEmail = null; S.account = v; this.account(); toast("Signed in"); })
+        .catch((e) => msg(e.message, true));
+      $("#a-finish").onclick = finish;
+      $("#a-code").onkeydown = (e) => { if (e.key === "Enter") finish(); };
       return;
     }
     card.innerHTML = `
@@ -715,8 +718,8 @@ const Settings = {
     $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
     $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
     $("#a-delete").onclick = () => {
-      const password = prompt("Deleting the account removes it and every flight synced to it from the server, for good. Your logbook on this computer stays.\n\nType your password to delete the account:");
-      if (password) api("account/delete", { password }).then((v) => { S.account = v; this.account(); toast("Account deleted"); }).catch(fail);
+      const email = prompt("Deleting the account removes it and every flight synced to it from the server, for good. Your logbook on this computer stays.\n\nType the account's email address to delete it:");
+      if (email) api("account/delete", { email }).then((v) => { S.account = v; this.account(); toast("Account deleted"); }).catch(fail);
     };
   },
   captureKey() {

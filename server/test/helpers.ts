@@ -20,18 +20,21 @@ export async function data<T = any>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The link token from the last email sent to ``to`` (``verify`` or ``reset``). */
-export function linkToken(to: string, purpose: string): string {
-  const email = [...outbox].reverse().find((e) => e.to === to && e.text.includes(`?${purpose}=`));
-  if (!email) throw new Error(`no ${purpose} email to ${to}`);
-  return new URL(email.text.match(/https?:\/\/\S+/)![0]).searchParams.get(purpose)!;
+/** The code and link token in the last sign-in email to ``to``. */
+export function lastEmail(to: string): { code: string; token: string } {
+  const email = [...outbox].reverse().find((e) => e.to === to);
+  if (!email) throw new Error(`no email to ${to}`);
+  return {
+    code: email.text.match(/\b(\d{6})\b/)![1],
+    token: new URL(email.text.match(/https?:\/\/\S+/)![0]).searchParams.get("login")!,
+  };
 }
 
-export async function signUp(email = `pilot-${crypto.randomUUID()}@example.com`, password = "correct horse battery"): Promise<{ email: string; password: string; token: string }> {
-  await call("POST", "/v1/auth/register", { email, password });
-  await call("POST", "/v1/auth/verify", { token: linkToken(email, "verify") });
-  const res = await call("POST", "/v1/auth/login", { email, password, kind: "desktop", device: "Test PC" });
-  return { email, password, token: (await data(res)).token };
+export async function signIn(email = `pilot-${crypto.randomUUID()}@example.com`, kind = "desktop"): Promise<{ email: string; token: string; res: Response }> {
+  await call("POST", "/v1/auth/start", { email });
+  const res = await call("POST", "/v1/auth/finish", { email, code: lastEmail(email).code, kind, device: "Test PC" });
+  const token = kind === "web" ? "" : (await data(res.clone())).token;
+  return { email, token, res };
 }
 
 export function bearer(token: string): Record<string, string> {

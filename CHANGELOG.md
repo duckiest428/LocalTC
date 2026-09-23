@@ -14,6 +14,9 @@ a new minor version adds features, a patch fixes them.
   against the release's SHA256SUMS and sets it up. No git, no administrator rights.
 - **Updates.** The app checks GitHub for a new version once a day (Quick Settings > Updates): tell me,
   install by itself when LocalTC closes, or never ask. It never updates during a flight.
+- **A logbook** of every flight (the Logbook tab), kept on your computer.
+- **An optional account** that copies the logbook to [localtc.tech](https://localtc.tech/dashboard.html) and
+  feeds the companion app. No password: you sign in with a code sent to your email.
 - **ATC zones on the Live Map**: the real centres and approach areas the handoffs follow, colour coded,
   with who you're talking to and who's next.
 

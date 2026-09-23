@@ -21,26 +21,17 @@ export async function sha256(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function pbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256);
-  return new Uint8Array(bits);
+/** A 6-digit sign-in code, uniformly random. */
+export function randomCode(): string {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000;
+  return String(n).padStart(6, "0");
 }
 
-/** "pbkdf2-sha256$iterations$salt$hash": the iterations travel with the hash, so they can change later. */
-export async function hashPassword(password: string, iterations = 100_000): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return `pbkdf2-sha256$${iterations}$${b64url(salt)}$${b64url(await pbkdf2(password, salt, iterations))}`;
-}
-
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [scheme, iter, salt, hash] = stored.split("$");
-  if (scheme !== "pbkdf2-sha256" || !iter || !salt || !hash) return false;
-  const got = await pbkdf2(password, unb64url(salt), Number(iter));
-  const want = unb64url(hash);
-  if (got.length !== want.length) return false;
+/** Equal-time comparison of two hex digests. */
+export function sameHash(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < got.length; i++) diff |= got[i] ^ want[i];
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 

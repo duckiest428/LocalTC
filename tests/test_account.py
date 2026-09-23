@@ -24,9 +24,11 @@ class FakeServer:
         path = url.split("https://api.test", 1)[1]
         self.requests.append((method, path, body, headers))
         authed = headers.get("Authorization", "").removeprefix("Bearer ") in self.tokens
-        if path == "/v1/auth/login":
-            if body["password"] != "correct horse":
-                return 401, {"error": "Wrong email or password."}
+        if path == "/v1/auth/start":
+            return 202, {"message": "Check your email."}
+        if path == "/v1/auth/finish":
+            if body["code"] != "123456":
+                return 401, {"error": "That code is wrong or has expired."}
             return 200, {"token": "good-token", "user": {"email": body["email"]}}
         if not authed:
             return 401, {"error": "Sign in again."}
@@ -39,6 +41,8 @@ class FakeServer:
             self.tokens.discard("good-token")
             return 200, {}
         if path == "/v1/me" and method == "DELETE":
+            if body["email"] != "pilot@example.com":
+                return 400, {"error": "Type the account's email address to confirm."}
             self.flights.clear()
             return 200, {}
         if path == "/v1/live":
@@ -68,10 +72,16 @@ def test_nothing_is_sent_until_signed_in(setup):
     assert server.requests == []
 
 
-def test_a_wrong_password_is_said_plainly(setup):
+def sign_in(account: Account) -> None:
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+
+
+def test_a_wrong_code_is_said_plainly(setup):
     account, _, _ = setup
-    with pytest.raises(AccountError, match="Wrong email or password"):
-        account.login("pilot@example.com", "nope", "PC")
+    account.start("pilot@example.com")
+    with pytest.raises(AccountError, match="wrong or has expired"):
+        account.finish("pilot@example.com", "000000", "PC")
     assert not account.signed_in
 
 
@@ -79,7 +89,7 @@ def test_sign_in_and_sync_uploads_each_flight_once(setup):
     account, server, book = setup
     for i in range(1, 4):
         book.add(record(i))
-    account.login("pilot@example.com", "correct horse", "PC")
+    sign_in(account)
     assert account.signed_in and account.email == "pilot@example.com"
     assert account.sync().uploaded == 3
     assert set(server.flights) == {"f1", "f2", "f3"}
@@ -90,7 +100,7 @@ def test_sign_in_and_sync_uploads_each_flight_once(setup):
 
 def test_a_token_revoked_on_the_website_signs_out_here(setup):
     account, server, book = setup
-    account.login("pilot@example.com", "correct horse", "PC")
+    sign_in(account)
     server.tokens.clear()
     book.add(record(1))
     with pytest.raises(AccountError):
@@ -101,7 +111,7 @@ def test_a_token_revoked_on_the_website_signs_out_here(setup):
 def test_signing_out_makes_every_flight_local_again(setup):
     account, _, book = setup
     book.add(record(1))
-    account.login("pilot@example.com", "correct horse", "PC")
+    sign_in(account)
     account.sync()
     account.logout()
     assert not account.signed_in and len(book.unsynced()) == 1
@@ -110,16 +120,18 @@ def test_signing_out_makes_every_flight_local_again(setup):
 def test_deleting_the_account_keeps_the_local_logbook(setup):
     account, server, book = setup
     book.add(record(1))
-    account.login("pilot@example.com", "correct horse", "PC")
+    sign_in(account)
     account.sync()
-    account.delete_account("correct horse")
+    with pytest.raises(AccountError):
+        account.delete_account("someone@else.com")
+    account.delete_account("pilot@example.com")
     assert server.flights == {} and not account.signed_in
     assert [f.id for f in book.flights()] == ["f1"]
 
 
 def test_the_companion_gets_changes_not_a_stream(setup):
     account, server, _ = setup
-    account.login("pilot@example.com", "correct horse", "PC")
+    sign_in(account)
     status = {"active": True, "phase": "CRUISE"}
     assert account.live(status, now=100.0)
     assert not account.live(status, now=200.0)  # nothing changed

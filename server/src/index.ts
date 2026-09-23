@@ -1,8 +1,8 @@
 /**
  * The optional LocalTC account server: accounts, the synced logbook, and the companion app's live view.
  *
- * LocalTC works without it. It holds only what an account needs: an email address, a password hash,
- * sign-ins, and the logbook's summary lines. See README.md.
+ * LocalTC works without it. It holds only what an account needs: an email address, sign-ins, and the
+ * logbook's summary lines. There are no passwords: signing in is a code or link sent by email. See README.md.
  */
 import * as auth from "./auth";
 import type { Env } from "./env";
@@ -19,13 +19,9 @@ const signedIn = (fn: (env: Env, request: Request, a: auth.Auth, url: URL, param
 
 const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/health$/, async () => json({ ok: true })],
-  ["POST", /^\/v1\/auth\/register$/, (env, req) => auth.register(env, req)],
-  ["POST", /^\/v1\/auth\/verify$/, (env, req) => auth.verify(env, req)],
-  ["POST", /^\/v1\/auth\/login$/, (env, req) => auth.login(env, req)],
+  ["POST", /^\/v1\/auth\/start$/, (env, req) => auth.start(env, req)],
+  ["POST", /^\/v1\/auth\/finish$/, (env, req) => auth.finish(env, req)],
   ["POST", /^\/v1\/auth\/logout$/, signedIn((env, _req, a) => auth.logout(env, a))],
-  ["POST", /^\/v1\/auth\/reset\/request$/, (env, req) => auth.resetRequest(env, req)],
-  ["POST", /^\/v1\/auth\/reset$/, (env, req) => auth.reset(env, req)],
-  ["POST", /^\/v1\/auth\/password$/, signedIn((env, req, a) => auth.changePassword(env, req, a))],
   ["GET", /^\/v1\/me$/, signedIn((env, _req, a) => auth.me(env, a))],
   ["DELETE", /^\/v1\/me$/, signedIn((env, req, a) => auth.deleteMe(env, req, a))],
   ["DELETE", /^\/v1\/sessions\/([\w-]+)$/, signedIn((env, _req, a, _u, p) => auth.revokeSession(env, a, p[0]))],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanStatus, pushFor } from "../src/live";
-import { bearer, call, data, signUp } from "./helpers";
+import { bearer, call, data, signIn } from "./helpers";
 
 const cruise = {
   active: true, callsign: "FFT2084", origin: "KSAN", destination: "KPHX", phase: "CRUISE",
@@ -9,7 +9,7 @@ const cruise = {
 
 describe("the companion's live view", () => {
   it("shows what the desktop app sent last", async () => {
-    const { token } = await signUp();
+    const { token } = await signIn();
     expect((await data(await call("GET", "/v1/live", undefined, bearer(token)))).active).toBe(false);
     expect((await call("PUT", "/v1/live", cruise, bearer(token))).status).toBe(200);
     const now = await data(await call("GET", "/v1/live", undefined, bearer(token)));
@@ -31,14 +31,14 @@ describe("the companion's live view", () => {
   });
 
   it("is only the account's own", async () => {
-    const a = await signUp();
-    const b = await signUp();
+    const a = await signIn();
+    const b = await signIn();
     await call("PUT", "/v1/live", cruise, bearer(a.token));
     expect((await data(await call("GET", "/v1/live", undefined, bearer(b.token)))).active).toBe(false);
   });
 
   it("registers an iPhone for notifications", async () => {
-    const { token } = await signUp();
+    const { token } = await signIn();
     expect((await call("POST", "/v1/push-tokens", { token: "ab".repeat(32) }, bearer(token))).status).toBe(200);
     expect((await call("POST", "/v1/push-tokens", { token: "not hex" }, bearer(token))).status).toBe(400);
   });

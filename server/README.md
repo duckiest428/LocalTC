@@ -10,18 +10,21 @@ Durable Object per account for the live view. It lives at `https://api.localtc.t
 
 | Table | What | Why |
 |---|---|---|
-| `users` | email, password hash (PBKDF2-SHA256), when confirmed | signing in |
+| `users` | email, when it was first signed in to | signing in |
 | `sessions` | a hash of each sign-in token, the kind of device and its name, last used | staying signed in; "sign out that device" |
-| `tokens` | hashes of one-time links (confirm email, reset password), expiring | the links in emails |
+| `logins` | hashes of the emailed sign-in code and link, wrong-code count, 15-minute expiry | signing in by email |
 | `flights` | the app's logbook lines: airports, gates, runways, times, distance, max altitude, landing rate, readback and alert counts | the dashboard and stats |
 | `push_tokens` | APNs device tokens | companion notifications |
-| `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping password guessing |
+| `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping code guessing and email floods |
 | `LiveRoom` (Durable Object) | the flight's latest status: phase, frequencies, ATC's last line | the companion app |
 
 Never stored or accepted: positions or tracks, audio, transcripts, recordings, settings. Fields the server
 doesn't know are dropped (`src/flights.ts` `clean`, `src/live.ts` `cleanStatus`).
 
-Unconfirmed accounts are deleted after 7 days, expired sign-ins and links daily (the cron trigger).
+**There are no passwords.** Signing in (and creating an account, the first time) emails a 6-digit code and a
+link: the apps take the code, the website either. Each works once, for 15 minutes, only from the
+newest email, and five wrong codes void it. Accounts asked for but never signed in to are deleted after a day, expired
+sign-ins and codes daily (the cron trigger).
 `DELETE /v1/me` deletes the account and everything in it at once; `GET /v1/export` gives it all as JSON.
 
 ## API
@@ -32,13 +35,10 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 
 | | |
 |---|---|
-| `POST /v1/auth/register` `{email, password}` | sends a confirmation link; same answer whether or not the address has an account |
-| `POST /v1/auth/verify` `{token}` | from the link |
-| `POST /v1/auth/login` `{email, password, kind: desktop\|ios\|web, device}` | `{token, user}` (web: a cookie) |
+| `POST /v1/auth/start` `{email}` | emails a code and a link (creating the account the first time); the same answer whether or not the address has one |
+| `POST /v1/auth/finish` `{email, code, kind: desktop\|ios\|web, device}` or `{token, kind: web}` | `{token, user}` (web: a cookie) |
 | `POST /v1/auth/logout` | |
-| `POST /v1/auth/reset/request` `{email}`, `POST /v1/auth/reset` `{token, password}` | signs out every device |
-| `POST /v1/auth/password` `{current, password}` | signs out the other devices |
-| `GET /v1/me`, `DELETE /v1/me` `{password}` | the account and its devices; delete it all |
+| `GET /v1/me`, `DELETE /v1/me` `{email}` | the account and its devices; delete it all (the address typed to confirm) |
 | `DELETE /v1/sessions/:id` | sign out a device |
 | `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
@@ -56,15 +56,11 @@ npm install --legacy-peer-deps
 npx wrangler login
 npx wrangler d1 create localtc          # copy the database_id into wrangler.toml
 npm run migrate                         # creates the tables
-npx wrangler secret put RESEND_API_KEY  # email: a Resend account with localtc.tech verified (SPF/DKIM)
+npx wrangler secret put RESEND_API_KEY  # the sign-in emails: a Resend account with localtc.tech verified
 npm run deploy                          # also creates the api.localtc.tech custom domain
 ```
 
-**Password hashing and the Workers plan.** PBKDF2 at 100,000 iterations (the most Workers' WebCrypto
-allows) takes more CPU than the Free plan's 10 ms per request, so sign-in needs the Workers Paid plan
-($5/month). `PBKDF2_ITERATIONS` can be lowered to stay on the free plan, at the cost of weaker protection if
-the database ever leaked; the iterations are stored with each hash, so raising it later works for new
-passwords.
+It all fits the free plans: Workers Free, D1 Free, and Resend's free tier (100 emails a day).
 
 **Companion notifications** (optional): an Apple Developer account, an APNs key (.p8), and the app's bundle
 id. Set `APNS_TOPIC` in `wrangler.toml` and the secrets `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`.

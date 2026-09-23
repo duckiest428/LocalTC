@@ -41,40 +41,27 @@
   <!-- Signed out -->
   <section class="dash-auth" id="auth" hidden>
     <div class="auth-card">
-      <h2 id="auth-title">Sign in</h2>
-      <form id="auth-form" novalidate>
-        <label>Email <input id="f-email" type="email" autocomplete="username" required spellcheck="false"></label>
-        <label id="f-password-row">Password <input id="f-password" type="password" autocomplete="current-password" required minlength="10"></label>
-        <p class="hint" id="f-hint" hidden>At least 10 characters. A passphrase of a few words is easiest.</p>
-        <label class="consent" id="f-consent-row" hidden>
-          <input id="f-consent" type="checkbox">
-          <span>I've read the <a href="privacy.html#account">privacy policy</a> and the <a href="terms.html#account">terms</a>.
-            LocalTC stores my email, a hash of my password and the flight summaries I sync, until I delete the account.</span>
-        </label>
-        <button class="btn btn-primary" id="f-submit" type="submit">Sign in</button>
+      <h2>Sign in</h2>
+      <p class="hint">No password. We email you a link and a code; the first sign-in creates the account.</p>
+      <form id="start-form" novalidate>
+        <label>Email <input id="f-email" type="email" autocomplete="email" required spellcheck="false"></label>
+        <button class="btn btn-primary" id="f-start" type="submit">Email me a sign-in link</button>
       </form>
-      <p class="auth-links">
-        <button class="linklike" id="to-register" type="button">Create an account</button>
-        <button class="linklike" id="to-reset" type="button">Forgot the password?</button>
-        <button class="linklike" id="to-signin" type="button" hidden>Back to sign in</button>
-      </p>
+      <form id="code-form" novalidate hidden>
+        <p class="hint">Open the link in the email, or type its code here.</p>
+        <label>6-digit code <input id="f-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456"></label>
+        <button class="btn btn-primary" type="submit">Sign in</button>
+        <button class="linklike" id="f-again" type="button">Use a different address</button>
+      </form>
+      <p class="hint small-print">Creating an account means agreeing to the <a href="terms.html#account">terms</a> and
+        <a href="privacy.html#account">privacy policy</a>: we keep your email address and the flight summaries you sync,
+        until you delete the account. You need to be 16 or over.</p>
     </div>
     <div class="note">
       <p><strong>An account is optional.</strong> LocalTC works fully without one, and the app keeps your
         logbook on your own computer either way (the <b>Logbook</b> tab). Signing in to the app copies each
         flight's summary here: airports, gates, runways, times, distance and the landing. Never your position,
         voice, transcripts or recordings.</p>
-    </div>
-  </section>
-
-  <!-- Choosing a new password from an email link -->
-  <section class="dash-auth" id="reset" hidden>
-    <div class="auth-card">
-      <h2>Choose a new password</h2>
-      <form id="reset-form" novalidate>
-        <label>New password <input id="r-password" type="password" autocomplete="new-password" required minlength="10"></label>
-        <button class="btn btn-primary" type="submit">Change password</button>
-      </form>
     </div>
   </section>
 
@@ -103,16 +90,10 @@
         <h2>Your data</h2>
         <p class="hint">Everything the account holds, as a JSON file.</p>
         <button class="btn btn-ghost" id="btn-export" type="button">Download my data</button>
-        <h3>Change password</h3>
-        <form id="pw-form" class="inline-form" novalidate>
-          <input id="pw-current" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password">
-          <input id="pw-new" type="password" placeholder="New password" autocomplete="new-password" aria-label="New password">
-          <button class="btn btn-ghost" type="submit">Change</button>
-        </form>
         <h3>Delete the account</h3>
         <p class="hint">Removes the account and every flight synced to it, for good. The logbook in the app stays.</p>
         <form id="del-form" class="inline-form" novalidate>
-          <input id="del-password" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password to confirm">
+          <input id="del-email" type="email" placeholder="Type your email address to confirm" aria-label="Your email address, to confirm">
           <button class="btn btn-danger" type="submit">Delete everything</button>
         </form>
       </div>

@@ -4,6 +4,7 @@ Everything returns the spoken form as plain words for speech synthesis, e.g.
 ``runway("34L") == "three four left"``.
 """
 
+from localtc.atc_core.region import CURRENT
 from localtc.atc_core.values import Approach, Callsign, Wind
 
 DIGITS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "niner")
@@ -68,11 +69,12 @@ def runway(ident: str) -> str:
 
 
 def frequency(mhz: float) -> str:
-    """121.8 -> "one two one point eight", 124.675 -> "one two four point six seven five"."""
+    """121.8 -> "one two one point eight", 124.675 -> "one two four point six seven five". ICAO says "decimal"."""
     text = f"{mhz:.3f}".rstrip("0")
     if text.endswith("."):
         text += "0"
-    return digits(text)
+    spoken = digits(text)
+    return spoken.replace(" point ", " decimal ") if CURRENT.get().icao else spoken
 
 
 def frequency_display(mhz: float) -> str:
@@ -81,10 +83,18 @@ def frequency_display(mhz: float) -> str:
 
 
 def altitude(feet: int) -> str:
-    """5000 -> "five thousand", 3500 -> "three thousand five hundred", 12000 -> "one two thousand", FL180+ -> flight level."""
+    """5000 -> "five thousand", 3500 -> "three thousand five hundred", 12000 -> "one two thousand"; at and
+    above the region's transition altitude, a flight level. ICAO says "feet" below it: "six thousand feet"."""
     feet = int(round(feet / 100.0) * 100)
-    if feet >= 18000:
+    region = CURRENT.get()
+    if feet >= region.transition_ft:
         return "flight level " + digits(str(feet // 100))
+    if region.icao:
+        return _feet(feet) + " feet"
+    return _feet(feet)
+
+
+def _feet(feet: int) -> str:
     thousands, hundreds = divmod(feet, 1000)
     parts = []
     if thousands:
@@ -96,7 +106,10 @@ def altitude(feet: int) -> str:
 
 def altitude_display(feet: int) -> str:
     feet = int(round(feet / 100.0) * 100)
-    return f"FL{feet // 100:03d}" if feet >= 18000 else f"{feet:,}"
+    region = CURRENT.get()
+    if feet >= region.transition_ft:
+        return f"FL{feet // 100:03d}"
+    return f"{feet:,} feet" if region.icao else f"{feet:,}"
 
 
 def heading(degrees: int) -> str:
@@ -112,8 +125,19 @@ def squawk(code: str) -> str:
     return digits(code)
 
 
+def hpa(inhg: float) -> int:
+    return round(inhg * 33.8639)
+
+
 def altimeter(inhg: float) -> str:
+    """ "two niner niner two"; ICAO gives QNH in hectopascals: "one zero one three"."""
+    if CURRENT.get().icao:
+        return digits(str(hpa(inhg)))
     return digits(f"{inhg:.2f}".replace(".", ""))
+
+
+def altimeter_display(inhg: float) -> str:
+    return str(hpa(inhg)) if CURRENT.get().icao else f"{inhg:.2f}"
 
 
 def letter(ch: str) -> str:
@@ -160,13 +184,18 @@ def taxi_route(names: tuple[str, ...]) -> str:
 
 
 def wind(value: Wind) -> str:
+    """ "two seven zero at one zero"; ICAO: "two seven zero degrees one zero knots"."""
     if value.speed_kt < 3:
         return "calm"
-    return f"{digits(f'{value.direction_mag % 360 or 360:03d}')} at {digits(str(value.speed_kt))}"
+    direction, speed_ = digits(f"{value.direction_mag % 360 or 360:03d}"), digits(str(value.speed_kt))
+    return f"{direction} degrees {speed_} knots" if CURRENT.get().icao else f"{direction} at {speed_}"
 
 
 def wind_display(value: Wind) -> str:
-    return "calm" if value.speed_kt < 3 else f"{value.direction_mag % 360 or 360:03d} at {value.speed_kt}"
+    if value.speed_kt < 3:
+        return "calm"
+    direction = f"{value.direction_mag % 360 or 360:03d}"
+    return f"{direction} degrees {value.speed_kt} knots" if CURRENT.get().icao else f"{direction} at {value.speed_kt}"
 
 
 def approach(value: Approach) -> str:

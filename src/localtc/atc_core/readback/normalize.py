@@ -54,7 +54,17 @@ def normalize(text: str) -> list[Token]:
 
     def flush() -> None:
         if run:
-            tokens.extend(Token("number", n) for n in _numbers(run))
+            numbers = _numbers(run)
+            # A flight level has at most three digits. "Flight level eight zero, ten minutes after" said
+            # without the pause is "eight zero ten": the level is the leading single digits.
+            after_fl = len(tokens) >= 2 and tokens[-1].text == "level" and tokens[-2].text == "flight"
+            if after_fl and numbers and len(numbers[0].split(".")[0]) > 3 and not any(w in MULTIPLIERS for w in run):
+                lead = 0
+                while lead < min(3, len(run)) and run[lead] in DIGIT_WORDS:
+                    lead += 1
+                if 0 < lead < len(run):
+                    numbers = _numbers(run[:lead]) + _numbers(run[lead:])
+            tokens.extend(Token("number", n) for n in numbers)
             run.clear()
 
     for i, word in enumerate(raw):

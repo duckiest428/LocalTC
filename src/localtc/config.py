@@ -125,7 +125,9 @@ class AtcConfig(_Section):
     center_name: str = "Seattle"
     center_mhz: float = 125.1
     strict_callsign: bool = False
-    transition_ft: int = 18000  # at or above this ATC talks in flight levels and gives no local altimeter
+    # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
+    phraseology: Literal["auto", "faa", "icao"] = "auto"
+    transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
     unscripted: bool = True  # traffic calls, altitude checks, "how do you read?", "stand by"

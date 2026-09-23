@@ -202,3 +202,23 @@ def test_affirm_answers_a_confirm():
     assert GrammarInterpreter().interpret("Affirm, 2LT", confirming, CONTEXT).status == "correct"
     assert GrammarInterpreter().interpret("120.2, 2LT", confirming, CONTEXT).status == "correct"
     assert GrammarInterpreter().interpret("Affirm, 2LT", pending, CONTEXT).kind != "readback"  # nothing to confirm
+
+
+ICAO = TemplateLibrary.load(style="icao")
+
+
+@pytest.mark.parametrize("instruction", READBACK_TEMPLATES)
+def test_ideal_icao_readback_is_correct(instruction):
+    """The same round trip in ICAO wording: "climb to flight level one two zero", "holding point", "decimal",
+    QNH in hectopascals, "feet" below the transition altitude."""
+    from localtc.atc_core.region import Region, speaking
+
+    rng = random.Random(instruction + "icao")
+    with speaking(Region("icao", 6000)):
+        for _ in range(40):
+            slots = random_slots(rng)
+            text = ICAO.pilot_readback(instruction, slots)
+            rendered = ICAO.render(instruction, slots)
+            pending = PendingReadback(instruction, rendered.controller, rendered.expected, rendered.required, rendered.optional)
+            result = GrammarInterpreter().interpret(text, pending, InterpretContext(callsign=slots["callsign"]))
+            assert (result.kind, result.status) == ("readback", "correct"), (text, render(normalize(text)), result)

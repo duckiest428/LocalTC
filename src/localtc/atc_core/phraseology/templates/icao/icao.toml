@@ -1,0 +1,150 @@
+# ICAO phraseology (Doc 4444 / Doc 9432), laid over the FAA templates by TemplateLibrary.load(style="icao").
+# Same ids, reworded. What must be read back is defined once, in the FAA files, and stays the same.
+#
+# The words that differ everywhere are in the speech helpers, not here: "decimal" in frequencies, QNH in
+# hectopascals, "degrees ... knots" in wind, "feet" below the transition altitude (phraseology/speech.py).
+
+[[template]]
+id = "clearance.ifr"
+text = ["{callsign}, cleared to {destination}, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
+pilot_readback = "Cleared to {destination}, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_at_cruise"
+text = ["{callsign}, cleared to {destination}, flight planned route, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
+pilot_readback = "Cleared to {destination}, flight planned route, climb to {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_sid"
+text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
+pilot_readback = "Cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
+pilot_readback = "Cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out"
+text = ["{callsign}, taxi to holding point runway {runway} via {taxi_route}."]
+pilot_readback = "Taxi to holding point runway {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_at"
+text = ["{callsign}, taxi to holding point {hold_point} runway {runway} via {taxi_route}."]
+pilot_readback = "Holding point {hold_point} runway {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+text = ["{callsign}, taxi to holding point runway {runway} via {taxi_route}, hold short of runway {hold_short}."]
+pilot_readback = "Holding point runway {runway} via {taxi_route}, hold short of runway {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_no_route"
+text = ["{callsign}, taxi to holding point runway {runway}."]
+pilot_readback = "Holding point runway {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.pushback"
+text = ["{callsign}, push back and start up approved, tail {turn}.", "{callsign}, start up and push back approved, tail {turn}."]
+
+[[template]]
+id = "ground.pushback_straight"
+text = ["{callsign}, push back and start up approved."]
+
+[[template]]
+id = "ground.taxi_in"
+text = ["{callsign}, taxi to the apron via {taxi_route}."]
+pilot_readback = "Taxi to the apron via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate"
+text = ["{callsign}, taxi to stand {gate} via {taxi_route}."]
+pilot_readback = "Stand {gate} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_no_route"
+text = ["{callsign}, taxi to the apron."]
+
+[[template]]
+id = "tower.takeoff"
+text = ["{callsign}, runway {runway}, cleared for takeoff."]
+pilot_readback = "Runway {runway}, cleared for takeoff, {callsign_short}."
+
+[[template]]
+id = "tower.go_around"
+text = ["{callsign}, roger, climb to {altitude}, contact {station} {frequency}."]
+pilot_readback = "Climb to {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around_traffic"
+text = ["{callsign}, go around, I say again, go around, traffic on the runway, climb to {altitude}."]
+pilot_readback = "Going around, climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_contact_ground"
+text = ["{callsign}, vacate when able, contact {station} {frequency}."]
+
+[[template]]
+id = "departure.radar_contact"
+text = ["{callsign}, {station}, identified, climb to {altitude}."]
+pilot_readback = "Climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.radar_contact"
+text = ["{callsign}, {station}, identified, climb to {altitude}."]
+pilot_readback = "Climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_level"
+text = ["{callsign}, {station}, identified, maintain {altitude}."]
+
+[[template]]
+id = "center.descend"
+text = ["{callsign}, descend to {altitude}, expect {approach} approach."]
+pilot_readback = "Descend to {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_pd"
+text = ["{callsign}, when ready descend to {altitude}, expect {approach} approach."]
+pilot_readback = "When ready descend to {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_via"
+text = ["{callsign}, descend via the {procedure} arrival, expect {approach} approach."]
+
+[[template]]
+id = "approach.descend"
+text = ["{callsign}, {station}, descend to {altitude}, expect {approach} approach."]
+pilot_readback = "Descend to {altitude}, expect {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.missed"
+text = ["{callsign}, roger, climb to {altitude}."]
+pilot_readback = "Climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.climb"
+text = ["{callsign}, climb to {altitude}."]
+pilot_readback = "Climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.descend"
+text = ["{callsign}, descend to {altitude}."]
+pilot_readback = "Descend to {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_priority"
+text = ["{callsign}, roger, you are number one, cleared direct {destination}, descend when ready, emergency services are standing by."]
+pilot_readback = "Direct {destination}, descending when ready, {callsign_short}."
+
+[[template]]
+id = "common.emergency_land"
+text = ["{callsign}, runway {runway}, wind {wind}, cleared to land, emergency services are standing by."]
+
+[[template]]
+id = "common.equipment"
+text = ["{callsign}, roger, emergency services will be standing by."]
+
+[fragments]
+hold_short = "hold short of runway {hold_short}"

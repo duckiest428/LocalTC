@@ -34,6 +34,17 @@ class TemplateFile(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     fragments: dict[str, str] = {}
 
 
+class Rewording(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
+    id: str
+    text: list[str] = []
+    pilot_readback: str = ""
+
+
+class OverlayFile(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
+    template: list[Rewording] = []
+    fragments: dict[str, str] = {}
+
+
 class TemplateError(ValueError):
     pass
 
@@ -58,19 +69,29 @@ def slot_names(text: str) -> list[str]:
 
 
 class TemplateLibrary:
-    def __init__(self, templates: dict[str, Template], fragments: dict[str, str]) -> None:
+    def __init__(self, templates: dict[str, Template], fragments: dict[str, str], style: str = "faa") -> None:
         self.templates = templates
         self.fragments = fragments
+        self.style = style
         self.validate()
 
     @classmethod
-    def load(cls, *extra_dirs: str | Path) -> "TemplateLibrary":
-        """Built-in templates plus any ``*.toml`` in ``extra_dirs`` (later files override ids)."""
+    def load(cls, *extra_dirs: str | Path, style: str = "faa") -> "TemplateLibrary":
+        """Built-in templates plus any ``*.toml`` in ``extra_dirs`` (later files override ids).
+
+        ``style="icao"`` lays ``templates/icao/*.toml`` over the FAA templates: the same ids, reworded. An
+        ICAO template may change ``text`` and ``pilot_readback`` only; what must be read back is the same
+        in both, so the engine and the readback checks don't depend on the style."""
         files: list[tuple[str, bytes]] = []
         package = resources.files("localtc.atc_core.phraseology") / "templates"
         for entry in sorted(package.iterdir(), key=lambda e: e.name):
             if entry.name.endswith(".toml"):
                 files.append((entry.name, entry.read_bytes()))
+        overlay: list[tuple[str, bytes]] = []
+        if style == "icao":
+            for entry in sorted((package / "icao").iterdir(), key=lambda e: e.name):
+                if entry.name.endswith(".toml"):
+                    overlay.append((f"icao/{entry.name}", entry.read_bytes()))
         for directory in extra_dirs:
             for path in sorted(Path(directory).glob("*.toml")):
                 files.append((str(path), path.read_bytes()))
@@ -84,7 +105,19 @@ class TemplateLibrary:
             for template in parsed.template:
                 templates[template.id] = template
             fragments.update(parsed.fragments)
-        return cls(templates, fragments)
+        for name, data in overlay:
+            try:
+                parsed = msgspec.convert(tomllib.loads(data.decode()), OverlayFile)
+            except (tomllib.TOMLDecodeError, msgspec.ValidationError) as exc:
+                raise TemplateError(f"{name}: {exc}") from exc
+            for change in parsed.template:
+                if change.id not in templates:
+                    raise TemplateError(f"{name}: {change.id} rewords a template that doesn't exist")
+                base = templates[change.id]
+                templates[change.id] = msgspec.structs.replace(
+                    base, text=change.text or base.text, pilot_readback=change.pilot_readback or base.pilot_readback)
+            fragments.update(parsed.fragments)
+        return cls(templates, fragments, style=style)
 
     def validate(self) -> None:
         problems = []

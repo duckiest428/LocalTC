@@ -536,6 +536,10 @@ const Settings = {
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
+        <div class="row"><label>Phraseology
+          <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
+            .map(([v, t]) => `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
         <div class="row"><label>Center name (where no airport lists one)<input id="s-center" value="${esc(st.atc.center_name)}"></label>
           <label>Center frequency<input id="s-center-mhz" type="number" step="0.005" min="118" max="137" value="${st.atc.center_mhz}"></label></div>
         <div class="row"><label>Keep the language model loaded for
@@ -620,6 +624,7 @@ const Settings = {
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
     on("#s-unscripted", "change", (e) => this.save("atc", "unscripted", e.target.checked));
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
+    on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-understand", "change", () => this.save("llm", "understanding", val("#s-understand")));

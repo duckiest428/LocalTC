@@ -15,8 +15,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from localtc.atc_core import region as regions
+from localtc.atc_core.airport import (
+    AirportGeometry,
+    TaxiGraph,
+    published,
+    select_approach,
+    select_runway,
+)
 from localtc.atc_core.airport import gates as stands
-from localtc.atc_core.airport import AirportGeometry, TaxiGraph, published, select_approach, select_runway
 from localtc.atc_core.airspace import Airspace, Area
 from localtc.atc_core.facilities import (
     Facility,
@@ -34,16 +41,29 @@ from localtc.atc_core.phraseology import TemplateLibrary, speech
 from localtc.atc_core.readback import (
     ChainInterpreter,
     GrammarInterpreter,
-    InterpretContext,
     Interpretation,
+    InterpretContext,
     Interpreter,
     PendingReadback,
     SayAgainInterpreter,
 )
 from localtc.atc_core.route import Route, RouteFix
-from localtc.atc_core.session import Clearance, Exchange, IssuedInstruction, SessionSnapshot, SessionState, snapshot
+from localtc.atc_core.session import (
+    Clearance,
+    Exchange,
+    IssuedInstruction,
+    SessionSnapshot,
+    SessionState,
+    snapshot,
+)
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind, clean_sim_name
-from localtc.atc_core.weather import AtisBoard, AtisInfo, WeatherTracker, components, magnetic_wind
+from localtc.atc_core.weather import (
+    AtisBoard,
+    AtisInfo,
+    WeatherTracker,
+    components,
+    magnetic_wind,
+)
 from localtc.sim_api import (
     AircraftIdentity,
     Airport,
@@ -167,7 +187,8 @@ class EngineConfig:
     sid: str | None = None  # departure procedure from the flight plan, named in the IFR clearance
     star: str | None = None  # arrival procedure from the flight plan: "descend via" it
     route: tuple[RouteFix, ...] = ()  # the plan's fixes: when the climb ends, where the descent begins
-    transition_ft: int = 18000  # at or above this everyone flies the standard altimeter setting
+    transition_ft: int = 0  # 0 = the region's transition altitude (atc_core.region); otherwise this everywhere
+    phraseology: str = "auto"  # "auto": FAA or ICAO by where the controller is; or "faa" / "icao" always
 
 
 @dataclass
@@ -196,7 +217,8 @@ class AtcEngine:
         self.route = Route(self.cfg.route)
         self.airspace = Airspace.load()
         self._area_cache: dict[str, tuple[float, Any]] = {}  # lookups, reused for AREA_RECHECK_S of sim time
-        self.library = library or TemplateLibrary.load()
+        self.libraries = {"faa": library or TemplateLibrary.load(), "icao": TemplateLibrary.load(style="icao")}
+        self.region = regions.FAA  # the phraseology region of the current step (see _region)
         self.interpreter = interpreter or ChainInterpreter(GrammarInterpreter(), SayAgainInterpreter())
         self.phraser = phraser  # words replies that have no template; None: they get "unable"
         self.state = SessionState()
@@ -259,7 +281,44 @@ class AtcEngine:
 
     # --- public ---------------------------------------------------------------------------
 
+    @property
+    def _altimeter_word(self) -> str:
+        return "QNH" if self.region.icao else "altimeter"
+
+    @property
+    def library(self) -> TemplateLibrary:
+        """The templates in the current region's wording, FAA or ICAO."""
+        return self.libraries[self.region.style]
+
     def handle(self, event: BusEvent) -> list[BusEvent]:
+        # Everything said in this step is worded for where the controller the pilot is talking to sits.
+        self.region = self._region()
+        with regions.speaking(self.region):
+            return self._handle(event)
+
+    def _region(self) -> regions.Region:
+        """FAA or ICAO, and the transition altitude: from the facility tuned (its airport, or for a centre
+        the FIR the aircraft is in), or else from where the aircraft is."""
+        forced = regions.forced(self.cfg.phraseology, self.cfg.transition_ft)
+        if forced is not None:
+            return forced
+        st = self.state
+        tuned = st.comms.tuned
+        own = st.aircraft
+        code: str | None = None
+        if tuned is not None and tuned.airport:
+            code = tuned.airport
+        elif own is not None and not own.on_ground and (area := self.center_area(own)) is not None:
+            code = area.id
+        elif own is not None and own.on_ground:
+            code = st.flight.origin if st.phase in DEPARTURE_PHASES else st.flight.destination
+        code = code or st.flight.origin or st.flight.destination
+        found = regions.region_for(code)
+        if self.cfg.transition_ft:
+            found = regions.Region(found.style, self.cfg.transition_ft)
+        return found
+
+    def _handle(self, event: BusEvent) -> list[BusEvent]:
         self._t = max(self._t, event.t)
         out: list[BusEvent] = []
         if isinstance(event, AirportData):
@@ -378,7 +437,7 @@ class AtcEngine:
             return None
         parts = [("information {atis} is current", {"atis": info.letter})]
         if info.weather.altimeter_inhg is not None:
-            parts.append(("altimeter {altimeter}", {"altimeter": info.weather.altimeter_inhg}))
+            parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": info.weather.altimeter_inhg}))
         return self._phrases(parts)
 
     def _caution_note(self, icao: str | None, *, wind: bool = False) -> Phrase | None:
@@ -398,9 +457,9 @@ class AtcEngine:
         # Above the transition altitude everyone is on the standard setting and a local altimeter means
         # nothing yet; it comes with the descent through the transition level.
         own = self.state.aircraft
-        if own is not None and own.alt_indicated_ft >= self.cfg.transition_ft:
+        if own is not None and own.alt_indicated_ft >= self.region.transition_ft:
             return None
-        return self._phrases([(f"{self._airport_name(icao).split()[0]} altimeter {{altimeter}}", {"altimeter": altimeter})])
+        return self._phrases([(f"{self._airport_name(icao).split()[0]} {self._altimeter_word} {{altimeter}}", {"altimeter": altimeter})])
 
     def _phrases(self, parts: list[tuple[str, dict[str, Any]]]) -> Phrase:
         phrases = [Phrase(*self.library.fill(text, slots, context="note")) for text, slots in parts]
@@ -530,7 +589,7 @@ class AtcEngine:
             self._atis_news.discard(icao)
             parts = [("information {atis} is now current", {"atis": info.letter})]
             if info.weather.altimeter_inhg is not None:
-                parts.append(("altimeter {altimeter}", {"altimeter": info.weather.altimeter_inhg}))
+                parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": info.weather.altimeter_inhg}))
             self._schedule(t, "common.info", {"message": self._phrases(parts)}, st.comms.tuned, delay=False,
                            on_issue=lambda: self._assign(**({"arrival_atis": info.letter} if icao == st.flight.destination
                                                             else {"atis": info.letter})))
@@ -1642,7 +1701,7 @@ class AtcEngine:
         parts: list[tuple[str, dict[str, Any]]] = []
         altimeter = round(own.altimeter_setting_inhg, 2) if own and 25 < own.altimeter_setting_inhg < 33 else None
         if topic in ("altimeter", "weather", "atis") and altimeter is not None:
-            parts.append(("altimeter {altimeter}", {"altimeter": altimeter}))
+            parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": altimeter}))
         if topic in ("wind", "weather") and own is not None:
             parts.insert(0, ("wind {wind}", {"wind": self._wind(own)}))
         arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES

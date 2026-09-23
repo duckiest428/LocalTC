@@ -56,6 +56,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         center_mhz=atc.center_mhz,
         strict_callsign=atc.strict_callsign,
         transition_ft=atc.transition_ft,
+        phraseology=atc.phraseology,
         seed=atc.seed,
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
         unscripted=atc.unscripted,

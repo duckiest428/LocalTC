@@ -35,12 +35,15 @@ APPROACH = SlotType("approach", Approach, lambda v: v.display, speech.approach)
 PROCEDURE = SlotType("procedure", str, _text, speech.procedure)
 ATIS = SlotType("atis", str, lambda v: speech.letter(v).capitalize(), speech.letter)
 WIND = SlotType("wind", Wind, speech.wind_display, speech.wind)
-ALTIMETER = SlotType("altimeter", float, lambda v: f"{v:.2f}", speech.altimeter)
+ALTIMETER = SlotType("altimeter", float, speech.altimeter_display, speech.altimeter)
 
 
 def _minutes(v: int) -> str:
-    """Minutes as ATC says them: "five" under ten, digit by digit above ("one seven")."""
-    return speech.number_words(int(v)) if int(v) < 10 else speech.digits(str(int(v)))
+    """Minutes as ATC says them: "five" under ten, digit by digit above ("one seven"). ICAO says them as a
+    number ("seventeen"): right after "flight level eight zero", digits would run into the level."""
+    from localtc.atc_core.region import CURRENT
+
+    return speech.number_words(int(v)) if int(v) < 10 or CURRENT.get().icao else speech.digits(str(int(v)))
 
 
 MINUTES = SlotType("minutes", int, _minutes, _minutes)

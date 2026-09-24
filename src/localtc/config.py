@@ -91,6 +91,9 @@ class AccountConfig(_Section):
     # Away from this network, the phone's map and radio log come through the server: position, traffic and
     # the radio text, only while a phone watches, held in memory there and never stored.
     companion_remote_map: bool = True
+    # After each flight, also upload its replay (the track and the radio transcript, never audio) so it plays on
+    # localtc.tech and the phone. Off: only the flights the pilot uploads from the Logbook.
+    upload_replays: bool = False
 
 
 class RouteFix(msgspec.Struct, frozen=True, kw_only=True):

@@ -2,13 +2,14 @@
  * The optional LocalTC account server: accounts, the synced logbook, and the companion app's live view.
  *
  * LocalTC works without it. It holds only what an account needs: an email address, sign-ins, and the
- * logbook's summary lines. There are no passwords: signing in is a code or link sent by email. See README.md.
+ * logbook's summary lines, and the replays of the flights the pilot uploads. There are no passwords: signing in is a code or link sent by email. See README.md.
  */
 import * as auth from "./auth";
 import type { Env } from "./env";
 import * as flights from "./flights";
 import { HttpError, cors, json } from "./http";
 import * as live from "./live";
+import * as replays from "./replays";
 import * as support from "./support";
 
 export { LiveRoom } from "./live";
@@ -30,6 +31,9 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["POST", /^\/v1\/flights$/, signedIn((env, req, a) => flights.upload(env, req, a))],
   ["GET", /^\/v1\/flights$/, signedIn((env, _req, a, url) => flights.list(env, url, a))],
   ["DELETE", /^\/v1\/flights\/([\w-]+)$/, signedIn((env, _req, a, _u, p) => flights.remove(env, a, p[0]))],
+  ["PUT", /^\/v1\/flights\/([\w-]+)\/replay$/, signedIn((env, req, a, _u, p) => replays.put(env, req, a, p[0]))],
+  ["GET", /^\/v1\/flights\/([\w-]+)\/replay$/, signedIn((env, _req, a, _u, p) => replays.get(env, a, p[0]))],
+  ["DELETE", /^\/v1\/flights\/([\w-]+)\/replay$/, signedIn((env, _req, a, _u, p) => replays.remove(env, a, p[0]))],
   ["GET", /^\/v1\/stats$/, signedIn((env, _req, a) => flights.stats(env, a))],
   ["GET", /^\/v1\/export$/, signedIn((env, _req, a) => flights.exportAll(env, a))],
   ["PUT", /^\/v1\/live$/, signedIn((env, req, a) => live.put(env, req, a))],

@@ -268,17 +268,18 @@ async def run_session(
             await recorder.close()
             log.info("Recording saved to %s", recorder.session_dir)
         if flight_log is not None:
-            _save_flight(flight_log, engine)
+            _save_flight(flight_log, engine, recorder.session_dir if recorder else None)
     return recorder.session_dir if recorder else None
 
 
-def _save_flight(flight_log, engine: object | None) -> None:
+def _save_flight(flight_log, engine: object | None, recording: Path | None = None) -> None:
     """The flight's line in the logbook, if it went anywhere. A failure here must not lose the session."""
     from localtc.logbook import Logbook
 
     try:
         record = flight_log.finish(engine)
         if record is not None:
+            record.recording = str(recording.resolve()) if recording is not None else ""
             Logbook().add(record)
             log.info("Logbook: %s %s -> %s", record.callsign, record.origin or "?", record.destination or "?")
     except Exception:

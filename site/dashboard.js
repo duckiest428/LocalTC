@@ -48,18 +48,22 @@ function show(which) {
 
 // --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
 
-const PAGES = ["tracker", "logbook", "support", "account"];
+const PAGES = ["tracker", "logbook", "replay", "support", "account"];
 let page = null;
 
 function go(name, { push = false } = {}) {
-  if (!PAGES.includes(name)) name = "tracker";
-  if (push && name !== page) history.pushState(null, "", `#${name}`);
+  const [base, id] = (name || "").split("/");  // "replay/<flight id>": a flight to rewatch
+  const hash = base === "replay" && id ? `replay/${id}` : base;
+  name = PAGES.includes(base) && (base !== "replay" || id) ? base : "tracker";
+  if (push && `#${hash}` !== location.hash) history.pushState(null, "", `#${name === base ? hash : name}`);
   page = name;
   for (const p of PAGES) $(`#${p}`).hidden = p !== name;
+  const nav = name === "replay" ? "logbook" : name;
   document.querySelectorAll(".side-nav a").forEach((a) => {
-    if (a.dataset.page === name) a.setAttribute("aria-current", "page");
+    if (a.dataset.page === nav) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
+  if (name === "replay") Replay.open(decodeURIComponent(id)); else Replay.close();
   document.title = `${$(`#${name}-h`).textContent} — LocalTC`;
   // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
   if (name === "tracker") Tracker.start(); else Tracker.stop();
@@ -178,6 +182,8 @@ function rows(page) {
       <td class="mono">${hm(f.air_min)}</td>
       <td class="mono">${hm(f.block_min)}</td>
       <td class="mono">${f.landing_vs_fpm == null ? "—" : `${esc(f.landing_vs_fpm)} fpm`}</td>
+      <td>${f.has_replay ? `<a class="btn btn-ghost btn-sm" href="#replay/${encodeURIComponent(f.id)}" title="Watch the flight again: the map and the radio, in step">&#9654; Replay</a>`
+        : '<span class="sub" title="Upload it from the Logbook in the LocalTC app to replay it here">—</span>'}</td>
       <td><button class="linklike del" type="button" title="Delete this flight from the account">Delete</button></td>
     </tr>`).join("");
   $("#flights").insertAdjacentHTML("beforeend", html);
@@ -189,6 +195,7 @@ function rows(page) {
 $("#more").onclick = async () => rows(await api("GET", `/v1/flights?limit=50&before=${encodeURIComponent(next)}`));
 
 $("#flights").onclick = async (e) => {
+  if (e.target.closest("a[href^='#replay/']")) return;  // the link goes there by itself
   const button = e.target.closest(".del");
   if (!button) {  // a click on a flight shows its route on the map
     const tr = e.target.closest("tr[data-route]");
@@ -196,7 +203,7 @@ $("#flights").onclick = async (e) => {
     return;
   }
   const row = button.closest("tr");
-  if (!confirm("Delete this flight from your account? The app's logbook keeps its copy.")) return;
+  if (!confirm("Delete this flight (and its replay, if uploaded) from your account? The app's logbook keeps its copy.")) return;
   try {
     await api("DELETE", `/v1/flights/${encodeURIComponent(row.dataset.id)}`);
     row.remove();
@@ -286,6 +293,37 @@ function map(stats) {
   const shown = flightsMap.show({ airports: stats.airports, routes: stats.routes });
   $("#lb-map").classList.toggle("empty", !shown);
 }
+
+// --- a replay: a flight to rewatch, uploaded from the app (replayplayer.js, shared with it) ----------------------
+
+const Replay = {
+  player: null, id: null,
+  async open(id) {
+    if (id === this.id && this.player) { setTimeout(() => this.player?.fit(), 0); return; }
+    this.close();
+    this.id = id;
+    $("#replay-h").textContent = "Replay";
+    const msg = $("#replay-msg");
+    msg.classList.remove("error");
+    msg.textContent = "Loading the flight ...";
+    try {
+      const r = await api("GET", `/v1/flights/${encodeURIComponent(id)}/replay`);
+      if (this.id !== id) return;  // gone somewhere else meanwhile
+      this.player = new ReplayPlayer($("#replay-player"), r, { tiles: true });
+      $("#replay-h").textContent = `Replay: ${r.flight.origin || "?"} → ${r.flight.destination || "?"}`;
+      document.title = `${$("#replay-h").textContent} — LocalTC`;
+      msg.textContent = "Space plays and pauses, J and K go to the previous and next call, the arrows skip 10 seconds.";
+      setTimeout(() => this.player?.fit(), 0);
+    } catch (err) {
+      msg.textContent = err.status === 404 ? "This flight has no replay in the account. Upload it from the Logbook in the LocalTC app." : err.message;
+      msg.classList.add("error");
+    }
+  },
+  close() {
+    if (this.player) { this.player.destroy(); this.player = null; }
+    this.id = null;
+  },
+};
 
 // --- the Flight Tracker: the flight in progress, live, as the companion app sees it ------------------------
 // A WebSocket to the account's relay. While it's open the app sends the aircraft, traffic and radio (if its

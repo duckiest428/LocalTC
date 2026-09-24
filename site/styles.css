@@ -122,6 +122,7 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .btn:hover { text-decoration: none; transform: translateY(-2px) scale(1.015); box-shadow: var(--ring), var(--e2); }
 .btn:active { transform: translateY(0) scale(.985); box-shadow: var(--ring), var(--e1); transition-duration: .08s; }
 .btn-ghost:hover { background: rgba(255, 255, 255, .11); }
+.btn-sm { padding: 6px 12px; font-size: 13px; border-radius: var(--r1); white-space: nowrap; }
 .btn-primary { background: var(--green); color: var(--on-green); box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset,
   0 10px 30px -10px rgba(95, 208, 104, .55), var(--e1); }
 .btn-primary:hover { filter: brightness(1.06); box-shadow: 0 1px 0 rgba(255, 255, 255, .25) inset,
@@ -471,7 +472,7 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .flights-h { margin-top: 0 !important; font-size: 15px !important; }
 
 @media (max-width: 860px) {
-  .dash-app { grid-template-columns: 1fr; gap: 20px; }
+  .dash-app { grid-template-columns: minmax(0, 1fr); gap: 20px; }  /* minmax: the nav scrolls, the page doesn't widen */
   .dash-side { top: 58px; z-index: 40; flex-direction: row; align-items: center; margin: -12px -22px 0; padding: 8px 22px;
     background: rgba(14, 16, 19, .92); backdrop-filter: blur(10px); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .06); }
   .dash-side .kicker { display: none; }

@@ -4,8 +4,9 @@
 ends: where from and to, which gates and runways, block and air time, distance, the landing, how the
 readbacks went. ``Logbook`` keeps those lines in SQLite at ``<data dir>/logbook.db``.
 
-Only these summaries exist here. An account (``localtc.account``) syncs them and nothing else: no
-positions, no audio, no transcripts.
+Only these summaries exist here, with the path of each flight's recording, which is what the Logbook's
+Replay plays (``localtc.replay.rewatch``). An account (``localtc.account``) syncs the summaries; a flight's
+replay (its track and radio transcript) goes to it only when the pilot uploads it. Never audio.
 """
 
 import sqlite3
@@ -22,6 +23,7 @@ from localtc.sim_api.geo import haversine_nm
 
 MOVING_KT = 3.0  # on the ground: the block starts when the aircraft first moves
 MAX_JUMP_NM = 5.0  # a position jump (slew, teleport, a new flight loaded) isn't distance flown
+LINK_WITHIN_S = 180.0  # an older line and its recording: started this close together
 
 
 @dataclass
@@ -52,6 +54,8 @@ class FlightRecord:
     destination_lat: float | None = None
     destination_lon: float | None = None
     synced_at: str | None = None  # when an account last took it; None = not synced
+    recording: str = ""  # the flight's recording directory on this computer, for its replay ("" = none)
+    replay_uploaded_at: str | None = None  # when its replay went to the account; None = not uploaded
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -217,7 +221,37 @@ class Logbook:
     def forget_sync(self) -> None:
         """Signed out, or the account was deleted: every flight is local-only again."""
         with closing(self._connect()) as db, db:
-            db.execute("UPDATE flights SET synced_at = NULL")
+            db.execute("UPDATE flights SET synced_at = NULL, replay_uploaded_at = NULL")
+
+    def mark_replay(self, flight_id: str, when: str | None) -> None:
+        """Its replay went to the account (``when``), or came off it (None)."""
+        with closing(self._connect()) as db, db:
+            db.execute("UPDATE flights SET replay_uploaded_at = ? WHERE id = ?", (when, flight_id))
+
+    def link_recordings(self, recordings: Path) -> int:
+        """Lines from before the logbook kept the recording's path: matched to a live recording that started
+        within a few minutes of the flight. Returns how many were linked."""
+        missing = [f for f in self.flights(limit=1_000_000) if not f.recording]
+        if not missing or not recordings.is_dir():
+            return 0
+        starts = []
+        for folder in recordings.iterdir():
+            if not folder.is_dir() or not folder.name.endswith("_live"):
+                continue
+            try:
+                starts.append((_created(folder), folder))
+            except (OSError, ValueError):
+                continue  # not a recording, or a broken one
+        linked = []
+        for f in missing:
+            began = datetime.fromisoformat(f.started_at)
+            near = [(abs((when - began).total_seconds()), folder) for when, folder in starts]
+            best = min(near, default=None, key=lambda pair: pair[0])
+            if best is not None and best[0] <= LINK_WITHIN_S:
+                linked.append((str(best[1].resolve()), f.id))
+        with closing(self._connect()) as db, db:
+            db.executemany("UPDATE flights SET recording = ? WHERE id = ?", linked)
+        return len(linked)
 
     def totals(self) -> dict[str, Any]:
         return totals(self.flights(limit=1_000_000))
@@ -237,6 +271,13 @@ def totals(flights: list[FlightRecord]) -> dict[str, Any]:
         "average_landing_fpm": round(sum(landings) / len(landings)) if landings else None,
         "readback_accuracy": round(sum(f.readbacks_correct for f in flights) / readbacks, 3) if readbacks else None,
     }
+
+
+def _created(folder: Path) -> datetime:
+    """When a recording started, from its header (the first line; nothing else is read)."""
+    from localtc.replay.reader import Recording
+
+    return datetime.fromisoformat(Recording(folder).header.created).astimezone(UTC)
 
 
 def _record(row: sqlite3.Row) -> FlightRecord:

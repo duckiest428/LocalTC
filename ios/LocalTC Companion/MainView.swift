@@ -11,7 +11,8 @@ struct MainView: View {
             Tab("Comms", systemImage: "headset") { screen { CommsTab() } }
             Tab("Frequencies", systemImage: "antenna.radiowaves.left.and.right") { screen { FrequenciesTab() } }
             Tab("Airports", systemImage: "mappin.and.ellipse") { screen { AirportsTab() } }
-            Tab("EFB", systemImage: "book.closed") { screen { ComingSoonView() } }
+            // Five tabs fit on an iPhone before "More": the EFB preview is in Settings until it's real.
+            Tab("Logbook", systemImage: "book.pages") { screen { LogbookTab() } }
         }
         .overlay(alignment: .top) {
             if let banner {

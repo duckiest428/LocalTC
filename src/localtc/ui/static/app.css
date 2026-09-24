@@ -319,6 +319,15 @@ pre.notes { white-space: pre-wrap; font: inherit; margin: 6px 0; max-height: 220
 .lb-map { height: 320px; flex: none; border: 1px solid var(--line); border-radius: 2px; }
 table.lb tr[data-route] { cursor: pointer; }
 table.lb tr.picked td { background: rgba(233, 120, 214, .12); }
+.lb-actions { display: flex; align-items: center; gap: 6px; }
+.linkbtn.up { font-size: 12px; color: var(--cyan); }
+.linkbtn.up.on { color: var(--green); }
+.replay-page[hidden], .logbook[hidden] { display: none; }
+/* The replay fills the tab: the map and the radio take what the header and the timeline leave. */
+.replay-page { height: 100%; box-sizing: border-box; overflow: hidden; }
+.replay-page #replay-player { flex: 1; min-height: 0; }
+.replay-page .rp-body { flex: 1; height: auto; min-height: 200px; }
+@media (max-width: 860px) { .replay-page { overflow: auto; } .replay-page .rp-body { flex: none; } }
 
 /* The flights map (flightsmap.js), shared with localtc.tech */
 .flights-map { background: #2b2f33; }  /* close to the darkened tiles, so the seams between them don't show */

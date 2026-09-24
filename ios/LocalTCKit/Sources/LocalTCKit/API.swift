@@ -113,6 +113,22 @@ public final class APIClient: Sendable {
         try decoder.decode(FlightStatus.self, from: try await call("GET", "/v1/live"))
     }
 
+    /// The account's logbook, newest first, a page at a time (`before`: the last page's `next`).
+    public func flights(before: String? = nil, limit: Int = 50) async throws -> LogbookPage {
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let before { query.append(URLQueryItem(name: "before", value: before)) }
+        return try decoder.decode(LogbookPage.self, from: try await call("GET", "/v1/flights", query: query))
+    }
+
+    public func stats() async throws -> LogbookStats {
+        try decoder.decode(LogbookStats.self, from: try await call("GET", "/v1/stats"))
+    }
+
+    /// A flight's replay, if the pilot uploaded it from the PC (404 otherwise).
+    public func replay(id: String) async throws -> Replay {
+        try Replay.decode(try await call("GET", "/v1/flights/\(id)/replay"))
+    }
+
     /// The relay's WebSocket, signed in.
     public func liveSocketRequest() -> URLRequest? {
         guard let token = tokens.token,
@@ -125,8 +141,11 @@ public final class APIClient: Sendable {
     }
 
     @discardableResult
-    func call(_ method: String, _ path: String, _ body: [String: String]? = nil, auth: Bool = true) async throws -> Data {
-        var request = URLRequest(url: baseURL.appending(path: path))
+    func call(_ method: String, _ path: String, _ body: [String: String]? = nil, query: [URLQueryItem] = [],
+              auth: Bool = true) async throws -> Data {
+        var url = baseURL.appending(path: path)
+        if !query.isEmpty { url.append(queryItems: query) }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

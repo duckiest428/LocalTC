@@ -7,6 +7,7 @@
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/replayplayer.css">
 </head>
 <body>
 <div class="app">
@@ -136,6 +137,10 @@
     <!-- Logbook: every live flight, kept on this computer -->
     <section class="page" id="page-logbook">
       <div class="logbook" id="logbook-body"><div class="muted pad">Loading ...</div></div>
+      <div class="logbook replay-page" id="replay-page" hidden>
+        <div class="row"><button class="btn small" id="replay-back">&larr; Logbook</button><span class="muted small" id="replay-note"></span></div>
+        <div id="replay-player"></div>
+      </div>
     </section>
   </main>
 
@@ -228,6 +233,7 @@
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/flightsmap.js"></script>
+<script src="/static/replayplayer.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

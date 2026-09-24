@@ -37,9 +37,9 @@ code_for() {  # the newest sign-in code emailed to $1
 
 echo "== account server"
 # Runs sign in from the same address again and again: the local rate-limit counters start empty.
-(cd "$ROOT/server" && npx wrangler d1 migrations apply localtc --local --env dev >/dev/null \
-  && npx wrangler d1 execute localtc --local --env dev --command "DELETE FROM attempts" >/dev/null \
-  && exec npx wrangler dev --env dev --port 8787) > "$WORK/wrangler.log" 2>&1 &
+(cd "$ROOT/server" && npx wrangler d1 migrations apply localtc --local --env dev --config wrangler.toml >/dev/null \
+  && npx wrangler d1 execute localtc --local --env dev --config wrangler.toml --command "DELETE FROM attempts" >/dev/null \
+  && exec npx wrangler dev --env dev --config wrangler.toml --port 8787) > "$WORK/wrangler.log" 2>&1 &
 WRANGLER_PID=$!
 for _ in $(seq 1 60); do curl -s "$API/v1/health" >/dev/null && break; sleep 1; done
 

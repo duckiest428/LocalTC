@@ -51,6 +51,12 @@ struct SettingsView: View {
                         ProgressView()
                     }
                 }
+                Section {
+                    NavigationLink { ComingSoonView() } label: {
+                        LabeledContent("EFB", value: "Coming soon")
+                    }
+                    .accessibilityIdentifier("efb")
+                }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     Link("Your logbook on localtc.tech", destination: URL(string: "https://localtc.tech/dashboard.html")!)

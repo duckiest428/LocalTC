@@ -62,7 +62,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 | **Quick Settings** | Performance profiles and the models (language model, Whisper size, ATC voice), each with its speed, quality and size, a **Download** button and a voice **Preview**. Also the push-to-talk key (press **Change**, then the key), yoke button, microphone, speakers, volume and speed, the copilot, ATC options, and developer mode. |
 | **Live Map** | Your aircraft and its track, AI traffic, the flight plan route and fixes, and the runways. Two maps, switched with **IFR / VFR**: it opens on your flight's rules and follows them when they change. **VFR** is terrain (OpenTopoMap) with the airspace class around each airport in view: Class B shelves, C, D, or an ICAO control zone or traffic zone, labelled ceiling over floor in hundreds of feet like a sectional (simplified sizes, not for real navigation). On the **IFR** map, **ATC zones** (on by default) draws who controls what: the enroute centres on your route, the departure and approach areas, each airport's Clearance, Ground, Tower and Dep/App, the tower's zone, and the stretch of final where approach clears you and sends you to tower. These are the same outlines ATC hands you over at, so the map explains every handoff; the one you're talking to and the one you're about to be sent to are highlighted. |
 | **Airport Lookup** | Frequencies, runways (length, heading, ILS) and taxiways for any airport a flight has visited. During a flight, any other ICAO is fetched from the sim. |
-| **Logbook** | Every live flight, kept on this computer: date, callsign, route, air and block time, the landing rate, and totals (hours, airports, distance, readbacks right). A map shows every airport and route flown; click a route to find its flights, or a flight to see its route. |
+| **Logbook** | Every live flight, kept on this computer: date, callsign, route, air and block time, the landing rate, and totals (hours, airports, distance, readbacks right). A map shows every airport and route flown; click a route to find its flights, or a flight to see its route. **Replay** rewatches a flight: the aircraft moving on the map with the whole radio transcript in step, a timeline to scrub, and speeds up to 64× (skipping the quiet stretches). |
 
 - **New Flight**: import your latest **SimBrief** plan (username or Pilot ID), or type one in (**Manual**). Then **Save and start flight**.
 - **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
@@ -77,14 +77,17 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 When a live flight ends, LocalTC writes a line to the logbook (`%LOCALAPPDATA%\LocalTC\logbook.db`):
 airports, gates, runways, block and air time, distance flown, highest altitude, the vertical speed at
 touchdown, and how many readbacks and alerts there were. It needs no account and nothing leaves the computer.
-Turn it off with `[logbook] enabled = false`.
+Turn it off with `[logbook] enabled = false`. Each line knows its flight's recording (`[recorder]`), which is
+what the Logbook's **Replay** plays.
 
 An **account is optional** (Quick Settings → Account). It copies those logbook lines to
 [localtc.tech](https://localtc.tech/dashboard.html)'s Dashboard, where there are totals, a map of the airports and
 routes, a live **Flight Tracker** for the flight you're flying, an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
 and next, and ATC's last call). Only while the companion app watches from away from your PC's network
 (and you allow it) do your position, traffic and radio pass through the server, held in memory and never
-stored; on the same Wi-Fi the phone talks to the PC directly. It never sends voice, recordings or settings. There's
+stored; on the same Wi-Fi the phone talks to the PC directly. A flight's **replay** (its track and radio
+transcript, no audio) goes up only when you upload it from the Logbook, or turn on "upload each flight's
+replay"; then it plays on the Dashboard and in the companion app's Logbook too. It never sends voice, recordings or settings. There's
 no password: signing in emails you a 6-digit code to type in. The sign-in is then kept in Windows Credential
 Manager (or the macOS Keychain), not in a file. The server is in
 [`server/`](server/README.md).
@@ -97,6 +100,7 @@ Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Onl
 - [docs/architecture.md](docs/architecture.md): the pieces, the event bus, a transmission end to end, the app.
 - [docs/phraseology.md](docs/phraseology.md): adding phraseology templates.
 - [docs/state-machine.md](docs/state-machine.md): extending the phases and the dialogue for new scenarios.
+- [docs/replay-format.md](docs/replay-format.md): a flight's replay (the Logbook's Replay, the Dashboard, the phone).
 - [site/](site/): the project's website, published to GitHub Pages by `.github/workflows/pages.yml`.
 
 ## Layout

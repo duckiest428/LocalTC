@@ -166,7 +166,7 @@ export async function deleteMe(env: Env, request: Request, auth: Auth): Promise<
     throw new HttpError(400, "Type the account's email address to confirm.");
   }
   const id = auth.user.id;
-  await env.DB.batch(["flights", "sessions", "logins", "push_tokens"].map((t) =>
+  await env.DB.batch(["replays", "flights", "sessions", "logins", "push_tokens"].map((t) =>
     env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(id)).concat(
     env.DB.prepare("DELETE FROM users WHERE id = ?1").bind(id)));
   await env.LIVE.get(env.LIVE.idFromName(id)).fetch("https://live/wipe", { method: "POST" });

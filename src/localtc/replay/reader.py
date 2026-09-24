@@ -38,13 +38,14 @@ class Recording:
         self.header: RecordingHeader = self._read_header()
         self.skipped_lines = 0
 
-    def events(self) -> Iterator[BusEvent]:
-        """Yield events in file order.
+    def events(self, *, skip: tuple[str, ...] = ()) -> Iterator[BusEvent]:
+        """Yield events in file order, leaving out the event types (tags) in ``skip`` without decoding them.
 
         Lines that don't decode are skipped with a warning: unknown event types
         from a newer LocalTC, or a truncated last line after a crash.
         """
         skipped = 0
+        unwanted = tuple(f'{{"type":"{tag}"'.encode() for tag in skip)
         with self._open() as fh:
             seen_header = False
             for lineno, line in enumerate(fh, start=1):
@@ -52,6 +53,8 @@ class Recording:
                     continue
                 if not seen_header:
                     seen_header = True
+                    continue
+                if unwanted and line.startswith(unwanted):
                     continue
                 try:
                     event = decode_event(line)

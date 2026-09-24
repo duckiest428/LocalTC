@@ -44,3 +44,8 @@ DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer swift test --scrat
 LocalTC replaying the San Diego → Phoenix recording, and the UI test, which signs in with the emailed code,
 waits for the flight, looks at every tab and signs out. `--relay` turns off the PC's local-network server,
 so everything goes through the relay.
+
+`LogbookReplayTests` plays a flight's replay (Logbook → the flight → play, scrub, the transcript at the
+landing). It needs an account on the local server holding one: upload a replay from the desktop app's
+Logbook, signed in to `wrangler dev`, then run the test with `TEST_RUNNER_LOCALTC_REPLAY=<flight id>` and
+the same `TEST_RUNNER_LOCALTC_API`, `_MAIL_LOG` and `_EMAIL` as the script sets. Without it, it's skipped.

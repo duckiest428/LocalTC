@@ -9,6 +9,9 @@ What an account sends to the LocalTC server (``[account] api_url``, a Cloudflare
 - only while a phone is watching away from the PC's network, and if the pilot allows it
   (``[account] companion_remote_map``): the aircraft's position, nearby traffic and the radio log. The
   server passes these to the phone and keeps them in memory only; they're never stored.
+- a flight's replay, only when the pilot uploads it from the Logbook or turns on ``[account]
+  upload_replays``: the track (thinned to every few seconds) and the radio transcript, stored with the
+  flight until either is deleted (``replay.rewatch``).
 Never audio, recordings or settings. On the same network the phone talks to the PC directly
 (``ui/companion.py``) and none of that goes through the server.
 
@@ -34,6 +37,7 @@ log = logging.getLogger(__name__)
 
 KEYRING_SERVICE = "LocalTC"
 BATCH = 100  # flights per upload
+LOCAL_ONLY = ("synced_at", "recording", "replay_uploaded_at")  # a logbook line's fields that stay on this computer
 LIVE_EVERY_S = 5.0  # the companion's status at most this often, except when something changes
 LIVE_HEARTBEAT_S = 15.0  # and at least this often while flying: the answer says whether a phone is watching
 
@@ -100,13 +104,16 @@ class TokenStore:
                 log.debug("No stored %s to delete", key)
 
 
-Transport = Callable[[str, str, dict | None, dict[str, str]], tuple[int, Any]]
+Transport = Callable[[str, str, dict | bytes | None, dict[str, str]], tuple[int, Any]]
 
 
-def _http(method: str, url: str, body: dict | None, headers: dict[str, str], timeout_s: float = 15.0) -> tuple[int, Any]:
-    data = json.dumps(body).encode() if body is not None else None
+def _http(method: str, url: str, body: dict | bytes | None, headers: dict[str, str], timeout_s: float = 15.0) -> tuple[int, Any]:
+    """JSON both ways; a ``bytes`` body (a replay) goes as it is, gzipped."""
+    raw_body = isinstance(body, bytes)
+    data = body if raw_body else json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(url, data=data, method=method, headers={
-        "Content-Type": "application/json", "User-Agent": f"LocalTC/{__version__}", **headers})
+        "Content-Type": "application/gzip" if raw_body else "application/json", "User-Agent": f"LocalTC/{__version__}",
+        **headers})
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
             raw = response.read()
@@ -152,7 +159,7 @@ class Account:
     def signed_in(self) -> bool:
         return self.token is not None
 
-    def _call(self, method: str, path: str, body: dict | None = None, *, auth: bool = True) -> Any:
+    def _call(self, method: str, path: str, body: dict | bytes | None = None, *, auth: bool = True) -> Any:
         headers = {"Authorization": f"Bearer {self.token}"} if auth and self.token else {}
         try:
             status, data = self.transport(method, f"{self.api_url}{path}", body, headers)
@@ -211,13 +218,24 @@ class Account:
         uploaded = 0
         for i in range(0, len(pending), BATCH):
             batch = pending[i:i + BATCH]
-            payload = [{k: v for k, v in f.to_dict().items() if k != "synced_at"} for f in batch]
+            payload = [{k: v for k, v in f.to_dict().items() if k not in LOCAL_ONLY} for f in batch]
             data = self._call("POST", "/v1/flights", {"flights": payload})
             accepted = list((data or {}).get("accepted", []))
             self.logbook.mark_synced(accepted)
             uploaded += len(accepted)
         self.last_sync = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         return SyncResult(uploaded=uploaded, remaining=len(pending) - uploaded)
+
+    def upload_replay(self, flight_id: str, replay: bytes) -> None:
+        """A flight's replay (its track and radio transcript, gzipped), for localtc.tech and the phone. Only when
+        the pilot asks: one flight's Upload, or the "upload replays" setting."""
+        if not self.signed_in:
+            raise AccountError("Sign in to your LocalTC account first (Account, in Quick Settings).", 401)
+        self._call("PUT", f"/v1/flights/{flight_id}/replay", replay)
+
+    def delete_replay(self, flight_id: str) -> None:
+        """The replay off the account; the flight's logbook line stays."""
+        self._call("DELETE", f"/v1/flights/{flight_id}/replay")
 
     def live(self, status: dict, *, force: bool = False, now: float | None = None) -> bool:
         """The companion app's view of the flight: sent when it changes (at most every few seconds, at once

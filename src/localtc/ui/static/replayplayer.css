@@ -1,0 +1,91 @@
+/* The replay player (replayplayer.js). One file, two copies: site/replayplayer.css and
+   src/localtc/ui/static/replayplayer.css; tests/test_site.py keeps them identical. The colours come from
+   whichever page it's on (the website's tokens, else the app's), with fallbacks. */
+
+.replay {
+  --rp-panel: var(--bg-3, var(--panel, #1f2329));
+  --rp-line: var(--line, rgba(255, 255, 255, .08));
+  --rp-text: var(--text, #e8ecf1);
+  --rp-dim: var(--text-3, var(--muted, #8a939d));
+  --rp-green: var(--green, #5fd068);
+  --rp-cyan: var(--cyan, #6cc9e8);
+  --rp-amber: var(--amber, #e7b24a);
+  --rp-red: var(--red, #f0736a);
+  --rp-mono: var(--mono, ui-monospace, Menlo, Consolas, monospace);
+  display: flex; flex-direction: column; gap: 10px; color: var(--rp-text); min-width: 0;
+}
+.replay .rp-mono { font-family: var(--rp-mono); }
+.replay .rp-sub { color: var(--rp-dim); font-size: 12px; font-weight: 400; }
+.rp-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rp-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 15px; }
+
+.rp-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 10px; height: min(62vh, 620px); min-height: 360px; }
+.rp-mapwrap { position: relative; min-width: 0; border-radius: 10px; overflow: hidden; background: #0c0f12; }
+.rp-map { position: absolute; inset: 0; }
+.rp-readout { position: absolute; left: 10px; bottom: 10px; z-index: 500; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline;
+  padding: 6px 10px; border-radius: 8px; background: rgba(9, 11, 13, .82); color: var(--rp-green); font-size: 13px; pointer-events: none; max-width: calc(100% - 20px); }
+.rp-readout i { font-style: normal; color: var(--rp-dim); font-size: 10px; margin-right: 4px; }
+.rp-readout .rp-phase { color: var(--rp-text); font-family: inherit; }
+
+.rp-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--rp-panel); border-radius: 10px; }
+.rp-list-h { padding: 8px 12px; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--rp-line); }
+.rp-list { position: relative; list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; }
+.rp-l { display: grid; grid-template-columns: 62px 1fr; gap: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; line-height: 1.35; border-left: 3px solid transparent; }
+.rp-l:hover { background: rgba(255, 255, 255, .04); }
+.rp-l .rp-at { color: var(--rp-dim); font-size: 11px; padding-top: 2px; }
+.rp-l:not(.past):not(.now) { opacity: .45; }
+.rp-l.now { background: rgba(95, 208, 104, .10); border-left-color: var(--rp-green); opacity: 1; }
+.rp-who { font-size: 11px; font-weight: 600; color: var(--rp-dim); display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.rp-l.atc .rp-who, .rp-l.atis .rp-who { color: var(--rp-cyan); }
+.rp-l.pilot .rp-who, .rp-l.copilot .rp-who { color: var(--rp-green); }
+.rp-text.unclear { font-style: italic; }
+.rp-rb.ok { color: var(--rp-green); }
+.rp-rb.bad { color: var(--rp-red); font-weight: 400; }
+.rp-l.phase, .rp-l.tuned { color: var(--rp-dim); font-size: 12px; }
+.rp-l.phase span { font-weight: 600; letter-spacing: .02em; }
+.rp-l.alert { color: var(--rp-red); }
+.rp-l details summary { cursor: pointer; color: var(--rp-dim); }
+
+.rp-bar { display: flex; flex-direction: column; gap: 6px; background: var(--rp-panel); border-radius: 10px; padding: 8px 12px 10px; }
+.rp-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rp-grow { flex: 1; }
+.rp-btn, .rp-speed { font: inherit; background: rgba(255, 255, 255, .06); color: var(--rp-text); border: 0; border-radius: 8px; cursor: pointer; }
+.rp-btn { width: 36px; height: 32px; font-size: 14px; }
+.rp-play { background: var(--rp-green); color: #0b1f0e; }
+.rp-btn:hover, .rp-speed:hover { filter: brightness(1.2); }
+.rp-time { font-size: 13px; margin-left: 6px; white-space: pre; }
+.replay .rp-check { font-size: 12px; color: var(--rp-dim); display: inline-flex; flex-direction: row; align-items: center; gap: 4px;
+  margin: 0 6px 0 0; white-space: nowrap; }
+.replay .rp-check input { display: inline-block; width: auto; margin: 0; }
+.rp-speeds { display: inline-flex; gap: 2px; }
+.rp-speed { padding: 5px 8px; font-size: 12px; }
+.rp-speed.on { background: var(--rp-cyan); color: #06222c; }
+.rp-scrub { position: relative; padding-top: 12px; }
+.rp-range { width: 100%; margin: 0; accent-color: var(--rp-green); cursor: pointer; }
+.rp-ticks { position: absolute; left: 8px; right: 8px; top: 0; height: 12px; pointer-events: none; }
+.rp-tick { position: absolute; bottom: 0; width: 1px; height: 6px; background: var(--rp-cyan); opacity: .7; }
+.rp-tick.pilot { background: var(--rp-green); height: 4px; }
+.rp-mark { position: absolute; top: 0; width: 7px; height: 7px; margin-left: -3px; border-radius: 50%; background: var(--rp-text); pointer-events: auto; cursor: help; }
+.rp-mark.alert { background: var(--rp-red); }
+.rp-mark.handoff { background: var(--rp-amber); }
+.rp-mark.takeoff, .rp-mark.landing { background: var(--rp-green); }
+
+.rp-plane { background: none; border: 0; }
+.rp-plane svg path { fill: var(--green, #5fd068); stroke: #000; stroke-width: 1; }
+.rp-track { stroke: #9aa4ae; stroke-opacity: .45; fill: none; }
+.rp-flown { stroke: var(--green, #5fd068); stroke-opacity: .95; fill: none; }
+.rp-route { stroke: var(--amber, #e7b24a); stroke-opacity: .55; fill: none; }
+.rp-apt { stroke: #fff; stroke-width: 1.5; fill: var(--cyan, #6cc9e8); fill-opacity: 1; }
+.rp-apt-label { background: rgba(9, 11, 13, .8); color: #e8ecf1; border: 0; box-shadow: none; font: 600 11px ui-monospace, Menlo, monospace; padding: 1px 4px; }
+.rp-apt-label::before { display: none; }
+.rp-mapbtns { display: flex; gap: 4px; }
+.rp-mapbtns button { font: 600 12px system-ui, sans-serif; padding: 6px 10px; border-radius: 8px; border: 0; background: #1f2329; color: #e8ecf1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .4); cursor: pointer; }
+.rp-mapbtns button.on { background: var(--green, #5fd068); color: #0b1f0e; }
+
+@media (max-width: 860px) {
+  .rp-body { grid-template-columns: 1fr; height: auto; min-height: 0; }
+  .rp-mapwrap { height: 46vh; min-height: 260px; }
+  .rp-side { height: 50vh; }
+  .rp-time { margin-left: 0; }
+}

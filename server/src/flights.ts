@@ -1,6 +1,7 @@
 import type { Auth } from "./auth";
 import type { Env } from "./env";
 import { HttpError, json, now, readJson } from "./http";
+import * as replays from "./replays";
 
 const BATCH = 100;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -75,14 +76,18 @@ export async function list(env: Env, url: URL, auth: Auth): Promise<Response> {
   const limitN = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "50") || 50, 1), 500);
   const before = url.searchParams.get("before") ?? "9999";
   const { results } = await env.DB.prepare(
-    `SELECT ${COLUMNS.join(", ")} FROM flights WHERE user_id = ?1 AND started_at < ?2 ORDER BY started_at DESC LIMIT ?3`,
+    `SELECT ${COLUMNS.join(", ")}, EXISTS (SELECT 1 FROM replays r WHERE r.user_id = flights.user_id AND r.flight_id = flights.id) AS has_replay
+     FROM flights WHERE user_id = ?1 AND started_at < ?2 ORDER BY started_at DESC LIMIT ?3`,
   ).bind(auth.user.id, before, limitN + 1).all<Flight>();
-  const page = results.slice(0, limitN).map((f) => ({ ...f, landed: !!f.landed }));
+  const page = results.slice(0, limitN).map((f) => ({ ...f, landed: !!f.landed, has_replay: !!f.has_replay }));
   return json({ flights: page, next: results.length > limitN ? results[limitN - 1].started_at : null });
 }
 
 export async function remove(env: Env, auth: Auth, id: string): Promise<Response> {
-  const res = await env.DB.prepare("DELETE FROM flights WHERE user_id = ?1 AND id = ?2").bind(auth.user.id, id).run();
+  const [res] = await env.DB.batch([
+    env.DB.prepare("DELETE FROM flights WHERE user_id = ?1 AND id = ?2").bind(auth.user.id, id),
+    env.DB.prepare("DELETE FROM replays WHERE user_id = ?1 AND flight_id = ?2").bind(auth.user.id, id),
+  ]);
   if (!res.meta.changes) throw new HttpError(404, "No such flight.");
   return json({ ok: true });
 }
@@ -126,6 +131,6 @@ export async function exportAll(env: Env, auth: Auth): Promise<Response> {
   const { results: sessions } = await env.DB.prepare("SELECT kind, device, created_at, last_used_at FROM sessions WHERE user_id = ?1")
     .bind(auth.user.id).all();
   const data = { exported_at: now(), account: { email: auth.user.email, created_at: auth.user.created_at, verified_at: auth.user.verified_at },
-    devices: sessions, flights: results.map((f) => ({ ...f, landed: !!f.landed })) };
+    devices: sessions, flights: results.map((f) => ({ ...f, landed: !!f.landed })), replays: await replays.all(env, auth) };
   return json(data, 200, { "Content-Disposition": 'attachment; filename="localtc-account.json"' });
 }

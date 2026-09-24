@@ -8,11 +8,13 @@ import asyncio
 import logging
 import platform
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from localtc.account import Account, AccountError
 from localtc.config import Config
-from localtc.logbook import Logbook
+from localtc.logbook import FlightRecord, Logbook
 from localtc.ui.server import HttpError
 
 log = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ class PilotRoutes:
         self.on_signed_out = on_signed_out
         self._outbox: list[tuple[str, Any]] = []
         self._relay_task: asyncio.Task | None = None
+        self._linked = False
         if hub is not None:
             hub.remote = self.relay
 
@@ -53,6 +56,9 @@ class PilotRoutes:
         return {
             (get, "logbook"): self.api_logbook,
             (post, "logbook/delete"): self.api_logbook_delete,
+            (get, "replay"): self.api_replay,
+            (post, "replay/upload"): self.api_replay_upload,
+            (post, "replay/remove"): self.api_replay_remove,
             (get, "account"): self.api_account,
             (post, "account/start"): self.api_start,
             (post, "account/finish"): self.api_finish,
@@ -64,10 +70,61 @@ class PilotRoutes:
     # --- logbook ------------------------------------------------------------------------------------------------
 
     async def api_logbook(self, args: dict) -> dict:
+        if not self._linked:  # lines from before the logbook kept its recordings: once a run
+            self._linked = True
+            await asyncio.to_thread(self.logbook.link_recordings, Path(self.cfg().recorder.dir).resolve())
         flights = await asyncio.to_thread(self.logbook.flights)
         from localtc.logbook import totals
 
-        return {"flights": [f.to_dict() for f in flights], "totals": totals(flights)}
+        return {"flights": [_row(f) for f in flights], "totals": totals(flights)}
+
+    # --- replays ------------------------------------------------------------------------------------------------
+
+    def _replay(self, flight_id: str) -> tuple[FlightRecord, bytes]:
+        from localtc.replay.rewatch import replay_for
+
+        record = self.logbook.get(flight_id)
+        if record is None:
+            raise HttpError(404, "No such flight")
+        if not _has_recording(record):
+            raise HttpError(404, "This flight's recording isn't on this computer, so there's nothing to replay.")
+        try:
+            return record, replay_for(record.recording, record)
+        except (OSError, ValueError) as exc:
+            raise HttpError(422, f"Couldn't read this flight's recording: {exc}") from None
+
+    async def api_replay(self, args: dict) -> dict:
+        from localtc.replay.rewatch import decode
+
+        _, data = await asyncio.to_thread(self._replay, str(args.get("id", "")))
+        return decode(data)
+
+    async def api_replay_upload(self, args: dict) -> dict:
+        flight_id = str(args.get("id", ""))
+        await self.upload_replay(flight_id, raise_errors=True)
+        return await self.api_logbook({})
+
+    async def api_replay_remove(self, args: dict) -> dict:
+        flight_id = str(args.get("id", ""))
+        await self._do(self.account.delete_replay, flight_id)
+        await asyncio.to_thread(self.logbook.mark_replay, flight_id, None)
+        return await self.api_logbook({})
+
+    async def upload_replay(self, flight_id: str, *, raise_errors: bool = False) -> bool:
+        """A flight's replay to the account. Its logbook line goes first: the server keeps replays of its
+        flights only."""
+        try:
+            record, data = await asyncio.to_thread(self._replay, flight_id)
+            if record.synced_at is None:
+                await self._do(self.account.sync)
+            await self._do(self.account.upload_replay, flight_id, data)
+        except HttpError as exc:
+            log.info("Couldn't upload the replay of %s: %s", flight_id, exc)
+            if raise_errors:
+                raise
+            return False
+        await asyncio.to_thread(self.logbook.mark_replay, flight_id, _now())
+        return True
 
     async def api_logbook_delete(self, args: dict) -> dict:
         """From this computer's logbook only. A synced copy is deleted on the website."""
@@ -81,7 +138,8 @@ class PilotRoutes:
         a, c = self.account, self.cfg().account  # reads the credential store; no network
         return {"signed_in": a.signed_in, "email": a.email, "api_url": c.api_url, "dashboard": c.dashboard_url,
                 "sync": c.sync, "companion": c.companion, "companion_lan": c.companion_lan,
-                "companion_remote_map": c.companion_remote_map, "last_sync": self.sync_state}
+                "companion_remote_map": c.companion_remote_map, "upload_replays": c.upload_replays,
+                "last_sync": self.sync_state}
 
     async def _do(self, fn: Callable, *args: Any) -> Any:
         try:
@@ -141,8 +199,14 @@ class PilotRoutes:
         self.publish("account", await self.api_account({}))
 
     async def after_flight(self) -> None:
-        if self.cfg().account.sync:
+        c = self.cfg().account
+        if c.sync:
             await self.sync()
+        if c.upload_replays and self.account.signed_in:
+            latest = await asyncio.to_thread(self.logbook.flights, 1)
+            if latest and _has_recording(latest[0]) and latest[0].replay_uploaded_at is None:
+                await self.upload_replay(latest[0].id)
+                self.publish("account", await self.api_account({}))
 
     async def live(self, status: dict, *, force: bool = False) -> None:
         """The companion app's view of the flight, when signed in and the companion is on."""
@@ -202,6 +266,22 @@ class PilotRoutes:
                 log.debug("Companion relay failed: %s", exc)
             if self.hub is not None:
                 self.hub.watching(self._account.watchers)
+
+
+def _has_recording(record: FlightRecord) -> bool:
+    return bool(record.recording) and Path(record.recording).is_dir()
+
+
+def _row(record: FlightRecord) -> dict:
+    """A logbook line for the page: whether it can be replayed here, not where the recording is."""
+    row = record.to_dict()
+    row["has_recording"] = _has_recording(record)
+    row.pop("recording", None)
+    return row
+
+
+def _now() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _email(args: dict) -> str:

@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="replayplayer.css">
 </head>
 <body>
 
@@ -111,12 +112,19 @@
         <div class="panel">
           <h3 class="flights-h">Flights</h3>
           <div class="table-wrap"><table class="flights">
-            <thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Aircraft</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Aircraft</th><th>Air</th><th>Block</th><th>Landing</th><th>Replay</th><th></th></tr></thead>
             <tbody id="flights"></tbody>
           </table></div>
           <button class="btn btn-ghost" id="more" type="button" hidden>Load more</button>
           <p class="hint" id="empty" hidden>No flights yet. Sign in to the account in the app (Quick Settings → Account), fly, and each flight appears here when it ends.</p>
         </div>
+      </section>
+
+      <section class="dash-page" id="replay" aria-labelledby="replay-h" hidden>
+        <div class="page-head"><h1 id="replay-h">Replay</h1>
+          <a class="btn btn-ghost btn-sm" href="#logbook" id="replay-back">&larr; Logbook</a></div>
+        <p class="hint" id="replay-msg">Space plays and pauses, J and K go to the previous and next call, the arrows skip 10 seconds.</p>
+        <div class="panel"><div id="replay-player"></div></div>
       </section>
 
       <section class="dash-page" id="support" aria-labelledby="support-h" hidden>
@@ -185,6 +193,7 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="flightsmap.js"></script>
+<script src="replayplayer.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

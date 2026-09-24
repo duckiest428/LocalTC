@@ -2,7 +2,7 @@
 
 import pytest
 
-from localtc.account import Account, AccountError, TokenStore
+from localtc.account import LOCAL_ONLY, Account, AccountError, TokenStore
 from localtc.logbook import FlightRecord, Logbook
 
 
@@ -17,6 +17,7 @@ class FakeServer:
 
     def __init__(self) -> None:
         self.flights: dict[str, dict] = {}
+        self.replays: dict[str, bytes] = {}
         self.tokens = {"good-token"}
         self.requests: list[tuple[str, str, dict | None, dict]] = []
 
@@ -34,7 +35,7 @@ class FakeServer:
             return 401, {"error": "Sign in again."}
         if path == "/v1/flights" and method == "POST":
             for f in body["flights"]:
-                assert set(f) == set(FlightRecord.__dataclass_fields__) - {"synced_at"}  # summaries, nothing else
+                assert set(f) == set(FlightRecord.__dataclass_fields__) - set(LOCAL_ONLY)  # summaries, nothing else
                 self.flights[f["id"]] = f
             return 200, {"accepted": [f["id"] for f in body["flights"]]}
         if path == "/v1/auth/logout":
@@ -47,6 +48,17 @@ class FakeServer:
             return 200, {}
         if path == "/v1/live":
             return 200, {"watchers": 0}
+        if path.startswith("/v1/flights/") and path.endswith("/replay"):
+            flight = path.split("/")[3]
+            if flight not in self.flights:
+                return 404, {"error": "Sync the flight's logbook line first."}
+            if method == "PUT":
+                assert isinstance(body, bytes)
+                self.replays[flight] = body
+                return 200, {"ok": True}
+            if method == "DELETE" and self.replays.pop(flight, None) is not None:
+                return 200, {"ok": True}
+            return 404, {"error": "No replay for this flight."}
         if path == "/v1/support":
             return 200, {"message": "Sent. Thanks!"}
         return 404, {"error": "no"}
@@ -154,3 +166,18 @@ def test_support_messages_need_the_account(setup):
     method, path, body, headers = server.requests[-1]
     assert (method, path) == ("POST", "/v1/support") and headers["Authorization"] == "Bearer good-token"
     assert "email" not in body  # the server answers the account's own address
+
+
+def test_a_replay_goes_up_only_when_asked_and_its_path_never_does(setup):
+    account, server, book = setup
+    book.add(record(1))
+    book.mark_replay("f1", None)
+    with pytest.raises(AccountError):
+        account.upload_replay("f1", b"\x1f\x8b")  # signed out: nothing goes anywhere
+    sign_in(account)
+    account.sync()
+    assert "recording" not in server.flights["f1"]  # where the recording is stays on this computer
+    account.upload_replay("f1", b"\x1f\x8bgz")
+    assert server.replays == {"f1": b"\x1f\x8bgz"}
+    account.delete_replay("f1")
+    assert server.replays == {}

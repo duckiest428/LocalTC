@@ -14,14 +14,16 @@ Durable Object per account for the live view. It lives at `https://api.localtc.t
 | `sessions` | a hash of each sign-in token, the kind of device and its name, last used | staying signed in; "sign out that device" |
 | `logins` | hashes of the emailed sign-in code and link, wrong-code count, 15-minute expiry | signing in by email |
 | `flights` | the app's logbook lines: airports, gates, runways, times, distance, max altitude, landing rate, readback and alert counts | the dashboard and stats |
+| `replays` | a flight's replay, only if the pilot uploads it: the track (a point every few seconds), the radio transcript as text, phases and alerts; gzipped, at most 1 MB ([`docs/replay-format.md`](../docs/replay-format.md)) | rewatching a flight on the dashboard and the phone |
 | `push_tokens` | APNs device tokens | companion notifications |
 | `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping code guessing and email floods |
 | `LiveRoom` (Durable Object) | stored: the flight's latest status (phase, frequencies, ATC's last line) and the PC's local-network address and key; **in memory only**, while a phone watches remotely: position, traffic, the radio log | the companion app |
 
-Never stored: positions or tracks, the radio log, audio, recordings, settings. Position, traffic and radio
+Never stored, apart from the replays pilots upload: positions or tracks, the radio log. Never stored at all:
+audio, recordings, settings. Position, traffic and radio
 text pass through `LiveRoom`'s memory to a phone watching away from the PC's network (the desktop sends them
 only while one is), and are gone when the room is evicted. Fields the server doesn't know are dropped
-(`src/flights.ts` `clean`, `src/live.ts` `cleanStatus`, `cleanFrame`, `cleanRadio`). The messages are in
+(`src/flights.ts` `clean`, `src/replays.ts` `cleanReplay`, `src/live.ts` `cleanStatus`, `cleanFrame`, `cleanRadio`). The messages are in
 [`docs/companion-protocol.md`](../docs/companion-protocol.md).
 
 **There are no passwords.** Signing in (and creating an account, the first time) emails a 6-digit code and a
@@ -45,7 +47,9 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `DELETE /v1/sessions/:id` | sign out a device |
 | `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
-| `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | |
+| `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | deleting a flight deletes its replay; the export includes the replays |
+| `PUT /v1/flights/:id/replay` (body: the replay, gzipped JSON) | the flight must be in the account; rebuilt field by field, 50 a day |
+| `GET /v1/flights/:id/replay`, `DELETE /v1/flights/:id/replay` | the replay as JSON; the list's `has_replay` says which flights have one |
 | `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message (the website's Flight Tracker opens it with its cookie, from `ALLOWED_ORIGINS` only) |
 | `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |
 | `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |

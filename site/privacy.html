@@ -28,7 +28,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 23 September 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 24 September 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -43,8 +43,8 @@
       analytics. The software processes your voice entirely on your own computer and sends it nowhere.
       Once a day it asks GitHub whether there's a new version, and you can turn that off. If you create
       an account, we store your email address and a summary of each flight you
-      sync, never your position, voice, transcripts or recordings, and you can export or delete all of
-      it yourself at any time.
+      sync, plus a flight's track and radio transcript only if you upload its replay. Never your voice or
+      recordings, and you can export or delete all of it yourself at any time.
     </p>
   </div>
 
@@ -172,12 +172,20 @@
       the text of your own calls). The server passes these straight to your phone (or browser) and keeps them in memory
       only. They're never written to the database or to disk, and they're gone when the flight ends or the
       server's memory is cleared. Turn it off in the app's Quick Settings → Account.</li>
+    <li><strong>Only for a flight whose replay you upload</strong> (from the Logbook in the app, one flight at
+      a time, or all of them with the "upload each flight's replay" setting, which is off until you turn it
+      on): the aircraft's track, a position every few seconds with its altitude, speed and heading, and
+      the radio transcript as text (ATC's transmissions, what the app heard you say, and whether each
+      readback was right), with the flight's phases and alerts. It's so you can rewatch the flight on the
+      dashboard and in the companion app. It's stored with the flight until you remove the replay (in the
+      app), delete the flight, or delete the account. Never audio, and never the recording itself.</li>
     <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
     <li><strong>Short-lived counters</strong> of sign-in attempts per IP address and email address, to stop
       code guessing and email flooding. They're deleted within a day.</li>
   </ul>
   <p>
-    We never store your position or track, the radio log, your voice, your recordings or your settings.
+    Apart from the replays you choose to upload, we never store your position or track or the radio log.
+    We never store your voice, your recordings or your settings.
     Your voice never leaves your PC. The server drops any field it doesn't expect.
   </p>
 
@@ -204,7 +212,8 @@
 
   <h3>How long</h3>
   <p>
-    Until you delete it. An account that's asked for but never signed in to is deleted after a day.
+    Until you delete it (a replay: until you remove it, or delete its flight). An account that's asked for
+    but never signed in to is deleted after a day.
     Sign-ins expire after 30 days on the website and a year in the apps; expired ones are deleted daily.
   </p>
 

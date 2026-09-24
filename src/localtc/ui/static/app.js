@@ -253,7 +253,8 @@ function showTab(name) {
   if (name === "settings") Settings.load();
   if (name === "map") MapView.show();
   if (name === "lookup") Lookup.show();
-  if (name === "logbook") Logbook.load().then(() => Logbook.map?.fit());
+  if (name === "logbook") Logbook.load().then(() => (Logbook.player ? Logbook.player.fit() : Logbook.map?.fit()));
+  else Logbook.player?.pause();
 }
 $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
 $("#btn-settings").onclick = () => showTab("settings");
@@ -394,6 +395,7 @@ function keyLabel(name) {
 
 const Logbook = {
   map: null,
+  player: null,
   async load() {
     const body = $("#logbook-body");
     try { this.render(await api("logbook")); } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
@@ -417,7 +419,12 @@ const Logbook = {
           <td class="mono">${esc(f.origin || "?")} → ${esc(f.destination || "?")}${f.landed ? "" : ' <span class="muted small">(no landing)</span>'}</td>
           <td class="mono">${hm(f.air_min)}</td><td class="mono">${hm(f.block_min)}</td>
           <td class="mono">${f.landing_vs_fpm == null ? "—" : `${f.landing_vs_fpm} fpm`}</td>
-          <td><span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
+          <td class="lb-actions">${f.has_recording ? `<button class="btn small" data-replay="${esc(f.id)}" title="Watch the flight again: the map and the radio, in step">&#9654; Replay</button>`
+              : '<span class="muted small" title="The recording of this flight is not on this computer (recording was off, or it was deleted)">no recording</span>'}
+            ${f.has_recording && S.account?.signed_in ? (f.replay_uploaded_at
+              ? `<button class="linkbtn up on" data-unshare="${esc(f.id)}" title="The replay is in your account (localtc.tech and the phone). Click to remove it from the account.">&#9729;&#9654;</button>`
+              : `<button class="linkbtn up" data-share="${esc(f.id)}" title="Upload the replay (the track and the radio transcript, no audio) so it plays on localtc.tech and your phone">Upload</button>`) : ""}
+            <span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
             <button class="linkbtn" data-del="${esc(f.id)}" title="Delete from this computer">&times;</button></td></tr>`).join("")}
       </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
       <p class="muted small pad">The logbook is kept on this computer (${t.flights} flight${t.flights === 1 ? "" : "s"}).
@@ -425,6 +432,18 @@ const Logbook = {
     $$("[data-del]").forEach((b) => (b.onclick = (e) => {
       e.stopPropagation();
       if (confirm("Delete this flight from the logbook on this computer?")) api("logbook/delete", { id: b.dataset.del }).then((v) => this.render(v)).catch(fail);
+    }));
+    $$("[data-replay]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); this.replay(b.dataset.replay); }));
+    $$("[data-share]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      b.disabled = true;
+      b.textContent = "Uploading ...";
+      api("replay/upload", { id: b.dataset.share }).then((v) => { this.render(v); toast("Replay uploaded: it plays on localtc.tech and your phone"); })
+        .catch((err) => { fail(err); b.disabled = false; b.textContent = "Upload"; });
+    }));
+    $$("[data-unshare]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      if (confirm("Remove this flight's replay from your account? It still plays here.")) api("replay/remove", { id: b.dataset.unshare }).then((v) => this.render(v)).catch(fail);
     }));
     if (!r.flights.length) return;
     // Every flight on a map; a click on a route marks its rows, a click on a row shows its route.
@@ -438,6 +457,36 @@ const Logbook = {
     }));
   },
 };
+
+// A flight to rewatch (replayplayer.js): built from its recording by the app the first time, then kept.
+Object.assign(Logbook, {
+  async replay(id) {
+    $("#logbook-body").hidden = true;
+    $("#replay-page").hidden = false;
+    $("#replay-note").textContent = "Loading the flight ...";
+    this.closePlayer();
+    try {
+      const r = await api(`replay?id=${encodeURIComponent(id)}`);
+      $("#replay-note").textContent = "Space plays and pauses, J and K go to the previous and next call, the arrows skip 10 seconds.";
+      this.player = new ReplayPlayer($("#replay-player"), r, { tiles: S.state.map_tiles !== false });
+      setTimeout(() => this.player?.fit(), 0);
+    } catch (e) {
+      $("#replay-note").textContent = "";
+      fail(e);
+      this.back();
+    }
+  },
+  closePlayer() {
+    if (this.player) { this.player.destroy(); this.player = null; }
+  },
+  back() {
+    this.closePlayer();
+    $("#replay-page").hidden = true;
+    $("#logbook-body").hidden = false;
+    this.map?.fit();
+  },
+});
+$("#replay-back").onclick = () => Logbook.back();
 
 /* ---------- Quick Settings ---------- */
 
@@ -775,6 +824,7 @@ const Settings = {
       <label class="check-row"><input type="checkbox" id="a-companion" ${a.companion ? "checked" : ""}> Show the flight in the companion app (phase, frequencies, ATC's last call)</label>
       <label class="check-row"><input type="checkbox" id="a-lan" ${a.companion_lan ? "checked" : ""} ${a.companion ? "" : "disabled"}> On the same Wi-Fi, the phone connects to this PC directly (map, traffic, radio log; nothing goes online)</label>
       <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)</label>
+      <label class="check-row"><input type="checkbox" id="a-replays" ${a.upload_replays ? "checked" : ""}> Also upload each flight's replay (its track and radio transcript, never audio), so it plays on localtc.tech and the phone. Off: only the ones you upload from the Logbook</label>
       <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
         <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
       <div class="row"><button class="btn small" id="a-logout">Sign out</button>
@@ -783,6 +833,7 @@ const Settings = {
     $("#a-companion").onchange = (e) => this.save("account", "companion", e.target.checked).then(() => { a.companion = e.target.checked; this.account(); });
     $("#a-lan").onchange = (e) => this.save("account", "companion_lan", e.target.checked).then(() => { a.companion_lan = e.target.checked; $("#restart-bar").hidden = false; });
     $("#a-remote").onchange = (e) => this.save("account", "companion_remote_map", e.target.checked).then(() => (a.companion_remote_map = e.target.checked));
+    $("#a-replays").onchange = (e) => this.save("account", "upload_replays", e.target.checked).then(() => (a.upload_replays = e.target.checked));
     $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
     $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
     $("#a-delete").onclick = () => {

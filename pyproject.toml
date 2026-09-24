@@ -65,7 +65,7 @@ forbidden_modules = [
     "localtc.app", "localtc.atc_core", "localtc.bus", "localtc.cli", "localtc.config", "localtc.copilot",
     "localtc.dsp", "localtc.llm", "localtc.recorder", "localtc.replay", "localtc.scenario", "localtc.sim_bridge",
     "localtc.stt", "localtc.tts", "localtc.ui", "localtc.flightplan", "localtc.models",
-    "localtc.account", "localtc.logbook", "localtc.update",
+    "localtc.account", "localtc.logbook", "localtc.update", "localtc.radiolog",
 ]
 
 [[tool.importlinter.contracts]]

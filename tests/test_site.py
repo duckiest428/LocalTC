@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 from localtc import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,10 +25,11 @@ def test_markdown_is_escaped_not_trusted():
     assert "<script>" not in body and 'href="javascript' not in body
 
 
-def test_the_flights_map_is_the_same_file_in_the_app_and_on_the_site():
-    site = (ROOT / "site" / "flightsmap.js").read_bytes()
-    app = (ROOT / "src" / "localtc" / "ui" / "static" / "flightsmap.js").read_bytes()
-    assert site == app, "copy site/flightsmap.js over src/localtc/ui/static/flightsmap.js (or the other way)"
+@pytest.mark.parametrize("name", ["flightsmap.js", "replayplayer.js", "replayplayer.css"])
+def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
+    site = (ROOT / "site" / name).read_bytes()
+    app = (ROOT / "src" / "localtc" / "ui" / "static" / name).read_bytes()
+    assert site == app, f"copy site/{name} over src/localtc/ui/static/{name} (or the other way)"
 
 
 PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html"]

@@ -31,7 +31,7 @@ from localtc.config import (
     save_settings,
     settings_path,
 )
-from localtc.console import ALERTS, PHASES, log_dir
+from localtc.console import PHASES, log_dir
 from localtc.flightplan import (
     FlightPlan,
     FlightPlanError,
@@ -41,24 +41,18 @@ from localtc.flightplan import (
     manual_plan,
     save_plan,
 )
+from localtc.radiolog import radio_line
 from localtc.sim_api import (
     AirportData,
     AtcAlert,
     AtcTransmission,
-    AtisBroadcast,
     BusEvent,
-    ConnectionStatus,
-    LlmExchange,
     OwnshipState,
     PhaseChanged,
     PttPressed,
     PttReleased,
     RadioTuned,
-    ReadbackEvaluated,
-    SessionNote,
-    SimLifecycle,
     TrafficSnapshot,
-    Transcript,
     encode_event,
 )
 from localtc.ui.server import EventStream, HttpError, sse
@@ -770,46 +764,6 @@ def own_view(ev: OwnshipState) -> dict:
             "hdg": round(ev.hdg_true), "hdg_mag": round(ev.hdg_mag), "gs": round(ev.gs_kt), "vs": round(ev.vs_fpm),
             "ground": ev.on_ground, "com1": ev.com1_mhz, "com2": ev.com2_mhz, "squawk": ev.squawk,
             "xpdr": str(ev.xpdr_mode), "tx": ev.com1_tx}
-
-
-def radio_line(ev: BusEvent) -> dict | None:
-    """One line of the ATC tab's radio log, or None for events it doesn't show."""
-    t = round(ev.t, 1)
-    if isinstance(ev, AtcTransmission):
-        return {"kind": "atc", "t": t, "station": ev.station, "mhz": ev.frequency_mhz, "text": ev.text}
-    if isinstance(ev, Transcript):
-        who = "copilot" if ev.source == "copilot" else "pilot"
-        if not ev.text:
-            return {"kind": "system", "t": t, "text": "Nothing heard: check the microphone if you spoke", "level": "warn"}
-        return {"kind": who, "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}
-    if isinstance(ev, ReadbackEvaluated):
-        if ev.status == "correct":
-            return {"kind": "readback", "t": t, "ok": True, "text": "readback ok"}
-        what = ", ".join([*ev.missing, *(f"{k} {v}" for k, v in ev.mismatched.items())])
-        return {"kind": "readback", "t": t, "ok": False, "text": f"readback {ev.status}" + (f": {what}" if what else "")}
-    if isinstance(ev, AtisBroadcast):
-        return {"kind": "atis", "t": t, "station": f"{ev.station} information {ev.letter}", "mhz": ev.frequency_mhz,
-                "text": ev.text}
-    if isinstance(ev, PhaseChanged):
-        return {"kind": "phase", "t": t, "text": PHASES.get(ev.phase, ev.phase)}
-    if isinstance(ev, RadioTuned):
-        return {"kind": "tuned", "t": t, "mhz": ev.frequency_mhz, "radio": ev.radio,
-                "text": ev.station or "no ATC on this frequency"}
-    if isinstance(ev, AtcAlert):
-        text = ALERTS.get(ev.kind, ev.kind.replace("_", " "))
-        if ev.detail and ev.kind in ("emergency", "copilot"):
-            text = f"{text}: {ev.detail}" if ev.kind == "emergency" else f"Copilot: {ev.detail}"
-        return {"kind": "alert", "t": t, "text": text, "level": "error" if ev.kind == "emergency" else "warn"}
-    if isinstance(ev, ConnectionStatus):
-        return {"kind": "system", "t": t, "text": ("Sim connected " if ev.connected else "Sim disconnected ") + ev.detail,
-                "level": "info" if ev.connected else "warn"}
-    if isinstance(ev, SimLifecycle) and ev.kind in ("paused", "unpaused"):
-        return {"kind": "phase", "t": t, "text": f"sim {ev.kind}"}
-    if isinstance(ev, SessionNote):
-        return {"kind": "note", "t": t, "text": ev.text}
-    if isinstance(ev, LlmExchange):
-        return None
-    return None
 
 
 def airport_summary(airport, engine=None) -> dict:

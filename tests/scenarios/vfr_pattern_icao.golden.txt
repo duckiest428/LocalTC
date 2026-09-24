@@ -5,7 +5,7 @@
 [    11.0] READBACK  ground.taxi_out_at correct
 [    62.0] PHASE     PARKED -> TAXI_OUT (started moving)
 [   324.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   324.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.
+[   324.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, goodbye.
 [   326.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
 [   326.0] READBACK  ground.handoff_tower correct
 [   332.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short runway 34L, ready for departure, remaining in the circuit.
@@ -35,11 +35,11 @@
 [   974.0] READBACK  tower.land correct
 [  1143.0] PHASE     APPROACH -> LANDING (short final runway 34L)
 [  1234.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, vacate when able, contact Paine Ground 121.8.
+[  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, vacate when able, contact Paine Ground 121.8, good day.
 [  1236.0] PILOT     120.2: Paine Ground one two one point eight, Cessna two lima tango.
 [  1236.0] READBACK  tower.exit_contact_ground correct
 [  1242.0] PILOT     121.8: Paine Ground, Cessna two lima tango, clear of runway 34L, taxi to parking.
 [  1245.0] ATC       Paine Ground 121.8: Cessna 2LT, taxi to the apron via A1, A, C.
 [  1247.0] PILOT     121.8: Taxi to the apron via alpha one, alpha, charlie, Cessna two lima tango.
 [  1247.0] READBACK  ground.taxi_in correct
-[  1602.0] PHASE     TAXI_IN -> PARKED (stopped with brake set)
+[  1602.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

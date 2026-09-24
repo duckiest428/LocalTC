@@ -1,7 +1,7 @@
 [[template]]
 id = "departure.radar_contact"
 controller = "departure"
-text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}."]
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.", "{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed on course."]
 readback = { required = ["altitude"] }
 pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
 

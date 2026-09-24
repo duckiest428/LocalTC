@@ -384,7 +384,10 @@ class LlmInterpreter:
     def interpret(self, text: str, pending: PendingReadback | None, context: InterpretContext) -> Interpretation:
         grammar = self.grammar.interpret(text, pending, context)
         reason = find_trigger(grammar, text, context.confidence)
-        if self.mode == "off" or (self.mode == "fallback" and reason is None):
+        # A readback the grammar finds correct is the script read back: nothing for the model to add, and every
+        # call to it costs the sim frames (it shares the machine) and up to a few seconds of waiting.
+        scripted = pending is not None and grammar.kind == "readback" and grammar.status == "correct"
+        if self.mode == "off" or scripted or (self.mode == "fallback" and reason is None):
             return self._grammar_only(grammar, text, pending, context, reason)
         answer, exchanges = self._ask(text, pending, context, reason)
         grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback

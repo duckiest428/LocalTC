@@ -54,6 +54,7 @@ def test_assist_mode_reads_back_and_changes_frequency_but_makes_no_calls():
         "Cleared to Boeing Field as filed, climb and maintain five thousand, departure one two four point six seven "
         "five, squawk three two six zero, Cessna two lima tango.",
         "Paine Ground, Cessna two lima tango, ready to taxi",
+        "Paine Ground one two one point eight, Cessna two lima tango.",  # delivery's "contact ground when ready"
         "Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.",
         "Paine Tower one two zero point two, Cessna two lima tango.",  # the handoff at the hold short line
     ]

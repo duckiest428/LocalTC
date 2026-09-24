@@ -5,7 +5,7 @@
 [    11.0] READBACK  ground.taxi_out_at correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.
+[   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
 [   356.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
 [   356.0] READBACK  ground.handoff_tower correct
 [   362.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short runway 34L, ready for departure, southbound.
@@ -24,30 +24,30 @@
 [   565.0] ATC       Seattle Departure 124.675: Cessna 2LT, cleared into the Class Bravo airspace, maintain VFR at or below 4,500.
 [   567.0] PILOT     124.675: Cleared into the Bravo, VFR at or below four thousand five hundred, Cessna two lima tango.
 [   567.0] READBACK  vfr.cleared_class_b correct
-[  1070.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1.
+[  1070.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1, good day.
 [  1072.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
 [  1072.0] READBACK  departure.handoff_center correct
 [  1078.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 4,500.
-[  1080.0] ATC       Seattle Center 125.1: N172LT, roger.
+[  1080.0] ATC       Seattle Center 125.1: N172LT, copy that.
 [  1362.0] PHASE     DEPARTURE -> ARRIVAL (sustained descent)
+[  1769.0] ATC       Seattle Center 125.1: Cessna 2LT, radar service terminated, squawk VFR, contact Boeing Tower 120.6, see ya.
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
-[  1770.0] ATC       Seattle Center 125.1: Cessna 2LT, radar service terminated, squawk VFR, contact Boeing Tower 120.6.
-[  1772.0] PILOT     125.1: Squawk VFR, Boeing Tower one two zero point six, Cessna two lima tango.
-[  1772.0] READBACK  vfr.service_terminated correct
-[  1778.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, 10 miles north, inbound for landing with information bravo.
+[  1771.0] PILOT     125.1: Squawk VFR, Boeing Tower one two zero point six, Cessna two lima tango.
+[  1771.0] READBACK  vfr.service_terminated correct
+[  1777.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, 10 miles north, inbound for landing with information bravo.
 [  1780.0] ATC       Boeing Tower 120.6: Cessna 2LT, Boeing Tower, enter left downwind runway 14R, report midfield, information Bravo is current, altimeter 29.92.
 [  1782.0] PILOT     120.6: Enter left downwind runway one four right, Cessna two lima tango.
 [  1782.0] READBACK  vfr.enter_downwind correct
-[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, wind 130 at 8, runway 14R, cleared to land.
+[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, wind 130 at 8, cleared to land.
 [  2070.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
 [  2070.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground 121.9.
+[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground 121.9, so long.
 [  2343.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
 [  2343.0] READBACK  tower.exit_contact_ground correct
 [  2349.0] PILOT     121.9: Boeing Ground, Cessna two lima tango, clear of runway 14R, taxi to parking.
 [  2351.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to parking via A, C.
 [  2353.0] PILOT     121.9: Taxi to parking via alpha, charlie, Cessna two lima tango.
 [  2353.0] READBACK  ground.taxi_in correct
-[  2751.0] PHASE     TAXI_IN -> PARKED (stopped with brake set)
+[  2751.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

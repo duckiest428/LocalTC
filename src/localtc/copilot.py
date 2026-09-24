@@ -236,7 +236,9 @@ class Copilot:
             # Report the runway being flown to, not the one expected earlier. Being on a runway's final at
             # all means lined up with it, and calling the other one leaves tower clearing a runway the
             # aircraft is pointing away from.
-            runway = (final.end.ident if final is not None else "") or st.assignments.arrival_runway
+            # (A parallel 800 ft over, still well out, is the one cleared for: the engine sorts that out.)
+            landing = self.engine.landing_runway(self.engine.state.aircraft) if self.engine.state.aircraft else None
+            runway = landing or (final.end.ident if final is not None else "") or st.assignments.arrival_runway
             miles = f"{max(1, round(final.distance_nm))} mile final" if final else "inbound"
             return f"{f.station}, {cs}, {miles} runway {runway}".rstrip()
         if f.controller == "ground":

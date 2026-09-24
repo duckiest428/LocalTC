@@ -44,3 +44,12 @@ text = [
 readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "procedure"] }
 pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
+
+# After the clearance is read back, delivery sends the flight on to ground (when ground has its own frequency).
+[[template]]
+id = "clearance.readback_correct_ground"
+controller = "clearance"
+text = ["{callsign}, readback correct, contact {station} {frequency} when ready.",
+        "{callsign}, readback correct. When ready for push and start, contact {station} on {frequency}."]
+readback = { optional = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."

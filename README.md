@@ -198,7 +198,7 @@ With llama3.2:3b the edge cases pass 34/34, at about 1 s per call (median; the p
 - An intent that makes no sense in the current phase (ready to taxi while cruising) is rejected.
 - On a timeout, a missing model or two bad answers, the grammar's result is used. There are two exceptions. A question with a clear topic word ("say the winds") is still answered. A call the model kept calling a request, where the pilot said "request", is declined as unsupported.
 
-**When it's asked** (`[llm] understanding`): `primary` asks it about every call. `fallback` asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). Either way the trigger is recorded.
+**When it's asked** (`[llm] understanding`): `fallback` (the default) asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). `primary` asks it about every call except a readback the grammar already finds correct. The model shares the PC with the sim, so every call costs frames; `fallback` keeps that to the calls that need it. Either way the trigger is recorded.
 
 **Phrasing** (`[llm] phrasing`): routine calls stay exactly as the templates say. The model only words replies with no template: answers the sim can't give (altimeter, wind, runway, squawk and assigned altitude come straight from sim data) and declined requests ("unable direct at this time, continue as filed"). The reply may not contain an instruction or approval ("cleared", "climb", "contact", "approved", ...) or any number that isn't in the facts it was given. Otherwise ATC says "unable".
 
@@ -340,6 +340,10 @@ Every threshold can be overridden in `[atc.phase]`.
 7. Approach clears the approach and hands off to tower.
 8. Tower clears to land, then hands off to ground after the runway exit.
 9. Ground gives the taxi-to-parking route.
+
+**Radar vectors** (`atc_core/vectors.py`): approach flies an arrival round a pattern worked out in the runway's frame: a join to a downwind on the arrival's side, a base turn about 17 nm out (10 for slow aircraft), and a 30 degree intercept that carries the approach clearance ("maintain 4,000 until established on the localizer"). Altitudes step down with the miles still to fly; an arrival too high for the distance is sent out on a downwind first. The pattern only moves forward, so drifting over a boundary never turns an aircraft back.
+
+**Controllers' habits** (`atc_core/personality.py`): each station, by its name, greets or not on its first real call ("good afternoon", by the sun where you are) and signs off handoffs its own way.
 
 **Automatic alerts:** moving without a taxi clearance, runway incursion, takeoff or landing without a clearance, and emergencies.
 

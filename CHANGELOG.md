@@ -39,8 +39,32 @@ a new minor version adds features, a patch fixes them.
 - A **Buy me a coffee** button in the app. One click and it's gone for good.
 
 ### Changed
+- **Approach vectors you like a real controller**: onto a downwind on your side, a base turn, then a 30 degree
+  intercept that carries the clearance ("maintain 4,000 until established on the localizer, cleared ILS runway
+  16L"), with step-down altitudes along the way and an extended downwind when you're too high. Then over to
+  tower once you're established.
+- **Centres hand you on across the country** (Denver, Salt Lake, Seattle), following the real airspace, even
+  with the local altimeter left in up high. Centre descends you via your arrival (or to about 10,000 ft above
+  the field), "request descent" near the top of descent gets the descent, and checking in on the way down gets
+  "continue descent".
+- **Controllers with a bit of personality**: some say "good afternoon" on their first call, handoffs end with
+  "good day", "have a good one" or nothing, and common calls vary their wording.
+- **Clearance delivery sends you to ground** after the readback: "readback correct, contact Denver Ground
+  120.15 when ready".
+- **The language model reads only what the grammar can't** (the new default): a correct readback never waits
+  for it, and the sim keeps its frames.
+- **Taxi readbacks are forgiving** on long routes: a letter or a taxiway lost to speech-to-text is fine, a wrong
+  taxiway still isn't.
 - The account server passes the flight rules and the flight's airports to the phone, handles support
   messages, and lets the Dashboard's tracker connect (redeploy the Worker, and set its SUPPORT_EMAIL secret).
+
+### Fixed
+- An airport's ATIS works when another airport's controller shares its frequency (Denver's ATIS on 125.6).
+- "Request gate" and "request parking" are understood; stopping on a taxiway after landing is no longer
+  "parked", and moving on isn't a taxi out.
+- Ground warns about an aircraft stopped on the taxiway ahead of you.
+- Aircraft that never report engine combustion (the CS300) are seen running by their N1 or RPM.
+- Tower keeps the parallel runway approach cleared you for; "Seattle-Tacoma" is said properly.
 
 ## [0.2.0] - 2026-09-22
 

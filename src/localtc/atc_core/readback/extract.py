@@ -307,21 +307,35 @@ ROUTE_FILLER = ("and", "then", "hold", "holding", "short", "point", "at", "to")
 
 
 def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ...]]:
-    found = [names for start in _find_phrase(tokens, ("via",)) if (names := _route_at(tokens, start))]
+    names = {str(n).lower() for n in expected} if expected else set()
+    found = [route for start in _find_phrase(tokens, ("via",)) if (route := _route_at(tokens, start, names)[0])]
     if not found and expected is not None:
-        # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against,
-        # the longest run of taxiway names is the route, skipping the letter of a runway ("25 L").
+        # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against, every
+        # taxiway name said is the route, in order, skipping the letter of a runway ("25 L") and a callsign
+        # ("Delta 2543"); words in between are speech-to-text slips ("Foxtrop") that the comparison forgives.
         skip = _runway_letters(tokens)
-        runs = [_route_at(tokens, i) for i, tok in enumerate(tokens)
-                if i not in skip and (tok.kind == "letter" or (tok.kind == "word" and len(tok.text) == 1))
-                and (i == 0 or i - 1 in skip or not _is_route_token(tokens[i - 1]))]
-        if (longest := max(runs, key=len, default=())) and len(longest) >= 2:
-            found.append(longest)
+        route: list[str] = []
+        i = 0
+        while i < len(tokens):
+            if i not in skip and _is_route_token(tokens[i], names) and not _callsign_letter(tokens, i):
+                taken, end = _route_at(tokens, i, names, filler=False)
+                if taken:
+                    route.extend(taken)
+                    i = end
+                    continue
+            i += 1
+        if len(route) >= 2:
+            found.append(tuple(route))
     return found
 
 
-def _is_route_token(token: Token) -> bool:
-    return token.kind == "letter" or (token.kind == "word" and len(token.text) == 1)
+def _is_route_token(token: Token, names: frozenset[str] | set[str] = frozenset()) -> bool:
+    return token.kind == "letter" or (token.kind == "word" and (len(token.text) == 1 or token.text in names))
+
+
+def _callsign_letter(tokens: list[Token], i: int) -> bool:
+    """ "Delta 2543", "November 172": a letter then a long number is a callsign, not a taxiway."""
+    return i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) >= 3
 
 
 def _runway_letters(tokens: list[Token]) -> set[int]:
@@ -334,25 +348,28 @@ def _runway_letters(tokens: list[Token]) -> set[int]:
     return skip
 
 
-def _route_at(tokens: list[Token], start: int) -> tuple[str, ...]:
-    """Taxiway names from ``start``: letters, each maybe with a number ("B6"), joined by filler words."""
-    names: list[str] = []
+def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] = frozenset(), *,
+              filler: bool = True) -> tuple[tuple[str, ...], int]:
+    """Taxiway names from ``start``: letters, each maybe with a number ("B6"), joined by filler words; and the
+    index just past them."""
+    route: list[str] = []
     i = start
     while i < len(tokens):
         token = tokens[i]
-        letter = token.text if _is_route_token(token) else None
-        if letter is None:
-            if token.kind == "word" and token.text in ROUTE_FILLER and names:
+        if not _is_route_token(token, names) or _callsign_letter(tokens, i):
+            if filler and token.kind == "word" and token.text in ROUTE_FILLER and route:
                 i += 1
                 continue
             break
-        name = letter.upper()
+        name = token.text.upper()
         if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
             name += tokens[i + 1].text
             i += 1
-        names.append(name)
+        route.append(name)
         i += 1
-    return tuple(names)
+        if not filler and i < len(tokens) and not _is_route_token(tokens[i], names):
+            break
+    return tuple(route), i
 
 
 PROCEDURE_END = ("departure", "arrival", "transition")
@@ -393,14 +410,39 @@ def taxi_route_matches(heard: Any, expected: Any) -> bool:
     want = [str(n).upper() for n in expected]
     if said == want:
         return True
-    i = 0
-    for name in want:
-        size = next((k for k in range(1, len(name) + 1)  # one entry, or several letters spelling this name
-                     if i + k <= len(said) and "".join(said[i : i + k]) == name), None)
-        if size is None:
-            return False
-        i += size
-    return i == len(said)
+    # Leniency for speech-to-text on a long route: "Alpha November" heard as "off of November", a taxiway
+    # swallowed. A letter dropped from a name costs half, a name missing one, a name that isn't in the route
+    # one and a half (a wrong taxiway is never forgiven on its own). Short routes must be right.
+    allowed = 0.5 if len(want) < 4 else len(want) // 3
+    return route_cost(said, want) <= allowed
+
+
+def route_cost(said: list[str], want: list[str]) -> float:
+    """How far a heard route is from the assigned one (see ``taxi_route_matches``); 0 when it spells it."""
+    inf = float("inf")
+    cost = [[inf] * (len(want) + 1) for _ in range(len(said) + 1)]
+    cost[0][0] = 0.0
+    for i in range(len(said) + 1):
+        for j in range(len(want) + 1):
+            here = cost[i][j]
+            if here == inf:
+                continue
+            if j < len(want):
+                cost[i][j + 1] = min(cost[i][j + 1], here + 1.0)  # a name not read back
+            if i < len(said):
+                cost[i + 1][j] = min(cost[i + 1][j], here + 1.5)  # a name that isn't in the route
+            if j < len(want):
+                name = want[j]
+                shorter = {name[:m] + name[m + 1:] for m in range(len(name))} if len(name) > 1 else set()
+                for k in range(1, len(name) + 1):  # one entry, or several letters spelling this name
+                    if i + k > len(said):
+                        break
+                    spelled = "".join(said[i : i + k])
+                    if spelled == name:
+                        cost[i + k][j + 1] = min(cost[i + k][j + 1], here)
+                    elif spelled in shorter:
+                        cost[i + k][j + 1] = min(cost[i + k][j + 1], here + 0.5)
+    return cost[len(said)][len(want)]
 
 
 APPROACH_KINDS = {"ils": "ILS", "rnav": "RNAV", "gps": "RNAV", "visual": "VISUAL", "localizer": "LOC", "loc": "LOC"}

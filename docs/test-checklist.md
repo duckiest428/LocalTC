@@ -49,6 +49,18 @@ Fly a SimBrief flight you know, for example KSAN → KPHX, with the copilot **of
 Things to watch for: calls ATC never answers, "say again" when you said it right, readbacks marked wrong
 when they were right, handoffs too early or late, ATC talking when it shouldn't.
 
+### Re-check from the Denver to Seattle flight (fixed since)
+
+- [ ] Centre hands you on as you cross into the next one (Denver → Salt Lake → Seattle), with the altimeter
+      on STD or not, and near the top of descent gives "descend via" your arrival (or "request descent" gets it).
+- [ ] Approach vectors: a downwind, a base turn, then "turn ... heading ..., maintain X until established on the
+      localizer, cleared ILS ..." and "contact tower" once you're on the localizer. Fly the headings.
+- [ ] Parked at the gate, tuning the ATIS frequency plays that airport's ATIS.
+- [ ] After the clearance readback: "readback correct, contact Ground ... when ready".
+- [ ] A long taxi route read back naturally is accepted, even with a slip; a wrong taxiway still isn't.
+- [ ] After landing: "request gate" (or "request parking") gets the gate and the route.
+- [ ] The frame rate no longer drops when you talk (the language model only reads what the grammar can't).
+
 ## 3. VFR (short hops are fine)
 
 - [ ] New Flight → Manual, set the rules to **VFR**. The Live Map switches itself to the **VFR** map (terrain plus airspace circles).

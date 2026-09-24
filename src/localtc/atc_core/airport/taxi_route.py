@@ -1,6 +1,7 @@
 """Taxi routing over the airport's taxi path graph."""
 
 import heapq
+import itertools
 import math
 from dataclasses import dataclass
 
@@ -95,6 +96,17 @@ class TaxiGraph:
                     heapq.heappush(queue, (nd, counter, edge.to))
         return None
 
+    def _along(self, path: list) -> list[tuple[float, float]]:
+        """Points every ~15 m along the route's inner stretch (not the stand it starts from nor the hold line
+        it ends at): a straight segment can cross a runway without a node on it."""
+        nodes = [node for node, _ in path]
+        points: list[tuple[float, float]] = []
+        for a, b in itertools.pairwise(nodes):
+            (ax, ay), (bx, by) = self.positions[a], self.positions[b]
+            steps = max(1, int(((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5 // 15))
+            points += [(ax + (bx - ax) * k / steps, ay + (by - ay) * k / steps) for k in range(steps + 1)]
+        return points[1:-1]
+
     def route(self, start: Node, goals: set[Node], *, hold_short: str | None = None) -> TaxiRoute | None:
         path = self.shortest_path(start, goals)
         if path is None:
@@ -109,6 +121,10 @@ class TaxiGraph:
         crossed += [
             next((r for r in self.geometry.runways if edge.runway in r.runway.idents), None) for edge in edges if edge.runway
         ]
+        # A taxiway laid over a runway without the sim marking it as one (Denver's WB over the end of 16L/34R)
+        # is crossed all the same: any point of the route on a runway's surface counts.
+        crossed += [r for r in self.geometry.runways if r is not target
+                    and any(r.contains(p) for p in self._along(path))]
         crossings: list[str] = []
         for runway in crossed:
             if runway is not None and runway is not target and runway.name not in crossings:

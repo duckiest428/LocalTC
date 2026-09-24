@@ -139,7 +139,7 @@ class LlmConfig(_Section):
     enabled: bool = True
     base_url: str = "http://127.0.0.1:11434"
     model: str = "llama3.2:3b"
-    understanding: Literal["primary", "fallback", "off"] = "primary"  # primary: every transmission; fallback: only
+    understanding: Literal["primary", "fallback", "off"] = "fallback"  # primary: every transmission; fallback: only
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
     timeout_s: float = 4.0  # per model call
     budget_s: float = 6.0  # per transmission, including one retry

@@ -78,6 +78,8 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     rollout_s: float = 3.0
     unexpected_touchdown_s: float = 3.0
     parked_s: float = 20.0
+    parked_away_s: float = 300.0  # brake set away from a stand after landing this long: parked there
+    stand_margin_m: float = 25.0  # this close to a parking spot's circle is at it
     teleport_kt: float = 1500.0  # implied ground speed between ticks that means a slew/teleport
 
 
@@ -97,6 +99,8 @@ class PhaseDetector:
         self._min_agl_in_phase = float("inf")
         self._track_from: tuple[float, float] | None = None
         self._track_deg: float | None = None
+        self._arrived = False  # landed and not yet pushed back again: moving off a stop is still the taxi in
+        self._engine_seen = False  # the sim has reported an engine running at least once (some aircraft never do)
 
     def reset(self) -> None:
         """Forget the phase; the next tick is classified from scratch (flight loaded, teleport)."""
@@ -121,6 +125,7 @@ class PhaseDetector:
             return self._set(own, self._classify(own, ctx), "initial state")
 
         self._min_agl_in_phase = min(self._min_agl_in_phase, own.alt_agl_ft)
+        self._engine_seen = self._engine_seen or own.engine_running
         self._update_track(own)
         result = self._transition(own, ctx)
         if result is None:
@@ -140,6 +145,10 @@ class PhaseDetector:
     def _set(self, own: OwnshipState, phase: FlightPhase, reason: str) -> PhaseChanged | None:
         previous = self.phase
         self.phase, self.since_t = phase, own.t
+        if phase is FlightPhase.TAXI_IN:
+            self._arrived = True
+        elif phase in (FlightPhase.PUSHBACK, FlightPhase.TAKEOFF) or (self._engine_seen and not own.engine_running):
+            self._arrived = False
         self._timers.clear()
         self._min_agl_in_phase = own.alt_agl_ft
         if previous == phase:
@@ -189,6 +198,14 @@ class PhaseDetector:
             return False
         return angle_diff(self._track_deg, own.hdg_true) >= th.pushback_astern_deg
 
+    def _at_stand(self, own: OwnshipState, ctx: PositionContext) -> bool:
+        """At a gate or a parking spot of the airport the aircraft is at (no layout known: anywhere counts)."""
+        geo = ctx.airport
+        if geo is None or not geo.airport.parking:
+            return True
+        return any(haversine_nm(own.lat, own.lon, p.lat, p.lon) * METERS_PER_NM <= max(p.radius_m, 15.0) + self.th.stand_margin_m
+                   for p in geo.airport.parking)
+
     def _takeoff_roll(self, own: OwnshipState, ctx: PositionContext) -> bool:
         return self._held(
             "takeoff", own.on_ground and ctx.aligned_on_runway and own.gs_kt >= self.th.takeoff_gs_kt, own.t, self.th.takeoff_s
@@ -223,6 +240,8 @@ class PhaseDetector:
             if self._held("pushback", self._moving_astern(own), t, th.pushback_s):
                 return FlightPhase.PUSHBACK, "being pushed back"
             if self._held("taxi", own.on_ground and own.gs_kt > th.taxi_start_kt, t, th.taxi_start_s):
+                if self._arrived:  # stopped on the way in (waiting for a gate), now moving on
+                    return FlightPhase.TAXI_IN, "taxiing in again"
                 return FlightPhase.TAXI_OUT, "started moving"
 
         elif phase is FlightPhase.PUSHBACK:
@@ -238,7 +257,7 @@ class PhaseDetector:
             holding = own.on_ground and own.gs_kt < th.stopped_kt and (self._at_hold_short(ctx) or ctx.aligned_on_runway)
             if self._held("hold", holding, t, th.hold_stop_s):
                 return FlightPhase.RUNWAY_HOLD, "lined up" if ctx.on_runway else "holding short"
-            parked = own.gs_kt < th.stopped_kt and (own.parking_brake or not own.engine_running)
+            parked = own.gs_kt < th.stopped_kt and (own.parking_brake or (self._engine_seen and not own.engine_running))
             if self._held("parked", parked and not ctx.on_runway, t, th.parked_s):
                 return FlightPhase.PARKED, "stopped with brake set"
 
@@ -322,8 +341,14 @@ class PhaseDetector:
         elif phase is FlightPhase.TAXI_IN:
             if self._takeoff_roll(own, ctx):
                 return FlightPhase.TAKEOFF, "takeoff roll"
-            parked = own.gs_kt < th.stopped_kt and (own.parking_brake or not own.engine_running)
-            if self._held("parked", parked, t, th.parked_s):
+            # Parked is at a stand, or engines off. Brake set on a taxiway (waiting for a gate, or for traffic)
+            # is still the taxi in, unless it goes on for a long time.
+            stopped = own.gs_kt < th.stopped_kt
+            engines_off = self._engine_seen and not own.engine_running
+            if self._held("parked", stopped and (engines_off or (own.parking_brake and self._at_stand(own, ctx))),
+                          t, th.parked_s):
+                return FlightPhase.PARKED, "engines off" if engines_off else "stopped at the stand"
+            if self._held("parked_long", stopped and own.parking_brake, t, th.parked_away_s):
                 return FlightPhase.PARKED, "stopped with brake set"
 
         return None

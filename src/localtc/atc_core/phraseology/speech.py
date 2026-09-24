@@ -250,7 +250,12 @@ def airport_name(name: str, icao: str) -> str:
     name = name.split("/")[0].strip()
     if not name:
         return digits(icao)
-    return " ".join(ABBREVIATIONS.get(w.upper(), w.capitalize()) for w in name.split())
+    return " ".join(ABBREVIATIONS.get(w.upper(), _capitalized(w)) for w in name.split())
+
+
+def _capitalized(word: str) -> str:
+    """ "SEATTLE-TACOMA" -> "Seattle-Tacoma"."""
+    return "-".join(part.capitalize() for part in word.split("-"))
 
 
 def station_name(name: str) -> str:

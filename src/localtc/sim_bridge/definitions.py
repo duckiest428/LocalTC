@@ -65,6 +65,9 @@ OWNSHIP: tuple[Datum, ...] = (
     Datum("precip", "AMBIENT PRECIP STATE", "mask", I32),
     Datum("in_cloud", "AMBIENT IN CLOUD", "Bool", I32),
     Datum("zulu_s", "ZULU TIME", "seconds"),
+    # Not every aircraft reports combustion (MSFS 2024's CS300 never does): N1 or RPM says the engine is turning.
+    Datum("eng_n1", "TURB ENG N1:1", "percent"),
+    Datum("eng_rpm", "GENERAL ENG RPM:1", "rpm"),
 )
 
 # Requested with PERIOD_SECOND + FLAG_CHANGED, so it only arrives when something changes.
@@ -153,7 +156,7 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         gear_down=bool(raw["gear_down"]),
         flaps_index=int(raw["flaps_index"]),
         parking_brake=bool(raw["parking_brake"]),
-        engine_running=bool(raw["engine_running"]),
+        engine_running=bool(raw["engine_running"]) or raw.get("eng_n1", 0.0) > 15.0 or raw.get("eng_rpm", 0.0) > 300.0,
         on_runway=bool(raw["on_runway"]),
         wind_dir_true=round(raw["wind_dir_true"], 1),
         wind_kt=round(raw["wind_kt"], 1),

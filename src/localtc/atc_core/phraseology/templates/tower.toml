@@ -39,7 +39,7 @@ pilot_readback = "Cleared to land runway {runway}, {callsign_short}."
 [[template]]
 id = "tower.continue"
 controller = "tower"
-text = ["{callsign}, continue, runway {runway}."]
+text = ["{callsign}, continue, runway {runway}.", "{callsign}, continue approach runway {runway}.", "{callsign}, runway {runway}, continue, I'll call your clearance."]
 
 [[template]]
 id = "tower.exit_contact_ground"

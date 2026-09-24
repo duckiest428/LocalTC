@@ -570,8 +570,8 @@ const Settings = {
           <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Not at all: unload after every call", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
           <span class="hint">Loaded, it answers at once but holds a few GB of memory; unloaded, the first call of a flight waits for it.</span></label></div>
         <div class="row"><label>Understanding
-          <select id="s-understand"><option value="primary" ${st.llm.understanding === "primary" ? "selected" : ""}>The model reads every call (most natural)</option>
-          <option value="fallback" ${st.llm.understanding === "fallback" ? "selected" : ""}>The grammar first, the model only when stuck (faster)</option></select></label></div>
+          <select id="s-understand"><option value="fallback" ${st.llm.understanding === "fallback" ? "selected" : ""}>The grammar first, the model only when stuck (recommended: light on the sim)</option>
+          <option value="primary" ${st.llm.understanding === "primary" ? "selected" : ""}>The model reads every call (slower, costs frames)</option></select></label></div>
       </div>
 
       <div class="card">

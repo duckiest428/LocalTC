@@ -9,20 +9,44 @@ from pathlib import Path
 
 import msgspec
 import pytest
-
 from helpers.llm import TIMEOUT, ScriptedBackend
+
 from localtc.atc_core.engine import AtcEngine, EngineConfig
-from localtc.atc_core.llm import LlmInterpreter, LlmPhraser, RecordedBackend, build_request, is_question, trigger
+from localtc.atc_core.llm import (
+    LlmInterpreter,
+    LlmPhraser,
+    RecordedBackend,
+    build_request,
+    is_question,
+    trigger,
+)
 from localtc.atc_core.llm.phrase import PhraseError, check_reply
-from localtc.atc_core.llm.understand import AnswerError, load_examples, parse_answer, parse_value
+from localtc.atc_core.llm.understand import (
+    AnswerError,
+    load_examples,
+    parse_answer,
+    parse_value,
+)
 from localtc.atc_core.phraseology import TemplateLibrary
-from localtc.atc_core.readback import GrammarInterpreter, InterpretContext, PendingReadback
+from localtc.atc_core.readback import (
+    GrammarInterpreter,
+    InterpretContext,
+    PendingReadback,
+)
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
 from localtc.llm.eval import CorpusBackend, load_cases, run_cases, setup
 from localtc.replay import Recording
 from localtc.scenario import run_scenario
-from localtc.sim_api import SIM_EVENT_TYPES, AirportData, AtcAlert, AtcTransmission, LlmExchange, OwnshipState, Transcript
+from localtc.sim_api import (
+    SIM_EVENT_TYPES,
+    AirportData,
+    AtcAlert,
+    AtcTransmission,
+    LlmExchange,
+    OwnshipState,
+    Transcript,
+)
 
 HERE = Path(__file__).parent
 EDGE = HERE / "scenarios_llm" / "edge_cases.toml"
@@ -189,10 +213,18 @@ def test_bad_answer_is_retried_with_the_problem_named():
 
 
 def test_timeout_uses_the_grammar_and_does_not_retry():
-    backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
-    result = LlmInterpreter(backend).interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
-    assert (result.kind, result.status, result.source) == ("readback", "correct", "grammar")
+    backend = ScriptedBackend({"Montreal Ground, DP69, request taxi": TIMEOUT})
+    result = LlmInterpreter(backend, mode="primary").interpret("Montreal Ground, DP69, request taxi", None, DP69)
+    assert (result.kind, result.intent, result.source) == ("request", "ready_to_taxi", "grammar")
     assert [(e.outcome, e.trigger) for e in result.exchanges] == [("timeout", "")]
+
+
+def test_a_correct_readback_never_waits_for_the_model():
+    """The model shares the PC with the sim: a readback the grammar finds correct is the script, read back."""
+    backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
+    result = LlmInterpreter(backend, mode="primary").interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
+    assert (result.kind, result.status, result.source) == ("readback", "correct", "grammar")
+    assert result.exchanges == () and backend.requests == []
 
 
 def test_the_budget_caps_retries():
@@ -344,5 +376,7 @@ def test_llm_exchanges_record_the_whole_flight():
             outputs += engine.handle(event)
     exchanges = [o for o in outputs if isinstance(o, LlmExchange)]
     transcripts = [e for e in Recording(CYUL).events() if isinstance(e, Transcript)]
-    assert [e.t for e in exchanges] == [t.t for t in transcripts]  # one call per pilot transmission
+    # One call per pilot transmission, except the readbacks the grammar found correct.
+    assert {e.t for e in exchanges} < {t.t for t in transcripts}
+    assert [e.t for e in exchanges] == sorted(e.t for e in exchanges)
     assert all(e.outcome == "error" for e in exchanges)  # nothing scripted: every one fell back to the grammar

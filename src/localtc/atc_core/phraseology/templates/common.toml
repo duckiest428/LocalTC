@@ -21,12 +21,12 @@ text = ["Station calling {station}, say again your callsign."]
 [[template]]
 id = "common.readback_correct"
 controller = "any"
-text = ["{callsign}, readback correct."]
+text = ["{callsign}, readback correct.", "{callsign}, readback correct.", "{callsign}, that's correct."]
 
 [[template]]
 id = "common.roger"
 controller = "any"
-text = ["{callsign}, roger."]
+text = ["{callsign}, roger.", "{callsign}, roger.", "{callsign}, copy that."]
 
 [[template]]
 id = "common.negative"

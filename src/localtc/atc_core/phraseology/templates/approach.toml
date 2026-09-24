@@ -44,6 +44,41 @@ readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
 [[template]]
+id = "approach.turn_descend"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, descend and maintain {altitude}."]
+readback = { required = ["heading", "altitude"] }
+pilot_readback = "Turn {turn} heading {heading}, descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.downwind"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, vectors {approach} approach.", "{callsign}, fly heading {heading}, downwind for runway {runway}."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.base"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, base leg.", "{callsign}, turn {turn} heading {heading}."]
+readback = { required = ["heading"] }
+pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_cleared"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, maintain {altitude} until established on the localizer, cleared {approach} approach."]
+readback = { required = ["heading", "altitude"], optional = ["approach"] }
+pilot_readback = "Turn {turn} heading {heading}, maintain {altitude} until established, cleared {approach} approach, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_tower"
+controller = "approach"
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency}, good day."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
 id = "approach.intercept"
 controller = "approach"
 text = ["{callsign}, turn {turn} heading {heading}, join the final approach course, {approach} approach."]

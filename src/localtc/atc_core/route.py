@@ -6,6 +6,7 @@ and can clear the descent before the aircraft needs it. Without a plan the same 
 answered from the cruise altitude alone, with the rules of thumb a controller would use.
 """
 
+import math
 from dataclasses import dataclass
 
 from localtc.sim_api.geo import haversine_nm
@@ -50,8 +51,10 @@ class Route:
     @property
     def arrival_floor_ft(self) -> int | None:
         """The last altitude the plan descends to before the airport: where "descend via" ends."""
-        descent = [f.alt_ft for f in self.fixes if f.stage == "DSC" and f.alt_ft > 0]
-        return descent[-1] if descent else None
+        # Not the airport itself, which a SimBrief plan lists last at pattern altitude: the arrival's last fix.
+        descent = [f.alt_ft for f in self.fixes if f.stage == "DSC" and f.alt_ft > 0
+                   and not (len(f.ident) == 4 and f.ident.isalpha())]
+        return int(math.ceil(descent[-1] / 1000.0) * 1000) if descent else None
 
     def minutes_to_cruise(self, cruise_ft: int) -> int:
         """Minutes from takeoff to the top of the climb: the plan's own time, else its distance at a climb

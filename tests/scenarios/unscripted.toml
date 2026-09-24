@@ -110,6 +110,10 @@ tune = "handoff"
 delay_s = 8
 say = "Seattle Approach, {callsign_short}, {alt} descending 3,000."
 
+[[pilot]]
+on = "center.checkin_descend"
+say = "{readback}"
+
 # --- arrival ------------------------------------------------------------------------------
 [[pilot]]
 on = "approach.descend"
@@ -123,6 +127,28 @@ say = "Approach, {callsign_short}, request vectors."
 [[pilot]]
 on = "approach.vectors"
 say = "{readback}"
+
+[[pilot]]
+on = "approach.downwind"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.base"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.intercept_cleared"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.handoff_tower"
+say = "{readback}"
+
+[[pilot]]
+on = "approach.handoff_tower"
+tune = "handoff"
+delay_s = 6
+say = "Boeing Tower, {callsign_short}, 6 mile final runway {arrival_runway}."
 
 [[pilot]]
 on = "approach.cleared"

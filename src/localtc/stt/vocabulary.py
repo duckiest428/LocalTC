@@ -62,6 +62,7 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\bwhole short\b|\bhold shirt\b|\bhole short\b", "hold short"),
     (r"\bsquak\b|\bsquaw\b|\bsquat\b|\bsquack\b|\bskwak\b|\bsquawks\b", "squawk"),
     (r"\bdecent and maintain\b|\bdescent and maintain\b", "descend and maintain"),
+    (r"\b(request|requesting) (?:the )?(?:sent|set|decent|dissent)\b", r"\1 descent"),  # "request the sent via CHINS5"
     (r"\bclimate and maintain\b|\bclimate maintain\b|\bclimbing maintain\b|\bline and maintain\b", "climb and maintain"),
     (r"\bline up and weight\b|\bline up and wade\b|\blineup and wait\b", "line up and wait"),
     (r"\bwill co\b|\bwilko\b|\bwill comply\b", "wilco"),

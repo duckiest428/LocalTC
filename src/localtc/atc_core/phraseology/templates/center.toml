@@ -17,6 +17,23 @@ controller = "center"
 text = ["{callsign}, {station}, radar contact, maintain {altitude}."]
 
 [[template]]
+id = "center.checkin_descending"
+controller = "center"
+text = ["{callsign}, {station}, roger, continue descent to {altitude}."]
+
+[[template]]
+id = "center.checkin_descend"
+controller = "center"
+text = ["{callsign}, {station}, radar contact, descend and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_via"
+controller = "center"
+text = ["{callsign}, {station}, roger, descend via the {procedure} arrival."]
+
+[[template]]
 id = "center.descend"
 controller = "center"
 text = ["{callsign}, descend and maintain {altitude}, expect {approach} approach."]

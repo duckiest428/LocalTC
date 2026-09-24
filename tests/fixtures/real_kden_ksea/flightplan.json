@@ -1,0 +1,201 @@
+{
+ "source": "simbrief",
+ "callsign": "DAL2543",
+ "origin": "KDEN",
+ "destination": "KSEA",
+ "alternate": "KPDX",
+ "cruise_ft": 38000,
+ "route": "ZIMMR3 CHNGY DCT PIH DCT PDT CHINS5",
+ "aircraft": "BCS3",
+ "registration": "N203SB",
+ "sid": "ZIMMR3",
+ "star": "CHINS5",
+ "dep_runway": "25",
+ "arr_runway": "16L",
+ "origin_name": "DENVER INTL",
+ "destination_name": "SEATTLE-TACOMA INTL",
+ "fixes": [
+  {
+   "ident": "MUGBE",
+   "lat": 39.932111,
+   "lon": -104.904564,
+   "alt_ft": 13500,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 291
+  },
+  {
+   "ident": "RALFI",
+   "lat": 39.939303,
+   "lon": -105.221842,
+   "alt_ft": 19200,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 471
+  },
+  {
+   "ident": "RAPDS",
+   "lat": 39.952575,
+   "lon": -105.390992,
+   "alt_ft": 21800,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 559
+  },
+  {
+   "ident": "PCKNS",
+   "lat": 39.965222,
+   "lon": -105.552761,
+   "alt_ft": 23600,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 625
+  },
+  {
+   "ident": "ZIMMR",
+   "lat": 39.97345,
+   "lon": -105.660669,
+   "alt_ft": 24900,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 673
+  },
+  {
+   "ident": "CHNGY",
+   "lat": 40.012078,
+   "lon": -106.4676,
+   "alt_ft": 30900,
+   "via": "ZIMMR3",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 973
+  },
+  {
+   "ident": "TOC",
+   "lat": 40.633476,
+   "lon": -107.709579,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1526
+  },
+  {
+   "ident": "PIH",
+   "lat": 42.870383,
+   "lon": -112.652231,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 3704
+  },
+  {
+   "ident": "PDT",
+   "lat": 45.698419,
+   "lon": -118.938711,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 6539
+  },
+  {
+   "ident": "BRUKK",
+   "lat": 46.19135,
+   "lon": -119.780044,
+   "alt_ft": 38000,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6957
+  },
+  {
+   "ident": "SUNED",
+   "lat": 46.294875,
+   "lon": -119.960042,
+   "alt_ft": 38000,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 7048
+  },
+  {
+   "ident": "YKM",
+   "lat": 46.570244,
+   "lon": -120.444636,
+   "alt_ft": 38000,
+   "via": "CHINS5",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 7283
+  },
+  {
+   "ident": "TOD",
+   "lat": 46.693857,
+   "lon": -120.703514,
+   "alt_ft": 38000,
+   "via": "CHINS5",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 7401
+  },
+  {
+   "ident": "CHINS",
+   "lat": 46.811506,
+   "lon": -120.952158,
+   "alt_ft": 32200,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7587
+  },
+  {
+   "ident": "RADDY",
+   "lat": 47.074469,
+   "lon": -121.516181,
+   "alt_ft": 18800,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 8021
+  },
+  {
+   "ident": "HUMPP",
+   "lat": 47.209375,
+   "lon": -121.810125,
+   "alt_ft": 12000,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 8238
+  },
+  {
+   "ident": "AUBRN",
+   "lat": 47.361789,
+   "lon": -122.145983,
+   "alt_ft": 4300,
+   "via": "CHINS5",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 8486
+  },
+  {
+   "ident": "KSEA",
+   "lat": 47.449889,
+   "lon": -122.311778,
+   "alt_ft": 2900,
+   "via": "CHINS5",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 9112
+  }
+ ],
+ "simbrief_id": "1790200978",
+ "rules": "IFR"
+}

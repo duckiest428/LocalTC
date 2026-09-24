@@ -132,5 +132,5 @@ def test_the_climb_is_handed_to_a_centre_before_the_top_of_it(replay):
 
 
 def test_no_local_altimeter_while_above_the_transition_altitude(replay):
-    descent = next(line for line in replay if "descend and maintain" in line and "expect" in line)
+    descent = next(line for line in replay if " ATC " in line and "descend" in line and "expect" in line)
     assert "altimeter" not in descent, descent

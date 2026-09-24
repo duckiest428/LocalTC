@@ -56,6 +56,8 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     cruise_level_s: float = 30.0
     cruise_no_plan_agl_ft: float = 3000.0
     cruise_no_plan_s: float = 60.0
+    cruise_other_agl_ft: float = 10000.0  # level this high, away from the planned cruise ...
+    cruise_other_s: float = 180.0  # ... for this long is a cruise too
     descent_vs_fpm: float = -400.0
     descent_s: float = 30.0
     descent_max_nm: float = 300.0  # a descent further out than this from the destination isn't the arrival
@@ -259,9 +261,17 @@ class PhaseDetector:
 
         elif phase is FlightPhase.DEPARTURE:
             if self.cruise_ft is not None:
-                level = abs(own.alt_indicated_ft - self.cruise_ft) <= th.cruise_alt_tol_ft and abs(own.vs_fpm) < th.level_vs_fpm
-                if self._held("cruise", level, t, th.cruise_level_s):
+                # Up in the flight levels the altimeter should be on 29.92; a crew that left the local setting
+                # in reads a couple of hundred feet off (30.15 in: FL380 shows 38,230). Either reading counts.
+                pressure_ft = own.alt_indicated_ft - (own.altimeter_inhg - 29.92) * 1000 if 25 < own.altimeter_inhg < 33 \
+                    else own.alt_indicated_ft
+                off = min(abs(own.alt_indicated_ft - self.cruise_ft), abs(pressure_ft - self.cruise_ft))
+                steady = abs(own.vs_fpm) < th.level_vs_fpm
+                if self._held("cruise", off <= th.cruise_alt_tol_ft and steady, t, th.cruise_level_s):
                     return FlightPhase.CRUISE, f"level at {self.cruise_ft:.0f} ft"
+                # Level somewhere else for a good while, high up: a different cruise (ATC's, or a step climb to come).
+                if self._held("cruise_other", steady and own.alt_agl_ft > th.cruise_other_agl_ft, t, th.cruise_other_s):
+                    return FlightPhase.CRUISE, f"level at {own.alt_indicated_ft:.0f} ft"
             else:
                 level = own.alt_agl_ft > th.cruise_no_plan_agl_ft and abs(own.vs_fpm) < th.level_vs_fpm
                 if self._held("cruise", level, t, th.cruise_no_plan_s):

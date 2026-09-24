@@ -278,6 +278,7 @@ class DiversionMixin:
         self.tracker.context_builder.destination = icao
         self._assign(arrival_runway=None, approach=None, arrival_atis=None)
         self._approach_kind = None
+        self._vector_leg = None
         for flag in ("descend", "handoff_approach", "handoff_center"):
             st.flags.discard(flag)
         for kind in ("approach", "landing"):

@@ -169,5 +169,15 @@ id = "common.divert_vector"
 text = ["{callsign}, turn {turn} heading {heading}, {destination} {distance} miles."]
 pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."
 
+[[template]]
+id = "approach.turn_descend"
+text = ["{callsign}, turn {turn} heading {heading}, descend to {altitude}."]
+pilot_readback = "Turn {turn} heading {heading}, descend to {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_cleared"
+text = ["{callsign}, turn {turn} heading {heading}, maintain {altitude} until established on the localizer, cleared {approach} approach."]
+pilot_readback = "Turn {turn} heading {heading}, maintain {altitude} until established, cleared {approach} approach, {callsign_short}."
+
 [fragments]
 hold_short = "hold short of runway {hold_short}"

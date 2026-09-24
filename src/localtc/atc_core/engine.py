@@ -16,6 +16,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core import region as regions
+from localtc.atc_core import vectors
 from localtc.atc_core.airport import (
     AirportGeometry,
     TaxiGraph,
@@ -107,6 +108,9 @@ MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stop
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
+DESCEND_GAP_S = 120.0
+INTERCEPT_GAP_S = 15.0  # the intercept waits no longer than this after the last instruction
+TOWER_AT_NM = 6.0  # cleared on the intercept, the arrival goes to tower about this far out (plus a margin)  # an altitude step on its own no more often than this
 CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
 GIVE_WAY_NM = 0.15  # traffic this close on the ground is close enough to wait for
 GIVE_WAY_MOVING_KT = 3.0  # both have to be moving for one to be in the other's way
@@ -127,7 +131,6 @@ MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
 SPEED_GATES = ((30.0, 250, "speed250"), (18.0, 210, "speed210"), (10.0, 180, "speed180"))
-APPROACH_CLEARANCE_NM = 18.0  # approach clears the approach and hands off to tower within this of the field
 DESCENT_LEAD_MIN = 5.0  # the descent is cleared this long before the top of descent, at the current groundspeed
 # Joining the final: within this of the extended centreline, this far out or less, pointing no further off
 # the final course than this (so a base leg counts and a downwind doesn't).
@@ -151,6 +154,7 @@ FIRM_DECLINE_WORDS = {"negative", "unable"}  # "no" alone is too often a false s
 MAX_OFFERED_FT = 41000
 DEPARTURE_ENDS_FT = 15000.0  # above this the departure controller hands the climb to a centre
 DEPARTURE_ENDS_NM = 40.0  # or this far from the field, whichever comes first
+DESCENT_ASK_MIN = 15.0  # a pilot asking for the descent this long before the top of it gets the descent clearance
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
@@ -268,6 +272,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._asked_ride_t = -math.inf  # when a centre last asked after the ride
         self._gave_way_t = -math.inf  # when ground last held this aircraft for another
         self._vector_t = -math.inf  # when approach last gave a vector or a speed
+        self._vector_leg: str | None = None  # the leg of the pattern approach last gave (vectors.py)
+        self._vector_side: float | None = None  # ... and the side of the final it is flown on
+        self._descend_t = -math.inf  # when approach last stepped the altitude down
         self._chatted: set[str] = set()  # centres that have already started one
         self._offered_level: tuple[float, int] | None = None  # (when, altitude) a level offered and not yet taken
         self._sector_since = -math.inf
@@ -630,33 +637,35 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 center = here  # climbed out into the next centre's airspace already: that one takes it
             self._sector, self._sector_since = center, t  # the first sector of the cruise
             self._handoff(t, "departure.handoff_center", st.comms.tuned, center)
-        elif phase in (P.CRUISE, P.ARRIVAL) and tuned == "center" and not self._arriving_in_area(own) \
+        elif phase in (P.DEPARTURE, P.CRUISE, P.ARRIVAL) and tuned == "center" and not self._arriving_in_area(own) \
                 and (crossing := self._sector_crossing(own)) is not None:
+            # Whatever the phase says: a flight climbing, level or descending across a centre boundary is
+            # handed to the next centre (a detector that missed the cruise once kept one on Denver to Seattle).
             self._sector, self._sector_since = crossing, t
             self._handoff(t, "center.handoff_center", st.comms.tuned, crossing)
-        elif phase is P.CRUISE and tuned in ("center", "departure") and "descend" not in st.flags and self._descent_due(own) \
+        elif phase in (P.DEPARTURE, P.CRUISE) and tuned in ("center", "departure") and "descend" not in st.flags \
+                and (phase is P.CRUISE or own.alt_indicated_ft >= 18000) and self._descent_due(own) \
                 and (plan := self._arrival_plan(own)) is not None:
             self._clear_descent(t, own, st.comms.tuned, plan)
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
             if "descend" not in st.flags and (plan := self._arrival_plan(own)) is not None:
-                st.flags.add("descend")
-                altitude, instruction = self._arrival_altitude(plan["arrival_alt"], own, "center")
-                self._schedule(
-                    t, instruction, {"altitude": altitude, "approach": plan["approach"]}, st.comms.tuned,
-                    delay=False, on_issue=lambda: self._assign(altitude_ft=altitude, approach=plan["approach"].display,
-                                                              arrival_runway=plan["approach"].runway),
-                    note=self._altimeter_note(st.flight.destination),
-                )
+                self._clear_descent(t, own, st.comms.tuned, plan, late=True)  # started down (or arrived) before being cleared
             elif (
                 self._arriving_in_area(own)
                 and (approach := self.facility("approach")) is not None and once("handoff_approach")
             ):
                 self._handoff(t, "center.handoff_approach", st.comms.tuned, approach)
+        elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "approach" and "approach" in st.clearances \
+                and st.clearances["approach"].instruction_id == "approach.intercept_cleared" \
+                and ctx.final is not None and ctx.final.distance_nm <= TOWER_AT_NM + 4 and (tower := self.facility("tower")) is not None \
+                and once("approach_tower"):
+            self._handoff(t, "approach.handoff_tower", st.comms.tuned, tower)  # established: over to tower
         elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "approach" and "approach" not in st.clearances:
             # The approach is cleared well before the aircraft is established, not as it crosses the
             # threshold of the approach phase: a pilot flying an ILS wants the clearance before
             # intercepting, with time to brief it and change to tower.
-            if self._joining_final(own) and (spoke_here or t - self._tuned_since >= MISSED_CHECKIN_S):
+            vectoring = self._vector_leg in ("join", "downwind", "base", "straight_in")  # the intercept will clear it
+            if self._joining_final(own) and not vectoring and (spoke_here or t - self._tuned_since >= MISSED_CHECKIN_S):
                 self._clear_approach(t, own, st.comms.tuned, delay=False)
         elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "tower" and "landing" not in st.clearances:
             on_final = phase is P.LANDING or (ctx.final is not None and ctx.final.distance_nm <= LANDING_CLEARANCE_NM)
@@ -1404,12 +1413,17 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._schedule(t, "common.unable", {}, facility)
                 return
         plan = self._arrival_plan(own)
-        heading = self._vector_heading(own, plan["approach"].runway) if plan else None
-        if plan is None or heading is None:
+        leg = self._vector(own, plan["approach"].runway) if plan else None
+        if plan is None or leg is None:
             self._schedule(t, "common.unable", {}, facility)
             return
+        heading = self._magnetic(own, leg.heading_true)
+        self._vector_leg, self._vector_t = leg.leg, t  # the pattern starts here; approach carries on from it
+        if leg.leg in ("join", "downwind", "base"):
+            self._vector_side = leg.side
         self._schedule(t, "approach.vectors", {"heading": heading, "approach": plan["approach"]}, facility,
-                       on_issue=lambda: self._assign(approach=plan["approach"].display, arrival_runway=plan["approach"].runway))
+                       on_issue=lambda: self._assign(heading=heading, approach=plan["approach"].display,
+                                                     arrival_runway=plan["approach"].runway))
 
     def _radar_vectors(self, own: OwnshipState) -> bool:
         """Approach turning the aircraft onto the final and slowing it down, without being asked.
@@ -1422,34 +1436,70 @@ class AtcEngine(VfrMixin, DiversionMixin):
         tuned = st.comms.tuned
         if tuned is None or tuned.controller != "approach" or "approach" in st.clearances:
             return False
-        if t - self._vector_t < VECTOR_GAP_S or (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
-            return False  # wait for the check-in, and leave room between instructions
+        if (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
+            return False  # wait for the check-in
         plan = self._arrival_plan(own)
         runway = plan["approach"].runway if plan else st.assignments.arrival_runway
-        # Vectoring belongs before the approach clearance, not instead of it: once the aircraft is close
-        # enough to be cleared, the clearance is the next thing said.
+        # All the way in: the downwind, base and intercept happen inside 20 miles. The intercept heading carries
+        # the approach clearance; until then there is always a heading being flown.
         distance = ctx.destination_distance_nm
-        if runway is None or distance is None or not APPROACH_CLEARANCE_NM < distance <= VECTOR_FROM_NM:
+        if runway is None or distance is None or not 2.0 < distance <= VECTOR_FROM_NM:
             return False
         if self._speed_control(own, t, tuned):
             return True
         established = ctx.final is not None and ctx.final.end.ident == runway
         if established:
             return False  # on the final already: nothing to vector
-        vector = self._vector_plan(own, runway)
-        if vector is None:
+        leg = self._vector(own, runway)
+        if leg is None:
             return False
-        heading, joining = vector
-        turn = self._turn_towards(own.hdg_mag, heading)
-        if turn is None:
-            return False  # already pointing that way
+        # Room between instructions, except for the turn onto the final: that one can't wait.
+        cutting_in = leg.leg == "intercept" and self._vector_leg != "intercept"
+        if t - self._vector_t < (INTERCEPT_GAP_S if cutting_in else VECTOR_GAP_S):
+            return False
+        heading = self._magnetic(own, leg.heading_true)
         assigned = st.assignments.heading
-        if assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG:
-            return False  # the same vector again: the aircraft is still turning onto the last one
+        turn = self._turn_towards(own.hdg_mag, heading)
+        if assigned is None and turn is None:  # already pointing about right: it still gets a heading to fly
+            turn = "right" if ((heading - own.hdg_mag) % 360) < 180 else "left"
+        new_heading = turn is not None and not (
+            assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG)  # still turning onto it
+        # Down with the miles left to fly, never a climb. On its own (no turn to go with it) only a real step.
+        level = st.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
+        step = self._step_altitude(own, plan) if plan else None
+        gap = 1000 if new_heading else 2000
+        descend = step if step is not None and step <= level - gap and own.alt_indicated_ft > step + 300 else None
+        if descend is not None and not new_heading and t - self._descend_t < DESCEND_GAP_S:
+            descend = None
+        if not new_heading and descend is None:
+            return False
         self._vector_t = t
-        self._schedule(t, "approach.intercept" if joining else "approach.turn",
-                       {"heading": heading, "turn": turn, "approach": plan["approach"]}, tuned, delay=False,
-                       on_issue=lambda: self._assign(heading=heading))
+        if descend is not None:
+            self._descend_t = t
+        if new_heading:
+            self._vector_leg = leg.leg
+            if self._vector_side is None and leg.leg in ("join", "downwind", "base"):
+                self._vector_side = leg.side
+        if new_heading and leg.leg == "intercept" and plan is not None:
+            # "Turn left heading 190, maintain 4,000 until established on the localizer, cleared ILS 16L approach."
+            altitude = min(level, self._intercept_altitude(own, plan))
+            self._schedule(t, "approach.intercept_cleared", {"heading": heading, "turn": turn, "altitude": altitude,
+                                                              "approach": plan["approach"]}, tuned, delay=False,
+                           clearance="approach",
+                           on_issue=lambda: (self._assign(heading=heading, altitude_ft=altitude, approach=plan["approach"].display,
+                                                          arrival_runway=plan["approach"].runway),
+                                             setattr(self, "_going_around", False)))
+        elif new_heading and descend is not None:
+            self._schedule(t, "approach.turn_descend", {"heading": heading, "turn": turn, "altitude": descend}, tuned,
+                           delay=False, on_issue=lambda: self._assign(heading=heading, altitude_ft=descend))
+        elif new_heading:
+            instruction = {"downwind": "approach.downwind", "base": "approach.base"}.get(leg.leg, "approach.turn")
+            self._schedule(t, instruction, {"heading": heading, "turn": turn, "approach": plan["approach"],
+                                            "runway": runway}, tuned, delay=False,
+                           on_issue=lambda: self._assign(heading=heading))
+        else:
+            self._schedule(t, "common.descend", {"altitude": descend}, tuned, delay=False,
+                           on_issue=lambda: self._assign(altitude_ft=descend))
         return True
 
     def _speed_control(self, own: OwnshipState, t: float, facility: Facility) -> bool:
@@ -1479,27 +1529,46 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return plan[0] if plan is not None else None
 
     def _vector_plan(self, own: OwnshipState, runway: str) -> tuple[int, bool] | None:
-        """A magnetic heading toward a point 8 nm out on the runway's final, and whether it joins it.
+        """A magnetic heading for the next leg onto ``runway``'s final (vectors.py), and whether it joins it."""
+        leg = self._vector(own, runway)
+        return (self._magnetic(own, leg.heading_true), leg.leg == "intercept") if leg is not None else None
 
-        Far from that gate the heading is a leg towards it; close to it the turn is a 30 degree
-        intercept of the final approach course, which is a different thing to say on the radio.
-        """
+    def _vector(self, own: OwnshipState, runway: str) -> vectors.Vector | None:
         geo = self.geometry(self.state.flight.destination)
         end = geo.end(runway) if geo is not None else None
         if geo is None or end is None:
             return None
-        course = math.radians(end.heading_true)
-        gate = (end.threshold[0] - 8 * NM_M * math.sin(course), end.threshold[1] - 8 * NM_M * math.cos(course))
-        x, y = geo.xy(own.lat, own.lon)
-        joining = math.hypot(gate[0] - x, gate[1] - y) < 3 * NM_M
-        if joining:
-            # Close to the gate: join the final at 30 degrees from whichever side the aircraft is on.
-            side = math.sin(course) * (y - end.threshold[1]) - math.cos(course) * (x - end.threshold[0])
-            true = end.heading_true + (30 if side > 0 else -30)
-        else:
-            true = math.degrees(math.atan2(gate[0] - x, gate[1] - y))
+        leg = vectors.vector(geo, end, own.lat, own.lon, slow=own.gs_kt < vectors.SLOW_KT, after=self._vector_leg,
+                             side=self._vector_side, heading_true=own.hdg_true)
+        if leg.leg in ("straight_in", "base", "intercept") and self._vector_leg != "intercept" \
+                and vectors.too_high(leg, own.alt_indicated_ft, geo.airport.elev_ft):
+            self._vector_side = None  # a new downwind, on the side it is on now
+            return vectors.extended(geo, end, own.lat, own.lon)
+        return leg
+
+    @staticmethod
+    def _magnetic(own: OwnshipState, true: float) -> int:
+        """A true heading as a magnetic one to give on the radio, in tens."""
         magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
-        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360, joining
+        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360
+
+    def _intercept_altitude(self, own: OwnshipState, plan: dict[str, Any]) -> int:
+        """Joining the final: at or under the glideslope from where the aircraft will meet it, in thousands."""
+        geo = self.geometry(self.state.flight.destination)
+        leg = self._vector(own, plan["approach"].runway)
+        if geo is None or leg is None:
+            return plan["approach_alt"]
+        joins = leg.join_nm if leg.join_nm is not None else leg.track_nm
+        under = geo.airport.elev_ft + joins * 0.9 * vectors.GLIDESLOPE_FT_PER_NM
+        return max(plan["approach_alt"], int(under // 500 * 500))
+
+    def _step_altitude(self, own: OwnshipState, plan: dict[str, Any]) -> int:
+        """Where approach wants the arrival now: down with the miles still to fly (vectors.step_altitude)."""
+        leg = self._vector(own, plan["approach"].runway)
+        geo = self.geometry(self.state.flight.destination)
+        if leg is None or geo is None:
+            return plan["approach_alt"]
+        return vectors.step_altitude(leg.track_nm, geo.airport.elev_ft, plan["approach_alt"])
 
     def _set_arrival(self, runway: str | None, kind: str | None, own: OwnshipState | None) -> Approach | None:
         """The pilot's choice of arrival runway and approach, if the airport and the weather allow it."""
@@ -1616,6 +1685,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if own is None or self._going_around:
             return
         self._going_around = True  # until approach clears the next approach
+        self._vector_leg = self._vector_side = None  # vectored round again from wherever the missed approach leaves it
         for kind in ("approach", "landing"):
             st.clearances.pop(kind, None)
         st.pending = None
@@ -1785,6 +1855,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._schedule(t, "common.unable", {}, facility)
             return
         climbing = wanted > own.alt_indicated_ft
+        if not climbing and "descend" not in st.flags and st.phase in (P.DEPARTURE, P.CRUISE) \
+                and own.alt_indicated_ft >= 10000 and self._descent_due(own, lead_min=DESCENT_ASK_MIN) \
+                and (plan := self._arrival_plan(own)) is not None:
+            # "Request descent" (or "descent via the arrival") coming up to the top of descent: the descent
+            # clearance itself, not 2,000 ft lower.
+            self._clear_descent(t, own, facility, plan)
+            return
         if abs(wanted - own.alt_indicated_ft) < 200:  # "request to maintain 1,500" at 1,500
             self._schedule(t, "common.maintain", {"altitude": wanted}, facility, on_issue=lambda: self._assign(altitude_ft=wanted))
             return
@@ -1976,7 +2053,18 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._schedule(t, "center.radar_contact", {"station": facility.station, "altitude": cruise}, facility,
                                on_issue=lambda: self._assign(altitude_ft=cruise))
                 return
-            if assigned is not None:
+            if assigned is not None and own is not None and own.alt_indicated_ft > assigned + 500:
+                # Checking in on the way down: "continue descent", not "maintain" an altitude still far below.
+                via = self._via_floor is not None and self.cfg.star
+                if via:
+                    self._schedule(t, "center.checkin_descend_via", {"station": facility.station,
+                                                                     "procedure": self.cfg.star}, facility, expects_readback=False)
+                elif own.vs_fpm < -300:  # on the way down already
+                    self._schedule(t, "center.checkin_descending", {"station": facility.station, "altitude": assigned},
+                                   facility, expects_readback=False)
+                else:  # level above it: the descent, said again
+                    self._schedule(t, "center.checkin_descend", {"station": facility.station, "altitude": assigned}, facility)
+            elif assigned is not None:
                 self._schedule(t, "center.checkin_level", {"station": facility.station, "altitude": assigned},
                                facility, expects_readback=False)  # confirming what is already assigned
             else:
@@ -1985,7 +2073,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         elif facility.controller == "approach" and "approach" not in st.clearances and own is not None:
             plan = self._arrival_plan(own)
             if plan is not None:
-                altitude, instruction = self._arrival_altitude(plan["approach_alt"], own, "approach")
+                # Never a climb: already lower than the step, the next thousand down.
+                step = min(self._step_altitude(own, plan), max(plan["approach_alt"], int(own.alt_indicated_ft // 1000 * 1000)))
+                altitude, instruction = self._arrival_altitude(step, own, "approach")
                 self._schedule(
                     t, instruction, {"station": facility.station, "altitude": altitude, "approach": plan["approach"]},
                     facility, on_issue=lambda: self._assign(altitude_ft=altitude, approach=plan["approach"].display,
@@ -2022,10 +2112,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if flying > planned + 200 and (assigned is None or assigned > planned):
             return planned, f"{controller}.descend"
         if assigned is not None and assigned < planned:
-            return assigned, f"{controller}.maintain"
+            # Already cleared lower (descending via the arrival): still well above it, that's "descend and maintain".
+            return assigned, f"{controller}.descend" if flying > assigned + 500 else f"{controller}.maintain"
         return planned, f"{controller}.maintain"
 
-    def _descent_due(self, own: OwnshipState) -> bool:
+    def _descent_due(self, own: OwnshipState, *, lead_min: float = 0.0) -> bool:
         """Time to clear the descent: DESCENT_LEAD_MIN before the top of descent.
 
         Waiting for the aircraft to start down means it starts down without a clearance: an FMS works out
@@ -2039,9 +2130,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return False
         level = st.assignments.altitude_ft or int(own.alt_indicated_ft)
         start_nm = self.route.descent_distance_nm(geo.airport.lat, geo.airport.lon, level, geo.airport.elev_ft)
-        return geo.distance_nm(own.lat, own.lon) <= start_nm + own.gs_kt / 60 * DESCENT_LEAD_MIN
+        return geo.distance_nm(own.lat, own.lon) <= start_nm + own.gs_kt / 60 * max(lead_min, DESCENT_LEAD_MIN)
 
-    def _clear_descent(self, t: float, own: OwnshipState, facility: Facility, plan: dict[str, Any]) -> None:
+    def _clear_descent(self, t: float, own: OwnshipState, facility: Facility, plan: dict[str, Any], *, late: bool = False) -> None:
         """The descent from cruise, ahead of the top of descent: "descend via" the filed arrival when there is
         one, otherwise at pilot's discretion to the arrival altitude."""
         st = self.state
@@ -2059,7 +2150,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._schedule(t, "center.descend_via", {"procedure": self.cfg.star, "approach": approach}, facility,
                            delay=False, on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
             return
-        altitude, _ = self._arrival_altitude(plan["arrival_alt"], own, "center")
+        altitude, instruction = self._arrival_altitude(plan["center_alt"], own, "center")
+        if late:  # already on the way down, or a short hop still climbing: "descend and maintain", or "maintain"
+            self._schedule(t, instruction, {"altitude": altitude, "approach": approach}, facility, delay=False,
+                           on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))
+            return
         self._schedule(t, "center.descend_pd", {"altitude": altitude, "approach": approach}, facility, delay=False,
                        on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))
 
@@ -2184,6 +2279,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return {
             "approach": Approach(kind, end.ident),
             "arrival_alt": int(min(cruise, max(3000, math.ceil((elev + 2500) / 1000) * 1000))),
+            # Where centre takes an arrival down to before approach has it: about 10,000 ft above the field for a
+            # jet up in the flight levels (Seattle: 11,000), the arrival altitude on a short, low flight.
+            "center_alt": int(max(3000, math.ceil((elev + 10000) / 1000) * 1000)) if cruise >= 18000
+            else int(min(cruise, max(3000, math.ceil((elev + 2500) / 1000) * 1000))),
             "approach_alt": int(math.ceil((elev + 2000) / 100) * 100),
         }
 

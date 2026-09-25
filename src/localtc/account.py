@@ -238,7 +238,7 @@ class Account:
         self._call("PUT", f"/v1/flights/{flight_id}/replay", replay)
 
     def share(self, body: dict) -> dict:
-        """A public link to a flight's card ({kind: "flight", ref, quote, names}) or a Wrapped summary's
+        """A public link to a flight's card ({kind: "flight", ref, quote, names, replay}) or a Wrapped summary's
         ({kind: "wrapped", period, from, to, tz, label}): {slug, url, card}. Only when the pilot shares."""
         return self._call("POST", "/v1/shares", body)
 

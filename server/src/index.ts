@@ -30,6 +30,7 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["POST", /^\/v1\/auth\/logout$/, signedIn((env, _req, a) => auth.logout(env, a))],
   ["GET", /^\/v1\/me$/, signedIn((env, _req, a) => auth.me(env, a))],
   ["DELETE", /^\/v1\/me$/, signedIn((env, req, a) => auth.deleteMe(env, req, a))],
+  ["PATCH", /^\/v1\/me$/, signedIn((env, req, a) => auth.updateMe(env, req, a))],
   ["DELETE", /^\/v1\/sessions\/([\w-]+)$/, signedIn((env, _req, a, _u, p) => auth.revokeSession(env, a, p[0]))],
   ["POST", /^\/v1\/flights$/, signedIn((env, req, a) => flights.upload(env, req, a))],
   ["GET", /^\/v1\/flights$/, signedIn((env, _req, a, url) => flights.list(env, url, a))],

@@ -172,6 +172,16 @@
         <div class="page-head"><h1 id="account-h">Account</h1></div>
         <p class="acct-who"><span>Signed in as <b class="who-email"></b></span>
           <button class="btn btn-ghost signout" type="button">Sign out</button></p>
+        <div class="panel">
+          <h3>Display name</h3>
+          <p class="hint">Shown as "Flown by …" on the flights and Wrapped recaps you share. Leave it empty to show no name.
+            Never your email address.</p>
+          <form id="name-form" class="inline-form" novalidate>
+            <input id="display-name" type="text" maxlength="32" autocomplete="nickname" placeholder="Your pilot name" aria-label="Display name">
+            <button class="btn btn-primary" type="submit">Save</button>
+          </form>
+          <p class="hint" id="name-status" role="status" aria-live="polite"></p>
+        </div>
         <div class="panel-row">
           <div class="panel">
             <h3>Signed-in devices</h3>

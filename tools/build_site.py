@@ -1,17 +1,21 @@
 """Build the parts of the website that come from the repository: site/changelog.html from CHANGELOG.md, and
 version stamps on the pages' own scripts and stylesheets.
 
-    python tools/build_site.py          # writes site/changelog.html, stamps site/*.html
+    python tools/build_site.py          # writes site/changelog.html, stamps site/*.html, writes site/assets.json
 
 Run by .github/workflows/pages.yml before publishing; neither change is committed. The stamps: the site is
 cached for hours (by browsers and Cloudflare), so a page could arrive new with its script old, a dashboard
 whose Wrapped link went nowhere. Every ``src="x.js"`` and ``href="x.css"`` gets ``?v=<its content hash>``,
 and so do the scripts' own imports (``import("./cardmodel.js")``): a changed file is a new address. Only the Markdown that
 CHANGELOG.md uses is understood: ## and ### headings, "- " lists, **bold**, `code` and [links](url).
+
+The shared-flight pages (localtc.tech/f/...) aren't the site's own: the account server writes them. It stamps
+the site's files they load from ``assets.json``: {file: its content hash}.
 """
 
 import hashlib
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -124,6 +128,8 @@ def render(markdown: str) -> tuple[str, str]:
 
 ASSET = re.compile(r'((?:src|href)=")([\w./-]+\.(?:js|css))(")')
 IMPORT = re.compile(r'(import\("\./)([\w./-]+\.js)("\))')
+# What a shared flight's page loads from the site (server/src/shares.ts).
+SHARE_PAGE_ASSETS = ("styles.css", "sharecard.css", "sharecard.js", "minireplay.js")
 
 
 def _hash(site: Path, name: str) -> str | None:
@@ -145,12 +151,20 @@ def stamp(site: Path) -> list[str]:
     return changed
 
 
+def asset_stamps(site: Path) -> dict[str, str]:
+    """{file: content hash} of what the account server's share pages load; written as site/assets.json."""
+    stamps = {name: h for name in SHARE_PAGE_ASSETS if (h := _hash(site, name))}
+    (site / "assets.json").write_text(json.dumps(stamps, indent=1) + "\n", encoding="utf-8")
+    return stamps
+
+
 def main() -> int:
     latest, body = render((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
     (ROOT / "site" / "changelog.html").write_text(PAGE.format(latest=html.escape(latest), body=body), encoding="utf-8")
     print(f"site/changelog.html: latest {latest}")
     if "--no-stamp" not in sys.argv:
         print("stamped:", ", ".join(stamp(ROOT / "site")) or "nothing")
+        print("site/assets.json:", asset_stamps(ROOT / "site"))
     return 0
 
 

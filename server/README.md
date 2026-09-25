@@ -10,12 +10,12 @@ Durable Object per account for the live view. It lives at `https://api.localtc.t
 
 | Table | What | Why |
 |---|---|---|
-| `users` | email, when it was first signed in to | signing in |
+| `users` | email, when it was first signed in to, a display name if the pilot sets one | signing in; "Flown by" on what they share |
 | `sessions` | a hash of each sign-in token, the kind of device and its name, last used | staying signed in; "sign out that device" |
 | `logins` | hashes of the emailed sign-in code and link, wrong-code count, 15-minute expiry | signing in by email |
 | `flights` | the app's logbook lines: airports, gates, runways, times, distance, max altitude, landing rate, readback and alert counts | the dashboard and stats |
 | `replays` | a flight's replay, only if the pilot uploads it: the track (a point every few seconds), the radio transcript as text, phases and alerts; gzipped, at most 1 MB ([`docs/replay-format.md`](../docs/replay-format.md)) | rewatching a flight on the dashboard and the phone |
-| `shares` | a flight (or a Wrapped recap) the pilot chose to share: a random slug, a snapshot of the card (route, date, numbers, at most one radio line; no gates, times of day or track) and the PNG their app drew | the public page at `localtc.tech/f/<slug>` or `/w/<slug>` |
+| `shares` | a flight (or a Wrapped recap) the pilot chose to share: a random slug, a snapshot of the card (route, date, numbers, at most one radio line; no times of day), the flight's details (aircraft, runways), the mini replay if the pilot chose it (the path, the radio, the route, weather, livery; timed from the start), and the PNG their app drew | the public page at `localtc.tech/f/<slug>` or `/w/<slug>` |
 | `push_tokens` | APNs device tokens | companion notifications |
 | `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping code guessing and email floods |
 | `LiveRoom` (Durable Object) | stored: the flight's latest status (phase, frequencies, ATC's last line) and the PC's local-network address and key; **in memory only**, while a phone watches remotely: position, traffic, the radio log | the companion app |
@@ -45,6 +45,7 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `POST /v1/auth/finish` `{email, code, kind: desktop\|ios\|web, device}` or `{token, kind: web}` | `{token, user}` (web: a cookie) |
 | `POST /v1/auth/logout` | |
 | `GET /v1/me`, `DELETE /v1/me` `{email}` | the account and its devices; delete it all (the address typed to confirm) |
+| `PATCH /v1/me` `{display_name}` | the name on what the pilot shares ("Flown by ..."): up to 32 letters, digits, spaces and . _ ' -; "" for none |
 | `DELETE /v1/sessions/:id` | sign out a device |
 | `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
@@ -52,7 +53,7 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `PUT /v1/flights/:id/replay` (body: the replay, gzipped JSON) | the flight must be in the account; rebuilt field by field, 50 a day |
 | `GET /v1/flights/:id/replay`, `DELETE /v1/flights/:id/replay` | the replay as JSON; the list's `has_replay` says which flights have one |
 | `GET /v1/flights/:id/moments` | the uploaded replay's lines worth quoting on a card, and its airports' names (kept with the replay, `replays.moments`) |
-| `POST /v1/shares` `{kind: "flight", ref, quote?, names?}` or `{kind: "wrapped", period, from, to, tz, label}` | `{slug, url, card}`: the snapshot is built here, from the account's own data; the quote must be ATC talking to that flight. Sharing again keeps the link (and clears the picture) |
+| `POST /v1/shares` `{kind: "flight", ref, quote?, names?, replay?}` or `{kind: "wrapped", period, from, to, tz, label}` | `{slug, url, card}`: the snapshot is built here, from the account's own data; the quote must be ATC talking to that flight. Sharing again keeps the link (and clears the picture). `replay: true` puts the flight's mini replay on the page, if its replay is uploaded; the answer's `replay` says whether it did |
 | `PUT /v1/shares/:slug/image` (body: a PNG, at most 1 MB), `DELETE /v1/shares/:slug`, `GET /v1/shares` | the card's picture (drawn by the app: the free plan hasn't the CPU to draw it here), unsharing, the list; the flights list's `share` is the link |
 | `GET /v1/wrapped?period=week\|month\|year&from=&to=&tz=&label=` | ATC Wrapped: the slides for that period, worked out when asked, never stored |
 | `GET /f/:slug`, `/f/:slug.png`, `/w/:slug`, `/w/:slug.png` (**no sign-in**) | the public page, with its own title and picture for chat apps (`noindex`, a strict CSP), and the picture. The Worker is routed `localtc.tech/f/*` and `/w/*` on the site's zone for these |

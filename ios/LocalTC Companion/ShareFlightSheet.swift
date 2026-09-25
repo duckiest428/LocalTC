@@ -10,6 +10,7 @@ struct ShareFlightSheet: View {
     @State private var renderer = CardRenderer(site: AppModel.siteURL)
     @State private var kept = Moments(moments: [], names: [:])
     @State private var quote: Int = 0  // index into the moments; -1: none
+    @State private var withReplay = true  // the path flown and the radio on the page, when there's a replay
     @State private var link: URL?
     @State private var slug: String?
     @State private var busy = false
@@ -29,6 +30,15 @@ struct ShareFlightSheet: View {
                         ShareLink(item: link) { Label("Send the link", systemImage: "square.and.arrow.up") }
                         Text(link.absoluteString).font(.caption.monospaced()).textSelection(.enabled)
                     }
+                    if flight.hasReplay == true {
+                        Toggle(isOn: $withReplay) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Put the replay on the page")
+                                Text("The path you flew and the radio, both sides").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("share-replay")
+                    }
                     Button(link == nil ? "Share" : "Update the card") { Task { await share() } }
                         .disabled(busy)
                         .accessibilityIdentifier("share-go")
@@ -36,7 +46,7 @@ struct ShareFlightSheet: View {
                         Button("Stop sharing", role: .destructive) { Task { await unshare() } }.disabled(busy)
                     }
                 } footer: {
-                    Text(status ?? "Anyone with the link sees this card: the route, the date and these numbers\(kept.moments.isEmpty ? "" : ", and the line you pick"). Never your gates, the times, the track or the rest of the radio.")
+                    Text(status ?? privacy)
                 }
                 if !kept.moments.isEmpty {
                     Section("The line from the radio") {
@@ -70,6 +80,14 @@ struct ShareFlightSheet: View {
         }
     }
 
+    private var replayOn: Bool { flight.hasReplay == true && withReplay }
+
+    private var privacy: String {
+        "Anyone with the link sees this card: the route, the date, these numbers\(kept.moments.isEmpty ? "" : ", the line you pick") and the aircraft and runways"
+            + (replayOn ? ", with the path flown and the radio (gates included, if ATC said them)." : ".")
+            + " Never your email or the time of day\(replayOn ? "" : ", the track or the rest of the radio")."
+    }
+
     private var chosen: Moment? { kept.moments.indices.contains(quote) ? kept.moments[quote] : nil }
 
     private var spec: [String: Any] {
@@ -83,7 +101,7 @@ struct ShareFlightSheet: View {
         defer { busy = false }
         do {
             status = "Sharing ..."
-            let made = try await model.api.shareFlight(id: flight.id, quote: chosen, names: kept.names)
+            let made = try await model.api.shareFlight(id: flight.id, quote: chosen, names: kept.names, replay: replayOn)
             link = made.url
             slug = made.slug
             onChange(made.url.absoluteString)

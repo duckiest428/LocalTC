@@ -17,6 +17,7 @@ It's JSON, gzipped for storage and upload. **All times are seconds from the repl
   "flight": {
     "id": "…",                     // the logbook line's id ("" when built without one)
     "callsign": "DAL2543", "aircraft": "A220-300", "origin": "KDEN", "destination": "KSEA",
+    "livery": "Airbus A220-300 Delta Air Lines",   // the sim's title for the aircraft ("" if unknown; optional)
     "departure_runway": "25", "arrival_runway": "16L", "departure_gate": "", "arrival_gate": "Gate B7",
     "started_at": "2026-09-23T22:18:21Z",
     "zulu0": 80302,                // the sim's time of day at the start, seconds after 00:00Z (null if unknown)

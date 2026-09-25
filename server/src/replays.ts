@@ -7,7 +7,7 @@
 import type { Auth } from "./auth";
 import type { Env } from "./env";
 import { HttpError, json, now } from "./http";
-import { airportNames, moments as pickMoments } from "./cardmodel";
+import { airportNames, miniReplay, moments as pickMoments } from "./cardmodel";
 import { limit } from "./rate";
 
 const MAX_GZ = 1024 * 1024; // D1 rows top out at 2 MB
@@ -25,7 +25,7 @@ const COLUMNS: Record<string, [number, number]> = {
   vs: [-30000, 30000], gnd: [0, 1],
 };
 const FLIGHT_TEXT = ["id", "callsign", "aircraft", "origin", "destination", "departure_runway", "arrival_runway",
-  "departure_gate", "arrival_gate"] as const;
+  "departure_gate", "arrival_gate", "livery"] as const;
 
 type Obj = Record<string, unknown>;
 
@@ -142,11 +142,13 @@ export async function put(env: Env, request: Request, auth: Auth, id: string): P
   const data = await gzip(JSON.stringify(replay));
   // The calls worth quoting, kept alongside: for sharing from the phone, and Wrapped's standout moment.
   const kept = JSON.stringify({ moments: pickMoments(replay.radio), names: airportNames(replay.airports) });
+  // And the replay cut down for a shared page, should the pilot put it on one.
+  const mini = JSON.stringify(miniReplay(replay));
   await env.DB.prepare(
-    `INSERT INTO replays (user_id, flight_id, created_at, size, data, moments) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    `INSERT INTO replays (user_id, flight_id, created_at, size, data, moments, mini) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
      ON CONFLICT(user_id, flight_id) DO UPDATE SET created_at = excluded.created_at, size = excluded.size, data = excluded.data,
-       moments = excluded.moments`,
-  ).bind(auth.user.id, id, now(), data.byteLength, data, kept).run();
+       moments = excluded.moments, mini = excluded.mini`,
+  ).bind(auth.user.id, id, now(), data.byteLength, data, kept, mini).run();
   return json({ ok: true, size: data.byteLength });
 }
 
@@ -179,6 +181,21 @@ export async function moments(env: Env, auth: Auth, id: string): Promise<Respons
   const kept = { moments: pickMoments(replay.radio), names: airportNames(replay.airports) };
   await env.DB.prepare("UPDATE replays SET moments = ?1 WHERE user_id = ?2 AND flight_id = ?3").bind(JSON.stringify(kept), auth.user.id, id).run();
   return json(kept);
+}
+
+/** The flight's replay cut down for a shared page (cardmodel miniReplay), or null with no replay uploaded. */
+export async function mini(env: Env, userId: string, id: string): Promise<Obj | null> {
+  const row = await env.DB.prepare("SELECT mini FROM replays WHERE user_id = ?1 AND flight_id = ?2")
+    .bind(userId, id).first<{ mini: string | null }>();
+  if (!row) return null;
+  if (row.mini) return JSON.parse(row.mini) as Obj;
+  // Uploaded before these were kept: work it out once, and keep it.
+  const full = await env.DB.prepare("SELECT data FROM replays WHERE user_id = ?1 AND flight_id = ?2")
+    .bind(userId, id).first<{ data: ArrayBuffer | number[] }>();
+  const bytes = full!.data instanceof ArrayBuffer ? full!.data : new Uint8Array(full!.data).buffer;
+  const made = miniReplay(JSON.parse(await gunzip(bytes, MAX_JSON)) as Obj) as Obj;
+  await env.DB.prepare("UPDATE replays SET mini = ?1 WHERE user_id = ?2 AND flight_id = ?3").bind(JSON.stringify(made), userId, id).run();
+  return made;
 }
 
 /** Every replay in the account, for the export. */

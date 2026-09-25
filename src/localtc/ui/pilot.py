@@ -148,8 +148,12 @@ class PilotRoutes:
             raise HttpError(404, "No such flight")
         if record.synced_at is None:  # the server shares its own copy of the line
             await self._do(self.account.sync)
+        with_replay = args.get("replay") is True
+        if with_replay and record.replay_uploaded_at is None and record.recording:
+            # The page's mini replay is cut from the account's copy of the replay: it goes up first.
+            await self.upload_replay(flight_id, raise_errors=True)
         made = await self._do(self.account.share, {"kind": "flight", "ref": flight_id, "quote": args.get("quote"),
-                                                    "names": args.get("names") or {}})
+                                                    "names": args.get("names") or {}, "replay": with_replay})
         await asyncio.to_thread(self.logbook.mark_shared, flight_id, made["url"])
         return made
 

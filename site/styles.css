@@ -532,6 +532,8 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 .devices li > span { display: flex; flex-direction: column; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .inline-form input { flex: 1 1 150px; }
+#name-status:empty { display: none; }
+#name-status.error { color: var(--red); }
 .live { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; padding: 14px 20px; margin-bottom: 16px; font-size: 14px; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(95, 208, 104, .18);
   animation: pulse 1.8s ease-in-out infinite; }

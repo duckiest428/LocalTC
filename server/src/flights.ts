@@ -134,9 +134,11 @@ export async function exportAll(env: Env, auth: Auth): Promise<Response> {
     .bind(auth.user.id).all<Flight>();
   const { results: sessions } = await env.DB.prepare("SELECT kind, device, created_at, last_used_at FROM sessions WHERE user_id = ?1")
     .bind(auth.user.id).all();
-  const data = { exported_at: now(), account: { email: auth.user.email, created_at: auth.user.created_at, verified_at: auth.user.verified_at },
+  const data = { exported_at: now(), account: { email: auth.user.email, display_name: auth.user.display_name ?? "", created_at: auth.user.created_at,
+      verified_at: auth.user.verified_at },
     devices: sessions, flights: results.map((f) => ({ ...f, landed: !!f.landed })), replays: await replays.all(env, auth),
-    shares: (await env.DB.prepare("SELECT slug, kind, ref, created_at, data FROM shares WHERE user_id = ?1 ORDER BY created_at")
-      .bind(auth.user.id).all<{ data: string }>()).results.map((s) => ({ ...s, data: JSON.parse(s.data) })) };
+    shares: (await env.DB.prepare("SELECT slug, kind, ref, created_at, data, extra FROM shares WHERE user_id = ?1 ORDER BY created_at")
+      .bind(auth.user.id).all<{ data: string; extra: string | null }>()).results
+      .map((s) => ({ ...s, data: JSON.parse(s.data), extra: s.extra ? JSON.parse(s.extra) : null })) };
   return json(data, 200, { "Content-Disposition": 'attachment; filename="localtc-account.json"' });
 }

@@ -521,8 +521,9 @@ Object.assign(Logbook, {
     const toDataUrl = (blob) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
     ShareCard.dialog({
       base: "/static/", moments, shared: f.share_url, slug: f.share_url ? f.share_url.split("/").pop() : null,
+      replay: !!(f.has_recording || f.replay_uploaded_at),
       card: (quote) => this.model.flightCard(f, { quote, names }),
-      share: (quote) => api("share", { id: f.id, quote, names }),
+      share: (quote, replay) => api("share", { id: f.id, quote, names, replay }),
       putImage: async (slug, blob) => api("share/image", { slug, png: await toDataUrl(blob) }),
       unshare: () => api("share/remove", { id: f.id }),
       onClose: () => this.load(),

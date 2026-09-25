@@ -75,3 +75,18 @@ def test_a_landing_rate_of_zero_is_no_measurement():
                                            (30000, "around the Earth"), (250000, "to the Moon")])
 def test_distances_are_framed(nm, words):
     assert words in run("return m.distanceFraming(input)", nm)
+
+
+def test_the_mini_replay_is_small_and_keeps_the_calls(replays):
+    replay = replays["real_kden_ksea"]
+    mini = run("return m.miniReplay(input)", replay)
+    assert len(mini["track"]) <= 402 and len(json.dumps(mini)) < 60_000
+    assert {line["who"] for line in mini["radio"]} <= {"atc", "pilot", "copilot"}
+    assert mini["track"][0][0] == 0 and mini["track"][-1][0] == round(replay["track"]["t"][-1])
+    assert "22:18" not in json.dumps(mini)  # a clock from the start, never the time of day
+    details = run("return m.flightDetails(input.f, m.miniReplay(input.r))",
+                  {"f": {"aircraft": "A220-300", "origin": "KDEN", "destination": "KSEA", "max_alt_ft": 38020}, "r": replay})
+    assert (details["departure_runway"], details["arrival_runway"]) == ("16R", "16L")  # from the clearances
+    assert details["weather"]["departure"] == {"wind": "100° at 4 kt", "altimeter": "30.15 inHg", "atis": "Lima"}
+    assert details["weather"]["arrival"]["wind"] == "220° at 7 kt"
+    assert details["route"][0] == "MUGBE" and not {"TOC", "TOD", "KSEA"} & set(details["route"])

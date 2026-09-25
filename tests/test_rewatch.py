@@ -120,8 +120,11 @@ def test_built_once_then_kept(tmp_path):
     rec = shutil.copytree(FLIGHT, tmp_path / "20260923-181635_live")
     first = replay_for(rec)
     assert (rec / CACHE_FILE).read_bytes() == first
-    (rec / CACHE_FILE).write_bytes(encode({"v": 1, "cached": True}))
-    assert decode(replay_for(rec)) == {"v": 1, "cached": True}  # from the cache, not rebuilt
+    kept = {"v": 1, "flight": {"livery": ""}, "cached": True}
+    (rec / CACHE_FILE).write_bytes(encode(kept))
+    assert decode(replay_for(rec)) == kept  # from the cache, not rebuilt
+    (rec / CACHE_FILE).write_bytes(encode({"v": 1, "flight": {}, "cached": True}))
+    assert "cached" not in decode(replay_for(rec))  # made before replays carried the livery: built again
 
 
 # --- the logbook and the app ------------------------------------------------------------------------------------
@@ -221,6 +224,18 @@ def test_sharing_needs_the_account_then_syncs_the_line_first(app):
     asyncio.run(routes.api_share_remove({"id": "kden-ksea"}))
     assert server.shares == {} and book.get("kden-ksea").share_url is None
     asyncio.run(routes.api_share_remove({"id": "kden-ksea"}))  # already gone: fine
+
+
+def test_sharing_with_the_replay_uploads_it_first(app):
+    # The page's mini replay is cut from the account's copy: a flight whose replay isn't up yet sends it.
+    routes, server, book, account = app
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+    made = asyncio.run(routes.api_share({"id": "kden-ksea"}))
+    assert server.shares[made["slug"]]["body"]["replay"] is False and server.replays == {}
+    made = asyncio.run(routes.api_share({"id": "kden-ksea", "replay": True}))
+    assert server.shares[made["slug"]]["body"]["replay"] is True
+    assert "kden-ksea" in server.replays and book.get("kden-ksea").replay_uploaded_at
 
 
 def test_the_share_link_stays_on_this_computer(app):

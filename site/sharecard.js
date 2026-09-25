@@ -593,7 +593,8 @@ ${body}</svg>`;
   /**
    * Share a flight: the card as the public will see it, a choice of the radio line it quotes, then the link.
    * opts: {base, moments: [...], shared: url|null, card(quote) -> snapshot for the preview,
-   *        share(quote) -> {slug, url, card}, putImage(slug, blob), unshare(slug), slug}
+   *        share(quote, withReplay) -> {slug, url, card}, putImage(slug, blob), unshare(slug), slug,
+   *        replay: whether the flight has a replay to put on the page (the path flown and the radio)}
    */
   function dialog(opts) {
     const box = document.createElement("div");
@@ -610,7 +611,9 @@ ${body}</svg>`;
 ${moments.length ? `<div class="share-quotes" role="radiogroup" aria-label="The line from the radio on the card">${quotes}
 <label><input type="radio" name="sc-quote" value="-1"${moments.length ? "" : " checked"}><b>No quote</b><span>Just the route and the numbers</span></label></div>`
     : `<p>Upload the flight's replay to quote a line from the radio on the card.</p>`}
-<p>Anyone with the link sees this card: the route, the date and these numbers${moments.length ? ", and the line you pick" : ""}. Never your gates, the times, the track or the rest of the radio. Stop sharing whenever you like.</p>
+${opts.replay ? `<label class="share-opt"><input type="checkbox" class="sc-replay" checked><span><b>Put the replay on the page</b>
+A small replay under the card: the path you flew and the radio, both sides, timed from the start of the flight.</span></label>` : ""}
+<p class="sc-privacy"></p>
 <div class="share-row sc-link" hidden><input type="text" readonly aria-label="The link"><button class="btn btn-ghost btn-sm sc-copy" type="button">Copy</button></div>
 <div class="share-row">
 <button class="btn btn-primary sc-go" type="button">Share</button>
@@ -631,6 +634,13 @@ ${moments.length ? `<div class="share-quotes" role="radiogroup" aria-label="The 
       return i >= 0 ? moments[i] : null;
     };
     const preview = () => mount(q(".share-card"), opts.card(chosen()), { base: opts.base || "" });
+    const withReplay = () => !!(q(".sc-replay") && q(".sc-replay").checked);
+    const privacy = () => {
+      q(".sc-privacy").textContent = `Anyone with the link sees this card: the route, the date, these numbers${moments.length ? ", the line you pick" : ""}`
+        + ` and the aircraft and runways${withReplay() ? ", with the path flown and the radio (gates included, if ATC said them)" : ""}.`
+        + ` Never your email or the time of day${withReplay() ? "" : ", the track or the rest of the radio"}. Stop sharing whenever you like.`;
+    };
+    if (q(".sc-replay")) q(".sc-replay").addEventListener("change", privacy);
     const linked = () => {
       q(".sc-link").hidden = !url;
       q(".sc-link input").value = url || "";
@@ -656,7 +666,7 @@ ${moments.length ? `<div class="share-quotes" role="radiogroup" aria-label="The 
       button.disabled = true;
       status(url ? "Updating ..." : "Sharing ...");
       try {
-        const made = await opts.share(chosen());
+        const made = await opts.share(chosen(), withReplay());
         slug = made.slug; url = made.url;
         linked();
         status("Drawing the card ...");
@@ -673,6 +683,7 @@ ${moments.length ? `<div class="share-quotes" role="radiogroup" aria-label="The 
       try { await opts.unshare(slug); slug = null; url = null; linked(); status("Not shared any more."); } catch (err) { status(err.message, true); }
     };
     linked();
+    privacy();
     preview();
     q(".sc-go").focus();
     return { close };

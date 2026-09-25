@@ -12,12 +12,80 @@ body.share-page { min-height: 100vh; display: flex; flex-direction: column; back
 .share-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .share-gone { margin: 18vh auto 0; text-align: center; }
 .share-gone h1 { color: var(--text, #e8ecf1); font-size: 28px; margin: 0 0 8px; }
+.share-pilot { margin: 0; font-size: 14px; color: var(--text-3, #8a939d); letter-spacing: .01em; }
+.share-pilot strong { color: var(--text, #e8ecf1); font-weight: 600; }
+.share-page #share:has(+ .share-more) { flex: 0 0 auto; }
+
+/* Under the card (minireplay.js): the replay playing by itself, and the flight's details. */
+.share-more { flex: 1; width: min(1200px, 100% - 32px); margin: 0 auto; padding: 8px 0 32px; display: flex; flex-direction: column; gap: 20px; }
+.share-more h2 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan, #6cc9e8); margin: 0 0 12px;
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-weight: 600; }
+.mini-replay, .share-details { background: rgba(255, 255, 255, .025); border: 1px solid rgba(255, 255, 255, .06); border-radius: 18px; }
+.mini-replay { overflow: hidden; }
+.mr-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid rgba(255, 255, 255, .06);
+  font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px; color: var(--text-3, #8a939d); flex-wrap: wrap; }
+.mr-head b { color: var(--text, #e8ecf1); letter-spacing: .12em; text-transform: uppercase; font-size: 12px; }
+.mr-live { width: 8px; height: 8px; border-radius: 50%; background: var(--green, #5fd068); box-shadow: 0 0 10px var(--green, #5fd068);
+  animation: mr-pulse 1.6s ease-in-out infinite; }
+.mr-still .mr-live { animation: none; }
+@keyframes mr-pulse { 50% { opacity: .35; } }
+.mr-clock { color: var(--green, #5fd068); font-variant-numeric: tabular-nums; min-width: 5ch; }
+.mr-phase { color: var(--text-2, #b3bcc6); }
+.mr-read { margin-left: auto; display: flex; gap: 14px; font-variant-numeric: tabular-nums; color: var(--text-2, #b3bcc6); }
+.mr-body { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+.mr-left { display: flex; flex-direction: column; border-right: 1px solid rgba(255, 255, 255, .06); }
+.mr-map { display: block; width: 100%; height: auto; background: radial-gradient(90% 90% at 60% 40%, #0d141b, #080a0d); }
+.mr-land { fill: #1a2530; stroke: #3a5063; stroke-width: 1; }
+.mr-plan { fill: none; stroke: rgba(232, 236, 241, .22); stroke-width: 1.5; stroke-dasharray: 4 6; }
+.mr-ghost { fill: none; stroke: rgba(108, 201, 232, .14); stroke-width: 2; stroke-linejoin: round; }
+.mr-flown { fill: none; stroke: var(--green, #5fd068); stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(95, 208, 104, .55)); }
+.mr-apt circle { fill: #0b0d10; stroke: var(--cyan, #6cc9e8); stroke-width: 2.2; }
+.mr-dest circle { stroke: var(--green, #5fd068); }
+.mr-apt text { fill: var(--text, #e8ecf1); font: 600 13px var(--mono, ui-monospace, Menlo, monospace); paint-order: stroke;
+  stroke: #0b0d10; stroke-width: 4px; }
+.mr-plane path { fill: #fff; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .8)); }
+.mr-profile { display: block; width: 100%; height: 64px; border-top: 1px solid rgba(255, 255, 255, .06); background: #0b0d10; }
+.mr-alt-line { fill: none; stroke: var(--cyan, #6cc9e8); stroke-width: 1.5; vector-effect: non-scaling-stroke; opacity: .75; }
+.mr-head-line { stroke: var(--green, #5fd068); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.mr-radio { list-style: none; margin: 0; padding: 14px 16px; overflow: hidden; height: 0; min-height: 100%; display: flex; flex-direction: column; gap: 10px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 56px); mask-image: linear-gradient(to bottom, transparent, #000 56px); }
+.mr-body { position: relative; }
+.mr-still .mr-radio { overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
+.mr-line { display: flex; flex-direction: column; gap: 3px; animation: mr-in .35s ease-out; }
+@keyframes mr-in { from { opacity: 0; transform: translateY(6px); } }
+.mr-who { display: flex; gap: 8px; align-items: baseline; font: 600 11px var(--mono, ui-monospace, Menlo, monospace); letter-spacing: .06em;
+  text-transform: uppercase; color: var(--cyan, #6cc9e8); }
+.mr-who i { font-style: normal; font-weight: 400; color: var(--text-3, #8a939d); letter-spacing: 0; }
+.mr-pilot .mr-who, .mr-copilot .mr-who { color: var(--green, #5fd068); }
+.mr-text { font: 13.5px/1.5 var(--mono, ui-monospace, Menlo, monospace); color: var(--text-2, #b3bcc6); overflow-wrap: anywhere; }
+.mr-atc .mr-text { color: var(--text, #e8ecf1); }
+.share-details { padding: 20px 22px; }
+.share-details dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px 24px; margin: 0; }
+.sd-item dt { font: 12px var(--mono, ui-monospace, Menlo, monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3, #8a939d); }
+.sd-item dd { margin: 4px 0 0; color: var(--text, #e8ecf1); font-weight: 600; font-size: 16px; }
+.sd-item dd span { display: block; font-weight: 400; font-size: 13px; color: var(--text-2, #b3bcc6); margin-top: 2px; }
+.sd-route { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, .06); }
+.sd-route h3 { font: 12px var(--mono, ui-monospace, Menlo, monospace); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3, #8a939d); margin: 0 0 8px; font-weight: 400; }
+.sd-route p { margin: 0; font: 13.5px/2 var(--mono, ui-monospace, Menlo, monospace); color: var(--text-2, #b3bcc6); word-spacing: 4px; }
+.sd-route b { color: var(--green, #5fd068); }
+@media (max-width: 760px) {
+  .mr-body { grid-template-columns: 1fr; }
+  .mr-left { border-right: 0; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+  .mr-radio { height: 260px; min-height: 0; }
+  .mr-read { margin-left: 0; }
+}
+
 .share-foot { text-align: center; padding: 18px 16px 28px; font-size: 14px; }
 .share-foot a { color: var(--text-3, #8a939d); text-decoration: none; }
 .share-foot a:hover { color: var(--text, #e8ecf1); }
 .share-foot strong { color: var(--green, #5fd068); }
 
 /* The share dialog (dashboard and app). */
+.share-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: rgba(95, 208, 104, .07);
+  font-size: 13px; color: var(--text-2, #b3bcc6); cursor: pointer; }
+.share-opt input { margin-top: 3px; accent-color: var(--green, #5fd068); }
+.share-opt b { display: block; color: var(--text, #e8ecf1); }
 .share-dialog { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 16px; background: rgba(5, 7, 9, .72); }
 .share-dialog[hidden] { display: none; }
 .share-box { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 14px;

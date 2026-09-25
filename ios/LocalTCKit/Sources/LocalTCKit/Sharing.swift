@@ -266,8 +266,10 @@ extension APIClient {
     }
 
     /// Make (or change) a flight's public card: the quote the pilot picked, the airports' names.
-    public func shareFlight(id: String, quote: Moment?, names: [String: String]) async throws -> Share {
-        var body: [String: Any] = ["kind": "flight", "ref": id, "names": names]
+    /// ``replay``: put the flight's mini replay on its page (the path flown and the radio), if the flight's
+    /// replay is in the account.
+    public func shareFlight(id: String, quote: Moment?, names: [String: String], replay: Bool = false) async throws -> Share {
+        var body: [String: Any] = ["kind": "flight", "ref": id, "names": names, "replay": replay]
         if let quote {
             body["quote"] = ["kind": quote.kind, "station": quote.station, "text": quote.text, "mhz": quote.mhz as Any].compactMapValues { $0 is NSNull ? nil : $0 }
         }

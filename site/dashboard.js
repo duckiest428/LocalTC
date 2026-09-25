@@ -148,6 +148,7 @@ async function load() {
   }
   show("dash");
   document.querySelectorAll(".who-email").forEach((el) => { el.textContent = me.email; });
+  $("#display-name").value = me.display_name || "";
   $("#s-from").textContent = me.email;
   devices(me.sessions);
   go(location.hash.slice(1));
@@ -247,6 +248,21 @@ $("#btn-export").onclick = async () => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (err) { say(err.message, true); }
+};
+
+// The name on what's shared ("Flown by ..."): the account server checks it.
+$("#name-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const status = $("#name-status");
+  try {
+    const saved = await api("PATCH", "/v1/me", { display_name: $("#display-name").value });
+    $("#display-name").value = saved.display_name;
+    status.textContent = saved.display_name ? `Saved. Your shared flights say "Flown by ${saved.display_name}".` : "Saved. Your shared flights show no name.";
+    status.classList.remove("error");
+  } catch (err) {
+    status.textContent = err.message;
+    status.classList.add("error");
+  }
 };
 
 $("#del-form").onsubmit = async (e) => {
@@ -352,9 +368,9 @@ const Share = {
     const kept = f.has_replay ? await api("GET", `/v1/flights/${encodeURIComponent(id)}/moments`).catch(() => ({ moments: [], names: {} })) : { moments: [], names: {} };
     const slug = f.share ? f.share.split("/").pop() : null;
     ShareCard.dialog({
-      base: "", moments: kept.moments, shared: f.share, slug,
+      base: "", moments: kept.moments, shared: f.share, slug, replay: !!f.has_replay,
       card: (quote) => this.model.flightCard(f, { quote, names: kept.names }),
-      share: (quote) => api("POST", "/v1/shares", { kind: "flight", ref: id, quote, names: kept.names }),
+      share: (quote, replay) => api("POST", "/v1/shares", { kind: "flight", ref: id, quote, names: kept.names, replay }),
       putImage: (s, blob) => upload("PUT", `/v1/shares/${s}/image`, blob, "image/png"),
       unshare: (s) => api("DELETE", `/v1/shares/${s}`),
       onClose: (url) => {

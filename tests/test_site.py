@@ -1,6 +1,7 @@
 """The website's built page: the changelog renders from CHANGELOG.md, and the current version is on top."""
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -69,3 +70,17 @@ def test_the_dashboard_is_a_sidebar_of_sections_behind_the_sign_in():
         assert f'<section class="dash-page" id="{page}"' in app  # all inside the signed-in part, hidden until then
     signed_out = html[html.index('id="auth"'):html.index('id="dash"')]
     assert "lb-map" not in signed_out and "support-form" not in signed_out
+
+
+def test_the_shared_flight_page_gets_the_hashes_of_what_it_loads(tmp_path):
+    # The account server writes those pages and stamps their scripts from assets.json: a new sharecard.js
+    # is a new address, never yesterday's cached one.
+    site = tmp_path / "site"
+    site.mkdir()
+    for name in build_site.SHARE_PAGE_ASSETS:
+        (site / name).write_text((ROOT / "site" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    stamps = build_site.asset_stamps(site)
+    assert set(stamps) == set(build_site.SHARE_PAGE_ASSETS)
+    assert json.loads((site / "assets.json").read_text()) == stamps
+    shares = (ROOT / "server" / "src" / "shares.ts").read_text(encoding="utf-8")
+    assert all(f'asset("{name}")' in shares for name in build_site.SHARE_PAGE_ASSETS)

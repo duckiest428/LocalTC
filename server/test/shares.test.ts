@@ -137,3 +137,65 @@ describe("moments of an uploaded replay", () => {
     expect(got.names).toEqual({ KSAN: "San Diego" });
   });
 });
+
+describe("the shared page's extras", () => {
+  async function withReplay() {
+    const who = await signIn();
+    await call("POST", "/v1/flights", { flights: [flight("p1", { departure_runway: "" })] }, bearer(who.token));
+    const replay = {
+      v: 1, flight: { started_at: "2026-09-20T21:26:00Z", duration_s: 3000, origin: "KSAN", destination: "KPHX", livery: "Frontier 'Grizwald'" },
+      airports: { KSAN: { lat: 32.73, lon: -117.19, elev: 17 }, KPHX: { lat: 33.43, lon: -112.01, elev: 1135 } },
+      route: [{ ident: "PADRZ", lat: 32.8, lon: -117.0 }, { ident: "TOC", lat: 32.9, lon: -116 }, { ident: "BLH", lat: 33.6, lon: -114.7 }],
+      track: { t: [0, 1000, 3000], lat: [32.73, 33.0, 33.43], lon: [-117.19, -115, -112.01], alt: [17, 36000, 1135],
+        gs: [0, 450, 0], hdg: [270, 90, 80], vs: [0, 0, 0], gnd: [1, 0, 1] },
+      radio: [
+        { kind: "atc", t: 2, station: "San Diego Tower", mhz: 118.3, text: "Frontier 2084, runway 27, cleared for takeoff, wind 250 at 8" },
+        { kind: "pilot", t: 5, text: "Cleared for takeoff runway 27, Frontier 2084" },
+        { kind: "tuned", t: 6, text: "118.3" },
+        { kind: "atc", t: 2900, station: "Phoenix Tower", mhz: 118.7, text: "Frontier 2084, runway 26, wind 270 at 11, cleared to land, altimeter 29.92" },
+      ],
+      marks: [{ t: 10, kind: "takeoff", text: "Takeoff" }],
+    };
+    const body = await new Response(new Blob([JSON.stringify(replay)]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+    const up = await worker.fetch(new Request(`${API}/v1/flights/p1/replay`, { method: "PUT", body, headers: bearer(who.token) }), env);
+    expect(up.status).toBe(200);
+    return who;
+  }
+
+  it("puts the mini replay and the flight's details on the page, only when asked", async () => {
+    const { token } = await withReplay();
+    const plain = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1" }, bearer(token)));
+    expect(plain.replay).toBe(false);
+    let html = await (await view(`/f/${plain.slug}`)).text();
+    expect(html).toContain('id="share-extra"');
+    expect(html).not.toContain("cleared to land"); // the radio isn't on it
+    expect(html).not.toContain("minireplay.js\"></script>\n<script");
+
+    const full = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1", replay: true }, bearer(token)));
+    expect(full.replay).toBe(true);
+    expect(full.slug).toBe(plain.slug);
+    html = await (await view(`/f/${full.slug}`)).text();
+    const extra = JSON.parse(/id="share-extra">(.*?)<\/script>/s.exec(html)![1]);
+    expect(extra.details).toMatchObject({ aircraft: "A320neo", livery: "Frontier 'Grizwald'", departure_runway: "27", arrival_runway: "26",
+      route: ["PADRZ", "BLH"], weather: { departure: { wind: "250° at 8 kt" }, arrival: { wind: "270° at 11 kt", altimeter: "29.92 inHg" } } });
+    expect(extra.replay.track.length).toBe(3);
+    expect(extra.replay.radio.map((l: any) => l.who)).toEqual(["atc", "pilot", "atc"]);
+    expect(html).toContain("minireplay.js");
+    expect(html).not.toContain("21:26"); // the clock runs from the start of the flight, never the time of day
+  });
+
+  it("shows who flew it once the pilot gives a name, and never the email", async () => {
+    const { token, email } = await withReplay();
+    const share = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1" }, bearer(token)));
+    expect(await (await view(`/f/${share.slug}`)).text()).not.toContain("Flown by <strong>");
+    expect((await call("PATCH", "/v1/me", { display_name: "<b>x</b>" }, bearer(token))).status).toBe(400);
+    expect((await call("PATCH", "/v1/me", { display_name: "  Duckiest   Pilot " }, bearer(token))).status).toBe(200);
+    expect((await data(await call("GET", "/v1/me", undefined, bearer(token)))).display_name).toBe("Duckiest Pilot");
+    const html = await (await view(`/f/${share.slug}`)).text();
+    expect(html).toContain("Flown by <strong>Duckiest Pilot</strong>");
+    expect(html).toContain("Flown by Duckiest Pilot with LocalTC");
+    expect(html).not.toContain(email);
+    await call("PATCH", "/v1/me", { display_name: "" }, bearer(token));
+    expect(await (await view(`/f/${share.slug}`)).text()).not.toContain("Duckiest");
+  });
+});

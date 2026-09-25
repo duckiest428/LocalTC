@@ -16,6 +16,7 @@ export interface User {
   email: string;
   verified_at: string | null;
   created_at: string;
+  display_name?: string;
 }
 
 export interface Auth {
@@ -148,9 +149,21 @@ export async function me(env: Env, auth: Auth): Promise<Response> {
     "SELECT id, kind, device, created_at, last_used_at FROM sessions WHERE user_id = ?1 ORDER BY last_used_at DESC",
   ).bind(auth.user.id).all<{ id: string }>();
   return json({
-    email: auth.user.email, created_at: auth.user.created_at,
+    email: auth.user.email, created_at: auth.user.created_at, display_name: auth.user.display_name ?? "",
     sessions: results.map((s) => ({ ...s, current: s.id === auth.sessionId })),
   });
+}
+
+/** A name the pilot shows on what they share ("Flown by ..."): letters, digits, spaces and . _ ' -, up to 32. */
+export async function updateMe(env: Env, request: Request, auth: Auth): Promise<Response> {
+  const body = await readJson(request, 4096);
+  if (typeof body.display_name !== "string") throw new HttpError(400, "Send a display_name.");
+  const name = body.display_name.normalize("NFC").replace(/\s+/g, " ").trim();
+  if (name.length > 32 || (name && !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._'-]*$/u.test(name))) {
+    throw new HttpError(400, "A display name is up to 32 letters, digits and spaces (and . _ ' -).");
+  }
+  await env.DB.prepare("UPDATE users SET display_name = ?1 WHERE id = ?2").bind(name, auth.user.id).run();
+  return json({ display_name: name });
 }
 
 export async function revokeSession(env: Env, auth: Auth, id: string): Promise<Response> {

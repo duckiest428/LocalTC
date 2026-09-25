@@ -94,6 +94,7 @@ def build_replay(recording: Recording, record: Any = None) -> dict[str, Any]:
             "id": field("id"),
             "callsign": field("callsign", flight_cfg.get("callsign") or (identity.atc_id if identity else "")),
             "aircraft": field("aircraft", identity.atc_model if identity else ""),
+            "livery": (identity.title.strip() if identity else "")[:64],  # the sim's title: "FlyByWire A320neo (Delta)"
             "origin": field("origin", flight_cfg.get("origin", "")),
             "destination": field("destination", flight_cfg.get("destination", "")),
             "departure_runway": field("departure_runway"),
@@ -217,7 +218,8 @@ def replay_for(recording_dir: str | Path, record: Any = None) -> bytes:
     if cache.is_file() and cache.stat().st_mtime >= recording.session_file.stat().st_mtime:
         data = cache.read_bytes()
         try:
-            if decode(data).get("v") == VERSION:
+            cached = decode(data)
+            if cached.get("v") == VERSION and "livery" in cached.get("flight", {}):  # made before liveries: again
                 return data
         except (OSError, ValueError):
             pass

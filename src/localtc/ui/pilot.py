@@ -56,6 +56,7 @@ class PilotRoutes:
         return {
             (get, "logbook"): self.api_logbook,
             (post, "logbook/delete"): self.api_logbook_delete,
+            (post, "logbook/rebuild"): self.api_logbook_rebuild,
             (get, "replay"): self.api_replay,
             (post, "replay/upload"): self.api_replay_upload,
             (post, "replay/remove"): self.api_replay_remove,
@@ -190,6 +191,17 @@ class PilotRoutes:
     async def api_wrapped_share(self, args: dict) -> dict:
         self._signed_in()
         return await self._do(self.account.share, {"kind": "wrapped", **_period(args)})
+
+    async def api_logbook_rebuild(self, args: dict) -> dict:
+        """A line measured again from its recording; synced again if the account is signed in."""
+        if await asyncio.to_thread(self.logbook.rebuild, str(args.get("id", ""))) is None:
+            raise HttpError(404, "This flight's recording isn't on this computer, or has no flight in it.")
+        if self.account.signed_in and self.cfg().account.sync:
+            try:
+                await self._do(self.account.sync)
+            except HttpError as exc:
+                log.info("Couldn't sync the rebuilt line: %s", exc)
+        return await self.api_logbook({})
 
     async def api_logbook_delete(self, args: dict) -> dict:
         """From this computer's logbook only. A synced copy is deleted on the website."""

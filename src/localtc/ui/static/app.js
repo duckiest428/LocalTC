@@ -429,6 +429,7 @@ const Logbook = {
               : `<button class="linkbtn up" data-share="${esc(f.id)}" title="Upload the replay (the track and the radio transcript, no audio) so it plays on localtc.tech and your phone">Upload</button>`) : ""}
             ${S.account?.signed_in ? `<button class="linkbtn up${f.share_url ? " on" : ""}" data-card="${esc(f.id)}" title="${f.share_url ? "Shared: anyone with the link sees this flight's card" : "Share this flight: a public card with the route and the numbers"}">${f.share_url ? "Shared" : "Share flight"}</button>` : ""}
             <span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
+            ${f.has_recording ? `<button class="linkbtn" data-rebuild="${esc(f.id)}" title="Measure this line again from its recording: times, landing rate, distance, aircraft">Rebuild</button>` : ""}
             <button class="linkbtn" data-del="${esc(f.id)}" title="Delete from this computer">&times;</button></td></tr>`).join("")}
       </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
       <p class="muted small pad">The logbook is kept on this computer (${t.flights} flight${t.flights === 1 ? "" : "s"}).
@@ -436,6 +437,14 @@ const Logbook = {
     $$("[data-del]").forEach((b) => (b.onclick = (e) => {
       e.stopPropagation();
       if (confirm("Delete this flight from the logbook on this computer?")) api("logbook/delete", { id: b.dataset.del }).then((v) => this.render(v)).catch(fail);
+    }));
+    $$("[data-rebuild]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      if (!confirm("Measure this flight again from its recording? Its times, landing rate, distance and aircraft are replaced.")) return;
+      b.disabled = true;
+      b.textContent = "Rebuilding ...";
+      api("logbook/rebuild", { id: b.dataset.rebuild }).then((v) => { this.render(v); toast("Rebuilt from the recording"); })
+        .catch((err) => { fail(err); b.disabled = false; b.textContent = "Rebuild"; });
     }));
     $$("[data-replay]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); this.replay(b.dataset.replay); }));
     $$("[data-share]").forEach((b) => (b.onclick = (e) => {

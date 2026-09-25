@@ -41,7 +41,7 @@ a new minor version adds features, a patch fixes them.
 - A pilot's "request climb" below the filed level lowered the cruise.
 - Montreal's 06L was taxied "via A4": the sim names the connector to 06L "A4" as well as 06R's real A4. It's now "via G, C" to the hold on C. A numbered taxiway the sim has in two unconnected places leading to different runways is no longer named at all, and `airport_fixes.toml` (in the LocalTC data folder) corrects an airport's taxiway names and holding points.
 - The Dashboard could mix a new page with an old script from the browser's cache: Wrapped went to the Flight Tracker, and the logbook's columns slid one to the left. The site's scripts and styles now carry a version stamp.
-- A flight's aircraft was missing from the logbook when the sim wrote its type as `ATCCOM.AC_MODEL_A20N` (the A320neo). Lines without one take it from their recording, and sync again.
+- A flight's aircraft was missing from the logbook when the sim wrote its type as `ATCCOM.AC_MODEL_A20N` (the A320neo). Lines without one take it from their recording, and sync again. **Rebuild** in the Logbook measures a line again from its recording (times, landing rate, distance, aircraft) when it came out wrong.
 - The Dashboard on a phone: the section bar at the top no longer makes the page wider than the screen.
 
 ## [0.3.0] - 2026-09-23

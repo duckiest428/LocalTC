@@ -4,6 +4,7 @@ the Logbook's endpoints, the upload only when the pilot asks).
 """
 
 import asyncio
+import dataclasses
 import json
 import shutil
 from pathlib import Path
@@ -263,3 +264,18 @@ def test_the_sims_underscored_model_names_are_read():
     log.feed(AircraftIdentity(t=1.0, title="A320neo V2", atc_id="ASXGS", airline="", flight_number="", atc_type="",
                               atc_model="ATCCOM.AC_MODEL_A20N.0.text"))
     assert log.aircraft == "A20N"
+
+
+def test_a_wrong_line_is_rebuilt_from_its_recording(app):
+    """The Denver flight's line said 0 fpm, 2:56 in the air and no aircraft; its recording says -290, 2:29, A220-300."""
+    routes, server, book, account = app
+    line = book.get("kden-ksea")
+    book.add(dataclasses.replace(line, landing_vs_fpm=0, air_min=176.0, aircraft="", synced_at="2026-09-24T01:20:00Z"))
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+    row = next(f for f in asyncio.run(routes.api_logbook_rebuild({"id": "kden-ksea"}))["flights"] if f["id"] == "kden-ksea")
+    assert (row["landing_vs_fpm"], row["air_min"], row["aircraft"]) == (-290, 149.4, "A220-300")
+    assert (row["callsign"], row["origin"], row["destination"]) == ("DAL2543", "KDEN", "KSEA")  # kept
+    assert server.flights["kden-ksea"]["landing_vs_fpm"] == -290  # synced again
+    with pytest.raises(HttpError):
+        asyncio.run(routes.api_logbook_rebuild({"id": "nope"}))

@@ -12,7 +12,7 @@ replay (its track and radio transcript) goes to it only when the pilot uploads i
 import sqlite3
 import uuid
 from contextlib import closing
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -268,6 +268,29 @@ class Logbook:
         with closing(self._connect()) as db, db:
             db.executemany("UPDATE flights SET recording = ? WHERE id = ?", linked)
         return len(linked)
+
+    def rebuild(self, flight_id: str) -> FlightRecord | None:
+        """A line measured again from its recording: the times, the landing rate, distance, altitude, readbacks
+        and aircraft. Its id, callsign, airports, gates and runways stay (the recording may not know them), and
+        it goes up to the account again. None if there's no line, no recording, or no flight in it."""
+        from localtc.replay import Recording
+
+        line = self.get(flight_id)
+        if line is None or not line.recording or not Path(line.recording).is_dir():
+            return None
+        folder = Path(line.recording)
+        log = FlightLog(started=_created(folder))
+        for event in Recording(folder).events(skip=("traffic_snapshot", "llm_exchange", "nearby_airports", "airport_data")):
+            log.feed(event)
+        fresh = log.finish(None)
+        if fresh is None:
+            return None
+        measured = ("started_at", "ended_at", "block_min", "air_min", "distance_nm", "max_alt_ft", "landing_vs_fpm", "readbacks",
+                    "readbacks_correct", "alerts", "landed")
+        updated = replace(line, **{k: getattr(fresh, k) for k in measured}, aircraft=fresh.aircraft or line.aircraft,
+                          synced_at=None)
+        self.add(updated)
+        return updated
 
     def fill_aircraft(self) -> int:
         """Lines with no aircraft (ATC missed the sim's answer, or it wrote the type in a form not understood

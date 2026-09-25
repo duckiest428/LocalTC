@@ -76,7 +76,8 @@ export function flightCard(f, { quote = null, names = {} } = {}) {
     block_min: f.block_min == null ? null : Math.round(f.block_min),
     distance_nm: Math.round(Number(f.distance_nm) || 0),
     max_alt_ft: Math.round(Number(f.max_alt_ft) || 0),
-    landing_fpm: f.landed && f.landing_vs_fpm != null ? Math.round(f.landing_vs_fpm) : null,
+    // 0 (or climbing) is no measurement: the touchdown was missed, not a perfect one.
+    landing_fpm: f.landed && Number(f.landing_vs_fpm) < 0 ? Math.round(f.landing_vs_fpm) : null,
     landed: !!f.landed,
     readback_pct: readbacks ? Math.round((100 * (Number(f.readbacks_correct) || 0)) / readbacks) : null,
     quote: quote && quote.text ? {

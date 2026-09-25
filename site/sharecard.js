@@ -248,9 +248,12 @@
 <filter id="sc-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="7"/></filter>
 </defs>`;
 
+  // The LocalTC logo's aircraft (logo.svg), centred on 0,0 in a 256 box.
+  const PLANE = "M0 -70C5 -70 8 -64 8 -56L8 -22L74 8L74 18L8 2L8 28L26 40L26 48L4 42L4 54C4 60 2 64 0 66C-2 64 -4 60 -4 54L-4 42L-26 48L-26 40L-8 28L-8 2L-74 18L-74 8L-8 -22L-8 -56C-8 -64 -5 -70 0 -70Z";
+
   function brand(x, y, label) {
     return `<g transform="translate(${x} ${y})">
-<rect width="30" height="30" rx="8" fill="${C.green}"/><path d="M8 19 L15 9 L22 19" fill="none" stroke="#0b1f0e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<rect width="30" height="30" rx="6.6" fill="#0a0e0c" stroke="rgba(255,255,255,0.14)"/><path transform="translate(15 15) scale(0.1172)" fill="#f5f7f6" d="${PLANE}"/>
 <text x="42" y="21" font-family="${SANS}" font-weight="700" font-size="19" fill="${C.text}">LocalTC</text>
 <text x="128" y="21" font-family="${MONO}" font-weight="500" font-size="13" letter-spacing="2.5" fill="${C.cyan}">${esc(label)}</text>
 </g>`;
@@ -312,8 +315,9 @@
 <text x="66" y="240" font-family="${SANS}" font-size="19" fill="${C.text2}">${esc(o.name || "")}</text>
 <text x="${destX + 2}" y="240" font-family="${SANS}" font-size="19" fill="${C.text2}">${esc(d.name || "")}</text>`;
     const meta = [card.callsign, card.aircraft, dateText(card.date)].filter(Boolean).join("  ·  ");
-    const landing = card.landing_fpm != null ? `${card.landing_fpm} fpm` : card.landed ? "–" : "No landing";
-    const butter = card.landing_fpm != null && card.landing_fpm > -150;
+    const fpm = card.landing_fpm < 0 ? card.landing_fpm : null;  // 0: not measured (older shares carry it)
+    const landing = fpm != null ? `${fpm} fpm` : card.landed ? "---" : "No landing";
+    const butter = fpm != null && fpm > -150;
     const statFont = `700 34px ${SANS}`;
     const col2 = Math.max(250, 64 + textWidth(duration(card.air_min), statFont) + 44,
       64 + textWidth(landing, statFont) + (butter ? 14 + 92 : 0) + 40);
@@ -380,7 +384,7 @@ ${stats}${badge}${q}
       stat(214, y0, Number(card.hours) < 100 ? (Math.round(card.hours * 10) / 10).toLocaleString("en-US") : num(card.hours), "HOURS", C.text, big),
       stat(350, y0, num(card.distance_nm), "NM", C.text, big),
       stat(64, y0 + 96, num((card.airports || []).length), "AIRPORTS", C.text, big),
-      stat(214, y0 + 96, card.best_landing_fpm != null ? `${card.best_landing_fpm}` : "–", "BEST FPM", card.best_landing_fpm > -150 ? C.green : C.text, big),
+      stat(214, y0 + 96, card.best_landing_fpm != null ? `${card.best_landing_fpm}` : "---", "BEST FPM", card.best_landing_fpm > -150 ? C.green : C.text, big),
       stat(350, y0 + 96, card.top_airport || "–", "TOP AIRPORT", C.text, big),
     ].join("");
     return svgFrame(`${map}

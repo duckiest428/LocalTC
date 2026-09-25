@@ -66,6 +66,11 @@ def test_the_snapshot_has_nothing_private():
     assert "B32" not in json.dumps(card) and "22:18" not in json.dumps(card) and card["quote"] is None
 
 
+def test_a_landing_rate_of_zero_is_no_measurement():
+    row = {"started_at": "2026-09-23T22:18:00Z", "origin": "KDEN", "destination": "KSEA", "landed": True, "landing_vs_fpm": 0}
+    assert run("return m.flightCard(input, {})", row)["landing_fpm"] is None
+
+
 @pytest.mark.parametrize(("nm", "words"), [(10, "short hop"), (320, "marathons"), (4500, "New York to London"),
                                            (30000, "around the Earth"), (250000, "to the Moon")])
 def test_distances_are_framed(nm, words):

@@ -33,6 +33,7 @@ a new minor version adds features, a patch fixes them.
 - The companion app's EFB preview moved to Settings, so the new Logbook fits on the tab bar.
 
 ### Fixed
+- Flight cards: a landing with no measured rate shows "---" rather than "0 fpm" (and no Butter badge), and the card carries the real LocalTC logo.
 - Standard pressure (STD) in the flight levels was an "altitude deviation" when the aircraft's avionics were on STD and the sim's altimeter setting wasn't. Up high ATC now reads the flight level. "We're on standard" is understood.
 - Tower cleared a takeoff with a 777 over the threshold about to land. An aircraft low over the runway now holds the departure.
 - "Stopped ahead of you on the taxiway" for aircraft parked at their gates. Only aircraft on the route ahead count now.

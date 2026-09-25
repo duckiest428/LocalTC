@@ -136,7 +136,7 @@ function describe(card: Obj): { title: string; description: string } {
   const from = c.origin.name ? `${c.origin.name} (${c.origin.icao})` : c.origin.icao;
   const to = c.destination.name ? `${c.destination.name} (${c.destination.icao})` : c.destination.icao;
   const bits = [c.aircraft, c.distance_nm ? `${c.distance_nm.toLocaleString("en-US")} nm` : "",
-    c.landing_fpm != null ? `landed at ${c.landing_fpm} fpm` : ""].filter(Boolean);
+    c.landing_fpm != null && c.landing_fpm < 0 ? `landed at ${c.landing_fpm} fpm` : ""].filter(Boolean);
   return { title: `${c.callsign}: ${from} to ${to}`, description: `${bits.join(", ")}. Flown with LocalTC.` };
 }
 

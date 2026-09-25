@@ -66,6 +66,9 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         approach=flight.approach,
         sid=flight.sid or None,
         star=flight.star or None,
+        dep_runway=flight.dep_runway or None,
+        arr_runway=flight.arr_runway or None,
+        enforce_fpln_runways=atc.enforce_fpln_runways,
         route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
                     for f in flight.fixes),
     )

@@ -36,6 +36,7 @@ strict_callsign = false       # true: a readback without the callsign is incompl
 transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"
 chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)
+enforce_fpln_runways = false  # true: ATC gives the flight plan's runways; false: the runways in use (ATIS, else wind)
 radio_range = true            # an airport's frequencies reach only so far: tower 20-60 nm, ground a few miles
 callsign_check = true         # another flight's callsign heard: "station calling, say again your callsign"
 airport_dirs = []             # extra folders of <ICAO>.json airport files

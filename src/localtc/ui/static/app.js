@@ -664,6 +664,7 @@ const Settings = {
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
+        <label class="check-row"><input type="checkbox" id="s-fpln-rwy" ${st.atc.enforce_fpln_runways ? "checked" : ""}> Enforce FPLN runway assignments: ATC gives the flight plan's departure and arrival runways. Off: the runways in use, from the ATIS</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
@@ -781,6 +782,7 @@ const Settings = {
     on("#s-unscripted", "change", (e) => this.save("atc", "unscripted", e.target.checked));
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
     on("#s-chatter", "change", (e) => this.save("atc", "chatter", e.target.checked));
+    on("#s-fpln-rwy", "change", (e) => this.save("atc", "enforce_fpln_runways", e.target.checked));
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));

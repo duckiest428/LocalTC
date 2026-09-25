@@ -229,6 +229,9 @@ class EngineConfig:
     approach: str = "auto"  # "auto": what the airport publishes, the weather and the aircraft allow
     sid: str | None = None  # departure procedure from the flight plan, named in the IFR clearance
     star: str | None = None  # arrival procedure from the flight plan: "descend via" it
+    dep_runway: str | None = None  # the flight plan's runways: given only with enforce_fpln_runways
+    arr_runway: str | None = None
+    enforce_fpln_runways: bool = False  # off: the runway in use (ATIS, else wind); on: the plan's
     route: tuple[RouteFix, ...] = ()  # the plan's fixes: when the climb ends, where the descent begins
     transition_ft: int = 0  # 0 = the region's transition altitude (atc_core.region); otherwise this everywhere
     phraseology: str = "auto"  # "auto": FAA or ICAO by where the controller is; or "faa" / "icao" always
@@ -491,16 +494,30 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return out
 
     def _runway_end(self, icao: str | None, own: OwnshipState):
-        """The runway in use at an airport: its ATIS runway, or the best one for the wind."""
+        """The runway ATC gives at an airport. One the pilot asked for; with "enforce FPLN runway assignments"
+        on, the flight plan's (if the airport has it); otherwise the runway in use: its ATIS runway, or the
+        best one for the wind."""
         geo = self.geometry(icao)
         if geo is None:
             return None
         if icao == self.state.flight.origin and self._departure_override and (end := geo.end(self._departure_override)):
             return end
+        if self.cfg.enforce_fpln_runways:
+            planned = self.cfg.dep_runway if icao == self.state.flight.origin else \
+                self.cfg.arr_runway if icao == self.state.flight.destination else None
+            if planned and (end := geo.end(planned)) is not None:
+                return end
+        if icao not in self.atis.current and own is not None:
+            self._atis_now(icao, geo, own)  # not heard yet: the runway still comes from the ATIS it will say
         info = self.atis.current.get(icao or "")
         if info is not None and (end := geo.end(info.runway)) is not None:
             return end
         return select_runway(geo, own.wind_dir_true, own.wind_kt)
+
+    def _atis_now(self, icao: str, geo, own: OwnshipState) -> None:
+        weather = self.weather.surface(icao, self.tracker.context_builder.airports)
+        if weather is not None:
+            self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t)
 
     def _atis_note(self, icao: str | None, reported: str | None) -> Phrase | None:
         """"information Charlie is current, altimeter 29.92" when the pilot didn't report the current ATIS."""

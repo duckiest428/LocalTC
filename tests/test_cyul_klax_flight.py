@@ -296,3 +296,27 @@ def parked_at_montreal(**kwargs) -> tuple[AtcEngine, OwnshipState]:
             if isinstance(event, OwnshipState):
                 own = event
     return engine, own
+
+
+# --- runways: the one in use, or the plan's ----------------------------------------------------------------------
+
+def taxi_runway(result) -> str:
+    line = next(line for line in atc(result.lines) if "taxi" in line and "runway" in line)
+    return re.search(r"runway (\w+)", line).group(1)
+
+
+def test_runways_come_from_the_atis_unless_the_plan_is_enforced(copilot):
+    """The SimBrief plan filed 06R; Montreal's ATIS had 06L in use. By default ATC gives 06L."""
+    assert taxi_runway(copilot) == "06L"
+    s = scenario(copilot="full")
+    s.flight.dep_runway, s.flight.arr_runway = "06R", "24R"
+    assert taxi_runway(run(s, FLIGHT, recording=FLIGHT)) == "06L"  # the plan alone changes nothing
+    s.atc.enforce_fpln_runways = True
+    assert taxi_runway(run(s, FLIGHT, recording=FLIGHT)) == "06R"
+
+
+def test_an_enforced_runway_the_airport_lacks_falls_back_to_the_atis():
+    s = scenario(copilot="full")
+    s.flight.dep_runway = "33X"
+    s.atc.enforce_fpln_runways = True
+    assert taxi_runway(run(s, FLIGHT, recording=FLIGHT)) == "06L"

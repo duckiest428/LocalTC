@@ -118,6 +118,8 @@ class FlightConfig(_Section):
     route: str = ""
     sid: str = ""  # named in the IFR clearance ("via the MONTN2 departure, then as filed")
     star: str = ""
+    dep_runway: str = ""  # the plan's runways (SimBrief's plan_rwy); ATC gives them only with [atc] enforce_fpln_runways
+    arr_runway: str = ""
     approach: Literal["auto", "visual", "ils", "rnav"] = "auto"  # auto: what the airport has, the weather and the aircraft allow
     fixes: list[RouteFix] = []  # the plan's route; set from the flight plan for each flight, not saved
 
@@ -130,6 +132,9 @@ class AtcConfig(_Section):
     strict_callsign: bool = False
     radio_range: bool = True  # an airport's frequencies reach only so far: tower 20-60 nm, ground 6 nm (by altitude)
     chatter: bool = True  # other flights heard on the frequency now and then (no traffic behind them, nothing to answer)
+    # Runways: off, ATC gives the runway in use (the ATIS's, else the best for the wind), whatever the plan says;
+    # on, the flight plan's departure and arrival runways (SimBrief or typed in), where the airport has them.
+    enforce_fpln_runways: bool = False
     callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"

@@ -79,6 +79,9 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 - [ ] Listen for the voices: tower quicker, centre slower, the ATIS flat. Different fields' ground controllers word
       things a little differently.
 
+- [ ] Runways: with Quick Settings → ATC → **Enforce FPLN runway assignments** off, taxi, takeoff and the approach use the
+      ATIS runway even when SimBrief planned another. Turn it on: they use SimBrief's departure and arrival runways.
+
 ## 3. VFR (short hops are fine)
 
 - [ ] New Flight → Manual, set the rules to **VFR**. The Live Map switches itself to the **VFR** map (terrain plus airspace circles).

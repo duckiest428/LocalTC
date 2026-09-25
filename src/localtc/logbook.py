@@ -56,6 +56,7 @@ class FlightRecord:
     synced_at: str | None = None  # when an account last took it; None = not synced
     recording: str = ""  # the flight's recording directory on this computer, for its replay ("" = none)
     replay_uploaded_at: str | None = None  # when its replay went to the account; None = not uploaded
+    share_url: str | None = None  # its public card's link (localtc.tech/f/...), while it's shared
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -221,12 +222,17 @@ class Logbook:
     def forget_sync(self) -> None:
         """Signed out, or the account was deleted: every flight is local-only again."""
         with closing(self._connect()) as db, db:
-            db.execute("UPDATE flights SET synced_at = NULL, replay_uploaded_at = NULL")
+            db.execute("UPDATE flights SET synced_at = NULL, replay_uploaded_at = NULL, share_url = NULL")
 
     def mark_replay(self, flight_id: str, when: str | None) -> None:
         """Its replay went to the account (``when``), or came off it (None)."""
         with closing(self._connect()) as db, db:
             db.execute("UPDATE flights SET replay_uploaded_at = ? WHERE id = ?", (when, flight_id))
+
+    def mark_shared(self, flight_id: str, url: str | None) -> None:
+        """Its card is public at ``url``, or not any more (None)."""
+        with closing(self._connect()) as db, db:
+            db.execute("UPDATE flights SET share_url = ? WHERE id = ?", (url, flight_id))
 
     def link_recordings(self, recordings: Path) -> int:
         """Lines from before the logbook kept the recording's path: matched to a live recording that started

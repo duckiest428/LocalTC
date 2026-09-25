@@ -107,6 +107,11 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 - [ ] Dashboard → **Support**: send yourself a test message. It arrives at your email with the account's address as the reply-to.
 - [ ] Quick Settings → **Support & feedback** in the app sends one too (signed in; signed out, Send is greyed).
 - [ ] Dashboard → devices: signing out another device works; **Download my data** gives a JSON file.
+- [ ] Logbook (app or Dashboard) → **Share** on a flight: the card previews, the quote list offers the clearance first,
+      Share gives a `localtc.tech/f/…` link. Open it in a private window: the card draws itself. Paste it into
+      Discord or iMessage: it unfurls with the card's picture. **Stop sharing**: the link says "No longer shared".
+- [ ] **Wrapped** (app: the Logbook's button; Dashboard: the sidebar): Month plays its slides (arrows, a tap), Week is one
+      card, Year adds the superlatives. **Save image** saves a slide; **Share my month** gives a `/w/…` link.
 
 ## 6. The iPhone companion app
 
@@ -119,6 +124,7 @@ pick your phone and your team, press Run). A free-account install stops working 
 - [ ] **Frequencies**: the tuned and next stations light up in the airport lists.
 - [ ] **Airports**: the departure and arrival airports with runways, ILS and ATIS.
 - [ ] **Logbook**: your synced flights; one with an uploaded replay plays (map, radio, scrubber).
+- [ ] **Logbook**: swipe a flight right → Share: the card draws, Share gives a link to send. The chart button opens **Wrapped**.
 - [ ] Settings → **EFB** is greyed out ("Coming soon").
 - [ ] Turn the phone's Wi-Fi off (use cellular): the badge changes to **Via server** and the map still moves.
 - [ ] Handoffs and clearances pop up as banners.

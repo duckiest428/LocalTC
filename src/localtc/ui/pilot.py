@@ -59,6 +59,11 @@ class PilotRoutes:
             (get, "replay"): self.api_replay,
             (post, "replay/upload"): self.api_replay_upload,
             (post, "replay/remove"): self.api_replay_remove,
+            (post, "share"): self.api_share,
+            (post, "share/image"): self.api_share_image,
+            (post, "share/remove"): self.api_share_remove,
+            (get, "wrapped"): self.api_wrapped,
+            (post, "wrapped/share"): self.api_wrapped_share,
             (get, "account"): self.api_account,
             (post, "account/start"): self.api_start,
             (post, "account/finish"): self.api_finish,
@@ -125,6 +130,65 @@ class PilotRoutes:
             return False
         await asyncio.to_thread(self.logbook.mark_replay, flight_id, _now())
         return True
+
+    # --- sharing and Wrapped: through the account ---------------------------------------------------------------
+
+    def _signed_in(self) -> None:
+        if not self.account.signed_in:
+            raise HttpError(401, "Sign in to the account first (Quick Settings > Account).")
+
+    async def api_share(self, args: dict) -> dict:
+        """A public card for a flight: the page has already shown the pilot the card and the line it quotes."""
+        self._signed_in()
+        flight_id = str(args.get("id", ""))
+        record = await asyncio.to_thread(self.logbook.get, flight_id)
+        if record is None:
+            raise HttpError(404, "No such flight")
+        if record.synced_at is None:  # the server shares its own copy of the line
+            await self._do(self.account.sync)
+        made = await self._do(self.account.share, {"kind": "flight", "ref": flight_id, "quote": args.get("quote"),
+                                                    "names": args.get("names") or {}})
+        await asyncio.to_thread(self.logbook.mark_shared, flight_id, made["url"])
+        return made
+
+    async def api_share_image(self, args: dict) -> dict:
+        """The card's picture, drawn by the page (a data: URL of a PNG), for the link's preview."""
+        self._signed_in()
+        import base64
+
+        slug, url = str(args.get("slug", "")), str(args.get("png", ""))
+        if not slug.isalnum() or not url.startswith("data:image/png;base64,"):
+            raise HttpError(400, "Send the card as a PNG.")
+        await self._do(self.account.share_image, slug, base64.b64decode(url.partition(",")[2]))
+        return {"ok": True}
+
+    async def api_share_remove(self, args: dict) -> dict:
+        self._signed_in()
+        flight_id = str(args.get("id", ""))
+        record = await asyncio.to_thread(self.logbook.get, flight_id)
+        slug = (record.share_url or "").rstrip("/").rpartition("/")[2] if record else str(args.get("slug", ""))
+        if slug:
+            try:
+                await self._do(self.account.unshare, slug)
+            except HttpError as exc:
+                if exc.status != 404:  # already gone (unshared on the website): fine
+                    raise
+        if record is not None:
+            await asyncio.to_thread(self.logbook.mark_shared, flight_id, None)
+        return {"ok": True}
+
+    async def api_wrapped(self, args: dict) -> dict:
+        self._signed_in()
+        if self.cfg().account.sync:  # the recap is of the synced logbook: bring it up to date first
+            try:
+                await self._do(self.account.sync)
+            except HttpError as exc:
+                log.info("Couldn't sync before Wrapped: %s", exc)
+        return await self._do(self.account.wrapped, _period(args))
+
+    async def api_wrapped_share(self, args: dict) -> dict:
+        self._signed_in()
+        return await self._do(self.account.share, {"kind": "wrapped", **_period(args)})
 
     async def api_logbook_delete(self, args: dict) -> dict:
         """From this computer's logbook only. A synced copy is deleted on the website."""
@@ -282,6 +346,11 @@ def _row(record: FlightRecord) -> dict:
 
 def _now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _period(args: dict) -> dict:
+    """A Wrapped period from the page, only the fields the server takes."""
+    return {k: str(args[k]) for k in ("period", "from", "to", "tz", "label") if args.get(k) not in (None, "")}
 
 
 def _email(args: dict) -> str:

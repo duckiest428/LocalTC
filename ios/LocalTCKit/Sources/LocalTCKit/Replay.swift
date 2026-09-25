@@ -197,6 +197,23 @@ public struct LogbookFlight: Codable, Sendable, Equatable, Identifiable {
     public var landingVsFpm: Int?
     public var landed: Bool
     public var hasReplay: Bool?
+    public var share: String?  // its public card's link, while it's shared
+    // For its card (site/cardmodel.js flightCard): the numbers and where the airports are.
+    public var distanceNm: Double?
+    public var maxAltFt: Double?
+    public var readbacks: Int?
+    public var readbacksCorrect: Int?
+    public var originLat: Double?
+    public var originLon: Double?
+    public var destinationLat: Double?
+    public var destinationLon: Double?
+
+    /// The line as the server has it (snake_case JSON), for the card to be drawn from.
+    public var json: Data {
+        let e = JSONEncoder()
+        e.keyEncodingStrategy = .convertToSnakeCase
+        return (try? e.encode(self)) ?? Data("{}".utf8)
+    }
 
     public var date: Date? { ISO8601DateFormatter().date(from: startedAt) }
 }

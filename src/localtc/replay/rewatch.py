@@ -18,6 +18,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from localtc.atc_core.facilities import sector_name
 from localtc.radiolog import radio_line
 from localtc.replay.reader import Recording
 from localtc.sim_api import (
@@ -48,7 +49,7 @@ def build_replay(recording: Recording, record: Any = None) -> dict[str, Any]:
     """The replay of a recording. ``record``: its logbook line (``FlightRecord``), for the names it knows."""
     own: list[OwnshipState] = []
     events: list[Any] = []
-    airports: dict[str, dict[str, float]] = {}
+    airports: dict[str, dict[str, Any]] = {}
     identity: AircraftIdentity | None = None
     for ev in recording.events(skip=SKIP):
         if isinstance(ev, OwnshipState):
@@ -56,6 +57,8 @@ def build_replay(recording: Recording, record: Any = None) -> dict[str, Any]:
         elif isinstance(ev, AirportData):
             a = ev.airport
             airports[a.icao] = {"lat": round(a.lat, 4), "lon": round(a.lon, 4), "elev": round(a.elev_ft)}
+            if a.name:  # the place, for a shared card: "Seattle" under KSEA
+                airports[a.icao]["name"] = sector_name(a)
         elif isinstance(ev, AircraftIdentity):
             identity = identity or ev
         else:

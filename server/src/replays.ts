@@ -7,6 +7,7 @@
 import type { Auth } from "./auth";
 import type { Env } from "./env";
 import { HttpError, json, now } from "./http";
+import { airportNames, moments as pickMoments } from "./cardmodel";
 import { limit } from "./rate";
 
 const MAX_GZ = 1024 * 1024; // D1 rows top out at 2 MB
@@ -54,6 +55,8 @@ export function cleanReplay(raw: unknown): Obj {
     if (!/^[A-Z0-9]{2,8}$/.test(icao) || !isObj(p)) bad("airports");
     const q = p as Obj;
     airports[icao] = { lat: num(q.lat, -90, 90, "airports"), lon: num(q.lon, -180, 180, "airports"), elev: num(q.elev ?? 0, -2000, 20000, "airports") };
+    const name = text(q.name, 40, "airport name");
+    if (name) (airports[icao] as Obj).name = name;
   }
 
   const route = (Array.isArray(r.route) ? r.route : []).slice(0, MAX_FIXES).map((x) => {
@@ -137,10 +140,13 @@ export async function put(env: Env, request: Request, auth: Auth, id: string): P
   const replay = cleanReplay(raw);
   (replay.flight as Obj).id = id;
   const data = await gzip(JSON.stringify(replay));
+  // The calls worth quoting, kept alongside: for sharing from the phone, and Wrapped's standout moment.
+  const kept = JSON.stringify({ moments: pickMoments(replay.radio), names: airportNames(replay.airports) });
   await env.DB.prepare(
-    `INSERT INTO replays (user_id, flight_id, created_at, size, data) VALUES (?1, ?2, ?3, ?4, ?5)
-     ON CONFLICT(user_id, flight_id) DO UPDATE SET created_at = excluded.created_at, size = excluded.size, data = excluded.data`,
-  ).bind(auth.user.id, id, now(), data.byteLength, data).run();
+    `INSERT INTO replays (user_id, flight_id, created_at, size, data, moments) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT(user_id, flight_id) DO UPDATE SET created_at = excluded.created_at, size = excluded.size, data = excluded.data,
+       moments = excluded.moments`,
+  ).bind(auth.user.id, id, now(), data.byteLength, data, kept).run();
   return json({ ok: true, size: data.byteLength });
 }
 
@@ -159,6 +165,20 @@ export async function remove(env: Env, auth: Auth, id: string): Promise<Response
   const res = await env.DB.prepare("DELETE FROM replays WHERE user_id = ?1 AND flight_id = ?2").bind(auth.user.id, id).run();
   if (!res.meta.changes) throw new HttpError(404, "No replay for this flight.");
   return json({ ok: true });
+}
+
+/** The calls worth quoting on a shared card, and the airports' names, from the flight's uploaded replay. */
+export async function moments(env: Env, auth: Auth, id: string): Promise<Response> {
+  const row = await env.DB.prepare("SELECT moments, data FROM replays WHERE user_id = ?1 AND flight_id = ?2")
+    .bind(auth.user.id, id).first<{ moments: string | null; data: ArrayBuffer | number[] }>();
+  if (!row) return json({ moments: [], names: {} });
+  if (row.moments) return json(JSON.parse(row.moments));
+  // Uploaded before moments were kept: work them out once, and keep them.
+  const bytes = row.data instanceof ArrayBuffer ? row.data : new Uint8Array(row.data).buffer;
+  const replay = JSON.parse(await gunzip(bytes, MAX_JSON)) as Obj;
+  const kept = { moments: pickMoments(replay.radio), names: airportNames(replay.airports) };
+  await env.DB.prepare("UPDATE replays SET moments = ?1 WHERE user_id = ?2 AND flight_id = ?3").bind(JSON.stringify(kept), auth.user.id, id).run();
+  return json(kept);
 }
 
 /** Every replay in the account, for the export. */

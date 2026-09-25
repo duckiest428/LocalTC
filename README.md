@@ -87,7 +87,9 @@ and next, and ATC's last call). Only while the companion app watches from away f
 (and you allow it) do your position, traffic and radio pass through the server, held in memory and never
 stored; on the same Wi-Fi the phone talks to the PC directly. A flight's **replay** (its track and radio
 transcript, no audio) goes up only when you upload it from the Logbook, or turn on "upload each flight's
-replay"; then it plays on the Dashboard and in the companion app's Logbook too. It never sends voice, recordings or settings. There's
+replay"; then it plays on the Dashboard and in the companion app's Logbook too. **Share** makes a flight's
+card public at a link (the route, the numbers and one radio line you pick), and **Wrapped** tells your week,
+month or year of flying as a story; both need the account. It never sends voice, recordings or settings. There's
 no password: signing in emails you a 6-digit code to type in. The sign-in is then kept in Windows Credential
 Manager (or the macOS Keychain), not in a file. The server is in
 [`server/`](server/README.md).

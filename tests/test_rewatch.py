@@ -190,3 +190,54 @@ def test_after_a_flight_the_replay_goes_up_only_with_the_setting(app, setting):
     asyncio.run(routes.after_flight())
     assert "kden-ksea" in server.flights  # the line syncs either way
     assert ("kden-ksea" in server.replays) is setting
+
+
+# --- sharing a flight and Wrapped, from the app ---------------------------------------------------------------
+
+PNG = "data:image/png;base64," + __import__("base64").b64encode(b"\x89PNG\r\n\x1a\n" + b"\0" * 100).decode()
+
+
+def test_sharing_needs_the_account_then_syncs_the_line_first(app):
+    routes, server, book, account = app
+    with pytest.raises(HttpError) as exc:
+        asyncio.run(routes.api_share({"id": "kden-ksea"}))
+    assert exc.value.status == 401
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+    quote = {"kind": "clearance", "station": "Denver Clearance", "mhz": 118.75, "text": "Delta 2543, cleared to Seattle via the ZIMMR3"}
+    made = asyncio.run(routes.api_share({"id": "kden-ksea", "quote": quote, "names": {"KSEA": "Seattle"}}))
+    assert "kden-ksea" in server.flights  # the server shares its own copy of the line
+    assert server.shares[made["slug"]]["body"]["quote"] == quote
+    assert book.get("kden-ksea").share_url == made["url"]
+    row = asyncio.run(routes.api_logbook({}))["flights"][0]
+    assert row["share_url"] == made["url"]
+
+    asyncio.run(routes.api_share_image({"slug": made["slug"], "png": PNG}))
+    assert server.shares[made["slug"]]["image"].startswith(b"\x89PNG")
+    with pytest.raises(HttpError):
+        asyncio.run(routes.api_share_image({"slug": made["slug"], "png": "data:text/html;base64,PGI+"}))
+
+    asyncio.run(routes.api_share_remove({"id": "kden-ksea"}))
+    assert server.shares == {} and book.get("kden-ksea").share_url is None
+    asyncio.run(routes.api_share_remove({"id": "kden-ksea"}))  # already gone: fine
+
+
+def test_the_share_link_stays_on_this_computer(app):
+    routes, server, _, account = app
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+    asyncio.run(routes.api_share({"id": "kden-ksea"}))
+    account.sync()
+    assert "share_url" not in server.flights["kden-ksea"]
+
+
+def test_wrapped_asks_the_account_for_the_period_only(app):
+    routes, server, _, account = app
+    account.start("pilot@example.com")
+    account.finish("pilot@example.com", "123456", "PC")
+    period = {"period": "month", "from": "2026-09-01T00:00:00Z", "to": "2026-10-01T00:00:00Z", "tz": "-420", "label": "September 2026"}
+    got = asyncio.run(routes.api_wrapped({**period, "extra": "dropped"}))
+    assert "extra" not in got["query"] and "label=September+2026" in got["query"]
+    assert got["flights"] == 1  # the logbook synced first
+    made = asyncio.run(routes.api_wrapped_share(period))
+    assert server.shares[made["slug"]]["body"]["kind"] == "wrapped"

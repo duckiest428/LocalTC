@@ -8,6 +8,7 @@ struct ReplayView: View {
     @Environment(AppModel.self) private var model
     @State private var clock: ReplayClock?
     @State private var error: String?
+    @State private var sharing = false
 
     var body: some View {
         Group {
@@ -21,6 +22,12 @@ struct ReplayView: View {
         }
         .navigationTitle("\(flight.origin) → \(flight.destination)")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { sharing = true } label: { Label("Share", systemImage: "square.and.arrow.up") }
+            }
+        }
+        .sheet(isPresented: $sharing) { ShareFlightSheet(flight: flight) }
         .task {
             do {
                 clock = ReplayClock(try await model.api.replay(id: flight.id))

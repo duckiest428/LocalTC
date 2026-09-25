@@ -1,5 +1,6 @@
 /* The dashboard: signs in to the optional LocalTC account, then a sidebar of sections, one shown at a time:
-   the Flight Tracker (the flight in progress), the logbook synced from the app, support, and the account. Leaflet draws the maps (vendor/leaflet, served from
+   the Flight Tracker (the flight in progress), the logbook synced from the app (sharing a flight's card:
+   sharecard.js), Wrapped (wrapped.js), support, and the account. Leaflet draws the maps (vendor/leaflet, served from
    here; the tiles come from OpenStreetMap). The sign-in is an HttpOnly cookie on api.localtc.tech, which
    this page can't read; nothing is kept in this browser's storage. */
 
@@ -48,12 +49,12 @@ function show(which) {
 
 // --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
 
-const PAGES = ["tracker", "logbook", "replay", "support", "account"];
+const PAGES = ["tracker", "logbook", "replay", "wrapped", "support", "account"];
 let page = null;
 
 function go(name, { push = false } = {}) {
   const [base, id] = (name || "").split("/");  // "replay/<flight id>": a flight to rewatch
-  const hash = base === "replay" && id ? `replay/${id}` : base;
+  const hash = (base === "replay" || base === "wrapped") && id ? `${base}/${id}` : base;
   name = PAGES.includes(base) && (base !== "replay" || id) ? base : "tracker";
   if (push && `#${hash}` !== location.hash) history.pushState(null, "", `#${name === base ? hash : name}`);
   page = name;
@@ -64,6 +65,7 @@ function go(name, { push = false } = {}) {
     else a.removeAttribute("aria-current");
   });
   if (name === "replay") Replay.open(decodeURIComponent(id)); else Replay.close();
+  if (name === "wrapped") Wrapped.open(id);
   document.title = `${$(`#${name}-h`).textContent} — LocalTC`;
   // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
   if (name === "tracker") Tracker.start(); else Tracker.stop();
@@ -132,6 +134,7 @@ document.querySelectorAll(".signout").forEach((b) => b.onclick = async () => {
 // --- the dashboard --------------------------------------------------------------------------------------
 
 let next = null;
+const flightsById = new Map();
 
 async function load() {
   let me;
@@ -153,6 +156,7 @@ async function load() {
   map(stats);
   $("#flights").innerHTML = "";
   rows(first);
+  nudge(first.flights);
 }
 
 function hm(min) {
@@ -184,9 +188,11 @@ function rows(page) {
       <td class="mono">${f.landing_vs_fpm == null ? "—" : `${esc(f.landing_vs_fpm)} fpm`}</td>
       <td>${f.has_replay ? `<a class="btn btn-ghost btn-sm" href="#replay/${encodeURIComponent(f.id)}" title="Watch the flight again: the map and the radio, in step">&#9654; Replay</a>`
         : '<span class="sub" title="Upload it from the Logbook in the LocalTC app to replay it here">—</span>'}</td>
+      <td><button class="btn btn-ghost btn-sm share" type="button" title="${f.share ? "Shared: anyone with the link sees its card" : "Make a public link to this flight's card"}">${f.share ? "Shared ✓" : "Share"}</button></td>
       <td><button class="linklike del" type="button" title="Delete this flight from the account">Delete</button></td>
     </tr>`).join("");
   $("#flights").insertAdjacentHTML("beforeend", html);
+  for (const f of page.flights) flightsById.set(f.id, f);
   next = page.next;
   $("#more").hidden = !next;
   $("#empty").hidden = $("#flights").children.length > 0;
@@ -196,6 +202,8 @@ $("#more").onclick = async () => rows(await api("GET", `/v1/flights?limit=50&bef
 
 $("#flights").onclick = async (e) => {
   if (e.target.closest("a[href^='#replay/']")) return;  // the link goes there by itself
+  const sharing = e.target.closest(".share");
+  if (sharing) return Share.open(sharing.closest("tr").dataset.id, sharing);
   const button = e.target.closest(".del");
   if (!button) {  // a click on a flight shows its route on the map
     const tr = e.target.closest("tr[data-route]");
@@ -324,6 +332,70 @@ const Replay = {
     this.id = null;
   },
 };
+
+// --- sharing a flight: a public card at localtc.tech/f/<slug> (sharecard.js, shared with the app) --------------
+
+/** Sends ``blob`` to ``path`` as its body, with the sign-in cookie. */
+async function upload(method, path, blob, type) {
+  const res = await fetch(API + path, { method, credentials: "include", headers: { "Content-Type": type, "X-LocalTC": "1" }, body: blob });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `The server said ${res.status}.`);
+  return data;
+}
+
+const Share = {
+  model: null,
+  async open(id, button) {
+    const f = flightsById.get(id);
+    if (!f) return;
+    this.model = this.model || await import("./cardmodel.js");
+    const kept = f.has_replay ? await api("GET", `/v1/flights/${encodeURIComponent(id)}/moments`).catch(() => ({ moments: [], names: {} })) : { moments: [], names: {} };
+    const slug = f.share ? f.share.split("/").pop() : null;
+    ShareCard.dialog({
+      base: "", moments: kept.moments, shared: f.share, slug,
+      card: (quote) => this.model.flightCard(f, { quote, names: kept.names }),
+      share: (quote) => api("POST", "/v1/shares", { kind: "flight", ref: id, quote, names: kept.names }),
+      putImage: (s, blob) => upload("PUT", `/v1/shares/${s}/image`, blob, "image/png"),
+      unshare: (s) => api("DELETE", `/v1/shares/${s}`),
+      onClose: (url) => {
+        f.share = url;
+        button.textContent = url ? "Shared ✓" : "Share";
+      },
+    });
+  },
+};
+
+// --- Wrapped: a week, a month or a year, as slides (wrapped.js, shared with the app) --------------------------
+
+const Wrapped = {
+  view: null,
+  open(which) {
+    if (!this.view) {
+      this.view = new WrappedView($("#wrapped-view"), {
+        base: "",
+        load: (r) => api("GET", `/v1/wrapped?${new URLSearchParams({ period: r.period, from: r.from, to: r.to, tz: r.tz, label: r.label })}`),
+        share: (r) => api("POST", "/v1/shares", { kind: "wrapped", period: r.period, from: r.from, to: r.to, tz: r.tz, label: r.label }),
+        putImage: (s, blob) => upload("PUT", `/v1/shares/${s}/image`, blob, "image/png"),
+      });
+    }
+    const [period, step] = (which || "").split(":");  // #wrapped/month:-1 is last month
+    if (["week", "month", "year"].includes(period)) this.view.open(period, Number(step) || 0);
+    else if (!this.view.recap) this.view.open("month", 0);
+  },
+};
+
+/** At the start of a month (or a year), a nudge on the logbook: the last one's recap is ready. */
+function nudge(flights) {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const flewThen = flights.some((f) => { const d = new Date(f.started_at); return d >= lastMonth && d < new Date(now.getFullYear(), now.getMonth(), 1); });
+  const fresh = now.getDate() <= 7 && flewThen;
+  $("#wr-nudge").hidden = !fresh;
+  if (!fresh) return;
+  const january = now.getMonth() === 0;
+  $("#wr-nudge-text").textContent = january ? `Your ${now.getFullYear() - 1} in flying is ready.` : `Your ${lastMonth.toLocaleDateString("en-GB", { month: "long" })} Wrapped is ready.`;
+  $("#wr-nudge-go").href = january ? "#wrapped/year:-1" : "#wrapped/month:-1";
+}
 
 // --- the Flight Tracker: the flight in progress, live, as the companion app sees it ------------------------
 // A WebSocket to the account's relay. While it's open the app sends the aircraft, traffic and radio (if its

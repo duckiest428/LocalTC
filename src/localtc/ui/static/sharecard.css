@@ -1,0 +1,70 @@
+/* The shared card (sharecard.js), on its public page and in the share dialog. One file, two copies:
+   site/sharecard.css and src/localtc/ui/static/sharecard.css; tests/test_site.py keeps them identical. */
+
+.share-card { width: 100%; aspect-ratio: 1200 / 630; border-radius: 18px; overflow: hidden; background: #0b0d10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .40), 0 44px 90px -28px rgba(0, 0, 0, .85); }
+.share-card svg { display: block; width: 100%; height: 100%; }
+
+/* The public page: the card, and what LocalTC is, nothing else. */
+body.share-page { min-height: 100vh; display: flex; flex-direction: column; background: radial-gradient(120% 80% at 70% 0%, #131a22, #0b0d10 60%); }
+.share-page #share { flex: 1; width: min(1200px, 100% - 32px); margin: 0 auto; padding: clamp(16px, 5vh, 64px) 0 24px;
+  display: flex; flex-direction: column; gap: 20px; }
+.share-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.share-gone { margin: 18vh auto 0; text-align: center; }
+.share-gone h1 { color: var(--text, #e8ecf1); font-size: 28px; margin: 0 0 8px; }
+.share-foot { text-align: center; padding: 18px 16px 28px; font-size: 14px; }
+.share-foot a { color: var(--text-3, #8a939d); text-decoration: none; }
+.share-foot a:hover { color: var(--text, #e8ecf1); }
+.share-foot strong { color: var(--green, #5fd068); }
+
+/* The share dialog (dashboard and app). */
+.share-dialog { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 16px; background: rgba(5, 7, 9, .72); }
+.share-dialog[hidden] { display: none; }
+.share-box { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 14px;
+  padding: 18px; border-radius: 20px; background: var(--bg-2, var(--panel, #191d21)); color: var(--text, #e8ecf1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .40), 0 44px 90px -28px rgba(0, 0, 0, .85); }
+.share-box h2 { margin: 0; font-size: 18px; }
+.share-box p { margin: 0; font-size: 13px; color: var(--text-3, var(--muted, #8a939d)); }
+.share-quotes { display: flex; flex-direction: column; gap: 6px; }
+.share-quotes label { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; padding: 8px 10px; border-radius: 10px;
+  cursor: pointer; background: rgba(255, 255, 255, .03); font-size: 13px; }
+.share-quotes label:hover { background: rgba(255, 255, 255, .06); }
+.share-quotes input { grid-row: span 2; margin-top: 3px; accent-color: var(--green, #5fd068); }
+.share-quotes b { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--cyan, #6cc9e8); font-weight: 600; }
+.share-quotes span { font-family: var(--mono, ui-monospace, Menlo, monospace); color: var(--text-2, #b3bcc6); overflow-wrap: anywhere; }
+.share-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.share-row input[type=text] { flex: 1; min-width: 200px; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 0;
+  background: rgba(0, 0, 0, .35); color: inherit; font-family: var(--mono, ui-monospace, Menlo, monospace); }
+.share-status { font-size: 13px; color: var(--text-3, #8a939d); min-height: 1.2em; }
+.share-status.error { color: var(--red, #f0736a); }
+
+/* ATC Wrapped (wrapped.js): the period picker, then the slides as a story. */
+.wrapped { display: flex; flex-direction: column; gap: 14px; color: var(--text, #e8ecf1); }
+.wr-bar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.wr-tabs { display: inline-flex; padding: 3px; border-radius: 12px; background: rgba(255, 255, 255, .05); }
+.wr-tabs button { font: inherit; font-size: 14px; border: 0; background: none; color: var(--text-3, #8a939d); padding: 6px 14px; border-radius: 9px; cursor: pointer; }
+.wr-tabs button[aria-selected=true] { background: var(--bg-3, #1f2329); color: var(--text, #e8ecf1); }
+.wr-nav { display: inline-flex; align-items: center; gap: 8px; }
+.wr-nav b { min-width: 11em; text-align: center; font-weight: 600; }
+.wr-nav button { font: inherit; font-size: 20px; line-height: 1; width: 34px; height: 34px; border-radius: 10px; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .05); color: var(--text, #e8ecf1); }
+.wr-nav button:disabled { opacity: .3; cursor: default; }
+.wr-stage { display: flex; flex-direction: column; gap: 10px; }
+.wr-progress { display: flex; gap: 4px; min-height: 3px; }
+.wr-progress i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.wr-progress i b { display: block; height: 100%; width: 0; background: var(--green, #5fd068); }
+.wr-progress i.done b { width: 100% !important; transition: none !important; }
+.wr-slide { cursor: pointer; outline: none; }
+.wr-slide:focus-visible { box-shadow: 0 0 0 2px var(--green, #5fd068); }
+.wr-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.wr-link { display: inline-flex; gap: 6px; align-items: center; }
+.wr-link input { font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 13px; padding: 6px 10px; border-radius: 10px; border: 0;
+  background: rgba(0, 0, 0, .35); color: inherit; width: min(320px, 60vw); }
+.wr-status, .wr-hint { font-size: 13px; color: var(--text-3, #8a939d); }
+.wr-status.error, .wr-hint.error { color: var(--red, #f0736a); }
+.wr-empty { padding: 48px 20px; text-align: center; border-radius: 18px; background: rgba(255, 255, 255, .03); }
+.wr-empty h3 { margin: 0 0 8px; font-size: 20px; }
+.wr-empty p { margin: 0 0 14px; color: var(--text-3, #8a939d); }
+.wr-nudge { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px;
+  background: linear-gradient(90deg, rgba(95, 208, 104, .14), rgba(108, 201, 232, .08)); }
+.wr-nudge[hidden] { display: none; }

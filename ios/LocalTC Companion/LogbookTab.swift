@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The account's logbook: the totals, then every flight synced from the PC. A flight whose replay the pilot
-/// uploaded (from the Logbook in the desktop app) plays again, map and radio together.
+/// uploaded (from the Logbook in the desktop app) plays again, map and radio together. Any flight can be
+/// shared as a public card (swipe it, or hold it), and Wrapped tells a week, a month or a year of them.
 struct LogbookTab: View {
     @Environment(AppModel.self) private var model
     @State private var stats: LogbookStats?
@@ -9,6 +10,7 @@ struct LogbookTab: View {
     @State private var next: String?
     @State private var error: String?
     @State private var loading = false
+    @State private var sharing: LogbookFlight?
 
     var body: some View {
         List {
@@ -26,11 +28,19 @@ struct LogbookTab: View {
             }
             Section {
                 ForEach(flights) { flight in
-                    if flight.hasReplay == true {
-                        NavigationLink { ReplayView(flight: flight) } label: { FlightRow(flight: flight) }
-                            .accessibilityIdentifier("replay-\(flight.id)")
-                    } else {
-                        FlightRow(flight: flight)
+                    Group {
+                        if flight.hasReplay == true {
+                            NavigationLink { ReplayView(flight: flight) } label: { FlightRow(flight: flight) }
+                                .accessibilityIdentifier("replay-\(flight.id)")
+                        } else {
+                            FlightRow(flight: flight)
+                        }
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button { sharing = flight } label: { Label("Share", systemImage: "square.and.arrow.up") }.tint(.green)
+                    }
+                    .contextMenu {
+                        Button { sharing = flight } label: { Label(flight.share == nil ? "Share…" : "Shared: change or stop…", systemImage: "square.and.arrow.up") }
                     }
                 }
                 if next != nil {
@@ -52,6 +62,19 @@ struct LogbookTab: View {
                     ContentUnavailableView("No flights yet", systemImage: "book.closed",
                                            description: Text("Each flight in LocalTC on your PC appears here when it ends, while it's signed in to this account."))
                 }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if !flights.isEmpty {
+                    NavigationLink { WrappedScreen() } label: { Label("Wrapped", systemImage: "chart.bar.fill") }
+                        .accessibilityIdentifier("wrapped")
+                }
+            }
+        }
+        .sheet(item: $sharing) { flight in
+            ShareFlightSheet(flight: flight) { url in
+                if let i = flights.firstIndex(where: { $0.id == flight.id }) { flights[i].share = url }
             }
         }
         .refreshable { await load() }
@@ -111,6 +134,9 @@ private struct FlightRow: View {
             VStack(alignment: .trailing, spacing: 3) {
                 Text(hm(flight.airMin)).font(.subheadline.monospacedDigit())
                 Text(flight.landingVsFpm.map { "\($0) fpm" } ?? "—").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            if flight.share != nil {
+                Image(systemName: "link").foregroundStyle(.cyan).accessibilityLabel("Shared")
             }
             if flight.hasReplay == true {
                 Image(systemName: "play.circle.fill").foregroundStyle(.green).font(.title3)

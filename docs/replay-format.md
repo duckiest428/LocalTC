@@ -22,7 +22,7 @@ It's JSON, gzipped for storage and upload. **All times are seconds from the repl
     "zulu0": 80302,                // the sim's time of day at the start, seconds after 00:00Z (null if unknown)
     "duration_s": 10706.7
   },
-  "airports": { "KDEN": { "lat": 39.8617, "lon": -104.6732, "elev": 5434 } },   // origin, destination, alternate
+  "airports": { "KDEN": { "lat": 39.8617, "lon": -104.6732, "elev": 5434, "name": "Denver" } },   // origin, destination, alternate; name optional
   "route": [ { "ident": "MUGBE", "lat": 39.9321, "lon": -104.9046 } ],        // the flight plan's fixes
   "track": {                       // columns of equal length, one entry per point
     "t":   [0, 5.0, …],            // seconds

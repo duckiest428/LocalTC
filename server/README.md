@@ -15,6 +15,7 @@ Durable Object per account for the live view. It lives at `https://api.localtc.t
 | `logins` | hashes of the emailed sign-in code and link, wrong-code count, 15-minute expiry | signing in by email |
 | `flights` | the app's logbook lines: airports, gates, runways, times, distance, max altitude, landing rate, readback and alert counts | the dashboard and stats |
 | `replays` | a flight's replay, only if the pilot uploads it: the track (a point every few seconds), the radio transcript as text, phases and alerts; gzipped, at most 1 MB ([`docs/replay-format.md`](../docs/replay-format.md)) | rewatching a flight on the dashboard and the phone |
+| `shares` | a flight (or a Wrapped recap) the pilot chose to share: a random slug, a snapshot of the card (route, date, numbers, at most one radio line; no gates, times of day or track) and the PNG their app drew | the public page at `localtc.tech/f/<slug>` or `/w/<slug>` |
 | `push_tokens` | APNs device tokens | companion notifications |
 | `attempts` | rate-limit counters, keyed by IP or email, gone within a day | stopping code guessing and email floods |
 | `LiveRoom` (Durable Object) | stored: the flight's latest status (phase, frequencies, ATC's last line) and the PC's local-network address and key; **in memory only**, while a phone watches remotely: position, traffic, the radio log | the companion app |
@@ -50,6 +51,11 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | deleting a flight deletes its replay; the export includes the replays |
 | `PUT /v1/flights/:id/replay` (body: the replay, gzipped JSON) | the flight must be in the account; rebuilt field by field, 50 a day |
 | `GET /v1/flights/:id/replay`, `DELETE /v1/flights/:id/replay` | the replay as JSON; the list's `has_replay` says which flights have one |
+| `GET /v1/flights/:id/moments` | the uploaded replay's lines worth quoting on a card, and its airports' names (kept with the replay, `replays.moments`) |
+| `POST /v1/shares` `{kind: "flight", ref, quote?, names?}` or `{kind: "wrapped", period, from, to, tz, label}` | `{slug, url, card}`: the snapshot is built here, from the account's own data; the quote must be ATC talking to that flight. Sharing again keeps the link (and clears the picture) |
+| `PUT /v1/shares/:slug/image` (body: a PNG, at most 1 MB), `DELETE /v1/shares/:slug`, `GET /v1/shares` | the card's picture (drawn by the app: the free plan hasn't the CPU to draw it here), unsharing, the list; the flights list's `share` is the link |
+| `GET /v1/wrapped?period=week\|month\|year&from=&to=&tz=&label=` | ATC Wrapped: the slides for that period, worked out when asked, never stored |
+| `GET /f/:slug`, `/f/:slug.png`, `/w/:slug`, `/w/:slug.png` (**no sign-in**) | the public page, with its own title and picture for chat apps (`noindex`, a strict CSP), and the picture. The Worker is routed `localtc.tech/f/*` and `/w/*` on the site's zone for these |
 | `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message (the website's Flight Tracker opens it with its cookie, from `ALLOWED_ORIGINS` only) |
 | `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |
 | `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |

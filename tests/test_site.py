@@ -25,7 +25,9 @@ def test_markdown_is_escaped_not_trusted():
     assert "<script>" not in body and 'href="javascript' not in body
 
 
-@pytest.mark.parametrize("name", ["flightsmap.js", "replayplayer.js", "replayplayer.css"])
+@pytest.mark.parametrize("name", ["flightsmap.js", "replayplayer.js", "replayplayer.css", "sharecard.js", "sharecard.css",
+                                  "wrapped.js", "cardmodel.js", "vendor/land-110m.json", "fonts/inter-latin-var.woff2",
+                                  "fonts/jetbrains-mono-latin-var.woff2"])
 def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
     site = (ROOT / "site" / name).read_bytes()
     app = (ROOT / "src" / "localtc" / "ui" / "static" / name).read_bytes()
@@ -59,10 +61,11 @@ def test_the_site_loads_nothing_it_does_not_serve_itself_except_the_api_and_map_
 def test_the_dashboard_is_a_sidebar_of_sections_behind_the_sign_in():
     html = (ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
     side = html[html.index('<nav class="side-nav"'):html.index("</nav>", html.index('<nav class="side-nav"'))]
-    assert [p for p in ("tracker", "logbook", "support", "account") if f'data-page="{p}"' in side] == \
-        ["tracker", "logbook", "support", "account"]
+    import re
+
+    assert re.findall(r'data-page="(\w+)"', side) == ["tracker", "logbook", "wrapped", "support", "account"]
     app = html[html.index('<div class="dash-app" id="dash" hidden>'):]
-    for page in ("tracker", "logbook", "support", "account"):
+    for page in ("tracker", "logbook", "wrapped", "support", "account"):
         assert f'<section class="dash-page" id="{page}"' in app  # all inside the signed-in part, hidden until then
     signed_out = html[html.index('id="auth"'):html.index('id="dash"')]
     assert "lb-map" not in signed_out and "support-form" not in signed_out

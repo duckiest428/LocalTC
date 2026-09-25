@@ -12,6 +12,9 @@ What an account sends to the LocalTC server (``[account] api_url``, a Cloudflare
 - a flight's replay, only when the pilot uploads it from the Logbook or turns on ``[account]
   upload_replays``: the track (thinned to every few seconds) and the radio transcript, stored with the
   flight until either is deleted (``replay.rewatch``).
+- a public card, only for a flight (or a Wrapped recap) the pilot shares: a snapshot of the route, the date,
+  the numbers and one radio line they picked (``site/cardmodel.js``), and the picture of it this app drew.
+  Unsharing, deleting the flight or the account takes it down.
 Never audio, recordings or settings. On the same network the phone talks to the PC directly
 (``ui/companion.py``) and none of that goes through the server.
 
@@ -25,6 +28,7 @@ import json
 import logging
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -37,7 +41,7 @@ log = logging.getLogger(__name__)
 
 KEYRING_SERVICE = "LocalTC"
 BATCH = 100  # flights per upload
-LOCAL_ONLY = ("synced_at", "recording", "replay_uploaded_at")  # a logbook line's fields that stay on this computer
+LOCAL_ONLY = ("synced_at", "recording", "replay_uploaded_at", "share_url")  # a logbook line's fields that stay on this computer
 LIVE_EVERY_S = 5.0  # the companion's status at most this often, except when something changes
 LIVE_HEARTBEAT_S = 15.0  # and at least this often while flying: the answer says whether a phone is watching
 
@@ -108,11 +112,11 @@ Transport = Callable[[str, str, dict | bytes | None, dict[str, str]], tuple[int,
 
 
 def _http(method: str, url: str, body: dict | bytes | None, headers: dict[str, str], timeout_s: float = 15.0) -> tuple[int, Any]:
-    """JSON both ways; a ``bytes`` body (a replay) goes as it is, gzipped."""
+    """JSON both ways; a ``bytes`` body goes as it is: a replay (gzipped) or a card's picture (a PNG)."""
     raw_body = isinstance(body, bytes)
     data = body if raw_body else json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(url, data=data, method=method, headers={
-        "Content-Type": "application/gzip" if raw_body else "application/json", "User-Agent": f"LocalTC/{__version__}",
+        "Content-Type": ("image/png" if body[:4] == b"\x89PNG" else "application/gzip") if raw_body else "application/json", "User-Agent": f"LocalTC/{__version__}",
         **headers})
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
@@ -232,6 +236,22 @@ class Account:
         if not self.signed_in:
             raise AccountError("Sign in to your LocalTC account first (Account, in Quick Settings).", 401)
         self._call("PUT", f"/v1/flights/{flight_id}/replay", replay)
+
+    def share(self, body: dict) -> dict:
+        """A public link to a flight's card ({kind: "flight", ref, quote, names}) or a Wrapped summary's
+        ({kind: "wrapped", period, from, to, tz, label}): {slug, url, card}. Only when the pilot shares."""
+        return self._call("POST", "/v1/shares", body)
+
+    def share_image(self, slug: str, png: bytes) -> None:
+        """The card's picture, as this app drew it: what a chat app shows when the link is pasted."""
+        self._call("PUT", f"/v1/shares/{slug}/image", png)
+
+    def unshare(self, slug: str) -> None:
+        self._call("DELETE", f"/v1/shares/{slug}")
+
+    def wrapped(self, query: dict) -> dict:
+        """ATC Wrapped for a period, from the synced logbook: {period, from, to, tz, label}."""
+        return self._call("GET", f"/v1/wrapped?{urllib.parse.urlencode(query)}")
 
     def delete_replay(self, flight_id: str) -> None:
         """The replay off the account; the flight's logbook line stays."""

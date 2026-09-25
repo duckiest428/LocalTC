@@ -1,0 +1,449 @@
+{
+ "period": "year",
+ "tier": "year",
+ "label": "2026",
+ "from": "2026-01-01T00:00:00Z",
+ "to": "2027-01-01T00:00:00Z",
+ "flights": 5,
+ "hours": 9.4,
+ "block_hours": 11.2,
+ "distance_nm": 3369,
+ "landings": 5,
+ "airports": [
+  {
+   "icao": "KDVT",
+   "visits": 2,
+   "lat": 33.6883,
+   "lon": -112.0826,
+   "name": ""
+  },
+  {
+   "icao": "CYUL",
+   "visits": 1,
+   "lat": 45.4706,
+   "lon": -73.7408,
+   "name": "Montreal"
+  },
+  {
+   "icao": "KBFI",
+   "visits": 1,
+   "lat": 47.53,
+   "lon": -122.3019,
+   "name": ""
+  },
+  {
+   "icao": "KDEN",
+   "visits": 1,
+   "lat": 39.8617,
+   "lon": -104.6732,
+   "name": "Denver"
+  },
+  {
+   "icao": "KLAX",
+   "visits": 1,
+   "lat": 33.9425,
+   "lon": -118.4081,
+   "name": "Los Angeles"
+  },
+  {
+   "icao": "KPAE",
+   "visits": 1,
+   "lat": 47.9063,
+   "lon": -122.2816,
+   "name": ""
+  },
+  {
+   "icao": "KPHX",
+   "visits": 1,
+   "lat": 33.4343,
+   "lon": -112.0116,
+   "name": ""
+  },
+  {
+   "icao": "KSAN",
+   "visits": 1,
+   "lat": 32.7336,
+   "lon": -117.1897,
+   "name": ""
+  },
+  {
+   "icao": "KSEA",
+   "visits": 1,
+   "lat": 47.449,
+   "lon": -122.3093,
+   "name": "Seattle"
+  }
+ ],
+ "routes": [
+  {
+   "origin": "CYUL",
+   "destination": "KLAX",
+   "flights": 1
+  },
+  {
+   "origin": "KDEN",
+   "destination": "KSEA",
+   "flights": 1
+  },
+  {
+   "origin": "KDVT",
+   "destination": "KDVT",
+   "flights": 1
+  },
+  {
+   "origin": "KPAE",
+   "destination": "KBFI",
+   "flights": 1
+  },
+  {
+   "origin": "KSAN",
+   "destination": "KPHX",
+   "flights": 1
+  }
+ ],
+ "slides": [
+  {
+   "kind": "intro",
+   "label": "2026",
+   "period": "year",
+   "flights": 5
+  },
+  {
+   "kind": "totals",
+   "flights": 5,
+   "hours": 9.4,
+   "block_hours": 11.2,
+   "landings": 5,
+   "hours_framing": "5 feature films' worth of flying"
+  },
+  {
+   "kind": "distance",
+   "distance_nm": 3369,
+   "framing": "1.1\u00d7 New York to London"
+  },
+  {
+   "kind": "map",
+   "airports": [
+    {
+     "icao": "KDVT",
+     "visits": 2,
+     "lat": 33.6883,
+     "lon": -112.0826,
+     "name": ""
+    },
+    {
+     "icao": "CYUL",
+     "visits": 1,
+     "lat": 45.4706,
+     "lon": -73.7408,
+     "name": "Montreal"
+    },
+    {
+     "icao": "KBFI",
+     "visits": 1,
+     "lat": 47.53,
+     "lon": -122.3019,
+     "name": ""
+    },
+    {
+     "icao": "KDEN",
+     "visits": 1,
+     "lat": 39.8617,
+     "lon": -104.6732,
+     "name": "Denver"
+    },
+    {
+     "icao": "KLAX",
+     "visits": 1,
+     "lat": 33.9425,
+     "lon": -118.4081,
+     "name": "Los Angeles"
+    },
+    {
+     "icao": "KPAE",
+     "visits": 1,
+     "lat": 47.9063,
+     "lon": -122.2816,
+     "name": ""
+    },
+    {
+     "icao": "KPHX",
+     "visits": 1,
+     "lat": 33.4343,
+     "lon": -112.0116,
+     "name": ""
+    },
+    {
+     "icao": "KSAN",
+     "visits": 1,
+     "lat": 32.7336,
+     "lon": -117.1897,
+     "name": ""
+    },
+    {
+     "icao": "KSEA",
+     "visits": 1,
+     "lat": 47.449,
+     "lon": -122.3093,
+     "name": "Seattle"
+    }
+   ],
+   "routes": [
+    {
+     "origin": "CYUL",
+     "destination": "KLAX",
+     "flights": 1
+    },
+    {
+     "origin": "KDEN",
+     "destination": "KSEA",
+     "flights": 1
+    },
+    {
+     "origin": "KDVT",
+     "destination": "KDVT",
+     "flights": 1
+    },
+    {
+     "origin": "KPAE",
+     "destination": "KBFI",
+     "flights": 1
+    },
+    {
+     "origin": "KSAN",
+     "destination": "KPHX",
+     "flights": 1
+    }
+   ]
+  },
+  {
+   "kind": "busiest_month",
+   "month": "2026-09",
+   "flights": 4
+  },
+  {
+   "kind": "top_airport",
+   "icao": "KDVT",
+   "name": "",
+   "visits": 2
+  },
+  {
+   "kind": "aircraft",
+   "aircraft": "A220-300",
+   "flights": 2,
+   "types": 3
+  },
+  {
+   "kind": "longest",
+   "id": "cyul-klax",
+   "origin": "CYUL",
+   "destination": "KLAX",
+   "date": "2026-09-24",
+   "callsign": "ACA779",
+   "aircraft": "A220-300",
+   "air_min": 305,
+   "distance_nm": 2112
+  },
+  {
+   "kind": "best_landing",
+   "fpm": -80,
+   "greasers": 3,
+   "landings": 5,
+   "flight": {
+    "id": "kpae-kbfi",
+    "origin": "KPAE",
+    "destination": "KBFI",
+    "date": "2026-09-12",
+    "callsign": "N172LT",
+    "aircraft": "C172",
+    "air_min": 22,
+    "distance_nm": 24
+   }
+  },
+  {
+   "kind": "streak",
+   "days": 2,
+   "from": "2026-09-23",
+   "to": "2026-09-24"
+  },
+  {
+   "kind": "radio",
+   "accuracy": 90.1,
+   "readbacks": 81,
+   "previous": null
+  },
+  {
+   "kind": "moment",
+   "label": "Clearance",
+   "t": 61.7,
+   "station": "Montreal Clearance",
+   "mhz": 125.6,
+   "text": "Air Canada 779, cleared to Los Angeles International airport as filed, climb and maintain 5,000, expect FL360 two six minutes after departure, departure frequency 120.42, squawk 1405.",
+   "score": 100,
+   "flight": {
+    "id": "cyul-klax",
+    "origin": "CYUL",
+    "destination": "KLAX",
+    "date": "2026-09-24",
+    "callsign": "ACA779",
+    "aircraft": "A220-300",
+    "air_min": 305,
+    "distance_nm": 2112
+   },
+   "moment": "clearance"
+  },
+  {
+   "kind": "first_last",
+   "first": {
+    "id": "kdvt-kdvt",
+    "origin": "KDVT",
+    "destination": "KDVT",
+    "date": "2026-08-30",
+    "callsign": "N123AB",
+    "aircraft": "C172",
+    "air_min": 38,
+    "distance_nm": 30
+   },
+   "last": {
+    "id": "cyul-klax",
+    "origin": "CYUL",
+    "destination": "KLAX",
+    "date": "2026-09-24",
+    "callsign": "ACA779",
+    "aircraft": "A220-300",
+    "air_min": 305,
+    "distance_nm": 2112
+   }
+  },
+  {
+   "kind": "persona",
+   "name": "Explorer",
+   "blurb": "Always somewhere new."
+  },
+  {
+   "kind": "summary",
+   "label": "2026",
+   "flights": 5,
+   "hours": 9.4,
+   "distance_nm": 3369,
+   "airport_count": 9,
+   "top_airport": "KDVT",
+   "best_landing_fpm": -80,
+   "persona": "Explorer"
+  }
+ ],
+ "previous": null,
+ "last_flight": {
+  "id": "cyul-klax",
+  "started_at": "2026-09-24T22:33:00Z",
+  "origin": "CYUL",
+  "destination": "KLAX",
+  "days_ago": 1
+ },
+ "card": {
+  "kind": "wrapped",
+  "period": "year",
+  "tier": "year",
+  "label": "2026",
+  "flights": 5,
+  "hours": 9.4,
+  "distance_nm": 3369,
+  "distance_framing": "1.1\u00d7 New York to London",
+  "landings": 5,
+  "airports": [
+   {
+    "icao": "KDVT",
+    "lat": 33.6883,
+    "lon": -112.0826,
+    "visits": 2,
+    "name": ""
+   },
+   {
+    "icao": "CYUL",
+    "lat": 45.4706,
+    "lon": -73.7408,
+    "visits": 1,
+    "name": "Montreal"
+   },
+   {
+    "icao": "KBFI",
+    "lat": 47.53,
+    "lon": -122.3019,
+    "visits": 1,
+    "name": ""
+   },
+   {
+    "icao": "KDEN",
+    "lat": 39.8617,
+    "lon": -104.6732,
+    "visits": 1,
+    "name": "Denver"
+   },
+   {
+    "icao": "KLAX",
+    "lat": 33.9425,
+    "lon": -118.4081,
+    "visits": 1,
+    "name": "Los Angeles"
+   },
+   {
+    "icao": "KPAE",
+    "lat": 47.9063,
+    "lon": -122.2816,
+    "visits": 1,
+    "name": ""
+   },
+   {
+    "icao": "KPHX",
+    "lat": 33.4343,
+    "lon": -112.0116,
+    "visits": 1,
+    "name": ""
+   },
+   {
+    "icao": "KSAN",
+    "lat": 32.7336,
+    "lon": -117.1897,
+    "visits": 1,
+    "name": ""
+   },
+   {
+    "icao": "KSEA",
+    "lat": 47.449,
+    "lon": -122.3093,
+    "visits": 1,
+    "name": "Seattle"
+   }
+  ],
+  "routes": [
+   {
+    "origin": "CYUL",
+    "destination": "KLAX",
+    "flights": 1
+   },
+   {
+    "origin": "KDEN",
+    "destination": "KSEA",
+    "flights": 1
+   },
+   {
+    "origin": "KDVT",
+    "destination": "KDVT",
+    "flights": 1
+   },
+   {
+    "origin": "KPAE",
+    "destination": "KBFI",
+    "flights": 1
+   },
+   {
+    "origin": "KSAN",
+    "destination": "KPHX",
+    "flights": 1
+   }
+  ],
+  "top_airport": "KDVT",
+  "best_landing_fpm": -80,
+  "persona": "Explorer"
+ }
+}

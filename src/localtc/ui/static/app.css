@@ -137,6 +137,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-dim); }
 .btn.primary:hover { background: #386e6a; }
 .btn.danger { background: #6b2f2b; border-color: #86403a; }
 .btn.wide { flex: 1; }
+/* The website's button names, used by the shared card and Wrapped (sharecard.js, wrapped.js). */
+.btn.btn-sm { padding: 3px 9px; font-size: 13px; }
+.btn.btn-primary { background: var(--teal); border-color: #3d7571; }
+.btn.btn-primary:hover { background: #386e6a; }
+.btn.btn-ghost { background: #1d2024; border-color: #4a4f56; }
+.lb-wrapped { align-self: center; justify-self: start; }
+.wrapped-page { display: flex; flex-direction: column; gap: 10px; }
+.wrapped-page[hidden] { display: none; }
 
 footer { background: var(--bg-2); border-top: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 10px; margin: 0 10px 10px; border: 1px solid var(--line); border-top: 0; }
 .txrow { display: flex; gap: 6px; align-items: center; }

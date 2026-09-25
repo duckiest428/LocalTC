@@ -5,7 +5,13 @@ compatibility_date = "2026-08-15"
 compatibility_flags = ["nodejs_compat"]
 
 # api.localtc.tech -> this Worker. Needs the localtc.tech zone on the same Cloudflare account.
-routes = [{ pattern = "api.localtc.tech", custom_domain = true }]
+# localtc.tech/f/* and /w/* (shared flights and Wrapped recaps) too: the site is static, and a chat app
+# unfurling a link needs the page's own title and card in its HTML. Every other path stays the site's.
+routes = [
+  { pattern = "api.localtc.tech", custom_domain = true },
+  { pattern = "localtc.tech/f/*", zone_name = "localtc.tech" },
+  { pattern = "localtc.tech/w/*", zone_name = "localtc.tech" },
+]
 workers_dev = false  # only api.localtc.tech; no *.workers.dev address
 
 [vars]

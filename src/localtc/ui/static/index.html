@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/replayplayer.css">
+<link rel="stylesheet" href="/static/sharecard.css">
 </head>
 <body>
 <div class="app">
@@ -141,6 +142,10 @@
         <div class="row"><button class="btn small" id="replay-back">&larr; Logbook</button><span class="muted small" id="replay-note"></span></div>
         <div id="replay-player"></div>
       </div>
+      <div class="logbook wrapped-page" id="wrapped-page" hidden>
+        <div class="row"><button class="btn small" id="wrapped-back">&larr; Logbook</button><span class="muted small">Your flying as a story. Tap a slide or use the arrow keys.</span></div>
+        <div id="wrapped-view"></div>
+      </div>
     </section>
   </main>
 
@@ -234,6 +239,8 @@
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/flightsmap.js"></script>
 <script src="/static/replayplayer.js"></script>
+<script src="/static/sharecard.js"></script>
+<script src="/static/wrapped.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

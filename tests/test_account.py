@@ -18,6 +18,7 @@ class FakeServer:
     def __init__(self) -> None:
         self.flights: dict[str, dict] = {}
         self.replays: dict[str, bytes] = {}
+        self.shares: dict[str, dict] = {}  # slug -> {kind, ref, body, image}
         self.tokens = {"good-token"}
         self.requests: list[tuple[str, str, dict | None, dict]] = []
 
@@ -59,6 +60,25 @@ class FakeServer:
             if method == "DELETE" and self.replays.pop(flight, None) is not None:
                 return 200, {"ok": True}
             return 404, {"error": "No replay for this flight."}
+        if path == "/v1/shares" and method == "POST":
+            if body["kind"] == "flight" and body["ref"] not in self.flights:
+                return 404, {"error": "Sync the flight's logbook line first."}
+            slug = next((s for s, v in self.shares.items() if (v["kind"], v["ref"]) == (body["kind"], body.get("ref", body.get("label")))),
+                        f"Slug{len(self.shares):06d}")
+            self.shares[slug] = {"kind": body["kind"], "ref": body.get("ref", body.get("label")), "body": body, "image": None}
+            return 200, {"slug": slug, "url": f"https://localtc.tech/f/{slug}", "card": {"kind": body["kind"]}}
+        if path.startswith("/v1/shares/"):
+            slug = path.split("/")[3]
+            if slug not in self.shares:
+                return 404, {"error": "No such share."}
+            if method == "PUT":
+                assert isinstance(body, bytes) and body[:4] == b"\x89PNG"
+                self.shares[slug]["image"] = body
+            else:
+                del self.shares[slug]
+            return 200, {"ok": True}
+        if path.startswith("/v1/wrapped?"):
+            return 200, {"query": path.partition("?")[2], "flights": len(self.flights), "slides": []}
         if path == "/v1/support":
             return 200, {"message": "Sent. Thanks!"}
         return 404, {"error": "no"}

@@ -143,14 +143,25 @@ public final class APIClient: Sendable {
     @discardableResult
     func call(_ method: String, _ path: String, _ body: [String: String]? = nil, query: [URLQueryItem] = [],
               auth: Bool = true) async throws -> Data {
+        try await send(method, path, raw: try body.map { try JSONSerialization.data(withJSONObject: $0) }, query: query, auth: auth)
+    }
+
+    /// A call with any JSON body (nested objects, numbers).
+    func send(_ method: String, _ path: String, json body: [String: Any]) async throws -> Data {
+        try await send(method, path, raw: try JSONSerialization.data(withJSONObject: body))
+    }
+
+    /// A call with a body as it is: JSON, or a picture (`contentType`).
+    func send(_ method: String, _ path: String, raw body: Data?, contentType: String = "application/json",
+              query: [URLQueryItem] = [], auth: Bool = true) async throws -> Data {
         var url = baseURL.appending(path: path)
         if !query.isEmpty { url.append(queryItems: query) }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 20
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         if auth, let token = tokens.token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        request.httpBody = body
         let (data, response) = try await transport.send(request)
         if response.statusCode == 401 && auth {
             tokens.clear()  // signed out on the website, or expired: signed out here too

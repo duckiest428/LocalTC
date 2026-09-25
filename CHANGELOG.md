@@ -7,6 +7,8 @@ a new minor version adds features, a patch fixes them.
 ## [0.3.0] - 2026-09-23
 
 ### Added
+- **Share a flight.** A public card for any flight in the account, at a link like `localtc.tech/f/…`: the route drawn across a dotted globe, the numbers, and one line from the radio you pick (the clearance, by default). Pasted into a chat, it unfurls with its own picture. Nothing is public until you press Share, never your gates, times or track, and Stop sharing, deleting the flight or the account takes it down. From the Logbook in the app, the Dashboard and the phone.
+- **ATC Wrapped.** Your week, month or year of flying as a story: hours, distance put into perspective, your airports and routes, your softest landing, your readbacks against last time, and for a year your busiest month, longest streak, a standout radio moment and your pilot type. Save any slide as a picture, or share the summary as a link. In the Logbook (with an account), on the Dashboard and on the phone.
 - **Other traffic on the frequency.** Now and then, when the frequency is quiet, the controller talks to other flights, and they read back. The calls use the airport's own runway in use, wind and taxi routes, and airlines that fly there. Nothing is simulated behind them and nothing is for you to answer.
 - **Radio range.** An airport's frequencies reach only so far, by the radio horizon and FAA service volumes: ground a few miles, tower 20-60 nm, approach 60-110 nm. Out of range, nobody answers, and the log says why. Centres cover their whole airspace.
 - **Stepped climbs.** Departure takes you to 17,000 ft (or your cruise, if lower). Each centre then gives its own usual step, and your cruise as you reach it.

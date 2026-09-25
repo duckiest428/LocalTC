@@ -413,6 +413,7 @@ const Logbook = {
         ${stat(t.flights, "flights")}${stat(t.air_hours, "hours flown")}${stat(t.airports.length, "airports")}
         ${stat(t.distance_nm.toLocaleString(), "nm")}${stat(t.average_landing_fpm == null ? "—" : `${t.average_landing_fpm}`, "avg landing fpm")}
         ${stat(t.readback_accuracy == null ? "—" : `${Math.round(t.readback_accuracy * 100)}%`, "readbacks right")}
+        ${S.account?.signed_in && r.flights.length ? '<button class="btn small lb-wrapped" id="lb-wrapped" title="A week, a month or a year of your flying, as a story">Wrapped</button>' : ""}
       </div>
       ${r.flights.length ? '<div class="lb-map" id="lb-map" aria-label="Map of every flight in the logbook"></div>' : ""}
       ${r.flights.length ? `<table class="lb"><thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Air</th><th>Block</th><th>Landing</th><th></th></tr></thead><tbody>
@@ -426,6 +427,7 @@ const Logbook = {
             ${f.has_recording && S.account?.signed_in ? (f.replay_uploaded_at
               ? `<button class="linkbtn up on" data-unshare="${esc(f.id)}" title="The replay is in your account (localtc.tech and the phone). Click to remove it from the account.">&#9729;&#9654;</button>`
               : `<button class="linkbtn up" data-share="${esc(f.id)}" title="Upload the replay (the track and the radio transcript, no audio) so it plays on localtc.tech and your phone">Upload</button>`) : ""}
+            ${S.account?.signed_in ? `<button class="linkbtn up${f.share_url ? " on" : ""}" data-card="${esc(f.id)}" title="${f.share_url ? "Shared: anyone with the link sees this flight's card" : "Share this flight: a public card with the route and the numbers"}">${f.share_url ? "Shared" : "Share"}</button>` : ""}
             <span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
             <button class="linkbtn" data-del="${esc(f.id)}" title="Delete from this computer">&times;</button></td></tr>`).join("")}
       </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
@@ -447,6 +449,8 @@ const Logbook = {
       e.stopPropagation();
       if (confirm("Remove this flight's replay from your account? It still plays here.")) api("replay/remove", { id: b.dataset.unshare }).then((v) => this.render(v)).catch(fail);
     }));
+    $$("[data-card]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); this.share(r.flights.find((f) => f.id === b.dataset.card)); }));
+    if ($("#lb-wrapped")) $("#lb-wrapped").onclick = () => this.wrapped();
     if (!r.flights.length) return;
     // Every flight on a map; a click on a route marks its rows, a click on a row shows its route.
     const pick = (o, d) => $$("#logbook-body tr[data-route]").forEach((tr) => tr.classList.toggle("picked", tr.dataset.route === `${o}>${d}`));
@@ -489,6 +493,55 @@ Object.assign(Logbook, {
   },
 });
 $("#replay-back").onclick = () => Logbook.back();
+
+// Sharing a flight (a public card at localtc.tech/f/...) and Wrapped: sharecard.js and wrapped.js, the
+// website's own files, through the account.
+Object.assign(Logbook, {
+  model: null,
+  async share(f) {
+    if (!f) return;
+    this.model = this.model || await import("/static/cardmodel.js");
+    let moments = [], names = {};
+    if (f.has_recording) {
+      try {
+        const r = await api(`replay?id=${encodeURIComponent(f.id)}`);
+        moments = this.model.moments(r.radio);
+        names = this.model.airportNames(r.airports);
+      } catch (_) { /* no quote to pick from, then */ }
+    }
+    const toDataUrl = (blob) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
+    ShareCard.dialog({
+      base: "/static/", moments, shared: f.share_url, slug: f.share_url ? f.share_url.split("/").pop() : null,
+      card: (quote) => this.model.flightCard(f, { quote, names }),
+      share: (quote) => api("share", { id: f.id, quote, names }),
+      putImage: async (slug, blob) => api("share/image", { slug, png: await toDataUrl(blob) }),
+      unshare: () => api("share/remove", { id: f.id }),
+      onClose: () => this.load(),
+    });
+  },
+  wrappedView: null,
+  wrapped() {
+    $("#logbook-body").hidden = true;
+    $("#wrapped-page").hidden = false;
+    if (!this.wrappedView) {
+      const toDataUrl = (blob) => new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.readAsDataURL(blob); });
+      const q = (r) => new URLSearchParams({ period: r.period, from: r.from, to: r.to, tz: r.tz, label: r.label });
+      this.wrappedView = new WrappedView($("#wrapped-view"), {
+        base: "/static/",
+        load: (r) => api(`wrapped?${q(r)}`),
+        share: (r) => api("wrapped/share", Object.fromEntries(q(r))),
+        putImage: async (slug, blob) => api("share/image", { slug, png: await toDataUrl(blob) }),
+      });
+      this.wrappedView.open("month", 0);
+    }
+  },
+});
+$("#wrapped-back").onclick = () => {
+  Logbook.wrappedView?.stop();
+  $("#wrapped-page").hidden = true;
+  $("#logbook-body").hidden = false;
+  Logbook.map?.fit();
+};
 
 /* ---------- Quick Settings ---------- */
 

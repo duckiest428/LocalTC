@@ -24,6 +24,18 @@ final class AppModel {
         return APIClient.production
     }
 
+    /// The website, whose sharecard.js draws the cards: the one beside the account server
+    /// (`LOCALTC_SITE` for a development build, else wrangler dev's site on port 8000).
+    static var siteURL: URL {
+        #if DEBUG
+        if let override = ProcessInfo.processInfo.environment["LOCALTC_SITE"], let url = URL(string: override) { return url }
+        if apiURL.host == "localhost" || apiURL.host == "127.0.0.1" {
+            return URL(string: "http://\(apiURL.host!):8000/")!
+        }
+        #endif
+        return URL(string: "https://localtc.tech/")!
+    }
+
     init() {
         let api = APIClient(baseURL: Self.apiURL, tokens: KeychainTokenStore())
         self.api = api

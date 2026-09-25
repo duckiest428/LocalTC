@@ -19,7 +19,10 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
-MAX_BODY = 1_000_000
+MAX_BODY = 2_000_000  # a shared card's picture, as a data URL, is the biggest thing a page sends
+# Types that mustn't come from the machine's own table: Windows registries map .js to text/plain now and then,
+# and a browser won't run a module ("import('./cardmodel.js')") served as that.
+TYPES = {".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
 Handler = Callable[[dict[str, Any]], Awaitable[Any]]
 
 
@@ -131,7 +134,7 @@ class AppServer:
         file = (self.static_dir / relative).resolve()
         if not file.is_relative_to(self.static_dir) or not file.is_file():
             return 404, "text/plain", b"not found"
-        content_type = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+        content_type = TYPES.get(file.suffix) or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
         if content_type.startswith("text/") or content_type in ("application/javascript", "application/json"):
             content_type += "; charset=utf-8"
         return 200, content_type, file.read_bytes()

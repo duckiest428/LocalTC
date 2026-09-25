@@ -204,6 +204,10 @@ With llama3.2:3b the edge cases pass 34/34, at about 1 s per call (median; the p
 
 **When it's asked** (`[llm] understanding`): `fallback` (the default) asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). `primary` asks it about every call except a readback the grammar already finds correct. The model shares the PC with the sim, so every call costs frames; `fallback` keeps that to the calls that need it. Either way the trigger is recorded.
 
+**Patience** (`[llm] patience_s`): the model shares the PC with the sim, and one that answers in 2 s on an idle machine can take 8 in flight. A question or anything off the script that the model misses the first deadline on (`timeout_s`) gets "stand by", and then one more try with up to `patience_s` (15 s) before ATC answers. If even that finds nothing, a long call in your own words gets "roger", not "say again". Readbacks never wait: the grammar's reading is used at once.
+
+**Standard pressure.** "We're on STD", "set to standard", "QNE" and "29.92" are understood. Up in the flight levels ATC reads your altitude as the flight level (pressure altitude), whatever the sim's altimeter setting says. Some airliners keep their own STD while the sim's setting stays on the local one, and that is not an altitude deviation.
+
 **Phrasing** (`[llm] phrasing`): routine calls stay exactly as the templates say. The model only words replies with no template: answers the sim can't give (altimeter, wind, runway, squawk and assigned altitude come straight from sim data) and declined requests ("unable direct at this time, continue as filed"). The reply may not contain an instruction or approval ("cleared", "climb", "contact", "approved", ...) or any number that isn't in the facts it was given. Otherwise ATC says "unable".
 
 **Recordings.** Every model call is recorded as an `llm_exchange` event: prompt, answer, outcome, latency. A replay reuses the recorded answers, so it behaves exactly like the flight did, without a model (`localtc replay ... --llm live` asks the model again instead). `localtc atc <recording> --llm live` runs the model offline against a recording.
@@ -248,6 +252,8 @@ ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for W
 
 **Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
 
+**Manner** (`tts/voices.py` `DELIVERY`): Piper's pace (`length_scale`), expressiveness (`noise_scale`) and rhythm (`noise_w`) are set per call, by who is talking. Tower is quick and clipped, centre slower and measured, ground conversational, and the ATIS flat and even like the recording it is. Each station gets a few percent of its own on top, the same every time. The words differ too. Each controller has a usual way of saying each instruction, all standard phraseology: "runway 06L, taxi via A4" at one field, "taxi to runway 06L via A4" at another; "contact Toronto Centre 135.55", or "on 135.55". A controller mostly keeps to its own habit, and now and then (12%) says it another correct way. What has to be read back never changes.
+
 **Pacing.** Transmissions never overlap, and the ATC engine knows how long its words take, so it doesn't start the next call (or answer the copilot) until the frequency is quiet.
 
 ## ATIS and weather
@@ -283,6 +289,17 @@ And ATC starts things too (`[atc] unscripted`, on by default):
 - **A quiet pilot:** an instruction nobody reads back gets "how do you read?" after 30 s, is said once more, then dropped.
 - **Missed check-in:** switched to the new frequency and said nothing for 45 s? Departure or approach calls you first. Still on the old frequency 45 s after reading back a handoff? You're told again.
 - **"Clearance on request, stand by":** clearance delivery sometimes needs a moment.
+- **Other traffic on the frequency** (`[atc] chatter`): now and then, when it's quiet, you hear the controller with other flights. "Westjet 452, runway 06L, cleared to land, wind 060 at 6", and the readback. They use the airport's own runway in use, wind and real taxi routes, and airlines that fly there. Nothing is behind them: no traffic is simulated, and nothing is for you to answer. They show dimmed in the radio log and never step on your own exchanges. Tower and ground are busiest; centres are quieter.
+- **Callsigns** (`[atc] callsign_check`): a call with another flight's callsign ("Westjet 452", or your airline with another number) isn't answered as yours: "station calling Montreal Ground, say again your callsign". One digit off on a first call ("Air Canada 797" for 779) gets the same. Speech-to-text slips are fine ("Canada 779", "Air Canada 79"), and so is a readback without the callsign.
+- **Radio range** (`[atc] radio_range`): an airport's frequencies reach only so far. VHF stops at the radio horizon, about 1.23 × (√ your height + √ the antenna's) nm. Within it, each kind of frequency works out to twice its FAA protected service volume (FAA Order 6050.32B):
+  - ground and clearance: 3 nm protected, so a few miles
+  - tower: 10, 15 or 30 nm by the size of the airport
+  - approach and departure: 30-55 nm
+  - ATIS: up to 60 nm
+
+  Call a tower 60 miles away and nobody answers; the log says why ("Montreal Tower is 60 nm away; its radio reaches about 30 nm at this altitude"). Centres aren't limited: each works its whole airspace through remote sites.
+
+**Climbing out.** Departure climbs an airliner to the top of its airspace (17,000 ft, or the filed level if lower) and hands it on. Each centre has its own usual step on the way up (FL230 to FL280). You get that, then your cruise once you're nearly at the step. Checking in on the way up gets "continue climb", and a handoff taken with "good day" and the station's name is taken, even without the frequency. With the sim paused, ATC doesn't call you; answers to your own calls still come.
 
 The copilot answers these too ("looking", "loud and clear").
 

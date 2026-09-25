@@ -13,6 +13,7 @@ from localtc.sim_api import (
     ConnectionStatus,
     LlmExchange,
     PhaseChanged,
+    RadioChatter,
     RadioTuned,
     ReadbackEvaluated,
     SessionNote,
@@ -36,6 +37,9 @@ def radio_line(ev: BusEvent) -> dict | None:
             return {"kind": "readback", "t": t, "ok": True, "text": "readback ok"}
         what = ", ".join([*ev.missing, *(f"{k} {v}" for k, v in ev.mismatched.items())])
         return {"kind": "readback", "t": t, "ok": False, "text": f"readback {ev.status}" + (f": {what}" if what else "")}
+    if isinstance(ev, RadioChatter):  # somebody else on the frequency
+        who = ev.station if ev.speaker == "atc" else ev.callsign
+        return {"kind": "chatter", "t": t, "station": who, "mhz": ev.frequency_mhz, "text": ev.text, "atc": ev.speaker == "atc"}
     if isinstance(ev, AtisBroadcast):
         return {"kind": "atis", "t": t, "station": f"{ev.station} information {ev.letter}", "mhz": ev.frequency_mhz,
                 "text": ev.text}
@@ -46,8 +50,8 @@ def radio_line(ev: BusEvent) -> dict | None:
                 "text": ev.station or "no ATC on this frequency"}
     if isinstance(ev, AtcAlert):
         text = ALERTS.get(ev.kind, ev.kind.replace("_", " "))
-        if ev.detail and ev.kind in ("emergency", "copilot"):
-            text = f"{text}: {ev.detail}" if ev.kind == "emergency" else f"Copilot: {ev.detail}"
+        if ev.detail and ev.kind in ("emergency", "copilot", "out_of_range"):
+            text = f"Copilot: {ev.detail}" if ev.kind == "copilot" else f"{text}: {ev.detail}"
         return {"kind": "alert", "t": t, "text": text, "level": "error" if ev.kind == "emergency" else "warn"}
     if isinstance(ev, ConnectionStatus):
         return {"kind": "system", "t": t, "text": ("Sim connected " if ev.connected else "Sim disconnected ") + ev.detail,

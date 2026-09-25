@@ -109,6 +109,9 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.atc .st { color: var(--cyan); font-size: 12px; }
 .line.pilot .who { color: var(--green); }
 .line.copilot .who { color: #9ad29e; }
+.line.chatter { opacity: .62; }  /* somebody else on the frequency: there, but not for you */
+.line.chatter .who, .line.chatter .st { color: var(--muted); font-size: 12px; }
+.line.chatter .body { color: #b9bec4; font-size: 13px; }
 .line.atis .who { color: #c79be6; }
 .line.atis .body { color: #b9bec4; font-size: 13px; }
 .line.readback .body { color: var(--muted); font-size: 12px; }

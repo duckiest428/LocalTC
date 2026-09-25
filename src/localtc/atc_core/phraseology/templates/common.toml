@@ -164,6 +164,12 @@ id = "common.how_read"
 controller = "any"
 text = ["{callsign}, {station}, how do you read?", "{callsign}, did you copy?"]
 
+# The language model is thinking it over (a question, something off the script): the answer follows.
+[[template]]
+id = "common.stand_by"
+controller = "any"
+text = ["{callsign}, stand by.", "{callsign}, stand by one."]
+
 [[template]]
 id = "clearance.standby"
 controller = "clearance"

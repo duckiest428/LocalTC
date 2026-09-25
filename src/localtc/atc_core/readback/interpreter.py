@@ -51,6 +51,7 @@ class InterpretContext:
     station: str | None = None  # who the pilot is talking to, e.g. "Montreal Tower"
     last_atc: str | None = None  # what that controller said last
     confidence: float | None = None  # speech-to-text confidence (None: typed)
+    patient: bool = False  # ATC said "stand by": the model may take its time (``LlmInterpreter.patience_s``)
 
 
 @dataclass(frozen=True)

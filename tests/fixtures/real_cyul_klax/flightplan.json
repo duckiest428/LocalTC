@@ -1,0 +1,341 @@
+{
+ "source": "simbrief",
+ "callsign": "ACA779",
+ "origin": "CYUL",
+ "destination": "KLAX",
+ "alternate": "KONT",
+ "cruise_ft": 36000,
+ "route": "DCT KESKA DCT SAVEX DCT KANUR DCT LETAK Q824 FNT DCT GIJ DCT IRK DCT HYS DCT PUB DCT TBC DCT JASSE Q90 DNERO ANJLL4",
+ "aircraft": "BCS3",
+ "registration": "C-SYNC",
+ "sid": "",
+ "star": "ANJLL4",
+ "dep_runway": "06R",
+ "arr_runway": "24R",
+ "origin_name": "PIERRE ELLIOTT TRUDEAU INTL",
+ "destination_name": "LOS ANGELES INTL",
+ "fixes": [
+  {
+   "ident": "KESKA",
+   "lat": 45.614444,
+   "lon": -74.146667,
+   "alt_ft": 15900,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 487
+  },
+  {
+   "ident": "SAVEX",
+   "lat": 45.513056,
+   "lon": -74.463889,
+   "alt_ft": 20400,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 646
+  },
+  {
+   "ident": "KANUR",
+   "lat": 45.431389,
+   "lon": -75.043611,
+   "alt_ft": 26100,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 873
+  },
+  {
+   "ident": "LETAK",
+   "lat": 45.402225,
+   "lon": -76.246047,
+   "alt_ft": 32400,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1256
+  },
+  {
+   "ident": "DESKI",
+   "lat": 45.379167,
+   "lon": -76.346667,
+   "alt_ft": 32700,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1278
+  },
+  {
+   "ident": "ILEMU",
+   "lat": 45.254167,
+   "lon": -76.878889,
+   "alt_ft": 34900,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1461
+  },
+  {
+   "ident": "TOC",
+   "lat": 45.18991,
+   "lon": -77.147578,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1554
+  },
+  {
+   "ident": "MENKO",
+   "lat": 44.776667,
+   "lon": -78.803333,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2138
+  },
+  {
+   "ident": "GOPUP",
+   "lat": 43.729722,
+   "lon": -81.558056,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3168
+  },
+  {
+   "ident": "TAGUM",
+   "lat": 43.481681,
+   "lon": -82.162886,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3395
+  },
+  {
+   "ident": "CFWBG",
+   "lat": 43.474072,
+   "lon": -82.182039,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3402
+  },
+  {
+   "ident": "HOCKE",
+   "lat": 43.26205,
+   "lon": -82.710631,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3602
+  },
+  {
+   "ident": "FNT",
+   "lat": 42.966767,
+   "lon": -83.746989,
+   "alt_ft": 36000,
+   "via": "Q824",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 3994
+  },
+  {
+   "ident": "GIJ",
+   "lat": 41.768611,
+   "lon": -86.318453,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 5052
+  },
+  {
+   "ident": "IRK",
+   "lat": 40.135017,
+   "lon": -92.591714,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 7589
+  },
+  {
+   "ident": "HYS",
+   "lat": 38.847656,
+   "lon": -99.276792,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 10284
+  },
+  {
+   "ident": "PUB",
+   "lat": 38.294253,
+   "lon": -104.429447,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 12354
+  },
+  {
+   "ident": "TBC",
+   "lat": 36.121325,
+   "lon": -111.269586,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 15314
+  },
+  {
+   "ident": "JASSE",
+   "lat": 36.070981,
+   "lon": -111.812725,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 15532
+  },
+  {
+   "ident": "AREAF",
+   "lat": 35.608825,
+   "lon": -113.230683,
+   "alt_ft": 38000,
+   "via": "Q90",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 16138
+  },
+  {
+   "ident": "ESGEE",
+   "lat": 35.133472,
+   "lon": -114.622678,
+   "alt_ft": 38000,
+   "via": "Q90",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 16754
+  },
+  {
+   "ident": "DNERO",
+   "lat": 35.035317,
+   "lon": -114.904553,
+   "alt_ft": 38000,
+   "via": "Q90",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 16879
+  },
+  {
+   "ident": "SLLRS",
+   "lat": 34.793181,
+   "lon": -115.460669,
+   "alt_ft": 38000,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 17137
+  },
+  {
+   "ident": "FLOJO",
+   "lat": 34.633483,
+   "lon": -115.893278,
+   "alt_ft": 38000,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 17326
+  },
+  {
+   "ident": "TOD",
+   "lat": 34.455846,
+   "lon": -116.372746,
+   "alt_ft": 38000,
+   "via": "ANJLL4",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 17541
+  },
+  {
+   "ident": "SALYY",
+   "lat": 34.416858,
+   "lon": -116.477039,
+   "alt_ft": 35900,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 17608
+  },
+  {
+   "ident": "GLESN",
+   "lat": 34.334733,
+   "lon": -116.676381,
+   "alt_ft": 32000,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 17731
+  },
+  {
+   "ident": "ANJLL",
+   "lat": 34.211203,
+   "lon": -116.982778,
+   "alt_ft": 26000,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 17921
+  },
+  {
+   "ident": "CAANN",
+   "lat": 34.165803,
+   "lon": -117.150572,
+   "alt_ft": 22900,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 18021
+  },
+  {
+   "ident": "BOYEL",
+   "lat": 34.1053,
+   "lon": -117.370244,
+   "alt_ft": 18600,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 18155
+  },
+  {
+   "ident": "CRCUS",
+   "lat": 34.073203,
+   "lon": -117.498439,
+   "alt_ft": 16200,
+   "via": "ANJLL4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 18233
+  },
+  {
+   "ident": "KLAX",
+   "lat": 33.942497,
+   "lon": -118.40805,
+   "alt_ft": 2600,
+   "via": "ANJLL4",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 18929
+  }
+ ],
+ "simbrief_id": "1790286927",
+ "rules": "IFR"
+}

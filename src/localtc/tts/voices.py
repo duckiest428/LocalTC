@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -60,3 +61,41 @@ def speaker_for(key: str, count: int, speakers: tuple[int, ...] = SPEAKERS) -> i
         return None
     pool = [s for s in speakers if s < count] or list(range(count))
     return pool[zlib.crc32(key.lower().encode()) % len(pool)]
+
+
+# --- how each controller speaks ---------------------------------------------------------------------------------
+#
+# Piper's three knobs, per call: ``length_scale`` (the pace: under 1 faster), ``noise_scale`` (how much the voice
+# varies, its expressiveness) and ``noise_w`` (how uneven the timing is: pauses, rhythm). Each kind of controller
+# has a manner of its own, and each station a little on top, so pacing tells them apart as much as the words do.
+
+@dataclass(frozen=True)
+class Delivery:
+    pace: float = 1.0  # multiplies the configured speaking rate: over 1 faster
+    noise_scale: float = 0.667  # Piper's defaults
+    noise_w: float = 0.8
+
+
+DELIVERY: dict[str, Delivery] = {
+    "clearance": Delivery(0.98, 0.62, 0.75),  # a long clearance, read steadily
+    "ground": Delivery(1.0, 0.72, 0.9),  # conversational
+    "tower": Delivery(1.08, 0.6, 0.6),  # quick and clipped: a busy runway
+    "departure": Delivery(1.04, 0.64, 0.7),
+    "approach": Delivery(1.02, 0.64, 0.72),
+    "center": Delivery(0.94, 0.62, 0.85),  # slower, measured: long hours, a big sector
+    "atis": Delivery(1.0, 0.25, 0.2),  # the recording: flat and even, nearly a machine
+    "chatter": Delivery(1.0, 0.7, 0.85),  # other pilots on the frequency
+    "pilot": Delivery(1.0, 0.667, 0.8),
+}
+
+
+def delivery_for(key: str, kind: str) -> Delivery:
+    """The manner of a controller (``kind``: clearance ... center, atis, pilot) with this station's own touch
+    (``key``: its name): up to 5 % on the pace and a little on the rest, the same every time."""
+    base = DELIVERY.get(kind, Delivery())
+    if kind in ("atis", "pilot"):
+        return base
+    h = zlib.crc32(("delivery" + key.lower()).encode())
+    pace = base.pace * (0.95 + (h % 101) / 1000)
+    return Delivery(round(pace, 3), round(base.noise_scale + ((h >> 8) % 11 - 5) / 100, 3),
+                    round(base.noise_w + ((h >> 16) % 11 - 5) / 100, 3))

@@ -3,6 +3,7 @@
 import random
 import string
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -154,9 +155,17 @@ class TemplateLibrary:
         *,
         rng: random.Random | None = None,
         controller: str | None = None,
+        choose: Callable[[int], int] | None = None,
     ) -> Rendered:
+        """``choose(n)`` picks one of a template's ``n`` wordings (a controller's habit); else ``rng`` does, else
+        the first."""
         template = self.get(instruction_id)
-        text = template.text[0] if rng is None or len(template.text) == 1 else rng.choice(template.text)
+        if len(template.text) == 1:
+            text = template.text[0]
+        elif choose is not None:
+            text = template.text[choose(len(template.text)) % len(template.text)]
+        else:
+            text = template.text[0] if rng is None else rng.choice(template.text)
         display, spoken = self.fill(text, slots, context=instruction_id)
         elements = (*template.readback.required, *template.readback.optional)
         return Rendered(

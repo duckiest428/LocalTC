@@ -26,17 +26,27 @@ from importlib import resources
 from typing import Any, Literal
 
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
-from localtc.atc_core.llm.grounding import PHRASE_STEMS, REQUEST_WORDS, grounded, missing_cue
+from localtc.atc_core.llm.grounding import (
+    PHRASE_STEMS,
+    REQUEST_WORDS,
+    grounded,
+    missing_cue,
+)
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
 from localtc.atc_core.readback.extract import candidates as find_candidates
-from localtc.atc_core.readback.extract import normalize_runway, values_close, values_equal, without_callsign
+from localtc.atc_core.readback.extract import (
+    normalize_runway,
+    values_close,
+    values_equal,
+    without_callsign,
+)
 from localtc.atc_core.readback.intents import EMERGENCY
 from localtc.atc_core.readback.interpreter import (
     GrammarInterpreter,
-    InterpretContext,
     Interpretation,
+    InterpretContext,
     PendingReadback,
     SayAgainInterpreter,
     Status,
@@ -371,11 +381,13 @@ class LlmInterpreter:
         timeout_s: float = 2.5,
         max_attempts: int = 2,
         budget_s: float = 4.0,
+        patience_s: float = 15.0,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.backend = backend
         self.mode: Mode = mode if backend is not None else "off"
         self.timeout_s, self.max_attempts, self.budget_s = timeout_s, max_attempts, budget_s
+        self.patience_s = patience_s  # after "stand by": one long try for a model the sim is keeping busy
         self.grammar = GrammarInterpreter()
         self.say_again = SayAgainInterpreter()
         self.examples = load_examples()
@@ -407,12 +419,13 @@ class LlmInterpreter:
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
         intent_errors = 0
-        deadline = self._clock() + self.budget_s
+        timeout_s, budget_s = (self.patience_s, self.patience_s) if context.patient else (self.timeout_s, self.budget_s)
+        deadline = self._clock() + budget_s
         for attempt in range(1, self.max_attempts + 1):
             remaining = deadline - self._clock()
             if remaining < 0.2:
                 break
-            reply = self.backend.complete(request, timeout_s=min(self.timeout_s, remaining))
+            reply = self.backend.complete(request, timeout_s=min(timeout_s, remaining))
 
             def record(outcome: str, detail: str = "", _reply=reply, _request=request, _attempt=attempt) -> None:
                 exchanges.append(LlmExchange(

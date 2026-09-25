@@ -1,38 +1,43 @@
 [[template]]
 id = "tower.takeoff"
 controller = "tower"
-text = [
-    "{callsign}, runway {runway}, fly runway heading, cleared for takeoff.",
-    "{callsign}, fly runway heading, runway {runway}, cleared for takeoff.",
-]
+text = ["{callsign}, runway {runway}, fly runway heading, cleared for takeoff.",
+        "{callsign}, fly runway heading, runway {runway}, cleared for takeoff.",
+        "{callsign}, runway {runway}, cleared for takeoff, fly runway heading."]
 readback = { required = ["runway", "cleared_for_takeoff"] }
 pilot_readback = "Runway heading, runway {runway}, cleared for takeoff, {callsign_short}."
 
 [[template]]
 id = "tower.luaw"
 controller = "tower"
-text = ["{callsign}, runway {runway}, line up and wait."]
+text = ["{callsign}, runway {runway}, line up and wait.",
+        "{callsign}, line up and wait runway {runway}."]
 readback = { required = ["runway", "line_up_and_wait"] }
 pilot_readback = "Runway {runway}, line up and wait, {callsign_short}."
 
 [[template]]
 id = "tower.hold_short_traffic"
 controller = "tower"
-text = ["{callsign}, hold short runway {hold_short}, {message}."]
+text = ["{callsign}, hold short runway {hold_short}, {message}.",
+        "{callsign}, hold short of runway {hold_short}, {message}."]
 readback = { required = ["hold_short"] }
 pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
 
 [[template]]
 id = "tower.handoff_departure"
 controller = "tower"
-text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency}, good day."]
+text = ["{callsign}, contact {station} {frequency}.",
+        "{callsign}, contact {station} {frequency}, good day.",
+        "{callsign}, contact {station} on {frequency}."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 
 [[template]]
 id = "tower.land"
 controller = "tower"
-text = ["{callsign}, runway {runway}, wind {wind}, cleared to land.", "{callsign}, wind {wind}, runway {runway}, cleared to land."]
+text = ["{callsign}, runway {runway}, wind {wind}, cleared to land.",
+        "{callsign}, wind {wind}, runway {runway}, cleared to land.",
+        "{callsign}, runway {runway}, cleared to land, wind {wind}."]
 readback = { required = ["runway", "cleared_to_land"] }
 pilot_readback = "Cleared to land runway {runway}, {callsign_short}."
 
@@ -44,7 +49,9 @@ text = ["{callsign}, continue, runway {runway}.", "{callsign}, continue approach
 [[template]]
 id = "tower.exit_contact_ground"
 controller = "tower"
-text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency} when clear."]
+text = ["{callsign}, contact {station} {frequency}.",
+        "{callsign}, contact {station} {frequency} when clear.",
+        "{callsign}, contact {station} on {frequency} when clear of the runway."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 

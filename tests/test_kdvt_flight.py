@@ -26,7 +26,8 @@ def after(lines: list[str], text: str, count: int = 1) -> list[str]:
 
 
 def test_the_taxi_clearance_names_the_hold_short_point(replay):
-    assert "runway 25L at D, taxi via C, D" in after(replay, "Request Taxi to Runway")[0]
+    taxi = after(replay, "Request Taxi to Runway")[0]
+    assert "runway 25L at D" in taxi and "via C, D" in taxi  # in the ground controller's own order of words
 
 
 def test_asking_for_the_departure_at_the_hold_short_line(replay):

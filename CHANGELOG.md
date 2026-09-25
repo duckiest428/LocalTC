@@ -7,6 +7,12 @@ a new minor version adds features, a patch fixes them.
 ## [0.3.0] - 2026-09-23
 
 ### Added
+- **Other traffic on the frequency.** Now and then, when the frequency is quiet, the controller talks to other flights, and they read back. The calls use the airport's own runway in use, wind and taxi routes, and airlines that fly there. Nothing is simulated behind them and nothing is for you to answer.
+- **Radio range.** An airport's frequencies reach only so far, by the radio horizon and FAA service volumes: ground a few miles, tower 20-60 nm, approach 60-110 nm. Out of range, nobody answers, and the log says why. Centres cover their whole airspace.
+- **Stepped climbs.** Departure takes you to 17,000 ft (or your cruise, if lower). Each centre then gives its own usual step, and your cruise as you reach it.
+- **Callsign checks.** Another flight's callsign gets "station calling ..., say again your callsign". Speech-to-text slips on your own callsign are fine.
+- **Controllers with their own style.** Each station has its usual way of wording each instruction, all standard, and its own pace and rhythm of speech: tower quick, centre measured, the ATIS flat like a recording.
+- **Stand by, then an answer.** A question or off-script call the language model can't answer in time gets "stand by", then a longer try (`[llm] patience_s`) before ATC replies.
 - **Flight replay.** Pick a flight in the Logbook and watch it again: the aircraft moving along its track on
   the map, the whole radio transcript beside it in step (ATC, your calls, and whether each readback was
   right), and a timeline to scrub with the calls, handoffs, takeoff, landing and alerts marked on it. Play at
@@ -47,6 +53,10 @@ a new minor version adds features, a patch fixes them.
 - A **Buy me a coffee** button in the app. One click and it's gone for good.
 
 ### Changed
+- A handoff taken with the station's name or "good day" is taken, without the frequency. "Readback correct, contact ground when ready" no longer gets "did you copy?".
+- Checking in on the way up gets "continue climb"; saying the altitude again after the check-in is just acknowledged.
+- Greetings come with a controller's first transmission only. "Say ride conditions" is asked once a flight.
+- A one-taxiway route is "runway 06L, taxi via A4", not "at A4, via A4".
 - The companion app's EFB preview moved to Settings, so the new Logbook fits on the tab bar.
 - **Approach vectors you like a real controller**: onto a downwind on your side, a base turn, then a 30 degree
   intercept that carries the clearance ("maintain 4,000 until established on the localizer, cleared ILS runway
@@ -68,6 +78,12 @@ a new minor version adds features, a patch fixes them.
   messages, and lets the Dashboard's tracker connect (redeploy the Worker, and set its SUPPORT_EMAIL secret).
 
 ### Fixed
+- Standard pressure (STD) in the flight levels was an "altitude deviation" when the aircraft's avionics were on STD and the sim's altimeter setting wasn't. Up high ATC now reads the flight level. "We're on standard" is understood.
+- Tower cleared a takeoff with a 777 over the threshold about to land. An aircraft low over the runway now holds the departure.
+- "Stopped ahead of you on the taxiway" for aircraft parked at their gates. Only aircraft on the route ahead count now.
+- Traffic calls for aircraft just off (or onto) a runway near an airport.
+- ATC called with the sim paused.
+- A pilot's "request climb" below the filed level lowered the cruise.
 - The Dashboard on a phone: the section bar at the top no longer makes the page wider than the screen.
 - An airport's ATIS works when another airport's controller shares its frequency (Denver's ATIS on 125.6).
 - "Request gate" and "request parking" are understood; stopping on a taxiway after landing is no longer

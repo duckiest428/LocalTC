@@ -128,6 +128,9 @@ class AtcConfig(_Section):
     center_name: str = "Seattle"
     center_mhz: float = 125.1
     strict_callsign: bool = False
+    radio_range: bool = True  # an airport's frequencies reach only so far: tower 20-60 nm, ground 6 nm (by altitude)
+    chatter: bool = True  # other flights heard on the frequency now and then (no traffic behind them, nothing to answer)
+    callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"
     transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere
@@ -146,6 +149,9 @@ class LlmConfig(_Section):
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
     timeout_s: float = 4.0  # per model call
     budget_s: float = 6.0  # per transmission, including one retry
+    # A question or anything off the script that the model couldn't answer in time: ATC says "stand by" and gives
+    # it this long, once. The sim shares the machine, and a model that answers in 2 s idle can take 8 in flight.
+    patience_s: float = 15.0
     max_attempts: int = 2
     keep_alive: str = "1h"
     num_ctx: int = 4096

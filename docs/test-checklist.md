@@ -61,6 +61,24 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 - [ ] After landing: "request gate" (or "request parking") gets the gate and the route.
 - [ ] The frame rate no longer drops when you talk (the language model only reads what the grammar can't).
 
+### Re-check from the Montreal to Los Angeles flight (fixed since)
+
+- [ ] On STD up high (the CS300's own altimeter, whatever the sim says): no "check altitude" and no deviation alert.
+      Telling ATC "we're on standard" gets "roger".
+- [ ] Take a handoff with just the station and "good day" ("Montreal Centre, good night"): accepted, no "say again".
+- [ ] Check in climbing: "radar contact, continue climb" (or the next climb). Saying the level again gets nothing, not a loop.
+- [ ] The climb goes up in steps: departure to 17,000, the centre to its step (FL230-280), then your cruise.
+- [ ] Tower doesn't clear you onto a runway with someone landing on it; with someone rolling on it, it's "line up and wait".
+- [ ] Just off the push, no "stopped ahead" for aircraft parked at their gates. Tower greets you once, not again with the takeoff.
+- [ ] "Say ride conditions" comes at most once a flight. Pause the sim: ATC doesn't call you until you unpause.
+- [ ] Ask something off the script (for example about the weather en route): "stand by", then an answer (Ollama running).
+- [ ] Other traffic: now and then you hear the controller with other flights, dimmed in the radio log. Quick Settings → ATC
+      turns it off. Does it feel like a real frequency? Too much, too little?
+- [ ] Radio range: call a tower from far away (parked at another airport): no answer, and the log says it's out of range.
+- [ ] Call with a wrong callsign on purpose ("Westjet 123, request taxi"): "station calling ..., say again your callsign".
+- [ ] Listen for the voices: tower quicker, centre slower, the ATIS flat. Different fields' ground controllers word
+      things a little differently.
+
 ## 3. VFR (short hops are fine)
 
 - [ ] New Flight → Manual, set the rules to **VFR**. The Live Map switches itself to the **VFR** map (terrain plus airspace circles).
@@ -100,7 +118,8 @@ pick your phone and your team, press Run). A free-account install stops working 
 - [ ] **Comms**: the radio log, the COM1/COM2 filter, and typing a call (on the same Wi-Fi) makes ATC answer it on the PC.
 - [ ] **Frequencies**: the tuned and next stations light up in the airport lists.
 - [ ] **Airports**: the departure and arrival airports with runways, ILS and ATIS.
-- [ ] **EFB** is greyed out ("Coming soon").
+- [ ] **Logbook**: your synced flights; one with an uploaded replay plays (map, radio, scrubber).
+- [ ] Settings → **EFB** is greyed out ("Coming soon").
 - [ ] Turn the phone's Wi-Fi off (use cellular): the badge changes to **Via server** and the map still moves.
 - [ ] Handoffs and clearances pop up as banners.
 

@@ -9,7 +9,14 @@ from localtc.airports import load_airport_dir
 from localtc.atc_core.engine import AtcEngine, EngineConfig
 from localtc.replay import Recording
 from localtc.scenario import PilotRule, When, load_scenario, run
-from localtc.sim_api import AirportData, AtcTransmission, OwnshipState, TrafficSnapshot, TrafficTarget, Transcript
+from localtc.sim_api import (
+    AirportData,
+    AtcTransmission,
+    OwnshipState,
+    TrafficSnapshot,
+    TrafficTarget,
+    Transcript,
+)
 
 HERE = Path(__file__).parent
 FIXTURES = HERE / "fixtures"
@@ -58,7 +65,8 @@ def test_return_to_the_departure_airport():
 
 
 def cruising_engine() -> tuple[AtcEngine, OwnshipState]:
-    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7))
+    # Put down anywhere along the flight (radio range would decide who can hear it, and that isn't what's tested).
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, radio_range=False))
     for airport in load_airport_dir(FIXTURES / "airports"):
         engine.handle(AirportData(t=0.0, airport=airport))
     events = [e for e in Recording(FIXTURES / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState)]
@@ -160,7 +168,9 @@ def test_a_level_offered_enroute_can_be_turned_down():
     assert engine._offered_level is None
 
 
-from test_phase import own  # noqa: E402  (a builder for OwnshipState, shared with the phase tests)
+from test_phase import (
+    own,  # noqa: E402  (a builder for OwnshipState, shared with the phase tests)
+)
 
 
 def test_an_emergency_gets_priority_and_the_shortest_way_down():

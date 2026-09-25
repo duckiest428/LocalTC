@@ -3,10 +3,24 @@
 Depends on nothing else in LocalTC, so any component can import it on any OS.
 """
 
-from localtc.sim_api.airport import Airport, ApproachProcedure, Frequency, ParkingSpot, Runway, RunwayEnd, TaxiPath, TaxiPoint
+from localtc.sim_api.airport import (
+    Airport,
+    ApproachProcedure,
+    Frequency,
+    ParkingSpot,
+    Runway,
+    RunwayEnd,
+    TaxiPath,
+    TaxiPoint,
+)
 from localtc.sim_api.clock import Clock, SessionClock, StreamClock
-from localtc.sim_api.commands import AnySimCommand, RequestAirportData, SetComFrequency, SimCommand
 from localtc.sim_api.codec import decode_event, encode_event
+from localtc.sim_api.commands import (
+    AnySimCommand,
+    RequestAirportData,
+    SetComFrequency,
+    SimCommand,
+)
 from localtc.sim_api.events import (
     ATC_EVENT_TYPES,
     BUS_EVENT_TYPES,
@@ -16,8 +30,8 @@ from localtc.sim_api.events import (
     AirportData,
     AtcAlert,
     AtcEvent,
-    AtisBroadcast,
     AtcTransmission,
+    AtisBroadcast,
     BusEvent,
     ConnectionStatus,
     Event,
@@ -28,6 +42,7 @@ from localtc.sim_api.events import (
     PhaseChanged,
     PttPressed,
     PttReleased,
+    RadioChatter,
     RadioEvent,
     RadioTuned,
     ReadbackEvaluated,
@@ -70,6 +85,7 @@ __all__ = [
     "PttPressed",
     "PttReleased",
     "RadioEvent",
+    "RadioChatter",
     "RadioTuned",
     "ReadbackEvaluated",
     "RequestAirportData",

@@ -55,6 +55,9 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         center_name=atc.center_name,
         center_mhz=atc.center_mhz,
         strict_callsign=atc.strict_callsign,
+        callsign_check=atc.callsign_check,
+        radio_range=atc.radio_range,
+        chatter=atc.chatter,
         transition_ft=atc.transition_ft,
         phraseology=atc.phraseology,
         seed=atc.seed,
@@ -131,9 +134,10 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
     interpreter = phraser = None
     if backend is not None and llm.understanding != "off":
         interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=llm.timeout_s,
-                                     max_attempts=llm.max_attempts, budget_s=llm.budget_s)
+                                     max_attempts=llm.max_attempts, budget_s=llm.budget_s, patience_s=llm.patience_s)
     if backend is not None and llm.phrasing:
-        phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s)
+        phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s,
+                             patience_s=llm.patience_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
     if cfg.tts.enabled:

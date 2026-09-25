@@ -206,6 +206,11 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
 
     if _has_any(tokens, ("mayday",), ("pan", "pan"), ("emergency",)):
         add(EMERGENCY)
+    if _has_any(tokens, ("std",), ("qne",), ("on", "standard"), ("standard", "pressure"), ("standard", "altimeter"),
+                ("standard", "setting"), ("set", "standard"), ("to", "standard")) \
+            or any(t.kind == "number" and t.text in ("29.92", "2992", "1013") for t in tokens) \
+            and not _has_any(tokens, ("request",), ("say",), ("what",)):
+        add("report_standard")  # "we're on STD up here": the altimeter set to 29.92 / 1013, a statement, not a problem
     if _has_any(tokens, ("radio", "check"), ("comm", "check"), ("how", "do", "you", "read"), ("radio", "test")):
         add("radio_check")
     if _has_any(tokens, ("say", "again"), ("repeat",), ("didn't", "copy"), ("did", "not", "copy"), ("say", "that", "again")):

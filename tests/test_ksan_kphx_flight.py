@@ -89,14 +89,16 @@ def test_check_ins_with_feet_in_them(text):
 
 def test_the_check_in_gets_radar_contact_and_the_climb(replay):
     answer = after(replay, "1300 feet climbing 5000 feet")[0]
-    assert "radar contact, climb and maintain FL350" in answer, answer
+    # Up to the top of departure's airspace: the centres take it on up to FL350.
+    assert "radar contact, climb and maintain 17,000" in answer, answer
 
 
 def test_an_unreadable_first_call_to_a_new_controller_is_the_check_in(replay):
     """Whatever speech-to-text makes of the first call on a new frequency, it's the check-in: the controller
     has the flight on radar from the handoff. "A from Frontier 2084" was the first word Seattle heard."""
     answer = after(replay, "A from Frontier 2084")[0]
-    assert "radar contact" in answer and "say again" not in answer, answer
+    # "Radar contact" or "roger": a flight handed over between radar controllers is identified already.
+    assert ("radar contact" in answer or "roger" in answer) and "say again" not in answer, answer
 
 
 def test_asking_for_a_climb_without_a_number():
@@ -164,7 +166,8 @@ def test_the_sims_model_code_in_a_traffic_call():
 def test_the_taxi_stays_on_this_side_of_the_runway(airports, replay):
     """C1 is a few metres nearer 27's threshold than B1, and choosing it sent the flight from the south-side
     gates across 09/27 at B6/C6 -- with no crossing clearance, so it was then blamed for an incursion."""
-    assert "runway 27 at B1, taxi via B, B1" in after(replay, "Request Taxi")[0]
+    taxi = after(replay, "Request Taxi")[0]
+    assert "runway 27 at B1" in taxi and "via B, B1" in taxi
 
 
 def test_a_route_over_the_departure_runway_is_a_crossing(airports):

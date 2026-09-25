@@ -27,6 +27,19 @@ def personality(station: str, *, icao: bool = False) -> Personality:
                        sign_off=offs[(h >> 16) % len(offs)])
 
 
+STYLE_DRIFT = 0.12  # how often a controller says it another (equally correct) way than usual
+
+
+def wording(station: str, instruction_id: str, n: int, rng) -> int:
+    """Which of ``n`` correct wordings of an instruction this controller uses: the same one nearly every time
+    (it's their habit, and Montreal Ground sounds unlike Denver Ground), now and then another."""
+    if n <= 1:
+        return 0
+    if rng is not None and rng.random() < STYLE_DRIFT:
+        return rng.randrange(n)
+    return zlib.crc32(f"{station.lower()}|{instruction_id}".encode()) % n
+
+
 def part_of_day(zulu_s: float | None, lon: float) -> str | None:
     """ "morning", "afternoon" or "evening" by the sun where the aircraft is (None without a time)."""
     if zulu_s is None:

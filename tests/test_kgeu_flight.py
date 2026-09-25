@@ -37,7 +37,7 @@ def test_asking_for_taxi_is_not_an_ifr_request(text):
 
 
 def test_ground_gives_the_taxi_clearance(replay):
-    assert "taxi via C" in after(replay, "DP32 Request IFR Taxi to Active Runway.")[0]
+    assert "via C" in after(replay, "DP32 Request IFR Taxi to Active Runway.")[0]
 
 
 def test_disregarded_direct_is_not_a_request():
@@ -47,10 +47,10 @@ def test_disregarded_direct_is_not_a_request():
 
 def test_trucks_are_rolled_and_the_landing_runway_is_the_cleared_approach(replay):
     answers = after(replay, "some trucks on the ground", 2)
-    assert "equipment standing by" in answers[0]
+    assert "equipment" in answers[0] and "standing by" in answers[0]
     # Runway 01, not 19: the aircraft was maneuvering 8 nm north of the field. And "continue", not yet
     # cleared to land: that waits for a final with the runway seen empty.
-    assert "continue, runway 01" in answers[1], answers[1]
+    assert "continue" in answers[1] and "runway 01" in answers[1], answers[1]
 
 
 def test_an_instrument_failure_is_acknowledged_not_say_again(replay):
@@ -69,4 +69,5 @@ def test_tower_on_121_reads_back_121_0():
 
 
 def test_asking_tower_for_another_runway_on_final(replay):
-    assert "runway 01, cleared to land" in after(replay, "request. Arnav. Runway 01.")[0]
+    answer = after(replay, "request. Arnav. Runway 01.")[0]
+    assert "runway 01" in answer and "cleared to land" in answer

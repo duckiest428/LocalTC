@@ -36,8 +36,8 @@ import msgspec
 from localtc.airports import load_airport_dir
 from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.llm import LlmPhraser
-from localtc.atc_core.readback import Interpreter
 from localtc.atc_core.phraseology import speech
+from localtc.atc_core.readback import Interpreter
 from localtc.config import AtcConfig, FlightConfig
 from localtc.replay import Recording
 from localtc.sim_api import (
@@ -46,9 +46,9 @@ from localtc.sim_api import (
     AtcAlert,
     AtcTransmission,
     BusEvent,
+    LlmExchange,
     OwnshipState,
     PhaseChanged,
-    LlmExchange,
     PttPressed,
     PttReleased,
     ReadbackEvaluated,
@@ -157,13 +157,14 @@ def run(
     on_input: Any = None,
     recorded_pilot: bool = False,
     speech_s_per_char: float = 0.0,
+    chatter: bool = False,
 ) -> ScenarioResult:
     """Run a scenario; ``base`` is the folder its relative paths start from.
 
     ``voice``: the pilot speaks instead of typing. Its ``speak(text, t)`` returns a clip (``duration_s``,
     ``text`` as heard, ``audio_ref``, ``confidence``); the transmission takes that long, with push-to-talk
     around it. ``on_input``: called with every event the engine is given (to write a recording).
-    ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
+    ``chatter``: other flights on the frequency now and then. ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
     the current ATC).
     """
     from localtc.app import engine_config
@@ -171,6 +172,7 @@ def run(
 
     engine = AtcEngine(engine_config(scenario.flight, scenario.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.speech_s_per_char = speech_s_per_char  # as with voice out: ATC's words take time to say
+    engine.cfg.chatter = chatter  # other flights on the frequency (off for goldens: they'd be all chatter)
     if voice is not None:
         engine.cfg.await_transcripts = True
     speaking: list[tuple[float, BusEvent]] = []  # push-to-talk releases and transcripts still to come
@@ -199,7 +201,10 @@ def run(
             on_input(event)
         if pilot is not None:
             pilot.observe(event)
-        for output in engine.handle(event):
+        outputs = engine.handle(event)
+        if engine.deferred is not None:
+            outputs = [*outputs, *engine.resolve_deferred()]  # "stand by", then the model's longer look
+        for output in outputs:
             result.outputs.append(output)
             if pilot is not None:
                 pilot.observe(output)

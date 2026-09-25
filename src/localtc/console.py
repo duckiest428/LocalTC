@@ -44,6 +44,7 @@ ALERTS = {
     "no_atc_on_frequency": "Nobody answers on this frequency",
     "emergency": "Emergency",
     "pilot_problem": "Problem reported",
+    "out_of_range": "Out of radio range",
 }
 
 

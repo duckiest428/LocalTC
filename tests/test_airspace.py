@@ -72,7 +72,8 @@ def replay() -> list[str]:
 def test_san_diego_to_phoenix_goes_through_the_centres_it_flies_through(replay):
     """ "Seattle Center" all the way from San Diego to Phoenix, because that was [atc] center_name. The
     flight is Los Angeles Center's out of SoCal, and Albuquerque's across the Arizona line."""
-    contacts = [line.split("contact ", 1)[1].split(" 1")[0] for line in replay if " ATC " in line and "contact " in line]
+    contacts = [line.split("contact ", 1)[1].split(" 1")[0].removesuffix(" on") for line in replay
+                if " ATC " in line and "contact " in line]
     order = list(dict.fromkeys(contacts))
     airborne = order[order.index("Socal Departure"):]
     assert airborne[:4] == ["Socal Departure", "Los Angeles Center", "Albuquerque Center", "Phoenix Approach"], order

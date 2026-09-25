@@ -107,6 +107,15 @@ struct RadioRow: View {
             }
             .frame(maxWidth: .infinity, alignment: line.speaker == .pilot ? .trailing : .leading)
             .listRowSeparator(.hidden)
+        case .other:  // somebody else on the frequency: there, but not for you
+            VStack(alignment: .leading, spacing: 2) {
+                Text(header).font(.caption2).foregroundStyle(.tertiary)
+                Text(line.text ?? "").font(.footnote).foregroundStyle(.secondary)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowSeparator(.hidden)
         case .system:
             Text(line.text ?? "")
                 .font(.caption)

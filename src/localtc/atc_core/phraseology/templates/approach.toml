@@ -1,7 +1,8 @@
 [[template]]
 id = "approach.descend"
 controller = "approach"
-text = ["{callsign}, {station}, descend and maintain {altitude}, expect {approach} approach."]
+text = ["{callsign}, {station}, descend and maintain {altitude}, expect {approach} approach.",
+        "{callsign}, {station}, expect {approach} approach, descend and maintain {altitude}."]
 readback = { required = ["altitude"] }
 pilot_readback = "Descend and maintain {altitude}, expect {approach}, {callsign_short}."
 
@@ -74,7 +75,9 @@ pilot_readback = "Turn {turn} heading {heading}, maintain {altitude} until estab
 [[template]]
 id = "approach.handoff_tower"
 controller = "approach"
-text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} {frequency}, good day."]
+text = ["{callsign}, contact {station} {frequency}.",
+        "{callsign}, contact {station} {frequency}, good day.",
+        "{callsign}, contact {station} on {frequency}."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 

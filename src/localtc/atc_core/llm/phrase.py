@@ -97,9 +97,11 @@ def spoken(text: str) -> str:
 
 class LlmPhraser:
     def __init__(self, backend: LlmBackend, *, timeout_s: float = 2.5, max_attempts: int = 2, budget_s: float = 4.0,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 patience_s: float = 15.0, clock: Callable[[], float] = time.monotonic) -> None:
         self.backend = backend
         self.timeout_s, self.max_attempts, self.budget_s = timeout_s, max_attempts, budget_s
+        self.patience_s = patience_s
+        self.patient = False  # set while answering after "stand by": one long try
         self._clock = clock
 
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
@@ -110,12 +112,13 @@ class LlmPhraser:
         ) + (("user", user_message(pilot, decision, facts)),)
         request = LlmRequest("phrase", SYSTEM, messages, SCHEMA, max_tokens=80)
         exchanges: list[LlmExchange] = []
-        deadline = self._clock() + self.budget_s
+        timeout_s, budget_s = (self.patience_s, self.patience_s) if self.patient else (self.timeout_s, self.budget_s)
+        deadline = self._clock() + budget_s
         for attempt in range(1, self.max_attempts + 1):
             remaining = deadline - self._clock()
             if remaining < 0.2:
                 break
-            result = self.backend.complete(request, timeout_s=min(self.timeout_s, remaining))
+            result = self.backend.complete(request, timeout_s=min(timeout_s, remaining))
 
             def record(outcome: str, detail: str = "", _result=result, _request=request, _attempt=attempt) -> None:
                 exchanges.append(LlmExchange(

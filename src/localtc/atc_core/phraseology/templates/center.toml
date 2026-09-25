@@ -7,14 +7,23 @@ text = ["{callsign}, {station}, roger."]
 [[template]]
 id = "center.radar_contact"
 controller = "center"
-text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.", "{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed on course."]
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.",
+        "{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed on course.",
+        "{callsign}, radar contact, climb and maintain {altitude}."]
 readback = { required = ["altitude"] }
 pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
 
 [[template]]
 id = "center.checkin_level"
 controller = "center"
-text = ["{callsign}, {station}, radar contact, maintain {altitude}.", "{callsign}, {station}, roger, maintain {altitude}.", "{callsign}, {station}, radar contact, {altitude}."]
+text = ["{callsign}, {station}, radar contact, maintain {altitude}.", "{callsign}, {station}, roger, maintain {altitude}."]
+
+# Checking in still on the way up to what was assigned: carry on, not "maintain" as if it were there.
+[[template]]
+id = "center.checkin_climbing"
+controller = "center"
+text = ["{callsign}, {station}, radar contact, continue climb, maintain {altitude}.",
+        "{callsign}, {station}, roger, continue climb, maintain {altitude}."]
 
 [[template]]
 id = "center.checkin_descending"

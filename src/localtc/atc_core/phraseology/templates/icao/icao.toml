@@ -100,6 +100,10 @@ id = "center.checkin_level"
 text = ["{callsign}, {station}, identified, maintain {altitude}."]
 
 [[template]]
+id = "center.checkin_climbing"
+text = ["{callsign}, {station}, identified, continue climb to {altitude}."]
+
+[[template]]
 id = "center.descend"
 text = ["{callsign}, descend to {altitude}, expect {approach} approach."]
 pilot_readback = "Descend to {altitude}, {callsign_short}."

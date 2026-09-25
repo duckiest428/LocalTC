@@ -117,6 +117,8 @@ function addLine(l) {
       body = `<span class="who">YOU</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
     case "copilot":
       body = `<span class="who">COPILOT</span><span class="body">${esc(l.text)}</span>`; break;
+    case "chatter":  // somebody else on the frequency
+      body = `<span class="who">${l.atc ? "ATC" : "OTHER"}</span><span class="st">${esc(l.station)}</span><div class="body">${esc(l.text)}</div>`; break;
     case "atis":
       body = `<span class="who">ATIS</span><span class="st">${esc(l.station)}</span><div class="body">${esc(l.text)}</div>`; break;
     case "tuned":
@@ -609,6 +611,9 @@ const Settings = {
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
+        <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
+        <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
+        <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <div class="row"><label>Phraseology
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
             .map(([v, t]) => `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${t}</option>`).join("")}</select>
@@ -722,6 +727,9 @@ const Settings = {
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
     on("#s-unscripted", "change", (e) => this.save("atc", "unscripted", e.target.checked));
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
+    on("#s-chatter", "change", (e) => this.save("atc", "chatter", e.target.checked));
+    on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
+    on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));

@@ -217,6 +217,19 @@ class AtisBroadcast(Event, tag="atis_broadcast"):
     spoken: str
 
 
+class RadioChatter(Event, tag="radio_chatter"):
+    """Somebody else on the frequency: another aircraft, or ATC talking to it. Background radio, generated
+    (atc_core/chatter.py), with nothing behind it and nothing for the pilot to answer."""
+
+    station: str  # the controller's station ("Montreal Tower")
+    frequency_mhz: float
+    speaker: str  # "atc" or "pilot"
+    callsign: str  # the other aircraft, as said ("Westjet 452")
+    text: str
+    spoken: str = ""
+    controller: str = ""  # tower, ground, ... (the controller's manner of speaking)
+
+
 class SessionNote(Event, tag="session_note"):
     """A note the pilot added to the recording (the app's dev mode): "ATC should have cleared me here"."""
 
@@ -226,7 +239,7 @@ class SessionNote(Event, tag="session_note"):
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter]
 AppEvent = Union[SessionNote]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent]
 

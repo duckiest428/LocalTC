@@ -111,16 +111,17 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
         self.mhz = mhz
     }
 
-    /// Who spoke, for styling: ATC, the pilot (or copilot), or LocalTC itself.
+    /// Who spoke, for styling: ATC, the pilot (or copilot), somebody else on the frequency, or LocalTC itself.
     public var speaker: Speaker {
         switch kind {
         case "atc", "atis": .atc
         case "pilot", "copilot": .pilot
+        case "chatter": .other
         default: .system
         }
     }
 
-    public enum Speaker: Sendable { case atc, pilot, system }
+    public enum Speaker: Sendable { case atc, pilot, other, system }
 }
 
 public struct FlightAlert: Codable, Sendable, Equatable, Identifiable {

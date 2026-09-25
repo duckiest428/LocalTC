@@ -1,32 +1,32 @@
 [     0.0] PHASE     - -> PARKED (initial state)
 [     7.0] PILOT     127.25: Paine Clearance, november one seven two lima tango, IFR to Boeing Field, with information bravo, ready to copy.
-[     9.0] ATC       Paine Clearance 127.25: N172LT, clearance on request, stand by.
+[     9.0] ATC       Paine Clearance 127.25: N172LT, stand by for your clearance.
 [    24.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field airport as filed, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    26.0] PILOT     127.25: Cleared to Boeing Field as filed, climb and maintain five thousand, departure one two four point six seven five, squawk three two six zero, Cessna two lima tango.
 [    26.0] READBACK  clearance.ifr_at_cruise correct
-[    28.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct, contact Paine Ground 121.8 when ready, good day.
+[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct. When ready for push and start, contact Paine Ground on 121.8.
 [    31.0] PILOT     121.8: Paine Ground, Cessna two lima tango, at parking, ready to taxi with information bravo.
-[    34.0] ATC       Paine Ground 121.8: N172LT, runway 34L at A1, taxi via C, A, A1, information Oscar is current, altimeter 29.92.
-[    36.0] PILOT     121.8: Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.
-[    36.0] READBACK  ground.taxi_out_at correct
+[    33.0] ATC       Paine Ground 121.8: N172LT, runway 34L at A1, taxi via C, A, A1, information Oscar is current, altimeter 29.92.
+[    35.0] PILOT     121.8: Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.
+[    35.0] READBACK  ground.taxi_out_at correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
 [   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
 [   356.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
 [   356.0] READBACK  ground.handoff_tower correct
 [   362.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short runway 34L, ready for departure.
-[   364.0] ATC       Paine Tower 120.2: N172LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
-[   366.0] PILOT     120.2: Runway heading, runway three four left, cleared for takeoff, Cessna two lima tango.
-[   366.0] READBACK  tower.takeoff correct
+[   365.0] ATC       Paine Tower 120.2: N172LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
+[   367.0] PILOT     120.2: Runway heading, runway three four left, cleared for takeoff, Cessna two lima tango.
+[   367.0] READBACK  tower.takeoff correct
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   439.0] PHASE     TAKEOFF -> DEPARTURE (airborne)
-[   478.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Seattle Departure 124.675, have a good one.
+[   478.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Seattle Departure 124.675, good day.
 [   480.0] PILOT     120.2: Seattle Departure one two four point six seven five, Cessna two lima tango.
 [   480.0] READBACK  tower.handoff_departure correct
 [   486.0] PILOT     124.675: Seattle Departure, Cessna two lima tango, 1,200 climbing 5,000.
-[   488.0] ATC       Seattle Departure 124.675: N172LT, Seattle Departure, radar contact, climb and maintain 5,000, proceed on course.
-[   490.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
-[   490.0] READBACK  departure.radar_contact correct
+[   489.0] ATC       Seattle Departure 124.675: N172LT, Seattle Departure, radar contact, climb and maintain 5,000, proceed on course.
+[   491.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
+[   491.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
 [   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
 [   845.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
@@ -39,10 +39,10 @@
 [  1073.0] PILOT     124.675: Seattle Center one two five point one, Cessna two lima tango.
 [  1073.0] READBACK  departure.handoff_center correct
 [  1079.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 5,000.
-[  1081.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, descend and maintain 3,000.
-[  1083.0] PILOT     125.1: Descend and maintain three thousand, Cessna two lima tango.
-[  1083.0] READBACK  center.checkin_descend correct
-[  1101.0] PILOT     125.1: Center, Cessna two lima tango, request direct Boeing Field.
+[  1082.0] ATC       Seattle Center 125.1: N172LT, Seattle Center, radar contact, descend and maintain 3,000.
+[  1084.0] PILOT     125.1: Descend and maintain three thousand, Cessna two lima tango.
+[  1084.0] READBACK  center.checkin_descend correct
+[  1102.0] PILOT     125.1: Center, Cessna two lima tango, request direct Boeing Field.
 [  1104.0] ATC       Seattle Center 125.1: Cessna 2LT, cleared direct Boeing Field.
 [  1106.0] PILOT     125.1: Direct Boeing Field, Cessna two lima tango.
 [  1106.0] READBACK  common.direct correct
@@ -53,16 +53,16 @@
 [  1364.0] PILOT     125.1: Seattle Approach one one niner point two, Cessna two lima tango.
 [  1364.0] READBACK  center.handoff_approach correct
 [  1370.0] PILOT     119.2: Seattle Approach, Cessna two lima tango, 4,600 descending 3,000.
-[  1373.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, descend and maintain 3,000, expect RNAV RWY 14R approach, information Bravo is current, altimeter 29.92.
-[  1375.0] PILOT     119.2: Descend and maintain three thousand, expect R-NAV runway one four right, Cessna two lima tango.
-[  1375.0] READBACK  approach.descend correct
-[  1381.0] PILOT     119.2: Approach, Cessna two lima tango, request vectors.
-[  1384.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 300, vectors for the RNAV RWY 14R approach.
-[  1386.0] PILOT     119.2: Heading three zero zero, Cessna two lima tango.
-[  1386.0] READBACK  approach.vectors correct
-[  1426.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn right heading 210, base leg.
-[  1428.0] PILOT     119.2: Turn right heading two one zero, Cessna two lima tango.
-[  1428.0] READBACK  approach.base correct
+[  1372.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, expect RNAV RWY 14R approach, descend and maintain 3,000, information Bravo is current, altimeter 29.92.
+[  1374.0] PILOT     119.2: Descend and maintain three thousand, expect R-NAV runway one four right, Cessna two lima tango.
+[  1374.0] READBACK  approach.descend correct
+[  1380.0] PILOT     119.2: Approach, Cessna two lima tango, request vectors.
+[  1382.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 300, vectors for the RNAV RWY 14R approach.
+[  1384.0] PILOT     119.2: Heading three zero zero, Cessna two lima tango.
+[  1384.0] READBACK  approach.vectors correct
+[  1425.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn right heading 210.
+[  1427.0] PILOT     119.2: Turn right heading two one zero, Cessna two lima tango.
+[  1427.0] READBACK  approach.base correct
 [  1759.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn left heading 150, maintain 2,100 until established on the localizer, cleared RNAV RWY 14R approach.
 [  1761.0] PILOT     119.2: Turn left heading one five zero, maintain two thousand one hundred until established, cleared R-NAV runway one four right approach, Cessna two lima tango.
 [  1761.0] READBACK  approach.intercept_cleared correct
@@ -71,17 +71,17 @@
 [  1901.0] PILOT     119.2: Boeing Tower one two zero point six, Cessna two lima tango.
 [  1901.0] READBACK  approach.handoff_tower correct
 [  1905.0] PILOT     120.6: Boeing Tower, Cessna two lima tango, 6 mile final runway 14R.
-[  1908.0] ATC       Boeing Tower 120.6: Cessna 2LT, continue, runway 14R.
-[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, wind 130 at 8, runway 14R, cleared to land.
+[  1908.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, continue, I'll call your clearance.
+[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, cleared to land, wind 130 at 8.
 [  2070.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
 [  2070.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground 121.9 when clear, so long.
+[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway, so long.
 [  2343.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
 [  2343.0] READBACK  tower.exit_contact_ground correct
 [  2349.0] PILOT     121.9: Boeing Ground, Cessna two lima tango, clear of runway 14R, taxi to parking.
-[  2351.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to parking via A, C.
-[  2353.0] PILOT     121.9: Taxi to parking via alpha, charlie, Cessna two lima tango.
-[  2353.0] READBACK  ground.taxi_in correct
+[  2352.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to parking via A, C.
+[  2354.0] PILOT     121.9: Taxi to parking via alpha, charlie, Cessna two lima tango.
+[  2354.0] READBACK  ground.taxi_in correct
 [  2751.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

@@ -247,6 +247,7 @@ class Copilot:
                 f"{f.station}, {cs}, clear of the runway, taxi to parking"
         if own is None:
             return f"{f.station}, {cs}, with you"
+        own = st.aircraft or own  # the engine's reading: the flight level up high, whatever the altimeter says
         alt = int(round(own.alt_indicated_ft / 100.0) * 100)
         assigned = st.assignments.altitude_ft
         atis = self._with_atis(st.flight.destination) if f.controller == "approach" else ""

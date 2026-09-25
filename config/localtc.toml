@@ -35,6 +35,9 @@ center_mhz = 125.1            # frequency. Enroute, centres are named after the 
 strict_callsign = false       # true: a readback without the callsign is incomplete
 transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?", "stand by"
+chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)
+radio_range = true            # an airport's frequencies reach only so far: tower 20-60 nm, ground a few miles
+callsign_check = true         # another flight's callsign heard: "station calling, say again your callsign"
 airport_dirs = []             # extra folders of <ICAO>.json airport files
 
 [atc.phase]                   # PhaseThresholds overrides, e.g. taxi_start_kt = 4
@@ -47,6 +50,7 @@ understanding = "fallback"    # fallback: only what the grammar can't read (ligh
 phrasing = true               # word answers to questions and declined requests (routine calls stay templated)
 timeout_s = 4.0               # per model call; on timeout the grammar's answer is used
 budget_s = 6.0                # per pilot transmission, including one retry
+patience_s = 15.0             # off-script calls the model missed: "stand by", then one try this long
 max_attempts = 2
 keep_alive = "1h"             # keep the model loaded between calls
 num_ctx = 4096

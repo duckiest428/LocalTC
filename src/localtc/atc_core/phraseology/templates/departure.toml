@@ -1,13 +1,17 @@
 [[template]]
 id = "departure.radar_contact"
 controller = "departure"
-text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.", "{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed on course."]
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.",
+        "{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed on course.",
+        "{callsign}, radar contact, climb and maintain {altitude}."]
 readback = { required = ["altitude"] }
 pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
 
 [[template]]
 id = "departure.handoff_center"
 controller = "departure"
-text = ["{callsign}, contact {station} {frequency}."]
+text = ["{callsign}, contact {station} {frequency}.",
+        "{callsign}, contact {station} on {frequency}.",
+        "{callsign}, contact {station} {frequency}, good day."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."

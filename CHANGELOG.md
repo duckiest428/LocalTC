@@ -4,7 +4,7 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
-## [0.3.0] - 2026-09-23
+## [0.3.2] - 2026-09-25
 
 ### Added
 - **Share a flight.** A public card for any flight in the account, at a link like `localtc.tech/f/…`: the route drawn across a dotted globe, the numbers, and one line from the radio you pick (the clearance, by default). Pasted into a chat, it unfurls with its own picture. Nothing is public until you press Share, never your gates, times or track, and Stop sharing, deleting the flight or the account takes it down. From the Logbook in the app, the Dashboard and the phone.
@@ -23,6 +23,26 @@ a new minor version adds features, a patch fixes them.
 - **Replays on localtc.tech and the phone.** Upload a flight's replay from the Logbook (or turn on "upload
   each flight's replay" in Account) and it plays on the Dashboard's Logbook and in the companion app's new
   Logbook tab. Only the track and the transcript go up, never audio; remove it any time.
+
+### Changed
+- A handoff taken with the station's name or "good day" is taken, without the frequency. "Readback correct, contact ground when ready" no longer gets "did you copy?".
+- Checking in on the way up gets "continue climb"; saying the altitude again after the check-in is just acknowledged.
+- Greetings come with a controller's first transmission only. "Say ride conditions" is asked once a flight.
+- A one-taxiway route is "runway 06L, taxi via A4", not "at A4, via A4".
+- The companion app's EFB preview moved to Settings, so the new Logbook fits on the tab bar.
+
+### Fixed
+- Standard pressure (STD) in the flight levels was an "altitude deviation" when the aircraft's avionics were on STD and the sim's altimeter setting wasn't. Up high ATC now reads the flight level. "We're on standard" is understood.
+- Tower cleared a takeoff with a 777 over the threshold about to land. An aircraft low over the runway now holds the departure.
+- "Stopped ahead of you on the taxiway" for aircraft parked at their gates. Only aircraft on the route ahead count now.
+- Traffic calls for aircraft just off (or onto) a runway near an airport.
+- ATC called with the sim paused.
+- A pilot's "request climb" below the filed level lowered the cruise.
+- The Dashboard on a phone: the section bar at the top no longer makes the page wider than the screen.
+
+## [0.3.0] - 2026-09-23
+
+### Added
 - **VFR.** Pick IFR or VFR in New Flight (a SimBrief plan fills it in). VFR flights get VFR ATC: a way out
   ("southbound departure approved"), "frequency change approved" or flight following with a code, radar
   contact and handoffs, a Class Bravo clearance when you ask (and an alert if you fly into Class B without
@@ -55,11 +75,6 @@ a new minor version adds features, a patch fixes them.
 - A **Buy me a coffee** button in the app. One click and it's gone for good.
 
 ### Changed
-- A handoff taken with the station's name or "good day" is taken, without the frequency. "Readback correct, contact ground when ready" no longer gets "did you copy?".
-- Checking in on the way up gets "continue climb"; saying the altitude again after the check-in is just acknowledged.
-- Greetings come with a controller's first transmission only. "Say ride conditions" is asked once a flight.
-- A one-taxiway route is "runway 06L, taxi via A4", not "at A4, via A4".
-- The companion app's EFB preview moved to Settings, so the new Logbook fits on the tab bar.
 - **Approach vectors you like a real controller**: onto a downwind on your side, a base turn, then a 30 degree
   intercept that carries the clearance ("maintain 4,000 until established on the localizer, cleared ILS runway
   16L"), with step-down altitudes along the way and an extended downwind when you're too high. Then over to
@@ -80,13 +95,6 @@ a new minor version adds features, a patch fixes them.
   messages, and lets the Dashboard's tracker connect (redeploy the Worker, and set its SUPPORT_EMAIL secret).
 
 ### Fixed
-- Standard pressure (STD) in the flight levels was an "altitude deviation" when the aircraft's avionics were on STD and the sim's altimeter setting wasn't. Up high ATC now reads the flight level. "We're on standard" is understood.
-- Tower cleared a takeoff with a 777 over the threshold about to land. An aircraft low over the runway now holds the departure.
-- "Stopped ahead of you on the taxiway" for aircraft parked at their gates. Only aircraft on the route ahead count now.
-- Traffic calls for aircraft just off (or onto) a runway near an airport.
-- ATC called with the sim paused.
-- A pilot's "request climb" below the filed level lowered the cruise.
-- The Dashboard on a phone: the section bar at the top no longer makes the page wider than the screen.
 - An airport's ATIS works when another airport's controller shares its frequency (Denver's ATIS on 125.6).
 - "Request gate" and "request parking" are understood; stopping on a taxiway after landing is no longer
   "parked", and moving on isn't a taxi out.

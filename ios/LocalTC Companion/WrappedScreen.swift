@@ -4,10 +4,11 @@ import SwiftUI
 /// ATC Wrapped on the phone: a week, a month or a year of the account's flying, as a story of slides. The
 /// account server works it out (the same slides as the website's); the words are LocalTCKit's SlideText.
 /// "Image" draws the slide as the website does (sharecard.js); the summary can become a public link.
+/// Only the last finished week, month or year can be seen; the one still going is locked, counting down.
 struct WrappedScreen: View {
     @Environment(AppModel.self) private var model
     @State private var kind: WrappedPeriod.Kind = .month
-    @State private var step = 0
+    @State private var step = -1  // the last finished period; 0 is the one still going (locked)
     @State private var recap: Wrapped?
     @State private var raw: [String: Any] = [:]
     @State private var error: String?
@@ -29,12 +30,13 @@ struct WrappedScreen: View {
             }
             .pickerStyle(.segmented)
             HStack {
-                Button { step -= 1 } label: { Image(systemName: "chevron.left") }.accessibilityLabel("The period before")
+                Button { step = -1 } label: { Image(systemName: "chevron.left") }
+                    .disabled(step == -1).accessibilityLabel("The period before")
                 Spacer()
-                Text(period.isCurrent && kind != .week ? "\(period.label) so far" : period.label).font(.headline)
+                Text(period.label).font(.headline)
                 Spacer()
-                Button { step += 1 } label: { Image(systemName: "chevron.right") }
-                    .disabled(period.isCurrent).accessibilityLabel("The period after")
+                Button { step = 0 } label: { Image(systemName: "chevron.right") }
+                    .disabled(step == 0).accessibilityLabel("The period after")
             }
             content
             Spacer(minLength: 0)
@@ -47,7 +49,8 @@ struct WrappedScreen: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(Color(red: 0.043, green: 0.051, blue: 0.063), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .task(id: "\(kind.rawValue)\(step)") { await load() }
+        .onChange(of: kind) { step = -1 }
+        .task(id: "\(kind.rawValue)\(step)") { if step == -1 { await load() } }
         .task(id: "\(index)-\(paused)-\(recap?.label ?? "")") { await advance() }
         .overlay(alignment: .topLeading) {
             // The renderer draws off screen: its web view has to be in the window to run.
@@ -56,7 +59,9 @@ struct WrappedScreen: View {
     }
 
     @ViewBuilder private var content: some View {
-        if loading && recap == nil {
+        if step == 0 {
+            locked
+        } else if loading && recap == nil {
             ProgressView("Looking back ...").frame(maxHeight: .infinity)
         } else if let error {
             ContentUnavailableView("Couldn't load Wrapped", systemImage: "exclamationmark.triangle", description: Text(error))
@@ -65,6 +70,29 @@ struct WrappedScreen: View {
         } else if let recap {
             story(recap)
         }
+    }
+
+    /// The period still going: its recap unlocks when it ends.
+    private var locked: some View {
+        let current = period
+        return TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(spacing: 12) {
+                Image(systemName: "lock.fill").font(.largeTitle).foregroundStyle(.secondary)
+                Text("\(current.label) is still going").font(.title3.bold())
+                Text("Its Wrapped unlocks when it ends, in").foregroundStyle(.secondary)
+                Text(Self.countdown(current.end.timeIntervalSince(context.date)))
+                    .font(.system(.largeTitle, design: .monospaced).weight(.semibold)).foregroundStyle(.green)
+                    .accessibilityIdentifier("wrapped-countdown")
+                Button("See \(WrappedPeriod(kind, step: -1).label)") { step = -1 }.buttonStyle(.bordered)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    static func countdown(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        let clock = String(format: "%02d:%02d:%02d", s % 86400 / 3600, s % 3600 / 60, s % 60)
+        return s >= 86400 ? "\(s / 86400)d \(clock)" : clock
     }
 
     private func empty(_ recap: Wrapped) -> some View {
@@ -76,6 +104,7 @@ struct WrappedScreen: View {
             } else {
                 Text("Fly with LocalTC signed in to this account, and each flight you land adds to it.")
             }
+            Text("Your next Wrapped unlocks in \(Self.countdown(WrappedPeriod(kind, step: 0).end.timeIntervalSinceNow)).")
         }
     }
 

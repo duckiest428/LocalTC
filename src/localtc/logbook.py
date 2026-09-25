@@ -17,8 +17,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from localtc.atc_core.values import clean_sim_name
 from localtc.config import data_dir
-from localtc.sim_api import AtcAlert, OwnshipState, PhaseChanged, ReadbackEvaluated
+from localtc.sim_api import (
+    AircraftIdentity,
+    AtcAlert,
+    OwnshipState,
+    PhaseChanged,
+    ReadbackEvaluated,
+)
 from localtc.sim_api.geo import haversine_nm
 
 MOVING_KT = 3.0  # on the ground: the block starts when the aircraft first moves
@@ -78,6 +85,7 @@ class FlightLog:
         self.distance_nm = 0.0
         self.max_alt_ft = 0.0
         self.readbacks = self.readbacks_correct = self.alerts = 0
+        self.aircraft = ""  # from the sim, in case ATC isn't running (or missed it)
 
     def feed(self, event: object) -> None:
         t = getattr(event, "t", None)
@@ -95,6 +103,8 @@ class FlightLog:
             self.readbacks_correct += event.status == "correct"
         elif isinstance(event, AtcAlert):
             self.alerts += 1
+        elif isinstance(event, AircraftIdentity):
+            self.aircraft = aircraft_name(event) or self.aircraft
 
     def _own(self, own: OwnshipState) -> None:
         prev = self._prev
@@ -132,7 +142,7 @@ class FlightLog:
             started_at=_iso(self.started),
             ended_at=_iso(self.started + timedelta(seconds=self.last_t - self.t0)),
             callsign=(callsign.ident if callsign is not None else "") or "",
-            aircraft=(f.aircraft_type if f is not None else "") or "",
+            aircraft=(f.aircraft_type if f is not None else "") or self.aircraft,
             origin=(f.origin if f is not None else "") or "",
             destination=(f.destination if f is not None else "") or "",
             departure_gate=(a.departure_gate if a is not None else "") or "",
@@ -259,8 +269,38 @@ class Logbook:
             db.executemany("UPDATE flights SET recording = ? WHERE id = ?", linked)
         return len(linked)
 
+    def fill_aircraft(self) -> int:
+        """Lines with no aircraft (ATC missed the sim's answer, or it wrote the type in a form not understood
+        then) take it from their recording, and go up to the account again. Returns how many were filled."""
+        from localtc.replay import Recording
+
+        filled = []
+        for f in self.flights(limit=1_000_000):
+            if f.aircraft or not f.recording or not Path(f.recording).is_dir():
+                continue
+            try:
+                events = Recording(Path(f.recording)).events(skip=_NOT_IDENTITY)
+                identity = next((e for e in events if isinstance(e, AircraftIdentity)), None)
+            except (OSError, ValueError):
+                continue
+            if identity is not None and (name := aircraft_name(identity)):
+                filled.append((name, f.id))
+        with closing(self._connect()) as db, db:
+            db.executemany("UPDATE flights SET aircraft = ?, synced_at = NULL WHERE id = ?", filled)
+        return len(filled)
+
     def totals(self) -> dict[str, Any]:
         return totals(self.flights(limit=1_000_000))
+
+
+# Everything in a recording but the aircraft's identity, for reading only that.
+_NOT_IDENTITY = ("ownship_state", "traffic_snapshot", "llm_exchange", "nearby_airports", "airport_data", "atc_transmission",
+                 "transcript", "ptt_pressed", "ptt_released", "readback_evaluated", "phase_changed", "session_note")
+
+
+def aircraft_name(identity: AircraftIdentity) -> str:
+    """ "A220-300", "A20N": the sim's model name for ATC, else the livery's title ("A320neo V2")."""
+    return clean_sim_name(identity.atc_model) or identity.title.strip()[:40]
 
 
 def totals(flights: list[FlightRecord]) -> dict[str, Any]:

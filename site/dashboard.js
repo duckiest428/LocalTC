@@ -188,7 +188,7 @@ function rows(page) {
       <td class="mono">${f.landing_vs_fpm == null ? "—" : `${esc(f.landing_vs_fpm)} fpm`}</td>
       <td>${f.has_replay ? `<a class="btn btn-ghost btn-sm" href="#replay/${encodeURIComponent(f.id)}" title="Watch the flight again: the map and the radio, in step">&#9654; Replay</a>`
         : '<span class="sub" title="Upload it from the Logbook in the LocalTC app to replay it here">—</span>'}</td>
-      <td><button class="btn btn-ghost btn-sm share" type="button" title="${f.share ? "Shared: anyone with the link sees its card" : "Make a public link to this flight's card"}">${f.share ? "Shared ✓" : "Share"}</button></td>
+      <td><button class="btn btn-ghost btn-sm share" type="button" title="${f.share ? "Shared: anyone with the link sees its card" : "Make a public link to this flight's card"}">${f.share ? "Shared ✓" : "Share flight"}</button></td>
       <td><button class="linklike del" type="button" title="Delete this flight from the account">Delete</button></td>
     </tr>`).join("");
   $("#flights").insertAdjacentHTML("beforeend", html);
@@ -359,7 +359,7 @@ const Share = {
       unshare: (s) => api("DELETE", `/v1/shares/${s}`),
       onClose: (url) => {
         f.share = url;
-        button.textContent = url ? "Shared ✓" : "Share";
+        button.textContent = url ? "Shared ✓" : "Share flight";
       },
     });
   },
@@ -380,7 +380,7 @@ const Wrapped = {
     }
     const [period, step] = (which || "").split(":");  // #wrapped/month:-1 is last month
     if (["week", "month", "year"].includes(period)) this.view.open(period, Number(step) || 0);
-    else if (!this.view.recap) this.view.open("month", 0);
+    else if (!this.view.recap) this.view.open("month", -1);  // last month: the one there is to look back on
   },
 };
 

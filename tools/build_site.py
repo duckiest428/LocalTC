@@ -1,11 +1,16 @@
-"""Build the parts of the website that come from the repository: site/changelog.html from CHANGELOG.md.
+"""Build the parts of the website that come from the repository: site/changelog.html from CHANGELOG.md, and
+version stamps on the pages' own scripts and stylesheets.
 
-    python tools/build_site.py          # writes site/changelog.html
+    python tools/build_site.py          # writes site/changelog.html, stamps site/*.html
 
-Run by .github/workflows/pages.yml before publishing; the page isn't committed. Only the Markdown that
+Run by .github/workflows/pages.yml before publishing; neither change is committed. The stamps: the site is
+cached for hours (by browsers and Cloudflare), so a page could arrive new with its script old, a dashboard
+whose Wrapped link went nowhere. Every ``src="x.js"`` and ``href="x.css"`` gets ``?v=<its content hash>``,
+and so do the scripts' own imports (``import("./cardmodel.js")``): a changed file is a new address. Only the Markdown that
 CHANGELOG.md uses is understood: ## and ### headings, "- " lists, **bold**, `code` and [links](url).
 """
 
+import hashlib
 import html
 import re
 import sys
@@ -117,10 +122,35 @@ def render(markdown: str) -> tuple[str, str]:
     return latest, "\n".join(out)
 
 
+ASSET = re.compile(r'((?:src|href)=")([\w./-]+\.(?:js|css))(")')
+IMPORT = re.compile(r'(import\("\./)([\w./-]+\.js)("\))')
+
+
+def _hash(site: Path, name: str) -> str | None:
+    file = site / name
+    return hashlib.sha256(file.read_bytes()).hexdigest()[:10] if file.is_file() else None
+
+
+def stamp(site: Path) -> list[str]:
+    """Version every page's (and script's) own assets by their content; returns the files changed."""
+    changed = []
+    stamped = lambda m: f"{m.group(1)}{m.group(2)}?v={h}{m.group(3)}" if (h := _hash(site, m.group(2))) else m.group(0)
+    # The scripts first, since their imports change their own content, and so their stamp.
+    for file in sorted(site.glob("*.js")) + sorted(site.glob("*.html")):
+        text = file.read_text(encoding="utf-8")
+        new = IMPORT.sub(stamped, text) if file.suffix == ".js" else ASSET.sub(stamped, text)
+        if new != text:
+            file.write_text(new, encoding="utf-8")
+            changed.append(file.name)
+    return changed
+
+
 def main() -> int:
     latest, body = render((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"))
     (ROOT / "site" / "changelog.html").write_text(PAGE.format(latest=html.escape(latest), body=body), encoding="utf-8")
     print(f"site/changelog.html: latest {latest}")
+    if "--no-stamp" not in sys.argv:
+        print("stamped:", ", ".join(stamp(ROOT / "site")) or "nothing")
     return 0
 
 

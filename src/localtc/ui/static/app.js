@@ -427,7 +427,7 @@ const Logbook = {
             ${f.has_recording && S.account?.signed_in ? (f.replay_uploaded_at
               ? `<button class="linkbtn up on" data-unshare="${esc(f.id)}" title="The replay is in your account (localtc.tech and the phone). Click to remove it from the account.">&#9729;&#9654;</button>`
               : `<button class="linkbtn up" data-share="${esc(f.id)}" title="Upload the replay (the track and the radio transcript, no audio) so it plays on localtc.tech and your phone">Upload</button>`) : ""}
-            ${S.account?.signed_in ? `<button class="linkbtn up${f.share_url ? " on" : ""}" data-card="${esc(f.id)}" title="${f.share_url ? "Shared: anyone with the link sees this flight's card" : "Share this flight: a public card with the route and the numbers"}">${f.share_url ? "Shared" : "Share"}</button>` : ""}
+            ${S.account?.signed_in ? `<button class="linkbtn up${f.share_url ? " on" : ""}" data-card="${esc(f.id)}" title="${f.share_url ? "Shared: anyone with the link sees this flight's card" : "Share this flight: a public card with the route and the numbers"}">${f.share_url ? "Shared" : "Share flight"}</button>` : ""}
             <span class="sync ${f.synced_at ? "on" : ""}" title="${f.synced_at ? "In your account" : "Only on this computer"}">${f.synced_at ? "&#9729;" : ""}</span>
             <button class="linkbtn" data-del="${esc(f.id)}" title="Delete from this computer">&times;</button></td></tr>`).join("")}
       </tbody></table>` : `<p class="muted pad">No flights yet. Every live flight gets a line here when it ends: airports, times, the landing.</p>`}
@@ -532,7 +532,7 @@ Object.assign(Logbook, {
         share: (r) => api("wrapped/share", Object.fromEntries(q(r))),
         putImage: async (slug, blob) => api("share/image", { slug, png: await toDataUrl(blob) }),
       });
-      this.wrappedView.open("month", 0);
+      this.wrappedView.open("month", -1);
     }
   },
 });

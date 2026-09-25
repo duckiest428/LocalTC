@@ -78,6 +78,7 @@ class PilotRoutes:
         if not self._linked:  # lines from before the logbook kept its recordings: once a run
             self._linked = True
             await asyncio.to_thread(self.logbook.link_recordings, Path(self.cfg().recorder.dir).resolve())
+            await asyncio.to_thread(self.logbook.fill_aircraft)
         flights = await asyncio.to_thread(self.logbook.flights)
         from localtc.logbook import totals
 

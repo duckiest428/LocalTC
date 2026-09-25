@@ -113,8 +113,10 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 - [ ] Logbook (app or Dashboard) → **Share** on a flight: the card previews, the quote list offers the clearance first,
       Share gives a `localtc.tech/f/…` link. Open it in a private window: the card draws itself. Paste it into
       Discord or iMessage: it unfurls with the card's picture. **Stop sharing**: the link says "No longer shared".
-- [ ] **Wrapped** (app: the Logbook's button; Dashboard: the sidebar): Month plays its slides (arrows, a tap), Week is one
-      card, Year adds the superlatives. **Save image** saves a slide; **Share my month** gives a `/w/…` link.
+- [ ] **Wrapped** (app: the Logbook's button; Dashboard: the sidebar): it opens on **last** month and plays its slides
+      (arrows, a tap). The arrow forward shows this month locked, counting down to its end; nothing older is offered.
+      **Save image** saves a slide; **Share my month** gives a `/w/…` link.
+- [ ] Dashboard logbook: every flight has **Share flight**, the Aircraft column has the type (a hard refresh the first time).
 
 ## 6. The iPhone companion app
 

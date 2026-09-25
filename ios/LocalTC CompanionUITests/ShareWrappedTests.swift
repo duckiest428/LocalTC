@@ -38,10 +38,9 @@ final class ShareWrappedTests: XCTestCase {
 
         XCTAssertTrue(app.tabBars.buttons["Logbook"].waitForExistence(timeout: 15))
         app.tabBars.buttons["Logbook"].tap()
-        let row = app.buttons["replay-\(flight)"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
-        row.swipeRight()
-        app.buttons["Share"].firstMatch.tap()
+        let share = app.buttons["share-\(flight)"]
+        XCTAssertTrue(share.waitForExistence(timeout: 15), "each flight has its Share flight button")
+        share.tap()
 
         let go = app.buttons["share-go"]
         XCTAssertTrue(go.waitForExistence(timeout: 10))
@@ -57,15 +56,17 @@ final class ShareWrappedTests: XCTestCase {
         let wrapped = app.buttons["wrapped"].firstMatch
         XCTAssertTrue(wrapped.waitForExistence(timeout: 5))
         wrapped.tap()
+        // Last month: the one there is to see.
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'wrapped-slide-'")).firstMatch.waitForExistence(timeout: 15)
             || app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'No flights'")).firstMatch.waitForExistence(timeout: 5))
-        attach(app, "3 wrapped month")
-        app.buttons["Year"].tap()
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'look back'")).firstMatch.waitForExistence(timeout: 15),
-                      "the year opens on its intro")
-        attach(app, "4 wrapped year")
-        app.buttons["Image"].tap()
-        XCTAssertTrue(app.buttons["Share image"].waitForExistence(timeout: 20), "the slide drawn as a picture")
-        attach(app, "5 slide image")
+        attach(app, "3 wrapped last month")
+        if app.buttons["Image"].exists {
+            app.buttons["Image"].tap()
+            XCTAssertTrue(app.buttons["Share image"].waitForExistence(timeout: 20), "the slide drawn as a picture")
+        }
+        // This month: locked, counting down.
+        app.buttons["The period after"].tap()
+        XCTAssertTrue(app.staticTexts["wrapped-countdown"].waitForExistence(timeout: 5), "the month still going is locked")
+        attach(app, "4 wrapped locked")
     }
 }

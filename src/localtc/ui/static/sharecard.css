@@ -65,6 +65,10 @@ body.share-page { min-height: 100vh; display: flex; flex-direction: column; back
 .wr-empty { padding: 48px 20px; text-align: center; border-radius: 18px; background: rgba(255, 255, 255, .03); }
 .wr-empty h3 { margin: 0 0 8px; font-size: 20px; }
 .wr-empty p { margin: 0 0 14px; color: var(--text-3, #8a939d); }
+.wr-lock { font-size: 34px; margin-bottom: 6px; opacity: .8; }
+.wr-countdown { font-family: var(--mono, ui-monospace, Menlo, monospace); font-size: 30px; font-weight: 600; color: var(--green, #5fd068);
+  letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.wr-empty b.wr-countdown { font-size: inherit; }
 .wr-nudge { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px;
   background: linear-gradient(90deg, rgba(95, 208, 104, .14), rgba(108, 201, 232, .08)); }
 .wr-nudge[hidden] { display: none; }

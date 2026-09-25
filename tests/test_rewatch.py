@@ -241,3 +241,25 @@ def test_wrapped_asks_the_account_for_the_period_only(app):
     assert got["flights"] == 1  # the logbook synced first
     made = asyncio.run(routes.api_wrapped_share(period))
     assert server.shares[made["slug"]]["body"]["kind"] == "wrapped"
+
+
+def test_a_line_without_its_aircraft_takes_it_from_the_recording(tmp_path):
+    rec = shutil.copytree(FLIGHT, tmp_path / "20260923-181635_live")
+    book = Logbook(tmp_path / "logbook.db")
+    book.add(flight(recording=str(rec), synced_at="2026-09-24T01:20:00Z"))
+    assert book.fill_aircraft() == 1
+    line = book.get("kden-ksea")
+    assert line.aircraft == "A220-300" and line.synced_at is None  # goes up to the account again
+    assert book.fill_aircraft() == 0
+
+
+def test_the_sims_underscored_model_names_are_read():
+    from localtc.atc_core.values import clean_sim_name
+    from localtc.logbook import FlightLog
+    from localtc.sim_api import AircraftIdentity
+
+    assert clean_sim_name("ATCCOM.AC_MODEL_A20N.0.text") == "A20N"
+    log = FlightLog()
+    log.feed(AircraftIdentity(t=1.0, title="A320neo V2", atc_id="ASXGS", airline="", flight_number="", atc_type="",
+                              atc_model="ATCCOM.AC_MODEL_A20N.0.text"))
+    assert log.aircraft == "A20N"

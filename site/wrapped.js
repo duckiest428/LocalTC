@@ -6,6 +6,9 @@
  * image" button saves), and plays them like a story: tap or the arrow keys to move, a few seconds each.
  * A week is one card. Only the summary can become a public link.
  *
+ * Only the last finished week, month or year can be seen (the server says the same). The one still going
+ * is locked, with a countdown to when it ends and its recap unlocks.
+ *
  *   new WrappedView(el, {base, load(range) -> recap, share(range) -> {slug, url, card}, putImage(slug, blob)})
  */
 (function () {
@@ -39,6 +42,14 @@
     }
     const current = Date.now() >= start.getTime() && Date.now() < end.getTime();
     return { period, from: iso(start), to: iso(end), tz: -start.getTimezoneOffset(), label, current, start };
+  }
+
+  /** "12d 04:13:22" */
+  function countdown(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const clock = [h, m, sec].map((n) => String(n).padStart(2, "0")).join(":");
+    return d ? `${d}d ${clock}` : clock;
   }
 
   /** A slide of the recap as a card for sharecard.js: {kind: "slide", kicker, value, unit, label, sub}. */
@@ -78,8 +89,9 @@
       this.opts = opts;
       this.base = opts.base || "";
       this.period = "month";
-      this.step = 0;
+      this.step = -1;  // the last finished one: the only one to look back on
       this.timer = null;
+      this.countdown = null;
       el.classList.add("wrapped");
       el.innerHTML = `<div class="wr-bar">
   <div class="wr-tabs" role="tablist" aria-label="Period">
@@ -88,9 +100,9 @@
   <div class="wr-nav"><button type="button" class="wr-prev" aria-label="The period before">‹</button><b class="wr-label"></b><button type="button" class="wr-next" aria-label="The period after">›</button></div>
 </div>
 <div class="wr-stage"></div>`;
-      el.querySelector(".wr-tabs").onclick = (e) => { const b = e.target.closest("button[data-period]"); if (b) { this.period = b.dataset.period; this.step = 0; this.load(); } };
-      el.querySelector(".wr-prev").onclick = () => { this.step -= 1; this.load(); };
-      el.querySelector(".wr-next").onclick = () => { this.step += 1; this.load(); };
+      el.querySelector(".wr-tabs").onclick = (e) => { const b = e.target.closest("button[data-period]"); if (b) { this.period = b.dataset.period; this.step = -1; this.load(); } };
+      el.querySelector(".wr-prev").onclick = () => { this.step = -1; this.load(); };
+      el.querySelector(".wr-next").onclick = () => { this.step = 0; this.load(); };
       this.onKey = (e) => {
         if (!this.slides || !el.isConnected || el.closest("[hidden]") || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || "")) return;
         if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); this.show(this.at + 1); }
@@ -99,10 +111,10 @@
       document.addEventListener("keydown", this.onKey);
     }
 
-    /** Open a period: "month", 0 is this month; -1 last month. */
-    open(period = this.period, step = this.step) {
+    /** Open a period: "month", -1 is last month (the one to see); 0 is this month (locked until it ends). */
+    open(period = this.period, step = -1) {
       this.period = period;
-      this.step = step;
+      this.step = step === 0 ? 0 : -1;
       return this.load();
     }
 
@@ -111,9 +123,11 @@
       const range = periodOf(this.period, Date.now(), this.step);
       this.range = range;
       this.el.querySelectorAll(".wr-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.period === this.period)));
-      this.el.querySelector(".wr-label").textContent = range.current && this.period !== "week" ? `${range.label} so far` : range.label;
-      this.el.querySelector(".wr-next").disabled = range.current;
+      this.el.querySelector(".wr-label").textContent = range.label;
+      this.el.querySelector(".wr-prev").disabled = this.step === -1;
+      this.el.querySelector(".wr-next").disabled = this.step === 0;
       const stage = this.el.querySelector(".wr-stage");
+      if (range.current) return this.locked(range);
       stage.innerHTML = `<p class="wr-hint">Looking back ...</p>`;
       let recap;
       try {
@@ -150,26 +164,38 @@
       this.show(0);
     }
 
+    /** The period still going: locked, counting down to when it ends. */
+    locked(range) {
+      const stage = this.el.querySelector(".wr-stage");
+      const last = periodOf(this.period, Date.now(), -1);
+      stage.innerHTML = `<div class="wr-empty wr-locked"><div class="wr-lock" aria-hidden="true">&#128274;</div>
+<h3>${esc(range.label)} is still going</h3>
+<p>Its Wrapped unlocks when it ends, in</p><p class="wr-countdown" role="timer" aria-live="off"></p>
+<button type="button" class="btn btn-ghost btn-sm wr-back">See ${esc(last.label)}</button></div>`;
+      stage.querySelector(".wr-back").onclick = () => { this.step = -1; this.load(); };
+      const end = new Date(range.to).getTime();
+      const tick = () => {
+        const left = end - Date.now();
+        if (left <= 0) { this.step = -1; this.load(); return; }  // it's over: that's the one to see now
+        const out = stage.querySelector(".wr-countdown");
+        if (out) out.textContent = countdown(left);
+      };
+      tick();
+      this.countdown = setInterval(tick, 1000);
+    }
+
     empty(recap) {
       const stage = this.el.querySelector(".wr-stage");
+      const next = periodOf(this.period, Date.now(), 0);
       const last = recap.last_flight;
-      let more = "";
-      if (last) {
-        const when = last.days_ago === 0 ? "today" : last.days_ago === 1 ? "yesterday" : `${last.days_ago} days ago`;
-        more = `<p>Your last flight was ${esc(when)}: ${esc(last.origin)} → ${esc(last.destination)}.</p>
-<button type="button" class="btn btn-ghost btn-sm wr-jump">Show that ${esc(this.period)}</button>`;
-      }
-      stage.innerHTML = `<div class="wr-empty"><h3>No flights ${this.range.current ? "yet " : ""}in ${esc(this.range.label.replace(/^Week of/, "the week of"))}.</h3>
-${last ? more : "<p>Fly with the account signed in, and each flight you land adds to it.</p>"}</div>`;
-      const jump = stage.querySelector(".wr-jump");
-      if (jump) jump.onclick = () => {
-        const then = new Date(last.started_at), now = new Date();
-        const steps = this.period === "year" ? then.getFullYear() - now.getFullYear()
-          : this.period === "month" ? (then.getFullYear() - now.getFullYear()) * 12 + then.getMonth() - now.getMonth()
-          : Math.round((periodOf("week", then).start - periodOf("week", now).start) / (7 * 86400_000));
-        this.step = steps;
-        this.load();
-      };
+      const when = last && (last.days_ago === 0 ? "today" : last.days_ago === 1 ? "yesterday" : `${last.days_ago} days ago`);
+      stage.innerHTML = `<div class="wr-empty"><h3>No flights in ${esc(this.range.label.replace(/^Week of/, "the week of"))}.</h3>
+${last ? `<p>Your last flight was ${esc(when)}: ${esc(last.origin)} → ${esc(last.destination)}.</p>` : ""}
+<p>Your ${esc(next.label.replace(/^Week of/, "week of"))} Wrapped unlocks in <b class="wr-countdown"></b>.</p></div>`;
+      const end = new Date(next.to).getTime();
+      const tick = () => { const out = stage.querySelector(".wr-countdown"); if (out) out.textContent = countdown(end - Date.now()); };
+      tick();
+      this.countdown = setInterval(tick, 1000);
     }
 
     async show(i) {
@@ -198,6 +224,8 @@ ${last ? more : "<p>Fly with the account signed in, and each flight you land add
     stop() {
       clearTimeout(this.timer);
       this.timer = null;
+      clearInterval(this.countdown);
+      this.countdown = null;
       const bar = this.el.querySelector(".wr-progress i.now b");
       if (bar) { bar.style.transition = "none"; bar.style.width = "0"; }
     }

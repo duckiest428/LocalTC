@@ -28,13 +28,21 @@ struct LogbookTab: View {
             }
             Section {
                 ForEach(flights) { flight in
-                    Group {
+                    VStack(alignment: .leading, spacing: 6) {
                         if flight.hasReplay == true {
                             NavigationLink { ReplayView(flight: flight) } label: { FlightRow(flight: flight) }
                                 .accessibilityIdentifier("replay-\(flight.id)")
                         } else {
                             FlightRow(flight: flight)
                         }
+                        Button { sharing = flight } label: {
+                            Label(flight.share == nil ? "Share flight" : "Shared", systemImage: flight.share == nil ? "square.and.arrow.up" : "link")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(flight.share == nil ? .green : .cyan)
+                        .accessibilityIdentifier("share-\(flight.id)")
                     }
                     .swipeActions(edge: .leading) {
                         Button { sharing = flight } label: { Label("Share", systemImage: "square.and.arrow.up") }.tint(.green)

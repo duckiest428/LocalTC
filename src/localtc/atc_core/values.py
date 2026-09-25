@@ -6,7 +6,8 @@ from dataclasses import dataclass, replace
 from localtc.atc_core import airlines
 
 # MSFS 2024 hands out untranslated localization tokens for ATC TYPE and ATC MODEL.
-SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)\s+(.+?)\.\d+\.(?:text|tts)", re.IGNORECASE)
+# "ATCCOM.AC_MODEL A330.0.text", and "ATCCOM.AC_MODEL_A20N.0.text" (the A320neo V2 writes it with an underscore)
+SIM_TOKEN = re.compile(r"ATCCOM\.(?:ATC_NAME|AC_MODEL)[\s_]+(.+?)\.\d+\.(?:text|tts)", re.IGNORECASE)
 # Three letters and a number (EXP69, ASA123): an airline-style callsign, said in full every time.
 AIRLINE_STYLE = re.compile(r"[A-Z]{3}\d{1,4}[A-Z]{0,2}")
 

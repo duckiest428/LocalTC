@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index";
 import { bearer, call, data, flight, signIn } from "./helpers";
 
@@ -19,7 +19,13 @@ async function pilot(flights: Record<string, unknown>[]) {
 
 const kinds = (r: any) => r.slides.map((s: any) => s.kind);
 
+// Looking back from early October: September is the last month, and the one that can be seen.
+const at = (iso: string) => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(iso)); };
+
 describe("ATC Wrapped", () => {
+  beforeEach(() => at("2026-10-05T12:00:00Z"));
+  afterEach(() => vi.useRealTimers());
+
   it("tells a month in slides, leaving out what says nothing", async () => {
     const { token } = await pilot([
       day(3), day(4, { landing_vs_fpm: -95 }), day(5, { origin: "KPHX", destination: "KSAN", air_min: 70, distance_nm: 300 }),
@@ -75,6 +81,7 @@ describe("ATC Wrapped", () => {
     const put = await worker.fetch(new Request("https://api.localtc.test/v1/flights/sep4/replay", { method: "PUT", body, headers: bearer(token) }), env);
     expect(put.status).toBe(200);
 
+    at("2027-01-04T12:00:00Z");  // the year is over
     const r = await data(await call("GET", `/v1/wrapped?${YEAR}&tz=-420`, undefined, bearer(token)));
     expect(r.tier).toBe("year");
     const slide = (k: string) => r.slides.find((s: any) => s.kind === k);
@@ -97,6 +104,19 @@ describe("ATC Wrapped", () => {
     expect(html).toContain("September 2026: ATC Wrapped");
     expect(html).not.toContain(email);
     expect(html).not.toContain("sep3"); // no flight in detail
+  });
+
+  it("keeps the period still going locked, and offers only the last one", async () => {
+    const { token } = await pilot([day(3), day(4)]);
+    const october = "period=month&from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z&label=October%202026";
+    const locked = await call("GET", `/v1/wrapped?${october}`, undefined, bearer(token));
+    expect(locked.status).toBe(403);
+    expect((await data(locked)).error).toMatch(/isn't over yet/);
+    const august = "period=month&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z&label=August%202026";
+    expect((await call("GET", `/v1/wrapped?${august}`, undefined, bearer(token))).status).toBe(403);
+    expect((await call("POST", "/v1/shares", { kind: "wrapped", period: "month", from: "2026-10-01T00:00:00Z", to: "2026-11-01T00:00:00Z" },
+      bearer(token))).status).toBe(403);
+    expect((await call("GET", `/v1/wrapped?${SEPT}`, undefined, bearer(token))).status).toBe(200);
   });
 
   it("refuses a period that isn't one", async () => {

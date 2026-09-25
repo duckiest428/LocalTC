@@ -6,6 +6,10 @@
  * comes from the moments kept with uploaded replays. The period's bounds come from the pilot's app, in its
  * own time zone ("this month" starts at local midnight), with the offset for counting days.
  *
+ * Only the last finished period can be seen: last week, last month, last year. The one still going is
+ * locked until it ends (the apps count down to it), and older ones aren't offered: a recap is for looking
+ * back at what just ended.
+ *
  * Every client draws the same slides from this: the dashboard, the desktop app and the phone. A slide that
  * would say nothing (a "top airport" visited once) is left out; a month with a single flight is shown as a
  * week's card, a year with a few as a month.
@@ -21,6 +25,8 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const MAX_SPAN_DAYS = 370;
 const GREASER_FPM = -150; // a landing softer than this is a greaser
 const MIN_FLIGHTS: Record<Period, number> = { week: 1, month: 2, year: 5 }; // fewer, and it's shown as the tier below
+const LONGEST_DAYS: Record<Period, number> = { week: 7, month: 31, year: 366 };
+const TZ_SLACK_MS = 14 * 3600_000; // local midnight is up to 14 hours either side of UTC's
 
 export type Range = { period: Period; from: string; to: string; tz: number; label: string; ref: string };
 
@@ -41,6 +47,9 @@ export function range(q: Obj): Range {
   const to = String(q.to ?? "");
   if (!ISO.test(from) || !ISO.test(to) || Date.parse(to) <= Date.parse(from)) throw new HttpError(400, "The period's dates aren't right.");
   if (Date.parse(to) - Date.parse(from) > MAX_SPAN_DAYS * 86400_000) throw new HttpError(400, "That period is too long.");
+  const now = Date.now();
+  if (Date.parse(to) > now + TZ_SLACK_MS) throw new HttpError(403, `This ${period} isn't over yet: its Wrapped unlocks when it ends.`);
+  if (now - Date.parse(to) > (LONGEST_DAYS[period] + 1) * 86400_000) throw new HttpError(403, `Only the last ${period} can be looked back on.`);
   const tz = Math.max(-840, Math.min(840, Math.round(Number(q.tz ?? 0) || 0)));
   const label = typeof q.label === "string" && /^[\w ,.-]{1,24}$/.test(q.label) ? q.label : from.slice(0, 10);
   return { period, from, to, tz, label, ref: `${period}:${label}` };

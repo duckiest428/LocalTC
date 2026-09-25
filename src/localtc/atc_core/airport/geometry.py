@@ -87,6 +87,7 @@ class AirportGeometry:
         self.airport = airport
         self.frame = LocalFrame(airport.lat, airport.lon)
         self.runways = tuple(RunwayGeometry(r, self.frame) for r in airport.runways)
+        self.hold_taxiways: dict[str, str] = {}  # runway end -> the taxiway its holding point is on (airport_fixes.toml)
 
     @property
     def icao(self) -> str:

@@ -10,9 +10,9 @@
 [    31.3] READBACK  clearance.readback_correct_ground correct
 [    33.4] TUNE      COM1 121.0
 [    38.9] PILOT     121.0: Montreal Ground, DP69, ready to taxi, with information Romeo
-[    40.6] ATC       Montreal Ground 121.0: DP69, runway 06L, taxi via A4.
-[    43.6] PILOT     121.0: Runway six left, taxi via alpha four, delta papa six niner.
-[    43.6] READBACK  ground.taxi_out correct
+[    40.6] ATC       Montreal Ground 121.0: DP69, runway 06L at C, taxi via G, C.
+[    43.6] PILOT     121.0: Runway six left at charlie, taxi via golf, charlie, delta papa six niner.
+[    43.6] READBACK  ground.taxi_out_at correct
 [   290.6] PHASE     PARKED -> TAXI_OUT (started moving)
 [   323.9] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
 [   323.9] ATC       Montreal Ground 121.0: DP69, contact Montreal Tower 119.3, have a good one.

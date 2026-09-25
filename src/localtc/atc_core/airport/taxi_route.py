@@ -152,6 +152,11 @@ class TaxiGraph:
         start = self.nearest_node(lat, lon, kinds=("point", "parking"))
         if start is None:
             return None
+        # A correction says which taxiway the holding point is on (Montreal's 06L: C): that one, if it's there.
+        wanted = self.geometry.hold_taxiways.get(end.ident)
+        on = [h for h in candidates if any(e.name == wanted for e in self.edges.get(("point", h.point.index), ()))] if wanted else []
+        if on:
+            candidates = on
         # A runway usually has a hold line on each side of its threshold. The one nearest the threshold
         # is not the one to use if reaching it means crossing the runway first: San Diego's C1 is a few
         # metres closer to 27 than B1, and choosing it sent a south-side departure across 09/27 to line

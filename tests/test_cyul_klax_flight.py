@@ -127,9 +127,37 @@ def test_no_caution_for_an_aircraft_parked_at_its_gate(recorded):
     assert not [line for line in atc(recorded.lines) if "stopped ahead" in line or "stopped on the taxiway" in line]
 
 
-def test_the_taxi_to_a_one_taxiway_route_is_not_at_a4_via_a4(recorded):
+def test_the_taxi_to_06l_goes_by_c_not_the_sims_second_a4(recorded):
+    """MSFS names the connector to 06L "A4" too (A4 is 06R's): the shipped correction unnames it and holds 06L on C."""
     taxi = said_after(recorded.lines, "Request taxi")[0]
-    assert "A4" in taxi and "at A4" not in taxi
+    assert "06L" in taxi and "via G, C" in taxi and "A4" not in taxi
+
+
+def test_a_numbered_taxiway_in_two_places_isnt_named_without_a_correction():
+    from localtc.atc_core.airport.taxi_route import TaxiGraph
+    from localtc.atc_core.phase.context import ContextBuilder
+    from localtc.sim_api import AirportData
+
+    events = list(Recording(FLIGHT).events())
+    airport = next(e.airport for e in events if isinstance(e, AirportData) and e.airport.icao == "CYUL")
+    own = next(e for e in events if isinstance(e, OwnshipState))
+    builder = ContextBuilder()
+    builder.fixes = {}  # the sim's data as it is: A4 at 06R, and "A4" on the way to 06L
+    geo = builder.add_airport(airport)
+    route = TaxiGraph(geo).departure_route(own.lat, own.lon, geo.end("06L"))
+    assert "A4" not in route.taxiways
+    assert not [p for p in geo.airport.taxi_paths if p.name == "A4"]  # neither is said: nobody knows which is real
+    assert [p for p in geo.airport.taxi_paths if p.name == "B"]  # lettered taxiways in pieces keep their names
+
+
+def test_the_pilots_own_corrections_win(tmp_path):
+    from localtc.atc_core.airport import fixes
+
+    mine = tmp_path / "airport_fixes.toml"
+    mine.write_text('[CYUL]\nhold = { "06L" = "G" }\n[KSEA]\nrename = [{ taxiway = "A", near = "16L", name = "Alpha" }]\n')
+    loaded = fixes.load(mine)
+    assert loaded["CYUL"].holds == {"06L": "G"} and loaded["CYUL"].renames  # the shipped rename stays
+    assert loaded["KSEA"].renames[0].name == "Alpha"
 
 
 def test_the_climb_goes_up_in_steps(copilot):

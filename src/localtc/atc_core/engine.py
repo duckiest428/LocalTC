@@ -20,6 +20,7 @@ import msgspec
 
 from localtc.atc_core import chatter, personality, radio_range, vectors
 from localtc.atc_core import region as regions
+from localtc.atc_core.airport import fixes as airport_fixes
 from localtc.atc_core.airport import (
     AirportGeometry,
     TaxiGraph,
@@ -232,6 +233,7 @@ class EngineConfig:
     dep_runway: str | None = None  # the flight plan's runways: given only with enforce_fpln_runways
     arr_runway: str | None = None
     enforce_fpln_runways: bool = False  # off: the runway in use (ATIS, else wind); on: the plan's
+    airport_fixes: str | None = None  # the pilot's own airport_fixes.toml, over the shipped one
     route: tuple[RouteFix, ...] = ()  # the plan's fixes: when the climb ends, where the descent begins
     transition_ft: int = 0  # 0 = the region's transition altitude (atc_core.region); otherwise this everywhere
     phraseology: str = "auto"  # "auto": FAA or ICAO by where the controller is; or "faa" / "icao" always
@@ -278,6 +280,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if self.cfg.callsign:
             flight.callsign = Callsign.named(self.cfg.callsign)
         self.tracker = PhaseTracker(destination=flight.destination, cruise_ft=flight.cruise_ft, thresholds=self.cfg.thresholds)
+        if self.cfg.airport_fixes:  # the pilot's own corrections to the sim's airport data
+            self.tracker.context_builder.fixes = airport_fixes.load(self.cfg.airport_fixes)
         self.facilities: list[Facility] = []
         self.airport_requests: list[str] = []  # airports the engine needs; the service fetches them
         self._requested: set[str] = set()

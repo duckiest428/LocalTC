@@ -19,7 +19,7 @@ import msgspec
 
 from localtc.airports import AirportCache
 from localtc.bus import EventBus, Subscription, pump
-from localtc.config import AtcConfig, Config, ConfigError, FlightConfig, LlmConfig
+from localtc.config import AtcConfig, Config, ConfigError, FlightConfig, LlmConfig, data_dir
 from localtc.console import CONSOLE
 from localtc.recorder import Recorder
 from localtc.recorder.format import AUDIO_DIR
@@ -69,6 +69,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         dep_runway=flight.dep_runway or None,
         arr_runway=flight.arr_runway or None,
         enforce_fpln_runways=atc.enforce_fpln_runways,
+        airport_fixes=str(data_dir() / "airport_fixes.toml"),
         route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
                     for f in flight.fixes),
     )

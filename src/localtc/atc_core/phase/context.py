@@ -2,7 +2,14 @@
 
 from dataclasses import dataclass
 
-from localtc.atc_core.airport import AirportGeometry, FinalApproach, HoldShort, RunwayEndGeometry, RunwayGeometry
+from localtc.atc_core.airport import (
+    AirportGeometry,
+    FinalApproach,
+    HoldShort,
+    RunwayEndGeometry,
+    RunwayGeometry,
+)
+from localtc.atc_core.airport import fixes as airport_fixes
 from localtc.sim_api import Airport, OwnshipState
 
 NEAR_AIRPORT_NM = 10.0
@@ -33,9 +40,15 @@ class ContextBuilder:
         self.airports: dict[str, AirportGeometry] = {}
         self.destination = destination.upper() if destination else None
         self._tolerance = runway_heading_tolerance
+        self.fixes = airport_fixes.load()  # corrections to the sim's airport data (the engine adds the pilot's own)
 
     def add_airport(self, airport: Airport) -> AirportGeometry:
+        raw = AirportGeometry(airport)
+        fix = self.fixes.get(airport.icao.upper())
+        airport = airport_fixes.apply(airport, fix, {h.point.index: h.runway.name for h in raw.hold_shorts},
+                                      {e.ident: e.threshold for e in raw.ends}, raw.xy)
         geometry = AirportGeometry(airport)
+        geometry.hold_taxiways = dict(fix.holds) if fix else {}
         self.airports[airport.icao.upper()] = geometry
         return geometry
 

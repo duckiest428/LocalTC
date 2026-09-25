@@ -1,0 +1,7 @@
+# Corrections to the sim's airport data (atc_core/airport/fixes.py says how). Yours go in airport_fixes.toml in
+# the LocalTC data folder, next to settings.toml; they win over these.
+
+[CYUL]
+# MSFS names the connector from the apron to 06L's threshold "A4" too. A4 is 06R's; 06L is reached by C.
+rename = [{ taxiway = "A4", near = "06L", name = "" }]
+hold = { "06L" = "C" }

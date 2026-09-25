@@ -39,6 +39,7 @@ a new minor version adds features, a patch fixes them.
 - Traffic calls for aircraft just off (or onto) a runway near an airport.
 - ATC called with the sim paused.
 - A pilot's "request climb" below the filed level lowered the cruise.
+- Montreal's 06L was taxied "via A4": the sim names the connector to 06L "A4" as well as 06R's real A4. It's now "via G, C" to the hold on C. A numbered taxiway the sim has in two unconnected places leading to different runways is no longer named at all, and `airport_fixes.toml` (in the LocalTC data folder) corrects an airport's taxiway names and holding points.
 - The Dashboard on a phone: the section bar at the top no longer makes the page wider than the screen.
 
 ## [0.3.0] - 2026-09-23

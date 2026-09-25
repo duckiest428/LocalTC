@@ -6,9 +6,11 @@ Windows-only bridge.
 
 import asyncio
 import logging
+import re
 import shutil
 import struct
 import threading
+import time
 from collections import Counter
 from collections.abc import Callable
 from contextlib import suppress
@@ -78,7 +80,18 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
 def ollama_backend(llm: LlmConfig):
     from localtc.llm import OllamaBackend
 
-    return OllamaBackend(model=llm.model, base_url=llm.base_url, keep_alive=llm.keep_alive, num_ctx=llm.num_ctx)
+    return OllamaBackend(model=llm.model, base_url=llm.base_url, keep_alive=_in_flight_keep_alive(llm.keep_alive),
+                         num_ctx=llm.num_ctx, cpu_only=llm.cpu_only, cpu_threads=llm.cpu_threads)
+
+
+def _in_flight_keep_alive(setting: str) -> str:
+    """During a flight the model stays loaded at least 30 minutes past each call (and is refreshed every 10):
+    the pilot's setting is for after it."""
+    m = re.fullmatch(r"\s*(-?\d+)\s*([smh]?)\s*", setting or "")
+    if m is None:
+        return setting
+    seconds = int(m.group(1)) * {"": 1, "s": 1, "m": 60, "h": 3600}[m.group(2)]
+    return setting if seconds < 0 or seconds >= 1800 else "30m"
 
 
 async def language_model(cfg: Config, source: SimSource):
@@ -106,24 +119,50 @@ async def language_model(cfg: Config, source: SimSource):
     if not status.has(llm.model):
         log.warning("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
         return None
+    # Loaded somewhere else than asked (CPU only switched on or off since): out, so it loads again where it should.
+    placed = await asyncio.to_thread(backend.placement)
+    if placed is not None and (placed.size_vram > 0) == llm.cpu_only:
+        log.info("Language model is loaded %s; reloading it %s", "on the graphics card" if placed.size_vram else "on the CPU",
+                 "on the CPU only" if llm.cpu_only else "where Ollama puts it")
+        await asyncio.to_thread(backend.unload)
     # A daemon thread, not the default executor: exit mustn't wait for a slow first load.
-    threading.Thread(target=warm_up, args=(backend,), name="llm-warm-up", daemon=True).start()
+    threading.Thread(target=warm_up, args=(backend, status), name="llm-warm-up", daemon=True).start()
+    backend.start_keeping()
     return backend
 
 
-def warm_up(backend, timeout_s: float = 120.0) -> float | None:
-    """Load the model and its prompt before the first real call; returns seconds taken."""
+def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
+    """Load the model, and read both its prompts (understanding and phrasing), before the first real call:
+    Ollama keeps what it has read, so a call then only reads its own last lines. Returns seconds taken."""
     from localtc.atc_core.llm import build_request
+    from localtc.atc_core.llm.phrase import phrase_request
     from localtc.atc_core.llm.understand import load_examples
     from localtc.atc_core.readback import InterpretContext
 
-    request = build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples())
-    reply = backend.complete(request, timeout_s=timeout_s)
-    if reply.text is None:
-        log.warning("Language model warm-up failed (%s); the first calls may be slow or use the grammar", reply.error)
-        return None
-    log.info("Language model %s ready (warm-up %.1f s)", backend.model, reply.latency_ms / 1000, extra=CONSOLE)
-    return reply.latency_ms / 1000
+    started = time.monotonic()
+    if hasattr(backend, "loading"):
+        backend.loading = True
+    try:
+        for request in (build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples()),
+                        phrase_request("radio check", "answer", {"callsign": "November 1 2 3"})):
+            reply = backend.complete(request, timeout_s=timeout_s)
+            if reply.text is None:
+                log.warning("Language model warm-up failed (%s); the first calls may be slow or use the grammar", reply.error)
+                return None
+    finally:
+        if hasattr(backend, "loading"):
+            backend.loading = False
+    seconds = time.monotonic() - started
+    where = backend.placement() if hasattr(backend, "placement") else None
+    log.info("Language model %s ready (warm-up %.1f s)%s", backend.model, seconds, f": {where.describe()}" if where else "",
+             extra=CONSOLE)
+    if where is not None and status is not None:
+        on_disk = status.sizes.get(backend.model) or status.sizes.get(f"{backend.model}:latest") or 0
+        if on_disk and where.size > 1.6 * on_disk:
+            log.warning("Ollama holds %.1f GB for this %.1f GB model (context %d): more than one context's worth, likely "
+                        "OLLAMA_NUM_PARALLEL above 1. Setting OLLAMA_NUM_PARALLEL=1 for Ollama frees that memory.",
+                        where.size / 1e9, on_disk / 1e9, where.context)
+    return seconds
 
 
 PIPER_S_PER_CHAR = 0.063  # Piper at rate 1, measured over ATC phraseology (tools/pick_speakers.py)
@@ -136,11 +175,13 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
 
     llm = cfg.llm
     interpreter = phraser = None
+    slower = 2.0 if llm.cpu_only and getattr(backend, "cpu_only", False) else 1.0  # a CPU answers in about twice the time
+    timeout_s, budget_s = llm.timeout_s * slower, llm.budget_s * slower
     if backend is not None and llm.understanding != "off":
-        interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=llm.timeout_s,
-                                     max_attempts=llm.max_attempts, budget_s=llm.budget_s, patience_s=llm.patience_s)
+        interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=timeout_s,
+                                     max_attempts=llm.max_attempts, budget_s=budget_s, patience_s=llm.patience_s)
     if backend is not None and llm.phrasing:
-        phraser = LlmPhraser(backend, timeout_s=llm.timeout_s, max_attempts=llm.max_attempts, budget_s=llm.budget_s,
+        phraser = LlmPhraser(backend, timeout_s=timeout_s, max_attempts=llm.max_attempts, budget_s=budget_s,
                              patience_s=llm.patience_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
@@ -194,6 +235,7 @@ async def run_session(
     recorder: Recorder | None = None
     consumers: list[asyncio.Task] = []
     pump_task: asyncio.Task | None = None
+    backend = None
     typed_task: asyncio.Task | None = None
     voice = speaker = None
     engine = atc_service = None
@@ -225,7 +267,8 @@ async def run_session(
             from localtc.airports import load_airport_dir
             from localtc.atc_core.service import AtcService
 
-            engine = build_engine(cfg, await language_model(cfg, source))
+            backend = await language_model(cfg, source)
+            engine = build_engine(cfg, backend)
             for directory in cfg.atc.airport_dirs:
                 for airport in load_airport_dir(directory):
                     engine.handle(AirportData(t=0.0, airport=airport))
@@ -260,6 +303,9 @@ async def run_session(
             await asyncio.wait({pump_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
             stop_task.cancel()
     finally:
+        if backend is not None and hasattr(backend, "stop_keeping"):
+            # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
+            threading.Thread(target=backend.stop_keeping, args=(cfg.llm.keep_alive,), name="llm-release", daemon=True).start()
         await source.stop()
         if pump_task is not None and not pump_task.done():
             with suppress(asyncio.CancelledError, TimeoutError):

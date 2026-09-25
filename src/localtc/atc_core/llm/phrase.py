@@ -95,6 +95,14 @@ def spoken(text: str) -> str:
     return NUMBER_RE.sub(lambda m: speech.digits(m.group(0)), text)
 
 
+def phrase_request(pilot: str, decision: str, facts: dict[str, str]) -> LlmRequest:
+    """The request for a reply's wording: the examples, then this call."""
+    messages: tuple[tuple[str, str], ...] = tuple(
+        turn for user, assistant in EXAMPLES for turn in (("user", user), ("assistant", assistant))
+    ) + (("user", user_message(pilot, decision, facts)),)
+    return LlmRequest("phrase", SYSTEM, messages, SCHEMA, max_tokens=80)
+
+
 class LlmPhraser:
     def __init__(self, backend: LlmBackend, *, timeout_s: float = 2.5, max_attempts: int = 2, budget_s: float = 4.0,
                  patience_s: float = 15.0, clock: Callable[[], float] = time.monotonic) -> None:
@@ -107,10 +115,7 @@ class LlmPhraser:
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
               trigger: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template."""
-        messages: tuple[tuple[str, str], ...] = tuple(
-            turn for user, assistant in EXAMPLES for turn in (("user", user), ("assistant", assistant))
-        ) + (("user", user_message(pilot, decision, facts)),)
-        request = LlmRequest("phrase", SYSTEM, messages, SCHEMA, max_tokens=80)
+        request = phrase_request(pilot, decision, facts)
         exchanges: list[LlmExchange] = []
         timeout_s, budget_s = (self.patience_s, self.patience_s) if self.patient else (self.timeout_s, self.budget_s)
         deadline = self._clock() + budget_s

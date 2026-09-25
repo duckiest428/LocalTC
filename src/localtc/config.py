@@ -158,8 +158,14 @@ class LlmConfig(_Section):
     # it this long, once. The sim shares the machine, and a model that answers in 2 s idle can take 8 in flight.
     patience_s: float = 15.0
     max_attempts: int = 2
+    # How long the model stays loaded after a flight ("0": unload at once). During one, LocalTC keeps it loaded:
+    # a model that has to load mid-flight misses the call.
     keep_alive: str = "1h"
     num_ctx: int = 4096
+    # Run the model on the CPU only: the graphics card is left to the sim. Answers take a little longer, so the
+    # timeouts above are doubled. Applies when the model loads (LocalTC reloads it at the next flight).
+    cpu_only: bool = False
+    cpu_threads: int = 0  # CPU threads for the model; 0: Ollama's choice (every physical core)
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 

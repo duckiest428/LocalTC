@@ -53,8 +53,10 @@ timeout_s = 4.0               # per model call; on timeout the grammar's answer 
 budget_s = 6.0                # per pilot transmission, including one retry
 patience_s = 15.0             # off-script calls the model missed: "stand by", then one try this long
 max_attempts = 2
-keep_alive = "1h"             # keep the model loaded between calls
+keep_alive = "1h"             # how long the model stays loaded after a flight ("0": unload at once); during one it always stays
 num_ctx = 4096
+cpu_only = false              # the model on the CPU only, leaving the graphics card to the sim (timeouts doubled); from the next flight
+cpu_threads = 0               # CPU threads for the model; 0: Ollama's choice
 replay = "recorded"           # in replays: "recorded" answers, "live" model, or "off"
 
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"

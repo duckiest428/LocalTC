@@ -291,13 +291,18 @@ def _cmd_atc(args: argparse.Namespace) -> int:
 
 
 def _cmd_llm_check(args: argparse.Namespace) -> int:
-    from localtc.app import ollama_backend, warm_up
-    from localtc.atc_core.llm import LlmInterpreter
+    """Is Ollama there, where does it put the model, and how long is a cold call and a warm one."""
+    from localtc.app import ollama_backend
+    from localtc.atc_core.llm import build_request
+    from localtc.atc_core.llm.phrase import phrase_request
+    from localtc.atc_core.llm.understand import load_examples
     from localtc.atc_core.readback import InterpretContext
 
     cfg = load_config(args.config)
     if args.model:
         cfg.llm.model = args.model
+    if args.cpu is not None:
+        cfg.llm.cpu_only = args.cpu
     backend = ollama_backend(cfg.llm)
     status = backend.status()
     if not status.reachable:
@@ -307,20 +312,45 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
     if not status.has(cfg.llm.model):
         print(f"Model {cfg.llm.model} isn't installed. Run: ollama pull {cfg.llm.model}")
         return 1
-    print(f"Loading {cfg.llm.model} ...")
-    seconds = warm_up(backend)
-    if seconds is None:
-        print("The model didn't answer.")
-        return 1
-    print(f"Loaded and answered in {seconds:.1f} s (first call; later ones reuse the loaded model)")
-    interpreter = LlmInterpreter(backend, timeout_s=30.0, budget_s=60.0)
-    for phase, station, text in (("RUNWAY_HOLD", "Montreal Tower", "tower DP69 holding short zero six left"),
-                                 ("CRUISE", "Montreal Center", "what's the altimeter in quebec"),
-                                 ("CRUISE", "Montreal Center", "request flight level two four zero, DP69")):
-        result = interpreter.interpret(text, None, InterpretContext(phase=phase, station=station))
-        took = sum(e.latency_ms for e in result.exchanges)
-        print(f"  {took:6.0f} ms  {text!r} -> {result.intent} {dict(result.values)}")
-    print(f"Timeout per call is {cfg.llm.timeout_s} s ([llm] timeout_s). Run 'localtc llm eval' for the full test.")
+    where = backend.placement()
+    print(f"Before: {cfg.llm.model} {'is loaded: ' + where.describe() if where else 'is not loaded'}")
+    print(f"Unloading it, then loading it {'on the CPU only' if cfg.llm.cpu_only else 'where Ollama puts it'} ...")
+    backend.unload()
+
+    examples = load_examples()
+    backend.loading = True  # the first call loads it: that's what's measured, not a warning
+    calls = [("cold: load + read the prompt", build_request("radio check", None, InterpretContext(phase="PARKED"), examples)),
+             ("warm: understanding", build_request("ready to taxi", None, InterpretContext(phase="PARKED"), examples)),
+             ("first phrasing", phrase_request("say again the frequency", "answer", {"callsign": "November 1 2 3"})),
+             ("warm: understanding", build_request("request flight level 360", None, InterpretContext(phase="CRUISE"), examples)),
+             ("warm: phrasing", phrase_request("can we get direct", "decline", {"callsign": "November 1 2 3"}))]
+    warm = []
+    for label, request in calls:
+        reply = backend.complete(request, timeout_s=300)
+        st = backend.last_stats
+        if reply.text is None:
+            print(f"  {label:30s} failed: {reply.error}")
+            return 1
+        print(f"  {label:30s} {reply.latency_ms / 1000:5.1f} s   (load {st.get('load_ms', 0) / 1000:4.1f} s, "
+              f"prompt {st.get('prompt_tokens', 0)} tokens in {st.get('prompt_ms', 0) / 1000:4.1f} s, "
+              f"answer {st.get('tokens', 0)} tokens in {st.get('gen_ms', 0) / 1000:4.1f} s)")
+        if label.startswith("warm"):
+            warm.append(reply.latency_ms / 1000)
+    where = backend.placement()
+    print(f"Now: {where.describe() if where else 'not loaded (odd: Ollama unloaded it straight away)'}"
+          + (f", context {where.context}" if where and where.context else ""))
+    on_disk = status.sizes.get(cfg.llm.model) or status.sizes.get(f"{cfg.llm.model}:latest") or 0
+    if where and on_disk and where.size > 1.6 * on_disk:
+        print(f"  Ollama holds {where.size / 1e9:.1f} GB for a {on_disk / 1e9:.1f} GB model: more than one context, likely "
+              "OLLAMA_NUM_PARALLEL above 1. Set the environment variable OLLAMA_NUM_PARALLEL=1 and restart Ollama.")
+    if where and 0 < where.on_gpu < 0.99:
+        print("  The model is split between the graphics card and the CPU: there wasn't room for it all. That's the slowest"
+              " way to run it. Try --cpu (and [llm] cpu_only = true), or a smaller model.")
+    limit = cfg.llm.timeout_s * (2 if cfg.llm.cpu_only else 1)
+    slowest = max(warm) if warm else 0
+    print(f"Timeout per call in a flight: {limit:.0f} s{' (doubled on the CPU)' if cfg.llm.cpu_only else ''}. "
+          f"Slowest warm call here: {slowest:.1f} s{', too slow with the sim running too' if slowest > limit * 0.6 else ''}.")
+    print("Run this again with the sim loaded and flying: that's when it counts. --cpu / --gpu try the other way.")
     return 0
 
 
@@ -684,7 +714,10 @@ def build_parser() -> argparse.ArgumentParser:
     llm_sub = llm.add_subparsers(dest="llm_command", required=True)
     check = with_config(llm_sub.add_parser("check", help="is Ollama running, is the model there, how fast is it"))
     check.add_argument("--model", help="model to check (default: [llm] model)")
-    check.set_defaults(func=_cmd_llm_check)
+    where = check.add_mutually_exclusive_group()
+    where.add_argument("--cpu", dest="cpu", action="store_const", const=True, help="load the model on the CPU only")
+    where.add_argument("--gpu", dest="cpu", action="store_const", const=False, help="let Ollama use the graphics card")
+    check.set_defaults(func=_cmd_llm_check, cpu=None)
     evaluate = with_config(llm_sub.add_parser("eval", help="run the seeded edge cases against the model"))
     evaluate.add_argument("--model", help="model to test (default: [llm] model)")
     evaluate.add_argument("--cases", help="cases TOML (default: the built-in set)")

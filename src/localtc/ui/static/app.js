@@ -684,9 +684,10 @@ const Settings = {
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
         <div class="row"><label>Center name (where no airport lists one)<input id="s-center" value="${esc(st.atc.center_name)}"></label>
           <label>Center frequency<input id="s-center-mhz" type="number" step="0.005" min="118" max="137" value="${st.atc.center_mhz}"></label></div>
-        <div class="row"><label>Keep the language model loaded for
-          <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Not at all: unload after every call", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
-          <span class="hint">Loaded, it answers at once but holds a few GB of memory; unloaded, the first call of a flight waits for it.</span></label></div>
+        <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run the language model on the CPU only: leaves the graphics card and its memory to the sim. Answers take a little longer (its timeouts are doubled). From the next flight</label>
+        <div class="row"><label>After a flight, keep the language model loaded for
+          <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
+          <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. ${esc(m.ollama.loaded || "")}</span></label></div>
         <div class="row"><label>Understanding
           <select id="s-understand"><option value="fallback" ${st.llm.understanding === "fallback" ? "selected" : ""}>The grammar first, the model only when stuck (recommended: light on the sim)</option>
           <option value="primary" ${st.llm.understanding === "primary" ? "selected" : ""}>The model reads every call (slower, costs frames)</option></select></label></div>
@@ -800,6 +801,7 @@ const Settings = {
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-understand", "change", () => this.save("llm", "understanding", val("#s-understand")));
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
+    on("#s-cpu-only", "change", () => this.save("llm", "cpu_only", $("#s-cpu-only").checked));
     on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
     on("#s-simbrief-fetch", "click", async (e) => {
       const user = val("#s-simbrief").trim();

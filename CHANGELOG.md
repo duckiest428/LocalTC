@@ -35,6 +35,9 @@ a new minor version adds features, a patch fixes them.
 - The companion app's EFB preview moved to Settings, so the new Logbook fits on the tab bar.
 
 ### Fixed
+- Language model timeouts: a model Ollama had unloaded (a quiet cruise longer than the keep-loaded setting, or that setting on "unload after every call") had to load again mid-flight, 10 to 25 seconds, and the call timed out. During a flight LocalTC now keeps it loaded (refreshed every 10 minutes); the setting is for after the flight. The warm-up also reads the phrasing prompt, not just the understanding one, and a call that still finds the model unloaded says so in the log.
+- **Run the language model on the CPU only** (Quick Settings → ATC): leaves the graphics card and its memory to the sim; timeouts doubled to match. The model is reloaded where it should be at the next flight. The log says where Ollama put it (all on the graphics card, on the CPU, or split between them, the slowest), and warns if Ollama holds several contexts' worth of memory for it (OLLAMA_NUM_PARALLEL above 1).
+- `localtc llm check` measures a cold call and warm ones (load, prompt and answer times), says where the model is, and tries either way with `--cpu` / `--gpu`.
 - A shared flight's page could show an old card for hours after an update (its scripts were cached by browsers and Cloudflare): the page now loads them by their content's hash.
 - Flight cards: a landing with no measured rate shows "---" rather than "0 fpm" (and no Butter badge), and the card carries the real LocalTC logo.
 - Standard pressure (STD) in the flight levels was an "altitude deviation" when the aircraft's avionics were on STD and the sim's altimeter setting wasn't. Up high ATC now reads the flight level. "We're on standard" is understood.

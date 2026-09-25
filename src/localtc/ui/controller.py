@@ -872,9 +872,11 @@ def _build_index(cache: AirportCache) -> dict[str, dict]:
 def _ollama_models(cfg) -> dict:
     from localtc.app import ollama_backend
 
-    status = ollama_backend(cfg.llm).status(timeout_s=1.5)
+    backend = ollama_backend(cfg.llm)
+    status = backend.status(timeout_s=1.5)
+    where = backend.placement(timeout_s=1.5) if status.reachable else None
     return {"running": status.reachable, "installed": list(status.models), "version": status.version,
-            "error": status.error}
+            "error": status.error, "loaded": f"Now loaded: {where.describe()}." if where else ""}
 
 
 def _devices() -> dict:

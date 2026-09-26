@@ -208,7 +208,7 @@ status = "correct"
 instruction = "departure.radar_contact"
 slots = "climb"
 text = "Up to five thousand, 2LT"
-status = "no_match"
+status = "correct"  # the altitude ATC gave, alone: as good a readback as any (a wrong one is still no match)
 
 [[case]]
 instruction = "departure.radar_contact"

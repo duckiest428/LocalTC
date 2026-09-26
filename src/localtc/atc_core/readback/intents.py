@@ -228,7 +228,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("acknowledge")  # "push back at my discretion, tail right": reading back the approval, not asking again
     elif pushing:
         add("request_pushback")
-    parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"))
+    parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"),
+                       ("to", "a", "gate"), ("to", "our", "gate"), ("to", "the", "stand"), ("to", "a", "stand"), ("to", "stand"),
+                       ("to", "the", "apron"))
     if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of")):
         add("clear_of_runway", runway=_any_runway(tokens))
     wants_stand = _has_any(tokens, ("request", "gate"), ("request", "parking"), ("request", "stand"), ("request", "ramp"),

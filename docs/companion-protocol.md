@@ -21,7 +21,7 @@ flows while the account's companion setting is on.
 
 ### `hello` (first message on either path)
 ```json
-{"protocol": 1, "version": "0.3.2", "status": {...}, "own": {...}|null, "traffic": [...],
+{"protocol": 1, "version": "0.3.5", "status": {...}, "own": {...}|null, "traffic": [...],
  "route": {...}|null, "radio": [...], "airports": [...]}
 ```
 The relay's `hello` has no `route` (the phone gets it on the local network only) and no `version`.

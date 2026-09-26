@@ -23,8 +23,7 @@
 [   337.6] ATC       Montreal Tower 119.3: DP69, runway 06L, cleared for takeoff, fly runway heading, wind calm.
 [   339.8] PILOT     119.3: Runway heading, runway six left, cleared for takeoff, delta papa six niner.
 [   339.8] READBACK  tower.takeoff correct
-[   510.8] PHASE     RUNWAY_HOLD -> TAXI_OUT (taxied away from the runway)
-[   527.6] PHASE     TAXI_OUT -> TAKEOFF (takeoff roll)
+[   527.6] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   550.4] PHASE     TAKEOFF -> DEPARTURE (airborne)
 [   558.6] ATC       Montreal Tower 119.3: DP69, contact Montreal Departure 120.42, good day.
 [   562.4] PILOT     119.3: Montreal Departure one two zero point four two, delta papa six niner.

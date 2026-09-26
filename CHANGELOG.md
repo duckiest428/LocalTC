@@ -4,6 +4,19 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
+## [0.3.5] - 2026-09-25
+
+### Fixed
+From a real Montreal to Los Angeles flight:
+- After landing, "request taxi to a gate" was taken as a request to taxi out, and ground gave a taxi to the departure airport's runway. Once landed, a taxi request is always to the gate; "taxi to a gate", "to our gate" and "to the stand" are understood too.
+- "Hold position, there's an A320 stopped ahead of you" for an A320 parked at its gate, twice. Crossing the apron to the taxi route, the aircraft's nose sweeps past the gates, and what's parked there isn't in the way. Once on the route, anything stopped on it (or dead ahead) still gets the caution.
+- A taxi readback with a correction ("06L via Charlie. Sorry, 06L at Charlie, Golf Charlie") is judged on the corrected part. "06L left" no longer puts a taxiway "L" in the route, the holding point after "at" isn't part of the route, and "a gate" isn't taxiway A.
+- "Hold short, Air Canada 779" without the runway: ATC asks for it ("read back hold short runway 06L") instead of "say again".
+- The altitude read back on its own ("6500, Air Canada 779") is a readback, when it's the altitude ATC gave.
+- Tuning the next centre's frequency as it was given (the copilot does, and so do pilots) made a readback of the handoff go to nobody: "no ATC on this frequency", and the copilot handed itself off again. The frequency ATC just gave belongs to that controller from the moment it's given.
+- No traffic calls from a controller who has already handed the flight off (Socal Approach after "contact tower"), and so no second "contact tower".
+- Lining up from a holding point well back from the runway no longer flickers the phase to "taxied away from the runway" and back.
+
 ## [0.3.2] - 2026-09-25
 
 ### Added

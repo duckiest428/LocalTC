@@ -951,6 +951,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         tuned = st.comms.tuned
         if tuned is None or tuned.controller not in ("tower", "departure", "center", "approach") or not self._traffic:
             return False
+        if st.comms.expected is not None and st.comms.expected != tuned:
+            return False  # handed off to the next controller: this one has nothing more to say (Socal after "contact tower")
         best: tuple[float, TrafficTarget] | None = None
         fields = [g for g in (self.tracker.context.airport, self.geometry(st.flight.origin), self.geometry(st.flight.destination))
                   if g is not None]
@@ -1068,8 +1070,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
             ahead = _along_path(path, geo.xy(own.lat, own.lon), geo.xy(target.lat, target.lon))
             if ahead is not None and STOPPED_AHEAD_M[0] <= ahead <= STOPPED_AHEAD_M[1]:
                 return True
-        # And whatever the route: close ahead off the nose is where the aircraft is going (Denver's pilot, off the
-        # route ground gave, heading for the E170).
+            if ahead is None:
+                # Not on the route yet: still crossing the apron to it, turning past the gates, and whatever is off
+                # the nose is parked there (Montreal's A320s at gates 83 and W4, the aircraft 80-150 m from its route).
+                return False
+        # On the route, or with none: close ahead off the nose is where the aircraft is going (Denver's pilot, on the
+        # route ground gave, heading for the E170 with its nose out over the taxilane).
         metres = _distance_nm(own.lat, own.lon, target.lat, target.lon) * 1852.0
         off = math.radians(_bearing(own.lat, own.lon, target.lat, target.lon) - own.hdg_true)
         along, across = metres * math.cos(off), abs(metres * math.sin(off))
@@ -1667,6 +1673,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         st = self.state
         intent = interp.intent
         own = st.aircraft
+        if intent == "ready_to_taxi" and st.phase is not None and P(st.phase) in (P.LANDING, P.TAXI_IN):
+            intent = "request_taxi_parking"  # landed: "request taxi" is to the gate, never back out to a runway
         if (letter := interp.values.get("atis")) and st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
             self._assign(arrival_atis=letter)  # "with information Delta" on arrival: the destination's ATIS
         if intent == "radio_check":
@@ -2998,6 +3006,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return None
         matches = [f for f in self.facilities if f.matches(mhz)]
         if not matches:
+            expected = self.state.comms.expected
+            if expected is not None and expected.matches(mhz):
+                # The frequency ATC just sent the pilot to: that controller's, even a moment before the flight is
+                # in its airspace (Chicago Center, handed off from Cleveland just short of the boundary).
+                return expected
             return self._center_here(mhz)
         if len(matches) == 1:
             return matches[0]

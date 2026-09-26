@@ -29,6 +29,7 @@ class FlightPhase(enum.StrEnum):
 
 
 TRACK_BASELINE_M = 4.0  # ground covered before the direction of travel is recomputed
+LEAVE_HOLD_M = 25.0  # farther than this from the runway than the aircraft has been since holding: it's taxiing away
 GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.PUSHBACK, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD,
                  FlightPhase.TAXI_IN}
 
@@ -101,6 +102,10 @@ class PhaseDetector:
         self._track_deg: float | None = None
         self._arrived = False  # landed and not yet pushed back again: moving off a stop is still the taxi in
         self._engine_seen = False  # the sim has reported an engine running at least once (some aircraft never do)
+        # Holding short: the runway held for, and the closest the aircraft has been to its centreline since. Lining
+        # up only gets closer; taxiing away gets farther.
+        self._hold_runway: tuple[object, object] | None = None  # (airport geometry, runway geometry)
+        self._hold_closest_m = float("inf")
 
     def reset(self) -> None:
         """Forget the phase; the next tick is classified from scratch (flight loaded, teleport)."""
@@ -108,6 +113,7 @@ class PhaseDetector:
         self._timers.clear()
         self._last = None
         self._track_from = self._track_deg = None
+        self._hold_runway, self._hold_closest_m = None, float("inf")
 
     def resume(self) -> None:
         """After a pause: restart dwell timers and forget the last position (a slew during pause isn't a teleport)."""
@@ -173,6 +179,19 @@ class PhaseDetector:
         if own.vs_fpm < -th.level_vs_fpm and not far:
             return FlightPhase.ARRIVAL
         return FlightPhase.CRUISE
+
+    def _across_hold_runway(self, own: OwnshipState, ctx: PositionContext) -> float | None:
+        """Metres from the centreline of the runway being held for (the closest seen is kept), or None unknown."""
+        if ctx.hold_short is not None and ctx.airport is not None:
+            if self._hold_runway is None or self._hold_runway[1] is not ctx.hold_short.runway:
+                self._hold_closest_m = float("inf")
+            self._hold_runway = (ctx.airport, ctx.hold_short.runway)
+        if self._hold_runway is None:
+            return None
+        geo, runway = self._hold_runway
+        across = abs(runway.along_across(geo.xy(own.lat, own.lon))[1])
+        self._hold_closest_m = min(self._hold_closest_m, across)
+        return across
 
     def _at_hold_short(self, ctx: PositionContext) -> bool:
         return ctx.hold_short_distance_m is not None and ctx.hold_short_distance_m <= self.th.hold_short_radius_m
@@ -264,10 +283,13 @@ class PhaseDetector:
         elif phase is FlightPhase.RUNWAY_HOLD:
             if self._takeoff_roll(own, ctx):
                 return FlightPhase.TAKEOFF, "takeoff roll"
+            across = self._across_hold_runway(own, ctx)
             away = (
                 own.gs_kt > th.taxi_start_kt
                 and not ctx.on_runway
                 and not self._at_hold_short(ctx)
+                # Past the hold line onto a long connector to line up (Montreal's C to 06L) is towards the runway.
+                and (across is None or across > self._hold_closest_m + LEAVE_HOLD_M)
             )
             if self._held("leave_hold", away, t, th.leave_hold_s):
                 return FlightPhase.TAXI_OUT, "taxied away from the runway"

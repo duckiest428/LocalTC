@@ -209,6 +209,12 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
         if any((value := _altitude_value(tokens, i)) is not None and _bare_flight_level(value, expected) == int(expected)
                for i in levels):
             found.append(int(expected))
+    if not found and expected is not None and not _has_any(tokens, ("expect",), ("climbing",), ("descending",), ("through",),
+                                                            ("leaving",), ("out", "of")):
+        # "Six thousand five hundred, Air Canada 779": the altitude alone, as pilots read one back. Taken only when
+        # it's the altitude ATC gave, and not a report of where the aircraft is ("out of 4,000", "climbing 6,500").
+        if any(t.kind == "number" and _altitude_value(tokens, i) == int(expected) for i, t in enumerate(tokens)):
+            found.append(int(expected))
     return found
 
 
@@ -313,11 +319,12 @@ def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ..
         # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against, every
         # taxiway name said is the route, in order, skipping the letter of a runway ("25 L") and a callsign
         # ("Delta 2543"); words in between are speech-to-text slips ("Foxtrop") that the comparison forgives.
-        skip = _runway_letters(tokens)
+        skip = _runway_letters(tokens) | _holding_points(tokens)
         route: list[str] = []
         i = 0
         while i < len(tokens):
-            if i not in skip and _is_route_token(tokens[i], names) and not _callsign_letter(tokens, i):
+            article = tokens[i].kind == "word" and tokens[i].text in ("a", "i")  # "a gate": taxiway A is "alpha"
+            if i not in skip and not article and _is_route_token(tokens[i], names) and not _callsign_letter(tokens, i):
                 taken, end = _route_at(tokens, i, names, filler=False)
                 if taken:
                     route.extend(taken)
@@ -339,13 +346,23 @@ def _callsign_letter(tokens: list[Token], i: int) -> bool:
 
 
 def _runway_letters(tokens: list[Token]) -> set[int]:
-    """Indices of the letters that are part of a runway ("runway 25 L"), not a taxiway."""
+    """Indices of the letters that are part of a runway ("runway 25 L", "06 L"), not a taxiway. After "runway",
+    or a two-digit number ("zero six left" comes out "06L"): a taxiway puts its letter first ("C6")."""
     skip = set()
     for i, token in enumerate(tokens[:-1]):
         if token.kind == "number" and token.text.isdigit() and 1 <= int(token.text) <= 36 \
-                and tokens[i + 1].text in ("l", "r", "c") and (i > 0 and tokens[i - 1].text == "runway"):
+                and tokens[i + 1].text in ("l", "r", "c") and ((i > 0 and tokens[i - 1].text == "runway") or len(token.text) == 2):
             skip.add(i + 1)
     return skip
+
+
+def _holding_points(tokens: list[Token]) -> set[int]:
+    """Indices of a holding point named after a runway ("06L at C", "runway two five right at bravo"): where
+    the aircraft stops, not a taxiway of the route."""
+    runway_end = _runway_letters(tokens) | {i for i, t in enumerate(tokens) if t.text in ("left", "right", "center")}
+    runway_end |= {i for i, t in enumerate(tokens) if t.kind == "number" and t.text.isdigit() and 1 <= int(t.text) <= 36
+                   and i > 0 and tokens[i - 1].text == "runway"}
+    return {i for i in range(2, len(tokens)) if tokens[i - 1].text == "at" and (i - 2) in runway_end}
 
 
 def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] = frozenset(), *,

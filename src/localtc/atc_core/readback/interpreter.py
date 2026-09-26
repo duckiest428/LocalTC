@@ -84,6 +84,16 @@ class Interpreter(Protocol):
     def interpret(self, text: str, pending: PendingReadback | None, context: InterpretContext) -> Interpretation: ...
 
 
+CORRECTION = {"sorry", "correction"}
+
+
+def after_correction(tokens: list) -> list:
+    """What the pilot said after correcting themselves ("via Charlie. Sorry, at Charlie, via Golf Charlie"), or
+    ``tokens`` itself when nothing, or only a word or two, follows the correction."""
+    last = max((i for i, t in enumerate(tokens) if t.kind == "word" and t.text in CORRECTION), default=None)
+    return tokens[last + 1:] if last is not None and len(tokens) - last - 1 >= 3 else tokens
+
+
 class GrammarInterpreter:
     """Deterministic: element extractors for readbacks, keyword intents for requests."""
 
@@ -103,6 +113,13 @@ class GrammarInterpreter:
         words = {t.text for t in tokens if t.kind == "word"}
         if pending is not None and not words & ASKING:
             readback = self._readback(tokens, pending, context, callsign_heard, text)
+            corrected = after_correction(tokens)
+            if corrected is not tokens and (readback is None or readback.status != "correct"):
+                # "Via Charlie. Sorry, at Charlie, via Golf Charlie": what follows the correction, if that's right.
+                # (A correction of one value, "cleared to land 14 left, correction 14 right", is already read right.)
+                again = self._readback(corrected, pending, context, callsign_heard, text)
+                if again is not None and again.status == "correct":
+                    readback = again
             if readback is not None:
                 return readback
             if pending.confirming and words & AFFIRM:
@@ -154,6 +171,10 @@ class GrammarInterpreter:
             missing.remove("hold_short")
             mismatched["hold_short"] = "onto the runway"
             present += 1
+        if "hold_short" in missing and _has_any(values_only, ("hold", "short"), ("holding", "short")):
+            # "Hold short, Air Canada 779": the instruction, without the runway it's for, which a hold short
+            # readback has to name. Incomplete ("read back hold short runway 06L"), not "say again".
+            present += 1
         if present == 0:
             return None  # not a readback of the pending instruction
         if context.strict_callsign and not callsign_heard:
@@ -199,4 +220,9 @@ class ChainInterpreter:
             return result
         if result.intent == EMERGENCY:
             return result  # handled deterministically; the fallback may add detail in Phase 2
-        return self.fallback.interpret(text, pending, context)
+        fallback = self.fallback.interpret(text, pending, context)
+        if result.kind == "readback" and fallback.intent == "say_again":
+            # A readback the grammar knows is incomplete or wrong ("hold short", no runway): what's missing is
+            # the answer, as when the language model times out; "say again" would lose it.
+            return result
+        return fallback

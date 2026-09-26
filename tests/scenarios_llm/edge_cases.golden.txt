@@ -29,7 +29,6 @@
 [   486.0] PILOT     124.675: Seattle Departure, Cessna two lima tango, passing two thousand for five thousand
 [   488.0] ATC       Seattle Departure 124.675: N172LT, Seattle Departure, radar contact, climb and maintain 5,000, proceed on course.
 [   490.0] PILOT     124.675: up to five thousand, two lima tango
-[   490.0] LLM       understand used: {"kind": "readback", "intent": "", "altitude": "5000"}
 [   490.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
 [   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.

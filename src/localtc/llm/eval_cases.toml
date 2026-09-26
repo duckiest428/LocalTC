@@ -332,6 +332,7 @@ expect = { kind = "request", intent_any = ["request_direct", "other"] }
 name = "vectors for the ILS"
 phase = "APPROACH"
 station = "Seattle Approach"
+callsign = "N172LT"
 pilot = "Approach, 2LT, request vectors for the ILS one four right"
 model = { kind = "request", intent = "request_vectors", runway = "14R", approach = "ILS" }
 expect = { kind = "request", intent = "request_vectors" }
@@ -340,6 +341,7 @@ expect = { kind = "request", intent = "request_vectors" }
 name = "a different runway for departure"
 phase = "PARKED"
 station = "Paine Ground"
+callsign = "N172LT"
 pilot = "Paine Ground, 2LT, could we get runway one six right for departure"
 model = { kind = "request", intent = "request_runway", runway = "16R" }
 expect = { kind = "request", intent = "request_runway", values = { runway = "16R" } }
@@ -348,6 +350,7 @@ expect = { kind = "request", intent = "request_runway", values = { runway = "16R
 name = "the visual approach instead"
 phase = "APPROACH"
 station = "Phoenix Approach"
+callsign = "EXP69"
 pilot = "EXP69, we'd like the visual approach runway two six"
 model = { kind = "request", intent = "request_runway", runway = "26", approach = "VISUAL" }
 expect = { kind = "request", intent = "request_runway", values = { runway = "26", approach = "VISUAL" } }
@@ -356,6 +359,7 @@ expect = { kind = "request", intent = "request_runway", values = { runway = "26"
 name = "return to the departure airport"
 phase = "DEPARTURE"
 station = "Seattle Departure"
+callsign = "N172LT"
 pilot = "Departure, 2LT, we've got a rough running engine, we'd like to return to Paine"
 model = { kind = "request", intent = "request_return" }
 expect = { kind = "request", intent_any = ["request_return", "emergency"] }
@@ -364,6 +368,7 @@ expect = { kind = "request", intent_any = ["request_return", "emergency"] }
 name = "going around"
 phase = "LANDING"
 station = "Boeing Tower"
+callsign = "N172LT"
 pilot = "Boeing Tower, two lima tango, going around"
 model = { kind = "request", intent = "going_around" }
 expect = { kind = "request", intent = "going_around" }
@@ -372,6 +377,7 @@ expect = { kind = "request", intent = "going_around" }
 name = "missed approach"
 phase = "APPROACH"
 station = "Seattle Approach"
+callsign = "N172LT"
 pilot = "2LT missed approach"
 model = { kind = "request", intent = "going_around" }
 expect = { kind = "request", intent = "going_around" }
@@ -380,6 +386,7 @@ expect = { kind = "request", intent = "going_around" }
 name = "pilot report: turbulence"
 phase = "CRUISE"
 station = "Seattle Center"
+callsign = "N172LT"
 pilot = "Center, 2LT, heads up we're getting moderate turbulence at five thousand"
 model = { kind = "request", intent = "report_conditions", conditions = "moderate turbulence", altitude = "5000" }
 expect = { kind = "request", intent = "report_conditions" }
@@ -388,6 +395,7 @@ expect = { kind = "request", intent = "report_conditions" }
 name = "pilot report: smooth ride"
 phase = "CRUISE"
 station = "Seattle Center"
+callsign = "N172LT"
 pilot = "ride's smooth up here, two lima tango"
 model = { kind = "request", intent = "report_conditions", conditions = "smooth" }
 expect = { kind = "request", intent = "report_conditions" }
@@ -396,6 +404,7 @@ expect = { kind = "request", intent = "report_conditions" }
 name = "traffic in sight"
 phase = "DEPARTURE"
 station = "Seattle Departure"
+callsign = "N172LT"
 pilot = "traffic in sight, two lima tango"
 model = { kind = "request", intent = "traffic_report" }
 expect = { kind = "request", intent = "traffic_report" }
@@ -404,6 +413,7 @@ expect = { kind = "request", intent = "traffic_report" }
 name = "looking for traffic"
 phase = "ARRIVAL"
 station = "Seattle Approach"
+callsign = "N172LT"
 pilot = "looking, 2LT"
 model = { kind = "request", intent = "traffic_report" }
 expect = { kind = "request", intent = "traffic_report" }
@@ -412,6 +422,7 @@ expect = { kind = "request", intent = "traffic_report" }
 name = "request higher without a number"
 phase = "CRUISE"
 station = "Seattle Center"
+callsign = "N172LT"
 pilot = "Center, 2LT, request higher for the ride"
 model = { kind = "request", intent = "request_altitude" }
 expect = { kind = "request", intent = "request_altitude" }
@@ -420,6 +431,7 @@ expect = { kind = "request", intent = "request_altitude" }
 name = "a thank-you is an acknowledgement"
 phase = "CRUISE"
 station = "Seattle Center"
+callsign = "N172LT"
 pilot = "thanks for the help, two lima tango"
 model = { kind = "request", intent = "acknowledge" }
 expect = { kind = "request", intent = "acknowledge" }
@@ -428,6 +440,7 @@ expect = { kind = "request", intent = "acknowledge" }
 name = "push and start, with the gate named"
 phase = "PARKED"
 station = "Seattle Ground"
+callsign = "DAL42"
 pilot = "DAL42, request pushback and start, gate S9"
 model = { kind = "request", intent = "request_pushback" }
 expect = { kind = "request", intent = "request_pushback" }

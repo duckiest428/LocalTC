@@ -35,6 +35,7 @@ from localtc.atc_core.llm.grounding import (
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
+from localtc.atc_core.phraseology import speech
 from localtc.atc_core.readback.extract import candidates as find_candidates
 from localtc.atc_core.readback.extract import (
     normalize_runway,
@@ -61,8 +62,9 @@ SYSTEM = """You read one pilot radio transmission and fill in a JSON form for an
 You are not ATC and never reply to the pilot.
 
 Rules:
-- Report only what the PILOT said in this transmission. Never copy a value from what ATC said or from \
-"Readback expected" unless the pilot said it too. If the pilot said a different number, report the pilot's number.
+- Report only what the PILOT said in this transmission. Never copy a value from what ATC said, from \
+"Cleared", "Callsign" or from "Readback expected" unless the pilot said it too. If the pilot said a different \
+number, report the pilot's number. The callsign's digits are never a value.
 - Leave a field "" (or false) when the pilot did not say it.
 - Write numbers as digits: runway "06L", frequency "120.425", squawk "5015", altitude in feet "12000" \
 (flight level 240 is "24000").
@@ -147,13 +149,16 @@ class Example:
     station: str
     pilot: str
     answer: dict[str, Any]
+    callsign: str = ""
     atc: str = ""
     expect: tuple[str, ...] = ()
+    cleared: dict[str, str] = field(default_factory=dict)  # altitude, heading, squawk, runway
+    traffic: str = ""
 
 
 def load_examples() -> list[Example]:
     data = tomllib.loads((resources.files("localtc.atc_core.llm") / "examples.toml").read_text(encoding="utf-8"))
-    return [Example(**{**e, "expect": tuple(e.get("expect", ()))}) for e in data["example"]]
+    return [Example(**{**e, "expect": tuple(e.get("expect", ())), "cleared": dict(e.get("cleared", {}))}) for e in data["example"]]
 
 
 def _label(element: str) -> str:
@@ -166,14 +171,55 @@ def _expect_line(items: list[tuple[str, str | None]]) -> str:
     return "; ".join(f"{_label(k)} {v}" if v is not None else _label(k) for k, v in items)
 
 
-def user_message(*, phase: str | None, station: str | None, atc: str | None, expect: list[tuple[str, str | None]],
-                 pilot: str) -> str:
-    lines = [f"Phase: {phase or 'unknown'}", f"Pilot is talking to: {station or 'unknown'}"]
-    if atc:
-        lines.append(f'ATC last said: "{atc}"')
-    lines.append(f"Readback expected: {_expect_line(expect)}")
-    lines.append(f'Pilot: "{pilot}"')
-    return "\n".join(lines)
+ROLES = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower", "departure": "departure",
+         "approach": "approach", "center": "center", "centre": "center"}
+CLEARED = ("altitude", "heading", "squawk", "runway")
+
+
+def role_of(station: str | None) -> str | None:
+    """ "Montreal Tower" -> "tower": what a station's name says it is."""
+    last = (station or "").split()[-1:] or [""]
+    return ROLES.get(last[0].lower())
+
+
+def user_message(*, callsign: str | None = None, phase: str | None, station: str | None, role: str | None = None,
+                 cleared: dict[str, str] | None = None, traffic: str | None = None, atc: str | None,
+                 expect: list[tuple[str, str | None]], pilot: str) -> str:
+    """The moment, as a small model reads best: the same keys in the same order every time, "none" when empty.
+    The examples are written this way too, so the real call looks like one of them."""
+    cleared = cleared or {}
+    role = role or role_of(station)
+    return "\n".join([
+        f"Callsign: {callsign or 'unknown'}",
+        f"Phase: {phase or 'unknown'}",
+        f"Station: {station or 'unknown'}" + (f" ({role})" if role else ""),
+        "Cleared: " + ("; ".join(f"{k} {cleared[k]}" for k in CLEARED if cleared.get(k)) or "none"),
+        f"Traffic called: {traffic or 'none'}",
+        f'ATC last said: "{atc}"' if atc else "ATC last said: none",
+        f"Readback expected: {_expect_line(expect)}",
+        f'Pilot: "{pilot}"',
+    ])
+
+
+def _callsign_line(context: InterpretContext) -> str | None:
+    c = context.callsign
+    if c is None:
+        return None
+    said = speech.callsign_display(c)
+    return said if said.replace(" ", "").upper() == c.ident.upper() else f"{said} ({c.ident})"
+
+
+def _cleared(context: InterpretContext) -> dict[str, str]:
+    out = {}
+    if context.cleared_altitude_ft:
+        out["altitude"] = str(context.cleared_altitude_ft)
+    if context.cleared_heading:
+        out["heading"] = f"{context.cleared_heading:03d}"
+    if context.squawk:
+        out["squawk"] = context.squawk
+    if context.runway:
+        out["runway"] = context.runway
+    return out
 
 
 def _expected_items(pending: PendingReadback) -> list[tuple[str, str | None]]:
@@ -209,19 +255,28 @@ def schema(pending: PendingReadback | None) -> dict[str, Any]:
     return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
 
 
-def build_request(text: str, pending: PendingReadback | None, context: InterpretContext,
-                  examples: list[Example]) -> LlmRequest:
-    mode = "readback" if pending is not None else "request"
+def example_messages(examples: list[Example], mode: str) -> tuple[tuple[str, str], ...]:
+    """The examples for a readback (one is expected) or a request (none is), in the file's order: the same on
+    every call of that mode, so Ollama reads them once and reuses them; only the last message is new to it."""
     messages: list[tuple[str, str]] = []
     for ex in examples:
         if ex.mode != mode:
             continue
         expect = [tuple(item.split("=", 1)) if "=" in item else (item, None) for item in ex.expect]
-        messages.append(("user", user_message(phase=ex.phase, station=ex.station, atc=ex.atc or None, expect=expect,
-                                              pilot=ex.pilot)))
+        messages.append(("user", user_message(callsign=ex.callsign or None, phase=ex.phase, station=ex.station,
+                                              cleared=ex.cleared, traffic=ex.traffic or None, atc=ex.atc or None,
+                                              expect=expect, pilot=ex.pilot)))
         messages.append(("assistant", json.dumps(ex.answer, separators=(",", ":"))))
+    return tuple(messages)
+
+
+def build_request(text: str, pending: PendingReadback | None, context: InterpretContext,
+                  examples: list[Example]) -> LlmRequest:
+    mode = "readback" if pending is not None else "request"
+    messages = list(example_messages(examples, mode))
     messages.append(("user", user_message(
-        phase=context.phase, station=context.station, atc=context.last_atc,
+        callsign=_callsign_line(context), phase=context.phase, station=context.station, role=context.station_role,
+        cleared=_cleared(context), traffic=context.traffic, atc=context.last_atc,
         expect=_expected_items(pending) if mode == "readback" else [], pilot=text,
     )))
     return LlmRequest("understand", SYSTEM, tuple(messages), schema(pending if mode == "readback" else None))

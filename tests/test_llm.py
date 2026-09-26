@@ -5,6 +5,7 @@ The same seeded edge cases run against a real model with ``localtc llm eval`` (o
 
 import json
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import msgspec
@@ -136,11 +137,14 @@ def _takeoff_pending() -> PendingReadback:
 
 
 def test_prompt_is_narrow():
-    context = InterpretContext(callsign=Callsign("DP69"), phase="RUNWAY_HOLD", station="Montreal Tower",
-                               last_atc="DP69, runway 06L, fly runway heading, cleared for takeoff.")
+    context = InterpretContext(callsign=Callsign("DP69"), phase="RUNWAY_HOLD", station="Montreal Tower", station_role="tower",
+                               last_atc="DP69, runway 06L, fly runway heading, cleared for takeoff.", squawk="5015",
+                               cleared_altitude_ft=5000, runway="06L")
     request = build_request("Clear for takeoff, DP69", _takeoff_pending(), context, load_examples())
+    # The moment in fixed keys, in a fixed order, "none" when empty: what a small model reads best.
     assert request.prompt == (
-        "Phase: RUNWAY_HOLD\nPilot is talking to: Montreal Tower\n"
+        "Callsign: DP69\nPhase: RUNWAY_HOLD\nStation: Montreal Tower (tower)\n"
+        "Cleared: altitude 5000; squawk 5015; runway 06L\nTraffic called: none\n"
         'ATC last said: "DP69, runway 06L, fly runway heading, cleared for takeoff."\n'
         "Readback expected: runway 06L; cleared for takeoff\n"
         'Pilot: "Clear for takeoff, DP69"'
@@ -148,15 +152,28 @@ def test_prompt_is_narrow():
     # Only the elements being read back, plus kind and intent; no free-text fields to roleplay in.
     assert list(request.schema["properties"]) == ["kind", "intent", "runway", "cleared_for_takeoff"]
     assert request.schema["additionalProperties"] is False
-    examples = [text for role, text in request.messages[:-1] if role == "user"]
-    assert examples and all("Readback expected: none" not in text for text in examples)  # readback examples only
     assert "never reply to the pilot" in request.system
+    examples = [text for role, text in request.messages[:-1] if role == "user"]
+    assert all(text.startswith("Callsign: ") and "\nTraffic called: " in text for text in examples)  # the same keys
 
     open_request = build_request("what's the altimeter", None, context, load_examples())
     assert list(open_request.schema["properties"]) == [
         "kind", "intent", "topic", "runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls",
         "fuel"]
-    assert all("Readback expected: none" in text for role, text in open_request.messages if role == "user")
+    assert open_request.prompt.endswith("Readback expected: none\nPilot: \"what's the altimeter\"")
+
+
+def test_calls_of_a_kind_share_the_prompt_up_to_their_own_last_message():
+    # Ollama reuses what it has already read of a prompt: two readbacks (or two requests) must not start
+    # differing before the last message, whatever the moment, or every example is read again (seconds on a CPU).
+    # Readbacks and requests keep their own examples: one mixed set made the small model worse (llm eval).
+    ex = load_examples()
+    first = InterpretContext(callsign=Callsign("DP69"), phase="RUNWAY_HOLD", station="Montreal Tower", runway="06L")
+    later = InterpretContext(callsign=Callsign("DP69"), phase="CRUISE", station="Montreal Center", cleared_altitude_ft=24000,
+                             squawk="5015", traffic="2 o'clock, 3 miles", last_atc="DP69, climb and maintain FL240.")
+    for pending in (_takeoff_pending(), None):
+        a, b = build_request("one", pending, first, ex), build_request("two", pending, later, ex)
+        assert a.system == b.system and a.messages[:-1] == b.messages[:-1] and a.prompt != b.prompt
 
 
 def test_request_key_identifies_the_question():
@@ -380,3 +397,49 @@ def test_llm_exchanges_record_the_whole_flight():
     assert {e.t for e in exchanges} < {t.t for t in transcripts}
     assert [e.t for e in exchanges] == sorted(e.t for e in exchanges)
     assert all(e.outcome == "error" for e in exchanges)  # nothing scripted: every one fell back to the grammar
+
+
+# --- what the model is shown of the moment -----------------------------------------------------------------------
+
+
+def _shown(backend: ScriptedBackend, purpose: str = "understand") -> str:
+    # The transmission's own message: a retry adds the correction after it, so the first attempt's.
+    return next(r.prompt for r in reversed(backend.requests) if r.purpose == purpose and "can't be used" not in r.prompt)
+
+
+def test_the_model_sees_this_moment_and_nothing_older():
+    backend = ScriptedBackend({q: {"kind": "question", "topic": "altimeter"} for q in ("ground, what's the altimeter",
+                                                                                       "altimeter again please")})
+    engine, own = cyul_engine(backend)
+    say(engine, own, "ground, what's the altimeter", mhz=121.0)
+    first = _shown(backend)
+    assert first.startswith("Callsign: DP69\nPhase: ") and "\nStation: Montreal Ground (ground)\n" in first
+    assert "\nTraffic called: none\n" in first and "\nReadback expected: none\n" in first
+
+    soon = msgspec.structs.replace(own, t=own.t + 60)
+    say(engine, soon, "altimeter again please", mhz=121.0)
+    assert 'ATC last said: "DP69, altimeter 30.10."' in _shown(backend)  # what ground just said
+
+    # An hour on, the same controller's last words are another moment: not shown as if just said.
+    later = msgspec.structs.replace(own, t=own.t + 3600)
+    say(engine, later, "altimeter again please", mhz=121.0)
+    assert "\nATC last said: none\n" in _shown(backend)
+
+
+def test_traffic_called_is_shown_for_a_few_minutes():
+    backend = ScriptedBackend({"looking": {"kind": "request", "intent": "traffic_report"}})
+    engine, own = cyul_engine(backend)
+    engine._last_traffic = (own.t, "2 o'clock, 3 miles, crossing left to right, 4,000 ft")
+    say(engine, own, "looking", mhz=121.0)
+    assert "\nTraffic called: 2 o'clock, 3 miles, crossing left to right, 4,000 ft\n" in _shown(backend)
+    say(engine, msgspec.structs.replace(own, t=own.t + 600), "looking", mhz=121.0)
+    assert "\nTraffic called: none\n" in _shown(backend)
+
+
+def test_the_phrasing_model_knows_who_it_speaks_for_and_the_runway_in_use():
+    backend = ScriptedBackend({"is the cafe open": {"kind": "question", "topic": "other"}},
+                              phrase={"is the cafe open": '{"reply":"unable, information not available"}'})
+    engine, own = cyul_engine(backend)
+    say(engine, own, "is the cafe open", mhz=121.0)
+    facts = _shown(backend, "phrase")
+    assert "controller Montreal Ground" in facts and "runway in use " in facts

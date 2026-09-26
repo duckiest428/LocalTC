@@ -158,9 +158,10 @@ def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
              extra=CONSOLE)
     if where is not None and status is not None:
         on_disk = status.sizes.get(backend.model) or status.sizes.get(f"{backend.model}:latest") or 0
-        if on_disk and where.size > 1.6 * on_disk:
-            log.warning("Ollama holds %.1f GB for this %.1f GB model (context %d): more than one context's worth, likely "
-                        "OLLAMA_NUM_PARALLEL above 1. Setting OLLAMA_NUM_PARALLEL=1 for Ollama frees that memory.",
+        # LocalTC keeps two prompts read (understanding and phrasing): two contexts. More is memory for nothing.
+        if on_disk and where.size > 2.6 * on_disk:
+            log.warning("Ollama holds %.1f GB for this %.1f GB model (context %d): room for more than the two contexts "
+                        "LocalTC uses. Setting OLLAMA_NUM_PARALLEL=2 for Ollama frees the rest.",
                         where.size / 1e9, on_disk / 1e9, where.context)
     return seconds
 

@@ -134,6 +134,10 @@ LONG_STATEMENT_WORDS = 8  # a call this long that nothing understood is the pilo
 CHATTER_QUIET_S = 12.0  # the frequency quiet this long before somebody else talks
 CHATTER_TURN_S = 1.5  # between the controller's call and the other aircraft's readback
 RANGE_TOLD_S = 60.0  # "out of range" said no more often than this per station
+# What the language model is shown of the recent past: ATC's last line to this flight on this frequency, and the
+# traffic ATC called, only this recent. Older is another moment (a Center sector revisited an hour later).
+MODEL_LAST_ATC_S = 300.0
+MODEL_TRAFFIC_S = 180.0
 CHECKIN_ACK_S = 120.0  # an altitude report this soon after the controller spoke is only acknowledging it
 HANDOFF_ACK_WORDS = {"roger", "wilco", "switching", "over", "good", "day", "night", "bye", "goodbye", "cheers", "thanks",
                      "later", "long", "contact", "contacting"}  # "so long", "good day", "over to Toronto"
@@ -298,6 +302,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._traffic: dict[int, TrafficTarget] = {}
         self._traffic_nm: dict[int, float] = {}  # distance at the previous snapshot, to see who's closing
         self._traffic_called: dict[int, float] = {}  # object id -> when ATC last called it
+        self._last_traffic: tuple[float, str] | None = None  # (when, "2 o'clock, 3 miles, ...") of the last call
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
@@ -989,6 +994,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if kind:
             display, spoken = display + f", {kind}", spoken + f", {speech.digits(kind) if any(c.isdigit() for c in kind) else kind}"
         self._schedule(t, "common.traffic", {"message": Phrase(display, spoken)}, tuned, delay=False, expects_readback=False)
+        self._last_traffic = (t, display)
         return True
 
     def _on_a_final(self, target: TrafficTarget) -> bool:
@@ -1405,14 +1411,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
             # The pilot read it back again (maybe didn't hear "readback correct"): nothing to add.
             st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
             return []
-        last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller), None)
         if pending is not None and (acked := self._handoff_acknowledged(ev.text, pending, t)) is not None:
             st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, acked))
             return self._on_readback(acked, facility, t)
-        interp = self.interpreter.interpret(ev.text, pending, InterpretContext(
-            callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
-            station=facility.station, last_atc=last_atc, confidence=ev.confidence, patient=self._patient,
-        ))
+        interp = self.interpreter.interpret(ev.text, pending, self._interpret_context(facility, t, ev.confidence))
         if interp.kind == "unknown" and (topic := question_topic(ev.text)) is not None:
             # Without the language model: "request frequency for tower" is still clearly a question.
             interp = replace(interp, kind="request", intent="question", values={"topic": topic}, needs_fallback=False)
@@ -2206,7 +2208,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         callsign = self._callsign()
         callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
         message, exchanges = self.phraser.reply(
-            pilot=interp.text, decision=decision, facts=self._facts(), callsigns=callsigns, t=t,
+            pilot=interp.text, decision=decision, facts=self._facts(facility), callsigns=callsigns, t=t,
             trigger="question" if decision == "answer" else "unsupported_request",
         )
         if message is None:
@@ -2273,10 +2275,26 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return plan["arrival_alt"]
         return max(assigned - 2000, 3000)
 
-    def _facts(self) -> dict[str, str]:
+    def _interpret_context(self, facility: Facility, t: float, confidence: float | None = None) -> InterpretContext:
+        """The moment, as the language model is shown it and as its answer is checked: one snapshot of the
+        engine's own state, made fresh for each transmission. The phrasing model's facts come from it too."""
+        st, a = self.state, self.state.assignments
+        last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller
+                         and t - e.t <= MODEL_LAST_ATC_S), None)
+        traffic = self._last_traffic[1] if self._last_traffic and t - self._last_traffic[0] <= MODEL_TRAFFIC_S else None
+        return InterpretContext(
+            callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
+            station=facility.station, station_role=facility.controller, last_atc=last_atc, confidence=confidence,
+            patient=self._patient, cleared_altitude_ft=a.altitude_ft, cleared_heading=a.heading, squawk=a.squawk,
+            runway=self._runway_in_use(st.aircraft), traffic=traffic,
+        )
+
+    def _facts(self, facility: Facility | None = None) -> dict[str, str]:
         """What the phrasing model may use, in display form. Nothing here is an instruction to fly."""
         st, own = self.state, self.state.aircraft
         facts: dict[str, str] = {}
+        if facility is not None:
+            facts["controller"] = facility.station
         dest = self.geometry(st.flight.destination)
         if dest is not None:
             facts["destination"] = speech.airport_name(dest.airport.name, dest.airport.icao)
@@ -2284,10 +2302,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
             facts["wind"] = speech.wind_display(self._wind(own))
             if 25 < own.altimeter_setting_inhg < 33:
                 facts["altimeter"] = f"{own.altimeter_setting_inhg:.2f}"
-        if st.assignments.departure_runway:
-            facts["departure runway"] = st.assignments.departure_runway
-        if st.assignments.arrival_runway:
-            facts["arrival runway"] = st.assignments.arrival_runway
+        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        if (runway := self._runway_in_use(own)) is not None:  # the same runway the template answers give
+            facts["runway in use"] = runway
+        if (info := self.current_atis(st.flight.destination if arriving else st.flight.origin)) is not None:
+            facts["ATIS"] = f"information {info.letter}"
         if st.phase:
             facts["phase"] = st.phase.lower().replace("_", " ")
         return facts

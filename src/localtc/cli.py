@@ -324,7 +324,7 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
              ("first phrasing", phrase_request("say again the frequency", "answer", {"callsign": "November 1 2 3"})),
              ("warm: understanding", build_request("request flight level 360", None, InterpretContext(phase="CRUISE"), examples)),
              ("warm: phrasing", phrase_request("can we get direct", "decline", {"callsign": "November 1 2 3"}))]
-    warm = []
+    warm, prompt_s = [], []
     for label, request in calls:
         reply = backend.complete(request, timeout_s=300)
         st = backend.last_stats
@@ -336,16 +336,24 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
               f"answer {st.get('tokens', 0)} tokens in {st.get('gen_ms', 0) / 1000:4.1f} s)")
         if label.startswith("warm"):
             warm.append(reply.latency_ms / 1000)
+        prompt_s.append(st.get("prompt_ms", 0) / 1000)
     where = backend.placement()
     print(f"Now: {where.describe() if where else 'not loaded (odd: Ollama unloaded it straight away)'}"
           + (f", context {where.context}" if where and where.context else ""))
     on_disk = status.sizes.get(cfg.llm.model) or status.sizes.get(f"{cfg.llm.model}:latest") or 0
-    if where and on_disk and where.size > 1.6 * on_disk:
-        print(f"  Ollama holds {where.size / 1e9:.1f} GB for a {on_disk / 1e9:.1f} GB model: more than one context, likely "
-              "OLLAMA_NUM_PARALLEL above 1. Set the environment variable OLLAMA_NUM_PARALLEL=1 and restart Ollama.")
+    if where and on_disk and where.size > 2.6 * on_disk:
+        print(f"  Ollama holds {where.size / 1e9:.1f} GB for a {on_disk / 1e9:.1f} GB model: room for several contexts "
+              "(OLLAMA_NUM_PARALLEL above 2). Two is all LocalTC uses: OLLAMA_NUM_PARALLEL=2 frees the rest.")
     if where and 0 < where.on_gpu < 0.99:
         print("  The model is split between the graphics card and the CPU: there wasn't room for it all. That's the slowest"
               " way to run it. Try --cpu (and [llm] cpu_only = true), or a smaller model.")
+    # The understanding call after the first phrasing call: still read from Ollama's cache, or read again?
+    after_phrase, before_phrase = prompt_s[3], prompt_s[1]
+    if after_phrase > max(1.0, 5 * before_phrase):
+        print(f"  Phrasing pushed the understanding prompt out of Ollama's cache: it was read again ({after_phrase:.1f} s). "
+              "Ollama is keeping one context: set the environment variable OLLAMA_NUM_PARALLEL=2 and restart Ollama.")
+    else:
+        print("  Ollama keeps both prompts (understanding and phrasing) read: switching between them costs nothing.")
     limit = cfg.llm.timeout_s * (2 if cfg.llm.cpu_only else 1)
     slowest = max(warm) if warm else 0
     print(f"Timeout per call in a flight: {limit:.0f} s{' (doubled on the CPU)' if cfg.llm.cpu_only else ''}. "
@@ -367,6 +375,9 @@ def _cmd_llm_eval(args: argparse.Namespace) -> int:
         print(f"Ollama isn't running at {cfg.llm.base_url}. Start the Ollama app and try again.")
         return 1
     cases = load_cases(args.cases)
+    from localtc.app import warm_up
+
+    warm_up(backend)  # a flight starts warm: the first case shouldn't measure the load
     print(f"Running {len(cases)} cases against {cfg.llm.model} (timeout {cfg.llm.timeout_s} s per call) ...")
     interpreter = LlmInterpreter(backend, mode="primary", timeout_s=cfg.llm.timeout_s, budget_s=cfg.llm.budget_s,
                                  max_attempts=cfg.llm.max_attempts)

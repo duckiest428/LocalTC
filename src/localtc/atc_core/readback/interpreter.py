@@ -52,6 +52,14 @@ class InterpretContext:
     last_atc: str | None = None  # what that controller said last
     confidence: float | None = None  # speech-to-text confidence (None: typed)
     patient: bool = False  # ATC said "stand by": the model may take its time (``LlmInterpreter.patience_s``)
+    # The rest of the moment, for the language model (the grammar doesn't need it): the controller's role, what
+    # this flight is cleared for, the runway in use, and the traffic ATC called in the last few minutes.
+    station_role: str | None = None  # clearance, ground, tower, departure, approach, center
+    cleared_altitude_ft: int | None = None
+    cleared_heading: int | None = None
+    squawk: str | None = None
+    runway: str | None = None
+    traffic: str | None = None
 
 
 @dataclass(frozen=True)

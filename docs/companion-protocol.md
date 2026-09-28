@@ -21,10 +21,20 @@ flows while the account's companion setting is on.
 
 ### `hello` (first message on either path)
 ```json
-{"protocol": 1, "version": "0.3.5", "status": {...}, "own": {...}|null, "traffic": [...],
- "route": {...}|null, "radio": [...], "airports": [...]}
+{"protocol": 1, "version": "0.4.0", "status": {...}, "own": {...}|null, "traffic": [...],
+ "route": {...}|null, "radio": [...], "airports": [...], "trail": [[33.1, -115.2], ...]}
 ```
 The relay's `hello` has no `route` (the phone gets it on the local network only) and no `version`.
+`trail` is the path flown so far, oldest first (older desktops leave it out).
+
+### `trail` (over the relay: when someone starts watching mid-flight)
+```json
+[[32.7336, -117.1897], [32.7401, -117.2012], ...]
+```
+The path flown this flight, `[lat, lon]` pairs rounded to 4 decimals, a point every ~200 m of movement (at most
+1,500 from the desktop; a long flight's are thinned evenly, so the whole route stays). It replaces any path
+drawn so far; the `own` positions that follow carry on from its end. The relay keeps it in memory, adds the
+positions it passes on, and hands it to every new viewer in `hello`; it's dropped when the flight ends.
 
 ### `status`
 ```json

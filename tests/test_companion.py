@@ -67,6 +67,31 @@ def test_a_phone_watching_remotely_gets_the_backlog_then_the_stream():
     assert relay.sent[-1] == ("radio", [{"kind": "atc", "text": "three"}])
 
 
+def test_a_map_opened_mid_flight_gets_the_path_flown_so_far():
+    hub, relay = CompanionHub(), Relay()
+    hub.remote = relay
+    hub.set_status({"active": True})
+    for i in range(50):  # 50 positions about 1 km apart, all before anyone watches
+        hub.set_own({"lat": 33.0 + i * 0.01, "lon": -117.0})
+    hub.set_own({"lat": 33.49001, "lon": -117.0})  # hardly moved: not a new point
+    assert len(hub.trail) == 50 and hub.snapshot()["trail"] == hub.trail  # the local stream's hello has it
+    hub.watching(1)
+    assert ("frame", {"trail": hub.trail}) in relay.sent  # and the relay gets it for the Flight Tracker
+    hub.set_status({"active": False})
+    hub.set_status({"active": True})
+    assert hub.trail == []  # the next flight starts clean
+
+
+def test_a_long_flight_keeps_its_whole_shape():
+    from localtc.ui.companion import TRAIL_KEEP
+
+    hub = CompanionHub()
+    hub.set_status({"active": True})
+    for i in range(TRAIL_KEEP * 3):
+        hub.set_own({"lat": i * 0.003, "lon": 0.0})
+    assert len(hub.trail) <= TRAIL_KEEP and hub.trail[0] == [0.0, 0.0] and hub.trail[-1][0] == round((TRAIL_KEEP * 3 - 1) * 0.003, 4)
+
+
 def test_the_remote_map_can_be_turned_off():
     hub, relay = CompanionHub(), Relay()
     hub.remote, hub.remote_map = relay, False

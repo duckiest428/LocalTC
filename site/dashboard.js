@@ -475,12 +475,14 @@ const Tracker = {
     if (type === "hello") {
       this.statusIs(data.status || { active: false });
       this.clearMap();
+      if (data.trail) this.setTrail(data.trail);
       if (data.own) this.own(data.own);
       if (data.traffic) this.traffic(data.traffic);
       $("#tr-radio").innerHTML = "";
       for (const line of data.radio || []) this.radio(line);
     } else if (type === "status") this.statusIs(data);
     else if (type === "own") this.own(data);
+    else if (type === "trail") this.setTrail(data);
     else if (type === "traffic") this.traffic(data);
     else if (type === "radio") this.radio(data);
   },
@@ -542,6 +544,16 @@ const Tracker = {
     if (this.plane) { this.plane.remove(); this.plane = null; }
     for (const m of this.tfc.values()) m.remove();
     this.tfc.clear();
+  },
+  // The path flown before this page opened (the app sends it): the live positions carry on from its end.
+  setTrail(points) {
+    if (!Array.isArray(points) || !points.length) return;
+    this.ensureMap();
+    // It runs up to now: it replaces what this page drew itself, ending where the aircraft is.
+    this.trailPts = points.map((p) => [p[0], p[1]]);
+    if (this.plane) { const at = this.plane.getLatLng(); this.trailPts.push([at.lat, at.lng]); }
+    this.trail.setLatLngs(this.trailPts);
+    if (!this.plane && this.follow) this.map.fitBounds(this.trail.getBounds(), { padding: [30, 30], maxZoom: 11 });
   },
   icon(hdg, cls, size) {
     const svg = `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;

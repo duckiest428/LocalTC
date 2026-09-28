@@ -74,6 +74,33 @@ describe("the relay's map and radio log", () => {
     socket.close();
   });
 
+  it("hands a tracker opened mid-flight the path flown so far", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    const open = async () => {
+      const ws = await call("GET", "/v1/live/ws", undefined, { ...bearer(token), Upgrade: "websocket" });
+      const socket = ws.webSocket!;
+      const got: any[] = [];
+      socket.accept();
+      socket.addEventListener("message", (e) => got.push(JSON.parse(e.data as string)));
+      return { socket, got };
+    };
+    const first = await open();
+    const trail = [[33.0, -117.0], [33.1, -116.9], ["x", 1], [95, 0], [33.2, -116.8]];
+    await call("PUT", "/v1/live/frame", { trail }, bearer(token));
+    await call("PUT", "/v1/live/frame", { own: { ...own, lat: 33.3, lon: -116.7 } }, bearer(token));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(first.got.find((m) => m.type === "trail").data).toEqual([[33.0, -117.0], [33.1, -116.9], [33.2, -116.8]]);
+    const second = await open();  // a second viewer: the path, and the positions passed on since
+    await new Promise((r) => setTimeout(r, 50));
+    expect(second.got[0].data.trail).toEqual([[33.0, -117.0], [33.1, -116.9], [33.2, -116.8], [33.3, -116.7]]);
+    await call("PUT", "/v1/live", { active: false }, bearer(token));
+    const third = await open();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(third.got[0].data.trail).toEqual([]);  // the flight is over: gone
+    for (const v of [first, second, third]) v.socket.close();
+  });
+
   it("passes the flight's airports on, whitelisted", async () => {
     const { token } = await signIn();
     const ws = await call("GET", "/v1/live/ws", undefined, { ...bearer(token), Upgrade: "websocket" });

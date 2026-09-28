@@ -197,6 +197,8 @@ public struct Hello: Codable, Sendable, Equatable {
     public var route: Route?
     public var radio: [RadioLine]?
     public var airports: [FlightAirport]?
+    /// The path flown so far, [[lat, lon], ...]: a map opened mid-flight draws it. Older desktops leave it out.
+    public var trail: [[Double]]?
 }
 
 public enum LiveMessage: Sendable, Equatable {
@@ -209,6 +211,7 @@ public enum LiveMessage: Sendable, Equatable {
     case radioBacklog([RadioLine])
     case alert(FlightAlert)
     case airports([FlightAirport])
+    case trail([[Double]])
 
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -231,6 +234,7 @@ public enum LiveMessage: Sendable, Equatable {
             return .radioBacklog(try d.decode([RadioLine].self, from: data))
         case "alert": return .alert(try d.decode(FlightAlert.self, from: data))
         case "airports": return .airports(try d.decode([FlightAirport].self, from: data))
+        case "trail": return .trail(try d.decode([[Double]].self, from: data))
         default: return nil
         }
     }

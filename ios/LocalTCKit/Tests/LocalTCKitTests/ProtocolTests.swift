@@ -86,4 +86,15 @@ struct FlightStoreTests {
         #expect(store.radio.count == FlightStore.radioKeep)
         #expect(store.radio.first?.text == "50")
     }
+
+    @Test("A map opened mid-flight draws the path flown so far")
+    func trail() throws {
+        let store = FlightStore()
+        let message = try LiveMessage.decodeEnvelope(#"{"type":"trail","data":[[33.0,-117.0],[33.1,-116.9]]}"#)
+        store.apply(try #require(message))
+        #expect(store.trail == [.init(lat: 33.0, lon: -117.0), .init(lat: 33.1, lon: -116.9)])
+        let hello = try LiveMessage.decodeEnvelope(#"{"type":"hello","data":{"trail":[[40.0,-100.0]]}}"#)
+        store.apply(try #require(hello))
+        #expect(store.trail == [.init(lat: 40.0, lon: -100.0)])
+    }
 }

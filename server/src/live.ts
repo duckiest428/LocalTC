@@ -24,6 +24,8 @@ const CONNECT_MS = 24 * 3600_000; // local-network details older than this are d
 const MAX_STATUS = 8 * 1024;
 const MAX_FRAME = 64 * 1024;
 const RADIO_KEEP = 50;
+const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight
+const TRAIL_STEP_DEG = 0.002; // a new point every ~200 m of movement
 const MAX_AIRPORTS = 32 * 1024;
 
 type Station = { station?: string; mhz?: number } | null;
@@ -70,10 +72,20 @@ export function cleanStatus(raw: Record<string, unknown>): Status {
   return out as unknown as Status;
 }
 
-export function cleanFrame(raw: Record<string, unknown>): { own?: Record<string, unknown>; traffic?: Record<string, unknown>[] } {
-  const out: { own?: Record<string, unknown>; traffic?: Record<string, unknown>[] } = {};
+export type Point = [number, number];
+export interface Frame { own?: Record<string, unknown>; traffic?: Record<string, unknown>[]; trail?: Point[] }
+
+const isLatLon = (p: unknown): p is Point => Array.isArray(p) && p.length === 2
+  && typeof p[0] === "number" && typeof p[1] === "number" && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
+
+export function cleanFrame(raw: Record<string, unknown>): Frame {
+  const out: Frame = {};
   if (raw.own) out.own = pick(raw.own, OWN_KEYS);
   if (Array.isArray(raw.traffic)) out.traffic = raw.traffic.slice(0, 300).map((t) => pick(t, TRAFFIC_KEYS));
+  // The path flown so far, which the app sends when someone starts watching mid-flight: [[lat, lon], ...].
+  if (Array.isArray(raw.trail)) {
+    out.trail = raw.trail.slice(-TRAIL_KEEP).filter(isLatLon).map(([lat, lon]) => [Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4]);
+  }
   if (JSON.stringify(out).length > MAX_FRAME) throw new HttpError(413, "Too much traffic at once.");
   return out;
 }
@@ -150,6 +162,7 @@ export class LiveRoom extends DurableObject<Env> {
   private traffic: Record<string, unknown>[] = [];
   private radio: Record<string, unknown>[] = [];
   private airports: Record<string, unknown>[] = [];
+  private trail: Point[] = [];
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -158,7 +171,7 @@ export class LiveRoom extends DurableObject<Env> {
       case "POST /wipe": {
         for (const ws of this.ctx.getWebSockets()) ws.close(1000, "account deleted");
         await this.ctx.storage.deleteAll();
-        this.own = null; this.traffic = []; this.radio = []; this.airports = [];
+        this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = [];
         return json({ ok: true });
       }
       case "GET /ws": {
@@ -166,7 +179,7 @@ export class LiveRoom extends DurableObject<Env> {
         const pair = new WebSocketPair();
         this.ctx.acceptWebSocket(pair[1]);
         pair[1].send(JSON.stringify({ type: "hello", data: { protocol: 1, status: await this.current(), own: this.own,
-          traffic: this.traffic, radio: this.radio, airports: this.airports } }));
+          traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail } }));
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       case "PUT /status": {
@@ -174,15 +187,16 @@ export class LiveRoom extends DurableObject<Env> {
         const before = await this.current();
         const after = { ...status, updated_at: now() };
         await this.ctx.storage.put("status", after);
-        if (!after.active) { this.own = null; this.traffic = []; this.radio = []; this.airports = []; }
+        if (!after.active) { this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; }
         this.broadcast("status", after);
         const push = pushFor(before.active ? before : null, after);
         if (push) this.ctx.waitUntil(notify(this.env, userId, push));
         return json({ ok: true, watchers: watchers() });
       }
       case "PUT /frame": {
-        const frame = (await request.json()) as ReturnType<typeof cleanFrame>;
-        if (frame.own) { this.own = frame.own; this.broadcast("own", frame.own); }
+        const frame = (await request.json()) as Frame;
+        if (frame.trail) { this.trail = frame.trail; this.broadcast("trail", this.trail); }
+        if (frame.own) { this.own = frame.own; this.extendTrail(frame.own); this.broadcast("own", frame.own); }
         if (frame.traffic) { this.traffic = frame.traffic; this.broadcast("traffic", frame.traffic); }
         return json({ ok: true, watchers: watchers() });
       }
@@ -213,11 +227,22 @@ export class LiveRoom extends DurableObject<Env> {
         return json({ lan: c.lan, key: c.key });
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
-        return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, stored: [...(await this.ctx.storage.list()).keys()] });
+        return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail,
+          stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
     }
     throw new HttpError(404, "Not found.");
+  }
+
+  /** The path grows with the positions passed on, so a second viewer gets it all in its hello. */
+  private extendTrail(own: Record<string, unknown>): void {
+    const { lat, lon } = own;
+    if (typeof lat !== "number" || typeof lon !== "number") return;
+    const last = this.trail[this.trail.length - 1];
+    if (last && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < TRAIL_STEP_DEG) return;
+    this.trail.push([Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4]);
+    if (this.trail.length > TRAIL_KEEP) this.trail = this.trail.slice(-TRAIL_KEEP);
   }
 
   private broadcast(type: string, data: unknown): void {

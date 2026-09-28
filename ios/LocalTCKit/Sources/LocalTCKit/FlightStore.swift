@@ -30,6 +30,7 @@ public final class FlightStore {
         switch message {
         case .hello(let hello):
             if let s = hello.status { status = s }
+            if let t = hello.trail { setTrail(t) }
             if let o = hello.own { setOwn(o) }
             if let t = hello.traffic { setTraffic(t) }
             if let r = hello.route { route = r }
@@ -48,6 +49,9 @@ public final class FlightStore {
             append(lines.filter { !known.contains("\($0.t ?? -1)|\($0.text ?? "")") })
         case .alert(let a): alerts.append(a)
         case .airports(let a): airports = a
+        case .trail(let t):
+            setTrail(t)
+            if let o = own { setOwn(o) }
         }
     }
 
@@ -76,6 +80,13 @@ public final class FlightStore {
             trail.append(point)
             if trail.count > Self.trailKeep { trail.removeFirst(trail.count - Self.trailKeep) }
         }
+    }
+
+    /// The path flown before this phone started watching: it replaces the one drawn so far (it runs up to now).
+    private func setTrail(_ points: [[Double]]) {
+        let path = points.compactMap { $0.count == 2 ? Coordinate(lat: $0[0], lon: $0[1]) : nil }
+        guard !path.isEmpty else { return }
+        trail = Array(path.suffix(Self.trailKeep))
     }
 
     private func setTraffic(_ list: [TrafficTarget]) {

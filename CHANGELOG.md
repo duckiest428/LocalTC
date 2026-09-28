@@ -14,6 +14,9 @@ a new minor version adds features, a patch fixes them.
 - **Readbacks with a number one slip off** (a digit wrong, two swapped, one dropped or added): when speech-to-text wasn't sure of what it heard, ATC asks "confirm squawk 5015" instead of "negative"; heard clearly, it's "negative" with the right value, as before.
 - A request or question along with a readback is answered too: the readback is taken, then the request.
 
+- **The Flight Tracker shows the path flown before it was opened**: the app keeps the flight's path and hands it over when the website (or the companion app) starts watching mid-flight; the relay keeps it in memory only, like the position.
+- **The installer carries only what LocalTC runs**: the release is an allowlist (the app, its settings and its setup), so the website, the server, the iOS app, the tests and anything new in the repository stay out of it.
+
 ### Fixed
 - Smoke or fire on board is an emergency whatever words come with it.
 - A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.

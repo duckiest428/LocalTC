@@ -134,3 +134,21 @@ def test_release_notes_come_from_the_changelog():
     assert update.changelog_section(text, "1.1.0") == "- new"
     assert update.changelog_section(text, "1.0.0") == "- old"
     assert update.changelog_section(text, "2.0.0") == ""
+
+
+def test_a_release_carries_only_what_an_install_runs():
+    """The release zip (``git archive``) is what the installer and the updater put on the pilot's PC: LocalTC
+    and its setup, not the website, the server, the iOS app or the tests. ``.gitattributes`` is an allowlist."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    entries = sorted({p.split("/")[0] for p in subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.splitlines()} | {
+        ".claude", "wrangler.jsonc", "something-new"})
+    out = subprocess.run(["git", "check-attr", "export-ignore", "--", *entries], cwd=ROOT, capture_output=True,
+                         text=True, check=True).stdout
+    shipped = {line.split(":")[0] for line in out.splitlines() if not line.endswith(": set")}
+    assert shipped == {"src", "config", "install", "pyproject.toml", "LICENSE", "README.md", "CHANGELOG.md",
+                       "Install LocalTC.cmd"}

@@ -38,6 +38,10 @@ SERVICE = "_localtc._tcp.local."
 RADIO_BACKLOG = 50
 REMOTE_OWN_EVERY_S = 1.0
 REMOTE_TRAFFIC_EVERY_S = 5.0
+# The path flown so far, for a map opened mid-flight: a point every ~200 m of movement (0.002 degrees), rounded to
+# about 10 m. Past TRAIL_KEEP points every other one goes, so a long flight keeps its whole shape.
+TRAIL_STEP_DEG = 0.002
+TRAIL_KEEP = 1500
 STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
                "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules")
 
@@ -106,6 +110,7 @@ class CompanionHub:
         self.own: dict | None = None
         self.traffic: list[dict] = []
         self.route: dict | None = None
+        self.trail: list[list[float]] = []  # [[lat, lon], ...], oldest first
         self.airports: list[dict] = []  # origin and destination: frequencies, runways, ATIS (published data)
         self.radio: deque[dict] = deque(maxlen=RADIO_BACKLOG)
         self.remote: Callable[[str, Any], None] | None = None  # to the relay; set while signed in
@@ -118,11 +123,14 @@ class CompanionHub:
     # --- what the app publishes ----------------------------------------------------------------------------
 
     def set_status(self, status: dict) -> None:
+        if status.get("active") and not self.status.get("active"):
+            self.trail = []  # a new flight: its own path
         self.status = {k: status.get(k) for k in STATUS_KEYS if k in status}
         self._local("status", self.status)
 
     def set_own(self, own: dict) -> None:
         self.own = own
+        self._extend_trail(own)
         self._local("own", own)
         if self._remote_ok() and time.monotonic() - self._sent_own >= REMOTE_OWN_EVERY_S:
             self._sent_own = time.monotonic()
@@ -173,10 +181,25 @@ class CompanionHub:
                 self._send("airports", self.airports)
             if self.own is not None:
                 self._send("frame", {"own": self.own, "traffic": self.traffic})
+            if self.trail:
+                self._send("frame", {"trail": self.trail})  # the path so far, for a map opened mid-flight
 
     def snapshot(self) -> dict:
         return {"protocol": PROTOCOL, "version": __version__, "status": self.status, "own": self.own,
-                "traffic": self.traffic, "route": self.route, "radio": list(self.radio), "airports": self.airports}
+                "traffic": self.traffic, "route": self.route, "radio": list(self.radio), "airports": self.airports,
+                "trail": self.trail}
+
+    def _extend_trail(self, own: dict) -> None:
+        lat, lon = own.get("lat"), own.get("lon")
+        if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            return
+        if self.trail:
+            last = self.trail[-1]
+            if abs(last[0] - lat) + abs(last[1] - lon) < TRAIL_STEP_DEG:
+                return
+        self.trail.append([round(lat, 4), round(lon, 4)])
+        if len(self.trail) > TRAIL_KEEP:
+            self.trail = self.trail[:-1:2] + self.trail[-1:]  # half as dense, the whole flight still there
 
     def _local(self, kind: str, data: Any) -> None:
         self.stream.publish(kind, data)

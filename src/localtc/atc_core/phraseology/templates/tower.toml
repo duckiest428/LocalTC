@@ -7,12 +7,28 @@ text = ["{callsign}, runway {runway}, fly runway heading, cleared for takeoff.",
 readback = { required = ["runway", "cleared_for_takeoff"] }
 pilot_readback = "Runway heading, runway {runway}, cleared for takeoff, {callsign_short}."
 
+# The takeoff clearance names what to fly first (procedures.py). On an RNAV SID starting at the runway, the
+# US tower gives the first fix; with a SID elsewhere, the SID is the instruction and nothing more is said.
+[[template]]
+id = "tower.takeoff_rnav"
+controller = "tower"
+text = ["{callsign}, RNAV to {fix}, runway {runway}, cleared for takeoff."]
+readback = { required = ["runway", "cleared_for_takeoff"] }
+pilot_readback = "RNAV to {fix}, runway {runway}, cleared for takeoff, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_sid"
+controller = "tower"
+text = ["{callsign}, runway {runway}, cleared for takeoff."]
+readback = { required = ["runway", "cleared_for_takeoff"] }
+pilot_readback = "Runway {runway}, cleared for takeoff, {callsign_short}."
+
 [[template]]
 id = "tower.luaw"
 controller = "tower"
 text = ["{callsign}, runway {runway}, line up and wait.",
         "{callsign}, line up and wait runway {runway}."]
-readback = { required = ["runway", "line_up_and_wait"] }
+readback = { required = ["line_up_and_wait"], optional = ["runway"] }
 pilot_readback = "Runway {runway}, line up and wait, {callsign_short}."
 
 [[template]]

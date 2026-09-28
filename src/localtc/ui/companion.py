@@ -47,8 +47,8 @@ CLEARANCE_IDS = {
     "clearance.ifr", "clearance.ifr_at_cruise", "clearance.ifr_sid", "clearance.ifr_sid_at_cruise",
     "ground.taxi_out", "ground.taxi_out_at", "ground.taxi_out_hold_short", "ground.taxi_in", "ground.taxi_to_gate",
     "ground.cross_runway", "ground.pushback", "ground.pushback_straight", "ground.hold_position",
-    "tower.takeoff", "tower.luaw", "tower.hold_short_traffic", "tower.land", "tower.go_around",
-    "tower.go_around_traffic", "approach.cleared", "approach.missed", "approach.vectors", "approach.descend",
+    "tower.takeoff", "tower.takeoff_rnav", "tower.takeoff_sid", "tower.luaw", "tower.hold_short_traffic", "tower.land", "tower.go_around",
+    "tower.go_around_traffic", "approach.cleared", "approach.cleared_star", "approach.missed", "approach.vectors", "approach.descend",
     "center.descend", "center.descend_pd", "center.descend_via", "center.radar_contact", "departure.radar_contact",
     "common.climb", "common.descend", "common.direct",
 }

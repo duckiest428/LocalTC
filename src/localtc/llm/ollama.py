@@ -27,6 +27,9 @@ log = logging.getLogger(__name__)
 COLD_LOAD_S = 1.0  # a call that spent longer than this loading the model found it unloaded
 
 
+CPU_ONLY_SLIVER = 0.1  # less than this share of the model on the graphics card is a model on the CPU
+
+
 @dataclass(frozen=True)
 class Placement:
     """Where Ollama has the model loaded (/api/ps)."""
@@ -39,9 +42,15 @@ class Placement:
     def on_gpu(self) -> float:
         return self.size_vram / self.size if self.size else 0.0
 
+    @property
+    def gpu(self) -> bool:
+        """Loaded on the graphics card. On the CPU only (num_gpu 0), Ollama still reports a sliver of video memory
+        (0.1 GB of a 2.6 GB model on Windows): that isn't the model on the card."""
+        return self.on_gpu >= CPU_ONLY_SLIVER
+
     def describe(self) -> str:
         gb = lambda b: f"{b / 1e9:.1f} GB"
-        if self.size_vram <= 0:
+        if not self.gpu:
             return f"{gb(self.size)}, on the CPU"
         if self.on_gpu >= 0.99:
             return f"{gb(self.size)}, all on the graphics card"

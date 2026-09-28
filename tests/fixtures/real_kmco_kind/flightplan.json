@@ -1,0 +1,301 @@
+{
+ "source": "simbrief",
+ "callsign": "FFT4837",
+ "origin": "KMCO",
+ "destination": "KIND",
+ "alternate": "KCVG",
+ "cruise_ft": 36000,
+ "route": "RDSOX1 JFRYS DCT BRUTS Q118 THRSR Q79 SWAPP DCT HAGAL GIIBS4",
+ "aircraft": "A21N",
+ "registration": "SN-FSL",
+ "sid": "RDSOX1",
+ "star": "GIIBS4",
+ "dep_runway": "36R",
+ "arr_runway": "05R",
+ "origin_name": "ORLANDO INTL",
+ "destination_name": "INDIANAPOLIS INTL",
+ "fixes": [
+  {
+   "ident": "FACTS",
+   "lat": 28.511042,
+   "lon": -81.322975,
+   "alt_ft": 3300,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 141
+  },
+  {
+   "ident": "EARRS",
+   "lat": 28.546561,
+   "lon": -81.327922,
+   "alt_ft": 4500,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 162
+  },
+  {
+   "ident": "LEFTI",
+   "lat": 28.597511,
+   "lon": -81.353467,
+   "alt_ft": 6500,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 201
+  },
+  {
+   "ident": "BLOSM",
+   "lat": 28.596192,
+   "lon": -81.4962,
+   "alt_ft": 10900,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 291
+  },
+  {
+   "ident": "RDSOX",
+   "lat": 28.425839,
+   "lon": -81.919947,
+   "alt_ft": 19700,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 561
+  },
+  {
+   "ident": "JFRYS",
+   "lat": 28.434208,
+   "lon": -82.476364,
+   "alt_ft": 26800,
+   "via": "RDSOX1",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 820
+  },
+  {
+   "ident": "TOC",
+   "lat": 29.497824,
+   "lon": -82.973849,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1377
+  },
+  {
+   "ident": "BRUTS",
+   "lat": 29.516111,
+   "lon": -82.9825,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1385
+  },
+  {
+   "ident": "JAMIZ",
+   "lat": 30.229697,
+   "lon": -83.324383,
+   "alt_ft": 36000,
+   "via": "Q118",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1755
+  },
+  {
+   "ident": "JOHNN",
+   "lat": 31.523039,
+   "lon": -83.957375,
+   "alt_ft": 36000,
+   "via": "Q118",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2437
+  },
+  {
+   "ident": "THRSR",
+   "lat": 33.629239,
+   "lon": -84.4351,
+   "alt_ft": 36000,
+   "via": "Q118",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3480
+  },
+  {
+   "ident": "KAILL",
+   "lat": 34.029781,
+   "lon": -84.523383,
+   "alt_ft": 36000,
+   "via": "Q79",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3672
+  },
+  {
+   "ident": "WUDEE",
+   "lat": 34.578756,
+   "lon": -84.666342,
+   "alt_ft": 36000,
+   "via": "Q79",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3948
+  },
+  {
+   "ident": "RESPE",
+   "lat": 35.591822,
+   "lon": -84.920086,
+   "alt_ft": 36000,
+   "via": "Q79",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4458
+  },
+  {
+   "ident": "SWAPP",
+   "lat": 36.613828,
+   "lon": -85.182233,
+   "alt_ft": 36000,
+   "via": "Q79",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4986
+  },
+  {
+   "ident": "HAGAL",
+   "lat": 38.186494,
+   "lon": -85.589644,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5786
+  },
+  {
+   "ident": "TOD",
+   "lat": 38.368486,
+   "lon": -85.616504,
+   "alt_ft": 36000,
+   "via": "GIIBS4",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 5877
+  },
+  {
+   "ident": "HASEV",
+   "lat": 38.378572,
+   "lon": -85.617997,
+   "alt_ft": 35600,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 5889
+  },
+  {
+   "ident": "GLNCH",
+   "lat": 38.573828,
+   "lon": -85.647744,
+   "alt_ft": 31400,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6039
+  },
+  {
+   "ident": "EASEL",
+   "lat": 39.016025,
+   "lon": -85.712967,
+   "alt_ft": 21700,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6376
+  },
+  {
+   "ident": "GIIBS",
+   "lat": 39.153536,
+   "lon": -85.737039,
+   "alt_ft": 18900,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6476
+  },
+  {
+   "ident": "BUPTE",
+   "lat": 39.269303,
+   "lon": -85.803589,
+   "alt_ft": 16000,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6576
+  },
+  {
+   "ident": "JOCKE",
+   "lat": 39.33065,
+   "lon": -85.838931,
+   "alt_ft": 14600,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6626
+  },
+  {
+   "ident": "FAMIL",
+   "lat": 39.460778,
+   "lon": -85.974744,
+   "alt_ft": 11000,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6751
+  },
+  {
+   "ident": "MOSLY",
+   "lat": 39.595589,
+   "lon": -86.107206,
+   "alt_ft": 7500,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6876
+  },
+  {
+   "ident": "KNIGT",
+   "lat": 39.668542,
+   "lon": -86.202611,
+   "alt_ft": 5300,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6951
+  },
+  {
+   "ident": "DOCEY",
+   "lat": 39.582544,
+   "lon": -86.312564,
+   "alt_ft": 3300,
+   "via": "GIIBS4",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7038
+  },
+  {
+   "ident": "KIND",
+   "lat": 39.717306,
+   "lon": -86.294639,
+   "alt_ft": 3300,
+   "via": "GIIBS4",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 7463
+  }
+ ],
+ "simbrief_id": "1790541358",
+ "rules": "IFR"
+}

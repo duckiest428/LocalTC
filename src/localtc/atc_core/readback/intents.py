@@ -140,6 +140,20 @@ def _turn(tokens: list[Token]) -> str | None:
     return None
 
 
+def _tail(tokens: list[Token]) -> str | None:
+    """The way the pilot wants the tail pushed: "can we tail left?", "can we get it to the left?". The first one
+    said: "tail left, since tailing right makes no sense from our gate" wants the left."""
+    for i, token in enumerate(tokens):
+        if token.text in ("left", "right") and any(t.text in ("tail", "tails", "tailing", "to", "towards")
+                                                  for t in tokens[max(0, i - 3):i]):
+            return token.text
+    return None
+
+
+PLEASANTRIES = (("how", "are", "you"), ("how's", "it", "going"), ("hows", "it", "going"), ("how", "is", "it", "going"),
+                ("how's", "your", "day"), ("how", "is", "your", "day"), ("how", "you", "doing"))
+
+
 def _traffic(tokens: list[Token]) -> str | None:
     if _has_any(tokens, ("negative", "contact"), ("not", "in", "sight"), ("no", "joy")):
         return "negative"
@@ -224,10 +238,11 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("request_ifr_clearance", atis=_atis(tokens), **vfr)
     pushing = _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
                        ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push"))
+    tail = _tail(tokens)
     if pushing and _has_any(tokens, *PUSH_READBACK) and not _has_any(tokens, *REQUEST_WORDS):
         add("acknowledge")  # "push back at my discretion, tail right": reading back the approval, not asking again
-    elif pushing:
-        add("request_pushback")
+    elif pushing or (tail is not None and _has_any(tokens, *REQUEST_WORDS)):
+        add("request_pushback", tail=tail)  # "can we tail left?" asks for the pushback the other way round
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"),
                        ("to", "a", "gate"), ("to", "our", "gate"), ("to", "the", "stand"), ("to", "a", "stand"), ("to", "stand"),
                        ("to", "the", "apron"))
@@ -239,6 +254,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if (parking and _has_any(tokens, ("taxi",))) or (wants_stand and not pushing):
         add("request_taxi_parking")  # "request taxi to the gate", "request gate", "request parking"
     elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
+                  ("get", "taxi"), ("have", "taxi"), ("taxi", "please"), ("like", "taxi"),
                   ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),
                   ("taxi", "to", "the", "runway")):
         add("ready_to_taxi", atis=_atis(tokens), **vfr)
@@ -307,13 +323,16 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
             add("request_class_b")
     if option and not any(m.intent in ("report_final", "position_report") for m in matches):
         add("request_option", option=option)
+    if not matches and _has_any(tokens, *PLEASANTRIES):
+        add("pleasantry")  # "how are you doing today?": a word back, nothing to do
     if not matches and reports_problem(tokens):
         add("report_problem")  # alone; with other calls the engine hears it anyway (AtcEngine._problem)
     if not matches and _has_any(tokens, ("tail", "left"), ("tail", "right"), ("push", "approved"), ("face", "east"),
                                 ("face", "west"), ("face", "north"), ("face", "south"), ("facing",)):
         add("acknowledge")  # reading back a pushback approval
-    if not matches and _has_any(tokens, ("hold", "position"), ("holding", "position"), ("holding", "short", "of", "traffic")):
-        add("acknowledge")  # "hold position, B737 crossing": the pilot stops, nothing to answer
+    if not matches and _has_any(tokens, ("hold", "position"), ("holding", "position"), ("holding", "short", "of", "traffic"),
+                                ("give", "way"), ("giving", "way"), ("have", "the", "traffic"), ("behind", "the")):
+        add("acknowledge")  # "hold position, B737 crossing" / "give way to the A320": the pilot waits, nothing to answer
     if not matches and _has_any(tokens, ("roger",), ("wilco",), ("copy",), ("will", "comply"), ("disregard",), ("thanks",),
                                 ("thank", "you"), ("affirm",), ("affirmative",), ("copy", "that"), ("good", "day"),
                                 ("stand", "by"), ("standby",), ("standing", "by"), ("will", "stand", "by"),

@@ -72,8 +72,8 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         arr_runway=flight.arr_runway or None,
         enforce_fpln_runways=atc.enforce_fpln_runways,
         airport_fixes=str(data_dir() / "airport_fixes.toml"),
-        route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
-                    for f in flight.fixes),
+        route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
+                             via=f.via) for f in flight.fixes),
     )
 
 
@@ -121,14 +121,17 @@ async def language_model(cfg: Config, source: SimSource):
         return None
     # Loaded somewhere else than asked (CPU only switched on or off since): out, so it loads again where it should.
     placed = await asyncio.to_thread(backend.placement)
-    if placed is not None and (placed.size_vram > 0) == llm.cpu_only:
-        log.info("Language model is loaded %s; reloading it %s", "on the graphics card" if placed.size_vram else "on the CPU",
+    if placed is not None and placed.gpu == llm.cpu_only and not _WARMING.locked():
+        log.info("Language model is loaded %s; reloading it %s", "on the graphics card" if placed.gpu else "on the CPU",
                  "on the CPU only" if llm.cpu_only else "where Ollama puts it")
         await asyncio.to_thread(backend.unload)
     # A daemon thread, not the default executor: exit mustn't wait for a slow first load.
     threading.Thread(target=warm_up, args=(backend, status), name="llm-warm-up", daemon=True).start()
     backend.start_keeping()
     return backend
+
+
+_WARMING = threading.Lock()  # held while a warm-up loads the model
 
 
 def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
@@ -139,6 +142,11 @@ def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
     from localtc.atc_core.llm.understand import load_examples
     from localtc.atc_core.readback import InterpretContext
 
+    if not _WARMING.acquire(blocking=False):
+        # A session started again (reconnecting to the sim) while the last one's warm-up is still loading the
+        # model: one load at a time. Two at once each took twice as long (82 s and 42 s on one PC).
+        log.info("Language model warm-up already under way")
+        return None
     started = time.monotonic()
     if hasattr(backend, "loading"):
         backend.loading = True
@@ -152,6 +160,7 @@ def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
     finally:
         if hasattr(backend, "loading"):
             backend.loading = False
+        _WARMING.release()
     seconds = time.monotonic() - started
     where = backend.placement() if hasattr(backend, "placement") else None
     log.info("Language model %s ready (warm-up %.1f s)%s", backend.model, seconds, f": {where.describe()}" if where else "",

@@ -121,10 +121,17 @@ def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float,
     return Vector(heading, "join", track, s)
 
 
+STEEP_FT_PER_NM = 400  # a jet with the speedbrakes out, which has the miles to use them
+STEEP_FROM_NM = 20.0  # further than this from the join, there's room to get down steeper than the glideslope
+
+
 def too_high(leg: Vector, altitude_ft: float, elev_ft: float) -> bool:
-    """Too high to go in this way: more than 1,500 ft above a three degree path from where it would join."""
+    """Too high to go in this way: close in, more than 1,500 ft above a three degree path from where it would
+    join; further out, more than a steep descent can lose on the way (an arrival 30 miles out at 12,000 ft
+    comes down; it isn't sent away on a downwind)."""
     miles = leg.join_nm if leg.join_nm is not None else leg.track_nm
-    return altitude_ft - elev_ft > miles * GLIDESLOPE_FT_PER_NM + 1500
+    rate = STEEP_FT_PER_NM if miles > STEEP_FROM_NM else GLIDESLOPE_FT_PER_NM
+    return altitude_ft - elev_ft > miles * rate + 1500
 
 
 def extended(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float) -> Vector:

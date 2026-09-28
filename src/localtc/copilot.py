@@ -32,6 +32,11 @@ QUIET_S = 4.0  # radio silence before the copilot starts a call of its own
 MAX_REPEATS = 2  # the same words twice in a row; a third time won't go better
 REPEAT_WINDOW_S = 120.0  # the same words again after this long are a new call, not a repeat
 CORRECTING = ("common.negative", "common.read_back", "common.confirm")  # ATC named what was wrong
+# A handoff at a human pace: read back once ATC has finished, change frequency a few seconds after the readback,
+# then listen on the new one before checking in. All three in six seconds sounded like a machine.
+TUNE_AFTER_S = (3.0, 6.0)  # from the end of the readback to the new frequency in the radio
+CHECKIN_AFTER_S = (5.0, 10.0)  # listening on the new frequency before the check-in
+SPEECH_S_PER_CHAR = 0.065  # how long the copilot's words take to say
 
 
 @dataclass(frozen=True)
@@ -159,12 +164,14 @@ class Copilot:
             return
         self._answered.add((pending.instruction_id, tx.t))
         words = self._correction(pending.instruction_id, issued.slots) if tx.instruction_id in CORRECTING else None
-        readback = self._push("say", tx.t, text=words or self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
+        start = max(tx.t, self.engine.radio_busy_until)  # once ATC has finished saying it
+        readback = self._push("say", start, text=words or self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
         handoff = st.comms.expected
         if handoff is not None and "frequency" in issued.slots and handoff.matches(float(issued.slots["frequency"])):
-            tune = self._push("tune", tx.t, facility=handoff, after=readback.due + 1.0)
+            said = readback.due + len(readback.text) * SPEECH_S_PER_CHAR
+            tune = self._push("tune", tx.t, facility=handoff, after=said, pause=self._rng.uniform(*TUNE_AFTER_S))
             if self.mode == "full":
-                self._push("checkin", tx.t, facility=handoff, after=tune.due + self._delay())
+                self._push("checkin", tx.t, facility=handoff, after=tune.due, pause=self._rng.uniform(*CHECKIN_AFTER_S))
 
     def _correction(self, instruction_id: str, slots: dict) -> str | None:
         """Told "negative" or "read back ...", answer with the part ATC picked out rather than saying the
@@ -262,10 +269,14 @@ class Copilot:
         return self._rng.uniform(*self.delay_s)
 
     def _push(self, kind: str, t: float, *, text: str = "", facility: Facility | None = None,
-              after: float | None = None) -> _Queued:
+              after: float | None = None, pause: float | None = None) -> _Queued:
+        """Queue an action ``pause`` seconds (by default a reaction time, or a second to turn a knob) after ``after``
+        (by default ``t``, or the last thing queued)."""
         self._seq += 1
         base = max(t, self._queue[-1].due if self._queue else t) if after is None else after
-        item = _Queued(base + (self._delay() if kind != "tune" else 1.0), self._seq, kind, text, facility)
+        if pause is None:
+            pause = self._delay() if kind != "tune" else 1.0
+        item = _Queued(base + pause, self._seq, kind, text, facility)
         self._queue.append(item)
         self._queue.sort()
         return item

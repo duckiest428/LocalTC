@@ -6,7 +6,34 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.3.5] - 2026-09-25
 
+### Added
+- **Keep LocalTC above other windows** (Quick Settings → Sim): never, while flying, or always. Above the sim when it runs in a window or borderless full screen.
+- **The taxi route on the map**: the route ground gave, to the runway or in to the gate, drawn on the Live Map with its taxiways.
+
+### Changed
+- **No more "stand by".** When the language model needs longer for a call, the app shows the controller working on it in the radio log, and the answer follows; nothing is said in between.
+- Questions the grammar can place are answered straight away, without the model: the altimeter, the runway (in so many words: "expect runway 36R for departure"), the wind, the ATIS, the squawk. A question asked along with a report ("short final runway 32, and can we get the altimeter?") gets both.
+- **The other traffic on the frequency is the sim's own**: the AI aircraft around, by their callsigns, each told what fits what it's doing (the one at a gate pushes back, the one low on final is cleared to land). With nobody around, the frequency is quiet: nobody is made up.
+- **Arrivals fly their STAR.** On a STAR that runs onto the final (an RNAV STAR lined up with the ILS), approach leaves the flight on it and clears the approach on the way: no headings. On a STAR that ends off to one side, the vectors start at its end. Without one, vectors as before; an arrival still high 30 miles out is brought down, not sent out on a long downwind. "Vectors for the ILS" is said once, not with every heading.
+- **The takeoff clearance fits the SID.** On an RNAV SID in the US: "RNAV to FACTS, runway 36R, cleared for takeoff". Elsewhere (ICAO, Canada) with a SID: "runway 36R, cleared for takeoff". "Fly runway heading" only without one.
+- "Line up and wait" read back without the runway is fine.
+- Centres no longer ask after the ride.
+- The copilot works a handoff at a human pace: the readback once ATC has finished, the new frequency a few seconds later, and a listen before checking in.
+- The language model runs on the CPU by default, leaving the graphics card to the sim.
+
 ### Fixed
+From a real Orlando to Indianapolis flight:
+- ATC went silent after "stand by" when the model timed out: the departure runway was asked for three times, and "can we get taxi?" and "can we tail left?" went unanswered. The grammar now hears all of them, and a call that nothing understood gets "say again", never silence.
+- "Tail right" from a gate whose taxi route leaves to the right: the tail was sent the wrong way (it goes left, so the nose comes round to the route). A pilot who asks for the tail one way gets it.
+- The tug taking up the slack (a jerk back at a few knots) was taken for taxiing off: "hold position, taxi clearance required", twice, during the pushback.
+- Two position samples a fraction of a millisecond apart were taken for a teleport. At Indianapolis that put the flight back on the taxi out, talking to Orlando Ground 720 miles away; on the approach it flicked to "cruise".
+- Parked aircraft ("that 737 is parked") got "stopped on the taxiway ahead" as the taxi swung past them. Aircraft the sim has parked (no flight, never seen moving) only get a caution when the aircraft is really heading into one.
+- After a go-around, approach never sent the flight to tower for the second approach, and tower sent it to the departure airport's departure frequency.
+- Approach gave "210 knots", then "250 knots", then "180": speeds only come down now.
+- A centre's handoff read back on its own frequency went to nobody once the next sector had the flight: the old controller still hears it.
+- Speech-to-text: "great for takeoff", "cut to land", "alt-terminator" (altimeter), "BTLR" for BTTLR and "ILS 32R" where there's only a 32 are all understood.
+- With CPU only on, Ollama still reports a sliver of the model on the graphics card, and LocalTC reloaded it at every session start (70 s each). Sessions started close together no longer warm the model up twice at once.
+
 From a real Montreal to Los Angeles flight:
 - After landing, "request taxi to a gate" was taken as a request to taxi out, and ground gave a taxi to the departure airport's runway. Once landed, a taxi request is always to the gate; "taxi to a gate", "to our gate" and "to the stand" are understood too.
 - "Hold position, there's an A320 stopped ahead of you" for an A320 parked at its gate, twice. Crossing the apron to the taxi route, the aircraft's nose sweeps past the gates, and what's parked there isn't in the way. Once on the route, anything stopped on it (or dead ahead) still gets the caution.

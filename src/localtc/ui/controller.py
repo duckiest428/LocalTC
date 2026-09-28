@@ -14,6 +14,7 @@ import sys
 import time
 import zipfile
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,7 @@ from localtc.radiolog import radio_line
 from localtc.sim_api import (
     AirportData,
     AtcAlert,
+    AtcThinking,
     AtcTransmission,
     BusEvent,
     OwnshipState,
@@ -103,6 +105,7 @@ class AppController:
         self._last_recording: Path | None = None
         self.companion = CompanionHub()
         self.companion.set_route(route_view(self.plan))
+        self.window_on_top: Callable[[bool], None] | None = None  # set by the app window (ui/__init__.py)
         self.companion_server: CompanionServer | None = None
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
@@ -222,6 +225,17 @@ class AppController:
     def _set_status(self, status: str, detail: str = "") -> None:
         self.status, self.status_detail = status, detail
         self._push_state()
+        self.apply_on_top()
+
+    def apply_on_top(self) -> None:
+        """The window above the others, as ``[ui] on_top`` asks: always, or while a flight is running."""
+        if self.window_on_top is None:
+            return
+        wanted = self.cfg.ui.on_top == "always" or (self.cfg.ui.on_top == "flying" and self.status in ("starting", "running"))
+        try:
+            self.window_on_top(wanted)
+        except Exception as exc:  # the window is closing, or the platform can't
+            log.debug("Couldn't set the window on top: %s", exc)
 
     def system(self, text: str, level: str = "info") -> None:
         self._radio({"kind": "system", "text": text, "level": level, "t": self.live.now() if self.live else None})
@@ -351,6 +365,7 @@ class AppController:
             "expected": msgspec.to_builtins(snap.expected_contact) if snap.expected_contact else None,
             "pending": msgspec.to_builtins(snap.pending) if snap.pending else None,
             "ete": ete, "rules": getattr(engine.state.flight, "rules", "IFR"),
+            "taxi": f"{taxi['to']} via {' '.join(taxi['taxiways'])}" if (taxi := engine.taxi_path()) else None,
         }
 
     # --- bus events -> the page --------------------------------------------------------------------------------
@@ -368,6 +383,8 @@ class AppController:
                              "hdg": round(t.hdg_true), "gs": round(t.gs_kt), "ground": t.on_ground} for t in ev.targets]
             self.publish("traffic", self.traffic)
             return
+        if isinstance(ev, AtcThinking):
+            self.publish("thinking", {"station": ev.station, "mhz": ev.frequency_mhz, "busy": ev.busy})
         if self.cfg.ui.dev_mode and not isinstance(ev, AirportData):
             self.publish("dev", {"t": round(ev.t, 2), "json": encode_event(ev).decode(errors="replace")[:4000]})
         line = radio_line(ev)
@@ -587,6 +604,7 @@ class AppController:
         live_now = self.live is not None
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
+        self.apply_on_top()
         if self.live is not None and self.live.speaker is not None and not self.muted:
             self.live.speaker.player.volume = cfg.tts.volume
         self._push_state()

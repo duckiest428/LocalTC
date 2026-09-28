@@ -29,6 +29,7 @@ class FlightPhase(enum.StrEnum):
 
 
 TRACK_BASELINE_M = 4.0  # ground covered before the direction of travel is recomputed
+MIN_JUMP_S = 1.0  # a position jump is measured over at least this long
 LEAVE_HOLD_M = 25.0  # farther than this from the runway than the aircraft has been since holding: it's taxiing away
 GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.PUSHBACK, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD,
                  FlightPhase.TAXI_IN}
@@ -124,7 +125,10 @@ class PhaseDetector:
     def update(self, own: OwnshipState, ctx: PositionContext) -> PhaseChanged | None:
         last, self._last = self._last, own
         if last is not None and own.t > last.t:
-            implied_kt = haversine_nm(last.lat, last.lon, own.lat, own.lon) / ((own.t - last.t) / 3600)
+            # Over at least a second: two samples a fraction of a millisecond apart (the sim sends them) put a
+            # metre of taxiing at thousands of knots. Taken as a teleport, that put an aircraft taxiing in at
+            # Indianapolis back on the taxi out, talking to Orlando Ground.
+            implied_kt = haversine_nm(last.lat, last.lon, own.lat, own.lon) / (max(own.t - last.t, MIN_JUMP_S) / 3600)
             if implied_kt > self.th.teleport_kt:
                 return self._set(own, self._classify(own, ctx), "position jump")
         if self.phase is None:
@@ -258,7 +262,9 @@ class PhaseDetector:
         if phase is FlightPhase.PARKED:
             if self._held("pushback", self._moving_astern(own), t, th.pushback_s):
                 return FlightPhase.PUSHBACK, "being pushed back"
-            if self._held("taxi", own.on_ground and own.gs_kt > th.taxi_start_kt, t, th.taxi_start_s):
+            # Not while going backwards: a tug taking up the slack jerks the aircraft back at a few knots.
+            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own)
+            if self._held("taxi", moving_off, t, th.taxi_start_s):
                 if self._arrived:  # stopped on the way in (waiting for a gate), now moving on
                     return FlightPhase.TAXI_IN, "taxiing in again"
                 return FlightPhase.TAXI_OUT, "started moving"

@@ -51,6 +51,26 @@ def test_taxi_needs_dwell_and_ignores_single_tick_noise():
     assert run(det, ticks) == [(0, P.PARKED), (6, P.TAXI_OUT)]
 
 
+def test_the_tug_taking_up_the_slack_is_a_pushback_not_a_taxi():
+    """Orlando, gate 57 (heading 192): the tug jerked the aircraft 7 m back at up to 7.5 kt, then pushed at 1.6 kt.
+    Taken for taxiing off, it got "hold position, taxi clearance required" twice during the pushback."""
+    det = PhaseDetector()
+    m = 1 / 111_120  # a metre of latitude
+    ticks = [own(0, hdg_true=192.0), own(0.25, hdg_true=192.0)]
+    for i, (metres, gs) in enumerate([(1.0, 7.5), (3.0, 7.5), (5.0, 5.0), (6.5, 3.2), (7.0, 3.2), (7.2, 0.0)]):
+        ticks.append(own(0.5 + 0.5 * i, lat=47.9 + metres * m, hdg_true=192.0, gs_kt=gs))
+    ticks += [own(4.0 + 0.5 * i, lat=47.9 + (7.2 + 0.4 * i) * m, hdg_true=192.0, gs_kt=1.6) for i in range(12)]
+    assert [p for _, p in run(det, ticks)] == [P.PARKED, P.PUSHBACK]
+
+
+def test_two_samples_a_moment_apart_are_not_a_teleport():
+    """The sim now and then sends two samples 0.2 ms apart: 30 cm of taxiing at 3,600 kt."""
+    det = PhaseDetector()
+    det.phase = P.TAXI_IN
+    ticks = [own(10.0, gs_kt=8.0), own(10.0002, lat=47.9 + 0.3 / 111_120, gs_kt=8.0)]
+    assert run(det, ticks) == []
+
+
 def test_takeoff_without_airport_data_uses_sim_runway_flag():
     det = PhaseDetector()
     ticks = [own(0, gs_kt=10), own(1, gs_kt=35, on_runway=True), own(2, gs_kt=40, on_runway=True)]

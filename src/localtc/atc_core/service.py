@@ -59,11 +59,11 @@ class AtcService:
             for output in outputs:
                 self.bus.publish(output)
             if self.engine.deferred is not None:
-                # ATC said "stand by": now the model gets its time, with the "stand by" already on the air.
+                # The model missed the call: now it gets its time, with the app showing the controller thinking.
                 try:
                     later = await asyncio.to_thread(self.engine.resolve_deferred)
                 except Exception:
-                    log.exception("ATC engine failed answering after stand by")
+                    log.exception("ATC engine failed answering after the model's second look")
                     later = []
                 outputs = [*outputs, *later]
                 for output in later:

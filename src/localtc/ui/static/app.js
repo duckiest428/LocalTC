@@ -44,6 +44,7 @@ function connect() {
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
   on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
   on("ptt", (p) => $("#btn-ptt").classList.toggle("down", p.down));
+  on("thinking", thinking);
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
@@ -104,8 +105,24 @@ function clearLog() {
   updateAlerts();
 }
 
+// The controller working out an answer (the language model has the call): shown until the answer is on the air.
+function thinking(t) {
+  $("#log .line.thinking")?.remove();
+  if (!t.busy) return;
+  const log = $("#log");
+  const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+  const row = document.createElement("div");
+  row.className = "line atc thinking";
+  row.innerHTML = `<span class="t"></span><div><span class="who">ATC</span><span class="st">${esc(t.station)} ${mhz(t.mhz)}</span>`
+    + `<div class="body"><span class="dots" aria-label="thinking"><i></i><i></i><i></i></span></div></div>`;
+  log.appendChild(row);
+  $("#log-empty").hidden = true;
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+
 function addLine(l) {
   const log = $("#log");
+  if (l.kind === "atc") $("#log .line.thinking")?.remove();
   const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
   const row = document.createElement("div");
   row.className = `line ${l.kind}` + (l.level ? ` ${l.level}` : "") + (l.kind === "readback" && !l.ok ? " bad" : "");
@@ -709,6 +726,9 @@ const Settings = {
         <div class="row" ${st.ui.source === "replay" ? "" : "hidden"}><label>Recording<input id="s-replay" value="${esc(st.replay.path)}"></label>
           <label style="flex:0 1 100px">Speed<input id="s-replay-speed" type="number" step="0.5" min="0" value="${st.replay.speed}"></label></div>
         <label class="check-row"><input type="checkbox" id="s-tiles" ${st.ui.map_tiles ? "checked" : ""}> Map background from OpenStreetMap (needs the internet)</label>
+        <div class="row"><label>Keep LocalTC above other windows<select id="s-on-top">${[["off", "Never"], ["flying", "While flying (above the sim)"], ["always", "Always"]]
+          .map(([v, label]) => `<option value="${v}" ${st.ui.on_top === v ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
+        <span class="hint">Above the sim when it runs in a window or borderless full screen; exclusive full screen always covers it.</span>
       </div>
 
       <div class="card" id="s-account-card"></div>
@@ -814,6 +834,7 @@ const Settings = {
       } catch (err) { fail(err); } finally { b.disabled = false; b.textContent = "Import latest plan"; }
     });
     on("#s-source", "change", async () => { await this.save("ui", "source", val("#s-source")); this.render(); });
+    on("#s-on-top", "change", () => this.save("ui", "on_top", val("#s-on-top")));
     on("#s-replay", "change", () => this.save("replay", "path", val("#s-replay").trim()));
     on("#s-replay-speed", "change", () => this.save("replay", "speed", Number(val("#s-replay-speed"))));
     on("#s-tiles", "change", async (e) => { await this.save("ui", "map_tiles", e.target.checked); S.state.map_tiles = e.target.checked; MapView.tiles(); });
@@ -1112,8 +1133,9 @@ const MapView = {
   },
   flightChanged(f) {
     this.syncRules();
-    // A handoff changes who is highlighted; otherwise the zones only need an occasional refresh.
-    const who = `${f?.tuned?.station || ""}|${f?.expected?.station || ""}`;
+    // A handoff changes who is highlighted, a taxi clearance the route drawn; otherwise the zones only need an
+    // occasional refresh.
+    const who = `${f?.tuned?.station || ""}|${f?.expected?.station || ""}|${f?.taxi || ""}`;
     if (who !== this.zonesWho || Date.now() - this.zonesAt > 20000) { this.zonesWho = who; this.zonesSoon(); }
   },
   async zones() {
@@ -1145,6 +1167,13 @@ const MapView = {
     if (z.final && !vfr) {
       L.polygon(z.final.ring, { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
         .bindTooltip(`Joining final for ${esc(z.final.runway)}: approach clears the approach here and sends you to tower`);
+    }
+    if (z.taxi && z.taxi.points.length > 1) {  // the route ground gave: to the runway, or in to the gate
+      const via = z.taxi.taxiways.length ? ` via ${z.taxi.taxiways.join(", ")}` : "";
+      L.polyline(z.taxi.points, { color: "#111", weight: 7, opacity: 0.5, interactive: false }).addTo(layer);
+      L.polyline(z.taxi.points, { color: "#f2c94c", weight: 3.5, opacity: 0.95, dashArray: "8 6" }).addTo(layer)
+        .bindTooltip(`Taxi to ${esc(z.taxi.to)}${esc(via)}`, { sticky: true });
+      L.circleMarker(z.taxi.points[z.taxi.points.length - 1], { radius: 4, color: "#f2c94c", weight: 2, fillColor: "#111", fillOpacity: 1, interactive: false }).addTo(layer);
     }
     if (z.gate) {
       L.circleMarker([z.gate.lat, z.gate.lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)

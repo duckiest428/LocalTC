@@ -70,8 +70,8 @@ when they were right, handoffs too early or late, ATC talking when it shouldn't.
 - [ ] The climb goes up in steps: departure to 17,000, the centre to its step (FL230-280), then your cruise.
 - [ ] Tower doesn't clear you onto a runway with someone landing on it; with someone rolling on it, it's "line up and wait".
 - [ ] Just off the push, no "stopped ahead" for aircraft parked at their gates. Tower greets you once, not again with the takeoff.
-- [ ] "Say ride conditions" comes at most once a flight. Pause the sim: ATC doesn't call you until you unpause.
-- [ ] Ask something off the script (for example about the weather en route): "stand by", then an answer (Ollama running).
+- [ ] No centre asks after the ride. Pause the sim: ATC doesn't call you until you unpause.
+- [ ] Ask something off the script (for example about the weather en route): no "stand by"; the radio log shows the controller thinking (three dots), then an answer (Ollama running). Ask the altimeter or "any idea what our departure runway will be?": answered at once.
 - [ ] Other traffic: now and then you hear the controller with other flights, dimmed in the radio log. Quick Settings → ATC
       turns it off. Does it feel like a real frequency? Too much, too little?
 - [ ] Radio range: call a tower from far away (parked at another airport): no answer, and the log says it's out of range.

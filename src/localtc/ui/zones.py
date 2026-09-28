@@ -85,6 +85,7 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
 
     return {
         "gate": _gate(engine),
+        "taxi": engine.taxi_path() if engine is not None else None,
         "centers": centers, "terminals": terminals, "airports": airports, "final": final,
         "tuned": {"station": tuned.station, "controller": tuned.controller, "mhz": tuned.mhz} if tuned else None,
         "next": {"station": expected.station, "controller": expected.controller, "mhz": expected.mhz}

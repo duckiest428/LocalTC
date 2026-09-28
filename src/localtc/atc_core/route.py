@@ -20,6 +20,7 @@ class RouteFix:
     alt_ft: int = 0
     stage: str = ""  # CLB, CRZ, DSC
     time_s: int = 0  # planned seconds from takeoff; 0 when the plan doesn't say
+    via: str = ""  # the airway, SID or STAR it's reached by; "" when the plan didn't say
 
 
 # Without a plan: average climb rates by where the cruise is (jets up high, turboprops and pistons lower).
@@ -56,6 +57,22 @@ class Route:
                    and not (len(f.ident) == 4 and f.ident.isalpha())]
         return int(math.ceil(descent[-1] / 1000.0) * 1000) if descent else None
 
+    def procedure(self, name: str | None, stage: str) -> tuple[RouteFix, ...]:
+        """The fixes of a SID (``stage`` "CLB") or a STAR ("DSC") in the plan, in order.
+
+        A plan that kept each fix's ``via`` names them. One saved before that has only the stages: a SID is
+        the fixes climbed through before the top of climb, a STAR the ones after the top of descent."""
+        if not name:
+            return ()
+        if any(f.via for f in self.fixes):
+            return tuple(f for f in self.fixes if f.via.upper() == name.upper() and not _marker(f))
+        if stage == "CLB":
+            first = next((i for i, f in enumerate(self.fixes) if f.stage != "CLB" or f.ident.upper() == "TOC"), len(self.fixes))
+            return tuple(f for f in self.fixes[:first] if not _marker(f))
+        top = self.top_of_descent
+        start = self.fixes.index(top) + 1 if top is not None else len(self.fixes)
+        return tuple(f for f in self.fixes[start:] if f.stage == "DSC" and not _marker(f))
+
     def minutes_to_cruise(self, cruise_ft: int) -> int:
         """Minutes from takeoff to the top of the climb: the plan's own time, else its distance at a climb
         groundspeed, else the cruise altitude at an average climb rate."""
@@ -78,6 +95,12 @@ class Route:
 
     def _along(self, first: int, last: int) -> float:
         return sum(haversine_nm(a.lat, a.lon, b.lat, b.lon) for a, b in zip(self.fixes[first:last], self.fixes[first + 1:last + 1]))
+
+
+def _marker(fix: RouteFix) -> bool:
+    """Not a fix on a procedure: the plan's top of climb and descent, and the airports at either end."""
+    ident = fix.ident.upper()
+    return ident in ("TOC", "TOD") or (len(ident) == 4 and ident.isalpha())
 
 
 def climb_groundspeed(cruise_ft: int) -> float:

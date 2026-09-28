@@ -105,6 +105,7 @@ class RouteFix(msgspec.Struct, frozen=True, kw_only=True):
     alt_ft: int = 0
     stage: str = ""  # CLB, CRZ, DSC
     time_s: int = 0  # planned seconds from takeoff
+    via: str = ""  # the airway, SID or STAR it's reached by ("GIIBS4"); "" in plans saved before it was kept
 
 
 class FlightConfig(_Section):
@@ -141,7 +142,7 @@ class AtcConfig(_Section):
     transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
-    unscripted: bool = True  # traffic calls, altitude checks, "how do you read?", "stand by"
+    unscripted: bool = True  # traffic calls, altitude checks, "how do you read?"
 
 
 class LlmConfig(_Section):
@@ -154,8 +155,9 @@ class LlmConfig(_Section):
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
     timeout_s: float = 4.0  # per model call
     budget_s: float = 6.0  # per transmission, including one retry
-    # A question or anything off the script that the model couldn't answer in time: ATC says "stand by" and gives
-    # it this long, once. The sim shares the machine, and a model that answers in 2 s idle can take 8 in flight.
+    # A question or anything off the script that the model couldn't answer in time: the app shows the controller
+    # thinking and the model gets this long, once. The sim shares the machine, and a model that answers in 2 s idle
+    # can take 8 in flight.
     patience_s: float = 15.0
     max_attempts: int = 2
     # How long the model stays loaded after a flight ("0": unload at once). During one, LocalTC keeps it loaded:
@@ -164,7 +166,7 @@ class LlmConfig(_Section):
     num_ctx: int = 4096
     # Run the model on the CPU only: the graphics card is left to the sim. Answers take a little longer, so the
     # timeouts above are doubled. Applies when the model loads (LocalTC reloads it at the next flight).
-    cpu_only: bool = False
+    cpu_only: bool = True  # the graphics card and its memory belong to the sim: the model takes the CPU
     cpu_threads: int = 0  # CPU threads for the model; 0: Ollama's choice (every physical core)
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
@@ -226,6 +228,8 @@ class UiConfig(_Section):
     # installs when LocalTC closes, "off" never asks GitHub.
     updates: Literal["notify", "auto", "off"] = "notify"
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
+    # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
+    on_top: Literal["off", "flying", "always"] = "off"
 
 
 class Config(_Section):

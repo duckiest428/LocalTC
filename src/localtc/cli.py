@@ -344,7 +344,7 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
     if where and on_disk and where.size > 2.6 * on_disk:
         print(f"  Ollama holds {where.size / 1e9:.1f} GB for a {on_disk / 1e9:.1f} GB model: room for several contexts "
               "(OLLAMA_NUM_PARALLEL above 2). Two is all LocalTC uses: OLLAMA_NUM_PARALLEL=2 frees the rest.")
-    if where and 0 < where.on_gpu < 0.99:
+    if where and where.gpu and where.on_gpu < 0.99:
         print("  The model is split between the graphics card and the CPU: there wasn't room for it all. That's the slowest"
               " way to run it. Try --cpu (and [llm] cpu_only = true), or a smaller model.")
     # The understanding call after the first phrasing call: still read from Ollama's cache, or read again?

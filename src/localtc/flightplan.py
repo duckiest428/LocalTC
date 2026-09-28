@@ -250,5 +250,5 @@ def apply_plan(plan: FlightPlan, flight: Any) -> None:
     flight.star = plan.star
     flight.dep_runway = plan.dep_runway
     flight.arr_runway = plan.arr_runway
-    flight.fixes = [RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s)
-                    for f in plan.fixes]
+    flight.fixes = [RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
+                             via=f.via) for f in plan.fixes]

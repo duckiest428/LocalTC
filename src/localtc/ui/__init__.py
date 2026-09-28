@@ -69,8 +69,15 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
             stop["set"]()
 
     controller.updates.quit = quit_app
+    def on_top(value: bool) -> None:
+        import webview
+
+        for w in list(webview.windows):
+            w.on_top = value
+
+    controller.window_on_top = on_top
     try:
-        if window and _open_window(url):
+        if window and _open_window(url, on_top=controller.cfg.ui.on_top == "always"):
             pass  # returns when the window is closed
         else:
             print(f"LocalTC is running at {url}  (Ctrl-C to quit)")
@@ -88,7 +95,7 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
     return 0
 
 
-def _open_window(url: str) -> bool:
+def _open_window(url: str, *, on_top: bool = False) -> bool:
     """A native window (pywebview). False when there's none to be had; the browser is used instead."""
     try:
         import webview
@@ -97,7 +104,7 @@ def _open_window(url: str) -> bool:
         return False
     try:
         webview.create_window("LocalTC", url, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=WINDOW_MIN,
-                              background_color="#1b1e22")
+                              background_color="#1b1e22", on_top=on_top)
         webview.start()
         return True
     except Exception as exc:  # no WebView2 runtime, no GUI

@@ -188,6 +188,15 @@ class AtcAlert(Event, tag="atc_alert"):
     detail: str = ""
 
 
+class AtcThinking(Event, tag="atc_thinking"):
+    """A controller working out an answer (the language model has the pilot's call): the app shows it, nothing
+    is said. ``busy`` False when the answer is out, or there won't be one."""
+
+    station: str
+    frequency_mhz: float
+    busy: bool = True
+
+
 class LlmExchange(Event, tag="llm_exchange"):
     """One call to the local language model, recorded so a replay reproduces it without the model.
 
@@ -239,7 +248,8 @@ class SessionNote(Event, tag="session_note"):
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
-AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter]
+AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
+                 AtcThinking]
 AppEvent = Union[SessionNote]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent]
 

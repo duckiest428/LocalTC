@@ -44,6 +44,14 @@ text = ["{callsign}, turn {turn} heading {heading}, vector for the {approach} ap
 readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
+# A vector after the first: what they're for has been said.
+[[template]]
+id = "approach.heading"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}.", "{callsign}, fly heading {heading}."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
 [[template]]
 id = "approach.turn_descend"
 controller = "approach"
@@ -94,3 +102,11 @@ controller = "approach"
 text = ["{callsign}, reduce speed to {speed} knots.", "{callsign}, maintain {speed} knots."]
 readback = { required = ["speed"] }
 pilot_readback = "{speed} knots, {callsign_short}."
+
+# On a STAR that runs onto the final: the arrival flies it, and the approach clearance comes on the way.
+[[template]]
+id = "approach.cleared_star"
+controller = "approach"
+text = ["{callsign}, cleared {approach} approach."]
+readback = { required = ["approach"] }
+pilot_readback = "Cleared {approach} approach, {callsign_short}."

@@ -156,6 +156,7 @@ def run(
     voice: Any = None,
     on_input: Any = None,
     recorded_pilot: bool = False,
+    recorded_copilot: bool = False,
     speech_s_per_char: float = 0.0,
     chatter: bool = False,
 ) -> ScenarioResult:
@@ -165,7 +166,8 @@ def run(
     ``text`` as heard, ``audio_ref``, ``confidence``); the transmission takes that long, with push-to-talk
     around it. ``on_input``: called with every event the engine is given (to write a recording).
     ``chatter``: other flights on the frequency now and then. ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
-    the current ATC).
+    the current ATC). ``recorded_copilot``: with it, the copilot's recorded calls too (the flight's radio as it was, when
+    the pilot handed it the radio for part of the way).
     """
     from localtc.app import engine_config
     from localtc.copilot import Copilot, Note, Say, Tune
@@ -288,7 +290,8 @@ def run(
     pilot_types = (PttPressed, PttReleased, Transcript) if recorded_pilot else ()
     events = (
         e for e in Recording(recording or base / scenario.scenario.recording).events()
-        if isinstance(e, SIM_EVENT_TYPES) or (isinstance(e, pilot_types) and getattr(e, "source", "") != "copilot")
+        if isinstance(e, SIM_EVENT_TYPES)
+        or (isinstance(e, pilot_types) and (recorded_copilot or getattr(e, "source", "") != "copilot"))
     )
     for event in events:
         if isinstance(event, Transcript):

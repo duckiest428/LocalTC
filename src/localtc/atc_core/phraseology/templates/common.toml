@@ -170,6 +170,12 @@ id = "common.stand_by"
 controller = "any"
 text = ["{callsign}, stand by.", "{callsign}, stand by one."]
 
+# "How are you doing today?": a word back.
+[[template]]
+id = "common.pleasantry"
+controller = "any"
+text = ["{callsign}, doing well, thanks.", "{callsign}, not bad at all, thanks for asking.", "{callsign}, good, thanks."]
+
 [[template]]
 id = "clearance.standby"
 controller = "clearance"

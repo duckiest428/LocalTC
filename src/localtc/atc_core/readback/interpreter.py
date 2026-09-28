@@ -16,8 +16,9 @@ from localtc.atc_core.readback.extract import (
     values_equal,
     without_callsign,
 )
-from localtc.atc_core.readback.intents import EMERGENCY, match_intents, resolve
+from localtc.atc_core.readback.intents import EMERGENCY, IntentMatch, match_intents, resolve
 from localtc.atc_core.readback.normalize import normalize
+from localtc.atc_core.readback.questions import asks, question_topic
 from localtc.atc_core.values import Callsign
 
 Kind = Literal["readback", "request", "unknown"]
@@ -104,6 +105,13 @@ class GrammarInterpreter:
         callsign_heard = bool(ELEMENTS["callsign"](tokens, context.callsign))
         matches = match_intents(tokens)
         chosen, ambiguous = resolve(matches)
+        if (topic := question_topic(text)) is not None and (chosen is None or chosen.intent != EMERGENCY):
+            if chosen is None or (chosen.intent in ("acknowledge", "pleasantry") and asks(text)):
+                # "Any idea what our departure runway will be? Thank you very much": a question, not a thank-you.
+                chosen, ambiguous = IntentMatch("question", {"topic": topic}), False
+            elif "topic" not in chosen.values:
+                # "Short final runway 32, and can we also get the altimeter?": the report, and the question with it.
+                chosen = IntentMatch(chosen.intent, {**chosen.values, "asks": topic})
 
         if chosen is not None and chosen.intent == EMERGENCY:
             return Interpretation(

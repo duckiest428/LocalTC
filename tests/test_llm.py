@@ -87,8 +87,11 @@ def test_seeded_cases_in_a_whole_flight(request):
 
 @pytest.mark.parametrize(("text", "pending", "expected"), [
     ("Mayday mayday, DP69, engine fire", False, "emergency"),
-    ("what's the altimeter", False, "question"),
-    ("say altimeter for DP69", False, "question"),
+    # A question the grammar can place is answered from the sim's data: no model, no wait.
+    ("what's the altimeter", False, None),
+    ("say altimeter for DP69", False, None),
+    ("any idea what our departure runway will be? Thank you very much", False, None),
+    ("what's the story with the delays today?", False, "question"),
     ("uh the thing", False, "parser_failure"),
     ("DP69 request direct Quebec", False, "parser_failure"),
     # The grammar hears a check-in and would miss the request riding along with it.
@@ -113,11 +116,12 @@ def test_questions():
 
 
 def test_fallback_mode_asks_the_model_only_when_triggered():
-    backend = ScriptedBackend({"what's the altimeter": {"kind": "question", "topic": "altimeter"}})
+    backend = ScriptedBackend({"what's the story with the delays today": {"kind": "question", "topic": "other"}})
     interpreter = LlmInterpreter(backend, mode="fallback")
     interpreter.interpret("Montreal Tower, DP69, holding short runway 06L, ready for departure", None, DP69)
+    interpreter.interpret("what's the altimeter", None, DP69)
     assert backend.requests == []
-    assert interpreter.interpret("what's the altimeter", None, DP69).intent == "question"
+    assert interpreter.interpret("what's the story with the delays today", None, DP69).intent == "question"
     assert len(backend.requests) == 1
 
 

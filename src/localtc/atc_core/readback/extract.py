@@ -600,10 +600,15 @@ ELEMENTS: dict[str, Extractor] = {
     "destination": destination,
     "fix": fixes,
     "callsign": callsigns,
+    # With what speech-to-text makes of "cleared": "great for takeoff", "cut to land", "clean to land".
     "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
-                                 ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off")),
+                                 ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off"),
+                                 ("great", "for", "takeoff"), ("clean", "for", "takeoff"), ("cleat", "for", "takeoff"),
+                                 ("cleared", "for", "departure")),
     "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"), ("position", "and", "hold")),
-    "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land")),
+    "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land"), ("cut", "to", "land"),
+                              ("great", "to", "land"), ("clean", "to", "land"), ("cleat", "to", "land"), ("clear", "land"),
+                              ("cleared", "for", "landing"), ("clear", "for", "landing")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),
     "descend_via": phrase(("descend", "via"), ("descending", "via"), ("descent", "via"), ("down", "via")),
 }
@@ -650,16 +655,31 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
     if element in ("runway", "hold_short"):
         return normalize_runway(heard) == normalize_runway(expected)
     if element == "approach":
-        return heard.runway == normalize_runway(expected.runway) and (heard.kind == expected.kind or heard.kind == "LOC")
+        wanted = normalize_runway(expected.runway)
+        # "ILS 32R" for the ILS 32: an airport with a runway 32 has no 32R, so it's the same approach, the letter
+        # added by the pilot or by speech-to-text.
+        same_runway = heard.runway == wanted or (wanted[-1:].isdigit() and heard.runway.rstrip("LRC") == wanted)
+        return same_runway and (heard.kind == expected.kind or heard.kind == "LOC")
     if element == "altitude" or element == "cruise":
         return int(heard) == int(expected)
     if element == "taxi_route":
         return taxi_route_matches(heard, expected)
     if element == "fix":
-        return str(heard).lower() == str(expected).lower()
+        # (A five-letter fix is one word: "direct BTLR, Frontier" isn't a fix called "BTLR Frontier".)
+        return str(heard).lower() == str(expected).lower() or fix_matches(str(heard).split()[0], str(expected))
     if element == "procedure":
         return procedure_matches(str(heard), str(expected))
     return heard == expected
+
+
+def fix_matches(heard: str, expected: str) -> bool:
+    """A five-letter fix as speech-to-text spells it: BTTLR ("Bottler") comes back BTLR. Doubled letters count
+    once; otherwise it has to be the same letters."""
+    def squeeze(name: str) -> str:
+        letters = "".join(c for c in name.upper() if c.isalpha())
+        return "".join(c for i, c in enumerate(letters) if i == 0 or c != letters[i - 1])
+
+    return len(expected) >= 4 and squeeze(heard) == squeeze(expected)
 
 
 def procedure_matches(heard: str, expected: str) -> bool:

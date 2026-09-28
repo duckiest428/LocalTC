@@ -6,8 +6,11 @@ other flights: "Westjet 452, runway 06L, cleared to land, wind 060 at 6" and "cl
 engine never waits for, or answers, any of it (``RadioChatter`` events, not transmissions to the pilot).
 
 The words are the same templates ATC uses with the pilot, filled in with the airport's own runway in use,
-wind and taxiways, and callsigns of airlines that fly there. The engine decides when (a quiet frequency, a
-gap of a minute or two that depends on how busy that kind of controller is); this module decides what.
+wind and taxiways. The aircraft are the sim's own: the AI traffic around, by the callsigns it carries, each
+told what fits what it's doing (the one at a gate is pushed back, the one low on final is cleared to land).
+With none of it around, the frequency is quiet: nobody is made up. The engine decides when (a quiet
+frequency, a gap of a minute or two that depends on how busy that kind of controller is) and who is around;
+this module decides what is said.
 """
 
 import random
@@ -17,13 +20,6 @@ from typing import Any
 
 from localtc.atc_core.phraseology import TemplateLibrary, speech
 from localtc.atc_core.values import Callsign, Wind
-
-# Airlines heard on North American frequencies, and on European and other ICAO ones.
-AMERICAS = ("AAL", "ACA", "ASA", "DAL", "FFT", "JBU", "NKS", "SKW", "SWA", "UAL", "WJA", "JZA", "POE", "FDX",
-            "UPS", "ENY", "RPA", "ROU", "TSC", "FLE", "AAY", "SCX", "EDV")
-EUROPE = ("BAW", "DLH", "AFR", "KLM", "EZY", "RYR", "SWR", "AUA", "IBE", "VLG", "SAS", "TAP", "EIN", "WZZ",
-          "EWG", "FIN", "TRA", "CFG", "AEE", "LOT", "UAE", "QTR", "THY")
-GA_CHANCE = 0.15  # at an airport, now and then a light aircraft rather than an airliner
 
 # How often each kind of controller is heard talking to somebody else: (shortest, longest) gap, seconds.
 GAP_S: dict[str, tuple[float, float]] = {
@@ -40,6 +36,20 @@ class Line:
     spoken: str
 
 
+# What another aircraft is doing, as the engine sees it in the sim's traffic.
+DOINGS = ("at_gate", "taxiing_out", "taxiing_in", "holding", "landing", "climbing", "descending", "level")
+
+
+@dataclass(frozen=True)
+class Other:
+    """A real aircraft in the sim that this controller could be talking to."""
+
+    object_id: int
+    callsign: Callsign
+    doing: str  # one of DOINGS
+    level_ft: int = 0  # its altitude, to the nearest thousand (airborne)
+
+
 @dataclass
 class Scene:
     """What the other flights can be told here: the airport's runway in use and taxiways, the wind, altitudes."""
@@ -53,39 +63,30 @@ class Scene:
     icao_region: bool = False
     level_ft: int = 35000  # around where the pilot's own flight is: centres work flights near its level
     exclude: str = ""  # the pilot's own callsign: never borrowed
+    others: list[Other] = field(default_factory=list)  # the sim's aircraft this controller is working
 
 
 class Chatter:
     def __init__(self, library: TemplateLibrary, seed: int = 0) -> None:
         self.library = library
         self.rng = random.Random(seed or 1)
+        self.last: Other | None = None  # who the last exchange was with
 
     def gap(self, controller: str) -> float:
         low, high = GAP_S.get(controller, (60.0, 150.0))
         return self.rng.uniform(low, high)
 
-    def callsign(self, scene: Scene) -> Callsign:
-        rng = self.rng
-        at_airport = scene.controller in ("ground", "tower", "clearance")
-        if at_airport and not scene.icao_region and rng.random() < GA_CHANCE:
-            letters = "".join(rng.choice("ABCDEFGHJKLMNPRSTUVWXYZ") for _ in range(2))
-            return Callsign.named(f"N{rng.randint(1, 9)}{rng.randint(10, 99)}{letters}")
-        airlines = EUROPE if scene.icao_region else AMERICAS
-        while True:
-            code = rng.choice(airlines)
-            number = str(rng.choice((rng.randint(10, 99), rng.randint(100, 999), rng.randint(1000, 4999))))
-            cs = Callsign.named(f"{code}{number}")
-            if cs.ident != scene.exclude:
-                return cs
-
     def exchange(self, scene: Scene) -> list[Line]:
         """One exchange between the controller and somebody else: ATC's call and the readback (or the other way
         round, for a check-in). Empty if there's nothing sensible to say here."""
-        options = self._options(scene)
-        if not options:
+        choices = [(other, option) for other in scene.others if other.callsign.ident != scene.exclude
+                   for option in self._options(scene, other)]
+        if not choices:
+            self.last = None
             return []
-        kind, iid, slots = self.rng.choice(options)
-        cs = self.callsign(scene)
+        other, (kind, iid, slots) = self.rng.choice(choices)
+        self.last = other
+        cs = other.callsign
         slots = {**slots, "callsign": cs}
         shown = cs.telephony + " " + cs.flight_number if cs.is_airline else cs.ident
         atc = self.library.render(iid, slots, rng=self.rng)
@@ -107,41 +108,46 @@ class Chatter:
             lines.append(Line("pilot", shown, _sentence(spoken), spoken))
         return lines
 
-    def _options(self, scene: Scene) -> list[tuple[str, str, dict[str, Any]]]:
+    def _options(self, scene: Scene, other: Other) -> list[tuple[str, str, dict[str, Any]]]:
+        """What this controller would say to ``other``, given what it's doing."""
         rng = self.rng
-        c = scene.controller
+        c, doing = scene.controller, other.doing
         out: list[tuple[str, str, dict[str, Any]]] = []
         runway, wind = scene.runway, scene.wind
         route = rng.choice(scene.routes) if scene.routes else ()
         if c == "ground":
-            if runway and route:
+            if doing == "at_gate":
+                out.append(("atc", "ground.pushback", {"turn": rng.choice(("left", "right"))}))
+            elif doing == "taxiing_out" and runway and route:
                 out.append(("atc", "ground.taxi_out", {"runway": runway, "taxi_route": route}))
-            if route:
+            elif doing == "taxiing_in" and route:
                 out.append(("atc", "ground.taxi_in", {"taxi_route": tuple(reversed(route))}))  # the way back in
-            out.append(("atc", "ground.pushback", {"turn": rng.choice(("left", "right"))}))
         elif c == "tower" and runway:
-            out.append(("atc", "tower.takeoff", {"runway": runway}))
-            out.append(("atc", "tower.luaw", {"runway": runway}))
-            if wind is not None:
+            if doing == "holding":
+                out.append(("atc", "tower.takeoff", {"runway": runway}))
+                out.append(("atc", "tower.luaw", {"runway": runway}))
+            elif doing == "landing" and wind is not None:
                 out.append(("atc", "tower.land", {"runway": runway, "wind": wind}))
-                out.append(("atc", "tower.land", {"runway": runway, "wind": wind}))  # landings are what towers say most
-        elif c in ("departure", "approach"):
-            if c == "departure":
-                out.append(("atc", "common.climb", {"altitude": rng.choice((7000, 9000, 11000, 13000, 17000))}))
+        elif c in ("departure", "approach") and doing in ("climbing", "descending", "level"):
+            if doing == "climbing":
+                out.append(("atc", "common.climb", {"altitude": min(17000, other.level_ft + rng.choice((2000, 4000, 6000)))}))
+            elif doing == "descending":
+                out.append(("atc", "common.descend", {"altitude": max(2000, other.level_ft - rng.choice((2000, 3000, 4000)))}))
+            if scene.handoff is not None and (doing != "climbing" or other.level_ft >= 10000):
+                station, mhz = scene.handoff
+                out.append(("atc", "common.contact", {"station": station, "frequency": mhz}))
+        elif c == "center" and other.level_ft >= 10000:
+            level = max(11000, min(41000, other.level_ft))
+            if doing == "level":
+                out.append(("checkin", "common.roger", {"level": level}))
+            elif doing == "climbing":
+                out.append(("atc", "common.climb", {"altitude": min(41000, level + rng.choice((2000, 4000)))}))
             else:
-                out.append(("atc", "common.descend", {"altitude": rng.choice((3000, 4000, 5000, 6000, 8000))}))
+                out.append(("atc", "common.descend", {"altitude": max(11000, level - rng.choice((2000, 4000, 6000)))}))
             if scene.handoff is not None:
                 station, mhz = scene.handoff
                 out.append(("atc", "common.contact", {"station": station, "frequency": mhz}))
-        elif c == "center":
-            level = max(24000, min(41000, scene.level_ft + rng.choice((-4000, -2000, 2000, 4000))))
-            out.append(("atc", "common.climb", {"altitude": level}))
-            out.append(("atc", "common.descend", {"altitude": max(11000, level - 10000)}))
-            out.append(("checkin", "common.roger", {"level": level}))
-            if scene.handoff is not None:
-                station, mhz = scene.handoff
-                out.append(("atc", "common.contact", {"station": station, "frequency": mhz}))
-        return out
+        return [(kind, iid, slots) for kind, iid, slots in out if "altitude" not in slots or slots["altitude"] >= 1000]
 
 
 def _digit_words(n: int) -> str:
@@ -157,4 +163,4 @@ def seed_for(callsign: str, seed: int) -> int:
     return seed or zlib.crc32(("chatter" + callsign).encode())
 
 
-__all__ = ["GAP_S", "Chatter", "Line", "Scene", "seed_for"]
+__all__ = ["DOINGS", "GAP_S", "Chatter", "Line", "Other", "Scene", "seed_for"]

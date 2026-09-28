@@ -27,6 +27,7 @@ from localtc.scenario import Scenario, ScenarioMeta, run
 from localtc.sim_api import (
     SIM_EVENT_TYPES,
     AtcAlert,
+    AtcThinking,
     AtcTransmission,
     OwnshipState,
     RadioChatter,
@@ -109,9 +110,10 @@ def test_greetings_only_with_the_first_word(recorded):
     assert tower and not any("good afternoon" in line or "good evening" in line for line in tower[1:])
 
 
-def test_the_ride_is_asked_after_once_a_flight(copilot):
+def test_nobody_asks_after_the_ride(copilot):
+    """Asked once a flight at most, then (the KMCO-KIND flight, 27 September 2026) not at all: "no ATC says that"."""
     rides = [line for line in atc(copilot.lines) if "ride" in line]
-    assert len(rides) <= 1, rides
+    assert rides == []
 
 
 # --- the departure ----------------------------------------------------------------------------------------------
@@ -240,13 +242,19 @@ def test_calling_a_tower_out_of_range_gets_silence_and_a_word_why():
 
 def test_chatter_is_other_aircraft_in_the_airports_own_words():
     c = chatter.Chatter(TemplateLibrary.load(), seed=3)
-    scene = chatter.Scene("tower", "Montreal Tower", runway="06L", wind=Wind(60, 6), exclude="ACA779")
+    others = [chatter.Other(1, Callsign.named("WJA452"), "landing"), chatter.Other(2, Callsign.named("DAL88"), "holding"),
+              chatter.Other(3, Callsign.named("ACA779"), "holding")]  # the pilot's own callsign, never borrowed
+    scene = chatter.Scene("tower", "Montreal Tower", runway="06L", wind=Wind(60, 6), exclude="ACA779", others=others)
     for _ in range(20):
         lines = c.exchange(scene)
         assert lines and lines[0].speaker == "atc" and "06L" in lines[0].text
-        assert "779" not in lines[0].callsign or "Air Canada" not in lines[0].callsign
+        assert lines[0].callsign in ("Westjet 452", "Delta 88")
+        if "Westjet" in lines[0].callsign:
+            assert "cleared to land" in lines[0].text  # the one on final lands; the one holding goes
         if len(lines) > 1:
             assert lines[1].speaker == "pilot" and "six left" in lines[1].spoken
+    # Nobody around in the sim: nobody made up.
+    assert c.exchange(chatter.Scene("tower", "Montreal Tower", runway="06L", wind=Wind(60, 6), exclude="ACA779")) == []
 
 
 def test_chatter_fills_the_quiet_and_never_the_pilots_own_exchanges():
@@ -296,16 +304,19 @@ class SlowThenFast:
         return LlmReply('{"kind":"question","intent":"","topic":"other"}', 7000.0)
 
 
-def test_off_script_gets_stand_by_then_the_patient_answer():
+def test_off_script_gets_the_controller_thinking_then_the_patient_answer():
     backend = SlowThenFast()
     engine, own = parked_at_montreal(interpreter=LlmInterpreter(backend, mode="fallback", timeout_s=2.5, patience_s=15.0))
     ground = engine.facility("ground")
     engine.handle(msgspec.structs.replace(own, t=own.t + 1, com1_mhz=ground.mhz))
-    first = engine.handle(Transcript(t=own.t + 2, text="Air Canada 779, what's the story with the de-icing today?",
+    first = engine.handle(Transcript(t=own.t + 2, text="Air Canada 779, what's the story with the delays today?",
                                      source="typed"))
-    assert [o.instruction_id for o in first if isinstance(o, AtcTransmission)] == ["common.stand_by"]
+    # Nothing said ("stand by" before every answer was one call too many): the app shows the controller thinking.
+    assert not [o for o in first if isinstance(o, AtcTransmission)]
+    assert [(o.station, o.busy) for o in first if isinstance(o, AtcThinking)] == [(ground.station, True)]
     assert engine.deferred is not None
     later = engine.resolve_deferred()
+    assert [o.busy for o in later if isinstance(o, AtcThinking)] == [False]
     later += engine.handle(msgspec.structs.replace(own, t=own.t + 12, com1_mhz=ground.mhz))
     assert backend.timeouts[-1] == pytest.approx(15.0, abs=0.01)  # the second try had its patience
     assert any(isinstance(o, AtcTransmission) and o.instruction_id != "common.say_again" for o in later)

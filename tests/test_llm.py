@@ -108,6 +108,71 @@ def test_triggers(text, pending, expected):
     assert trigger(grammar, text) == expected
 
 
+@pytest.mark.parametrize(("text", "phase", "confidence", "expected"), [
+    # A readback that's right, with a request riding along the grammar can't place: the model hears the rest.
+    ("Runway 06L, cleared for takeoff, actually can we get a left turn out of here after departure, DP69",
+     "RUNWAY_HOLD", None, None),  # (the grammar places this one: request_turn)
+    ("Runway 06L, cleared for takeoff, and can we do the thing with the bells, DP69", "RUNWAY_HOLD", None, "compound"),
+    ("Tower, DP69, holding short 06L, sorry, 24R, ready", "RUNWAY_HOLD", None, "self_correction"),
+    ("Tower, uh, DP69 holding short 06L ready", "RUNWAY_HOLD", None, "hesitation"),
+    ("Tower, holding short 06L, ready for departure", "RUNWAY_HOLD", None, "callsign"),
+    ("Tower, DP69 holding short 06L ready, altimeter standard", "RUNWAY_HOLD", None, "non_numeric"),
+    ("Tower, DP69, request pushback", "RUNWAY_HOLD", None, "out_of_phase"),
+    ("Tower, DP69, holding short 06L, ready for departure", "RUNWAY_HOLD", 0.62, "digits_unsure"),
+    ("Tower, DP69, holding short 06L, ready for departure", "RUNWAY_HOLD", 0.9, None),
+])
+def test_what_sends_a_call_to_the_model(text, phase, confidence, expected):
+    readback = LIBRARY.render("tower.takeoff", {"runway": "06L", "callsign": Callsign("DP69")})
+    waiting = PendingReadback("tower.takeoff", "tower", readback.expected, readback.required) if "cleared" in text else None
+    context = InterpretContext(callsign=Callsign("DP69"), phase=phase, station="Montreal Tower", station_role="tower",
+                               confidence=confidence)
+    grammar = GrammarInterpreter().interpret(text, waiting, context)
+    assert trigger(grammar, text, confidence, context=context) == expected
+
+
+def test_a_request_riding_along_with_a_readback_is_answered_too():
+    readback = LIBRARY.render("tower.takeoff", {"runway": "06L", "callsign": Callsign("DP69")})
+    waiting = PendingReadback("tower.takeoff", "tower", readback.expected, readback.required)
+    heard = GrammarInterpreter().interpret(
+        "Runway 06L, cleared for takeoff, and can we get the altimeter, DP69", waiting, DP69)
+    assert heard.status == "correct" and (heard.then.intent, heard.then.values) == ("question", {"topic": "altimeter"})
+    # One the grammar can't place goes to the model, which reads the readback and the request in one answer.
+    text = "cleared for takeoff runway 06L, and can we get a look at the northern lights on the way out, DP69"
+    backend = ScriptedBackend({text: {"kind": "readback", "intent": "other", "runway": "06L",
+                                      "cleared_for_takeoff": True}})
+    result = LlmInterpreter(backend, mode="fallback").interpret(text, waiting, DP69)
+    assert (result.kind, result.status, result.trigger) == ("readback", "correct", "compound")
+    assert result.then is not None and result.then.intent == "other"  # (which ATC declines)
+
+
+@pytest.mark.parametrize(("said", "confidence", "status"), [
+    ("squawk five zero one five", 0.6, "correct"),
+    ("squawk five zero five one", 0.6, "unclear"),  # two digits swapped, not sure what was heard: "confirm squawk"
+    ("squawk five zero five one", 0.95, "incorrect"),  # heard clearly: the pilot's own wrong number, "negative"
+    ("squawk five zero five one", None, "incorrect"),  # typed: exactly what was meant
+    ("squawk five zero one six", 0.6, "unclear"),  # one digit off
+    ("squawk two six four three", 0.6, "incorrect"),  # nothing like it: "negative" with the right one
+])
+def test_readback_tiers_by_how_sure_speech_to_text_was(said, confidence, status):
+    r = LIBRARY.render("clearance.ifr", {"destination": "Quebec", "altitude": 5000, "cruise": 12000, "minutes": 10,
+                                         "frequency": 120.42, "squawk": "5015", "callsign": Callsign("DP69")})
+    pending = PendingReadback("clearance.ifr", "clearance", r.expected, r.required, r.optional)
+    text = f"climb and maintain five thousand, departure one two zero point four two, {said}, DP69"
+    context = InterpretContext(callsign=Callsign("DP69"), phase="PARKED", confidence=confidence)
+    assert GrammarInterpreter().interpret(text, pending, context).status == status
+
+
+def test_say_again_only_after_the_model_could_not_either():
+    """The model timing out is not the model failing to understand: ATC thinks, asks it again with time to spare,
+    and says "say again" only if that too finds nothing."""
+    text = "DP69 the uh thing"
+    backend = ScriptedBackend({text: [TIMEOUT, {"kind": "unintelligible"}]})
+    engine, own = cyul_engine(backend)
+    first = say(engine, own, text, mhz=121.0)
+    assert not atc(first) and engine.deferred is not None
+    assert atc(engine.resolve_deferred()) == ["DP69, say again."]
+
+
 def test_questions():
     assert is_question("which runway are we landing on")
     assert is_question("any weather at quebec?")
@@ -149,22 +214,37 @@ def test_prompt_is_narrow():
     assert request.prompt == (
         "Callsign: DP69\nPhase: RUNWAY_HOLD\nStation: Montreal Tower (tower)\n"
         "Cleared: altitude 5000; squawk 5015; runway 06L\nTraffic called: none\n"
-        'ATC last said: "DP69, runway 06L, fly runway heading, cleared for takeoff."\n'
+        'Recent: ATC: "DP69, runway 06L, fly runway heading, cleared for takeoff."\n'
         "Readback expected: runway 06L; cleared for takeoff\n"
         'Pilot: "Clear for takeoff, DP69"'
     )
-    # Only the elements being read back, plus kind and intent; no free-text fields to roleplay in.
-    assert list(request.schema["properties"]) == ["kind", "intent", "runway", "cleared_for_takeoff"]
-    assert request.schema["additionalProperties"] is False
+    # Only the elements being read back, plus kind, intent and topic (what's asked along with it); no free-text
+    # fields to roleplay in. Only kind is required: the model writes what was said and stops.
+    assert list(request.schema["properties"]) == ["kind", "intent", "topic", "runway", "cleared_for_takeoff"]
+    assert request.schema["additionalProperties"] is False and request.schema["required"] == ["kind"]
     assert "never reply to the pilot" in request.system
     examples = [text for role, text in request.messages[:-1] if role == "user"]
-    assert all(text.startswith("Callsign: ") and "\nTraffic called: " in text for text in examples)  # the same keys
+    assert all(text.startswith("Callsign: ") and "\nTraffic called: " in text and "\nRecent: " in text
+               for text in examples)  # the same keys
+    answers = [json.loads(text) for role, text in request.messages[:-1] if role == "assistant"]
+    assert all("" not in a.values() for a in answers)  # no empty fields to copy: they cost seconds on a CPU
 
     open_request = build_request("what's the altimeter", None, context, load_examples())
     assert list(open_request.schema["properties"]) == [
         "kind", "intent", "topic", "runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls",
         "fuel"]
     assert open_request.prompt.endswith("Readback expected: none\nPilot: \"what's the altimeter\"")
+
+
+def test_the_model_may_only_answer_with_calls_that_fit_the_controller_and_phase():
+    approach = InterpretContext(callsign=Callsign("ACA8272"), phase="APPROACH", station="Seattle Approach",
+                                station_role="approach")
+    intents = build_request("Clear ILS 34R", None, approach, load_examples()).schema["properties"]["intent"]["enum"]
+    assert "request_ifr_clearance" not in intents and "request_pushback" not in intents
+    assert {"request_altitude", "report_final", "going_around", "other", "say_again"} <= set(intents)
+    ground = InterpretContext(callsign=Callsign("ACA8272"), phase="TAXI_OUT", station="Vancouver Ground")
+    intents = build_request("x", None, ground, load_examples()).schema["properties"]["intent"]["enum"]
+    assert "request_crossing" in intents and "need_time" in intents and "request_altitude" not in intents
 
 
 def test_calls_of_a_kind_share_the_prompt_up_to_their_own_last_message():
@@ -235,7 +315,8 @@ def test_bad_answer_is_retried_with_the_problem_named():
 
 def test_timeout_uses_the_grammar_and_does_not_retry():
     backend = ScriptedBackend({"Montreal Ground, DP69, request taxi": TIMEOUT})
-    result = LlmInterpreter(backend, mode="primary").interpret("Montreal Ground, DP69, request taxi", None, DP69)
+    ground = InterpretContext(callsign=Callsign("DP69"), phase="PARKED", station="Montreal Ground")
+    result = LlmInterpreter(backend, mode="primary").interpret("Montreal Ground, DP69, request taxi", None, ground)
     assert (result.kind, result.intent, result.source) == ("request", "ready_to_taxi", "grammar")
     assert [(e.outcome, e.trigger) for e in result.exchanges] == [("timeout", "")]
 
@@ -422,12 +503,13 @@ def test_the_model_sees_this_moment_and_nothing_older():
 
     soon = msgspec.structs.replace(own, t=own.t + 60)
     say(engine, soon, "altimeter again please", mhz=121.0)
-    assert 'ATC last said: "DP69, altimeter 30.10."' in _shown(backend)  # what ground just said
+    # What was just said on this frequency, both ways.
+    assert '\nRecent: Pilot: "ground, what\'s the altimeter" | ATC: "DP69, altimeter 30.10."\n' in _shown(backend)
 
     # An hour on, the same controller's last words are another moment: not shown as if just said.
     later = msgspec.structs.replace(own, t=own.t + 3600)
     say(engine, later, "altimeter again please", mhz=121.0)
-    assert "\nATC last said: none\n" in _shown(backend)
+    assert "\nRecent: none\n" in _shown(backend)
 
 
 def test_traffic_called_is_shown_for_a_few_minutes():

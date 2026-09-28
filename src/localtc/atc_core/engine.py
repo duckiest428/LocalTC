@@ -143,7 +143,10 @@ STOPPED_AHEAD_WIDTH_M = 30.0  # ... when it is this close to the line the aircra
 STOPPED_AHEAD_OFF_ROUTE_M = 120.0  # with no route to follow, only this far along the nose
 PARKED_AHEAD_WIDTH_M = 10.0  # a parked aircraft this close to straight ahead of the nose ...
 PARKED_AHEAD_S = 4.0  # ... for this long is one the taxi is heading into
-CONVERSATIONAL_TRIGGERS = {"question", "out_of_grammar", "parser_failure", "low_confidence", "ambiguous"}
+# The model missed a call for one of these, and the grammar had nothing: ask it again with time to spare before
+# "say again" (which is for when the model couldn't make it out either).
+CONVERSATIONAL_TRIGGERS = {"question", "out_of_grammar", "parser_failure", "low_confidence", "ambiguous", "compound",
+                           "self_correction", "hesitation", "callsign", "non_numeric", "out_of_phase", "digits_unsure"}
 LONG_STATEMENT_WORDS = 8  # a call this long that nothing understood is the pilot talking, not a garbled readback
 CHATTER_QUIET_S = 12.0  # the frequency quiet this long before somebody else talks
 CHATTER_TURN_S = 1.5  # between the controller's call and the other aircraft's readback
@@ -151,6 +154,7 @@ RANGE_TOLD_S = 60.0  # "out of range" said no more often than this per station
 # What the language model is shown of the recent past: ATC's last line to this flight on this frequency, and the
 # traffic ATC called, only this recent. Older is another moment (a Center sector revisited an hour later).
 MODEL_LAST_ATC_S = 300.0
+MODEL_RECENT = 4  # exchanges on this frequency the model is shown
 MODEL_TRAFFIC_S = 180.0
 CHECKIN_ACK_S = 120.0  # an altitude report this soon after the controller spoke is only acknowledging it
 HANDOFF_ACK_WORDS = {"roger", "wilco", "switching", "over", "good", "day", "night", "bye", "goodbye", "cheers", "thanks",
@@ -1601,7 +1605,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
                     None, "other", "question", "report_problem", "acknowledge")):
                 return out  # the problem was the message: acknowledged, nothing to decline or ask again
         if interp.kind == "readback":
-            return out + self._on_readback(interp, facility, t)
+            out += self._on_readback(interp, facility, t)
+            if interp.then is not None and interp.then.intent != "emergency":
+                # "Cleared to land 14R, can we make it a low approach?": the readback taken, then the request.
+                out += self._on_request(interp.then, facility, t)
+            return out
         if interp.intent == "emergency":
             return out + self._emergency(interp, facility, t)
         if interp.kind == "request":
@@ -1658,11 +1666,16 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
     @staticmethod
     def _model_needs_time(interp: Interpretation, pending: PendingReadback | None) -> bool:
-        """The model was asked about something conversational and ran out of time (never for a readback: the
-        grammar's reading of those is good enough, and they're what ATC is waiting on)."""
-        return (interp.trigger in CONVERSATIONAL_TRIGGERS and bool(interp.exchanges)
-                and all(getattr(x, "outcome", "") == "timeout" for x in interp.exchanges)
-                and (pending is None or interp.trigger == "question") and interp.intent != "emergency")
+        """The model was asked and ran out of time, and what's left is not enough to answer: a conversational
+        call, a request riding along with a readback, or anything that would otherwise get "say again". A
+        readback the grammar could read (right, wrong or partly) is answered from that: it's what ATC waits on."""
+        timed_out = bool(interp.exchanges) and all(getattr(x, "outcome", "") == "timeout" for x in interp.exchanges)
+        if not timed_out or interp.intent == "emergency":
+            return False
+        say_again = interp.kind == "unknown" or (interp.intent == "say_again" and interp.source == "fallback")
+        conversational = interp.trigger in CONVERSATIONAL_TRIGGERS and (
+            pending is None or interp.trigger in ("question", "compound"))
+        return say_again or conversational
 
     def _reach(self, facility: Facility, own: OwnshipState | None) -> radio_range.Reach | None:
         """How the facility's radio reaches the aircraft (None: not limited, or nothing to measure from)."""
@@ -2578,14 +2591,20 @@ class AtcEngine(VfrMixin, DiversionMixin):
         """The moment, as the language model is shown it and as its answer is checked: one snapshot of the
         engine's own state, made fresh for each transmission. The phrasing model's facts come from it too."""
         st, a = self.state, self.state.assignments
-        last_atc = next((e.text for e in reversed(st.exchanges) if e.speaker == "atc" and e.controller == facility.controller
-                         and t - e.t <= MODEL_LAST_ATC_S), None)
+        here = [e for e in st.exchanges if e.controller == facility.controller and t - e.t <= MODEL_LAST_ATC_S]
+        last_atc = next((e.text for e in reversed(here) if e.speaker == "atc"), None)
+        recent = tuple(f'{"ATC" if e.speaker == "atc" else "Pilot"}: "{e.text}"' for e in here[-MODEL_RECENT:])
         traffic = self._last_traffic[1] if self._last_traffic and t - self._last_traffic[0] <= MODEL_TRAFFIC_S else None
+        approach = a.approach.replace(" RWY ", " ") if a.approach else None  # given: "ILS 34R"
+        if approach is None and st.phase is not None and P(st.phase) in (P.ARRIVAL, P.APPROACH) and st.aircraft is not None:
+            plan = self._arrival_plan(st.aircraft)
+            approach = f"{plan['approach'].kind} {plan['approach'].runway}" if plan else None
         return InterpretContext(
             callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
             station=facility.station, station_role=facility.controller, last_atc=last_atc, confidence=confidence,
             patient=self._patient, cleared_altitude_ft=a.altitude_ft, cleared_heading=a.heading, squawk=a.squawk,
-            runway=self._runway_in_use(st.aircraft), traffic=traffic,
+            runway=self._runway_in_use(st.aircraft), traffic=traffic, recent=recent,
+            approach=approach,
         )
 
     def _facts(self, facility: Facility | None = None) -> dict[str, str]:

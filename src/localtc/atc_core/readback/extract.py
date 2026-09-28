@@ -516,7 +516,10 @@ def callsigns(tokens: list[Token], expected: Callsign | None = None) -> list[Cal
     ident = expected.ident.lower().replace("-", "")
     suffix = expected.suffix.lower()
     for segment in _compact_segments(tokens):
-        if segment.endswith(ident) or segment.endswith(ident[1:]) or segment.endswith(suffix):
+        # The whole registration anywhere in a run ("n172lt" glued to the "ifr to" after it); its short form
+        # only at either end of one ("2lt" glued to the "4,600" after it).
+        if ident in segment or (len(ident) > 4 and ident[1:] in segment) or segment.endswith(suffix) \
+                or segment.startswith(suffix):
             return [expected]
     return []
 
@@ -636,20 +639,52 @@ def candidates(element: str, tokens: list[Token], expected: Any) -> list[Any]:
     return found
 
 
-def values_close(element: str, heard: Any, expected: Any) -> bool:
-    """Not what ATC said, but probably it, misheard or misspoken: worth a "confirm", not a "negative"."""
+def digits_near(heard: str, expected: str) -> bool:
+    """One slip of speech-to-text apart: a digit wrong, two next to each other swapped, or one dropped or
+    added ("135105" for 135.05, "5105" for squawk 5015, "020" heard "200"). Not the same digits."""
+    a, b = "".join(c for c in heard if c.isdigit()), "".join(c for c in expected if c.isdigit())
+    if a == b or min(len(a), len(b)) < 3 or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        wrong = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(wrong) == 1 or (len(wrong) == 2 and wrong[1] == wrong[0] + 1
+                                   and a[wrong[0]] == b[wrong[1]] and a[wrong[1]] == b[wrong[0]])
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    return any(long[:i] + long[i + 1:] == short for i in range(len(long)))
+
+
+def _digits(element: str, value: Any) -> str:
+    if element == "frequency":
+        return f"{float(value):.3f}".replace(".", "").rstrip("0")
+    if element == "heading":
+        return f"{int(value):03d}"
+    return str(value)
+
+
+ASR_SURE = 0.85  # speech-to-text this confident heard the digits the pilot said: one off is the pilot's number
+
+
+def values_close(element: str, heard: Any, expected: Any, confidence: float | None = None) -> bool:
+    """Not what ATC said, but probably it, misheard or misspoken: worth a "confirm", not a "negative".
+
+    A number one slip away from the right one (``digits_near``) is that only while speech-to-text wasn't sure
+    of what it heard (``confidence`` under ``ASR_SURE``). Heard clearly, or typed (None), it's the pilot's own
+    wrong number, and gets "negative" with the right one."""
     if isinstance(heard, Unclear):
         return True
     if element in ("runway", "hold_short"):
         heard, expected = normalize_runway(heard), normalize_runway(expected)
         return expected[-1:].isdigit() and heard != expected and heard.rstrip("LRC") == expected  # "08 left" for 08
-    if element in ("altitude", "cruise"):
-        return int(heard) % 100 != 0 and abs(int(heard) - int(expected)) < 50  # "1508" for 1,500
+    if element in ("altitude", "cruise") and int(heard) % 100 != 0 and abs(int(heard) - int(expected)) < 50:
+        return True  # "1508" for 1,500
     if element == "frequency":
         # "121771" for 121.7 ("121.7 when ready" run together): worth a "confirm", not a "negative".
-        wanted = f"{float(expected):.3f}".replace(".", "").rstrip("0")
+        wanted = _digits(element, expected)
         said = str(heard).replace(".", "")
-        return len(wanted) >= 4 and said.startswith(wanted) and said != wanted
+        if len(wanted) >= 4 and said.startswith(wanted) and said != wanted:
+            return True
+    if element in ("frequency", "squawk", "altitude", "cruise", "heading") and confidence is not None and confidence < ASR_SURE:
+        return digits_near(_digits(element, heard), _digits(element, expected))
     return False
 
 

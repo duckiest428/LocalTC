@@ -4,9 +4,12 @@
 #
 # mode = "readback" (a readback is expected) or "request" (none is). Every call is shown all of them, in
 # this order, so Ollama reads them once and reuses them.
-# callsign, cleared (altitude, heading, squawk, runway) and traffic are the moment as the engine knows it: most
-# examples show values there the pilot didn't say, and an answer that leaves them out.
+# callsign, cleared (altitude, heading, squawk, runway, approach), traffic and recent (the last exchanges on
+# this frequency) are the moment as the engine knows it: most examples show values there the pilot didn't say,
+# and an answer that leaves them out.
 # expect lists the readback elements for readback-mode examples, as "element=value".
+# Answers carry only what the pilot said: a field left out is one not said (every token of an answer costs
+# time on a CPU, so no empty fields).
 
 [[example]]
 mode = "readback"
@@ -14,44 +17,44 @@ phase = "RUNWAY_HOLD"
 station = "Montreal Tower"
 callsign = "DP69"
 cleared = { altitude = "5000", squawk = "5015", runway = "06L" }
-atc = "DP69, runway 06L, fly runway heading, cleared for takeoff."
+recent = ["ATC: \"DP69, runway 06L, fly runway heading, cleared for takeoff.\""]
 expect = ["runway=06L", "cleared_for_takeoff"]
 pilot = "clear for take off zero six left, delta papa six nine"
-answer = { kind = "readback", intent = "", runway = "06L", cleared_for_takeoff = true }
+answer = { kind = "readback", runway = "06L", cleared_for_takeoff = true }
 
-[[example]]
 # The pilot said a different squawk: report what the pilot said, never the expected value.
+[[example]]
 mode = "readback"
 phase = "PARKED"
 station = "Montreal Clearance"
 callsign = "DP69"
-atc = "DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015."
+recent = ["ATC: \"DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015.\""]
 expect = ["altitude=5000", "frequency=120.42", "squawk=5015"]
 pilot = "cleared as filed, five thousand, one twenty point four two, squawk five zero five one, DP69"
-answer = { kind = "readback", intent = "", altitude = "5000", frequency = "120.42", squawk = "5051" }
+answer = { kind = "readback", altitude = "5000", frequency = "120.42", squawk = "5051" }
 
-[[example]]
 # Only part of the instruction read back: leave the rest empty.
+[[example]]
 mode = "readback"
 phase = "CRUISE"
 station = "Montreal Departure"
 callsign = "Air Canada 326 (ACA326)"
 cleared = { altitude = "11000", squawk = "3321" }
-atc = "Air Canada 326, contact Montreal Center 135.025."
+recent = ["ATC: \"Air Canada 326, contact Montreal Center 135.025.\""]
 expect = ["frequency=135.025"]
 pilot = "over to center, air canada three twenty six"
-answer = { kind = "readback", intent = "", frequency = "" }
+answer = { kind = "readback" }
 
-[[example]]
 # Asking for a repeat is not a readback.
+[[example]]
 mode = "readback"
 phase = "PARKED"
 station = "Montreal Clearance"
 callsign = "DP69"
-atc = "DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015."
+recent = ["ATC: \"DP69, cleared to Quebec airport as filed, climb and maintain 5,000, departure frequency 120.42, squawk 5015.\""]
 expect = ["altitude=5000", "frequency=120.42", "squawk=5015"]
 pilot = "say again the squawk for DP69"
-answer = { kind = "request", intent = "say_again", altitude = "", frequency = "", squawk = "" }
+answer = { kind = "request", intent = "say_again" }
 
 [[example]]
 mode = "request"
@@ -60,27 +63,27 @@ station = "Montreal Departure"
 callsign = "DP69"
 cleared = { altitude = "12000", squawk = "5015" }
 pilot = "montreal departure DP69 with you out of six thousand for one two thousand"
-answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "6000", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "checkin", altitude = "6000" }
 
-[[example]]
 # "<altitude> climbing <altitude>" is the standard check-in after a handoff.
+[[example]]
 mode = "request"
 phase = "DEPARTURE"
 station = "Seattle Departure"
 callsign = "N172LT"
 cleared = { altitude = "5000", squawk = "4521" }
 pilot = "Seattle Departure, N172LT, two thousand three hundred climbing five thousand"
-answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "2300", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "checkin", altitude = "2300" }
 
-[[example]]
 # Reporting an altitude to a new controller is a check-in, not a request.
+[[example]]
 mode = "request"
 phase = "CRUISE"
 station = "Seattle Center"
 callsign = "Alaska 123 (ASA123)"
 cleared = { altitude = "11000", squawk = "2213" }
 pilot = "Seattle Center, Alaska 123, level one one thousand"
-answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "11000", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "checkin", altitude = "11000" }
 
 [[example]]
 mode = "request"
@@ -89,7 +92,7 @@ station = "Seattle Approach"
 callsign = "N172LT"
 cleared = { altitude = "3000", squawk = "4521" }
 pilot = "approach N172LT descending through four thousand five hundred for three thousand"
-answer = { kind = "request", intent = "checkin", topic = "", runway = "", atis = "", altitude = "4500", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "checkin", altitude = "4500" }
 
 [[example]]
 mode = "request"
@@ -97,7 +100,7 @@ phase = "PARKED"
 station = "Seattle Ground"
 callsign = "Delta 42 (DAL42)"
 pilot = "DAL42, request pushback and start, gate S9"
-answer = { kind = "request", intent = "request_pushback", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "request_pushback" }
 
 [[example]]
 mode = "request"
@@ -105,7 +108,7 @@ phase = "PARKED"
 station = "Paine Ground"
 callsign = "N172LT"
 pilot = "ground N172LT at the west ramp with bravo, ready to taxi"
-answer = { kind = "request", intent = "ready_to_taxi", topic = "", runway = "", atis = "B", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "ready_to_taxi", atis = "B" }
 
 [[example]]
 mode = "request"
@@ -114,7 +117,7 @@ station = "Boeing Tower"
 callsign = "N172LT"
 cleared = { altitude = "3000", squawk = "4521", runway = "14R" }
 pilot = "Boeing tower, N172LT, established on the localizer one four right"
-answer = { kind = "request", intent = "report_final", topic = "", runway = "14R", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "report_final", runway = "14R" }
 
 [[example]]
 mode = "request"
@@ -123,7 +126,7 @@ station = "Montreal Tower"
 callsign = "DP69"
 cleared = { altitude = "5000", squawk = "5015", runway = "06L" }
 pilot = "tower DP69 holding short zero six left"
-answer = { kind = "request", intent = "ready_for_departure", topic = "", runway = "06L", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "ready_for_departure", runway = "06L" }
 
 [[example]]
 mode = "request"
@@ -132,7 +135,7 @@ station = "Montreal Center"
 callsign = "DP69"
 cleared = { altitude = "24000", squawk = "5015" }
 pilot = "what's the altimeter in quebec"
-answer = { kind = "question", intent = "", topic = "altimeter", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "question", topic = "altimeter" }
 
 [[example]]
 mode = "request"
@@ -141,7 +144,7 @@ station = "Montreal Center"
 callsign = "Air Canada 326 (ACA326)"
 cleared = { altitude = "20000", squawk = "3321" }
 pilot = "Air Canada 326 request flight level two four zero"
-answer = { kind = "request", intent = "request_altitude", topic = "", runway = "", atis = "", altitude = "24000", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "request_altitude", altitude = "24000" }
 
 [[example]]
 mode = "request"
@@ -150,7 +153,7 @@ station = "Montreal Departure"
 callsign = "DP69"
 cleared = { altitude = "12000", squawk = "5015" }
 pilot = "mayday mayday mayday DP69 engine fire, two souls on board, one hour of fuel"
-answer = { kind = "request", intent = "emergency", topic = "", runway = "", atis = "", altitude = "", emergency = "engine fire", souls = "2", fuel = "1 hour" }
+answer = { kind = "request", intent = "emergency", emergency = "engine fire", souls = "2", fuel = "1 hour" }
 
 [[example]]
 mode = "request"
@@ -159,7 +162,7 @@ station = "Montreal Center"
 callsign = "DP69"
 cleared = { altitude = "24000", squawk = "5015" }
 pilot = "DP69 requesting direct Quebec"
-answer = { kind = "request", intent = "other", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "other" }
 
 [[example]]
 mode = "request"
@@ -168,7 +171,7 @@ station = "Seattle Approach"
 callsign = "Alaska 123 (ASA123)"
 cleared = { altitude = "6000", squawk = "2213" }
 pilot = "Alaska 123 would like to hold present position for a few minutes"
-answer = { kind = "request", intent = "other", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "other" }
 
 [[example]]
 mode = "request"
@@ -176,7 +179,7 @@ phase = "PARKED"
 station = "Montreal Ground"
 callsign = "DP69"
 pilot = "uh the uh we're uh"
-answer = { kind = "unintelligible", intent = "", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "unintelligible" }
 
 [[example]]
 mode = "request"
@@ -185,17 +188,17 @@ station = "Seattle Center"
 callsign = "N172LT"
 cleared = { altitude = "9000", squawk = "4521" }
 pilot = "Seattle Center, N172LT, request direct BLAKO"
-answer = { kind = "request", intent = "request_direct", topic = "", runway = "", atis = "", altitude = "", fix = "BLAKO", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "request_direct", fix = "BLAKO" }
 
-[[example]]
 # A different runway or approach type is request_runway, even when it mentions vectors or an altitude.
+[[example]]
 mode = "request"
 phase = "APPROACH"
 station = "Phoenix Approach"
 callsign = "EXP69"
 cleared = { altitude = "8000", heading = "250", squawk = "6102" }
 pilot = "EXP69 would like the visual for runway two six instead"
-answer = { kind = "request", intent = "request_runway", topic = "", runway = "26", atis = "", altitude = "", fix = "", approach = "VISUAL", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "request_runway", runway = "26", approach = "VISUAL" }
 
 [[example]]
 mode = "request"
@@ -204,26 +207,88 @@ station = "Boeing Tower"
 callsign = "N172LT"
 cleared = { altitude = "3000", squawk = "4521", runway = "14R" }
 pilot = "going around, two lima tango"
-answer = { kind = "request", intent = "going_around", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "going_around" }
 
-[[example]]
 # A pilot report of the ride or icing: not a request, not a question.
+[[example]]
 mode = "request"
 phase = "CRUISE"
 station = "Seattle Center"
 callsign = "N172LT"
 cleared = { altitude = "7000", squawk = "4521" }
 pilot = "Center, 2LT, we're getting some moderate chop at seven thousand"
-answer = { kind = "request", intent = "report_conditions", topic = "", runway = "", atis = "", altitude = "7000", fix = "", approach = "", conditions = "moderate chop", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "report_conditions", altitude = "7000", conditions = "moderate chop" }
 
-[[example]]
 # Traffic ATC called: "looking" or "in sight" is a traffic report, whatever else is said.
+[[example]]
 mode = "request"
 phase = "DEPARTURE"
 station = "Seattle Departure"
 callsign = "N172LT"
 cleared = { altitude = "5000", squawk = "4521" }
 traffic = "2 o'clock, 3 miles, crossing left to right, 4,000 ft, C172"
-atc = "N172LT, traffic 2 o'clock, 3 miles, crossing left to right, 4,000, a Cessna 172."
+recent = ["ATC: \"N172LT, traffic 2 o'clock, 3 miles, crossing left to right, 4,000, a Cessna 172.\""]
 pilot = "looking for the traffic, two lima tango"
-answer = { kind = "request", intent = "traffic_report", topic = "", runway = "", atis = "", altitude = "", fix = "", approach = "", conditions = "", emergency = "", souls = "", fuel = "" }
+answer = { kind = "request", intent = "traffic_report" }
+
+# Reading back and asking in one call: kind is readback, intent is what they asked for.
+[[example]]
+mode = "readback"
+phase = "LANDING"
+station = "Boeing Tower"
+callsign = "N172LT"
+cleared = { altitude = "3000", squawk = "4521", runway = "14R", approach = "ILS 14R" }
+recent = ["ATC: \"N172LT, runway 14R, cleared to land.\""]
+expect = ["runway=14R", "cleared_to_land"]
+pilot = "cleared to land one four right, actually can we make that a low approach, two lima tango"
+answer = { kind = "readback", intent = "request_option", runway = "14R", cleared_to_land = true }
+
+# An approach clearance read back on approach is a readback, never a request for a clearance.
+[[example]]
+mode = "readback"
+phase = "APPROACH"
+station = "Seattle Approach"
+callsign = "Air Canada 8272 (ACA8272)"
+cleared = { altitude = "5000", squawk = "3305", runway = "34R", approach = "ILS 34R" }
+recent = ["ATC: \"Air Canada 8272, turn left heading 020, maintain 2,500 until established on the localizer, cleared ILS runway 34R approach.\""]
+expect = ["heading=020", "altitude=2500", "approach=ILS 34R"]
+pilot = "left zero two zero, two thousand five hundred til established, cleared ILS three four right, Air Canada 8272"
+answer = { kind = "readback", heading = "020", altitude = "2500", approach = "ILS 34R" }
+
+# Asking to wait before the next instruction.
+[[example]]
+mode = "request"
+phase = "RUNWAY_HOLD"
+station = "Vancouver Tower"
+callsign = "Air Canada 8272 (ACA8272)"
+cleared = { altitude = "5000", squawk = "3305", runway = "31" }
+recent = ["ATC: \"Air Canada 8272, line up and wait runway 31.\""]
+pilot = "we're not quite there yet, give us a little more time, Air Canada 8272"
+answer = { kind = "request", intent = "need_time" }
+
+[[example]]
+mode = "request"
+phase = "TAXI_OUT"
+station = "Vancouver Tower"
+callsign = "Air Canada 8272 (ACA8272)"
+cleared = { altitude = "5000", squawk = "3305", runway = "31" }
+pilot = "Tower, Air Canada 8272, request to cross runway eight right"
+answer = { kind = "request", intent = "request_crossing", runway = "08R" }
+
+[[example]]
+mode = "request"
+phase = "CRUISE"
+station = "Seattle Center"
+callsign = "Alaska 123 (ASA123)"
+cleared = { altitude = "24000", squawk = "2213" }
+pilot = "Alaska 123 level two four zero, altimeter's on standard"
+answer = { kind = "request", intent = "report_standard", altitude = "24000" }
+
+[[example]]
+mode = "request"
+phase = "TAXI_OUT"
+station = "Vancouver Ground"
+callsign = "Air Canada 8272 (ACA8272)"
+cleared = { squawk = "3305", runway = "31" }
+pilot = "Ground, Air Canada 8272, how's your day going, busy one with the game on?"
+answer = { kind = "request", intent = "pleasantry" }

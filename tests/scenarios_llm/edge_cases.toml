@@ -84,7 +84,7 @@ say = "Seattle Center, {callsign_short}, level 5,000."
 #     an emergency without a keyword -------------------------------------------------------------
 [[pilot]]
 when = { phase = "CRUISE", after_s = 90 }
-say = "Seattle Center, two lima tango, request direct Boeing Field"
+say = "Seattle Center, two lima tango, request a deviation twenty degrees left for weather"
 
 [[pilot]]
 when = { phase = "CRUISE", after_s = 130 }

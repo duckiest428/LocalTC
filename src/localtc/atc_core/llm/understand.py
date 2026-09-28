@@ -36,6 +36,7 @@ from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
 from localtc.atc_core.phraseology import speech
+from localtc.atc_core.readback.expected import expected_intents, is_expected
 from localtc.atc_core.readback.extract import candidates as find_candidates
 from localtc.atc_core.readback.extract import (
     normalize_runway,
@@ -59,67 +60,55 @@ from localtc.sim_api import LlmExchange
 Mode = Literal["primary", "fallback", "off"]
 
 SYSTEM = """You read one pilot radio transmission and fill in a JSON form for an air traffic control computer. \
-You are not ATC and never reply to the pilot.
+You are not ATC and never reply to the pilot. The computer decides everything; you only say what the pilot said.
 
 Rules:
-- Report only what the PILOT said in this transmission. Never copy a value from what ATC said, from \
-"Cleared", "Callsign" or from "Readback expected" unless the pilot said it too. If the pilot said a different \
-number, report the pilot's number. The callsign's digits are never a value.
-- Leave a field "" (or false) when the pilot did not say it.
+- Report only what the PILOT said in this transmission. Never copy a value from "Recent", "Cleared", \
+"Callsign" or "Readback expected" unless the pilot said it too. If the pilot said a different number, report \
+the pilot's number. The callsign's digits are never a value.
+- Leave out a field the pilot did not say.
 - Write numbers as digits: runway "06L", frequency "120.425", squawk "5015", altitude in feet "12000" \
 (flight level 240 is "24000").
-- The text comes from speech recognition and has mistakes ("clear for take off" means cleared for takeoff).
+- The text comes from speech recognition and has mistakes ("clear for take off" means cleared for takeoff). \
+When the pilot corrects themselves ("sorry", "I mean"), report what they said last.
 
 kind:
-- "readback": the pilot repeats an ATC instruction back.
+- "readback": the pilot repeats an ATC instruction back. If they also ask for something in the same call, \
+intent says what (or topic, for a question).
 - "request": the pilot asks for or reports something; intent says what.
 - "question": the pilot asks ATC for information; topic says what.
 - "unintelligible": you cannot tell what the pilot wants.
 
-intent (only for "request"): request_ifr_clearance = asks for the IFR clearance; request_pushback = asks to \
-push back off the gate or to push and start; ready_to_taxi; \
-ready_for_departure = holding short or ready for takeoff; checkin = first call to a new controller, like \
-"with you at 6000"; report_final = "5 mile final"; clear_of_runway; request_taxi_parking; request_altitude = asks \
-for higher, lower or a new altitude; request_direct = asks to fly direct to a fix or airport (fix: its name); \
-request_vectors = asks for vectors or a heading; request_runway = asks for a different runway or a type of \
-approach (runway, approach: "ILS", "RNAV" or "VISUAL"); request_return = wants to return to the departure airport; \
-request_diversion = wants to divert: to the nearest suitable airport, or to one it names (fix: its name); going_around = going around or missed approach; report_conditions = reports turbulence, icing or the \
-ride (conditions: the words used); traffic_report = "traffic in sight", "looking" or "negative contact"; \
-say_again = asks ATC to repeat; acknowledge = roger, wilco, thanks; emergency = mayday, pan-pan or any \
-emergency; other = any other request.
-topic (only for "question"): altimeter, wind, weather, runway, squawk, altitude, frequency, atis, other."""
+intent: request_ifr_clearance = asks for the IFR clearance; request_pushback = push back or push and start; \
+ready_to_taxi; request_crossing = asks to cross a runway (runway); ready_for_departure = holding short or ready \
+for takeoff; request_turn = a turn after departure; need_time = not ready yet, needs a moment; checkin = first \
+call to a new controller, like "with you at 6000"; report_final = "5 mile final", "established"; \
+position_report = a traffic pattern position, like "left downwind"; request_option = touch and go, low \
+approach, stop and go; clear_of_runway; request_taxi_parking; request_altitude = asks for higher, lower or a \
+new altitude; request_direct = direct to a fix or airport (fix: its name); request_vectors = vectors or a \
+heading; request_runway = a different runway or approach type (runway, approach: "ILS", "LOC", "RNAV", "VOR", \
+"NDB" or "VISUAL"); request_return = back to the departure airport; request_diversion = divert, to the nearest \
+airport or one it names (fix); going_around = go around or missed approach; report_conditions = turbulence, \
+icing or the ride (conditions: the words used); traffic_report = "traffic in sight", "looking", "negative \
+contact"; report_standard = altimeter set to standard (STD, QNE, 29.92, 1013); request_flight_following; \
+request_class_b; radio_check; pleasantry = small talk like "how's your day"; report_problem = a failure short \
+of an emergency; say_again = asks ATC to repeat; acknowledge = roger, wilco, thanks; emergency = mayday, \
+pan-pan, smoke, fire, a medical emergency or any other emergency; other = any other request.
+topic (for a question): altimeter, wind, weather, runway, squawk, altitude, frequency, atis, other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
-INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "ready_for_departure", "checkin", "report_final", "clear_of_runway",
+INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "request_crossing", "ready_for_departure",
+           "request_turn", "need_time", "checkin", "report_final", "position_report", "request_option", "clear_of_runway",
            "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
-           "request_return", "request_diversion", "going_around", "report_conditions", "traffic_report", "say_again", "acknowledge",
-           "emergency", "other"]
+           "request_return", "request_diversion", "going_around", "report_conditions", "traffic_report",
+           "report_standard", "request_flight_following", "request_class_b", "radio_check", "pleasantry",
+           "report_problem", "say_again", "acknowledge", "emergency", "other"]
 TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "other"]
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
 VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "squawk", "heading", "approach")
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
 REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
-
-# Phases in which a request makes sense (None = before the first phase is known). Others are rejected.
-GROUND_OUT = {None, "PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD"}
-AIRBORNE = {None, "TAKEOFF", "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH", "LANDING"}
-PLAUSIBLE_PHASES: dict[str, set[str | None]] = {
-    "request_ifr_clearance": GROUND_OUT,
-    "request_pushback": {None, "PARKED", "PUSHBACK"},
-    "ready_to_taxi": GROUND_OUT,
-    "ready_for_departure": GROUND_OUT,
-    "checkin": AIRBORNE,
-    "report_final": {None, "ARRIVAL", "APPROACH", "LANDING"},
-    "clear_of_runway": {None, "LANDING", "TAXI_IN"},
-    "request_taxi_parking": {None, "LANDING", "TAXI_IN"},
-    "request_direct": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
-    "request_vectors": {None, "DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"},
-    "request_return": AIRBORNE,
-    "request_diversion": AIRBORNE,
-    "going_around": {None, "TAKEOFF", "DEPARTURE", "APPROACH", "LANDING"},
-    "report_conditions": AIRBORNE,
-    "traffic_report": AIRBORNE,
-}
+APPROACH_KINDS = ("ILS", "LOC", "RNAV", "GPS", "VOR", "NDB", "LDA", "SDF", "VISUAL")
 
 
 class AnswerError(ValueError):
@@ -150,15 +139,16 @@ class Example:
     pilot: str
     answer: dict[str, Any]
     callsign: str = ""
-    atc: str = ""
+    recent: tuple[str, ...] = ()
     expect: tuple[str, ...] = ()
-    cleared: dict[str, str] = field(default_factory=dict)  # altitude, heading, squawk, runway
+    cleared: dict[str, str] = field(default_factory=dict)  # altitude, heading, squawk, runway, approach
     traffic: str = ""
 
 
 def load_examples() -> list[Example]:
     data = tomllib.loads((resources.files("localtc.atc_core.llm") / "examples.toml").read_text(encoding="utf-8"))
-    return [Example(**{**e, "expect": tuple(e.get("expect", ())), "cleared": dict(e.get("cleared", {}))}) for e in data["example"]]
+    return [Example(**{**e, "expect": tuple(e.get("expect", ())), "recent": tuple(e.get("recent", ())),
+                       "cleared": dict(e.get("cleared", {}))}) for e in data["example"]]
 
 
 def _label(element: str) -> str:
@@ -173,7 +163,7 @@ def _expect_line(items: list[tuple[str, str | None]]) -> str:
 
 ROLES = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower", "departure": "departure",
          "approach": "approach", "center": "center", "centre": "center"}
-CLEARED = ("altitude", "heading", "squawk", "runway")
+CLEARED = ("altitude", "heading", "squawk", "runway", "approach")
 
 
 def role_of(station: str | None) -> str | None:
@@ -183,7 +173,7 @@ def role_of(station: str | None) -> str | None:
 
 
 def user_message(*, callsign: str | None = None, phase: str | None, station: str | None, role: str | None = None,
-                 cleared: dict[str, str] | None = None, traffic: str | None = None, atc: str | None,
+                 cleared: dict[str, str] | None = None, traffic: str | None = None, recent: tuple[str, ...] = (),
                  expect: list[tuple[str, str | None]], pilot: str) -> str:
     """The moment, as a small model reads best: the same keys in the same order every time, "none" when empty.
     The examples are written this way too, so the real call looks like one of them."""
@@ -195,7 +185,7 @@ def user_message(*, callsign: str | None = None, phase: str | None, station: str
         f"Station: {station or 'unknown'}" + (f" ({role})" if role else ""),
         "Cleared: " + ("; ".join(f"{k} {cleared[k]}" for k in CLEARED if cleared.get(k)) or "none"),
         f"Traffic called: {traffic or 'none'}",
-        f'ATC last said: "{atc}"' if atc else "ATC last said: none",
+        "Recent: " + (" | ".join(recent) if recent else "none"),
         f"Readback expected: {_expect_line(expect)}",
         f'Pilot: "{pilot}"',
     ])
@@ -219,7 +209,15 @@ def _cleared(context: InterpretContext) -> dict[str, str]:
         out["squawk"] = context.squawk
     if context.runway:
         out["runway"] = context.runway
+    if context.approach:
+        out["approach"] = context.approach
     return out
+
+
+def _recent(context: InterpretContext) -> tuple[str, ...]:
+    if context.recent:
+        return context.recent
+    return (f'ATC: "{context.last_atc}"',) if context.last_atc else ()
 
 
 def _expected_items(pending: PendingReadback) -> list[tuple[str, str | None]]:
@@ -240,19 +238,30 @@ def _model_elements(pending: PendingReadback) -> list[str]:
     return [e for e in (*pending.required, *pending.optional) if e in VALUE_ELEMENTS or e in PHRASE_ELEMENTS]
 
 
-def schema(pending: PendingReadback | None) -> dict[str, Any]:
+def allowed_intents(context: InterpretContext | None) -> list[str]:
+    """The intents the model may answer with: those that make sense to this controller in this phase
+    (``readback.expected``), in the prompt's order."""
+    if context is None:
+        return list(INTENTS)
+    fitting = set(expected_intents(context.station_role or role_of(context.station), context.phase))
+    return [i for i in INTENTS if i in fitting]
+
+
+def schema(pending: PendingReadback | None, context: InterpretContext | None = None) -> dict[str, Any]:
+    """The answer's form. Only ``kind`` is required: the model writes the fields the pilot said and stops
+    (every empty field it had to write out cost a CPU tenths of a second, a dozen of them seconds)."""
     props: dict[str, Any] = {
         "kind": {"type": "string", "enum": KINDS},
-        "intent": {"type": "string", "enum": [*INTENTS, ""]},
+        "intent": {"type": "string", "enum": allowed_intents(context)},
+        "topic": {"type": "string", "enum": TOPICS},
     }
     if pending is not None:
         for element in _model_elements(pending):
             props[element] = {"type": "boolean"} if element in PHRASE_ELEMENTS else {"type": "string"}
     else:
-        props["topic"] = {"type": "string", "enum": [*TOPICS, ""]}
         for name in REQUEST_FIELDS:
             props[name] = {"type": "string"}
-    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+    return {"type": "object", "properties": props, "required": ["kind"], "additionalProperties": False}
 
 
 def example_messages(examples: list[Example], mode: str) -> tuple[tuple[str, str], ...]:
@@ -264,7 +273,7 @@ def example_messages(examples: list[Example], mode: str) -> tuple[tuple[str, str
             continue
         expect = [tuple(item.split("=", 1)) if "=" in item else (item, None) for item in ex.expect]
         messages.append(("user", user_message(callsign=ex.callsign or None, phase=ex.phase, station=ex.station,
-                                              cleared=ex.cleared, traffic=ex.traffic or None, atc=ex.atc or None,
+                                              cleared=ex.cleared, traffic=ex.traffic or None, recent=ex.recent,
                                               expect=expect, pilot=ex.pilot)))
         messages.append(("assistant", json.dumps(ex.answer, separators=(",", ":"))))
     return tuple(messages)
@@ -276,16 +285,17 @@ def build_request(text: str, pending: PendingReadback | None, context: Interpret
     messages = list(example_messages(examples, mode))
     messages.append(("user", user_message(
         callsign=_callsign_line(context), phase=context.phase, station=context.station, role=context.station_role,
-        cleared=_cleared(context), traffic=context.traffic, atc=context.last_atc,
+        cleared=_cleared(context), traffic=context.traffic, recent=_recent(context),
         expect=_expected_items(pending) if mode == "readback" else [], pilot=text,
     )))
-    return LlmRequest("understand", SYSTEM, tuple(messages), schema(pending if mode == "readback" else None))
+    return LlmRequest("understand", SYSTEM, tuple(messages), schema(pending if mode == "readback" else None, context))
 
 
 # --- reading the answer ----------------------------------------------------------------------------------
 
 RUNWAY_RE = re.compile(r"^(?:rwy|runway)?\s*0?(\d{1,2})\s*(l|r|c|left|right|center|centre)?$", re.IGNORECASE)
-APPROACH_RE = re.compile(r"^(ils|loc|rnav|gps|visual)\s*(?:rwy|runway)?\s*(\d{1,2}\s*[lrc]?)$", re.IGNORECASE)
+APPROACH_RE = re.compile(r"^(ils|loc|rnav|gps|rnp|vor|ndb|lda|sdf|visual)\s*(?:\(?(?:gps|rnp)\)?)?\s*(?:rwy|runway)?\s*"
+                         r"(\d{1,2}\s*[lrc]?)$", re.IGNORECASE)
 
 
 def parse_value(element: str, raw: Any) -> Any:
@@ -335,7 +345,7 @@ def parse_value(element: str, raw: Any) -> Any:
         match = APPROACH_RE.match(value)
         if not match:
             raise AnswerError(f"approach {raw!r} is not like \"ILS 06\"")
-        kind = {"GPS": "RNAV"}.get(match.group(1).upper(), match.group(1).upper())
+        kind = {"GPS": "RNAV", "RNP": "RNAV"}.get(match.group(1).upper(), match.group(1).upper())
         return Approach(kind, normalize_runway(match.group(2).replace(" ", "").upper()))
     if element == "atis":
         letter = value.upper().removeprefix("INFORMATION").strip()
@@ -376,6 +386,12 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
         raise AnswerError("a request needs an intent")
     if kind == "question":
         topic = topic if topic in TOPICS else "other"
+    if kind == "readback":
+        # What they asked for on the back of it, if anything: kept only when the words back it up (a small
+        # model fills in an intent for every readback given the chance).
+        if intent in ("acknowledge", "say_again") or (intent and missing_cue(intent, tokens)):
+            intent = ""
+        topic = topic if topic in TOPICS and is_question(" ".join(t.text for t in tokens)) else ""
 
     values: dict[str, Any] = {}
     dropped: list[str] = []
@@ -392,7 +408,7 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
             continue
         if name == "approach" and kind == "request":
             text = str(data[name]).strip().upper()
-            kind_word = next((k for k in ("ILS", "RNAV", "GPS", "VISUAL", "LOC") if k in text), "")
+            kind_word = next((k for k in APPROACH_KINDS if k in text), "")
             said = {t.text for t in tokens}
             if kind_word and (kind_word.lower() in said or (kind_word in ("RNAV", "GPS") and {"rnav", "nav", "gps"} & said)):
                 values[name] = {"GPS": "RNAV", "LOC": "ILS"}.get(kind_word, kind_word)
@@ -403,8 +419,7 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
             text = str(data[name]).strip()
             if text and ((name == "emergency" and _said_words(text, tokens)) or (name != "emergency" and _said_digits(text, tokens))):
                 values[name] = text
-            elif text:
-                dropped.append(f"{name}={text}")
+            # (Souls and fuel the pilot didn't give are left out, not a reason to lose the emergency: ATC asks.)
             continue
         value = parse_value(name, data[name])
         if value is None:
@@ -450,14 +465,18 @@ class LlmInterpreter:
 
     def interpret(self, text: str, pending: PendingReadback | None, context: InterpretContext) -> Interpretation:
         grammar = self.grammar.interpret(text, pending, context)
-        reason = find_trigger(grammar, text, context.confidence)
-        # A readback the grammar finds correct is the script read back: nothing for the model to add, and every
-        # call to it costs the sim frames (it shares the machine) and up to a few seconds of waiting.
-        scripted = pending is not None and grammar.kind == "readback" and grammar.status == "correct"
+        reason = find_trigger(grammar, text, context.confidence, context=context)
+        # A readback the grammar finds correct is the script read back: nothing for the model to add (unless
+        # something rides along with it), and every call to it costs the sim frames (it shares the machine) and
+        # up to a few seconds of waiting.
+        scripted = pending is not None and grammar.kind == "readback" and grammar.status == "correct" and reason is None
         if self.mode == "off" or scripted or (self.mode == "fallback" and reason is None):
             return self._grammar_only(grammar, text, pending, context, reason)
         answer, exchanges = self._ask(text, pending, context, reason)
-        grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback
+        # The grammar's reading counts when it makes sense here: a check-in heard on the ground isn't one.
+        grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback and (
+            grammar.kind == "readback" or is_expected(grammar.intent, context.station_role or role_of(context.station),
+                                                      context.phase))
         if answer is None or (answer.guessed and grammar_knows):
             # No usable answer from the model: the grammar's reading, if it has one, beats a guess.
             result = self._grammar_only(grammar, text, pending, context, reason)
@@ -493,8 +512,7 @@ class LlmInterpreter:
                 record(reply.error.split(":")[0] or "error", reply.error)
                 break  # a slow or missing model won't be faster on a second try
             try:
-                readback_mode = "topic" not in request.schema["properties"]
-                answer = parse_answer(reply.text, pending if readback_mode else None, tokens)
+                answer = parse_answer(reply.text, pending, tokens)
                 answer = self._check_phase(answer, context)
             except AnswerError as exc:
                 intent_errors += isinstance(exc, IntentError)
@@ -519,8 +537,9 @@ class LlmInterpreter:
 
     @staticmethod
     def _check_phase(answer: Answer, context: InterpretContext) -> Answer:
-        allowed = PLAUSIBLE_PHASES.get(answer.intent)
-        if answer.kind == "request" and allowed is not None and context.phase not in allowed:
+        """The schema already limits the intents to this controller and phase; a model that ignores the
+        schema (or a recorded answer from before) is held to it here."""
+        if answer.kind == "request" and answer.intent not in allowed_intents(context):
             raise IntentError(f"{answer.intent} is not possible in phase {context.phase}")
         return answer
 
@@ -544,11 +563,15 @@ class LlmInterpreter:
             return Interpretation(kind="request", intent=EMERGENCY, values=details, confidence=1.0, source="llm",
                                   callsign_heard=grammar.callsign_heard, text=text)
         if grammar.kind == "readback" and answer.kind in ("request", "unintelligible") and answer.intent != "say_again":
-            return grammar  # the pilot repeated the pending instruction; that's a readback whatever the model says
+            # The pilot repeated the pending instruction; that's a readback whatever the model says. What the
+            # model heard asked for rides along with a readback that was right.
+            asked = self._follow_up(answer, text) if answer.kind == "request" and grammar.status == "correct" else None
+            return replace(grammar, then=grammar.then or asked)
         if pending is not None and answer.kind == "readback":
-            readback = self._readback(without_callsign(tokens, context.callsign), answer, pending, grammar, text)
+            readback = self._readback(without_callsign(tokens, context.callsign), answer, pending, grammar, text,
+                                      context.confidence)
             if readback is not None:
-                return readback
+                return replace(readback, then=grammar.then or self._follow_up(answer, text))
         if answer.kind == "question":
             return Interpretation(kind="request", intent="question", values={"topic": answer.topic}, confidence=0.8,
                                   source="llm", callsign_heard=grammar.callsign_heard, text=text)
@@ -565,8 +588,19 @@ class LlmInterpreter:
         return replace(self.say_again.interpret(text, pending, context), source="llm")
 
     @staticmethod
+    def _follow_up(answer: Answer, text: str) -> Interpretation | None:
+        """The request or question the model heard along with a readback, or None."""
+        if answer.intent and answer.intent not in ("acknowledge", "say_again", "emergency"):
+            values = {k: v for k, v in answer.values.items() if k in ("runway", "altitude", "fix", "approach", "conditions")}
+            return Interpretation(kind="request", intent=answer.intent, values=values, confidence=0.8, source="llm", text=text)
+        if answer.topic:
+            return Interpretation(kind="request", intent="question", values={"topic": answer.topic}, confidence=0.8,
+                                  source="llm", text=text)
+        return None
+
+    @staticmethod
     def _readback(tokens: list[Token], answer: Answer, pending: PendingReadback, grammar: Interpretation,
-                  text: str) -> Interpretation | None:
+                  text: str, confidence: float | None = None) -> Interpretation | None:
         heard: dict[str, Any] = {}
         mismatched: dict[str, Any] = {}
         unclear: dict[str, Any] = {}
@@ -580,7 +614,7 @@ class LlmInterpreter:
                 heard[element] = from_grammar
             elif from_model is not None and values_equal(element, from_model, expected):
                 heard[element] = from_model
-            elif (close := next((c for c in candidates if values_close(element, c, expected)), None)) is not None:
+            elif (close := next((c for c in candidates if values_close(element, c, expected, confidence)), None)) is not None:
                 unclear[element] = close
             elif candidates:
                 mismatched[element] = candidates[0]

@@ -48,7 +48,7 @@ phase = "PARKED"
 station = "Montreal Clearance"
 instruction = "clearance.ifr"
 slots = { destination = "Quebec", altitude = 5000, cruise = 12000, frequency = 120.42, squawk = "5015" }
-pilot = "climb and maintain five thousand, departure one two zero point four two, squawk five zero five one, DP69"
+pilot = "climb and maintain five thousand, departure one two zero point four two, squawk five two six three, DP69"
 model = { kind = "readback", altitude = "5000", frequency = "120.42", squawk = "5015" }
 expect = { kind = "readback", status = "incorrect", mismatched = ["squawk"] }
 
@@ -444,3 +444,54 @@ callsign = "DAL42"
 pilot = "DAL42, request pushback and start, gate S9"
 model = { kind = "request", intent = "request_pushback" }
 expect = { kind = "request", intent = "request_pushback" }
+
+# --- calls the model got wrong on a real flight (the intent list now fits the controller and phase) ---------
+
+[[case]]
+name = "approach clearance read back short: a readback, never an IFR clearance request"
+phase = "APPROACH"
+station = "Seattle Approach"
+callsign = "ACA8272"
+instruction = "approach.intercept_cleared"
+slots = { turn = "left", heading = 20, altitude = 2500, approach = "ILS 34R" }
+pilot = "Clear ILS 34R or Canada 8272."
+model = { kind = "readback", approach = "ILS 34R" }
+expect = { kind = "readback", status = "incomplete" }
+
+[[case]]
+name = "a runway crossing asked for at the hold line"
+phase = "RUNWAY_HOLD"
+station = "Vancouver Tower"
+callsign = "ACA8272"
+pilot = "Tower, Air Canada 8272. Request to cross runway 8R."
+model = { kind = "request", intent = "request_crossing", runway = "08R" }
+expect = { kind = "request", intent = "request_crossing" }
+
+[[case]]
+name = "more time before the takeoff: not a pushback, not a clearance"
+phase = "RUNWAY_HOLD"
+station = "Vancouver Tower"
+callsign = "ACA8272"
+pilot = "Just to find, sorry, we're encountering a little bit of issues here at the flight deck. Give us a little more time and yeah, sorry about that."
+model = { kind = "request", intent = "need_time" }
+expect = { kind = "request", intent = "need_time" }
+
+[[case]]
+name = "a check-in at cruise, not a final report"
+phase = "CRUISE"
+station = "Seattle Center"
+callsign = "ACA8272"
+pilot = "Seattle Centre, Air Canada 8272, cruising at 13,000 feet."
+model = { kind = "request", intent = "checkin", altitude = "13000" }
+expect = { kind = "request", intent = "checkin" }
+
+[[case]]
+name = "readback and a request in one call"
+phase = "LANDING"
+station = "Seattle Tower"
+callsign = "ACA8272"
+instruction = "tower.land"
+slots = { runway = "34R", wind = "350@9" }
+pilot = "cleared to land 34 right, and could we get a gate assignment while we're at it, Air Canada 8272"
+model = { kind = "readback", intent = "request_taxi_parking", runway = "34R", cleared_to_land = true }
+expect = { kind = "readback", status = "correct" }

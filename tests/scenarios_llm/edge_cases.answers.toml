@@ -7,7 +7,7 @@
 "Seattle Departure, Cessna two lima tango, passing two thousand for five thousand" = { kind = "request", intent = "checkin", altitude = "2000" }
 "up to five thousand, two lima tango" = { kind = "readback", altitude = "5000" }
 # First a hallucinated flight level the pilot never said (rejected), then the right answer.
-"Seattle Center, two lima tango, request direct Boeing Field" = [
+"Seattle Center, two lima tango, request a deviation twenty degrees left for weather" = [
     { kind = "request", intent = "request_altitude", altitude = "35000" },
     { kind = "request", intent = "other" },
 ]
@@ -19,7 +19,7 @@
 
 [phrase]
 # First answer approves the request (not allowed), the retry declines it.
-"Seattle Center, two lima tango, request direct Boeing Field" = [
-    '{"reply":"proceed direct Boeing Field, approved"}',
-    '{"reply":"unable direct at this time, continue as filed"}',
+"Seattle Center, two lima tango, request a deviation twenty degrees left for weather" = [
+    '{"reply":"deviation approved, proceed direct Boeing Field"}',
+    '{"reply":"unable at this time, continue as filed"}',
 ]

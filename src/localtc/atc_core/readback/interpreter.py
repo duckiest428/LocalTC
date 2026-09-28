@@ -4,20 +4,28 @@
 returns the same ``Interpretation``, so the dialogue engine doesn't care which one ran.
 """
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, Protocol
 
 from localtc.atc_core.readback.extract import (
     CONTRARY_TO_HOLDING,
     ELEMENTS,
+    _find_phrase,
     _has_any,
     candidates,
     values_close,
     values_equal,
     without_callsign,
 )
-from localtc.atc_core.readback.intents import EMERGENCY, IntentMatch, match_intents, resolve
-from localtc.atc_core.readback.normalize import normalize
+from localtc.atc_core.readback.intents import (
+    EMERGENCY,
+    REQUEST_WORDS,
+    IntentMatch,
+    match_intents,
+    resolve,
+)
+from localtc.atc_core.readback.normalize import Token, normalize
 from localtc.atc_core.readback.questions import asks, question_topic
 from localtc.atc_core.values import Callsign
 
@@ -26,6 +34,8 @@ Kind = Literal["readback", "request", "unknown"]
 # ("negative, request to maintain 1,500").
 ASKING = {"request", "requesting", "unable"}
 Status = Literal["correct", "incorrect", "unclear", "incomplete", "no_match"]
+# Asking for something on the back of a readback: "..., and can we get higher", "..., actually the ILS instead?"
+FOLLOW_UP = (*REQUEST_WORDS, ("actually",), ("instead",), ("also",), ("and", "can"), ("unable",))
 # "Affirm" answers a "confirm ...".
 AFFIRM = {"affirm", "affirmative", "correct", "yes", "yep", "confirmed", "confirm"}
 
@@ -60,7 +70,9 @@ class InterpretContext:
     cleared_heading: int | None = None
     squawk: str | None = None
     runway: str | None = None
+    approach: str | None = None  # the approach in use or cleared, "ILS 34R"
     traffic: str | None = None
+    recent: tuple[str, ...] = ()  # the last few exchanges on this frequency, oldest first: 'ATC: "..."', 'Pilot: "..."'
 
 
 @dataclass(frozen=True)
@@ -79,6 +91,10 @@ class Interpretation:
     text: str = ""
     trigger: str | None = None  # why the language model was asked (atc_core.llm.triggers)
     exchanges: tuple[Any, ...] = ()  # LlmExchange events from interpreting this transmission
+    # A request or question riding along with a readback ("cleared to land 14R, can we make it a low approach"):
+    # the readback is taken, then this is answered.
+    then: "Interpretation | None" = None
+    asked_more: bool = False  # ... or one the grammar heard but couldn't place (the language model gets a look)
 
 
 class Interpreter(Protocol):
@@ -129,7 +145,9 @@ class GrammarInterpreter:
                 if again is not None and again.status == "correct":
                     readback = again
             if readback is not None:
-                return readback
+                then, unplaced = follow_up(tokens, text, lambda tail: self._readback(
+                    tail, pending, context, callsign_heard, text) is not None)
+                return replace(readback, then=then, asked_more=unplaced)
             if pending.confirming and words & AFFIRM:
                 return Interpretation(kind="readback", intent=pending.instruction_id, status="correct",
                                       values={e: pending.expected.get(e, True) for e in pending.required},
@@ -166,7 +184,7 @@ class GrammarInterpreter:
                 continue
             present += 1
             match = next((c for c in found if values_equal(element, c, expected)), None)
-            close = next((c for c in found if values_close(element, c, expected)), None)
+            close = next((c for c in found if values_close(element, c, expected, context.confidence)), None)
             if match is not None:
                 heard[element] = match
             elif close is not None:
@@ -209,6 +227,31 @@ class GrammarInterpreter:
             needs_fallback=status != "correct" and pending.attempts + 1 >= self.max_attempts,
             text=text,
         )
+
+
+def follow_up(tokens: list[Token], text: str, echoes: Callable[[list[Token]], bool] = lambda tail: False,
+              ) -> tuple["Interpretation | None", bool]:
+    """What the pilot asked for after reading back, when the grammar can place it: "cleared to land 14R, and
+    can we get the altimeter?" is the readback, then a question about the altimeter. None when nothing was
+    asked, or it can't tell what (the language model gets a look: ``llm.triggers``, "compound"), or the "ask"
+    is the readback itself in other words (``echoes``: "we'd like to cross runway 8R" to "cross runway 08R").
+    The second value: something was asked that the grammar couldn't place."""
+    starts = [end - len(phrase) for phrase in FOLLOW_UP for end in _find_phrase(tokens, phrase)]
+    starts = [i for i in starts if i > 0]
+    asked = "?" in text
+    if not starts and not asked:
+        return None, False
+    tail = tokens[min(starts):] if starts else tokens
+    if echoes(tail):
+        return None, False
+    # (Not a check-in or a report: "a left turn out of here" is no "out of 3,000".)
+    chosen, ambiguous = resolve([m for m in match_intents(tail) if m.intent not in ("checkin", "position_report")])
+    if starts and chosen is not None and not ambiguous and chosen.intent not in ("acknowledge", "report_final", "say_again"):
+        return Interpretation(kind="request", intent=chosen.intent, values=chosen.values, confidence=0.9, text=text), False
+    question = " ".join(t.text for t in tail) + ("?" if asked else "")
+    if (topic := question_topic(question)) is not None:
+        return Interpretation(kind="request", intent="question", values={"topic": topic}, confidence=0.8, text=text), False
+    return None, True
 
 
 class SayAgainInterpreter:

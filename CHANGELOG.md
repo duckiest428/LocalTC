@@ -4,6 +4,20 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
+## [0.4.0] - 2026-09-28
+
+### Changed
+- **The language model only listens; the grammar and the controller decide.** Every call goes to the grammar first. When the grammar can't place it confidently, the model reads it and fills in a small form (what kind of call, which request, which values), and ATC acts on that exactly as on the grammar's reading. The model never picks an instruction. "Say again" comes only once the model couldn't make the call out either: a model that runs out of time gets a second, longer try while the app shows the controller working on it.
+- **What sends a call to the model**: nothing matched, two requests that don't go together, a readback that isn't right, a request riding along with a readback ("cleared to land, and can we make it a low approach?"), the pilot correcting themselves or hesitating, the callsign missing or one digit off, an altimeter given as "standard", a call that makes no sense to this controller now (a pushback request to a tower), or speech-to-text unsure of the words or of the numbers in them.
+- **The model may only answer with calls that fit the controller and the phase**: on approach, "cleared ILS 34R" can't come back as a request for an IFR clearance. It's shown the moment in fixed order: the callsign, the phase, who it's talking to, what's cleared (altitude, heading, squawk, runway, approach), traffic called, the last few exchanges on the frequency, and the readback expected.
+- **Faster answers from the model**: it writes only the fields the pilot said instead of a dozen empty ones. On a CPU, the median call went from 2.8 to 1.7 seconds in the test set, with more of it right.
+- **Readbacks with a number one slip off** (a digit wrong, two swapped, one dropped or added): when speech-to-text wasn't sure of what it heard, ATC asks "confirm squawk 5015" instead of "negative"; heard clearly, it's "negative" with the right value, as before.
+- A request or question along with a readback is answered too: the readback is taken, then the request.
+
+### Fixed
+- Smoke or fire on board is an emergency whatever words come with it.
+- A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.
+
 ## [0.3.5] - 2026-09-25
 
 ### Added
@@ -22,7 +36,6 @@ a new minor version adds features, a patch fixes them.
 - The language model runs on the CPU by default, leaving the graphics card to the sim.
 
 ### Fixed
-From a real Vancouver to Seattle flight:
 - **Which approach to expect.** It was always the ILS where the runway had one. In the US and Canada, an arrival in good weather (known visibility of 5 miles or more, no rain or snow) now expects the visual approach, as it would there; bad or unknown weather keeps the ILS (or RNAV). ICAO regions keep the instrument approach. Ask for the ILS and you get it. Once given, the approach to expect doesn't change by itself. The visual is worded as ATC says it ("expect visual approach runway 34R", "turn left heading 320, cleared visual approach runway 34R"), without a localizer to be established on.
 - "We'd like to get a taxi for the departure" got "contact tower", and after it every call on ground got "contact tower" again, even once ground had given the taxi. A taxi from ground cancels its own handoff now, and "a taxi for the departure" is a taxi request.
 - At another runway's hold line (08R, crossed to get to 31), "request to cross runway 8R" got "line up and wait runway 31". Crossing requests are understood, and tower clears a departure only at its runway: from anywhere else it's "continue taxi, hold short runway 31", and the takeoff after a line up and wait waits until the aircraft is lined up.
@@ -34,7 +47,6 @@ From a real Vancouver to Seattle flight:
 - Gate "B251": that's the sim's name for an extra stand among Seattle's B gates. Stands numbered unlike the gates around them are no longer assigned, and a stand's letter suffix from the sim ("B7A") is read.
 - Speech-to-text: "Contact Clearance" (a readback, not an IFR request), "126 decimal, 125", "this on via" (descend via), "cruising at 13,000" (a check-in), "continue approach" (an acknowledgement), "121771" for 121.7 (a "confirm", not a "negative").
 
-From a real Orlando to Indianapolis flight:
 - ATC went silent after "stand by" when the model timed out: the departure runway was asked for three times, and "can we get taxi?" and "can we tail left?" went unanswered. The grammar now hears all of them, and a call that nothing understood gets "say again", never silence.
 - "Tail right" from a gate whose taxi route leaves to the right: the tail was sent the wrong way (it goes left, so the nose comes round to the route). A pilot who asks for the tail one way gets it.
 - The tug taking up the slack (a jerk back at a few knots) was taken for taxiing off: "hold position, taxi clearance required", twice, during the pushback.

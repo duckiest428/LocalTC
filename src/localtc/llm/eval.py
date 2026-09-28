@@ -169,8 +169,13 @@ class CorpusBackend:
 
 
 def fill_schema(answer: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
-    """Every schema field present, as a constrained model would produce: "" or false when unsaid."""
+    """The answer as a model held to the schema writes it: its required fields, and those of the rest it has
+    something for (a field the schema doesn't have can't be written)."""
+    required = set(schema.get("required", ()))
     out = {}
     for name, spec in schema["properties"].items():
-        out[name] = answer.get(name, False if spec.get("type") == "boolean" else "")
+        if name in answer:
+            out[name] = answer[name]
+        elif name in required:
+            out[name] = False if spec.get("type") == "boolean" else ""
     return out

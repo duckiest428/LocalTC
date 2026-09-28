@@ -150,6 +150,9 @@ def _tail(tokens: list[Token]) -> str | None:
     return None
 
 
+# An emergency whatever words come with it: smoke or fire on board.
+EMERGENCY_WORDS = (("smoke",), ("on", "fire"), ("engine", "fire"), ("cabin", "fire"), ("cockpit", "fire"), ("fire", "in"),
+                   ("fire", "on", "board"), ("fire", "warning"))
 NEED_TIME = (("more", "time"), ("not", "ready"), ("not", "quite", "there"), ("not", "quite", "ready"), ("few", "minutes"),
              ("few", "more", "minutes"), ("a", "minute"), ("a", "moment"), ("give", "us", "a"), ("little", "more", "time"),
              ("bit", "more", "time"), ("need", "a", "minute"), ("standby", "for", "a"))
@@ -221,7 +224,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     # "climbing 4,500, request a Class Bravo clearance": a check-in asking for Class B, not an IFR clearance
     b_in_flight = bool(class_b) and _has_any(tokens, *checkin_words)
 
-    if _has_any(tokens, ("mayday",), ("pan", "pan"), ("emergency",)):
+    if _has_any(tokens, ("mayday",), ("pan", "pan"), ("emergency",), *EMERGENCY_WORDS):
         add(EMERGENCY)
     if _has_any(tokens, ("std",), ("qne",), ("on", "standard"), ("standard", "pressure"), ("standard", "altimeter"),
                 ("standard", "setting"), ("set", "standard"), ("to", "standard")) \

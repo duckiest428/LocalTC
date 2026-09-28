@@ -90,6 +90,13 @@ text = ["{callsign}, unable {turn} turn, fly runway heading."]
 
 # Another aircraft still on the runway as this one comes down on it.
 [[template]]
+id = "tower.go_around_traffic_contact"
+controller = "tower"
+text = ["{callsign}, go around, traffic on the runway, fly runway heading, climb and maintain {altitude}, contact {station} {frequency}."]
+readback = { required = ["altitude", "frequency"] }
+pilot_readback = "Going around, runway heading, climb and maintain {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
 id = "tower.go_around_traffic"
 controller = "tower"
 text = ["{callsign}, go around, traffic on the runway, fly runway heading, climb and maintain {altitude}."]
@@ -101,3 +108,20 @@ pilot_readback = "Going around, runway heading, climb and maintain {altitude}, {
 id = "tower.sequence"
 controller = "tower"
 text = ["{callsign}, {message}."]
+
+# A departure calling ready before it's at the runway (at another runway's hold line on the way, still taxiing):
+# tower clears it when it gets there.
+[[template]]
+id = "tower.continue_hold_short"
+controller = "tower"
+text = ["{callsign}, continue taxi, hold short runway {hold_short}.", "{callsign}, roger, taxi to and hold short runway {hold_short}."]
+readback = { required = ["hold_short"] }
+pilot_readback = "Hold short runway {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_runway"
+controller = "tower"
+text = ["{callsign}, hold short runway {hold_short}."]
+readback = { required = ["hold_short"] }
+pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
+

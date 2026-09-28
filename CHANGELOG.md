@@ -22,6 +22,18 @@ a new minor version adds features, a patch fixes them.
 - The language model runs on the CPU by default, leaving the graphics card to the sim.
 
 ### Fixed
+From a real Vancouver to Seattle flight:
+- **Which approach to expect.** It was always the ILS where the runway had one. In the US and Canada, an arrival in good weather (known visibility of 5 miles or more, no rain or snow) now expects the visual approach, as it would there; bad or unknown weather keeps the ILS (or RNAV). ICAO regions keep the instrument approach. Ask for the ILS and you get it. Once given, the approach to expect doesn't change by itself. The visual is worded as ATC says it ("expect visual approach runway 34R", "turn left heading 320, cleared visual approach runway 34R"), without a localizer to be established on.
+- "We'd like to get a taxi for the departure" got "contact tower", and after it every call on ground got "contact tower" again, even once ground had given the taxi. A taxi from ground cancels its own handoff now, and "a taxi for the departure" is a taxi request.
+- At another runway's hold line (08R, crossed to get to 31), "request to cross runway 8R" got "line up and wait runway 31". Crossing requests are understood, and tower clears a departure only at its runway: from anywhere else it's "continue taxi, hold short runway 31", and the takeoff after a line up and wait waits until the aircraft is lined up.
+- "Give us a little more time" is answered "roger, advise when ready".
+- Tower cleared the landing and then let an A350 line up and roll in front of it: the go-around check didn't run in the last mile and a half (the landing phase) and waited for a quiet radio. It now sends the flight around, and back to approach. With the flight on final, tower's other traffic isn't cleared onto its runway.
+- An airport's altimeter changed with every call on the way in (29.90, 29.95, 29.96, 30.00): it was the pressure wherever the aircraft happened to be. It's now the airport's: estimated once from afar, then measured on arrival.
+- Approach answered "descending via the MARNR8" with "descend and maintain 5,000": it now says "descend via the MARNR8 arrival, expect ...". Speed instructions are "reduce speed to 250 knots", never "maintain" a speed the aircraft isn't flying. A centre no longer offers a higher level minutes before clearing the descent.
+- "An estimated arrival runway to Seattle?" in the cruise was answered with Vancouver's runway: airborne, it's the arrival runway and approach.
+- Gate "B251": that's the sim's name for an extra stand among Seattle's B gates. Stands numbered unlike the gates around them are no longer assigned, and a stand's letter suffix from the sim ("B7A") is read.
+- Speech-to-text: "Contact Clearance" (a readback, not an IFR request), "126 decimal, 125", "this on via" (descend via), "cruising at 13,000" (a check-in), "continue approach" (an acknowledgement), "121771" for 121.7 (a "confirm", not a "negative").
+
 From a real Orlando to Indianapolis flight:
 - ATC went silent after "stand by" when the model timed out: the departure runway was asked for three times, and "can we get taxi?" and "can we tail left?" went unanswered. The grammar now hears all of them, and a call that nothing understood gets "say again", never silence.
 - "Tail right" from a gate whose taxi route leaves to the right: the tail was sent the wrong way (it goes left, so the nose comes round to the route). A pilot who asks for the tail one way gets it.

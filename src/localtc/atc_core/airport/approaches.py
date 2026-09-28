@@ -1,5 +1,10 @@
 """Which approach ATC gives you: what the airport publishes, what the weather allows, what the aircraft can fly.
 
+In the US and Canada, an IFR arrival in good weather is expected to fly the visual approach (FAA JO 7110.65
+7-4-3: ATC may clear a visual approach with the ceiling and visibility for it), the ILS or RNAV to the same
+runway as the backup and for anyone who asks. In bad weather it's the best instrument approach the runway
+has. ICAO regions keep the instrument approach, and the visual only where the runway has nothing better.
+
 The sim's facility data lists an airport's instrument approaches (``Airport.approaches``). A small field
 with nothing but a VOR approach can't offer an RNAV, and a Cub can't fly either, so ATC says "expect the
 visual". Airport data recorded before approaches were read has none at all: those airports fall back to
@@ -14,6 +19,7 @@ DISPLAY = {"ils": "ILS", "localizer": "LOC", "lda": "LDA", "sdf": "SDF", "rnav":
            "vordme": "VOR", "vor": "VOR", "ndbdme": "NDB", "ndb": "NDB", "backcourse": "LOC BC"}
 PRECISION = ("ILS", "LOC", "LDA", "RNAV")  # the rest are non-precision: in good weather, a visual is easier
 VISUAL = "VISUAL"
+VISUAL_SM = 5.0  # visibility for a visual approach to be what's expected (the ceiling can't be read from the sim)
 
 # Aircraft with no instrument approach capability. Matched against the sim's model name, lowercased.
 VISUAL_ONLY = ("cub", "champ", "stearman", "glider", "sailplane", "balloon", "blimp", "ask 21", "ask21", "dg-1001",
@@ -43,6 +49,8 @@ def select_approach(
     aircraft_type: str = "",
     requested: str | None = None,
     override: str = "auto",
+    visual_first: bool = False,
+    precip: str = "",
 ) -> str:
     """The approach to expect for ``runway``: an approach kind, or "VISUAL"."""
     choices = published(airport, runway)
@@ -69,5 +77,7 @@ def select_approach(
         return "ILS" if has_ils else "RNAV"  # airport data without approaches (older recordings)
     if not visual_weather:
         return choices[0]
+    if visual_first and not in_cloud and not precip and visibility_sm is not None and visibility_sm >= VISUAL_SM:
+        return VISUAL  # the US and Canada in good weather: "expect the visual", the ILS if asked for
     # Good weather and nothing better than a non-precision approach: the visual is simpler for everyone.
     return choices[0] if choices[0] in PRECISION else VISUAL

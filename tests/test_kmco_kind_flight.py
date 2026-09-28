@@ -118,7 +118,7 @@ def test_a_question_with_a_report_gets_both(recorded):
     """ "Short final for runway 32. And can we also get an updated altimeter?" """
     assert question_topic("Frontier 4837. Short final for runway 32. And can we also get an updated altimeter?") == "altimeter"
     reply = answer_to(recorded.lines, "Short final for runway 32")
-    assert "runway 32" in reply and "altimeter 30.01" in reply
+    assert "runway 32" in reply and re.search(r"altimeter \d\d\.\d\d", reply)
 
 
 class AlwaysLate:
@@ -260,9 +260,12 @@ def test_what_speech_to_text_makes_of_it(text, instruction, slots):
     assert heard(text, pending(instruction, **slots), "APPROACH").status == "correct"
 
 
-def test_ils_32r_is_the_ils_32_where_there_is_only_a_32(recorded):
-    readback = next(line for line in recorded.lines if "READBACK" in line and at(line) > 9690)
-    assert "approach.intercept_cleared correct" in readback
+def test_ils_32r_is_the_ils_32_where_there_is_only_a_32():
+    from localtc.atc_core.values import Approach
+
+    waiting = pending("approach.intercept_cleared", heading=290, turn="right", altitude=2800, approach=Approach("ILS", "32"))
+    text = "Clear ILS 32R heading 290 and maintain 2800 until established. Frontier 4837."
+    assert heard(text, waiting, "APPROACH").status == "correct"
 
 
 # --- the departure --------------------------------------------------------------------------------------------------

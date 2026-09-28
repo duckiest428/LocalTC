@@ -46,14 +46,14 @@ def test_an_aircraft_on_the_runway_sends_this_one_around():
     engine = tower_engine()
     engine.handle(TrafficSnapshot(t=1.0, targets=(at_runway(engine, "14R"),)))
     out = engine.handle(approaching(engine, distance_nm=1.0))
-    assert "tower.go_around_traffic" in said(engine, out)
+    assert {"tower.go_around_traffic", "tower.go_around_traffic_contact"} & set(said(engine, out))
 
 
 def test_a_clear_runway_does_not():
     engine = tower_engine()
     engine.handle(TrafficSnapshot(t=1.0, targets=()))
     out = engine.handle(approaching(engine, distance_nm=1.0))
-    assert "tower.go_around_traffic" not in said(engine, out)
+    assert not {"tower.go_around_traffic", "tower.go_around_traffic_contact"} & set(said(engine, out))
 
 
 def test_an_aircraft_rolling_off_the_runway_does_not():
@@ -61,7 +61,7 @@ def test_an_aircraft_rolling_off_the_runway_does_not():
     engine = tower_engine()
     engine.handle(TrafficSnapshot(t=1.0, targets=(at_runway(engine, "14R", gs_kt=60.0),)))
     out = engine.handle(approaching(engine, distance_nm=1.0))
-    assert "tower.go_around_traffic" not in said(engine, out)
+    assert not {"tower.go_around_traffic", "tower.go_around_traffic_contact"} & set(said(engine, out))
 
 
 def test_traffic_ahead_on_the_same_final_gets_a_landing_order():

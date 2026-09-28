@@ -193,7 +193,8 @@ def test_heliports_do_not_become_the_nearest_airport(cyul):
 
 
 def test_holding_short_alone_asks_for_takeoff(cyul):
-    """The pilot said "Tower, DP69 holding short 06L" and got "say again"."""
+    """The pilot said "Tower, DP69 holding short 06L" and got "say again". Said from the gate, it gets "continue
+    taxi, hold short" (tower clears nobody from somewhere else); at the 06L hold, the takeoff."""
     engine = AtcEngine(EngineConfig(seed=5, destination="CYQB", cruise_ft=12000, callsign="DP69"))
     engine.handle(AirportData(t=0.0, airport=cyul))
     own = next(e for e in Recording(CANADA).events() if isinstance(e, OwnshipState))
@@ -202,6 +203,17 @@ def test_holding_short_alone_asks_for_takeoff(cyul):
                if isinstance(o, AtcTransmission)]
     replies += [o for o in engine.handle(msgspec.structs.replace(own, t=own.t + 8, com1_mhz=119.3))
                 if isinstance(o, AtcTransmission)]
+    assert [o.instruction_id for o in replies] == ["tower.continue_hold_short"]
+    engine = AtcEngine(EngineConfig(seed=5, destination="CYQB", cruise_ft=12000, callsign="DP69"))
+    engine.handle(AirportData(t=0.0, airport=cyul))
+    geo = engine.geometry("CYUL")
+    hold = next(h for h in geo.hold_shorts if h.runway.name.startswith("06L"))
+    lat, lon = geo.frame.to_latlon(*hold.xy)
+    at_hold = msgspec.structs.replace(own, lat=lat, lon=lon, com1_mhz=119.3)
+    engine.handle(at_hold)
+    replies = [o for o in engine.handle(Transcript(t=own.t + 1, text="Tower, DP69 holding short 06L"))
+               if isinstance(o, AtcTransmission)]
+    replies += [o for o in engine.handle(msgspec.structs.replace(at_hold, t=own.t + 8)) if isinstance(o, AtcTransmission)]
     assert [o.instruction_id for o in replies] == ["tower.takeoff"]
 
 

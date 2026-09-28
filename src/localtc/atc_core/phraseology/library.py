@@ -13,7 +13,7 @@ import msgspec
 
 from localtc.atc_core.phraseology.slots import SLOT_DEFAULTS, SLOTS
 from localtc.atc_core.readback.extract import ELEMENTS
-from localtc.atc_core.values import Phrase
+from localtc.atc_core.values import Approach, Phrase
 
 
 class ReadbackSpec(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
@@ -204,7 +204,13 @@ class TemplateLibrary:
                 raise TemplateError(f"{context}: slot {{{name}}} expects {slot_type.value_type}, got {type(value).__name__}")
             display[name] = slot_type.display(value)
             spoken[name] = slot_type.spoken(value)
-        return text.format_map(display), _spoken_sentence(text.format_map(spoken))
+        shown, said = text.format_map(display), text.format_map(spoken)
+        approach = slots.get("approach")
+        if "approach" in display and isinstance(approach, Approach) and approach.kind == "VISUAL":
+            # "Cleared visual approach runway 34R", not "cleared VISUAL RWY 34R approach".
+            shown = shown.replace(f"{display['approach']} approach", f"visual approach runway {approach.runway}")
+            said = said.replace(f"{spoken['approach']} approach", f"visual approach {spoken['approach'][len('visual '):]}")
+        return shown, _spoken_sentence(said)
 
 
 def _spoken_sentence(text: str) -> str:

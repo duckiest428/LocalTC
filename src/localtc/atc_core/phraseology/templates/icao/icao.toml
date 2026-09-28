@@ -77,6 +77,11 @@ text = ["{callsign}, roger, climb to {altitude}, contact {station} {frequency}."
 pilot_readback = "Climb to {altitude}, {station} {frequency}, {callsign_short}."
 
 [[template]]
+id = "tower.go_around_traffic_contact"
+text = ["{callsign}, go around, I say again, go around, traffic on the runway, climb to {altitude}, contact {station} {frequency}."]
+pilot_readback = "Going around, climb to {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
 id = "tower.go_around_traffic"
 text = ["{callsign}, go around, I say again, go around, traffic on the runway, climb to {altitude}."]
 pilot_readback = "Going around, climb to {altitude}, {callsign_short}."

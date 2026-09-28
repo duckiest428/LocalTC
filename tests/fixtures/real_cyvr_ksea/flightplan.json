@@ -1,0 +1,131 @@
+{
+ "source": "simbrief",
+ "callsign": "ACA8272",
+ "origin": "CYVR",
+ "destination": "KSEA",
+ "alternate": "KPDX",
+ "cruise_ft": 13000,
+ "route": "DCT ROESH MARNR8",
+ "aircraft": "BCS3",
+ "registration": "C-SYNC",
+ "sid": "",
+ "star": "MARNR8",
+ "dep_runway": "31",
+ "arr_runway": "34R",
+ "origin_name": "VANCOUVER INTL",
+ "destination_name": "SEATTLE-TACOMA INTL",
+ "fixes": [
+  {
+   "ident": "TOC",
+   "lat": 49.161982,
+   "lon": -123.172934,
+   "alt_ft": 13000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 448
+  },
+  {
+   "ident": "ROESH",
+   "lat": 48.631242,
+   "lon": -123.018994,
+   "alt_ft": 13000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 820
+  },
+  {
+   "ident": "MARNR",
+   "lat": 48.038867,
+   "lon": -122.849908,
+   "alt_ft": 13000,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1235
+  },
+  {
+   "ident": "PNELA",
+   "lat": 47.924997,
+   "lon": -122.746828,
+   "alt_ft": 13000,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1326
+  },
+  {
+   "ident": "VEGGN",
+   "lat": 47.721606,
+   "lon": -122.564258,
+   "alt_ft": 13000,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1486
+  },
+  {
+   "ident": "TOD",
+   "lat": 47.646025,
+   "lon": -122.512322,
+   "alt_ft": 13000,
+   "via": "MARNR8",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 1543
+  },
+  {
+   "ident": "UNITT",
+   "lat": 47.575056,
+   "lon": -122.463706,
+   "alt_ft": 11000,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 1633
+  },
+  {
+   "ident": "WUBET",
+   "lat": 47.468861,
+   "lon": -122.4647,
+   "alt_ft": 8700,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 1742
+  },
+  {
+   "ident": "SHIPZ",
+   "lat": 47.358072,
+   "lon": -122.465697,
+   "alt_ft": 5900,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 1869
+  },
+  {
+   "ident": "EMMSS",
+   "lat": 47.299769,
+   "lon": -122.4662,
+   "alt_ft": 4300,
+   "via": "MARNR8",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 1941
+  },
+  {
+   "ident": "KSEA",
+   "lat": 47.449889,
+   "lon": -122.311778,
+   "alt_ft": 2900,
+   "via": "MARNR8",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 2431
+  }
+ ],
+ "simbrief_id": "1790558218",
+ "rules": "IFR"
+}

@@ -278,7 +278,7 @@ The language model reads what you say, the engine decides, and the templates spe
 | "request direct BLAKO" / "direct to the airport" | "cleared direct BLAKO" (read it back) |
 | "request vectors (for the ILS 26)" | a heading to an 8 nm final, then the approach as usual |
 | "could we get runway 16R" (on the ground) | a new taxi route to it, or "expect runway 16R"; "unable, wind ..." if the tailwind is over 10 kt |
-| "we'd like the visual runway 26" (arriving) | "expect visual runway 26 approach"; unable in low visibility |
+| "we'd like the visual runway 26" (arriving) | "expect visual approach runway 26"; unable in low visibility |
 | "request return to Paine" | the departure airport becomes the destination: "cleared direct Paine Field airport, maintain ..., expect ..." |
 | "going around" (or a go-around without a word) | "fly runway heading, climb and maintain ..., contact approach", then a new approach |
 | "moderate chop at 7,000" | "roger, thanks for the report" |

@@ -86,8 +86,21 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
         choices = [g for g in free if g.word == "gate"]
     if not choices:
         return None
+    usual = [g for g in choices if not odd_number(g, everything)]
+    choices = usual or choices
     choices.sort(key=lambda g: g.index)
     return random.Random(zlib.crc32(f"gate{geometry.airport.icao}{seed}".encode())).choice(choices)
+
+
+def odd_number(gate: Gate, everything: list[Gate]) -> bool:
+    """A stand numbered unlike the gates around it: Seattle's scenery has "B 241", "B 249", "B 251" among B1-B16,
+    extra positions a controller wouldn't send anybody to by that name."""
+    letters = "".join(c for c in gate.label if c.isalpha())[:1]
+    digits = "".join(c for c in gate.label if c.isdigit())
+    group = ["".join(c for c in g.label if c.isdigit()) for g in everything
+             if g.word == gate.word and "".join(c for c in g.label if c.isalpha())[:1] == letters]
+    short = sum(1 for d in group if 0 < len(d) <= 2)
+    return len(digits) >= 3 and short > len(group) / 2
 
 
 def parked_at(geometry: AirportGeometry, lat: float, lon: float) -> Gate | None:

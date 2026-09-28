@@ -176,6 +176,12 @@ id = "common.pleasantry"
 controller = "any"
 text = ["{callsign}, doing well, thanks.", "{callsign}, not bad at all, thanks for asking.", "{callsign}, good, thanks."]
 
+# "Give us a few more minutes": nothing more until the pilot says so.
+[[template]]
+id = "common.advise_ready"
+controller = "any"
+text = ["{callsign}, roger, advise when ready.", "{callsign}, no problem, call me when you're ready."]
+
 [[template]]
 id = "clearance.standby"
 controller = "clearance"

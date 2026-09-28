@@ -106,9 +106,21 @@ def test_asking_for_a_climb_without_a_number():
     assert "request_altitude" not in intents("Good day, my incredible people up there. We'd like the departure.")
 
 
-def test_accepting_an_offered_level_after_a_false_start(replay):
-    """ "No, no, no. We'll be able to accept flight level 370": the "no" was a false start, not a decline."""
-    assert "climb and maintain FL370" in after(replay, "We'll be able to accept flight level 370")[0]
+def test_accepting_an_offered_level_after_a_false_start():
+    """ "No, no, no. We'll be able to accept flight level 370": the "no" was a false start, not a decline. (On this
+    flight the offer came 90 seconds before the descent; since the KMCO-KIND flight, it isn't made that late.)"""
+    from localtc.atc_core.facilities import Facility
+
+    engine = AtcEngine(EngineConfig(callsign="FFT2084", cruise_ft=35000))
+    center = Facility("center", "Los Angeles Center", 125.1)
+    engine._offered_level = (100.0, 37000)
+    assert engine._answer_offer("No, no, no. We'll be able to accept flight level 370 Frontier 2084.", center, 110.0)
+    assert [(s.instruction_id, s.slots["altitude"]) for s in engine._scheduled] == [("common.climb", 37000)]
+
+
+def test_no_level_offered_just_before_the_descent(replay):
+    assert not [line for line in replay if "advise if you can accept" in line
+                and 2500 < float(line.split("]")[0].strip("[ ")) < 2800]
 
 
 # --- what speech-to-text did, and the words around it --------------------------------------------------

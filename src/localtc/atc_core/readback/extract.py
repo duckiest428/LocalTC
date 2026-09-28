@@ -610,7 +610,8 @@ ELEMENTS: dict[str, Extractor] = {
                               ("great", "to", "land"), ("clean", "to", "land"), ("cleat", "to", "land"), ("clear", "land"),
                               ("cleared", "for", "landing"), ("clear", "for", "landing")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),
-    "descend_via": phrase(("descend", "via"), ("descending", "via"), ("descent", "via"), ("down", "via")),
+    "descend_via": phrase(("descend", "via"), ("descending", "via"), ("descent", "via"), ("down", "via"),
+                          ("on", "via"), ("send", "via"), ("sent", "via")),  # "this on via", "the send via"
 }
 
 
@@ -644,6 +645,11 @@ def values_close(element: str, heard: Any, expected: Any) -> bool:
         return expected[-1:].isdigit() and heard != expected and heard.rstrip("LRC") == expected  # "08 left" for 08
     if element in ("altitude", "cruise"):
         return int(heard) % 100 != 0 and abs(int(heard) - int(expected)) < 50  # "1508" for 1,500
+    if element == "frequency":
+        # "121771" for 121.7 ("121.7 when ready" run together): worth a "confirm", not a "negative".
+        wanted = f"{float(expected):.3f}".replace(".", "").rstrip("0")
+        said = str(heard).replace(".", "")
+        return len(wanted) >= 4 and said.startswith(wanted) and said != wanted
     return False
 
 

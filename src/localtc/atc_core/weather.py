@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from localtc.atc_core.airport import AirportGeometry, select_approach, select_runway
 from localtc.atc_core.airport.geometry import RunwayEndGeometry
 from localtc.atc_core.phraseology import speech
+from localtc.atc_core.region import region_for
 from localtc.atc_core.values import Wind
 from localtc.sim_api import OwnshipState
 
@@ -124,8 +125,22 @@ class WeatherTracker:
     """Surface samples per airport, and the latest pressure (good anywhere in the region)."""
 
     samples: dict[str, Weather] = field(default_factory=dict)
-    altimeter_inhg: float | None = None
+    altimeter_inhg: float | None = None  # the pressure where the aircraft is now
     _winds: dict[str, deque] = field(default_factory=dict)
+    _measured: dict[str, float] = field(default_factory=dict)  # each airport's altimeter, taken there
+    _estimated: dict[str, float] = field(default_factory=dict)  # ... or first guessed from afar, and kept
+
+    def altimeter_at(self, icao: str | None) -> float | None:
+        """An airport's altimeter: measured on or near it, else the pressure where the aircraft was when it was first
+        asked for, kept until it's measured. The pressure where the aircraft happens to be drifts as it flies: taken
+        afresh each time, Seattle's altimeter went 29.90, 29.95, 29.96, 30.00 on the way in."""
+        if not icao:
+            return self.altimeter_inhg
+        if icao in self._measured:
+            return self._measured[icao]
+        if icao not in self._estimated and self.altimeter_inhg is not None:
+            self._estimated[icao] = self.altimeter_inhg
+        return self._estimated.get(icao)
 
     def update(self, own: OwnshipState, airports: dict[str, AirportGeometry]) -> None:
         if 25.0 < own.altimeter_setting_inhg < 33.0:
@@ -136,6 +151,8 @@ class WeatherTracker:
             near = geo.distance_nm(own.lat, own.lon) <= SAMPLE_NM
             if not (near and (own.on_ground or own.alt_agl_ft <= SAMPLE_AGL_FT)):
                 continue
+            if self.altimeter_inhg is not None:
+                self._measured[icao] = self.altimeter_inhg
             winds = self._winds.setdefault(icao, deque())
             winds.append((own.t, own.wind_kt))
             while winds and own.t - winds[0][0] > GUST_WINDOW_S:
@@ -147,7 +164,7 @@ class WeatherTracker:
                 wind=magnetic_wind(own), gust_kt=int(round(gust)) if gust else None,
                 visibility_sm=round(own.visibility_m / M_PER_SM, 1) if own.visibility_m is not None else None,
                 temperature_c=int(round(own.temperature_c)) if own.temperature_c is not None else None,
-                altimeter_inhg=self.altimeter_inhg, precip=_precip(own.precip), t=own.t, wind_dir_true=own.wind_dir_true,
+                altimeter_inhg=self._measured.get(icao), precip=_precip(own.precip), t=own.t, wind_dir_true=own.wind_dir_true,
             )
 
     def surface(self, icao: str, airports: dict[str, AirportGeometry]) -> Weather | None:
@@ -160,7 +177,7 @@ class WeatherTracker:
             own = max(nearby, key=lambda w: w.t, default=None)
         if own is None:
             return None
-        return Weather(own.wind, own.gust_kt, own.visibility_sm, own.temperature_c, self.altimeter_inhg or own.altimeter_inhg,
+        return Weather(own.wind, own.gust_kt, own.visibility_sm, own.temperature_c, self.altimeter_at(icao) or own.altimeter_inhg,
                        own.precip, own.t, own.wind_dir_true)
 
 
@@ -207,7 +224,8 @@ class AtisBoard:
         end = self._runway(geo, weather, old.runway if old else None)
         if end is None:
             return None
-        approach = select_approach(geo.airport, end.ident, has_ils=end.has_ils, visibility_sm=weather.visibility_sm)
+        approach = select_approach(geo.airport, end.ident, has_ils=end.has_ils, visibility_sm=weather.visibility_sm,
+                                   visual_first=not region_for(icao).icao, precip=weather.precip)
         notes = remarks(geo, end, weather)
         if old is not None and not _changed(old, weather, end.ident, notes):
             return None

@@ -113,6 +113,13 @@ APPROACH_KINDS = {
 }
 
 
+def _parking_suffix(code: int) -> str:
+    """A stand's letter after its number ("B7A"): the sim sends it as a letter's code, or as 1-26."""
+    if 65 <= code <= 90:
+        return chr(code)
+    return chr(64 + code) if 1 <= code <= 26 else ""
+
+
 def definition_lines() -> list[str]:
     """The strings passed to SimConnect_AddToFacilityDefinition, in order."""
     lines = ["OPEN AIRPORT", *(f.name for f in AIRPORT.fields)]
@@ -204,7 +211,7 @@ class AirportAssembler:
             prefix = PARKING_NAMES.get(p["NAME"], "PARKING")
             parking.append(
                 ParkingSpot(
-                    index=index, name=f"{prefix} {p['NUMBER']}".strip(), kind=PARKING_KINDS.get(p["TYPE"], "other"),
+                    index=index, name=f"{prefix} {p['NUMBER']}{_parking_suffix(p.get('SUFFIX', 0))}".strip(), kind=PARKING_KINDS.get(p["TYPE"], "other"),
                     lat=plat, lon=plon, heading_true=round(p["HEADING"], 1), radius_m=round(p["RADIUS"], 1),
                 )
             )

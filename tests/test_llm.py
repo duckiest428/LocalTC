@@ -529,3 +529,19 @@ def test_the_phrasing_model_knows_who_it_speaks_for_and_the_runway_in_use():
     say(engine, own, "is the cafe open", mhz=121.0)
     facts = _shown(backend, "phrase")
     assert "controller Montreal Ground" in facts and "runway in use " in facts
+
+
+def test_the_app_is_told_when_the_model_timed_out():
+    """A timeout changes what ATC says: the pilot always hears about it (an alert the app shows)."""
+    text = "DP69 the uh thing"
+    backend = ScriptedBackend({text: [TIMEOUT, TIMEOUT]})
+    engine, own = cyul_engine(backend)
+    first = say(engine, own, text, mhz=121.0)
+    [waiting] = [o for o in first if isinstance(o, AtcAlert)]
+    assert waiting.kind == "llm_timeout" and "asking it once more" in waiting.detail
+    [gave_up] = [o for o in engine.resolve_deferred() if isinstance(o, AtcAlert)]
+    assert gave_up.kind == "llm_timeout" and "ATC answered without it" in gave_up.detail
+    from localtc.radiolog import radio_line
+
+    line = radio_line(gave_up)
+    assert line["code"] == "llm_timeout" and line["text"].startswith("The language model timed out: no answer")

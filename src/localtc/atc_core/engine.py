@@ -99,6 +99,7 @@ from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
     BusEvent,
+    LlmExchange,
     NearbyAirports,
     OwnshipState,
     PhaseChanged,
@@ -1583,9 +1584,26 @@ class AtcEngine(VfrMixin, DiversionMixin):
     def _on_pilot(self, ev: Transcript) -> list[BusEvent]:
         self._answering = True  # whatever is scheduled now answers the pilot, and goes out even with the sim paused
         try:
-            return self._answer_pilot(ev)
+            out = self._answer_pilot(ev)
         finally:
             self._answering = False
+        return out + self._model_timeouts(out, ev.t)
+
+    def _model_timeouts(self, out: list[BusEvent], t: float) -> list[BusEvent]:
+        """An ``llm_timeout`` alert whenever the language model ran out of time on the pilot's call: the app says so
+        (the pilot should know why ATC answered the way it did, and that the timeouts can be raised)."""
+        missed = [o for o in out if isinstance(o, LlmExchange) and o.outcome == "timeout"]
+        if not missed:
+            return []
+        waited = max(o.latency_ms for o in missed) / 1000
+        what = "phrasing a reply" if all(o.purpose == "phrase" for o in missed) else "reading your call"
+        if any(isinstance(o, AtcThinking) and o.busy for o in out):
+            patience = getattr(self.interpreter, "patience_s", None)
+            more = f" (up to {patience:.0f} s)" if patience else ""
+            detail = f"no answer {what} in {waited:.0f} s; asking it once more{more}"
+        else:
+            detail = f"no answer {what} in {waited:.0f} s; ATC answered without it"
+        return [self._alert(t, "llm_timeout", detail)]
 
     def _answer_pilot(self, ev: Transcript) -> list[BusEvent]:
         st, t = self.state, ev.t

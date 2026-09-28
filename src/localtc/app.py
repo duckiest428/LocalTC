@@ -187,7 +187,8 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
     llm = cfg.llm
     interpreter = phraser = None
     slower = 2.0 if llm.cpu_only and getattr(backend, "cpu_only", False) else 1.0  # a CPU answers in about twice the time
-    timeout_s, budget_s = llm.timeout_s * slower, llm.budget_s * slower
+    timeout_s = llm.timeout_s * slower
+    budget_s = max(llm.budget_s, llm.timeout_s) * slower  # (a budget shorter than one call would cut every call short)
     if backend is not None and llm.understanding != "off":
         interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=timeout_s,
                                      max_attempts=llm.max_attempts, budget_s=budget_s, patience_s=llm.patience_s)

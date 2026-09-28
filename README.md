@@ -226,6 +226,8 @@ A readback the grammar finds correct, and a request it matched confidently, neve
 
 **Patience** (`[llm] patience_s`): the model shares the PC with the sim, and one that answers in 2 s on an idle machine can take 8 in flight. A call the model missed the first deadline on (`timeout_s`), and that the grammar alone couldn't answer, gets one more try with up to `patience_s` (15 s) before ATC answers; meanwhile the radio log shows the controller thinking, and nothing is said on the radio. If even that finds nothing, a long call in your own words gets "roger", and anything else "say again": never silence. A readback the grammar could read (right, wrong or partly) is answered from that at once.
 
+**Timing** (Quick Settings → ATC → Language model timing, or `[llm] timeout_s`, `budget_s`, `patience_s`): how long to wait for an answer, for all tries of one call, and for the second try. Longer is more patient with a busy PC; shorter answers sooner. **Whenever the model runs out of time, the app says so**: a notice on screen, a line in the radio log and an entry under the alerts, saying whether it's being asked once more or ATC answered without it.
+
 **CPU or graphics card** (`[llm] cpu_only`, on by default): the model runs on the CPU and leaves the graphics card and its memory to the sim; its timeouts are doubled to match. Turn it off (Quick Settings → ATC) on a machine with video memory to spare.
 
 **Standard pressure.** "We're on STD", "set to standard", "QNE" and "29.92" are understood. Up in the flight levels ATC reads your altitude as the flight level (pressure altitude), whatever the sim's altimeter setting says. Some airliners keep their own STD while the sim's setting stays on the local one, and that is not an altitude deviation.

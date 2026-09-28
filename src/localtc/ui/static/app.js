@@ -22,13 +22,13 @@ async function api(path, body) {
 }
 
 let toastTimer;
-function toast(text, error = false) {
+function toast(text, error = false, ms = null) {
   const el = $("#toast");
   el.textContent = text;
   el.className = "toast" + (error ? " error" : "");
   el.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.hidden = true), error ? 6000 : 3000);
+  toastTimer = setTimeout(() => (el.hidden = true), ms ?? (error ? 6000 : 3000));
 }
 const fail = (e) => toast(e.message || String(e), true);
 
@@ -151,6 +151,8 @@ function addLine(l) {
   if (++S.radioLines > 500) log.querySelector(".line")?.remove();
   if (stick) log.scrollTop = log.scrollHeight;
   if (l.kind === "alert") { S.alerts.push(l); updateAlerts(); }
+  // The model running out of time changes what ATC said: always shown, with where to give it longer.
+  if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → ATC → Language model timing.`, true, 12000);
 }
 
 function updateAlerts() {
@@ -705,6 +707,16 @@ const Settings = {
         <div class="row"><label>After a flight, keep the language model loaded for
           <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
           <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. ${esc(m.ollama.loaded || "")}</span></label></div>
+        <p class="sub-h">Language model timing</p>
+        <div class="row llm-timing"><label>Wait for an answer
+          <input id="s-llm-timeout" type="number" min="1" max="60" step="0.5" value="${st.llm.timeout_s}"> s</label>
+          <label>Per call, all tries
+          <input id="s-llm-budget" type="number" min="1" max="120" step="0.5" value="${st.llm.budget_s}"> s</label>
+          <label>Second try when it missed
+          <input id="s-llm-patience" type="number" min="0" max="120" step="1" value="${st.llm.patience_s}"> s</label>
+          <span class="hint">How long ATC waits for the model before answering without it. Longer is more patient with
+            a busy PC (the app shows the controller thinking meanwhile); shorter answers sooner. On the CPU the first two are
+            doubled. The app tells you whenever the model runs out of time. From the next flight.</span></div>
         <div class="row"><label>Understanding
           <select id="s-understand"><option value="fallback" ${st.llm.understanding === "fallback" ? "selected" : ""}>The grammar first, the model only when stuck (recommended: light on the sim)</option>
           <option value="primary" ${st.llm.understanding === "primary" ? "selected" : ""}>The model reads every call (slower, costs frames)</option></select></label></div>
@@ -822,6 +834,13 @@ const Settings = {
     on("#s-understand", "change", () => this.save("llm", "understanding", val("#s-understand")));
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
     on("#s-cpu-only", "change", () => this.save("llm", "cpu_only", $("#s-cpu-only").checked));
+    for (const [id, key, low, high] of [["#s-llm-timeout", "timeout_s", 1, 60], ["#s-llm-budget", "budget_s", 1, 120],
+                                         ["#s-llm-patience", "patience_s", 0, 120]])
+      on(id, "change", () => {
+        const value = Number(val(id));
+        if (!Number.isFinite(value) || value < low || value > high) { toast(`Between ${low} and ${high} seconds`, true); return; }
+        this.save("llm", key, value);
+      });
     on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
     on("#s-simbrief-fetch", "click", async (e) => {
       const user = val("#s-simbrief").trim();

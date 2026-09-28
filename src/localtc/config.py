@@ -156,8 +156,8 @@ class LlmConfig(_Section):
     model: str = "llama3.2:3b"
     understanding: Literal["primary", "fallback", "off"] = "fallback"  # primary: every transmission; fallback: only
     phrasing: bool = True  # word replies that have no template (questions, declined requests)
-    timeout_s: float = 4.0  # per model call
-    budget_s: float = 6.0  # per transmission, including one retry
+    timeout_s: float = 4.0  # per model call (Quick Settings → ATC → Language model timing)
+    budget_s: float = 6.0  # per transmission, including one retry (at least timeout_s)
     # A question or anything off the script that the model couldn't answer in time: the app shows the controller
     # thinking and the model gets this long, once. The sim shares the machine, and a model that answers in 2 s idle
     # can take 8 in flight.

@@ -38,7 +38,7 @@ LLM_MODELS = (
     ModelOption("llama3.2:1b", "Llama 3.2 1B", 1300, "fastest", "basic",
                 "Misreads more calls; the grammar catches most of them. For older CPUs."),
     ModelOption("llama3.2:3b", "Llama 3.2 3B", 2000, "fast", "good",
-                "Recommended. Passes all 34 of LocalTC's edge cases, about 1 s per call on a CPU.", tested=True),
+                "Recommended. Passes all 54 of LocalTC's edge cases, about 2 s per call on a CPU.", tested=True),
     ModelOption("qwen2.5:3b", "Qwen 2.5 3B", 1900, "fast", "good", "An alternative to Llama 3.2 3B."),
     ModelOption("gemma3:4b", "Gemma 3 4B", 3300, "medium", "better", "Wants 16 GB of RAM or a GPU."),
     ModelOption("qwen2.5:7b", "Qwen 2.5 7B", 4700, "slow on CPU", "best",

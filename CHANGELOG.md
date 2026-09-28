@@ -7,6 +7,8 @@ a new minor version adds features, a patch fixes them.
 ## [0.4.0] - 2026-09-28
 
 ### Added
+- **Language model timing in the app** (Quick Settings → ATC): how long ATC waits for the model's answer, for all its tries, and for the second, patient try.
+- **The app tells you whenever the language model times out**: a notice on screen, a line in the radio log and an alert, saying whether it's being asked again or ATC answered without it.
 - **Every kind of instrument approach** the sim's airport data lists: ILS, localizer, LDA and SDF, localizer back course, RNAV (GPS) with its minima lines (LPV, LNAV/VNAV, LP, LNAV), RNAV (RNP) for aircraft that can fly RNP AR, VOR and VOR/DME, NDB and NDB/DME, and circling-only procedures (VOR-A). Each is named the way ATC says it ("cleared localizer back course runway 26 approach", "cleared RNAV Yankee runway 16R approach") and joined the right way: "until established on the localizer" or "on the final approach course".
 - **Minima decide the approach**: ATC gives the one with the lowest minima your aircraft can fly among those the weather allows. A GA navigator flies the LPV, an airliner the LNAV/VNAV; the RNP AR approaches are for airliners only.
 - **Circle to land**: with no instrument approach to the runway in use and weather too poor for a visual, an approach to another runway and a circle: "cleared VOR runway 16 approach, circle west of the airport for a left downwind to runway 34". Circling minima and the circling area grow with the aircraft's approach category.

@@ -45,6 +45,7 @@ ALERTS = {
     "emergency": "Emergency",
     "pilot_problem": "Problem reported",
     "out_of_range": "Out of radio range",
+    "llm_timeout": "The language model timed out",
 }
 
 
@@ -132,7 +133,7 @@ class FlightConsole:
             return [f"{when}  {s('--', DIM)} {s(PHASES.get(ev.phase, ev.phase), DIM)}"]
         if isinstance(ev, AtcAlert):
             text = ALERTS.get(ev.kind, ev.kind.replace("_", " "))
-            detail = f": {ev.detail}" if ev.kind == "emergency" and ev.detail else ""
+            detail = f": {ev.detail}" if ev.kind in ("emergency", "llm_timeout") and ev.detail else ""
             return [f"{when}  {s('!', BOLD, RED if ev.kind == 'emergency' else YELLOW)}  {s(text + detail, YELLOW)}"]
         if isinstance(ev, ConnectionStatus):
             return [f"{when}  {s('Sim connected' if ev.connected else 'Sim disconnected', BOLD if ev.connected else YELLOW)}"

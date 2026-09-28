@@ -377,3 +377,6 @@ table.lb td { white-space: nowrap; }
 .linkbtn:hover { color: #e2574c; }
 .btn.danger { color: #ff8a80; border-color: #6b3a36; }
 .error:not(.dot) { color: var(--red); }
+.llm-timing label { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
+.llm-timing input[type=number] { width: 72px; }
+.sub-h { margin: 10px 0 4px; font-size: 13px; color: var(--text); font-weight: 600; }

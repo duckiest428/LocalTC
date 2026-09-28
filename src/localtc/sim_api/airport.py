@@ -51,9 +51,13 @@ class Frequency(msgspec.Struct, frozen=True, kw_only=True):
 class ApproachProcedure(msgspec.Struct, frozen=True, kw_only=True):
     """An instrument approach the airport publishes, e.g. ILS 16R or RNAV (GPS) 01."""
 
-    kind: str  # ils, localizer, rnav, gps, vor, ndb, lda, sdf, visual, ...
+    kind: str  # ils, localizer, rnav, gps, vor, vordme, ndb, ndbdme, lda, sdf, backcourse
     runway: str = ""  # "16R"; "" for an approach not tied to a runway (circling)
-    suffix: str = ""  # "Y"/"Z" when an airport has several of the same kind
+    suffix: str = ""  # "Y"/"Z" when an airport has several of the same kind; "A" for a circling one (VOR-A)
+    lines: tuple[str, ...] = ()  # RNAV minima lines published: "lpv", "lnav/vnav", "lp", "lnav" (() before 0.4)
+    rnp_ar: bool = False  # an RNAV (RNP) approach: RNP AR, authorization required
+    faf: str = ""  # the final approach fix
+    faf_alt_ft: float = 0.0  # its altitude
 
 
 class TaxiPoint(msgspec.Struct, frozen=True, kw_only=True):

@@ -462,27 +462,65 @@ def route_cost(said: list[str], want: list[str]) -> float:
     return cost[len(said)][len(want)]
 
 
-APPROACH_KINDS = {"ils": "ILS", "rnav": "RNAV", "gps": "RNAV", "visual": "VISUAL", "localizer": "LOC", "loc": "LOC"}
+APPROACH_KINDS = {"ils": "ILS", "rnav": "RNAV", "gps": "RNAV", "rnp": "RNP", "visual": "VISUAL", "localizer": "LOC",
+                  "loc": "LOC", "vor": "VOR", "ndb": "NDB", "lda": "LDA", "sdf": "SDF"}
+# Spelled out, letter by letter ("V O R", "india lima sierra"), and what makes a variant of one ("VOR DME").
+SPELLED_KINDS = {("i", "l", "s"): "ILS", ("r", "nav"): "RNAV", ("v", "o", "r"): "VOR", ("n", "d", "b"): "NDB",
+                 ("l", "d", "a"): "LDA", ("s", "d", "f"): "SDF", ("r", "n", "p"): "RNP", ("g", "p", "s"): "RNAV",
+                 ("l", "o", "c"): "LOC"}
+WITH_DME = {"VOR": "VOR/DME", "NDB": "NDB/DME", "LOC": "LOC/DME"}
+# Approaches that are the same one read back under another name: an ILS flown without its glideslope is the
+# localizer approach; RNAV, RNAV (RNP) and GPS; a VOR approach and a VOR/DME one.
+SAME_APPROACH = [{"ILS", "LOC", "LOC/DME"}, {"RNAV", "RNP", "GPS"}, {"VOR", "VOR/DME"}, {"NDB", "NDB/DME"},
+                 {"LOC BC", "LOC"}]
+
+
+def same_approach(heard: str, expected: str) -> bool:
+    return heard == expected or any(heard in group and expected in group for group in SAME_APPROACH)
 
 
 def approaches(tokens: list[Token], expected: Any = None) -> list[Approach]:
     words = _words(tokens)
     starts: list[tuple[int, str]] = []  # (index just after the approach type, kind)
     for i, word in enumerate(words):
-        if word in APPROACH_KINDS:
+        spelled = next(((len(p), kind) for p, kind in SPELLED_KINDS.items() if tuple(words[i : i + len(p)]) == p), None)
+        if word in APPROACH_KINDS and spelled is None:
             starts.append((i + 1, APPROACH_KINDS[word]))
-        elif words[i : i + 3] == ["i", "l", "s"]:  # spelled out: "I L S" / "india lima sierra"
-            starts.append((i + 3, "ILS"))
-        elif words[i : i + 2] == ["r", "nav"]:
-            starts.append((i + 2, "RNAV"))
+        elif spelled is not None:
+            starts.append((i + spelled[0], spelled[1]))
     found = []
     for after, kind in starts:
         j = after
-        while j < len(tokens) and tokens[j].text in ("approach", "runway", "to", "y", "z"):
+        suffix = ""
+        while j < len(tokens):
+            text = tokens[j].text
+            if text in ("approach", "runway", "to", "slash"):
+                j += 1
+            elif text == "dme" and kind in WITH_DME:
+                kind, j = WITH_DME[kind], j + 1
+            elif text == "back" and j + 1 < len(tokens) and tokens[j + 1].text == "course" and kind == "LOC":
+                kind, j = "LOC BC", j + 2
+            elif (text in ("y", "z", "x", "w") or tokens[j].kind == "letter" and text in "wxyz") and not suffix:
+                suffix, j = text.upper(), j + 1
+            else:
+                break
+        if (hit := _runway_at(tokens, j)) is not None:
+            circle = _circle_to(tokens, j + hit[1])
+            found.append(Approach(kind=kind, runway=hit[0], suffix=suffix, circle_to=circle or ""))
+        elif suffix in ("", "A", "B", "C") and j < len(tokens) and tokens[j].text in ("alpha", "a", "bravo", "b", "charlie", "c"):
+            found.append(Approach(kind=kind, runway="", suffix=tokens[j].text[0].upper()))  # "VOR alpha": VOR-A
+    return found
+
+
+def _circle_to(tokens: list[Token], start: int) -> str | None:
+    """ "..., circle to (land) runway 34": the runway circled to."""
+    for i in _find_phrase(tokens, ("circle",), start):
+        j = i
+        while j < len(tokens) and tokens[j].text in ("to", "land", "runway", "for"):
             j += 1
         if (hit := _runway_at(tokens, j)) is not None:
-            found.append(Approach(kind=kind, runway=hit[0]))
-    return found
+            return hit[0]
+    return None
 
 
 def _compact_segments(tokens: list[Token]) -> list[str]:
@@ -696,11 +734,15 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
     if element in ("runway", "hold_short"):
         return normalize_runway(heard) == normalize_runway(expected)
     if element == "approach":
+        if not expected.runway:  # VOR-A: the name is all there is
+            return same_approach(heard.kind, expected.kind) and heard.suffix == expected.suffix
+        if not heard.runway:
+            return False
         wanted = normalize_runway(expected.runway)
         # "ILS 32R" for the ILS 32: an airport with a runway 32 has no 32R, so it's the same approach, the letter
         # added by the pilot or by speech-to-text.
         same_runway = heard.runway == wanted or (wanted[-1:].isdigit() and heard.runway.rstrip("LRC") == wanted)
-        return same_runway and (heard.kind == expected.kind or heard.kind == "LOC")
+        return same_runway and same_approach(heard.kind, expected.kind)
     if element == "altitude" or element == "cruise":
         return int(heard) == int(expected)
     if element == "taxi_route":

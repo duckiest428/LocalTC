@@ -86,6 +86,14 @@ text = ["{callsign}, turn {turn} heading {heading}, maintain {altitude} until es
 readback = { required = ["heading", "altitude"], optional = ["approach"] }
 pilot_readback = "Turn {turn} heading {heading}, maintain {altitude} until established, cleared {approach} approach, {callsign_short}."
 
+# A VOR, NDB or RNAV approach (and a circling one off it): no localizer, the final approach course (7110.65 4-8-1).
+[[template]]
+id = "approach.intercept_course"
+controller = "approach"
+text = ["{callsign}, turn {turn} heading {heading}, maintain {altitude} until established on the final approach course, cleared {approach} approach."]
+readback = { required = ["heading", "altitude"], optional = ["approach"] }
+pilot_readback = "Turn {turn} heading {heading}, maintain {altitude} until established, cleared {approach} approach, {callsign_short}."
+
 # The visual: no localizer to be established on, no altitude to hold until then.
 [[template]]
 id = "approach.intercept_visual"

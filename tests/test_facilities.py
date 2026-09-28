@@ -231,7 +231,7 @@ def test_published_approaches_are_read_and_offered():
     )
     airport = assemble(airport_messages(source, 7)).build()
     assert [(a.kind, a.runway) for a in airport.approaches] == [("ils", "34L"), ("rnav", "34L"), ("vor", "16R")]
-    assert published(airport, "34L") == ("ILS", "RNAV")
+    assert published(airport, "34L") == ("ILS", "RNAV (GPS)")  # the charts' names
     assert published(airport, "16R") == ("VOR",)
     assert select_approach(airport, "34L", has_ils=True) == "ILS"
     assert select_approach(airport, "16R", visibility_sm=10.0) == "VISUAL"  # only a VOR approach: the visual is simpler

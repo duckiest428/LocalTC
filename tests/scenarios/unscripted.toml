@@ -141,6 +141,10 @@ on = "approach.intercept_cleared"
 say = "{readback}"
 
 [[pilot]]
+on = "approach.intercept_course"
+say = "{readback}"
+
+[[pilot]]
 on = "approach.handoff_tower"
 say = "{readback}"
 

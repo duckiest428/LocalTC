@@ -6,18 +6,31 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.4.0] - 2026-09-28
 
+### Added
+- **Every kind of instrument approach** the sim's airport data lists: ILS, localizer, LDA and SDF, localizer back course, RNAV (GPS) with its minima lines (LPV, LNAV/VNAV, LP, LNAV), RNAV (RNP) for aircraft that can fly RNP AR, VOR and VOR/DME, NDB and NDB/DME, and circling-only procedures (VOR-A). Each is named the way ATC says it ("cleared localizer back course runway 26 approach", "cleared RNAV Yankee runway 16R approach") and joined the right way: "until established on the localizer" or "on the final approach course".
+- **Minima decide the approach**: ATC gives the one with the lowest minima your aircraft can fly among those the weather allows. A GA navigator flies the LPV, an airliner the LNAV/VNAV; the RNP AR approaches are for airliners only.
+- **Circle to land**: with no instrument approach to the runway in use and weather too poor for a visual, an approach to another runway and a circle: "cleared VOR runway 16 approach, circle west of the airport for a left downwind to runway 34". Circling minima and the circling area grow with the aircraft's approach category.
+- Ask for any approach by name: the VOR, the NDB, the localizer, the back course, the RNAV Yankee.
+- **A new ATIS**, built to the FAA's format in the US and Canada and ICAO's elsewhere (or as the phraseology setting says), from everything the sim's weather gives: variable winds and gusts, visibility in miles with fractions or in metres, RVR in low visibility, rain and snow by intensity, freezing rain and fog, thunderstorms, mist, haze and smoke, the clouds the aircraft flew through near the airport (few, scattered, broken, overcast, the ceiling, a sky obscured by fog, CAVOK), temperature and dew point, altimeter or QNH, the transition level, density altitude and a rapid pressure change.
+- **The ATIS carries the airport's operations**: the approaches and runways in use, simultaneous approaches to parallel runways, a runway change in progress, low visibility procedures, wind shear, runway condition codes and braking action, de-icing, bird activity, and "read back all runway hold short instructions".
+- **Notices on the ATIS** (`[atc] notams`, on by default): a few ordinary ones per airport and session, which ATC works to. A closed runway is never used and asking for it gets "unable, runway 16R is closed"; taxi routes go round a closed taxiway; an ILS out is no approach, and a glideslope out makes it the localizer approach; approach lights out raise the visibility needed.
+- **Separate arrival and departure ATIS** where a US airport has two ATIS frequencies, each with its own letters.
+
 ### Changed
+- **The ATIS letter advances with every hourly observation**, as well as with a change in the weather, the runways, the approaches or the notices. Its time is the observation's.
+- **ATC and the ATIS agree**: the approach ATC tells you to expect is the one the ATIS advertises for your runway, unless your aircraft can't fly it or you asked for another.
+- **The ATIS loop is read a little differently each time round**, the same information in slightly different words, like a controller's recording.
 - **The language model only listens; the grammar and the controller decide.** Every call goes to the grammar first. When the grammar can't place it confidently, the model reads it and fills in a small form (what kind of call, which request, which values), and ATC acts on that exactly as on the grammar's reading. The model never picks an instruction. "Say again" comes only once the model couldn't make the call out either: a model that runs out of time gets a second, longer try while the app shows the controller working on it.
 - **What sends a call to the model**: nothing matched, two requests that don't go together, a readback that isn't right, a request riding along with a readback ("cleared to land, and can we make it a low approach?"), the pilot correcting themselves or hesitating, the callsign missing or one digit off, an altimeter given as "standard", a call that makes no sense to this controller now (a pushback request to a tower), or speech-to-text unsure of the words or of the numbers in them.
 - **The model may only answer with calls that fit the controller and the phase**: on approach, "cleared ILS 34R" can't come back as a request for an IFR clearance. It's shown the moment in fixed order: the callsign, the phase, who it's talking to, what's cleared (altitude, heading, squawk, runway, approach), traffic called, the last few exchanges on the frequency, and the readback expected.
 - **Faster answers from the model**: it writes only the fields the pilot said instead of a dozen empty ones. On a CPU, the median call went from 2.8 to 1.7 seconds in the test set, with more of it right.
 - **Readbacks with a number one slip off** (a digit wrong, two swapped, one dropped or added): when speech-to-text wasn't sure of what it heard, ATC asks "confirm squawk 5015" instead of "negative"; heard clearly, it's "negative" with the right value, as before.
 - A request or question along with a readback is answered too: the readback is taken, then the request.
-
 - **The Flight Tracker shows the path flown before it was opened**: the app keeps the flight's path and hands it over when the website (or the companion app) starts watching mid-flight; the relay keeps it in memory only, like the position.
 - **The installer carries only what LocalTC runs**: the release is an allowlist (the app, its settings and its setup), so the website, the server, the iOS app, the tests and anything new in the repository stay out of it.
 
 ### Fixed
+- Fuel on board and fuel flow were never read from the sim, so an emergency never had an endurance estimate.
 - Smoke or fire on board is an emergency whatever words come with it.
 - A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.
 

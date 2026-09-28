@@ -68,6 +68,10 @@ OWNSHIP: tuple[Datum, ...] = (
     # Not every aircraft reports combustion (MSFS 2024's CS300 never does): N1 or RPM says the engine is turning.
     Datum("eng_n1", "TURB ENG N1:1", "percent"),
     Datum("eng_rpm", "GENERAL ENG RPM:1", "rpm"),
+    # For the ATIS (added in 0.4, last so an older sim that doesn't know them only loses these): how hard it's
+    # raining or snowing, and smoke (wildfire haze).
+    Datum("precip_rate_mm", "AMBIENT PRECIP RATE", "millimeters of water"),
+    Datum("in_smoke", "AMBIENT IN SMOKE", "Bool", I32),
 )
 
 # Requested with PERIOD_SECOND + FLAG_CHANGED, so it only arrives when something changes.
@@ -116,6 +120,11 @@ def payload_size(datums: tuple[Datum, ...]) -> int:
 
 
 def unpack(datums: tuple[Datum, ...], payload: bytes) -> dict[str, Any]:
+    """The values in ``payload``. One shorter than the definition (a sim that refused a variable at the end) reads
+    the missing ones as zero."""
+    size = payload_size(datums)
+    if len(payload) < size:
+        payload = payload + bytes(size - len(payload))
     values = struct.unpack_from(struct_format(datums), payload)
     return {
         d.field: (v.split(b"\0", 1)[0].decode("utf-8", errors="replace") if isinstance(v, bytes) else v)
@@ -167,6 +176,11 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         precip=int(raw["precip"]),
         in_cloud=bool(raw["in_cloud"]),
         zulu_s=round(raw["zulu_s"], 1),
+        fuel_lb=round(raw["fuel_lb"], 1),
+        fuel_flow_pph=round(raw["fuel_flow_pph"], 1),
+        gross_weight_lb=round(raw["gross_weight_lb"], 1),
+        precip_rate_mm=round(raw.get("precip_rate_mm", 0.0), 2),
+        in_smoke=bool(raw.get("in_smoke", 0)),
     )
 
 

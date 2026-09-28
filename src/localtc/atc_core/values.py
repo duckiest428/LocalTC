@@ -81,12 +81,64 @@ class Callsign:
 
 @dataclass(frozen=True)
 class Approach:
-    kind: str  # "ILS", "RNAV", "VISUAL"
-    runway: str  # "14R"
+    """An approach as ATC names it: "ILS Z RWY 34R", "LOC BC RWY 26", "RNAV (RNP) Y RWY 19", "VOR-A".
+
+    ``kind`` is one of APPROACH_KINDS. ``runway`` is the runway the procedure is built for; "" for one with
+    circling minima only (named with a letter: VOR-A). ``circle_to`` is the runway to land on when that's
+    another one (circle-to-land), with ``circle_side`` ("west") and ``circle_pattern`` ("left") when ATC
+    restricts where to circle. ``minima`` is the RNAV minima line flown (LPV, LNAV/VNAV, LNAV, LP), for show:
+    ATC never says it."""
+
+    kind: str
+    runway: str
+    suffix: str = ""
+    circle_to: str = ""
+    circle_side: str = ""
+    circle_pattern: str = ""
+    minima: str = ""
+
+    @property
+    def name(self) -> str:
+        """The chart's name without the runway: "ILS Z", "RNAV (RNP) Y", "VOR-A"."""
+        kind = {"RNP": "RNAV (RNP)"}.get(self.kind, self.kind)
+        if not self.runway:
+            return f"{kind}-{self.suffix or 'A'}"
+        return f"{kind} {self.suffix}" if self.suffix else kind
 
     @property
     def display(self) -> str:
-        return f"{self.kind} RWY {self.runway}"
+        return self.name if not self.runway else f"{self.name} RWY {self.runway}"
+
+    @property
+    def landing_runway(self) -> str:
+        """Where it lands: the runway circled to, or the one the approach is to."""
+        return self.circle_to or self.runway
+
+    @property
+    def circling(self) -> bool:
+        return bool(self.circle_to) or not self.runway
+
+    @classmethod
+    def parse(cls, display: str) -> "Approach | None":
+        """The approach from its ``display`` ("ILS Z RWY 34R", "VOR-A"); None if it isn't one."""
+        text = (display or "").strip()
+        if not text:
+            return None
+        head, _, runway = text.partition(" RWY ")
+        head = head.replace("RNAV (RNP)", "RNP")
+        if not runway:
+            kind, _, letter = head.rpartition("-")
+            return cls(kind, "", letter) if kind in APPROACH_KINDS and len(letter) == 1 else None
+        words = head.split()
+        suffix = words[-1] if len(words) > 1 and len(words[-1]) == 1 and words[-1].isalpha() else ""
+        kind = " ".join(words[:-1] if suffix else words)
+        return cls(kind, runway.strip(), suffix) if kind in APPROACH_KINDS else None
+
+
+# Every approach LocalTC knows, precision first. "RNP" is an RNAV (RNP) approach (RNP AR, authorization required);
+# "RNAV" an RNAV (GPS) approach, whose minima line (LPV ... LNAV) depends on the aircraft.
+APPROACH_KINDS = ("ILS", "RNP", "RNAV", "GPS", "LOC", "LOC/DME", "LDA", "SDF", "LOC BC", "VOR/DME", "VOR", "NDB/DME",
+                  "NDB", "VISUAL")
 
 
 @dataclass(frozen=True)

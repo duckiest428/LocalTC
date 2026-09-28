@@ -37,8 +37,11 @@ class _Edge:
     runway: str
 
 
+CLOSED_PENALTY = 100.0  # a closed taxiway (the ATIS's notice) is used only where there's no other way
+
+
 class TaxiGraph:
-    def __init__(self, geometry: AirportGeometry) -> None:
+    def __init__(self, geometry: AirportGeometry, *, closed: frozenset[str] = frozenset()) -> None:
         self.geometry = geometry
         airport = geometry.airport
         self.positions: dict[Node, tuple[float, float]] = {
@@ -54,7 +57,8 @@ class TaxiGraph:
             if a not in self.positions or b not in self.positions:
                 continue
             length = math.dist(self.positions[a], self.positions[b])
-            cost = length * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0)
+            cost = length * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0) * (
+                CLOSED_PENALTY if path.name and path.name in closed else 1.0)
             runway = path.runway if path.kind == "runway" else ""
             self.edges[a].append(_Edge(b, cost, length, path.name, runway))
             self.edges[b].append(_Edge(a, cost, length, path.name, runway))

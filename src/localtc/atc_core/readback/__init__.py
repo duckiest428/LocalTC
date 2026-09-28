@@ -3,8 +3,8 @@
 from localtc.atc_core.readback.interpreter import (
     ChainInterpreter,
     GrammarInterpreter,
-    InterpretContext,
     Interpretation,
+    InterpretContext,
     Interpreter,
     PendingReadback,
     SayAgainInterpreter,

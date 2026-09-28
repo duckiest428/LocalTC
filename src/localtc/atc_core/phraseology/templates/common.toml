@@ -135,6 +135,12 @@ id = "common.unable_runway"
 controller = "any"
 text = ["{callsign}, unable runway {runway}, wind {wind}."]
 
+# A runway the ATIS has closed (its notices).
+[[template]]
+id = "common.runway_closed"
+controller = "any"
+text = ["{callsign}, unable, runway {runway} is closed."]
+
 [[template]]
 id = "common.return"
 controller = "any"

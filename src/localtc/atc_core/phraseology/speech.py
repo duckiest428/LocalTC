@@ -213,9 +213,29 @@ def wind_display(value: Wind) -> str:
     return f"{direction} degrees {value.speed_kt} knots" if CURRENT.get().icao else f"{direction} at {value.speed_kt}"
 
 
+APPROACH_SPOKEN = {"ILS": "I L S", "RNAV": "R-NAV", "RNP": "R-NAV", "GPS": "G P S", "LOC": "localizer",
+                   "LOC/DME": "localizer D M E", "LOC BC": "localizer back course", "LDA": "L D A", "SDF": "S D F",
+                   "VOR": "V O R", "VOR/DME": "V O R D M E", "NDB": "N D B", "NDB/DME": "N D B D M E", "VISUAL": "visual"}
+
+
 def approach(value: Approach) -> str:
-    kind = {"ILS": "I L S", "RNAV": "R-NAV", "VISUAL": "visual"}.get(value.kind, value.kind.lower())
-    return f"{kind} runway {runway(value.runway)}"
+    """ "I L S zulu runway three four right", "localizer back course runway two six", "V O R alpha"."""
+    kind = APPROACH_SPOKEN.get(value.kind, value.kind.lower())
+    suffix = f" {PHONETIC[value.suffix.upper()]}" if value.suffix and value.suffix.upper() in PHONETIC else ""
+    if not value.runway:
+        return f"{kind}{suffix or ' alpha'}"
+    return f"{kind}{suffix} runway {runway(value.runway)}"
+
+
+def circling(value: Approach) -> tuple[str, str]:
+    """What follows "cleared ... approach" on a circle-to-land (FAA JO 7110.65 4-8-6): "circle to runway 34", or
+    "circle west of the airport for a left downwind to runway 34". (display, spoken); empty when not circling."""
+    if not value.circle_to:
+        return "", ""
+    if value.circle_side and value.circle_pattern:
+        where = f"circle {value.circle_side} of the airport for a {value.circle_pattern} downwind to runway "
+        return where + value.circle_to, where + runway(value.circle_to)
+    return f"circle to runway {value.circle_to}", f"circle to runway {runway(value.circle_to)}"
 
 
 def callsign(value: Callsign) -> str:

@@ -75,15 +75,20 @@ TAXI_PATH = FacilityItem("TAXI_PATH", _fields(
 TAXI_NAME = FacilityItem("TAXI_NAME", _fields(("NAME", "32s")), 17)
 
 # Which instrument approaches the airport publishes, and to which runway. A subset of the SDK's APPROACH
-# fields: enough to say "expect the ILS runway 16R" only where there is one.
-APPROACH = FacilityItem("APPROACH", _fields(
-    ("TYPE", "i"), ("SUFFIX", "i"), ("RUNWAY_NUMBER", "i"), ("RUNWAY_DESIGNATOR", "i"),
-    ("FAF_ALTITUDE", "f"), ("MISSED_ALTITUDE", "f"),
-), 4)
+# fields: the kind, the runway, the final approach fix, the RNAV minima lines (LNAV, LNAV/VNAV, LP, LPV) and
+# whether it's an RNAV (RNP) approach (RNP AR). IS_RNPAR is MSFS 2024's; a sim that doesn't know a field
+# leaves it out of the reply, which then matches one of the shorter layouts below.
+_APPROACH_BASE = (("TYPE", "i"), ("SUFFIX", "i"), ("RUNWAY_NUMBER", "i"), ("RUNWAY_DESIGNATOR", "i"),
+                  ("FAF_ICAO", "8s"), ("FAF_ALTITUDE", "f"), ("MISSED_ALTITUDE", "f"))
+_APPROACH_LINES = (("HAS_LNAV", "i"), ("HAS_LNAVVNAV", "i"), ("HAS_LP", "i"), ("HAS_LPV", "i"))
+APPROACH = FacilityItem("APPROACH", _fields(*_APPROACH_BASE, *_APPROACH_LINES, ("IS_RNPAR", "i")), 4)
+# A reply without IS_RNPAR (a sim before MSFS 2024): classified as an approach all the same (never asked for).
+APPROACH_FALLBACKS = (FacilityItem("APPROACH", _fields(*_APPROACH_BASE, *_APPROACH_LINES), 4),)
 
 CHILDREN = (RUNWAY, FREQUENCY, TAXI_POINT, TAXI_PARKING, TAXI_PATH, TAXI_NAME, APPROACH)
 ALL_ITEMS = (AIRPORT, *CHILDREN)
-assert len({item.size for item in ALL_ITEMS}) == len(ALL_ITEMS), "facility item sizes must be unique"
+assert len({item.size for item in (*ALL_ITEMS, *APPROACH_FALLBACKS)}) == len(ALL_ITEMS) + len(APPROACH_FALLBACKS), \
+    "facility item sizes must be unique"
 
 FREQUENCY_KINDS = {
     0: "none", 1: "atis", 2: "multicom", 3: "unicom", 4: "ctaf", 5: "ground", 6: "tower", 7: "clearance",
@@ -169,7 +174,7 @@ class AirportAssembler:
 
     def _classify(self, msg: FacilityData) -> tuple[FacilityItem, bytes, int] | None:
         for payload, offset in ((msg.payload, 40), (msg.payload_bool8, 37)):
-            candidates = [item for item in ALL_ITEMS if item.size == len(payload)]
+            candidates = [item for item in (*ALL_ITEMS, *APPROACH_FALLBACKS) if item.size == len(payload)]
             if candidates:
                 best = next((c for c in candidates if c.type_hint == msg.type), candidates[0])
                 return best, payload, offset
@@ -222,8 +227,12 @@ class AirportAssembler:
                 continue
             number, designator = ap["RUNWAY_NUMBER"], RUNWAY_DESIGNATORS.get(ap["RUNWAY_DESIGNATOR"], "")
             suffix = chr(ap["SUFFIX"]) if 65 <= ap["SUFFIX"] <= 90 else ""
+            lines = tuple(line for line, key in (("lpv", "HAS_LPV"), ("lnav/vnav", "HAS_LNAVVNAV"), ("lp", "HAS_LP"),
+                                                 ("lnav", "HAS_LNAV")) if ap.get(key))
             approaches.append(ApproachProcedure(kind=kind, runway=f"{number:02d}{designator}" if number else "",
-                                                suffix=suffix))
+                                                suffix=suffix, lines=lines if kind in ("rnav", "gps") else (),
+                                                rnp_ar=bool(ap.get("IS_RNPAR")), faf=ap.get("FAF_ICAO", "").strip(),
+                                                faf_alt_ft=round(ap.get("FAF_ALTITUDE", 0.0) * FEET_PER_METER)))
         names = {index: n["NAME"] for index, n in self.items["TAXI_NAME"].items()}
         paths = []
         for _, p in sorted(self.items["TAXI_PATH"].items()):

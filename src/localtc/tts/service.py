@@ -110,10 +110,21 @@ class VoiceOut:
         return Clip(audio, speech.rate, kind)
 
     async def _loop_atis(self, ev: AtisBroadcast) -> None:
-        clip = await asyncio.to_thread(self.render, ev.spoken, f"{ev.station} ATIS", "atis")
-        if clip is None:
-            return
+        """The ATIS on a loop, each time round in its next wording (the same information, the words around it
+        changing a little, as a recording made by a person). Each wording is synthesized once."""
+        texts = ev.variants or (ev.spoken,)
+        clips: dict[int, Clip | None] = {}
+        turn = 0
         while True:
+            index = turn % len(texts)
+            if index not in clips:
+                clips[index] = await asyncio.to_thread(self.render, texts[index], f"{ev.station} ATIS", "atis")
+            clip = clips[index]
+            turn += 1
+            if clip is None:
+                if not any(c is not None for c in clips.values()) and len(clips) == len(texts):
+                    return
+                continue
             playing = Clip(clip.audio, clip.rate, "atis")
             self.player.play(playing)
             await asyncio.to_thread(playing.done.wait)

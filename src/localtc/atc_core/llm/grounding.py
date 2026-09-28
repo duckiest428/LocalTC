@@ -63,8 +63,11 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
         letter = str(value).lower()
         return any(t.text == letter for t in tokens if t.kind == "letter") or letter in words
     if element == "approach":
-        kind_words = {"ILS": {"ils", "i", "localizer"}, "RNAV": {"rnav", "gps", "r", "area"}, "VISUAL": {"visual"}}
-        return grounded("runway", value.runway, tokens) and bool(words & kind_words.get(value.kind, set()))
+        kind_words = {"ILS": {"ils", "i", "localizer"}, "RNAV": {"rnav", "gps", "r", "area", "rnp"}, "VISUAL": {"visual"},
+                      "LOC": {"localizer", "loc", "l"}, "VOR": {"vor", "v"}, "NDB": {"ndb", "n"}, "LDA": {"lda", "l"},
+                      "SDF": {"sdf", "s"}, "RNP": {"rnp", "rnav", "r"}}
+        kind = value.kind.split("/")[0].split()[0]
+        return (not value.runway or grounded("runway", value.runway, tokens)) and bool(words & kind_words.get(kind, set()))
     return False
 
 

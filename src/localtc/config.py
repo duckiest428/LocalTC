@@ -143,6 +143,9 @@ class AtcConfig(_Section):
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4
     unscripted: bool = True  # traffic calls, altitude checks, "how do you read?"
+    # Notices on each airport's ATIS (a taxiway closed, an ILS out, bird activity ...), a few per session, and ATC
+    # works to them: a closed runway isn't used, an ILS out isn't an approach.
+    notams: bool = True
 
 
 class LlmConfig(_Section):
@@ -259,6 +262,8 @@ def with_recorded(cfg: Config, recorded: dict) -> Config:
     for section in ("flight", "atc"):
         if isinstance(recorded.get(section), dict):
             data[section] = {**data[section], **recorded[section]}
+    if isinstance(recorded.get("atc"), dict) and "notams" not in recorded["atc"]:
+        data["atc"]["notams"] = False  # recorded before ATIS notices: replayed as it was flown
     try:
         return msgspec.convert(data, Config)
     except msgspec.ValidationError:

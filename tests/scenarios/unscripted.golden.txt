@@ -63,9 +63,9 @@
 [  1425.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn right heading 210.
 [  1427.0] PILOT     119.2: Turn right heading two one zero, Cessna two lima tango.
 [  1427.0] READBACK  approach.base correct
-[  1759.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn left heading 150, maintain 2,100 until established on the localizer, cleared RNAV RWY 14R approach.
+[  1759.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn left heading 150, maintain 2,100 until established on the final approach course, cleared RNAV RWY 14R approach.
 [  1761.0] PILOT     119.2: Turn left heading one five zero, maintain two thousand one hundred until established, cleared R-NAV runway one four right approach, Cessna two lima tango.
-[  1761.0] READBACK  approach.intercept_cleared correct
+[  1761.0] READBACK  approach.intercept_course correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1899.0] ATC       Seattle Approach 119.2: Cessna 2LT, contact Boeing Tower 120.6, see ya.
 [  1901.0] PILOT     119.2: Boeing Tower one two zero point six, Cessna two lima tango.

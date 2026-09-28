@@ -66,6 +66,9 @@ class OwnshipState(Event, tag="ownship_state"):
     fuel_lb: float | None = None  # total fuel on board
     fuel_flow_pph: float | None = None  # burn on engine 1, for an endurance estimate
     gross_weight_lb: float | None = None
+    # For the ATIS (0.4); None / False where a recording predates them.
+    precip_rate_mm: float | None = None  # AMBIENT PRECIP RATE, mm/h
+    in_smoke: bool = False
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):
@@ -224,6 +227,8 @@ class AtisBroadcast(Event, tag="atis_broadcast"):
     letter: str
     text: str
     spoken: str
+    # The same broadcast worded a little differently for each time round the loop (0.4); () reads ``spoken`` each time.
+    variants: tuple[str, ...] = ()
 
 
 class RadioChatter(Event, tag="radio_chatter"):

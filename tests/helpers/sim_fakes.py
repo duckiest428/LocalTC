@@ -36,6 +36,7 @@ OWNSHIP_VALUES = {
     "on_runway": 0, "fuel_lb": 318.0, "fuel_flow_pph": 0.0, "gross_weight_lb": 2320.0,
     "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,
     "temperature_c": 12.0, "visibility_m": 16000.0, "precip": 2, "in_cloud": 0, "zulu_s": 64800.0, "eng_n1": 0.0, "eng_rpm": 2100.0,
+    "precip_rate_mm": 0.0, "in_smoke": 0,
 }
 
 IDENTITY_VALUES = {
@@ -138,7 +139,9 @@ def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False, 
         msgs.append(facility_message(request_id, fac.APPROACH, i, {
             "TYPE": approach_kinds[a.kind], "SUFFIX": ord(a.suffix) if a.suffix else 0,
             "RUNWAY_NUMBER": int(digits or 0), "RUNWAY_DESIGNATOR": designators[a.runway[len(digits):]],
-            "FAF_ALTITUDE": 600.0, "MISSED_ALTITUDE": 900.0}, bool8=bool8, documented_ids=documented_ids))
+            "FAF_ICAO": a.faf or "FAFXX", "FAF_ALTITUDE": 600.0, "MISSED_ALTITUDE": 900.0,
+            "HAS_LNAV": int("lnav" in a.lines), "HAS_LNAVVNAV": int("lnav/vnav" in a.lines), "HAS_LP": int("lp" in a.lines),
+            "HAS_LPV": int("lpv" in a.lines), "IS_RNPAR": int(a.rnp_ar)}, bool8=bool8, documented_ids=documented_ids))
     msgs.append(_renumber(build_message(RecvFacilityDataEnd(RequestId=request_id), RecvId.FACILITY_DATA_END),
                           RecvId.FACILITY_DATA_END, documented_ids))
     return msgs

@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 import msgspec
 
+from localtc.atc_core.phraseology import speech
 from localtc.atc_core.phraseology.slots import SLOT_DEFAULTS, SLOTS
 from localtc.atc_core.readback.extract import ELEMENTS
 from localtc.atc_core.values import Approach, Phrase
@@ -210,6 +211,12 @@ class TemplateLibrary:
             # "Cleared visual approach runway 34R", not "cleared VISUAL RWY 34R approach".
             shown = shown.replace(f"{display['approach']} approach", f"visual approach runway {approach.runway}")
             said = said.replace(f"{spoken['approach']} approach", f"visual approach {spoken['approach'][len('visual '):]}")
+        if "approach" in display and isinstance(approach, Approach) and approach.circle_to \
+                and f"cleared {display['approach']} approach" in shown:
+            # "Cleared VOR runway 16 approach, circle west of the airport for a left downwind to runway 34" (4-8-6).
+            circle_shown, circle_said = speech.circling(approach)
+            shown = shown.replace(f"cleared {display['approach']} approach", f"cleared {display['approach']} approach, {circle_shown}")
+            said = said.replace(f"cleared {spoken['approach']} approach", f"cleared {spoken['approach']} approach, {circle_said}")
         return shown, _spoken_sentence(said)
 
 

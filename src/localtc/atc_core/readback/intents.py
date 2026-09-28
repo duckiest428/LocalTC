@@ -79,7 +79,8 @@ def _direction(tokens: list[Token]) -> str | None:
 
 FIX_STOP = {"to", "the", "a", "direct", "please", "for", "if", "able", "possible", "when", "request", "requesting"}
 CONDITION_WORDS = ("turbulence", "chop", "choppy", "icing", "ice", "bumpy", "smooth", "shear", "rough")
-APPROACH_WORDS = {"ils": "ILS", "localizer": "ILS", "rnav": "RNAV", "gps": "RNAV", "visual": "VISUAL"}
+APPROACH_WORDS = {"ils": "ILS", "localizer": "LOC", "loc": "LOC", "rnav": "RNAV", "gps": "RNAV", "rnp": "RNP",
+                  "visual": "VISUAL", "vor": "VOR", "ndb": "NDB", "lda": "LDA", "sdf": "SDF"}
 
 
 def _fix(tokens: list[Token]) -> str | None:
@@ -308,6 +309,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     if _has_any(tokens, ("direct",)) and not _has_any(tokens, ("disregard",)) and (fix := _fix(tokens)):
         add("request_direct", fix=fix)
     approach = next((APPROACH_WORDS[t.text] for t in tokens if t.text in APPROACH_WORDS), None)
+    if approach == "LOC" and _has_any(tokens, ("back", "course")):
+        approach = "LOC BC"
     returning = _has_any(tokens, *RETURN_WORDS)
     place = _divert_to(tokens) if _has_any(tokens, ("vectors",), ("vector",), *DIVERT_WORDS) else None
     diverting = not returning and (_has_any(tokens, *DIVERT_WORDS) or (

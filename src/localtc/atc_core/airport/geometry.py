@@ -159,17 +159,20 @@ class AirportGeometry:
 
 
 def select_runway(
-    airport: AirportGeometry, wind_dir_true: float, wind_kt: float, *, calm_kt: float = 5.0
+    airport: AirportGeometry, wind_dir_true: float, wind_kt: float, *, calm_kt: float = 5.0,
+    exclude: frozenset[str] = frozenset(),
 ) -> RunwayEndGeometry | None:
-    """Best runway end for the wind: most headwind, then ILS-equipped, then longest.
+    """Best runway end for the wind: most headwind, then ILS-equipped, then longest. Never one in ``exclude``
+    (closed).
 
     Below ``calm_kt`` wind direction is ignored (calm-wind runway: ILS, then longest).
     """
-    if not airport.ends:
+    ends = [e for e in airport.ends if e.ident not in exclude]
+    if not ends:
         return None
 
     def score(end: RunwayEndGeometry) -> tuple[float, int, float]:
         headwind = 0.0 if wind_kt < calm_kt else wind_kt * math.cos(math.radians(wind_dir_true - end.heading_true))
         return round(headwind), int(end.has_ils), end.runway.runway.length_m
 
-    return max(airport.ends, key=score)
+    return max(ends, key=score)

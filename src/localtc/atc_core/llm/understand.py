@@ -410,8 +410,10 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
             text = str(data[name]).strip().upper()
             kind_word = next((k for k in APPROACH_KINDS if k in text), "")
             said = {t.text for t in tokens}
-            if kind_word and (kind_word.lower() in said or (kind_word in ("RNAV", "GPS") and {"rnav", "nav", "gps"} & said)):
-                values[name] = {"GPS": "RNAV", "LOC": "ILS"}.get(kind_word, kind_word)
+            spoken = {"LOC": {"loc", "localizer"}, "RNAV": {"rnav", "nav", "gps"}, "GPS": {"rnav", "nav", "gps"},
+                      "RNP": {"rnp", "rnav"}}.get(kind_word, {kind_word.lower()})
+            if kind_word and spoken & said:
+                values[name] = {"GPS": "RNAV"}.get(kind_word, kind_word)
             elif text:
                 dropped.append(f"{name}={text}")
             continue

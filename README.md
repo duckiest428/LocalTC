@@ -14,7 +14,7 @@ Windows is the only supported runtime. Development works on macOS too, using rec
 
 > **Status: Phase 5 (the app).**
 > - **Working:** the full IFR flow, from clearance delivery to taxi-in; voice in and out; ATIS and weather; unscripted moments; the copilot; the app.
-> - **Not yet:** SIDs, STARs and published arrivals (ATC clears "as filed" and gives vectors or a straight-in approach), and AI traffic on the frequency.
+> - **Not yet:** holding patterns, published missed approaches, and each chart's own minima (typical values are used).
 
 ## Install (Windows)
 
@@ -194,19 +194,37 @@ Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) o
 
 Without Ollama, LocalTC logs a warning and runs on the grammar alone, exactly as in Phase 1. `--no-llm` does the same on purpose.
 
-With llama3.2:3b the edge cases pass 34/34, at about 1 s per call (median; the p95 is about 2 s including retries). If `llm check` shows slower answers on your machine, raise `[llm] timeout_s` and `budget_s`. Keep `base_url` on `127.0.0.1`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every call.
+With llama3.2:3b on a CPU the edge cases (54 of them, several from real flights) pass 54/54, at about 2 s per call (median; the p95 is about 4 s including retries). If `llm check` shows slower answers on your machine, raise `[llm] timeout_s` and `budget_s`. Keep `base_url` on `127.0.0.1`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every call.
 
-**What the model does.** It fills in a small JSON form for each pilot call: the kind of call, the intent, and the values the pilot said. It never talks to the pilot and never decides anything. Its answer is checked before it's used:
+**The grammar decides, the model only listens.** Every call goes to the grammar first. The model is asked only when the grammar can't place the call confidently among the ones expected right now, and it answers with a small JSON form: the kind of call, the intent, and the values the pilot said. It never talks to the pilot, never issues a clearance and never picks an instruction: the engine (the state machine) acts on the form exactly as on the grammar's reading. "Say again" only comes once the model couldn't make the call out either.
+
+**What sends a call to the model** (the trigger is recorded with each call, `atc_core/llm/triggers.py`):
+- nothing matched, or two requests that don't go together;
+- a readback that isn't right: wrong, partial, or a number only nearly right;
+- a request or question riding along with a readback ("cleared to land 34R, actually can we make that a low approach") the grammar can't place (one it can, it answers itself);
+- a self-correction or hesitation ("sorry", "I mean", "uh", a word said twice);
+- the callsign missing, garbled or one digit off;
+- an altimeter given as STD or QNE;
+- a call that makes no sense to this controller in this phase (a pushback request to a tower, a check-in on the ground);
+- a word for something the grammar has no call for ("deviation", "icing");
+- speech-to-text unsure of the words (confidence under 0.5), or of numbers in them (under 0.7).
+
+A readback the grammar finds correct, and a request it matched confidently, never wait for the model.
+
+**What the model is shown** (one snapshot per call, the same key order every time): the callsign, the phase, who the pilot is talking to and what kind of controller that is, what's cleared (altitude, heading, squawk, runway, approach), traffic called in the last few minutes, the last few exchanges on the frequency, and the readback expected. **It may only answer with intents that fit that controller in that phase** (`readback/expected.py`): the schema's list of intents is cut to them, so on approach "cleared ILS 34R" can't come back as a request for an IFR clearance. The answer only has to carry what the pilot said (no empty fields), which keeps it short: on a CPU that's the difference between 3 and 2 seconds.
+
+**Its answer is checked before it's used:**
 - The form must match the schema (Ollama enforces it). An answer that doesn't is retried once, with the problem named.
 - **Every value must have been said.** A squawk, frequency or altitude that isn't in the pilot's words (after number normalization) makes the whole answer invalid.
 - **The intent has to fit the words.** An altitude request needs a request word ("request", "could we", "higher") and an altitude word. A small model otherwise calls every check-in an altitude request.
 - Readback values are compared with the same rules as the grammar, and a value the grammar heard wins over the model's. If the grammar recognized a readback, the model can't turn it into a request.
-- An intent that makes no sense in the current phase (ready to taxi while cruising) is rejected.
 - On a timeout, a missing model or two bad answers, the grammar's result is used. There are two exceptions. A question with a clear topic word ("say the winds") is still answered. A call the model kept calling a request, where the pilot said "request", is declined as unsupported.
 
-**When it's asked** (`[llm] understanding`): `fallback` (the default) asks only when the grammar can't cope: a parser failure, an ambiguous call, a question, an emergency, a rejected readback, or words outside the grammar ("request direct"). `primary` asks it about every call except a readback the grammar already finds correct. The model shares the PC with the sim, so every call costs frames; `fallback` keeps that to the calls that need it. Either way the trigger is recorded.
+**Numbers speech-to-text nearly got** (`values_close`): a readback number one slip from the right one (a digit wrong, two swapped, one dropped or added: "135105" for 135.05, "5051" for squawk 5015) is "confirm squawk 5015" while speech-to-text wasn't sure of what it heard (confidence under 0.85), and "negative, squawk 5015" when it heard clearly (or the call was typed). A number nothing like the right one is "negative" with the right one. A right one is "readback correct" where ATC says so.
 
-**Patience** (`[llm] patience_s`): the model shares the PC with the sim, and one that answers in 2 s on an idle machine can take 8 in flight. A question or anything off the script that the model misses the first deadline on (`timeout_s`) gets one more try with up to `patience_s` (15 s) before ATC answers; meanwhile the radio log shows the controller thinking, and nothing is said on the radio. If even that finds nothing, a long call in your own words gets "roger", and anything else "say again": never silence. Questions the grammar can place (the altimeter, the runway, the wind) never wait for the model at all, and readbacks never wait either: the grammar's reading is used at once.
+**When it's asked** (`[llm] understanding`): `fallback` (the default) asks only on the triggers above. `primary` asks it about every call except a readback the grammar already finds correct. The model shares the PC with the sim, so every call costs frames; `fallback` keeps that to the calls that need it.
+
+**Patience** (`[llm] patience_s`): the model shares the PC with the sim, and one that answers in 2 s on an idle machine can take 8 in flight. A call the model missed the first deadline on (`timeout_s`), and that the grammar alone couldn't answer, gets one more try with up to `patience_s` (15 s) before ATC answers; meanwhile the radio log shows the controller thinking, and nothing is said on the radio. If even that finds nothing, a long call in your own words gets "roger", and anything else "say again": never silence. A readback the grammar could read (right, wrong or partly) is answered from that at once.
 
 **CPU or graphics card** (`[llm] cpu_only`, on by default): the model runs on the CPU and leaves the graphics card and its memory to the sim; its timeouts are doubled to match. Turn it off (Quick Settings → ATC) on a machine with video memory to spare.
 
@@ -262,11 +280,26 @@ ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for W
 
 ## ATIS and weather
 
-MSFS doesn't give add-ons its ATIS or METARs, only the weather where the aircraft is, so LocalTC builds each airport's ATIS itself: wind (with gusts), visibility and precipitation, temperature, altimeter, the approach and runway in use, and cautions (gusty winds, strong crosswind, low visibility, wet runway, high density altitude). Surface weather is sampled on or near the airport. Until you get to the destination, its ATIS uses the freshest surface sample from an airport within 150 nm; the altimeter is always current.
+MSFS doesn't give add-ons its ATIS or METARs, only the weather where the aircraft is, so LocalTC builds each airport's ATIS itself (`atc_core/atis/`), in the FAA format (JO 7110.65 2-9-3, the AIM) in the US and Canada and the ICAO one (Annex 11, Doc 4444) elsewhere, or as `[atc] phraseology` says.
 
-- Tune an ATIS frequency and it's printed in the console and read aloud on a loop until you tune away.
-- The letter advances when the weather really changes (at most every 10 minutes). If you're on ground, tower or approach when it does, ATC tells you: "information Charlie is now current, altimeter 29.90".
-- **The runway in use comes from the ATIS**, for taxi clearances and arrivals alike, and it only changes when the tailwind on it passes 5 kt.
+**The weather** is sampled on or near the airport (until you get there, from an airport within 150 nm; the altimeter is the airport's own):
+- **Wind**: calm, variable ("wind variable at 4"), gusts, and a direction varying 60 degrees or more ("variable between 240 and 300").
+- **Visibility** in statute miles with fractions ("1 1/4") or, ICAO, metres and kilometres ("10 kilometres or more"); **RVR** when it's a mile or less.
+- **Present weather**: rain and snow by how hard they fall (light, heavy), freezing rain and fog below zero, a thunderstorm for a downpour with strong gusts, fog, mist, haze, smoke.
+- **Sky**: the clouds the aircraft flew through climbing out or coming down within 30 nm (few, scattered, broken, overcast, the ceiling), an obscured sky with a vertical visibility in fog, "sky clear" once it's been seen clear high enough; ICAO: clouds below 5,000 ft, "no significant cloud", CAVOK. The sim has no cloud report, so until the aircraft has seen them the sky is left out, which the FAA's ATIS may do anyway in good weather.
+- **Temperature and dew point** (the sim has no humidity: the dew point is estimated from the visibility and precipitation), the **altimeter** (inches, or QNH in hectopascals), the ICAO **transition level**, and remarks: density altitude, the pressure rising or falling rapidly.
+
+**The operations:**
+- **Approaches and runways in use**, one approach per landing runway ("ILS runway 34R approach in use"), simultaneous approaches to parallel runways far enough apart ("simultaneous ILS approaches in use, runways 06L and 06R"), landing and departing runways, and "runway change in progress" after one.
+- **Notices** (`[atc] notams`, on by default): the sim has none, so each airport gets a few ordinary ones per session: a taxiway closed or under construction, a runway closed (never the longest), an ILS or its glideslope out, approach or edge lights out, a VOR out, bird activity. ATC works to them: a closed runway is never used (and asking for it gets "unable, runway 16R is closed"), taxi routes go round a closed taxiway where there's another way, an ILS out isn't an approach, a glideslope out makes it the localizer approach.
+- **Advisories from the weather**: low visibility procedures, low level wind shear, runway condition codes and braking action on a wet, snowy or icy runway, de-icing.
+- **Separate arrival and departure ATIS** where a US airport has two frequencies (Denver, Los Angeles): each with its own letters, and ATC gives the one for your flight.
+
+**The letter** advances with every new hourly observation (at 53 minutes past, even if nothing changed), with a change in the weather that matters between them, and with any change in the runways, approaches, notices or advisories, at most every 10 minutes. If you're on ground, tower or approach when it does, ATC tells you: "information Charlie is now current, altimeter 29.90".
+
+**It's read on a loop** while it's tuned, with small differences in the wording each time round, the way a controller's recording sounds; the information is the same.
+
+- **The runway in use and the approach come from the ATIS**, for taxi clearances and arrivals alike: ATC expects you to fly the approach the ATIS advertises for your runway (unless your aircraft can't fly it, or you ask for another). The runway only changes when the tailwind on it passes 5 kt.
 - ATC uses it: a taxi clearance adds "information Charlie is current, altimeter 29.92" if you didn't report the current letter ("with information Charlie"). The takeoff clearance gives the wind and any cautions. Descents give the destination altimeter, and approach checks you have the current ATIS. The landing clearance adds cautions.
 
 ## Unscripted moments
@@ -368,7 +401,9 @@ Every threshold can be overridden in `[atc.phase]`.
 8. Tower clears to land, then hands off to ground after the runway exit.
 9. Ground gives the taxi-to-parking route.
 
-**Radar vectors** (`atc_core/vectors.py`): approach flies an arrival round a pattern worked out in the runway's frame: a join to a downwind on the arrival's side, a base turn about 17 nm out (10 for slow aircraft), and a 30 degree intercept that carries the approach clearance ("maintain 4,000 until established on the localizer"). Altitudes step down with the miles still to fly; an arrival too high for the distance is sent out on a downwind first. The pattern only moves forward, so drifting over a boundary never turns an aircraft back.
+**Radar vectors** (`atc_core/vectors.py`): approach flies an arrival round a pattern worked out in the runway's frame: a join to a downwind on the arrival's side, a base turn about 17 nm out (10 for slow aircraft), and a 30 degree intercept that carries the approach clearance ("maintain 4,000 until established on the localizer", or "on the final approach course" for a VOR, NDB or RNAV approach).
+
+**Approaches** (`atc_core/airport/approaches.py`): every kind the sim's airport data lists: ILS, localizer (LOC), LDA and SDF, the localizer back course (reverse sensing), RNAV (GPS) with its minima lines (LPV, LNAV/VNAV, LP, LNAV), RNAV (RNP) (RNP AR, offered only to an aircraft that can fly it: an airliner), VOR and VOR/DME, NDB and NDB/DME, and circling-only procedures (VOR-A). Each has typical minima: a decision altitude on a glidepath (ILS 200 ft and 1/2 mile, LPV 250, LNAV/VNAV 350) or a minimum descent altitude with step-down fixes (LNAV and localizer 450, VOR 550, NDB 650). The RNAV line depends on the aircraft: the sim's GA navigators have WAAS and fly the LPV, airliners the LNAV/VNAV. ATC gives the approach with the lowest minima the aircraft can fly among those the weather allows, the visual in good weather in the US and Canada, and whatever you ask for by name ("request the VOR 34", "the localizer back course 26", "the RNAV Yankee"). A glideslope out of service turns the ILS into the localizer approach ("ILS or LOC"); an ILS out takes the localizer approaches away; approach lights out raise the visibility needed. A runway with no instrument approach, in weather too poor for a visual, gets one to another runway and a circle to land, with the side restricted when the landing is the other way round: "cleared VOR runway 16 approach, circle west of the airport for a left downwind to runway 34" (FAA JO 7110.65 4-8-6). Circling minima and the circling area grow with the approach category (A to D). The sim doesn't say which localizer approaches need DME, so they're all "LOC"; LOC/DME, VOR/DME and NDB/DME asked for or read back are understood. Altitudes step down with the miles still to fly; an arrival too high for the distance is sent out on a downwind first. The pattern only moves forward, so drifting over a boundary never turns an aircraft back.
 
 **Controllers' habits** (`atc_core/personality.py`): each station, by its name, greets or not on its first real call ("good afternoon", by the sun where you are) and signs off handoffs its own way.
 

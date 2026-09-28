@@ -272,9 +272,19 @@ class Account:
         self.watchers = int((data or {}).get("watchers", 0) or 0)
         return True
 
-    def frame(self, *, own: dict | None = None, traffic: list | None = None) -> None:
-        """Position and traffic for a phone watching through the server. Held in memory there, never stored."""
-        data = self._call("PUT", "/v1/live/frame", {k: v for k, v in (("own", own), ("traffic", traffic)) if v is not None})
+    def frame(self, *, own: dict | None = None, traffic: list | None = None, trail: list | None = None) -> None:
+        """Position, traffic and the path flown so far, for a phone watching through the server. Held in memory
+        there, never stored."""
+        body = {k: v for k, v in (("own", own), ("traffic", traffic), ("trail", trail)) if v is not None}
+        data = self._call("PUT", "/v1/live/frame", body)
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
+
+    def live_map(self, *, route: dict | None = None, zones: dict | None = None, clear: tuple[str, ...] = ()) -> None:
+        """The flight plan's route and the Live Map's ATC zones for a phone or the Flight Tracker watching
+        through the server. Held in memory there, never stored; ``clear`` names the ones now gone."""
+        body: dict = {k: v for k, v in (("route", route), ("zones", zones)) if v is not None}
+        body.update({k: None for k in clear})
+        data = self._call("PUT", "/v1/live/map", body)
         self.watchers = int((data or {}).get("watchers", 0) or 0)
 
     def radio(self, lines: list[dict]) -> None:

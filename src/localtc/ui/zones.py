@@ -74,6 +74,8 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
             "tower_nm": TOWER_NM if any(f.controller == "tower" for f in facilities) else 0,
             "stations": [{"controller": f.controller, "station": f.station, "mhz": f.mhz,
                           "tuned": tuned == f, "next": expected == f and tuned != f} for f in facilities],
+            "runways": [{"name": r.name, "lat": r.lat, "lon": r.lon, "heading_true": r.heading_true,
+                         "length_m": r.length_m} for r in found.runways],
         })
         area = _terminal(engine, airspace, found, "departure" if role == "departure" else "approach")
         if area is not None:

@@ -1,7 +1,8 @@
 """The companion app's feed: what a phone shows of the flight, on the same network or through the account.
 
-``CompanionHub`` keeps the picture a phone needs (the status, the aircraft, the traffic, the route, the
-radio log, the flight's airports) from what the app already publishes, and hands it out two ways:
+``CompanionHub`` keeps the picture a phone needs (the status, the aircraft, the traffic, the route, the path
+flown, the ATC zones, the radio log, the flight's airports) from what the app already publishes, and hands it
+out two ways:
 
 - **On the same network**, a small server (``CompanionServer``) on port 47800 streams it directly, as
   Server-Sent Events, to a phone that has the key. The key is made fresh at every start and reaches the
@@ -42,6 +43,7 @@ REMOTE_TRAFFIC_EVERY_S = 5.0
 # about 10 m. Past TRAIL_KEEP points every other one goes, so a long flight keeps its whole shape.
 TRAIL_STEP_DEG = 0.002
 TRAIL_KEEP = 1500
+ZONE_DECIMALS = 3  # the ATC zones' outlines to about 100 m: plenty for a map, a third the size
 STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
                "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules")
 
@@ -111,6 +113,7 @@ class CompanionHub:
         self.traffic: list[dict] = []
         self.route: dict | None = None
         self.trail: list[list[float]] = []  # [[lat, lon], ...], oldest first
+        self.zones: dict | None = None  # the Live Map's ATC layer for this flight (ui/zones.py, compact_zones)
         self.airports: list[dict] = []  # origin and destination: frequencies, runways, ATIS (published data)
         self.radio: deque[dict] = deque(maxlen=RADIO_BACKLOG)
         self.remote: Callable[[str, Any], None] | None = None  # to the relay; set while signed in
@@ -144,8 +147,21 @@ class CompanionHub:
             self._send("frame", {"traffic": traffic})
 
     def set_route(self, route: dict | None) -> None:
+        if route == self.route:
+            return
         self.route = route
         self._local("route", route)
+        if self._remote_ok():
+            self._send("route", route)
+
+    def set_zones(self, zones: dict | None) -> None:
+        """The ATC layer the Live Map draws, for the flight as a whole: sent on when it changes."""
+        if zones == self.zones:
+            return
+        self.zones = zones
+        self._local("zones", zones)
+        if self._remote_ok():
+            self._send("zones", zones)
 
     def set_airports(self, airports: list[dict]) -> None:
         if airports == self.airports:
@@ -183,11 +199,15 @@ class CompanionHub:
                 self._send("frame", {"own": self.own, "traffic": self.traffic})
             if self.trail:
                 self._send("frame", {"trail": self.trail})  # the path so far, for a map opened mid-flight
+            if self.route is not None:
+                self._send("route", self.route)
+            if self.zones is not None:
+                self._send("zones", self.zones)
 
     def snapshot(self) -> dict:
         return {"protocol": PROTOCOL, "version": __version__, "status": self.status, "own": self.own,
                 "traffic": self.traffic, "route": self.route, "radio": list(self.radio), "airports": self.airports,
-                "trail": self.trail}
+                "trail": self.trail, "zones": self.zones}
 
     def _extend_trail(self, own: dict) -> None:
         lat, lon = own.get("lat"), own.get("lon")
@@ -210,6 +230,29 @@ class CompanionHub:
     def _send(self, kind: str, data: Any) -> None:
         if self.remote is not None:
             self.remote(kind, data)
+
+
+def compact_zones(zones: dict) -> dict:
+    """The Live Map's ATC layer (``ui/zones.py``) as a phone gets it: coordinates rounded, repeats dropped."""
+
+    def ring(points: list) -> list[list[float]]:
+        out: list[list[float]] = []
+        for lat, lon in points:
+            p = [round(lat, ZONE_DECIMALS), round(lon, ZONE_DECIMALS)]
+            if not out or out[-1] != p:
+                out.append(p)
+        return out
+
+    def area(a: dict) -> dict:
+        return {**a, "label": ring([a["label"]])[0], "rings": [ring(r) for r in a["rings"]]}
+
+    out = {**zones, "centers": [area(c) for c in zones.get("centers") or []],
+           "terminals": [area(t) for t in zones.get("terminals") or []]}
+    if zones.get("final"):
+        out["final"] = {**zones["final"], "ring": ring(zones["final"]["ring"])}
+    if zones.get("taxi"):
+        out["taxi"] = {**zones["taxi"], "points": [[round(a, 5), round(b, 5)] for a, b in zones["taxi"]["points"]]}
+    return out
 
 
 class CompanionServer:

@@ -17,6 +17,7 @@ a new minor version adds features, a patch fixes them.
 - **The ATIS carries the airport's operations**: the approaches and runways in use, simultaneous approaches to parallel runways, a runway change in progress, low visibility procedures, wind shear, runway condition codes and braking action, de-icing, bird activity, and "read back all runway hold short instructions".
 - **Notices on the ATIS** (`[atc] notams`, on by default): a few ordinary ones per airport and session, which ATC works to. A closed runway is never used and asking for it gets "unable, runway 16R is closed"; taxi routes go round a closed taxiway; an ILS out is no approach, and a glideslope out makes it the localizer approach; approach lights out raise the visibility needed.
 - **Separate arrival and departure ATIS** where a US airport has two ATIS frequencies, each with its own letters.
+- **The Flight Tracker and the companion app show everything the Live Map does**: the ATC zones (the centres on the route, the departure and approach areas, the stretch of final, each tower's control zone), the flight plan route and its fixes, the runways, the taxi route ground gave, the gate, each airport's controllers with the one you're tuned to and the next one marked, and the airspace classes on the VFR map, along with the path flown. The website's tracker also gets the app's IFR/VFR switch, the zones on/off, Route and Follow buttons, and the map key; the companion app gets a zones button and a key.
 
 ### Changed
 - **The ATIS letter advances with every hourly observation**, as well as with a change in the weather, the runways, the approaches or the notices. Its time is the observation's.
@@ -35,6 +36,9 @@ a new minor version adds features, a patch fixes them.
 - Fuel on board and fuel flow were never read from the sim, so an emergency never had an endurance estimate.
 - Smoke or fire on board is an emergency whatever words come with it.
 - A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.
+- The path flown before the Flight Tracker was opened never reached it, or a phone away from the PC's network: the app sent it in a form the account connection turned down.
+- The Live Map's ATC zones didn't redraw after zooming while the map followed the aircraft.
+- Dark lines across the dark maps at low zoom, where the map tiles meet.
 
 ## [0.3.5] - 2026-09-25
 

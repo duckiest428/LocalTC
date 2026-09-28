@@ -82,6 +82,32 @@ def test_a_map_opened_mid_flight_gets_the_path_flown_so_far():
     assert hub.trail == []  # the next flight starts clean
 
 
+def test_the_route_and_the_atc_zones_go_to_a_phone_and_the_flight_tracker():
+    from localtc.ui.companion import compact_zones
+
+    hub, relay = CompanionHub(), Relay()
+    hub.remote = relay
+    route = {"origin": "KLAX", "destination": "LFPG", "fixes": [{"ident": "DOTSS", "lat": 33.9, "lon": -118.4, "kind": "wpt"}]}
+    zones = compact_zones({
+        "centers": [{"id": "KZLA", "name": "Los Angeles Center", "label": [34.123456, -117.0],
+                     "rings": [[[33.00001, -118.00001], [33.00002, -118.00002], [35.0, -118.0]]]}],
+        "terminals": [], "final": None, "taxi": {"points": [[33.9412345, -118.4012345]], "to": "runway 25R", "taxiways": []},
+        "airports": [], "classes": []})
+    assert zones["centers"][0]["rings"] == [[[33.0, -118.0], [35.0, -118.0]]]  # rounded, the repeat dropped
+    assert zones["centers"][0]["label"] == [34.123, -117.0] and zones["taxi"]["points"] == [[33.94123, -118.40123]]
+    hub.set_route(route)
+    hub.set_zones(zones)
+    assert relay.sent == []  # nobody watching through the server yet
+    assert hub.snapshot()["route"] == route and hub.snapshot()["zones"] == zones  # the local stream's hello has them
+    hub.watching(1)
+    assert ("route", route) in relay.sent and ("zones", zones) in relay.sent
+    relay.sent.clear()
+    hub.set_zones(dict(zones))  # the same again: not resent
+    assert relay.sent == []
+    hub.set_zones(None)
+    assert relay.sent == [("zones", None)]
+
+
 def test_a_long_flight_keeps_its_whole_shape():
     from localtc.ui.companion import TRAIL_KEEP
 

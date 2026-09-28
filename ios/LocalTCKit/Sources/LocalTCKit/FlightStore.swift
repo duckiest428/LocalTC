@@ -12,6 +12,7 @@ public final class FlightStore {
     public private(set) var trail: [Coordinate] = []
     public private(set) var traffic: [Int: TrafficTarget] = [:]
     public private(set) var route: Route?
+    public private(set) var zones: AtcZones?
     public private(set) var radio: [RadioLine] = []
     public private(set) var airports: [FlightAirport] = []
     /// Banners waiting to be shown, oldest first. The app removes each as it shows it.
@@ -34,14 +35,16 @@ public final class FlightStore {
             if let o = hello.own { setOwn(o) }
             if let t = hello.traffic { setTraffic(t) }
             if let r = hello.route { route = r }
+            zones = hello.zones
             if let lines = hello.radio { radio = Array(lines.suffix(Self.radioKeep)) }
             if let a = hello.airports { airports = a }
         case .status(let s):
-            if !s.active && status.active { trail = []; airports = [] }  // the flight ended: the next one starts clean
+            if !s.active && status.active { trail = []; airports = []; zones = nil }  // the flight ended: the next one starts clean
             status = s
         case .own(let o): setOwn(o)
         case .traffic(let t): setTraffic(t)
         case .route(let r): route = r
+        case .zones(let z): zones = z
         case .radio(let line): append([line])
         case .radioBacklog(let lines):
             // A catch-up after reconnecting: only what isn't already shown.
@@ -61,6 +64,7 @@ public final class FlightStore {
         trail = []
         traffic = [:]
         route = nil
+        zones = nil
         radio = []
         airports = []
         alerts = []

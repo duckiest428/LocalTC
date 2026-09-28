@@ -414,12 +414,15 @@ function nudge(flights) {
 }
 
 // --- the Flight Tracker: the flight in progress, live, as the companion app sees it ------------------------
-// A WebSocket to the account's relay. While it's open the app sends the aircraft, traffic and radio (if its
-// "map away from home" setting is on); they pass through the server's memory and are never stored.
+// A WebSocket to the account's relay. While it's open the app sends the aircraft, the path flown, traffic,
+// radio, the route and the ATC zones its Live Map draws (if its "map away from home" setting is on); they pass
+// through the server's memory and are never stored. atcmap.js draws the route and the zones, as in the app.
 
 const Tracker = {
   ws: null, retry: 0, timer: null, ping: null, map: null, plane: null, trail: null, trailPts: [], tfc: new Map(),
   status: { active: false }, gotOwn: false, follow: true, wanted: false,
+  tiles: null, routeLayer: null, zoneLayer: null, runwayLayer: null, route: null, routeLine: null, zones: null,
+  mode: "ifr", rulesSeen: null, zonesOn: true,
 
   start() {
     if (this.wanted) return;
@@ -475,6 +478,8 @@ const Tracker = {
     if (type === "hello") {
       this.statusIs(data.status || { active: false });
       this.clearMap();
+      this.setRoute(data.route || null);
+      this.setZones(data.zones || null);
       if (data.trail) this.setTrail(data.trail);
       if (data.own) this.own(data.own);
       if (data.traffic) this.traffic(data.traffic);
@@ -483,6 +488,8 @@ const Tracker = {
     } else if (type === "status") this.statusIs(data);
     else if (type === "own") this.own(data);
     else if (type === "trail") this.setTrail(data);
+    else if (type === "route") this.setRoute(data);
+    else if (type === "zones") this.setZones(data);
     else if (type === "traffic") this.traffic(data);
     else if (type === "radio") this.radio(data);
   },
@@ -515,6 +522,7 @@ const Tracker = {
       ...(s.gate ? [fact("Gate", esc(s.gate))] : []),
     ].join("");
     this.ensureMap();
+    this.syncRules();
     // No position a while into the flight: the app keeps it at home (its setting), say so.
     clearTimeout(this.noMapTimer);
     this.noMapTimer = setTimeout(() => { $("#tr-nomap").hidden = this.gotOwn || !this.status.active; }, 12000);
@@ -523,22 +531,111 @@ const Tracker = {
   ensureMap() {
     if (this.map) { setTimeout(() => this.map.invalidateSize(), 0); return; }
     this.map = L.map("tr-map", { worldCopyJump: true }).setView([39, -98], 4);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
+    this.tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
-    $("#tr-map").classList.add("fm-tiles");
+    // Bottom to top, as in the app: the zones, the runways, the route, the path flown, then the aircraft.
+    this.zoneLayer = L.layerGroup().addTo(this.map);
+    this.runwayLayer = L.layerGroup().addTo(this.map);
+    this.routeLayer = L.layerGroup().addTo(this.map);
     this.trail = L.polyline([], { className: "tr-trail", weight: 2.5 }).addTo(this.map);
-    this.map.on("dragstart", () => { this.follow = false; });
-    const follow = L.control({ position: "topright" });
-    follow.onAdd = () => {
-      const b = L.DomUtil.create("button", "tr-follow");
-      b.type = "button"; b.textContent = "Follow";
-      L.DomEvent.on(b, "click", (e) => { L.DomEvent.stop(e); this.follow = true; if (this.plane) this.map.panTo(this.plane.getLatLng()); });
-      return b;
+    const controls = L.control({ position: "topright" });
+    controls.onAdd = () => {
+      const bar = L.DomUtil.create("div", "tr-controls");
+      bar.innerHTML = `<span class="tr-seg" role="group" aria-label="Map type" title="IFR: who controls what. VFR: a light map and the airspace classes. Opens on the flight's rules.">
+          <button type="button" data-mode="ifr" aria-pressed="true">IFR</button><button type="button" data-mode="vfr" aria-pressed="false">VFR</button></span>
+        <button type="button" data-act="zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
+        <button type="button" data-act="route" title="The whole flight plan route">Route</button>
+        <button type="button" data-act="follow" aria-pressed="true">Follow</button>`;
+      L.DomEvent.disableClickPropagation(bar);
+      L.DomEvent.on(bar, "click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (b.dataset.mode) this.setMode(b.dataset.mode);
+        else if (b.dataset.act === "zones") this.setZonesOn(!this.zonesOn);
+        else if (b.dataset.act === "route") this.showRoute();
+        else if (b.dataset.act === "follow") { this.setFollow(true); if (this.plane) this.map.panTo(this.plane.getLatLng()); }
+      });
+      return bar;
     };
-    follow.addTo(this.map);
+    controls.addTo(this.map);
+    this.map.on("dragstart", () => this.setFollow(false));
+    // The key folds to one line (who the flight talks to) so it doesn't cover the map; a click opens it.
+    const legend = L.DomUtil.create("div", "maplegend tr-legend folded", $("#tr-map"));
+    legend.id = "tr-legend";
+    legend.innerHTML = `<button type="button" class="lg-fold" aria-expanded="false">Map key</button>${AtcMap.LEGEND}`;
+    legend.querySelector(".lg-fold").onclick = (e) => {
+      const open = legend.classList.toggle("folded") === false;
+      e.currentTarget.setAttribute("aria-expanded", String(open));
+    };
+    L.DomEvent.disableClickPropagation(legend);
+    this.setRoute(this.route);  // what came before the map was first shown
+    this.setZones(this.zones);
+    this.setMode(this.mode);
+  },
+  setFollow(on) {
+    this.follow = on;
+    $("#tr-map .tr-controls [data-act=follow]")?.setAttribute("aria-pressed", String(on));
+  },
+  /* IFR or VFR, as in the app: the map opens on the flight's rules and follows them when they change; the
+     switch works any time. VFR is the light map (no terrain tiles here: only OpenStreetMap's are used). */
+  syncRules() {
+    const rules = String(this.status.rules || "IFR").toLowerCase() === "vfr" ? "vfr" : "ifr";
+    if (rules !== this.rulesSeen) { this.rulesSeen = rules; this.setMode(rules); }
+  },
+  setMode(mode) {
+    this.mode = mode === "vfr" ? "vfr" : "ifr";
+    if (!this.map) return;
+    $("#tr-map").dataset.mode = this.mode;
+    $("#tr-map").classList.toggle("fm-tiles", this.mode === "ifr");  // IFR dark, VFR light like a chart
+    document.querySelectorAll("#tr-map .tr-seg [data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === this.mode)));
+    this.drawZones();
+  },
+  setZonesOn(on) {
+    this.zonesOn = on;
+    $("#tr-map .tr-controls [data-act=zones]")?.setAttribute("aria-pressed", String(on));
+    this.drawZones();
+  },
+  // The flight plan's route: the line through its fixes, or a straight one when it was typed without them.
+  setRoute(route) {
+    this.route = route;
+    if (!this.routeLayer) return;
+    this.routeLayer.clearLayers();
+    this.routeLine = route ? AtcMap.route(this.routeLayer, route) : null;
+    this.straightRoute();
+  },
+  straightRoute() {
+    if (this.routeLine || !this.route || !this.zones) return;
+    const at = (icao) => (this.zones.airports || []).find((a) => a.icao === icao && a.lat != null);
+    const from = at(this.route.origin), to = at(this.route.destination);
+    if (from && to && from !== to) this.routeLine = AtcMap.straight(this.routeLayer, from, to);
+  },
+  showRoute() {
+    this.setFollow(false);
+    const line = this.routeLine || (this.trailPts.length > 1 ? this.trail : null);
+    if (line) this.map.fitBounds(line.getBounds(), { padding: [30, 30] });
+  },
+  // The Live Map's ATC layer, worked out by the app for the flight (ui/zones.py): redrawn when it changes.
+  setZones(z) {
+    this.zones = z;
+    if (!this.map) return;
+    this.runwayLayer.clearLayers();
+    for (const a of (z && z.airports) || []) AtcMap.runways(this.runwayLayer, a);
+    this.straightRoute();
+    this.drawZones();
+  },
+  drawZones() {
+    if (!this.zoneLayer) return;
+    this.zoneLayer.clearLayers();
+    const legend = $("#tr-legend");
+    if (legend) legend.hidden = !this.zonesOn || !this.zones;
+    if (!this.zonesOn || !this.zones) return;
+    AtcMap.zones(this.zoneLayer, this.zones, { vfr: this.mode === "vfr" });
+    if (legend) legend.querySelector(".lg-talk").innerHTML = AtcMap.talk(this.zones);
   },
   clearMap() {
     this.gotOwn = false;
+    this.setRoute(null);
+    this.setZones(null);
     this.trailPts = [];
     if (this.trail) this.trail.setLatLngs([]);
     if (this.plane) { this.plane.remove(); this.plane = null; }

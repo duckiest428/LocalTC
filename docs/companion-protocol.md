@@ -12,7 +12,7 @@ or by Bonjour (`_localtc._tcp`), tries each local URL with `GET /companion/v1/he
 falls back to the relay. The companion key is made fresh each time LocalTC starts and reaches the phone only
 through the signed-in account.
 
-Over the relay, `own`, `traffic`, `radio`, `airports` and `alert` flow only while a phone (or the website's
+Over the relay, `own`, `trail`, `traffic`, `route`, `zones`, `radio`, `airports` and `alert` flow only while a phone (or the website's
 Flight Tracker) is connected and the pilot allows
 it (`[account] companion_remote_map`); the server holds them in memory and never stores them. `status` always
 flows while the account's companion setting is on.
@@ -22,10 +22,10 @@ flows while the account's companion setting is on.
 ### `hello` (first message on either path)
 ```json
 {"protocol": 1, "version": "0.4.0", "status": {...}, "own": {...}|null, "traffic": [...],
- "route": {...}|null, "radio": [...], "airports": [...], "trail": [[33.1, -115.2], ...]}
+ "route": {...}|null, "radio": [...], "airports": [...], "trail": [[33.1, -115.2], ...], "zones": {...}|null}
 ```
-The relay's `hello` has no `route` (the phone gets it on the local network only) and no `version`.
-`trail` is the path flown so far, oldest first (older desktops leave it out).
+The relay's `hello` has no `version`. `trail` is the path flown so far, oldest first; `zones` the ATC layer
+of the desktop's Live Map (both left out by older desktops, and `route` and `zones` by the relay before 0.4).
 
 ### `trail` (over the relay: when someone starts watching mid-flight)
 ```json
@@ -60,10 +60,44 @@ view (the pilot can switch). Older desktops leave it out; read that as IFR.
   "gs": 440, "ground": false}]
 ```
 
-### `route` (local network only)
+### `route`
 ```json
-{"origin": "KSAN", "destination": "KPHX", "fixes": [{"ident": "HYDRR", "lat": 33.5, "lon": -112.5}]}
+{"origin": "KSAN", "destination": "KPHX", "fixes": [{"ident": "HYDRR", "lat": 33.5, "lon": -112.5, "kind": "wpt"}]}
 ```
+The flight plan's route, sent when it changes and to each new viewer. `kind` `"apt"` marks the airports at the
+ends (drawn without a label). A plan typed without fixes has none: draw a straight line between the airports
+in `zones`. The desktop sends it to the relay with `PUT /v1/live/map {"route": ...}`.
+
+### `zones`
+The ATC layer the desktop's Live Map draws (`ui/zones.py`), worked out for the flight as a whole: again after a
+handoff, a taxi clearance or a new runway or gate, and every 30 s as the flight moves. `null` when the flight
+ends. Points are `[lat, lon]`, rounded to 3 decimals (5 for the taxi route).
+```json
+{"rules": "IFR", "center": "Los Angeles Center",
+ "tuned": {"station": "SoCal Departure", "controller": "departure", "mhz": 124.3}, "next": null,
+ "centers": [{"id": "KZLA", "name": "Los Angeles Center", "kind": "center", "label": [34.1, -117.0],
+              "rings": [[[33.0, -118.0], ...]], "active": true, "route": true, "working": false}],
+ "terminals": [{"id": "SCT", "name": "SoCal Departure", "label": [...], "rings": [...], "active": true,
+                "working": true, "icao": "KSAN", "role": "departure"}],
+ "final": {"icao": "KPHX", "runway": "26", "ring": [[...], [...], [...], [...]]}|null,
+ "taxi": {"icao": "KSAN", "to": "runway 27", "points": [[...], ...], "taxiways": ["B", "A"]}|null,
+ "gate": {"icao": "KPHX", "name": "Gate C14", "lat": 33.43, "lon": -112.0}|null,
+ "airports": [{"icao": "KSAN", "name": "...", "lat": 32.73, "lon": -117.19, "role": "departure", "tower_nm": 5,
+               "stations": [{"controller": "tower", "station": "Lindbergh Tower", "mhz": 118.3, "tuned": false, "next": true}],
+               "runways": [{"name": "09/27", "lat": 32.73, "lon": -117.19, "heading_true": 105.0, "length_m": 2865}]}],
+ "classes": [{"icao": "KSAN", "name": "...", "lat": 32.73, "lon": -117.19, "class": "B", "label": "Class B",
+              "towered": true, "rings": [{"nm": 10, "floor": 0, "ceiling": 10000}, ...]}]}
+```
+- `centers`: the centres the route passes through. `active` is the one the aircraft is in, `working` the one
+  talking to it, and `label` is where to put the name (on the route).
+- `terminals`: the departure and approach areas: departure works the flight until it leaves its area, and
+  approach takes it in there.
+- `final`: the stretch of final where approach clears the approach and sends the flight to tower.
+- `airports`: the flight's airports, their controllers as badges (D clearance, G ground, T tower, A departure or
+  approach, `tuned` and `next` marked), their runways, and `tower_nm`, the tower's control zone as a circle.
+- `classes`: the VFR map's airspace class around each of the flight's airports, with each ring's floor and
+  ceiling in feet MSL (floor 0 is the surface).
+- The desktop sends it to the relay with `PUT /v1/live/map {"zones": ...}`; `null` there clears it.
 
 ### `radio` (one line)
 ```json

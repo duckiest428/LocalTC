@@ -83,6 +83,7 @@ public struct RouteFix: Codable, Sendable, Equatable {
     public var ident: String
     public var lat: Double
     public var lon: Double
+    public var kind: String?  // "apt" for the airports at the ends (not labelled), else a waypoint or navaid
 }
 
 public struct Route: Codable, Sendable, Equatable {
@@ -199,6 +200,8 @@ public struct Hello: Codable, Sendable, Equatable {
     public var airports: [FlightAirport]?
     /// The path flown so far, [[lat, lon], ...]: a map opened mid-flight draws it. Older desktops leave it out.
     public var trail: [[Double]]?
+    /// The ATC zones the desktop's Live Map draws (Zones.swift). Older desktops leave it out.
+    public var zones: AtcZones?
 }
 
 public enum LiveMessage: Sendable, Equatable {
@@ -212,6 +215,7 @@ public enum LiveMessage: Sendable, Equatable {
     case alert(FlightAlert)
     case airports([FlightAirport])
     case trail([[Double]])
+    case zones(AtcZones?)
 
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -235,6 +239,7 @@ public enum LiveMessage: Sendable, Equatable {
         case "alert": return .alert(try d.decode(FlightAlert.self, from: data))
         case "airports": return .airports(try d.decode([FlightAirport].self, from: data))
         case "trail": return .trail(try d.decode([[Double]].self, from: data))
+        case "zones": return .zones(try d.decode(AtcZones?.self, from: data))
         default: return nil
         }
     }

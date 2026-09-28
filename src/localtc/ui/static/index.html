@@ -7,6 +7,7 @@
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/atcmap.css">
 <link rel="stylesheet" href="/static/replayplayer.css">
 <link rel="stylesheet" href="/static/sharecard.css">
 </head>
@@ -98,28 +99,7 @@
         <button class="btn small" id="map-zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
       </div>
       <div class="mapinfo" id="map-info"></div>
-      <div class="maplegend" id="map-legend">
-        <div class="lg-talk" id="map-talk"></div>
-        <div class="lg-ifr">
-          <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
-          <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
-          <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
-          <div class="lg-row"><span class="sw sw-taxi"></span>Taxi route ground gave</div>
-          <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
-        </div>
-        <div class="lg-vfr">
-          <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
-          <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
-          <div class="lg-row"><span class="sw sw-d"></span>Class D / control zone: call the tower first</div>
-          <div class="lg-row"><span class="sw sw-atz"></span>Traffic zone (ATZ)</div>
-          <div class="lg-row lg-muted">Labels: ceiling / floor in hundreds of feet MSL (SFC = surface)</div>
-        </div>
-        <div class="lg-row lg-badges"><span><span class="atc-badge b-clearance">D</span>Clearance</span>
-          <span><span class="atc-badge b-ground">G</span>Ground</span> <span><span class="atc-badge b-tower">T</span>Tower</span>
-          <span><span class="atc-badge b-terminal">A</span>Dep/App</span></div>
-        <div class="lg-src lg-ifr">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
-        <div class="lg-src lg-vfr">Airspace classes are simplified (typical sizes), not for real navigation</div>
-      </div>
+      <div class="maplegend" id="map-legend"></div>
     </section>
 
     <!-- Airport Lookup -->
@@ -239,6 +219,7 @@
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/flightsmap.js"></script>
+<script src="/static/atcmap.js"></script>
 <script src="/static/replayplayer.js"></script>
 <script src="/static/sharecard.js"></script>
 <script src="/static/wrapped.js"></script>

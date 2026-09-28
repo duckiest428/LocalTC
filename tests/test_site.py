@@ -26,7 +26,7 @@ def test_markdown_is_escaped_not_trusted():
     assert "<script>" not in body and 'href="javascript' not in body
 
 
-@pytest.mark.parametrize("name", ["flightsmap.js", "replayplayer.js", "replayplayer.css", "sharecard.js", "sharecard.css",
+@pytest.mark.parametrize("name", ["flightsmap.js", "atcmap.js", "atcmap.css", "replayplayer.js", "replayplayer.css", "sharecard.js", "sharecard.css",
                                   "wrapped.js", "cardmodel.js", "vendor/land-110m.json", "fonts/inter-latin-var.woff2",
                                   "fonts/jetbrains-mono-latin-var.woff2"])
 def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):

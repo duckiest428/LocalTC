@@ -97,4 +97,37 @@ struct FlightStoreTests {
         store.apply(try #require(hello))
         #expect(store.trail == [.init(lat: 40.0, lon: -100.0)])
     }
+
+    @Test("The ATC zones the desktop's Live Map draws come through, and go with the flight")
+    func zones() throws {
+        let store = FlightStore()
+        store.apply(.status(FlightStatus(active: true)))
+        let json = #"""
+        {"type":"zones","data":{"rules":"IFR","center":"Los Angeles Center",
+          "tuned":{"station":"SoCal Departure","controller":"departure","mhz":124.3},
+          "centers":[{"id":"KZLA","name":"Los Angeles Center","label":[34,-117],"rings":[[[33,-118],[35,-118],[35,-116]]],"active":true,"route":true}],
+          "taxi":{"to":"runway 25R","points":[[33.94,-118.4],[33.95,-118.41]],"taxiways":["B","AA"]},
+          "airports":[{"icao":"KLAX","lat":33.94,"lon":-118.4,"tower_nm":5,
+            "stations":[{"controller":"tower","station":"LA Tower","mhz":133.9,"tuned":true},{"controller":"ground","next":true},
+                        {"controller":"approach"},{"controller":"departure","tuned":false}],
+            "runways":[{"name":"07L/25R","lat":33.93,"lon":-118.4,"heading_true":90,"length_m":3000}]}],
+          "classes":[{"icao":"KLAX","lat":33.94,"lon":-118.4,"class":"B","rings":[{"nm":10,"floor":0,"ceiling":10000},{"nm":20,"floor":3100,"ceiling":10000}]}],
+          "someday":"a newer desktop's extra"}}
+        """#
+        store.apply(try #require(try LiveMessage.decodeEnvelope(json)))
+        let z = try #require(store.zones)
+        #expect(z.centers.first?.id == "KZLA" && z.centers.first?.rings.first?.count == 3)
+        #expect(z.terminals.isEmpty && z.final == nil)  // missing lists and objects: empty
+        #expect(z.tuned?.label == "SoCal Departure 124.300")
+        let airport = try #require(z.airports.first)
+        #expect(airport.towerNm == 5)
+        #expect(airport.badges == [.init(letter: "T", tuned: true, next: false), .init(letter: "G", tuned: false, next: true),
+                                   .init(letter: "A", tuned: false, next: false)])
+        let ends = try #require(airport.runways.first?.ends)
+        #expect(abs(ends[0][0] - 33.93) < 1e-9 && ends[1][1] > ends[0][1])  // east-west: the same latitude, 3 km apart
+        let bravo = try #require(z.classes.first?.rings)
+        #expect(bravo.map(\.ceilingLabel) == ["100", "100"] && bravo.map(\.floorLabel) == ["SFC", "31"])
+        store.apply(.status(FlightStatus(active: false)))
+        #expect(store.zones == nil)
+    }
 }

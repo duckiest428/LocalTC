@@ -325,6 +325,7 @@ class PilotRoutes:
             radio: list = []
             alerts: list = []
             airports: list | None = None
+            live_map: dict = {}  # route and zones: the latest of each (None: gone)
             for kind, data in batch:
                 if kind == "frame":
                     frame.update(data)
@@ -334,6 +335,8 @@ class PilotRoutes:
                     alerts.append(data)
                 elif kind == "airports":
                     airports = data
+                elif kind in ("route", "zones"):
+                    live_map[kind] = data
             try:
                 if frame:
                     await asyncio.to_thread(self._account.frame, **frame)
@@ -341,6 +344,9 @@ class PilotRoutes:
                     await asyncio.to_thread(self._account.radio, radio[-50:])
                 if airports is not None:
                     await asyncio.to_thread(self._account.airports, airports)
+                if live_map:
+                    await asyncio.to_thread(self._account.live_map, **{k: v for k, v in live_map.items() if v is not None},
+                                            clear=tuple(k for k, v in live_map.items() if v is None))
                 for alert in alerts:
                     await asyncio.to_thread(self._account.alert, alert)
             except AccountError as exc:

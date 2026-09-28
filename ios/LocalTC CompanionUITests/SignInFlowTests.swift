@@ -45,6 +45,18 @@ final class SignInFlowTests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 45), .completed, "connection badge: \(badge.label)")
         attach(app, "2 map")
 
+        // The ATC zones the desktop's Live Map draws came too: their key is there once they have.
+        XCTAssertTrue(app.buttons["mapZones"].exists)
+        XCTAssertTrue(app.buttons["mapKey"].waitForExistence(timeout: 45), "the ATC zones")
+        let map = app.maps.firstMatch
+        for _ in 0..<2 { map.pinch(withScale: 0.25, velocity: -3) }  // out to the airspace around the airport
+        attach(app, "2a map with zones")
+        app.buttons["mapKey"].tap()
+        XCTAssertTrue(app.staticTexts["Departure / Approach area"].waitForExistence(timeout: 5))
+        attach(app, "2a map key")
+        app.swipeDown(velocity: .fast)
+        app.buttons["Follow the aircraft"].tap()
+
         // The replayed flight is IFR, so the map opens on IFR; VFR (terrain) is a tap away.
         let mapMode = app.segmentedControls["mapMode"]
         XCTAssertTrue(mapMode.waitForExistence(timeout: 10))

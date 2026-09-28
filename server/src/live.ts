@@ -9,8 +9,8 @@ import { HttpError, allowedOrigin, json, now, readJson, str } from "./http";
  *
  * - The flight's status (phase, frequencies, ATC's last line) is kept in storage, so a phone opening the
  *   app sees the latest even after the room was evicted.
- * - Position, traffic, the radio log and the flight's airports arrive only while a phone (or the website's
- *   Flight Tracker) is watching through the server (the
+ * - Position, traffic, the radio log, the flight's airports, its route and the ATC zones the app's Live Map
+ *   draws arrive only while a phone (or the website's Flight Tracker) is watching through the server (the
  *   desktop checks the watcher count in every answer). They're held in memory and passed on, never
  *   written to storage: when the room is evicted, they're gone.
  * - Where the phone can reach the PC on the local network, and the key it needs there, is stored until the
@@ -27,6 +27,7 @@ const RADIO_KEEP = 50;
 const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight
 const TRAIL_STEP_DEG = 0.002; // a new point every ~200 m of movement
 const MAX_AIRPORTS = 32 * 1024;
+const MAX_MAP = 384 * 1024; // the route and the zones: a long flight crosses a dozen centres' outlines
 
 type Station = { station?: string; mhz?: number } | null;
 export interface Status {
@@ -99,6 +100,62 @@ export function cleanRadio(raw: unknown): Record<string, unknown>[] {
   });
 }
 
+type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
+const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const text = (v: unknown, max = 80): string | undefined => (typeof v === "string" ? v.slice(0, max) : undefined);
+const flag = (v: unknown): boolean => v === true;
+const points = (v: unknown, max: number): Point[] => (Array.isArray(v) ? v.slice(0, max).filter(isLatLon) : []);
+function list<T>(v: unknown, max: number, each: (x: Obj) => T): T[] {
+  return Array.isArray(v) ? v.slice(0, max).map(obj).filter((x): x is Obj => x !== null).map(each) : [];
+}
+const station = (s: Obj) => ({ station: text(s.station), controller: text(s.controller, 20), mhz: num(s.mhz) });
+
+export interface LiveMap { route?: Obj | null; zones?: Obj | null }
+
+/** The flight plan's route and the Live Map's ATC layer (the desktop's ui/zones.py), field by field. */
+export function cleanMap(raw: Obj): LiveMap {
+  const out: LiveMap = {};
+  if ("route" in raw) {
+    const r = obj(raw.route);
+    out.route = r && {
+      origin: text(r.origin, 8), destination: text(r.destination, 8),
+      fixes: list(r.fixes, 600, (f) => ({ ident: text(f.ident, 12), lat: num(f.lat), lon: num(f.lon), kind: text(f.kind, 8) }))
+        .filter((f) => f.lat !== undefined && f.lon !== undefined),
+    };
+  }
+  if ("zones" in raw) {
+    const z = obj(raw.zones);
+    const area = (a: Obj) => ({
+      id: text(a.id), name: text(a.name), kind: text(a.kind, 20), label: isLatLon(a.label) ? a.label : null,
+      rings: (Array.isArray(a.rings) ? a.rings.slice(0, 12) : []).map((ring) => points(ring, 2000)),
+      active: flag(a.active), route: flag(a.route), working: flag(a.working), icao: text(a.icao, 8), role: text(a.role, 20),
+    });
+    const final = obj(z?.final), taxi = obj(z?.taxi), gate = obj(z?.gate), tuned = obj(z?.tuned), next = obj(z?.next);
+    out.zones = z && {
+      rules: z.rules === "VFR" ? "VFR" : "IFR", center: text(z.center),
+      tuned: tuned && station(tuned), next: next && station(next),
+      centers: list(z.centers, 60, area), terminals: list(z.terminals, 8, area),
+      final: final && { icao: text(final.icao, 8), runway: text(final.runway, 8), ring: points(final.ring, 8) },
+      taxi: taxi && { icao: text(taxi.icao, 8), to: text(taxi.to), points: points(taxi.points, 800),
+        taxiways: (Array.isArray(taxi.taxiways) ? taxi.taxiways.slice(0, 40) : []).map((t) => text(t, 12)).filter(Boolean) },
+      gate: gate && { icao: text(gate.icao, 8), name: text(gate.name), lat: num(gate.lat), lon: num(gate.lon) },
+      airports: list(z.airports, 4, (a) => ({
+        icao: text(a.icao, 8), name: text(a.name), lat: num(a.lat), lon: num(a.lon), role: text(a.role, 20), tower_nm: num(a.tower_nm),
+        stations: list(a.stations, 24, (s) => ({ ...station(s), tuned: flag(s.tuned), next: flag(s.next) })),
+        runways: list(a.runways, 24, (r) => ({ name: text(r.name, 12), lat: num(r.lat), lon: num(r.lon),
+          heading_true: num(r.heading_true), length_m: num(r.length_m) })),
+      })),
+      classes: list(z.classes, 40, (a) => ({
+        icao: text(a.icao, 8), name: text(a.name), lat: num(a.lat), lon: num(a.lon), class: text(a.class, 4), label: text(a.label),
+        towered: flag(a.towered), rings: list(a.rings, 4, (r) => ({ nm: num(r.nm), floor: num(r.floor), ceiling: num(r.ceiling) })),
+      })),
+    };
+  }
+  if (JSON.stringify(out).length > MAX_MAP) throw new HttpError(413, "The map is too big.");
+  return out;
+}
+
 const AIRPORT_KEYS = ["icao", "name", "role", "lat", "lon", "elev_ft", "atis"] as const;
 const FREQUENCY_KEYS = ["label", "kind", "mhz", "name"] as const;
 const RUNWAY_KEYS = ["name", "length_ft", "heading_mag", "ils"] as const;
@@ -163,6 +220,12 @@ export class LiveRoom extends DurableObject<Env> {
   private radio: Record<string, unknown>[] = [];
   private airports: Record<string, unknown>[] = [];
   private trail: Point[] = [];
+  private route: Obj | null = null;
+  private zones: Obj | null = null;
+
+  private forget(): void {
+    this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; this.route = null; this.zones = null;
+  }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
@@ -171,7 +234,7 @@ export class LiveRoom extends DurableObject<Env> {
       case "POST /wipe": {
         for (const ws of this.ctx.getWebSockets()) ws.close(1000, "account deleted");
         await this.ctx.storage.deleteAll();
-        this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = [];
+        this.forget();
         return json({ ok: true });
       }
       case "GET /ws": {
@@ -179,7 +242,8 @@ export class LiveRoom extends DurableObject<Env> {
         const pair = new WebSocketPair();
         this.ctx.acceptWebSocket(pair[1]);
         pair[1].send(JSON.stringify({ type: "hello", data: { protocol: 1, status: await this.current(), own: this.own,
-          traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail } }));
+          traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail, route: this.route,
+          zones: this.zones } }));
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       case "PUT /status": {
@@ -187,7 +251,7 @@ export class LiveRoom extends DurableObject<Env> {
         const before = await this.current();
         const after = { ...status, updated_at: now() };
         await this.ctx.storage.put("status", after);
-        if (!after.active) { this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; }
+        if (!after.active) this.forget();
         this.broadcast("status", after);
         const push = pushFor(before.active ? before : null, after);
         if (push) this.ctx.waitUntil(notify(this.env, userId, push));
@@ -198,6 +262,12 @@ export class LiveRoom extends DurableObject<Env> {
         if (frame.trail) { this.trail = frame.trail; this.broadcast("trail", this.trail); }
         if (frame.own) { this.own = frame.own; this.extendTrail(frame.own); this.broadcast("own", frame.own); }
         if (frame.traffic) { this.traffic = frame.traffic; this.broadcast("traffic", frame.traffic); }
+        return json({ ok: true, watchers: watchers() });
+      }
+      case "PUT /map": {
+        const map = (await request.json()) as LiveMap;
+        if (map.route !== undefined) { this.route = map.route; this.broadcast("route", this.route); }
+        if (map.zones !== undefined) { this.zones = map.zones; this.broadcast("zones", this.zones); }
         return json({ ok: true, watchers: watchers() });
       }
       case "POST /radio": {
@@ -228,6 +298,7 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
         return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail,
+          route: this.route, zones: this.zones,
           stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
@@ -287,6 +358,10 @@ export async function get(env: Env, auth: Auth): Promise<Response> {
 
 export async function frame(env: Env, request: Request, auth: Auth): Promise<Response> {
   return send(env, auth, "PUT", "/frame", cleanFrame(await readJson(request, MAX_FRAME)));
+}
+
+export async function map(env: Env, request: Request, auth: Auth): Promise<Response> {
+  return send(env, auth, "PUT", "/map", cleanMap(await readJson(request, MAX_MAP)));
 }
 
 export async function radio(env: Env, request: Request, auth: Auth): Promise<Response> {

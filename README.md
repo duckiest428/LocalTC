@@ -82,10 +82,11 @@ what the Logbook's **Replay** plays.
 
 An **account is optional** (Quick Settings → Account). It copies those logbook lines to
 [localtc.tech](https://localtc.tech/dashboard.html)'s Dashboard, where there are totals, a map of the airports and
-routes, a live **Flight Tracker** for the flight you're flying, an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
-and next, and ATC's last call). Only while the companion app watches from away from your PC's network
-(and you allow it) do your position, traffic and radio pass through the server, held in memory and never
-stored; on the same Wi-Fi the phone talks to the PC directly. A flight's **replay** (its track and radio
+routes, a live **Flight Tracker** for the flight you're flying (the same map as the app's Live Map: the ATC
+zones, the route, the path flown, the traffic), an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
+and next, and ATC's last call). Only while the Flight Tracker or the companion app watches from away from your
+PC's network (and you allow it) do your position, path, route, ATC zones, traffic and radio pass through the
+server, held in memory and never stored; on the same Wi-Fi the phone talks to the PC directly. A flight's **replay** (its track and radio
 transcript, no audio) goes up only when you upload it from the Logbook, or turn on "upload each flight's
 replay"; then it plays on the Dashboard and in the companion app's Logbook too. **Share** makes a flight's
 card public at a link (the route, the numbers and one radio line you pick), and **Wrapped** tells your week,

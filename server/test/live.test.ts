@@ -120,6 +120,50 @@ describe("the relay's map and radio log", () => {
     socket.close();
   });
 
+  it("passes the route and the ATC zones on, field by field, and forgets them with the flight", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", { active: true, callsign: "DAL290" }, bearer(token));
+    const open = async () => {
+      const ws = await call("GET", "/v1/live/ws", undefined, { ...bearer(token), Upgrade: "websocket" });
+      const socket = ws.webSocket!;
+      const got: any[] = [];
+      socket.accept();
+      socket.addEventListener("message", (e) => got.push(JSON.parse(e.data as string)));
+      return { socket, got };
+    };
+    const first = await open();
+    const route = { origin: "KLAX", destination: "LFPG", fixes: [{ ident: "DOTSS", lat: 33.9, lon: -118.4, kind: "wpt", x: 1 }, { ident: "BAD" }] };
+    const zones = {
+      rules: "IFR", center: "Los Angeles Center", tuned: { station: "SoCal Departure", controller: "departure", mhz: 124.3, extra: 1 },
+      centers: [{ id: "KZLA", name: "Los Angeles Center", kind: "center", label: [34, -117], rings: [[[33, -118], [35, -118], ["x", 0], [35, -116]]], active: true, route: true, working: false, secret: 1 }],
+      terminals: [], final: null, taxi: { icao: "KLAX", to: "runway 25R", points: [[33.94, -118.4], [33.95, -118.41]], taxiways: ["B", "AA", 7] },
+      gate: null, airports: [{ icao: "KLAX", lat: 33.94, lon: -118.4, role: "departure", tower_nm: 5,
+        stations: [{ controller: "tower", station: "Los Angeles Tower", mhz: 133.9, tuned: true, next: "yes" }],
+        runways: [{ name: "07L/25R", lat: 33.93, lon: -118.4, heading_true: 83, length_m: 3300 }] }],
+      classes: [{ icao: "KLAX", class: "B", towered: true, lat: 33.94, lon: -118.4, rings: [{ nm: 10, floor: 0, ceiling: 10000 }] }],
+    };
+    expect((await call("PUT", "/v1/live/map", { route, zones }, bearer(token))).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(first.got.find((m) => m.type === "route").data.fixes).toEqual([{ ident: "DOTSS", lat: 33.9, lon: -118.4, kind: "wpt" }]);
+    const sent = first.got.find((m) => m.type === "zones").data;
+    expect(sent.centers[0]).not.toHaveProperty("secret");
+    expect(sent.centers[0].rings[0]).toEqual([[33, -118], [35, -118], [35, -116]]);
+    expect(sent.tuned).toEqual({ station: "SoCal Departure", controller: "departure", mhz: 124.3 });
+    expect(sent.taxi.taxiways).toEqual(["B", "AA"]);
+    expect(sent.airports[0].stations[0]).toMatchObject({ tuned: true, next: false });
+    const second = await open();  // opened later: the hello has them
+    await new Promise((r) => setTimeout(r, 50));
+    expect(second.got[0].data.route.destination).toBe("LFPG");
+    expect(second.got[0].data.zones.classes[0].rings[0]).toEqual({ nm: 10, floor: 0, ceiling: 10000 });
+    await call("PUT", "/v1/live/map", { zones: null }, bearer(token));  // the flight's zones gone, its route kept
+    await call("PUT", "/v1/live", { active: false }, bearer(token));
+    const third = await open();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(third.got[0].data.route).toBeNull();
+    expect(third.got[0].data.zones).toBeNull();
+    for (const v of [first, second, third]) v.socket.close();
+  });
+
   it("lets the website's tracker open the socket with its cookie, from its own pages only", async () => {
     const { res } = await signIn(undefined, "web");
     const cookie = res.headers.get("Set-Cookie")!.split(";")[0];

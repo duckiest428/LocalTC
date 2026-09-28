@@ -53,6 +53,7 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/live$/, signedIn((env, _req, a) => live.get(env, a))],
   ["GET", /^\/v1\/live\/ws$/, signedIn((env, req, a) => live.socket(env, req, a))],
   ["PUT", /^\/v1\/live\/frame$/, signedIn((env, req, a) => live.frame(env, req, a))],
+  ["PUT", /^\/v1\/live\/map$/, signedIn((env, req, a) => live.map(env, req, a))],
   ["POST", /^\/v1\/live\/radio$/, signedIn((env, req, a) => live.radio(env, req, a))],
   ["POST", /^\/v1\/live\/alert$/, signedIn((env, req, a) => live.alert(env, req, a))],
   ["PUT", /^\/v1\/live\/airports$/, signedIn((env, req, a) => live.airports(env, req, a))],

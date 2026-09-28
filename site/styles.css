@@ -431,9 +431,8 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 
 /* The flights map (flightsmap.js, the same file as the app's) and the tracker's map */
 .flights-map, .tr-map { background: #2b2f33; font-family: var(--sans); z-index: 0; }  /* its own stacking context: the controls stay under the header */
-.fm-tiles .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.35); }
-/* Darkened tiles show hairline seams where they meet; overlapping them by a fraction of a pixel hides it. */
-.fm-tiles .leaflet-tile-container img.leaflet-tile { width: 256.6px !important; height: 256.6px !important; }
+/* Each tile darkened on its own: a filter on the whole tile pane leaves dark seams where the tiles meet. */
+.fm-tiles img.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.92) saturate(.35); }
 .fm-route { stroke: #e978d6; fill: none; cursor: pointer; }
 .fm-focus { stroke: var(--amber); fill: none; }
 .fm-airport { stroke: var(--bg-0); fill: var(--green); }
@@ -514,8 +513,22 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .tr-plane.own svg path { fill: var(--green); }
 .tr-plane.air svg path { fill: var(--cyan); }
 .tr-plane.ground svg path { fill: var(--text-3); }
-.tr-follow { font: 600 12px var(--sans); padding: 6px 10px; border-radius: 8px; border: 0; background: var(--bg-3); color: var(--text);
+.tr-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tr-controls button { font: 600 12px var(--sans); padding: 6px 10px; border-radius: 8px; border: 0; background: var(--bg-3); color: var(--text-2);
   box-shadow: var(--e1); cursor: pointer; }
+.tr-controls button[aria-pressed=true] { color: var(--text); background: #2f5f4a; }
+.tr-seg { display: inline-flex; box-shadow: var(--e1); border-radius: 8px; }
+.tr-seg button { box-shadow: none; border-radius: 0; }
+.tr-seg button:first-child { border-radius: 8px 0 0 8px; }
+.tr-seg button:last-child { border-radius: 0 8px 8px 0; }
+.tr-map .maplegend { bottom: 24px; right: 8px; max-width: 300px; border-radius: 8px; }
+.tr-legend.folded .lg-ifr, .tr-legend.folded .lg-vfr, .tr-legend.folded .lg-badges, .tr-legend.folded .lg-src { display: none; }
+.tr-legend.folded .lg-talk { margin-bottom: 0; }
+.lg-fold { float: right; margin: -2px -4px 0 12px; font: 600 11px var(--sans); color: var(--text-2); background: none; border: 0;
+  padding: 2px 4px; cursor: pointer; }
+.lg-fold::after { content: " ▴"; }
+.tr-legend.folded .lg-fold::after { content: " ▾"; }
+.tr-map:not(.fm-tiles) { background: #e8e6e1; }  /* VFR: the light map */
 @media (max-width: 860px) {
   .tr-body { grid-template-columns: 1fr; }
   .tr-map { height: 340px; }

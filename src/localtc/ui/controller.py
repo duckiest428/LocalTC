@@ -58,7 +58,7 @@ from localtc.sim_api import (
     encode_event,
 )
 from localtc.ui.server import EventStream, HttpError, sse
-from localtc.ui.companion import CompanionHub, CompanionServer
+from localtc.ui.companion import CompanionHub, CompanionServer, compact_zones
 from localtc.ui.pilot import PilotRoutes
 from localtc.ui.updates import Updates
 
@@ -67,6 +67,7 @@ log = logging.getLogger(__name__)
 RADIO_HISTORY = 400
 OWN_EVERY_S = 0.25
 FLIGHT_EVERY_S = 1.0
+COMPANION_ZONES_EVERY_S = 30.0  # the phone's ATC zones: again after a handoff or a taxi clearance, else this often
 FREQ_LABELS = {"atis": "ATIS", "awos": "AWOS", "asos": "ASOS", "clearance": "CLR", "ground": "GND", "tower": "TWR",
                "departure": "DEP", "approach": "APP", "center": "CTR", "unicom": "UNICOM", "ctaf": "CTAF",
                "multicom": "MULTICOM", "fss": "FSS"}
@@ -110,6 +111,9 @@ class AppController:
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
         self._last_atc: AtcTransmission | None = None
+        self._zones_who: tuple = ()
+        self._zones_at = -COMPANION_ZONES_EVERY_S
+        self._zones_task: asyncio.Task | None = None
         self.updates = Updates(lambda: self.cfg.ui.updates, self.publish, lambda: self.live is not None)
 
     # --- wiring ---------------------------------------------------------------------------------------------
@@ -197,6 +201,7 @@ class AppController:
         self.stream.publish(kind, data)
         if kind == "own":
             self.companion.set_own(data)
+            self._companion_zones_soon()
         elif kind == "traffic":
             self.companion.set_traffic(data)
         elif kind == "radio":
@@ -204,6 +209,10 @@ class AppController:
         elif kind == "flight":
             self.companion.set_status(self.companion_view() if data else {"active": False})
             self.companion.set_airports(self.companion_airports() if data else [])
+            if data:
+                self._companion_zones_soon()
+            else:
+                self.companion.set_zones(None)
 
     def state(self) -> dict:
         return {
@@ -427,6 +436,33 @@ class AppController:
             "ete": f.get("ete"), "gate": self._gate(), "rules": f.get("rules"),
             "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
         }
+
+    def _companion_zones_soon(self) -> None:
+        """The Live Map's ATC zones for the phone and the website's Flight Tracker: worked out again after a
+        handoff, a taxi clearance or a new runway, and every so often as the flight moves on."""
+        f = self.flight
+        if not f or self.live is None or not self.cfg.account.companion:
+            return
+        who = (repr(f.get("tuned")), repr(f.get("expected")), f.get("taxi"), f.get("runway"), self._gate())
+        if who == self._zones_who and time.monotonic() - self._zones_at < COMPANION_ZONES_EVERY_S:
+            return
+        if self._zones_task is not None and not self._zones_task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._zones_who, self._zones_at = who, time.monotonic()
+        self._zones_task = loop.create_task(self._companion_zones())
+
+    async def _companion_zones(self) -> None:
+        try:
+            z = await self.api_zones({})
+        except Exception:
+            log.debug("The companion's ATC zones failed", exc_info=True)
+            return
+        if self.flight:
+            self.companion.set_zones(compact_zones(z))
 
     def companion_airports(self) -> list[dict]:
         """The flight's airports for the phone's Frequencies and Airports tabs: published data only."""
@@ -1016,4 +1052,4 @@ def route_view(plan: FlightPlan | None) -> dict | None:
     if plan is None:
         return None
     return {"origin": plan.origin, "destination": plan.destination,
-            "fixes": [{"ident": f.ident, "lat": f.lat, "lon": f.lon} for f in plan.fixes]}
+            "fixes": [{"ident": f.ident, "lat": f.lat, "lon": f.lon, "kind": f.kind} for f in plan.fixes]}

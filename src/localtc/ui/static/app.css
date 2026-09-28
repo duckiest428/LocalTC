@@ -230,14 +230,13 @@ input[type=range] { accent-color: var(--green-dim); width: 100%; }
 /* --- map --- */
 #page-map { overflow: hidden; }
 #map { position: absolute; inset: 0; background: #11161b; }
-.tiles-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4); }
+/* Each tile darkened on its own: a filter on the whole tile pane leaves dark seams where the tiles meet. */
+.tiles-dark img.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4); }
 .mapctl { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; gap: 6px; }
 .mapctl .btn[aria-pressed=true] { background: var(--teal); }
 .mapinfo { position: absolute; left: 10px; bottom: 10px; z-index: 500; background: rgba(20, 23, 27, .88); border: 1px solid var(--line); padding: 6px 10px; font-family: var(--mono); font-size: 12px; border-radius: 3px; }
 .leaflet-container { font: 12px var(--font); }
 .own-icon svg { filter: drop-shadow(0 0 2px #000); }
-.tfc-label { color: #d7dce1; font: 11px/1.1 var(--mono); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
-.fix-label { color: #e9d38a; font: 10px var(--mono); text-shadow: 0 0 3px #000; white-space: nowrap; }
 .leaflet-control-attribution { background: rgba(20, 23, 27, .7) !important; color: #888 !important; }
 .leaflet-control-attribution a { color: #aaa !important; }
 
@@ -270,65 +269,11 @@ tr.tunable:hover td { background: var(--panel-2); }
   .switch { padding: 6px 8px; }
 }
 
-/* --- ATC zones on the map: what the engine hands over at, coloured by who works it --- */
-:root { --z-clearance: #3d8bfd; --z-ground: #22a55b; --z-tower: #e2574c; --z-terminal: #2fb67c; --z-final: #e7b24a; --z-center: #d9dde2; }
-.maplegend { position: absolute; right: 10px; bottom: 28px; z-index: 500; background: rgba(20, 23, 27, .9); border: 1px solid var(--line);
-  border-radius: 3px; padding: 8px 10px; font-size: 11.5px; line-height: 1.5; max-width: 300px; }
-.maplegend[hidden] { display: none; }
-.lg-row { display: flex; align-items: center; gap: 7px; color: #c8ced5; flex-wrap: wrap; }
-.lg-badges { gap: 4px 10px; margin-top: 3px; }
-.lg-badges > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.lg-src { color: var(--muted); font-size: 10.5px; margin-top: 4px; }
-.lg-talk { font-family: var(--mono); font-size: 12px; margin-bottom: 5px; color: var(--text); }
-.lg-talk:empty { display: none; }
-.lg-talk .now { color: var(--green); }
-.lg-talk .then { color: var(--amber); }
-.sw { width: 18px; height: 10px; flex: none; border-radius: 2px; }
-.sw-center { border: 1.5px solid var(--z-center); }
-.sw-terminal { background: rgba(47, 182, 124, .35); border: 1.5px solid var(--z-terminal); }
-.sw-final { background: rgba(231, 178, 74, .25); border: 1.5px dashed var(--z-final); }
-.sw-taxi { border: 0; border-top: 3px dashed #f2c94c; height: 0; margin-top: 6px; }
-.sw-tower { border: 1.5px dashed var(--z-tower); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
-.atc-gate { background: #8a6cf0; color: #fff; border: 0; font-weight: 600; font-size: 11px; padding: 1px 6px; box-shadow: none; }
-.atc-gate::before { display: none; }
-.atc-badge { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 3px;
-  font: 700 11px/1 var(--font); color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
-.b-clearance { background: var(--z-clearance); }
-.b-ground { background: var(--z-ground); }
-.b-tower { background: var(--z-tower); }
-.b-terminal { background: var(--z-terminal); }
-.b-center { background: #5b6470; }
-.atc-badges { display: flex; gap: 3px; transform: translate(-50%, -150%); }
-.atc-badge.tuned { box-shadow: 0 0 0 2px #fff, 0 0 10px 2px rgba(95, 208, 104, .9); }
-.atc-badge.next { animation: badge-next 1.2s ease-in-out infinite; }
-@keyframes badge-next { 50% { box-shadow: 0 0 0 2px var(--z-final), 0 0 10px 2px rgba(231, 178, 74, .8); } }
-.zone-label { font: 600 11px/1.1 var(--font); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000;
-  transform: translate(-50%, -50%); pointer-events: none; }
-.zone-label.center { color: #e8ecf0; letter-spacing: .02em; }
-.zone-label.center.dim { color: #8d959e; font-weight: 500; }
-.zone-label.center.here { color: var(--green); }
-.zone-label.terminal { color: #7fe0b3; }
-/* The VFR map: terrain, and the airspace classes a VFR pilot needs a word with ATC before entering */
-:root { --z-b: #2b6fd8; --z-c: #b23a9e; --z-d: #2b6fd8; --z-atz: #b23a9e; }
+/* The ATC zones' own styles: atcmap.css, shared with the website's Flight Tracker */
 .seg { display: inline-flex; }
 .seg .btn { border-radius: 0; }
 .seg .btn:first-child { border-radius: 3px 0 0 3px; }
 .seg .btn:last-child { border-radius: 0 3px 3px 0; margin-left: -1px; }
-#page-map[data-mode="ifr"] .lg-vfr, #page-map[data-mode="vfr"] .lg-ifr { display: none; }
-.lg-muted { color: var(--muted); }
-.sw-b { border: 2px solid var(--z-b); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
-.sw-c { border: 2px solid var(--z-c); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
-.sw-d { border: 1.5px dashed var(--z-d); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
-.sw-atz { border: 1.5px dashed var(--z-atz); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
-.vfr-alt { font: 700 10.5px/1 var(--font); white-space: nowrap; transform: translate(-50%, -50%); pointer-events: none;
-  display: inline-flex; flex-direction: column; align-items: center; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
-.vfr-alt i { font-style: normal; border-top: 1.5px solid currentColor; }
-.vfr-alt.b { color: var(--z-b); } .vfr-alt.c { color: var(--z-c); }
-.vfr-alt.d { color: var(--z-d); } .vfr-alt.atz { color: var(--z-atz); }
-.vfr-apt { font: 700 11px/1 var(--font); white-space: nowrap; transform: translate(8px, -50%); pointer-events: none;
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
-.vfr-apt.towered { color: #1d5bbf; } .vfr-apt.other { color: #8e2c7c; }
-@media (prefers-reduced-motion: reduce) { .atc-badge.next { animation: none; box-shadow: 0 0 0 2px var(--z-final); } }
 
 /* Updates: the release notes */
 pre.notes { white-space: pre-wrap; font: inherit; margin: 6px 0; max-height: 220px; overflow: auto; }
@@ -350,10 +295,7 @@ table.lb tr.picked td { background: rgba(233, 120, 214, .12); }
 
 /* The flights map (flightsmap.js), shared with localtc.tech */
 .flights-map { background: #2b2f33; }  /* close to the darkened tiles, so the seams between them don't show */
-.fm-tiles .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4); }
-/* Darkened tiles show hairline seams where they meet; overlapping them by a fraction of a pixel hides it. */
-.fm-tiles .leaflet-tile-container img.leaflet-tile, .tiles-dark .leaflet-tile-container img.leaflet-tile {
-  width: 256.6px !important; height: 256.6px !important; }
+.fm-tiles img.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.4); }
 .fm-route { stroke: #e978d6; fill: none; cursor: pointer; }
 .fm-focus { stroke: #ffd166; fill: none; }
 .fm-airport { stroke: #0e1114; fill: #5fd068; }

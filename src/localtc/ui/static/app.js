@@ -1006,7 +1006,7 @@ const Settings = {
 const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path fill="${color}" stroke="#000" stroke-width="1" d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
 
 const MapView = {
-  map: null, ownMarker: null, trail: null, trailPts: [], tfc: new Map(), route: null, routeFixes: null, follow: true, tileLayer: null, airports: new Set(),
+  map: null, ownMarker: null, trail: null, trailPts: [], tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "",
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
@@ -1015,6 +1015,7 @@ const MapView = {
   },
   init() {
     this.map = L.map("map", { zoomControl: true, attributionControl: true, worldCopyJump: true }).setView([47.9, -122.28], 9);
+    $("#map-legend").innerHTML = AtcMap.LEGEND;  // atcmap.js: the same legend as the website's Flight Tracker
     $$("#map-mode [data-mode]").forEach((b) => (b.onclick = () => this.setMode(b.dataset.mode)));
     this.syncRules();
     this.tiles();
@@ -1022,7 +1023,7 @@ const MapView = {
     try { this.zonesOn = localStorage.getItem("map-zones") !== "off"; } catch { /* storage unavailable: default on */ }
     this.setZones(this.zonesOn);
     $("#map-zones").onclick = () => this.setZones(!this.zonesOn);
-    this.map.on("moveend", () => this.zonesSoon());
+    this.map.on("moveend", () => this.viewChanged());
     this.trail = L.polyline(this.trailPts, { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
     this.map.on("dragstart", () => this.setFollow(false));
     $("#map-follow").onclick = () => this.setFollow(!this.follow);
@@ -1096,21 +1097,15 @@ const MapView = {
     const key = p ? `${p.origin}-${p.destination}-${p.simbrief_id}-${p.fixes?.length}` : "";
     if (key === this.planKey) return;
     this.planKey = key;
-    if (this.route) { this.map.removeLayer(this.route); this.route = null; }
-    if (this.routeFixes) { this.map.removeLayer(this.routeFixes); this.routeFixes = null; }
+    if (this.routeLayer) { this.map.removeLayer(this.routeLayer); this.routeLayer = null; }
+    this.route = null;
     if (!p) return;
-    const pts = (p.fixes || []).map((f) => [f.lat, f.lon]);
-    this.routeFixes = L.layerGroup().addTo(this.map);
-    for (const f of p.fixes || []) {
-      if (f.kind === "apt") continue;
-      L.circleMarker([f.lat, f.lon], { radius: 3, color: "#e9d38a", weight: 1, fillOpacity: 0.8 }).addTo(this.routeFixes);
-      L.marker([f.lat, f.lon], { icon: L.divIcon({ className: "", html: `<div class="fix-label" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }), interactive: false }).addTo(this.routeFixes);
-    }
-    if (pts.length > 1) this.route = L.polyline(pts, { color: "#e978d6", weight: 2, opacity: 0.85 }).addTo(this.map);
+    this.routeLayer = L.layerGroup().addTo(this.map);
+    this.route = AtcMap.route(this.routeLayer, p);
     this.zonesSoon();
     Promise.all([p.origin, p.destination].map((icao) => (icao ? this.airport(icao) : null))).then(([from, to]) => {
       if (!this.route && from && to && this.planKey === key)  // a typed plan: no fixes, a straight line
-        this.route = L.polyline([[from.lat, from.lon], [to.lat, to.lon]], { color: "#e978d6", weight: 2, dashArray: "6 6" }).addTo(this.map);
+        this.route = AtcMap.straight(this.routeLayer, from, to);
     });
   },
   async airport(icao) {
@@ -1123,12 +1118,7 @@ const MapView = {
   drawAirport(a) {
     if (!this.map || this.airports.has(a.icao)) return;
     this.airports.add(a.icao);
-    for (const r of a.runways) {
-      const half = r.length_m / 2, h = (r.heading_true * Math.PI) / 180;
-      const dLat = (half * Math.cos(h)) / 111320, dLon = (half * Math.sin(h)) / (111320 * Math.cos((r.lat * Math.PI) / 180));
-      L.polyline([[r.lat - dLat, r.lon - dLon], [r.lat + dLat, r.lon + dLon]], { color: "#d9dde2", weight: 4, opacity: 0.9 }).addTo(this.map).bindTooltip(`${a.icao} ${r.name}`);
-    }
-    L.marker([a.lat, a.lon], { icon: L.divIcon({ className: "", html: `<div class="tfc-label" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }) }).addTo(this.map);
+    AtcMap.runways(this.map, a);
   },
   focus(a) {
     showTab("map");
@@ -1147,8 +1137,16 @@ const MapView = {
   },
   zonesSoon(delay = 400) {
     if (!this.map || !this.zonesOn) return;
+    if (this.zonesTimer && delay) return;  // one is on its way already: never pushed back, or a moving map starves it
     clearTimeout(this.zonesTimer);
-    this.zonesTimer = setTimeout(() => this.zones(), delay);
+    this.zonesTimer = setTimeout(() => { this.zonesTimer = null; this.zones(); }, delay);
+  },
+  // Following the aircraft moves the map several times a second: the zones are fetched again only when the view
+  // has really changed (another zoom, or panned out of the area last drawn), else the wait never ends.
+  viewChanged() {
+    const v = this.zonesView;
+    if (v && v.zoom === this.map.getZoom() && v.bounds.contains(this.map.getBounds())) return;
+    this.zonesSoon();
   },
   flightChanged(f) {
     this.syncRules();
@@ -1165,82 +1163,11 @@ const MapView = {
       z = await api(`zones?south=${b.getSouth().toFixed(3)}&west=${b.getWest().toFixed(3)}&north=${b.getNorth().toFixed(3)}&east=${b.getEast().toFixed(3)}`);
     } catch { return; /* nothing to draw yet */ }
     this.zonesAt = Date.now();
+    this.zonesView = { zoom: this.map.getZoom(), bounds: b.pad(0.3) };
     if (!this.zonesOn) return;
-    const layer = this.zoneLayer;
-    layer.clearLayers();
-    const label = (at, text, cls) => L.marker(at, { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
-    const vfr = this.mode === "vfr";
-    if (vfr) this.vfr(z, layer);
-    for (const c of vfr ? [] : z.centers) {
-      const on = c.active || c.working;
-      L.polygon(c.rings, { color: "#d9dde2", weight: on ? 2.2 : 1, opacity: c.route ? 0.85 : 0.35, dashArray: c.route ? null : "4 6",
-        fill: on, fillColor: "#d9dde2", fillOpacity: 0.04, interactive: false }).addTo(layer);
-      label(c.label, c.name, `center ${c.active ? "here" : c.route ? "" : "dim"}`);
-    }
-    for (const a of vfr ? [] : z.terminals) {
-      L.polygon(a.rings, { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
-        fillOpacity: a.working ? 0.22 : 0.12 }).addTo(layer)
-        .bindTooltip(`${esc(a.name)} — ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
-      label(a.label, a.name, "terminal");
-    }
-    if (z.final && !vfr) {
-      L.polygon(z.final.ring, { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
-        .bindTooltip(`Joining final for ${esc(z.final.runway)}: approach clears the approach here and sends you to tower`);
-    }
-    if (z.taxi && z.taxi.points.length > 1) {  // the route ground gave: to the runway, or in to the gate
-      const via = z.taxi.taxiways.length ? ` via ${z.taxi.taxiways.join(", ")}` : "";
-      L.polyline(z.taxi.points, { color: "#111", weight: 7, opacity: 0.5, interactive: false }).addTo(layer);
-      L.polyline(z.taxi.points, { color: "#f2c94c", weight: 3.5, opacity: 0.95, dashArray: "8 6" }).addTo(layer)
-        .bindTooltip(`Taxi to ${esc(z.taxi.to)}${esc(via)}`, { sticky: true });
-      L.circleMarker(z.taxi.points[z.taxi.points.length - 1], { radius: 4, color: "#f2c94c", weight: 2, fillColor: "#111", fillOpacity: 1, interactive: false }).addTo(layer);
-    }
-    if (z.gate) {
-      L.circleMarker([z.gate.lat, z.gate.lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)
-        .bindTooltip(`${esc(z.gate.name)} at ${esc(z.gate.icao)}: where ground sent you`, { permanent: true, direction: "right", className: "atc-gate" });
-    }
-    const KIND = { clearance: ["D", "b-clearance"], ground: ["G", "b-ground"], tower: ["T", "b-tower"], departure: ["A", "b-terminal"], approach: ["A", "b-terminal"] };
-    for (const ap of z.airports) {
-      if (ap.tower_nm && !vfr) L.circle([ap.lat, ap.lon], { radius: ap.tower_nm * 1852, color: "#e2574c", weight: 1.3, dashArray: "4 5", fillColor: "#e2574c", fillOpacity: 0.05, interactive: false }).addTo(layer);
-      const seen = new Set();
-      const badges = ap.stations.filter((s) => KIND[s.controller] && !seen.has(KIND[s.controller][0]) && seen.add(KIND[s.controller][0]))
-        .map((s) => {
-          const all = ap.stations.filter((o) => KIND[o.controller]?.[0] === KIND[s.controller][0]);
-          const state = all.some((o) => o.tuned) ? "tuned" : all.some((o) => o.next) ? "next" : "";
-          return `<span class="atc-badge ${KIND[s.controller][1]} ${state}">${KIND[s.controller][0]}</span>`;
-        }).join("");
-      const tip = ap.stations.map((s) => `${esc(s.station)} ${Number(s.mhz).toFixed(3)}${s.tuned ? " ◀ tuned" : s.next ? " ◀ next" : ""}`).join("<br>");
-      L.marker([ap.lat, ap.lon], { icon: L.divIcon({ className: "", html: `<div class="atc-badges">${badges}</div>`, iconSize: [0, 0] }) })
-        .addTo(layer).bindTooltip(`<b>${esc(ap.icao)}</b> ${esc(ap.name || "")}<br>${tip}`);
-    }
-    const talk = [];
-    if (z.tuned) talk.push(`<span class="now">▶ ${esc(z.tuned.station)} ${Number(z.tuned.mhz).toFixed(3)}</span>`);
-    if (z.next) talk.push(`<span class="then">next: ${esc(z.next.station)} ${Number(z.next.mhz).toFixed(3)}</span>`);
-    if (!z.tuned && z.center) talk.push(`in ${esc(z.center)} airspace`);
-    $("#map-talk").innerHTML = talk.join("<br>");
-  },
-  /* The VFR layer: each airport's airspace class, with ceiling over floor on every ring like a sectional. */
-  vfr(z, layer) {
-    const STYLE = { B: ["b", "#2b6fd8", null, 2.4], C: ["c", "#b23a9e", null, 2.2], D: ["d", "#2b6fd8", "7 5", 1.8],
-      CTR: ["d", "#2b6fd8", "7 5", 1.8], ATZ: ["atz", "#b23a9e", "4 4", 1.6] };
-    const hundreds = (ft) => (ft ? String(Math.round(ft / 100)) : "SFC");
-    const along = (a, nm) => [a.lat - (nm / 60) * Math.SQRT1_2, a.lon + ((nm / 60) * Math.SQRT1_2) / Math.cos((a.lat * Math.PI) / 180)];
-    for (const a of z.classes || []) {
-      const st = STYLE[a.class];
-      (a.rings || []).forEach((r, i) => {
-        if (!st) return;
-        L.circle([a.lat, a.lon], { radius: r.nm * 1852, color: st[1], weight: st[3], dashArray: st[2], fill: i === 0,
-          fillColor: st[1], fillOpacity: 0.07, interactive: false }).addTo(layer);
-        const inner = i ? a.rings[i - 1].nm : 0;  // the label sits in its band, southeast of the field
-        L.marker(along(a, i ? (inner + r.nm) / 2 : r.nm * 0.62), { icon: L.divIcon({ className: "",
-          html: `<div class="vfr-alt ${st[0]}"><span>${hundreds(r.ceiling)}</span><i>${hundreds(r.floor)}</i></div>`, iconSize: [0, 0] }),
-          interactive: false, keyboard: false }).addTo(layer);
-      });
-      const color = a.towered ? "#1d5bbf" : "#8e2c7c";
-      L.circleMarker([a.lat, a.lon], { radius: 5, color, weight: 2, fillColor: "#fff", fillOpacity: 1 }).addTo(layer)
-        .bindTooltip(`<b>${esc(a.icao)}</b> ${esc(a.name || "")}<br>${a.label ? `${esc(a.label)}${a.class === "B" || a.class === "C" ? ` (Class ${a.class})` : ""}` : "No tower: uncontrolled"}`);
-      L.marker([a.lat, a.lon], { icon: L.divIcon({ className: "", html: `<div class="vfr-apt ${a.towered ? "towered" : "other"}">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
-        interactive: false, keyboard: false }).addTo(layer);
-    }
+    this.zoneLayer.clearLayers();
+    AtcMap.zones(this.zoneLayer, z, { vfr: this.mode === "vfr" });  // atcmap.js, shared with the website
+    $("#map-legend .lg-talk").innerHTML = AtcMap.talk(z);
   },
 };
 

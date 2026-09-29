@@ -70,16 +70,42 @@ def test_chat_request_and_answer(server):
     assert path == "/api/chat" and body["model"] == "llama3.2:3b" and body["stream"] is False
     assert body["format"] == request().schema  # the answer is forced into the form
     assert body["options"]["temperature"] == 0 and body["options"]["seed"] == 0
-    roles = [m["role"] for m in body["messages"]]
-    assert roles[0] == "system" and roles[-1] == "user" and "assistant" in roles  # few-shot turns in between
+    # The rules and the examples in one system message, the same on every call; then the moment.
+    assert [m["role"] for m in body["messages"]] == ["system", "user"] and "Examples" in body["messages"][0]["content"]
     assert body["messages"][-1]["content"] == request().prompt
-    assert body["keep_alive"] == "1h"
+    assert body["keep_alive"] == "1h" and body["options"]["num_ctx"] == 3072 and body["options"]["num_predict"] == 80
 
 
 def test_timeout(server):
     server["delay"] = 1.0
     reply = OllamaBackend(base_url=server["url"]).complete(request(), timeout_s=0.2)
     assert (reply.text, reply.error) == (None, "timeout")
+
+
+def test_after_a_call_that_ran_out_of_time_the_prompt_is_read_again(server):
+    # Cut off, perhaps before Ollama had read the prompt: it reads it again now (one token of answer), so the pilot's
+    # next call doesn't start from nothing and run out of time too.
+    server["delay"] = 0.5
+    backend = OllamaBackend(base_url=server["url"])
+    assert backend.complete(request(), timeout_s=0.1).error == "timeout"
+    backend._priming.join(5)
+    _, primed = server["requests"][-1]
+    assert len(server["requests"]) == 2 and primed["options"]["num_predict"] == 1
+    assert primed["messages"][0]["content"] == request().system
+
+
+def test_after_a_phrasing_call_the_understanding_prompt_is_read_again(server):
+    from localtc.atc_core.llm.phrase import phrase_request
+
+    backend = OllamaBackend(base_url=server["url"])
+    understand = request()
+    backend.complete(understand, timeout_s=5)
+    server["answer"] = '{"reply":"altimeter 29.92"}'
+    backend.complete(phrase_request("what's the altimeter", "answer", {"callsign": "DP69"}), timeout_s=5)
+    backend._priming.join(5)
+    _, primed = server["requests"][-1]
+    assert primed["messages"][0]["content"] == understand.system  # the understanding prompt, again
+    assert primed["options"]["num_predict"] == 1 and "format" not in primed
 
 
 def test_not_running():

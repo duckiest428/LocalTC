@@ -16,7 +16,7 @@ import time
 from collections.abc import Callable
 from dataclasses import replace
 
-from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
+from localtc.atc_core.llm.backend import LlmBackend, LlmRequest, waits
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.values import Phrase
 from localtc.sim_api import LlmExchange
@@ -119,7 +119,8 @@ class LlmPhraser:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template."""
         request = phrase_request(pilot, decision, facts)
         exchanges: list[LlmExchange] = []
-        timeout_s, budget_s = (self.patience_s, self.patience_s) if self.patient else (self.timeout_s, self.budget_s)
+        timeout_s, budget_s = (self.patience_s, self.patience_s) if self.patient else \
+            waits(self.backend, self.timeout_s, self.budget_s, self.patience_s)
         deadline = self._clock() + budget_s
         for attempt in range(1, self.max_attempts + 1):
             remaining = deadline - self._clock()

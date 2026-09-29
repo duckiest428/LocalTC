@@ -127,7 +127,9 @@ async def language_model(cfg: Config, source: SimSource):
                  "on the CPU only" if llm.cpu_only else "where Ollama puts it")
         await asyncio.to_thread(backend.unload)
     # A daemon thread, not the default executor: exit mustn't wait for a slow first load.
-    threading.Thread(target=warm_up, args=(backend, status), name="llm-warm-up", daemon=True).start()
+    wait_s = llm.timeout_s * (2.0 if llm.cpu_only else 1.0)  # as build_engine sets it
+    threading.Thread(target=warm_up, args=(backend, status), kwargs={"wait_s": wait_s, "patience_s": llm.patience_s},
+                     name="llm-warm-up", daemon=True).start()
     backend.start_keeping()
     return backend
 
@@ -135,10 +137,14 @@ async def language_model(cfg: Config, source: SimSource):
 _WARMING = threading.Lock()  # held while a warm-up loads the model
 
 
-def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
+def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | None = None,
+            patience_s: float = 15.0) -> float | None:
     """Load the model, and read both its prompts (understanding and phrasing), before the first real call:
-    Ollama keeps what it has read, so a call then only reads its own last lines. Returns seconds taken."""
+    Ollama keeps what it has read, so a call then only reads its own last lines. Then one ordinary call, to see
+    how long one takes on this PC now (the sim running): ATC's wait follows it (``llm.backend.waits``), and the
+    pilot hears when it's slower than ``wait_s``. Returns seconds taken."""
     from localtc.atc_core.llm import build_request
+    from localtc.atc_core.llm.backend import PACE_FACTOR
     from localtc.atc_core.llm.phrase import phrase_request
     from localtc.atc_core.llm.understand import load_examples
     from localtc.atc_core.readback import InterpretContext
@@ -152,20 +158,35 @@ def warm_up(backend, status=None, timeout_s: float = 180.0) -> float | None:
     if hasattr(backend, "loading"):
         backend.loading = True
     try:
-        for request in (build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples()),
-                        phrase_request("radio check", "answer", {"callsign": "November 1 2 3"})):
+        # Phrasing first, understanding last: where Ollama keeps one prompt read, it's the one the pilot's first
+        # call needs.
+        for request in (phrase_request("radio check", "answer", {"callsign": "November 1 2 3"}),
+                        build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples())):
             reply = backend.complete(request, timeout_s=timeout_s)
             if reply.text is None:
                 log.warning("Language model warm-up failed (%s); the first calls may be slow or use the grammar", reply.error)
                 return None
+        backend.complete(build_request("request higher", None, InterpretContext(phase="CRUISE"), load_examples()),
+                         timeout_s=timeout_s)  # read already: what an ordinary call costs
     finally:
         if hasattr(backend, "loading"):
             backend.loading = False
         _WARMING.release()
     seconds = time.monotonic() - started
     where = backend.placement() if hasattr(backend, "placement") else None
-    log.info("Language model %s ready (warm-up %.1f s)%s", backend.model, seconds, f": {where.describe()}" if where else "",
-             extra=CONSOLE)
+    pace = getattr(backend, "pace_s", None)
+    log.info("Language model %s ready (warm-up %.1f s%s)%s", backend.model, seconds,
+             f"; a call takes about {pace:.1f} s" if pace else "", f": {where.describe()}" if where else "", extra=CONSOLE)
+    if where is not None and where.gpu and where.on_gpu < 0.99:
+        # Split between the card and the CPU: slower than either, and the part on the card takes video memory the
+        # sim needs (with MSFS there's often little left).
+        log.warning("The language model only partly fit on the graphics card (%s). It's quicker, and leaves the "
+                    "card to the sim, on the CPU alone: Quick Settings → ATC → \"Run the language model on the CPU only\".", where.describe())
+    if pace and wait_s and PACE_FACTOR * pace > wait_s:
+        log.warning("The language model takes about %.1f s a call on this PC right now, too close to ATC's wait of "
+                    "%.0f s: ATC waits up to %.0f s for it instead. For quicker answers, a smaller model (Quick Settings "
+                    "→ Models) or fewer calls to it (Quick Settings → ATC → the grammar first).",
+                    pace, wait_s, min(PACE_FACTOR * pace, patience_s))
     if where is not None and status is not None:
         on_disk = status.sizes.get(backend.model) or status.sizes.get(f"{backend.model}:latest") or 0
         # LocalTC keeps two prompts read (understanding and phrasing): two contexts. More is memory for nothing.

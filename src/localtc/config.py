@@ -166,7 +166,7 @@ class LlmConfig(_Section):
     # How long the model stays loaded after a flight ("0": unload at once). During one, LocalTC keeps it loaded:
     # a model that has to load mid-flight misses the call.
     keep_alive: str = "1h"
-    num_ctx: int = 4096
+    num_ctx: int = 3072  # a call needs up to about 2,100 tokens (tests/test_llm.py holds it to that); more is memory for nothing
     # Run the model on the CPU only: the graphics card is left to the sim. Answers take a little longer, so the
     # timeouts above are doubled. Applies when the model loads (LocalTC reloads it at the next flight).
     cpu_only: bool = True  # the graphics card and its memory belong to the sim: the model takes the CPU

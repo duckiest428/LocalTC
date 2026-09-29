@@ -40,6 +40,19 @@ class LlmReply:
     error: str = ""  # "timeout", "error: ...", "recorded_miss"
 
 
+PACE_FACTOR = 2.5  # ATC waits up to this many times the model's usual answer time on this PC
+
+
+def waits(backend: object, timeout_s: float, budget_s: float, patience_s: float) -> tuple[float, float]:
+    """How long to wait for one call, and for all of a transmission's tries: the pilot's settings, or longer when
+    the model usually takes longer than they allow on this PC while flying (its ``pace_s``), never past
+    ``patience_s``. A fixed wait shorter than the model's usual time only ever times out."""
+    pace = getattr(backend, "pace_s", None)
+    if pace:
+        timeout_s = max(timeout_s, min(PACE_FACTOR * pace, patience_s))
+    return timeout_s, max(budget_s, timeout_s)
+
+
 class LlmBackend(Protocol):
     model: str
 

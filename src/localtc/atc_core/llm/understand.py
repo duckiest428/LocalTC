@@ -25,7 +25,7 @@ from dataclasses import dataclass, field, replace
 from importlib import resources
 from typing import Any, Literal
 
-from localtc.atc_core.llm.backend import LlmBackend, LlmRequest
+from localtc.atc_core.llm.backend import LlmBackend, LlmRequest, waits
 from localtc.atc_core.llm.grounding import (
     PHRASE_STEMS,
     REQUEST_WORDS,
@@ -59,42 +59,26 @@ from localtc.sim_api import LlmExchange
 
 Mode = Literal["primary", "fallback", "off"]
 
-SYSTEM = """You read one pilot radio transmission and fill in a JSON form for an air traffic control computer. \
-You are not ATC and never reply to the pilot. The computer decides everything; you only say what the pilot said.
-
-Rules:
-- Report only what the PILOT said in this transmission. Never copy a value from "Recent", "Cleared", \
-"Callsign" or "Readback expected" unless the pilot said it too. If the pilot said a different number, report \
-the pilot's number. The callsign's digits are never a value.
-- Leave out a field the pilot did not say.
-- Write numbers as digits: runway "06L", frequency "120.425", squawk "5015", altitude in feet "12000" \
-(flight level 240 is "24000").
-- The text comes from speech recognition and has mistakes ("clear for take off" means cleared for takeoff). \
-When the pilot corrects themselves ("sorry", "I mean"), report what they said last.
-
-kind:
-- "readback": the pilot repeats an ATC instruction back. If they also ask for something in the same call, \
-intent says what (or topic, for a question).
-- "request": the pilot asks for or reports something; intent says what.
-- "question": the pilot asks ATC for information; topic says what.
-- "unintelligible": you cannot tell what the pilot wants.
-
-intent: request_ifr_clearance = asks for the IFR clearance; request_pushback = push back or push and start; \
-ready_to_taxi; request_crossing = asks to cross a runway (runway); ready_for_departure = holding short or ready \
-for takeoff; request_turn = a turn after departure; need_time = not ready yet, needs a moment; checkin = first \
-call to a new controller, like "with you at 6000"; report_final = "5 mile final", "established"; \
-position_report = a traffic pattern position, like "left downwind"; request_option = touch and go, low \
-approach, stop and go; clear_of_runway; request_taxi_parking; request_altitude = asks for higher, lower or a \
-new altitude; request_direct = direct to a fix or airport (fix: its name); request_vectors = vectors or a \
-heading; request_runway = a different runway or approach type (runway, approach: "ILS", "LOC", "RNAV", "VOR", \
-"NDB" or "VISUAL"); request_return = back to the departure airport; request_diversion = divert, to the nearest \
-airport or one it names (fix); going_around = go around or missed approach; report_conditions = turbulence, \
-icing or the ride (conditions: the words used); traffic_report = "traffic in sight", "looking", "negative \
-contact"; report_standard = altimeter set to standard (STD, QNE, 29.92, 1013); request_flight_following; \
-request_class_b; radio_check; pleasantry = small talk like "how's your day"; report_problem = a failure short \
-of an emergency; say_again = asks ATC to repeat; acknowledge = roger, wilco, thanks; emergency = mayday, \
-pan-pan, smoke, fire, a medical emergency or any other emergency; other = any other request.
-topic (for a question): altimeter, wind, weather, runway, squawk, altitude, frequency, atis, other."""
+SYSTEM = """Fill in a JSON form for an ATC computer from one pilot radio call. The text is speech-to-text and \
+has mistakes. You never reply to the pilot; you only say what the pilot said.
+- Take values only from the Pilot line, never from Cleared, Recent, Callsign or Readback expected. If the pilot \
+said a different number, write the pilot's. Callsign digits are never a value. Leave out what wasn't said.
+- Digits: runway "06L", frequency "120.425", squawk "5015", altitude in feet "12000" (FL240 is "24000").
+- After "sorry" or "I mean", use what was said last.
+- When a readback is expected and the pilot repeats any of it, kind is readback.
+kind: readback (repeats an ATC instruction; if they also ask something, add intent or topic), request (asks \
+for or reports something: intent), question (asks for information: topic), unintelligible.
+intent: request_ifr_clearance, request_pushback, ready_to_taxi, request_crossing (a runway), \
+ready_for_departure (holding short, ready), request_turn, need_time (not ready yet), checkin (first call to a \
+controller: "with you at 6000", "level 110"), report_final ("established", "5 mile final"), position_report \
+(pattern leg), request_option (touch and go, low approach), clear_of_runway, request_taxi_parking, \
+request_altitude (higher, lower, a level), request_direct (fix: the name said), request_vectors, request_runway (another \
+runway or approach: ILS LOC RNAV VOR NDB VISUAL), request_return, request_diversion (fix), going_around (or \
+missed approach), report_conditions (turbulence, icing, the ride: conditions), traffic_report (in sight, \
+looking, no contact), report_standard (altimeter standard, QNE, 29.92, 1013), request_flight_following, \
+request_class_b, radio_check, pleasantry (small talk), report_problem (a failure, not an emergency), \
+say_again (asks ATC to repeat, even naming what), acknowledge (roger, wilco, thanks), emergency (mayday, pan-pan, smoke, fire, medical), other.
+topic: altimeter, wind (winds, gusts), weather, runway, squawk, altitude, frequency, atis, other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
 INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "request_crossing", "ready_for_departure",
@@ -109,6 +93,7 @@ VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "sq
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
 REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
 APPROACH_KINDS = ("ILS", "LOC", "RNAV", "GPS", "VOR", "NDB", "LDA", "SDF", "VISUAL")
+ANSWER_TOKENS = 80  # the longest answer (an emergency with its details) is about 40
 
 
 class AnswerError(ValueError):
@@ -251,7 +236,8 @@ def schema(pending: PendingReadback | None, context: InterpretContext | None = N
     """The answer's form. Only ``kind`` is required: the model writes the fields the pilot said and stops
     (every empty field it had to write out cost a CPU tenths of a second, a dozen of them seconds)."""
     props: dict[str, Any] = {
-        "kind": {"type": "string", "enum": KINDS},
+        # No readback is expected: the form doesn't offer one (a small model otherwise files reports as readbacks).
+        "kind": {"type": "string", "enum": KINDS if pending is not None else [k for k in KINDS if k != "readback"]},
         "intent": {"type": "string", "enum": allowed_intents(context)},
         "topic": {"type": "string", "enum": TOPICS},
     }
@@ -264,31 +250,35 @@ def schema(pending: PendingReadback | None, context: InterpretContext | None = N
     return {"type": "object", "properties": props, "required": ["kind"], "additionalProperties": False}
 
 
-def example_messages(examples: list[Example], mode: str) -> tuple[tuple[str, str], ...]:
-    """The examples for a readback (one is expected) or a request (none is), in the file's order: the same on
-    every call of that mode, so Ollama reads them once and reuses them; only the last message is new to it."""
-    messages: list[tuple[str, str]] = []
-    for ex in examples:
-        if ex.mode != mode:
-            continue
-        expect = [tuple(item.split("=", 1)) if "=" in item else (item, None) for item in ex.expect]
-        messages.append(("user", user_message(callsign=ex.callsign or None, phase=ex.phase, station=ex.station,
-                                              cleared=ex.cleared, traffic=ex.traffic or None, recent=ex.recent,
-                                              expect=expect, pilot=ex.pilot)))
-        messages.append(("assistant", json.dumps(ex.answer, separators=(",", ":"))))
-    return tuple(messages)
+def example_line(ex: Example) -> str:
+    """One example on one line: the parts of the moment that matter to it, the pilot's words, the answer."""
+    context = [f"{ex.phase}, {ex.station}"]
+    if ex.cleared:
+        context.append("cleared " + ", ".join(f"{k} {ex.cleared[k]}" for k in CLEARED if ex.cleared.get(k)))
+    if ex.traffic:
+        context.append(f"traffic called {ex.traffic}")
+    if ex.expect:
+        items = [tuple(item.split("=", 1)) if "=" in item else (item, None) for item in ex.expect]
+        context.append("readback expected: " + _expect_line(items))
+    return f'[{"; ".join(context)}] "{ex.pilot}" -> {json.dumps(ex.answer, separators=(",", ":"))}'
+
+
+def system_prompt(examples: list[Example]) -> str:
+    """The rules and every example: one block, the same on every call, so Ollama reads it once and reuses it and
+    only the real call's few lines are new to it. (Examples as chat turns cost twice the tokens.)"""
+    return SYSTEM + "\n\nExamples ([the moment] \"the pilot\" -> the form):\n" + "\n".join(example_line(e) for e in examples)
 
 
 def build_request(text: str, pending: PendingReadback | None, context: InterpretContext,
                   examples: list[Example]) -> LlmRequest:
     mode = "readback" if pending is not None else "request"
-    messages = list(example_messages(examples, mode))
-    messages.append(("user", user_message(
+    messages = [("user", user_message(
         callsign=_callsign_line(context), phase=context.phase, station=context.station, role=context.station_role,
         cleared=_cleared(context), traffic=context.traffic, recent=_recent(context),
         expect=_expected_items(pending) if mode == "readback" else [], pilot=text,
-    )))
-    return LlmRequest("understand", SYSTEM, tuple(messages), schema(pending if mode == "readback" else None, context))
+    ))]
+    return LlmRequest("understand", system_prompt(examples), tuple(messages), schema(pending if mode == "readback" else None, context),
+                      max_tokens=ANSWER_TOKENS)
 
 
 # --- reading the answer ----------------------------------------------------------------------------------
@@ -332,8 +322,9 @@ def parse_value(element: str, raw: Any) -> Any:
         if not digits.isdigit():
             raise AnswerError(f"{element} {raw!r} is not a number of feet")
         feet = int(digits)
-        # "FL150", or "015" (flight level zero one five: 1,500 ft)
-        feet = feet * 100 if feet < 1000 and (value.upper().startswith("FL") or digits.startswith("0")) else feet
+        # "FL150", "015" (flight level zero one five: 1,500 ft), or a bare "360": no one is cleared to 360 ft, and
+        # small models write the level as said
+        feet = feet * 100 if feet < 1000 else feet
         if not 100 <= feet <= 60000:
             raise AnswerError(f"{element} {raw!r} is out of range")
         return feet
@@ -393,6 +384,9 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
             intent = ""
         topic = topic if topic in TOPICS and is_question(" ".join(t.text for t in tokens)) else ""
 
+    approach, runway = data.get("approach"), data.get("runway")
+    if pending is not None and isinstance(approach, str) and approach.strip().upper() in APPROACH_KINDS and runway:
+        data = {**data, "approach": f"{approach.strip()} {runway}"}  # "ILS" and runway "06": the ILS 06
     values: dict[str, Any] = {}
     dropped: list[str] = []
     fields = _model_elements(pending) if pending is not None else REQUEST_FIELDS
@@ -402,7 +396,7 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
         if name in ("fix", "conditions"):
             text = str(data[name]).strip()
             if text and _said_words(text, tokens):
-                values[name] = text
+                values[name] = text.upper() if name == "fix" else text  # a fix or airport is an ident: "QUEBEC"
             elif text:
                 dropped.append(f"{name}={text}")
             continue
@@ -495,7 +489,8 @@ class LlmInterpreter:
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
         intent_errors = 0
-        timeout_s, budget_s = (self.patience_s, self.patience_s) if context.patient else (self.timeout_s, self.budget_s)
+        timeout_s, budget_s = (self.patience_s, self.patience_s) if context.patient else \
+            waits(self.backend, self.timeout_s, self.budget_s, self.patience_s)
         deadline = self._clock() + budget_s
         for attempt in range(1, self.max_attempts + 1):
             remaining = deadline - self._clock()

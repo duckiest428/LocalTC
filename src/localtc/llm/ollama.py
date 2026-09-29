@@ -9,22 +9,31 @@ fit in the video memory free at that moment, the rest on the CPU. ``cpu_only`` a
 asks, so ``placement()`` says where it is and ``unload()`` lets it load again elsewhere.
 
 A model that isn't loaded costs a cold load on the next call (several seconds on a GPU, tens on a CPU, the
-whole prompt read again): a certain timeout. ``keep_warm()`` refreshes it through a long quiet cruise.
+whole prompt read again): a certain timeout. Even loaded, a prompt Ollama hasn't read yet costs tens of seconds
+on a CPU the sim is using; one it has read costs a fraction of one. So the understanding prompt is kept read:
+after a call that ran out of time (cut off before Ollama had read it all, the next call would start again from
+nothing and time out too), after a phrasing call (a different prompt, which may have taken its place) and through
+a long quiet cruise, ``prime()`` has Ollama read it again in the background, answering one token. A late call
+isn't left to finish: its answer comes too late to use, and writing it would hold up the pilot's next call.
 """
 
 import json
 import logging
 import socket
+import statistics
 import threading
 import time
 import urllib.error
 import urllib.request
+from collections import deque
 from dataclasses import dataclass, field
 
 from localtc.atc_core.llm import LlmReply, LlmRequest
 
 log = logging.getLogger(__name__)
 COLD_LOAD_S = 1.0  # a call that spent longer than this loading the model found it unloaded
+FINISH_S = 180.0  # how long priming may take: reading the whole prompt on a busy CPU
+PACE_CALLS = 5  # the model's usual answer time: the median of this many recent understanding calls
 
 
 CPU_ONLY_SLIVER = 0.1  # less than this share of the model on the graphics card is a model on the CPU
@@ -76,13 +85,16 @@ class OllamaBackend:
     model: str = "llama3.2:3b"
     base_url: str = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first and costs ~2 s a call
     keep_alive: str = "1h"  # keep the model loaded between transmissions
-    num_ctx: int = 4096
+    num_ctx: int = 3072
     cpu_only: bool = False  # nothing on the graphics card: num_gpu 0 (applies when the model loads)
     cpu_threads: int = 0  # 0: Ollama's choice (every physical core)
     options: dict = field(default_factory=dict)
     last_stats: dict = field(default_factory=dict, repr=False)  # the last call's timings, from Ollama
     loading: bool = field(default=False, repr=False)  # warming up: a load is expected, not news
     _keeper: threading.Event | None = field(default=None, repr=False)
+    _understand: LlmRequest | None = field(default=None, repr=False)  # the last understanding call, to prime with
+    _priming: threading.Thread | None = field(default=None, repr=False)
+    _paces: deque = field(default_factory=lambda: deque(maxlen=PACE_CALLS), repr=False)
 
     def load_options(self) -> dict:
         """The options that decide where and how the model loads: the same on every call, or it reloads."""
@@ -106,14 +118,21 @@ class OllamaBackend:
         started = time.monotonic()
         try:
             data = self._post("/api/chat", body, timeout_s)
-        except TimeoutError:
-            return LlmReply(None, (time.monotonic() - started) * 1000, "timeout")
         except (urllib.error.URLError, OSError, ValueError) as exc:
             reason = getattr(exc, "reason", exc)
-            if isinstance(reason, (TimeoutError, socket.timeout)):
-                return LlmReply(None, (time.monotonic() - started) * 1000, "timeout")
-            return LlmReply(None, (time.monotonic() - started) * 1000, f"error: {reason}")
+            if not isinstance(exc, TimeoutError) and not isinstance(reason, (TimeoutError, socket.timeout)):
+                return LlmReply(None, (time.monotonic() - started) * 1000, f"error: {reason}")
+            if request.purpose == "understand":
+                self._understand = request
+                self.prime()  # cut off, maybe before Ollama had read it all: have it read (and keep) it now
+            return LlmReply(None, (time.monotonic() - started) * 1000, "timeout")
         self._timings(data, request)
+        if request.purpose == "understand":
+            self._understand = request
+            if self.last_stats["load_ms"] <= COLD_LOAD_S * 1000:
+                self._paces.append(time.monotonic() - started)
+        elif request.purpose == "phrase":
+            self.prime()  # the phrasing prompt may have taken the understanding one's place in Ollama's cache
         content = (data.get("message") or {}).get("content")
         if not isinstance(content, str):
             return LlmReply(None, (time.monotonic() - started) * 1000, f"error: unexpected response {str(data)[:200]}")
@@ -128,6 +147,12 @@ class OllamaBackend:
             log.warning("The language model wasn't loaded: this %s call spent %.1f s loading it", request.purpose, st["load_ms"] / 1000)
         log.debug("LLM %s: load %d ms, prompt %d tokens in %d ms, %d tokens in %d ms", request.purpose, st["load_ms"],
                   st["prompt_tokens"], st["prompt_ms"], st["tokens"], st["gen_ms"])
+
+    @property
+    def pace_s(self) -> float | None:
+        """How long an understanding call usually takes on this PC now (the median of the last few, loads left
+        out), or None before one has been answered."""
+        return statistics.median(self._paces) if self._paces else None
 
     def placement(self, timeout_s: float = 2.0) -> Placement | None:
         """Where the model is loaded, or None when it isn't (or Ollama can't say)."""
@@ -156,14 +181,38 @@ class OllamaBackend:
         except (urllib.error.URLError, OSError, ValueError) as exc:
             log.info("Couldn't keep %s loaded: %s", self.model, exc)
 
+    def prime(self, request: LlmRequest | None = None) -> None:
+        """Have Ollama read the understanding prompt (the last one asked, or ``request``) and keep it, in the
+        background: one token of answer, thrown away. The pilot's next call then only reads its own lines."""
+        request = request or self._understand
+        if request is None or (self._priming is not None and self._priming.is_alive()):
+            return
+        body = {"model": self.model, "stream": False, "keep_alive": self.keep_alive,
+                "messages": [{"role": "system", "content": request.system}]
+                + [{"role": role, "content": content} for role, content in request.messages],
+                "options": {"temperature": 0, "seed": 0, "num_predict": 1, **self.load_options(), **self.options}}
+
+        def run() -> None:
+            try:
+                self._post("/api/chat", body, FINISH_S)
+            except (urllib.error.URLError, OSError, ValueError) as exc:
+                log.debug("Priming the language model failed: %s", exc)
+
+        self._priming = threading.Thread(target=run, name="llm-prime", daemon=True)
+        self._priming.start()
+
     def start_keeping(self, every_s: float = 600.0) -> None:
-        """While a flight is on: refresh the model now and then, so a long quiet cruise never unloads it."""
+        """While a flight is on: refresh the model now and then, so a long quiet cruise never unloads it, and
+        with it the understanding prompt, so it's still read when the pilot next calls."""
         self.stop_keeping()
         stop = self._keeper = threading.Event()
 
         def run() -> None:
             while not stop.wait(every_s):
-                self.keep_warm()
+                if self._understand is not None:
+                    self.prime()
+                else:
+                    self.keep_warm()
 
         threading.Thread(target=run, name="llm-keep-warm", daemon=True).start()
 

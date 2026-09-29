@@ -5,7 +5,6 @@ The same seeded edge cases run against a real model with ``localtc llm eval`` (o
 
 import json
 import tomllib
-from dataclasses import replace
 from pathlib import Path
 
 import msgspec
@@ -222,12 +221,13 @@ def test_prompt_is_narrow():
     # fields to roleplay in. Only kind is required: the model writes what was said and stops.
     assert list(request.schema["properties"]) == ["kind", "intent", "topic", "runway", "cleared_for_takeoff"]
     assert request.schema["additionalProperties"] is False and request.schema["required"] == ["kind"]
-    assert "never reply to the pilot" in request.system
-    examples = [text for role, text in request.messages[:-1] if role == "user"]
-    assert all(text.startswith("Callsign: ") and "\nTraffic called: " in text and "\nRecent: " in text
-               for text in examples)  # the same keys
-    answers = [json.loads(text) for role, text in request.messages[:-1] if role == "assistant"]
-    assert all("" not in a.values() for a in answers)  # no empty fields to copy: they cost seconds on a CPU
+    assert "never reply to the pilot" in request.system and len(request.messages) == 1
+    # The examples: one line each, in the rules' message; the answers carry no empty fields to copy (they cost
+    # seconds on a CPU).
+    lines = [line for line in request.system.splitlines() if line.startswith("[")]
+    assert len(lines) == len(load_examples()) and all('" -> {' in line for line in lines)
+    answers = [json.loads(line.split(" -> ", 1)[1]) for line in lines]
+    assert all("" not in a.values() for a in answers)
 
     open_request = build_request("what's the altimeter", None, context, load_examples())
     assert list(open_request.schema["properties"]) == [
@@ -247,17 +247,36 @@ def test_the_model_may_only_answer_with_calls_that_fit_the_controller_and_phase(
     assert "request_crossing" in intents and "need_time" in intents and "request_altitude" not in intents
 
 
-def test_calls_of_a_kind_share_the_prompt_up_to_their_own_last_message():
-    # Ollama reuses what it has already read of a prompt: two readbacks (or two requests) must not start
-    # differing before the last message, whatever the moment, or every example is read again (seconds on a CPU).
-    # Readbacks and requests keep their own examples: one mixed set made the small model worse (llm eval).
+def test_every_call_shares_the_prompt_up_to_its_own_last_message():
+    # Ollama reuses what it has already read of a prompt: no two calls may differ before the last message,
+    # whatever the moment and whether a readback is expected, or the examples are read again (tens of seconds on a
+    # CPU shared with the sim: a timeout).
     ex = load_examples()
     first = InterpretContext(callsign=Callsign("DP69"), phase="RUNWAY_HOLD", station="Montreal Tower", runway="06L")
     later = InterpretContext(callsign=Callsign("DP69"), phase="CRUISE", station="Montreal Center", cleared_altitude_ft=24000,
                              squawk="5015", traffic="2 o'clock, 3 miles", last_atc="DP69, climb and maintain FL240.")
-    for pending in (_takeoff_pending(), None):
-        a, b = build_request("one", pending, first, ex), build_request("two", pending, later, ex)
-        assert a.system == b.system and a.messages[:-1] == b.messages[:-1] and a.prompt != b.prompt
+    calls = [build_request(said, pending, moment, ex) for said, pending, moment in (
+        ("one", _takeoff_pending(), first), ("two", None, later), ("three", None, first), ("four", _takeoff_pending(), later))]
+    assert len({c.system for c in calls}) == 1 and all(len(c.messages) == 1 for c in calls)
+    assert len({c.prompt for c in calls}) == 4
+
+
+def test_the_prompt_fits_a_small_context():
+    # A small num_ctx keeps the model's memory small (the sim needs the rest). The longest call (four exchanges
+    # shown, a readback expected), a retry's two extra messages and the answer must fit in it, or Ollama cuts the
+    # start of the prompt off without a word.
+    from localtc.atc_core.llm.understand import ANSWER_TOKENS
+    from localtc.config import LlmConfig
+
+    busy = InterpretContext(callsign=Callsign("ACA8272"), phase="APPROACH", station="Seattle Approach", squawk="3305",
+                            cleared_altitude_ft=5000, runway="34R", approach="ILS 34R", traffic="2 o'clock, 3 miles, 4,000 ft",
+                            recent=('ATC: "Air Canada 8272, turn left heading 020, maintain 2,500 until established on the '
+                                    'localizer, cleared ILS runway 34R approach."',) * 4)
+    request = build_request("left zero two zero, two thousand five hundred til established, cleared ILS three four "
+                            "right, Air Canada 8272", _takeoff_pending(), busy, load_examples())
+    tokens = (len(request.system) + len(request.prompt)) / 3.4  # Llama's tokenizer: about 3.5 characters a token
+    retry = 60 + ANSWER_TOKENS
+    assert tokens + retry + ANSWER_TOKENS + 50 <= LlmConfig().num_ctx, f"about {tokens:.0f} tokens"
 
 
 def test_request_key_identifies_the_question():
@@ -273,7 +292,8 @@ def test_request_key_identifies_the_question():
 @pytest.mark.parametrize(("element", "raw", "value"), [
     ("runway", "06L", "06L"), ("runway", "6 left", "06L"), ("runway", "RWY 24R", "24R"), ("runway", "", None),
     ("frequency", "120.425", 120.425), ("squawk", "5015", "5015"), ("altitude", "FL240", 24000),
-    ("altitude", "12,000", 12000), ("approach", "ILS 06", "ILS RWY 06"), ("atis", "information B", "B"),
+    ("altitude", "12,000", 12000), ("altitude", "360", 36000),  # a level as said: nobody is cleared to 360 ft
+    ("approach", "ILS 06", "ILS RWY 06"), ("atis", "information B", "B"),
     ("cleared_for_takeoff", True, True), ("cleared_for_takeoff", False, None),
 ])
 def test_parse_value(element, raw, value):
@@ -299,6 +319,22 @@ def test_invented_values_are_rejected():
         parse_answer("kind: readback", None, tokens)
     with pytest.raises(AnswerError, match="needs an intent"):
         parse_answer(json.dumps({"kind": "request", "intent": ""}), None, tokens)
+
+
+def test_what_a_small_model_gets_half_right_is_read_the_way_it_meant():
+    # With no readback expected, the form offers none (a small model filed position reports as readbacks).
+    kinds = build_request("eight miles out", None, DP69, load_examples()).schema["properties"]["kind"]["enum"]
+    assert "readback" not in kinds and "readback" in build_request("x", _takeoff_pending(), DP69, load_examples()).schema[
+        "properties"]["kind"]["enum"]
+    # The approach's kind in one field and its runway in the other: the approach to that runway.
+    pending = PendingReadback("approach.cleared", "approach", {"approach": parse_value("approach", "ILS 34R")}, ("approach",))
+    answer = parse_answer(json.dumps({"kind": "readback", "approach": "ILS", "runway": "34R"}), pending,
+                          normalize("cleared ILS three four right, ACA8272"))
+    assert answer.values["approach"].display == "ILS RWY 34R"
+    # A fix is an ident, whatever case the model wrote it in.
+    answer = parse_answer(json.dumps({"kind": "request", "intent": "request_direct", "fix": "Quebec"}), None,
+                          normalize("DP69 requesting direct Quebec"))
+    assert answer.values["fix"] == "QUEBEC"
 
 
 def test_bad_answer_is_retried_with_the_problem_named():

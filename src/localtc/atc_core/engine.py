@@ -160,6 +160,12 @@ PARKED_AHEAD_WIDTH_M = 10.0  # a parked aircraft this close to straight ahead of
 PARKED_AHEAD_S = 4.0  # ... for this long is one the taxi is heading into
 # The model missed a call for one of these, and the grammar had nothing: ask it again with time to spare before
 # "say again" (which is for when the model couldn't make it out either).
+PLAIN_QUESTION_WORDS = 6  # more than this, besides the call-up and courtesy, is asking more than a topic
+COURTESY = {"please", "thanks", "thank", "you", "very", "much", "hey", "hi", "hello", "good", "morning", "afternoon",
+            "evening", "day", "and", "uh", "um", "er", "sir", "ma'am"}
+# Words that put a question somewhere else, or later, than the sim's data here and now.
+ELSEWHERE = {"route", "enroute", "en", "along", "ahead", "destination", "forecast", "forecasted", "tomorrow", "later",
+             "there", "at", "in", "near", "around", "over", "arrival", "arriving"}
 CONVERSATIONAL_TRIGGERS = {"question", "out_of_grammar", "parser_failure", "low_confidence", "ambiguous", "compound",
                            "self_correction", "hesitation", "callsign", "non_numeric", "out_of_phase", "digits_unsure"}
 LONG_STATEMENT_WORDS = 8  # a call this long that nothing understood is the pilot talking, not a garbled readback
@@ -2559,10 +2565,25 @@ class AtcEngine(VfrMixin, DiversionMixin):
                     st.flags.add("handoff_tower")  # the pilot has it now; no second "contact tower"
                 self._handoff(t, "common.contact", facility, target, delay=True)
                 return []
-        if (message := self._answer_message(topic)) is not None:
+        message = self._answer_message(topic)
+        if self.phraser is not None and (getattr(self.interpreter, "mode", "") == "primary"
+                                         or not self._plain_question(interp.text or "", facility)):
+            # Asked more than the topic's word: "any bad weather en route to Orlando?" isn't "say the weather", and
+            # the local wind and altimeter don't answer it. The model words the answer to what was asked, from the
+            # facts (the data's own answer among them), and says what isn't known.
+            return self._phrase(interp, facility, t, "answer", known=message)
+        if message is not None:
             self._schedule(t, "common.info", {"message": message}, facility)
             return []
         return self._phrase(interp, facility, t, "answer")
+
+    def _plain_question(self, text: str, facility: Facility) -> bool:
+        """A question the sim's data answers by its topic alone: short ("say altimeter", "what's the wind") and
+        about here, not somewhere else or later."""
+        said = {w.lower() for w in (facility.station, speech.callsign_display(self._callsign()),
+                                    speech.callsign_display(self._callsign().short)) for w in w.split()}
+        words = [t.text for t in normalize(text) if t.kind == "word" and t.text not in said and t.text not in COURTESY]
+        return len(words) <= PLAIN_QUESTION_WORDS and not set(words) & ELSEWHERE
 
     def _answer_message(self, topic: str) -> Phrase | None:
         """The answer to a question about ``topic`` from the sim's data ("expect runway 36R for departure",
@@ -2603,17 +2624,25 @@ class AtcEngine(VfrMixin, DiversionMixin):
     def _decline(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         return self._phrase(interp, facility, t, "decline")
 
-    def _phrase(self, interp: Interpretation, facility: Facility, t: float, decision: str) -> list[BusEvent]:
+    def _phrase(self, interp: Interpretation, facility: Facility, t: float, decision: str,
+                known: Phrase | None = None) -> list[BusEvent]:
+        """A reply worded by the model from the facts. ``known``: what the sim's data says to the question, one of
+        the facts, and the reply when the model has none."""
         if self.phraser is None:
             self._schedule(t, "common.unable", {}, facility)
             return []
         callsign = self._callsign()
         callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
+        facts = self._facts(facility)
+        if known is not None:
+            facts["here and now"] = known.display
         message, exchanges = self.phraser.reply(
-            pilot=interp.text, decision=decision, facts=self._facts(facility), callsigns=callsigns, t=t,
+            pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger="question" if decision == "answer" else "unsupported_request",
         )
-        if message is None:
+        if message is None and known is not None:
+            self._schedule(t, "common.info", {"message": known}, facility)
+        elif message is None:
             self._schedule(t, "common.unable", {}, facility)
         else:
             self._schedule(t, "common.info", {"message": message}, facility)

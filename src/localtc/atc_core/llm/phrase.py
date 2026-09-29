@@ -28,7 +28,9 @@ The controller has already decided what to say; you only put it into words.
 - Never give or approve an instruction: no clearances, altitudes, headings, frequencies to contact, squawk codes \
 or taxi routes, and never say "approved". If the pilot asks for something like that, say "unable" and, if it \
 fits, "continue as filed".
-- If the facts don't answer the question, say "unable, information not available".
+- Answer what the pilot asked. If the facts answer only part of it, give that part and say the rest isn't \
+available (you have no weather reports along the route or at other airports unless the facts say so). If \
+they answer none of it, say "unable, information not available".
 - At most 20 words. Do not start with the callsign; it is added for you."""
 
 SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"],
@@ -40,6 +42,9 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
      '{"reply":"Quebec wind 240 at 8, altimeter 29.92"}'),
     ('Pilot asked: "request direct Quebec"\nDecision: decline\nFacts: controller Montreal Center; destination Quebec; phase cruise',
      '{"reply":"unable direct at this time, continue as filed"}'),
+    ('Pilot asked: "any bad weather on the way to Phoenix today"\nDecision: answer\nFacts: controller San Diego Ground; '
+     'destination Phoenix; wind 270@6; altimeter 29.98; here and now: wind 270 at 6, altimeter 29.98',
+     '{"reply":"no weather reports along your route available, San Diego wind 270 at 6, altimeter 29.98"}'),
     ('Pilot asked: "how long until we get there"\nDecision: answer\nFacts: controller Seattle Approach; runway in use 16L',
      '{"reply":"unable, information not available"}'),
 )

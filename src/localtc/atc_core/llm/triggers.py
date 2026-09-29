@@ -8,7 +8,7 @@ the grammar's answer not good enough (``trigger``, in order):
 - ``question`` / ``parser_failure`` / ``ambiguous``: nothing matched, or two calls that don't go together.
 - ``readback_rejected``: a readback that isn't correct (wrong, partial, or a value only nearly right).
 - ``compound``: a readback with a request or question riding along ("cleared to land, actually can we do a
-  low approach"): the grammar reads the readback and would drop the rest.
+  low approach"): the grammar reads the readback and would drop the rest. Or a request with a question in it.
 - ``self_correction`` / ``hesitation``: "sorry", "I mean", "uh", a word said twice: the words may not say
   what the pilot meant.
 - ``callsign``: this flight's callsign not heard, or only nearly.
@@ -70,8 +70,10 @@ def trigger(grammar: Interpretation, text: str, confidence: float | None = None,
         # The script, read back. Only something riding along with it that the grammar couldn't place is worth
         # the model's time.
         return "compound" if grammar.asked_more else None
+    if grammar.kind == "request" and grammar.values.get("asks"):
+        return "compound"  # a request and a question in one call: the grammar would answer the question by keyword
     if grammar.kind == "request" and grammar.intent == "question" and grammar.values.get("topic", "other") != "other":
-        return None  # the grammar knows what's asked, and ATC answers it from the sim's data
+        return None  # the grammar knows the topic; ATC answers from the sim's data, or words it (engine._answer)
     if is_question(text) and (grammar.kind == "unknown" or grammar.intent in (None, "acknowledge", "question")):
         return "question"  # ("can we get taxi?" is the grammar's to answer: it knows that one)
     if grammar.kind == "unknown":

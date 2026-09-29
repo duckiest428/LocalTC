@@ -111,6 +111,12 @@ def after_correction(tokens: list) -> list:
     return tokens[last + 1:] if last is not None and len(tokens) - last - 1 >= 3 else tokens
 
 
+# Words that ask for the IFR clearance itself, not just name the Clearance station.
+CLEARANCE_ASKED = (("ifr",), ("i", "f", "r"), ("ready", "to", "copy"), ("request", "clearance"), ("requesting", "clearance"),
+                   ("clearance", "to"), ("our", "clearance"), ("for", "clearance"),  # ("the", ...): "the" is dropped
+                   ("clearance", "please"), ("need", "clearance"), ("get", "clearance"))
+
+
 class GrammarInterpreter:
     """Deterministic: element extractors for readbacks, keyword intents for requests."""
 
@@ -122,6 +128,11 @@ class GrammarInterpreter:
         matches = match_intents(tokens)
         chosen, ambiguous = resolve(matches)
         if (topic := question_topic(text)) is not None and (chosen is None or chosen.intent != EMERGENCY):
+            if chosen is not None and chosen.intent == "request_ifr_clearance" and asks(text) \
+                    and not _has_any(tokens, *CLEARANCE_ASKED):
+                # "Cleveland Clearance, Frontier 3916, any bad weather en route?": the station's name, and a
+                # question for it; nobody asked for a clearance.
+                chosen, ambiguous = None, False
             if chosen is None or (chosen.intent in ("acknowledge", "pleasantry") and asks(text)):
                 # "Any idea what our departure runway will be? Thank you very much": a question, not a thank-you.
                 chosen, ambiguous = IntentMatch("question", {"topic": topic}), False

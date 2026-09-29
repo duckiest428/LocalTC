@@ -447,6 +447,48 @@ def test_questions_are_answered_from_the_sim():
     assert atc(say(engine, later, "and the winds?", mhz=121.0)) == ["DP69, wind calm."]
 
 
+def test_a_question_about_more_than_here_is_answered_by_the_model():
+    # "Any bad weather en route?" was answered with the local wind and altimeter by its keyword, the model never
+    # asked. Now the model words the answer to what was asked, the data's answer among its facts.
+    route = "Ground, DP69. Do we have any bad weather on route to Quebec today? We've lost internet access up here"
+    backend = ScriptedBackend(phrase={route: '{"reply":"no weather reports along your route available, wind calm, altimeter 30.10"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "fallback"  # grammar first: the grammar knows it's a weather question
+    out = say(engine, own, route, mhz=121.0)
+    assert atc(out) == ["DP69, no weather reports along your route available, wind calm, altimeter 30.10."]
+    shown = backend.requests[-1].prompt
+    assert "here and now: wind calm, altimeter 30.10" in shown  # the data's answer is one of its facts
+    # A plain one is still answered straight from the data, without waiting for the model.
+    asked = len(backend.requests)
+    later = msgspec.structs.replace(own, t=own.t + 20)
+    assert atc(say(engine, later, "ground, what's the altimeter", mhz=121.0)) == ["DP69, altimeter 30.10."]
+    assert len(backend.requests) == asked
+    # And when the model has no answer, the data's answer rather than "unable".
+    later = msgspec.structs.replace(own, t=own.t + 40)
+    assert atc(say(engine, later, "any idea what the weather is doing at Quebec?", mhz=121.0)) == [
+        "DP69, wind calm, altimeter 30.10."]
+
+
+def test_a_question_to_clearance_is_not_a_clearance_request():
+    from localtc.atc_core.llm.triggers import trigger
+    from localtc.atc_core.readback import GrammarInterpreter
+
+    grammar = GrammarInterpreter()
+    context = InterpretContext(callsign=Callsign("FFT3916"), phase="PARKED", station="Cleveland Clearance",
+                               station_role="clearance")
+    asked = grammar.interpret("Cleveland Clearance, Frontier 3916. Do we have any bad weather on route to Orlando?",
+                              None, context)
+    assert (asked.intent, asked.values) == ("question", {"topic": "weather"})
+    for request in ("Cleveland Clearance, Frontier 3916, IFR to Orlando", "Clearance, Frontier 3916, ready to copy",
+                    "Cleveland Clearance, Frontier 3916, request clearance to Orlando"):
+        assert grammar.interpret(request, None, context).intent == "request_ifr_clearance"
+    # A request with a question in it goes to the model: the grammar would answer the question by its keyword.
+    both = grammar.interpret("Clearance, Frontier 3916 with alpha, ready to copy, and what's the weather at Orlando?",
+                             None, context)
+    assert both.intent == "request_ifr_clearance" and both.values.get("asks")
+    assert trigger(both, both.text, 0.9, context=context) == "compound"
+
+
 def test_unknown_questions_are_worded_by_the_model_or_unable():
     backend = ScriptedBackend(
         {"how long is the taxi": {"kind": "question", "topic": "other"},

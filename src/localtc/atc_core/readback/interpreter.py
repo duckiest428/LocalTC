@@ -95,6 +95,25 @@ class Interpretation:
     # the readback is taken, then this is answered.
     then: "Interpretation | None" = None
     asked_more: bool = False  # ... or one the grammar heard but couldn't place (the language model gets a look)
+    # What each reader made of it, for the record (``AtcDecision``): the grammar's reading, the model's checked one
+    # ("" when it wasn't asked or had none), and why the model's wasn't the one used.
+    grammar_read: str = ""
+    model_read: str = ""
+    fallback: str = ""
+
+
+def reading(interp: "Interpretation | None") -> str:
+    """One line for what a reader made of a call: "request ready_to_taxi atis=B", "readback correct", "unknown"."""
+    if interp is None:
+        return ""
+    if interp.kind == "readback":
+        head = f"readback {interp.status}"
+    elif interp.kind == "request" and interp.intent == "question":
+        head = f"question {interp.values.get('topic', 'other')}"
+    else:
+        head = " ".join(x for x in (interp.kind, interp.intent or "") if x)
+    values = " ".join(f"{k}={v}" for k, v in interp.values.items() if k not in ("topic", "asks"))
+    return " ".join(x for x in (head, values) if x)
 
 
 class Interpreter(Protocol):

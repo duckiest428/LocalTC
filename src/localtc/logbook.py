@@ -280,7 +280,7 @@ class Logbook:
             return None
         folder = Path(line.recording)
         log = FlightLog(started=_created(folder))
-        for event in Recording(folder).events(skip=("traffic_snapshot", "llm_exchange", "nearby_airports", "airport_data")):
+        for event in Recording(folder).events(skip=("traffic_snapshot", "llm_exchange", "atc_decision", "nearby_airports", "airport_data")):
             log.feed(event)
         fresh = log.finish(None)
         if fresh is None:
@@ -317,7 +317,7 @@ class Logbook:
 
 
 # Everything in a recording but the aircraft's identity, for reading only that.
-_NOT_IDENTITY = ("ownship_state", "traffic_snapshot", "llm_exchange", "nearby_airports", "airport_data", "atc_transmission",
+_NOT_IDENTITY = ("ownship_state", "traffic_snapshot", "llm_exchange", "atc_decision", "nearby_airports", "airport_data", "atc_transmission",
                  "transcript", "ptt_pressed", "ptt_released", "readback_evaluated", "phase_changed", "session_note")
 
 

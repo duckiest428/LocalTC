@@ -32,6 +32,7 @@ from localtc.sim_api import (
     AirportData,
     AtcTransmission,
     BusEvent,
+    FlightArrived,
     RequestAirportData,
     SessionInfo,
     SessionNote,
@@ -98,7 +99,7 @@ def _in_flight_keep_alive(setting: str) -> str:
 async def language_model(cfg: Config, source: SimSource):
     """The model backend for this session, or None (grammar only). Never fails the session."""
     llm = cfg.llm
-    if not llm.enabled or (llm.understanding == "off" and not llm.phrasing):
+    if not llm.enabled or (llm.mode == "off" and not llm.phrasing):
         return None
     if isinstance(source, ReplaySource) and llm.replay != "live":
         if llm.replay == "off":
@@ -139,13 +140,13 @@ _WARMING = threading.Lock()  # held while a warm-up loads the model
 
 def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | None = None,
             patience_s: float = 15.0) -> float | None:
-    """Load the model, and read both its prompts (understanding and phrasing), before the first real call:
+    """Load the model, and read its prompts (understanding, phrasing, rewording), before the first real call:
     Ollama keeps what it has read, so a call then only reads its own last lines. Then one ordinary call, to see
     how long one takes on this PC now (the sim running): ATC's wait follows it (``llm.backend.waits``), and the
     pilot hears when it's slower than ``wait_s``. Returns seconds taken."""
     from localtc.atc_core.llm import build_request
     from localtc.atc_core.llm.backend import PACE_FACTOR
-    from localtc.atc_core.llm.phrase import phrase_request
+    from localtc.atc_core.llm.phrase import phrase_request, reword_request
     from localtc.atc_core.llm.understand import load_examples
     from localtc.atc_core.readback import InterpretContext
 
@@ -161,6 +162,7 @@ def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | N
         # Phrasing first, understanding last: where Ollama keeps one prompt read, it's the one the pilot's first
         # call needs.
         for request in (phrase_request("radio check", "answer", {"callsign": "November 1 2 3"}),
+                        reword_request("radio check", "read you five"),
                         build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples())):
             reply = backend.complete(request, timeout_s=timeout_s)
             if reply.text is None:
@@ -184,15 +186,16 @@ def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | N
                     "card to the sim, on the CPU alone: Quick Settings → ATC → \"Run the language model on the CPU only\".", where.describe())
     if pace and wait_s and PACE_FACTOR * pace > wait_s:
         log.warning("The language model takes about %.1f s a call on this PC right now, too close to ATC's wait of "
-                    "%.0f s: ATC waits up to %.0f s for it instead. For quicker answers, a smaller model (Quick Settings "
-                    "→ Models) or fewer calls to it (Quick Settings → ATC → the grammar first).",
+                    "%.0f s: ATC waits up to %.0f s for it instead. For quicker answers, fewer calls to it: Quick Settings → "
+                    "ATC → Script or model → Semi or Fully scripted.",
                     pace, wait_s, min(PACE_FACTOR * pace, patience_s))
     if where is not None and status is not None:
         on_disk = status.sizes.get(backend.model) or status.sizes.get(f"{backend.model}:latest") or 0
-        # LocalTC keeps two prompts read (understanding and phrasing): two contexts. More is memory for nothing.
-        if on_disk and where.size > 2.6 * on_disk:
-            log.warning("Ollama holds %.1f GB for this %.1f GB model (context %d): room for more than the two contexts "
-                        "LocalTC uses. Setting OLLAMA_NUM_PARALLEL=2 for Ollama frees the rest.",
+        # LocalTC keeps three prompts read (understanding, phrasing, rewording): three contexts. More is memory for
+        # nothing.
+        if on_disk and where.size > 3.4 * on_disk:
+            log.warning("Ollama holds %.1f GB for this %.1f GB model (context %d): room for more than the three contexts "
+                        "LocalTC uses. Setting OLLAMA_NUM_PARALLEL=3 for Ollama frees the rest.",
                         where.size / 1e9, on_disk / 1e9, where.context)
     return seconds
 
@@ -210,14 +213,15 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
     slower = 2.0 if llm.cpu_only and getattr(backend, "cpu_only", False) else 1.0  # a CPU answers in about twice the time
     timeout_s = llm.timeout_s * slower
     budget_s = max(llm.budget_s, llm.timeout_s) * slower  # (a budget shorter than one call would cut every call short)
-    if backend is not None and llm.understanding != "off":
-        interpreter = LlmInterpreter(backend, mode=llm.understanding, timeout_s=timeout_s,
+    if backend is not None and llm.mode != "off":
+        interpreter = LlmInterpreter(backend, mode=llm.mode, timeout_s=timeout_s,
                                      max_attempts=llm.max_attempts, budget_s=budget_s, patience_s=llm.patience_s)
     if backend is not None and llm.phrasing:
         phraser = LlmPhraser(backend, timeout_s=timeout_s, max_attempts=llm.max_attempts, budget_s=budget_s,
                              patience_s=llm.patience_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
+    engine.cfg.gate_radius_m = cfg.session.gate_radius_m
     if cfg.tts.enabled:
         engine.cfg.speech_s_per_char = PIPER_S_PER_CHAR / cfg.tts.rate  # ATC waits for its own words to finish
     return engine
@@ -325,16 +329,18 @@ async def run_session(
         typed_task = (asyncio.create_task(_typed_transmissions(bus, source, ptt=enter_ptt))
                       if (typed_input or enter_ptt) else None)
 
+        arrived: asyncio.Event | None = None
+        if cfg.atc.enabled and cfg.session.auto_stop_at_gate and (session.source_kind == "live" or cfg.session.auto_stop_in_replay):
+            arrived = asyncio.Event()
+            consumers.append(asyncio.create_task(_stop_at_gate(bus.subscribe(FlightArrived), arrived, cfg.session.auto_stop_delay_s)))
         pump_task = asyncio.create_task(pump(source, bus))
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
                                  voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None))
-        if stop is None:
-            await pump_task
-        else:
-            stop_task = asyncio.create_task(stop.wait())
-            await asyncio.wait({pump_task, stop_task}, return_when=asyncio.FIRST_COMPLETED)
-            stop_task.cancel()
+        waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
+        await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
+        for task in waits:
+            task.cancel()
     finally:
         if backend is not None and hasattr(backend, "stop_keeping"):
             # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
@@ -357,6 +363,18 @@ async def run_session(
         if flight_log is not None:
             _save_flight(flight_log, engine, recorder.session_dir if recorder else None)
     return recorder.session_dir if recorder else None
+
+
+async def _stop_at_gate(events: Subscription, arrived: asyncio.Event, delay_s: float) -> None:
+    """Sets ``arrived`` (the session then ends) once ATC sees the aircraft parked at a gate at the destination, after
+    ``delay_s`` for ATC's last words. Once: the session is over after it."""
+    async for event in events:
+        if isinstance(event, FlightArrived):
+            log.info("Arrived: %s at %s. The flight stops in %.0f s (Quick Settings → ATC → Stop the flight at the gate).",
+                     event.gate, event.airport, delay_s, extra=CONSOLE)
+            await asyncio.sleep(delay_s)
+            arrived.set()
+            return
 
 
 def _save_flight(flight_log, engine: object | None, recording: Path | None = None) -> None:

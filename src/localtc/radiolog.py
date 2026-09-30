@@ -11,6 +11,7 @@ from localtc.sim_api import (
     AtisBroadcast,
     BusEvent,
     ConnectionStatus,
+    FlightArrived,
     LlmExchange,
     PhaseChanged,
     RadioChatter,
@@ -61,6 +62,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         return {"kind": "phase", "t": t, "text": f"sim {ev.kind}"}
     if isinstance(ev, SessionNote):
         return {"kind": "note", "t": t, "text": ev.text}
+    if isinstance(ev, FlightArrived):
+        return {"kind": "phase", "t": t, "text": f"arrived: {ev.gate} at {ev.airport}"}
     if isinstance(ev, LlmExchange):
         return None
     return None

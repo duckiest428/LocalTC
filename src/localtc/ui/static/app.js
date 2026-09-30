@@ -697,6 +697,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
+        <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
         <div class="row"><label>Phraseology
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
             .map(([v, t]) => `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${t}</option>`).join("")}</select>
@@ -717,9 +718,16 @@ const Settings = {
           <span class="hint">How long ATC waits for the model before answering without it. Longer is more patient with
             a busy PC (the app shows the controller thinking meanwhile); shorter answers sooner. On the CPU the first two are
             doubled. The app tells you whenever the model runs out of time. From the next flight.</span></div>
-        <div class="row"><label>Understanding
-          <select id="s-understand"><option value="fallback" ${st.llm.understanding === "fallback" ? "selected" : ""}>The grammar first, the model only when stuck (recommended: light on the sim)</option>
-          <option value="primary" ${st.llm.understanding === "primary" ? "selected" : ""}>The model reads every call (slower, costs frames)</option></select></label></div>
+        <div class="row"><label>Script or model
+          <select id="s-llm-mode">${[
+            ["mostly_llm", "Mostly LLM: the model reads and words most calls; the script takes the clearly routine ones (recommended)"],
+            ["llm", "Fully LLM: the model reads and words every call (slowest; the script checks it and steps in when it fails)"],
+            ["semi", "Semi script/LLM: the script for clear routine calls, the model for the rest and for wording off the script"],
+            ["scripted", "Fully scripted: standard phraseology; the model only for a call the script can't read (lightest)"],
+          ].map(([v, t]) => `<option value="${v}" ${st.llm.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">How much ATC leans on the language model, for understanding you and for the words of its replies.
+            Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
+            anything that fails the checks is said in the script's words.</span></label></div>
       </div>
 
       <div class="card">
@@ -831,7 +839,8 @@ const Settings = {
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
-    on("#s-understand", "change", () => this.save("llm", "understanding", val("#s-understand")));
+    on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
+    on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
     on("#s-cpu-only", "change", () => this.save("llm", "cpu_only", $("#s-cpu-only").checked));
     for (const [id, key, low, high] of [["#s-llm-timeout", "timeout_s", 1, 60], ["#s-llm-budget", "budget_s", 1, 120],

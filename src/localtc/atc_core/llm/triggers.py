@@ -31,7 +31,7 @@ from localtc.atc_core.readback.expected import is_expected
 from localtc.atc_core.readback.extract import _has_any
 from localtc.atc_core.readback.intents import EMERGENCY
 from localtc.atc_core.readback.normalize import normalize
-from localtc.atc_core.readback.questions import is_question, question_topic
+from localtc.atc_core.readback.questions import asks, is_question, question_topic
 
 __all__ = ["REASONS", "is_question", "question_topic", "trigger"]
 
@@ -70,8 +70,10 @@ def trigger(grammar: Interpretation, text: str, confidence: float | None = None,
         # The script, read back. Only something riding along with it that the grammar couldn't place is worth
         # the model's time.
         return "compound" if grammar.asked_more else None
-    if grammar.kind == "request" and grammar.values.get("asks"):
-        return "compound"  # a request and a question in one call: the grammar would answer the question by keyword
+    if grammar.kind == "request" and grammar.values.get("asks") and asks(text):
+        # A request and a question in one call ("ready to copy, and what's the weather at Orlando?"): the grammar
+        # would answer the question by its keyword. (A topic word alone isn't asking: "..., altimeter standard".)
+        return "compound"
     if grammar.kind == "request" and grammar.intent == "question" and grammar.values.get("topic", "other") != "other":
         return None  # the grammar knows the topic; ATC answers from the sim's data, or words it (engine._answer)
     if is_question(text) and (grammar.kind == "unknown" or grammar.intent in (None, "acknowledge", "question")):

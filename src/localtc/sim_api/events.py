@@ -159,6 +159,7 @@ class AtcTransmission(Event, tag="atc_transmission"):
     controller: str = ""  # clearance, ground, tower, departure, center, approach
     instruction_id: str | None = None  # phraseology template id
     spoken: str = ""  # text normalized for speech synthesis
+    worded_by: str = ""  # "template" or "model" (the language model's words for it); "": before this was recorded
 
 
 # --- ATC core events (produced by localtc.atc_core) -------------------------
@@ -218,6 +219,30 @@ class LlmExchange(Event, tag="llm_exchange"):
     attempt: int = 1
 
 
+class AtcDecision(Event, tag="atc_decision"):
+    """How ATC came to its answer to one pilot transmission, kept apart: what the grammar read, what the language
+    model read (after the checks), which reading the engine acted on, what it decided, who worded the reply, and
+    why anything the model gave wasn't used. The ``LlmExchange`` events before it have the raw answers."""
+
+    pilot: str  # what the pilot said
+    mode: str = ""  # [llm] mode: scripted, semi, mostly_llm, llm, off
+    trigger: str = ""  # why the grammar's reading alone wasn't enough (atc_core.llm.triggers); "" none
+    grammar: str = ""  # the grammar's reading: "request ready_to_taxi atis=B", "readback correct", "unknown"
+    model: str = ""  # the model's checked reading ("" not asked, or nothing usable)
+    used: str = ""  # the reading acted on: "grammar" or "model"
+    decision: str = ""  # the replies decided, as template ids ("ground.taxi, common.info"); "" nothing said
+    wording: str = ""  # who words each reply, in the same order: "template" or "model"
+    fallback: str = ""  # what of the model's wasn't used, and why ("" all of it was, or it wasn't asked)
+
+
+class FlightArrived(Event, tag="flight_arrived"):
+    """Parked at a gate or stand at the destination after landing, the taxi in over: the flight is done (the session
+    stops on it when [session] auto_stop_at_gate says to). Once a flight."""
+
+    airport: str  # ICAO
+    gate: str  # "Gate B25", "Parking 3", or "parking"
+
+
 class AtisBroadcast(Event, tag="atis_broadcast"):
     """An airport's ATIS, sent when the pilot tunes its frequency and again whenever the letter changes."""
 
@@ -254,7 +279,7 @@ SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, 
                  NearbyAirports]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
-                 AtcThinking]
+                 AtcThinking, AtcDecision, FlightArrived]
 AppEvent = Union[SessionNote]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent]
 

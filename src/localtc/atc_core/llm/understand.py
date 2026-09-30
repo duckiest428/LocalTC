@@ -1,4 +1,7 @@
-"""The language model as the primary reader of pilot transmissions, with the grammar behind it.
+"""The language model as a reader of pilot transmissions, with the grammar beside it.
+
+How much it reads is the pilot's choice (``[llm] mode``, ``MODES``): from only the calls the grammar can't
+read (scripted) to every call (llm). The engine words its replies by the same mode (``engine._worded_by_model``).
 
 The model gets a narrow job: fill in a small JSON form (what kind of call, which intent,
 which values the pilot said) for one transmission, given only the context it needs. It
@@ -33,6 +36,7 @@ from localtc.atc_core.llm.grounding import (
     missing_cue,
 )
 from localtc.atc_core.llm.triggers import is_question, question_topic
+from localtc.atc_core.readback.questions import asks
 from localtc.atc_core.llm.triggers import trigger as find_trigger
 from localtc.atc_core.phraseology import slots as slot_types
 from localtc.atc_core.phraseology import speech
@@ -52,12 +56,35 @@ from localtc.atc_core.readback.interpreter import (
     PendingReadback,
     SayAgainInterpreter,
     Status,
+    reading,
 )
 from localtc.atc_core.readback.normalize import PHONETIC, Token, normalize
 from localtc.atc_core.values import Approach
 from localtc.sim_api import LlmExchange
 
-Mode = Literal["primary", "fallback", "off"]
+Mode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]
+MODES: dict[str, str] = {
+    # The script (grammar, state machine, templates) does the work; the model is asked only about a call the grammar
+    # can't read, and what it makes of it goes back through the script.
+    "scripted": "Fully scripted",
+    # The script for calls it clearly recognizes; the model for anything ambiguous, compound, off the script or
+    # out of the grammar, and for wording what has no template.
+    "semi": "Semi script/LLM",
+    # The model reads most calls and words the replies to them; the script takes a call it is sure is routine.
+    "mostly_llm": "Mostly LLM",
+    # The model reads every call and words every reply; the script checks it and answers when it fails.
+    "llm": "Fully LLM",
+    "off": "Off",
+}
+LEGACY_MODES = {"primary": "llm", "fallback": "semi"}  # the setting's values before the four modes
+# Scripted: why the grammar couldn't read a call. Only then is the model asked (see ``triggers``).
+CANNOT_READ = {"emergency", "question", "parser_failure", "ambiguous", "readback_rejected", "self_correction", "hesitation",
+               "low_confidence", "digits_unsure"}
+# Mostly LLM: calls with a procedure the script runs the same way every time. One of these that the grammar reads
+# with nothing odd about it (no trigger, not a question) is the script's to answer, without the model.
+ROUTINE = {"request_ifr_clearance", "request_pushback", "ready_to_taxi", "ready_for_departure", "checkin", "report_final",
+           "position_report", "clear_of_runway", "request_taxi_parking", "radio_check", "acknowledge", "traffic_report",
+           "report_standard", "going_around"}
 
 SYSTEM = """Fill in a JSON form for an ATC computer from one pilot radio call. The text is speech-to-text and \
 has mistakes. You never reply to the pilot; you only say what the pilot said.
@@ -111,6 +138,7 @@ class Answer:
     topic: str = ""
     values: dict[str, Any] = field(default_factory=dict)  # typed, and every one was said
     guessed: bool = False  # not the model's answer: inferred from the words after its answers failed
+    note: str = ""  # how the checks read it, when not as the model wrote it
 
 
 # --- the prompt -----------------------------------------------------------------------------------------
@@ -358,7 +386,10 @@ def _said_digits(value: str, tokens: list[Token]) -> bool:
     return all(any(t.kind == "number" and t.text.split(".")[0] == d for t in tokens) for d in digits)
 
 
-def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token]) -> Answer:
+def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token], *, asked: bool = False) -> Answer:
+    """The model's answer, checked against the pilot's words. ``asked``: the pilot asked a question and used no
+    word that asks for something done ("request", "can", "could" ...): a request the words don't bear out is then
+    the question (the tokens alone lose the question mark)."""
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -425,6 +456,11 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token])
         else:
             dropped.append(f"{name}={data[name]}")
     if kind == "request" and (problem := missing_cue(intent, tokens)):
+        if asked:
+            # "How long is runway 24R?" filed as request_runway: the pilot asked something and asked for nothing.
+            # It's a question, and the phrasing model words the answer; retrying got the same request back.
+            return Answer(kind="question", topic=topic if topic in TOPICS else "other", values=values,
+                          note=f"read as a question ({problem})")
         raise IntentError(problem + "; pick the intent that matches the words, or other if none does")
     if dropped:
         # A model that invents one value has probably misread the whole call ("request direct" taken
@@ -443,7 +479,7 @@ class LlmInterpreter:
         self,
         backend: LlmBackend | None,
         *,
-        mode: Mode = "primary",
+        mode: Mode = "llm",
         timeout_s: float = 2.5,
         max_attempts: int = 2,
         budget_s: float = 4.0,
@@ -451,6 +487,9 @@ class LlmInterpreter:
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.backend = backend
+        mode = LEGACY_MODES.get(mode, mode)  # type: ignore[assignment]
+        if mode not in MODES:
+            raise ValueError(f"unknown mode {mode!r}; one of: {', '.join(MODES)}")
         self.mode: Mode = mode if backend is not None else "off"
         self.timeout_s, self.max_attempts, self.budget_s = timeout_s, max_attempts, budget_s
         self.patience_s = patience_s  # after "stand by": one long try for a model the sim is keeping busy
@@ -462,23 +501,48 @@ class LlmInterpreter:
     def interpret(self, text: str, pending: PendingReadback | None, context: InterpretContext) -> Interpretation:
         grammar = self.grammar.interpret(text, pending, context)
         reason = find_trigger(grammar, text, context.confidence, context=context)
-        # A readback the grammar finds correct is the script read back: nothing for the model to add (unless
-        # something rides along with it), and every call to it costs the sim frames (it shares the machine) and
-        # up to a few seconds of waiting.
-        scripted = pending is not None and grammar.kind == "readback" and grammar.status == "correct" and reason is None
-        if self.mode == "off" or scripted or (self.mode == "fallback" and reason is None):
-            return self._grammar_only(grammar, text, pending, context, reason)
+        if not self.asks_model(grammar, text, pending, reason):
+            return replace(self._grammar_only(grammar, text, pending, context, reason), grammar_read=reading(grammar))
         answer, exchanges = self._ask(text, pending, context, reason)
         # The grammar's reading counts when it makes sense here: a check-in heard on the ground isn't one.
         grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback and (
             grammar.kind == "readback" or is_expected(grammar.intent, context.station_role or role_of(context.station),
                                                       context.phase))
+        fallback = ""
         if answer is None or (answer.guessed and grammar_knows):
             # No usable answer from the model: the grammar's reading, if it has one, beats a guess.
             result = self._grammar_only(grammar, text, pending, context, reason)
+            last = exchanges[-1] if exchanges else None
+            why = f"{last.outcome}: {last.detail}" if last is not None and last.detail else (last.outcome if last else "")
+            fallback = f"model gave no usable reading ({why}); the grammar's used" if why else "the grammar's reading used"
         else:
             result = self._merge(grammar, answer, text, pending, context)
-        return replace(result, trigger=reason, exchanges=tuple(exchanges))
+            if answer.guessed:
+                fallback = "model gave no usable reading; guessed from the words"
+        model_read = "" if answer is None or answer.guessed else reading(result)
+        return replace(result, trigger=reason, exchanges=tuple(exchanges), grammar_read=reading(grammar),
+                       model_read=model_read, fallback=fallback)
+
+    def asks_model(self, grammar: Interpretation, text: str, pending: PendingReadback | None, reason: str | None) -> bool:
+        """Whether this mode has the model read the call, given what the grammar made of it and why that may not be
+        enough (``reason``, a trigger)."""
+        if self.mode == "off":
+            return False
+        if self.mode == "llm":
+            return True
+        if self.mode == "scripted":
+            return reason in CANNOT_READ
+        # A readback the grammar finds correct is the script read back: nothing for the model to add (unless
+        # something rides along with it: then ``reason`` is "compound"). Every call to the model costs the sim
+        # frames (it shares the machine) and seconds of waiting.
+        correct_readback = pending is not None and grammar.kind == "readback" and grammar.status == "correct"
+        if self.mode == "semi":
+            return reason is not None
+        # Mostly LLM: the model, unless the grammar is sure this is a routine call.
+        routine = reason is None and (correct_readback or (
+            grammar.kind == "request" and grammar.intent in ROUTINE and not grammar.values.get("asks")
+            and not is_question(text)))
+        return not routine
 
     # -- asking ---------------------------------------------------------------------------------------
 
@@ -486,6 +550,8 @@ class LlmInterpreter:
              reason: str | None) -> tuple[Answer | None, list[LlmExchange]]:
         assert self.backend is not None
         tokens = without_callsign(normalize(text), context.callsign)  # its digits are not values
+        # Asked something, and nothing done: "how long is runway 24R?" (never "can we get 24R?").
+        asked = (is_question(text) or asks(text)) and not {t.text for t in tokens} & REQUEST_WORDS
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
         intent_errors = 0
@@ -509,8 +575,8 @@ class LlmInterpreter:
                 record(reply.error.split(":")[0] or "error", reply.error)
                 break  # a slow or missing model won't be faster on a second try
             try:
-                answer = parse_answer(reply.text, pending, tokens)
-                answer = self._check_phase(answer, context)
+                answer = parse_answer(reply.text, pending, tokens, asked=asked)
+                answer = self._check_phase(answer, context, asked)
             except AnswerError as exc:
                 intent_errors += isinstance(exc, IntentError)
                 record("invalid", str(exc))
@@ -519,7 +585,7 @@ class LlmInterpreter:
                     ("user", f"That answer can't be used: {exc}. Reply with the corrected JSON only."),
                 ))
                 continue
-            record("used")
+            record("used", answer.note)
             return answer, exchanges
         words = {t.text for t in tokens}
         if exchanges and (topic := question_topic(text)) is not None:
@@ -533,11 +599,15 @@ class LlmInterpreter:
         return None, exchanges
 
     @staticmethod
-    def _check_phase(answer: Answer, context: InterpretContext) -> Answer:
+    def _check_phase(answer: Answer, context: InterpretContext, asked: bool = False) -> Answer:
         """The schema already limits the intents to this controller and phase; a model that ignores the
-        schema (or a recorded answer from before) is held to it here."""
+        schema (or a recorded answer from before) is held to it here. A question filed as an impossible request
+        is still the question."""
         if answer.kind == "request" and answer.intent not in allowed_intents(context):
-            raise IntentError(f"{answer.intent} is not possible in phase {context.phase}")
+            problem = f"{answer.intent} is not possible in phase {context.phase}"
+            if asked:
+                return Answer(kind="question", topic=answer.topic or "other", note=f"read as a question ({problem})")
+            raise IntentError(problem)
         return answer
 
     # -- combining with the grammar -------------------------------------------------------------------

@@ -48,6 +48,7 @@ from localtc.atc_core.facilities import (
     sector_center,
 )
 from localtc.atc_core.llm import LlmPhraser
+from localtc.atc_core.llm.phrase import spoken_as
 from localtc.atc_core.llm.triggers import question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
@@ -60,6 +61,7 @@ from localtc.atc_core.readback import (
     PendingReadback,
     SayAgainInterpreter,
 )
+from localtc.atc_core.readback.interpreter import reading
 from localtc.atc_core.readback.callsign_check import judge as judge_callsign
 from localtc.atc_core.readback.extract import frequencies, same_approach
 from localtc.atc_core.readback.intents import match_intents
@@ -95,10 +97,12 @@ from localtc.sim_api import (
     Airport,
     AirportData,
     AtcAlert,
+    AtcDecision,
     AtcThinking,
     AtcTransmission,
     AtisBroadcast,
     BusEvent,
+    FlightArrived,
     LlmExchange,
     NearbyAirports,
     OwnshipState,
@@ -163,6 +167,18 @@ PARKED_AHEAD_S = 4.0  # ... for this long is one the taxi is heading into
 PLAIN_QUESTION_WORDS = 6  # more than this, besides the call-up and courtesy, is asking more than a topic
 COURTESY = {"please", "thanks", "thank", "you", "very", "much", "hey", "hi", "hello", "good", "morning", "afternoon",
             "evening", "day", "and", "uh", "um", "er", "sir", "ma'am"}
+# Words that ask for more about the topic than its word: "how long is runway 24R" is not "which runway".
+QUALIFIERS = {"long", "length", "wide", "width", "far", "distance", "why", "when", "elevation", "surface", "closed", "open",
+              "until", "delay", "delays", "busy", "whether", "else", "other", "another"}
+HOW_QUALIFIERS = {"many", "much", "big", "high", "old"}  # after "how" ("how many", never "thank you very much")
+# Replies the model doesn't reword: nothing to them but the callsign and a word, or already the model's or the data's.
+NO_REWORD = {"common.say_again", "common.station_say_again", "common.roger", "common.readback_correct", "common.info",
+             "common.unable"}
+ARRIVED_S = 5.0  # stopped at a gate at the destination this long: the flight is over (``_arrived_at_gate``)
+DESTINATION_NM = 3.0  # this close to the destination airport's reference point is at it
+PLACE_WORDS = {"at", "in", "near", "around", "over"}  # "... at <a place>": here only if the place is
+NEARBY_NM = 20.0  # the departure or destination airport this close: the sim's weather here is its weather
+UNAVAILABLE = Phrase("unable, that information is not available", "unable, that information is not available")
 # Words that put a question somewhere else, or later, than the sim's data here and now.
 ELSEWHERE = {"route", "enroute", "en", "along", "ahead", "destination", "forecast", "forecasted", "tomorrow", "later",
              "there", "at", "in", "near", "around", "over", "arrival", "arriving"}
@@ -281,6 +297,7 @@ class EngineConfig:
     transition_ft: int = 0  # 0 = the region's transition altitude (atc_core.region); otherwise this everywhere
     phraseology: str = "auto"  # "auto": FAA or ICAO by where the controller is; or "faa" / "icao" always
     notams: bool = False  # notices on the ATIS, which ATC works to (the app's default is on: [atc] notams)
+    gate_radius_m: float = 30.0  # this close to a gate or parking spot at the destination is parked at it (``arrived``)
 
 
 @dataclass
@@ -295,6 +312,8 @@ class _Scheduled:
     on_issue: Callable[[], None] | None = None
     note: Phrase | None = None  # said after the instruction: weather, the ATIS, a caution
     reply: bool = False  # an answer to the pilot (goes out with the sim paused; ATC's own calls wait)
+    worded_by: str = "template"  # "model": ``worded`` is the language model's words for it (checked), said instead
+    worded: Phrase | None = None  # ... without the callsign, which the template gives
 
 
 class AtcEngine(VfrMixin, DiversionMixin):
@@ -402,6 +421,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._deferred: Transcript | None = None  # the model missed it once: it gets a second, longer look
         self._deferred_facility: Facility | None = None  # ... asked of this controller
         self._patient = False  # answering that one now
+        self._interp: Interpretation | None = None  # what the pilot's call was read as (for ``AtcDecision``)
+        self._not_used: list[str] = []  # what of the model's wasn't used on this call, and why
+        self._arrived_since: float | None = None  # stopped at a gate at the destination since then
+        self._arrived = False  # ... and said so (once a flight)
+        self._landed = False  # landed and taxiing in, this session
 
     # --- public ---------------------------------------------------------------------------
 
@@ -749,14 +773,53 @@ class AtcEngine(VfrMixin, DiversionMixin):
             out += self._on_phase_change(change, own)
         if not self.tracker.paused:
             out += self._monitor(own)  # paused, the world stands still: no calls of ATC's own
+        out += self._arrived_at_gate(own)
         out += self._pending_alerts
         self._pending_alerts = []
         return out
+
+    def _arrived_at_gate(self, own: OwnshipState) -> list[BusEvent]:
+        """Parked at a gate or stand at the destination after landing, the taxi in over: ``FlightArrived``, once a flight
+        (the session stops the flight on it when [session] auto_stop_at_gate says to). Near the airport,
+        on a runway or taxiway, at a gate at another airport, still rolling or with a taxi instruction still going:
+        not yet."""
+        st, t = self.state, own.t
+        if self._arrived or not self._landed or st.flight.destination is None or st.phase != P.PARKED.value:
+            self._arrived_since = None
+            return []
+        geo = self.geometry(st.flight.destination)
+        stopped = own.on_ground and own.gs_kt < 1.0 and not own.on_runway and not self.tracker.context.on_runway
+        taxiing = st.pending is not None or any(item.instruction_id.startswith("ground.") for item in self._scheduled)
+        gate = self._gate_at(geo, own) if geo is not None and geo.distance_nm(own.lat, own.lon) <= DESTINATION_NM else None
+        if gate is None or not stopped or taxiing:
+            self._arrived_since = None
+            return []
+        if self._arrived_since is None:
+            self._arrived_since = t
+        if t - self._arrived_since < ARRIVED_S:
+            return []
+        self._arrived = True
+        return [FlightArrived(t=t, airport=st.flight.destination, gate=gate)]
+
+    def _gate_at(self, geo: AirportGeometry, own: OwnshipState) -> str | None:
+        """The gate or parking spot the aircraft is at (within [session] gate_radius_m of it, or its own size), or None."""
+        here = geo.xy(own.lat, own.lon)
+        near = [(math.dist(here, geo.xy(g.spot.lat, g.spot.lon)), g) for g in stands.gates(geo)]
+        near = [(d, g) for d, g in near if d <= max(g.spot.radius_m, self.cfg.gate_radius_m)]
+        if near:
+            return min(near, key=lambda dg: dg[0])[1].display
+        spots = [p for p in geo.airport.parking
+                 if math.dist(here, geo.xy(p.lat, p.lon)) <= max(p.radius_m, self.cfg.gate_radius_m)]
+        return "parking" if spots else None
 
     def _on_phase_change(self, change: PhaseChanged, own: OwnshipState) -> list[BusEvent]:
         st, t = self.state, change.t
         out: list[BusEvent] = []
         phase = P(change.phase)
+        if phase is P.TAXI_IN and change.previous == P.LANDING.value:
+            self._landed = True  # down at the end of a flight: a gate now is the end of it
+        elif phase is P.TAKEOFF:
+            self._landed = False  # off again (a touch and go, another leg)
         if change.previous is not None and P(change.previous) is P.PARKED and st.assignments.departure_gate is None:
             geo = self.geometry(st.flight.origin) if st.flight.origin else None
             gate = stands.parked_at(geo, own.lat, own.lon) if geo is not None else None
@@ -1589,11 +1652,101 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
     def _on_pilot(self, ev: Transcript) -> list[BusEvent]:
         self._answering = True  # whatever is scheduled now answers the pilot, and goes out even with the sim paused
+        self._interp, self._not_used = None, []
+        before = len(self._scheduled)
         try:
             out = self._answer_pilot(ev)
+            replies = [item for item in self._scheduled[before:] if item.reply]
+            out += self._word_replies(replies, ev)
         finally:
             self._answering = False
-        return out + self._model_timeouts(out, ev.t)
+        return out + [self._decision(ev, replies)] + self._model_timeouts(out, ev.t)
+
+    @property
+    def llm_mode(self) -> str:
+        """How much ATC leans on the language model (``[llm] mode``): scripted, semi, mostly_llm, llm, or off."""
+        return getattr(self.interpreter, "mode", "off")
+
+    def _word_replies(self, replies: list[_Scheduled], ev: Transcript) -> list[BusEvent]:
+        """The model's words for the script's replies, where the mode has the model word them: every reply (llm), or
+        the replies to a call the model read (mostly_llm). Each is checked to say what the script decided, all of it
+        and nothing more (``phrase.check_reworded``); what fails is said in the template's words, and why is kept."""
+        mode, interp = self.llm_mode, self._interp
+        if self.phraser is None or not replies or interp is None or mode not in ("mostly_llm", "llm"):
+            return []
+        understood = [x for x in interp.exchanges if getattr(x, "purpose", "") == "understand"]
+        if mode == "mostly_llm" and not understood:
+            return []  # the script was sure it's routine, and answered it
+        if understood and understood[-1].outcome in ("timeout", "error"):
+            self._not_used.append("wording: the template's (the model ran out of time reading the call)")
+            return []  # it just ran out of time: another call to it would too, and the pilot is waiting
+        callsign = self._callsign()
+        callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
+        out: list[BusEvent] = []
+        for item in replies:
+            if item.worded_by != "template" or item.instruction_id in NO_REWORD:
+                continue
+            body = self._reply_body(item)
+            if body is None:
+                continue
+            text, exchanges = self.phraser.reword(pilot=ev.text, scripted=body, callsigns=callsigns, t=ev.t,
+                                                  trigger=interp.trigger or "")
+            out += exchanges
+            if text is None:
+                last = exchanges[-1] if exchanges else None
+                why = (f"{last.outcome}: {last.detail}" if last.detail else last.outcome) if last is not None else "no answer"
+                self._not_used.append(f"wording of {item.instruction_id}: the template's (the model's {why})")
+                continue
+            item.worded = Phrase(text, spoken_as(text, self._slot_forms(item.slots)))
+            item.worded_by = "model"
+        return out
+
+    def _reply_body(self, item: _Scheduled) -> str | None:
+        """What the template says for ``item`` after the callsign (the first of its wordings), or None when it
+        doesn't start with the callsign (then it's left as it is)."""
+        callsign = self._callsign()
+        if item.facility.controller in self.state.comms.contacted and not callsign.is_airline:
+            callsign = callsign.short
+        try:
+            rendered = self.library.render(item.instruction_id, {**item.slots, "callsign": callsign},
+                                           controller=item.facility.controller, choose=lambda n: 0)
+        except Exception:
+            return None
+        head = speech.callsign_display(callsign) + ", "
+        if not rendered.text.startswith(head):
+            return None
+        return rendered.text[len(head):].rstrip(" .") or None
+
+    @staticmethod
+    def _slot_forms(slots: dict[str, Any]) -> list[tuple[str, str]]:
+        """(display, spoken) for each value a reply carries: how the voice says the model's words for it."""
+        from localtc.atc_core.phraseology.slots import SLOTS
+
+        forms: list[tuple[str, str]] = []
+        for name, value in slots.items():
+            slot = SLOTS.get(name)
+            if slot is None or name == "callsign" or not isinstance(value, slot.value_type):
+                continue
+            try:
+                forms.append((slot.display(value), slot.spoken(value)))
+                if name == "taxi_route":
+                    forms += [(str(part), speech.taxi_route((part,))) for part in value]
+            except Exception:
+                continue
+        return forms
+
+    def _decision(self, ev: Transcript, replies: list[_Scheduled]) -> AtcDecision:
+        """The record of how this call was answered (``AtcDecision``)."""
+        interp = self._interp
+        not_used = ([interp.fallback] if interp is not None and interp.fallback else []) + self._not_used
+        model = interp.model_read if interp is not None else ""
+        return AtcDecision(
+            t=ev.t, pilot=ev.text, mode=self.llm_mode, trigger=(interp.trigger or "") if interp is not None else "",
+            grammar=(interp.grammar_read or reading(interp)) if interp is not None else "",
+            model=model, used="model" if interp is not None and interp.source == "llm" else "grammar",
+            decision=", ".join(item.instruction_id for item in replies),
+            wording=", ".join(item.worded_by for item in replies), fallback="; ".join(not_used),
+        )
 
     def _model_timeouts(self, out: list[BusEvent], t: float) -> list[BusEvent]:
         """An ``llm_timeout`` alert whenever the language model ran out of time on the pilot's call: the app says so
@@ -1602,7 +1755,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if not missed:
             return []
         waited = max(o.latency_ms for o in missed) / 1000
-        what = "phrasing a reply" if all(o.purpose == "phrase" for o in missed) else "reading your call"
+        what = "wording a reply" if all(o.purpose in ("phrase", "reword") for o in missed) else "reading your call"
         if any(isinstance(o, AtcThinking) and o.busy for o in out):
             patience = getattr(self.interpreter, "patience_s", None)
             more = f" (up to {patience:.0f} s)" if patience else ""
@@ -1672,6 +1825,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             # Without the language model: "request frequency for tower" is still clearly a question.
             interp = replace(interp, kind="request", intent="question", values={"topic": topic}, needs_fallback=False)
         st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, interp))
+        self._interp = interp
         out: list[BusEvent] = list(interp.exchanges)
         if not self._patient and self._model_needs_time(interp, pending):
             # A question, or something off the script, and the model didn't answer in time (the sim shares the
@@ -2565,17 +2719,71 @@ class AtcEngine(VfrMixin, DiversionMixin):
                     st.flags.add("handoff_tower")  # the pilot has it now; no second "contact tower"
                 self._handoff(t, "common.contact", facility, target, delay=True)
                 return []
-        message = self._answer_message(topic)
-        if self.phraser is not None and (getattr(self.interpreter, "mode", "") == "primary"
-                                         or not self._plain_question(interp.text or "", facility)):
-            # Asked more than the topic's word: "any bad weather en route to Orlando?" isn't "say the weather", and
-            # the local wind and altimeter don't answer it. The model words the answer to what was asked, from the
-            # facts (the data's own answer among them), and says what isn't known.
-            return self._phrase(interp, facility, t, "answer", known=message)
-        if message is not None:
+        text = interp.text or ""
+        if (lengths := self._runway_lengths(text, facility)) is not None:
+            message, answers_it = lengths, True  # "how long is runway 24R?": the airport data has it
+        else:
+            message = self._answer_message(topic)
+            # The sim's data answers the question only when it asks for the topic and nothing more: "say altimeter",
+            # not "how long is runway 24R" (which isn't "which runway") or "any weather en route" (not here and now).
+            answers_it = message is not None and self._asks_only_topic(text, facility, topic)
+        plain = answers_it and self._plain_question(text, facility)
+        if self.phraser is not None and (self.llm_mode in ("mostly_llm", "llm") or not plain):
+            # The model words the answer to what was asked, from the facts (the data's answer among them when it is
+            # one), and says what isn't known. Failing that, the data's answer if it answers it, else "not available":
+            # never the answer to a different question.
+            return self._phrase(interp, facility, t, "answer", known=message if answers_it else None)
+        if answers_it:
             self._schedule(t, "common.info", {"message": message}, facility)
             return []
-        return self._phrase(interp, facility, t, "answer")
+        self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
+        return []
+
+    def _airport_here(self, facility: Facility | None) -> str | None:
+        """The airport a question to ``facility`` is about by default: its own, else the one the flight is at or going to."""
+        st = self.state
+        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        return (facility.airport if facility is not None else None) or (st.flight.destination if arriving else st.flight.origin)
+
+    def _runway_lengths(self, text: str, facility: Facility) -> Phrase | None:
+        """The answer to "how long is runway 24R?" (or "the runway": the one in use) from the airport data, or None
+        when that isn't the question or the data has no such runway."""
+        words = re.findall(r"[a-z']+", text.lower())
+        if "runway" not in words or not ({"long", "length"} & set(words)):
+            return None
+        geo = self.geometry(self._airport_here(facility))
+        if geo is None:
+            return None
+        ends = {end.ident: r for r in geo.airport.runways for end in (r.primary, r.secondary)}
+        # "24 right", "two four R": (24, "R"); a number alone is either side.
+        said = {(int(m.group(1)), (m.group(2) or "")[:1].upper()) for m in re.finditer(
+            r"(?<![\d.])(\d{1,2})(?![\d.])(?:\s*(left|right|center|centre|l|r|c)\b)?", " ".join(t.text for t in normalize(text)))}
+        asked = [ident for ident in ends if (m := re.fullmatch(r"(\d{1,2})([LRC]?)", ident))
+                 and any(n == int(m.group(1)) and side in ("", m.group(2)) for n, side in said)]
+        if not asked and (in_use := self._runway_in_use(self.state.aircraft)) in ends:
+            asked = [in_use]
+        if not asked:
+            return None
+        parts = [Phrase(*self.library.fill("runway {runway} is {length} feet", {"runway": ident, "length":
+                                          int(round(ends[ident].length_m * 3.28084))}, context="runway length"))
+                 for ident in asked]
+        return sum(parts[1:], parts[0])
+
+    def _asks_only_topic(self, text: str, facility: Facility, topic: str) -> bool:
+        """A question about its topic, here and now: not how long or wide, when or why, or somewhere else ("the
+        winds at Boeing" to Boeing Tower is here; "the altimeter in Quebec" from Montreal isn't). The weather's the
+        sim's here and now; the runway, squawk and the rest are the flight's, arrival included."""
+        words = re.findall(r"[a-z']+", text.lower())  # as said: normalizing makes "Quebec" the letter Q
+        later = (ELSEWHERE - PLACE_WORDS) if topic in ("altimeter", "wind", "weather") else set()
+        if set(words) & (QUALIFIERS | later) or any(a == "how" and b in HOW_QUALIFIERS for a, b in itertools.pairwise(words)):
+            return False
+        here = {"the", "this", "field", "airport", "here", "your", "our", "station"} | set(facility.station.lower().split())
+        own = self.state.aircraft
+        for icao in (facility.airport, self.state.flight.origin, self.state.flight.destination):
+            geo = self.geometry(icao)
+            if geo is not None and (icao == facility.airport or own is not None and geo.distance_nm(own.lat, own.lon) <= NEARBY_NM):
+                here |= {icao.lower()} | set(re.findall(r"[a-z]+", self._airport_name(icao).lower()))
+        return not any(w in PLACE_WORDS and i + 1 < len(words) and words[i + 1] not in here for i, w in enumerate(words))
 
     def _plain_question(self, text: str, facility: Facility) -> bool:
         """A question the sim's data answers by its topic alone: short ("say altimeter", "what's the wind") and
@@ -2639,13 +2847,23 @@ class AtcEngine(VfrMixin, DiversionMixin):
         message, exchanges = self.phraser.reply(
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger="question" if decision == "answer" else "unsupported_request",
+            required=known.display if known is not None else "",
         )
-        if message is None and known is not None:
+        if message is not None:
+            self._schedule(t, "common.info", {"message": message}, facility, worded_by="model")
+            return list(exchanges)
+        last = exchanges[-1] if exchanges else None
+        why = (f"{last.outcome}: {last.detail}" if last.detail else last.outcome) if last is not None else "no answer"
+        if known is not None:
             self._schedule(t, "common.info", {"message": known}, facility)
-        elif message is None:
-            self._schedule(t, "common.unable", {}, facility)
+            said = "the sim's data answered"
+        elif decision == "answer":
+            self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
+            said = "said it isn't available"
         else:
-            self._schedule(t, "common.info", {"message": message}, facility)
+            self._schedule(t, "common.unable", {}, facility)
+            said = "said unable"
+        self._not_used.append(f"{decision}: the model's wording wasn't used ({why}); {said}")
         return list(exchanges)
 
     def _altitude_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
@@ -2744,6 +2962,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
             facts["runway in use"] = runway
         if (info := self.current_atis(st.flight.destination if arriving else st.flight.origin)) is not None:
             facts["ATIS"] = f"information {info.letter}"
+        if (geo := self.geometry(self._airport_here(facility))) is not None and geo.airport.runways:
+            # "How long is runway 24R?": the sim's airport data has it, so the answer is a fact, not a guess.
+            name = speech.airport_name(geo.airport.name, geo.airport.icao)
+            facts[f"{name} runways"] = ", ".join(
+                f"{r.primary.ident}/{r.secondary.ident} {int(round(r.length_m * 3.28084, -2))} ft" for r in geo.airport.runways)
+            facts[f"{name} elevation"] = f"{int(round(geo.airport.elev_ft))} ft"
         if st.phase:
             facts["phase"] = st.phase.lower().replace("_", " ")
         return facts
@@ -3197,6 +3421,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         expects_readback: bool = True,
         on_issue: Callable[[], None] | None = None,
         note: Phrase | None = None,
+        worded_by: str = "template",
     ) -> None:
         due = t + (self._random().uniform(*self.cfg.response_delay_s) if delay else 0.0)
         if self._scheduled:
@@ -3204,7 +3429,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             # problem the pilot reported, then the answer to the rest of the call, never the other way round.
             due = max(due, max(item.due for item in self._scheduled))
         self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue,
-                                          note, self._answering))
+                                          note, self._answering, worded_by))
 
     def _transmitting(self, t: float) -> bool:
         """True while the pilot holds push-to-talk.
@@ -3252,6 +3477,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         rendered = self.library.render(
             item.instruction_id, slots, controller=facility.controller,
             choose=lambda n: personality.wording(facility.station, item.instruction_id, n, self._voice_rng))
+        if item.worded is not None:
+            # The model's words for it (checked to say the same). What's read back is still the template's.
+            rendered = replace(rendered, text=f"{speech.callsign_display(callsign)}, {item.worded.display}.",
+                               spoken=f"{speech.callsign(callsign)}, {item.worded.spoken}.")
         if item.note is not None:
             rendered = replace(rendered, text=f"{rendered.text.rstrip('.')}, {item.note.display}.",
                                spoken=f"{rendered.spoken.rstrip('.')}, {item.note.spoken}.")
@@ -3288,6 +3517,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return AtcTransmission(
             t=t, station=facility.station, frequency_mhz=facility.mhz, text=rendered.text, controller=facility.controller,
             instruction_id=item.instruction_id, spoken=rendered.spoken,
+            worded_by="model" if item.worded_by == "model" else "template",
         )
 
     # --- helpers ------------------------------------------------------------------------------------------------

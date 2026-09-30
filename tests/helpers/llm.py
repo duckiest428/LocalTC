@@ -7,19 +7,20 @@ from typing import Any
 from localtc.atc_core.llm import LlmReply, LlmRequest
 from localtc.llm.eval import fill_schema
 
-PILOT_RE = re.compile(r'^Pilot(?: asked)?: "(.*)"$', re.MULTILINE)
+PILOT_RE = re.compile(r'^Pilot(?: asked| said)?: "(.*)"$', re.MULTILINE)
 TIMEOUT = "TIMEOUT"
 
 
 class ScriptedBackend:
-    """``understand``/``phrase`` map the pilot's words to an answer: a dict (filled out to the schema, as a
+    """``understand``/``phrase``/``reword`` map the pilot's words to an answer: a dict (filled out to the schema, as a
     constrained model would), a raw string, TIMEOUT, or a list of those for successive attempts.
     Anything unscripted gets an error, which the interpreter treats like a missing model."""
 
     model = "scripted"
 
-    def __init__(self, understand: dict[str, Any] | None = None, phrase: dict[str, Any] | None = None) -> None:
-        self.answers = {"understand": dict(understand or {}), "phrase": dict(phrase or {})}
+    def __init__(self, understand: dict[str, Any] | None = None, phrase: dict[str, Any] | None = None,
+                 reword: dict[str, Any] | None = None) -> None:
+        self.answers = {"understand": dict(understand or {}), "phrase": dict(phrase or {}), "reword": dict(reword or {})}
         self.requests: list[LlmRequest] = []
 
     def complete(self, request: LlmRequest, *, timeout_s: float) -> LlmReply:
@@ -29,7 +30,7 @@ class ScriptedBackend:
         if match is None or "can't be used" in request.messages[-1][1]:
             match = next((m for role, text in reversed(request.messages) if role == "user"
                           and (m := PILOT_RE.search(text)) and "can't be used" not in text), None)
-        answer = self.answers[request.purpose].get(match.group(1)) if match else None
+        answer = self.answers.get(request.purpose, {}).get(match.group(1)) if match else None
         if isinstance(answer, list):
             answer = answer.pop(0) if len(answer) > 1 else answer[0]
         if answer is None:

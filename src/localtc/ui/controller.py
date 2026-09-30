@@ -638,6 +638,9 @@ class AppController:
                 raise HttpError(400, str(exc)) from None
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
+        interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None
+        if cfg.llm.mode != self.cfg.llm.mode and cfg.llm.mode != "off" and getattr(interpreter, "backend", None) is not None:
+            interpreter.mode = cfg.llm.mode  # the model's already there: the new mode from the next call
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()

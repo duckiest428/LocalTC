@@ -48,8 +48,13 @@ airport_dirs = []             # extra folders of <ICAO>.json airport files
 enabled = true
 base_url = "http://127.0.0.1:11434"
 model = "llama3.2:3b"         # ollama pull llama3.2:3b
-understanding = "fallback"    # fallback: only what the grammar can't read (light on the sim); primary: every call; off
-phrasing = true               # word answers to questions and declined requests (routine calls stay templated)
+mode = "mostly_llm"           # how much ATC leans on the model, for reading calls and wording replies:
+                              #   scripted: the script; the model only for a call the grammar can't read
+                              #   semi: the script for clear routine calls; the model for the rest, and its wording off the script
+                              #   mostly_llm: the model reads and words most calls; the script takes the clearly routine ones
+                              #   llm: the model reads and words every call (the script checks it, and answers when it fails)
+                              #   off: the grammar and the templates only
+phrasing = true               # the model may word replies at all (false: templates only, whatever the mode)
 timeout_s = 4.0               # per model call; on timeout the grammar's answer is used
 budget_s = 6.0                # per pilot transmission, including one retry
 patience_s = 15.0             # off-script calls the model missed: one more try this long (the app shows ATC thinking)
@@ -59,6 +64,12 @@ num_ctx = 3072                # the model's working memory, in tokens: a call ne
 cpu_only = true               # the model on the CPU only, leaving the graphics card to the sim (timeouts doubled); from the next flight
 cpu_threads = 0               # CPU threads for the model; 0: Ollama's choice
 replay = "recorded"           # in replays: "recorded" answers, "live" model, or "off"
+
+[session]
+auto_stop_at_gate = true      # stop the flight once parked at a gate or stand at the destination (stopped, taxi done)
+auto_stop_in_replay = false   # ... in a replay too
+gate_radius_m = 30.0          # this close to a gate or parking spot counts as at it
+auto_stop_delay_s = 8.0       # time for ATC's last words before the flight stops
 
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false

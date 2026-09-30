@@ -41,7 +41,7 @@ EVERY_GROUND_S = 2.0
 TURN_DEG = 4.0
 CLIMB_FT = 150.0
 RADIO_KINDS = ("atc", "pilot", "copilot", "atis", "tuned", "alert", "phase")
-SKIP = ("traffic_snapshot", "llm_exchange", "nearby_airports", "session_note", "ptt_pressed", "ptt_released")
+SKIP = ("traffic_snapshot", "llm_exchange", "atc_decision", "nearby_airports", "session_note", "ptt_pressed", "ptt_released")
 HANDOFF_TO = re.compile(r"contact ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*)")
 
 

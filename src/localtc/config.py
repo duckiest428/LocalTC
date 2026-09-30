@@ -148,14 +148,21 @@ class AtcConfig(_Section):
     notams: bool = True
 
 
+LlmMode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]
+# The setting before the modes: "primary" was the model reading every call, "fallback" the grammar first.
+LEGACY_LLM_MODES = {"primary": "llm", "fallback": "semi", "off": "off"}
+
+
 class LlmConfig(_Section):
     """The local language model (Ollama). Without it, or when it's slow, the grammar does the work."""
 
     enabled: bool = True
     base_url: str = "http://127.0.0.1:11434"
     model: str = "llama3.2:3b"
-    understanding: Literal["primary", "fallback", "off"] = "fallback"  # primary: every transmission; fallback: only
-    phrasing: bool = True  # word replies that have no template (questions, declined requests)
+    # How much ATC leans on the model rather than its script, for reading calls and for wording replies (see
+    # atc_core.llm.understand.MODES): scripted, semi, mostly_llm, llm, or off (the grammar and templates alone).
+    mode: LlmMode = "mostly_llm"
+    phrasing: bool = True  # the model may word replies at all (off: templates only, whatever the mode)
     timeout_s: float = 4.0  # per model call (Quick Settings → ATC → Language model timing)
     budget_s: float = 6.0  # per transmission, including one retry (at least timeout_s)
     # A question or anything off the script that the model couldn't answer in time: the app shows the controller
@@ -213,6 +220,17 @@ class CopilotConfig(_Section):
     delay_max_s: float = 4.0
 
 
+class SessionConfig(_Section):
+    """When a flight ends by itself."""
+
+    # Parked at a gate or stand at the destination after landing (stopped, taxi done): the flight is stopped, as the
+    # Stop button would.
+    auto_stop_at_gate: bool = True
+    auto_stop_in_replay: bool = False  # ... in a replay too (off: a replay plays to its end)
+    gate_radius_m: float = 30.0  # this close to a gate or parking spot counts as at it
+    auto_stop_delay_s: float = 8.0  # time for ATC's last words before the flight stops
+
+
 class UiConfig(_Section):
     """The LocalTC app window."""
 
@@ -240,6 +258,7 @@ class Config(_Section):
     flight: FlightConfig = msgspec.field(default_factory=FlightConfig)
     atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
+    session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
@@ -282,13 +301,13 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] = os.envi
     data: dict = {}
     if config_path.is_file():
         with open(config_path, "rb") as fh:
-            data = tomllib.load(fh)
+            data = _migrate(tomllib.load(fh))
     elif explicit:
         raise ConfigError(f"config file not found: {config_path}")
     overlay_path = settings_path() if settings == "default" else settings
     if overlay_path is not None and overlay_path.is_file():
         try:
-            data = merge(data, tomllib.loads(overlay_path.read_text(encoding="utf-8")))
+            data = merge(data, _migrate(tomllib.loads(overlay_path.read_text(encoding="utf-8"))))
         except (OSError, tomllib.TOMLDecodeError) as exc:
             raise ConfigError(f"{overlay_path}: {exc} (delete it to go back to config/localtc.toml)") from exc
 
@@ -302,6 +321,18 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] = os.envi
             raise ConfigError(f"LOCALTC_SOURCE must be 'live' or 'replay', got {kind!r}")
         cfg.source.kind = kind
     return cfg
+
+
+def _migrate(data: dict) -> dict:
+    """One file's settings from an older version, in today's names: ``[llm] understanding`` is ``[llm] mode`` (the
+    app's next save writes it so). Each file on its own, so a saved choice still wins over the config file's."""
+    llm = data.get("llm")
+    if isinstance(llm, dict) and "understanding" in llm:
+        llm = dict(llm)
+        old = llm.pop("understanding")
+        llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
+        data = {**data, "llm": llm}
+    return data
 
 
 # --- the app's saved settings --------------------------------------------------------------------------------

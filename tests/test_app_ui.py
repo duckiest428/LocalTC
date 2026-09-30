@@ -106,7 +106,7 @@ def test_profiles_follow_the_hardware():
     assert models.recommend(models.Hardware("win32", 4, 8.0)).id == "light"
     cfg = Config()
     models.apply_profile(cfg, models.profile("light"))
-    assert (cfg.llm.model, cfg.voice.model) == ("llama3.2:1b", "tiny.en")
+    assert (cfg.llm.model, cfg.voice.model) == ("llama3.2:3b", "tiny.en")  # one language model: the one tested
     catalog = models.catalog()
     assert {"llm", "whisper", "voice", "profiles"} <= catalog.keys()
     assert all(p["llm"] in {m["id"] for m in catalog["llm"]} for p in catalog["profiles"])

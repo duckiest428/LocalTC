@@ -341,9 +341,9 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
     print(f"Now: {where.describe() if where else 'not loaded (odd: Ollama unloaded it straight away)'}"
           + (f", context {where.context}" if where and where.context else ""))
     on_disk = status.sizes.get(cfg.llm.model) or status.sizes.get(f"{cfg.llm.model}:latest") or 0
-    if where and on_disk and where.size > 2.6 * on_disk:
+    if where and on_disk and where.size > 3.4 * on_disk:
         print(f"  Ollama holds {where.size / 1e9:.1f} GB for a {on_disk / 1e9:.1f} GB model: room for several contexts "
-              "(OLLAMA_NUM_PARALLEL above 2). Two is all LocalTC uses: OLLAMA_NUM_PARALLEL=2 frees the rest.")
+              "(OLLAMA_NUM_PARALLEL above 3). Three is all LocalTC uses: OLLAMA_NUM_PARALLEL=3 frees the rest.")
     if where and where.gpu and where.on_gpu < 0.99:
         print("  The model is split between the graphics card and the CPU: there wasn't room for it all. That's the slowest"
               " way to run it. Try --cpu (and [llm] cpu_only = true), or a smaller model.")
@@ -351,7 +351,7 @@ def _cmd_llm_check(args: argparse.Namespace) -> int:
     after_phrase, before_phrase = prompt_s[3], prompt_s[1]
     if after_phrase > max(1.0, 5 * before_phrase):
         print(f"  Phrasing pushed the understanding prompt out of Ollama's cache: it was read again ({after_phrase:.1f} s). "
-              "Ollama is keeping one context: set the environment variable OLLAMA_NUM_PARALLEL=2 and restart Ollama.")
+              "Ollama is keeping one context: set the environment variable OLLAMA_NUM_PARALLEL=3 and restart Ollama.")
     else:
         print("  Ollama keeps both prompts (understanding and phrasing) read: switching between them costs nothing.")
     limit = cfg.llm.timeout_s * (2 if cfg.llm.cpu_only else 1)
@@ -379,7 +379,7 @@ def _cmd_llm_eval(args: argparse.Namespace) -> int:
 
     warm_up(backend)  # a flight starts warm: the first case shouldn't measure the load
     print(f"Running {len(cases)} cases against {cfg.llm.model} (timeout {cfg.llm.timeout_s} s per call) ...")
-    interpreter = LlmInterpreter(backend, mode="primary", timeout_s=cfg.llm.timeout_s, budget_s=cfg.llm.budget_s,
+    interpreter = LlmInterpreter(backend, mode="llm", timeout_s=cfg.llm.timeout_s, budget_s=cfg.llm.budget_s,
                                  max_attempts=cfg.llm.max_attempts)
     results = run_cases(interpreter, cases)
     print(format_results(results))

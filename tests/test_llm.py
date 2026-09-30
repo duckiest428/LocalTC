@@ -42,6 +42,7 @@ from localtc.sim_api import (
     SIM_EVENT_TYPES,
     AirportData,
     AtcAlert,
+    AtcDecision,
     AtcTransmission,
     LlmExchange,
     OwnshipState,
@@ -72,7 +73,7 @@ def test_seeded_case(case):
 def test_seeded_cases_in_a_whole_flight(request):
     """Awkward calls seeded into the synthetic IFR flight: model answers, rejections, retries, a timeout."""
     backend = edge_backend()
-    result = run_scenario(EDGE, interpreter=LlmInterpreter(backend, mode="fallback"), phraser=LlmPhraser(backend))
+    result = run_scenario(EDGE, interpreter=LlmInterpreter(backend, mode="semi"), phraser=LlmPhraser(backend))
     golden = EDGE.with_suffix(".golden.txt")
     if request.config.getoption("--update-goldens") or not golden.exists():
         golden.write_text(result.transcript, encoding="utf-8")
@@ -357,12 +358,21 @@ def test_timeout_uses_the_grammar_and_does_not_retry():
     assert [(e.outcome, e.trigger) for e in result.exchanges] == [("timeout", "")]
 
 
-def test_a_correct_readback_never_waits_for_the_model():
+@pytest.mark.parametrize("mode", ["scripted", "semi", "mostly_llm"])
+def test_a_correct_readback_never_waits_for_the_model(mode):
     """The model shares the PC with the sim: a readback the grammar finds correct is the script, read back."""
     backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
-    result = LlmInterpreter(backend, mode="primary").interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
+    result = LlmInterpreter(backend, mode=mode).interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
     assert (result.kind, result.status, result.source) == ("readback", "correct", "grammar")
     assert result.exchanges == () and backend.requests == []
+
+
+def test_fully_llm_reads_even_a_correct_readback_and_the_grammar_stands_in_when_it_fails():
+    backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
+    result = LlmInterpreter(backend, mode="llm").interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
+    assert (result.kind, result.status, result.source) == ("readback", "correct", "grammar")
+    assert [e.outcome for e in result.exchanges] == ["timeout"]
+    assert result.fallback.startswith("model gave no usable reading (timeout")
 
 
 def test_the_budget_caps_retries():
@@ -453,20 +463,25 @@ def test_a_question_about_more_than_here_is_answered_by_the_model():
     route = "Ground, DP69. Do we have any bad weather on route to Quebec today? We've lost internet access up here"
     backend = ScriptedBackend(phrase={route: '{"reply":"no weather reports along your route available, wind calm, altimeter 30.10"}'})
     engine, own = cyul_engine(backend)
-    engine.interpreter.mode = "fallback"  # grammar first: the grammar knows it's a weather question
+    engine.interpreter.mode = "semi"  # grammar first: the grammar knows it's a weather question
     out = say(engine, own, route, mhz=121.0)
     assert atc(out) == ["DP69, no weather reports along your route available, wind calm, altimeter 30.10."]
     shown = backend.requests[-1].prompt
-    assert "here and now: wind calm, altimeter 30.10" in shown  # the data's answer is one of its facts
+    assert "here and now wind calm, altimeter 30.10" not in shown  # the local weather doesn't answer "en route"
+    assert "wind calm; altimeter 30.10" in shown  # ... though it's among the facts
     # A plain one is still answered straight from the data, without waiting for the model.
     asked = len(backend.requests)
     later = msgspec.structs.replace(own, t=own.t + 20)
     assert atc(say(engine, later, "ground, what's the altimeter", mhz=121.0)) == ["DP69, altimeter 30.10."]
     assert len(backend.requests) == asked
-    # And when the model has no answer, the data's answer rather than "unable".
+    # When the model has no answer: the data's answer if it answers the question ...
     later = msgspec.structs.replace(own, t=own.t + 40)
-    assert atc(say(engine, later, "any idea what the weather is doing at Quebec?", mhz=121.0)) == [
+    assert atc(say(engine, later, "any idea what the weather is doing at Montreal?", mhz=121.0)) == [
         "DP69, wind calm, altimeter 30.10."]
+    # ... and never the answer to a different one: Montreal's weather isn't Quebec's.
+    later = msgspec.structs.replace(own, t=own.t + 60)
+    assert atc(say(engine, later, "any idea what the weather is doing at Quebec?", mhz=121.0)) == [
+        "DP69, unable, that information is not available."]
 
 
 def test_a_question_to_clearance_is_not_a_clearance_request():
@@ -499,7 +514,7 @@ def test_unknown_questions_are_worded_by_the_model_or_unable():
     engine, own = cyul_engine(backend)
     assert atc(say(engine, own, "how long is the taxi", mhz=121.0)) == ["DP69, unable, information not available."]
     later = msgspec.structs.replace(own, t=own.t + 20)
-    assert atc(say(engine, later, "is the cafe open", mhz=121.0)) == ["DP69, unable."]
+    assert atc(say(engine, later, "is the cafe open", mhz=121.0)) == ["DP69, unable, that information is not available."]
 
 
 def test_altitude_requests_are_decided_by_the_engine():
@@ -523,11 +538,12 @@ def test_altitude_requests_are_decided_by_the_engine():
 
 def test_recorded_answers_replay_the_same_session():
     """Model calls go into the recording; replaying them gives the same ATC without a model."""
-    backend = ScriptedBackend({"ground, what's the altimeter": {"kind": "question", "topic": "altimeter"}})
+    backend = ScriptedBackend({"ground, what's the altimeter": {"kind": "question", "topic": "altimeter"}},
+                              phrase={"ground, what's the altimeter": '{"reply":"altimeter 30.10"}'})
     engine, own = cyul_engine(backend)
     first = say(engine, own, "ground, what's the altimeter", mhz=121.0)
     exchanges = [e for e in first if isinstance(e, LlmExchange)]
-    assert [e.outcome for e in exchanges] == ["used"]
+    assert [(e.purpose, e.outcome) for e in exchanges] == [("understand", "used"), ("phrase", "used")]
 
     replayed, own = cyul_engine(RecordedBackend.from_events(exchanges))
     again = say(replayed, own, "ground, what's the altimeter", mhz=121.0)
@@ -536,7 +552,8 @@ def test_recorded_answers_replay_the_same_session():
 
     changed, own = cyul_engine(RecordedBackend.from_events(exchanges))
     miss = say(changed, own, "ground, what is the altimeter", mhz=121.0)  # a different prompt: not in the recording
-    assert [e.outcome for e in miss if isinstance(e, LlmExchange)] == ["recorded_miss"]
+    assert [e.outcome for e in miss if isinstance(e, LlmExchange)] == ["recorded_miss", "recorded_miss"]
+    assert atc(miss) == atc(first)  # the grammar and the sim's data, without the model
 
 
 def test_the_corpus_context_matches_the_engine():
@@ -546,18 +563,25 @@ def test_the_corpus_context_matches_the_engine():
     assert pending.required == ("altitude", "frequency", "squawk") and context.last_atc.startswith("DP69, cleared to Quebec")
 
 
-def test_llm_exchanges_record_the_whole_flight():
+@pytest.mark.parametrize("mode", ["llm", "mostly_llm"])
+def test_llm_exchanges_record_the_whole_flight(mode):
     """Everything the model was asked during the real CYUL recording's replay is in the output, in order."""
     backend = ScriptedBackend()
     engine, own = cyul_engine(backend)
+    engine.interpreter.mode = mode
     outputs = []
     for event in Recording(CYUL).events():
         if isinstance(event, (*SIM_EVENT_TYPES, Transcript)):
             outputs += engine.handle(event)
     exchanges = [o for o in outputs if isinstance(o, LlmExchange)]
     transcripts = [e for e in Recording(CYUL).events() if isinstance(e, Transcript)]
-    # One call per pilot transmission, except the readbacks the grammar found correct.
-    assert {e.t for e in exchanges} < {t.t for t in transcripts}
+    read = {e.t for e in exchanges if e.purpose == "understand"}
+    if mode == "llm":
+        assert read == {t.t for t in transcripts}  # every transmission
+    else:
+        assert read < {t.t for t in transcripts}  # all but the routine calls the grammar is sure of
+    decisions = [o for o in outputs if isinstance(o, AtcDecision)]
+    assert len(decisions) == len(transcripts) and all(d.mode == mode for d in decisions)
     assert [e.t for e in exchanges] == sorted(e.t for e in exchanges)
     assert all(e.outcome == "error" for e in exchanges)  # nothing scripted: every one fell back to the grammar
 

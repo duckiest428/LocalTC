@@ -69,7 +69,10 @@ a new minor version adds features, a patch fixes them.
 - The sim's wind and altimeter answer a question only when the pilot's own words are about them, not just because the model labelled it "weather".
 - A reply ending with the callsign was turned away for the callsign's digits.
 - The warm-up warning said ATC would wait "up to 35 s instead" of a 40 s setting: it only ever waits longer, and only says so then.
-- A question to Clearance was taken as a request for the IFR clearance, because of the station's name.
+- **Mid-conversation, a question about another flight ("what aircraft is United 2117 in?") got "station calling, say again your callsign"**, from the script, before the model ever saw it. A question in the middle of a conversation with that controller is now taken as yours. And when ATC does ask for the callsign and you answer with it, ATC answers the call you made instead of repeating its last line.
+- A question the model filed as "say again" got ATC's last transmission repeated: "say again" now needs words that ask for a repeat.
+- A question to Clearance was taken as a request for the IFR clearance, because of the station's name, whether the grammar or the model read it.
+- "One last thing, how long is runway 19L?" also gave runways 01L and 01R: "one" was taken as runway 1.
 - A request with a question in it went to the grammar alone, which answered the question by its keyword.
 - A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.
 - The path flown before the Flight Tracker was opened never reached it, or a phone away from the PC's network: the app sent it in a form the account connection turned down.

@@ -178,6 +178,8 @@ ARRIVED_S = 5.0  # stopped at a gate at the destination this long: the flight is
 DESTINATION_NM = 3.0  # this close to the destination airport's reference point is at it
 PLACE_WORDS = {"at", "in", "near", "around", "over"}  # "... at <a place>": here only if the place is
 NEARBY_NM = 20.0  # the departure or destination airport this close: the sim's weather here is its weather
+CALLSIGN_ASKED_S = 60.0  # "say again your callsign" -- the callsign, this soon after: the earlier call was this flight's
+CONVERSATION_S = 180.0  # this flight and this controller talked this recently: still the same conversation
 CONVERSE_WORDS = 4  # a clear call this long that no procedure fits: in the model's modes, the model replies to it
 CONVERSE_CONFIDENCE = 0.6  # ... when speech-to-text was this sure of the words (below: "say again" is the honest reply)
 SAID = {"common.say_again": "say again", "common.roger": "roger", "common.pleasantry": "the script's small talk",
@@ -431,6 +433,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._arrived_since: float | None = None  # stopped at a gate at the destination since then
         self._arrived = False  # ... and said so (once a flight)
         self._landed = False  # landed and taxiing in, this session
+        self._callsign_asked: tuple[Transcript, Facility] | None = None  # the call that got "say again your callsign"
 
     # --- public ---------------------------------------------------------------------------
 
@@ -1815,13 +1818,25 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 return [self._alert(t, "out_of_range", f"{facility.station} is {heard.distance_nm:.0f} nm away; "
                                                        f"its radio reaches about {heard.range_nm:.0f} nm at this altitude")]
             return []
+        if (asked := self._callsign_asked) is not None and asked[1] == facility and t - asked[0].t <= CALLSIGN_ASKED_S \
+                and len(rest := without_callsign(said := normalize(ev.text), self._callsign())) < len(said) \
+                and len(rest) <= 2:  # the callsign, and little or nothing else
+            # "Station calling, say again your callsign" -- "United 1596": it was this flight. The call it made is
+            # answered now, not the callsign on its own.
+            self._callsign_asked = None
+            ev = msgspec.structs.replace(ev, text=f"{ev.text.rstrip(' .')}, {asked[0].text}",
+                                         confidence=asked[0].confidence)
+            return self._answer_pilot(ev)
         if self.cfg.callsign_check and ev.source != "copilot":
             verdict = judge_callsign(normalize(ev.text), self._callsign())
+            if verdict == "other" and self._talking_about_another_flight(ev.text, facility, t):
+                verdict = "ours"
             if verdict == "other" or (verdict == "close" and pending is None):
                 # Somebody else's callsign ("Westjet 452", "Air Canada 452"), or one slip away from ours on a call
                 # that would start something: not answered as this flight's. A readback, which the controller is
                 # waiting for from this flight, is taken with a near-miss callsign.
                 st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+                self._callsign_asked = (ev, facility)  # if it was this flight after all, its call is answered then
                 self._schedule(t, "common.station_say_again", {"station": facility.station}, facility, expects_readback=False)
                 return []
         if CONFIRM_WORDS & set(re.findall(r"[a-z]+", ev.text.lower())):
@@ -1923,6 +1938,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._schedule(ev.t, "common.say_again", {}, facility)
         done = [AtcThinking(t=ev.t, station=facility.station, frequency_mhz=facility.mhz, busy=False)] if facility else []
         return out + done + self._flush(self._t)
+
+    def _talking_about_another_flight(self, text: str, facility: Facility, t: float) -> bool:
+        """A question about another flight in the middle of this one's conversation ("what aircraft is United 2117
+        in?"): the callsign is what it's asking about, not who's calling. The same voice, still talking to the same
+        controller a moment later: a controller knows who that is."""
+        recent = any(e.controller == facility.controller and t - e.t <= CONVERSATION_S for e in self.state.exchanges)
+        return recent and (is_question(text) or asks(text))
 
     def _model_replies(self) -> bool:
         """Whether a call nothing could classify still goes to the model for its reply: always, in the modes where
@@ -2805,8 +2827,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return None
         ends = {end.ident: r for r in geo.airport.runways for end in (r.primary, r.secondary)}
         # "24 right", "two four R": (24, "R"); a number alone is either side.
-        said = {(int(m.group(1)), (m.group(2) or "")[:1].upper()) for m in re.finditer(
-            r"(?<![\d.])(\d{1,2})(?![\d.])(?:\s*(left|right|center|centre|l|r|c)\b)?", " ".join(t.text for t in normalize(text)))}
+        said = self._runways_said(text)
         asked = [ident for ident in ends if (m := re.fullmatch(r"(\d{1,2})([LRC]?)", ident))
                  and any(n == int(m.group(1)) and side in ("", m.group(2)) for n, side in said)]
         if not asked and (in_use := self._runway_in_use(self.state.aircraft)) in ends:
@@ -2817,6 +2838,23 @@ class AtcEngine(VfrMixin, DiversionMixin):
                                           int(round(ends[ident].length_m * 3.28084))}, context="runway length"))
                  for ident in asked]
         return sum(parts[1:], parts[0])
+
+    @staticmethod
+    def _runways_said(text: str) -> set[tuple[int, str]]:
+        """The runways named in ``text``: (24, "R") for "24 right" or "two four R"; a number with no side counts only
+        next to the word "runway" ("one last thing, how long is runway 19L" is 19L, never runway 1), and only when no
+        runway with a side was named."""
+        tokens = normalize(text)
+        sided, bare = set(), set()
+        for i, tok in enumerate(tokens):
+            if tok.kind != "number" or not tok.text.isdigit() or not 1 <= int(tok.text) <= 36:
+                continue
+            after = tokens[i + 1].text if i + 1 < len(tokens) else ""
+            if after in ("l", "r", "c", "left", "right", "center", "centre"):
+                sided.add((int(tok.text), after[0].upper()))
+            elif "runway" in {t.text for t in tokens[max(0, i - 2):i + 3]}:
+                bare.add((int(tok.text), ""))
+        return sided or bare
 
     def _asks_only_topic(self, text: str, facility: Facility, topic: str) -> bool:
         """A question about its topic, here and now: not how long or wide, when or why, or somewhere else ("the

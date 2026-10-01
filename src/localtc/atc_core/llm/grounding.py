@@ -103,6 +103,9 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "request_flight_following": ({"following", "advisories", "service"},),
     "request_class_b": ({"class", "bravo", "airspace", "b"},),
     "radio_check": ({"radio", "check", "read", "hear"},),
+    # Asking for a repeat says so: a question the model filed as "say again" got the last transmission repeated.
+    "say_again": ({"say", "again", "repeat", "missed", "pardon", "come", "didn't", "didnt", "last", "garbled", "broken",
+                   "blocked", "unreadable"},),
     "pleasantry": ({"how", "day", "doing", "going", "evening", "morning", "afternoon", "busy", "weekend"},),
     "report_problem": ({"failure", "failed", "inoperative", "problem", "malfunction", "working", "unreliable", "issue",
                         "trucks", "equipment"},),

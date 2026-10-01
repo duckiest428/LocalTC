@@ -146,12 +146,12 @@ class GrammarInterpreter:
         callsign_heard = bool(ELEMENTS["callsign"](tokens, context.callsign))
         matches = match_intents(tokens)
         chosen, ambiguous = resolve(matches)
+        if chosen is not None and chosen.intent == "request_ifr_clearance" and asks(text) \
+                and not _has_any(tokens, *CLEARANCE_ASKED):
+            # "Cleveland Clearance, Frontier 3916, any bad weather en route?", "San Francisco Clearance, is there any
+            # restricted airspace around?": the station's name, and a question for it; nobody asked for a clearance.
+            chosen, ambiguous = None, False
         if (topic := question_topic(text)) is not None and (chosen is None or chosen.intent != EMERGENCY):
-            if chosen is not None and chosen.intent == "request_ifr_clearance" and asks(text) \
-                    and not _has_any(tokens, *CLEARANCE_ASKED):
-                # "Cleveland Clearance, Frontier 3916, any bad weather en route?": the station's name, and a
-                # question for it; nobody asked for a clearance.
-                chosen, ambiguous = None, False
             if chosen is None or (chosen.intent in ("acknowledge", "pleasantry") and asks(text)):
                 # "Any idea what our departure runway will be? Thank you very much": a question, not a thank-you.
                 chosen, ambiguous = IntentMatch("question", {"topic": topic}), False

@@ -392,7 +392,7 @@ EMPTY = {"", "none", "null", "nil", "n/a", "na", "unknown", "-", "no", "not give
 
 
 def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token], *, asked: bool = False,
-                 question: bool = False) -> Answer:
+                 question: bool = False, station: str | None = None) -> Answer:
     """The model's answer, checked against the pilot's words. ``asked``: the pilot asked a question and used no
     word that asks for something done ("request", "can", "could" ...): a request the words don't bear out is then
     the question (the tokens alone lose the question mark). ``question``: the words ask something at all: a request
@@ -475,7 +475,11 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
         else:
             dropped.append(f"{name}={data[name]}")
     note = "; ".join(f"left out: {i}" for i in ignored)
-    if kind == "request" and (problem := missing_cue(intent, tokens)):
+    # The station's name is no word of the call's: "Clearance" in "San Francisco Clearance, any restricted airspace
+    # around?" doesn't ask for a clearance.
+    named = set(re.findall(r"[a-z]+", (station or "").lower()))
+    said = [t for t in tokens if not (t.kind == "word" and t.text in named)]
+    if kind == "request" and (problem := missing_cue(intent, said)):
         if asked or (question and topic in TOPICS and topic != "other"):
             # "How long is runway 24R?" filed as request_runway: the pilot asked something and asked for nothing.
             # It's a question, and the phrasing model words the answer; retrying got the same request back.
@@ -596,7 +600,7 @@ class LlmInterpreter:
                 record(reply.error.split(":")[0] or "error", reply.error)
                 break  # a slow or missing model won't be faster on a second try
             try:
-                answer = parse_answer(reply.text, pending, tokens, asked=asked, question=question)
+                answer = parse_answer(reply.text, pending, tokens, asked=asked, question=question, station=context.station)
                 answer = self._check_phase(answer, context, asked)
             except AnswerError as exc:
                 intent_errors += isinstance(exc, IntentError)

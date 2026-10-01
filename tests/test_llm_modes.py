@@ -424,3 +424,57 @@ def test_beyond_facts_end_to_end_and_the_notice_points_to_it():
     assert atc(out) == ["DP69, runway 24R is 200 feet wide."]
     assert "you may answer from what a controller would know" in backend.requests[-1].system
     assert load_config(env={}, settings=None).llm.beyond_facts is False  # off unless the pilot turns it on
+
+
+# --- the third report: the script came back mid-conversation --------------------------------------------------------
+
+SFO_GROUND = InterpretContext(callsign=Callsign("UAL1596"), phase="PARKED", station="San Francisco Clearance",
+                              station_role="clearance")
+
+
+def test_a_question_to_clearance_is_not_the_clearance_by_the_stations_name():
+    text = "And San Francisco Clearance United 1596. Is there any restricted airspace around San Francisco?"
+    assert GrammarInterpreter().interpret(text, None, SFO_GROUND).intent != "request_ifr_clearance"
+    answer = parse_answer('{"kind":"request","intent":"request_ifr_clearance","topic":"weather"}', None,
+                          normalize(text), asked=True, question=True, station="San Francisco Clearance")
+    assert answer.kind == "question"
+
+
+def test_a_question_about_another_flight_mid_conversation_is_still_this_flights():
+    """"What aircraft is United 2117 in?" got "station calling, say again your callsign": the script, and never the
+    model, until the end of the flight."""
+    asked = "Montreal Ground, what aircraft is United 2117 in?"
+    backend = ScriptedBackend({asked: {"kind": "question", "topic": "other"}},
+                              phrase={asked: '{"reply":"unable, information not available"}'})
+    engine, own = cyul_engine(backend)
+    say(engine, own, "Montreal Ground, DP69, what's the altimeter?", mhz=121.0)  # talking already
+    out = say(engine, msgspec.structs.replace(own, t=own.t + 30), asked, mhz=121.0)
+    assert atc(out) == ["DP69, unable, information not available."]
+
+
+def test_after_say_again_your_callsign_the_call_is_answered():
+    cold = "Montreal Ground, what aircraft is United 2117 in?"  # nobody talked to ground yet: who is it?
+    both = f"DP69, {cold}"
+    backend = ScriptedBackend({both: {"kind": "question", "topic": "other"}},
+                              phrase={both: '{"reply":"unable, information not available"}'})
+    engine, own = cyul_engine(backend)
+    assert atc(say(engine, own, cold, mhz=121.0)) == ["Station calling Montreal Ground, say again your callsign."]
+    out = say(engine, msgspec.structs.replace(own, t=own.t + 10), "DP69.", mhz=121.0)
+    assert atc(out) == ["DP69, unable, information not available."]  # the question, answered: not a repeat
+
+
+def test_one_last_thing_is_not_runway_one():
+    engine, own = cyul_engine(ScriptedBackend())
+    assert engine._runways_said("And one last thing. How long is the 24 right runway?") == {(24, "R")}
+    assert engine._runways_said("how long is runway 6") == {(6, "")}
+    assert engine._runways_said("one last thing, how long is the runway") == set()
+
+
+def test_say_again_from_the_model_needs_words_that_ask_for_a_repeat():
+    """The model read "what aircraft is United 2117 in?" as say_again, and ATC repeated its last answer."""
+    with pytest.raises(Exception, match="say_again needs"):
+        parse_answer('{"kind":"request","intent":"say_again"}', None, normalize("United 1596"))
+    asked = parse_answer('{"kind":"request","intent":"say_again"}', None, normalize("what aircraft is United 2117 in"),
+                         asked=True, question=True)
+    assert asked.kind == "question"
+    assert parse_answer('{"kind":"request","intent":"say_again"}', None, normalize("say again the squawk")).intent == "say_again"

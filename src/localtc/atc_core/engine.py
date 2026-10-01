@@ -178,6 +178,8 @@ ARRIVED_S = 5.0  # stopped at a gate at the destination this long: the flight is
 DESTINATION_NM = 3.0  # this close to the destination airport's reference point is at it
 PLACE_WORDS = {"at", "in", "near", "around", "over"}  # "... at <a place>": here only if the place is
 NEARBY_NM = 20.0  # the departure or destination airport this close: the sim's weather here is its weather
+CONVERSE_WORDS = 4  # a clear call this long that no procedure fits: in the model's modes, the model replies to it
+CONVERSE_CONFIDENCE = 0.6  # ... when speech-to-text was this sure of the words (below: "say again" is the honest reply)
 UNAVAILABLE = Phrase("unable, that information is not available", "unable, that information is not available")
 # Words that put a question somewhere else, or later, than the sim's data here and now.
 ELSEWHERE = {"route", "enroute", "en", "along", "ahead", "destination", "forecast", "forecasted", "tomorrow", "later",
@@ -1835,6 +1837,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return out + [AtcThinking(t=t, station=facility.station, frequency_mhz=facility.mhz)]
         if interp.kind == "request" and interp.intent == "acknowledge" and asks(ev.text):
             # A question nobody could make out ("... any idea? Thanks"): not a thank-you to leave unanswered.
+            if self._model_replies(ev, pending):
+                return out + self._phrase(interp, facility, t, "reply", otherwise="common.say_again")
             self._schedule(t, "common.say_again", {}, facility)
             return out
         if interp.intent != "emergency" and (problem := self._problem(ev.text, facility, t)) is not None:
@@ -1864,6 +1868,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
             if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
                 return out + self._give_up_readback(facility, t)
+        if self._model_replies(ev, pending):
+            # The model's modes: a clear call no procedure fits ("would you like a coffee after your shift?", "that's not
+            # parallel, you'd need both 28s") gets the model's reply, not the script's "say again".
+            return out + self._phrase(interp, facility, t, "reply", otherwise="common.say_again")
         if self._patient and pending is None and len(ev.text.split()) >= LONG_STATEMENT_WORDS:
             # Gave the model its time, and still nothing to act on: a long call in the pilot's
             # own words is a statement, not a garbled instruction. "Roger", not "say again" to a paragraph.
@@ -1901,6 +1909,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._schedule(ev.t, "common.say_again", {}, facility)
         done = [AtcThinking(t=ev.t, station=facility.station, frequency_mhz=facility.mhz, busy=False)] if facility else []
         return out + done + self._flush(self._t)
+
+    def _model_replies(self, ev: Transcript, pending: PendingReadback | None) -> bool:
+        """Whether the model words a reply to a call the script has no procedure for: in the modes where it words
+        ATC's replies, to a call heard clearly enough, with no readback waiting."""
+        return (self.phraser is not None and self.llm_mode in ("mostly_llm", "llm") and pending is None
+                and len(re.findall(r"[a-z']+", ev.text.lower())) >= CONVERSE_WORDS
+                and (ev.confidence is None or ev.confidence >= CONVERSE_CONFIDENCE))
 
     @staticmethod
     def _model_needs_time(interp: Interpretation, pending: PendingReadback | None) -> bool:
@@ -2119,6 +2134,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._schedule(t, "common.radio_check", {"station": facility.station}, facility, expects_readback=False)
             return []
         if intent == "pleasantry":
+            if self.phraser is not None and self.llm_mode in ("mostly_llm", "llm"):
+                return self._phrase(interp, facility, t, "reply", otherwise="common.pleasantry")
             self._schedule(t, "common.pleasantry", {}, facility, expects_readback=False)
             return []
         if intent == "report_standard":
@@ -2720,19 +2737,26 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._handoff(t, "common.contact", facility, target, delay=True)
                 return []
         text = interp.text or ""
+        exact = False
         if (lengths := self._runway_lengths(text, facility)) is not None:
-            message, answers_it = lengths, True  # "how long is runway 24R?": the airport data has it
+            message, answers_it, exact = lengths, True, True  # "how long is runway 24R?": the airport data has it
         else:
             message = self._answer_message(topic)
             # The sim's data answers the question only when it asks for the topic and nothing more: "say altimeter",
             # not "how long is runway 24R" (which isn't "which runway") or "any weather en route" (not here and now).
-            answers_it = message is not None and self._asks_only_topic(text, facility, topic)
+            # ... and the pilot's own words are about the topic: the model's label alone ("weather" for "anything going
+            # on at San Francisco?") doesn't make the wind and altimeter the answer.
+            answers_it = message is not None and self._asks_only_topic(text, facility, topic) \
+                and question_topic(text) == topic
         plain = answers_it and self._plain_question(text, facility)
+        # The model's reply must give the data's answer when it is exactly the answer: a runway's length, or a plain
+        # "say altimeter". To "anything going on at San Francisco?" (read as about the weather) it's only a fact.
+        require = exact or plain
         if self.phraser is not None and (self.llm_mode in ("mostly_llm", "llm") or not plain):
             # The model words the answer to what was asked, from the facts (the data's answer among them when it is
             # one), and says what isn't known. Failing that, the data's answer if it answers it, else "not available":
             # never the answer to a different question.
-            return self._phrase(interp, facility, t, "answer", known=message if answers_it else None)
+            return self._phrase(interp, facility, t, "answer", known=message if answers_it else None, require=require)
         if answers_it:
             self._schedule(t, "common.info", {"message": message}, facility)
             return []
@@ -2833,11 +2857,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return self._phrase(interp, facility, t, "decline")
 
     def _phrase(self, interp: Interpretation, facility: Facility, t: float, decision: str,
-                known: Phrase | None = None) -> list[BusEvent]:
+                known: Phrase | None = None, *, require: bool = True, otherwise: str | None = None) -> list[BusEvent]:
         """A reply worded by the model from the facts. ``known``: what the sim's data says to the question, one of
         the facts, and the reply when the model has none."""
         if self.phraser is None:
-            self._schedule(t, "common.unable", {}, facility)
+            self._schedule(t, otherwise or "common.unable", {}, facility, expects_readback=otherwise is None)
             return []
         callsign = self._callsign()
         callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
@@ -2846,8 +2870,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             facts["here and now"] = known.display
         message, exchanges = self.phraser.reply(
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
-            trigger="question" if decision == "answer" else "unsupported_request",
-            required=known.display if known is not None else "",
+            trigger={"answer": "question", "reply": "conversation"}.get(decision, "unsupported_request"),
+            required=known.display if known is not None and require else "",
         )
         if message is not None:
             self._schedule(t, "common.info", {"message": message}, facility, worded_by="model")
@@ -2857,6 +2881,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if known is not None:
             self._schedule(t, "common.info", {"message": known}, facility)
             said = "the sim's data answered"
+        elif otherwise is not None:
+            self._schedule(t, otherwise, {}, facility, expects_readback=False)
+            said = f"said {otherwise}"
         elif decision == "answer":
             self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
             said = "said it isn't available"
@@ -2962,6 +2989,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
             facts["runway in use"] = runway
         if (info := self.current_atis(st.flight.destination if arriving else st.flight.origin)) is not None:
             facts["ATIS"] = f"information {info.letter}"
+            if (ops := info.operations) is not None:
+                # What's going on at the airport ("parallel landings today?", "anything affecting us?"): the ATIS's own.
+                facts["landing runways"] = ", ".join(ops.landing) or "none"
+                facts["departing runways"] = ", ".join(ops.departing) or "none"
+                facts["parallel landings"] = "yes" if ops.simultaneous or len(ops.landing) > 1 else "no"
+                facts["notices"] = ", ".join(n.text(info.icao_style) for n in ops.notices) or "none"
         if (geo := self.geometry(self._airport_here(facility))) is not None and geo.airport.runways:
             # "How long is runway 24R?": the sim's airport data has it, so the answer is a fact, not a guess.
             name = speech.airport_name(geo.airport.name, geo.airport.icao)

@@ -26,13 +26,16 @@ from localtc.sim_api import LlmExchange
 SYSTEM = """You word one short reply for an air traffic controller, in standard radio phraseology. \
 The controller has already decided what to say; you only put it into words.
 - You are the controller named in the facts: answer as that station would.
-- Use only the facts given. Never invent numbers, names or information.
+- Use only the facts given. Never invent numbers, names or information: nothing is closed, restricted, active or \
+delayed unless the facts say so ("notices none": nothing to report).
 - Never give or approve an instruction: no clearances, altitudes, headings, frequencies to contact, squawk codes \
 or taxi routes, and never say "approved". If the pilot asks for something like that, say "unable" and, if it \
 fits, "continue as filed".
-- Answer what the pilot asked. If the facts answer only part of it, give that part and say the rest isn't \
-available (you have no weather reports along the route or at other airports unless the facts say so). If \
-they answer none of it, say "unable, information not available".
+- Decision answer: answer what the pilot asked. If the facts answer only part of it, give that part and say the \
+rest isn't available (you have no weather reports along the route or at other airports unless the facts say so). \
+If they answer none of it, say "unable, information not available".
+- Decision reply: the pilot said something that is no request (small talk, thanks, a remark, a correction). Reply \
+briefly and politely as a busy controller would; if they're right or wrong about something in the facts, say so.
 - At most 20 words. Do not start with the callsign; it is added for you."""
 
 SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"],
@@ -49,6 +52,11 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
      '{"reply":"no weather reports along your route available, San Diego wind 270 at 6, altimeter 29.98"}'),
     ('Pilot asked: "how long until we get there"\nDecision: answer\nFacts: controller Seattle Approach; runway in use 16L',
      '{"reply":"unable, information not available"}'),
+    ('Pilot asked: "how are you doing today"\nDecision: reply\nFacts: controller Denver Ground; phase parked',
+     '{"reply":"doing well, thanks for asking"}'),
+    ('Pilot asked: "so that isn\'t parallel landings, you would need both 28 left and right"\nDecision: reply\n'
+     'Facts: controller San Francisco Tower; landing runways 28R; notices none',
+     '{"reply":"that\'s right, only runway 28R for landing at the moment"}'),
 )
 
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
@@ -56,6 +64,10 @@ BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading",
 # The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
 INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
 NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
+# Claims about the state of things ("runway 19L closed", "restricted airspace active"): only what the facts say.
+STATUS = {"closed", "closure", "closures", "maintenance", "restricted", "restriction", "restrictions", "active", "inactive",
+          "inoperative", "unserviceable", "construction", "tfr", "notam", "notams", "occupying", "occupied", "blocked",
+          "delay", "delays", "holding", "stop", "outage", "parallel", "simultaneous", "congested", "work", "expected", "shortly", "soon"}
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 THOUSANDS_RE = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")  # "10,000": one number
 MAX_WORDS = 25
@@ -95,7 +107,25 @@ def _reply_text(raw: str, callsigns: tuple[str, ...]) -> str:
     for callsign in callsigns:
         if callsign and text.lower().startswith(callsign.lower()):
             text = text[len(callsign):].lstrip(" ,")
+        if callsign and text.lower().endswith(callsign.lower()):  # "..., United 1596" at the end, as pilots hear it too
+            text = text[:-len(callsign)].rstrip(" ,.")
     return text
+
+
+def _check_runways(text: str, facts: dict[str, str]) -> None:
+    """Runways as the facts have them: a pair ("19L/01R") only as the airport has it, and one said to be in use only
+    if the facts say it is."""
+    listed = " ".join(facts.values()).upper()
+    for pair in re.findall(r"\b\d{1,2}[LRC]?/\d{1,2}[LRC]?\b", text.upper()):
+        if not re.search(rf"(?<![\w/]){re.escape(pair)}(?![\w/])", listed):
+            raise PhraseError(f"reply names runway {pair}, which the airport doesn't have")
+    in_use = {d.lstrip("0") for k, v in facts.items() if "in use" in k or k in ("landing runways", "departing runways")
+              for d in re.findall(r"\b\d{1,2}[LRC]?\b", v.upper())}
+    for clause in re.split(r",|;| and | but ", text.lower()):
+        if "in use" in clause or "landing" in clause or "departing" in clause:
+            said = {d.lstrip("0") for d in re.findall(r"\b\d{1,2}[LRC]?\b", clause.upper())}
+            if wrong := sorted(said - in_use):
+                raise PhraseError(f"reply says runway {', '.join(wrong)} is in use; the facts say {', '.join(sorted(in_use)) or 'none'}")
 
 
 def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], required: str = "") -> str:
@@ -111,12 +141,16 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
         raise PhraseError(f"reply gives an instruction ({', '.join(banned)}); only answer or say unable")
     if internal := sorted(set(words) & INTERNAL):
         raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
-    fact_words = set(re.findall(r"[a-z]+", " ".join(facts.values()).lower()))
+    fact_words = set(re.findall(r"[a-z]+", " ".join([*facts, *facts.values()]).lower()))
+    if claims := sorted(set(words) & STATUS - fact_words):
+        raise PhraseError(f"reply says {', '.join(claims)}, which the facts don't say; say only what they say, or that "
+                          "there's nothing to report")
     if navaids := sorted(set(words) & NAVAIDS - fact_words):
         raise PhraseError(f"reply mentions {', '.join(navaids)}, which is not in the facts")
     known = numbers(" ".join(facts.values()))
     if invented := [n for n in NUMBER_RE.findall(THOUSANDS_RE.sub("", text)) if _number(n) not in known]:
         raise PhraseError(f"reply has numbers that are not in the facts: {', '.join(invented)}")
+    _check_runways(text, facts)
     if required and "unable" not in words:
         if missing := sorted(numbers(required) - numbers(text)):
             raise PhraseError(f"reply leaves out {', '.join(missing)}: the answer is \"{required}\" (here and now)")
@@ -158,6 +192,8 @@ REWORD_EXAMPLES: tuple[tuple[str, str], ...] = (
      '{"reply":"climb and maintain 9,000"}'),
     ('Pilot said: "tower, 2LT, 5 mile final 14R"\nReply: "runway 14R, cleared to land, wind 150 at 8"',
      '{"reply":"wind 150 at 8, runway 14R cleared to land"}'),
+    ('Pilot said: "approach, 2LT, radio check"\nReply: "read you five by five"',
+     '{"reply":"loud and clear, five by five"}'),
 )
 
 # Words that make or change an instruction. The script's must all be kept, and none added.

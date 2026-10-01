@@ -275,6 +275,8 @@ def schema(pending: PendingReadback | None, context: InterpretContext | None = N
     else:
         for name in REQUEST_FIELDS:
             props[name] = {"type": "string"}
+        # A letter or nothing: a small model otherwise writes "doing well" or the whole call into it.
+        props["atis"] = {"type": "string", "enum": [chr(c) for c in range(ord("A"), ord("Z") + 1)]}
     return {"type": "object", "properties": props, "required": ["kind"], "additionalProperties": False}
 
 
@@ -386,10 +388,18 @@ def _said_digits(value: str, tokens: list[Token]) -> bool:
     return all(any(t.kind == "number" and t.text.split(".")[0] == d for t in tokens) for d in digits)
 
 
-def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token], *, asked: bool = False) -> Answer:
+EMPTY = {"", "none", "null", "nil", "n/a", "na", "unknown", "-", "no", "not given", "not said"}
+
+
+def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token], *, asked: bool = False,
+                 question: bool = False) -> Answer:
     """The model's answer, checked against the pilot's words. ``asked``: the pilot asked a question and used no
     word that asks for something done ("request", "can", "could" ...): a request the words don't bear out is then
-    the question (the tokens alone lose the question mark)."""
+    the question (the tokens alone lose the question mark). ``question``: the words ask something at all: a request
+    the words don't bear out, with a topic the model named ("can we get a wind report?": wind), is that question.
+
+    A value in a request that isn't one ("atis": "doing well") is left out, noted, and the rest of the answer kept:
+    one junk field is no reason to lose what the model did read."""
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -420,9 +430,10 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
         data = {**data, "approach": f"{approach.strip()} {runway}"}  # "ILS" and runway "06": the ILS 06
     values: dict[str, Any] = {}
     dropped: list[str] = []
+    ignored: list[str] = []
     fields = _model_elements(pending) if pending is not None else REQUEST_FIELDS
     for name in fields:
-        if name not in data:
+        if name not in data or (isinstance(data[name], str) and data[name].strip().lower() in EMPTY):
             continue
         if name in ("fix", "conditions"):
             text = str(data[name]).strip()
@@ -448,25 +459,34 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
                 values[name] = text
             # (Souls and fuel the pilot didn't give are left out, not a reason to lose the emergency: ATC asks.)
             continue
-        value = parse_value(name, data[name])
+        try:
+            value = parse_value(name, data[name])
+        except AnswerError as exc:
+            if pending is not None:
+                raise  # a readback's values are what's checked: no guessing past a bad one
+            ignored.append(str(exc))
+            continue
         if value is None:
             continue
         if grounded(name, value, tokens):
             values[name] = value
+        elif name == "atis" and pending is None:
+            ignored.append(f"the pilot said no information {value}")  # small models fill it in for every call
         else:
             dropped.append(f"{name}={data[name]}")
+    note = "; ".join(f"left out: {i}" for i in ignored)
     if kind == "request" and (problem := missing_cue(intent, tokens)):
-        if asked:
+        if asked or (question and topic in TOPICS and topic != "other"):
             # "How long is runway 24R?" filed as request_runway: the pilot asked something and asked for nothing.
             # It's a question, and the phrasing model words the answer; retrying got the same request back.
             return Answer(kind="question", topic=topic if topic in TOPICS else "other", values=values,
-                          note=f"read as a question ({problem})")
+                          note="; ".join(x for x in (f"read as a question ({problem})", note) if x))
         raise IntentError(problem + "; pick the intent that matches the words, or other if none does")
     if dropped:
         # A model that invents one value has probably misread the whole call ("request direct" taken
         # as an altitude request with a made-up level), so the answer is retried, not patched.
         raise AnswerError("the pilot did not say " + ", ".join(dropped) + "; report only what the pilot said")
-    return Answer(kind=kind, intent=intent, topic=topic, values=values)
+    return Answer(kind=kind, intent=intent, topic=topic, values=values, note=note)
 
 
 # --- the interpreter --------------------------------------------------------------------------------------
@@ -551,7 +571,8 @@ class LlmInterpreter:
         assert self.backend is not None
         tokens = without_callsign(normalize(text), context.callsign)  # its digits are not values
         # Asked something, and nothing done: "how long is runway 24R?" (never "can we get 24R?").
-        asked = (is_question(text) or asks(text)) and not {t.text for t in tokens} & REQUEST_WORDS
+        question = is_question(text) or asks(text)
+        asked = question and not {t.text for t in tokens} & REQUEST_WORDS
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
         intent_errors = 0
@@ -575,7 +596,7 @@ class LlmInterpreter:
                 record(reply.error.split(":")[0] or "error", reply.error)
                 break  # a slow or missing model won't be faster on a second try
             try:
-                answer = parse_answer(reply.text, pending, tokens, asked=asked)
+                answer = parse_answer(reply.text, pending, tokens, asked=asked, question=question)
                 answer = self._check_phase(answer, context, asked)
             except AnswerError as exc:
                 intent_errors += isinstance(exc, IntentError)

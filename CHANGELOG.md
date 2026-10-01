@@ -52,6 +52,14 @@ a new minor version adds features, a patch fixes them.
 - **A question the model filed as a request was turned away.** "How long is the 24 right runway?" came back as a runway request, the check wanted a word like "can" or "request", and the retry said the same, so ATC answered from the script with "expect runway 24L for departure". A call that asks something and asks for nothing is now the question.
 - **When the model's answer is turned away, ATC no longer answers a different question.** It gives the sim's data only when that answers what was asked; otherwise it says the information isn't available. ("Weather at Quebec" isn't Montreal's wind; "how long is the runway" isn't "which runway".)
 - The model's answer must include the data's own answer when there is one: a reply giving another runway's length is turned away.
+- **In the model's modes, the script still answered calls the model had read.**
+  - One junk value in the model's reading (the ATIS letter filled with "doing well", "none" or the whole sentence) threw the reading away; the value is now left out and the rest kept, and the form allows only a letter there.
+  - A question with "can" in it ("can we get a wind report?") filed as another request was turned away; with a topic named, it's the question.
+  - Small talk got the template's line, and a clear remark nothing could place ("would you like a coffee after your shift?", "that's not parallel, you'd need both 28s") got "say again". In Mostly and Fully LLM the model now replies to them, and "say again" comes only if it can't.
+- **The model's answers say only what LocalTC knows.** A reply that calls something closed, restricted, active, delayed or "expected shortly" without the facts saying so is turned away, as is a runway pairing the airport doesn't have or a runway "in use" that isn't. The model is now told the landing and departing runways, whether parallel landings are in use, and the ATIS notices ("none" when there are none).
+- The sim's wind and altimeter answer a question only when the pilot's own words are about them, not just because the model labelled it "weather".
+- A reply ending with the callsign was turned away for the callsign's digits.
+- The warm-up warning said ATC would wait "up to 35 s instead" of a 40 s setting: it only ever waits longer, and only says so then.
 - A question to Clearance was taken as a request for the IFR clearance, because of the station's name.
 - A request with a question in it went to the grammar alone, which answered the question by its keyword.
 - A registration said in full ("November one seven two lima tango, IFR to Boeing Field") wasn't recognised as the flight's own when words followed it.

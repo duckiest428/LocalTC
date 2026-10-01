@@ -10,7 +10,7 @@ from helpers.llm import TIMEOUT, ScriptedBackend
 from test_llm import DP69, _takeoff_pending, atc, cyul_engine, say
 
 from localtc.atc_core.llm import LlmInterpreter
-from localtc.atc_core.llm.phrase import PhraseError, check_reworded, spoken_as
+from localtc.atc_core.llm.phrase import PhraseError, check_reply, check_reworded, spoken_as
 from localtc.atc_core.llm.understand import parse_answer
 from localtc.atc_core.readback import GrammarInterpreter, InterpretContext
 from localtc.atc_core.readback.normalize import normalize
@@ -289,3 +289,80 @@ def test_mostly_llm_is_the_default_and_old_settings_carry_over(tmp_path):
 def test_the_grammar_reads_a_clearance_question_as_a_question():
     heard = GrammarInterpreter().interpret(RUNWAY_LENGTH, None, GROUND)
     assert heard.intent == "question"
+
+
+# --- the second report: Fully LLM, and the script answered anyway ----------------------------------------------------
+
+
+def test_a_junk_value_in_a_request_is_left_out_not_the_whole_reading():
+    """llama3.2:3b filled "atis" with "doing well", "none" and the pilot's whole sentence: every one of those readings
+    was thrown away for it, and the script answered."""
+    said = normalize("San Francisco Clearance, United 1596, we'd like to get our IFR to Denver, please")
+    answer = parse_answer('{"kind":"request","intent":"request_ifr_clearance","atis":"good evening, united 1596"}',
+                          None, said)
+    assert (answer.kind, answer.intent, answer.values) == ("request", "request_ifr_clearance", {})
+    assert "left out: atis" in answer.note
+    assert parse_answer('{"kind":"request","intent":"ready_to_taxi","atis":"none"}', None,
+                        normalize("ground, ready to taxi")).values == {}
+    with pytest.raises(Exception, match="is not a runway"):  # a readback's values are still checked strictly
+        parse_answer('{"kind":"readback","runway":"the long one"}', _takeoff_pending(),
+                     normalize("runway 06L cleared for takeoff"))
+
+
+def test_a_question_with_can_in_it_and_a_topic_is_that_question():
+    text = "can we get a wind report? How the winds gonna be like when we depart?"
+    answer = parse_answer('{"kind":"request","intent":"request_ifr_clearance","topic":"wind"}', None, normalize(text),
+                          asked=False, question=True)
+    assert (answer.kind, answer.topic) == ("question", "wind")
+
+
+@pytest.mark.parametrize(("mode", "model_replies"), [("scripted", False), ("semi", False), ("mostly_llm", True), ("llm", True)])
+def test_small_talk_and_remarks_get_the_models_reply_where_it_words_atcs(mode, model_replies):
+    coffee = "Montreal Ground, DP69, would you like to grab a coffee after your shift today?"
+    doing = "Montreal Ground DP69, how are you doing today?"
+    backend = ScriptedBackend({coffee: {"kind": "unintelligible"}, doing: {"kind": "request", "intent": "pleasantry"}},
+                              phrase={coffee: '{"reply":"appreciate it, maybe another time"}',
+                                      doing: '{"reply":"doing well, thanks for asking"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = mode
+    first = atc(say(engine, own, coffee, mhz=121.0))
+    second = atc(say(engine, msgspec.structs.replace(own, t=own.t + 30), doing, mhz=121.0))
+    if model_replies:
+        assert first == ["DP69, appreciate it, maybe another time."]
+        assert second == ["DP69, doing well, thanks for asking."]
+    else:
+        assert first == ["DP69, say again."] and second[0].startswith("DP69, ") and "thanks" in second[0]
+
+
+def test_when_the_model_has_no_reply_to_a_remark_it_is_say_again():
+    coffee = "Montreal Ground, DP69, would you like to grab a coffee after your shift today?"
+    backend = ScriptedBackend({coffee: {"kind": "unintelligible"}}, phrase={coffee: '{"reply":"cleared for coffee"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "llm"
+    out = say(engine, own, coffee, mhz=121.0)
+    assert atc(out) == ["DP69, say again."]
+    [decision] = [o for o in out if isinstance(o, AtcDecision)]
+    assert "said common.say_again" in decision.fallback
+
+
+FACTS = {"controller": "San Francisco Ground", "runway in use": "28R", "landing runways": "28R", "departing runways": "28R",
+         "parallel landings": "no", "notices": "none",
+         "San Francisco International runways": "19L/01R 8700 ft, 19R/01L 7700 ft, 28L/10R 11400 ft, 28R/10L 11900 ft"}
+
+
+@pytest.mark.parametrize(("reply", "problem"), [
+    ("no parallel landings in use today", None),
+    ("you're correct, only 28R for landing, United 1596", None),  # the callsign at the end is the template's job
+    ("runway 19L/01R closed due to maintenance", "says closed, maintenance"),  # what llama3.2:3b made up
+    ("restricted airspace is active", "says active, restricted"),
+    ("runway 19L/01L in use", "names runway 19L/01L"),
+    ("runway 28L in use", "says runway 28L is in use"),
+    ("runway 28R in use, 19R expected shortly", "says expected, shortly"),
+])
+def test_a_reply_says_only_what_the_facts_say(reply, problem):
+    raw = msgspec.json.encode({"reply": reply}).decode()
+    if problem is None:
+        check_reply(raw, FACTS, ("United 1596",))
+    else:
+        with pytest.raises(PhraseError, match=problem):
+            check_reply(raw, FACTS, ("United 1596",))

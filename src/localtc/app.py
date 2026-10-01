@@ -184,7 +184,7 @@ def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | N
         # sim needs (with MSFS there's often little left).
         log.warning("The language model only partly fit on the graphics card (%s). It's quicker, and leaves the "
                     "card to the sim, on the CPU alone: Quick Settings → ATC → \"Run the language model on the CPU only\".", where.describe())
-    if pace and wait_s and PACE_FACTOR * pace > wait_s:
+    if pace and wait_s and min(PACE_FACTOR * pace, patience_s) > wait_s:  # (it only ever waits longer, never shorter)
         log.warning("The language model takes about %.1f s a call on this PC right now, too close to ATC's wait of "
                     "%.0f s: ATC waits up to %.0f s for it instead. For quicker answers, fewer calls to it: Quick Settings → "
                     "ATC → Script or model → Semi or Fully scripted.",

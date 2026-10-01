@@ -163,6 +163,9 @@ class LlmConfig(_Section):
     # atc_core.llm.understand.MODES): scripted, semi, mostly_llm, llm, or off (the grammar and templates alone).
     mode: LlmMode = "mostly_llm"
     phrasing: bool = True  # the model may word replies at all (off: templates only, whatever the mode)
+    # The model's answers may go past what the sim's data says (a number, a closure, a runway it isn't told about):
+    # off, a reply saying anything the facts don't is turned away. Instructions are never allowed either way.
+    beyond_facts: bool = False
     timeout_s: float = 4.0  # per model call (Quick Settings → ATC → Language model timing)
     budget_s: float = 6.0  # per transmission, including one retry (at least timeout_s)
     # A question or anything off the script that the model couldn't answer in time: the app shows the controller

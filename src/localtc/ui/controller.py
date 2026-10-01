@@ -641,6 +641,8 @@ class AppController:
         interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None
         if cfg.llm.mode != self.cfg.llm.mode and cfg.llm.mode != "off" and getattr(interpreter, "backend", None) is not None:
             interpreter.mode = cfg.llm.mode  # the model's already there: the new mode from the next call
+        if (phraser := getattr(self.live.engine, "phraser", None) if self.live is not None else None) is not None:
+            phraser.beyond_facts = cfg.llm.beyond_facts  # from the next reply
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()

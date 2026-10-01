@@ -55,6 +55,7 @@ mode = "mostly_llm"           # how much ATC leans on the model, for reading cal
                               #   llm: the model reads and words every call (the script checks it, and answers when it fails)
                               #   off: the grammar and the templates only
 phrasing = true               # the model may word replies at all (false: templates only, whatever the mode)
+beyond_facts = false          # true: its answers may go past the sim's data (what it knows itself); never instructions
 timeout_s = 4.0               # per model call; on timeout the grammar's answer is used
 budget_s = 6.0                # per pilot transmission, including one retry
 patience_s = 15.0             # off-script calls the model missed: one more try this long (the app shows ATC thinking)

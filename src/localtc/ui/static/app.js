@@ -729,6 +729,7 @@ const Settings = {
           <span class="hint">How much ATC leans on the language model, for understanding you and for the words of its replies.
             Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
             anything that fails the checks is said in the script's words.</span></label></div>
+        <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
       </div>
 
       <div class="card">
@@ -842,6 +843,7 @@ const Settings = {
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
+    on("#s-beyond-facts", "change", (e) => this.save("llm", "beyond_facts", e.target.checked));
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
     on("#s-cpu-only", "change", () => this.save("llm", "cpu_only", $("#s-cpu-only").checked));
     for (const [id, key, low, high] of [["#s-llm-timeout", "timeout_s", 1, 60], ["#s-llm-budget", "budget_s", 1, 120],

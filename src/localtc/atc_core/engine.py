@@ -48,7 +48,7 @@ from localtc.atc_core.facilities import (
     sector_center,
 )
 from localtc.atc_core.llm import LlmPhraser
-from localtc.atc_core.llm.phrase import spoken_as
+from localtc.atc_core.llm.phrase import facts_problem, spoken_as
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
@@ -2926,7 +2926,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         else:
             self._schedule(t, "common.unable", {}, facility)
             said = 'ATC said "unable"'
-        self._not_used.append(f"the model's {WHAT_WORDED.get(decision, decision)} was turned away ({why}); {said}")
+        hint = " (Quick Settings → ATC → \"Let the model answer beyond the sim's data\" lets such answers through)" \
+            if last is not None and facts_problem(last.detail) and not self.phraser.beyond_facts else ""
+        self._not_used.append(f"the model's {WHAT_WORDED.get(decision, decision)} was turned away ({why}); {said}{hint}")
         return list(exchanges)
 
     def _altitude_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:

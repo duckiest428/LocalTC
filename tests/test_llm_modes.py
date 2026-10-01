@@ -390,3 +390,37 @@ def test_a_reply_says_only_what_the_facts_say(reply, problem):
     else:
         with pytest.raises(PhraseError, match=problem):
             check_reply(raw, FACTS, ("United 1596",))
+
+
+# --- [llm] beyond_facts --------------------------------------------------------------------------------------------
+
+
+def test_beyond_facts_lets_the_models_own_knowledge_through_but_never_an_instruction():
+    """Off (the default), "runway 28L is 200 feet wide" is turned away: the sim never said so. On, it goes out."""
+    raw = '{"reply":"runway 24R is 200 feet wide"}'
+    with pytest.raises(PhraseError, match="not in the facts"):
+        check_reply(raw, FACTS, ("DP69",))
+    assert check_reply(raw, FACTS, ("DP69",), beyond_facts=True) == "runway 24R is 200 feet wide"
+    assert check_reply('{"reply":"runway 19R closed for maintenance"}', FACTS, (), beyond_facts=True)
+    with pytest.raises(PhraseError, match="instruction"):  # still never an instruction
+        check_reply('{"reply":"cleared to land runway 28R"}', FACTS, (), beyond_facts=True)
+    with pytest.raises(PhraseError, match="leaves out 11400"):  # nor another figure than the data's own answer
+        check_reply('{"reply":"runway 28L is 9000 feet"}', FACTS, (), required="runway 28L is 11,400 feet",
+                    beyond_facts=True)
+
+
+def test_beyond_facts_end_to_end_and_the_notice_points_to_it():
+    wide = "Montreal Ground, DP69. How wide is the 24 right runway?"
+    backend = ScriptedBackend(phrase={wide: '{"reply":"runway 24R is 200 feet wide"}'})
+    engine, own = cyul_engine(backend)
+    out = say(engine, own, wide, mhz=121.0)
+    assert atc(out) == ["DP69, unable, that information is not available."]
+    [alert] = [o for o in out if isinstance(o, AtcAlert) and o.kind == "llm_rejected"]
+    assert "Let the model answer beyond the sim's data" in alert.detail
+    assert all("Quick Settings" not in r.messages[-1][1] for r in backend.requests)  # the model isn't told about the app
+    engine, own = cyul_engine(backend)
+    engine.phraser.beyond_facts = True
+    out = say(engine, own, wide, mhz=121.0)
+    assert atc(out) == ["DP69, runway 24R is 200 feet wide."]
+    assert "you may answer from what a controller would know" in backend.requests[-1].system
+    assert load_config(env={}, settings=None).llm.beyond_facts is False  # off unless the pilot turns it on

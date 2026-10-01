@@ -129,7 +129,8 @@ async def language_model(cfg: Config, source: SimSource):
         await asyncio.to_thread(backend.unload)
     # A daemon thread, not the default executor: exit mustn't wait for a slow first load.
     wait_s = llm.timeout_s * (2.0 if llm.cpu_only else 1.0)  # as build_engine sets it
-    threading.Thread(target=warm_up, args=(backend, status), kwargs={"wait_s": wait_s, "patience_s": llm.patience_s},
+    threading.Thread(target=warm_up, args=(backend, status), kwargs={"wait_s": wait_s, "patience_s": llm.patience_s,
+                                                                  "beyond_facts": llm.beyond_facts},
                      name="llm-warm-up", daemon=True).start()
     backend.start_keeping()
     return backend
@@ -139,7 +140,7 @@ _WARMING = threading.Lock()  # held while a warm-up loads the model
 
 
 def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | None = None,
-            patience_s: float = 15.0) -> float | None:
+            patience_s: float = 15.0, beyond_facts: bool = False) -> float | None:
     """Load the model, and read its prompts (understanding, phrasing, rewording), before the first real call:
     Ollama keeps what it has read, so a call then only reads its own last lines. Then one ordinary call, to see
     how long one takes on this PC now (the sim running): ATC's wait follows it (``llm.backend.waits``), and the
@@ -161,7 +162,7 @@ def warm_up(backend, status=None, timeout_s: float = 180.0, *, wait_s: float | N
     try:
         # Phrasing first, understanding last: where Ollama keeps one prompt read, it's the one the pilot's first
         # call needs.
-        for request in (phrase_request("radio check", "answer", {"callsign": "November 1 2 3"}),
+        for request in (phrase_request("radio check", "answer", {"callsign": "November 1 2 3"}, beyond_facts=beyond_facts),
                         reword_request("radio check", "read you five"),
                         build_request("radio check", None, InterpretContext(phase="PARKED"), load_examples())):
             reply = backend.complete(request, timeout_s=timeout_s)
@@ -218,6 +219,7 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
                                      max_attempts=llm.max_attempts, budget_s=budget_s, patience_s=llm.patience_s)
     if backend is not None and llm.phrasing:
         phraser = LlmPhraser(backend, timeout_s=timeout_s, max_attempts=llm.max_attempts, budget_s=budget_s,
+                             beyond_facts=llm.beyond_facts,
                              patience_s=llm.patience_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript

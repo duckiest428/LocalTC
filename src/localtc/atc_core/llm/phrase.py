@@ -23,11 +23,16 @@ from localtc.atc_core.phraseology import speech
 from localtc.atc_core.values import Phrase
 from localtc.sim_api import LlmExchange
 
-SYSTEM = """You word one short reply for an air traffic controller, in standard radio phraseology. \
+# [llm] beyond_facts: the model may answer from what it knows as well, where the sim's data says nothing.
+FACTS_RULE = """- Use only the facts given. Never invent numbers, names or information: nothing is closed, restricted, active or \
+delayed unless the facts say so ("notices none": nothing to report)."""
+BEYOND_RULE = """- Use the facts first. Where they say nothing, you may answer from what a controller would know about aviation and \
+this airport; if you don't know, say the information isn't available. Never contradict the facts."""
+
+SYSTEM_TEMPLATE = """You word one short reply for an air traffic controller, in standard radio phraseology. \
 The controller has already decided what to say; you only put it into words.
 - You are the controller named in the facts: answer as that station would.
-- Use only the facts given. Never invent numbers, names or information: nothing is closed, restricted, active or \
-delayed unless the facts say so ("notices none": nothing to report).
+{facts_rule}
 - Never give or approve an instruction: no clearances, altitudes, headings, frequencies to contact, squawk codes \
 or taxi routes, and never say "approved". If the pilot asks for something like that, say "unable" and, if it \
 fits, "continue as filed".
@@ -37,6 +42,13 @@ If they answer none of it, say "unable, information not available".
 - Decision reply: the pilot said something that is no request (small talk, thanks, a remark, a correction). Reply \
 briefly and politely as a busy controller would; if they're right or wrong about something in the facts, say so.
 - At most 20 words. Do not start with the callsign; it is added for you."""
+
+
+def system(beyond_facts: bool = False) -> str:
+    return SYSTEM_TEMPLATE.replace("{facts_rule}", BEYOND_RULE if beyond_facts else FACTS_RULE)
+
+
+SYSTEM = system()
 
 SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"],
           "additionalProperties": False}
@@ -112,25 +124,56 @@ def _reply_text(raw: str, callsigns: tuple[str, ...]) -> str:
     return text
 
 
+def _check_facts(text: str, words: list[str], facts: dict[str, str]) -> None:
+    """Nothing in the reply that the facts don't say."""
+    fact_words = set(re.findall(r"[a-z]+", " ".join([*facts, *facts.values()]).lower()))
+    if claims := sorted(set(words) & STATUS - fact_words):
+        raise FactsError(f"reply says {', '.join(claims)}, which the facts don't say; say only what they say, or that "
+                         "there's nothing to report")
+    if navaids := sorted(set(words) & NAVAIDS - fact_words):
+        raise FactsError(f"reply mentions {', '.join(navaids)}, which is not in the facts")
+    known = numbers(" ".join(facts.values()))
+    if invented := [n for n in NUMBER_RE.findall(THOUSANDS_RE.sub("", text)) if _number(n) not in known]:
+        raise FactsError(f"reply has numbers that are not in the facts: {', '.join(invented)}")
+    _check_runways(text, facts)
+
+
 def _check_runways(text: str, facts: dict[str, str]) -> None:
     """Runways as the facts have them: a pair ("19L/01R") only as the airport has it, and one said to be in use only
     if the facts say it is."""
     listed = " ".join(facts.values()).upper()
     for pair in re.findall(r"\b\d{1,2}[LRC]?/\d{1,2}[LRC]?\b", text.upper()):
         if not re.search(rf"(?<![\w/]){re.escape(pair)}(?![\w/])", listed):
-            raise PhraseError(f"reply names runway {pair}, which the airport doesn't have")
+            raise FactsError(f"reply names runway {pair}, which the airport doesn't have")
     in_use = {d.lstrip("0") for k, v in facts.items() if "in use" in k or k in ("landing runways", "departing runways")
               for d in re.findall(r"\b\d{1,2}[LRC]?\b", v.upper())}
     for clause in re.split(r",|;| and | but ", text.lower()):
         if "in use" in clause or "landing" in clause or "departing" in clause:
             said = {d.lstrip("0") for d in re.findall(r"\b\d{1,2}[LRC]?\b", clause.upper())}
             if wrong := sorted(said - in_use):
-                raise PhraseError(f"reply says runway {', '.join(wrong)} is in use; the facts say {', '.join(sorted(in_use)) or 'none'}")
+                raise FactsError(f"reply says runway {', '.join(wrong)} is in use; the facts say {', '.join(sorted(in_use)) or 'none'}")
 
 
-def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], required: str = "") -> str:
+class FactsError(PhraseError):
+    """A reply saying something the facts don't (a number, a closure, a navaid, a runway in use): turned away unless
+    [llm] beyond_facts lets the model answer from what it knows."""
+
+
+# How a FactsError reads in an LlmExchange's detail (the engine tells the pilot the setting would have let it through).
+FACTS_PROBLEMS = ("which the facts don't say", "which is not in the facts", "not in the facts:",
+                  "which the airport doesn't have", "is in use; the facts say")
+
+
+def facts_problem(detail: str) -> bool:
+    return any(p in detail for p in FACTS_PROBLEMS)
+
+
+def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], required: str = "", *,
+                beyond_facts: bool = False) -> str:
     """The model's reply, checked against the facts. ``required``: the data's own answer to the question (the facts'
-    "here and now"): a reply that gives other numbers than its own, or another runway, answers something else."""
+    "here and now"): a reply that gives other numbers than its own, or another runway, answers something else.
+    ``beyond_facts``: what the facts don't cover may come from the model ([llm] beyond_facts); the safety checks (no
+    instruction, short, the data's own answer when there is one) stay."""
     text = _reply_text(raw, callsigns)
     words = re.findall(r"[a-z]+", text.lower())
     if not words:
@@ -141,16 +184,8 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
         raise PhraseError(f"reply gives an instruction ({', '.join(banned)}); only answer or say unable")
     if internal := sorted(set(words) & INTERNAL):
         raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
-    fact_words = set(re.findall(r"[a-z]+", " ".join([*facts, *facts.values()]).lower()))
-    if claims := sorted(set(words) & STATUS - fact_words):
-        raise PhraseError(f"reply says {', '.join(claims)}, which the facts don't say; say only what they say, or that "
-                          "there's nothing to report")
-    if navaids := sorted(set(words) & NAVAIDS - fact_words):
-        raise PhraseError(f"reply mentions {', '.join(navaids)}, which is not in the facts")
-    known = numbers(" ".join(facts.values()))
-    if invented := [n for n in NUMBER_RE.findall(THOUSANDS_RE.sub("", text)) if _number(n) not in known]:
-        raise PhraseError(f"reply has numbers that are not in the facts: {', '.join(invented)}")
-    _check_runways(text, facts)
+    if not beyond_facts:
+        _check_facts(text, words, facts)
     if required and "unable" not in words:
         if missing := sorted(numbers(required) - numbers(text)):
             raise PhraseError(f"reply leaves out {', '.join(missing)}: the answer is \"{required}\" (here and now)")
@@ -166,12 +201,12 @@ def spoken(text: str) -> str:
     return NUMBER_RE.sub(lambda m: speech.digits(m.group(0)), text)
 
 
-def phrase_request(pilot: str, decision: str, facts: dict[str, str]) -> LlmRequest:
+def phrase_request(pilot: str, decision: str, facts: dict[str, str], *, beyond_facts: bool = False) -> LlmRequest:
     """The request for a reply's wording: the examples, then this call."""
     messages: tuple[tuple[str, str], ...] = tuple(
         turn for user, assistant in EXAMPLES for turn in (("user", user), ("assistant", assistant))
     ) + (("user", user_message(pilot, decision, facts)),)
-    return LlmRequest("phrase", SYSTEM, messages, SCHEMA, max_tokens=80)
+    return LlmRequest("phrase", system(beyond_facts), messages, SCHEMA, max_tokens=80)
 
 
 # --- rewording the script's replies -------------------------------------------------------------------------------
@@ -304,8 +339,10 @@ def spoken_as(text: str, pairs: list[tuple[str, str]]) -> str:
 
 class LlmPhraser:
     def __init__(self, backend: LlmBackend, *, timeout_s: float = 2.5, max_attempts: int = 2, budget_s: float = 4.0,
-                 patience_s: float = 15.0, clock: Callable[[], float] = time.monotonic) -> None:
+                 patience_s: float = 15.0, beyond_facts: bool = False,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self.backend = backend
+        self.beyond_facts = beyond_facts  # [llm] beyond_facts: answers may go past the sim's data (``check_reply``)
         self.timeout_s, self.max_attempts, self.budget_s = timeout_s, max_attempts, budget_s
         self.patience_s = patience_s
         self.patient = False  # set while answering after "stand by": one long try
@@ -315,8 +352,10 @@ class LlmPhraser:
               trigger: str = "", required: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template.
         ``required``: the data's answer, which the reply must give (``check_reply``)."""
-        text, exchanges = self._run(phrase_request(pilot, decision, facts),
-                                    lambda raw: check_reply(raw, facts, callsigns, required), t, trigger)
+        beyond = self.beyond_facts
+        text, exchanges = self._run(phrase_request(pilot, decision, facts, beyond_facts=beyond),
+                                    lambda raw: check_reply(raw, facts, callsigns, required, beyond_facts=beyond),
+                                    t, trigger)
         return (Phrase(text, spoken(text)) if text is not None else None), exchanges
 
     def reword(self, *, pilot: str, scripted: str, callsigns: tuple[str, ...], t: float,

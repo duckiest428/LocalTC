@@ -55,7 +55,15 @@ a new minor version adds features, a patch fixes them.
 - **In the model's modes, the script still answered calls the model had read.**
   - One junk value in the model's reading (the ATIS letter filled with "doing well", "none" or the whole sentence) threw the reading away; the value is now left out and the rest kept, and the form allows only a letter there.
   - A question with "can" in it ("can we get a wind report?") filed as another request was turned away; with a topic named, it's the question.
-  - Small talk got the template's line, and a clear remark nothing could place ("would you like a coffee after your shift?", "that's not parallel, you'd need both 28s") got "say again". In Mostly and Fully LLM the model now replies to them, and "say again" comes only if it can't.
+  - Small talk got the template's line, and a remark nothing could place ("would you like a coffee after your shift?", "that's not parallel, you'd need both 28s") got "say again". In Mostly and Fully LLM, any call nothing can classify goes to the model for its reply, however short or unclear, and with a readback still owed (the model is told what readback ATC is waiting for).
+- **A turned-away model answer is never replaced silently, or by something unrelated.** What ATC says instead fits the call:
+  - the same clearance in the script's words;
+  - the sim's data when it answers the question;
+  - "unable, that information is not available" to a question;
+  - "roger" to a remark;
+  - "say again" only when the words were unclear or a readback is still owed.
+
+  The radio log and a notice say each time that the model's answer was turned away, why, and what ATC said instead.
 - **The model's answers say only what LocalTC knows.** A reply that calls something closed, restricted, active, delayed or "expected shortly" without the facts saying so is turned away, as is a runway pairing the airport doesn't have or a runway "in use" that isn't. The model is now told the landing and departing runways, whether parallel landings are in use, and the ATIS notices ("none" when there are none).
 - The sim's wind and altimeter answer a question only when the pilot's own words are about them, not just because the model labelled it "weather".
 - A reply ending with the callsign was turned away for the callsign's digits.

@@ -16,7 +16,7 @@ from localtc.atc_core.readback import GrammarInterpreter, InterpretContext
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
 from localtc.config import load_config
-from localtc.sim_api import AtcDecision, AtcTransmission, LlmExchange
+from localtc.sim_api import AtcAlert, AtcDecision, AtcTransmission, LlmExchange
 
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 GROUND = InterpretContext(callsign=Callsign("DP69"), phase="PARKED", station="Montreal Ground", station_role="ground")
@@ -121,7 +121,7 @@ def test_a_reply_about_another_runway_is_turned_away_for_the_datas_answer(mode):
     phrases = [e for e in out if isinstance(e, LlmExchange) and e.purpose == "phrase"]
     assert [e.outcome for e in phrases] == ["invalid", "invalid"] and "leaves out 11000" in phrases[0].detail
     [decision] = [o for o in out if isinstance(o, AtcDecision)]
-    assert decision.wording == "template" and "the sim's data answered" in decision.fallback
+    assert decision.wording == "template" and "ATC gave the sim's data" in decision.fallback
 
 
 @pytest.mark.parametrize("mode", ["scripted", "semi", "mostly_llm", "llm"])
@@ -136,8 +136,10 @@ def test_when_the_model_cant_answer_ATC_says_so_instead_of_answering_something_e
     assert [(e.outcome, e.attempt) for e in phrases] == [("invalid", 1), ("invalid", 2)]
     assert all("200" in e.detail and e.response for e in phrases)  # the raw answer and why, kept
     [decision] = [o for o in out if isinstance(o, AtcDecision)]
-    assert "the model's wording wasn't used (invalid: reply has numbers that are not in the facts: 200)" \
-        in decision.fallback and "said it isn't available" in decision.fallback
+    assert "the model's answer was turned away (invalid: reply has numbers that are not in the facts: 200); " \
+        'ATC said "unable, that information is not available"' in decision.fallback
+    [alert] = [o for o in out if isinstance(o, AtcAlert) and o.kind == "llm_rejected"]  # and the pilot is told
+    assert alert.detail == decision.fallback
 
 
 # --- wording the reply --------------------------------------------------------------------------------------------------
@@ -197,8 +199,8 @@ def test_a_reworded_reply_that_changes_the_clearance_is_said_as_the_script_has_i
     rewords = [e for e in out if isinstance(e, LlmExchange) and e.purpose == "reword"]
     assert [e.outcome for e in rewords] == ["invalid", "invalid"] and why.split(",")[0] in rewords[0].detail
     [decision] = [o for o in out if isinstance(o, AtcDecision)]
-    assert decision.wording == "template" and "wording of ground.taxi_out_at: the template's (the model's invalid" \
-        in decision.fallback
+    assert decision.wording == "template" and "the model's words for ground.taxi_out_at were turned away (invalid" \
+        in decision.fallback and "ATC said the same in the script's words" in decision.fallback
 
 
 def test_no_rewording_when_the_model_just_ran_out_of_time():
@@ -334,15 +336,37 @@ def test_small_talk_and_remarks_get_the_models_reply_where_it_words_atcs(mode, m
         assert first == ["DP69, say again."] and second[0].startswith("DP69, ") and "thanks" in second[0]
 
 
-def test_when_the_model_has_no_reply_to_a_remark_it_is_say_again():
-    coffee = "Montreal Ground, DP69, would you like to grab a coffee after your shift today?"
-    backend = ScriptedBackend({coffee: {"kind": "unintelligible"}}, phrase={coffee: '{"reply":"cleared for coffee"}'})
+@pytest.mark.parametrize(("said", "instead"), [
+    # Never something unrelated, and never silently: what fits the call, with the app saying the model's was turned away.
+    ("Montreal Ground, DP69, that taxiway sign back there was pretty faded", "DP69, roger."),  # a remark
+    ("Montreal Ground, DP69, would you like to grab a coffee after your shift today?",
+     "DP69, unable, that information is not available."),  # a question
+    ("DP69 the uh thing", "DP69, say again."),  # nothing to it but noise
+])
+def test_when_the_models_reply_to_an_unclassified_call_is_turned_away(said, instead):
+    backend = ScriptedBackend({said: {"kind": "unintelligible"}}, phrase={said: '{"reply":"cleared for coffee"}'})
     engine, own = cyul_engine(backend)
     engine.interpreter.mode = "llm"
-    out = say(engine, own, coffee, mhz=121.0)
-    assert atc(out) == ["DP69, say again."]
-    [decision] = [o for o in out if isinstance(o, AtcDecision)]
-    assert "said common.say_again" in decision.fallback
+    out = say(engine, own, said, mhz=121.0)
+    assert atc(out) == [instead]
+    assert [e.purpose for e in out if isinstance(e, LlmExchange)] == ["understand", "phrase", "phrase"]  # it was asked
+    [alert] = [o for o in out if isinstance(o, AtcAlert) and o.kind == "llm_rejected"]
+    assert "the model's reply was turned away (invalid: reply gives an instruction (cleared)" in alert.detail
+
+
+@pytest.mark.parametrize("mode", ["mostly_llm", "llm"])
+def test_a_call_nothing_classifies_still_gets_the_models_reply(mode):
+    """However short or unclear, and with a readback still owed: in the model's modes, its reply goes out."""
+    engine, own, _ = taxi_engine(mode)
+    say(engine, own, ROUTINE, mhz=121.0)  # the taxi clearance: a readback is owed now
+    garbled = "DP69 uh the thing"
+    backend = ScriptedBackend({garbled: {"kind": "unintelligible"}},
+                              phrase={garbled: '{"reply":"say again, I didn\'t get your readback"}'})
+    engine.interpreter.backend = engine.phraser.backend = backend
+    out = say(engine, msgspec.structs.replace(own, t=own.t + 20), garbled, mhz=121.0)
+    assert atc(out) == ["DP69, say again, I didn't get your readback."]
+    assert "readback expected" in [r for r in backend.requests if r.purpose == "phrase"][-1].prompt
+    assert engine.state.pending is not None  # still owed
 
 
 FACTS = {"controller": "San Francisco Ground", "runway in use": "28R", "landing runways": "28R", "departing runways": "28R",

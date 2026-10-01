@@ -49,7 +49,7 @@ from localtc.atc_core.facilities import (
 )
 from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.phrase import spoken_as
-from localtc.atc_core.llm.triggers import question_topic
+from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
 from localtc.atc_core.readback import (
@@ -63,7 +63,7 @@ from localtc.atc_core.readback import (
 )
 from localtc.atc_core.readback.interpreter import reading
 from localtc.atc_core.readback.callsign_check import judge as judge_callsign
-from localtc.atc_core.readback.extract import frequencies, same_approach
+from localtc.atc_core.readback.extract import frequencies, same_approach, without_callsign
 from localtc.atc_core.readback.intents import match_intents
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.readback.questions import asks
@@ -180,6 +180,9 @@ PLACE_WORDS = {"at", "in", "near", "around", "over"}  # "... at <a place>": here
 NEARBY_NM = 20.0  # the departure or destination airport this close: the sim's weather here is its weather
 CONVERSE_WORDS = 4  # a clear call this long that no procedure fits: in the model's modes, the model replies to it
 CONVERSE_CONFIDENCE = 0.6  # ... when speech-to-text was this sure of the words (below: "say again" is the honest reply)
+SAID = {"common.say_again": "say again", "common.roger": "roger", "common.pleasantry": "the script's small talk",
+        "common.unable": "unable"}
+WHAT_WORDED = {"answer": "answer", "reply": "reply", "decline": "decline"}
 UNAVAILABLE = Phrase("unable, that information is not available", "unable, that information is not available")
 # Words that put a question somewhere else, or later, than the sim's data here and now.
 ELSEWHERE = {"route", "enroute", "en", "along", "ahead", "destination", "forecast", "forecasted", "tomorrow", "later",
@@ -1662,7 +1665,16 @@ class AtcEngine(VfrMixin, DiversionMixin):
             out += self._word_replies(replies, ev)
         finally:
             self._answering = False
-        return out + [self._decision(ev, replies)] + self._model_timeouts(out, ev.t)
+        decision = self._decision(ev, replies)
+        return out + [decision] + self._model_timeouts(out, ev.t) + self._model_rejections(out, decision)
+
+    def _model_rejections(self, out: list[BusEvent], decision: AtcDecision) -> list[BusEvent]:
+        """An ``llm_rejected`` alert whenever something of the model's was turned away on this call and ATC said
+        something else: never silently. (Timeouts have their own alert.)"""
+        turned_away = any(isinstance(o, LlmExchange) and o.outcome == "invalid" for o in out)
+        if not turned_away or not decision.fallback:
+            return []
+        return [self._alert(decision.t, "llm_rejected", decision.fallback)]
 
     @property
     def llm_mode(self) -> str:
@@ -1680,8 +1692,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if mode == "mostly_llm" and not understood:
             return []  # the script was sure it's routine, and answered it
         if understood and understood[-1].outcome in ("timeout", "error"):
-            self._not_used.append("wording: the template's (the model ran out of time reading the call)")
-            return []  # it just ran out of time: another call to it would too, and the pilot is waiting
+            if any(item.worded_by == "template" and item.instruction_id not in NO_REWORD for item in replies):
+                self._not_used.append("the script's words, not the model's: it had just failed to answer in time")
+            return []  # it just ran out of time (or isn't there): another call would too, and the pilot is waiting
         callsign = self._callsign()
         callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
         out: list[BusEvent] = []
@@ -1697,7 +1710,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             if text is None:
                 last = exchanges[-1] if exchanges else None
                 why = (f"{last.outcome}: {last.detail}" if last.detail else last.outcome) if last is not None else "no answer"
-                self._not_used.append(f"wording of {item.instruction_id}: the template's (the model's {why})")
+                self._not_used.append(f"the model's words for {item.instruction_id} were turned away ({why}); ATC said "
+                                      "the same in the script's words")
                 continue
             item.worded = Phrase(text, spoken_as(text, self._slot_forms(item.slots)))
             item.worded_by = "model"
@@ -1837,8 +1851,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return out + [AtcThinking(t=t, station=facility.station, frequency_mhz=facility.mhz)]
         if interp.kind == "request" and interp.intent == "acknowledge" and asks(ev.text):
             # A question nobody could make out ("... any idea? Thanks"): not a thank-you to leave unanswered.
-            if self._model_replies(ev, pending):
-                return out + self._phrase(interp, facility, t, "reply", otherwise="common.say_again")
+            if self._model_replies():
+                return out + self._phrase(interp, facility, t, "reply", otherwise=self._unplaced_fallback(ev, pending))
             self._schedule(t, "common.say_again", {}, facility)
             return out
         if interp.intent != "emergency" and (problem := self._problem(ev.text, facility, t)) is not None:
@@ -1868,10 +1882,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
             if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
                 return out + self._give_up_readback(facility, t)
-        if self._model_replies(ev, pending):
-            # The model's modes: a clear call no procedure fits ("would you like a coffee after your shift?", "that's not
-            # parallel, you'd need both 28s") gets the model's reply, not the script's "say again".
-            return out + self._phrase(interp, facility, t, "reply", otherwise="common.say_again")
+        if self._model_replies():
+            # The model's modes: a call nothing could classify ("would you like a coffee after your shift?", "that's not
+            # parallel, you'd need both 28s", a garbled readback) still gets the model's reply, not the script's.
+            return out + self._phrase(interp, facility, t, "reply", otherwise=self._unplaced_fallback(ev, pending))
         if self._patient and pending is None and len(ev.text.split()) >= LONG_STATEMENT_WORDS:
             # Gave the model its time, and still nothing to act on: a long call in the pilot's
             # own words is a statement, not a garbled instruction. "Roger", not "say again" to a paragraph.
@@ -1910,12 +1924,23 @@ class AtcEngine(VfrMixin, DiversionMixin):
         done = [AtcThinking(t=ev.t, station=facility.station, frequency_mhz=facility.mhz, busy=False)] if facility else []
         return out + done + self._flush(self._t)
 
-    def _model_replies(self, ev: Transcript, pending: PendingReadback | None) -> bool:
-        """Whether the model words a reply to a call the script has no procedure for: in the modes where it words
-        ATC's replies, to a call heard clearly enough, with no readback waiting."""
-        return (self.phraser is not None and self.llm_mode in ("mostly_llm", "llm") and pending is None
-                and len(re.findall(r"[a-z']+", ev.text.lower())) >= CONVERSE_WORDS
-                and (ev.confidence is None or ev.confidence >= CONVERSE_CONFIDENCE))
+    def _model_replies(self) -> bool:
+        """Whether a call nothing could classify still goes to the model for its reply: always, in the modes where
+        the model words ATC's replies (Mostly and Fully LLM)."""
+        return self.phraser is not None and self.llm_mode in ("mostly_llm", "llm")
+
+    def _unplaced_fallback(self, ev: Transcript, pending: PendingReadback | None) -> str | Phrase:
+        """What ATC says when the model's reply to a call nothing could classify fails its checks: what fits the call,
+        never something unrelated. A readback still owed, or words speech-to-text wasn't sure of: "say again" (that's
+        the problem). A question: that ATC hasn't the answer. Anything else, a remark: "roger"."""
+        unsure = ev.confidence is not None and ev.confidence < CONVERSE_CONFIDENCE
+        # Words that say something: not "uh", "the", or the callsign ("DP69 the uh thing" is one word).
+        words = [t for t in without_callsign(normalize(ev.text), self._callsign()) if t.kind == "word"]
+        if pending is not None or unsure or len(words) < CONVERSE_WORDS:
+            return "common.say_again"
+        if is_question(ev.text) or asks(ev.text):
+            return UNAVAILABLE
+        return "common.roger"
 
     @staticmethod
     def _model_needs_time(interp: Interpretation, pending: PendingReadback | None) -> bool:
@@ -2857,17 +2882,25 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return self._phrase(interp, facility, t, "decline")
 
     def _phrase(self, interp: Interpretation, facility: Facility, t: float, decision: str,
-                known: Phrase | None = None, *, require: bool = True, otherwise: str | None = None) -> list[BusEvent]:
+                known: Phrase | None = None, *, require: bool = True, otherwise: str | Phrase | None = None) -> list[BusEvent]:
         """A reply worded by the model from the facts. ``known``: what the sim's data says to the question, one of
-        the facts, and the reply when the model has none."""
+        the facts, and the reply when the model has none. ``otherwise``: what's said instead when the model's reply
+        fails its checks (a template id, or words), chosen to fit the call; the app says it happened."""
         if self.phraser is None:
-            self._schedule(t, otherwise or "common.unable", {}, facility, expects_readback=otherwise is None)
+            if isinstance(otherwise, Phrase):
+                self._schedule(t, "common.info", {"message": otherwise}, facility)
+            else:
+                self._schedule(t, otherwise or "common.unable", {}, facility, expects_readback=otherwise is None)
             return []
         callsign = self._callsign()
         callsigns = tuple({speech.callsign_display(callsign), speech.callsign_display(callsign.short), callsign.ident})
         facts = self._facts(facility)
         if known is not None:
             facts["here and now"] = known.display
+        if (pending := self.state.pending) is not None and pending.controller == facility.controller:
+            from localtc.atc_core.llm.understand import _expect_line, _expected_items
+
+            facts["readback expected"] = _expect_line(_expected_items(pending))  # what ATC is still waiting to hear
         message, exchanges = self.phraser.reply(
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger={"answer": "question", "reply": "conversation"}.get(decision, "unsupported_request"),
@@ -2880,17 +2913,20 @@ class AtcEngine(VfrMixin, DiversionMixin):
         why = (f"{last.outcome}: {last.detail}" if last.detail else last.outcome) if last is not None else "no answer"
         if known is not None:
             self._schedule(t, "common.info", {"message": known}, facility)
-            said = "the sim's data answered"
+            said = f'ATC gave the sim\'s data: "{known.display}"'
+        elif isinstance(otherwise, Phrase):
+            self._schedule(t, "common.info", {"message": otherwise}, facility)
+            said = f'ATC said "{otherwise.display}"'
         elif otherwise is not None:
             self._schedule(t, otherwise, {}, facility, expects_readback=False)
-            said = f"said {otherwise}"
+            said = f'ATC said "{SAID.get(otherwise, otherwise)}"'
         elif decision == "answer":
             self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
-            said = "said it isn't available"
+            said = f'ATC said "{UNAVAILABLE.display}"'
         else:
             self._schedule(t, "common.unable", {}, facility)
-            said = "said unable"
-        self._not_used.append(f"{decision}: the model's wording wasn't used ({why}); {said}")
+            said = 'ATC said "unable"'
+        self._not_used.append(f"the model's {WHAT_WORDED.get(decision, decision)} was turned away ({why}); {said}")
         return list(exchanges)
 
     def _altitude_request(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:

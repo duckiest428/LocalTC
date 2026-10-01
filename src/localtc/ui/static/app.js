@@ -152,6 +152,7 @@ function addLine(l) {
   if (stick) log.scrollTop = log.scrollHeight;
   if (l.kind === "alert") { S.alerts.push(l); updateAlerts(); }
   // The model running out of time changes what ATC said: always shown, with where to give it longer.
+  if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);
   if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → ATC → Language model timing.`, true, 12000);
 }
 

@@ -25,7 +25,7 @@ from localtc.sim_api import LlmExchange
 
 # [llm] beyond_facts: the model may answer from what it knows as well, where the sim's data says nothing.
 FACTS_RULE = """- Use only the facts given. Never invent numbers, names or information: nothing is closed, restricted, active or \
-delayed unless the facts say so ("notices none": nothing to report)."""
+delayed unless the facts say so."""
 BEYOND_RULE = """- Use the facts first. Where they say nothing, you may answer from what a controller would know about aviation and \
 this airport; if you don't know, say the information isn't available. Never contradict the facts."""
 
@@ -33,6 +33,7 @@ SYSTEM_TEMPLATE = """You word one short reply for an air traffic controller, in 
 The controller has already decided what to say; you only put it into words.
 - You are the controller named in the facts: answer as that station would.
 {facts_rule}
+- Use only the facts that answer what the pilot said; never list the others.
 - Never give or approve an instruction: no clearances, altitudes, headings, frequencies to contact, squawk codes \
 or taxi routes, and never say "approved". If the pilot asks for something like that, say "unable" and, if it \
 fits, "continue as filed".
@@ -40,7 +41,9 @@ fits, "continue as filed".
 rest isn't available (you have no weather reports along the route or at other airports unless the facts say so). \
 If they answer none of it, say "unable, information not available".
 - Decision reply: the pilot said something that is no request (small talk, thanks, a remark, a correction). Reply \
-briefly and politely as a busy controller would; if they're right or wrong about something in the facts, say so.
+briefly and politely as a busy controller would ("roger", "copy that", "no problem"); if they're right or wrong \
+about something in the facts, say so. If the facts say you are waiting for a readback the pilot didn't give, ask \
+for it: "read back the altitude".
 - At most 20 words. Do not start with the callsign; it is added for you."""
 
 
@@ -54,21 +57,24 @@ SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "requir
           "additionalProperties": False}
 
 EXAMPLES: tuple[tuple[str, str], ...] = (
-    ('Pilot asked: "any weather to report at quebec"\nDecision: answer\nFacts: controller Montreal Center; Quebec wind 240@8; '
-     'Quebec altimeter 29.92',
+    ('Pilot asked: "any weather to report at quebec"\nDecision: answer\nFacts: controller Montreal Center; time 1412Z; '
+     'Quebec wind 240@8; Quebec altimeter 29.92',
      '{"reply":"Quebec wind 240 at 8, altimeter 29.92"}'),
-    ('Pilot asked: "request direct Quebec"\nDecision: decline\nFacts: controller Montreal Center; destination Quebec; phase cruise',
+    ('Pilot asked: "request direct Quebec"\nDecision: decline\nFacts: controller Montreal Center; destination Quebec; '
+     'phase cruise; cleared altitude FL230',
      '{"reply":"unable direct at this time, continue as filed"}'),
     ('Pilot asked: "any bad weather on the way to Phoenix today"\nDecision: answer\nFacts: controller San Diego Ground; '
-     'destination Phoenix; wind 270@6; altimeter 29.98; here and now: wind 270 at 6, altimeter 29.98',
+     'destination Phoenix; wind 270@6; altimeter 29.98; departure runway 27; here and now: wind 270 at 6, altimeter 29.98',
      '{"reply":"no weather reports along your route available, San Diego wind 270 at 6, altimeter 29.98"}'),
-    ('Pilot asked: "how long until we get there"\nDecision: answer\nFacts: controller Seattle Approach; runway in use 16L',
+    ('Pilot asked: "how long until we get there"\nDecision: answer\nFacts: controller Seattle Approach; time 0230Z; '
+     'landing runway 16L; ATIS information C',
      '{"reply":"unable, information not available"}'),
-    ('Pilot asked: "how are you doing today"\nDecision: reply\nFacts: controller Denver Ground; phase parked',
+    ('Pilot asked: "how are you doing today"\nDecision: reply\nFacts: controller Denver Ground; phase parked; '
+     'wind 180@9; departure runway 17R',
      '{"reply":"doing well, thanks for asking"}'),
-    ('Pilot asked: "so that isn\'t parallel landings, you would need both 28 left and right"\nDecision: reply\n'
-     'Facts: controller San Francisco Tower; landing runways 28R; notices none',
-     '{"reply":"that\'s right, only runway 28R for landing at the moment"}'),
+    ('Pilot asked: "negative, that plane is not in our way"\nDecision: reply\nFacts: controller Toronto Ground; '
+     'phase taxi out; wind 360@13; departure runway 33R; ATIS information T',
+     '{"reply":"roger, thanks for letting me know"}'),
 )
 
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
@@ -145,7 +151,8 @@ def _check_runways(text: str, facts: dict[str, str]) -> None:
     for pair in re.findall(r"\b\d{1,2}[LRC]?/\d{1,2}[LRC]?\b", text.upper()):
         if not re.search(rf"(?<![\w/]){re.escape(pair)}(?![\w/])", listed):
             raise FactsError(f"reply names runway {pair}, which the airport doesn't have")
-    in_use = {d.lstrip("0") for k, v in facts.items() if "in use" in k or k in ("landing runways", "departing runways")
+    in_use = {d.lstrip("0") for k, v in facts.items() if "in use" in k or k in ("landing runways", "departing runways",
+                                                                                "landing runway", "departure runway")
               for d in re.findall(r"\b\d{1,2}[LRC]?\b", v.upper())}
     for clause in re.split(r",|;| and | but ", text.lower()):
         if "in use" in clause or "landing" in clause or "departing" in clause:
@@ -213,21 +220,23 @@ def phrase_request(pilot: str, decision: str, facts: dict[str, str], *, beyond_f
 
 REWORD_SYSTEM = """You are an air traffic controller on the radio. The controller's reply is decided; say it \
 the way a real controller would, in standard radio phraseology, fitting what the pilot said.
-- Keep every number, runway, altitude, heading, frequency, squawk, taxiway, fix and name exactly as given, \
-taxiways and fixes in the same order, and a flight level as "FL240".
-- Keep every instruction and its meaning: cleared, hold short, expect, contact, climb, descend, unable ...
+- Say every item of the Keep line exactly as written: numbers, runways, altitudes, flight levels, headings, \
+frequencies, squawks, taxiways, fixes and names, taxiways and fixes in the same order.
+- Keep every instruction and its meaning: cleared, hold short, expect, contact, climb, descend, readback correct, \
+negative, unable ...
 - Add nothing: no instruction, number, approval or information that isn't in the reply.
-- Do not start with the callsign; it is added for you. One or two short sentences."""
+- Say each thing once. Do not start with the callsign; it is added for you. One or two short sentences."""
 
 REWORD_EXAMPLES: tuple[tuple[str, str], ...] = (
     ('Pilot said: "ground, DP69 at gate 12, ready to taxi with information bravo"\n'
-     'Reply: "runway 06L, taxi via B, C, hold short of runway 06L"',
+     'Reply: "runway 06L, taxi via B, C, hold short of runway 06L"\nKeep: 06L; B; C',
      '{"reply":"taxi to runway 06L via B and C, hold short of runway 06L"}'),
-    ('Pilot said: "center, N172LT, any chance of higher?"\nReply: "climb and maintain 9,000"',
+    ('Pilot said: "center, N172LT, any chance of higher?"\nReply: "climb and maintain 9,000"\nKeep: 9,000',
      '{"reply":"climb and maintain 9,000"}'),
-    ('Pilot said: "tower, 2LT, 5 mile final 14R"\nReply: "runway 14R, cleared to land, wind 150 at 8"',
+    ('Pilot said: "tower, 2LT, 5 mile final 14R"\nReply: "runway 14R, cleared to land, wind 150 at 8"\n'
+     'Keep: 14R; 150; 8',
      '{"reply":"wind 150 at 8, runway 14R cleared to land"}'),
-    ('Pilot said: "approach, 2LT, radio check"\nReply: "read you five by five"',
+    ('Pilot said: "approach, 2LT, radio check"\nReply: "read you five by five"\nKeep: nothing',
      '{"reply":"loud and clear, five by five"}'),
 )
 
@@ -244,12 +253,36 @@ COMMON_IDENTS = {"ATC", "ATIS", "IFR", "VFR", "ILS", "RNAV", "GPS", "VOR", "NDB"
 
 def _plain(text: str) -> str:
     """Lower case, with the spellings that mean the same word made one: "take off", "take-off": "takeoff"; "24 right":
-    "24r" (a runway's side isn't a turn)."""
+    "24r" (a runway's side isn't a turn); "pushback": "push". "Radar contact" goes: it isn't the instruction
+    "contact" (and a model that adds "contact approach" to it is adding one)."""
     t = re.sub(r"\b(\d{1,2})\s+(left|right|center|centre)\b", lambda m: m.group(1) + m.group(2)[0], text.lower())
-    for a, b in (("take-off", "takeoff"), ("take off", "takeoff"), ("line-up", "line up"), ("push back", "pushback"),
-                 ("push-back", "pushback"), ("stand by", "standby"), ("centre", "center")):
+    for a, b in (("take-off", "takeoff"), ("take off", "takeoff"), ("line-up", "line up"), ("push back", "push"),
+                 ("push-back", "push"), ("pushback", "push"), ("stand by", "standby"), ("centre", "center"),
+                 ("radar contact", "radar")):
         t = t.replace(a, b)
     return t
+
+
+def keep_line(scripted: str) -> str:
+    """What the reworded reply must say as written, for the model to see: "FL360; 127.575; 3305; GOPUP4"."""
+    found = re.findall(r"\bFL\s?\d{2,3}\b|\b\d{1,2}[LRC]\b|\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?|"
+                       r"\b(?=[A-Z0-9]*[A-Z])[A-Z][A-Z0-9]{0,6}\b", scripted)
+    items = [f for f in dict.fromkeys(found) if f not in COMMON_IDENTS]
+    if "readback correct" in scripted.lower():
+        items.insert(0, "readback correct")
+    return "; ".join(items) or "nothing"
+
+
+def _repeats(text: str) -> str | None:
+    """Three words or more said twice ("expect runway 33R, expect runway 33R for departure"), or None."""
+    words = re.findall(r"[a-z0-9']+", text.lower())
+    seen: set[tuple[str, ...]] = set()
+    for i in range(len(words) - 2):
+        gram = tuple(words[i:i + 3])
+        if gram in seen:
+            return " ".join(gram)
+        seen.add(gram)
+    return None
 
 
 def _idents(text: str) -> set[str]:
@@ -308,13 +341,17 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
         raise PhraseError(f"reply changes the order of {' '.join(_sequence(scripted))}; keep them in order")
     if internal := sorted(words & INTERNAL):
         raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
+    if "readback correct" in said and "readback correct" not in got.replace("read back", "readback"):
+        raise PhraseError("reply leaves out readback correct; keep it")
+    if (twice := _repeats(text)) is not None and _repeats(scripted) is None:
+        raise PhraseError(f'reply says "{twice}" twice; say each thing once')
     return text
 
 
 def reword_request(pilot: str, scripted: str) -> LlmRequest:
     messages: tuple[tuple[str, str], ...] = tuple(
         turn for user, assistant in REWORD_EXAMPLES for turn in (("user", user), ("assistant", assistant))
-    ) + (("user", f'Pilot said: "{pilot}"\nReply: "{scripted}"'),)
+    ) + (("user", f'Pilot said: "{pilot}"\nReply: "{scripted}"\nKeep: {keep_line(scripted)}'),)
     return LlmRequest("reword", REWORD_SYSTEM, messages, SCHEMA, max_tokens=100)
 
 

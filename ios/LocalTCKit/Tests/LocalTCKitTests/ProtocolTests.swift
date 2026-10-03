@@ -98,6 +98,18 @@ struct FlightStoreTests {
         #expect(store.trail == [.init(lat: 40.0, lon: -100.0)])
     }
 
+    @Test("A long flight keeps its whole path from the start, less dense, as it goes")
+    func longTrail() throws {
+        let store = FlightStore()
+        for i in 0..<5000 {
+            let own = try LiveMessage.decodeEnvelope(#"{"type":"own","data":{"lat":\#(Double(i) * 0.01),"lon":-100.0}}"#)
+            store.apply(try #require(own))
+        }
+        #expect(store.trail.count <= FlightStore.trailKeep)
+        #expect(store.trail.first == .init(lat: 0, lon: -100))  // the start stays where it was
+        #expect(store.trail.last == .init(lat: 49.99, lon: -100))
+    }
+
     @Test("The ATC zones the desktop's Live Map draws come through, and go with the flight")
     func zones() throws {
         let store = FlightStore()

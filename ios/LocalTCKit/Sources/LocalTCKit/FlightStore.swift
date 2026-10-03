@@ -5,7 +5,11 @@ import Observation
 @MainActor @Observable
 public final class FlightStore {
     public static let radioKeep = 200
-    public static let trailKeep = 600
+    /// The path flown: a point every ~200 m (``trailStep`` degrees), and past ``trailKeep`` points every other one
+    /// goes, so a long flight keeps its whole shape from the gate on. (Cutting the oldest off moved the start of
+    /// the line along behind the aircraft.)
+    public static let trailKeep = 2000
+    public static let trailStep = 0.002
 
     public private(set) var status = FlightStatus()
     public private(set) var own: OwnAircraft?
@@ -80,17 +84,25 @@ public final class FlightStore {
     private func setOwn(_ o: OwnAircraft) {
         own = o
         let point = Coordinate(lat: o.lat, lon: o.lon)
-        if trail.last != point {
-            trail.append(point)
-            if trail.count > Self.trailKeep { trail.removeFirst(trail.count - Self.trailKeep) }
+        if let last = trail.last, abs(last.lat - point.lat) + abs(last.lon - point.lon) < Self.trailStep { return }
+        trail.append(point)
+        trail = Self.thinned(trail)
+    }
+
+    /// Every other point (the last one kept) until it fits ``trailKeep``: the whole path, less dense.
+    static func thinned(_ path: [Coordinate]) -> [Coordinate] {
+        var out = path
+        while out.count > trailKeep, let last = out.last {
+            out = stride(from: 0, to: out.count - 1, by: 2).map { out[$0] } + [last]
         }
+        return out
     }
 
     /// The path flown before this phone started watching: it replaces the one drawn so far (it runs up to now).
     private func setTrail(_ points: [[Double]]) {
         let path = points.compactMap { $0.count == 2 ? Coordinate(lat: $0[0], lon: $0[1]) : nil }
         guard !path.isEmpty else { return }
-        trail = Array(path.suffix(Self.trailKeep))
+        trail = Self.thinned(path)
     }
 
     private func setTraffic(_ list: [TrafficTarget]) {

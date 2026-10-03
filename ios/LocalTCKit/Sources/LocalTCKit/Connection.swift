@@ -107,9 +107,21 @@ public final class ConnectionManager {
         }
     }
 
-    /// A call typed on the phone, transmitted by LocalTC on COM1. Only on the same Wi-Fi: the relay is one-way.
+    /// Whether a typed call can go out now: straight to the PC on the same Wi-Fi, or through the server.
+    public var canSay: Bool { local != nil || state == .server }
+
+    /// A call typed on the phone, transmitted by LocalTC on COM1: straight to the PC on the same Wi-Fi, otherwise
+    /// through the account's relay, which holds it until LocalTC picks it up (a second or two while watching).
     public func say(_ text: String, session: URLSession = .shared) async throws {
-        guard let (url, key) = local else { throw SayError.notLocal }
+        guard let (url, key) = local else {
+            guard state == .server else { throw SayError.notLocal }
+            do {
+                try await api.say(text)
+            } catch let error as APIError {
+                throw SayError.refused(error.message)
+            }
+            return
+        }
         var request = URLRequest(url: url.appending(path: "/companion/v1/say"))
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -127,7 +139,7 @@ public final class ConnectionManager {
 
         public var errorDescription: String? {
             switch self {
-            case .notLocal: "Talking to ATC from the phone works on the same Wi-Fi as the PC."
+            case .notLocal: "Not connected to LocalTC: talking to ATC works on the same Wi-Fi as the PC, or through the server."
             case .refused(let why): why
             }
         }

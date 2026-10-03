@@ -294,3 +294,13 @@ def test_a_wrong_line_is_rebuilt_from_its_recording(app):
     assert server.flights["kden-ksea"]["landing_vs_fpm"] == -290  # synced again
     with pytest.raises(HttpError):
         asyncio.run(routes.api_logbook_rebuild({"id": "nope"}))
+
+
+def test_marks_and_lines_fit_what_the_account_takes():
+    """A 261-character "turned away" alert had every replay of the flight refused by the account ("The replay's mark
+    isn't right"): marks are cut to 200 characters, radio lines to 2,000."""
+    from localtc.replay.rewatch import LINE_TEXT, MARK_TEXT, _clip
+
+    long = "the model's words for clearance.standby were turned away " * 6
+    assert len(_clip(long, MARK_TEXT)) == MARK_TEXT and _clip(long, MARK_TEXT).endswith("…")
+    assert _clip("roger", MARK_TEXT) == "roger" and LINE_TEXT == 2000

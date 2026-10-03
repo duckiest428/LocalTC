@@ -73,6 +73,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         dep_runway=flight.dep_runway or None,
         arr_runway=flight.arr_runway or None,
         enforce_fpln_runways=atc.enforce_fpln_runways,
+        traffic_runways=atc.traffic_runways,
         airport_fixes=str(data_dir() / "airport_fixes.toml"),
         route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
                              via=f.via) for f in flight.fixes),

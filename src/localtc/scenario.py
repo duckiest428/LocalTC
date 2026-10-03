@@ -92,6 +92,8 @@ class Scenario(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     pilot: list[PilotRule] = []
 
 
+RECORDED_STANDBY_S = (12.0, 25.0)  # "stand by", then the clearance, in the recordings made before it took longer
+
 def load_scenario(path: str | Path) -> Scenario:
     return msgspec.convert(tomllib.loads(Path(path).read_text(encoding="utf-8")), Scenario)
 
@@ -173,6 +175,10 @@ def run(
     from localtc.copilot import Copilot, Note, Say, Tune
 
     engine = AtcEngine(engine_config(scenario.flight, scenario.atc), interpreter=interpreter, phraser=phraser)
+    # A recording's aircraft moves when it moved, and its pilot spoke when they spoke: both were timed against the
+    # clearance coming a dozen seconds or so after "stand by" (a readback from the recording can't come before the
+    # clearance it reads back, nor the taxi before the aircraft rolls).
+    engine.cfg.standby_s = RECORDED_STANDBY_S
     engine.cfg.speech_s_per_char = speech_s_per_char  # as with voice out: ATC's words take time to say
     engine.cfg.chatter = chatter  # other flights on the frequency (off for goldens: they'd be all chatter)
     if voice is not None:

@@ -37,6 +37,10 @@ const num = (v: unknown, min: number, max: number, what: string): number =>
   typeof v === "number" && Number.isFinite(v) && v >= min && v <= max ? v : bad(what);
 const text = (v: unknown, max: number, what: string): string =>
   v === undefined || v === null ? "" : typeof v === "string" && v.length <= max ? v : bad(what);
+/** Words shown to the pilot (a mark, a radio line): too long is cut short, never a reason to refuse the replay (a
+ * 261-character alert had every replay of a flight turned away). */
+const clip = (v: unknown, max: number, what: string): string =>
+  v === undefined || v === null ? "" : typeof v === "string" ? (v.length <= max ? v : `${v.slice(0, max - 1)}…`) : bad(what);
 
 /** A replay from the app, rebuilt from the fields this server knows. */
 export function cleanReplay(raw: unknown): Obj {
@@ -76,18 +80,18 @@ export function cleanReplay(raw: unknown): Obj {
 
   const radio = (Array.isArray(r.radio) ? r.radio : bad("radio")).slice(0, MAX_LINES).map((x) => {
     if (!isObj(x) || typeof x.kind !== "string" || !RADIO_KINDS.has(x.kind)) bad("radio");
-    const line: Obj = { kind: x.kind, t: num(x.t, 0, 7 * 86400, "radio time"), text: text(x.text, TEXT, "radio text") };
+    const line: Obj = { kind: x.kind, t: num(x.t, 0, 7 * 86400, "radio time"), text: clip(x.text, TEXT, "radio text") };
     if (x.station !== undefined) line.station = text(x.station, 120, "radio station");
     if (x.mhz !== undefined && x.mhz !== null) line.mhz = num(x.mhz, 0, 1000, "radio frequency");
     if (typeof x.ok === "boolean") line.ok = x.ok;
-    if (x.readback !== undefined) line.readback = text(x.readback, 300, "readback");
+    if (x.readback !== undefined) line.readback = clip(x.readback, 300, "readback");
     if (x.unclear === true) line.unclear = true;
     return line;
   });
 
   const marks = (Array.isArray(r.marks) ? r.marks : []).slice(0, MAX_MARKS).map((x) => {
     if (!isObj(x) || typeof x.kind !== "string" || !MARK_KINDS.has(x.kind)) bad("marks");
-    return { t: num(x.t, 0, 7 * 86400, "mark time"), kind: x.kind, text: text(x.text, 200, "mark") };
+    return { t: num(x.t, 0, 7 * 86400, "mark time"), kind: x.kind, text: clip(x.text, 200, "mark") };
   });
   return { v: 1, flight, airports, route, track, radio, marks };
 }

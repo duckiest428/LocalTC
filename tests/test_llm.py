@@ -311,11 +311,20 @@ def test_parse_value_rejects(element, raw):
         parse_value(element, raw)
 
 
-def test_invented_values_are_rejected():
+def test_invented_values_are_left_out():
+    """A value the pilot didn't say never counts: left out (the rest of the reading stands), or, when it's the very
+    thing a request is about, the reading is turned away (retried)."""
     tokens = normalize("roger, DP69")
-    with pytest.raises(AnswerError, match="did not say squawk=5015"):
-        parse_answer(json.dumps({"kind": "readback", "intent": "", "squawk": "5015"}),
-                     PendingReadback("x", "clearance", {"squawk": "5015"}, ("squawk",)), tokens)
+    answer = parse_answer(json.dumps({"kind": "readback", "intent": "", "squawk": "5015"}),
+                          PendingReadback("x", "clearance", {"squawk": "5015"}, ("squawk",)), tokens)
+    assert answer.values == {} and "did not say squawk=5015" in answer.note
+    # "Looking", with the cleared altitude copied in from the context (llama3.2:3b, all three flights).
+    looking = parse_answer(json.dumps({"kind": "request", "intent": "traffic_report", "altitude": "39000"}), None,
+                           normalize("Looking, Delta 2672"))
+    assert (looking.intent, looking.values) == ("traffic_report", {})
+    with pytest.raises(AnswerError, match="did not say altitude=12000"):
+        parse_answer(json.dumps({"kind": "request", "intent": "request_altitude", "altitude": "12000"}), None,
+                     normalize("could we get higher, DP69"))
     with pytest.raises(AnswerError, match="not valid JSON"):
         parse_answer("kind: readback", None, tokens)
     with pytest.raises(AnswerError, match="needs an intent"):
@@ -630,7 +639,7 @@ def test_the_phrasing_model_knows_who_it_speaks_for_and_the_runway_in_use():
     engine, own = cyul_engine(backend)
     say(engine, own, "is the cafe open", mhz=121.0)
     facts = _shown(backend, "phrase")
-    assert "controller Montreal Ground" in facts and "runway in use " in facts
+    assert "controller Montreal Ground" in facts and "departure runway " in facts
 
 
 def test_the_app_is_told_when_the_model_timed_out():

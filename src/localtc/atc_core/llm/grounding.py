@@ -56,7 +56,9 @@ def grounded(element: str, value: Any, tokens: list[Token]) -> bool:
         feet = int(value)
         if _said_number(str(feet), tokens):
             return True
-        return "level" in words and feet % 100 == 0 and _said_number(str(feet // 100), tokens)
+        # "Flight level 390", or the level alone ("Clementine 390": climb and maintain three nine zero, as pilots say
+        # it): three digits for hundreds of feet, from 18,000 up.
+        return feet % 100 == 0 and _said_number(str(feet // 100), tokens) and ("level" in words or feet >= 18000)
     if element == "heading":
         return _said_number(str(int(value)), tokens)
     if element == "atis":
@@ -80,7 +82,7 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
     "request_pushback": ({"push", "pushback", "pushing"},),
-    "ready_to_taxi": ({"taxi", "ready", "push", "pushback"},),
+    "ready_to_taxi": ({"taxi", "ready"},),  # (not "push back": that's request_pushback, Phoenix's gate F4)
     "ready_for_departure": ({"ready", "holding", "hold", "departure", "takeoff", "go", "short"},),
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
     "clear_of_runway": ({"clear", "vacated", "off", "exited"},),

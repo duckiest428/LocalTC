@@ -99,6 +99,11 @@
               <dl class="tr-facts" id="tr-facts"></dl>
               <h3>Radio</h3>
               <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
+              <form class="tr-say" id="tr-say" autocomplete="off">
+                <input id="tr-say-text" maxlength="300" placeholder="Type a radio call, as in the app ..." aria-label="A radio call to transmit">
+                <button class="btn btn-primary btn-sm" type="submit">Transmit</button>
+              </form>
+              <p class="hint tr-say-note" id="tr-say-note" aria-live="polite"></p>
             </div>
           </div>
           <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →

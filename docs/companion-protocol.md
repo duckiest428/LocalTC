@@ -123,8 +123,16 @@ The phone shows a banner, and a local notification if it's in the background.
 The departure and arrival airports (one if they're the same): published data for the Frequencies and
 Airports tabs.
 
-## Talking from the phone (local network only)
+## Talking from the phone or the website
 
-`POST http://<pc>:47800/companion/v1/say` with the companion key and `{"text": "Phoenix Approach, Frontier
-2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app. `200 {"ok": true}`, or
-`409 {"error": ...}` when no flight is running. The relay is one-way, so this works on the same Wi-Fi only.
+On the same Wi-Fi: `POST http://<pc>:47800/companion/v1/say` with the companion key and `{"text": "Phoenix
+Approach, Frontier 2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app.
+`200 {"ok": true}`, or `409 {"error": ...}` when no flight is running.
+
+Anywhere else, through the account: `POST /v1/live/say` (signed in; the website's Flight Tracker with its cookie
+and `X-LocalTC: 1`, from the site's own pages) with `{"text": ...}`. The relay holds the call in memory, five at
+most, for a minute: `200 {"ok": true, "waiting": n}`, `409` when no flight is on, `400` for an empty call. The
+desktop app picks the waiting calls up from the `calls` list in the answer to its next live update (`PUT
+/v1/live`, `/frame`, `/map`, `POST /radio`, `PUT /airports`), or with `GET /v1/live/calls` every couple of seconds
+while somebody watches, and transmits each as if typed. A call it can't transmit comes back in the radio log as
+an `alert` line starting "Not transmitted".

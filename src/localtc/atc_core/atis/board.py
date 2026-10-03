@@ -3,12 +3,14 @@
 A new ATIS (the next letter, A to Z and round again) is recorded (JO 7110.65 2-9-2):
 
 - with every new official weather observation, hourly at 53 minutes past, whatever it says;
-- when the weather changes enough to matter between them (a special): the wind, the visibility across 3 miles,
-  the altimeter by 0.02, precipitation starting or stopping, a ceiling appearing;
+- when the weather changes enough to matter between them (a special): the wind by 10 kt or swinging 60 degrees,
+  the visibility across 3 miles, the altimeter by 0.03, precipitation starting or stopping, a ceiling appearing;
 - when the operations change: the runway in use, the approaches, the notices, the runway condition, low
   visibility procedures or wind shear.
 
-Not more than once every ``MIN_UPDATE_S`` though, so a gusty wind doesn't spin the letters. The ATIS also fixes
+Not more than once every ``MIN_UPDATE_S`` between the hourly ones though (a change of runway: ``RUNWAY_UPDATE_S``),
+so the sim's ever-shifting weather doesn't spin the letters: pilots found a new letter every ten minutes nothing
+like the real thing. The ATIS also fixes
 each airport's runway in use, so the runway doesn't flip with every gust: it changes only when the tailwind on
 it gets too strong (and never onto a closed one), and the broadcast says a runway change is in progress for a
 while after.
@@ -33,11 +35,14 @@ from localtc.atc_core.atis.operations import (
     parallels,
 )
 from localtc.atc_core.region import Region, region_for
+from localtc.sim_api.geo import angle_diff
 
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+FLOW_DEG = 45.0  # a runway end this close to the traffic's heading is going the same way
 MAX_TAILWIND_KT = 5.0  # the runway in use changes once the tailwind on it is stronger than this
 CROSSWIND_CAUTION_KT = 12.0
-MIN_UPDATE_S = 600.0  # an ATIS changes at most this often (session time)
+MIN_UPDATE_S = 1800.0  # a special between the hourly observations at most this often (session time) ...
+RUNWAY_UPDATE_S = 300.0  # ... or this often when the runway in use changes
 RUNWAY_CHANGE_S = 900.0  # "runway change in progress" this long after one
 OBSERVED_AT_MIN = 53  # routine observations: hourly at 53 minutes past
 TYPICAL = Aircraft(airline=True)  # what an ATIS advertises approaches for: the airliners that fly them
@@ -78,6 +83,7 @@ class AtisBoard:
     """The current ATIS for each airport; the letter advances with each new observation and each change."""
 
     def __init__(self, seed: int = 0, *, notams: bool = True, region: Region | None = None) -> None:
+        self.flows: dict[str, float] = {}  # airport -> the true heading its own traffic is using (the engine sets it)
         self.seed = seed
         self.notams = notams
         self.region = region  # the phraseology setting, when it isn't "auto"
@@ -98,12 +104,13 @@ class AtisBoard:
         """Refresh an airport's ATIS; returns it if it's new or its letter changed."""
         key = icao if kind == "both" else f"{icao}/{kind}"
         old = self.current.get(key)
-        if old is not None and t - self._issued.get(key, -MIN_UPDATE_S) < MIN_UPDATE_S:
+        since = t - self._issued.get(key, -math.inf)
+        if old is not None and since < RUNWAY_UPDATE_S:
             return None
         notices = self.notices(icao, geo)
         closed = closed_ends(geo, notices)
         out = outages(notices)
-        end = self._runway(geo, weather, old.runway if old else None, closed, out)
+        end = self._runway(geo, weather, old.runway if old else None, closed, out, flow=self.flows.get(icao))
         if end is None:
             return None
         region = self.region or region_for(icao)
@@ -121,16 +128,27 @@ class AtisBoard:
             geo.airport, e.ident, has_ils=e.has_ils, visibility_sm=weather.visibility_sm, ceiling_ft=weather.ceiling_ft,
             in_cloud=weather.in_cloud, aircraft_type=TYPICAL.type, airline=TYPICAL.airline,
             visual_first=not region.icao, precip=weather.precip, outages=out) for e in landing}
+        instrument = {}
+        for e in landing:
+            if approaches[e.ident].kind == "VISUAL":
+                published = choose_approach(
+                    geo.airport, e.ident, has_ils=e.has_ils, visibility_sm=weather.visibility_sm,
+                    ceiling_ft=weather.ceiling_ft, in_cloud=True, aircraft_type=TYPICAL.type, airline=TYPICAL.airline,
+                    visual_first=False, precip=weather.precip, outages=out)  # what it has for when it isn't visual
+                if published.kind != "VISUAL" and not published.circle_to:
+                    instrument[e.ident] = published
         extra = advisories(weather, end.ident)
         taxiways = frozenset(n.subject for n in notices if n.kind == "taxiway_closed")
         ops = Operations(
-            landing=tuple(e.ident for e in landing), departing=(end.ident,), approaches=approaches,
+            landing=tuple(e.ident for e in landing), departing=(end.ident,), approaches=approaches, instrument=instrument,
             simultaneous=simultaneous and all(a.kind != "VISUAL" for a in approaches.values()), notices=notices,
             outages=out, closed_runways=closed, closed_taxiways=taxiways,
             runway_change=t - self._runway_changed.get(key, -math.inf) < RUNWAY_CHANGE_S, **extra)
         notes = remarks(geo, end, weather)
         slot = observation_slot(zulu_s)
         new_observation = old is not None and slot != old.observation
+        if old is not None and not new_observation and since < MIN_UPDATE_S and end.ident == old.runway:
+            return None  # a special so soon after the last one: it waits (the runway changing doesn't)
         if old is not None and not new_observation and not _changed(old, weather, end.ident, notes) \
                 and old.operations is not None and old.operations.key() == ops.key():
             return None
@@ -148,9 +166,17 @@ class AtisBoard:
         self._issued[key] = t
         return info
 
-    @staticmethod
-    def _runway(geo: AirportGeometry, weather: Weather, current: str | None, closed: frozenset[str],
-                out=None) -> RunwayEndGeometry | None:
+    def _runway(self, geo: AirportGeometry, weather: Weather, current: str | None, closed: frozenset[str],
+                out=None, *, flow: float | None = None) -> RunwayEndGeometry | None:
+        """The runway in use. With ``flow`` (the way the sim's own traffic is taking off and landing, a true heading):
+        a runway that way, as long as its tailwind is acceptable, so this flight isn't sent head-on into the stream
+        of everybody else's arrivals and departures."""
+        if flow is not None:
+            against = frozenset(e.ident for e in geo.ends if angle_diff(e.heading_true, flow) > FLOW_DEG)
+            with_flow = [e for e in geo.ends if e.ident not in closed | against
+                         and components(e, weather)[0] >= -MAX_TAILWIND_KT]
+            if with_flow:
+                closed = closed | against  # the rest of the choice as below, among the runways that way
         open_ends = [e for e in geo.ends if e.ident not in closed]
         if not open_ends:
             return None
@@ -175,12 +201,12 @@ def _changed(old: AtisInfo, new: Weather, runway: str, notes: tuple[str, ...]) -
     before = old.weather
     if runway != old.runway or notes != old.remarks or new.precip != before.precip:
         return True
-    if before.altimeter_inhg is not None and new.altimeter_inhg is not None and abs(before.altimeter_inhg - new.altimeter_inhg) >= 0.02:
+    if before.altimeter_inhg is not None and new.altimeter_inhg is not None and abs(before.altimeter_inhg - new.altimeter_inhg) >= 0.03:
         return True
-    if abs(new.wind.speed_kt - before.wind.speed_kt) >= 7:
+    if abs(new.wind.speed_kt - before.wind.speed_kt) >= 10:
         return True
     turn = abs((new.wind.direction_mag - before.wind.direction_mag + 180) % 360 - 180)
-    if turn >= 40 and max(new.wind.speed_kt, before.wind.speed_kt) >= 6:
+    if turn >= 60 and max(new.wind.speed_kt, before.wind.speed_kt) >= 10:
         return True
     ceilings = [w.ceiling_ft for w in (before, new)]
     if (ceilings[0] is None) != (ceilings[1] is None) or (None not in ceilings and

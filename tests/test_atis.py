@@ -62,16 +62,42 @@ def test_the_letter_advances_only_on_a_real_change_and_not_too_often():
     assert first is not None and first.runway == "34L" and first.zulu == "1653"
     assert board.update("KPAE", geo, weather(345, 9), 63180.0, "Paine Field", t=700.0) is None  # same weather
     assert board.update("KPAE", geo, weather(340, 8, altimeter_inhg=29.80), 63180.0, "Paine Field", t=100.0) is None  # too soon
+    # A special within half an hour of the last ATIS waits (the sim's weather shifts all the time; pilots found a new
+    # letter every ten minutes nothing like the real thing) ...
+    assert board.update("KPAE", geo, Weather(Wind(340, 8), altimeter_inhg=29.80, wind_dir_true=340.0), 63900.0,
+                        "Paine Field", t=700.0) is None
     changed = board.update("KPAE", geo, Weather(Wind(340, 8), altimeter_inhg=29.80, wind_dir_true=340.0), 63900.0,
-                           "Paine Field", t=700.0)
+                           "Paine Field", t=1900.0)
     assert changed is not None and changed.letter == chr(ord(first.letter) + 1) if first.letter != "Z" else "A"
+    # ... and so does one that's no real change: 7 kt more wind, or the altimeter by 0.02.
+    assert board.update("KPAE", geo, Weather(Wind(340, 15), altimeter_inhg=29.82, wind_dir_true=340.0), 63900.0,
+                        "Paine Field", t=4000.0) is None
+
+
+def test_a_change_of_runway_is_a_new_atis_soon():
+    board, geo = AtisBoard(), geometry("KPAE")
+    first = board.update("KPAE", geo, weather(340, 8), 0.0, "Paine Field")
+    turned = board.update("KPAE", geo, weather(160, 12), 0.0, "Paine Field", t=400.0)
+    assert turned is not None and turned.runway.startswith("16") and turned.letter != first.letter
 
 
 def test_the_runway_in_use_holds_until_the_tailwind_is_too_strong():
     board, geo = AtisBoard(), geometry("KPAE")
     assert board.update("KPAE", geo, weather(340, 8), 0.0, "Paine Field").runway == "34L"
-    assert board.update("KPAE", geo, weather(170, 4), 0.0, "Paine Field", t=700.0).runway == "34L"  # light tailwind
-    assert board.update("KPAE", geo, weather(160, 12), 0.0, "Paine Field", t=1400.0).runway.startswith("16")
+    board.update("KPAE", geo, weather(170, 4), 0.0, "Paine Field", t=2000.0)
+    assert board.current["KPAE"].runway == "34L"  # a light tailwind: no change (no new ATIS for it either)
+    assert board.update("KPAE", geo, weather(160, 12), 0.0, "Paine Field", t=4000.0).runway.startswith("16")
+
+
+def test_the_runway_goes_the_way_the_traffic_does_when_the_wind_allows():
+    """The sim's own arrivals and departures on 16 (``AtisBoard.flows``): this flight goes that way too, not head-on
+    into them, when the wind on 16 is fine; a strong tailwind on it still turns it round."""
+    board, geo = AtisBoard(), geometry("KPAE")
+    board.flows["KPAE"] = geo.end("16R").heading_true
+    assert board.update("KPAE", geo, weather(340, 4), 0.0, "Paine Field").runway.startswith("16")
+    board = AtisBoard()
+    board.flows["KPAE"] = geo.end("16R").heading_true
+    assert board.update("KPAE", geo, weather(340, 15), 0.0, "Paine Field").runway.startswith("34")
 
 
 def test_cautions_for_the_weather():

@@ -139,7 +139,10 @@ def test_when_the_model_cant_answer_ATC_says_so_instead_of_answering_something_e
     assert "the model's answer was turned away (invalid: reply has numbers that are not in the facts: 200); " \
         'ATC said "unable, that information is not available"' in decision.fallback
     [alert] = [o for o in out if isinstance(o, AtcAlert) and o.kind == "llm_rejected"]  # and the pilot is told
-    assert alert.detail == decision.fallback
+    assert alert.detail in decision.fallback and "the model's answer was turned away" in alert.detail
+    # (A reading of the call the grammar took over is in the record, not the alert: the pilot heard the model either
+    # way, and those alerts were most of what made the model look like it wasn't there.)
+    assert "model gave no usable reading" not in alert.detail
 
 
 # --- wording the reply --------------------------------------------------------------------------------------------------
@@ -306,9 +309,11 @@ def test_a_junk_value_in_a_request_is_left_out_not_the_whole_reading():
     assert "left out: atis" in answer.note
     assert parse_answer('{"kind":"request","intent":"ready_to_taxi","atis":"none"}', None,
                         normalize("ground, ready to taxi")).values == {}
-    with pytest.raises(Exception, match="is not a runway"):  # a readback's values are still checked strictly
-        parse_answer('{"kind":"readback","runway":"the long one"}', _takeoff_pending(),
-                     normalize("runway 06L cleared for takeoff"))
+    # A readback's: the same ("expect 390, 25 minutes of departure" for the cruise lost the altitude, frequency and
+    # squawk the model read right). What the grammar heard of it stands.
+    answer = parse_answer('{"kind":"readback","runway":"the long one"}', _takeoff_pending(),
+                          normalize("runway 06L cleared for takeoff"))
+    assert answer.values == {} and "is not a runway" in answer.note
 
 
 def test_a_question_with_can_in_it_and_a_topic_is_that_question():
@@ -365,7 +370,7 @@ def test_a_call_nothing_classifies_still_gets_the_models_reply(mode):
     engine.interpreter.backend = engine.phraser.backend = backend
     out = say(engine, msgspec.structs.replace(own, t=own.t + 20), garbled, mhz=121.0)
     assert atc(out) == ["DP69, say again, I didn't get your readback."]
-    assert "readback expected" in [r for r in backend.requests if r.purpose == "phrase"][-1].prompt
+    assert "waiting for the pilot to read back" in [r for r in backend.requests if r.purpose == "phrase"][-1].prompt
     assert engine.state.pending is not None  # still owed
 
 
@@ -478,3 +483,127 @@ def test_say_again_from_the_model_needs_words_that_ask_for_a_repeat():
                          asked=True, question=True)
     assert asked.kind == "question"
     assert parse_answer('{"kind":"request","intent":"say_again"}', None, normalize("say again the squawk")).intent == "say_again"
+
+
+# --- three long flights in Fully LLM: what the model was shown, and what was kept of what it said -----------------
+
+
+def _reworded(scripted: str, reply: str) -> str:
+    return check_reworded(msgspec.json.encode({"reply": reply}).decode(), scripted, ("Delta 2672", "DAL2672"))
+
+
+def test_radar_contact_is_no_instruction_to_contact_anybody():
+    """ "Radar contact, maintain FL390" came out as "maintain FL390, contact approach": the "contact" of "radar contact"
+    let an invented handoff through, and dropping it was turned away."""
+    assert _reworded("Oakland Center, radar contact, maintain FL390", "maintain FL390") == "maintain FL390"
+    with pytest.raises(PhraseError, match="adds contact"):
+        _reworded("Oakland Center, radar contact, maintain FL390", "maintain FL390, contact approach")
+
+
+def test_the_model_is_shown_what_to_keep_and_not_handed_a_level_to_copy():
+    """It wrote "maintain FL240" for FL360, four times: FL240 was the instructions' own example."""
+    from localtc.atc_core.llm.phrase import REWORD_SYSTEM, keep_line, reword_request
+
+    assert "FL240" not in REWORD_SYSTEM
+    assert keep_line("Chicago Center, radar contact, maintain FL360") == "FL360"
+    assert reword_request("level 35,900", "Chicago Center, radar contact, maintain FL360").prompt.endswith("Keep: FL360")
+    assert keep_line("readback correct, contact Seattle Ground 126.875 when ready") == "readback correct; 126.875"
+
+
+def test_what_the_reworded_reply_may_not_lose_or_say_twice():
+    with pytest.raises(PhraseError, match="readback correct"):
+        _reworded("readback correct, contact Seattle Ground 126.875 when ready", "contact Seattle Ground 126.875 when ready")
+    with pytest.raises(PhraseError, match="twice"):
+        _reworded("expect runway 33R for departure", "expect runway 33R, expect runway 33R for departure")
+    assert _reworded("push and start approved, tail left", "tail left, pushback and start approved")  # push is push
+
+
+def test_the_facts_are_what_the_call_is_about():
+    """ "Not sure." got "runway 33R is in use, and parallel landings are not available"; a give-way remark got "I did
+    say parallel landings are not available"; a garbled hold-short call got the runway lengths and a closure."""
+    backend = ScriptedBackend(phrase={"DP69 uh the thing": '{"reply":"roger"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "llm"
+    say(engine, msgspec.structs.replace(own, zulu_s=50000.0), "DP69 uh the thing", mhz=121.0)
+    facts = [r for r in backend.requests if r.purpose == "phrase"][-1].prompt
+    assert "parallel" not in facts and "notices" not in facts and "runways" not in facts and " ft" not in facts
+    assert "time 1353Z" in facts and "departure runway" in facts  # "what time is it?" had nothing to go on
+    assert "notices" in engine._facts(engine.facility("ground"), "is anything closed today?")
+    assert " ft" in engine._facts(engine.facility("ground"), "how long is the runway?").get("Montreal-Trudeau International runways", " ft")
+
+
+def test_a_readback_of_a_taxi_to_the_gate_is_no_request_for_one():
+    """LAX and San Diego: the readback, right, taken for a request to taxi to the gate; ATC said the whole taxi again,
+    the readback came again, and again."""
+    from localtc.atc_core.llm.understand import Answer, LlmInterpreter as Interpreter
+    from localtc.atc_core.readback import PendingReadback
+
+    pending = PendingReadback("ground.taxi_to_gate", "ground", {"taxi_route": ("B7", "B")}, ("taxi_route",))
+    asked = Answer(kind="request", intent="request_taxi_parking")
+    assert Interpreter._follow_up(asked, "Gate 49 via Bravo 7, Bravo, Air Canada 795", pending) is None
+    landing = PendingReadback("tower.land", "tower", {"runway": "14R"}, ("runway",))
+    option = Answer(kind="request", intent="request_option")
+    assert Interpreter._follow_up(option, "cleared to land 14R, can we make it a low approach?", landing) is not None
+
+
+def test_nothing_asked_is_no_question():
+    with pytest.raises(Exception, match="asked nothing"):
+        parse_answer('{"kind":"question","topic":"wind"}', None, normalize("Not sure."))
+    assert parse_answer('{"kind":"question","topic":"runway"}', None, normalize("what runway can we expect"),
+                        question=True).kind == "question"
+
+
+def test_a_flight_level_said_as_three_digits_is_the_level():
+    """ "Clementine 390" (climb and maintain three nine zero): the model's 39000 turned away, "the pilot did not say it"."""
+    from localtc.atc_core.llm.grounding import grounded
+
+    assert grounded("altitude", 39000, normalize("Clementine 390, 2672"))
+    assert not grounded("altitude", 3900, normalize("Clementine 39, 2672"))
+
+
+def test_a_reading_the_grammar_took_over_is_kept_not_alerted():
+    """ "Roger that" read as ready_to_taxi, turned away, the grammar's acknowledge used: the record keeps why, and the
+    pilot isn't shown "the model's answer was turned away" for a reply that was never the model's to lose."""
+    roger = "Roger that, DP69"
+    backend = ScriptedBackend({roger: {"kind": "request", "intent": "ready_to_taxi"}})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "llm"
+    out = say(engine, own, roger, mhz=121.0)
+    [decision] = [o for o in out if isinstance(o, AtcDecision)]
+    assert "model gave no usable reading" in decision.fallback
+    assert not [o for o in out if isinstance(o, AtcAlert) and o.kind == "llm_rejected"]
+
+
+def test_asking_what_to_expect_is_a_question_not_a_request():
+    """ "We'd like to know what runway to expect for departure, and which way we'll tail": read as a runway request with
+    the runway in use filled in, and answered "unable"."""
+    said = normalize("we're not requesting to push back, but we'd like to know what is our expected runway for departure")
+    answer = parse_answer('{"kind":"request","intent":"request_runway","runway":"33R"}', None, said, asked=True, question=True)
+    assert (answer.kind, answer.topic) == ("question", "runway")
+    asking_for_one = parse_answer('{"kind":"request","intent":"request_runway","runway":"33R"}', None,
+                                  normalize("can we get runway 33R instead"), question=True)
+    assert (asking_for_one.kind, asking_for_one.values) == ("request", {"runway": "33R"})
+
+
+def test_the_grammars_unsure_reading_beats_unable():
+    """ "Tail left. Actually, sorry. Can we get a tail right?": the model called it an IFR clearance request twice,
+    the grammar heard a pushback (unsure: a turn in it too), and the guess "a request ATC can't do" got "unable"."""
+    tail = "Tail left. Actually, sorry. Can we get a tail right? We'd like a direct turn to Bravo after, DP69"
+    wrong = {"kind": "request", "intent": "request_ifr_clearance"}
+    backend = ScriptedBackend({tail: [wrong, wrong]}, reword={tail: '{"reply":"tail right, push and start approved"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "llm"
+    engine.state.phase = "PARKED"
+    out = say(engine, own, tail, mhz=121.0)
+    texts = atc(out)
+    assert texts and "unable" not in texts[0] and "tail right" in texts[0], texts
+
+
+def test_a_routine_call_the_grammar_is_sure_of_isnt_made_a_question():
+    """ "Are we clear to land?": the model said a class B request, the words don't fit, and it became a question that
+    got "unable". The grammar heard the call for the landing clearance."""
+    clear = "Are we clear to land, DP69?"
+    backend = ScriptedBackend({clear: {"kind": "request", "intent": "request_class_b"}})
+    tower = InterpretContext(callsign=Callsign("DP69"), phase="APPROACH", station="Montreal Tower", station_role="tower")
+    result = LlmInterpreter(backend, mode="llm").interpret(clear, None, tower)
+    assert result.intent == "report_final" and "gave way to the grammar" in result.fallback

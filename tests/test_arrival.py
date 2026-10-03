@@ -53,8 +53,16 @@ def test_not_while_rolling_on_a_runway_or_still_taxiing():
     on_runway = msgspec.structs.replace(GATE_AT_CYUL, lat=runway.lat, lon=runway.lon, on_runway=True)
     assert arrivals(engine_to("CYUL", landed=True), on_runway) == []  # stopped, but on a runway
     engine = engine_to("CYUL", landed=True)
-    engine.state.pending = PendingReadback("ground.taxi_in", "ground", {}, ("taxi_route",))  # a taxi instruction going
+    engine.state.pending = PendingReadback("ground.hold_position", "ground", {}, ())  # a ground instruction going
     assert arrivals(engine, GATE_AT_CYUL) == []
+
+
+def test_the_taxi_to_the_gate_is_over_once_parked_there():
+    """LAX's gate 49: the readback of the taxi in still owed (ATC had said it again), the aircraft parked at the gate,
+    and the flight never stopped."""
+    engine = engine_to("CYUL", landed=True)
+    engine.state.pending = PendingReadback("ground.taxi_to_gate", "ground", {}, ("taxi_route",))
+    assert len(arrivals(engine, GATE_AT_CYUL)) == 1
 
 
 def test_the_gate_radius_is_the_pilots():

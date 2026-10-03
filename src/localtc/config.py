@@ -136,6 +136,9 @@ class AtcConfig(_Section):
     # Runways: off, ATC gives the runway in use (the ATIS's, else the best for the wind), whatever the plan says;
     # on, the flight plan's departure and arrival runways (SimBrief or typed in), where the airport has them.
     enforce_fpln_runways: bool = False
+    # The runway in use goes the way the sim's own traffic is taking off and landing (when the wind allows), so the
+    # flight isn't sent head-on into it; off: by the wind alone.
+    traffic_runways: bool = True
     callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"

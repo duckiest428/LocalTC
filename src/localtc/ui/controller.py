@@ -110,6 +110,7 @@ class AppController:
         self.companion_server: CompanionServer | None = None
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
+        self.pilot.on_call = self._phone_say  # a call typed on the phone or the website, through the account
         self._last_atc: AtcTransmission | None = None
         self._zones_who: tuple = ()
         self._zones_at = -COMPANION_ZONES_EVERY_S
@@ -487,7 +488,8 @@ class AppController:
         return out
 
     def _phone_say(self, text: str) -> None:
-        """A call typed on the companion app: transmitted on COM1 like one typed here."""
+        """A call typed on the companion app (on the local network or through the account) or the website's Flight
+        Tracker: transmitted on COM1 like one typed here."""
         try:
             self._need_live().say(text)
         except HttpError as exc:

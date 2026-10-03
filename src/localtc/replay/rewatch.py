@@ -34,6 +34,8 @@ from localtc.sim_api import (
 
 VERSION = 1
 CACHE_FILE = "replay.json.gz"
+MARK_TEXT = 200  # the account's limits for a mark's text ...
+LINE_TEXT = 2000  # ... and a radio line's (an ATIS is long)
 LEAD_S = 60.0  # kept before the first call or movement, and after the last
 MOVING_KT = 3.0
 EVERY_AIR_S = 5.0
@@ -157,6 +159,12 @@ def _track(own: list[OwnshipState], start: float) -> dict[str, list]:
     return cols
 
 
+def _clip(text: str, limit: int) -> str:
+    """At most ``limit`` characters (the account takes no more: a long "turned away" alert, 261 of them, had every
+    replay with it refused)."""
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
 def _radio(events: list[Any], start: float) -> list[dict[str, Any]]:
     lines: list[dict[str, Any]] = []
     for ev in events:
@@ -171,6 +179,7 @@ def _radio(events: list[Any], start: float) -> list[dict[str, Any]]:
         if line is None or line["kind"] not in RADIO_KINDS:
             continue
         line = {k: v for k, v in line.items() if k in ("kind", "t", "station", "mhz", "text", "unclear")}
+        line["text"] = _clip(line.get("text") or "", LINE_TEXT)
         line["t"] = round(ev.t - start, 1)
         if not line.get("unclear"):
             line.pop("unclear", None)
@@ -183,7 +192,7 @@ def _marks(own: list[OwnshipState], events: list[Any], start: float, end: float)
 
     def mark(t: float, kind: str, text: str) -> None:
         if start <= t <= end:
-            marks.append({"t": round(t - start, 1), "kind": kind, "text": text})
+            marks.append({"t": round(t - start, 1), "kind": kind, "text": _clip(text, MARK_TEXT)})
 
     for ev in events:
         if isinstance(ev, PhaseChanged) and ev.previous is not None:
@@ -219,8 +228,9 @@ def replay_for(recording_dir: str | Path, record: Any = None) -> bytes:
         data = cache.read_bytes()
         try:
             cached = decode(data)
-            if cached.get("v") == VERSION and "livery" in cached.get("flight", {}):  # made before liveries: again
-                return data
+            if cached.get("v") == VERSION and "livery" in cached.get("flight", {}) \
+                    and all(len(m.get("text") or "") <= MARK_TEXT for m in cached.get("marks", [])):
+                return data  # (made before liveries, or with marks too long for the account: made again)
         except (OSError, ValueError):
             pass
     data = encode(build_replay(recording, record))

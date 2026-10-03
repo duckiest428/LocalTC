@@ -507,6 +507,9 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .tr-radio li.atc .who { color: var(--cyan); }
 .tr-radio li.pilot .who, .tr-radio li.copilot .who { color: var(--green); }
 .tr-nomap { margin: 10px 0 0 !important; }
+.tr-say { display: flex; gap: 6px; margin-top: 10px; }
+.tr-say input { flex: 1; min-width: 0; }
+.tr-say-note { margin: 6px 0 0 !important; min-height: 1em; }
 .tr-trail { stroke: var(--green); fill: none; opacity: .75; }
 .tr-plane { background: none; border: 0; }
 .tr-plane svg path { stroke: #000; stroke-width: 1; }

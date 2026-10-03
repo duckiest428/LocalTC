@@ -98,7 +98,7 @@ def test_traffic_advisory_for_converging_traffic():
     out = transmissions(engine, [TrafficSnapshot(t=t, targets=(ahead(4.0),)), msgspec.structs.replace(own, t=t),
                                  TrafficSnapshot(t=t + 3, targets=(ahead(3.6),)), msgspec.structs.replace(own, t=t + 3)])
     call = next(o for o in out if o.instruction_id == "common.traffic")
-    assert "12 o'clock, 4 miles, opposite direction" in call.text and "B738" in call.text
+    assert "12 o'clock, 4 miles, opposite direction" in call.text and "Boeing 737" in call.text  # never "bravo 738"
     # Not again for the same airplane a few seconds later.
     again = transmissions(engine, [TrafficSnapshot(t=t + 30, targets=(ahead(2.0),)), msgspec.structs.replace(own, t=t + 30)])
     assert not [o for o in again if o.instruction_id == "common.traffic"]
@@ -128,44 +128,14 @@ def test_an_empty_transcript_is_not_a_check_in():
     assert engine.state.comms.last_pilot_t is None
 
 
-def test_a_level_offered_enroute_becomes_an_instruction_when_taken():
-    """ "advise if you can accept FL370" is an offer, not a clearance: nothing is outstanding until the
-    pilot takes it, and then it is assigned and read back like any other altitude."""
-    from localtc.atc_core.engine import AtcEngine, EngineConfig
-    from localtc.atc_core.facilities import Facility
-    from localtc.atc_core.readback import Interpretation
-
-    engine = AtcEngine(EngineConfig(callsign="DAL42", seed=3))
-    centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
-    engine._offered_level = (100.0, 37000)
-    engine._on_request(Interpretation(kind="request", intent="acknowledge",
-                                      text="affirmative, we can accept FL370"), centre, 130.0)
-    assert [item.instruction_id for item in engine._scheduled] == ["common.climb"]
-    assert engine._scheduled[0].slots["altitude"] == 37000
-    assert engine._offered_level is None
-
-
-def test_an_offer_not_taken_expires():
-    from localtc.atc_core.engine import AtcEngine, EngineConfig
-    from localtc.atc_core.facilities import Facility
-
-    engine = AtcEngine(EngineConfig(callsign="DAL42", seed=3))
-    centre = Facility(controller="center", station="Vancouver Center", mhz=133.5)
-    engine._offered_level = (100.0, 37000)
-    assert not engine._accepts_higher(100_000.0, centre)
-
-
-def test_a_level_offered_enroute_can_be_turned_down():
-    """ "Negative, we'd like to stay at our cruising level" left the offer open and got "say again"."""
-    from localtc.atc_core.engine import AtcEngine, EngineConfig
-    from localtc.atc_core.facilities import Facility
-
-    engine = AtcEngine(EngineConfig(callsign="ACA216", seed=3))
-    centre = Facility(controller="center", station="Edmonton Center", mhz=124.525)
-    engine._offered_level = (100.0, 37000)
-    assert engine._answer_offer("Negative. We'd like to stay on our cruising.", centre, 130.0)
-    assert [item.instruction_id for item in engine._scheduled] == ["common.roger"]
-    assert engine._offered_level is None
+def test_no_level_is_offered_out_of_the_blue():
+    """ "Advise if you can accept FL380" came for no reason, an hour into a quiet cruise: pilots found it nothing like
+    the real thing. A centre gives a level when the pilot asks for one."""
+    engine, own = cruising_engine()
+    engine.state.assignments.altitude_ft = 36000
+    high = msgspec.structs.replace(own, alt_indicated_ft=36000.0, alt_msl_ft=36000.0)
+    said = transmissions(engine, [msgspec.structs.replace(high, t=own.t + dt) for dt in range(0, 7200, 30)])
+    assert not [tx.text for tx in said if "accept" in tx.text or "available" in tx.text]
 
 
 from test_phase import (

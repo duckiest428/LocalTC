@@ -141,14 +141,23 @@ def _turn(tokens: list[Token]) -> str | None:
     return None
 
 
-def _tail(tokens: list[Token]) -> str | None:
+CORRECTING = {"actually", "sorry", "correction", "instead", "rather", "mean"}
+
+
+def tail_side(tokens: list[Token]) -> str | None:
     """The way the pilot wants the tail pushed: "can we tail left?", "can we get it to the left?". The first one
-    said: "tail left, since tailing right makes no sense from our gate" wants the left."""
-    for i, token in enumerate(tokens):
-        if token.text in ("left", "right") and any(t.text in ("tail", "tails", "tailing", "to", "towards")
-                                                  for t in tokens[max(0, i - 3):i]):
-            return token.text
-    return None
+    said: "tail left, since tailing right makes no sense from our gate" wants the left. Unless the pilot corrects
+    themselves: "tail left. Actually, sorry, can we get a tail right?" wants the right."""
+    said = [(i, token.text) for i, token in enumerate(tokens)
+            if token.text in ("left", "right") and any(t.text in ("tail", "tails", "tailing", "to", "towards")
+                                                       for t in tokens[max(0, i - 3):i])]
+    if not said:
+        return None
+    first = said[0]
+    for i, side in said[1:]:
+        if any(t.text in CORRECTING for t in tokens[first[0] + 1:i]):
+            first = (i, side)
+    return first[1]
 
 
 # An emergency whatever words come with it: smoke or fire on board.
@@ -246,7 +255,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("request_ifr_clearance", atis=_atis(tokens), **vfr)
     pushing = _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
                        ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push"))
-    tail = _tail(tokens)
+    tail = tail_side(tokens)
     if pushing and _has_any(tokens, *PUSH_READBACK) and not _has_any(tokens, *REQUEST_WORDS):
         add("acknowledge")  # "push back at my discretion, tail right": reading back the approval, not asking again
     elif pushing or (tail is not None and _has_any(tokens, *REQUEST_WORDS)):
@@ -376,6 +385,7 @@ def reports_problem(tokens: list[Token]) -> str | None:
 COMPATIBLE = [
     {"request_taxi_parking", "clear_of_runway"},
     {"going_around", "report_final"},  # "going around, runway 08": no longer a final report
+    {"going_around", "checkin"},  # "going around, 1,000 climbing 2,200": the check-in with approach after it
     {"request_vectors", "request_runway"},  # "request vectors for the ILS 26"
     {"request_direct", "request_runway"},
     {"request_crossing", "request_runway"},  # "request to cross runway 08R"

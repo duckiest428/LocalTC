@@ -12,6 +12,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from localtc.atc_core.airport.geometry import AirportGeometry
+from localtc.atc_core.readback.normalize import Token
 from localtc.sim_api import ParkingSpot, TrafficTarget
 
 # Types that need a heavy gate. Matched against the start of the sim's model name ("B777", "A350-900").
@@ -109,3 +110,22 @@ def parked_at(geometry: AirportGeometry, lat: float, lon: float) -> Gate | None:
     near = [(math.dist(here, geometry.xy(g.spot.lat, g.spot.lon)), g) for g in gates(geometry)]
     near = [(d, g) for d, g in near if d <= max(g.spot.radius_m, NEAR_SPOT_M)]
     return min(near, key=lambda dg: dg[0])[1] if near else None
+
+
+def requested(tokens: list[Token]) -> str | None:
+    """The gate a pilot asks for ("gate Echo 9", "taxi to B 25", "stand 46"): "E9", "B25", "46"; None."""
+    for i, token in enumerate(tokens):
+        if token.text not in ("gate", "stand", "to"):
+            continue
+        rest = tokens[i + 1:i + 3]
+        if len(rest) == 2 and len(rest[0].text) == 1 and rest[0].text.isalpha() and rest[1].text.isdigit():
+            return rest[0].text.upper() + rest[1].text
+        if token.text in ("gate", "stand") and rest and rest[0].text.isdigit():
+            return rest[0].text
+    return None
+
+
+def named(geometry: AirportGeometry, label: str) -> Gate | None:
+    """The scenery's gate called ``label`` ("E9" is "GATE E 9" or "GATE E9"), or None if it has none by that name."""
+    want = label.upper().replace(" ", "")
+    return next((g for g in gates(geometry) if g.word == "gate" and g.label.upper().replace(" ", "") == want), None)

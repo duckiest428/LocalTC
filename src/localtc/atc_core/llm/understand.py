@@ -108,6 +108,7 @@ say_again (asks ATC to repeat, even naming what), acknowledge (roger, wilco, tha
 topic: altimeter, wind (winds, gusts), weather, runway, squawk, altitude, frequency, atis, other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
+EXPECT_WORDS = {"expect", "expected", "expecting"}
 INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "request_crossing", "ready_for_departure",
            "request_turn", "need_time", "checkin", "report_final", "position_report", "request_option", "clear_of_runway",
            "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
@@ -120,6 +121,17 @@ VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "sq
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
 REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
 APPROACH_KINDS = ("ILS", "LOC", "RNAV", "GPS", "VOR", "NDB", "LDA", "SDF", "VISUAL")
+# The requests an instruction answers ({controller: {first word of its name: intents}}): read back, it's no
+# follow-up request ("taxi to gate 46 via B9" is the readback of the taxi, not a request for one).
+ANSWERED_BY: dict[str, dict[str, tuple[str, ...]]] = {
+    "ground": {"taxi": ("ready_to_taxi", "request_taxi_parking", "clear_of_runway"), "pushback": ("request_pushback",)},
+    "clearance": {"ifr": ("request_ifr_clearance",), "readback": ("request_ifr_clearance", "ready_to_taxi")},
+    "tower": {"takeoff": ("ready_for_departure",), "luaw": ("ready_for_departure",), "hold": ("ready_for_departure",),
+              "land": ("report_final",), "continue": ("report_final",)},
+}
+# The value each request is about: one the pilot didn't say means the call was misread (``parse_answer``).
+KEY_VALUES = {"request_altitude": ("altitude",), "request_direct": ("fix",), "request_diversion": ("fix",),
+              "request_runway": ("runway", "approach")}
 ANSWER_TOKENS = 80  # the longest answer (an emergency with its details) is about 40
 
 
@@ -398,8 +410,10 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
     the question (the tokens alone lose the question mark). ``question``: the words ask something at all: a request
     the words don't bear out, with a topic the model named ("can we get a wind report?": wind), is that question.
 
-    A value in a request that isn't one ("atis": "doing well") is left out, noted, and the rest of the answer kept:
-    one junk field is no reason to lose what the model did read."""
+    A value that isn't one ("atis": "doing well"), or that the pilot didn't say (the cleared altitude copied into a
+    "Looking" from the context), is left out, noted, and the rest of the answer kept: one junk field is no reason to
+    lose what the model did read. Only the value a request is about (the level of request_altitude, the fix of
+    request_direct) can't be made up: then the call was misread, and the answer is retried."""
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -418,6 +432,9 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
         raise AnswerError("a request needs an intent")
     if kind == "question":
         topic = topic if topic in TOPICS else "other"
+        if not question and not asked:
+            # "Not sure.", "Hold for runway 8": nothing asked. A question it isn't (it got the facts recited at it).
+            raise AnswerError("the pilot asked nothing; a question needs the pilot to ask something")
     if kind == "readback":
         # What they asked for on the back of it, if anything: kept only when the words back it up (a small
         # model fills in an intent for every readback given the chance).
@@ -462,8 +479,8 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
         try:
             value = parse_value(name, data[name])
         except AnswerError as exc:
-            if pending is not None:
-                raise  # a readback's values are what's checked: no guessing past a bad one
+            # ("expect 390, 25 minutes after departure" for the cruise of a readback: what the grammar heard of it
+            # stands; the model's string is no reason to lose the altitude, squawk and frequency it read right.)
             ignored.append(str(exc))
             continue
         if value is None:
@@ -474,6 +491,7 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
             ignored.append(f"the pilot said no information {value}")  # small models fill it in for every call
         else:
             dropped.append(f"{name}={data[name]}")
+    ignored += [f"the pilot did not say {d}" for d in dropped]
     note = "; ".join(f"left out: {i}" for i in ignored)
     # The station's name is no word of the call's: "Clearance" in "San Francisco Clearance, any restricted airspace
     # around?" doesn't ask for a clearance.
@@ -486,10 +504,17 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
             return Answer(kind="question", topic=topic if topic in TOPICS else "other", values=values,
                           note="; ".join(x for x in (f"read as a question ({problem})", note) if x))
         raise IntentError(problem + "; pick the intent that matches the words, or other if none does")
-    if dropped:
-        # A model that invents one value has probably misread the whole call ("request direct" taken
-        # as an altitude request with a made-up level), so the answer is retried, not patched.
-        raise AnswerError("the pilot did not say " + ", ".join(dropped) + "; report only what the pilot said")
+    if kind == "request" and asked and (key := KEY_VALUES.get(intent)) is not None and not (set(key) & set(values)):
+        # "What runway can we expect for departure?" as request_runway, with no runway: asking which, not for one.
+        topic = topic if topic in TOPICS and topic != "other" else question_topic(" ".join(t.text for t in tokens)) or \
+            {"request_runway": "runway", "request_altitude": "altitude"}.get(intent, "other")
+        return Answer(kind="question", topic=topic, values=values,
+                      note="; ".join(x for x in (f"read as a question ({intent} names no {key[0]})", note) if x))
+    if kind == "request" and (key := KEY_VALUES.get(intent)) is not None and not (set(key) & set(values)) \
+            and (made_up := [d for d in dropped if d.split("=", 1)[0] in key]):
+        # A model that invents the very thing asked for has probably misread the whole call ("request direct"
+        # taken as an altitude request with a made-up level), so the answer is retried, not patched.
+        raise AnswerError("the pilot did not say " + ", ".join(made_up) + "; report only what the pilot said")
     return Answer(kind=kind, intent=intent, topic=topic, values=values, note=note)
 
 
@@ -532,8 +557,22 @@ class LlmInterpreter:
         grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback and (
             grammar.kind == "readback" or is_expected(grammar.intent, context.station_role or role_of(context.station),
                                                       context.phase))
+        # A guess that it's a request ATC can't do ("other": "unable") loses to any request the grammar made out that fits
+        # here, sure of it or not ("tail left, actually, can we get a tail right?": the pushback, tail right).
+        grammar_guess = grammar.kind == "request" and bool(grammar.intent) and grammar.intent not in (EMERGENCY, "acknowledge") \
+            and is_expected(grammar.intent, context.station_role or role_of(context.station), context.phase)
         fallback = ""
-        if answer is None or (answer.guessed and grammar_knows):
+        # The model's request taken for a question only because its intent didn't fit the words ("are we clear to land?"
+        # as a class B request): a routine call the grammar is sure of is what it was.
+        converted = answer is not None and answer.note.startswith("read as a question") and grammar_knows \
+            and grammar.kind == "request" and grammar.intent in ROUTINE
+        if converted:
+            result = self._grammar_only(grammar, text, pending, context, reason)
+            fallback = f"the model's reading ({answer.note}) gave way to the grammar's {grammar.intent}"
+        elif answer is not None and answer.guessed and answer.intent == "other" and grammar_guess and not grammar_knows:
+            result = replace(grammar, needs_fallback=False)  # the grammar's best reading, unsure as it is, not "unable"
+            fallback = "model gave no usable reading; the grammar's reading used, though it wasn't sure"
+        elif answer is None or (answer.guessed and grammar_knows):
             # No usable answer from the model: the grammar's reading, if it has one, beats a guess.
             result = self._grammar_only(grammar, text, pending, context, reason)
             last = exchanges[-1] if exchanges else None
@@ -542,8 +581,8 @@ class LlmInterpreter:
         else:
             result = self._merge(grammar, answer, text, pending, context)
             if answer.guessed:
-                fallback = "model gave no usable reading; guessed from the words"
-        model_read = "" if answer is None or answer.guessed else reading(result)
+                fallback = "model gave no usable reading; taken from the words as a question or a request ATC can't do"
+        model_read = "" if answer is None or answer.guessed or converted else reading(result)
         return replace(result, trigger=reason, exchanges=tuple(exchanges), grammar_read=reading(grammar),
                        model_read=model_read, fallback=fallback)
 
@@ -576,7 +615,10 @@ class LlmInterpreter:
         tokens = without_callsign(normalize(text), context.callsign)  # its digits are not values
         # Asked something, and nothing done: "how long is runway 24R?" (never "can we get 24R?").
         question = is_question(text) or asks(text)
-        asked = question and not {t.text for t in tokens} & REQUEST_WORDS
+        words = {t.text for t in tokens}
+        # "What runway can we expect?", "what direction can we expect to tail?": asking what's coming, not for
+        # something to be done, whatever "can" says.
+        asked = question and (not words & REQUEST_WORDS or bool(words & EXPECT_WORDS))
         request = build_request(text, pending, context, self.examples)
         exchanges: list[LlmExchange] = []
         intent_errors = 0
@@ -657,13 +699,13 @@ class LlmInterpreter:
         if grammar.kind == "readback" and answer.kind in ("request", "unintelligible") and answer.intent != "say_again":
             # The pilot repeated the pending instruction; that's a readback whatever the model says. What the
             # model heard asked for rides along with a readback that was right.
-            asked = self._follow_up(answer, text) if answer.kind == "request" and grammar.status == "correct" else None
+            asked = self._follow_up(answer, text, pending) if answer.kind == "request" and grammar.status == "correct" else None
             return replace(grammar, then=grammar.then or asked)
         if pending is not None and answer.kind == "readback":
             readback = self._readback(without_callsign(tokens, context.callsign), answer, pending, grammar, text,
                                       context.confidence)
             if readback is not None:
-                return replace(readback, then=grammar.then or self._follow_up(answer, text))
+                return replace(readback, then=grammar.then or self._follow_up(answer, text, pending))
         if answer.kind == "question":
             return Interpretation(kind="request", intent="question", values={"topic": answer.topic}, confidence=0.8,
                                   source="llm", callsign_heard=grammar.callsign_heard, text=text)
@@ -680,8 +722,16 @@ class LlmInterpreter:
         return replace(self.say_again.interpret(text, pending, context), source="llm")
 
     @staticmethod
-    def _follow_up(answer: Answer, text: str) -> Interpretation | None:
-        """The request or question the model heard along with a readback, or None."""
+    def _follow_up(answer: Answer, text: str, pending: PendingReadback | None = None) -> Interpretation | None:
+        """The request or question the model heard along with a readback, or None. Only one the pilot asked for in
+        words ("cleared to land 14R, can we make it a low approach?"): a readback of a taxi to the gate is no
+        request to taxi to the gate (ATC gave the whole taxi again, to a readback that was right)."""
+        words = {t.text for t in normalize(text)}
+        if not (words & REQUEST_WORDS or is_question(text) or asks(text)):
+            return None
+        if pending is not None and answer.intent in ANSWERED_BY.get(pending.instruction_id.split(".")[0], {}).get(
+                pending.instruction_id.split(".")[1].split("_")[0], ()):
+            return None  # what the instruction read back is the answer to
         if answer.intent and answer.intent not in ("acknowledge", "say_again", "emergency"):
             values = {k: v for k, v in answer.values.items() if k in ("runway", "altitude", "fix", "approach", "conditions")}
             return Interpretation(kind="request", intent=answer.intent, values=values, confidence=0.8, source="llm", text=text)

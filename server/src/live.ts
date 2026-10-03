@@ -3,6 +3,7 @@ import type { Auth } from "./auth";
 import { es256Jwt } from "./crypto";
 import type { Env } from "./env";
 import { HttpError, allowedOrigin, json, now, readJson, str } from "./http";
+import { limit } from "./rate";
 
 /*
  * The companion app's live view, one LiveRoom (Durable Object) per account.
@@ -16,6 +17,10 @@ import { HttpError, allowedOrigin, json, now, readJson, str } from "./http";
  * - Where the phone can reach the PC on the local network, and the key it needs there, is stored until the
  *   desktop replaces it.
  *
+ * - A radio call typed on the phone or the website ("POST /v1/live/say") waits here, in memory, for the desktop to
+ *   pick up with its next update (or its poll while somebody watches) and transmit, as if typed in the app; one
+ *   not picked up within CALL_TTL_MS is dropped (the PC is off, or the flight is over).
+ *
  * Everything the phone receives over the WebSocket is {type, data}, as in docs/companion-protocol.md.
  */
 
@@ -24,10 +29,13 @@ const CONNECT_MS = 24 * 3600_000; // local-network details older than this are d
 const MAX_STATUS = 8 * 1024;
 const MAX_FRAME = 64 * 1024;
 const RADIO_KEEP = 50;
-const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight
+const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight (thinned beyond: ``thin``)
 const TRAIL_STEP_DEG = 0.002; // a new point every ~200 m of movement
 const MAX_AIRPORTS = 32 * 1024;
 const MAX_MAP = 384 * 1024; // the route and the zones: a long flight crosses a dozen centres' outlines
+const CALL_TTL_MS = 60_000; // a radio call from the phone or website the desktop hasn't picked up by then is dropped
+const CALLS_KEEP = 5; // calls waiting at once (more is somebody typing faster than ATC can answer)
+const CALL_MAX = 300; // characters in one call, as the desktop's own box takes
 
 type Station = { station?: string; mhz?: number } | null;
 export interface Status {
@@ -85,9 +93,18 @@ export function cleanFrame(raw: Record<string, unknown>): Frame {
   if (Array.isArray(raw.traffic)) out.traffic = raw.traffic.slice(0, 300).map((t) => pick(t, TRAFFIC_KEYS));
   // The path flown so far, which the app sends when someone starts watching mid-flight: [[lat, lon], ...].
   if (Array.isArray(raw.trail)) {
-    out.trail = raw.trail.slice(-TRAIL_KEEP).filter(isLatLon).map(([lat, lon]) => [Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4]);
+    out.trail = thin(raw.trail.slice(0, 8 * TRAIL_KEEP).filter(isLatLon)
+      .map(([lat, lon]) => [Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4] as Point));
   }
   if (JSON.stringify(out).length > MAX_FRAME) throw new HttpError(413, "Too much traffic at once.");
+  return out;
+}
+
+/** Every other point (the last kept) until the path fits TRAIL_KEEP: all of the flight, less dense. Cutting the
+ * oldest points off instead moved the start of the line along behind a long flight. */
+export function thin(path: Point[]): Point[] {
+  let out = path;
+  while (out.length > TRAIL_KEEP) out = out.filter((_, i) => i % 2 === 0 && i !== out.length - 1).concat([out[out.length - 1]]);
   return out;
 }
 
@@ -213,8 +230,18 @@ export function pushFor(before: Status | null, after: Status): { title: string; 
   return null;
 }
 
+/** A radio call to transmit: the words, trimmed to one line. */
+export function cleanCall(raw: Record<string, unknown>): string {
+  const text = typeof raw.text === "string" ? raw.text.replace(/\s+/g, " ").trim() : "";
+  if (!text) throw new HttpError(400, "Nothing to say.");
+  return text.slice(0, CALL_MAX);
+}
+
+export interface Call { id: string; text: string; at: number }
+
 export class LiveRoom extends DurableObject<Env> {
   // In memory only. Never written to this.ctx.storage.
+  private calls: Call[] = [];
   private own: Record<string, unknown> | null = null;
   private traffic: Record<string, unknown>[] = [];
   private radio: Record<string, unknown>[] = [];
@@ -225,6 +252,14 @@ export class LiveRoom extends DurableObject<Env> {
 
   private forget(): void {
     this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; this.route = null; this.zones = null;
+    this.calls = [];
+  }
+
+  /** The calls waiting for the desktop, handed over once: each answer to the desktop carries them. */
+  private take(): Call[] {
+    const fresh = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS);
+    this.calls = [];
+    return fresh;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -255,31 +290,31 @@ export class LiveRoom extends DurableObject<Env> {
         this.broadcast("status", after);
         const push = pushFor(before.active ? before : null, after);
         if (push) this.ctx.waitUntil(notify(this.env, userId, push));
-        return json({ ok: true, watchers: watchers() });
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "PUT /frame": {
         const frame = (await request.json()) as Frame;
         if (frame.trail) { this.trail = frame.trail; this.broadcast("trail", this.trail); }
         if (frame.own) { this.own = frame.own; this.extendTrail(frame.own); this.broadcast("own", frame.own); }
         if (frame.traffic) { this.traffic = frame.traffic; this.broadcast("traffic", frame.traffic); }
-        return json({ ok: true, watchers: watchers() });
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "PUT /map": {
         const map = (await request.json()) as LiveMap;
         if (map.route !== undefined) { this.route = map.route; this.broadcast("route", this.route); }
         if (map.zones !== undefined) { this.zones = map.zones; this.broadcast("zones", this.zones); }
-        return json({ ok: true, watchers: watchers() });
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "POST /radio": {
         const lines = (await request.json()) as Record<string, unknown>[];
         for (const line of lines) this.broadcast("radio", line);
         this.radio = this.radio.concat(lines).slice(-RADIO_KEEP);
-        return json({ ok: true, watchers: watchers() });
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "PUT /airports": {
         this.airports = (await request.json()) as Record<string, unknown>[];
         this.broadcast("airports", this.airports);
-        return json({ ok: true, watchers: watchers() });
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "POST /alert": {
         const { alert, userId } = (await request.json()) as { alert: ReturnType<typeof cleanAlert>; userId: string };
@@ -287,6 +322,16 @@ export class LiveRoom extends DurableObject<Env> {
         this.ctx.waitUntil(notify(this.env, userId, { title: alert.title, body: alert.body }));
         return json({ ok: true, watchers: watchers() });
       }
+      case "POST /say": {
+        // A call typed on the phone or the website. Only while a flight is on: otherwise nothing would answer it.
+        const { text } = (await request.json()) as { text: string };
+        if (!(await this.current()).active) return json({ error: "LocalTC isn't flying right now." }, 409);
+        this.calls = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS).concat([{ id: crypto.randomUUID(), text, at: Date.now() }])
+          .slice(-CALLS_KEEP);
+        return json({ ok: true, waiting: this.calls.length });
+      }
+      case "GET /calls":  // the desktop's poll while somebody watches and nothing else is going up
+        return json({ ok: true, watchers: watchers(), calls: this.take() });
       case "PUT /connect": {
         await this.ctx.storage.put("connect", { ...(await request.json() as object), updated_at: Date.now() });
         return json({ ok: true });
@@ -298,7 +343,7 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
         return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail,
-          route: this.route, zones: this.zones,
+          route: this.route, zones: this.zones, calls: this.calls,
           stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
@@ -313,7 +358,7 @@ export class LiveRoom extends DurableObject<Env> {
     const last = this.trail[this.trail.length - 1];
     if (last && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < TRAIL_STEP_DEG) return;
     this.trail.push([Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4]);
-    if (this.trail.length > TRAIL_KEEP) this.trail = this.trail.slice(-TRAIL_KEEP);
+    this.trail = thin(this.trail);
   }
 
   private broadcast(type: string, data: unknown): void {
@@ -371,6 +416,20 @@ export async function radio(env: Env, request: Request, auth: Auth): Promise<Res
 
 export async function alert(env: Env, request: Request, auth: Auth): Promise<Response> {
   return send(env, auth, "POST", "/alert", { alert: cleanAlert(await readJson(request, MAX_STATUS)), userId: auth.user.id });
+}
+
+/** A radio call from the phone or the website's Flight Tracker, for the desktop to transmit. The website signs in
+ * with its cookie, which a browser sends by itself: only the site's own pages may send one that way. */
+export async function say(env: Env, request: Request, auth: Auth): Promise<Response> {
+  if (auth.viaCookie && !allowedOrigin(env, request.headers.get("Origin"))) throw new HttpError(403, "Not from this site.");
+  const text = cleanCall(await readJson(request, 4 * 1024));
+  await limit(env, `say:${auth.user.id}`, 120, 3600);
+  return send(env, auth, "POST", "/say", { text });
+}
+
+/** The desktop picking up the calls waiting for it. */
+export async function calls(env: Env, auth: Auth): Promise<Response> {
+  return send(env, auth, "GET", "/calls");
 }
 
 export async function putConnect(env: Env, request: Request, auth: Auth): Promise<Response> {

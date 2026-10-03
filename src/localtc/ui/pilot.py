@@ -7,6 +7,7 @@ never contacts the server.
 import asyncio
 import logging
 import platform
+import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,9 @@ from localtc.logbook import FlightRecord, Logbook
 from localtc.ui.server import HttpError
 
 log = logging.getLogger(__name__)
+
+CALLS_POLL_S = 2.0  # while somebody watches through the server: their typed calls are picked up at least this often
+RETRY_REPLAYS = 5  # with "upload replays" on, the last this many flights whose replay isn't on the account yet go up after a flight
 
 
 class PilotRoutes:
@@ -33,6 +37,7 @@ class PilotRoutes:
         self.hub = hub  # ui.companion.CompanionHub: what goes to a phone watching through the server
         self.on_signed_in = on_signed_in
         self.on_signed_out = on_signed_out
+        self.on_call: Callable[[str], None] | None = None  # a radio call typed on the phone or the website: transmit it
         self._outbox: list[tuple[str, Any]] = []
         self._relay_task: asyncio.Task | None = None
         self._linked = False
@@ -284,9 +289,12 @@ class PilotRoutes:
         if c.sync:
             await self.sync()
         if c.upload_replays and self.account.signed_in:
-            latest = await asyncio.to_thread(self.logbook.flights, 1)
-            if latest and _has_recording(latest[0]) and latest[0].replay_uploaded_at is None:
-                await self.upload_replay(latest[0].id)
+            # This flight's, and any of the last few that didn't go up (refused, or the PC went offline): a replay
+            # once turned away for a mark too long stayed off the account for good.
+            recent = await asyncio.to_thread(self.logbook.flights, RETRY_REPLAYS)
+            waiting = [r for r in recent if _has_recording(r) and r.replay_uploaded_at is None]
+            uploaded = [await self.upload_replay(r.id) for r in waiting]
+            if any(uploaded):
                 self.publish("account", await self.api_account({}))
 
     async def live(self, status: dict, *, force: bool = False) -> None:
@@ -295,10 +303,28 @@ class PilotRoutes:
             return
         try:
             await asyncio.to_thread(self._account.live, status, force=force)
+            if status.get("active") and self._account.watchers > 0 and self.on_call is not None \
+                    and time.monotonic() - self._account.relayed_at >= CALLS_POLL_S:
+                # Somebody watching who may type a call, and nothing else went up just now to bring it back.
+                await asyncio.to_thread(self._account.poll_calls)
         except AccountError as exc:
             log.debug("Companion update failed: %s", exc)
+        self._deliver_calls()
         if self.hub is not None:
             self.hub.watching(self._account.watchers)
+
+    def _deliver_calls(self) -> None:
+        """The radio calls typed on the phone or the website, transmitted as if typed here. One that can't go (no
+        flight running) is said on the phone's radio log, so whoever typed it knows."""
+        if self._account is None or self.on_call is None:
+            return
+        for text in self._account.take_calls():
+            try:
+                self.on_call(text)
+            except (RuntimeError, ValueError) as exc:
+                log.info("A call from the phone couldn't be transmitted: %s", exc)
+                if self.hub is not None:
+                    self.hub.add_radio({"kind": "alert", "t": None, "text": f"Not transmitted: {exc or 'no flight running'}"})
 
     async def share_connect(self, lan: list[str], key: str) -> None:
         """Tell the account where the phone can find this PC on the local network."""
@@ -351,6 +377,7 @@ class PilotRoutes:
                     await asyncio.to_thread(self._account.alert, alert)
             except AccountError as exc:
                 log.debug("Companion relay failed: %s", exc)
+            self._deliver_calls()
             if self.hub is not None:
                 self.hub.watching(self._account.watchers)
 

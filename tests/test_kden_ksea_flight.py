@@ -124,7 +124,7 @@ def test_a_typed_route_is_a_route_and_a_wrong_taxiway_still_is_not():
 
 def test_the_e170_stopped_ahead_on_the_taxiway(recorded):
     caution = [line for line in atc(recorded) if "stopped" in line and "ahead" in line]
-    assert len(caution) == 1 and "E170" in caution[0]
+    assert len(caution) == 1 and "Embraer 170" in caution[0]  # named as a controller says it, not "echo 170"
     assert 900 < float(caution[0].split("]")[0].strip("[ ")) < 960  # a couple of hundred metres before reaching it
 
 

@@ -93,4 +93,10 @@ text = ["{callsign}, caution, {message} stopped on the taxiway ahead of you.", "
 [[template]]
 id = "ground.give_way"
 controller = "ground"
-text = ["{callsign}, hold position, {message}.", "{callsign}, give way to the {message}, then continue taxi."]
+text = ["{callsign}, hold position, give way to the {message}.", "{callsign}, give way to the {message}, then continue taxi."]
+
+# Traffic taxiing to the same runway, joining the way ahead: one call, not a caution for each aircraft in the line.
+[[template]]
+id = "ground.follow"
+controller = "ground"
+text = ["{callsign}, give way to the {message}, then follow it.", "{callsign}, follow the {message}."]

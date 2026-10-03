@@ -281,3 +281,82 @@ def _capitalized(word: str) -> str:
 def station_name(name: str) -> str:
     """Frequency names like "PAINE TOWER" -> "Paine Tower"."""
     return " ".join(ABBREVIATIONS.get(w.upper(), w.capitalize()) for w in name.split())
+
+
+def model_number(n: int) -> str:
+    """An aircraft model's number as it's said: 737 "seven thirty-seven", 320 "three twenty", 170 "one seventy",
+    90 "ninety"."""
+    if n < 100:
+        return number_words(n)
+    head, rest = divmod(n, 100)
+    if head >= 10:
+        return digits(str(n))
+    return f"{ONES[head]} " + ("hundred" if rest == 0 else f"oh {ONES[rest]}" if rest < 10 else number_words(rest))
+
+
+# ICAO type designators as controllers say them ("give way to the Boeing 737"): maker and model, never the letters
+# spelled out ("bravo seven three seven"). A family's variants are one model to a controller. Boeing, Airbus and
+# Embraer airliners are worked out from the designator (``aircraft_type``); the rest are named here.
+TYPE_NAMES: tuple[tuple[str, str, str], ...] = (  # (designator pattern, display, spoken)
+    (r"BCS[13]|A22\d", "Airbus A220", "Airbus two twenty"),
+    (r"E1[34]5|ERJ", "Embraer regional jet", "Embraer regional jet"),
+    (r"CRJ", "CRJ", "regional jet"),
+    (r"CRJ[1-9X]", "CRJ", "regional jet"),
+    (r"DH8[A-D]", "Dash 8", "Dash eight"),
+    (r"AT[47]\d", "ATR", "A T R"),
+    (r"C1[78]\d", "Cessna", "Cessna"),
+    (r"C208", "Caravan", "Caravan"),
+    (r"C25[ABC]|C5\d[0-9A-Z]|C68A|C700|C750", "Citation", "Citation"),
+    (r"PC12", "Pilatus PC-12", "Pilatus"),
+    (r"PC24", "Pilatus PC-24", "Pilatus"),
+    (r"MD1[01]", "MD-11", "M D eleven"),
+    (r"MD8\d|MD90", "MD-80", "M D eighty"),
+    (r"B190", "Beech 1900", "Beech nineteen hundred"),
+    (r"BE\d\d|B350", "Beechcraft", "Beechcraft"),
+    (r"P28[A-Z]|PA\d\d", "Piper", "Piper"),
+    (r"SR2[02]", "Cirrus", "Cirrus"),
+    (r"TBM\d", "TBM", "T B M"),
+    (r"GLF\d|G[56]\d\d|GLEX", "Gulfstream", "Gulfstream"),
+    (r"CL\d\d", "Challenger", "Challenger"),
+)
+
+
+def _airliner(code: str) -> tuple[str, int] | None:
+    """("Boeing", 737) for "B738", "B38M" or "737"; ("Airbus", 321) for "A321" or "A21N"; ("Embraer", 175) for
+    "E75L"; None for anything else."""
+    import re
+
+    if m := re.fullmatch(r"B?7([0-8])[0-9LWXR]", code):
+        return "Boeing", 707 + 10 * int(m.group(1))
+    if re.fullmatch(r"B3[789]M", code):
+        return "Boeing", 737  # the 737 MAX
+    if m := re.fullmatch(r"A3(\d)(\d)|A3(\d)[NK]", code):
+        n = int(f"3{m.group(1)}{m.group(2)}") if m.group(1) else 300 + 10 * int(m.group(3))
+        return "Airbus", n if 318 <= n <= 321 else n // 10 * 10  # A332, A333: the A330
+    if m := re.fullmatch(r"A(19|20|21)N", code):
+        return "Airbus", 300 + int(m.group(1))  # the neo
+    if re.fullmatch(r"E75[LS]", code):
+        return "Embraer", 175
+    if m := re.fullmatch(r"E[12]([79])(\d)", code):
+        return "Embraer", 100 + 10 * int(m.group(1)) + int(m.group(2))  # E290: the E190-E2
+    return None
+
+
+def aircraft_type(model: str) -> tuple[str, str]:
+    """(display, spoken) for an aircraft type as the sim names it ("B738", "A21N", "E170", "737", "Airbus"):
+    "Boeing 737" / "Boeing seven thirty-seven", "Airbus A321" / "Airbus three twenty-one", "Embraer 170" /
+    "Embraer one seventy". A name the table doesn't know is said as written."""
+    import re
+
+    code = model.strip().upper().replace("-", "")
+    if not code:
+        return "", ""
+    if (airliner := _airliner(code)) is not None:
+        maker, n = airliner
+        return f"{maker} {'A' if maker == 'Airbus' else ''}{n}", f"{maker} {model_number(n)}"
+    for pattern, display, spoken in TYPE_NAMES:
+        if re.fullmatch(pattern, code):
+            return display, spoken
+    if re.fullmatch(r"[A-Za-z ]+", model.strip()):
+        return model.strip(), model.strip()  # "Airbus", "Citation": a name already
+    return model, digits(model)

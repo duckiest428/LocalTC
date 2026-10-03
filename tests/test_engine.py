@@ -1,6 +1,7 @@
 """AtcEngine behaviors outside the scripted scenarios, the session snapshot, and the bus service."""
 
 import asyncio
+import re
 from pathlib import Path
 
 import msgspec
@@ -63,9 +64,9 @@ def test_no_destination_asks_for_it():
 
 
 def test_say_again_repeats_the_last_instruction():
-    engine, own = parked_engine(destination="KBFI", cruise_ft=7000)
+    engine, own = parked_engine(destination="KBFI", cruise_ft=12000)
     (clearance,) = transmissions(say(engine, own, 5, "Paine Clearance, 172LT, IFR to Boeing Field, ready to copy"))
-    assert "climb and maintain 5,000, expect 7,000" in clearance.text
+    assert re.search(r"climb and maintain \d,000, expect 12,000", clearance.text), clearance.text
     (repeat,) = transmissions(say(engine, own, 20, "say again for 2LT"))
     assert repeat.instruction_id == "clearance.ifr" and repeat.text.startswith("Cessna 2LT, cleared to Boeing Field")
 
@@ -129,3 +130,18 @@ def test_service_on_the_bus_with_cached_destination(tmp_path):
     assert [e.airport.icao for e in events if isinstance(e, AirportData)] == ["KBFI"]
     assert [e.phase for e in events if isinstance(e, PhaseChanged)][:4] == ["PARKED", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF"]
     assert "KBFI" in engine.tracker.context_builder.airports
+
+
+def test_stand_by_means_a_while():
+    """ "Stand by for your clearance", and the clearance a dozen seconds later sounded like nobody went to get it: it
+    comes 40 s to a minute and a half on."""
+    for seed in range(1, 40):
+        engine, own = parked_engine(destination="KBFI", cruise_ft=12000)
+        engine.cfg.seed = seed
+        said = say(engine, own, 5, "Paine Clearance, 172LT, IFR to Boeing Field, ready to copy")
+        if not any(getattr(o, "instruction_id", "") == "clearance.standby" for o in said):
+            continue
+        clearance = next(item for item in engine._scheduled if item.instruction_id.startswith("clearance.ifr"))
+        assert 40 <= clearance.due - 5 <= 95, clearance.due
+        return
+    raise AssertionError("no stand by in 40 seeds")

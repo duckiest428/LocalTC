@@ -695,6 +695,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
         <label class="check-row"><input type="checkbox" id="s-fpln-rwy" ${st.atc.enforce_fpln_runways ? "checked" : ""}> Enforce FPLN runway assignments: ATC gives the flight plan's departure and arrival runways. Off: the runways in use, from the ATIS</label>
+        <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
@@ -836,6 +837,7 @@ const Settings = {
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
     on("#s-chatter", "change", (e) => this.save("atc", "chatter", e.target.checked));
     on("#s-fpln-rwy", "change", (e) => this.save("atc", "enforce_fpln_runways", e.target.checked));
+    on("#s-traffic-rwy", "change", (e) => this.save("atc", "traffic_runways", e.target.checked));
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
@@ -1080,7 +1082,9 @@ const MapView = {
     const last = this.trailPts[this.trailPts.length - 1];
     if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.0015) {
       this.trailPts.push([o.lat, o.lon]);
-      if (this.trailPts.length > 3000) this.trailPts.shift();
+      // Past 3,000 points every other one goes (the last kept): the whole flight from the gate, less dense. Dropping
+      // the oldest moved the start of the line along behind a long flight.
+      if (this.trailPts.length > 3000) this.trailPts = this.trailPts.filter((p, i, all) => i % 2 === 0 || i === all.length - 1);
       if (this.trail) this.trail.setLatLngs(this.trailPts);
     }
     if (!this.map) return;

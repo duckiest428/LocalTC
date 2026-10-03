@@ -206,3 +206,44 @@ describe("the relay's map and radio log", () => {
     expect((await call("POST", "/v1/live/alert", { kind: "spam", title: "x", body: "y" }, bearer(token))).status).toBe(400);
   });
 });
+
+describe("radio calls from the phone and the website", () => {
+  it("waits for the desktop and goes to it once, with its next update", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    expect((await call("POST", "/v1/live/say", { text: "  Los Angeles Center,\n FFT2084 request higher " }, bearer(token))).status).toBe(200);
+    const answer = await data(await call("PUT", "/v1/live/frame", { own: { lat: 33.1, lon: -115.2 } }, bearer(token)));
+    expect(answer.calls.map((c: { text: string }) => c.text)).toEqual(["Los Angeles Center, FFT2084 request higher"]);
+    expect((await data(await call("GET", "/v1/live/calls", undefined, bearer(token)))).calls).toEqual([]);
+  });
+
+  it("is refused when nothing is flying, or there's nothing to say", async () => {
+    const { token } = await signIn();
+    expect((await call("POST", "/v1/live/say", { text: "radio check" }, bearer(token))).status).toBe(409);
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    expect((await call("POST", "/v1/live/say", { text: "   " }, bearer(token))).status).toBe(400);
+  });
+
+  it("comes from the website with its cookie, from its own pages only", async () => {
+    const email = `pilot-${crypto.randomUUID()}@example.com`;
+    const desktop = await signIn(email);
+    await call("PUT", "/v1/live", cruise, bearer(desktop.token));
+    const { res } = await signIn(email, "web");
+    const cookie = res.headers.get("Set-Cookie")!.split(";")[0];
+    expect((await call("POST", "/v1/live/say", { text: "radio check" }, { Cookie: cookie, Origin: "https://evil.example", "X-LocalTC": "1" })).status).toBe(403);
+    expect((await call("POST", "/v1/live/say", { text: "radio check" }, { Cookie: cookie, Origin: "https://localtc.test", "X-LocalTC": "1" })).status).toBe(200);
+    const answer = await data(await call("GET", "/v1/live/calls", undefined, bearer(desktop.token)));
+    expect(answer.calls.map((c: { text: string }) => c.text)).toEqual(["radio check"]);
+  });
+});
+
+describe("the path flown", () => {
+  it("keeps the start of a long flight, less dense, never cut off", async () => {
+    const { thin } = await import("../src/live");
+    const path = Array.from({ length: 5000 }, (_, i) => [i / 100, 0] as [number, number]);
+    const kept = thin(path);
+    expect(kept.length).toBeLessThanOrEqual(2000);
+    expect(kept[0]).toEqual([0, 0]);
+    expect(kept[kept.length - 1]).toEqual([49.99, 0]);
+  });
+});

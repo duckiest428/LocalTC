@@ -74,6 +74,9 @@ class Operations:
     landing: tuple[str, ...]
     departing: tuple[str, ...]
     approaches: dict[str, Approach] = field(default_factory=dict)  # landing runway -> the approach in use
+    # In visual weather: the instrument approach each landing runway has besides ("RNAV Y runway 08 and visual
+    # approaches in use"), so the ATIS names the approach a pilot will brief and ATC will clear, not just "visual".
+    instrument: dict[str, Approach] = field(default_factory=dict)
     simultaneous: bool = False
     notices: tuple[Notice, ...] = ()
     outages: Outages = NO_OUTAGES

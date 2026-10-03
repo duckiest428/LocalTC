@@ -274,7 +274,14 @@ def _faa_approaches(info: AtisInfo) -> tuple[str, str]:
         approach = Approach(info.approach, info.runway)
         approaches = [approach]
     if all(a.kind == "VISUAL" for a in approaches):
-        return "Visual approaches in use", "visual approaches in use"
+        # The instrument approaches the landing runways have, named with the visuals: "ILS Y runway 26R and visual
+        # approaches in use" (a pilot found plain "visual approaches in use" nothing like the real broadcasts).
+        backup = [ops.instrument[r] for r in ops.landing if r in ops.instrument] if ops is not None else []
+        if not backup:
+            return "Visual approaches in use", "visual approaches in use"
+        shown = " and ".join(_approach_words(a, False) for a in backup)
+        said = " and ".join(_approach_words(a, True) for a in backup)
+        return f"{shown} and visual approaches in use", f"{said} and visual approaches in use"
     if ops is not None and ops.simultaneous and len({a.kind for a in approaches}) == 1 and len(approaches) > 1:
         runways = " and ".join(a.runway for a in approaches)
         said = " and ".join(speech.runway(a.runway) for a in approaches)

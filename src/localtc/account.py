@@ -26,6 +26,7 @@ closes.
 
 import json
 import logging
+import math
 import time
 import urllib.error
 import urllib.parse
@@ -148,6 +149,8 @@ class Account:
         self._live_sent = 0.0
         self._live_last: dict | None = None
         self.watchers = 0  # phones following the flight through the server, as of the last answer
+        self.calls: list[str] = []  # radio calls typed on the phone or the website, waiting to be transmitted
+        self.relayed_at = -math.inf  # (monotonic) the server's last answer about the live view
 
     @property
     def logbook(self) -> Logbook:
@@ -269,15 +272,33 @@ class Account:
             return False
         data = self._call("PUT", "/v1/live", status)
         self._live_sent, self._live_last = now, status
-        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self._relayed(data)
         return True
+
+    def _relayed(self, data: Any) -> None:
+        """An answer about the live view: how many watch, and the radio calls waiting (each comes once)."""
+        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self.relayed_at = time.monotonic()
+        for call in (data or {}).get("calls") or ():
+            text = call.get("text") if isinstance(call, dict) else None
+            if isinstance(text, str) and text.strip():
+                self.calls.append(text.strip()[:300])
+
+    def take_calls(self) -> list[str]:
+        """The radio calls typed on the phone or the website since last asked, oldest first."""
+        calls, self.calls = self.calls, []
+        return calls
+
+    def poll_calls(self) -> None:
+        """Ask for waiting radio calls (while somebody watches and nothing else has gone up for a moment)."""
+        self._relayed(self._call("GET", "/v1/live/calls"))
 
     def frame(self, *, own: dict | None = None, traffic: list | None = None, trail: list | None = None) -> None:
         """Position, traffic and the path flown so far, for a phone watching through the server. Held in memory
         there, never stored."""
         body = {k: v for k, v in (("own", own), ("traffic", traffic), ("trail", trail)) if v is not None}
         data = self._call("PUT", "/v1/live/frame", body)
-        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self._relayed(data)
 
     def live_map(self, *, route: dict | None = None, zones: dict | None = None, clear: tuple[str, ...] = ()) -> None:
         """The flight plan's route and the Live Map's ATC zones for a phone or the Flight Tracker watching
@@ -285,17 +306,17 @@ class Account:
         body: dict = {k: v for k, v in (("route", route), ("zones", zones)) if v is not None}
         body.update({k: None for k in clear})
         data = self._call("PUT", "/v1/live/map", body)
-        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self._relayed(data)
 
     def radio(self, lines: list[dict]) -> None:
         """Radio log lines for a phone watching through the server. Held in memory there, never stored."""
         data = self._call("POST", "/v1/live/radio", {"lines": lines})
-        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self._relayed(data)
 
     def airports(self, airports: list[dict]) -> None:
         """The flight's airports (frequencies, runways, ATIS) for a phone watching through the server."""
         data = self._call("PUT", "/v1/live/airports", {"airports": airports})
-        self.watchers = int((data or {}).get("watchers", 0) or 0)
+        self._relayed(data)
 
     def support(self, message: dict) -> str:
         """Feedback or a support request, emailed to LocalTC's maintainer. The answer goes to the account's email."""

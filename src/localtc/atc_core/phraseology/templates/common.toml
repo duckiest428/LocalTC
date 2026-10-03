@@ -166,6 +166,13 @@ readback = { required = ["altitude"] }
 pilot_readback = "Maintain {altitude}, {callsign_short}."
 
 [[template]]
+id = "common.check_heading"
+controller = "any"
+text = ["{callsign}, check heading, fly heading {heading}.", "{callsign}, verify heading, fly heading {heading}."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
+[[template]]
 id = "common.how_read"
 controller = "any"
 text = ["{callsign}, {station}, how do you read?", "{callsign}, did you copy?"]

@@ -358,7 +358,11 @@ class PhaseDetector:
 
         elif phase is FlightPhase.LANDING:
             climbing = not own.on_ground and own.vs_fpm > th.go_around_vs_fpm
-            if self._min_agl_in_phase < th.go_around_min_agl_ft and self._held("go_around", climbing, t, th.go_around_s):
+            # Low, then climbing away; or sent around from higher up the final (LAX, told to go around at 400 ft a mile
+            # out): climbing well above the lowest it got. Either way it isn't landing any more.
+            gone_around = self._min_agl_in_phase < th.go_around_min_agl_ft or \
+                own.alt_agl_ft > self._min_agl_in_phase + th.go_around_min_agl_ft
+            if gone_around and self._held("go_around", climbing, t, th.go_around_s):
                 return FlightPhase.DEPARTURE, "go-around"
             slow = own.on_ground and own.gs_kt < th.rollout_kt
             if self._held("rollout", slow, t, th.rollout_s):

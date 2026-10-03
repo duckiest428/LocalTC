@@ -28,6 +28,14 @@ a new minor version adds features, a patch fixes them.
 - **Stop the flight at the gate** (Quick Settings → ATC, on by default): parked at a gate or stand at the destination after landing (stopped, off the runway, no taxi instruction still going), the flight ends as if you'd pressed Stop, a few seconds after ATC's last words. Not before departure, not at another airport, and not in a replay unless `[session] auto_stop_in_replay` says so. `[session] gate_radius_m` sets how close counts as at the gate.
 - **A record of how ATC reached each answer** in the recording and the flight report (`atc_decision`): what the grammar read, what the model read after the checks, which reading ATC acted on, what it decided, who worded the reply, and why anything of the model's wasn't used. Each ATC transmission says whether the model or the template worded it.
 - **Runway lengths and the field elevation** are among what the model is told, and "how long is runway 24R?" is answered from the sim's airport data.
+- **Talk to ATC from the phone or the website, anywhere**: a call typed in the companion app's Comms tab away from the PC's Wi-Fi, or in the website's Flight Tracker (a new box under its radio log), goes through the account to LocalTC, which transmits it on COM1 as if typed in the app; ATC's answer comes back in the radio log. The account holds a call for a minute at most, in memory only. A call that can't go out (no flight running) says so in the radio log.
+- **The runway in use follows the sim's own traffic** (Quick Settings → ATC, `[atc] traffic_runways`, on by default): ATC watches which way the AI aircraft take off and land at your airports and, when the wind allows, sends you the same way instead of head-on into their stream. Fewer conflicting finals and go-arounds.
+- **Go around when you never switched to tower**: on short final, still on approach's frequency and without a landing clearance, approach sends you around ("go around, you're not cleared to land"), once.
+- **"Check heading"**: a heading ATC gave and you're not flying (30° off for 20 s, after time to turn) gets "check heading, fly heading 100", twice at most for one heading.
+- **Approach answers your check-in after a go-around**: "radar contact, maintain 2,200, expect vectors for the ILS runway 25R approach", and the copilot checks in with "going around".
+- **Ask for a gate**: "we'd like gate Echo 9" gets that gate when the scenery has one by that name; when it doesn't, ground sends you to parking rather than making up a gate number. "Negative, we'd like gate E9" to a taxi instruction asks for that gate instead.
+- **"Disregard the request"** after asking for a climb or descent takes it back: "maintain FL360", and whatever else you asked is answered. "Disregard" on its own gets "roger".
+- **The model knows the time** (the sim's, in Zulu), your filed cruise altitude and your cleared altitude, and, when you ask about them, the traffic taxiing near you and which way the pushback will turn.
 - **The Flight Tracker and the companion app show everything the Live Map does**: the ATC zones (the centres on the route, the departure and approach areas, the stretch of final, each tower's control zone), the flight plan route and its fixes, the runways, the taxi route ground gave, the gate, each airport's controllers with the one you're tuned to and the next one marked, and the airspace classes on the VFR map, along with the path flown. The website's tracker also gets the app's IFR/VFR switch, the zones on/off, Route and Follow buttons, and the map key; the companion app gets a zones button and a key.
 
 ### Changed
@@ -44,6 +52,17 @@ a new minor version adds features, a patch fixes them.
 - A request or question along with a readback is answered too: the readback is taken, then the request.
 - **The Flight Tracker shows the path flown before it was opened**: the app keeps the flight's path and hands it over when the website (or the companion app) starts watching mid-flight; the relay keeps it in memory only, like the position.
 - **One language model: Llama 3.2 3B**, the one LocalTC's prompts and checks are built and tested around. The others are gone from Quick Settings → Models and the setup profiles.
+- **Other aircraft are named as controllers say them**: "Boeing 737", "Airbus A321", "Embraer 170", "regional jet", never the type code spelled out ("bravo seven three seven", "echo one seven zero").
+- **Giving way on the ground only when there's something to give way to**: never to an aircraft on a runway (lining up, taking off or landing), never while you're turning, and only when its way and yours really meet close ahead; once for each aircraft. An aircraft taxiing to the same runway ahead of you gets "give way to the Boeing 737, then follow it", once, not a caution for every aircraft in the line. "Crossing left to right" is said only when it clearly is.
+- **The ATIS letter changes less often**: a special between the hourly observations at most every 30 minutes (a runway change sooner), and only for a real change (the wind by 10 kt or 60°, the altimeter by 0.03). ATC no longer announces each new letter on its own; the next clearance mentions it, or your check-in with the old letter gets the new one.
+- **The ATIS names the instrument approach in visual weather**: "ILS runway 08 and visual approaches in use", not just "visual approaches in use".
+- **No more levels offered for no reason**: the centre no longer asks if you can accept a higher level in the middle of the cruise. Ask, and it's given as before.
+- **"Stand by for your clearance" means a while**: the clearance comes 40 seconds to a minute and a half later, not a dozen seconds.
+- **The initial altitude isn't always 5,000**: it's set by the departure airport's elevation and the SID, the same every time for the same airport and SID, between 4,000 and 10,000 ft above most fields.
+- **The model's answers stay on what you asked**: it's given the facts that matter to the call (who's talking, the time, the weather and runway where you are or the approach where you're going), and runway lengths, closures, the runways in use or the field elevation only when your words are about them. It's told to use only what answers the call. (Given everything, it recited "parallel landings are not available" and runway closures to remarks that had nothing to do with them.) Parallel landings are no longer among the facts at all.
+- **The model rewords a clearance more reliably**: it's shown exactly what it must keep (the numbers, levels, frequencies, taxiways and fixes), and no example level it could copy (it wrote "FL240" for FL360, over and over). "Radar contact" isn't the instruction "contact" (a dropped "radar contact" was turned away, an added "contact approach" got through). "Readback correct" must be kept, the same thing mustn't be said twice, and "pushback" is the "push" of "push and start approved".
+- **One stray value no longer loses the model's reading of a call**: a value it copied from the context ("Looking" with the cleared altitude, a readback with the expected runway) or wrote wrongly ("expect 390, 25 minutes" for a cruise level) is left out and the rest kept. Only a made-up value for the very thing a request is about (the level of a climb request) still has the call read again. A flight level said as three digits ("climb and maintain 390") counts as said.
+- **A reading of your call that the checks turned away, with the grammar reading it instead, is no longer an alert**: it's in the radio log and the decision record, and the model still words the reply. The "turned away" notice is for when you hear the script instead of the model.
 - **The installer carries only what LocalTC runs**: the release is an allowlist (the app, its settings and its setup), so the website, the server, the iOS app, the tests and anything new in the repository stay out of it.
 
 ### Fixed
@@ -65,7 +84,7 @@ a new minor version adds features, a patch fixes them.
   - "say again" only when the words were unclear or a readback is still owed.
 
   The radio log and a notice say each time that the model's answer was turned away, why, and what ATC said instead.
-- **The model's answers say only what LocalTC knows.** A reply that calls something closed, restricted, active, delayed or "expected shortly" without the facts saying so is turned away, as is a runway pairing the airport doesn't have or a runway "in use" that isn't. The model is now told the landing and departing runways, whether parallel landings are in use, and the ATIS notices ("none" when there are none).
+- **The model's answers say only what LocalTC knows.** A reply that calls something closed, restricted, active, delayed or "expected shortly" without the facts saying so is turned away, as is a runway pairing the airport doesn't have or a runway "in use" that isn't. The model is told the runways in use and the ATIS notices when the pilot asks about them.
 - The sim's wind and altimeter answer a question only when the pilot's own words are about them, not just because the model labelled it "weather".
 - A reply ending with the callsign was turned away for the callsign's digits.
 - The warm-up warning said ATC would wait "up to 35 s instead" of a 40 s setting: it only ever waits longer, and only says so then.
@@ -78,6 +97,24 @@ a new minor version adds features, a patch fixes them.
 - The path flown before the Flight Tracker was opened never reached it, or a phone away from the PC's network: the app sent it in a form the account connection turned down.
 - The Live Map's ATC zones didn't redraw after zooming while the map followed the aircraft.
 - Dark lines across the dark maps at low zoom, where the map tiles meet.
+- **The flight path lost its start on long flights**: the Live Map, the Flight Tracker, the account's relay and the companion app each kept only the latest stretch (the companion about ten minutes), so the beginning of the green line moved along behind the aircraft. Now the whole path stays, thinned as it grows.
+- **Replays of some flights never reached the account**: one long alert in the flight was more than the account takes for a replay's marker, and the whole replay was refused, every time. Long text is now cut short on both sides, and with "upload replays" on, the replays of your last few flights that didn't go up are sent after the next flight.
+- **A readback of the taxi to the gate was taken as a request for it**, and ATC said the whole taxi again, to every readback; the flight then never stopped at the gate. A request heard along with a readback now needs words that ask for something, and is never the request the instruction answered.
+- **Stop the flight at the gate** waited forever when the taxi-in's readback was still owed: parked at the gate, the taxi is over.
+- **A false "go around, traffic on the runway"**: for an aircraft rolling out well down the runway, or beside the pavement at a holding point. Now only for one on the runway in the stretch you'll land on, or stopped on it.
+- **"Hold short, traffic landing" for an aircraft that had just taken off**: traffic climbing away low over the runway is a departure; you line up behind it.
+- **After a go-around**: "go around" was said again (and "how do you read?") after landing; tower cleared the flight to land right after sending it around; a go-around started from higher up the final wasn't seen as one, so ATC treated the flight as landing for a quarter of an hour; "have a good flight" came with a go-around you'd be back from in minutes.
+- **The copilot read back instructions long gone**, half an hour late or on another controller's frequency: a readback is now said only while the controller who gave it is still waiting for it.
+- **A handoff to the next centre on the current centre's own frequency**: the pilot "contacted" the new centre, the old one answered, and the handoff went round and round. The next centre is always on another frequency.
+- **An approach flown without the vectors was never handed to tower** and landed unannounced: established on the final, the flight is cleared for the approach and sent to tower.
+- **A pushback with the tail asked for after a correction** ("tail left, actually, can we get a tail right?") got "unable", then tail left. The last tail asked for after "actually" or "sorry" is the one given, and "can we get a tail right?" at the gate is the pushback. The route's direction behind the stand is read further along when the lane behind the tail doesn't say left or right.
+- A call cut off mid-word ("but sh-") got the model's answer to half a sentence; now "say again".
+- Saying "negative" to an instruction and asking for something else left that instruction waiting, and ATC asked for it again a minute later.
+- "Are we clear to land?" on final read as clear of the runway got "contact ground" in the air.
+- "What runway can we expect?" and "what direction will we tail?" read as requests got "unable"; they're questions.
+- The model's "question" for a call that asked nothing ("not sure") got the facts recited at it.
+- "Expect runway 33R" asked for a readback and then "did you copy?": an expected runway is information, not a clearance.
+- After landing, the destination's frequencies were named after the departure airport's controllers.
 
 ## [0.3.5] - 2026-09-25
 

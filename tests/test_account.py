@@ -49,6 +49,9 @@ class FakeServer:
             return 200, {}
         if path == "/v1/live":
             return 200, {"watchers": 0}
+        if path in ("/v1/live/frame", "/v1/live/calls"):
+            calls, self.calls = getattr(self, "calls", []), []  # handed over once
+            return 200, {"watchers": 1, "calls": calls}
         if path.startswith("/v1/flights/") and path.endswith("/replay"):
             flight = path.split("/")[3]
             if flight not in self.flights:
@@ -174,6 +177,19 @@ def test_the_companion_gets_changes_not_a_stream(setup):
     assert account.live({**status, "phase": "ARRIVAL"}, now=116.0)  # the heartbeat: is a phone watching?
     live = [r for r in server.requests if r[1] == "/v1/live"]
     assert len(live) == 3 and all("lat" not in r[2] for r in live)
+
+
+def test_calls_typed_on_the_phone_or_website_come_with_the_relays_answers(setup):
+    """A radio call typed away from the PC's Wi-Fi waits on the server; it comes back with the next live update (or
+    the poll while somebody watches), once each."""
+    account, server, _ = setup
+    sign_in(account)
+    server.calls = [{"id": "1", "text": "  Los Angeles Center, ACA795, request higher ", "at": 0}, {"id": "2", "text": ""}]
+    account.frame(own={"lat": 33.0, "lon": -117.0})
+    assert account.take_calls() == ["Los Angeles Center, ACA795, request higher"] and account.take_calls() == []
+    server.calls = [{"id": "3", "text": "radio check"}]
+    account.poll_calls()
+    assert account.watchers == 1 and account.take_calls() == ["radio check"]
 
 
 def test_support_messages_need_the_account(setup):

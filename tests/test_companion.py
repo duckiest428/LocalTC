@@ -229,3 +229,32 @@ def test_a_call_typed_on_the_phone_is_transmitted():
     assert ok == (200, {"ok": True}) and said == ["Phoenix Approach, Frontier 2084, with you"]
     assert empty[0] == 400
     assert idle == (409, {"error": "start a flight first"})
+
+
+def test_calls_through_the_account_are_transmitted_and_a_failed_one_is_said():
+    """A call typed on the phone (away from the PC's Wi-Fi) or the website's Flight Tracker goes out as if typed in
+    the app; one that can't (no flight running) comes back in the radio log so whoever typed it knows."""
+    from localtc.ui.pilot import PilotRoutes
+
+    class Account:
+        def __init__(self) -> None:
+            self.calls = ["Socal Approach, ACA795, request vectors"]
+
+        def take_calls(self) -> list[str]:
+            calls, self.calls = self.calls, []
+            return calls
+
+    hub = CompanionHub()
+    pilot = PilotRoutes(lambda: None, lambda kind, data: None, account=Account(), hub=hub)
+    said: list[str] = []
+    pilot.on_call = said.append
+    pilot._deliver_calls()
+    assert said == ["Socal Approach, ACA795, request vectors"]
+
+    def nothing_flying(text: str) -> None:
+        raise RuntimeError("start a flight first")
+
+    pilot._account.calls = ["radio check"]
+    pilot.on_call = nothing_flying
+    pilot._deliver_calls()
+    assert hub.radio[-1]["kind"] == "alert" and "Not transmitted: start a flight first" in hub.radio[-1]["text"]

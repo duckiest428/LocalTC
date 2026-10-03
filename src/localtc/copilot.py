@@ -77,6 +77,11 @@ class _Queued:
     text: str = field(default="", compare=False)
     facility: Facility | None = field(default=None, compare=False)
     tries: int = field(default=0, compare=False)
+    # A readback: the instruction it answers, and the controller who gave it. Said only while that controller is
+    # still waiting for it (a readback held up behind the pilot's own calls went out half an hour late at LAX, on
+    # another frequency).
+    answers: str | None = field(default=None, compare=False)
+    heard_on: Facility | None = field(default=None, compare=False)
 
 
 class Copilot:
@@ -141,7 +146,8 @@ class Copilot:
         if any(key[0] == pending.instruction_id for key in self._answered):
             return  # already answered this one; ATC is waiting on a correction, not on silence
         self._answered.add((pending.instruction_id, pending.issued_t))
-        self._push("say", t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
+        self._push("say", t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots),
+                   answers=pending.instruction_id, heard_on=issued.facility)
 
     # --- reacting to ATC --------------------------------------------------------------------------------
 
@@ -165,7 +171,8 @@ class Copilot:
         self._answered.add((pending.instruction_id, tx.t))
         words = self._correction(pending.instruction_id, issued.slots) if tx.instruction_id in CORRECTING else None
         start = max(tx.t, self.engine.radio_busy_until)  # once ATC has finished saying it
-        readback = self._push("say", start, text=words or self.engine.library.pilot_readback(pending.instruction_id, issued.slots))
+        readback = self._push("say", start, text=words or self.engine.library.pilot_readback(pending.instruction_id, issued.slots),
+                              answers=pending.instruction_id, heard_on=issued.facility)
         handoff = st.comms.expected
         if handoff is not None and "frequency" in issued.slots and handoff.matches(float(issued.slots["frequency"])):
             said = readback.due + len(readback.text) * SPEECH_S_PER_CHAR
@@ -258,6 +265,9 @@ class Copilot:
         alt = int(round(own.alt_indicated_ft / 100.0) * 100)
         assigned = st.assignments.altitude_ft
         atis = self._with_atis(st.flight.destination) if f.controller == "approach" else ""
+        if getattr(self.engine, "_going_around", False):
+            # Sent back from tower: going around, and nothing about the ATIS (heard it once already).
+            return f"{f.station}, {cs}, going around, {alt:,}" + (f" climbing {assigned:,}" if assigned and assigned > alt + 300 else "")
         if assigned and abs(assigned - alt) > 300:
             verb = "climbing" if assigned > alt else "descending"
             return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}" + atis
@@ -269,14 +279,15 @@ class Copilot:
         return self._rng.uniform(*self.delay_s)
 
     def _push(self, kind: str, t: float, *, text: str = "", facility: Facility | None = None,
-              after: float | None = None, pause: float | None = None) -> _Queued:
+              after: float | None = None, pause: float | None = None, answers: str | None = None,
+              heard_on: Facility | None = None) -> _Queued:
         """Queue an action ``pause`` seconds (by default a reaction time, or a second to turn a knob) after ``after``
         (by default ``t``, or the last thing queued)."""
         self._seq += 1
         base = max(t, self._queue[-1].due if self._queue else t) if after is None else after
         if pause is None:
             pause = self._delay() if kind != "tune" else 1.0
-        item = _Queued(base + pause, self._seq, kind, text, facility)
+        item = _Queued(base + pause, self._seq, kind, text, facility, answers=answers, heard_on=heard_on)
         self._queue.append(item)
         self._queue.sort()
         return item
@@ -287,6 +298,9 @@ class Copilot:
             assert item.facility is not None
             return [Tune(t, item.facility.mhz)]
         text = item.text
+        if item.answers is not None and (st.pending is None or st.pending.instruction_id != item.answers or (
+                item.heard_on is not None and st.comms.tuned is not None and not st.comms.tuned.matches(item.heard_on.mhz))):
+            return []  # answered already (by the pilot), replaced, or that controller is no longer the one listening
         if item.kind == "checkin":
             assert item.facility is not None
             text = self._checkin_text(item.facility, st.aircraft) or ""

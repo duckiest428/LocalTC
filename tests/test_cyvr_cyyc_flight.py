@@ -114,13 +114,29 @@ def test_the_flight_is_called_air_canada(replay):
 # --- what ATC does and when ----------------------------------------------------------------------
 
 
-def test_no_incursion_crossing_a_runway_the_route_goes_across(replay):
+@pytest.fixture(scope="module")
+def by_the_wind() -> list[str]:
+    """The flight as it was flown: to 08R, by the wind. (The AI traffic was all on 26 that day; now ATC sends this
+    flight that way too, [atc] traffic_runways.)"""
+    cfg = with_recorded(load_config(), Recording(FLIGHT).header.config)
+    cfg.atc.traffic_runways = False
+    scenario = Scenario(scenario=ScenarioMeta(recording=str(FLIGHT)), flight=cfg.flight, atc=cfg.atc)
+    return run(scenario, FLIGHT, recording=FLIGHT, recorded_pilot=True).lines
+
+
+def test_no_incursion_crossing_a_runway_the_route_goes_across(by_the_wind):
     """The taxi route to 08R crosses runway 13. Being routed over a runway and then blamed for
     crossing it is ATC's mistake, not the pilot's: the clearance to cross comes as they reach it."""
-    assert not any("runway_incursion" in line for line in replay), \
-        [line for line in replay if "ALERT" in line]
-    assert any("cross runway 13" in line for line in replay), \
-        [line for line in replay if "ATC" in line][:12]
+    assert not any("runway_incursion" in line for line in by_the_wind), \
+        [line for line in by_the_wind if "ALERT" in line]
+    assert any("cross runway 13" in line for line in by_the_wind), \
+        [line for line in by_the_wind if "ATC" in line][:12]
+
+
+def test_the_runway_goes_the_way_the_traffic_does(replay):
+    """Vancouver's AI traffic was taking off and landing on 26 all session; ATC had sent this flight to 08R, into it."""
+    taxi = next(line for line in replay if "taxi to runway" in line)
+    assert "runway 26" in taxi, taxi
 
 
 def test_the_climb_is_handed_to_a_centre_before_the_top_of_it(replay):

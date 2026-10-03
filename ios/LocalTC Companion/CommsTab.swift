@@ -48,19 +48,19 @@ struct CommsTab: View {
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("comFilter")
                 HStack(spacing: 10) {
-                    TextField(model.connection.local == nil ? "Typing to ATC works on the same Wi-Fi" : "Type a message ...",
+                    TextField(model.connection.canSay ? "Type a message ..." : "Typing to ATC works once connected",
                               text: $draft, axis: .vertical)
                         .lineLimit(1...3)
                         .textFieldStyle(.roundedBorder)
                         .focused($typing)
                         .submitLabel(.send)
                         .onSubmit(send)
-                        .disabled(model.connection.local == nil)
+                        .disabled(!model.connection.canSay)
                         .accessibilityIdentifier("message")
                     Button(action: send) {
                         Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.title3)
                     }
-                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || sending || model.connection.local == nil)
+                    .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || sending || !model.connection.canSay)
                     .accessibilityLabel("Transmit on COM1")
                 }
                 if let problem {

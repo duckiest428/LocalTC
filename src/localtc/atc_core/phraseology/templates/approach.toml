@@ -27,6 +27,24 @@ text = ["{callsign}, cleared {approach} approach, contact {station} {frequency}.
 readback = { required = ["frequency"], optional = ["approach"] }
 pilot_readback = "Cleared {approach} approach, {station} {frequency}, {callsign_short}."
 
+# Short final and never switched to tower (no landing clearance): approach sends the flight around.
+[[template]]
+id = "approach.go_around_no_clearance"
+controller = "approach"
+text = ["{callsign}, go around, you're not cleared to land, fly runway heading, climb and maintain {altitude}.",
+        "{callsign}, go around, no landing clearance, fly runway heading, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Going around, runway heading, climb and maintain {altitude}, {callsign_short}."
+
+# The check-in after a go-around, sent back from tower: on radar again, and round for another try.
+[[template]]
+id = "approach.go_around_checkin"
+controller = "approach"
+text = ["{callsign}, {station}, radar contact, maintain {altitude}, expect vectors for the {approach} approach.",
+        "{callsign}, {station}, roger, maintain {altitude}, vectors for another {approach} approach."]
+readback = { required = ["altitude"] }
+pilot_readback = "Maintain {altitude}, {callsign_short}."
+
 [[template]]
 id = "approach.vectors"
 controller = "approach"

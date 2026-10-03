@@ -666,7 +666,12 @@ const Tracker = {
     if (!this.plane) { this.plane = L.marker(at, { icon: this.icon(o.hdg, "own", 30), zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, o.ground ? 13 : 9); }
     else { this.plane.setLatLng(at); this.plane.setIcon(this.icon(o.hdg, "own", 30)); }
     const last = this.trailPts[this.trailPts.length - 1];
-    if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.002) { this.trailPts.push(at); this.trail.setLatLngs(this.trailPts); }
+    if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.002) {
+      this.trailPts.push(at);
+      // Past 4,000 points every other one goes: the whole flight, less dense (never the start cut off).
+      if (this.trailPts.length > 4000) this.trailPts = this.trailPts.filter((p, i, all) => i % 2 === 0 || i === all.length - 1);
+      this.trail.setLatLngs(this.trailPts);
+    }
     if (this.follow) this.map.panTo(at, { animate: false });
     this.plane.bindTooltip(`${Number(o.alt || 0).toLocaleString()} ft · ${o.gs ?? "—"} kt · ${String(o.hdg ?? 0).padStart(3, "0")}°`);
   },
@@ -684,6 +689,7 @@ const Tracker = {
     for (const [id, m] of this.tfc) if (!seen.has(id)) { m.remove(); this.tfc.delete(id); }
   },
   radio(line) {
+    if (line.kind === "alert" && /^Not transmitted/.test(line.text || "")) { $("#tr-say-note").textContent = line.text; return; }
     if (!["atc", "pilot", "copilot"].includes(line.kind) || !line.text) return;
     const list = $("#tr-radio");
     const who = line.kind === "atc" ? esc(line.station || "ATC") : line.kind === "copilot" ? "Copilot" : "You";
@@ -691,6 +697,22 @@ const Tracker = {
     while (list.children.length > 40) list.firstElementChild.remove();
     list.scrollTop = list.scrollHeight;
   },
+};
+
+// A radio call typed here: the account's relay holds it until the app picks it up (a second or two while this page
+// watches), and the app transmits it on COM1 as if typed there. ATC's answer comes back in the radio log above.
+$("#tr-say").onsubmit = async (e) => {
+  e.preventDefault();
+  const input = $("#tr-say-text");
+  const text = input.value.trim();
+  if (!text) return;
+  const note = $("#tr-say-note");
+  note.textContent = "Sending ...";
+  try {
+    await api("POST", "/v1/live/say", { text });
+    input.value = "";
+    note.textContent = "Sent to the app: it goes out on COM1 in a moment.";
+  } catch (err) { note.textContent = err.message; }
 };
 
 // --- arriving from the email's link --------------------------------------------------------------------

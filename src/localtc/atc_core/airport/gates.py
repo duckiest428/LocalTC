@@ -3,6 +3,9 @@
 The sim's parking spots carry a name ("GATE B 25", "PARKING 3", "S PARKING 2") and a kind (gate_medium,
 ramp_ga_small, ramp_cargo, fuel, vehicle). Airliners go to a gate, heavies to a heavy gate, everyone else
 to a GA ramp. A spot with an aircraft sitting on it is taken.
+
+With the airport's real gates (``real_gates``, from OpenStreetMap), a stand takes the real gate's name ("Gate E9"
+where the scenery says "GATE 88"), and an international flight goes to a gate that takes international arrivals.
 """
 
 import math
@@ -12,6 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from localtc.atc_core.airport.geometry import AirportGeometry
+from localtc.atc_core.airport.real_gates import GateData, match
 from localtc.atc_core.readback.normalize import Token
 from localtc.sim_api import ParkingSpot, TrafficTarget
 
@@ -27,7 +31,9 @@ NEAR_SPOT_M = 60.0  # the departure gate: the spot the aircraft is parked on, if
 class Gate:
     spot: ParkingSpot
     word: str  # "gate" or "parking"
-    label: str  # "B25", "3", "S2"
+    label: str  # "B25", "3", "S2": the real gate's ("E9") when the airport's real gates are known
+    international: bool = False  # takes international arrivals (the real gates)
+    real: bool = False  # named from the airport's real gates
 
     @property
     def index(self) -> int:
@@ -48,8 +54,22 @@ def parse(spot: ParkingSpot) -> Gate | None:
     return Gate(spot, word, label)
 
 
-def gates(geometry: AirportGeometry) -> list[Gate]:
-    return [g for s in geometry.airport.parking if (g := parse(s)) is not None]
+_MATCHED: dict[tuple[int, str, int], dict] = {}  # the last matching (an airport's stands, its real gates)
+
+
+def gates(geometry: AirportGeometry, real: GateData | None = None) -> list[Gate]:
+    """The airport's stands; with ``real``, the gate stands named after the real gates they match."""
+    parsed = [g for s in geometry.airport.parking if (g := parse(s)) is not None]
+    if real is None or not real.gates:
+        return parsed
+    key = (id(geometry), geometry.icao + real.icao, len(real.gates))
+    if key not in _MATCHED:
+        spots = [(g.index, g.label, g.spot.lat, g.spot.lon) for g in parsed if g.word == "gate"]
+        _MATCHED.clear()
+        _MATCHED[key] = match(spots, real, geometry.xy)
+    named_by = _MATCHED[key]
+    return [Gate(g.spot, g.word, r.ref, r.international, True) if (r := named_by.get(g.index)) is not None else g
+            for g in parsed]
 
 
 def suitable(gate: Gate, *, airline: bool, heavy: bool) -> bool:
@@ -74,13 +94,14 @@ def occupied(gate: Gate, geometry: AirportGeometry, traffic: Iterable[TrafficTar
 
 
 def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traffic: Iterable[TrafficTarget],
-           seed: str) -> Gate | None:
+           seed: str, real: GateData | None = None, international: bool = False) -> Gate | None:
     """A free stand for this aircraft, picked the same way every time the same flight replays. An airliner
     with no free gate of its size gets any free gate; if the whole field is full, nothing is assigned and
-    ground just says "taxi to parking"."""
+    ground just says "taxi to parking". With the real gates: a stand with a real gate's name over one the
+    scenery numbered on its own, an international gate for an international flight, and a domestic one otherwise."""
     traffic = list(traffic)
     heavy = airline and is_heavy(aircraft_type)
-    everything = gates(geometry)
+    everything = gates(geometry, real)
     free = [g for g in everything if not occupied(g, geometry, traffic)]
     choices = [g for g in free if suitable(g, airline=airline, heavy=heavy)]
     if not choices and airline:
@@ -89,6 +110,10 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
         return None
     usual = [g for g in choices if not odd_number(g, everything)]
     choices = usual or choices
+    if airline:  # a real gate (E9), not a stand the real gates didn't name (the scenery's "88")
+        choices = [g for g in choices if g.real] or choices
+        if any(g.international for g in everything):
+            choices = [g for g in choices if g.international == international] or choices
     choices.sort(key=lambda g: g.index)
     return random.Random(zlib.crc32(f"gate{geometry.airport.icao}{seed}".encode())).choice(choices)
 
@@ -104,10 +129,10 @@ def odd_number(gate: Gate, everything: list[Gate]) -> bool:
     return len(digits) >= 3 and short > len(group) / 2
 
 
-def parked_at(geometry: AirportGeometry, lat: float, lon: float) -> Gate | None:
+def parked_at(geometry: AirportGeometry, lat: float, lon: float, real: GateData | None = None) -> Gate | None:
     """The stand an aircraft is sitting on, if any."""
     here = geometry.xy(lat, lon)
-    near = [(math.dist(here, geometry.xy(g.spot.lat, g.spot.lon)), g) for g in gates(geometry)]
+    near = [(math.dist(here, geometry.xy(g.spot.lat, g.spot.lon)), g) for g in gates(geometry, real)]
     near = [(d, g) for d, g in near if d <= max(g.spot.radius_m, NEAR_SPOT_M)]
     return min(near, key=lambda dg: dg[0])[1] if near else None
 
@@ -125,7 +150,8 @@ def requested(tokens: list[Token]) -> str | None:
     return None
 
 
-def named(geometry: AirportGeometry, label: str) -> Gate | None:
-    """The scenery's gate called ``label`` ("E9" is "GATE E 9" or "GATE E9"), or None if it has none by that name."""
+def named(geometry: AirportGeometry, label: str, real: GateData | None = None) -> Gate | None:
+    """The gate called ``label`` ("E9" is "GATE E 9" or "GATE E9", or the stand matched to the real gate E9), or None
+    if there's none by that name."""
     want = label.upper().replace(" ", "")
-    return next((g for g in gates(geometry) if g.word == "gate" and g.label.upper().replace(" ", "") == want), None)
+    return next((g for g in gates(geometry, real) if g.word == "gate" and g.label.upper().replace(" ", "") == want), None)

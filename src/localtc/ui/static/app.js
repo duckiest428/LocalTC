@@ -695,6 +695,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
         <label class="check-row"><input type="checkbox" id="s-fpln-rwy" ${st.atc.enforce_fpln_runways ? "checked" : ""}> Enforce FPLN runway assignments: ATC gives the flight plan's departure and arrival runways. Off: the runways in use, from the ATIS</label>
+        <label class="check-row"><input type="checkbox" id="s-real-gates" ${st.atc.real_gates !== false ? "checked" : ""}> Real gate names: gates as the airport numbers them (E9, not the scenery's 88), and international flights to international gates. Downloaded from OpenStreetMap and kept; off: the scenery's names</label>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
@@ -837,6 +838,7 @@ const Settings = {
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
     on("#s-chatter", "change", (e) => this.save("atc", "chatter", e.target.checked));
     on("#s-fpln-rwy", "change", (e) => this.save("atc", "enforce_fpln_runways", e.target.checked));
+    on("#s-real-gates", "change", (e) => this.save("atc", "real_gates", e.target.checked));
     on("#s-traffic-rwy", "change", (e) => this.save("atc", "traffic_runways", e.target.checked));
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));

@@ -6,6 +6,7 @@ Windows-only bridge.
 
 import asyncio
 import logging
+import os
 import re
 import shutil
 import struct
@@ -23,6 +24,7 @@ from localtc.airports import AirportCache
 from localtc.bus import EventBus, Subscription, pump
 from localtc.config import AtcConfig, Config, ConfigError, FlightConfig, LlmConfig, data_dir
 from localtc.console import CONSOLE
+from localtc.gate_data import GateStore
 from localtc.recorder import Recorder
 from localtc.recorder.format import AUDIO_DIR
 from localtc.replay import ReplaySource
@@ -225,6 +227,10 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
     engine.cfg.gate_radius_m = cfg.session.gate_radius_m
+    # The airports' real gate names, from OpenStreetMap (cached; fetched in the background). LOCALTC_REAL_GATES=""
+    # turns it off whatever the settings say (the tests: no network, the same gates on every machine).
+    if cfg.atc.real_gates and os.environ.get("LOCALTC_REAL_GATES", "1"):
+        engine.gate_source = GateStore(data_dir() / "gates").get
     if cfg.tts.enabled:
         engine.cfg.speech_s_per_char = PIPER_S_PER_CHAR / cfg.tts.rate  # ATC waits for its own words to finish
     return engine

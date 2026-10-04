@@ -8,6 +8,7 @@ the first event at or after their due time.
 """
 
 import itertools
+import logging
 import math
 import random
 import re
@@ -28,6 +29,7 @@ from localtc.atc_core.airport import (
 )
 from localtc.atc_core.airport import fixes as airport_fixes
 from localtc.atc_core.airport import gates as stands
+from localtc.atc_core.airport import real_gates
 from localtc.atc_core.airport.approaches import LOCALIZER as LOCALIZER_KINDS
 from localtc.atc_core.airport.approaches import (
     Aircraft,
@@ -391,6 +393,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self.tracker.context_builder.fixes = airport_fixes.load(self.cfg.airport_fixes)
         self.facilities: list[Facility] = []
         self.airport_requests: list[str] = []  # airports the engine needs; the service fetches them
+        # The real gates of an airport (``localtc.gate_data``), or None while unknown; None: the scenery's names only.
+        self.gate_source: Callable[[str], real_gates.GateData | None] | None = None
         self._requested: set[str] = set()
         self._scheduled: list[_Scheduled] = []
         self._rng: random.Random | None = None
@@ -782,6 +786,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if dest and dest not in self.tracker.context_builder.airports and dest not in self._requested:
             self._requested.add(dest)
             self.airport_requests.append(dest)
+            self._real_gates(dest)  # asks for its real gates now: fetched long before the taxi in
 
         self.weather.update(raw, self.tracker.context_builder.airports)
         previous = (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned)
@@ -856,7 +861,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
     def _gate_at(self, geo: AirportGeometry, own: OwnshipState) -> str | None:
         """The gate or parking spot the aircraft is at (within [session] gate_radius_m of it, or its own size), or None."""
         here = geo.xy(own.lat, own.lon)
-        near = [(math.dist(here, geo.xy(g.spot.lat, g.spot.lon)), g) for g in stands.gates(geo)]
+        near = [(math.dist(here, geo.xy(g.spot.lat, g.spot.lon)), g) for g in stands.gates(geo, self._real_gates(geo.icao))]
         near = [(d, g) for d, g in near if d <= max(g.spot.radius_m, self.cfg.gate_radius_m)]
         if near:
             return min(near, key=lambda dg: dg[0])[1].display
@@ -882,7 +887,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._landed = False  # off again (a touch and go, another leg)
         if change.previous is not None and P(change.previous) is P.PARKED and st.assignments.departure_gate is None:
             geo = self.geometry(st.flight.origin) if st.flight.origin else None
-            gate = stands.parked_at(geo, own.lat, own.lon) if geo is not None else None
+            gate = stands.parked_at(geo, own.lat, own.lon, self._real_gates(geo.icao)) if geo is not None else None
             self._assign(departure_gate=gate.display if gate is not None else None)
         if phase is P.TAXI_OUT and change.previous in (P.PARKED, P.PUSHBACK) and "taxi" not in st.clearances \
                 and st.flight.origin:
@@ -3728,7 +3733,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time.
         taxiways = a.taxi_route if "taxi_in" in self.state.clearances and requested is None else None
         if requested is not None and geo is not None:
-            gate = stands.named(geo, requested)
+            gate = stands.named(geo, requested, self._real_gates(geo.icao))
             if gate is None:
                 self._assign(gate=None, gate_index=None)
         else:
@@ -3758,8 +3763,21 @@ class AtcEngine(VfrMixin, DiversionMixin):
         callsign = self._callsign()
         if geo is None or not callsign.is_airline:
             return None
-        return stands.assign(geo, airline=callsign.is_airline, aircraft_type=self.state.flight.aircraft_type or "",
-                             traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}")
+        flight = self.state.flight
+        return stands.assign(geo, airline=callsign.is_airline, aircraft_type=flight.aircraft_type or "",
+                             traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}",
+                             real=self._real_gates(geo.icao),
+                             international=real_gates.is_international(flight.origin, flight.destination))
+
+    def _real_gates(self, icao: str | None) -> "real_gates.GateData | None":
+        """The airport's real gates (``gate_source``: the app's OpenStreetMap cache), or None: the scenery's names."""
+        if not icao or self.gate_source is None:
+            return None
+        try:
+            return self.gate_source(icao)
+        except Exception:  # noqa: BLE001 - a broken cache never stops ATC
+            logging.getLogger(__name__).exception("real gates for %s", icao)
+            return None
 
     def _handoff(self, t: float, instruction_id: str, from_facility: Facility, to_facility: Facility, *, delay: bool = False) -> None:
         self._schedule(t, instruction_id, {"station": to_facility.station, "frequency": to_facility.mhz}, from_facility,

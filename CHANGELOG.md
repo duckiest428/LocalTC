@@ -7,6 +7,7 @@ a new minor version adds features, a patch fixes them.
 ## [0.4.0] - 2026-09-28
 
 ### Added
+- **Real gate names and international gates**: ground sends you to the airport's real gates ("Gate E9", not the scenery's "Gate 88"), international arrivals to the gates that take them, and finds the gate you ask for by its real name. From OpenStreetMap, fetched once per airport and kept; on by default (Quick Settings → ATC → "Real gate names").
 - **Language model timing in the app** (Quick Settings → ATC): how long ATC waits for the model's answer, for all its tries, and for the second, patient try.
 - **The app tells you whenever the language model times out**: a notice on screen, a line in the radio log and an alert, saying whether it's being asked again or ATC answered without it.
 - **Every kind of instrument approach** the sim's airport data lists: ILS, localizer, LDA and SDF, localizer back course, RNAV (GPS) with its minima lines (LPV, LNAV/VNAV, LP, LNAV), RNAV (RNP) for aircraft that can fly RNP AR, VOR and VOR/DME, NDB and NDB/DME, and circling-only procedures (VOR-A). Each is named the way ATC says it ("cleared localizer back course runway 26 approach", "cleared RNAV Yankee runway 16R approach") and joined the right way: "until established on the localizer" or "on the final approach course".

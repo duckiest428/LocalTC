@@ -139,6 +139,7 @@ class AtcConfig(_Section):
     # The runway in use goes the way the sim's own traffic is taking off and landing (when the wind allows), so the
     # flight isn't sent head-on into it; off: by the wind alone.
     traffic_runways: bool = True
+    real_gates: bool = True  # the airports' real gate names and international gates, from OpenStreetMap
     callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"

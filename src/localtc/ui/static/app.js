@@ -43,7 +43,7 @@ function connect() {
   on("own", setOwn);
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
   on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
-  on("ptt", (p) => $("#btn-ptt").classList.toggle("down", p.down));
+  on("ptt", (p) => $(p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
   on("thinking", thinking);
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); });
@@ -69,6 +69,8 @@ function setState(st) {
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
+  $("#btn-ic").classList.toggle("off", !st.voice);
+  $("#btn-ic").title = st.voice ? `Hold to talk to the copilot${st.ptt && st.ptt.intercom ? ` (or ${keyLabel(st.ptt.intercom)})` : ""}` : "Voice input is off (Quick Settings > Push-to-talk)";
   if (!S.flight.callsign) planHeader(st.plan);
   MapView.plan(st.plan);
   MapView.syncRules();
@@ -134,6 +136,10 @@ function addLine(l) {
       body = `<span class="who">YOU</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
     case "copilot":
       body = `<span class="who">COPILOT</span><span class="body">${esc(l.text)}</span>`; break;
+    case "intercom":  // you, to the copilot
+      body = `<span class="who">YOU</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
+    case "crew":  // the copilot, to you
+      body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
       body = `<span class="who">${l.atc ? "ATC" : "OTHER"}</span><span class="st">${esc(l.station)}</span><div class="body">${esc(l.text)}</div>`; break;
     case "atis":
@@ -240,19 +246,27 @@ async function transmit() {
 }
 $("#tx-text").addEventListener("keydown", (e) => { if (e.key === "Enter") transmit(); });
 $("#btn-send").onclick = transmit;
+$("#btn-crew").onclick = async () => {
+  const input = $("#tx-text"), text = input.value.trim();
+  if (!text) return;
+  try { await api("radio/crew", { text }); input.value = ""; } catch (e) { fail(e); }
+};
 $("#btn-clear").onclick = () => { $("#tx-text").value = ""; $("#tx-text").focus(); };
 
-let pttDown = false;
-async function ptt(down) {
-  if (down === pttDown) return;
-  pttDown = down;
-  $("#btn-ptt").classList.toggle("down", down);
-  try { await api("radio/ptt", { down }); } catch (e) { pttDown = false; $("#btn-ptt").classList.remove("down"); if (down) fail(e); }
+const held = { radio: false, intercom: false };
+async function ptt(down, intercom = false) {
+  const which = intercom ? "intercom" : "radio", btn = $(intercom ? "#btn-ic" : "#btn-ptt");
+  if (down === held[which]) return;
+  held[which] = down;
+  btn.classList.toggle("down", down);
+  try { await api("radio/ptt", { down, intercom }); } catch (e) { held[which] = false; btn.classList.remove("down"); if (down) fail(e); }
 }
-const pttBtn = $("#btn-ptt");
-pttBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); pttBtn.setPointerCapture(e.pointerId); ptt(true); });
-pttBtn.addEventListener("pointerup", () => ptt(false));
-pttBtn.addEventListener("pointercancel", () => ptt(false));
+for (const [id, intercom] of [["#btn-ptt", false], ["#btn-ic", true]]) {
+  const btn = $(id);
+  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); ptt(true, intercom); });
+  btn.addEventListener("pointerup", () => ptt(false, intercom));
+  btn.addEventListener("pointercancel", () => ptt(false, intercom));
+}
 
 $("#sw-atc").onclick = async () => {
   try { await api("radio/mute", { muted: !S.state.muted }); } catch (e) { fail(e); }
@@ -688,6 +702,18 @@ const Settings = {
         <div class="row"><label>When the Copilot switch is on, it
           <select id="s-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
           <option value="assist" ${st.ui.copilot === "assist" ? "selected" : ""}>reads back and changes frequencies; you make the calls</option></select></label></div>
+        <label class="check-row"><input type="checkbox" id="s-crew" ${st.crew.enabled ? "checked" : ""}> Intercom: talk to the copilot on a key of its own. It works the aircraft for you ("flaps two", "gear down", "set heading 270", "squawk 4521") and says when it's done, or why not</label>
+        <div class="row">
+          <span>Intercom key</span><span class="keycap" id="s-ic-key">${esc(keyLabel(st.voice.intercom_key))}</span>
+          <button class="btn small" id="s-ic-key-set">Change</button><span class="muted small" id="s-ic-key-hint"></span>
+        </div>
+        <div class="row"><label>Or a button, as MSFS names it<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label></div>
+        <div class="row">
+          <label>Copilot's voice<select id="s-crew-sex">${["female", "male", "any"].map((s) => `<option value="${s}" ${st.crew.voice_sex === s ? "selected" : ""}>${{ female: "Female", male: "Male", any: "Either" }[s]}</option>`).join("")}</select></label>
+          <label style="flex:0 1 120px">Voice<select id="s-crew-pick">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<option value="${i}" ${st.crew.voice_pick === i ? "selected" : ""}>${i + 1}</option>`).join("")}</select></label>
+          <div><button class="btn small" id="s-crew-preview">&#9654; Preview</button></div>
+        </div>
+        <span class="hint">The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS).</span>
       </div>
 
       <div class="card">
@@ -826,6 +852,16 @@ const Settings = {
     on("#s-ptt", "change", async () => { await this.save("voice", "ptt", val("#s-ptt")); this.render(); });
     on("#s-joy", "change", () => this.save("voice", "ptt_joystick", val("#s-joy").trim()));
     on("#s-key-set", "click", () => this.captureKey());
+    on("#s-ic-key-set", "click", () => this.captureKey("intercom_key", "#s-ic-key", "#s-ic-key-hint"));
+    on("#s-ic-joy", "change", () => this.save("voice", "intercom_joystick", val("#s-ic-joy").trim()));
+    on("#s-crew", "change", (e) => this.save("crew", "enabled", e.target.checked));
+    on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
+    on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
+    on("#s-crew-preview", "click", async (e) => {
+      e.target.disabled = true;
+      try { await api("voice/crew_preview", { sex: val("#s-crew-sex"), pick: Number(val("#s-crew-pick")) }); } catch (err) { fail(err); }
+      e.target.disabled = false;
+    });
     on("#s-mic", "change", () => this.save("voice", "input_device", val("#s-mic")));
     on("#s-out", "change", () => this.save("tts", "output_device", val("#s-out")));
     for (const [id, key] of [["#s-volume", "volume"], ["#s-rate", "rate"], ["#s-static", "static"]])
@@ -972,8 +1008,8 @@ const Settings = {
       if (email) api("account/delete", { email }).then((v) => { S.account = v; this.account(); toast("Account deleted"); }).catch(fail);
     };
   },
-  captureKey() {
-    const cap = $("#s-key"), hint = $("#s-key-hint");
+  captureKey(field = "ptt_key", capId = "#s-key", hintId = "#s-key-hint") {
+    const cap = $(capId), hint = $(hintId);
     cap.classList.add("listening"); cap.textContent = "press a key";
     hint.textContent = "Esc cancels. Pick a key the sim doesn't use (Right Ctrl, F13, Scroll Lock ...).";
     const handler = async (e) => {
@@ -983,8 +1019,9 @@ const Settings = {
       hint.textContent = "";
       const name = e.code === "Escape" ? null : keyName(e);
       if (e.code !== "Escape" && !name) { toast(`${e.code} can't be a push-to-talk key`, true); }
-      if (name && await this.save("voice", "ptt_key", name)) { S.state.ptt.key = name; $("#help-ptt").textContent = keyLabel(name); }
-      cap.textContent = keyLabel(S.settings.settings.voice.ptt_key);
+      if (name && field === "ptt_key" && await this.save("voice", "ptt_key", name)) { S.state.ptt.key = name; $("#help-ptt").textContent = keyLabel(name); }
+      else if (name && field !== "ptt_key") await this.save("voice", field, name);
+      cap.textContent = keyLabel(S.settings.settings.voice[field]);
     };
     document.addEventListener("keydown", handler, true);
   },

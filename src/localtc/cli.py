@@ -35,6 +35,9 @@ from localtc.sim_api import (
     SourceUnavailable,
     TrafficSnapshot,
     Transcript,
+    CrewAction,
+    CrewSpeech,
+    IntercomHeard,
 )
 
 
@@ -69,6 +72,12 @@ def format_event(ev: BusEvent) -> str:
         elif ev.source == "copilot":
             how = "  (copilot)"
         body = f'PILOT "{ev.text}"{how}' if ev.text else "PILOT (no speech heard)"
+    elif isinstance(ev, IntercomHeard):
+        body = f'IC    pilot "{ev.text}"'
+    elif isinstance(ev, CrewSpeech):
+        body = f'IC    copilot "{ev.text}" ({ev.kind})'
+    elif isinstance(ev, CrewAction):
+        body = f"CREW  {ev.action} {ev.value}: {ev.outcome}" + (f" ({ev.detail})" if ev.detail else "")
     elif isinstance(ev, AtcTransmission):
         body = f'ATC   {ev.station} {ev.frequency_mhz:.3f}: "{ev.text}"'
     elif isinstance(ev, PhaseChanged):

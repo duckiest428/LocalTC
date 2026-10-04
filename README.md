@@ -370,6 +370,40 @@ localtc atc tests/fixtures/real_cyul --copilot full --destination CYQB --cruise-
 
 It tunes COM1 through SimConnect (`COM_RADIO_SET_HZ`). Two-decimal frequency names are the 25 kHz channel ("120.42" is 120.425). If the aircraft doesn't follow, the copilot retries once and then logs a `copilot` alert and skips the call. It won't say the same thing a third time in a row.
 
+### The intercom: the copilot as Pilot Monitoring
+
+A second key talks to the copilot instead of ATC (`[voice] intercom_key`, Right Alt by default, or a yoke button
+with `intercom_joystick`; Quick Settings → Copilot). It hears you on the same microphone and answers in a dry
+headset voice, never over the radio. The **IC** button holds the intercom from the app, and **CREW** sends typed
+words to the copilot instead of transmitting them.
+
+It works the aircraft through SimConnect and says so once the sim shows it ("Flaps 2."), or that it didn't take:
+
+| Say | It does |
+|---|---|
+| "gear down", "gear up" | the gear |
+| "flaps one" (A320: "one plus F"), "flaps full", "flaps up" | the flaps, named the way the aircraft names them |
+| "landing lights on", "strobes off", "beacon on", "taxi lights", "nav lights", "logo lights" | the lights |
+| "arm the spoilers", "speedbrakes extend" / "retract" | the spoilers |
+| "autopilot on" / "off", "autothrottle on", "heading mode", "nav mode", "approach mode", "altitude hold", "vertical speed mode", "level change" | the autopilot |
+| "set heading 270", "altitude 10,000", "flight level 240", "speed 250", "vertical speed minus 1,500" | the autopilot's settings |
+| "squawk 4521", "tune 121.9", "standby 118.7", "swap" | the transponder and COM1 |
+| "altimeter 29.92", "QNH 1013", "standard", "parking brake set" / "release" | the rest |
+
+Several in one breath work ("gear down, flaps three, landing lights on"). It refuses what isn't safe, with the reason:
+gear up on the ground or without a positive rate, flaps or gear above their limit speeds (from the aircraft's profile),
+any flap change on the takeoff roll, speedbrakes below 1,000 ft, the parking brake while moving. It asks you to
+"confirm" first for an emergency squawk, a squawk other than ATC's, an altitude other than the one ATC cleared, and
+the autopilot off below 500 ft. A radio call said on the intercom by mistake is offered to be sent.
+
+The copilot's voice is female, male or either (`[crew] voice_sex`, eight voices each with `voice_pick`); it uses the
+same voice for its readbacks on the radio.
+
+**Aircraft profiles** (`src/localtc/crew/profiles/*.toml`, and your own in `%LOCALAPPDATA%\LocalTC\profiles`, which win)
+name the flap detents, the placard speeds, and any action an add-on wants sent another way: its own key event, or an
+L:var (MSFS 2024). The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
+ignore those (PMDG, Fenix) need a profile of their own; until then the copilot says when a command didn't take.
+
 ## Live bridge setup (Windows)
 
 1. **SimConnect.dll.** Install the MSFS 2024 SDK (in the sim: Options → General → Developers → enable Developer Mode, then download the SDK). LocalTC finds the DLL in this order:

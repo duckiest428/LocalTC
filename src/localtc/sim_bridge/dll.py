@@ -88,6 +88,9 @@ class SimConnectDll:
             [c_void_p, c_uint32, c_char_p, c_uint32, c_uint32, c_uint32, c_uint32, c_int],
         )
         self._set_input_group_state = _bind(lib, "SimConnect_SetInputGroupState", [c_void_p, c_uint32, c_uint32])
+        self._set_data_on_sim_object = _bind(
+            lib, "SimConnect_SetDataOnSimObject", [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_void_p]
+        )
         self._get_next_dispatch = _bind(
             lib, "SimConnect_GetNextDispatch", [c_void_p, POINTER(c_void_p), POINTER(c_uint32)]
         )
@@ -161,6 +164,12 @@ class SimConnectDll:
         hr = self._map_input_event(handle, group, definition.encode(), down_event, 0, up_event, 0, 0)
         _check(hr, f"MapInputEventToClientEvent({definition})")
         _check(self._set_input_group_state(handle, group, 1), "SetInputGroupState")  # on
+
+    def set_data_on_sim_object(self, handle: int, define_id: int, object_id: int, data: bytes) -> None:
+        """Write one data definition's values (packed as the definition reads them) to an object."""
+        buffer = ctypes.create_string_buffer(data, len(data))
+        hr = self._set_data_on_sim_object(handle, define_id, object_id, 0, 0, len(data), buffer)
+        _check(hr, f"SetDataOnSimObject({define_id})")
 
     def get_next_dispatch(self, handle: int) -> bytes | None:
         """Copy the next pending message out of SimConnect's buffer, or None if there isn't one."""

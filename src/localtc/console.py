@@ -26,6 +26,8 @@ from localtc.sim_api import (
     ReadbackEvaluated,
     SimLifecycle,
     Transcript,
+    CrewSpeech,
+    IntercomHeard,
 )
 
 CONSOLE = {"console": True}  # log.info(..., extra=CONSOLE): also show this INFO line on the console
@@ -112,6 +114,10 @@ class FlightConsole:
                 return [f"{when}  {s('YOU', BOLD, GREEN)}  {s('(nothing heard; check the microphone if you spoke)', DIM)}"]
             unsure = ev.confidence is not None and ev.confidence < 0.5
             return [f"{when}  {s('YOU', BOLD, GREEN)}  {ev.text}" + (s("  (unclear)", YELLOW) if unsure else "")]
+        if isinstance(ev, IntercomHeard) and ev.text:
+            return [f"{when}  {s('YOU', BOLD, GREEN)}  {ev.text}  {s('(intercom)', DIM)}"]
+        if isinstance(ev, CrewSpeech):
+            return [f"{when}  {s('COPILOT', BOLD, CYAN)}  {ev.text}  {s('(intercom)', DIM)}"]
         if isinstance(ev, ReadbackEvaluated):
             if ev.status == "correct":
                 return [f"{' ' * 7}{s('   readback ok', DIM)}"]

@@ -23,7 +23,7 @@ from localtc.sim_bridge.protocol import (
     RecvSimObjectData,
     build_message,
 )
-from localtc.sim_bridge.simconnect_source import REQ_AIRPORT_LIST, REQ_IDENTITY, REQ_OWNSHIP, REQ_TRAFFIC
+from localtc.sim_bridge.simconnect_source import REQ_AIRCRAFT, REQ_AIRPORT_LIST, REQ_IDENTITY, REQ_OWNSHIP, REQ_TRAFFIC
 
 USER_OBJECT_ID = 1
 
@@ -175,6 +175,8 @@ class FakeSimConnect:
         self.system_events: dict[str, int] = {}
         self.client_events: dict[int, str] = {}
         self.transmitted: list[tuple] = []
+        self.written: list[tuple] = []  # (the variable's name, the bytes written) through SetDataOnSimObject
+        self.aircraft = {d.field: 0 for d in defs.AIRCRAFT} | {"flaps_positions": 4, "light_beacon": 1}
         self.input_maps: list[tuple] = []  # (definition, down event, up event)  # (sim event name, data, object id, group, flags)
         self._inbox: deque[bytes] = deque()
         self._lock = threading.Lock()
@@ -232,6 +234,12 @@ class FakeSimConnect:
         elif request_id == REQ_IDENTITY:
             payload = defs.pack(defs.IDENTITY, IDENTITY_VALUES)
             self.push(data_message(RecvId.SIMOBJECT_DATA, request_id, USER_OBJECT_ID, 1, 1, payload))
+        elif request_id == REQ_AIRCRAFT:
+            payload = defs.pack(defs.AIRCRAFT, self.aircraft)
+            self.push(data_message(RecvId.SIMOBJECT_DATA, request_id, USER_OBJECT_ID, 1, 1, payload))
+
+    def set_data_on_sim_object(self, handle, define_id, object_id, data) -> None:
+        self.written.append((self.definitions[define_id][-1], data))
 
     def request_data_on_sim_object_type(self, handle, request_id, define_id, radius_m, object_type) -> None:
         assert request_id == REQ_TRAFFIC

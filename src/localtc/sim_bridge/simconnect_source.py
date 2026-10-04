@@ -9,6 +9,7 @@ thread reconnects with back-off and reports ``ConnectionStatus`` events.
 import asyncio
 import logging
 import queue
+import struct
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
@@ -20,6 +21,8 @@ from localtc.sim_api import (
     AirportData,
     BusEvent,
     ConnectionStatus,
+    IntercomPressed,
+    IntercomReleased,
     NearbyAirport,
     NearbyAirports,
     SessionClock,
@@ -27,7 +30,9 @@ from localtc.sim_api import (
     PttPressed,
     PttReleased,
     RequestAirportData,
+    SendSimEvent,
     SetComFrequency,
+    SetSimVar,
     SimCommand,
     SimLifecycle,
     TrafficSnapshot,
@@ -63,8 +68,9 @@ from localtc.sim_bridge.protocol import (
 
 log = logging.getLogger(__name__)
 
-DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_FACILITY_AIRPORT = 1, 2, 3, 10
-REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST = 1, 2, 3, 4
+DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 10
+REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT = 1, 2, 3, 4, 5
+FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
@@ -75,7 +81,9 @@ EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, 
 EVT_COM1_SET_HZ, EVT_COM2_SET_HZ = 20, 21
 CLIENT_EVENTS = {EVT_COM1_SET_HZ: "COM_RADIO_SET_HZ", EVT_COM2_SET_HZ: "COM2_RADIO_SET_HZ"}
 EVT_PTT_DOWN, EVT_PTT_UP = 30, 31  # push-to-talk from a joystick button or key bound through the sim
-GROUP_PTT = 1
+EVT_INTERCOM_DOWN, EVT_INTERCOM_UP = 32, 33  # the intercom (talking to the copilot), the same way
+FIRST_COPILOT_EVENT = 100  # key events the copilot sends ("GEAR_DOWN"), mapped as first used, from here up
+GROUP_PTT, GROUP_INTERCOM = 1, 2
 SYSTEM_EVENTS = {
     EVT_SIM_START: "SimStart",
     EVT_SIM_STOP: "SimStop",
@@ -116,6 +124,7 @@ class SimConnectApi(Protocol):
     def map_client_event_to_sim_event(self, handle: int, event_id: int, name: str) -> None: ...
     def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None: ...
     def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None: ...
+    def set_data_on_sim_object(self, handle: int, define_id: int, object_id: int, data: bytes) -> None: ...
     def get_next_dispatch(self, handle: int) -> bytes | None: ...
 
 
@@ -144,6 +153,8 @@ class SimConnectSource:
         self._last_connected: bool | None = None
         self._raw_tap = raw_tap
         self._commands: queue.SimpleQueue[SimCommand] = queue.SimpleQueue()
+        self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
+        self._simvar_definitions: dict[str, int] = {}  # variable -> data definition id, this connection
         self._position: tuple[float, float] | None = None
         self._assemblers: dict[int, facilities.AirportAssembler] = {}
         self._fetched_airports: set[str] = set()
@@ -238,7 +249,10 @@ class SimConnectSource:
                 self._stop.wait(1.0)
 
     def _session(self, dll: SimConnectApi, handle: int) -> None:
-        for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC)):
+        self._copilot_events: dict[str, int] = {}
+        self._simvar_definitions: dict[str, int] = {}
+        for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
+                                  (DEF_AIRCRAFT, defs.AIRCRAFT)):
             for d in datums:
                 dll.add_to_data_definition(handle, define_id, d.simvar, d.units, d.datatype)
         for event_id, name in SYSTEM_EVENTS.items():
@@ -254,8 +268,17 @@ class SimConnectSource:
                 log.info("Push-to-talk: %s (through the sim)", self._cfg.ptt_input)
             except SimConnectError as exc:
                 log.warning("Can't use %s as push-to-talk: %s", self._cfg.ptt_input, exc)
+        if self._cfg.intercom_input:
+            try:
+                dll.map_input_to_events(handle, GROUP_INTERCOM, self._cfg.intercom_input, EVT_INTERCOM_DOWN, EVT_INTERCOM_UP)
+                log.info("Intercom: %s (through the sim)", self._cfg.intercom_input)
+            except SimConnectError as exc:
+                log.warning("Can't use %s for the intercom: %s", self._cfg.intercom_input, exc)
         dll.request_data_on_sim_object(
             handle, REQ_IDENTITY, DEF_IDENTITY, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
+        )
+        dll.request_data_on_sim_object(
+            handle, REQ_AIRCRAFT, DEF_AIRCRAFT, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
         for line in facilities.definition_lines():
             dll.add_to_facility_definition(handle, DEF_FACILITY_AIRPORT, line)
@@ -323,6 +346,10 @@ class SimConnectSource:
                 self._emit(PttPressed(t=t))
             elif msg.event_id == EVT_PTT_UP:
                 self._emit(PttReleased(t=t))
+            elif msg.event_id == EVT_INTERCOM_DOWN:
+                self._emit(IntercomPressed(t=t))
+            elif msg.event_id == EVT_INTERCOM_UP:
+                self._emit(IntercomReleased(t=t))
             elif (event := _lifecycle_event(msg, t)) is not None:
                 self._emit(event)
         elif isinstance(msg, ObjectData):
@@ -354,8 +381,39 @@ class SimConnectSource:
                     log.info("Tuning COM%d to %.3f", command.radio, command.hz / 1e6)
                 except SimConnectError as exc:
                     log.warning("Couldn't tune COM%d: %s", command.radio, exc)
+            elif isinstance(command, SendSimEvent):
+                self._send_event(dll, handle, command)
+            elif isinstance(command, SetSimVar):
+                self._set_simvar(dll, handle, command)
             else:
                 log.warning("unsupported command %r", command)
+
+    def _send_event(self, dll: SimConnectApi, handle: int, command: SendSimEvent) -> None:
+        """A key event from the copilot ("GEAR_DOWN"), mapped to a client event the first time it's sent."""
+        try:
+            event_id = self._copilot_events.get(command.name)
+            if event_id is None:
+                event_id = FIRST_COPILOT_EVENT + len(self._copilot_events)
+                dll.map_client_event_to_sim_event(handle, event_id, command.name)
+                self._copilot_events[command.name] = event_id
+            dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.value, GROUP_PRIORITY_HIGHEST,
+                                      EVENT_FLAG_GROUPID_IS_PRIORITY)
+            log.info("Copilot: %s %s", command.name, command.value)
+        except SimConnectError as exc:
+            log.warning("Copilot couldn't send %s: %s", command.name, exc)
+
+    def _set_simvar(self, dll: SimConnectApi, handle: int, command: SetSimVar) -> None:
+        """A variable from the copilot (an add-on's L:var), through a data definition of its own."""
+        try:
+            define_id = self._simvar_definitions.get(command.name)
+            if define_id is None:
+                define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+                dll.add_to_data_definition(handle, define_id, command.name, command.unit, defs.F64)
+                self._simvar_definitions[command.name] = define_id
+            dll.set_data_on_sim_object(handle, define_id, OBJECT_ID_USER, struct.pack("<d", command.value))
+            log.info("Copilot: %s = %s", command.name, command.value)
+        except SimConnectError as exc:
+            log.warning("Copilot couldn't set %s: %s", command.name, exc)
 
     def _request_airport(self, dll: SimConnectApi, handle: int, icao: str, *, force: bool = False) -> None:
         if not force and icao in self._fetched_airports:
@@ -429,6 +487,8 @@ class SimConnectSource:
             self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:
             self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
+        elif msg.request_id == REQ_AIRCRAFT:
+            self._emit(defs.systems_from_raw(defs.unpack(defs.AIRCRAFT, msg.payload), t))
         elif msg.request_id == REQ_TRAFFIC:
             target = None
             has_data = msg.out_of > 0 and len(msg.payload) >= defs.payload_size(defs.TRAFFIC)

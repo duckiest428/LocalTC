@@ -1,0 +1,7 @@
+# Any aircraft without a profile of its own: the sim's standard key events, which the stock aircraft honour.
+# Flap detents are counted from the aircraft ("flaps two" is the second notch); no placard speeds are known,
+# so only the gear and flaps rules that need none apply.
+[aircraft]
+name = "stock"
+match = []
+flaps = "set"            # FLAPS_SET with the handle's position (0-16383)

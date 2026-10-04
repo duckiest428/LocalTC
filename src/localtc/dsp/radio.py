@@ -76,6 +76,17 @@ def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: in
     return (out / peak * 0.9).astype(np.float32)
 
 
+def intercom_effect(audio: np.ndarray, rate: int) -> np.ndarray:
+    """The crew intercom: a headset's wide band (200-5000 Hz), lightly levelled, no hiss and no squelch. Clearly
+    a person beside you, not the radio."""
+    if len(audio) == 0:
+        return audio.astype(np.float32)
+    voice = bandpass(audio.astype(np.float32), rate, 200.0, 5000.0, presence_db=1.5)
+    voice = compress(voice, rate, threshold=0.2, ratio=2.0, drive=1.2)
+    peak = np.max(np.abs(voice)) or 1.0
+    return (voice / peak * 0.8).astype(np.float32)
+
+
 def clean(audio: np.ndarray) -> np.ndarray:
     """No radio: just a sensible level."""
     peak = np.max(np.abs(audio)) if len(audio) else 0.0

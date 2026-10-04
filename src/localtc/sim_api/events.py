@@ -71,6 +71,40 @@ class OwnshipState(Event, tag="ownship_state"):
     in_smoke: bool = False
 
 
+class AircraftSystems(Event, tag="aircraft_systems"):
+    """The cockpit's switches and settings the copilot checks and sets (``localtc.crew``): sent once a second while
+    any of them changes. Read with key-event names the stock aircraft honour; an add-on may leave some at 0."""
+
+    gear_pct: float = 0.0  # 0 up, 100 down and locked (in transit between)
+    flaps_pct: float = 0.0  # trailing-edge flaps, 0-100
+    flaps_positions: int = 0  # handle detents beyond "up"
+    spoilers_pct: float = 0.0
+    spoilers_armed: bool = False
+    light_landing: bool = False
+    light_taxi: bool = False
+    light_strobe: bool = False
+    light_beacon: bool = False
+    light_nav: bool = False
+    light_logo: bool = False
+    ap_master: bool = False
+    ap_heading: bool = False  # heading hold / HDG mode
+    ap_nav: bool = False
+    ap_approach: bool = False
+    ap_altitude: bool = False
+    ap_vs: bool = False
+    ap_flc: bool = False  # flight level change / speed on pitch
+    athr_armed: bool = False
+    ap_heading_sel: float = 0.0  # the heading bug, degrees
+    ap_altitude_sel: float = 0.0  # feet
+    ap_speed_sel: float = 0.0  # knots
+    ap_vs_sel: float = 0.0  # feet per minute
+    com1_standby_mhz: float = 0.0
+    radio_height_ft: float = 0.0
+    battery: bool = False
+    engines_running: int = 0  # how many
+    mach: float = 0.0
+
+
 class AircraftIdentity(Event, tag="aircraft_identity"):
     title: str = ""
     atc_id: str = ""
@@ -149,6 +183,45 @@ class Transcript(Event, tag="transcript"):
     audio_ref: str | None = None
     stt_ms: float = 0.0  # speech-to-text time
     source: str = ""  # voice, typed, copilot, or "" (older recordings, scripts)
+
+
+# --- The intercom: the pilot and the copilot (produced by localtc.crew and the voice input) ---------------
+
+
+class IntercomPressed(Event, tag="intercom_pressed"):
+    """The intercom key went down: the pilot talking to the copilot, not on the radio."""
+
+
+class IntercomReleased(Event, tag="intercom_released"):
+    audio_ref: str | None = None
+
+
+class IntercomHeard(Event, tag="intercom_heard"):
+    """What the pilot said to the copilot. ``source``: voice, or typed (the app's crew box)."""
+
+    text: str
+    confidence: float | None = None
+    audio_ref: str | None = None
+    stt_ms: float = 0.0
+    source: str = "voice"
+
+
+class CrewSpeech(Event, tag="crew_speech"):
+    """The copilot speaking on the intercom. ``kind``: reply, done, refused, confirm, alert (what it is, for the log)."""
+
+    text: str
+    spoken: str = ""  # the words for speech, if they differ from the text ("flaps one plus F")
+    kind: str = "reply"
+
+
+class CrewAction(Event, tag="crew_action"):
+    """Something the copilot did in the cockpit, or wouldn't do: ``outcome`` sent (the sim was told), done (the sim
+    shows it), failed (it didn't take), refused (unsafe), confirm (waiting for the pilot's "confirm")."""
+
+    action: str  # gear_down, flaps, landing_lights, ap_altitude, squawk, ...
+    outcome: str
+    value: str = ""  # "2", "on", "10000"
+    detail: str = ""
 
 
 class AtcTransmission(Event, tag="atc_transmission"):
@@ -276,18 +349,20 @@ class SessionNote(Event, tag="session_note"):
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
-                 NearbyAirports]
+                 NearbyAirports, AircraftSystems]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]
 AppEvent = Union[SessionNote]
-BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent]
+CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction]
+BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)
 RADIO_EVENT_TYPES: tuple[type, ...] = get_args(RadioEvent)
 ATC_EVENT_TYPES: tuple[type, ...] = get_args(AtcEvent)
 APP_EVENT_TYPES: tuple[type, ...] = get_args(AppEvent)
-BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES + ATC_EVENT_TYPES + APP_EVENT_TYPES
+CREW_EVENT_TYPES: tuple[type, ...] = get_args(CrewEvent)
+BUS_EVENT_TYPES: tuple[type, ...] = SIM_EVENT_TYPES + RADIO_EVENT_TYPES + ATC_EVENT_TYPES + APP_EVENT_TYPES + CREW_EVENT_TYPES
 
 
 def event_type(event: Event) -> str:

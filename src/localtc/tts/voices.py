@@ -23,6 +23,46 @@ SPEAKERS: tuple[int, ...] = (
 )
 PILOT_SPEAKER_SALT = "pilot"
 
+# Who each speaker of DEFAULT_VOICE is ("F"/"M", by speaker index), for choosing the copilot's voice: LibriSpeech's
+# SPEAKERS.TXT through the voice's speaker_id_map. The single-speaker voices, by hand.
+SINGLE_VOICE_SEX = {"en_US-lessac-medium": "F", "en_US-lessac-low": "F", "en_US-ryan-high": "M", "en_GB-alan-medium": "M"}
+CREW_PICKS = 8  # voices offered per sex in the copilot settings
+
+
+def _sex_table() -> str:
+    path = Path(__file__).with_name("libritts_sex.txt")
+    try:
+        return "".join(line.strip() for line in path.read_text(encoding="utf-8").splitlines() if not line.startswith("#"))
+    except OSError:
+        return ""
+
+
+SPEAKER_SEX = _sex_table()
+
+
+def sex_of(speaker: int | None, voice: str = DEFAULT_VOICE) -> str:
+    """"F", "M", or "" when unknown."""
+    if speaker is None:
+        return SINGLE_VOICE_SEX.get(voice, "")
+    return SPEAKER_SEX[speaker] if voice == DEFAULT_VOICE and 0 <= speaker < len(SPEAKER_SEX) else ""
+
+
+def crew_choices(sex: str, count: int, voice: str = DEFAULT_VOICE) -> list[int]:
+    """The speakers offered for the copilot: the clearest (SPEAKERS order) of that sex first, then the rest of
+    that sex, CREW_PICKS of them. ``sex`` "any": both. Empty for a single-speaker voice."""
+    if count <= 1:
+        return []
+    want = sex.upper()[:1] if sex.lower() in ("female", "male", "f", "m") else ""
+    pool = [s for s in (*SPEAKERS, *range(count)) if s < count]
+    picked = [s for s in dict.fromkeys(pool) if not want or sex_of(s, voice) == want]
+    return picked[:CREW_PICKS]
+
+
+def crew_speaker(sex: str, pick: int, count: int, voice: str = DEFAULT_VOICE) -> int | None:
+    """The copilot's speaker: choice ``pick`` (0-based, wrapping) of ``sex``'s voices; None for a single voice."""
+    choices = crew_choices(sex, count, voice)
+    return choices[pick % len(choices)] if choices else None
+
 
 def default_voices_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA")

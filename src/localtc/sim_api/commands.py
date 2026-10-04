@@ -22,4 +22,21 @@ class SetComFrequency(SimCommand, tag="set_com_frequency"):
     radio: int = 1
 
 
-AnySimCommand = Union[RequestAirportData, SetComFrequency]
+class SendSimEvent(SimCommand, tag="send_sim_event"):
+    """A key event, as the sim's controls send it ("GEAR_DOWN", "FLAPS_SET" with 0-16383, "HEADING_BUG_SET" with
+    270): the copilot working the aircraft (localtc.crew)."""
+
+    name: str
+    value: int = 0
+
+
+class SetSimVar(SimCommand, tag="set_sim_var"):
+    """Write a variable an aircraft exposes, for the switches its key events don't reach: an add-on's L:var
+    ("L:INI_SEATBELTS_SWITCH") in MSFS 2024."""
+
+    name: str
+    unit: str = "number"
+    value: float = 0.0
+
+
+AnySimCommand = Union[RequestAirportData, SetComFrequency, SendSimEvent, SetSimVar]

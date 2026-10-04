@@ -31,10 +31,11 @@ class VocabularyHints:
     runways: tuple[str, ...] = ()  # every runway end at the airports in play, e.g. "06L", "24R"
     taxiways: tuple[str, ...] = ()  # names at the current airport
     extra: tuple[str, ...] = field(default_factory=tuple)
+    style: str = ""  # the primer, if not ATC's (the intercom's crew words)
 
 
 def build_prompt(hints: VocabularyHints) -> str:
-    parts = [STYLE]
+    parts = [hints.style or STYLE]
     if hints.stations:
         parts.append("Stations: " + ", ".join(dict.fromkeys(hints.stations)) + ".")
     if hints.airports:

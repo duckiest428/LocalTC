@@ -74,7 +74,7 @@ type = "forbidden"
 source_modules = [
     "localtc.atc_core", "localtc.bus", "localtc.config", "localtc.copilot", "localtc.dsp", "localtc.llm",
     "localtc.recorder", "localtc.replay", "localtc.sim_api", "localtc.stt", "localtc.tts", "localtc.flightplan",
-    "localtc.models",
+    "localtc.models", "localtc.crew",
 ]
 forbidden_modules = ["localtc.sim_bridge"]
 
@@ -101,7 +101,7 @@ name = "ATC core depends only on sim_api, bus and airports (no HTTP, no copilot)
 type = "forbidden"
 source_modules = ["localtc.atc_core"]
 forbidden_modules = [
-    "localtc.app", "localtc.cli", "localtc.copilot", "localtc.dsp", "localtc.llm", "localtc.recorder",
+    "localtc.app", "localtc.cli", "localtc.copilot", "localtc.crew", "localtc.dsp", "localtc.llm", "localtc.recorder",
     "localtc.replay", "localtc.scenario", "localtc.sim_bridge", "localtc.stt", "localtc.tts", "localtc.voice",
     "localtc.account", "localtc.logbook", "localtc.update",
 ]

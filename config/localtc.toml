@@ -79,6 +79,8 @@ enabled = false
 ptt = "keyboard"              # keyboard | joystick | enter (Enter in this window starts and stops a transmission)
 ptt_key = "ctrl_r"            # keyboard: hold to talk; works while the sim has focus (ctrl_r, alt_r, f13, a letter...)
 ptt_joystick = "joystick:0:button:0"   # joystick: the button as MSFS names it (bound through SimConnect)
+intercom_key = "alt_r"        # hold to talk to the copilot instead of ATC (keyboard; blank: none)
+intercom_joystick = ""        # ... or a joystick button for it, as MSFS names it
 input_device = ""             # blank = default microphone; or part of its name (localtc voice devices)
 model = "auto"                # auto: small.en with an NVIDIA GPU, base.en otherwise; tiny.en ... large-v3
 device = "auto"               # auto | cpu | cuda
@@ -105,6 +107,11 @@ copilot = true                # speak the copilot's calls too
 mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)
 delay_min_s = 2.0             # reaction time before the copilot speaks
 delay_max_s = 4.0
+
+[crew]                        # the copilot as Pilot Monitoring, on the intercom (needs [voice] for speech)
+enabled = true                # the intercom key talks to the copilot: "flaps two", "gear down", "squawk 4521"
+voice_sex = "any"             # the copilot's voice: female | male | any
+voice_pick = 0                # which of that sex's voices, 0-7 (the copilot uses it on the radio too)
 
 [recorder]
 enabled = true

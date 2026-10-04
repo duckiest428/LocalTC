@@ -1,5 +1,8 @@
 """ATC's voice on the bus: ``AtcTransmission`` (and the ATIS, and the copilot) in, radio audio out.
 
+The copilot talks twice over: on the radio (its readbacks, band-limited like your own side of the radio) and on the
+intercom (``CrewSpeech``: a dry headset voice, no radio at all), in the same voice either way.
+
 Every station speaks with its own voice (a speaker of a multi-speaker Piper voice, chosen from
 its name), through the radio effect. The ATIS repeats while its frequency is tuned, like the
 real thing, and stops when the pilot tunes away.
@@ -12,10 +15,11 @@ import zlib
 from typing import Any
 
 from localtc.bus import EventBus
-from localtc.dsp.radio import clean, radio_effect
+from localtc.dsp.radio import clean, intercom_effect, radio_effect
 from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
+    CrewSpeech,
     RadioChatter,
     RadioTuned,
     Transcript,
@@ -51,10 +55,12 @@ class VoiceOut:
         atis: bool = True,
         copilot: bool = True,
         speakers: tuple[int, ...] = SPEAKERS,
+        crew_speaker: int | None = None,  # the copilot's own voice (``[crew] voice``); None: one picked for "pilot"
     ) -> None:
         self.bus, self.synth, self.player = bus, synth, player
         self.effect, self.static, self.atis, self.copilot, self.speakers = effect, static, atis, copilot, speakers
-        self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter)
+        self.crew_speaker = crew_speaker
+        self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
 
@@ -70,6 +76,8 @@ class VoiceOut:
                         await self.say(ev.spoken or ev.text, f"chatter {ev.callsign}", "atc", manner="chatter")
                 elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
                     await self.say(ev.text, PILOT_SPEAKER_SALT, "pilot")
+                elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
+                    await self.say(ev.spoken or ev.text, PILOT_SPEAKER_SALT, "intercom")
                 elif isinstance(ev, AtisBroadcast) and self.atis:
                     self._stop_atis()
                     self._atis_task = asyncio.create_task(self._loop_atis(ev))
@@ -90,8 +98,10 @@ class VoiceOut:
         words = radio_words(text)
         if not words.strip():
             return None
-        speaker = speaker_for(voice_key, self.synth.speakers, self.speakers)
-        how = delivery_for(voice_key, manner or kind)
+        crew = kind in ("pilot", "intercom")
+        speaker = (self.crew_speaker if crew and self.crew_speaker is not None and self.crew_speaker < self.synth.speakers
+                   else speaker_for(voice_key, self.synth.speakers, self.speakers))
+        how = delivery_for(voice_key, "pilot" if crew else manner or kind)
         rate = getattr(self.synth, "rate", None)
         try:
             speech = self.synth.synthesize(words, speaker, rate=rate * how.pace if rate else None,
@@ -99,7 +109,9 @@ class VoiceOut:
         except TypeError:  # a synthesizer without the knobs (tests' fakes): its own manner
             speech = self.synth.synthesize(words, speaker)
         seed = zlib.crc32(words.encode())
-        if not self.effect:
+        if kind == "intercom":  # beside you in the cockpit: never the radio
+            audio = intercom_effect(speech.audio, speech.rate)
+        elif not self.effect:
             audio = clean(speech.audio)
         elif kind == "pilot":  # your own side of the radio: band-limited, no hiss
             audio = radio_effect(speech.audio, speech.rate, static=0.0, seed=seed, squelch=False)

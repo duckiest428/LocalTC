@@ -26,9 +26,11 @@ def parse_key(name: str):
 
 
 class KeyboardPtt:
-    def __init__(self, key: str, on_down: Callable[[], None], on_up: Callable[[], None]) -> None:
+    def __init__(self, key: str, on_down: Callable[[], None], on_up: Callable[[], None], *,
+                 what: str = "Push-to-talk") -> None:
         self.key = parse_key(key)
         self.key_name = key
+        self.what = what
         self._on_down, self._on_up = on_down, on_up
         self._held = False
         self._listener = None
@@ -39,7 +41,7 @@ class KeyboardPtt:
         self._listener = keyboard.Listener(on_press=self._press, on_release=self._release)
         self._listener.daemon = True
         self._listener.start()
-        log.info("Push-to-talk: hold %s", self.key_name, extra={"console": True})
+        log.info("%s: hold %s", self.what, self.key_name, extra={"console": True})
 
     def stop(self) -> None:
         if self._listener is not None:

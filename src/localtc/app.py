@@ -37,6 +37,7 @@ from localtc.sim_api import (
     FlightArrived,
     RequestAirportData,
     SessionInfo,
+    IntercomHeard,
     SessionNote,
     SetComFrequency,
     SimSource,
@@ -273,6 +274,8 @@ async def run_session(
     record = cfg.recorder.enabled if record is None else record
     if cfg.voice.enabled and cfg.voice.ptt == "joystick" and not cfg.live.ptt_input:
         cfg.live.ptt_input = cfg.voice.ptt_joystick  # the bridge binds it before connecting
+    if cfg.voice.enabled and cfg.crew.enabled and cfg.voice.intercom_joystick and not cfg.live.intercom_input:
+        cfg.live.intercom_input = cfg.voice.intercom_joystick
     source = make_source(cfg)
     session = await source.start()
     log.info("Source ready: %s %s %s", session.source_kind, session.sim_product, session.sim_version)
@@ -327,6 +330,13 @@ async def run_session(
                          else "works the radio for the whole flight", extra=CONSOLE)
             atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
             consumers.append(asyncio.create_task(atc_service.run()))
+            if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
+                from localtc.crew.pm import PilotMonitoring
+                from localtc.crew.profiles import load_all
+                from localtc.crew.service import CrewService
+
+                crew = CrewService(PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles")), bus, source)
+                consumers.append(asyncio.create_task(crew.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
             consumers.append(asyncio.create_task(speaker.service.run()))
@@ -422,14 +432,19 @@ class LiveSession:
         if text.strip():
             self.bus.publish(Transcript(t=self.now(), text=text.strip(), source="typed"))
 
+    def say_crew(self, text: str) -> None:
+        """Typed to the copilot, as if said on the intercom."""
+        if text.strip():
+            self.bus.publish(IntercomHeard(t=self.now(), text=text.strip(), source="typed"))
+
     def note(self, text: str) -> None:
         self.bus.publish(SessionNote(t=self.now(), text=text))
 
-    def ptt(self, down: bool) -> bool:
-        """Push-to-talk from the app's button. False without voice input."""
+    def ptt(self, down: bool, radio: int = 1) -> bool:
+        """Push-to-talk from the app's button (``radio`` 0: the intercom button). False without voice input."""
         if self.voice is None:
             return False
-        (self.voice.service.press if down else self.voice.service.release)()
+        (self.voice.service.press if down else self.voice.service.release)(radio)
         return True
 
     async def tune(self, mhz: float, radio: int = 1) -> None:
@@ -528,7 +543,11 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
         log.warning("ATC voice unavailable (%s): text only", exc)
         return None
     log.info("ATC voice: %s through %s", t.voice, player.name, extra=CONSOLE)
-    service = VoiceOut(bus, synth, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot)
+    from localtc.tts.voices import crew_speaker
+
+    copilot_voice = crew_speaker(cfg.crew.voice_sex, cfg.crew.voice_pick, synth.speakers, t.voice)
+    service = VoiceOut(bus, synth, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
+                       crew_speaker=copilot_voice)
     return VoiceOutput(service, player)
 
 
@@ -537,10 +556,12 @@ class VoiceInput:
     service: object
     capture: object
     ptt: object | None = None
+    intercom: object | None = None  # the intercom key's listener
 
     def close(self) -> None:
-        if self.ptt is not None:
-            self.ptt.stop()
+        for listener in (self.ptt, self.intercom):
+            if listener is not None:
+                listener.stop()
         self.capture.close()
 
 
@@ -574,7 +595,18 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         ptt.start()
     elif v.ptt == "joystick":
         log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick, extra=CONSOLE)
-    return VoiceInput(service, capture, ptt)
+    intercom = None
+    if cfg.crew.enabled and v.intercom_key and v.ptt != "enter" and (v.ptt != "keyboard" or v.intercom_key != v.ptt_key):
+        from localtc.stt.ptt import KeyboardPtt
+        from localtc.stt.service import INTERCOM
+
+        try:
+            intercom = KeyboardPtt(v.intercom_key, lambda: service.press(INTERCOM), lambda: service.release(INTERCOM),
+                                   what="Intercom (the copilot)")
+            intercom.start()
+        except ValueError as exc:
+            log.warning("No intercom key: %s", exc)
+    return VoiceInput(service, capture, ptt, intercom)
 
 
 async def _cache_airports(sub: Subscription, cache: AirportCache) -> None:

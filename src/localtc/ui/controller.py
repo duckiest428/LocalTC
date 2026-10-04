@@ -51,6 +51,8 @@ from localtc.sim_api import (
     BusEvent,
     OwnshipState,
     PhaseChanged,
+    IntercomPressed,
+    IntercomReleased,
     PttPressed,
     PttReleased,
     RadioTuned,
@@ -128,6 +130,8 @@ class AppController:
             (post, "flight/plan"): self.api_plan,
             (post, "flight/simbrief"): self.api_simbrief,
             (post, "radio/say"): self.api_say,
+            (post, "radio/crew"): self.api_crew,
+            (post, "voice/crew_preview"): self.api_crew_preview,
             (post, "support"): self.api_support,
             (post, "radio/ptt"): self.api_ptt,
             (post, "radio/tune"): self.api_tune,
@@ -222,7 +226,8 @@ class AppController:
             "flight": self.flight, "copilot": self.live.copilot_mode if self.live else self.cfg.copilot.mode,
             "copilot_mode": self.cfg.ui.copilot,
             "muted": self.muted, "dev_mode": self.cfg.ui.dev_mode, "voice": self.cfg.voice.enabled,
-            "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick},
+            "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick,
+                    "intercom": self.cfg.voice.intercom_key if self.cfg.crew.enabled else ""},
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
@@ -412,6 +417,8 @@ class AppController:
             self.publish("airport", {"icao": ev.airport.icao})
         elif isinstance(ev, PttPressed | PttReleased):
             self.publish("ptt", {"down": isinstance(ev, PttPressed)})
+        elif isinstance(ev, IntercomPressed | IntercomReleased):
+            self.publish("ptt", {"down": isinstance(ev, IntercomPressed), "intercom": True})
         elif isinstance(ev, PhaseChanged | RadioTuned | AtcTransmission):
             if isinstance(ev, AtcTransmission):
                 self._last_atc = ev
@@ -577,8 +584,20 @@ class AppController:
             raise HttpError(exc.status if 400 <= exc.status < 500 else 502, str(exc)) from None
         return {"message": answer}
 
+    async def api_crew(self, args: dict) -> dict:
+        """Typed to the copilot (the intercom), not transmitted."""
+        self._need_live().say_crew(str(args.get("text", "")))
+        return {}
+
+    async def api_crew_preview(self, args: dict) -> dict:
+        """The copilot's voice ([crew] voice_sex and voice_pick, or the ones given), on the intercom."""
+        sex = str(args.get("sex") or self.cfg.crew.voice_sex)
+        pick = int(args.get("pick", self.cfg.crew.voice_pick))
+        seconds = await asyncio.to_thread(_crew_preview, self.cfg, sex, pick)
+        return {"seconds": seconds}
+
     async def api_ptt(self, args: dict) -> dict:
-        if not self._need_live().ptt(bool(args.get("down"))):
+        if not self._need_live().ptt(bool(args.get("down")), 0 if args.get("intercom") else 1):
             raise HttpError(409, "voice input is off (Quick Settings > Push-to-talk)")
         return {}
 
@@ -629,15 +648,19 @@ class AppController:
             cfg = msgspec.convert(merge(msgspec.to_builtins(self.cfg), changes), Config)
         except msgspec.ValidationError as exc:
             raise HttpError(400, f"setting not valid: {exc}") from None
-        if cfg.voice.ptt_key != self.cfg.voice.ptt_key and sys.platform == "win32":  # key names differ by OS
-            try:
-                from localtc.stt.ptt import parse_key
+        for key in ("ptt_key", "intercom_key"):
+            value = getattr(cfg.voice, key)
+            if value != getattr(self.cfg.voice, key) and value and sys.platform == "win32":  # key names differ by OS
+                try:
+                    from localtc.stt.ptt import parse_key
 
-                parse_key(cfg.voice.ptt_key)
-            except ImportError:
-                pass
-            except ValueError as exc:
-                raise HttpError(400, str(exc)) from None
+                    parse_key(value)
+                except ImportError:
+                    pass
+                except ValueError as exc:
+                    raise HttpError(400, str(exc)) from None
+        if cfg.voice.intercom_key and cfg.voice.intercom_key == cfg.voice.ptt_key:
+            raise HttpError(400, "The intercom key can't be the push-to-talk key")
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
         interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None
@@ -967,6 +990,22 @@ def _preview(cfg: Config, voice: str, station: str, text: str) -> float:
     audio = radio_effect(speech.audio, speech.rate, static=cfg.tts.static) if cfg.tts.radio_effect else clean(speech.audio)
     player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume)
     player.play(Clip(audio, speech.rate)).done.wait(timeout=30)
+    player.close()
+    return round(speech.seconds, 1)
+
+
+def _crew_preview(cfg: Config, sex: str, pick: int) -> float:
+    from localtc.dsp.radio import intercom_effect
+    from localtc.tts.player import AudioPlayer, Clip
+    from localtc.tts.synth import PiperSynth
+    from localtc.tts.voices import crew_speaker, download
+
+    voice_file = download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None)
+    synth = PiperSynth(voice_file, rate=cfg.tts.rate)
+    speech = synth.synthesize("Flaps two. Gear down, three green. Landing checklist complete.",
+                              crew_speaker(sex, pick, synth.speakers, cfg.tts.voice))
+    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume)
+    player.play(Clip(intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")).done.wait(timeout=30)
     player.close()
     return round(speech.seconds, 1)
 

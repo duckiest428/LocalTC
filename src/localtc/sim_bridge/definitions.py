@@ -8,7 +8,7 @@ import struct
 from dataclasses import dataclass
 from typing import Any
 
-from localtc.sim_api import AircraftIdentity, OwnshipState, TrafficTarget
+from localtc.sim_api import AircraftIdentity, AircraftSystems, OwnshipState, TrafficTarget
 from localtc.sim_api.units import bco16_to_squawk, round_mhz, xpdr_mode_name
 from localtc.sim_bridge.protocol import DataType
 
@@ -82,6 +82,41 @@ IDENTITY: tuple[Datum, ...] = (
     Datum("flight_number", "ATC FLIGHT NUMBER", None, S8),
     Datum("atc_type", "ATC TYPE", None, S32),
     Datum("atc_model", "ATC MODEL", None, S32),
+)
+
+# The switches and settings the copilot checks (localtc.crew). Requested with PERIOD_SECOND + FLAG_CHANGED.
+AIRCRAFT: tuple[Datum, ...] = (
+    Datum("gear_pct", "GEAR TOTAL PCT EXTENDED", "percent"),
+    Datum("flaps_pct", "TRAILING EDGE FLAPS LEFT PERCENT", "percent"),
+    Datum("flaps_positions", "FLAPS NUM HANDLE POSITIONS", "Number", I32),
+    Datum("spoilers_pct", "SPOILERS HANDLE POSITION", "percent"),
+    Datum("spoilers_armed", "SPOILERS ARMED", "Bool", I32),
+    Datum("light_landing", "LIGHT LANDING", "Bool", I32),
+    Datum("light_taxi", "LIGHT TAXI", "Bool", I32),
+    Datum("light_strobe", "LIGHT STROBE", "Bool", I32),
+    Datum("light_beacon", "LIGHT BEACON", "Bool", I32),
+    Datum("light_nav", "LIGHT NAV", "Bool", I32),
+    Datum("light_logo", "LIGHT LOGO", "Bool", I32),
+    Datum("ap_master", "AUTOPILOT MASTER", "Bool", I32),
+    Datum("ap_heading", "AUTOPILOT HEADING LOCK", "Bool", I32),
+    Datum("ap_nav", "AUTOPILOT NAV1 LOCK", "Bool", I32),
+    Datum("ap_approach", "AUTOPILOT APPROACH HOLD", "Bool", I32),
+    Datum("ap_altitude", "AUTOPILOT ALTITUDE LOCK", "Bool", I32),
+    Datum("ap_vs", "AUTOPILOT VERTICAL HOLD", "Bool", I32),
+    Datum("ap_flc", "AUTOPILOT FLIGHT LEVEL CHANGE", "Bool", I32),
+    Datum("athr_armed", "AUTOPILOT THROTTLE ARM", "Bool", I32),
+    Datum("ap_heading_sel", "AUTOPILOT HEADING LOCK DIR", "degrees"),
+    Datum("ap_altitude_sel", "AUTOPILOT ALTITUDE LOCK VAR", "feet"),
+    Datum("ap_speed_sel", "AUTOPILOT AIRSPEED HOLD VAR", "knots"),
+    Datum("ap_vs_sel", "AUTOPILOT VERTICAL HOLD VAR", "feet per minute"),
+    Datum("com1_standby_mhz", "COM STANDBY FREQUENCY:1", "MHz"),
+    Datum("radio_height_ft", "RADIO HEIGHT", "feet"),
+    Datum("battery", "ELECTRICAL MASTER BATTERY", "Bool", I32),
+    Datum("eng1", "GENERAL ENG COMBUSTION:1", "Bool", I32),
+    Datum("eng2", "GENERAL ENG COMBUSTION:2", "Bool", I32),
+    Datum("eng3", "GENERAL ENG COMBUSTION:3", "Bool", I32),
+    Datum("eng4", "GENERAL ENG COMBUSTION:4", "Bool", I32),
+    Datum("mach", "AIRSPEED MACH", "mach"),
 )
 
 TRAFFIC: tuple[Datum, ...] = (
@@ -181,6 +216,20 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         gross_weight_lb=round(raw["gross_weight_lb"], 1),
         precip_rate_mm=round(raw.get("precip_rate_mm", 0.0), 2),
         in_smoke=bool(raw.get("in_smoke", 0)),
+    )
+
+
+def systems_from_raw(raw: dict[str, Any], t: float) -> AircraftSystems:
+    flags = ("spoilers_armed", "light_landing", "light_taxi", "light_strobe", "light_beacon", "light_nav", "light_logo",
+             "ap_master", "ap_heading", "ap_nav", "ap_approach", "ap_altitude", "ap_vs", "ap_flc", "athr_armed", "battery")
+    return AircraftSystems(
+        t=t, **{f: bool(raw[f]) for f in flags},
+        gear_pct=round(raw["gear_pct"], 1), flaps_pct=round(raw["flaps_pct"], 1),
+        flaps_positions=int(raw["flaps_positions"]), spoilers_pct=round(raw["spoilers_pct"], 1),
+        ap_heading_sel=round(raw["ap_heading_sel"] % 360, 1), ap_altitude_sel=round(raw["ap_altitude_sel"]),
+        ap_speed_sel=round(raw["ap_speed_sel"], 1), ap_vs_sel=round(raw["ap_vs_sel"]),
+        com1_standby_mhz=round_mhz(raw["com1_standby_mhz"]), radio_height_ft=round(raw["radio_height_ft"], 1),
+        engines_running=sum(bool(raw[f"eng{i}"]) for i in range(1, 5)), mach=round(raw["mach"], 3),
     )
 
 

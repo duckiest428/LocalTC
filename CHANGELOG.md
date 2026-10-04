@@ -7,6 +7,8 @@ a new minor version adds features, a patch fixes them.
 ## [0.4.0] - 2026-09-28
 
 ### Added
+- **The copilot on the intercom, as Pilot Monitoring**: a second key (Right Alt by default, or a yoke button) talks to the copilot instead of ATC, and it answers in a dry headset voice. Say "flaps two", "gear down", "landing lights on", "autopilot on", "set heading 270", "flight level 240", "squawk 4521", "tune 121.9", "QNH 1013" and more: it does it in the sim and says so once the sim shows it, or that it didn't take. It refuses what isn't safe, with the reason (flaps above their speed, gear up without a positive rate, speedbrakes low), and asks you to confirm an emergency squawk, a squawk or altitude other than ATC's, or the autopilot off near the ground. A radio call said on the intercom by mistake is offered to be sent. Aircraft profiles name the flap settings and limits (the stock A320neo first).
+- **The copilot's voice: female or male**, eight voices each, the same one on the intercom and for its readbacks on the radio (Quick Settings → Copilot).
 - **Real gate names and international gates**: ground sends you to the airport's real gates ("Gate E9", not the scenery's "Gate 88"), international arrivals to the gates that take them, and finds the gate you ask for by its real name. From OpenStreetMap, fetched once per airport and kept; on by default (Quick Settings → ATC → "Real gate names").
 - **Language model timing in the app** (Quick Settings → ATC): how long ATC waits for the model's answer, for all its tries, and for the second, patient try.
 - **The app tells you whenever the language model times out**: a notice on screen, a line in the radio log and an alert, saying whether it's being asked again or ATC answered without it.

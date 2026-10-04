@@ -109,6 +109,9 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.atc .st { color: var(--cyan); font-size: 12px; }
 .line.pilot .who { color: var(--green); }
 .line.copilot .who { color: #9ad29e; }
+.line.crew .who, .line.intercom .who { color: #8fb8e8; }
+.line.crew .ic, .line.intercom .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
+.ptt.ic { font-weight: 700; font-size: 12px; color: #8fb8e8; }
 .line.thinking .dots { display: inline-flex; gap: 4px; padding: 4px 0; }
 .line.thinking .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); opacity: .25;
   animation: thinking 1.2s infinite ease-in-out; }

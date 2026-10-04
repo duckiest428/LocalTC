@@ -1,7 +1,8 @@
 """Plays radio clips one after another on the speakers or headset (sounddevice / PortAudio).
 
 Clips never overlap: a second transmission waits for the first, as on a real frequency. A clip
-can be cut off (the ATIS, when the pilot tunes away).
+can be cut off (the ATIS, when the pilot tunes away). The radio goes before the intercom: a crew
+line still waiting is played after ATC, as a copilot stops talking when the radio does.
 """
 
 import logging
@@ -21,7 +22,7 @@ BLOCK_S = 0.05
 class Clip:
     audio: np.ndarray
     rate: int
-    kind: str = "atc"  # atc, atis, pilot
+    kind: str = "atc"  # atc, atis, pilot (the copilot on the radio), intercom (the copilot beside you)
     done: threading.Event = field(default_factory=threading.Event)
 
 
@@ -69,7 +70,20 @@ class AudioPlayer:
 
     def play(self, clip: Clip) -> Clip:
         self.start()
-        self._queue.put(clip)
+        if clip.kind in ("intercom", "atis"):
+            self._queue.put(clip)
+            return clip
+        waiting = []  # a radio clip goes ahead of the intercom lines still waiting
+        while True:
+            try:
+                waiting.append(self._queue.get_nowait())
+            except queue.Empty:
+                break
+        radio = [c for c in waiting if c is None or c.kind != "intercom"]
+        crew = [c for c in waiting if c is not None and c.kind == "intercom"]
+        closing = [c for c in radio if c is None]
+        for item in [c for c in radio if c is not None] + [clip] + crew + closing:
+            self._queue.put(item)
         return clip
 
     @property

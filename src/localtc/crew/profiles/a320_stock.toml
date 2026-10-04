@@ -1,0 +1,19 @@
+# The MSFS 2024 stock Airbus A320neo. Detents by handle index; "1+F" is config 1 on the ground (the same handle).
+# Speeds from the A320 limitations: VFE per configuration, VLO/VLE for the gear.
+[aircraft]
+name = "Airbus A320neo"
+match = ["A320", "A20N", "A321", "A21N", "A319", "A19N"]
+flaps = "detents"        # FLAPS_UP, FLAPS_1, FLAPS_2, FLAPS_3, FLAPS_DOWN
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 230, 200, 185, 177]   # knots, 0: no limit
+gear_extend_kt = 250            # VLO extension
+gear_retract_kt = 220           # VLO retraction
+gear_extended_kt = 280          # VLE
+first_detent_ground = "1+F"     # how "flaps 1" is said on the ground: the slats and flaps of config 1+F
+
+# Any action can be sent another way for this aircraft: a key event other than the standard one, or an L:var.
+# [actions.seatbelt_sign]
+# lvar = "L:XMLVAR_SWITCH_OVHD_INTLT_SEATBELT_Position"
+# on = 1
+# off = 0

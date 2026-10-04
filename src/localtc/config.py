@@ -55,6 +55,7 @@ class LiveConfig(_Section):
     connect_timeout_s: float = 0.0  # 0 = wait indefinitely
     nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
     ptt_input: str = ""  # a joystick button or key as push-to-talk through the sim, e.g. "joystick:0:button:3"
+    intercom_input: str = ""  # ... and as the intercom key (talking to the copilot)
 
 
 class ReplayConfig(_Section):
@@ -195,6 +196,9 @@ class VoiceConfig(_Section):
     ptt: Literal["keyboard", "joystick", "enter"] = "keyboard"
     ptt_key: str = "ctrl_r"  # keyboard: a key held to talk, works while the sim has focus
     ptt_joystick: str = "joystick:0:button:0"  # joystick: an input as MSFS names it
+    # The intercom: a second key (or button) held to talk to the copilot instead of ATC. Blank: none.
+    intercom_key: str = "alt_r"  # keyboard
+    intercom_joystick: str = ""  # joystick, as MSFS names it
     input_device: str = ""  # blank = the system default microphone; or part of its name, or its number
     model: str = "auto"  # auto: small.en with an NVIDIA GPU, base.en otherwise
     device: Literal["auto", "cpu", "cuda"] = "auto"
@@ -225,6 +229,14 @@ class CopilotConfig(_Section):
     mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
     delay_min_s: float = 2.0  # pilot reaction time before speaking
     delay_max_s: float = 4.0
+
+
+class CrewConfig(_Section):
+    """The copilot as Pilot Monitoring, on the intercom: takes spoken commands and works the aircraft."""
+
+    enabled: bool = True  # with voice input on: the intercom key talks to the copilot
+    voice_sex: Literal["female", "male", "any"] = "any"  # the copilot's voice
+    voice_pick: int = 0  # which of that sex's voices (0-7); the copilot uses it on the radio too
 
 
 class SessionConfig(_Section):
@@ -267,6 +279,7 @@ class Config(_Section):
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
+    crew: CrewConfig = msgspec.field(default_factory=CrewConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)

@@ -11,7 +11,10 @@ from localtc.sim_api import (
     AtisBroadcast,
     BusEvent,
     ConnectionStatus,
+    CrewAction,
+    CrewSpeech,
     FlightArrived,
+    IntercomHeard,
     LlmExchange,
     PhaseChanged,
     RadioChatter,
@@ -33,6 +36,14 @@ def radio_line(ev: BusEvent) -> dict | None:
         if not ev.text:
             return {"kind": "system", "t": t, "text": "Nothing heard: check the microphone if you spoke", "level": "warn"}
         return {"kind": who, "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}
+    if isinstance(ev, IntercomHeard):  # to the copilot, not on the radio
+        if not ev.text:
+            return None
+        return {"kind": "intercom", "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}
+    if isinstance(ev, CrewSpeech):
+        return {"kind": "crew", "t": t, "text": ev.text, "level": "warn" if ev.kind in ("refused", "alert") else ""}
+    if isinstance(ev, CrewAction):
+        return None  # what the copilot said about it is the line; the action itself is in the recording
     if isinstance(ev, ReadbackEvaluated):
         if ev.status == "correct":
             return {"kind": "readback", "t": t, "ok": True, "text": "readback ok"}

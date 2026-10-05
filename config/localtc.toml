@@ -113,6 +113,8 @@ enabled = true                # the intercom key talks to the copilot: "flaps tw
 voice_sex = "any"             # the copilot's voice: female | male | any
 voice_pick = 0                # which of that sex's voices, 0-7 (the copilot uses it on the radio too)
 llm = "full"                  # the language model on the intercom: off | questions | full (commands in other words, confirmed)
+verbosity = "standard"        # what it says by itself: quiet (safety only) | standard (callouts, relays, reminders) | chatty
+hands = "pm"                  # pm: it works its own side (radios, transponder, altimeter, lights, gear and flaps after takeoff) | calls: says only
 
 [recorder]
 enabled = true

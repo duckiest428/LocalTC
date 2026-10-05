@@ -11,6 +11,11 @@ gear_extend_kt = 250            # VLO extension
 gear_retract_kt = 220           # VLO retraction
 gear_extended_kt = 280          # VLE
 first_detent_ground = "1+F"     # how "flaps 1" is said on the ground: the slats and flaps of config 1+F
+speed_check_kt = 100            # "one hundred knots" on the takeoff roll
+rollout_call_kt = 70            # "seventy knots" on the landing roll
+vmo_kt = 350
+spoilers = true                 # ground spoilers: armed before takeoff and landing, "spoilers" on touchdown
+landing_detent = "3"            # config 3 or full
 
 # Any action can be sent another way for this aircraft: a key event other than the standard one, or an L:var.
 # [actions.seatbelt_sign]

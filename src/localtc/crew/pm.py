@@ -17,9 +17,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from localtc.atc_core import region as regions
+from localtc.config import PlanPerf
 from localtc.crew.actions import Cockpit, Plan, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command, parse
+from localtc.crew.monitor import SAFETY, Call, Monitor
 from localtc.crew.profiles import Profile, for_aircraft, load_all
 from localtc.sim_api import (
     AircraftIdentity,
@@ -46,15 +48,21 @@ STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure",
 class _Waiting:
     deadline: float
     plan: Plan
+    quiet: bool = False  # the copilot's own action, already said: only a failure is reported
 
 
 class PilotMonitoring:
-    def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None) -> None:
+    def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None,
+                 verbosity: str = "standard", hands: str = "pm", perf: PlanPerf | None = None, plan_source: str = "",
+                 radio_mode=lambda: "off") -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
         self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
         self.cockpit = Cockpit(profile=for_aircraft(self.profiles, "", ""))
         self.picture = Picture(self.cockpit, engine)
+        # The copilot speaking first: callouts, reminders, relays, its own side of the cockpit (crew.monitor).
+        self.monitor = Monitor(self.picture, verbosity=verbosity, hands=hands, perf=perf, plan_source=plan_source,
+                               radio_mode=radio_mode, seed=_seed(engine))
         self._waiting: list[_Waiting] = []
         self._confirm: tuple[float, Command] | None = None  # (deadline, the command waiting for "confirm")
         self._offer: tuple[float, str] | None = None  # (deadline, a radio call to send)
@@ -81,7 +89,27 @@ class PilotMonitoring:
         elif isinstance(ev, IntercomHeard):
             self._read_clearance()
             out += self._heard(ev.t, ev.text)
+        self.monitor.observe(ev)
         out += self._tick(ev.t)
+        for call in self.monitor.due(ev.t):
+            out += self._callout(call, ev.t)
+        return out
+
+    def _callout(self, call: Call, t: float) -> list[Any]:
+        """One of the monitor's calls: the copilot's own hands first (each checked, as a command is), then the words."""
+        out: list[Any] = []
+        for cmd in call.commands:
+            p = plan(cmd, self.cockpit)
+            if isinstance(p, str) or safety(cmd, self.cockpit).kind != "ok":
+                continue
+            if p.check(self.cockpit) is True:
+                continue  # already so
+            out += [*p.writes, CrewAction(t=t, action=p.action, value=p.value, outcome="sent",
+                                          detail=f"{call.key}: " + "; ".join(_describe(w) for w in p.writes))]
+            if cmd.action != "altimeter":  # an airliner's own STD and QNH buttons often leave the sim's setting alone
+                self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
+        kind = "alert" if call.priority >= SAFETY else "callout"
+        out.append(CrewSpeech(t=t, text=call.text, spoken=call.spoken, kind=kind))
         return out
 
     # --- the pilot ------------------------------------------------------------------------------------------------
@@ -127,6 +155,23 @@ class PilotMonitoring:
             return [self._say(t, "Loud and clear.")]
         if cmd.action in ("yes", "no"):
             return self._answer(t, cmd.action == "yes")
+        if cmd.action == "checklist":
+            name = cmd.value or self._next_checklist()
+            if name is None:
+                return [self._say(t, "Which checklist?")]
+            self.monitor.checklist(name, t)
+            return self._now(t)
+        if cmd.action == "brief":
+            self.monitor.briefing(cmd.value, t)
+            return self._now(t)
+        if cmd.action == "status":
+            self.monitor.status(t)
+            return self._now(t)
+        if cmd.action == "verbosity":
+            self.monitor.verbosity = cmd.value
+            return [self._say(t, {"quiet": "Copy, only what matters.", "chatty": "Copy, I'll keep you posted.",
+                                  "standard": "Copy, the usual calls."}[cmd.value])]
+        self.monitor.pilot_said(cmd, t)
         verdict = safety(cmd, self.cockpit)
         if verdict.kind == "refuse":
             return [self._say(t, verdict.reason, "refused"),
@@ -137,7 +182,35 @@ class PilotMonitoring:
                     CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="confirm", detail=verdict.reason)]
         return self._do(t, cmd)
 
+    def _now(self, t: float) -> list[Any]:
+        """What the pilot just asked the monitor for, said at once (they asked: no waiting for a gap)."""
+        out: list[Any] = []
+        for call in [q for q in self.monitor.queue if q.t <= t and q.key.startswith(("run:", "brief:", "status:", "landing:"))]:
+            self.monitor.queue.remove(call)
+            out += self._callout(call, t)
+        return out
+
+    def _next_checklist(self) -> str | None:
+        offer = self.monitor.offer
+        if offer is not None and offer.kind == "checklist":
+            return offer.value
+        phase = self.monitor.phase or "PARKED"
+        return {"PARKED": "before_start", "PUSHBACK": "after_start", "TAXI_OUT": "before_takeoff",
+                "RUNWAY_HOLD": "before_takeoff", "DEPARTURE": "after_takeoff", "CRUISE": "descent", "ARRIVAL": "descent",
+                "APPROACH": "landing", "LANDING": "landing", "TAXI_IN": "shutdown"}.get(phase)
+
     def _answer(self, t: float, yes: bool) -> list[Any]:
+        if (offer := self.monitor.take_offer(t)) is not None:
+            if not yes:
+                return [self._say(t, "Copy, later then.")]
+            if offer.kind == "checklist":
+                self.monitor.checklist(offer.value, t)
+                return self._now(t)
+            if offer.kind == "brief":
+                self.monitor.briefing(offer.value, t)
+                return self._now(t)
+            if offer.kind == "squawk":
+                return self._command(t, Command("squawk", offer.value))
         if self._confirm is not None and t <= self._confirm[0]:
             cmd = self._confirm[1]
             self._confirm = None
@@ -174,8 +247,9 @@ class PilotMonitoring:
         for w in self._waiting:
             shown = w.plan.check(self.cockpit)
             if shown or shown is None:
-                out += [self._say(t, w.plan.done, "done", w.plan.done_spoken),
-                        CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="done")]
+                if not w.quiet:
+                    out.append(self._say(t, w.plan.done, "done", w.plan.done_spoken))
+                out.append(CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="done"))
             elif t >= w.deadline:
                 what = w.plan.done.rstrip(".").replace(" set", "")
                 out += [self._say(t, f"{what} didn't take, check it.", "alert"),
@@ -217,6 +291,12 @@ class PilotMonitoring:
     @staticmethod
     def _say(t: float, text: str, kind: str = "reply", spoken: str = "") -> CrewSpeech:
         return CrewSpeech(t=t, text=text, spoken=spoken, kind=kind)
+
+
+def _seed(engine: Any) -> int:
+    """The copilot's wording varies, the same way each time for the same flight (replays, tests)."""
+    callsign = getattr(getattr(getattr(engine, "state", None), "flight", None), "callsign", None)
+    return sum(map(ord, str(callsign))) if callsign else 0
 
 
 def _describe(command: SimCommand) -> str:

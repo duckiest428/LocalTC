@@ -161,6 +161,7 @@ def run(
     recorded_copilot: bool = False,
     speech_s_per_char: float = 0.0,
     chatter: bool = False,
+    crew: Any = None,
 ) -> ScenarioResult:
     """Run a scenario; ``base`` is the folder its relative paths start from.
 
@@ -169,7 +170,8 @@ def run(
     around it. ``on_input``: called with every event the engine is given (to write a recording).
     ``chatter``: other flights on the frequency now and then. ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
     the current ATC). ``recorded_copilot``: with it, the copilot's recorded calls too (the flight's radio as it was, when
-    the pilot handed it the radio for part of the way).
+    the pilot handed it the radio for part of the way). ``crew``: a ``crew.pm.PilotMonitoring`` on the intercom, given
+    every event and ATC's words; what the copilot says on it goes into the lines ("CREW").
     """
     from localtc.app import engine_config
     from localtc.copilot import Copilot, Note, Say, Tune
@@ -212,8 +214,12 @@ def run(
         outputs = engine.handle(event)
         if engine.deferred is not None:
             outputs = [*outputs, *engine.resolve_deferred()]  # "stand by", then the model's longer look
+        if crew is not None:
+            crew_hears(event)
         for output in outputs:
             result.outputs.append(output)
+            if crew is not None:
+                crew_hears(output)
             if pilot is not None:
                 pilot.observe(output)
             if (line := format_output(output)) is not None:
@@ -225,6 +231,16 @@ def run(
                         rule.when is None or _when_matches(rule.when, engine, state["last_own"])
                     ):
                         schedule(index, rule, output.t + rule.delay_s, {"instruction": output.instruction_id, "issued": issued})
+
+    def crew_hears(event: BusEvent) -> None:
+        from localtc.sim_api import CrewSpeech, SimCommand
+
+        for said in crew.observe(event):
+            if isinstance(said, CrewSpeech):
+                result.outputs.append(said)
+                result.lines.append(f"[{said.t:8.1f}] CREW      {said.text}")
+            elif isinstance(said, SimCommand):
+                result.outputs.append(said)
 
     def speak(rule: PilotRule, at: float, context: dict[str, Any]) -> None:
         own: OwnshipState | None = state["last_own"]

@@ -288,6 +288,7 @@ async def run_session(
     typed_task: asyncio.Task | None = None
     voice = speaker = None
     engine = atc_service = None
+    pm = None
     flight_log = None
     try:
         if record:
@@ -340,7 +341,11 @@ async def run_session(
                 crew_model = (CrewModel(backend, mode=cfg.crew.llm, timeout_s=cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
                                         patience_s=cfg.llm.patience_s)
                               if backend is not None and cfg.crew.llm != "off" else None)
-                pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model)
+                service = atc_service
+                pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
+                                     verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
+                                     plan_source=cfg.flight.plan_source,
+                                     radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
@@ -361,7 +366,8 @@ async def run_session(
         pump_task = asyncio.create_task(pump(source, bus))
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
-                                 voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None))
+                                 voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None,
+                                 crew=pm))
         waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
         await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
         for task in waits:
@@ -429,6 +435,7 @@ class LiveSession:
     voice: "VoiceInput | None" = None
     speaker: "VoiceOutput | None" = None
     recording: Path | None = None
+    crew: object | None = None  # crew.pm.PilotMonitoring
 
     def now(self) -> float:
         return self.source.clock.now()

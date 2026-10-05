@@ -399,6 +399,30 @@ the autopilot off below 500 ft. A radio call said on the intercom by mistake is 
 The copilot's voice is female, male or either (`[crew] voice_sex`, eight voices each with `voice_pick`); it uses the
 same voice for its readbacks on the radio.
 
+**It speaks first.** The copilot watches the sim and ATC and says what a Pilot Monitoring says, unasked: a greeting
+with the route and the fuel against the SimBrief plan, the ATIS, "call for the clearance when you're ready", checklist
+and briefing prompts; on the roll "one hundred knots" (Airbus; "eighty" otherwise), V1 and rotate from the plan's
+speeds or the aircraft's own, "positive rate"; "one thousand to go", ten thousand, the transition; the handoffs; top
+of climb and of descent, the destination's ATIS, "localizer alive"; on approach "one thousand, stable" (or what isn't),
+minimums, "spoilers", the rollout call; and a summary at the gate. It warns of what's unsafe: config on the roll, a
+runway ahead without a clearance, gear not down at 1,000 ft, not cleared to land at 500 ft, a stall or overspeed, flap
+and gear speeds, an engine failure, the altitude or heading off what ATC gave, a readback or handoff missed, traffic
+closing, low fuel. Every call has its trigger, says once (or again only after a pause, and not more than twice), and
+never talks over ATC or you; safety calls cut in.
+
+- `[crew] verbosity`: `quiet` (safety only), `standard` (callouts, relays and reminders) or `chatty` (status updates
+  too). Below 10,000 ft it never chats. Say "quiet please", "keep me posted" or "normal callouts" mid-flight.
+- `[crew] hands = "pm"`: it works its own side as it calls it: the next frequency in standby, the transponder code, the
+  altimeter at the transition, the exterior lights, gear up on positive rate and the flaps on schedule after takeoff,
+  the cleared altitude and heading, the after-landing flow. The captain's side (parking brake, engines, the autopilot,
+  flaps for takeoff and landing) it never touches; it says when something there is missed. `"calls"`: it touches
+  nothing.
+- "before takeoff checklist" (or "run the checklist") reads one against the aircraft, setting its own side and holding
+  on anything of yours that isn't right; "brief" gives the departure or arrival briefing; "status" the fuel, distance
+  and ETA.
+- From the phone (Comms → Copilot) or the website's full-screen Flight Tracker (Copilot), typed lines go to the copilot
+  on the intercom instead of ATC.
+
 **Aircraft profiles** (`src/localtc/crew/profiles/*.toml`, and your own in `%LOCALAPPDATA%\LocalTC\profiles`, which win)
 name the flap detents, the placard speeds, and any action an add-on wants sent another way: its own key event, or an
 L:var (MSFS 2024). The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that

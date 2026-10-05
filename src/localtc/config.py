@@ -109,6 +109,24 @@ class RouteFix(msgspec.Struct, frozen=True, kw_only=True):
     via: str = ""  # the airway, SID or STAR it's reached by ("GIIBS4"); "" in plans saved before it was kept
 
 
+class PlanPerf(msgspec.Struct, frozen=True, kw_only=True):
+    """What SimBrief planned for the fuel, the weights and the takeoff and landing: the copilot checks the aircraft
+    against it and calls the speeds. Pounds and knots; 0 or "" where the plan didn't say."""
+
+    units: str = ""  # how the plan counts weight: "kgs" or "lbs"
+    block_fuel_lb: float = 0.0  # ramp fuel
+    takeoff_fuel_lb: float = 0.0
+    landing_fuel_lb: float = 0.0  # planned fuel on landing at the destination
+    reserve_fuel_lb: float = 0.0  # final reserve
+    zfw_lb: float = 0.0  # planned zero fuel weight
+    v1: int = 0
+    vr: int = 0
+    v2: int = 0
+    takeoff_flaps: str = ""  # "1+F", "5"
+    vref: int = 0
+    landing_flaps: str = ""
+
+
 class FlightConfig(_Section):
     rules: Literal["IFR", "VFR"] = "IFR"
     destination: str = ""  # ICAO
@@ -124,6 +142,8 @@ class FlightConfig(_Section):
     arr_runway: str = ""
     approach: Literal["auto", "visual", "ils", "rnav"] = "auto"  # auto: what the airport has, the weather and the aircraft allow
     fixes: list[RouteFix] = []  # the plan's route; set from the flight plan for each flight, not saved
+    plan_source: str = ""  # "simbrief" or "manual" when a plan was loaded; "": none (the sim's own flight plan)
+    perf: PlanPerf = PlanPerf()  # SimBrief's fuel, weights and speeds; set from the plan for each flight
 
 
 class AtcConfig(_Section):
@@ -241,6 +261,13 @@ class CrewConfig(_Section):
     # "questions" also answers anything else from what it knows; "full" also takes commands said in other words
     # (read back for your "confirm" before it acts).
     llm: Literal["off", "questions", "full"] = "full"
+    # How much the copilot says by itself: "quiet" only what's safety (config, gear, not cleared to land, speed),
+    # "standard" also the standard callouts, ATC relays and reminders, "chatty" also status updates and small talk.
+    # Below 10,000 feet it never chats (the sterile cockpit).
+    verbosity: Literal["quiet", "standard", "chatty"] = "standard"
+    # "pm": the copilot works its own side (radios in standby, transponder, altimeter at the transition, exterior
+    # lights, gear and flaps after takeoff, the cleared altitude and heading); "calls": it touches nothing by itself.
+    hands: Literal["pm", "calls"] = "pm"
 
 
 class SessionConfig(_Section):

@@ -8,11 +8,21 @@ from localtc.crew.pm import PilotMonitoring
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AtcAlert,
     AtcTransmission,
+    FlightArrived,
     IntercomHeard,
+    IntercomPressed,
+    IntercomReleased,
     OwnshipState,
+    PhaseChanged,
+    PttPressed,
+    PttReleased,
+    ReadbackEvaluated,
     SimCommand,
     SimSource,
+    TrafficSnapshot,
+    Transcript,
 )
 
 log = logging.getLogger(__name__)
@@ -22,7 +32,11 @@ class CrewService:
     def __init__(self, pm: PilotMonitoring, bus: EventBus, source: SimSource | None = None) -> None:
         self.pm, self.bus, self.source = pm, bus, source
         # Subscribed now, not in run(): a fast source could publish before run() starts.
-        self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftIdentity, IntercomHeard, AtcTransmission)
+        # Everything the copilot watches to speak first (crew.monitor): ATC and the pilot on the radio (so it doesn't
+        # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
+        self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftIdentity, IntercomHeard, AtcTransmission,
+                                     PhaseChanged, ReadbackEvaluated, PttPressed, PttReleased, IntercomPressed,
+                                     IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived)
 
     async def run(self) -> None:
         async for event in self._inputs:

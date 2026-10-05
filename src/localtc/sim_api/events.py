@@ -103,6 +103,18 @@ class AircraftSystems(Event, tag="aircraft_systems"):
     battery: bool = False
     engines_running: int = 0  # how many
     mach: float = 0.0
+    # The aircraft's own numbers and warnings, for the copilot's callouts (a separate request: 0 / False where the sim
+    # or an add-on doesn't give them).
+    vs0_kt: float = 0.0  # stall speed, landing configuration
+    vs1_kt: float = 0.0  # stall speed, clean
+    takeoff_kt: float = 0.0  # the design takeoff (rotation) speed
+    vmo_kt: float = 0.0  # the design cruise speed limit (VC)
+    stall_warning: bool = False
+    overspeed_warning: bool = False
+    loc_received: bool = False  # NAV1 has a localizer signal
+    gs_received: bool = False
+    loc_deviation: int = 0  # -127..127, to 10: full scale is off the needle
+    gs_deviation: int = 0
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):

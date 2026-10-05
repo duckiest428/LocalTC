@@ -6,8 +6,12 @@
 "tune one two one point niner", "standby one one eight seven", "swap", "altimeter two niner niner two",
 "QNH one zero one three", "standard", "parking brake set". Several in one breath ("gear down, flaps three") are
 read in order. "Confirm" / "negative" answer the copilot's question, and "how do you hear me" checks the intercom.
+"Before takeoff checklist" (or "run the checklist": the one that's due) reads a checklist, "brief" / "approach
+briefing" a briefing, "status" how the flight's going; "quiet please" / "keep me posted" / "normal callouts" set how
+much the copilot says by itself.
 """
 
+import re
 from dataclasses import dataclass
 
 from localtc.atc_core.readback.normalize import Token, normalize
@@ -16,7 +20,8 @@ from localtc.atc_core.readback.normalize import Token, normalize
 @dataclass(frozen=True)
 class Command:
     action: str  # gear, flaps, light, spoilers, autopilot, ap_mode, autothrottle, heading, altitude, speed, vs,
-    #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, yes, no, check
+    #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, yes, no, check,
+    #              checklist, brief, status, verbosity
     value: str = ""  # "down", "2", "on", "270", "10000", "-1500", "4553", "121.9", "29.92"
     target: str = ""  # which light, which autopilot mode; "hpa" for an altimeter setting in hectopascals
 
@@ -36,6 +41,12 @@ NO = {"negative", "no", "cancel", "disregard", "stop", "belay"}
 FILLER = {"to", "the", "at", "please", "our", "my", "your", "for", "me", "us", "now", "new"}  # "set the altimeter to 30.10"
 CHECK = ("how do you hear", "how do you read", "do you read", "radio check", "intercom check", "you there",
          "can you hear")
+QUIET = ("quiet please", "be quiet", "less chatter", "talk less", "only the essentials", "keep it quiet", "go quiet",
+         "sterile cockpit")
+CHATTY = ("keep me posted", "talk more", "more chatter", "chatty", "chat more")
+STANDARD = ("normal callouts", "standard callouts", "usual callouts", "back to normal")
+STATUS = ("status report", "status update", "give me a status", "how are we doing", "how's it going", "hows it going",
+          "how is it going", "status")
 
 
 def _number(tokens: list[Token], i: int) -> float | None:
@@ -64,6 +75,19 @@ def parse(text: str) -> list[Command]:
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
         return [Command("check")]
+    for phrases, level in ((QUIET, "quiet"), (CHATTY, "chatty"), (STANDARD, "standard")):
+        if any(phrase in lowered for phrase in phrases):
+            return [Command("verbosity", level)]
+    if "checklist" in lowered or "check list" in lowered:
+        from localtc.crew.checklists import named  # checklists builds on this module
+
+        return [Command("checklist", named(lowered) or "")]
+    if re.search(r"\bbrief(?:ing)?\b", lowered):
+        which = "departure" if re.search(r"departure|takeoff|take off", lowered) else \
+            "approach" if re.search(r"approach|arrival|landing", lowered) else ""
+        return [Command("brief", which)]
+    if any(re.search(rf"\b{re.escape(phrase)}\b", lowered) for phrase in STATUS) and len(lowered.split()) <= 6:
+        return [Command("status")]
     tokens = [t for t in normalize(text.replace("/", " ")) if t.text not in FILLER or t.kind == "number"]
     words = [t.text for t in tokens]
     if len(words) <= 3 and words and words[0] in YES:

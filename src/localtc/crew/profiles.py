@@ -42,6 +42,16 @@ class Profile:
     gear_extended_kt: float = 0.0
     first_detent_ground: str = ""  # how the first detent is said on the ground ("1+F")
     actions: dict[str, Write] = field(default_factory=dict)
+    # For the copilot's callouts: the takeoff speed check ("eighty knots"; Airbus "one hundred knots"), the rollout
+    # call ("sixty knots"; Airbus "seventy knots"), the speed limit (0: the sim's overspeed warning only), whether
+    # there are ground spoilers to call, the lowest detent that's landing flaps ("": the last but one), the fastest
+    # taxi.
+    speed_check_kt: int = 80
+    rollout_call_kt: int = 60
+    vmo_kt: float = 0.0
+    spoilers: bool = False
+    landing_detent: str = ""
+    taxi_max_kt: float = 30.0
 
     def matches(self, title: str, model: str) -> bool:
         words = f"{title} {model}".upper()
@@ -70,6 +80,12 @@ class Profile:
     def vfe_for(self, index: int) -> float:
         return self.vfe[index] if 0 <= index < len(self.vfe) else 0.0
 
+    def landing_index(self, positions: int) -> int:
+        """The lowest handle position that's landing flaps."""
+        if self.landing_detent and (i := self.detent_index(self.landing_detent, positions)) is not None:
+            return i
+        return max(positions - 1, 1)
+
 
 def parse(data: dict) -> Profile:
     a = data.get("aircraft", {})
@@ -82,6 +98,9 @@ def parse(data: dict) -> Profile:
         vfe=tuple(float(v) for v in a.get("vfe", ())), gear_extend_kt=float(a.get("gear_extend_kt", 0)),
         gear_retract_kt=float(a.get("gear_retract_kt", 0)), gear_extended_kt=float(a.get("gear_extended_kt", 0)),
         first_detent_ground=str(a.get("first_detent_ground", "")), actions=actions,
+        speed_check_kt=int(a.get("speed_check_kt", 80)), rollout_call_kt=int(a.get("rollout_call_kt", 60)),
+        vmo_kt=float(a.get("vmo_kt", 0)), spoilers=bool(a.get("spoilers", False)),
+        landing_detent=str(a.get("landing_detent", "")).lower(), taxi_max_kt=float(a.get("taxi_max_kt", 30)),
     )
 
 

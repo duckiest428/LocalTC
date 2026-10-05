@@ -29,6 +29,8 @@ from typing import Any, Literal
 
 import msgspec
 
+from localtc.config import PlanPerf
+
 SIMBRIEF_URL = "https://www.simbrief.com/api/xml.fetcher.php"
 SIMBRIEF_DISPATCH = "https://dispatch.simbrief.com/options/custom"  # where a new plan is made
 ICAO = re.compile(r"^[A-Z0-9]{3,4}$")
@@ -65,6 +67,7 @@ class FlightPlan(msgspec.Struct, kw_only=True):
     fixes: list[Fix] = []
     simbrief_id: str = ""  # SimBrief's static id or request time: tells one plan from the next
     rules: Literal["IFR", "VFR"] = "IFR"
+    perf: PlanPerf = PlanPerf()  # SimBrief's fuel, weights and V-speeds (empty for a typed plan)
 
     def summary(self) -> str:
         parts = [self.callsign or "(sim callsign)", f"{self.origin or '?'}-{self.destination or '?'}"]
@@ -197,6 +200,34 @@ def parse_simbrief(data: dict[str, Any]) -> FlightPlan:
         fixes=fixes,
         simbrief_id=str(_get(data, "params", "static_id") or _get(data, "params", "time_generated")),
         rules="VFR" if str(atc.get("flight_rules") or "I").upper() == "V" else "IFR",  # Y/Z (mixed) fly IFR here
+        perf=_perf(data),
+    )
+
+
+def _perf(data: dict[str, Any]) -> PlanPerf:
+    """The OFP's fuel and weights (in its own units, turned to pounds) and the takeoff and landing performance
+    (the TLR, when SimBrief worked it out), for the runways planned."""
+    units = str(_get(data, "params", "units")).lower()
+    to_lb = 2.20462 if units.startswith("kg") else 1.0
+    fuel = data.get("fuel") or {}
+    weights = data.get("weights") or {}
+
+    def lb(section: dict, key: str) -> float:
+        return round(_int(section.get(key)) * to_lb) if isinstance(section, dict) else 0.0
+
+    takeoff, landing = _get(data, "tlr", "takeoff") or {}, _get(data, "tlr", "landing") or {}
+    plan_rwy = str(_get(data, "origin", "plan_rwy"))
+    runways = _as_list(takeoff.get("runway")) if isinstance(takeoff, dict) else []
+    rwy = next((r for r in runways if str(r.get("identifier")) == plan_rwy), runways[0] if runways else {})
+    dry = landing.get("distance_dry") if isinstance(landing, dict) else None
+    dry = dry if isinstance(dry, dict) else {}
+    return PlanPerf(
+        units="kgs" if to_lb != 1.0 else "lbs" if units else "",
+        block_fuel_lb=lb(fuel, "plan_ramp"), takeoff_fuel_lb=lb(fuel, "plan_takeoff"),
+        landing_fuel_lb=lb(fuel, "plan_landing"), reserve_fuel_lb=lb(fuel, "reserve"), zfw_lb=lb(weights, "est_zfw"),
+        v1=_int(rwy.get("speeds_v1")), vr=_int(rwy.get("speeds_vr")), v2=_int(rwy.get("speeds_v2")),
+        takeoff_flaps=str(rwy.get("flap_setting") or ""), vref=_int(dry.get("speeds_vref")),
+        landing_flaps=str(dry.get("flap_setting") or ""),
     )
 
 
@@ -250,5 +281,7 @@ def apply_plan(plan: FlightPlan, flight: Any) -> None:
     flight.star = plan.star
     flight.dep_runway = plan.dep_runway
     flight.arr_runway = plan.arr_runway
+    flight.plan_source = plan.source
+    flight.perf = plan.perf
     flight.fixes = [RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
                              via=f.via) for f in plan.fixes]

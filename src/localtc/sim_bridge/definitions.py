@@ -119,6 +119,21 @@ AIRCRAFT: tuple[Datum, ...] = (
     Datum("mach", "AIRSPEED MACH", "mach"),
 )
 
+# Asked for separately from AIRCRAFT: an add-on (or a sim version) that doesn't know one of these names fails only
+# this request, not the switches the copilot works with.
+AIRCRAFT_EXTRA: tuple[Datum, ...] = (
+    Datum("vs0_kt", "DESIGN SPEED VS0", "knots"),
+    Datum("vs1_kt", "DESIGN SPEED VS1", "knots"),
+    Datum("takeoff_kt", "DESIGN TAKEOFF SPEED", "knots"),
+    Datum("vmo_kt", "DESIGN SPEED VC", "knots"),
+    Datum("stall_warning", "STALL WARNING", "Bool", I32),
+    Datum("overspeed_warning", "OVERSPEED WARNING", "Bool", I32),
+    Datum("loc_received", "NAV HAS LOCALIZER:1", "Bool", I32),
+    Datum("gs_received", "NAV HAS GLIDE SLOPE:1", "Bool", I32),
+    Datum("loc_deviation", "NAV CDI:1", "Number"),
+    Datum("gs_deviation", "NAV GSI:1", "Number"),
+)
+
 TRAFFIC: tuple[Datum, ...] = (
     Datum("atc_id", "ATC ID", None, S32),
     Datum("airline", "ATC AIRLINE", None, S64),
@@ -222,7 +237,7 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
 RADIO_HEIGHT_TOP_FT = 2500.0
 
 
-def systems_from_raw(raw: dict[str, Any], t: float) -> AircraftSystems:
+def systems_from_raw(raw: dict[str, Any], t: float, extra: dict[str, Any] | None = None) -> AircraftSystems:
     flags = ("spoilers_armed", "light_landing", "light_taxi", "light_strobe", "light_beacon", "light_nav", "light_logo",
              "ap_master", "ap_heading", "ap_nav", "ap_approach", "ap_altitude", "ap_vs", "ap_flc", "athr_armed", "battery")
     return AircraftSystems(
@@ -235,7 +250,22 @@ def systems_from_raw(raw: dict[str, Any], t: float) -> AircraftSystems:
         # To 10 ft where callouts use it, and no higher than 2,500 ft: above that it changes with every hill and wave.
         radio_height_ft=float(round(min(raw["radio_height_ft"], RADIO_HEIGHT_TOP_FT), -1)),
         engines_running=sum(bool(raw[f"eng{i}"]) for i in range(1, 5)), mach=round(raw["mach"], 2),
+        **_extra(extra or {}),
     )
+
+
+def _extra(raw: dict[str, Any]) -> dict[str, Any]:
+    if not raw:
+        return {}
+    return {
+        "vs0_kt": float(round(raw["vs0_kt"])), "vs1_kt": float(round(raw["vs1_kt"])),
+        "takeoff_kt": float(round(raw["takeoff_kt"])), "vmo_kt": float(round(raw["vmo_kt"])),
+        "stall_warning": bool(raw["stall_warning"]), "overspeed_warning": bool(raw["overspeed_warning"]),
+        "loc_received": bool(raw["loc_received"]), "gs_received": bool(raw["gs_received"]),
+        # To 10 of the 127: enough for "alive", without a new message for every wobble of the needle.
+        "loc_deviation": int(round(max(-127.0, min(127.0, raw["loc_deviation"])), -1)),
+        "gs_deviation": int(round(max(-127.0, min(127.0, raw["gs_deviation"])), -1)),
+    }
 
 
 def identity_from_raw(raw: dict[str, Any], t: float) -> AircraftIdentity:

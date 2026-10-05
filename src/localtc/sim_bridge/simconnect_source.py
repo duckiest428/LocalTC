@@ -71,8 +71,8 @@ from localtc.sim_bridge.protocol import (
 
 log = logging.getLogger(__name__)
 
-DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 10
-REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT = 1, 2, 3, 4, 5
+DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_AIRCRAFT_EXTRA, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 5, 10
+REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
@@ -157,6 +157,8 @@ class SimConnectSource:
         self._raw_tap = raw_tap
         self._commands: queue.SimpleQueue[SimCommand] = queue.SimpleQueue()
         self._systems: AircraftSystems | None = None  # the last switches sent on
+        self._aircraft_raw: dict | None = None  # the latest of each of the two requests they're made from
+        self._extra_raw: dict | None = None
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
         self._simvar_definitions: dict[str, int] = {}  # variable -> data definition id, this connection
         self._position: tuple[float, float] | None = None
@@ -256,7 +258,7 @@ class SimConnectSource:
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
-                                  (DEF_AIRCRAFT, defs.AIRCRAFT)):
+                                  (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA)):
             for d in datums:
                 dll.add_to_data_definition(handle, define_id, d.simvar, d.units, d.datatype)
         for event_id, name in SYSTEM_EVENTS.items():
@@ -283,6 +285,9 @@ class SimConnectSource:
         )
         dll.request_data_on_sim_object(
             handle, REQ_AIRCRAFT, DEF_AIRCRAFT, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
+        )
+        dll.request_data_on_sim_object(
+            handle, REQ_AIRCRAFT_EXTRA, DEF_AIRCRAFT_EXTRA, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
         for line in facilities.definition_lines():
             dll.add_to_facility_definition(handle, DEF_FACILITY_AIRPORT, line)
@@ -491,8 +496,14 @@ class SimConnectSource:
             self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:
             self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
-        elif msg.request_id == REQ_AIRCRAFT:
-            systems = defs.systems_from_raw(defs.unpack(defs.AIRCRAFT, msg.payload), t)
+        elif msg.request_id in (REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA):
+            if msg.request_id == REQ_AIRCRAFT:
+                self._aircraft_raw = defs.unpack(defs.AIRCRAFT, msg.payload)
+            else:
+                self._extra_raw = defs.unpack(defs.AIRCRAFT_EXTRA, msg.payload)
+            if self._aircraft_raw is None:
+                return
+            systems = defs.systems_from_raw(self._aircraft_raw, t, self._extra_raw)
             if self._systems is None or replace(systems, t=self._systems.t) != self._systems:  # only what's kept changing
                 self._systems = systems
                 self._emit(systems)

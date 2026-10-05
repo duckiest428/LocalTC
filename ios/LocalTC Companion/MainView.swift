@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.appTheme) private var theme
     @State private var showSettings = false
     @State private var banner: FlightAlert?
 
@@ -30,6 +31,7 @@ struct MainView: View {
     private func screen<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         NavigationStack {
             content()
+                .themed(theme)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) { ConnectionBadge(state: model.connection.state) }
                     ToolbarItem(placement: .topBarTrailing) {
@@ -57,26 +59,38 @@ struct MainView: View {
     }
 }
 
+/// How the phone reaches the flight, top left of every screen: just the symbol, in its color. The toolbar gives it
+/// its own glass on iOS 26; a capsule of our own inside that looked like a broken double pill.
 struct ConnectionBadge: View {
     let state: ConnectionManager.State
+    @State private var showLabel = false
 
     var body: some View {
-        Label(state.label, systemImage: icon)
-            .labelStyle(.titleAndIcon)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(color.opacity(0.15), in: Capsule())
-            .accessibilityLabel("Connection: \(state.label)")
-            .accessibilityIdentifier("connection")
+        Button { showLabel.toggle() } label: {
+            Image(systemName: icon)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(color)
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.pulse, options: .repeating, isActive: state == .connecting)
+                .frame(width: 28, height: 28)
+        }
+        .popover(isPresented: $showLabel) {
+            Label(state.label, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(color)
+                .padding()
+                .presentationCompactAdaptation(.popover)
+        }
+        .accessibilityLabel("Connection: \(state.label)")
+        .accessibilityIdentifier("connection")
     }
 
     private var icon: String {
         switch state {
         case .wifi: "wifi"
-        case .server: "cloud"
-        case .connecting: "arrow.triangle.2.circlepath"
-        case .offline: "wifi.slash"
+        case .server: "icloud.fill"
+        case .connecting: "antenna.radiowaves.left.and.right"
+        case .offline: "icloud.slash"
         }
     }
 

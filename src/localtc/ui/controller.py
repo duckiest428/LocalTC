@@ -227,7 +227,7 @@ class AppController:
             "source": self.source_kind, "plan": msgspec.to_builtins(self.plan) if self.plan else None,
             "flight": self.flight, "copilot": self.live.copilot_mode if self.live else self.cfg.copilot.mode,
             "copilot_mode": self.cfg.ui.copilot,
-            "muted": self.muted, "dev_mode": self.cfg.ui.dev_mode, "voice": self.cfg.voice.enabled,
+            "muted": self.muted, "dev_mode": self.cfg.ui.dev_mode, "voice": self.cfg.voice.enabled, "theme": self.cfg.ui.theme,
             "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick,
                     "intercom": self.cfg.voice.intercom_key if self.cfg.crew.enabled else ""},
             "recording": str(self.live.recording) if self.live and self.live.recording else None,

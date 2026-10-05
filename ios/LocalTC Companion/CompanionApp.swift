@@ -3,13 +3,28 @@ import SwiftUI
 @main
 struct CompanionApp: App {
     @State private var model = AppModel()
+    @AppStorage("theme") private var themeName = AppTheme.system.rawValue
 
     var body: some Scene {
         WindowGroup {
+            let theme = AppTheme(rawValue: themeName) ?? .system
             RootView()
                 .environment(model)
-                .tint(.green)
+                .environment(\.appTheme, theme)
+                .tint(theme.accent)
+                .preferredColorScheme(theme.scheme)
         }
+    }
+}
+
+private struct AppThemeKey: EnvironmentKey {
+    static let defaultValue = AppTheme.system
+}
+
+extension EnvironmentValues {
+    var appTheme: AppTheme {
+        get { self[AppThemeKey.self] }
+        set { self[AppThemeKey.self] = newValue }
     }
 }
 

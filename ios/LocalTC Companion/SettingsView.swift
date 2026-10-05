@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @State private var me: Me?
     @State private var error: String?
@@ -57,6 +58,9 @@ struct SettingsView: View {
                     }
                     .accessibilityIdentifier("efb")
                 }
+                Section("Appearance") {
+                    ThemePicker()
+                }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     Link("Your logbook on localtc.tech", destination: URL(string: "https://localtc.tech/dashboard.html")!)
@@ -64,6 +68,7 @@ struct SettingsView: View {
                     Link("Terms", destination: URL(string: "https://localtc.tech/terms.html#account")!)
                 }
             }
+            .themed(theme)
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { await load() }

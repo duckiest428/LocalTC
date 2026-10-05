@@ -36,6 +36,12 @@ TELEPHONY: dict[str, str] = {
     "SAS": "Scandinavian", "SWR": "Swiss", "TAP": "Air Portugal", "TRA": "Transavia", "TVF": "France Soleil",
     "VLG": "Vueling", "WZZ": "Wizzair", "SXS": "Sunexpress", "PGT": "Sunturk", "AEE": "Aegean",
     "OAL": "Olympic", "LDM": "Lauda", "SDR": "Sundair", "MSR": "Egyptair", "RAM": "Royalair Maroc",
+    "EDW": "Edelweiss", "OAW": "Helvetic", "LGL": "Luxair", "KLC": "City", "BCY": "Cityjet", "CFE": "Flyer",
+    "DLA": "Dolomiti", "ANE": "Air Nostrum", "ADR": "Adria", "ENT": "Enter", "NOS": "Moonflower", "TFL": "Orange",
+    "TUI": "Tuifly", "JAF": "Beauty", "TVS": "Skytravel", "WIF": "Wideroe", "ROT": "Tarom", "LZB": "Flying Bulgaria",
+    "CAI": "Corendon", "SEH": "Air Crete", "VKG": "Viking", "IBK": "Nortrans", "NLY": "Flyniki", "HOP": "Air Hop",
+    "GEC": "Lufthansa Cargo", "DHK": "World Express", "BCI": "Blue Islands", "LOF": "Trans States",
+    "AHY": "Azal", "KZR": "Astanaline", "BRU": "Belarus Avia", "EZS": "Topswiss", "EJU": "Alpine",
     # Eastern Europe, Russia, Central Asia
     "AFL": "Aeroflot", "AZA": "Alitalia", "BTK": "Bektas", "CSA": "CSA", "ELY": "Elal", "FPO": "Askair",
 "PBD": "Pobeda", "SBI": "Siberian", "SVR": "Sverdlovsk", "SWN": "Sunwing",

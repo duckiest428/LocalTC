@@ -57,7 +57,9 @@
 .replay .rp-check { font-size: 12px; color: var(--rp-dim); display: inline-flex; flex-direction: row; align-items: center; gap: 4px;
   margin: 0 6px 0 0; white-space: nowrap; }
 .replay .rp-check input { display: inline-block; width: auto; margin: 0; }
-.rp-speeds { display: inline-flex; gap: 2px; }
+.rp-speed-pick { font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, .06);
+  color: var(--rp-text); border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; padding: 4px 6px; cursor: pointer; }
+.rp-speed-pick option { background: #1b1e22; color: #e8eaed; }
 .rp-speed { padding: 5px 8px; font-size: 12px; }
 .rp-speed.on { background: var(--rp-cyan); color: #06222c; }
 .rp-scrub { position: relative; padding-top: 12px; }

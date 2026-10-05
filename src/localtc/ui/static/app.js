@@ -58,7 +58,16 @@ function connect() {
   es.onopen = () => setStatus(S.state);
 }
 
+const THEMES = [["radio", "Radio panel (dark)"], ["midnight", "Midnight blue"], ["oled", "Black (OLED)"],
+  ["amber", "Amber avionics"], ["slate", "Slate"], ["daylight", "Daylight (light)"]];
+function applyTheme(theme) {
+  const t = THEMES.some(([v]) => v === theme) ? theme : "radio";
+  if (t === "radio") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("theme", t); } catch { /* storage unavailable: the setting still applies */ }
+}
+
 function setState(st) {
+  applyTheme(st.theme);
   S.state = st;
   setStatus(st);
   if (st.flight && Object.keys(st.flight).length) setFlight(st.flight);
@@ -775,6 +784,12 @@ const Settings = {
       </div>
 
       <div class="card">
+        <h3>Appearance</h3>
+        <div class="row theme-row">${THEMES.map(([v, label]) => `<button type="button" class="theme-pick${(st.ui.theme || "radio") === v ? " on" : ""}" data-theme-pick="${v}" title="${label}">
+          <span class="swatch sw-${v}"><i></i><i></i><i></i></span><span>${label}</span></button>`).join("")}</div>
+      </div>
+
+      <div class="card">
         <h3>Sim</h3>
         <div class="row"><label>Connect to<select id="s-source"><option value="live" ${st.ui.source === "live" ? "selected" : ""}>MSFS 2024 (live)</option>
           <option value="replay" ${st.ui.source === "replay" ? "selected" : ""}>A recorded flight (replay, for development)</option></select></label></div>
@@ -912,6 +927,11 @@ const Settings = {
     });
     on("#s-source", "change", async () => { await this.save("ui", "source", val("#s-source")); this.render(); });
     on("#s-on-top", "change", () => this.save("ui", "on_top", val("#s-on-top")));
+    $$("[data-theme-pick]").forEach((b) => (b.onclick = async () => {
+      applyTheme(b.dataset.themePick);
+      $$("[data-theme-pick]").forEach((x) => x.classList.toggle("on", x === b));
+      await this.save("ui", "theme", b.dataset.themePick);
+    }));
     on("#s-replay", "change", () => this.save("replay", "path", val("#s-replay").trim()));
     on("#s-replay-speed", "change", () => this.save("replay", "speed", Number(val("#s-replay-speed"))));
     on("#s-tiles", "change", async (e) => { await this.save("ui", "map_tiles", e.target.checked); S.state.map_tiles = e.target.checked; MapView.tiles(); });

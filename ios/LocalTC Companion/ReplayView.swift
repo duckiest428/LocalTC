@@ -4,6 +4,10 @@ import SwiftUI
 /// A flight to rewatch: the aircraft along its track, a timeline to scrub, and the radio transcript in step.
 /// The same player as the website's (site/replayplayer.js); the clock's rules are in LocalTCKit's ReplayClock.
 struct ReplayView: View {
+    /// The replay speeds offered, as on the website and in the app.
+    static let speeds: [Double] = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+    static func label(_ s: Double) -> String { s < 1 ? "\(s)×" : "\(Int(s))×" }
+
     let flight: LogbookFlight
     @Environment(AppModel.self) private var model
     @State private var clock: ReplayClock?
@@ -176,16 +180,18 @@ private struct ReplayPlayer: View {
                 }
                 Spacer()
                 Menu {
-                    ForEach([1.0, 4, 16, 64], id: \.self) { s in
-                        Button("\(Int(s))×") { speed = s }
+                    ForEach(ReplayView.speeds, id: \.self) { s in
+                        Button { speed = s } label: {
+                            if s == speed { Label(ReplayView.label(s), systemImage: "checkmark") } else { Text(ReplayView.label(s)) }
+                        }
                     }
                     Toggle("Skip quiet", isOn: $skipQuiet)
                 } label: {
-                    Text("\(Int(speed))×").font(.callout.monospacedDigit().weight(.semibold))
+                    Text(ReplayView.label(speed)).font(.callout.monospacedDigit().weight(.semibold))
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(.cyan.opacity(0.2), in: Capsule())
                 }
-                .accessibilityLabel("Speed \(Int(speed)) times, skip quiet \(skipQuiet ? "on" : "off")")
+                .accessibilityLabel("Speed \(ReplayView.label(speed)), skip quiet \(skipQuiet ? "on" : "off")")
             }
         }
         .padding(.horizontal)

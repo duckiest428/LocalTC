@@ -6,7 +6,7 @@
    src/localtc/ui/static/replayplayer.js (the app's Logbook). tests/test_site.py keeps them identical. */
 
 class ReplayPlayer {
-  static SPEEDS = [1, 4, 16, 64];
+  static SPEEDS = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
   static QUIET_S = 45;  // skipping quiet stretches: a gap longer than this ...
   static LEAD_S = 8;  // ... jumps to this long before the next call
 
@@ -82,8 +82,8 @@ class ReplayPlayer {
           <span class="rp-time rp-mono"></span>
           <span class="rp-grow"></span>
           <label class="rp-check" title="Jump over stretches with nothing said"><input type="checkbox" class="rp-quiet" ${this.skipQuiet ? "checked" : ""}> Skip quiet</label>
-          <span class="rp-speeds" role="group" aria-label="Speed">${ReplayPlayer.SPEEDS.map((s) =>
-            `<button type="button" class="rp-speed${s === this.speed ? " on" : ""}" data-speed="${s}">${s}×</button>`).join("")}</span>
+          <select class="rp-speed-pick" aria-label="Speed" title="Speed">${ReplayPlayer.SPEEDS.map((s) =>
+            `<option value="${s}"${s === this.speed ? " selected" : ""}>${s}×</option>`).join("")}</select>
         </div>
         <div class="rp-scrub">
           <div class="rp-ticks">${this.ticksHtml()}</div>
@@ -97,12 +97,7 @@ class ReplayPlayer {
     q(".rp-prev").onclick = () => this.jump(-1);
     q(".rp-next").onclick = () => this.jump(1);
     q(".rp-quiet").onchange = (e) => { this.skipQuiet = e.target.checked; };
-    q(".rp-speeds").onclick = (e) => {
-      const b = e.target.closest("[data-speed]");
-      if (!b) return;
-      this.speed = Number(b.dataset.speed);
-      this.el.querySelectorAll(".rp-speed").forEach((x) => x.classList.toggle("on", x === b));
-    };
+    q(".rp-speed-pick").onchange = (e) => { this.speed = Number(e.target.value); };
     this.ui.range.oninput = () => this.seek(Number(this.ui.range.value));
     this.ui.list.onclick = (e) => {
       const li = e.target.closest("li[data-i]");

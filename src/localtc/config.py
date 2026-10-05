@@ -274,6 +274,9 @@ class UiConfig(_Section):
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"
+    # The app's colors (and the companion's, which has its own pick): radio (the dark panel), midnight, oled, amber,
+    # slate, daylight.
+    theme: Literal["radio", "midnight", "oled", "amber", "slate", "daylight"] = "radio"
 
 
 class Config(_Section):

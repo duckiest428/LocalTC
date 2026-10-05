@@ -217,6 +217,8 @@ class TemplateLibrary:
             circle_shown, circle_said = speech.circling(approach)
             shown = shown.replace(f"cleared {display['approach']} approach", f"cleared {display['approach']} approach, {circle_shown}")
             said = said.replace(f"cleared {spoken['approach']} approach", f"cleared {spoken['approach']} approach, {circle_said}")
+        if "approach" in display and isinstance(approach, Approach) and " RWY " in display["approach"]:
+            shown = shown.replace(display["approach"], display["approach"].replace(" RWY ", " runway "))  # as said
         return shown, _spoken_sentence(said)
 
 

@@ -89,8 +89,10 @@ def test_check_ins_with_feet_in_them(text):
 
 def test_the_check_in_gets_radar_contact_and_the_climb(replay):
     answer = after(replay, "1300 feet climbing 5000 feet")[0]
-    # Up to the top of departure's airspace: the centres take it on up to FL350.
-    assert "radar contact, climb and maintain 17,000" in answer, answer
+    # Still climbing to the clearance's 5,000: radar contact, and the next step as it gets near (not 17,000 at once).
+    assert "radar contact" in answer and "climb" not in answer, answer
+    climbs = [line for line in after(replay, "1300 feet climbing 5000 feet", 20) if "Departure" in line and "climb and maintain" in line]
+    assert climbs, "departure gives the next step on the way up"
 
 
 def test_an_unreadable_first_call_to_a_new_controller_is_the_check_in(replay):

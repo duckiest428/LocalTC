@@ -112,6 +112,7 @@ delay_max_s = 4.0
 enabled = true                # the intercom key talks to the copilot: "flaps two", "gear down", "squawk 4521"
 voice_sex = "any"             # the copilot's voice: female | male | any
 voice_pick = 0                # which of that sex's voices, 0-7 (the copilot uses it on the radio too)
+llm = "full"                  # the language model on the intercom: off | questions | full (commands in other words, confirmed)
 
 [recorder]
 enabled = true

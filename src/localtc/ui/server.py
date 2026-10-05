@@ -32,17 +32,30 @@ class HttpError(Exception):
         self.status = status
 
 
-class EventStream:
-    """Fans events out to every open page."""
+BACKLOG = 2000  # messages a page that stopped reading may fall behind before it's caught up from scratch
 
-    def __init__(self) -> None:
+
+class EventStream:
+    """Fans events out to every open page.
+
+    A page that stops reading (a window the sim covers, which WebView2 freezes; a phone app in the background) falls
+    behind. Past BACKLOG messages its queue is emptied and refilled with ``catch_up()``: the whole current picture,
+    the path flown included. Dropping the newest messages instead lost hours of the flight (the map drew one straight
+    line across them) and the radio lines in between."""
+
+    def __init__(self, catch_up: Callable[[], list[bytes]] | None = None) -> None:
         self._queues: set[asyncio.Queue] = set()
+        self.catch_up = catch_up
 
     def publish(self, kind: str, data: Any) -> None:
         message = sse(kind, data)
         for queue in list(self._queues):
-            if queue.qsize() < 2000:  # a page that stopped reading doesn't grow memory forever
-                queue.put_nowait(message)
+            if queue.qsize() >= BACKLOG:
+                while not queue.empty():
+                    queue.get_nowait()
+                for caught_up in (self.catch_up() if self.catch_up else []):
+                    queue.put_nowait(caught_up)
+            queue.put_nowait(message)
 
     def open(self) -> asyncio.Queue:
         queue: asyncio.Queue = asyncio.Queue()

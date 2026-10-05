@@ -237,6 +237,10 @@ class CrewConfig(_Section):
     enabled: bool = True  # with voice input on: the intercom key talks to the copilot
     voice_sex: Literal["female", "male", "any"] = "any"  # the copilot's voice
     voice_pick: int = 0  # which of that sex's voices (0-7); the copilot uses it on the radio too
+    # The language model on the intercom (needs [llm]): "off" the fixed commands and common questions only;
+    # "questions" also answers anything else from what it knows; "full" also takes commands said in other words
+    # (read back for your "confirm" before it acts).
+    llm: Literal["off", "questions", "full"] = "full"
 
 
 class SessionConfig(_Section):

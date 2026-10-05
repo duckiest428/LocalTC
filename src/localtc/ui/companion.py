@@ -43,6 +43,9 @@ REMOTE_TRAFFIC_EVERY_S = 5.0
 # about 10 m. Past TRAIL_KEEP points every other one goes, so a long flight keeps its whole shape.
 TRAIL_STEP_DEG = 0.002
 TRAIL_KEEP = 1500
+# The whole path goes up to the relay this often while somebody watches: the relay only sees the positions sent while
+# somebody watched, so without it a website opened later drew a straight line across the rest of the flight.
+REMOTE_TRAIL_EVERY_S = 120.0
 ZONE_DECIMALS = 3  # the ATC zones' outlines to about 100 m: plenty for a map, a third the size
 STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
                "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules")
@@ -107,7 +110,7 @@ def lan_addresses() -> list[str]:
 class CompanionHub:
     def __init__(self) -> None:
         self.key = secrets.token_urlsafe(32)
-        self.stream = EventStream()  # phones on the local network
+        self.stream = EventStream(lambda: [sse("hello", self.snapshot())])  # phones on the local network
         self.status: dict = {"active": False}
         self.own: dict | None = None
         self.traffic: list[dict] = []
@@ -121,6 +124,7 @@ class CompanionHub:
         self.remote_watchers = 0
         self._sent_own = 0.0
         self._sent_traffic = 0.0
+        self._sent_trail = 0.0
         self._backlog_sent = False
 
     # --- what the app publishes ----------------------------------------------------------------------------
@@ -137,7 +141,11 @@ class CompanionHub:
         self._local("own", own)
         if self._remote_ok() and time.monotonic() - self._sent_own >= REMOTE_OWN_EVERY_S:
             self._sent_own = time.monotonic()
-            self._send("frame", {"own": own})
+            if self.trail and time.monotonic() - self._sent_trail >= REMOTE_TRAIL_EVERY_S:
+                self._sent_trail = time.monotonic()
+                self._send("frame", {"own": own, "trail": self.trail})
+            else:
+                self._send("frame", {"own": own})
 
     def set_traffic(self, traffic: list[dict]) -> None:
         self.traffic = traffic
@@ -198,6 +206,7 @@ class CompanionHub:
             if self.own is not None:
                 self._send("frame", {"own": self.own, "traffic": self.traffic})
             if self.trail:
+                self._sent_trail = time.monotonic()
                 self._send("frame", {"trail": self.trail})  # the path so far, for a map opened mid-flight
             if self.route is not None:
                 self._send("route", self.route)

@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 MIN_CLIP_S = 0.3  # shorter: a click on the switch, not speech
 SILENCE_RMS = 0.003  # below this the mic heard nothing
 NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignored
+# Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
+# key pressed for a shortcut, at 0.17-0.34): heard as nothing.
+GUESSED_CONFIDENCE, GUESSED_MAX_S = 0.35, 3.0
 INTERCOM = 0  # the "radio" of the intercom key: the copilot, not a COM radio
 # What Whisper is primed with on the intercom: the words a pilot says to the copilot.
 CREW_STYLE = (
@@ -54,12 +57,18 @@ class VoiceService:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._radio = 1
         self._held: int | None = None  # the key being held (a radio, or INTERCOM): the other one waits for it
+        self._cancelled = False  # the key was part of a shortcut (Alt+Tab): the clip is dropped
 
     # Called from the push-to-talk source's thread. ``radio`` INTERCOM: the intercom key.
     def press(self, radio: int = 1) -> None:
         if self._loop is not None:
             event = IntercomPressed(t=self.now()) if radio == INTERCOM else PttPressed(t=self.now(), radio=radio)
             self._loop.call_soon_threadsafe(lambda: self.bus.publish(event))
+
+    def cancel(self, radio: int = 1) -> None:
+        """The key came up after being used in a shortcut (another key pressed while it was held): nothing was said."""
+        self._cancelled = True
+        self.release(radio)
 
     def release(self, radio: int = 1) -> None:
         if self._loop is not None:
@@ -80,6 +89,13 @@ class VoiceService:
                 if self._held != radio:
                     continue
                 self._held = None
+                if self._cancelled:
+                    self._cancelled = False
+                    self.capture.end()
+                    log.info("Push-to-talk key used in a shortcut: nothing sent")
+                    if radio != INTERCOM:  # ATC is waiting for this transmission: it was nothing
+                        self.bus.publish(Transcript(t=self.now(), text="", radio=radio, source="cancelled"))
+                    continue
                 await asyncio.sleep(self.tail_s)  # the last word often ends as the switch is let go
                 audio = self.capture.end()
                 try:
@@ -128,6 +144,9 @@ class VoiceService:
         speech = trim_silence(audio)
         result = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt=prompt, hotwords=hotwords(hints))
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
+        if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:
+            log.info("Dropped %r: confidence %.2f on %.1f s of audio, made up from noise", text, result.confidence, audio_s)
+            text = ""
         log.info("Heard %r in %.1f s of audio (%.1f s with speech, %.0f ms, confidence %.2f)", text, audio_s,
                  result.audio_s, result.latency_ms, result.confidence)
         return self._heard(text, result.confidence, ref, result.latency_ms)

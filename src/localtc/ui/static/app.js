@@ -39,6 +39,7 @@ function connect() {
   const on = (kind, fn) => es.addEventListener(kind, (e) => fn(JSON.parse(e.data)));
   on("state", setState);
   on("radio_history", (lines) => { clearLog(); lines.forEach(addLine); });
+  on("trail", (points) => MapView.setTrail(points));
   on("radio", addLine);
   on("own", setOwn);
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
@@ -714,6 +715,10 @@ const Settings = {
           <div><button class="btn small" id="s-crew-preview">&#9654; Preview</button></div>
         </div>
         <span class="hint">The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS).</span>
+        <div class="row"><label>Language model on the intercom<select id="s-crew-llm">
+          <option value="full" ${st.crew.llm === "full" ? "selected" : ""}>Questions and commands in your own words (it reads them back for "confirm")</option>
+          <option value="questions" ${st.crew.llm === "questions" ? "selected" : ""}>Questions only: commands as listed</option>
+          <option value="off" ${st.crew.llm === "off" ? "selected" : ""}>Off: the listed commands and common questions (fuel, distance, ATC's last call)</option></select></label></div>
       </div>
 
       <div class="card">
@@ -856,6 +861,7 @@ const Settings = {
     on("#s-ic-joy", "change", () => this.save("voice", "intercom_joystick", val("#s-ic-joy").trim()));
     on("#s-crew", "change", (e) => this.save("crew", "enabled", e.target.checked));
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
+    on("#s-crew-llm", "change", () => this.save("crew", "llm", val("#s-crew-llm")));
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
     on("#s-crew-preview", "click", async (e) => {
       e.target.disabled = true;
@@ -1114,6 +1120,14 @@ const MapView = {
     this.follow = on;
     $("#map-follow").setAttribute("aria-pressed", String(on));
     if (on && S.own) this.map.panTo([S.own.lat, S.own.lon]);
+  },
+  /* The path flown so far, from LocalTC itself: on opening, and whenever this page fell behind (a window the sim
+     covered stops reading for a while; what it missed is in here, not drawn as one straight line). */
+  setTrail(points) {
+    if (!Array.isArray(points) || !points.length) return;
+    this.trailPts = points.map((p) => [p[0], p[1]]);
+    if (S.own) this.trailPts.push([S.own.lat, S.own.lon]);
+    if (this.trail) this.trail.setLatLngs(this.trailPts);
   },
   own(o) {
     // The track is kept whether or not the map has ever been opened, so opening it mid-flight shows

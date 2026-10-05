@@ -131,7 +131,7 @@ class OllamaBackend:
             self._understand = request
             if self.last_stats["load_ms"] <= COLD_LOAD_S * 1000:
                 self._paces.append(time.monotonic() - started)
-        elif request.purpose in ("phrase", "reword"):
+        elif request.purpose in ("phrase", "reword", "crew"):
             self.prime()  # the phrasing prompt may have taken the understanding one's place in Ollama's cache
         content = (data.get("message") or {}).get("content")
         if not isinstance(content, str):

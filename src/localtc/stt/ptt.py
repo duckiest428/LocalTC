@@ -25,12 +25,22 @@ def parse_key(name: str):
             from None
 
 
+MODIFIERS = ("alt", "ctrl", "shift", "cmd")
+
+
 class KeyboardPtt:
+    """A key held to talk. A modifier key (Alt, Ctrl ...) pressed together with another key is a shortcut, not talking:
+    ``on_cancel`` then, instead of ``on_up`` (Alt+Tab with Left Alt as the intercom key made Whisper hear words in the
+    noise)."""
+
     def __init__(self, key: str, on_down: Callable[[], None], on_up: Callable[[], None], *,
-                 what: str = "Push-to-talk") -> None:
+                 what: str = "Push-to-talk", on_cancel: Callable[[], None] | None = None) -> None:
         self.key = parse_key(key)
         self.key_name = key
         self.what = what
+        self._on_cancel = on_cancel
+        self._modifier = key.strip().lower().startswith(MODIFIERS)
+        self._combo = False
         self._on_down, self._on_up = on_down, on_up
         self._held = False
         self._listener = None
@@ -52,11 +62,14 @@ class KeyboardPtt:
                                    and self.key.char and key.char.lower() == self.key.char)
 
     def _press(self, key) -> None:
-        if self._matches(key) and not self._held:  # ignore auto-repeat while held
-            self._held = True
-            self._on_down()
+        if self._matches(key):
+            if not self._held:  # ignore auto-repeat while held
+                self._held, self._combo = True, False
+                self._on_down()
+        elif self._held and self._modifier:
+            self._combo = True
 
     def _release(self, key) -> None:
         if self._matches(key) and self._held:
             self._held = False
-            self._on_up()
+            (self._on_cancel if self._combo and self._on_cancel is not None else self._on_up)()

@@ -66,7 +66,7 @@ def test_misheard_numbers_in_readbacks_are_confirmed(replay):
 
 def test_a_low_cruise_is_not_told_to_descend_or_climb(replay):
     atc = [line for line in replay if " ATC " in line]
-    assert any("maintain 1,500, expect RNAV RWY" in line for line in atc)
+    assert any("maintain 1,500, expect RNAV runway" in line for line in atc)
     assert not any("descend and maintain 1,500" in line or "3,200" in line for line in atc)
 
 
@@ -76,10 +76,10 @@ def test_a_request_during_a_readback_is_a_request(replay):
 
 def test_approach_clears_the_approach_well_before_short_final(replay):
     times = {name: float(re.match(r"\[\s*([\d.]+)\]", line).group(1)) for line in replay
-             for name in ("cleared RNAV RWY", "APPROACH -> LANDING") if name in line}
+             for name in ("cleared RNAV runway", "APPROACH -> LANDING") if name in line}
     # Replayed, the pilot's calls answer the flight's old ATC, which delays the check-in; live it comes minutes earlier
     # (tests/scenarios: cleared ~6 minutes before short final).
-    assert times["cleared RNAV RWY"] < times["APPROACH -> LANDING"]
+    assert times["cleared RNAV runway"] < times["APPROACH -> LANDING"]
 
 
 def test_landing_clearance_names_the_runway_that_exists(replay):

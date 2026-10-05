@@ -34,7 +34,7 @@
 [   506.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
 [   506.0] READBACK  departure.radar_contact correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
-[   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS RWY 14R approach, Boeing altimeter 29.92.
+[   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS runway 14R approach, Boeing altimeter 29.92.
 [   846.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
 [   846.0] READBACK  center.descend_pd correct
 [  1069.0] ATC       Seattle Departure 124.675: Cessna 2LT, contact Seattle Center 125.1, good day.
@@ -51,7 +51,7 @@
 [  1365.0] READBACK  center.handoff_approach correct
 [  1372.0] TUNE      COM1 119.2
 [  1380.0] PILOT     119.2: Seattle Approach, N172LT, 4,500 descending 3,000, with information Bravo
-[  1383.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, expect ILS RWY 14R approach, descend and maintain 3,000, Boeing altimeter 29.92.
+[  1383.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, expect ILS runway 14R approach, descend and maintain 3,000, Boeing altimeter 29.92.
 [  1387.0] PILOT     119.2: Descend and maintain three thousand, expect I L S runway one four right, Cessna two lima tango.
 [  1387.0] READBACK  approach.descend correct
 [  1395.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 300, downwind for runway 14R.
@@ -66,7 +66,7 @@
 [  1560.0] ATC       Seattle Approach 119.2: Cessna 2LT, check heading, fly heading 210.
 [  1563.0] PILOT     119.2: Heading two one zero, Cessna two lima tango.
 [  1563.0] READBACK  common.check_heading correct
-[  1759.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn left heading 150, maintain 2,100 until established on the localizer, cleared ILS RWY 14R approach.
+[  1759.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn left heading 150, maintain 2,100 until established on the localizer, cleared ILS runway 14R approach.
 [  1762.0] PILOT     119.2: Turn left heading one five zero, maintain two thousand one hundred until established, cleared I L S runway one four right approach, Cessna two lima tango.
 [  1762.0] READBACK  approach.intercept_cleared correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)

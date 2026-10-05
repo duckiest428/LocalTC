@@ -3,7 +3,9 @@
 Every command goes the same way: the safety rules (``actions.safety``) first, then the sim commands, then a look at
 the sim within ``CHECK_S``: "Flaps 2." once the handle shows it, "Flaps 2 didn't take, check it." if it never does.
 A command the rules want confirmed waits up to ``CONFIRM_S`` for "confirm". A radio call said on the intercom by
-mistake is offered to be sent ("That was on the intercom. Send it?").
+mistake is offered to be sent ("That was on the intercom. Send it?"). A question is answered from the copilot's facts
+(``answers``): the common ones directly, the rest by the language model (``model``), as is a command the grammar
+couldn't read, which the copilot then asks the pilot to confirm before doing.
 
 Pure: ``observe`` takes each bus event (with its ``t``) and returns what to publish (``CrewSpeech``, ``CrewAction``,
 the copilot's ``Transcript`` on the radio) and the ``SimCommand``s to send, so a recording replays through it the
@@ -14,12 +16,15 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from localtc.atc_core import region as regions
 from localtc.crew.actions import Cockpit, Plan, plan, safety
+from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command, parse
 from localtc.crew.profiles import Profile, for_aircraft, load_all
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AtcTransmission,
     CrewAction,
     CrewSpeech,
     IntercomHeard,
@@ -44,10 +49,12 @@ class _Waiting:
 
 
 class PilotMonitoring:
-    def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None) -> None:
+    def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None) -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
+        self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
         self.cockpit = Cockpit(profile=for_aircraft(self.profiles, "", ""))
+        self.picture = Picture(self.cockpit, engine)
         self._waiting: list[_Waiting] = []
         self._confirm: tuple[float, Command] | None = None  # (deadline, the command waiting for "confirm")
         self._offer: tuple[float, str] | None = None  # (deadline, a radio call to send)
@@ -69,6 +76,8 @@ class PilotMonitoring:
             if profile is not self.cockpit.profile:
                 log.info("Copilot: %s profile for %s", profile.name, ev.title or ev.atc_model)
                 self.cockpit.profile = profile
+        elif isinstance(ev, AtcTransmission):
+            self.picture.last_atc = ev
         elif isinstance(ev, IntercomHeard):
             self._read_clearance()
             out += self._heard(ev.t, ev.text)
@@ -85,11 +94,33 @@ class PilotMonitoring:
             if self._radio_call(text):
                 self._offer = (t + OFFER_S, text)
                 return [self._say(t, "That was on the intercom. Want me to send it?", "confirm")]
-            return [self._say(t, "Say again?", "reply")]
+            if (said := answer(text, self.picture)) is not None:
+                return [self._say(t, said)]
+            return self._ask_model(t, text)
         out: list[Any] = []
         for cmd in commands:
             out += self._command(t, cmd)
         return out
+
+    def _ask_model(self, t: float, text: str) -> list[Any]:
+        """What neither the grammar nor the data answers could take: the model's reply, or its reading of a command,
+        which waits for the pilot's "confirm"."""
+        if self.model is None:
+            return [self._say(t, "Say again?")]
+        reading, exchanges = self.model.ask(t, text, facts(self.picture))
+        if reading is None:
+            return [*exchanges, self._say(t, "Say again?")]
+        if reading.command is None:
+            return [*exchanges, self._say(t, reading.reply)]
+        cmd = reading.command
+        verdict = safety(cmd, self.cockpit)
+        if verdict.kind == "refuse":
+            return [*exchanges, self._say(t, verdict.reason, "refused"),
+                    CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail=verdict.reason)]
+        self._confirm = (t + CONFIRM_S, cmd)
+        question = verdict.reason if verdict.kind == "confirm" else f"{reading.reply.rstrip('.!')}, confirm?"
+        return [*exchanges, self._say(t, question, "confirm"),
+                CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="confirm", detail="read by the language model")]
 
     def _command(self, t: float, cmd: Command) -> list[Any]:
         if cmd.action == "check":
@@ -164,6 +195,8 @@ class PilotMonitoring:
     def _read_clearance(self) -> None:
         if self.engine is None:
             return
+        # Fuel in kilograms, the way airlines outside the US count it.
+        self.picture.metric = regions.region_for(self.engine.state.flight.origin) is not regions.FAA
         a = self.engine.state.assignments
         self.cockpit.cleared_altitude_ft = a.altitude_ft
         self.cockpit.assigned_squawk = a.squawk

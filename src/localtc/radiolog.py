@@ -33,6 +33,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         return {"kind": "atc", "t": t, "station": ev.station, "mhz": ev.frequency_mhz, "text": ev.text}
     if isinstance(ev, Transcript):
         who = "copilot" if ev.source == "copilot" else "pilot"
+        if not ev.text and ev.source == "cancelled":
+            return None
         if not ev.text:
             return {"kind": "system", "t": t, "text": "Nothing heard: check the microphone if you spoke", "level": "warn"}
         return {"kind": who, "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}

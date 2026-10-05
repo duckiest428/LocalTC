@@ -9,8 +9,13 @@ pilot_readback = "Descend and maintain {altitude}, expect {approach}, {callsign_
 [[template]]
 id = "approach.checkin_descend_via"
 controller = "approach"
-text = ["{callsign}, {station}, roger, descend via the {procedure} arrival, expect {approach} approach.",
-        "{callsign}, {station}, continue via the {procedure} arrival, expect {approach} approach."]
+text = ["{callsign}, {station}, expect {approach} approach.",
+        "{callsign}, {station}, roger, expect {approach} approach."]
+
+[[template]]
+id = "approach.checkin_roger"
+controller = "approach"
+text = ["{callsign}, {station}, roger.", "{callsign}, roger.", "{callsign}, {station}."]
 
 [[template]]
 id = "approach.maintain"

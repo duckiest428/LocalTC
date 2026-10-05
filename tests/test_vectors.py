@@ -150,7 +150,7 @@ def test_vectored_all_the_way_onto_the_final(bearing, nm, heading):
     assert arrival.captured
     geo = AirportGeometry(KSEA)
     out, _ = vectors.frame(geo, geo.end("16L"), arrival.own.lat, arrival.own.lon)
-    assert 8 <= out <= 18  # established a sensible way out
+    assert 8 <= out <= 22  # established a sensible way out (at its own speed: nobody ahead to slow it for)
     altitudes = [o for o in arrival.said if "descend and maintain" in o.text]
     assert len(altitudes) >= 2  # stepped down, not dropped to the bottom at the first call
     cleared = next(o for o in arrival.said if o.instruction_id == "approach.intercept_cleared")

@@ -140,12 +140,14 @@ def test_the_arrival_runway_in_the_cruise_is_seattles(recorded):
 
 def test_approach_lets_a_descend_via_carry_on(recorded):
     checkin = answer_to(recorded, "Descending via the M-A-R-N-R-8 arrival")
-    assert "descend via the MARNR8 arrival" in checkin and "descend and maintain" not in checkin
+    # Already descending via it, with the approach to expect from the centre: neither said again.
+    assert "descend" not in checkin and "expect" not in checkin, checkin
 
 
 def test_speeds_are_reductions(recorded):
     speeds = [line for line in atc(recorded) if "knots" in line]
-    assert speeds and all("reduce speed to" in line for line in speeds)
+    # Nobody landing ahead and above 10,000 ft: the speed is the pilot's own.
+    assert all("reduce speed to" in line for line in speeds)
 
 
 def test_an_airports_altimeter_stays_put_until_measured_there():

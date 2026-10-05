@@ -8,6 +8,14 @@ readback = { required = ["altitude"] }
 pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
 
 [[template]]
+id = "departure.radar_contact_only"
+controller = "departure"
+text = ["{callsign}, {station}, radar contact.",
+        "{callsign}, {station}, radar contact, proceed on course.",
+        "{callsign}, radar contact."]
+pilot_readback = "{callsign_short}."
+
+[[template]]
 id = "departure.handoff_center"
 controller = "departure"
 text = ["{callsign}, contact {station} {frequency}.",

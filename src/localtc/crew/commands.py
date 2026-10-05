@@ -33,6 +33,7 @@ AP_MODES = {"heading": "heading", "hdg": "heading", "nav": "nav", "lnav": "nav",
             "vertical": "vs", "vs": "vs", "level": "flc", "flch": "flc", "flc": "flc"}
 YES = {"confirm", "confirmed", "affirm", "affirmative", "yes", "yeah", "correct", "go", "do"}
 NO = {"negative", "no", "cancel", "disregard", "stop", "belay"}
+FILLER = {"to", "the", "at", "please", "our", "my", "your", "for", "me", "us", "now", "new"}  # "set the altimeter to 30.10"
 CHECK = ("how do you hear", "how do you read", "do you read", "radio check", "intercom check", "you there",
          "can you hear")
 
@@ -63,7 +64,7 @@ def parse(text: str) -> list[Command]:
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
         return [Command("check")]
-    tokens = normalize(text.replace("/", " "))
+    tokens = [t for t in normalize(text.replace("/", " ")) if t.text not in FILLER or t.kind == "number"]
     words = [t.text for t in tokens]
     if len(words) <= 3 and words and words[0] in YES:
         return [Command("yes")]

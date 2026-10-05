@@ -103,11 +103,11 @@ def test_a_pilot_asks_for_one_by_name():
 
 
 @pytest.mark.parametrize(("approach", "template", "shown"), [
-    (Approach("ILS", "16", "Z"), "approach.intercept_cleared", "established on the localizer, cleared ILS Z RWY 16 approach"),
-    (Approach("LOC BC", "34"), "approach.intercept_cleared", "cleared LOC BC RWY 34 approach"),
-    (Approach("VOR/DME", "34"), "approach.intercept_course", "established on the final approach course, cleared VOR/DME RWY 34"),
+    (Approach("ILS", "16", "Z"), "approach.intercept_cleared", "established on the localizer, cleared ILS Z runway 16 approach"),
+    (Approach("LOC BC", "34"), "approach.intercept_cleared", "cleared LOC BC runway 34 approach"),
+    (Approach("VOR/DME", "34"), "approach.intercept_course", "established on the final approach course, cleared VOR/DME runway 34"),
     (Approach("VOR", "16", circle_to="34", circle_side="west", circle_pattern="left"), "approach.intercept_course",
-     "cleared VOR RWY 16 approach, circle west of the airport for a left downwind to runway 34"),
+     "cleared VOR runway 16 approach, circle west of the airport for a left downwind to runway 34"),
     (Approach("VOR", "", "A", circle_to="27"), "approach.intercept_course", "cleared VOR-A approach, circle to runway 27"),
 ])
 def test_the_clearance_names_each_approach(approach, template, shown):

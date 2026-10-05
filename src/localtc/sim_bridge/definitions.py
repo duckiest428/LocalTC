@@ -219,6 +219,9 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
     )
 
 
+RADIO_HEIGHT_TOP_FT = 2500.0
+
+
 def systems_from_raw(raw: dict[str, Any], t: float) -> AircraftSystems:
     flags = ("spoilers_armed", "light_landing", "light_taxi", "light_strobe", "light_beacon", "light_nav", "light_logo",
              "ap_master", "ap_heading", "ap_nav", "ap_approach", "ap_altitude", "ap_vs", "ap_flc", "athr_armed", "battery")
@@ -227,9 +230,11 @@ def systems_from_raw(raw: dict[str, Any], t: float) -> AircraftSystems:
         gear_pct=round(raw["gear_pct"], 1), flaps_pct=round(raw["flaps_pct"], 1),
         flaps_positions=int(raw["flaps_positions"]), spoilers_pct=round(raw["spoilers_pct"], 1),
         ap_heading_sel=round(raw["ap_heading_sel"] % 360, 1), ap_altitude_sel=round(raw["ap_altitude_sel"]),
-        ap_speed_sel=round(raw["ap_speed_sel"], 1), ap_vs_sel=round(raw["ap_vs_sel"]),
-        com1_standby_mhz=round_mhz(raw["com1_standby_mhz"]), radio_height_ft=round(raw["radio_height_ft"], 1),
-        engines_running=sum(bool(raw[f"eng{i}"]) for i in range(1, 5)), mach=round(raw["mach"], 3),
+        ap_speed_sel=round(raw["ap_speed_sel"]), ap_vs_sel=round(raw["ap_vs_sel"]),
+        com1_standby_mhz=round_mhz(raw["com1_standby_mhz"]),
+        # To 10 ft where callouts use it, and no higher than 2,500 ft: above that it changes with every hill and wave.
+        radio_height_ft=float(round(min(raw["radio_height_ft"], RADIO_HEIGHT_TOP_FT), -1)),
+        engines_running=sum(bool(raw[f"eng{i}"]) for i in range(1, 5)), mach=round(raw["mach"], 2),
     )
 
 

@@ -160,7 +160,7 @@ def test_approach_vectors_the_arrival_all_the_way_to_the_final(copilot):
     assert len(headings) >= 3
     # The last heading carries the approach clearance: the visual in Seattle's good weather (the ILS as it was
     # before visuals were expected in the US).
-    assert "cleared visual approach runway 16L" in headings[-1] or "cleared ILS RWY 16L approach" in headings[-1]
+    assert "cleared visual approach runway 16L" in headings[-1] or "cleared ILS runway 16L approach" in headings[-1]
 
 
 def test_tower_keeps_the_runway_approach_cleared(copilot):

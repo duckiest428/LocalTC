@@ -16,8 +16,11 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from typing import Protocol
 
+from msgspec.structs import replace
+
 from localtc.config import LiveConfig
 from localtc.sim_api import (
+    AircraftSystems,
     AirportData,
     BusEvent,
     ConnectionStatus,
@@ -153,6 +156,7 @@ class SimConnectSource:
         self._last_connected: bool | None = None
         self._raw_tap = raw_tap
         self._commands: queue.SimpleQueue[SimCommand] = queue.SimpleQueue()
+        self._systems: AircraftSystems | None = None  # the last switches sent on
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
         self._simvar_definitions: dict[str, int] = {}  # variable -> data definition id, this connection
         self._position: tuple[float, float] | None = None
@@ -488,7 +492,10 @@ class SimConnectSource:
         elif msg.request_id == REQ_IDENTITY:
             self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
         elif msg.request_id == REQ_AIRCRAFT:
-            self._emit(defs.systems_from_raw(defs.unpack(defs.AIRCRAFT, msg.payload), t))
+            systems = defs.systems_from_raw(defs.unpack(defs.AIRCRAFT, msg.payload), t)
+            if self._systems is None or replace(systems, t=self._systems.t) != self._systems:  # only what's kept changing
+                self._systems = systems
+                self._emit(systems)
         elif msg.request_id == REQ_TRAFFIC:
             target = None
             has_data = msg.out_of > 0 and len(msg.payload) >= defs.payload_size(defs.TRAFFIC)

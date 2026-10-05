@@ -163,14 +163,15 @@ def test_the_pilots_own_corrections_win(tmp_path):
 
 
 def test_the_climb_goes_up_in_steps(copilot):
-    """Departure to the top of its airspace, then the centre's step, then the cruise."""
+    """Departure in steps short of the top of its airspace (each as the last is reached, not 17,000 at once), then
+    the centre's step, then the cruise."""
     ups = []
     for line in atc(copilot.lines):
         if (m := re.search(r"climb and maintain (FL(\d{3})|(\d{1,2}),(\d{3}))", line)) is not None:
             feet = int(m.group(2)) * 100 if m.group(2) else int(m.group(3) + m.group(4))
             if feet > 5000:
                 ups.append(feet)
-    assert ups[0] == 17000 and 23000 <= ups[1] <= 28000 and ups[-1] == 36000, ups
+    assert ups == sorted(ups) and ups[0] < 17000 and any(23000 <= u <= 28000 for u in ups) and ups[-1] == 36000, ups
 
 
 # --- the sim paused ---------------------------------------------------------------------------------------------

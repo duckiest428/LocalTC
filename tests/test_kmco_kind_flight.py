@@ -280,7 +280,7 @@ def test_an_rnav_sid_is_rnav_to_its_first_fix(recorded):
 def test_a_star_down_the_final_is_flown_and_the_approach_cleared_on_it(copilot):
     arrival = [line for line in atc(copilot.lines) if 7300 < at(line) < 8850]
     assert not [line for line in arrival if "heading" in line], arrival  # no vectors on the GIIBS4
-    cleared = [line for line in arrival if "cleared ILS RWY 32 approach" in line]
+    cleared = [line for line in arrival if "cleared ILS runway 32 approach" in line]
     assert len(cleared) == 1 and "Indianapolis Approach" in cleared[0]
     assert any("contact Indy Tower" in line for line in arrival if at(line) > at(cleared[0]))
 
@@ -295,7 +295,7 @@ def test_after_the_go_around_approach_sends_it_to_tower_again(copilot, recorded)
 def test_vectors_for_the_ils_is_said_once(copilot):
     headings = [line for line in atc(copilot.lines) if at(line) > 8850 and "heading" in line]
     assert headings
-    assert sum("ILS RWY 32 approach" in line for line in headings if "cleared" not in line) <= 1
+    assert sum("ILS runway 32 approach" in line for line in headings if "cleared" not in line) <= 1
 
 
 def test_speeds_only_come_down(copilot):

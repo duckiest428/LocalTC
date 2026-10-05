@@ -85,7 +85,7 @@ class AppController:
         self.cfg = cfg or load_config(config_path)
         if cfg is None and first_run:
             self.cfg.voice.enabled = True  # the app is for flying with a microphone; the CLI asks with --voice
-        self.stream = EventStream()
+        self.stream = EventStream(lambda: self.on_connect())  # a page that fell behind starts again from all of it
         self.plan_path = plan_path or data_dir() / "flightplan.json"
         self.plan: FlightPlan | None = load_plan(self.plan_path)
         self.cache = cache or AirportCache()
@@ -196,6 +196,8 @@ class AppController:
     def on_connect(self) -> list[bytes]:
         """What a page gets as soon as it opens: the whole current picture."""
         out = [sse("state", self.state()), sse("radio_history", list(self.radio))]
+        if self.companion.trail:
+            out.append(sse("trail", self.companion.trail))  # the path flown so far: the Live Map's green line
         if self.own:
             out.append(sse("own", self.own))
         if self.traffic:

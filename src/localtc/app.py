@@ -335,7 +335,13 @@ async def run_session(
                 from localtc.crew.profiles import load_all
                 from localtc.crew.service import CrewService
 
-                crew = CrewService(PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles")), bus, source)
+                from localtc.crew.model import CrewModel
+
+                crew_model = (CrewModel(backend, mode=cfg.crew.llm, timeout_s=cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
+                                        patience_s=cfg.llm.patience_s)
+                              if backend is not None and cfg.crew.llm != "off" else None)
+                pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model)
+                crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
@@ -591,7 +597,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     if v.ptt == "keyboard":
         from localtc.stt.ptt import KeyboardPtt
 
-        ptt = KeyboardPtt(v.ptt_key, service.press, service.release)
+        ptt = KeyboardPtt(v.ptt_key, service.press, service.release, on_cancel=service.cancel)
         ptt.start()
     elif v.ptt == "joystick":
         log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick, extra=CONSOLE)
@@ -602,7 +608,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
 
         try:
             intercom = KeyboardPtt(v.intercom_key, lambda: service.press(INTERCOM), lambda: service.release(INTERCOM),
-                                   what="Intercom (the copilot)")
+                                   what="Intercom (the copilot)", on_cancel=lambda: service.cancel(INTERCOM))
             intercom.start()
         except ValueError as exc:
             log.warning("No intercom key: %s", exc)

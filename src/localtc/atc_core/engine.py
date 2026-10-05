@@ -256,6 +256,11 @@ MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
 SPEED_GATES = ((30.0, 250, "speed250"), (18.0, 210, "speed210"), (10.0, 180, "speed180"))
+# Speeds are the pilot's own unless there's a reason: 250 knots below 10,000 feet (the rule) and the slower ones for
+# traffic landing ahead (another aircraft this close to the airport, nearer it and lower). Slowing every arrival to
+# 210 and 180 with nobody around was "unrealistic".
+SPEED_LIMIT_BELOW_FT = 10000.0
+SPEED_TRAFFIC_NM, SPEED_TRAFFIC_AGL_FT = 25.0, 8000.0
 DESCENT_LEAD_MIN = 5.0  # the descent is cleared this long before the top of descent, at the current groundspeed
 # Joining the final: within this of the extended centreline, this far out or less, pointing no further off
 # the final course than this (so a base leg counts and a downwind doesn't).
@@ -277,6 +282,11 @@ HEADING_CHECKS = 2  # said this often for one heading, then left
 ALTITUDE_CHECKS = 2  # "check altitude" this many times for one assigned altitude, then something else
 MAX_OFFERED_FT = 41000  # the highest level ATC gives a flight asking for higher
 DEPARTURE_TOP_FT = 17000  # departure climbs a flight this high and no higher: the centres above do the rest
+# ... in steps: on radar contact a few thousand feet above the clearance's altitude, and the next as the flight nears
+# each one (a flight still climbing to 5,000 was given 17,000 straight away, the same every time). Each controller and
+# flight its own, so no two departures climb alike.
+DEPARTURE_STEPS_FT = (2000, 3000, 4000, 6000, 8000)
+DEPARTURE_REACHING_FT = 2000  # this close below its altitude (climbing), a departure gets the next step at once
 CENTER_STEPS = (23000, 24000, 26000, 28000)  # a centre's usual intermediate level on the way up (one each)
 CENTER_STEP_GAP_FT = 4000  # ... when the cruise is at least this far above it
 CLIMB_REACHING_FT = 1000  # within this of the level given, the next climb is on its way ...
@@ -992,7 +1002,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             # handed to the next centre (a detector that missed the cruise once kept one on Denver to Seattle).
             self._sector, self._sector_since = crossing, t
             self._handoff(t, "center.handoff_center", st.comms.tuned, crossing)
-        elif phase in (P.DEPARTURE, P.CRUISE) and tuned == "center" and (step := self._climb_due(own)) is not None:
+        elif phase in (P.DEPARTURE, P.CRUISE) and tuned in ("center", "departure") and (step := self._climb_due(own)) is not None:
             self._reaching_t = None
             self._schedule(t, "common.climb", {"altitude": step}, st.comms.tuned, delay=False,
                            on_issue=lambda: self._assign(altitude_ft=step))
@@ -2706,9 +2716,16 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if own.ias_kt < SPEED_CONTROL_MIN_KT or ctx.destination_distance_nm is None:
             return False
         assigned = self.state.assignments.speed_kt
+        traffic = None
         for distance, speed, flag in SPEED_GATES:
             if assigned is not None and speed >= assigned:
                 continue  # slowed down already: never sped up again (210, then "maintain 250", then 180)
+            if speed == 250 and own.alt_indicated_ft >= SPEED_LIMIT_BELOW_FT:
+                continue
+            if speed < 250:
+                traffic = self._landing_ahead(own) if traffic is None else traffic
+                if not traffic:
+                    continue
             if ctx.destination_distance_nm <= distance and own.ias_kt > speed + 20 and flag not in self.state.flags:
                 self.state.flags.add(flag)
                 self._vector_t = t
@@ -2716,6 +2733,17 @@ class AtcEngine(VfrMixin, DiversionMixin):
                                on_issue=lambda s=speed: self._assign(speed_kt=s))
                 return True
         return False
+
+    def _landing_ahead(self, own: OwnshipState) -> bool:
+        """Another aircraft on its way down to the destination ahead of this one: airborne, low, and nearer it."""
+        geo = self.geometry(self.state.flight.destination)
+        if geo is None:
+            return False
+        mine = geo.distance_nm(own.lat, own.lon)
+        elevation = geo.airport.elev_ft
+        return any(not tgt.on_ground and tgt.alt_ft - elevation < SPEED_TRAFFIC_AGL_FT
+                   and (theirs := geo.distance_nm(tgt.lat, tgt.lon)) < min(mine, SPEED_TRAFFIC_NM)
+                   for tgt in self._traffic.values())
 
     @staticmethod
     def _turn_towards(current: float, target: int) -> str | None:
@@ -3435,7 +3463,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         elevation = geo.airport.elev_ft if geo is not None else 0.0
         base = max(INITIAL_MIN_FT, int(math.ceil((elevation + 3000) / 1000.0)) * 1000)
         steps = [base + extra for extra in INITIAL_STEPS_FT if base + extra <= max(INITIAL_MAX_FT, base)]
-        pick = zlib.crc32(f"initial{self.state.flight.origin}{self.cfg.sid}".encode()) % len(steps)
+        # The airport, the SID and the runway (each departure procedure tops out at its own altitude), and the flight:
+        # one flight is cleared lower than another, as traffic and the time of day have it.
+        runway = self.state.assignments.departure_runway or ""
+        pick = zlib.crc32(f"initial{self.state.flight.origin}{self.cfg.sid}{runway}{self._callsign().ident}".encode()) % len(steps)
         return steps[pick]
 
     def _departure_runway(self, own: OwnshipState | None) -> str | None:
@@ -3528,8 +3559,16 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return
         if facility.controller == "departure":
             cruise = st.assignments.cruise_ft or st.flight.cruise_ft
+            assigned = st.assignments.altitude_ft
+            if cruise and own is not None and assigned and own.alt_indicated_ft < assigned - DEPARTURE_REACHING_FT \
+                    and min(cruise, DEPARTURE_TOP_FT) - assigned > 4000:  # (a low cruise just above: given at once)
+                # Still climbing to the clearance's altitude: radar contact, and the next step as it gets near
+                # (``_climb_due``), not the whole climb at once.
+                self._schedule(t, "departure.radar_contact_only", {"station": facility.station}, facility,
+                               expects_readback=False)
+                return
             if cruise:
-                # Up to the top of departure's airspace, not the cruise: the centres above take it from there.
+                # The next step up, short of the top of departure's airspace: the centres above take it from there.
                 top = self._climb_step(facility, own, cruise)
                 self._schedule(t, "departure.radar_contact", {"station": facility.station, "altitude": top}, facility,
                                on_issue=lambda: self._assign(altitude_ft=top))
@@ -3578,8 +3617,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
             plan = self._arrival_plan(own)
             if plan is not None and self._via_floor is not None and self.cfg.star \
                     and own.alt_indicated_ft > self._via_floor + 500 and not self._going_around:
-                # Checking in on the STAR it was cleared to descend via: carry on down it ("why doesn't it just say
-                # continue down the arrival?"), with the approach to expect.
+                # Checking in on the STAR it was cleared to descend via: it carries on down it, and the descent isn't
+                # said again ("how many times do I need to tell you"); nor is the approach, if the centre gave it.
+                if st.assignments.approach == plan["approach"].display:
+                    self._schedule(t, "approach.checkin_roger", {"station": facility.station}, facility,
+                                   expects_readback=False,
+                                   note=self._atis_note(st.flight.destination, st.assignments.arrival_atis)
+                                   or self._altimeter_note(st.flight.destination))
+                    return
                 self._schedule(t, "approach.checkin_descend_via", {"station": facility.station, "procedure": self.cfg.star,
                                                                    "approach": plan["approach"]}, facility,
                                expects_readback=False,
@@ -4021,7 +4066,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
         """The next altitude of the climb. Departure's is the top of its airspace; a centre's is its usual step
         (each has its own, FL230 to FL280) when the cruise is well above it, else the cruise itself."""
         if facility.controller == "departure":
-            return min(cruise, DEPARTURE_TOP_FT)
+            top = min(cruise, DEPARTURE_TOP_FT)
+            assigned = self.state.assignments.altitude_ft or 0
+            here = max(assigned, own.alt_indicated_ft if own is not None else 0.0)
+            pick = zlib.crc32(f"{facility.station}{self._callsign().ident}{assigned}".encode()) % len(DEPARTURE_STEPS_FT)
+            step = int(math.ceil((here + DEPARTURE_STEPS_FT[pick]) / 1000.0)) * 1000
+            return top if top - step < 2000 else step  # the last bit of the way in one go
         step = CENTER_STEPS[zlib.crc32(facility.station.encode()) % len(CENTER_STEPS)]
         here = own.alt_indicated_ft if own is not None else 0.0
         assigned = self.state.assignments.altitude_ft or 0
@@ -4035,8 +4085,18 @@ class AtcEngine(VfrMixin, DiversionMixin):
         tuned = st.comms.tuned
         cruise = st.assignments.cruise_ft or st.flight.cruise_ft
         assigned = st.assignments.altitude_ft
-        if tuned is None or tuned.controller != "center" or not cruise or assigned is None or assigned >= cruise:
+        if tuned is None or tuned.controller not in ("center", "departure") or not cruise or assigned is None \
+                or assigned >= cruise or (tuned.controller == "departure" and assigned >= min(cruise, DEPARTURE_TOP_FT)):
             return None
+        if tuned.controller == "departure":
+            if "descend" in st.flags or "emergency" in st.flags or own.vs_fpm < 300:
+                return None  # only a flight on its way up gets the next step
+            if own.alt_agl_ft >= DEPARTURE_ENDS_FT - 3000:
+                return None  # nearly out of departure's airspace: the centre gives the next one
+            if own.alt_indicated_ft < assigned - DEPARTURE_REACHING_FT or self.state.pending is not None:
+                return None
+            step = self._climb_step(tuned, own, cruise)  # a departure keeps a climb going: no levelling off first
+            return step if step > assigned else None
         if "descend" in st.flags or "emergency" in st.flags or own.alt_indicated_ft < assigned - CLIMB_REACHING_FT:
             self._reaching_t = None
             return None

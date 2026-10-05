@@ -103,6 +103,7 @@ class AppController:
         self.flight: dict = {}
         self.jobs: dict[str, dict] = {}
         self.muted = False
+        self.account_prompt = False  # show the one-time account suggestion (after the third flight)
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self._ticker: asyncio.Task | None = None
@@ -145,6 +146,7 @@ class AppController:
             (post, "radio/tune"): self.api_tune,
             (post, "radio/copilot"): self.api_copilot,
             (post, "radio/mute"): self.api_mute,
+            (post, "account/prompt"): self.api_account_prompt,
             (get, "settings"): self.api_settings,
             (post, "settings"): self.api_save_settings,
             (get, "models"): self.api_models,
@@ -246,7 +248,27 @@ class AppController:
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
+            "account_prompt": self.account_prompt,
         }
+
+    async def _count_flight(self) -> None:
+        """One more flight flown. After the third, without an account, the app suggests one, once."""
+        ui = self.cfg.ui
+        ui.flights_done += 1
+        if ui.flights_done >= ACCOUNT_PROMPT_FLIGHTS and not ui.account_prompted:
+            signed_in = await asyncio.to_thread(lambda: self.pilot.account.signed_in)
+            self.account_prompt = not signed_in
+            ui.account_prompted = True  # asked once, whatever the answer
+        try:
+            await asyncio.to_thread(save_settings, self.cfg, base=load_config(self.config_path, settings=None))
+        except Exception as exc:  # noqa: BLE001 - a count not saved never spoils the end of a flight
+            log.info("Couldn't save the flight count: %s", exc)
+
+    async def api_account_prompt(self, args: dict) -> dict:
+        """The account suggestion answered (either way): not shown again."""
+        self.account_prompt = False
+        self._push_state()
+        return {}
 
     def _push_state(self) -> None:
         self.publish("state", self.state())
@@ -315,6 +337,7 @@ class AppController:
             self.companion.set_status({"active": False})
             asyncio.create_task(self.pilot.live({"active": False}, force=True))
             asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
+            await self._count_flight()
             self._set_status("idle")
         except asyncio.CancelledError:
             self._set_status("idle")
@@ -1148,6 +1171,7 @@ def _reveal(path: Path) -> None:
 
 
 # Warnings that are diagnostics, not news for the pilot: the sim refusing a request, an airport's data slow to come.
+ACCOUNT_PROMPT_FLIGHTS = 3  # flights before the app suggests an account (once)
 QUIET_WARNINGS = ("SimConnect exception", "Timed out waiting for", "No airport data returned", "Skipping unparseable",
                   "Couldn't ask for arrival", "Arrival procedures not available")
 

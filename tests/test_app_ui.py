@@ -234,3 +234,35 @@ def test_the_app_flies_the_sim_whatever_the_config_file_says(tmp_path):
     assert controller.flight_config().source.kind == "live" and controller.state()["source"] == "live"
     cfg.ui.source = "replay"  # only the app's own setting switches it
     assert controller.flight_config().source.kind == "replay"
+
+
+def test_an_account_is_suggested_once_after_the_third_flight(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from localtc.ui.controller import AppController
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    controller = AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
+    controller.pilot = SimpleNamespace(account=SimpleNamespace(signed_in=False))
+
+    async def fly(n):
+        for _ in range(n):
+            await controller._count_flight()
+
+    asyncio.run(fly(2))
+    assert not controller.state()["account_prompt"]
+    asyncio.run(fly(1))
+    assert controller.state()["account_prompt"] and controller.cfg.ui.account_prompted
+    asyncio.run(controller.api_account_prompt({}))
+    asyncio.run(fly(3))
+    assert not controller.state()["account_prompt"]  # once only
+    assert controller.cfg.ui.flights_done == 6
+
+
+def test_cloud_defaults_mistral_first_no_paid_only_and_no_local_fallback():
+    from localtc.llm.cloud import PROVIDERS
+
+    cloud = Config().cloud
+    assert cloud.order[0] == "mistral" and not cloud.local_fallback and not cloud.enabled
+    assert PROVIDERS[0].id == "mistral" and all(p.key in ("none", "free") for p in PROVIDERS)

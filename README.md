@@ -231,11 +231,11 @@ A readback the grammar finds correct, and a request it matched confidently, neve
 
 **Cloud language model** (`[cloud]`, Quick Settings → Cloud language model; off by default, **recommended for quality**). A large model in the cloud reads your calls and words replies far better than a 3B one beside the sim, and gets the whole flight as context (`LlmRequest.context`: every fact the engine has, the route, both ATIS, the last half hour on the radio), where the local model keeps its lean, topic-gated facts. `localtc.llm.cloud` speaks the OpenAI chat API to each service:
 
-| No key | Key (free tier or credits) | Paid key |
-|---|---|---|
-| Pollinations | LongCat, Qwen (Alibaba Model Studio), Cerebras, Mistral, NVIDIA NIM, SiliconFlow, Tencent Hunyuan, iFlytek Spark, Baidu Qianfan | OpenCode Zen |
+| No key | Free key |
+|---|---|
+| Pollinations | Mistral (first: the most generous free limits), LongCat, Qwen (Alibaba Model Studio), Cerebras, NVIDIA NIM, SiliconFlow, Tencent Hunyuan, iFlytek Spark, Baidu Qianfan |
 
-A call walks the services in `[cloud] order` (no key first), each service's models in turn. A route that answers 429 or 402 rests until its `Retry-After` (else 30 s, doubling to 10 min) with the rest of its service; 5xx, a timeout or a non-JSON answer rests it the same way; a refused key takes out the service and a missing model only that model, for the flight. Each try gets at most half the remaining wait while others are left, and when every route has failed the local model answers with its usual prompt (`local_fallback`). Answers go through the same checks as the local model's. Keys are kept in the system credential store, not the settings file. Qwen Chat's, Qwen Code's, Qoder's and OpenCode's own free tiers are only for their own apps (private endpoints), so they aren't used.
+A call walks the services in `[cloud] order` (Mistral, then Pollinations), each service's models in turn. A route that answers 429 or 402 rests until its `Retry-After` (else 30 s, doubling to 10 min) with the rest of its service; 5xx, a timeout or a non-JSON answer rests it the same way; a refused key takes out the service and a missing model only that model, for the flight. Each try gets at most half the remaining wait while others are left, and when every route has failed the local model can answer with its usual prompt (`local_fallback`, off by default). Answers go through the same checks as the local model's. Keys are kept in the system credential store, not the settings file. Qwen Chat's, Qwen Code's, Qoder's and OpenCode's own free tiers are only for their own apps (private endpoints), so they aren't used.
 
 **CPU or graphics card** (`[llm] cpu_only`, on by default): the model runs on the CPU and leaves the graphics card and its memory to the sim; its timeouts are doubled to match. Turn it off (Quick Settings → ATC) on a machine with video memory to spare.
 

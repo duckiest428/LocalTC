@@ -76,6 +76,8 @@ function setState(st) {
   $("#sw-atc").classList.toggle("on", !st.muted);
   $("#devbar").hidden = !st.dev_mode;
   $("#btn-coffee").hidden = !!st.coffee_clicked;
+  const dlg = $("#dlg-account");
+  if (st.account_prompt && dlg && !dlg.open) dlg.showModal();
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -330,6 +332,20 @@ $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
 $("#btn-settings").onclick = () => showTab("settings");
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
 $("#btn-help").onclick = () => $("#dlg-help").showModal();
+// The account suggestion: answered either way, it's never shown again; yes opens the account card in Quick Settings.
+$("#dlg-account").addEventListener("close", () => {
+  const yes = $("#dlg-account").returnValue === "yes";
+  if (S.state) S.state.account_prompt = false;
+  api("account/prompt", {}).catch(() => {});
+  if (!yes) return;
+  $("#btn-settings").click();
+  const find = (tries = 20) => {
+    const card = $("#s-account-card");
+    if (card) { card.scrollIntoView({ block: "start", behavior: "smooth" }); $("#a-email")?.focus(); }
+    else if (tries) setTimeout(() => find(tries - 1), 150);
+  };
+  find();
+});
 
 // Buy me a coffee: shown until it's been clicked once, then never again.
 $("#btn-coffee").addEventListener("click", () => {
@@ -672,10 +688,10 @@ const Settings = {
         <p class="muted small">A large model in the cloud understands your calls and words ATC's and the copilot's replies far
           better than one small enough to run beside the sim, and it's given the whole flight (the route, every clearance,
           the ATIS, what was said) where the model on this PC gets only the essentials. Off unless you turn it on: while it's
-          on, what you say and your flight's details go to the service answering. Services that need no key are tried first;
-          one that's busy, out of allowance or down steps aside and the next answers, and the model on this PC answers last.</p>
+          on, what you say and your flight's details go to the service answering. Mistral is tried first (the most generous free
+          limits), then Pollinations (no key); one that's busy, out of allowance or down steps aside and the next answers.</p>
         <label class="check-row"><input type="checkbox" id="s-cloud" ${on ? "checked" : ""}> Use cloud language models (from the next flight)</label>
-        <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback !== false ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
+        <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
         ${c.via ? `<p class="small">This flight's last answer came from <b>${esc(c.via)}</b>.</p>` : ""}
         <div class="cloud-list">${c.providers.map((p) => `<div class="cloud-row" data-provider="${p.id}">
           <div class="cloud-name"><b>${esc(p.name)}</b> <span class="cloud-kind ${kinds[p.key][1]}">${kinds[p.key][0]}</span> ${state(p)}
@@ -687,7 +703,7 @@ const Settings = {
             <button class="btn small" data-cloud-test="${p.id}" ${p.key === "none" || p.has_key ? "" : "disabled"}>Test</button></div>
           <div class="small cloud-test" id="cloud-test-${p.id}"></div></div>`).join("")}</div>
         <p class="muted small">Qwen Chat's, Qoder's and OpenCode's own unlimited free use is only for their own apps, so LocalTC
-          can't use it: Qwen is reached through Alibaba Model Studio with a key, OpenCode Zen with a paid key. The order and each
+          can't use it: Qwen is reached through Alibaba Model Studio with a free key. The order and each
           service's models can be changed in the settings file ([cloud] order, models).</p>
       </div>`;
   },

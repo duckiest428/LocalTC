@@ -3,8 +3,8 @@ sim's PC, at the price of the flight's words leaving it (to the service answerin
 
 Every service here speaks the OpenAI chat-completions API, so one client serves them all. Each is a ``Provider``: its
 address, whether it needs a key, and the models to try there, in order. A *route* is one model at one service; a call
-goes down the routes in priority order (no-key services first: they have the most generous limits, and nothing to set
-up), and a route that fails steps aside for a while:
+goes down the routes in priority order (Mistral first, for its generous free limits, then the no-key service),
+and a route that fails steps aside for a while:
 
 - rate limited or out of free allowance (429, 402): until its ``Retry-After``, else 30 s, doubling each time to 10 min;
 - the service down, slow or garbled (5xx, a timeout, no JSON): 30 s, doubling the same way;
@@ -37,7 +37,7 @@ COOLDOWN_S = 30.0  # a route's first time out
 COOLDOWN_MAX_S = 600.0
 MIN_TRY_S = 2.5  # a try gets at least this (when there is that much left)
 CLOUD_TOKENS = 1024  # answer room: some of these models think before they answer, and thinking counts
-USER_AGENT = "LocalTC (+https://localtc.app)"
+USER_AGENT = "LocalTC (+https://localtc.tech)"
 
 
 @dataclass(frozen=True)
@@ -56,9 +56,12 @@ class Provider:
         return self.key != "none"
 
 
-# Priority order: no key first, then free keys, then the rest. Model names are the services' own; a gone one is
+# Priority order: Mistral first (the most generous free limits), then no key, then the other free keys. Model names
+# are the services' own; a gone one is
 # skipped (and [cloud] models replaces a service's list).
 PROVIDERS: tuple[Provider, ...] = (
+    Provider("mistral", "Mistral", "https://api.mistral.ai/v1", ("mistral-small-latest", "mistral-medium-latest"),
+             key="free", signup="https://console.mistral.ai", note="Free Experiment plan: the most generous free limits here."),
     Provider("pollinations", "Pollinations", "https://text.pollinations.ai/openai", ("openai-fast",), key="none",
              signup="https://enter.pollinations.ai",
              note="No key, no account. Its anonymous allowance is small and comes and goes: when it's used up, the "
@@ -70,8 +73,6 @@ PROVIDERS: tuple[Provider, ...] = (
              note="Free quota for new accounts. (Qwen Chat's and Qwen Code's own free use isn't open to other apps.)"),
     Provider("cerebras", "Cerebras", "https://api.cerebras.ai/v1", ("gpt-oss-120b", "llama-3.3-70b", "qwen-3-32b"),
              key="free", signup="https://cloud.cerebras.ai", note="Free tier: a daily token allowance; very fast."),
-    Provider("mistral", "Mistral", "https://api.mistral.ai/v1", ("mistral-small-latest", "mistral-medium-latest"),
-             key="free", signup="https://console.mistral.ai", note="Free Experiment plan, with a monthly allowance."),
     Provider("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1",
              ("deepseek-ai/deepseek-v4.1-flash", "nvidia/nemotron-3.5-lightning-30b-a3b", "openai/gpt-oss-20b"),
              key="free", signup="https://build.nvidia.com", note="Free developer credits."),
@@ -84,9 +85,6 @@ PROVIDERS: tuple[Provider, ...] = (
              json_mode=False),
     Provider("baidu", "Baidu Qianfan", "https://qianfan.baidubce.com/v2", ("ernie-speed-128k", "ernie-4.5-turbo-32k"),
              key="free", signup="https://console.bce.baidu.com/qianfan", note="ERNIE Speed and Lite are free."),
-    Provider("opencode", "OpenCode Zen", "https://opencode.ai/zen/v1", ("qwen3.8-flash", "deepseek-v4.1-flash"),
-             signup="https://opencode.ai/auth",
-             note="Pay as you go. (Zen's free models only work inside OpenCode itself.)"),
 )
 BY_ID = {p.id: p for p in PROVIDERS}
 

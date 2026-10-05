@@ -399,3 +399,7 @@ table.lb td { white-space: nowrap; }
 .cloud-kind { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: rgba(127,127,127,.15); }
 .cloud-kind.ok { color: var(--green); }
 @media (max-width: 640px) { .cloud-row { grid-template-columns: 1fr; } .cloud-key { justify-content: flex-start; } }
+
+/* The account suggestion */
+.benefits { margin: 8px 0 12px; padding-left: 18px; }
+.benefits li { margin: 4px 0; }

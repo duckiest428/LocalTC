@@ -209,8 +209,8 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
-CLOUD_ORDER = ["pollinations", "longcat", "qwen", "cerebras", "mistral", "nvidia", "siliconflow", "hunyuan", "spark",
-               "baidu", "opencode"]
+CLOUD_ORDER = ["mistral", "pollinations", "longcat", "qwen", "cerebras", "nvidia", "siliconflow", "hunyuan", "spark",
+               "baidu"]
 
 
 class CloudConfig(_Section):
@@ -219,10 +219,10 @@ class CloudConfig(_Section):
     here."""
 
     enabled: bool = False
-    # The services to try, first to last: those with no key first. A service that needs a key and has none is skipped.
+    # The services to try, first to last: Mistral (the most generous free limits), then the one needing no key. A service that needs a key and has none is skipped.
     order: list[str] = msgspec.field(default_factory=lambda: list(CLOUD_ORDER))
     models: dict[str, list[str]] = msgspec.field(default_factory=dict)  # a service's models, replacing its own list
-    local_fallback: bool = True  # every cloud service failing: the local model (Ollama) answers, when it's there
+    local_fallback: bool = False  # on: every cloud service failing, the local model (Ollama) answers
     timeout_s: float = 6.0  # per call, all services tried in it (the cloud is quick, but the first may be busy)
 
 
@@ -318,6 +318,8 @@ class UiConfig(_Section):
     # New versions from GitHub Releases: "notify" says so and installs when asked, "auto" downloads and
     # installs when LocalTC closes, "off" never asks GitHub.
     updates: Literal["notify", "auto", "off"] = "notify"
+    flights_done: int = 0  # flights ended, for the one-time account suggestion
+    account_prompted: bool = False  # the account suggestion was shown (once only)
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"

@@ -37,9 +37,11 @@ from localtc.crew import checklists
 from localtc.crew.actions import Cockpit
 from localtc.crew.answers import LB_PER_KG, Picture, _hm
 from localtc.crew.commands import Command
+from localtc.crew.watches import WatchMixin
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    ArrivalData,
     AtcAlert,
     AtcTransmission,
     FlightArrived,
@@ -85,6 +87,8 @@ class Call:
     spoken: str = ""
     commands: tuple[Command, ...] = ()  # the copilot's own hands: done with the words
     urgent: bool = False  # said even over the frequency (the end of the flight, before it stops)
+    radio: str = ""  # then said on the radio by the copilot (asking ATC for a step climb, a diversion)
+    before_readback: bool = False  # ATC's instruction repeated: in the moment before the readback, or not at all
 
     @property
     def expires(self) -> float:
@@ -126,9 +130,10 @@ class _Flight:
     max_engines: int = 0
 
 
-class Monitor:
+class Monitor(WatchMixin):
     def __init__(self, picture: Picture, *, verbosity: str = "standard", hands: str = "pm",
-                 perf: PlanPerf | None = None, plan_source: str = "", radio_mode=lambda: "off", seed: int = 0) -> None:
+                 perf: PlanPerf | None = None, plan_source: str = "", radio_mode=lambda: "off", seed: int = 0,
+                 alternate: str = "", repeat_atc: bool = False) -> None:
         self.p = picture
         self.verbosity = verbosity if verbosity in VERBOSITY else "standard"
         self.hands = hands == "pm"
@@ -162,6 +167,7 @@ class Monitor:
         self.flap_step_t = -1e9
         self.atis_seen: dict[str, str] = {}
         self.traffic_nm: dict[int, float] = {}
+        self._init_watches(alternate, repeat_atc)
 
     # --- in ----------------------------------------------------------------------------------------------------
 
@@ -187,6 +193,7 @@ class Monitor:
             self.last_atc_t = t
             self.pilot_since_atc = False
             self._on_atc(ev)
+            self._watch_atc(ev)
         elif isinstance(ev, PttPressed | IntercomPressed):
             self.ptt_down = True
         elif isinstance(ev, PttReleased | IntercomReleased):
@@ -194,6 +201,7 @@ class Monitor:
             self.busy_until = max(self.busy_until, t + 2.0)
         elif isinstance(ev, Transcript) and ev.radio != 0 and ev.text:
             self.pilot_since_atc = True
+            self.queue = [q for q in self.queue if not q.before_readback]  # read back already: nothing to repeat
             self.busy_until = max(self.busy_until, t + 3.0)  # ATC answers next
         elif isinstance(ev, ReadbackEvaluated):
             self.f.readbacks += 1
@@ -205,6 +213,9 @@ class Monitor:
         elif isinstance(ev, AtcAlert) and ev.kind == "emergency":
             self._call("emergency", ROUTINE, t, "Copy the emergency. Want me to squawk 7700?")
             self.offer = Offer("squawk", "7700", t + 20.0)
+            self._watch_emergency(t, "emergency")
+        elif isinstance(ev, ArrivalData):
+            self._watch_arrival(ev)
         elif isinstance(ev, TrafficSnapshot):
             self._traffic(ev, t)
         elif isinstance(ev, AircraftSystems):
@@ -222,8 +233,8 @@ class Monitor:
         """What to say now: a safety call at once, else the next routine one when the frequency is quiet."""
         level = VERBOSITY[self.verbosity]
         self.queue = [q for q in self.queue if q.expires >= t and q.priority >= level]
-        if self.sterile:
-            self.queue = [q for q in self.queue if q.priority > CHATTER]
+        if self.sterile:  # ATC's instruction repeated is the flight's business, not chat
+            self.queue = [q for q in self.queue if q.priority > CHATTER or q.before_readback]
         if self.offer is not None and t > self.offer.until:
             self.offer = None
         if not self.queue:
@@ -231,9 +242,11 @@ class Monitor:
         self.queue.sort(key=lambda q: (-q.priority, q.t))
         top = self.queue[0]
         busy = self.ptt_down or t < self.busy_until or self._readback_due(t)
+        if top.before_readback:  # the gap after ATC, before the readback: the only moment it's any use
+            busy = self.ptt_down or t < self.busy_until - AFTER_ATC_S + 0.3
         if top.priority < SAFETY and not top.urgent and (busy or t - self.last_said < GAP_S):
             return []
-        if top.priority == CHATTER and len(self.queue) > 1:
+        if top.priority == CHATTER and len(self.queue) > 1 and not top.before_readback:
             self.queue.pop(0)  # something more useful is waiting
             return []
         self.queue.pop(0)
@@ -260,7 +273,7 @@ class Monitor:
         return when is not None and (again_s is None or t - when < again_s)
 
     def _call(self, key: str, priority: int, t: float, text: str | list[str], *, commands: tuple[Command, ...] = (),
-              again_s: float | None = None, urgent: bool = False) -> bool:
+              again_s: float | None = None, urgent: bool = False, radio: str = "", before_readback: bool = False) -> bool:
         """Queue ``text`` (one of the wordings, picked) under ``key``, once (or again after ``again_s``)."""
         if self._said(key, again_s, t) or any(q.key == key for q in self.queue):
             return False
@@ -272,7 +285,8 @@ class Monitor:
         st = self.engine.state if self.engine is not None else None
         airports = (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
         self.queue.append(Call(key, words, max(priority, VERBOSITY[self.verbosity]) if commands else priority, t,
-                               spoken=spoken(words, airports), commands=commands if self.hands else (), urgent=urgent))
+                               spoken=spoken(words, airports), commands=commands if self.hands else (), urgent=urgent,
+                               radio=radio, before_readback=before_readback))
         return True
 
     def _readback_due(self, t: float) -> bool:
@@ -438,6 +452,7 @@ class Monitor:
         self.f.max_engines = max(self.f.max_engines, s.engines_running)
         if s.engines_running < was.engines_running and not own.on_ground and "engine" not in self.commanded:
             self._call("engine_failure", SAFETY, t, "Engine failure!", again_s=60)
+            self._watch_emergency(t, "engine")
         if s.engines_running < was.engines_running and own.on_ground and own.gs_kt > 40:
             v1 = self.perf.v1
             below = v1 and own.ias_kt < v1
@@ -463,6 +478,7 @@ class Monitor:
             self._radio(own, t)
             self._checklist_tick(t)
             self._status(own, t)
+            self._watch(own, prev, t)
 
     def _preflight(self, own: OwnshipState, t: float) -> None:
         st = self.engine.state if self.engine is not None else None
@@ -744,7 +760,8 @@ class Monitor:
                           every_s=90)
         else:
             self.f.said.pop("speed_off_t", None)
-        if own.in_cloud and own.temperature_c is not None and -40 <= own.temperature_c <= 5:
+        if own.in_cloud and own.temperature_c is not None and -40 <= own.temperature_c <= 5 \
+                and not (s is not None and s.anti_ice):
             self._call("icing", ROUTINE, t, f"In cloud at {own.temperature_c:.0f} degrees; engine anti-ice?", again_s=1200)
         self._cruise(own, t)
         self._approach(own, prev, t, agl)
@@ -773,6 +790,7 @@ class Monitor:
             at_landing = own.fuel_lb - burn * to_go / own.gs_kt
             if self.perf.reserve_fuel_lb and at_landing < self.perf.reserve_fuel_lb:
                 self._call("fuel_reserve", SAFETY, t, f"Fuel: at this burn we'd land below final reserve, about {self._fuel(max(at_landing, 0))}.", again_s=1800)
+                self._watch_emergency(t, "fuel")
             elif self.perf.landing_fuel_lb and at_landing < self.perf.landing_fuel_lb * 0.9:
                 short = self.perf.landing_fuel_lb - at_landing
                 self._call("fuel_plan", ROUTINE, t, f"We're tracking about {self._fuel(short)} under the planned landing fuel.", again_s=2700)
@@ -834,7 +852,9 @@ class Monitor:
             if dh and prev_agl > dh + 100 >= agl:
                 self._call(f"100_above:{n}", ROUTINE, t, "Hundred above.")
             if dh and prev_agl > dh >= agl:
-                self._call(f"minimums:{n}", ROUTINE, t, "Minimums.")
+                # The lights only when they could be there: out of cloud, the ceiling and visibility for it. Never in fog.
+                self._call(f"minimums:{n}", ROUTINE, t, "Minimums. Approach lights in sight." if self._lights_plausible(dh)
+                           else "Minimums.")
 
     def _unstable(self, own: OwnshipState) -> list[str]:
         p = self.c.profile

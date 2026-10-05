@@ -54,7 +54,7 @@ class _Waiting:
 class PilotMonitoring:
     def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None,
                  verbosity: str = "standard", hands: str = "pm", perf: PlanPerf | None = None, plan_source: str = "",
-                 radio_mode=lambda: "off") -> None:
+                 radio_mode=lambda: "off", alternate: str = "", repeat_atc: bool = False) -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
         self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
@@ -62,7 +62,7 @@ class PilotMonitoring:
         self.picture = Picture(self.cockpit, engine)
         # The copilot speaking first: callouts, reminders, relays, its own side of the cockpit (crew.monitor).
         self.monitor = Monitor(self.picture, verbosity=verbosity, hands=hands, perf=perf, plan_source=plan_source,
-                               radio_mode=radio_mode, seed=_seed(engine))
+                               radio_mode=radio_mode, seed=_seed(engine), alternate=alternate, repeat_atc=repeat_atc)
         self._waiting: list[_Waiting] = []
         self._confirm: tuple[float, Command] | None = None  # (deadline, the command waiting for "confirm")
         self._offer: tuple[float, str] | None = None  # (deadline, a radio call to send)
@@ -93,6 +93,9 @@ class PilotMonitoring:
         out += self._tick(ev.t)
         for call in self.monitor.due(ev.t):
             out += self._callout(call, ev.t)
+        if self.monitor.requests:  # what the monitor wants from the sim: an arrival's restrictions, airports around
+            out += self.monitor.requests
+            self.monitor.requests = []
         return out
 
     def _callout(self, call: Call, t: float) -> list[Any]:
@@ -110,6 +113,8 @@ class PilotMonitoring:
                 self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
         kind = "alert" if call.priority >= SAFETY else "callout"
         out.append(CrewSpeech(t=t, text=call.text, spoken=call.spoken, kind=kind))
+        if call.radio:  # then on the radio: the copilot asking ATC
+            out.append(Transcript(t=t, text=call.radio, source="copilot"))
         return out
 
     # --- the pilot ------------------------------------------------------------------------------------------------
@@ -211,6 +216,8 @@ class PilotMonitoring:
                 return self._now(t)
             if offer.kind == "squawk":
                 return self._command(t, Command("squawk", offer.value))
+            if offer.kind in ("step", "divert", "sight"):
+                return self._ask_atc(t, offer.kind, offer.value)
         if self._confirm is not None and t <= self._confirm[0]:
             cmd = self._confirm[1]
             self._confirm = None
@@ -222,6 +229,18 @@ class PilotMonitoring:
                 return [Transcript(t=t, text=text, source="copilot")]
             return [self._say(t, "Copy.")]
         return [self._say(t, "Copy.")] if yes else []
+
+    def _ask_atc(self, t: float, kind: str, value: str) -> list[Any]:
+        """The pilot said yes to asking ATC (a step climb, a diversion, the field in sight): the copilot asks when it
+        works the radio, else says who to tell."""
+        words = self.monitor.radio_request(kind, value)
+        if self.monitor.radio_mode() == "full" and words:
+            return [self._say(t, "Asking."), Transcript(t=t, text=words, source="copilot")]
+        st = self.engine.state if self.engine is not None else None
+        station = st.comms.tuned.station if st is not None and st.comms.tuned is not None else "ATC"
+        if kind == "sight":
+            return [self._say(t, f"Tell {station}, and they'll clear us for the visual.")]
+        return [self._say(t, f"Your radios: ask {station}" + (f", \"{words.split(', ', 2)[-1]}\"." if words else "."))]
 
     def _do(self, t: float, cmd: Command) -> list[Any]:
         p = plan(cmd, self.cockpit)

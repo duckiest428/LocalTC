@@ -344,7 +344,8 @@ async def run_session(
                 service = atc_service
                 pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
-                                     plan_source=cfg.flight.plan_source,
+                                     plan_source=cfg.flight.plan_source, alternate=cfg.flight.alternate,
+                                     repeat_atc=cfg.crew.repeat_atc,
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))

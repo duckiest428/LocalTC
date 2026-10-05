@@ -268,6 +268,9 @@ class CrewConfig(_Section):
     # "pm": the copilot works its own side (radios in standby, transponder, altimeter at the transition, exterior
     # lights, gear and flaps after takeoff, the cleared altitude and heading); "calls": it touches nothing by itself.
     hands: Literal["pm", "calls"] = "pm"
+    # Chatty only: the key part of each ATC instruction said back to you in the moment before the readback ("Descend
+    # and maintain 8,000."), unless you read it back first.
+    repeat_atc: bool = False
 
 
 class SessionConfig(_Section):

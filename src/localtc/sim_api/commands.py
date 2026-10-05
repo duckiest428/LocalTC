@@ -15,6 +15,13 @@ class RequestAirportData(SimCommand, tag="request_airport_data"):
     icao: str
 
 
+class RequestArrival(SimCommand, tag="request_arrival"):
+    """Fetch an airport's arrival procedure (STAR) by name, with its restrictions; answered with ``ArrivalData``."""
+
+    icao: str
+    name: str
+
+
 class SetComFrequency(SimCommand, tag="set_com_frequency"):
     """Tune a COM radio's active frequency (the copilot changing frequencies)."""
 
@@ -39,4 +46,4 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, SetComFrequency, SendSimEvent, SetSimVar]
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar]

@@ -118,6 +118,11 @@ APPROACH_KINDS = {
 }
 
 
+def plausible_ident(icao: str) -> bool:
+    """An airport ident the sim can be asked about: 2 to 5 letters and digits ("KSAN", "2K5", "CYEG")."""
+    return 2 <= len(icao) <= 5 and icao.isascii() and icao.isalnum()
+
+
 def _parking_suffix(code: int) -> str:
     """A stand's letter after its number ("B7A"): the sim sends it as a letter's code, or as 1-26."""
     if 65 <= code <= 90:

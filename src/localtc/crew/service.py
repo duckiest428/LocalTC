@@ -8,6 +8,7 @@ from localtc.crew.pm import PilotMonitoring
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    ArrivalData,
     AtcAlert,
     AtcTransmission,
     FlightArrived,
@@ -36,7 +37,7 @@ class CrewService:
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
         self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftIdentity, IntercomHeard, AtcTransmission,
                                      PhaseChanged, ReadbackEvaluated, PttPressed, PttReleased, IntercomPressed,
-                                     IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived)
+                                     IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData)
 
     async def run(self) -> None:
         async for event in self._inputs:

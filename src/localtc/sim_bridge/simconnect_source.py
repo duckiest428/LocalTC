@@ -33,6 +33,7 @@ from localtc.sim_api import (
     PttPressed,
     PttReleased,
     RequestAirportData,
+    RequestArrival,
     SendSimEvent,
     SetComFrequency,
     SetSimVar,
@@ -42,7 +43,7 @@ from localtc.sim_api import (
     TrafficTarget,
 )
 from localtc.sim_bridge import definitions as defs
-from localtc.sim_bridge import facilities
+from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
     EVENT_FLAG_GROUPID_IS_PRIORITY,
@@ -72,7 +73,9 @@ from localtc.sim_bridge.protocol import (
 log = logging.getLogger(__name__)
 
 DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_AIRCRAFT_EXTRA, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 5, 10
+DEF_AIRCRAFT_MORE, DEF_FACILITY_ARRIVALS = 6, 11
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
+REQ_AIRCRAFT_MORE = 7
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
@@ -157,8 +160,10 @@ class SimConnectSource:
         self._raw_tap = raw_tap
         self._commands: queue.SimpleQueue[SimCommand] = queue.SimpleQueue()
         self._systems: AircraftSystems | None = None  # the last switches sent on
-        self._aircraft_raw: dict | None = None  # the latest of each of the two requests they're made from
+        self._aircraft_raw: dict | None = None  # the latest of each of the three requests they're made from
         self._extra_raw: dict | None = None
+        self._more_raw: dict | None = None
+        self._arrival_assemblers: dict[int, arrivals.ArrivalAssembler] = {}
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
         self._simvar_definitions: dict[str, int] = {}  # variable -> data definition id, this connection
         self._position: tuple[float, float] | None = None
@@ -258,7 +263,8 @@ class SimConnectSource:
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
-                                  (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA)):
+                                  (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
+                                  (DEF_AIRCRAFT_MORE, defs.AIRCRAFT_MORE)):
             for d in datums:
                 dll.add_to_data_definition(handle, define_id, d.simvar, d.units, d.datatype)
         for event_id, name in SYSTEM_EVENTS.items():
@@ -289,8 +295,19 @@ class SimConnectSource:
         dll.request_data_on_sim_object(
             handle, REQ_AIRCRAFT_EXTRA, DEF_AIRCRAFT_EXTRA, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
+        dll.request_data_on_sim_object(
+            handle, REQ_AIRCRAFT_MORE, DEF_AIRCRAFT_MORE, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
+        )
         for line in facilities.definition_lines():
             dll.add_to_facility_definition(handle, DEF_FACILITY_AIRPORT, line)
+        self._arrivals_ok = True
+        try:  # the arrivals' restrictions, for the copilot: a sim that won't take it loses only these
+            for line in arrivals.definition_lines():
+                dll.add_to_facility_definition(handle, DEF_FACILITY_ARRIVALS, line)
+        except SimConnectError as exc:
+            self._arrivals_ok = False
+            log.warning("Arrival procedures not available from this sim: %s", exc)
+        self._arrival_assemblers.clear()
         self._assemblers.clear()
         self._fetched_airports.clear()
         nearest_period = self._cfg.nearest_airport_interval_s if self._cfg.nearest_airport_interval_s > 0 else None
@@ -366,8 +383,15 @@ class SimConnectSource:
         elif isinstance(msg, FacilityData):
             if (assembler := self._assemblers.get(msg.request_id)) is not None:
                 assembler.add(msg)
+            elif (arrival := self._arrival_assemblers.get(msg.request_id)) is not None:
+                arrival.add(msg)
         elif isinstance(msg, FacilityDataEnd):
-            self._on_facility_end(msg, t)
+            if (arrival := self._arrival_assemblers.pop(msg.request_id, None)) is not None:
+                data = arrival.build(t)
+                log.info("Arrival %s at %s: %d legs", arrival.name, arrival.icao, len(data.legs))
+                self._emit(data)
+            else:
+                self._on_facility_end(msg, t)
         elif isinstance(msg, AirportList) and msg.request_id == REQ_AIRPORT_LIST:
             self._on_airport_list(msg)
         return True
@@ -382,6 +406,8 @@ class SimConnectSource:
                 return
             if isinstance(command, RequestAirportData):
                 self._request_airport(dll, handle, command.icao.upper(), force=True)
+            elif isinstance(command, RequestArrival):
+                self._request_arrival(dll, handle, command.icao.upper(), command.name.upper())
             elif isinstance(command, SetComFrequency):
                 event_id = EVT_COM2_SET_HZ if command.radio == 2 else EVT_COM1_SET_HZ
                 try:
@@ -425,6 +451,8 @@ class SimConnectSource:
             log.warning("Copilot couldn't set %s: %s", command.name, exc)
 
     def _request_airport(self, dll: SimConnectApi, handle: int, icao: str, *, force: bool = False) -> None:
+        if not facilities.plausible_ident(icao):
+            return
         if not force and icao in self._fetched_airports:
             return
         if any(a.icao == icao for a in self._assemblers.values()):
@@ -435,6 +463,19 @@ class SimConnectSource:
         self._fetched_airports.add(icao)
         dll.request_facility_data(handle, DEF_FACILITY_AIRPORT, request_id, icao)
         log.info("Requesting airport data for %s", icao)
+
+    def _request_arrival(self, dll: SimConnectApi, handle: int, icao: str, name: str) -> None:
+        if not getattr(self, "_arrivals_ok", False) or not facilities.plausible_ident(icao) or not name:
+            return
+        request_id = self._next_facility_request
+        self._next_facility_request += 1
+        self._arrival_assemblers[request_id] = arrivals.ArrivalAssembler(icao, name, started_t=time.monotonic())
+        try:
+            dll.request_facility_data(handle, DEF_FACILITY_ARRIVALS, request_id, icao)
+            log.info("Requesting arrival %s at %s", name, icao)
+        except SimConnectError as exc:
+            self._arrival_assemblers.pop(request_id, None)
+            log.warning("Couldn't ask for arrival %s at %s: %s", name, icao, exc)
 
     def _on_facility_end(self, msg: FacilityDataEnd, t: float) -> None:
         assembler = self._assemblers.pop(msg.request_id, None)
@@ -454,7 +495,9 @@ class SimConnectSource:
         if self._airport_list_received < max(msg.out_of, 1) or self._position is None:
             return
         lat, lon = self._position
-        candidates = [a for a in self._airport_list if a.icao]
+        # An ident that isn't letters and digits ("J@" turned up in the far north) isn't an airport: asking the sim
+        # for its data only gets an exception back, and then a timeout.
+        candidates = [a for a in self._airport_list if facilities.plausible_ident(a.icao)]
         if not candidates:
             return
         by_distance = sorted(candidates, key=lambda a: facilities.haversine_nm(lat, lon, a.lat, a.lon))
@@ -472,6 +515,10 @@ class SimConnectSource:
                 log.warning("Timed out waiting for airport data for %s", assembler.icao)
                 self._fetched_airports.discard(assembler.icao)
                 del self._assemblers[request_id]
+        for request_id, arrival in list(self._arrival_assemblers.items()):
+            if now - arrival.started_t > FACILITY_TIMEOUT_S:
+                log.warning("Timed out waiting for arrival %s at %s", arrival.name, arrival.icao)
+                del self._arrival_assemblers[request_id]
 
     def _on_open(self, msg: OpenInfo) -> None:
         self._open = msg
@@ -496,14 +543,16 @@ class SimConnectSource:
             self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:
             self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
-        elif msg.request_id in (REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA):
+        elif msg.request_id in (REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA, REQ_AIRCRAFT_MORE):
             if msg.request_id == REQ_AIRCRAFT:
                 self._aircraft_raw = defs.unpack(defs.AIRCRAFT, msg.payload)
-            else:
+            elif msg.request_id == REQ_AIRCRAFT_EXTRA:
                 self._extra_raw = defs.unpack(defs.AIRCRAFT_EXTRA, msg.payload)
+            else:
+                self._more_raw = defs.unpack(defs.AIRCRAFT_MORE, msg.payload)
             if self._aircraft_raw is None:
                 return
-            systems = defs.systems_from_raw(self._aircraft_raw, t, self._extra_raw)
+            systems = defs.systems_from_raw(self._aircraft_raw, t, self._extra_raw, self._more_raw)
             if self._systems is None or replace(systems, t=self._systems.t) != self._systems:  # only what's kept changing
                 self._systems = systems
                 self._emit(systems)

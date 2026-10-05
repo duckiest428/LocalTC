@@ -52,6 +52,18 @@ class Profile:
     spoilers: bool = False
     landing_detent: str = ""
     taxi_max_kt: float = 30.0
+    # The autobrake switch's positions by the sim's AUTO BRAKE SWITCH CB value ("off", "low", ...): () unknown, and then
+    # nothing is said about the autobrake rather than a guess. Reversers: True/False, or None to go by the engines
+    # (jets have them). The highest level a step climb is suggested to, and the runway below which a landing without
+    # the autobrake gets a word.
+    autobrake: tuple[str, ...] = ()
+    reversers: bool | None = None
+    ceiling_ft: int = 41000
+    short_runway_ft: int = 7000
+
+    def autobrake_name(self, position: int) -> str:
+        """The switch position as said ("medium"), or "" when this aircraft's positions aren't known."""
+        return self.autobrake[position] if 0 <= position < len(self.autobrake) else ""
 
     def matches(self, title: str, model: str) -> bool:
         words = f"{title} {model}".upper()
@@ -101,6 +113,9 @@ def parse(data: dict) -> Profile:
         speed_check_kt=int(a.get("speed_check_kt", 80)), rollout_call_kt=int(a.get("rollout_call_kt", 60)),
         vmo_kt=float(a.get("vmo_kt", 0)), spoilers=bool(a.get("spoilers", False)),
         landing_detent=str(a.get("landing_detent", "")).lower(), taxi_max_kt=float(a.get("taxi_max_kt", 30)),
+        autobrake=tuple(str(x).lower() for x in a.get("autobrake", ())),
+        reversers=bool(a["reversers"]) if "reversers" in a else None, ceiling_ft=int(a.get("ceiling_ft", 41000)),
+        short_runway_ft=int(a.get("short_runway_ft", 7000)),
     )
 
 

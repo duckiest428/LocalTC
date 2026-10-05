@@ -115,6 +115,15 @@ class AircraftSystems(Event, tag="aircraft_systems"):
     gs_received: bool = False
     loc_deviation: int = 0  # -127..127, to 10: full scale is off the needle
     gs_deviation: int = 0
+    # Since 0.4 (a third request, so a name an aircraft doesn't know costs only these): the load factor for turbulence,
+    # ice and anti-ice, the autobrake and the reversers. -1 / 0 / False where not given.
+    g_force: float = 1.0
+    ice_pct: float = 0.0  # structural ice, 0-100
+    anti_ice: bool = False  # engine anti-ice (engine 1) or the wing de-ice switch
+    autobrake: int = -1  # the autobrake switch position (what each means is per aircraft: crew/profiles); -1 unknown
+    autobrake_active: bool = False
+    reverser_pct: float = 0.0  # the most deployed reverser
+    jet: bool = False  # turbine engines (ENGINE TYPE 1): reversers expected
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):
@@ -174,6 +183,29 @@ class NearbyAirports(Event, tag="nearby_airports"):
     """The airports the sim knows around the aircraft, nearest first: where ATC looks for a diversion."""
 
     airports: tuple[NearbyAirport, ...] = ()
+
+
+class ArrivalLeg(msgspec.Struct, frozen=True, kw_only=True):
+    """A fix on an arrival (STAR) and what's published there: an altitude ("at", "above", "below", "between") and a
+    speed. ``transition``: "" the common part, else the runway ("RW16L") or enroute transition it's on."""
+
+    fix: str
+    lat: float | None = None
+    lon: float | None = None
+    altitude: str = ""  # "", at, above, below, between
+    alt1_ft: int = 0  # at, at or above, at or below; the top of a "between"
+    alt2_ft: int = 0  # the bottom of a "between"
+    speed_kt: int = 0  # 0: none
+    transition: str = ""
+
+
+class ArrivalData(Event, tag="arrival_data"):
+    """An arrival procedure's legs, from the sim's navdata: the copilot checks its altitude and speed restrictions.
+    ``legs`` empty: the sim has no such arrival (or nothing published on it)."""
+
+    airport: str
+    name: str
+    legs: tuple[ArrivalLeg, ...] = ()
 
 
 # --- Radio events (produced by LocalTC itself, published on the bus) --------
@@ -361,7 +393,7 @@ class SessionNote(Event, tag="session_note"):
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
-                 NearbyAirports, AircraftSystems]
+                 NearbyAirports, AircraftSystems, ArrivalData]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

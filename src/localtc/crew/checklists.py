@@ -154,6 +154,7 @@ ITEMS: dict[str, tuple[Item, ...]] = {
         Item("Gear", _own(lambda c, x: ("down, three green" if c.own.gear_down else "up", c.own.gear_down))),
         Item("Flaps", _flaps_landing),
         Item("Spoilers", _sys(lambda c, x: ("armed", True) if c.systems.spoilers_armed else None)),
+        Item("Autobrake", _sys(lambda c, x: (name, True) if (name := c.profile.autobrake_name(c.systems.autobrake)) else None)),
     ),
     "after_landing": (
         Item("Flaps", _own(lambda c, x: ("up" if c.own.flaps_index == 0 else _say_flaps(_flaps_named(c)), c.own.flaps_index == 0)),

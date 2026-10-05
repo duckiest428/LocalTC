@@ -16,6 +16,12 @@ rollout_call_kt = 70            # "seventy knots" on the landing roll
 vmo_kt = 350
 spoilers = true                 # ground spoilers: armed before takeoff and landing, "spoilers" on touchdown
 landing_detent = "3"            # config 3 or full
+# AUTO BRAKE SWITCH CB 0-3 as the A320 family's buttons (as FlyByWire's A32NX counts them; not yet checked in the
+# stock aircraft: if the copilot names the wrong one, correct it here).
+autobrake = ["off", "low", "medium", "max"]
+reversers = true
+ceiling_ft = 39000              # the A320's certified ceiling (39,800 ft)
+short_runway_ft = 7000
 
 # Any action can be sent another way for this aircraft: a key event other than the standard one, or an L:var.
 # [actions.seatbelt_sign]

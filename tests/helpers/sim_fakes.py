@@ -23,7 +23,15 @@ from localtc.sim_bridge.protocol import (
     RecvSimObjectData,
     build_message,
 )
-from localtc.sim_bridge.simconnect_source import REQ_AIRCRAFT, REQ_AIRPORT_LIST, REQ_IDENTITY, REQ_OWNSHIP, REQ_TRAFFIC
+from localtc.sim_bridge.simconnect_source import (
+    DEF_FACILITY_AIRPORT,
+    DEF_FACILITY_ARRIVALS,
+    REQ_AIRCRAFT,
+    REQ_AIRPORT_LIST,
+    REQ_IDENTITY,
+    REQ_OWNSHIP,
+    REQ_TRAFFIC,
+)
 
 USER_OBJECT_ID = 1
 
@@ -89,6 +97,13 @@ def facility_message(request_id: int, item: fac.FacilityItem, index: int, values
     if bool8:  # the 1-byte bool layout: drop 3 bytes of IsListItem and shrink dwSize
         raw = struct.pack("<I", len(raw) - 3) + raw[4:29] + raw[32:]
     return _renumber(raw, RecvId.FACILITY_DATA, documented_ids)
+
+
+def raw_facility_message(request_id: int, kind: int, unique: int, parent: int, payload: bytes, index: int = 0) -> bytes:
+    """One facility reply as the sim sends it: its type, its place in the tree (``unique``, ``parent``) and the bytes."""
+    header = RecvFacilityData(UserRequestId=request_id, UniqueRequestId=unique, ParentUniqueRequestId=parent, Type=kind,
+                              IsListItem=1, ItemIndex=index)
+    return build_message(header, RecvId.FACILITY_DATA, payload)
 
 
 def airport_messages(airport: Airport, request_id: int, *, bool8: bool = False, documented_ids: bool = False) -> list[bytes]:
@@ -164,7 +179,9 @@ class FakeSimConnect:
                  failed_opens: int = 0, airports: tuple[Airport, ...] = (), facility_bool8: bool = False) -> None:
         self.airports = {a.icao: a for a in airports}
         self.facility_bool8 = facility_bool8
-        self.facility_definition: list[str] = []
+        self.facility_definition: list[str] = []  # the airport layout's (DEF_FACILITY_AIRPORT)
+        self.facility_definitions: dict[int, list[str]] = {}
+        self.arrival_messages: dict[str, list[bytes]] = {}  # icao -> the replies to an arrival request (by request 0)
         self.facility_requests: list[str] = []
         self.sim_major = sim_major
         self.traffic = traffic
@@ -249,9 +266,16 @@ class FakeSimConnect:
             self.push(data_message(RecvId.SIMOBJECT_DATA_BYTYPE, request_id, object_id, entry, n, payload))
 
     def add_to_facility_definition(self, handle, define_id, field) -> None:
-        self.facility_definition.append(field)
+        if define_id == DEF_FACILITY_AIRPORT:
+            self.facility_definition.append(field)
+        self.facility_definitions.setdefault(define_id, []).append(field)
 
     def request_facility_data(self, handle, define_id, request_id, icao, region="") -> None:
+        if define_id == DEF_FACILITY_ARRIVALS:
+            for raw in self.arrival_messages.get(icao, []):
+                self.push(raw[:12] + struct.pack("<I", request_id) + raw[16:])
+            self.push(build_message(RecvFacilityDataEnd(RequestId=request_id), RecvId.FACILITY_DATA_END))
+            return
         self.facility_requests.append(icao)
         if icao in self.airports:
             for msg in airport_messages(self.airports[icao], request_id, bool8=self.facility_bool8):

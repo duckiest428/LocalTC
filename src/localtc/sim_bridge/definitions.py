@@ -134,6 +134,19 @@ AIRCRAFT_EXTRA: tuple[Datum, ...] = (
     Datum("gs_deviation", "NAV GSI:1", "Number"),
 )
 
+# A third request (0.4), for the same reason: the load factor (turbulence), ice, the autobrake and the reversers.
+AIRCRAFT_MORE: tuple[Datum, ...] = (
+    Datum("g_force", "G FORCE", "GForce"),
+    Datum("ice_pct", "STRUCTURAL ICE PCT", "percent over 100"),
+    Datum("eng_anti_ice", "ENG ANTI ICE:1", "Bool", I32),
+    Datum("wing_deice", "STRUCTURAL DEICE SWITCH", "Bool", I32),
+    Datum("autobrake", "AUTO BRAKE SWITCH CB", "Number", I32),
+    Datum("autobrake_active", "AUTOBRAKES ACTIVE", "Bool", I32),
+    Datum("rev1", "TURB ENG REVERSE NOZZLE PERCENT:1", "percent"),
+    Datum("rev2", "TURB ENG REVERSE NOZZLE PERCENT:2", "percent"),
+    Datum("engine_type", "ENGINE TYPE", "Enum", I32),
+)
+
 TRAFFIC: tuple[Datum, ...] = (
     Datum("atc_id", "ATC ID", None, S32),
     Datum("airline", "ATC AIRLINE", None, S64),
@@ -237,7 +250,8 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
 RADIO_HEIGHT_TOP_FT = 2500.0
 
 
-def systems_from_raw(raw: dict[str, Any], t: float, extra: dict[str, Any] | None = None) -> AircraftSystems:
+def systems_from_raw(raw: dict[str, Any], t: float, extra: dict[str, Any] | None = None,
+                     more: dict[str, Any] | None = None) -> AircraftSystems:
     flags = ("spoilers_armed", "light_landing", "light_taxi", "light_strobe", "light_beacon", "light_nav", "light_logo",
              "ap_master", "ap_heading", "ap_nav", "ap_approach", "ap_altitude", "ap_vs", "ap_flc", "athr_armed", "battery")
     return AircraftSystems(
@@ -251,6 +265,7 @@ def systems_from_raw(raw: dict[str, Any], t: float, extra: dict[str, Any] | None
         radio_height_ft=float(round(min(raw["radio_height_ft"], RADIO_HEIGHT_TOP_FT), -1)),
         engines_running=sum(bool(raw[f"eng{i}"]) for i in range(1, 5)), mach=round(raw["mach"], 2),
         **_extra(extra or {}),
+        **_more(more or {}),
     )
 
 
@@ -265,6 +280,18 @@ def _extra(raw: dict[str, Any]) -> dict[str, Any]:
         # To 10 of the 127: enough for "alive", without a new message for every wobble of the needle.
         "loc_deviation": int(round(max(-127.0, min(127.0, raw["loc_deviation"])), -1)),
         "gs_deviation": int(round(max(-127.0, min(127.0, raw["gs_deviation"])), -1)),
+    }
+
+
+def _more(raw: dict[str, Any]) -> dict[str, Any]:
+    if not raw:
+        return {}
+    return {
+        # To 0.05 g: turbulence shows in how it varies, and a level cruise doesn't send a new message every second.
+        "g_force": round(raw["g_force"] * 20) / 20, "ice_pct": float(round(max(0.0, raw["ice_pct"]))),
+        "anti_ice": bool(raw["eng_anti_ice"]) or bool(raw["wing_deice"]),
+        "autobrake": int(raw["autobrake"]), "autobrake_active": bool(raw["autobrake_active"]),
+        "reverser_pct": float(round(max(raw["rev1"], raw["rev2"], 0.0), -1)), "jet": int(raw["engine_type"]) == 1,
     }
 
 

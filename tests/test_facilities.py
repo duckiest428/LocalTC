@@ -79,6 +79,20 @@ def test_airport_list_element_size_is_detected(ident_len):
     assert msg.airports[1].lat == pytest.approx(47.53)
 
 
+
+def test_airport_list_with_padding_still_lines_up():
+    """A few bytes after the last element made the measured size wrong: latitudes' bytes came out as idents ("P@")."""
+    raw = airport_list_message(4, [kpae(), kbfi()], ident_len=9) + b"\0" * 8
+    raw = len(raw).to_bytes(4, "little") + raw[4:]
+    msg = parse_message(raw)
+    assert [a.icao for a in msg.airports] == ["KPAE", "KBFI"]
+
+
+@pytest.mark.parametrize("ident,ok", [("KSAN", True), ("2K5", True), ("PA", False), ("P@", False), ("-:P@", False),
+                                      ("ksan", False), ("\ufffdP@", False)])
+def test_plausible_ident(ident, ok):
+    assert fac.plausible_ident(ident) is ok
+
 FAST = LiveConfig(ownship_hz=50, traffic_interval_s=0, nearest_airport_interval_s=0.05, retry_max_s=0.05)
 
 

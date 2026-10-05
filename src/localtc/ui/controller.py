@@ -1108,6 +1108,11 @@ def _reveal(path: Path) -> None:
         pass
 
 
+# Warnings that are diagnostics, not news for the pilot: the sim refusing a request, an airport's data slow to come.
+QUIET_WARNINGS = ("SimConnect exception", "Timed out waiting for", "No airport data returned", "Skipping unparseable",
+                  "Couldn't ask for arrival", "Arrival procedures not available")
+
+
 class _UiLogHandler(logging.Handler):
     """Lines meant for the pilot (``extra=CONSOLE``) and warnings go to the radio log as system lines."""
 
@@ -1126,6 +1131,8 @@ class _UiLogHandler(logging.Handler):
             return
         if text.startswith("Copilot: ") and record.levelno >= logging.WARNING:
             return  # also published as an alert, which the radio log shows
+        if text.startswith(QUIET_WARNINGS):
+            return  # the sim's own hiccups: in the log file for a bug report, never in the radio log
         level = "warn" if record.levelno >= logging.WARNING else "info"
         try:
             self.loop.call_soon_threadsafe(self.controller.system, text, level)

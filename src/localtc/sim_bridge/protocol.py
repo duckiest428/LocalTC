@@ -358,28 +358,54 @@ def _parse_facility(buf: bytes) -> "FacilityData | FacilityDataEnd | None":
     return None  # FACILITY_MINIMAL_LIST and anything else we don't use
 
 
+# The list's element: ident, region, then latitude, longitude, altitude (doubles). MSFS 2024's ident is 9 bytes, 2020's 6.
+AIRPORT_ELEMENT_SIZES = (36, 33)
+
+
 def _parse_airport_list(buf: bytes) -> AirportList:
-    """Element size is derived from the message, so 2020's 6-char and 2024's longer idents both parse."""
+    """The element size is worked out from the message, and checked: a chunk with only a few airports may carry a few
+    bytes of padding, which made the size come out wrong and the entries misaligned (a latitude's bytes read as an
+    ident: "P@", "-:P@"). The size whose entries all read as airports wins; an entry that still doesn't is dropped."""
     m = _read(RecvFacilitiesList, buf)
     end = _message_end(m.dwSize, buf)
     count = m.dwArraySize
-    airports = []
-    if count:
-        element = (end - FACILITIES_LIST_OFFSET) // count
-        text = element - 24  # three doubles follow ident + region
-        if text < 4:
-            raise ProtocolError(f"unexpected airport list element size {element}")
-        ident_len = text - 3
-        for i in range(count):
-            base = FACILITIES_LIST_OFFSET + i * element
-            chunk = buf[base : base + element]
-            lat, lon, alt = struct.unpack_from("<ddd", chunk, text)
-            airports.append(
-                AirportListEntry(
-                    icao=_cstr(chunk[:ident_len]), region=_cstr(chunk[ident_len:text]), lat=lat, lon=lon, alt_m=alt
-                )
-            )
-    return AirportList(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, airports=tuple(airports))
+    if not count:
+        return AirportList(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, airports=())
+    measured = (end - FACILITIES_LIST_OFFSET) // count
+    sizes = [measured] + [s for s in AIRPORT_ELEMENT_SIZES if s != measured and s * count <= end - FACILITIES_LIST_OFFSET]
+    best: list[AirportListEntry] = []
+    for element in sizes:
+        if element - 24 < 4:
+            continue
+        entries = _airport_entries(buf, count, element)
+        good = [e for e in entries if _plausible(e)]
+        if len(good) > len(best):
+            best = good
+        if len(good) == count:
+            break
+    if not best and measured - 24 < 4:
+        raise ProtocolError(f"unexpected airport list element size {measured}")
+    return AirportList(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, airports=tuple(best))
+
+
+def _airport_entries(buf: bytes, count: int, element: int) -> list[AirportListEntry]:
+    text = element - 24  # three doubles follow ident + region
+    ident_len = text - 3
+    out = []
+    for i in range(count):
+        base = FACILITIES_LIST_OFFSET + i * element
+        chunk = buf[base : base + element]
+        if len(chunk) < element:
+            break
+        lat, lon, alt = struct.unpack_from("<ddd", chunk, text)
+        out.append(AirportListEntry(icao=_cstr(chunk[:ident_len]), region=_cstr(chunk[ident_len:text]), lat=lat, lon=lon,
+                                    alt_m=alt))
+    return out
+
+
+def _plausible(e: AirportListEntry) -> bool:
+    return (3 <= len(e.icao) <= 5 and e.icao.isascii() and e.icao.isalnum() and e.icao == e.icao.upper()
+            and -90 <= e.lat <= 90 and -180 <= e.lon <= 180 and -1000 < e.alt_m < 6000)
 
 
 def _message_end(declared_size: int, buf: bytes) -> int:

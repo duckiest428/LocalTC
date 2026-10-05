@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from localtc.bus import EventBus
+from localtc.dsp.clips import CLIPS, clip_id
 from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16, trim_silence
 from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup, hotwords
 from localtc.sim_api import IntercomHeard, IntercomPressed, IntercomReleased, PttPressed, PttReleased, Transcript
@@ -149,4 +150,7 @@ class VoiceService:
             text = ""
         log.info("Heard %r in %.1f s of audio (%.1f s with speech, %.0f ms, confidence %.2f)", text, audio_s,
                  result.audio_s, result.latency_ms, result.confidence)
-        return self._heard(text, result.confidence, ref, result.latency_ms)
+        heard = self._heard(text, result.confidence, ref, result.latency_ms)
+        if text and CLIPS.enabled:  # what was said, to play again from the radio log
+            await asyncio.to_thread(CLIPS.put, clip_id(heard), speech, SAMPLE_RATE)
+        return heard

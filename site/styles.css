@@ -531,13 +531,59 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .tr-fullscreen .tr-map { height: 100%; min-height: 0; }
 .tr-fullscreen .tr-side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .tr-fullscreen .tr-radio { flex: 1; max-height: none; min-height: 0; }
+.tr-fullscreen .comms-log { max-height: none; }
 @media (max-width: 860px) {  /* a phone: the page scrolls, the map on top */
   .tr-page { height: auto; overflow: visible; }
   .tr-fullscreen .tr-body { grid-template-columns: 1fr; grid-template-rows: none; }
   .tr-fullscreen .tr-map { height: 55vh; }
   .tr-fullscreen .tr-radio { max-height: 40vh; min-height: 120px; }
+  .tr-fullscreen .comms { flex: none; }
+  .tr-fullscreen .comms-log { height: 50vh; flex: none; }
   .tr-top .brand-mark { display: none; }
 }
+/* The comms panel on the full-screen tracker, as on the phone: the transmissions as bubbles (ATC on the left, you on
+   the right, the copilot on the intercom in amber), a play button where the audio was kept, the channels along the
+   bottom, and the line to type on. */
+.comms { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 12px; background: var(--bg-1);
+  border-radius: var(--r2); box-shadow: var(--ring); overflow: hidden; }
+.comms-log { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 12px; display: flex;
+  flex-direction: column; gap: 8px; }
+.msg { display: flex; }
+.msg.mine { justify-content: flex-end; }
+.msg-bubble { max-width: 88%; background: var(--bg-3); border-radius: 12px; padding: 8px 11px; box-shadow: var(--hair); }
+.msg.mine .msg-bubble { background: #1d3524; }
+.msg.crew .msg-bubble, .msg.intercom .msg-bubble { background: #33291a; }
+.msg.intercom .msg-bubble { background: #2a2b1c; }
+.msg.warn .msg-bubble { box-shadow: inset 0 0 0 1px rgba(231, 178, 74, .55); }
+.msg.chatter .msg-bubble { background: var(--bg-2); opacity: .8; }
+.msg-who { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.msg-who b { color: var(--amber); font-weight: 600; }
+.msg.atc .msg-who b { color: var(--amber); }
+.msg.mine .msg-who b { color: var(--green); }
+.msg.copilot .msg-who b { color: var(--cyan); }
+.msg.chatter .msg-who b { color: var(--text-3); font-weight: 500; }
+.msg-text { font-size: 14px; line-height: 1.4; color: var(--text); margin-top: 2px; }
+.msg-meta { font: 11px var(--mono); color: var(--text-3); margin-top: 3px; }
+.msg-empty { color: var(--text-3); font-size: 13px; text-align: center; margin: auto 0; padding: 16px; }
+.msg-play { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0;
+  background: var(--amber); color: #1b1407; cursor: pointer; flex: none; }
+.msg-play.on { background: var(--green); color: var(--on-green); }
+.msg-play.gone { opacity: .35; cursor: default; }
+.comms-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; background: var(--bg-2); }
+.comms-tabs button { position: relative; font: 600 13px var(--sans); padding: 8px 6px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text-2); cursor: pointer; }
+.comms-tabs button small { font-weight: 500; font-size: 11px; color: var(--text-3); }
+.comms-tabs button[aria-selected=true] { background: var(--amber); color: #1b1407; }
+.comms-tabs button[aria-selected=true] small { color: #3a2c10; }
+.comms-tabs button:disabled { opacity: .4; cursor: not-allowed; }
+.comms-tabs button.unread::after { content: ""; position: absolute; top: 6px; right: 8px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--green); }
+.comms-say { display: flex; gap: 8px; padding: 8px; background: var(--bg-2); }
+.comms-say input { flex: 1; min-width: 0; }
+.comms-send { flex: none; width: 40px; border: 0; border-radius: 10px; background: var(--amber); color: #1b1407; cursor: pointer;
+  display: grid; place-items: center; }
+.comms .tr-say-note { padding: 0 10px 8px; margin: 0 !important; background: var(--bg-2); font-size: 12px; }
+.tr-preview { margin-top: 14px !important; }
 .tr-plane { background: none; border: 0; }
 .tr-plane svg path { stroke: #000; stroke-width: 1; }
 .tr-plane.own svg path { fill: var(--green); }

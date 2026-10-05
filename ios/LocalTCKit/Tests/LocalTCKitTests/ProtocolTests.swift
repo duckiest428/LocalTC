@@ -45,6 +45,27 @@ struct ProtocolTests {
         #expect(RadioLine(kind: "copilot", text: "x").speaker == .pilot)
         #expect(RadioLine(kind: "readback", text: "x").speaker == .system)
     }
+
+    @Test("A line carries the id of its kept audio, and which COM it was on")
+    func audio() throws {
+        let line = try JSONDecoder().decode(RadioLine.self, from: Data(#"{"kind":"pilot","text":"hi","radio":2,"audio":"0123456789abcdef"}"#.utf8))
+        #expect(line.audio == "0123456789abcdef" && line.radio == 2)
+        #expect(Listener(rawValue: "com2") == .com2)
+    }
+
+    @Test("An area across the date line is cut there, not drawn across the world")
+    func dateLine() {
+        // Anchorage-like: 170°E to 160°W, as the desktop sends it (-180...180).
+        let ring: [[Double]] = [[50, 170], [50, -160], [60, -160], [60, 170]]
+        let pieces = antimeridianPieces(ring)
+        #expect(pieces.count == 2)
+        for piece in pieces {
+            let lons = piece.map { $0[1] }
+            #expect(lons.allSatisfy { (-180...180).contains($0) })
+            #expect(lons.max()! - lons.min()! <= 30)  // no edge right across the map
+        }
+        #expect(antimeridianPieces([[40, -120], [40, -110], [45, -110]]).count == 1)  // an ordinary one is left alone
+    }
 }
 
 @Suite("The flight as the phone keeps it")

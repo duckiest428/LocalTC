@@ -36,15 +36,15 @@ PAGE = """<!DOCTYPE html>
 <body>
 
 <header class="topbar">
-  <a class="brand" href="index.html"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
   <nav class="nav">
-    <a href="index.html#features">Features</a>
-    <a href="index.html#install">Install</a>
-    <a href="changelog.html" aria-current="page">Changelog</a>
-    <a href="dashboard.html#support">Support</a>
+    <a href="./#features">Features</a>
+    <a href="./#install">Install</a>
+    <a href="changelog" aria-current="page">Changelog</a>
+    <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
-  <a class="btn btn-ghost" href="dashboard.html">Dashboard</a>
+  <a class="btn btn-ghost" href="dashboard">Dashboard</a>
 </header>
 
 <main class="legal changelog">
@@ -54,7 +54,7 @@ PAGE = """<!DOCTYPE html>
     <a href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a></p>
 {body}
   <nav class="legal-nav">
-    <a href="index.html">&larr; Back to LocalTC</a>
+    <a href="./">&larr; Back to LocalTC</a>
     <a href="https://github.com/duckiest428/LocalTC/releases">All releases on GitHub</a>
   </nav>
 </main>

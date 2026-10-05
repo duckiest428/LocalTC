@@ -18,15 +18,15 @@
 <body>
 
 <header class="topbar">
-  <a class="brand" href="index.html"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
   <nav class="nav">
-    <a href="index.html#features">Features</a>
-    <a href="index.html#install">Install</a>
-    <a href="changelog.html">Changelog</a>
-    <a href="dashboard.html#support">Support</a>
+    <a href="./#features">Features</a>
+    <a href="./#install">Install</a>
+    <a href="changelog">Changelog</a>
+    <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
-  <a class="btn btn-ghost" href="dashboard.html" aria-current="page">Dashboard</a>
+  <a class="btn btn-ghost" href="dashboard" aria-current="page">Dashboard</a>
 </header>
 
 <main class="dash">
@@ -49,8 +49,8 @@
         <button class="btn btn-primary" type="submit">Sign in</button>
         <button class="linklike" id="f-again" type="button">Use a different address</button>
       </form>
-      <p class="hint small-print">Creating an account means agreeing to the <a href="terms.html#account">terms</a> and
-        <a href="privacy.html#account">privacy policy</a>: we keep your email address and the flight summaries you sync,
+      <p class="hint small-print">Creating an account means agreeing to the <a href="terms#account">terms</a> and
+        <a href="privacy#account">privacy policy</a>: we keep your email address and the flight summaries you sync,
         until you delete the account. You need to be 16 or over.</p>
     </div>
     <div class="note">
@@ -88,7 +88,7 @@
         <div class="page-head">
           <h1 id="tracker-h">Flight Tracker</h1>
           <span class="tr-conn" id="tr-conn">Connecting ...</span>
-          <a class="btn btn-ghost btn-sm tr-full" href="tracker.html" title="The map on the whole screen, and a line to type to ATC or the copilot">Open full screen &#8599;</a>
+          <a class="btn btn-ghost btn-sm tr-full" href="tracker" title="The map on the whole screen, and a line to type to ATC or the copilot">Open full screen &#8599;</a>
         </div>
         <div class="panel tracker">
           <div class="tr-status" id="tr-status">
@@ -98,9 +98,8 @@
             <div class="tr-map" id="tr-map" aria-label="Your aircraft, its route and path, the traffic around it and the ATC zones"></div>
             <div class="tr-side">
               <dl class="tr-facts" id="tr-facts"></dl>
-              <h3>Radio</h3>
-              <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
-              <p class="hint">A preview. To type to ATC or the copilot, <a href="tracker.html">open the Flight Tracker full screen</a>.</p>
+              <p class="hint tr-preview">A preview. The radio and the intercom, with a line to type to ATC or the copilot,
+                are on the <a href="tracker">full-screen Flight Tracker</a>.</p>
             </div>
           </div>
           <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →
@@ -157,7 +156,7 @@
               <p class="dash-msg" id="s-msg" role="status" aria-live="polite" hidden></p>
             </form>
             <p class="hint small-print">Emailed to LocalTC's developer and not stored anywhere else. The answer comes to
-              <b id="s-from"></b>. See <a href="privacy.html#support">the privacy policy</a>.</p>
+              <b id="s-from"></b>. See <a href="privacy#support">the privacy policy</a>.</p>
           </div>
           <div class="note">
             <p><strong>A flight went wrong?</strong> The fastest fix starts with a recording. In the app, turn on
@@ -207,10 +206,10 @@
   </div>
 
   <nav class="legal-nav">
-    <a href="index.html">&larr; Back to LocalTC</a>
-    <a href="privacy.html#account">Privacy</a>
-    <a href="terms.html#account">Terms</a>
-    <a href="cookies.html">Cookies</a>
+    <a href="./">&larr; Back to LocalTC</a>
+    <a href="privacy#account">Privacy</a>
+    <a href="terms#account">Terms</a>
+    <a href="cookies">Cookies</a>
   </nav>
 </main>
 

@@ -16,10 +16,10 @@
 <body class="tr-page" data-page="tracker">
 
 <header class="tr-top">
-  <a class="brand" href="index.html"><img class="brand-logo" src="logo.svg" alt="" width="24" height="24"><span class="brand-mark">LocalTC</span></a>
+  <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="24" height="24"><span class="brand-mark">LocalTC</span></a>
   <h1 id="tracker-h">Flight Tracker</h1>
   <span class="tr-conn" id="tr-conn">Connecting ...</span>
-  <a class="btn btn-ghost btn-sm" href="dashboard.html#tracker">&larr; Dashboard</a>
+  <a class="btn btn-ghost btn-sm" href="dashboard#tracker">&larr; Dashboard</a>
 </header>
 
 <main class="tracker tr-fullscreen">
@@ -30,16 +30,19 @@
     <div class="tr-map" id="tr-map" aria-label="Your aircraft, its route and path, the traffic around it and the ATC zones"></div>
     <div class="tr-side">
       <dl class="tr-facts" id="tr-facts"></dl>
-      <h3>Radio and intercom</h3>
-      <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
-      <div class="tr-to tr-seg" id="tr-to" role="group" aria-label="Who to talk to" hidden>
-        <button type="button" data-to="atc" aria-pressed="true">ATC</button><button type="button" data-to="crew" aria-pressed="false">Copilot</button>
-      </div>
-      <form class="tr-say" id="tr-say" autocomplete="off">
-        <input id="tr-say-text" maxlength="300" placeholder="Type a radio call, as in the app ..." aria-label="A radio call to transmit">
-        <button class="btn btn-primary btn-sm" id="tr-say-send" type="submit">Transmit</button>
-      </form>
-      <p class="hint tr-say-note" id="tr-say-note" aria-live="polite"></p>
+      <section class="comms" aria-label="The radio and the intercom">
+        <ol class="comms-log" id="tr-radio" aria-live="polite"></ol>
+        <div class="comms-tabs" id="tr-to" role="tablist" aria-label="Channel: what you see and where you talk">
+          <button type="button" role="tab" data-to="atc" aria-selected="true">COM1</button>
+          <button type="button" role="tab" data-to="com2" aria-selected="false">COM2</button>
+          <button type="button" role="tab" data-to="crew" aria-selected="false">INT <small>Copilot</small></button>
+        </div>
+        <form class="comms-say" id="tr-say" autocomplete="off">
+          <input id="tr-say-text" maxlength="300" placeholder="Type a radio call on COM1 ..." aria-label="A radio call to transmit">
+          <button class="comms-send" id="tr-say-send" type="submit" aria-label="Transmit"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2.2-7.3z" fill="currentColor"/></svg></button>
+        </form>
+        <p class="hint tr-say-note" id="tr-say-note" aria-live="polite"></p>
+      </section>
     </div>
   </div>
   <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →

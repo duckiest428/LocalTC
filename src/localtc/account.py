@@ -117,7 +117,8 @@ def _http(method: str, url: str, body: dict | bytes | None, headers: dict[str, s
     raw_body = isinstance(body, bytes)
     data = body if raw_body else json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(url, data=data, method=method, headers={
-        "Content-Type": ("image/png" if body[:4] == b"\x89PNG" else "application/gzip") if raw_body else "application/json", "User-Agent": f"LocalTC/{__version__}",
+        "Content-Type": ("image/png" if body[:4] == b"\x89PNG" else "audio/wav" if body[:4] == b"RIFF" else "application/gzip")
+        if raw_body else "application/json", "User-Agent": f"LocalTC/{__version__}",
         **headers})
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
@@ -300,6 +301,12 @@ class Account:
         there, never stored."""
         body = {k: v for k, v in (("own", own), ("traffic", traffic), ("trail", trail)) if v is not None}
         data = self._call("PUT", "/v1/live/frame", body)
+        self._relayed(data)
+
+    def clip(self, key: str, wav: bytes) -> None:
+        """A transmission's audio (8 kHz WAV) for a phone or the Flight Tracker to play again, under the radio line's
+        ``audio`` id. Held in memory there, the last few only, never stored."""
+        data = self._call("PUT", f"/v1/live/clip/{key}", wav)
         self._relayed(data)
 
     def live_map(self, *, route: dict | None = None, zones: dict | None = None, clear: tuple[str, ...] = ()) -> None:

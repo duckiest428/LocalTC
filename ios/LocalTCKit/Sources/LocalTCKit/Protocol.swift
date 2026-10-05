@@ -103,8 +103,9 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
     public var ok: Bool?
     public var level: String?
     public var radio: Int?  // 1 or 2: which COM, when the desktop knows
+    public var audio: String?  // the id its audio is kept under, to play again (the desktop's "Play buttons" setting)
 
-    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level, radio }
+    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level, radio, audio }
 
     public init(kind: String, text: String?, station: String? = nil, mhz: Double? = nil) {
         self.kind = kind

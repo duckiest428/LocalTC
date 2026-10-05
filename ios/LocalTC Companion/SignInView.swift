@@ -58,7 +58,7 @@ struct SignInView: View {
                     Section { Text(message).foregroundStyle(failed ? .red : .secondary) }
                 }
                 Section {
-                    Text("Creating an account means agreeing to the [terms](https://localtc.tech/terms.html#account) and [privacy policy](https://localtc.tech/privacy.html#account). You need to be 16 or over. LocalTC on the PC works without an account.")
+                    Text("Creating an account means agreeing to the [terms](https://localtc.tech/terms#account) and [privacy policy](https://localtc.tech/privacy#account). You need to be 16 or over. LocalTC on the PC works without an account.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

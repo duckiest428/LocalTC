@@ -60,7 +60,8 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
     for c in centers:
         inside = [p for p in route if shown[c["id"]].contains(*p)]
         if inside:
-            c["label"] = list(inside[len(inside) // 2])
+            lat, lon = inside[len(inside) // 2]
+            c["label"] = [lat, _wrap(lon)]
 
     airports, terminals, final = [], [], None
     for icao, role in ((origin, "departure"), (destination, "arrival")):
@@ -161,9 +162,16 @@ def _route_points(plan: Any, ends: list[Airport | None]) -> list[tuple[float, fl
         points = [(a.lat, a.lon) for a in ends if a is not None]
     out: list[tuple[float, float]] = []
     for (lat1, lon1), (lat2, lon2) in pairwise(points):
-        steps = max(1, int(math.hypot(lat2 - lat1, (lon2 - lon1) * math.cos(math.radians(lat1))) * 60 / ROUTE_SAMPLE_NM))
-        out += [(lat1 + (lat2 - lat1) * i / steps, lon1 + (lon2 - lon1) * i / steps) for i in range(steps)]
+        # The short way across the date line: Anchorage to Tokyo is 60 degrees west, not 300 east through Europe
+        # (which lit up and labelled every centre from Montreal to Magadan).
+        dlon = (lon2 - lon1 + 180.0) % 360.0 - 180.0
+        steps = max(1, int(math.hypot(lat2 - lat1, dlon * math.cos(math.radians(lat1))) * 60 / ROUTE_SAMPLE_NM))
+        out += [(lat1 + (lat2 - lat1) * i / steps, _wrap(lon1 + dlon * i / steps)) for i in range(steps)]
     return out + points[-1:]
+
+
+def _wrap(lon: float) -> float:
+    return (lon + 180.0) % 360.0 - 180.0
 
 
 def _terminal(engine: Any, airspace: Airspace, found: Airport, role: str) -> Area | None:
@@ -205,5 +213,6 @@ def _gate(engine: Any) -> dict[str, Any] | None:
 
 
 def _area(area: Area, **flags: bool) -> dict[str, Any]:
-    return {"id": area.id, "name": area.name, "kind": area.kind, "label": list(area.label),
-            "rings": [[[lat, lon] for lat, lon in ring] for ring in area.rings], **flags}
+    # An outline across the date line is kept 0..360 here; the map gets -180..180 and joins it up itself.
+    return {"id": area.id, "name": area.name, "kind": area.kind, "label": [area.label[0], _wrap(area.label[1])],
+            "rings": [[[lat, _wrap(lon)] for lat, lon in ring] for ring in area.rings], **flags}

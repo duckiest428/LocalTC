@@ -59,7 +59,7 @@ export async function start(env: Env, request: Request): Promise<Response> {
     env.DB.prepare("INSERT INTO logins (id, user_id, code_hash, link_hash, expires_at) VALUES (?1, ?2, ?3, ?4, ?5)")
       .bind(id, user.id, await sha256(`${id}:${code}`), await sha256(token), isoIn(LOGIN_S)),
   ]);
-  const link = `${env.SITE_URL}/dashboard.html?login=${token}`;
+  const link = `${env.SITE_URL}/dashboard?login=${token}`;
   const welcome = user.verified_at ? "" : "This creates your LocalTC account. ";
   await send(env, {
     to: address,

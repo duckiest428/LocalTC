@@ -14,7 +14,7 @@ import mimetypes
 import urllib.parse
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +30,13 @@ class HttpError(Exception):
     def __init__(self, status: int, message: str) -> None:
         super().__init__(message)
         self.status = status
+
+
+class Raw(NamedTuple):
+    """A call's answer that isn't JSON: its type and its bytes."""
+
+    content_type: str
+    body: bytes
 
 
 BACKLOG = 2000  # messages a page that stopped reading may fall behind before it's caught up from scratch
@@ -130,6 +137,8 @@ class AppServer:
                         raise HttpError(400, "send a JSON object")
                     args.update(parsed)
                 result = await handler(args)
+                if isinstance(result, Raw):  # not JSON: a transmission's audio
+                    return 200, result.content_type, result.body
                 return 200, "application/json", json.dumps(result, default=str).encode()
             except HttpError as exc:
                 return exc.status, "application/json", json.dumps({"error": str(exc)}).encode()

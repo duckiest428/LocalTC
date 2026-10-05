@@ -84,7 +84,7 @@ class AccountConfig(_Section):
     """The optional account (see localtc.account). Nothing is sent anywhere until the pilot signs in."""
 
     api_url: str = "https://api.localtc.tech"
-    dashboard_url: str = "https://localtc.tech/dashboard.html"
+    dashboard_url: str = "https://localtc.tech/dashboard"
     sync: bool = True  # upload new logbook lines after each flight, when signed in
     companion: bool = True  # the flight's status for the companion app, when signed in
     companion_lan: bool = True  # a phone on the same network connects to this PC directly (port below)
@@ -307,6 +307,9 @@ class UiConfig(_Section):
     # The app's colors (and the companion's, which has its own pick): radio (the dark panel), midnight, oled, amber,
     # slate, daylight.
     theme: Literal["radio", "midnight", "oled", "amber", "slate", "daylight"] = "radio"
+    # Play buttons on the radio log (here, on the phone and on the website's Flight Tracker): ATC's and the copilot's
+    # words as they were heard, and yours as the microphone took them. Kept in memory only, the last 80.
+    replay_audio: bool = False
 
 
 class Config(_Section):

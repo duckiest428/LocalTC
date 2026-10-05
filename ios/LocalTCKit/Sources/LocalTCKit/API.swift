@@ -135,6 +135,11 @@ public final class APIClient: Sendable {
         try await call("POST", "/v1/live/say", ["text": text, "to": to.rawValue])
     }
 
+    /// A transmission's audio the desktop sent to the relay (``RadioLine/audio``).
+    public func clip(_ id: String) async throws -> Data {
+        try await send("GET", "/v1/live/clip/\(id)", raw: nil)
+    }
+
     /// The relay's WebSocket, signed in.
     public func liveSocketRequest() -> URLRequest? {
         guard let token = tokens.token,

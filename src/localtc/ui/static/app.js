@@ -161,7 +161,9 @@ function addLine(l) {
     default:
       body = `<span class="body">${l.kind === "phase" ? "&mdash; " : ""}${esc(l.text)}</span>`;
   }
-  row.innerHTML = `<span class="t">${clock(l.t)}</span><div>${body}</div>`;
+  // A play button where the transmission's audio was kept (Quick Settings → ATC voice → Play buttons).
+  const play = l.audio ? `<button class="play" data-audio="${esc(l.audio)}" title="Play it again" aria-label="Play">&#9654;</button>` : "";
+  row.innerHTML = `<span class="t">${clock(l.t)}</span><div>${play}${body}</div>`;
   log.appendChild(row);
   $("#log-empty").hidden = true;
   if (++S.radioLines > 500) log.querySelector(".line")?.remove();
@@ -171,6 +173,28 @@ function addLine(l) {
   if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);
   if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → ATC → Language model timing.`, true, 12000);
 }
+
+let playing = null;
+$("#log").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".play");
+  if (!btn) return;
+  if (playing) { playing.audio.pause(); playing.btn.classList.remove("on"); }
+  if (playing && playing.btn === btn) { playing = null; return; }
+  btn.classList.add("on");
+  try {
+    const res = await fetch(`/api/clip?id=${encodeURIComponent(btn.dataset.audio)}`);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Not kept");
+    const audio = new Audio(URL.createObjectURL(await res.blob()));
+    playing = { audio, btn };
+    audio.onended = () => { btn.classList.remove("on"); if (playing && playing.audio === audio) playing = null; };
+    await audio.play();
+  } catch (err) {
+    btn.classList.remove("on");
+    btn.disabled = true;
+    btn.title = err.message;
+    playing = null;
+  }
+});
 
 function updateAlerts() {
   const n = S.alerts.length, badge = $("#alert-count");
@@ -705,6 +729,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-effect" ${st.tts.radio_effect ? "checked" : ""}> Radio effect (band-pass, compression, squelch)</label>
         <label class="check-row"><input type="checkbox" id="s-atis" ${st.tts.atis ? "checked" : ""}> Read the ATIS aloud while it's tuned</label>
         <label class="check-row"><input type="checkbox" id="s-cpvoice" ${st.tts.copilot ? "checked" : ""}> Speak the copilot's calls too</label>
+        <label class="check-row"><input type="checkbox" id="s-replay" ${st.ui.replay_audio ? "checked" : ""}> Play buttons on the radio log: ATC and the copilot as you heard them, you as the microphone took it (here, on the phone and on the website's Flight Tracker; the last 80, in memory only)</label>
       </div>
 
       <div class="card">
@@ -735,6 +760,7 @@ const Settings = {
         <div class="row"><label>Its hands<select id="s-crew-hands">
           <option value="pm" ${st.crew.hands === "pm" ? "selected" : ""}>It works its own side: radios in standby, transponder, altimeter, lights, gear and flaps after takeoff</option>
           <option value="calls" ${st.crew.hands === "calls" ? "selected" : ""}>Calls only: it says what's due and touches nothing</option></select></label></div>
+        <label class="check-row"><input type="checkbox" id="s-crew-repeat" ${st.crew.repeat_atc ? "checked" : ""}> Chatty only: it says the key part of each ATC instruction back to you before your readback ("Descend and maintain 8,000"), unless you read it back first</label>
         <span class="hint">Your side (parking brake, engines, the autopilot, flaps for takeoff and landing) it never touches: it tells you when something's missed. Say "quiet please" or "keep me posted" to change how much it talks mid-flight.</span>
       </div>
 
@@ -900,6 +926,8 @@ const Settings = {
     on("#s-effect", "change", (e) => this.save("tts", "radio_effect", e.target.checked));
     on("#s-atis", "change", (e) => this.save("tts", "atis", e.target.checked));
     on("#s-cpvoice", "change", (e) => this.save("tts", "copilot", e.target.checked));
+    on("#s-replay", "change", (e) => this.save("ui", "replay_audio", e.target.checked));
+    on("#s-crew-repeat", "change", (e) => this.save("crew", "repeat_atc", e.target.checked));
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
     on("#s-unscripted", "change", (e) => this.save("atc", "unscripted", e.target.checked));
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
@@ -1003,8 +1031,8 @@ const Settings = {
           <input id="a-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456"></label>
           <div><button class="btn small primary" id="a-finish">Sign in</button></div></div>
         <p class="small muted">No password: each sign-in is a code sent to your email. The first one creates the account,
-          which means agreeing to the <a href="https://localtc.tech/terms.html#account" target="_blank" rel="noopener">terms</a>
-          and <a href="https://localtc.tech/privacy.html#account" target="_blank" rel="noopener">privacy policy</a> (16 or over).</p>
+          which means agreeing to the <a href="https://localtc.tech/terms#account" target="_blank" rel="noopener">terms</a>
+          and <a href="https://localtc.tech/privacy#account" target="_blank" rel="noopener">privacy policy</a> (16 or over).</p>
         <p class="small muted" id="a-msg"></p>`;
       const msg = (t, err) => { $("#a-msg").textContent = t; $("#a-msg").className = `small ${err ? "error" : "muted"}`; };
       $("#a-start").onclick = () => {
@@ -1096,14 +1124,14 @@ const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path 
 
 const MapView = {
   map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
-  zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "",
+  zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
     if (!this.map) this.init();
     setTimeout(() => this.map.invalidateSize(), 0);
   },
   init() {
-    this.map = L.map("map", { zoomControl: true, attributionControl: true, worldCopyJump: true }).setView([47.9, -122.28], 9);
+    this.map = L.map("map", { zoomControl: true, attributionControl: true }).setView([47.9, -122.28], 9);
     $("#map-legend").innerHTML = AtcMap.LEGEND;  // atcmap.js: the same legend as the website's Flight Tracker
     $$("#map-mode [data-mode]").forEach((b) => (b.onclick = () => this.setMode(b.dataset.mode)));
     this.syncRules();
@@ -1156,7 +1184,7 @@ const MapView = {
   setTrail(points) {
     if (!Array.isArray(points) || !points.length) return;
     this.path.set(points);
-    if (S.own) this.path.pts.push([S.own.lat, S.own.lon]);
+    if (S.own) this.path.pts.push([S.own.lat, this.path.lon(S.own.lon)]);
     if (this.trail) this.trail.setLatLngs(this.path.pts);
   },
   own(o) {
@@ -1164,25 +1192,20 @@ const MapView = {
     // where the flight has been rather than starting a line from that moment.
     if (this.path.add(o.lat, o.lon, o.ground) && this.trail) this.trail.setLatLngs(this.path.pts);
     if (!this.map) return;
+    // Past the date line the aircraft is drawn where the path goes on, and the route and zones are moved there.
+    const at = [o.lat, this.path.lon(o.lon)];
+    AtcMap.setRef(at[1]);
+    if (this.drawnRef != null && Math.abs(at[1] - this.drawnRef) > 90) { this.planKey = null; this.plan(S.state.plan); this.zonesSoon(0); }
+    if (this.drawnRef == null || Math.abs(at[1] - this.drawnRef) > 90) this.drawnRef = at[1];
     const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${PLANE("#5fd068")}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
-    if (!this.ownMarker) { this.ownMarker = L.marker([o.lat, o.lon], { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView([o.lat, o.lon], 11); }
-    else { this.ownMarker.setLatLng([o.lat, o.lon]); this.ownMarker.setIcon(icon); }
-    if (this.follow) this.map.panTo([o.lat, o.lon], { animate: false });
+    if (!this.ownMarker) { this.ownMarker = L.marker(at, { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, 11); }
+    else { this.ownMarker.setLatLng(at); this.ownMarker.setIcon(icon); }
+    if (this.follow) this.map.panTo(at, { animate: false });
     $("#map-info").textContent = `${o.alt.toLocaleString()} ft  ${o.gs} kt  HDG ${String(o.hdg_mag).padStart(3, "0")}  VS ${o.vs > 0 ? "+" : ""}${o.vs}`;
   },
   traffic(list) {
     if (!this.map) return;
-    const seen = new Set();
-    for (const t of list || []) {
-      seen.add(t.id);
-      const color = t.ground ? "#8d959e" : "#62c7e6";
-      const alt = t.ground ? "GND" : `${Math.round(t.alt / 100).toString().padStart(3, "0")}`;
-      const icon = L.divIcon({ className: "", html: `<div style="transform:rotate(${t.hdg}deg);width:20px;height:20px">${PLANE(color).replace('width="30" height="30"', 'width="20" height="20"')}</div>
-        <div class="tfc-label" style="margin-left:18px;margin-top:-18px">${esc(t.callsign || "")}<br>${alt} ${esc(t.type)}</div>`, iconSize: [20, 20], iconAnchor: [10, 10] });
-      const m = this.tfc.get(t.id);
-      if (m) { m.setLatLng([t.lat, t.lon]); m.setIcon(icon); } else this.tfc.set(t.id, L.marker([t.lat, t.lon], { icon, interactive: false }).addTo(this.map));
-    }
-    for (const [id, m] of this.tfc) if (!seen.has(id)) { this.map.removeLayer(m); this.tfc.delete(id); }
+    AtcMap.traffic(this.map, this.tfc, list);  // atcmap.js: the website's Flight Tracker draws them the same way
   },
   plan(p) {
     if (!this.map) return;

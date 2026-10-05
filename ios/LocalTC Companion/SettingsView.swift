@@ -63,9 +63,9 @@ struct SettingsView: View {
                 }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                    Link("Your logbook on localtc.tech", destination: URL(string: "https://localtc.tech/dashboard.html")!)
-                    Link("Privacy policy", destination: URL(string: "https://localtc.tech/privacy.html#account")!)
-                    Link("Terms", destination: URL(string: "https://localtc.tech/terms.html#account")!)
+                    Link("Your logbook on localtc.tech", destination: URL(string: "https://localtc.tech/dashboard")!)
+                    Link("Privacy policy", destination: URL(string: "https://localtc.tech/privacy#account")!)
+                    Link("Terms", destination: URL(string: "https://localtc.tech/terms#account")!)
                 }
             }
             .themed(theme)

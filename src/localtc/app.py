@@ -441,10 +441,10 @@ class LiveSession:
     def now(self) -> float:
         return self.source.clock.now()
 
-    def say(self, text: str) -> None:
-        """A typed pilot transmission on COM1."""
+    def say(self, text: str, radio: int = 1) -> None:
+        """A typed pilot transmission on COM1 (or COM2)."""
         if text.strip():
-            self.bus.publish(Transcript(t=self.now(), text=text.strip(), source="typed"))
+            self.bus.publish(Transcript(t=self.now(), text=text.strip(), radio=2 if radio == 2 else 1, source="typed"))
 
     def say_crew(self, text: str) -> None:
         """Typed to the copilot, as if said on the intercom."""

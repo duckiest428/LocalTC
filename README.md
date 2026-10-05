@@ -68,7 +68,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 - **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
 - **Talk**: hold your push-to-talk key (Right Ctrl by default) or the headset button next to the text box. You can also type a call and press Enter.
 - **ATC** switch: ATC's voice on or off (text only). **Copilot** switch: the copilot works the radio with ATC.
-- **Support & feedback** (Quick Settings): write to the developer from the app, signed in to the account. It's emailed on, and the answer comes to the account's address. The website's [Dashboard](https://localtc.tech/dashboard.html#support) has a Support section too.
+- **Support & feedback** (Quick Settings): write to the developer from the app, signed in to the account. It's emailed on, and the answer comes to the account's address. The website's [Dashboard](https://localtc.tech/dashboard#support) has a Support section too.
 - **Buy me a coffee** (top right): if LocalTC made a flight better. Click it once and it's gone for good.
 - **Developer mode** (Quick Settings): every flight is recorded with its audio. **Mark** notes the moment something goes wrong, and **Export session** zips the recording, logs, settings and flight plan into your Downloads folder, ready to send.
 
@@ -81,7 +81,7 @@ Turn it off with `[logbook] enabled = false`. Each line knows its flight's recor
 what the Logbook's **Replay** plays.
 
 An **account is optional** (Quick Settings → Account). It copies those logbook lines to
-[localtc.tech](https://localtc.tech/dashboard.html)'s Dashboard, where there are totals, a map of the airports and
+[localtc.tech](https://localtc.tech/dashboard)'s Dashboard, where there are totals, a map of the airports and
 routes, a live **Flight Tracker** for the flight you're flying (the same map as the app's Live Map: the ATC
 zones, the route, the path flown, the traffic), an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned
 and next, and ATC's last call). Only while the Flight Tracker or the companion app watches from away from your
@@ -420,12 +420,20 @@ never talks over ATC or you; safety calls cut in.
 - "before takeoff checklist" (or "run the checklist") reads one against the aircraft, setting its own side and holding
   on anything of yours that isn't right; "brief" gives the departure or arrival briefing; "status" the fuel, distance
   and ETA.
-- From the phone (Comms → Copilot) or the website's full-screen Flight Tracker (Copilot), typed lines go to the copilot
-  on the intercom instead of ATC.
+- It also watches for turbulence (from the load factor), wind shear below 1,500 ft and ice; reads the destination's and
+  alternate's ATIS for the weather ahead (the sim gives nothing along the route); suggests step climbs (asking ATC
+  itself when it works the radio); checks the STAR's restrictions from the sim's navdata while descending via it; asks
+  "field in sight?" on the way in to a visual; confirms the autobrake and calls the reversers; says when you leave the
+  taxi route; and on an emergency, engine failure or low fuel names the nearest suitable airports. `[crew] repeat_atc`
+  (chatty only) has it say ATC's instruction back to you before your readback.
+- From the phone or the website's full-screen Flight Tracker (the INT channel beside COM1 and COM2), typed lines go to
+  the copilot on the intercom instead of ATC. The phone can take them by voice too (the microphone in the message box).
+- `[ui] replay_audio` (Quick Settings → ATC voice → Play buttons): a play button on each transmission in the app, on the
+  phone and on the website, ATC and the copilot as heard and you as the microphone took you. Kept in memory only.
 
 **Aircraft profiles** (`src/localtc/crew/profiles/*.toml`, and your own in `%LOCALAPPDATA%\LocalTC\profiles`, which win)
 name the flap detents, the placard speeds, and any action an add-on wants sent another way: its own key event, or an
-L:var (MSFS 2024). The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
+L:var (MSFS 2024), the autobrake's positions and whether it has reversers. The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
 ignore those (PMDG, Fenix) need a profile of their own; until then the copilot says when a command didn't take.
 
 ## Live bridge setup (Windows)

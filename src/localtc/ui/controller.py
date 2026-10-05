@@ -42,6 +42,7 @@ from localtc.flightplan import (
     manual_plan,
     save_plan,
 )
+from localtc.dsp.clips import CLIPS, clip_id
 from localtc.radiolog import radio_line
 from localtc.sim_api import (
     AirportData,
@@ -49,7 +50,11 @@ from localtc.sim_api import (
     AtcThinking,
     AtcTransmission,
     BusEvent,
+    CrewSpeech,
+    IntercomHeard,
     OwnshipState,
+    RadioChatter,
+    Transcript,
     PhaseChanged,
     IntercomPressed,
     IntercomReleased,
@@ -59,7 +64,7 @@ from localtc.sim_api import (
     TrafficSnapshot,
     encode_event,
 )
-from localtc.ui.server import EventStream, HttpError, sse
+from localtc.ui.server import EventStream, HttpError, Raw, sse
 from localtc.ui.companion import CompanionHub, CompanionServer, compact_zones
 from localtc.ui.pilot import PilotRoutes
 from localtc.ui.updates import Updates
@@ -118,6 +123,9 @@ class AppController:
         self._zones_at = -COMPANION_ZONES_EVERY_S
         self._zones_task: asyncio.Task | None = None
         self.updates = Updates(lambda: self.cfg.ui.updates, self.publish, lambda: self.live is not None)
+        # The transmissions kept to play again ([ui] replay_audio): on to a phone watching through the account.
+        CLIPS.enabled = self.cfg.ui.replay_audio
+        CLIPS.listeners = [self.companion.add_clip]
 
     # --- wiring ---------------------------------------------------------------------------------------------
 
@@ -146,6 +154,7 @@ class AppController:
             (post, "voice/preview"): self.api_preview,
             (get, "airport"): self.api_airport,
             (get, "zones"): self.api_zones,
+            (get, "clip"): self.api_clip,
             (get, "airports/search"): self.api_search,
             (post, "dev/note"): self.api_note,
             (get, "dev/sessions"): self.api_sessions,
@@ -406,6 +415,8 @@ class AppController:
             self.publish("dev", {"t": round(ev.t, 2), "json": encode_event(ev).decode(errors="replace")[:4000]})
         line = radio_line(ev)
         if line is not None:
+            if CLIPS.enabled and self._has_audio(ev):
+                line["audio"] = clip_id(ev)  # its audio, to play again: the app, the phone and the website ask by this
             self._radio(line)
         if isinstance(ev, AtcAlert):
             self.companion.on_event(ev)
@@ -429,6 +440,26 @@ class AppController:
                 self.flight = self.flight_view()
                 self.publish("flight", self.flight)
                 asyncio.create_task(self.pilot.live(self.companion_view(), force=not isinstance(ev, AtcTransmission)))
+
+    def _has_audio(self, ev: BusEvent) -> bool:
+        """Whether a radio log line's audio will be kept: what was spoken aloud, or said into the microphone."""
+        speaking = self.live is not None and self.live.speaker is not None
+        if isinstance(ev, AtcTransmission | RadioChatter | CrewSpeech):
+            return speaking
+        if isinstance(ev, Transcript):
+            return bool(ev.text) and (ev.source == "voice" or (ev.source == "copilot" and speaking and self.cfg.tts.copilot))
+        if isinstance(ev, IntercomHeard):
+            return bool(ev.text) and ev.source == "voice"
+        return False
+
+    async def api_clip(self, args: dict) -> Raw:
+        """A kept transmission's audio (8 kHz WAV), by its radio line's ``audio`` id."""
+        from localtc.ui.companion import clip_when_ready
+
+        wav = await clip_when_ready(str(args.get("id", "")))
+        if wav is None:
+            raise HttpError(404, "That transmission isn't kept (Quick Settings → Voice → Play buttons).")
+        return Raw("audio/wav", wav)
 
     def _gate(self) -> str | None:
         engine = self.live.engine if self.live else None
@@ -509,7 +540,7 @@ class AppController:
                 raise RuntimeError("The copilot isn't on (Quick Settings → Copilot → Intercom)")
             live.say_crew(text)
         else:
-            live.say(text)
+            live.say(text, radio=2 if to == "com2" else 1)
 
     # --- the page's calls ----------------------------------------------------------------------------------------
 
@@ -578,7 +609,7 @@ class AppController:
         return self.live
 
     async def api_say(self, args: dict) -> dict:
-        self._need_live().say(str(args.get("text", "")))
+        self._need_live().say(str(args.get("text", "")), radio=2 if args.get("radio") in (2, "2") else 1)
         return {}
 
     async def api_support(self, args: dict) -> dict:
@@ -680,6 +711,10 @@ class AppController:
         if (crew := getattr(self.live, "crew", None) if self.live is not None else None) is not None:
             crew.monitor.verbosity = cfg.crew.verbosity  # what the copilot says by itself, from now
             crew.monitor.hands = cfg.crew.hands == "pm"
+            crew.monitor.repeat_atc = cfg.crew.repeat_atc
+        CLIPS.enabled = cfg.ui.replay_audio
+        if not CLIPS.enabled:
+            CLIPS.clear()
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()

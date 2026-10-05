@@ -9,70 +9,96 @@ const AtcMap = (() => {
   const mhz = (v) => Number(v).toFixed(3);
   const ROUTE = { color: "#e978d6", weight: 2, opacity: 0.85 };
 
+  /* The date line. Leaflet draws a line from 179°E to 179°W the long way, across the whole world: a flight from New
+     York to Tokyo drew its route, the centres on it and their names across every continent. So nothing here is drawn
+     at -180..180 as given: lines run on in one piece (Tokyo becomes 220°W after Anchorage), and everything else is
+     drawn in the copy of the world nearest the aircraft (``setRef``: its longitude, as the path flown has it). */
+  let ref = null;
+  const wrapNear = (lon, to) => lon + 360 * Math.round((to - lon) / 360);
+  const near = (lon) => (ref == null ? lon : wrapNear(lon, ref));
+  /** Points joined up: each next one within 180° of the one before, the first near the aircraft. */
+  function chain(points) {
+    const out = [];
+    for (const p of points) out.push([p[0], out.length ? wrapNear(p[1], out[out.length - 1][1]) : near(p[1])]);
+    return out;
+  }
+  /** An outline in one piece, then moved as a whole to the copy of the world nearest the aircraft. */
+  function ring(points) {
+    const joined = [];
+    for (const p of points) joined.push([p[0], joined.length ? wrapNear(p[1], joined[joined.length - 1][1]) : p[1]]);
+    if (!joined.length) return joined;
+    const mid = joined.reduce((a, p) => a + p[1], 0) / joined.length, shift = near(mid) - mid;
+    return joined.map((p) => [p[0], p[1] + shift]);
+  }
+  const at = (lat, lon) => [lat, near(lon)];
+
   /** The planned route: a line through its fixes, each one dotted and named. Returns the line (or null). */
   function route(layer, plan) {
     const fixes = (plan && plan.fixes) || [];
-    for (const f of fixes) {
-      if (f.kind === "apt") continue;
-      L.circleMarker([f.lat, f.lon], { radius: 3, color: "#e9d38a", weight: 1, fillOpacity: 0.8 }).addTo(layer);
-      L.marker([f.lat, f.lon], { icon: L.divIcon({ className: "", html: `<div class="fix-label" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }),
+    const pts = chain(fixes.map((f) => [f.lat, f.lon]));
+    fixes.forEach((f, i) => {
+      if (f.kind === "apt") return;
+      L.circleMarker(pts[i], { radius: 3, color: "#e9d38a", weight: 1, fillOpacity: 0.8 }).addTo(layer);
+      L.marker(pts[i], { icon: L.divIcon({ className: "", html: `<div class="fix-label" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }),
         interactive: false, keyboard: false }).addTo(layer);
-    }
-    return fixes.length > 1 ? L.polyline(fixes.map((f) => [f.lat, f.lon]), ROUTE).addTo(layer) : null;
+    });
+    return fixes.length > 1 ? L.polyline(pts, ROUTE).addTo(layer) : null;
   }
 
   /** A plan typed without fixes: a straight dashed line from one airport to the other. */
   function straight(layer, from, to) {
-    return L.polyline([[from.lat, from.lon], [to.lat, to.lon]], { ...ROUTE, dashArray: "6 6" }).addTo(layer);
+    return L.polyline(chain([[from.lat, from.lon], [to.lat, to.lon]]), { ...ROUTE, dashArray: "6 6" }).addTo(layer);
   }
 
   /** An airport's runways as lines, and its code. ``a.runways``: {name, lat, lon, heading_true, length_m}. */
   function runways(layer, a) {
+    const shift = near(a.lon) - a.lon;
     for (const r of a.runways || []) {
       if (r.lat == null || r.lon == null || !r.length_m) continue;
       const half = r.length_m / 2, h = (r.heading_true * Math.PI) / 180;
       const dLat = (half * Math.cos(h)) / 111320, dLon = (half * Math.sin(h)) / (111320 * Math.cos((r.lat * Math.PI) / 180));
-      L.polyline([[r.lat - dLat, r.lon - dLon], [r.lat + dLat, r.lon + dLon]], { color: "#d9dde2", weight: 4, opacity: 0.9 })
+      L.polyline([[r.lat - dLat, r.lon - dLon + shift], [r.lat + dLat, r.lon + dLon + shift]], { color: "#d9dde2", weight: 4, opacity: 0.9 })
         .addTo(layer).bindTooltip(`${esc(a.icao)} ${esc(r.name)}`);
     }
-    L.marker([a.lat, a.lon], { icon: L.divIcon({ className: "", html: `<div class="tfc-label" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
+    L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", html: `<div class="tfc-label" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
       interactive: false, keyboard: false }).addTo(layer);
   }
 
   /** The ATC zones (ui/zones.py's answer) into ``layer``, IFR or VFR. */
   function zones(layer, z, { vfr = false } = {}) {
-    const label = (at, text, cls) => L.marker(at, { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
+    const label = (p, text, cls) => L.marker(at(p[0], p[1]), { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
     if (vfr) classes(layer, z);
     for (const c of vfr ? [] : z.centers || []) {
       const on = c.active || c.working;
-      L.polygon(c.rings, { color: "#d9dde2", weight: on ? 2.2 : 1, opacity: c.route ? 0.85 : 0.35, dashArray: c.route ? null : "4 6",
+      L.polygon((c.rings || []).map(ring), { color: "#d9dde2", weight: on ? 2.2 : 1, opacity: c.route ? 0.85 : 0.35, dashArray: c.route ? null : "4 6",
         fill: on, fillColor: "#d9dde2", fillOpacity: 0.04, interactive: false }).addTo(layer);
       if (c.label) label(c.label, c.name, `center ${c.active ? "here" : c.route ? "" : "dim"}`);
     }
     for (const a of vfr ? [] : z.terminals || []) {
-      L.polygon(a.rings, { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
+      L.polygon((a.rings || []).map(ring), { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
         fillOpacity: a.working ? 0.22 : 0.12 }).addTo(layer)
         .bindTooltip(`${esc(a.name)} — ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
       if (a.label) label(a.label, a.name, "terminal");
     }
     if (z.final && !vfr) {
-      L.polygon(z.final.ring, { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
+      L.polygon(ring(z.final.ring), { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
         .bindTooltip(`Joining final for ${esc(z.final.runway)}: approach clears the approach here and sends you to tower`);
     }
     if (z.taxi && z.taxi.points && z.taxi.points.length > 1) {  // the route ground gave: to the runway, or in to the gate
       const via = z.taxi.taxiways && z.taxi.taxiways.length ? ` via ${z.taxi.taxiways.join(", ")}` : "";
-      L.polyline(z.taxi.points, { color: "#111", weight: 7, opacity: 0.5, interactive: false }).addTo(layer);
-      L.polyline(z.taxi.points, { color: "#f2c94c", weight: 3.5, opacity: 0.95, dashArray: "8 6" }).addTo(layer)
+      const pts = chain(z.taxi.points);
+      L.polyline(pts, { color: "#111", weight: 7, opacity: 0.5, interactive: false }).addTo(layer);
+      L.polyline(pts, { color: "#f2c94c", weight: 3.5, opacity: 0.95, dashArray: "8 6" }).addTo(layer)
         .bindTooltip(`Taxi to ${esc(z.taxi.to)}${esc(via)}`, { sticky: true });
-      L.circleMarker(z.taxi.points[z.taxi.points.length - 1], { radius: 4, color: "#f2c94c", weight: 2, fillColor: "#111", fillOpacity: 1, interactive: false }).addTo(layer);
+      L.circleMarker(pts[pts.length - 1], { radius: 4, color: "#f2c94c", weight: 2, fillColor: "#111", fillOpacity: 1, interactive: false }).addTo(layer);
     }
     if (z.gate && z.gate.lat != null) {
-      L.circleMarker([z.gate.lat, z.gate.lon], { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)
+      L.circleMarker(at(z.gate.lat, z.gate.lon), { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)
         .bindTooltip(`${esc(z.gate.name)} at ${esc(z.gate.icao)}: where ground sent you`, { permanent: true, direction: "right", className: "atc-gate" });
     }
     const KIND = { clearance: ["D", "b-clearance"], ground: ["G", "b-ground"], tower: ["T", "b-tower"], departure: ["A", "b-terminal"], approach: ["A", "b-terminal"] };
     for (const ap of z.airports || []) {
-      if (ap.tower_nm && !vfr) L.circle([ap.lat, ap.lon], { radius: ap.tower_nm * 1852, color: "#e2574c", weight: 1.3, dashArray: "4 5", fillColor: "#e2574c", fillOpacity: 0.05, interactive: false }).addTo(layer);
+      if (ap.tower_nm && !vfr) L.circle(at(ap.lat, ap.lon), { radius: ap.tower_nm * 1852, color: "#e2574c", weight: 1.3, dashArray: "4 5", fillColor: "#e2574c", fillOpacity: 0.05, interactive: false }).addTo(layer);
       const stations = ap.stations || [];
       const seen = new Set();
       const badges = stations.filter((s) => KIND[s.controller] && !seen.has(KIND[s.controller][0]) && seen.add(KIND[s.controller][0]))
@@ -82,7 +108,7 @@ const AtcMap = (() => {
           return `<span class="atc-badge ${KIND[s.controller][1]} ${state}">${KIND[s.controller][0]}</span>`;
         }).join("");
       const tip = stations.map((s) => `${esc(s.station)} ${mhz(s.mhz)}${s.tuned ? " ◀ tuned" : s.next ? " ◀ next" : ""}`).join("<br>");
-      L.marker([ap.lat, ap.lon], { icon: L.divIcon({ className: "", html: `<div class="atc-badges">${badges}</div>`, iconSize: [0, 0] }) })
+      L.marker(at(ap.lat, ap.lon), { icon: L.divIcon({ className: "", html: `<div class="atc-badges">${badges}</div>`, iconSize: [0, 0] }) })
         .addTo(layer).bindTooltip(`<b>${esc(ap.icao)}</b> ${esc(ap.name || "")}<br>${tip}`);
     }
   }
@@ -92,12 +118,12 @@ const AtcMap = (() => {
     const STYLE = { B: ["b", "#2b6fd8", null, 2.4], C: ["c", "#b23a9e", null, 2.2], D: ["d", "#2b6fd8", "7 5", 1.8],
       CTR: ["d", "#2b6fd8", "7 5", 1.8], ATZ: ["atz", "#b23a9e", "4 4", 1.6] };
     const hundreds = (ft) => (ft ? String(Math.round(ft / 100)) : "SFC");
-    const along = (a, nm) => [a.lat - (nm / 60) * Math.SQRT1_2, a.lon + ((nm / 60) * Math.SQRT1_2) / Math.cos((a.lat * Math.PI) / 180)];
+    const along = (a, nm) => [a.lat - (nm / 60) * Math.SQRT1_2, near(a.lon) + ((nm / 60) * Math.SQRT1_2) / Math.cos((a.lat * Math.PI) / 180)];
     for (const a of z.classes || []) {
       const st = STYLE[a.class];
       (a.rings || []).forEach((r, i) => {
         if (!st) return;
-        L.circle([a.lat, a.lon], { radius: r.nm * 1852, color: st[1], weight: st[3], dashArray: st[2], fill: i === 0,
+        L.circle(at(a.lat, a.lon), { radius: r.nm * 1852, color: st[1], weight: st[3], dashArray: st[2], fill: i === 0,
           fillColor: st[1], fillOpacity: 0.07, interactive: false }).addTo(layer);
         const inner = i ? a.rings[i - 1].nm : 0;  // the label sits in its band, southeast of the field
         L.marker(along(a, i ? (inner + r.nm) / 2 : r.nm * 0.62), { icon: L.divIcon({ className: "",
@@ -105,9 +131,9 @@ const AtcMap = (() => {
           interactive: false, keyboard: false }).addTo(layer);
       });
       const color = a.towered ? "#1d5bbf" : "#8e2c7c";
-      L.circleMarker([a.lat, a.lon], { radius: 5, color, weight: 2, fillColor: "#fff", fillOpacity: 1 }).addTo(layer)
+      L.circleMarker(at(a.lat, a.lon), { radius: 5, color, weight: 2, fillColor: "#fff", fillOpacity: 1 }).addTo(layer)
         .bindTooltip(`<b>${esc(a.icao)}</b> ${esc(a.name || "")}<br>${a.label ? `${esc(a.label)}${a.class === "B" || a.class === "C" ? ` (Class ${a.class})` : ""}` : "No tower: uncontrolled"}`);
-      L.marker([a.lat, a.lon], { icon: L.divIcon({ className: "", html: `<div class="vfr-apt ${a.towered ? "towered" : "other"}">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
+      L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", html: `<div class="vfr-apt ${a.towered ? "towered" : "other"}">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
         interactive: false, keyboard: false }).addTo(layer);
     }
   }
@@ -155,14 +181,44 @@ const AtcMap = (() => {
       add(lat, lon, ground) {
         ground = !!ground;
         const last = this.pts[this.pts.length - 1];
+        if (last) lon = wrapNear(lon, last[1]);  // on across the date line, never back across the world
         if (last && ground === this.ground && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < (ground ? 0.0001 : 0.002)) return false;
         this.ground = ground;
         this.pts.push([lat, lon]);
         if (this.pts.length > keep) this.pts = simplify(this.pts, keep);
         return true;
       },
-      set(points) { this.pts = simplify(points.map((p) => [p[0], p[1]]), keep); },
+      set(points) {
+        const joined = [];
+        for (const p of points) joined.push([p[0], joined.length ? wrapNear(p[1], joined[joined.length - 1][1]) : p[1]]);
+        this.pts = simplify(joined, keep);
+      },
+      /** Where the aircraft is drawn: its longitude in the same copy of the world as the end of the path. */
+      lon(lon) { const last = this.pts[this.pts.length - 1]; return last ? wrapNear(lon, last[1]) : lon; },
     };
+  }
+
+  /* Traffic, as the app's Live Map shows it: each aircraft pointing its way, airborne cyan and on the ground grey,
+     labelled with its callsign, its altitude in hundreds of feet (or GND) and its type. */
+  const PLANE = (color, size) => `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path fill="${color}" stroke="#000" stroke-width="1" d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
+  function trafficIcon(t) {
+    const color = t.ground ? "#8d959e" : "#62c7e6";
+    const alt = t.ground ? "GND" : `${Math.round((t.alt || 0) / 100).toString().padStart(3, "0")}`;
+    return L.divIcon({ className: "", html: `<div style="transform:rotate(${Number(t.hdg) || 0}deg);width:20px;height:20px">${PLANE(color, 20)}</div>
+      <div class="tfc-label" style="margin-left:18px;margin-top:-18px">${esc(t.callsign || "")}<br>${alt} ${esc(t.type || "")}</div>`,
+      iconSize: [20, 20], iconAnchor: [10, 10] });
+  }
+  /** The traffic ``list`` on ``map``, its markers kept in ``markers`` (a Map by id) from one update to the next. */
+  function traffic(map, markers, list) {
+    const seen = new Set();
+    for (const t of list || []) {
+      if (t.lat == null || t.lon == null) continue;
+      seen.add(t.id);
+      const pos = at(t.lat, t.lon), m = markers.get(t.id);
+      if (m) { m.setLatLng(pos); m.setIcon(trafficIcon(t)); }
+      else markers.set(t.id, L.marker(pos, { icon: trafficIcon(t), interactive: false }).addTo(map));
+    }
+    for (const [id, m] of markers) if (!seen.has(id)) { m.remove(); markers.delete(id); }
   }
   function simplify(path, keep) {
     let out = path;
@@ -190,5 +246,6 @@ const AtcMap = (() => {
     return path.filter((_, i) => keep[i]);
   }
 
-  return { esc, route, straight, runways, zones, talk, track, LEGEND };
+  return { esc, route, straight, runways, zones, talk, track, traffic, PLANE, LEGEND,
+    setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

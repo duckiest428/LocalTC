@@ -102,10 +102,25 @@ ends. Points are `[lat, lon]`, rounded to 3 decimals (5 for the taxi route).
 
 ### `radio` (one line)
 ```json
-{"kind": "atc|pilot|copilot|crew|intercom|readback|atis|phase|tuned|alert|system", "t": 1234.5,
- "station": "Albuquerque Center", "mhz": 133.65, "text": "...", "ok": true, "level": "warn"}
+{"kind": "atc|pilot|copilot|crew|intercom|chatter|readback|atis|phase|tuned|alert|system", "t": 1234.5,
+ "station": "Albuquerque Center", "mhz": 133.65, "text": "...", "ok": true, "level": "warn", "radio": 1,
+ "audio": "0123456789abcdef"}
 ```
-Only `kind`, `t` and `text` are always present.
+Only `kind`, `t` and `text` are always present. `radio` is the COM (1 or 2) a call of yours or the copilot's went out
+on; for ATC's, compare `mhz` with `own`'s `com1` and `com2`. `audio`, when the desktop keeps the transmissions to play
+again (its "Play buttons" setting), is the id the line's audio is kept under (below).
+
+### A transmission's audio
+
+An 8 kHz, 8-bit mono WAV (20 s at most): ATC's and the copilot's words as they were heard, the pilot's as the
+microphone took them. Only fetched when somebody presses play.
+
+- On the same Wi-Fi: `GET http://<pc>:47800/companion/v1/clip?id=<audio>` with the companion key. The desktop keeps
+  the last 80, in memory; a line just shown may still be being synthesized, so the answer waits a few seconds for it.
+  `404` when it isn't kept.
+- Through the account: `GET /v1/live/clip/<audio>` (signed in; the website with its cookie, from its own pages). The
+  desktop sends each one with `PUT /v1/live/clip/<audio>` (the WAV as the body) while somebody watches; the relay holds
+  the last 40 in memory, never stored, and forgets them with the flight.
 
 ### `alert`
 ```json
@@ -127,13 +142,13 @@ Airports tabs.
 ## Talking from the phone or the website
 
 On the same Wi-Fi: `POST http://<pc>:47800/companion/v1/say` with the companion key and `{"text": "Phoenix
-Approach, Frontier 2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app.
-`200 {"ok": true}`, or `409 {"error": ...}` when no flight is running. With `"to": "crew"` the words go to the
+Approach, Frontier 2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app (with
+`"to": "com2"`, on COM2). `200 {"ok": true}`, or `409 {"error": ...}` when no flight is running. With `"to": "crew"` the words go to the
 copilot on the intercom instead (as if said on the intercom key): its answer comes back as a `crew` radio line,
 and the words as an `intercom` one.
 
 Anywhere else, through the account: `POST /v1/live/say` (signed in; the website's Flight Tracker with its cookie
-and `X-LocalTC: 1`, from the site's own pages) with `{"text": ..., "to": "atc" | "crew"}`. The relay holds the call in
+and `X-LocalTC: 1`, from the site's own pages) with `{"text": ..., "to": "atc" | "com2" | "crew"}`. The relay holds the call in
 memory, five at most, for a minute: `200 {"ok": true, "waiting": n}`, `409` when no flight is on (or for the
 copilot when the status doesn't say `crew`), `400` for an empty call. The
 desktop app picks the waiting calls up from the `calls` list in the answer to its next live update (`PUT

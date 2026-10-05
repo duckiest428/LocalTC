@@ -24,7 +24,9 @@ struct MapTab: View {
                 }
             }
             if let route = store.route, route.fixes.count > 1 {
-                MapPolyline(coordinates: route.fixes.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) })
+                // Geodesic: the short way across the date line, not back across the whole world.
+                MapPolyline(coordinates: route.fixes.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) },
+                            contourStyle: .geodesic)
                     .stroke(Zone.route, lineWidth: 2)
                 ForEach(Array(route.fixes.enumerated()), id: \.offset) { _, fix in
                     if fix.kind != "apt" {
@@ -42,17 +44,30 @@ struct MapTab: View {
                       let from = zones.airports.first(where: { $0.icao == route.origin }),
                       let to = zones.airports.first(where: { $0.icao == route.destination }), from.icao != to.icao {
                 // A plan typed without fixes: a straight line, dashed.
-                MapPolyline(coordinates: [coordinate([from.lat, from.lon]), coordinate([to.lat, to.lon])])
+                MapPolyline(coordinates: [coordinate([from.lat, from.lon]), coordinate([to.lat, to.lon])], contourStyle: .geodesic)
                     .stroke(Zone.route, style: StrokeStyle(lineWidth: 2, dash: [6, 6]))
             }
             if store.trail.count > 1 {
-                MapPolyline(coordinates: store.trail.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) })
+                MapPolyline(coordinates: store.trail.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon) },
+                            contourStyle: .geodesic)
                     .stroke(.green.opacity(0.8), lineWidth: 3)
             }
+            // The traffic around, as the desktop's Live Map shows it: pointing its way, airborne cyan and on the ground
+            // grey, with its callsign, its altitude in hundreds of feet (or GND) and its type.
             ForEach(Array(store.traffic.values)) { target in
-                Annotation(label(target), coordinate: CLLocationCoordinate2D(latitude: target.lat, longitude: target.lon)) {
-                    plane(heading: target.hdg, size: 14, color: target.ground == true ? .gray : .orange)
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: target.lat, longitude: target.lon), anchor: .center) {
+                    HStack(alignment: .top, spacing: 2) {
+                        plane(heading: target.hdg, size: 14, color: target.ground == true ? Zone.trafficGround : Zone.traffic)
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(target.callsign ?? "")
+                            Text(trafficLevel(target))
+                        }
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black, radius: 1.5)
+                    }
                 }
+                .annotationTitles(.hidden)
             }
             if let own = store.own {
                 Annotation(store.status.callsign ?? "You", coordinate: CLLocationCoordinate2D(latitude: own.lat, longitude: own.lon)) {
@@ -160,9 +175,9 @@ struct MapTab: View {
         own.ground == true ? 4_000 : min(max(Double(own.alt ?? 0) * 12, 15_000), 400_000)
     }
 
-    private func label(_ t: TrafficTarget) -> String {
-        let alt = t.alt.map { $0 >= 18_000 ? "FL\($0 / 100)" : "\($0)" } ?? ""
-        return [t.callsign, alt].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+    private func trafficLevel(_ t: TrafficTarget) -> String {
+        let level = t.ground == true ? "GND" : t.alt.map { String(format: "%03d", max($0, 0) / 100) } ?? ""
+        return [level, t.type ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     /// SF Symbols' aeroplane points east; a heading counts from north.
@@ -192,6 +207,8 @@ enum Zone {
     static let taxi = Color(red: 0.95, green: 0.79, blue: 0.30)
     static let gate = Color(red: 0.54, green: 0.42, blue: 0.94)
     static let route = Color(red: 0.91, green: 0.47, blue: 0.84)
+    static let traffic = Color(red: 0.38, green: 0.78, blue: 0.90)
+    static let trafficGround = Color(red: 0.55, green: 0.58, blue: 0.62)
     static let classB = Color(red: 0.17, green: 0.44, blue: 0.85)
     static let classC = Color(red: 0.70, green: 0.23, blue: 0.62)
 
@@ -254,7 +271,7 @@ struct ZoneLayers {
         } else {
             ForEach(zones.centers) { center in
                 let on = center.active == true || center.working == true
-                ForEach(Array(center.rings.enumerated()), id: \.offset) { _, ring in
+                ForEach(Array(center.rings.flatMap(antimeridianPieces).enumerated()), id: \.offset) { _, ring in
                     MapPolygon(coordinates: ring.map(coordinate))
                         .foregroundStyle(Zone.center.opacity(on ? 0.05 : 0))
                         .stroke(Zone.center.opacity(center.route == true ? 0.85 : 0.35),
@@ -272,7 +289,7 @@ struct ZoneLayers {
                 }
             }
             ForEach(zones.terminals) { area in
-                ForEach(Array(area.rings.enumerated()), id: \.offset) { _, ring in
+                ForEach(Array(area.rings.flatMap(antimeridianPieces).enumerated()), id: \.offset) { _, ring in
                     MapPolygon(coordinates: ring.map(coordinate))
                         .foregroundStyle(Zone.terminal.opacity(area.working == true ? 0.22 : 0.12))
                         .stroke(Zone.terminal, lineWidth: area.working == true ? 2.2 : 1.4)

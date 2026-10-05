@@ -224,3 +224,40 @@ public struct AtcZones: Codable, Sendable, Equatable {
         classes = try c.decodeIfPresent([AirspaceClass].self, forKey: .classes) ?? []
     }
 }
+
+/// An outline drawn the right way across the date line. The desktop sends -180...180, so an area across it (Anchorage
+/// over the Aleutians, the Pacific oceanic ones) jumps from 179°E to 179°W, and a map draws that edge the long way, right
+/// across the world. Here it's joined up, then cut at the date line into the piece on each side.
+public func antimeridianPieces(_ ring: [[Double]]) -> [[[Double]]] {
+    var joined: [[Double]] = []
+    for p in ring where p.count >= 2 {
+        guard let last = joined.last else { joined.append([p[0], p[1]]); continue }
+        joined.append([p[0], p[1] + 360 * ((last[1] - p[1]) / 360).rounded()])
+    }
+    guard let low = joined.map({ $0[1] }).min(), let high = joined.map({ $0[1] }).max() else { return [] }
+    if low >= -180 && high <= 180 { return [joined] }
+    let shift: Double = high > 180 ? -360 : 360
+    let here = clip(joined, at: high > 180 ? 180 : -180, keepBelow: high > 180)
+    let there = clip(joined.map { [$0[0], $0[1] + shift] }, at: high > 180 ? -180 : 180, keepBelow: high <= 180)
+    return [here, there].filter { $0.count >= 3 }
+}
+
+/// Sutherland-Hodgman against the meridian ``lon``: the part of the ring west of it (``keepBelow``) or east of it.
+private func clip(_ ring: [[Double]], at lon: Double, keepBelow: Bool) -> [[Double]] {
+    func inside(_ p: [Double]) -> Bool { keepBelow ? p[1] <= lon : p[1] >= lon }
+    func cross(_ a: [Double], _ b: [Double]) -> [Double] {
+        let f = (lon - a[1]) / (b[1] - a[1])
+        return [a[0] + (b[0] - a[0]) * f, lon]
+    }
+    var out: [[Double]] = []
+    for (i, b) in ring.enumerated() {
+        let a = ring[(i + ring.count - 1) % ring.count]
+        if inside(b) {
+            if !inside(a) { out.append(cross(a, b)) }
+            out.append(b)
+        } else if inside(a) {
+            out.append(cross(a, b))
+        }
+    }
+    return out
+}

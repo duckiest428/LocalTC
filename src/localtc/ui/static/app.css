@@ -161,6 +161,10 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line { padding: 3px 0; display: grid; grid-template-columns: 44px 1fr; gap: 8px; }
 .line .t { color: #6f7780; font-family: var(--mono); font-size: 11px; padding-top: 3px; }
 .line .who { font-weight: 700; margin-right: 6px; }
+.line .play { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; padding: 0; border: 0;
+  border-radius: 50%; background: #e7b24a; color: #1b1407; font-size: 9px; cursor: pointer; vertical-align: 1px; }
+.line .play.on { background: var(--green); }
+.line .play:disabled { opacity: .35; cursor: default; }
 .line.atc .who { color: var(--cyan); }
 .line.atc .body { color: var(--text-strong); }
 .line.atc .st { color: var(--cyan); font-size: 12px; }

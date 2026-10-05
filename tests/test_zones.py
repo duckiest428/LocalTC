@@ -56,3 +56,17 @@ def test_during_the_flight_it_shows_who_the_pilot_is_talking_to():
     here = next(c for c in z["centers"] if c["active"])
     assert here["name"] == "Albuquerque Center" and here["route"]
     json.dumps(z)  # it goes to the page as JSON
+
+
+def test_a_route_across_the_date_line_goes_the_short_way():
+    """Anchorage to Tokyo crosses the Pacific: not 300 degrees east through every centre from Canada to Russia, which
+    lit them all up and lined their names up across the map."""
+    from localtc.flightplan import Fix
+
+    pacific = FlightPlan(origin="PANC", destination="RJTT", fixes=[
+        Fix(ident="PANC", lat=61.17, lon=-149.99, kind="apt"), Fix(ident="NIPPI", lat=50.0, lon=170.0),
+        Fix(ident="RJTT", lat=35.55, lon=139.78, kind="apt")])
+    z = zones(None, pacific, lambda icao: None, None)
+    on_route = {c["name"] for c in z["centers"] if c["route"]}
+    assert "Anchorage Center" in on_route and not any("Moscow" in n or "Montreal" in n or "Shanwick" in n for n in on_route)
+    assert all(-180 <= p[1] <= 180 for c in z["centers"] for ring in c["rings"] for p in ring)  # the server takes no more

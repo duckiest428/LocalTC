@@ -77,11 +77,18 @@ final class SignInFlowTests: XCTestCase {
 
         app.tabBars.buttons["Comms"].tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'Frontier'")).firstMatch.waitForExistence(timeout: 30))
-        XCTAssertTrue(app.segmentedControls["comFilter"].exists)
+        attach(app, "4 comms")
+        // The channels along the bottom, as on an audio panel: COM1, COM2 and INT (the copilot).
+        XCTAssertTrue(app.buttons["channel.COM1"].exists, "COM1")
+        XCTAssertTrue(app.buttons["channel.COM2"].exists, "COM2")
+        XCTAssertTrue(app.buttons["channel.INT"].exists, "INT")
+        XCTAssertTrue(app.buttons["dictate"].exists, "the microphone")
         let message = app.textFields["message"]
         XCTAssertTrue(message.exists)
-        XCTAssertEqual(message.isEnabled, expect == "Same Wi-Fi", "typing to ATC is for the same Wi-Fi")
-        attach(app, "4 comms")
+        XCTAssertTrue(message.isEnabled, "typing works on the same Wi-Fi and through the server")
+        app.buttons["channel.INT"].tap()
+        attach(app, "4b intercom")
+        app.buttons["channel.COM1"].tap()
 
         app.tabBars.buttons["Frequencies"].tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'KSAN · '")).firstMatch.waitForExistence(timeout: 20))

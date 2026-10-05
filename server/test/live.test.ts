@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cleanStatus, pushFor } from "../src/live";
-import { bearer, call, data, signIn } from "./helpers";
+import { env } from "cloudflare:test";
+import worker from "../src/index";
+import { API, bearer, call, data, signIn } from "./helpers";
 
 const cruise = {
   active: true, callsign: "FFT2084", origin: "KSAN", destination: "KPHX", phase: "CRUISE",
@@ -224,8 +226,10 @@ describe("radio calls from the phone and the website", () => {
     await call("PUT", "/v1/live", { ...cruise, crew: true }, bearer(token));
     expect((await call("POST", "/v1/live/say", { text: "gear down", to: "crew" }, bearer(token))).status).toBe(200);
     expect((await call("POST", "/v1/live/say", { text: "radio check", to: "anything" }, bearer(token))).status).toBe(200);
+    expect((await call("POST", "/v1/live/say", { text: "Ground, radio check", to: "com2" }, bearer(token))).status).toBe(200);
     const answer = await data(await call("GET", "/v1/live/calls", undefined, bearer(token)));
-    expect(answer.calls.map((c: { text: string; to: string }) => [c.text, c.to])).toEqual([["gear down", "crew"], ["radio check", "atc"]]);
+    expect(answer.calls.map((c: { text: string; to: string }) => [c.text, c.to])).toEqual(
+      [["gear down", "crew"], ["radio check", "atc"], ["Ground, radio check", "com2"]]);
   });
 
   it("is refused when nothing is flying, or there's nothing to say", async () => {
@@ -271,3 +275,35 @@ describe("the path flown", () => {
     expect(kept.some(([lat, lon]) => Math.abs(lat - 40) < 1e-4 && Math.abs(lon + 72.995) < 2e-4)).toBe(true);
   });
 });
+
+describe("a transmission's audio, to play again", () => {
+  const wav = (n = 100) => {
+    const bytes = new Uint8Array(44 + n);
+    bytes.set(new TextEncoder().encode("RIFF"), 0);
+    bytes.set(new TextEncoder().encode("WAVE"), 8);
+    return bytes;
+  };
+  const put = (id: string, body: Uint8Array, token: string) => worker.fetch(new Request(`${API}/v1/live/clip/${id}`, {
+    method: "PUT", body, headers: { "Content-Type": "audio/wav", ...bearer(token) } }), env);
+
+  it("is held for the account's phone and website, the last few only", async () => {
+    const { token } = await signIn();
+    expect((await put("0123456789abcdef", wav(), token)).status).toBe(200);
+    const back = await call("GET", "/v1/live/clip/0123456789abcdef", undefined, bearer(token));
+    expect(back.status).toBe(200);
+    expect(back.headers.get("Content-Type")).toBe("audio/wav");
+    expect((await back.arrayBuffer()).byteLength).toBe(144);
+    for (let i = 0; i < 45; i++) await put(i.toString(16).padStart(16, "0"), wav(10), token);
+    expect((await call("GET", "/v1/live/clip/0123456789abcdef", undefined, bearer(token))).status).toBe(404);
+    const other = await signIn();
+    expect((await call("GET", "/v1/live/clip/" + (44).toString(16).padStart(16, "0"), undefined, bearer(other.token))).status).toBe(404);
+  });
+
+  it("must be a WAV, not too long, under a transmission's id", async () => {
+    const { token } = await signIn();
+    expect((await put("0123456789abcdef", new Uint8Array(50), token)).status).toBe(400);
+    expect((await put("not-an-id", wav(), token)).status).toBe(404);
+    expect((await put("0123456789abcdef", wav(300 * 1024), token)).status).toBe(413);
+  });
+});
+

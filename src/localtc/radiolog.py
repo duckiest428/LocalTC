@@ -37,7 +37,8 @@ def radio_line(ev: BusEvent) -> dict | None:
             return None
         if not ev.text:
             return {"kind": "system", "t": t, "text": "Nothing heard: check the microphone if you spoke", "level": "warn"}
-        return {"kind": who, "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}
+        return {"kind": who, "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5,
+                "radio": ev.radio}
     if isinstance(ev, IntercomHeard):  # to the copilot, not on the radio
         if not ev.text:
             return None

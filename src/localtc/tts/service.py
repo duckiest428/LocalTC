@@ -15,6 +15,7 @@ import zlib
 from typing import Any
 
 from localtc.bus import EventBus
+from localtc.dsp.clips import CLIPS, clip_id
 from localtc.dsp.radio import clean, intercom_effect, radio_effect
 from localtc.sim_api import (
     AtcTransmission,
@@ -68,16 +69,16 @@ class VoiceOut:
         try:
             async for ev in self._events:
                 if isinstance(ev, AtcTransmission):
-                    await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc")
+                    await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc", keep=clip_id(ev))
                 elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
                     if ev.speaker == "atc":
-                        await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc")
+                        await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc", keep=clip_id(ev))
                     else:
-                        await self.say(ev.spoken or ev.text, f"chatter {ev.callsign}", "atc", manner="chatter")
+                        await self.say(ev.spoken or ev.text, f"chatter {ev.callsign}", "atc", manner="chatter", keep=clip_id(ev))
                 elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
-                    await self.say(ev.text, PILOT_SPEAKER_SALT, "pilot")
+                    await self.say(ev.text, PILOT_SPEAKER_SALT, "pilot", keep=clip_id(ev))
                 elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
-                    await self.say(ev.spoken or ev.text, PILOT_SPEAKER_SALT, "intercom")
+                    await self.say(ev.spoken or ev.text, PILOT_SPEAKER_SALT, "intercom", keep=clip_id(ev))
                 elif isinstance(ev, AtisBroadcast) and self.atis:
                     self._stop_atis()
                     self._atis_task = asyncio.create_task(self._loop_atis(ev))
@@ -86,11 +87,14 @@ class VoiceOut:
         finally:
             self._stop_atis()
 
-    async def say(self, text: str, voice_key: str, kind: str, *, manner: str | None = None) -> Clip | None:
+    async def say(self, text: str, voice_key: str, kind: str, *, manner: str | None = None, keep: str = "") -> Clip | None:
+        """``keep``: the id to keep the audio under, to be played again (``dsp.clips``, when that's on)."""
         async with self._lock:
             clip = await asyncio.to_thread(self.render, text, voice_key, kind, manner)
             if clip is not None:
                 self.player.play(clip)
+                if keep and CLIPS.enabled:
+                    await asyncio.to_thread(CLIPS.put, keep, clip.audio, clip.rate)
             return clip
 
     def render(self, text: str, voice_key: str, kind: str, manner: str | None = None) -> Clip | None:

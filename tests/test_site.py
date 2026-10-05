@@ -42,12 +42,12 @@ def test_every_page_has_the_same_header_links():
     for page in PAGES:
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
         header = html[html.index('<header class="topbar">'):html.index("</header>")]
-        assert 'href="dashboard.html#support"' in header, page  # support is a dashboard section: it needs the account
+        assert 'href="dashboard#support"' in header, page  # support is a dashboard section: it needs the account
         assert 'href="https://github.com/duckiest428/LocalTC">GitHub</a>' in header, page
-        assert 'class="btn btn-ghost" href="dashboard.html"' in header and ">Dashboard</a>" in header, page
+        assert 'class="btn btn-ghost" href="dashboard"' in header and ">Dashboard</a>" in header, page
         assert ">Logbook</a>" not in header, page
     template = (ROOT / "tools" / "build_site.py").read_text(encoding="utf-8")  # the changelog page's header
-    assert ">Dashboard</a>" in template and 'href="dashboard.html#support"' in template and ">Logbook</a>" not in template
+    assert ">Dashboard</a>" in template and 'href="dashboard#support"' in template and ">Logbook</a>" not in template
 
 
 def test_the_site_loads_nothing_it_does_not_serve_itself_except_the_api_and_map_tiles():
@@ -89,9 +89,21 @@ def test_the_shared_flight_page_gets_the_hashes_of_what_it_loads(tmp_path):
 def test_the_dashboard_tracker_is_a_preview_and_the_talking_is_on_its_full_screen_page():
     dashboard = (ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
     full = (ROOT / "site" / "tracker.html").read_text(encoding="utf-8")
-    assert 'id="tr-say"' not in dashboard and 'href="tracker.html"' in dashboard
-    assert 'id="tr-say"' in full and 'data-to="crew"' in full and 'id="tr-map"' in full
+    assert 'id="tr-say"' not in dashboard and 'href="tracker"' in dashboard
+    assert 'id="tr-radio"' not in dashboard  # the radio is the full screen's, not the preview's
+    assert 'id="tr-say"' in full and 'data-to="crew"' in full and 'data-to="com2"' in full and 'id="tr-map"' in full
     for page in (dashboard, full):  # the same tracker code, after what it builds on
         scripts = __import__("re").findall(r'<script src="([\w./-]+)"', page)
         assert scripts.index("api.js") < scripts.index("tracker.js")
         assert scripts.index("atcmap.js") < scripts.index("tracker.js")
+
+
+def test_the_pages_link_to_each_other_without_html():
+    """/dashboard, not /dashboard.html (GitHub Pages serves the page either way)."""
+    import re
+
+    for page in [*PAGES, "tracker.html"]:
+        text = (ROOT / "site" / page).read_text(encoding="utf-8")
+        assert not re.findall(r'href="(?!https?:)[^"]*\.html', text), page
+    assert ".html" not in build_site.PAGE.split("<main")[0]
+

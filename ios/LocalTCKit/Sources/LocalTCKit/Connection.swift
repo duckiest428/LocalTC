@@ -30,7 +30,8 @@ public enum ConnectionMode: String, CaseIterable, Sendable, Codable {
 }
 
 /// Who a typed line is for: ATC on COM1, or the copilot on the intercom.
-public enum Listener: String, Sendable, CaseIterable { case atc, crew }
+/// Who a typed line is for: ATC on COM1 (``atc``), ATC on COM2, or the copilot on the intercom (``crew``).
+public enum Listener: String, Sendable, CaseIterable { case atc, com2, crew }
 
 /// Keeps the phone connected: straight to the PC when it's on the same Wi-Fi, through the relay otherwise,
 /// and back to the direct line as soon as it's reachable again.
@@ -134,6 +135,23 @@ public final class ConnectionManager {
         request.timeoutInterval = 5
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode != 200 else { return }
+        let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+        throw SayError.refused(message ?? "LocalTC said \(http.statusCode)")
+    }
+
+    /// A transmission's audio (an 8 kHz WAV) by its radio line's ``RadioLine/audio`` id: from the PC on this network,
+    /// else from the account's relay, which holds the last few while the phone watches.
+    public func clip(_ id: String, session: URLSession = .shared) async throws -> Data {
+        guard let (url, key) = local else {
+            do { return try await api.clip(id) } catch let error as APIError { throw SayError.refused(error.message) }
+        }
+        var components = URLComponents(url: url.appending(path: "/companion/v1/clip"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "id", value: id)]
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 10
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode != 200 else { return data }
         let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
         throw SayError.refused(message ?? "LocalTC said \(http.statusCode)")
     }

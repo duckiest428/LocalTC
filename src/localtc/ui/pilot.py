@@ -353,8 +353,11 @@ class PilotRoutes:
             alerts: list = []
             airports: list | None = None
             live_map: dict = {}  # route and zones: the latest of each (None: gone)
+            clips: list = []  # (id, wav): transmissions to play again
             for kind, data in batch:
-                if kind == "frame":
+                if kind == "clip":
+                    clips.append(data)
+                elif kind == "frame":
                     frame.update(data)
                 elif kind == "radio":
                     radio.extend(data)
@@ -381,6 +384,8 @@ class PilotRoutes:
                                             clear=tuple(k for k, v in live_map.items() if v is None))
                 for alert in alerts:
                     await asyncio.to_thread(self._account.alert, alert)
+                for key, wav in clips[-6:]:
+                    await asyncio.to_thread(self._account.clip, key, wav)
             except AccountError as exc:
                 log.debug("Companion relay failed: %s", exc)
             self._deliver_calls()

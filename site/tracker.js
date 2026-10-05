@@ -1,17 +1,19 @@
-/* The Flight Tracker: the flight in progress, live, as the companion app sees it. In the dashboard it's a preview
-   (the map, the facts, the radio); on its own page (tracker.html) it fills the screen, and there you can type to ATC
-   or to the copilot on the intercom.
+/* The Flight Tracker: the flight in progress, live, as the companion app sees it. In the dashboard it's a preview (the
+   map and the facts); on its own page (/tracker) it fills the screen with the radio and the intercom beside it, as
+   the phone shows them: COM1, COM2 and INT (the copilot) along the bottom, each the channel you see and the one you
+   talk on, and a play button on each transmission LocalTC kept the audio of.
 
    A WebSocket to the account's relay. While it's open the app sends the aircraft, the path flown, traffic, radio, the
    route and the ATC zones its Live Map draws (if its "map away from home" setting is on); they pass through the
-   server's memory and are never stored. atcmap.js draws the route and the zones, as in the app; api.js has the
-   account calls. */
+   server's memory and are never stored. atcmap.js draws the route, the zones and the traffic, as in the app; api.js
+   has the account calls. */
 
 const Tracker = {
   ws: null, retry: 0, timer: null, ping: null, map: null, plane: null, trail: null, path: AtcMap.track(), tfc: new Map(),
   status: { active: false }, gotOwn: false, follow: true, wanted: false,
   tiles: null, routeLayer: null, zoneLayer: null, runwayLayer: null, route: null, routeLine: null, zones: null,
-  mode: "ifr", rulesSeen: null, zonesOn: true, talkTo: "atc",
+  mode: "ifr", rulesSeen: null, zonesOn: true, talkTo: "atc", drawnRef: null, lastOwn: null, lines: [],
+  unread: new Set(), playing: null,
 
   start() {
     if (this.wanted) return;
@@ -72,8 +74,9 @@ const Tracker = {
       if (data.trail) this.setTrail(data.trail);
       if (data.own) this.own(data.own);
       if (data.traffic) this.traffic(data.traffic);
-      $("#tr-radio").innerHTML = "";
-      for (const line of data.radio || []) this.radio(line);
+      this.lines = [];
+      for (const line of data.radio || []) this.radio(line, true);
+      this.renderRadio();
     } else if (type === "status") this.statusIs(data);
     else if (type === "own") this.own(data);
     else if (type === "trail") this.setTrail(data);
@@ -121,7 +124,7 @@ const Tracker = {
 
   ensureMap() {
     if (this.map) { setTimeout(() => this.map.invalidateSize(), 0); return; }
-    this.map = L.map("tr-map", { worldCopyJump: true }).setView([39, -98], 4);
+    this.map = L.map("tr-map").setView([39, -98], 4);  // no world-copy jumping: atcmap.js keeps it all in one copy
     this.tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
     // Bottom to top, as in the app: the zones, the runways, the route, the path flown, then the aircraft.
@@ -162,6 +165,15 @@ const Tracker = {
     this.setRoute(this.route);  // what came before the map was first shown
     this.setZones(this.zones);
     this.setMode(this.mode);
+  },
+  /* The copy of the world everything is drawn in: the aircraft's, as the path flown has it. Crossing the date line
+     moves it on, and the route, the zones and the runways are drawn again there. */
+  useRef(lon) {
+    AtcMap.setRef(lon);
+    if (this.drawnRef != null && Math.abs(lon - this.drawnRef) <= 90) return;
+    this.drawnRef = lon;
+    this.setRoute(this.route);
+    this.setZones(this.zones);
   },
   setFollow(on) {
     this.follow = on;
@@ -225,6 +237,8 @@ const Tracker = {
   },
   clearMap() {
     this.gotOwn = false;
+    this.drawnRef = null;
+    AtcMap.setRef(null);
     this.setRoute(null);
     this.setZones(null);
     this.path = AtcMap.track();
@@ -239,8 +253,9 @@ const Tracker = {
     this.ensureMap();
     // It runs up to now: it replaces what this page drew itself, ending where the aircraft is.
     this.path.set(points);
-    if (this.plane) { const at = this.plane.getLatLng(); this.path.pts.push([at.lat, at.lng]); }
+    if (this.plane) { const at = this.plane.getLatLng(); this.path.pts.push([at.lat, this.path.lon(at.lng)]); }
     this.trail.setLatLngs(this.path.pts);
+    this.useRef(this.path.pts[this.path.pts.length - 1][1]);
     if (!this.plane && this.follow) this.map.fitBounds(this.trail.getBounds(), { padding: [30, 30], maxZoom: 11 });
   },
   icon(hdg, cls, size) {
@@ -253,66 +268,128 @@ const Tracker = {
     this.ensureMap();
     this.gotOwn = true;
     $("#tr-nomap").hidden = true;
-    const at = [o.lat, o.lon];
+    this.lastOwn = o;
+    if (this.path.add(o.lat, o.lon, o.ground)) this.trail.setLatLngs(this.path.pts);
+    const at = [o.lat, this.path.lon(o.lon)];
+    this.useRef(at[1]);
     if (!this.plane) { this.plane = L.marker(at, { icon: this.icon(o.hdg, "own", 30), zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, o.ground ? 13 : 9); }
     else { this.plane.setLatLng(at); this.plane.setIcon(this.icon(o.hdg, "own", 30)); }
-    if (this.path.add(o.lat, o.lon, o.ground)) this.trail.setLatLngs(this.path.pts);
     if (this.follow) this.map.panTo(at, { animate: false });
     this.plane.bindTooltip(`${Number(o.alt || 0).toLocaleString()} ft · ${o.gs ?? "—"} kt · ${String(o.hdg ?? 0).padStart(3, "0")}°`);
   },
+  // The traffic around, labelled as on the app's Live Map (atcmap.js).
   traffic(list) {
     if (!this.map) return;
-    const seen = new Set();
-    for (const t of list || []) {
-      seen.add(t.id);
-      const label = `${esc(t.callsign || "")} ${t.ground ? "GND" : Math.round((t.alt || 0) / 100).toString().padStart(3, "0")}`;
-      const m = this.tfc.get(t.id);
-      if (m) { m.setLatLng([t.lat, t.lon]); m.setIcon(this.icon(t.hdg, t.ground ? "ground" : "air", 18)); }
-      else this.tfc.set(t.id, L.marker([t.lat, t.lon], { icon: this.icon(t.hdg, t.ground ? "ground" : "air", 18) })
-        .bindTooltip(label).addTo(this.map));
-    }
-    for (const [id, m] of this.tfc) if (!seen.has(id)) { m.remove(); this.tfc.delete(id); }
+    AtcMap.traffic(this.map, this.tfc, list);
   },
-  /* Who a typed line is for: ATC on COM1, or the copilot on the intercom (when it's on in the app). */
+  /* The channels, as on the phone: COM1 and COM2 (ATC, you, and the copilot when it works the radio) and INT (you and
+     the copilot on the intercom, when it's on in the app). The one picked is what the log shows and where a typed line
+     goes. A dot on another one: something new there. */
   syncTalk() {
-    const pick = $("#tr-to");
-    if (!pick) return;
     const crew = !!this.status.crew;
-    pick.hidden = !crew;
+    const int = document.querySelector("#tr-to [data-to=crew]");
+    if (int) {
+      int.disabled = !crew;
+      int.title = crew ? "The copilot, on the intercom" : "The copilot isn't on in LocalTC (Quick Settings → Copilot → Intercom)";
+    }
     if (!crew && this.talkTo === "crew") this.setTalk("atc");
   },
   setTalk(to) {
     this.talkTo = to;
-    document.querySelectorAll("#tr-to [data-to]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.to === to)));
+    this.unread.delete(to);
+    document.querySelectorAll("#tr-to [data-to]").forEach((b) => {
+      b.setAttribute("aria-selected", String(b.dataset.to === to));
+      b.classList.toggle("unread", this.unread.has(b.dataset.to));
+    });
     const input = $("#tr-say-text");
     if (input) {
-      input.placeholder = to === "crew" ? "Say it to the copilot: \"flaps one\", \"how much fuel?\", \"brief\" ..." : "Type a radio call, as in the app ...";
+      input.placeholder = to === "crew" ? "Say it to the copilot: \"flaps one\", \"how much fuel?\", \"brief\" ..."
+        : `Type a radio call on ${to === "com2" ? "COM2" : "COM1"} ...`;
       input.setAttribute("aria-label", to === "crew" ? "Something to say to the copilot" : "A radio call to transmit");
     }
     const send = $("#tr-say-send");
-    if (send) send.textContent = to === "crew" ? "Say" : "Transmit";
+    if (send) send.setAttribute("aria-label", to === "crew" ? "Say it to the copilot" : "Transmit");
+    this.renderRadio();
   },
-  radio(line) {
+  /** The channel a line is on: the intercom, else COM2 when it says so (or ATC's frequency is COM2's), else COM1. */
+  channel(line) {
+    if (line.kind === "crew" || line.kind === "intercom") return "crew";
+    if (line.radio === 2) return "com2";
+    const o = this.lastOwn, f = Number(line.mhz);
+    if (!line.radio && f && o && o.com2 && Math.abs(f - o.com2) < 0.006 && !(o.com1 && Math.abs(f - o.com1) < 0.006)) return "com2";
+    return "atc";
+  },
+  radio(line, quiet = false) {
     const note = $("#tr-say-note");
     if (line.kind === "alert" && /^Not transmitted/.test(line.text || "")) { if (note) note.textContent = line.text; return; }
-    if (!["atc", "pilot", "copilot", "crew", "intercom"].includes(line.kind) || !line.text) return;
+    if (!["atc", "pilot", "copilot", "crew", "intercom", "chatter"].includes(line.kind) || !line.text) return;
+    line.ch = this.channel(line);
+    this.lines.push(line);
+    if (this.lines.length > 200) this.lines.shift();
+    if (quiet) return;
+    if (line.ch !== this.talkTo) {
+      this.unread.add(line.ch);
+      document.querySelector(`#tr-to [data-to=${line.ch}]`)?.classList.add("unread");
+      return;
+    }
     const list = $("#tr-radio");
-    // The intercom too: what you said to the copilot, and what it said (its callouts, its answers).
-    const who = { atc: esc(line.station || "ATC"), copilot: "Copilot", pilot: "You", crew: "Copilot · intercom",
-      intercom: "You · intercom" }[line.kind];
-    list.insertAdjacentHTML("beforeend", `<li class="${esc(line.kind)}"><span class="who">${who}</span> ${esc(line.text)}</li>`);
-    while (list.children.length > 40) list.firstElementChild.remove();
+    if (!list) return;
+    list.insertAdjacentHTML("beforeend", this.bubble(line));
+    while (list.children.length > 120) list.firstElementChild.remove();
     list.scrollTop = list.scrollHeight;
+  },
+  renderRadio() {
+    const list = $("#tr-radio");
+    if (!list) return;
+    const shown = this.lines.filter((l) => l.ch === this.talkTo).slice(-120);
+    list.innerHTML = shown.length ? shown.map((l) => this.bubble(l)).join("")
+      : `<li class="msg-empty">${this.talkTo === "crew" ? "Nothing on the intercom yet. The copilot speaks up when there's something to say, and answers anything you say to it here."
+        : "Quiet on the frequency."}</li>`;
+    list.scrollTop = list.scrollHeight;
+  },
+  bubble(l) {
+    const mine = l.kind === "pilot" || l.kind === "intercom";
+    const who = { atc: l.station || "ATC", pilot: "You", copilot: "Copilot", crew: "Copilot", intercom: "You",
+      chatter: l.station || "Other traffic" }[l.kind];
+    const meta = [l.mhz ? Number(l.mhz).toFixed(3) : "", l.ch === "crew" ? "INT" : l.ch === "com2" ? "COM2" : "COM1"].filter(Boolean).join(" · ");
+    const play = l.audio ? `<button type="button" class="msg-play" data-audio="${esc(l.audio)}" aria-label="Play">${PLAY_ICON}</button>` : "";
+    return `<li class="msg ${esc(l.kind)}${mine ? " mine" : ""}${l.level === "warn" ? " warn" : ""}"><div class="msg-bubble">
+      <div class="msg-who">${play}<b>${esc(who)}</b></div><div class="msg-text">${esc(l.text)}</div>
+      <div class="msg-meta">${esc(meta)}</div></div></li>`;
+  },
+  /* A transmission as it was heard (ATC's and the copilot's voices, yours as the microphone took it): from the
+     account's relay, which holds the last few while you watch. Only when you press play. */
+  async play(btn) {
+    const id = btn.dataset.audio;
+    if (this.playing) { this.playing.audio.pause(); this.playing.btn.classList.remove("on"); }
+    if (this.playing && this.playing.btn === btn) { this.playing = null; return; }
+    btn.classList.add("on");
+    try {
+      const res = await fetch(`${API}/v1/live/clip/${encodeURIComponent(id)}`, { credentials: "include", headers: { "X-LocalTC": "1" } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Not available");
+      const audio = new Audio(URL.createObjectURL(await res.blob()));
+      this.playing = { audio, btn };
+      audio.onended = () => { btn.classList.remove("on"); if (this.playing && this.playing.audio === audio) this.playing = null; };
+      await audio.play();
+    } catch (err) {
+      btn.classList.remove("on");
+      btn.title = err.message;
+      btn.classList.add("gone");
+      this.playing = null;
+    }
   },
 };
 
-// --- the full-screen page (tracker.html): the map takes the screen, and you can talk ---------------------------
+const PLAY_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>';
+
+// --- the full-screen page (/tracker): the map takes the screen, and you can talk ----------------------------------
 
 // A line typed here: the account's relay holds it until the app picks it up (a second or two while this page
-// watches). A radio call goes out on COM1 as if typed in the app, ATC's answer coming back in the log; a line for the
-// copilot is said to it on the intercom, its answer coming back the same way.
+// watches). A radio call goes out on COM1 (or COM2) as if typed in the app, ATC's answer coming back in the log; a line
+// for the copilot is said to it on the intercom, its answer coming back the same way.
 if ($("#tr-say")) {
-  $("#tr-to").onclick = (e) => { const b = e.target.closest("[data-to]"); if (b) Tracker.setTalk(b.dataset.to); };
+  $("#tr-to").onclick = (e) => { const b = e.target.closest("[data-to]"); if (b && !b.disabled) Tracker.setTalk(b.dataset.to); };
+  $("#tr-radio").onclick = (e) => { const b = e.target.closest(".msg-play"); if (b) Tracker.play(b); };
   $("#tr-say").onsubmit = async (e) => {
     e.preventDefault();
     const input = $("#tr-say-text");
@@ -324,7 +401,7 @@ if ($("#tr-say")) {
     try {
       await api("POST", "/v1/live/say", { text, to });
       input.value = "";
-      note.textContent = to === "crew" ? "Sent to the copilot: it answers on the intercom." : "Sent to the app: it goes out on COM1 in a moment.";
+      note.textContent = to === "crew" ? "Said to the copilot: it answers on the intercom." : `Sent: it goes out on ${to === "com2" ? "COM2" : "COM1"} in a moment.`;
     } catch (err) { note.textContent = err.message; }
   };
 }
@@ -335,7 +412,7 @@ if (document.body.dataset.page === "tracker") {
       await api("GET", "/v1/me");
     } catch (err) {
       $("#tr-status").innerHTML = err.status === 401
-        ? `<p class="hint">Sign in on the <a href="dashboard.html">dashboard</a> first, then come back here.</p>`
+        ? `<p class="hint">Sign in on the <a href="dashboard">dashboard</a> first, then come back here.</p>`
         : `<p class="hint">Can't reach the LocalTC server: ${esc(err.message)}</p>`;
       return;
     }

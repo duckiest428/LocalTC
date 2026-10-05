@@ -38,6 +38,8 @@ const MAX_MAP = 384 * 1024; // the route and the zones: a long flight crosses a 
 const CALL_TTL_MS = 60_000; // a radio call from the phone or website the desktop hasn't picked up by then is dropped
 const CALLS_KEEP = 5; // calls waiting at once (more is somebody typing faster than ATC can answer)
 const CALL_MAX = 300; // characters in one call, as the desktop's own box takes
+const CLIP_MAX = 200 * 1024; // a transmission's audio (8 kHz, 8 bits: 20 s at most)
+const CLIPS_KEEP = 40; // the last few, to play again from the radio log
 
 type Station = { station?: string; mhz?: number } | null;
 export interface Status {
@@ -65,7 +67,7 @@ const STATUS_KEYS = ["active", "callsign", "aircraft", "origin", "destination", 
   "altitude_ft", "runway", "gate", "rules", "tuned", "next", "ete", "last_atc", "crew"] as const;
 const OWN_KEYS = ["t", "lat", "lon", "alt", "agl", "hdg", "hdg_mag", "gs", "vs", "ground", "com1", "com2", "squawk"] as const;
 const TRAFFIC_KEYS = ["id", "callsign", "type", "lat", "lon", "alt", "hdg", "gs", "ground"] as const;
-const RADIO_KEYS = ["kind", "t", "station", "mhz", "text", "ok", "level", "unclear", "radio"] as const;
+const RADIO_KEYS = ["kind", "t", "station", "mhz", "text", "ok", "level", "unclear", "radio", "audio"] as const;
 const ALERT_KINDS = ["handoff", "clearance", "traffic", "emergency"];
 
 function pick(raw: unknown, keys: readonly string[]): Record<string, unknown> {
@@ -260,15 +262,28 @@ export function pushFor(before: Status | null, after: Status): { title: string; 
   return null;
 }
 
-/** A radio call to transmit: the words, trimmed to one line. */
-/** A typed call: its words, and who it's for: ATC on COM1 ("atc") or the copilot on the intercom ("crew"). */
-export function cleanCall(raw: Record<string, unknown>): { text: string; to: "atc" | "crew" } {
+/** Who a typed call is for: ATC on COM1 ("atc"), on COM2 ("com2"), or the copilot on the intercom ("crew"). */
+export type Listener = "atc" | "com2" | "crew";
+
+/** A typed call: its words, trimmed to one line, and who it's for. */
+export function cleanCall(raw: Record<string, unknown>): { text: string; to: Listener } {
   const text = typeof raw.text === "string" ? raw.text.replace(/\s+/g, " ").trim() : "";
   if (!text) throw new HttpError(400, "Nothing to say.");
-  return { text: text.slice(0, CALL_MAX), to: raw.to === "crew" ? "crew" : "atc" };
+  return { text: text.slice(0, CALL_MAX), to: raw.to === "crew" || raw.to === "com2" ? raw.to : "atc" };
 }
 
-export interface Call { id: string; text: string; to: "atc" | "crew"; at: number }
+const CLIP_ID = /^[0-9a-f]{16}$/;
+
+/** A transmission's audio from the desktop: a WAV, under the id its radio line carries. */
+export function cleanClip(id: string, body: ArrayBuffer): ArrayBuffer {
+  if (!CLIP_ID.test(id)) throw new HttpError(400, "That isn't a transmission's id.");
+  if (body.byteLength > CLIP_MAX) throw new HttpError(413, "That transmission is too long.");
+  const head = new TextDecoder().decode(new Uint8Array(body.slice(0, 12)));
+  if (!head.startsWith("RIFF") || head.slice(8, 12) !== "WAVE") throw new HttpError(400, "Send a WAV.");
+  return body;
+}
+
+export interface Call { id: string; text: string; to: Listener; at: number }
 
 export class LiveRoom extends DurableObject<Env> {
   // In memory only. Never written to this.ctx.storage.
@@ -281,10 +296,11 @@ export class LiveRoom extends DurableObject<Env> {
   private trailGround = false;
   private route: Obj | null = null;
   private zones: Obj | null = null;
+  private clips = new Map<string, ArrayBuffer>(); // the last CLIPS_KEEP transmissions' audio, oldest first
 
   private forget(): void {
     this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; this.route = null; this.zones = null;
-    this.calls = [];
+    this.calls = []; this.clips.clear();
   }
 
   /** The calls waiting for the desktop, handed over once: each answer to the desktop carries them. */
@@ -297,6 +313,18 @@ export class LiveRoom extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const watchers = () => this.ctx.getWebSockets().length;
+    const clip = /^\/clip\/([0-9a-f]{16})$/.exec(url.pathname);
+    if (clip && request.method === "PUT") {
+      this.clips.delete(clip[1]);
+      this.clips.set(clip[1], await request.arrayBuffer());
+      while (this.clips.size > CLIPS_KEEP) this.clips.delete(this.clips.keys().next().value as string);
+      return json({ ok: true, watchers: watchers(), calls: this.take() });
+    }
+    if (clip && request.method === "GET") {
+      const wav = this.clips.get(clip[1]);
+      if (!wav) return json({ error: "That transmission isn't here (only the last few, while someone watches)." }, 404);
+      return new Response(wav, { headers: { "Content-Type": "audio/wav", "Cache-Control": "private, max-age=3600" } });
+    }
     switch (`${request.method} ${url.pathname}`) {
       case "POST /wipe": {
         for (const ws of this.ctx.getWebSockets()) ws.close(1000, "account deleted");
@@ -356,12 +384,12 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "POST /say": {
         // A call typed on the phone or the website. Only while a flight is on: otherwise nothing would answer it.
-        const { text, to } = (await request.json()) as { text: string; to?: "atc" | "crew" };
+        const { text, to } = (await request.json()) as { text: string; to?: Listener };
         const now = await this.current();
         if (!now.active) return json({ error: "LocalTC isn't flying right now." }, 409);
         if (to === "crew" && !now.crew) return json({ error: "The copilot isn't on in LocalTC." }, 409);
         this.calls = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS)
-          .concat([{ id: crypto.randomUUID(), text, to: to === "crew" ? "crew" : "atc", at: Date.now() }]).slice(-CALLS_KEEP);
+          .concat([{ id: crypto.randomUUID(), text, to: to === "crew" || to === "com2" ? to : "atc", at: Date.now() }]).slice(-CALLS_KEEP);
         return json({ ok: true, waiting: this.calls.length });
       }
       case "GET /calls":  // the desktop's poll while somebody watches and nothing else is going up
@@ -377,7 +405,7 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
         return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail,
-          route: this.route, zones: this.zones, calls: this.calls,
+          route: this.route, zones: this.zones, calls: this.calls, clips: [...this.clips.keys()],
           stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
@@ -463,6 +491,21 @@ export async function say(env: Env, request: Request, auth: Auth): Promise<Respo
   const call = cleanCall(await readJson(request, 4 * 1024));
   await limit(env, `say:${auth.user.id}`, 120, 3600);
   return send(env, auth, "POST", "/say", call);
+}
+
+/** A transmission's audio from the desktop, for the phone and the Flight Tracker to play again. */
+export async function putClip(env: Env, request: Request, auth: Auth, id: string): Promise<Response> {
+  const body = cleanClip(id, await request.arrayBuffer());
+  return room(env, auth).fetch(`https://live/clip/${id}`, { method: "PUT", body });
+}
+
+/** One to play: the website's (with its cookie, from its own pages) or the phone's. */
+export async function getClip(env: Env, request: Request, auth: Auth, id: string): Promise<Response> {
+  if (!CLIP_ID.test(id)) throw new HttpError(400, "That isn't a transmission's id.");
+  if (auth.viaCookie && request.headers.get("Origin") && !allowedOrigin(env, request.headers.get("Origin"))) {
+    throw new HttpError(403, "Not from this site.");
+  }
+  return room(env, auth).fetch(`https://live/clip/${id}`);
 }
 
 /** The desktop picking up the calls waiting for it. */

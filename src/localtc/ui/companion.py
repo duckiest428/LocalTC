@@ -24,6 +24,7 @@ import platform
 import secrets
 import socket
 import time
+import urllib.parse
 from collections import deque
 from collections.abc import Callable
 from typing import Any
@@ -190,6 +191,12 @@ class CompanionHub:
         if self._remote_ok():
             self._send("radio", [line])
 
+    def add_clip(self, key: str, wav: bytes) -> None:
+        """A transmission's audio, kept to play again (dsp.clips): on to a phone watching through the server. One on
+        this network asks for it when it's played (``/companion/v1/clip``)."""
+        if self._remote_ok():
+            self._send("clip", (key, wav))
+
     def on_event(self, ev: object) -> None:
         alert = alert_for(ev)
         if alert is not None:
@@ -246,6 +253,19 @@ class CompanionHub:
     def _send(self, kind: str, data: Any) -> None:
         if self.remote is not None:
             self.remote(kind, data)
+
+
+async def clip_when_ready(key: str, wait_s: float = 6.0) -> bytes | None:
+    """A kept transmission's audio. Played the moment its line shows, it may still be being synthesized: a moment."""
+    from localtc.dsp.clips import CLIPS
+
+    for _ in range(int(wait_s / 0.2)):
+        if not CLIPS.enabled or not key:
+            return None
+        if (wav := CLIPS.get(key)) is not None:
+            return wav
+        await asyncio.sleep(0.2)
+    return CLIPS.get(key)
 
 
 def simplify(path: list[list[float]], keep: int) -> list[list[float]]:
@@ -321,7 +341,7 @@ class CompanionServer:
                  say: Callable[[str, str], None] | None = None) -> None:
         self.hub = hub
         self.zones = zones
-        self.say = say  # a call typed on the phone: (words, "atc" or "crew"), as if typed in the app
+        self.say = say  # a call typed on the phone: (words, "atc", "com2" or "crew"), as if typed in the app
         self._server: asyncio.base_events.Server | None = None
         self._zeroconf: Any = None
         self._clients: set[asyncio.Task] = set()  # open connections, closed with the server
@@ -396,6 +416,13 @@ class CompanionServer:
             elif method == "POST" and path == "/companion/v1/say" and self.say is not None:
                 status, answer = self._say(body)
                 _write_response(writer, status, "application/json", json.dumps(answer).encode(), keep_alive=False)
+            elif method == "GET" and path == "/companion/v1/clip":
+                key = urllib.parse.parse_qs(target.partition("?")[2]).get("id", [""])[0]
+                wav = await clip_when_ready(key)
+                if wav is None:
+                    _write_response(writer, 404, "application/json", b'{"error":"that transmission isn\'t kept"}', keep_alive=False)
+                else:
+                    _write_response(writer, 200, "audio/wav", wav, keep_alive=False)
             elif method == "GET" and path == "/companion/v1/zones" and self.zones is not None:
                 body = json.dumps(await self.zones({}), default=str).encode()
                 _write_response(writer, 200, "application/json", body, keep_alive=False)
@@ -414,7 +441,7 @@ class CompanionServer:
         try:
             sent = json.loads(body or b"{}")
             text = str(sent.get("text", "")).strip()[:300]
-            to = "crew" if sent.get("to") == "crew" else "atc"  # the copilot on the intercom, or ATC on COM1
+            to = sent.get("to") if sent.get("to") in ("crew", "com2") else "atc"  # the intercom, COM2, or COM1
         except (ValueError, AttributeError):
             return 400, {"error": "send {\"text\": ...}"}
         if not text:

@@ -217,6 +217,17 @@ describe("radio calls from the phone and the website", () => {
     expect((await data(await call("GET", "/v1/live/calls", undefined, bearer(token)))).calls).toEqual([]);
   });
 
+  it("goes to the copilot on the intercom when it's on, and says who it's for", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    expect((await call("POST", "/v1/live/say", { text: "gear down", to: "crew" }, bearer(token))).status).toBe(409);  // no copilot
+    await call("PUT", "/v1/live", { ...cruise, crew: true }, bearer(token));
+    expect((await call("POST", "/v1/live/say", { text: "gear down", to: "crew" }, bearer(token))).status).toBe(200);
+    expect((await call("POST", "/v1/live/say", { text: "radio check", to: "anything" }, bearer(token))).status).toBe(200);
+    const answer = await data(await call("GET", "/v1/live/calls", undefined, bearer(token)));
+    expect(answer.calls.map((c: { text: string; to: string }) => [c.text, c.to])).toEqual([["gear down", "crew"], ["radio check", "atc"]]);
+  });
+
   it("is refused when nothing is flying, or there's nothing to say", async () => {
     const { token } = await signIn();
     expect((await call("POST", "/v1/live/say", { text: "radio check" }, bearer(token))).status).toBe(409);
@@ -245,5 +256,18 @@ describe("the path flown", () => {
     expect(kept.length).toBeLessThanOrEqual(2000);
     expect(kept[0]).toEqual([0, 0]);
     expect(kept[kept.length - 1]).toEqual([49.99, 0]);
+  });
+
+  it("keeps the taxi's turns when a long flight is simplified", async () => {
+    const { thin } = await import("../src/live");
+    // An L-shaped taxi (10 m steps), then a long zigzag-free climb and cruise.
+    const taxi = [...Array.from({ length: 50 }, (_, i) => [40, -73 + i * 0.0001]),
+      ...Array.from({ length: 50 }, (_, i) => [40 + i * 0.0001, -72.995])] as [number, number][];
+    const cruise = Array.from({ length: 4000 }, (_, i) => [40.005 + i * 0.002, -72.995] as [number, number]);
+    const kept = thin([...taxi, ...cruise]);
+    expect(kept.length).toBeLessThanOrEqual(2000);
+    expect(kept[0]).toEqual([40, -73]);
+    // The corner is still there (within a step), not cut across from the gate to the runway.
+    expect(kept.some(([lat, lon]) => Math.abs(lat - 40) < 1e-4 && Math.abs(lon + 72.995) < 2e-4)).toBe(true);
   });
 });

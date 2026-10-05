@@ -50,6 +50,7 @@ describe("ATC Wrapped", () => {
     const { token } = await pilot([day(3), day(4), flight("aug", { started_at: "2026-08-15T10:00:00Z", readbacks: 10, readbacks_correct: 10 })]);
     const r = await data(await call("GET", `/v1/wrapped?${SEPT}`, undefined, bearer(token)));
     expect(r.previous).toMatchObject({ flights: 1, readback_accuracy: 100 });
+    expect(r.first_flight_at).toBe("2026-08-15T10:00:00Z"); // how far back the arrows go
     expect(r.slides.find((s: any) => s.kind === "radio").previous).toBe(100);
   });
 

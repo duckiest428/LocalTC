@@ -4,11 +4,13 @@ import SwiftUI
 /// ATC Wrapped on the phone: a week, a month or a year of the account's flying, as a story of slides. The
 /// account server works it out (the same slides as the website's); the words are LocalTCKit's SlideText.
 /// "Image" draws the slide as the website does (sharecard.js); the summary can become a public link.
-/// Only the last finished week, month or year can be seen; the one still going is locked, counting down.
+/// Any finished week, month or year back to the account's first flight can be seen; the one still going is locked,
+/// counting down.
 struct WrappedScreen: View {
     @Environment(AppModel.self) private var model
     @State private var kind: WrappedPeriod.Kind = .month
-    @State private var step = -1  // the last finished period; 0 is the one still going (locked)
+    @State private var step = -1  // periods back: -1 is the last finished one; 0 is the one still going (locked)
+    @State private var first: Date?  // the account's first flight, once the server has said
     @State private var recap: Wrapped?
     @State private var raw: [String: Any] = [:]
     @State private var error: String?
@@ -30,12 +32,12 @@ struct WrappedScreen: View {
             }
             .pickerStyle(.segmented)
             HStack {
-                Button { step = -1 } label: { Image(systemName: "chevron.left") }
-                    .disabled(step == -1).accessibilityLabel("The period before")
+                Button { step -= 1 } label: { Image(systemName: "chevron.left") }
+                    .disabled(!canGoBack).accessibilityLabel("The period before")
                 Spacer()
                 Text(period.label).font(.headline)
                 Spacer()
-                Button { step = 0 } label: { Image(systemName: "chevron.right") }
+                Button { step += 1 } label: { Image(systemName: "chevron.right") }
                     .disabled(step == 0).accessibilityLabel("The period after")
             }
             content
@@ -50,12 +52,19 @@ struct WrappedScreen: View {
         .toolbarBackground(Color(red: 0.043, green: 0.051, blue: 0.063), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .onChange(of: kind) { step = -1 }
-        .task(id: "\(kind.rawValue)\(step)") { if step == -1 { await load() } }
+        .task(id: "\(kind.rawValue)\(step)") { if step < 0 { await load() } }
         .task(id: "\(index)-\(paused)-\(recap?.label ?? "")") { await advance() }
         .overlay(alignment: .topLeading) {
             // The renderer draws off screen: its web view has to be in the window to run.
             CardPreview(renderer: renderer).frame(width: 2, height: 1).opacity(0.01).allowsHitTesting(false)
         }
+    }
+
+    /// Back as far as the account's first flight; without word of it (an older server), a few years.
+    private var canGoBack: Bool {
+        let before = WrappedPeriod(kind, step: step - 1)
+        if let first { return before.end > first }
+        return before.start > Date().addingTimeInterval(-5 * 366 * 86400)
     }
 
     @ViewBuilder private var content: some View {
@@ -104,7 +113,9 @@ struct WrappedScreen: View {
             } else {
                 Text("Fly with LocalTC signed in to this account, and each flight you land adds to it.")
             }
-            Text("Your next Wrapped unlocks in \(Self.countdown(WrappedPeriod(kind, step: 0).end.timeIntervalSinceNow)).")
+            if step == -1 {
+                Text("Your next Wrapped unlocks in \(Self.countdown(WrappedPeriod(kind, step: 0).end.timeIntervalSinceNow)).")
+            }
         }
     }
 
@@ -151,6 +162,7 @@ struct WrappedScreen: View {
     private func load() async {
         loading = true
         defer { loading = false }
+        recap = nil  // not the period before's story under this one's name while it loads
         index = 0
         image = nil
         link = nil
@@ -158,6 +170,7 @@ struct WrappedScreen: View {
         do {
             let data = try await model.api.wrappedJSON(period)
             recap = try model.api.decodeWrapped(data)
+            if let at = recap?.firstFlightAt { first = ISO8601DateFormatter().date(from: at) }
             raw = JSONSerialization.dictionary(data)
             error = nil
         } catch {

@@ -145,5 +145,50 @@ const AtcMap = (() => {
     <div class="lg-src lg-ifr">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
     <div class="lg-src lg-vfr">Airspace classes are simplified (typical sizes), not for real navigation</div>`;
 
-  return { esc, route, straight, runways, zones, talk, LEGEND };
+  /* The path flown, kept as the app keeps it (ui/companion.py): a point every ~200 m in the air and every ~10 m on
+     the ground, so the taxi from the gate keeps its turns; one always on lifting off or touching down. Past `keep`
+     points it's simplified (Douglas-Peucker): straight legs lose their points, the turns and the taxi keep theirs.
+     Dropping every other point instead lost the taxi a few hours into a flight. */
+  function track(keep = 3000) {
+    return {
+      pts: [], ground: false,
+      add(lat, lon, ground) {
+        ground = !!ground;
+        const last = this.pts[this.pts.length - 1];
+        if (last && ground === this.ground && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < (ground ? 0.0001 : 0.002)) return false;
+        this.ground = ground;
+        this.pts.push([lat, lon]);
+        if (this.pts.length > keep) this.pts = simplify(this.pts, keep);
+        return true;
+      },
+      set(points) { this.pts = simplify(points.map((p) => [p[0], p[1]]), keep); },
+    };
+  }
+  function simplify(path, keep) {
+    let out = path;
+    for (let tol = 0.00003; out.length > keep * 0.75 && out.length > 2; tol *= 2) out = douglasPeucker(out, tol);
+    return out;
+  }
+  function douglasPeucker(path, tolerance) {
+    const keep = path.map(() => false);
+    keep[0] = keep[path.length - 1] = true;
+    const stack = [[0, path.length - 1]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (b <= a + 1) continue;
+      const k = Math.cos((path[a][0] * Math.PI) / 180);
+      const ax = path[a][1] * k, ay = path[a][0], dx = path[b][1] * k - ax, dy = path[b][0] - ay, len2 = dx * dx + dy * dy;
+      let worst = -1, at = a;
+      for (let i = a + 1; i < b; i++) {
+        const px = path[i][1] * k - ax, py = path[i][0] - ay;
+        const u = len2 === 0 ? 0 : Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+        const d = Math.hypot(px - u * dx, py - u * dy);
+        if (d > worst) { worst = d; at = i; }
+      }
+      if (worst > tolerance) { keep[at] = true; stack.push([a, at], [at, b]); }
+    }
+    return path.filter((_, i) => keep[i]);
+  }
+
+  return { esc, route, straight, runways, zones, talk, track, LEGEND };
 })();

@@ -282,10 +282,12 @@ class Account:
         for call in (data or {}).get("calls") or ():
             text = call.get("text") if isinstance(call, dict) else None
             if isinstance(text, str) and text.strip():
-                self.calls.append(text.strip()[:300])
+                to = "crew" if call.get("to") == "crew" else "atc"
+                self.calls.append((text.strip()[:300], to))
 
-    def take_calls(self) -> list[str]:
-        """The radio calls typed on the phone or the website since last asked, oldest first."""
+    def take_calls(self) -> list[tuple[str, str]]:
+        """The calls typed on the phone or the website since last asked, oldest first: (words, "atc" for the radio
+        or "crew" for the copilot on the intercom)."""
         calls, self.calls = self.calls, []
         return calls
 

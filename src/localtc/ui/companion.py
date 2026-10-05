@@ -39,16 +39,20 @@ SERVICE = "_localtc._tcp.local."
 RADIO_BACKLOG = 50
 REMOTE_OWN_EVERY_S = 1.0
 REMOTE_TRAFFIC_EVERY_S = 5.0
-# The path flown so far, for a map opened mid-flight: a point every ~200 m of movement (0.002 degrees), rounded to
-# about 10 m. Past TRAIL_KEEP points every other one goes, so a long flight keeps its whole shape.
+# The path flown so far, for a map opened mid-flight: a point every ~200 m of movement in the air (0.002 degrees) and
+# every ~10 m on the ground, so the taxi from the gate shows its turns, rounded to about 1 m. Past TRAIL_KEEP points
+# the path is simplified (``simplify``): straight legs lose their points, the turns and the taxi keep theirs.
+# (Dropping every other point lost the taxi altogether: a few hours in, the gate joined the climb in one line.)
 TRAIL_STEP_DEG = 0.002
+TRAIL_STEP_GROUND_DEG = 0.0001
 TRAIL_KEEP = 1500
+TRAIL_TOLERANCE_DEG = 0.00003  # the simplification's first try: ~3 m off the line; doubled until the path fits
 # The whole path goes up to the relay this often while somebody watches: the relay only sees the positions sent while
 # somebody watched, so without it a website opened later drew a straight line across the rest of the flight.
 REMOTE_TRAIL_EVERY_S = 120.0
 ZONE_DECIMALS = 3  # the ATC zones' outlines to about 100 m: plenty for a map, a third the size
 STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
-               "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules")
+               "altitude_ft", "runway", "tuned", "next", "ete", "last_atc", "gate", "rules", "crew")
 
 # What deserves a banner on the phone. Handoffs and the clearances that change what the pilot does next;
 # not every "roger".
@@ -125,6 +129,7 @@ class CompanionHub:
         self._sent_own = 0.0
         self._sent_traffic = 0.0
         self._sent_trail = 0.0
+        self._trail_ground = False
         self._backlog_sent = False
 
     # --- what the app publishes ----------------------------------------------------------------------------
@@ -222,13 +227,15 @@ class CompanionHub:
         lat, lon = own.get("lat"), own.get("lon")
         if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
             return
-        if self.trail:
+        ground = bool(own.get("ground"))
+        if self.trail and ground == self._trail_ground:  # lifting off or touching down: always a point
             last = self.trail[-1]
-            if abs(last[0] - lat) + abs(last[1] - lon) < TRAIL_STEP_DEG:
+            if abs(last[0] - lat) + abs(last[1] - lon) < (TRAIL_STEP_GROUND_DEG if ground else TRAIL_STEP_DEG):
                 return
-        self.trail.append([round(lat, 4), round(lon, 4)])
+        self._trail_ground = ground
+        self.trail.append([round(lat, 5), round(lon, 5)])
         if len(self.trail) > TRAIL_KEEP:
-            self.trail = self.trail[:-1:2] + self.trail[-1:]  # half as dense, the whole flight still there
+            self.trail = simplify(self.trail, TRAIL_KEEP)
 
     def _local(self, kind: str, data: Any) -> None:
         self.stream.publish(kind, data)
@@ -239,6 +246,49 @@ class CompanionHub:
     def _send(self, kind: str, data: Any) -> None:
         if self.remote is not None:
             self.remote(kind, data)
+
+
+def simplify(path: list[list[float]], keep: int) -> list[list[float]]:
+    """The path in at most ``keep`` points with its shape: Douglas-Peucker, the tolerance doubled from
+    ``TRAIL_TOLERANCE_DEG`` until it fits in three quarters of ``keep`` (room to grow before the next time). The first
+    and last points always stay."""
+    out = path
+    tolerance = TRAIL_TOLERANCE_DEG
+    while len(out) > keep * 3 // 4 and len(out) > 2:
+        out = _douglas_peucker(out, tolerance)
+        tolerance *= 2
+    return out
+
+
+def _douglas_peucker(path: list[list[float]], tolerance: float) -> list[list[float]]:
+    import math
+
+    n = len(path)
+    keep = [False] * n
+    keep[0] = keep[-1] = True
+    stack = [(0, n - 1)]
+    while stack:
+        a, b = stack.pop()
+        if b <= a + 1:
+            continue
+        k = math.cos(math.radians(path[a][0]))  # a degree of longitude is shorter away from the equator
+        ax, ay, bx, by = path[a][1] * k, path[a][0], path[b][1] * k, path[b][0]
+        dx, dy = bx - ax, by - ay
+        length2 = dx * dx + dy * dy
+        worst, at = -1.0, a
+        for i in range(a + 1, b):
+            px, py = path[i][1] * k - ax, path[i][0] - ay
+            if length2 == 0:
+                d = math.hypot(px, py)
+            else:
+                u = max(0.0, min(1.0, (px * dx + py * dy) / length2))
+                d = math.hypot(px - u * dx, py - u * dy)
+            if d > worst:
+                worst, at = d, i
+        if worst > tolerance:
+            keep[at] = True
+            stack += [(a, at), (at, b)]
+    return [p for p, k in zip(path, keep, strict=True) if k]
 
 
 def compact_zones(zones: dict) -> dict:
@@ -268,10 +318,10 @@ class CompanionServer:
     """The phone's direct line on the local network: an SSE stream and the ATC zones, behind the key."""
 
     def __init__(self, hub: CompanionHub, zones: Callable[[dict], Any] | None = None,
-                 say: Callable[[str], None] | None = None) -> None:
+                 say: Callable[[str, str], None] | None = None) -> None:
         self.hub = hub
         self.zones = zones
-        self.say = say  # a call typed on the phone, transmitted as if typed in the app
+        self.say = say  # a call typed on the phone: (words, "atc" or "crew"), as if typed in the app
         self._server: asyncio.base_events.Server | None = None
         self._zeroconf: Any = None
         self._clients: set[asyncio.Task] = set()  # open connections, closed with the server
@@ -362,13 +412,15 @@ class CompanionServer:
 
     def _say(self, body: bytes) -> tuple[int, dict]:
         try:
-            text = str(json.loads(body or b"{}").get("text", "")).strip()[:300]
+            sent = json.loads(body or b"{}")
+            text = str(sent.get("text", "")).strip()[:300]
+            to = "crew" if sent.get("to") == "crew" else "atc"  # the copilot on the intercom, or ATC on COM1
         except (ValueError, AttributeError):
             return 400, {"error": "send {\"text\": ...}"}
         if not text:
             return 400, {"error": "nothing to say"}
         try:
-            self.say(text)
+            self.say(text, to)
         except (RuntimeError, ValueError) as exc:  # no flight running: the phone shows why
             return 409, {"error": str(exc) or "LocalTC isn't flying"}
         return 200, {"ok": True}

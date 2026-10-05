@@ -124,6 +124,8 @@ public struct Wrapped: Codable, Sendable, Equatable {
     public var routes: [WrappedRoute]
     public var slides: [WrappedSlide]
     public var lastFlight: WrappedLastFlight?
+    /// The account's first flight (ISO 8601): how far back the arrows go. Absent from an older server.
+    public var firstFlightAt: String?
 }
 
 /// A week, a month or a year, in the phone's own time zone: what the server is asked for.

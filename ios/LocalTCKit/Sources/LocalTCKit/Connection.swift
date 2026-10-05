@@ -29,6 +29,9 @@ public enum ConnectionMode: String, CaseIterable, Sendable, Codable {
     }
 }
 
+/// Who a typed line is for: ATC on COM1, or the copilot on the intercom.
+public enum Listener: String, Sendable, CaseIterable { case atc, crew }
+
 /// Keeps the phone connected: straight to the PC when it's on the same Wi-Fi, through the relay otherwise,
 /// and back to the direct line as soon as it's reachable again.
 @MainActor @Observable
@@ -110,13 +113,14 @@ public final class ConnectionManager {
     /// Whether a typed call can go out now: straight to the PC on the same Wi-Fi, or through the server.
     public var canSay: Bool { local != nil || state == .server }
 
-    /// A call typed on the phone, transmitted by LocalTC on COM1: straight to the PC on the same Wi-Fi, otherwise
-    /// through the account's relay, which holds it until LocalTC picks it up (a second or two while watching).
-    public func say(_ text: String, session: URLSession = .shared) async throws {
+    /// A line typed on the phone: a radio call LocalTC transmits on COM1 (``to`` .atc), or something said to the
+    /// copilot on the intercom (.crew). Straight to the PC on the same Wi-Fi, otherwise through the account's relay,
+    /// which holds it until LocalTC picks it up (a second or two while watching).
+    public func say(_ text: String, to: Listener = .atc, session: URLSession = .shared) async throws {
         guard let (url, key) = local else {
             guard state == .server else { throw SayError.notLocal }
             do {
-                try await api.say(text)
+                try await api.say(text, to: to)
             } catch let error as APIError {
                 throw SayError.refused(error.message)
             }
@@ -126,7 +130,7 @@ public final class ConnectionManager {
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text])
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["text": text, "to": to.rawValue])
         request.timeoutInterval = 5
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode != 200 else { return }

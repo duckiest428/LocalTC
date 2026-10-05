@@ -184,12 +184,15 @@ def test_calls_typed_on_the_phone_or_website_come_with_the_relays_answers(setup)
     the poll while somebody watches), once each."""
     account, server, _ = setup
     sign_in(account)
-    server.calls = [{"id": "1", "text": "  Los Angeles Center, ACA795, request higher ", "at": 0}, {"id": "2", "text": ""}]
+    server.calls = [{"id": "1", "text": "  Los Angeles Center, ACA795, request higher ", "at": 0}, {"id": "2", "text": ""},
+                    {"id": "4", "text": "how much fuel do we have", "to": "crew"}]
     account.frame(own={"lat": 33.0, "lon": -117.0})
-    assert account.take_calls() == ["Los Angeles Center, ACA795, request higher"] and account.take_calls() == []
+    assert account.take_calls() == [("Los Angeles Center, ACA795, request higher", "atc"),
+                                    ("how much fuel do we have", "crew")]  # the copilot's, on the intercom
+    assert account.take_calls() == []
     server.calls = [{"id": "3", "text": "radio check"}]
     account.poll_calls()
-    assert account.watchers == 1 and account.take_calls() == ["radio check"]
+    assert account.watchers == 1 and account.take_calls() == [("radio check", "atc")]
 
 
 def test_support_messages_need_the_account(setup):

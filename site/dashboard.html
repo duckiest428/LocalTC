@@ -88,6 +88,7 @@
         <div class="page-head">
           <h1 id="tracker-h">Flight Tracker</h1>
           <span class="tr-conn" id="tr-conn">Connecting ...</span>
+          <a class="btn btn-ghost btn-sm tr-full" href="tracker.html" title="The map on the whole screen, and a line to type to ATC or the copilot">Open full screen &#8599;</a>
         </div>
         <div class="panel tracker">
           <div class="tr-status" id="tr-status">
@@ -99,11 +100,7 @@
               <dl class="tr-facts" id="tr-facts"></dl>
               <h3>Radio</h3>
               <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
-              <form class="tr-say" id="tr-say" autocomplete="off">
-                <input id="tr-say-text" maxlength="300" placeholder="Type a radio call, as in the app ..." aria-label="A radio call to transmit">
-                <button class="btn btn-primary btn-sm" type="submit">Transmit</button>
-              </form>
-              <p class="hint tr-say-note" id="tr-say-note" aria-live="polite"></p>
+              <p class="hint">A preview. To type to ATC or the copilot, <a href="tracker.html">open the Flight Tracker full screen</a>.</p>
             </div>
           </div>
           <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →
@@ -223,6 +220,8 @@
 <script src="replayplayer.js"></script>
 <script src="sharecard.js"></script>
 <script src="wrapped.js"></script>
+<script src="api.js"></script>
+<script src="tracker.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

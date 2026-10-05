@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// The radio: everything said on the frequencies, filtered by COM, and a line to type a call to ATC.
+/// The radio and the intercom: everything said on the frequencies (filtered by COM) and between you and the copilot,
+/// and a line to type a call to ATC or something to the copilot.
 struct CommsTab: View {
     @Environment(AppModel.self) private var model
     @State private var filter = Filter.all
+    @State private var listener = Listener.atc
     @State private var draft = ""
     @State private var sending = false
     @State private var problem: String?
@@ -16,8 +18,8 @@ struct CommsTab: View {
         let lines = store.radio.filter { line in
             switch filter {
             case .all: true
-            case .com1: line.speaker == .system || store.com(of: line) == 1
-            case .com2: line.speaker == .system || store.com(of: line) == 2
+            case .com1: [.system, .crew, .intercom].contains(line.speaker) || store.com(of: line) == 1
+            case .com2: [.system, .crew, .intercom].contains(line.speaker) || store.com(of: line) == 2
             }
         }
         VStack(spacing: 0) {
@@ -47,8 +49,17 @@ struct CommsTab: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("comFilter")
+                if store.status.crew == true {
+                    Picker("To", selection: $listener) {
+                        Label("ATC", systemImage: "antenna.radiowaves.left.and.right").tag(Listener.atc)
+                        Label("Copilot", systemImage: "headphones").tag(Listener.crew)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("listener")
+                }
                 HStack(spacing: 10) {
-                    TextField(model.connection.canSay ? "Type a message ..." : "Typing to ATC works once connected",
+                    TextField(!model.connection.canSay ? "Typing works once connected"
+                              : listener == .crew ? "Say it to the copilot: \"flaps one\", \"fuel?\", \"brief\" ..." : "Type a radio call ...",
                               text: $draft, axis: .vertical)
                         .lineLimit(1...3)
                         .textFieldStyle(.roundedBorder)
@@ -58,10 +69,10 @@ struct CommsTab: View {
                         .disabled(!model.connection.canSay)
                         .accessibilityIdentifier("message")
                     Button(action: send) {
-                        Image(systemName: sending ? "ellipsis" : "paperplane.fill").font(.title3)
+                        Image(systemName: sending ? "ellipsis" : listener == .crew ? "headphones" : "paperplane.fill").font(.title3)
                     }
                     .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || sending || !model.connection.canSay)
-                    .accessibilityLabel("Transmit on COM1")
+                    .accessibilityLabel(listener == .crew ? "Say it to the copilot" : "Transmit on COM1")
                 }
                 if let problem {
                     Text(problem).font(.caption).foregroundStyle(.orange).frame(maxWidth: .infinity, alignment: .leading)
@@ -73,6 +84,7 @@ struct CommsTab: View {
         }
         .navigationTitle("Comms")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: store.status.crew) { _, on in if on != true { listener = .atc } }
     }
 
     private func send() {
@@ -81,7 +93,7 @@ struct CommsTab: View {
         sending = true
         Task {
             do {
-                try await model.connection.say(text)
+                try await model.connection.say(text, to: model.store.status.crew == true ? listener : .atc)
                 draft = ""
                 problem = nil
             } catch {
@@ -115,6 +127,18 @@ struct RadioRow: View {
                     .background(Color.gray.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowSeparator(.hidden)
+        case .crew, .intercom:  // the intercom: between you and the copilot, not on the radio
+            VStack(alignment: line.speaker == .intercom ? .trailing : .leading, spacing: 3) {
+                Label(line.speaker == .crew ? "Copilot · intercom" : "You · intercom", systemImage: "headphones")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(line.text ?? "")
+                    .italic()
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(line.level == "warn" ? Color.orange.opacity(0.2) : Color.yellow.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 14))
+            }
+            .frame(maxWidth: .infinity, alignment: line.speaker == .intercom ? .trailing : .leading)
             .listRowSeparator(.hidden)
         case .system:
             Text(line.text ?? "")

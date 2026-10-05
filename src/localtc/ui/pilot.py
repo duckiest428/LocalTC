@@ -37,7 +37,8 @@ class PilotRoutes:
         self.hub = hub  # ui.companion.CompanionHub: what goes to a phone watching through the server
         self.on_signed_in = on_signed_in
         self.on_signed_out = on_signed_out
-        self.on_call: Callable[[str], None] | None = None  # a radio call typed on the phone or the website: transmit it
+        # A call typed on the phone or the website: (words, "atc" to transmit on COM1 or "crew" for the copilot).
+        self.on_call: Callable[[str, str], None] | None = None
         self._outbox: list[tuple[str, Any]] = []
         self._relay_task: asyncio.Task | None = None
         self._linked = False
@@ -318,9 +319,9 @@ class PilotRoutes:
         flight running) is said on the phone's radio log, so whoever typed it knows."""
         if self._account is None or self.on_call is None:
             return
-        for text in self._account.take_calls():
+        for text, to in self._account.take_calls():
             try:
-                self.on_call(text)
+                self.on_call(text, to)
             except (RuntimeError, ValueError) as exc:
                 log.info("A call from the phone couldn't be transmitted: %s", exc)
                 if self.hub is not None:
@@ -363,7 +364,12 @@ class PilotRoutes:
                     airports = data
                 elif kind in ("route", "zones"):
                     live_map[kind] = data
+            # The path on its own: with the traffic around a big airport in the same request it went over the
+            # server's size limit, and the whole frame (path included) was refused.
+            trail = frame.pop("trail", None)
             try:
+                if trail:
+                    await asyncio.to_thread(self._account.frame, trail=trail)
                 if frame:
                     await asyncio.to_thread(self._account.frame, **frame)
                 if radio:

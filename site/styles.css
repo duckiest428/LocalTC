@@ -511,6 +511,33 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .tr-say input { flex: 1; min-width: 0; }
 .tr-say-note { margin: 6px 0 0 !important; min-height: 1em; }
 .tr-trail { stroke: var(--green); fill: none; opacity: .75; }
+.tr-radio li.crew .who, .tr-radio li.intercom .who { color: var(--amber); }
+.tr-radio li.crew, .tr-radio li.intercom { font-style: italic; }
+.page-head .tr-full { margin-left: auto; }
+.tr-to { margin-top: 10px; }
+.tr-to button { font: 600 12px var(--sans); padding: 6px 14px; border: 0; background: var(--bg-3); color: var(--text-2); cursor: pointer; }
+.tr-to button[aria-pressed=true] { color: var(--text); background: #2f5f4a; }
+
+/* The full-screen Flight Tracker (tracker.html): a slim bar on top, the map filling the rest beside the facts and the
+   radio; on a phone, the map on top and the rest below it. */
+.tr-page { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.tr-page [hidden] { display: none !important; }
+.tr-top { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--bg-3); }
+.tr-top h1 { font-size: 16px; margin: 0; }
+.tr-top .btn { margin-left: auto; }
+.tr-fullscreen { flex: 1; display: flex; flex-direction: column; padding: 12px 16px 16px; min-height: 0; }
+.tr-fullscreen .tr-body { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-rows: minmax(0, 1fr); margin-top: 10px; }
+.tr-fullscreen .tr-map { height: 100%; min-height: 0; }
+.tr-fullscreen .tr-side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.tr-fullscreen .tr-radio { flex: 1; max-height: none; min-height: 0; }
+@media (max-width: 860px) {  /* a phone: the page scrolls, the map on top */
+  .tr-page { height: auto; overflow: visible; }
+  .tr-fullscreen .tr-body { grid-template-columns: 1fr; grid-template-rows: none; }
+  .tr-fullscreen .tr-map { height: 55vh; }
+  .tr-fullscreen .tr-radio { max-height: 40vh; min-height: 120px; }
+  .tr-top .brand-mark { display: none; }
+}
 .tr-plane { background: none; border: 0; }
 .tr-plane svg path { stroke: #000; stroke-width: 1; }
 .tr-plane.own svg path { fill: var(--green); }

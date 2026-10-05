@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flight Tracker — LocalTC</title>
+<meta name="description" content="The flight you're flying in LocalTC, live on a map, with the radio and the intercom. Needs the optional account.">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="atcmap.css">
+</head>
+<body class="tr-page" data-page="tracker">
+
+<header class="tr-top">
+  <a class="brand" href="index.html"><img class="brand-logo" src="logo.svg" alt="" width="24" height="24"><span class="brand-mark">LocalTC</span></a>
+  <h1 id="tracker-h">Flight Tracker</h1>
+  <span class="tr-conn" id="tr-conn">Connecting ...</span>
+  <a class="btn btn-ghost btn-sm" href="dashboard.html#tracker">&larr; Dashboard</a>
+</header>
+
+<main class="tracker tr-fullscreen">
+  <div class="tr-status" id="tr-status">
+    <p class="hint">Looking for a flight ...</p>
+  </div>
+  <div class="tr-body" id="tr-body" hidden>
+    <div class="tr-map" id="tr-map" aria-label="Your aircraft, its route and path, the traffic around it and the ATC zones"></div>
+    <div class="tr-side">
+      <dl class="tr-facts" id="tr-facts"></dl>
+      <h3>Radio and intercom</h3>
+      <ol class="tr-radio" id="tr-radio" aria-live="polite"></ol>
+      <div class="tr-to tr-seg" id="tr-to" role="group" aria-label="Who to talk to" hidden>
+        <button type="button" data-to="atc" aria-pressed="true">ATC</button><button type="button" data-to="crew" aria-pressed="false">Copilot</button>
+      </div>
+      <form class="tr-say" id="tr-say" autocomplete="off">
+        <input id="tr-say-text" maxlength="300" placeholder="Type a radio call, as in the app ..." aria-label="A radio call to transmit">
+        <button class="btn btn-primary btn-sm" id="tr-say-send" type="submit">Transmit</button>
+      </form>
+      <p class="hint tr-say-note" id="tr-say-note" aria-live="polite"></p>
+    </div>
+  </div>
+  <p class="hint tr-nomap" id="tr-nomap" hidden>The position isn't shared: in the LocalTC app, Quick Settings →
+    Account → turn on "Away from this Wi-Fi, send the map ...".</p>
+</main>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="atcmap.js"></script>
+<script src="api.js"></script>
+<script src="tracker.js"></script>
+</body>
+</html>

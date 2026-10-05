@@ -100,6 +100,7 @@ export type Recap = {
   distance_nm: number; landings: number; airports: { icao: string; visits: number; lat: number | null; lon: number | null; name: string }[];
   routes: { origin: string; destination: string; flights: number }[]; slides: Slide[]; previous: Obj | null;
   last_flight: Obj | null;
+  first_flight_at: string | null; // the account's first flight: how far back the arrows go
 };
 
 export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
@@ -111,7 +112,7 @@ export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
   ).bind(user, r.from, r.to).all<Flight>();
   const span = Date.parse(r.to) - Date.parse(r.from);
   const prevFrom = new Date(Date.parse(r.from) - span).toISOString().replace(/\.\d{3}Z$/, "Z");
-  const [prev, last, before, moments] = await Promise.all([
+  const [prev, last, before, moments, first] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS flights, SUM(readbacks) AS readbacks, SUM(readbacks_correct) AS correct, COALESCE(SUM(air_min), 0) AS air
                     FROM flights WHERE user_id = ?1 AND started_at >= ?2 AND started_at < ?3`).bind(user, prevFrom, r.from)
       .first<{ flights: number; readbacks: number | null; correct: number | null; air: number }>(),
@@ -123,6 +124,7 @@ export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
     env.DB.prepare(`SELECT r.flight_id, r.moments FROM replays r JOIN flights f ON f.user_id = r.user_id AND f.id = r.flight_id
                     WHERE r.user_id = ?1 AND f.started_at >= ?2 AND f.started_at < ?3 AND r.moments IS NOT NULL`)
       .bind(user, r.from, r.to).all<{ flight_id: string; moments: string }>(),
+    env.DB.prepare("SELECT MIN(started_at) AS at FROM flights WHERE user_id = ?1").bind(user).first<{ at: string | null }>(),
   ]);
 
   // Names for the airports, where an uploaded replay said them.
@@ -164,6 +166,7 @@ export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
     previous: prev && prev.flights ? { flights: prev.flights, hours: round1(prev.air / 60),
       readback_accuracy: prev.readbacks ? round1((100 * (prev.correct ?? 0)) / prev.readbacks) : null } : null,
     last_flight: last ? { ...last, days_ago: Math.floor((Date.now() - Date.parse(String(last.started_at))) / 86400_000) } : null,
+    first_flight_at: first?.at ?? null,
   };
   if (!n) return recap;
 

@@ -444,6 +444,7 @@ class AppController:
             "phase_label": f.get("phase_label"), "squawk": f.get("squawk"), "altitude_ft": f.get("altitude_ft"),
             "runway": f.get("runway"), "tuned": _station(f.get("tuned")), "next": _station(f.get("expected")),
             "ete": f.get("ete"), "gate": self._gate(), "rules": f.get("rules"),
+            "crew": getattr(self.live, "crew", None) is not None,  # the copilot can be talked to (typed to)
             "last_atc": {"station": atc.station, "mhz": atc.frequency_mhz, "text": atc.text} if atc else None,
         }
 
@@ -496,13 +497,19 @@ class AppController:
             })
         return out
 
-    def _phone_say(self, text: str) -> None:
+    def _phone_say(self, text: str, to: str = "atc") -> None:
         """A call typed on the companion app (on the local network or through the account) or the website's Flight
-        Tracker: transmitted on COM1 like one typed here."""
+        Tracker: transmitted on COM1 like one typed here, or ``to`` "crew": said to the copilot on the intercom."""
         try:
-            self._need_live().say(text)
+            live = self._need_live()
         except HttpError as exc:
             raise RuntimeError(str(exc)) from None
+        if to == "crew":
+            if getattr(live, "crew", None) is None:
+                raise RuntimeError("The copilot isn't on (Quick Settings → Copilot → Intercom)")
+            live.say_crew(text)
+        else:
+            live.say(text)
 
     # --- the page's calls ----------------------------------------------------------------------------------------
 
@@ -670,6 +677,9 @@ class AppController:
             interpreter.mode = cfg.llm.mode  # the model's already there: the new mode from the next call
         if (phraser := getattr(self.live.engine, "phraser", None) if self.live is not None else None) is not None:
             phraser.beyond_facts = cfg.llm.beyond_facts  # from the next reply
+        if (crew := getattr(self.live, "crew", None) if self.live is not None else None) is not None:
+            crew.monitor.verbosity = cfg.crew.verbosity  # what the copilot says by itself, from now
+            crew.monitor.hands = cfg.crew.hands == "pm"
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()

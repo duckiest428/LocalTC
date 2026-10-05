@@ -5,11 +5,14 @@ import Observation
 @MainActor @Observable
 public final class FlightStore {
     public static let radioKeep = 200
-    /// The path flown: a point every ~200 m (``trailStep`` degrees), and past ``trailKeep`` points every other one
-    /// goes, so a long flight keeps its whole shape from the gate on. (Cutting the oldest off moved the start of
-    /// the line along behind the aircraft.)
+    /// The path flown: a point every ~200 m in the air (``trailStep`` degrees) and every ~10 m on the ground
+    /// (``trailStepGround``), so the taxi from the gate keeps its turns. Past ``trailKeep`` points it's simplified
+    /// (``thinned``): straight legs lose their points, the turns and the taxi keep theirs. (Every other point dropped
+    /// lost the taxi a few hours in; cutting the oldest off moved the start of the line along behind the aircraft.)
     public static let trailKeep = 2000
     public static let trailStep = 0.002
+    public static let trailStepGround = 0.0001
+    private var trailGround = false
 
     public private(set) var status = FlightStatus()
     public private(set) var own: OwnAircraft?
@@ -84,18 +87,53 @@ public final class FlightStore {
     private func setOwn(_ o: OwnAircraft) {
         own = o
         let point = Coordinate(lat: o.lat, lon: o.lon)
-        if let last = trail.last, abs(last.lat - point.lat) + abs(last.lon - point.lon) < Self.trailStep { return }
+        let ground = o.ground ?? false
+        // Lifting off or touching down is always a point.
+        if let last = trail.last, ground == trailGround,
+           abs(last.lat - point.lat) + abs(last.lon - point.lon) < (ground ? Self.trailStepGround : Self.trailStep) { return }
+        trailGround = ground
         trail.append(point)
         trail = Self.thinned(trail)
     }
 
-    /// Every other point (the last one kept) until it fits ``trailKeep``: the whole path, less dense.
+    /// The whole path in at most ``trailKeep`` points with its shape: Douglas-Peucker, the tolerance (from ~3 m)
+    /// doubled until it fits in three quarters of that. The first and last points always stay.
     static func thinned(_ path: [Coordinate]) -> [Coordinate] {
+        guard path.count > trailKeep else { return path }
         var out = path
-        while out.count > trailKeep, let last = out.last {
-            out = stride(from: 0, to: out.count - 1, by: 2).map { out[$0] } + [last]
+        var tolerance = 0.00003
+        while out.count > trailKeep * 3 / 4, out.count > 2 {
+            out = douglasPeucker(out, tolerance)
+            tolerance *= 2
         }
         return out
+    }
+
+    private static func douglasPeucker(_ path: [Coordinate], _ tolerance: Double) -> [Coordinate] {
+        var keep = [Bool](repeating: false, count: path.count)
+        keep[0] = true
+        keep[path.count - 1] = true
+        var stack = [(0, path.count - 1)]
+        while let (a, b) = stack.popLast() {
+            guard b > a + 1 else { continue }
+            let k = cos(path[a].lat * .pi / 180)  // a degree of longitude is shorter away from the equator
+            let ax = path[a].lon * k, ay = path[a].lat
+            let dx = path[b].lon * k - ax, dy = path[b].lat - ay
+            let len2 = dx * dx + dy * dy
+            var worst = -1.0, at = a
+            for i in (a + 1)..<b {
+                let px = path[i].lon * k - ax, py = path[i].lat - ay
+                let u = len2 == 0 ? 0 : max(0, min(1, (px * dx + py * dy) / len2))
+                let d = hypot(px - u * dx, py - u * dy)
+                if d > worst { worst = d; at = i }
+            }
+            if worst > tolerance {
+                keep[at] = true
+                stack.append((a, at))
+                stack.append((at, b))
+            }
+        }
+        return zip(path, keep).compactMap { $1 ? $0 : nil }
     }
 
     /// The path flown before this phone started watching: it replaces the one drawn so far (it runs up to now).

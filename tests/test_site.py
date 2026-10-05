@@ -53,7 +53,7 @@ def test_every_page_has_the_same_header_links():
 def test_the_site_loads_nothing_it_does_not_serve_itself_except_the_api_and_map_tiles():
     import re
 
-    for page in PAGES:
+    for page in [*PAGES, "tracker.html"]:
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
         for src in re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"]+)"', html):
             assert not src.startswith(("http:", "https:", "//")), f"{page} loads {src} from elsewhere"
@@ -84,3 +84,14 @@ def test_the_shared_flight_page_gets_the_hashes_of_what_it_loads(tmp_path):
     assert json.loads((site / "assets.json").read_text()) == stamps
     shares = (ROOT / "server" / "src" / "shares.ts").read_text(encoding="utf-8")
     assert all(f'asset("{name}")' in shares for name in build_site.SHARE_PAGE_ASSETS)
+
+
+def test_the_dashboard_tracker_is_a_preview_and_the_talking_is_on_its_full_screen_page():
+    dashboard = (ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+    full = (ROOT / "site" / "tracker.html").read_text(encoding="utf-8")
+    assert 'id="tr-say"' not in dashboard and 'href="tracker.html"' in dashboard
+    assert 'id="tr-say"' in full and 'data-to="crew"' in full and 'id="tr-map"' in full
+    for page in (dashboard, full):  # the same tracker code, after what it builds on
+        scripts = __import__("re").findall(r'<script src="([\w./-]+)"', page)
+        assert scripts.index("api.js") < scripts.index("tracker.js")
+        assert scripts.index("atcmap.js") < scripts.index("tracker.js")

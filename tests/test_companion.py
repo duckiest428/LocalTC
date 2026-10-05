@@ -118,6 +118,47 @@ def test_a_long_flight_keeps_its_whole_shape():
     assert len(hub.trail) <= TRAIL_KEEP and hub.trail[0] == [0.0, 0.0] and hub.trail[-1][0] == round((TRAIL_KEEP * 3 - 1) * 0.003, 4)
 
 
+def test_the_taxi_from_the_gate_survives_a_long_flight():
+    """Every other point dropped lost the taxi a few hours in: the gate joined the climb in one straight line."""
+    from localtc.ui.companion import TRAIL_KEEP
+
+    hub = CompanionHub()
+    hub.set_status({"active": True})
+    for i in range(60):  # pushback and taxi east along the apron, 5 m a second
+        hub.set_own({"lat": 40.0, "lon": -73.0 + i * 0.00006, "ground": True})
+    for i in range(60):  # then north to the runway
+        hub.set_own({"lat": 40.0 + i * 0.00006, "lon": -73.0 + 59 * 0.00006, "ground": True})
+    ground = len(hub.trail)
+    assert ground > 20  # a point every ~10 m on the ground, not every 200 m
+    for i in range(TRAIL_KEEP * 4):
+        hub.set_own({"lat": 40.01 + i * 0.003, "lon": -72.99 + (i % 400) * 0.0005, "ground": False})
+    assert len(hub.trail) <= TRAIL_KEEP and hub.trail[0] == [40.0, -73.0]
+    corner = [40.0, round(-73.0 + 59 * 0.00006, 5)]
+    assert any(abs(p[0] - corner[0]) < 0.0002 and abs(p[1] - corner[1]) < 0.0002 for p in hub.trail)
+
+
+def test_the_path_goes_up_on_its_own():
+    """With the traffic around a big airport in the same request it was over the server's size limit."""
+    import asyncio
+
+    from localtc.ui.pilot import PilotRoutes
+
+    sent = []
+
+    class Account:
+        watchers = 1
+
+        def frame(self, **kw):
+            sent.append(sorted(kw))
+
+    desk = PilotRoutes.__new__(PilotRoutes)
+    desk._account, desk._outbox, desk.hub = Account(), [], None
+    desk._deliver_calls = lambda: None
+    desk._outbox = [("frame", {"trail": [[1.0, 2.0]]}), ("frame", {"own": {"lat": 1.0}, "traffic": []})]
+    asyncio.run(desk._drain())
+    assert sent == [["trail"], ["own", "traffic"]]
+
+
 def test_the_remote_map_can_be_turned_off():
     hub, relay = CompanionHub(), Relay()
     hub.remote, hub.remote_map = relay, False
@@ -206,12 +247,12 @@ async def post(port: int, path: str, key: str, body: dict) -> tuple[int, dict]:
 
 
 def test_a_call_typed_on_the_phone_is_transmitted():
-    said: list[str] = []
+    said: list[tuple[str, str]] = []
 
-    def say(text: str) -> None:
+    def say(text: str, to: str) -> None:
         if text == "boom":
             raise RuntimeError("start a flight first")
-        said.append(text)
+        said.append((text, to))
 
     async def go():
         hub = CompanionHub()
@@ -221,12 +262,14 @@ def test_a_call_typed_on_the_phone_is_transmitted():
             ok = await post(port, "/companion/v1/say", hub.key, {"text": "Phoenix Approach, Frontier 2084, with you"})
             empty = await post(port, "/companion/v1/say", hub.key, {"text": "  "})
             idle = await post(port, "/companion/v1/say", hub.key, {"text": "boom"})
-            return ok, empty, idle
+            crew = await post(port, "/companion/v1/say", hub.key, {"text": "flaps one", "to": "crew"})
+            return ok, empty, idle, crew
         finally:
             await server.close()
 
-    ok, empty, idle = asyncio.run(go())
-    assert ok == (200, {"ok": True}) and said == ["Phoenix Approach, Frontier 2084, with you"]
+    ok, empty, idle, crew = asyncio.run(go())
+    assert ok == (200, {"ok": True}) and crew == (200, {"ok": True})
+    assert said == [("Phoenix Approach, Frontier 2084, with you", "atc"), ("flaps one", "crew")]  # the copilot's, on the intercom
     assert empty[0] == 400
     assert idle == (409, {"error": "start a flight first"})
 
@@ -238,23 +281,23 @@ def test_calls_through_the_account_are_transmitted_and_a_failed_one_is_said():
 
     class Account:
         def __init__(self) -> None:
-            self.calls = ["Socal Approach, ACA795, request vectors"]
+            self.calls = [("Socal Approach, ACA795, request vectors", "atc"), ("gear down", "crew")]
 
-        def take_calls(self) -> list[str]:
+        def take_calls(self) -> list[tuple[str, str]]:
             calls, self.calls = self.calls, []
             return calls
 
     hub = CompanionHub()
     pilot = PilotRoutes(lambda: None, lambda kind, data: None, account=Account(), hub=hub)
-    said: list[str] = []
-    pilot.on_call = said.append
+    said: list[tuple[str, str]] = []
+    pilot.on_call = lambda text, to: said.append((text, to))
     pilot._deliver_calls()
-    assert said == ["Socal Approach, ACA795, request vectors"]
+    assert said == [("Socal Approach, ACA795, request vectors", "atc"), ("gear down", "crew")]
 
-    def nothing_flying(text: str) -> None:
+    def nothing_flying(text: str, to: str) -> None:
         raise RuntimeError("start a flight first")
 
-    pilot._account.calls = ["radio check"]
+    pilot._account.calls = [("radio check", "atc")]
     pilot.on_call = nothing_flying
     pilot._deliver_calls()
     assert hub.radio[-1]["kind"] == "alert" and "Not transmitted: start a flight first" in hub.radio[-1]["text"]

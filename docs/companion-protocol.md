@@ -42,10 +42,11 @@ positions it passes on, and hands it to every new viewer in `hello`; it's droppe
  "phase": "CRUISE", "phase_label": "Cruise", "squawk": "4512", "altitude_ft": 35000, "runway": "26",
  "gate": "Gate C14", "rules": "IFR", "tuned": {"station": "Albuquerque Center", "mhz": 133.65},
  "next": {"station": "Phoenix Approach", "mhz": 119.2}, "ete": {"nm": 80, "min": 11},
- "last_atc": {"station": "Albuquerque Center", "mhz": 133.65, "text": "Frontier 2084, roger."}}
+ "last_atc": {"station": "Albuquerque Center", "mhz": 133.65, "text": "Frontier 2084, roger."}, "crew": true}
 ```
 `{"active": false}` when no flight is running. `rules` is `"IFR"` or `"VFR"`: the map opens on the matching
-view (the pilot can switch). Older desktops leave it out; read that as IFR.
+view (the pilot can switch). Older desktops leave it out; read that as IFR. `crew` is true while the copilot is
+on the intercom: a typed line can go to it (below).
 
 ### `own` (about 4 Hz locally, 1 Hz over the relay)
 ```json
@@ -101,7 +102,7 @@ ends. Points are `[lat, lon]`, rounded to 3 decimals (5 for the taxi route).
 
 ### `radio` (one line)
 ```json
-{"kind": "atc|pilot|copilot|readback|atis|phase|tuned|alert|system", "t": 1234.5,
+{"kind": "atc|pilot|copilot|crew|intercom|readback|atis|phase|tuned|alert|system", "t": 1234.5,
  "station": "Albuquerque Center", "mhz": 133.65, "text": "...", "ok": true, "level": "warn"}
 ```
 Only `kind`, `t` and `text` are always present.
@@ -127,12 +128,15 @@ Airports tabs.
 
 On the same Wi-Fi: `POST http://<pc>:47800/companion/v1/say` with the companion key and `{"text": "Phoenix
 Approach, Frontier 2084, with you"}` transmits the call on COM1, exactly as if it were typed in the app.
-`200 {"ok": true}`, or `409 {"error": ...}` when no flight is running.
+`200 {"ok": true}`, or `409 {"error": ...}` when no flight is running. With `"to": "crew"` the words go to the
+copilot on the intercom instead (as if said on the intercom key): its answer comes back as a `crew` radio line,
+and the words as an `intercom` one.
 
 Anywhere else, through the account: `POST /v1/live/say` (signed in; the website's Flight Tracker with its cookie
-and `X-LocalTC: 1`, from the site's own pages) with `{"text": ...}`. The relay holds the call in memory, five at
-most, for a minute: `200 {"ok": true, "waiting": n}`, `409` when no flight is on, `400` for an empty call. The
+and `X-LocalTC: 1`, from the site's own pages) with `{"text": ..., "to": "atc" | "crew"}`. The relay holds the call in
+memory, five at most, for a minute: `200 {"ok": true, "waiting": n}`, `409` when no flight is on (or for the
+copilot when the status doesn't say `crew`), `400` for an empty call. The
 desktop app picks the waiting calls up from the `calls` list in the answer to its next live update (`PUT
 /v1/live`, `/frame`, `/map`, `POST /radio`, `PUT /airports`), or with `GET /v1/live/calls` every couple of seconds
-while somebody watches, and transmits each as if typed. A call it can't transmit comes back in the radio log as
+while somebody watches, and transmits each as if typed (each call says its `to`). A call it can't transmit comes back in the radio log as
 an `alert` line starting "Not transmitted".

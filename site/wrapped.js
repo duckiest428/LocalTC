@@ -89,7 +89,8 @@
       this.opts = opts;
       this.base = opts.base || "";
       this.period = "month";
-      this.step = -1;  // the last finished one: the only one to look back on
+      this.step = -1;  // periods back from the one still going (0, locked until it ends): -1 is the last finished one
+      this.first = null;  // the account's first flight (the server says): the arrows go back as far as that
       this.timer = null;
       this.countdown = null;
       el.classList.add("wrapped");
@@ -101,8 +102,8 @@
 </div>
 <div class="wr-stage"></div>`;
       el.querySelector(".wr-tabs").onclick = (e) => { const b = e.target.closest("button[data-period]"); if (b) { this.period = b.dataset.period; this.step = -1; this.load(); } };
-      el.querySelector(".wr-prev").onclick = () => { this.step = -1; this.load(); };
-      el.querySelector(".wr-next").onclick = () => { this.step = 0; this.load(); };
+      el.querySelector(".wr-prev").onclick = () => { if (this.canGoBack()) { this.step -= 1; this.load(); } };
+      el.querySelector(".wr-next").onclick = () => { if (this.step < 0) { this.step += 1; this.load(); } };
       this.onKey = (e) => {
         if (!this.slides || !el.isConnected || el.closest("[hidden]") || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || "")) return;
         if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); this.show(this.at + 1); }
@@ -111,11 +112,19 @@
       document.addEventListener("keydown", this.onKey);
     }
 
-    /** Open a period: "month", -1 is last month (the one to see); 0 is this month (locked until it ends). */
+    /** Open a period: "month", -1 is last month (the one to see), -2 the one before; 0 is this month (locked until
+     *  it ends). */
     open(period = this.period, step = -1) {
       this.period = period;
-      this.step = step === 0 ? 0 : -1;
+      this.step = Math.min(0, Math.round(Number(step) || 0));
       return this.load();
+    }
+
+    /** Back as far as the account's first flight; without word of it (an older server), a few years. */
+    canGoBack() {
+      const before = periodOf(this.period, Date.now(), this.step - 1);
+      if (this.first) return new Date(before.to).getTime() > new Date(this.first).getTime();
+      return before.start.getTime() > Date.now() - 5 * 366 * 86400_000;
     }
 
     async load() {
@@ -124,7 +133,7 @@
       this.range = range;
       this.el.querySelectorAll(".wr-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.period === this.period)));
       this.el.querySelector(".wr-label").textContent = range.label;
-      this.el.querySelector(".wr-prev").disabled = this.step === -1;
+      this.el.querySelector(".wr-prev").disabled = !this.canGoBack();
       this.el.querySelector(".wr-next").disabled = this.step === 0;
       const stage = this.el.querySelector(".wr-stage");
       if (range.current) return this.locked(range);
@@ -138,6 +147,7 @@
       }
       if (range !== this.range) return; // another period was picked meanwhile
       this.recap = recap;
+      if (recap.first_flight_at) { this.first = recap.first_flight_at; this.el.querySelector(".wr-prev").disabled = !this.canGoBack(); }
       if (!recap.flights) return this.empty(recap);
       this.slides = recap.slides.map((s) => (s.kind === "summary" ? { ...recap.card, name: "summary" } : slideCard(s, recap))).filter(Boolean);
       stage.innerHTML = `<div class="wr-progress">${this.slides.length > 1 ? this.slides.map(() => "<i><b></b></i>").join("") : ""}</div>
@@ -189,9 +199,11 @@
       const next = periodOf(this.period, Date.now(), 0);
       const last = recap.last_flight;
       const when = last && (last.days_ago === 0 ? "today" : last.days_ago === 1 ? "yesterday" : `${last.days_ago} days ago`);
+      // An older period with nothing in it: just that (the arrows go on); the last one says when the next unlocks.
+      const latest = this.step === -1;
       stage.innerHTML = `<div class="wr-empty"><h3>No flights in ${esc(this.range.label.replace(/^Week of/, "the week of"))}.</h3>
-${last ? `<p>Your last flight was ${esc(when)}: ${esc(last.origin)} → ${esc(last.destination)}.</p>` : ""}
-<p>Your ${esc(next.label.replace(/^Week of/, "week of"))} Wrapped unlocks in <b class="wr-countdown"></b>.</p></div>`;
+${last && latest ? `<p>Your last flight was ${esc(when)}: ${esc(last.origin)} → ${esc(last.destination)}.</p>` : ""}
+${latest ? `<p>Your ${esc(next.label.replace(/^Week of/, "week of"))} Wrapped unlocks in <b class="wr-countdown"></b>.</p>` : ""}</div>`;
       const end = new Date(next.to).getTime();
       const tick = () => { const out = stage.querySelector(".wr-countdown"); if (out) out.textContent = countdown(end - Date.now()); };
       tick();

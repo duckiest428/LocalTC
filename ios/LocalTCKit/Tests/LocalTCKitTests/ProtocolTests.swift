@@ -110,6 +110,21 @@ struct FlightStoreTests {
         #expect(store.trail.last == .init(lat: 49.99, lon: -100))
     }
 
+    @Test("The taxi from the gate keeps its turns, however long the flight gets")
+    func taxiKept() throws {
+        let store = FlightStore()
+        func own(_ lat: Double, _ lon: Double, ground: Bool) throws {
+            let m = try LiveMessage.decodeEnvelope(#"{"type":"own","data":{"lat":\#(lat),"lon":\#(lon),"ground":\#(ground)}}"#)
+            store.apply(try #require(m))
+        }
+        for i in 0..<50 { try own(40, -73 + Double(i) * 0.0002, ground: true) }  // east along the apron
+        for i in 0..<50 { try own(40 + Double(i) * 0.0002, -72.99, ground: true) }  // then north to the runway
+        for i in 0..<6000 { try own(40.01 + Double(i) * 0.003, -72.99, ground: false) }
+        #expect(store.trail.count <= FlightStore.trailKeep)
+        #expect(store.trail.first == .init(lat: 40, lon: -73))
+        #expect(store.trail.contains { abs($0.lat - 40) < 0.0003 && abs($0.lon + 72.99) < 0.0003 })  // the corner
+    }
+
     @Test("The ATC zones the desktop's Live Map draws come through, and go with the flight")
     func zones() throws {
         let store = FlightStore()

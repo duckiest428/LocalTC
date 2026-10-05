@@ -129,9 +129,10 @@ public final class APIClient: Sendable {
         try Replay.decode(try await call("GET", "/v1/flights/\(id)/replay"))
     }
 
-    /// A radio call for LocalTC on the PC to transmit, through the account's relay (away from the PC's Wi-Fi).
-    public func say(_ text: String) async throws {
-        try await call("POST", "/v1/live/say", ["text": text])
+    /// A radio call for LocalTC on the PC to transmit, or a line for the copilot on the intercom, through the
+    /// account's relay (away from the PC's Wi-Fi).
+    public func say(_ text: String, to: Listener = .atc) async throws {
+        try await call("POST", "/v1/live/say", ["text": text, "to": to.rawValue])
     }
 
     /// The relay's WebSocket, signed in.

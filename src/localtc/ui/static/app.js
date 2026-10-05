@@ -728,6 +728,14 @@ const Settings = {
           <option value="full" ${st.crew.llm === "full" ? "selected" : ""}>Questions and commands in your own words (it reads them back for "confirm")</option>
           <option value="questions" ${st.crew.llm === "questions" ? "selected" : ""}>Questions only: commands as listed</option>
           <option value="off" ${st.crew.llm === "off" ? "selected" : ""}>Off: the listed commands and common questions (fuel, distance, ATC's last call)</option></select></label></div>
+        <div class="row"><label>What it says by itself<select id="s-crew-verbosity">
+          <option value="quiet" ${st.crew.verbosity === "quiet" ? "selected" : ""}>Quiet: only what's safety (config, gear, not cleared to land, speed)</option>
+          <option value="standard" ${st.crew.verbosity === "standard" ? "selected" : ""}>Standard: callouts, ATC relays and reminders</option>
+          <option value="chatty" ${st.crew.verbosity === "chatty" ? "selected" : ""}>Chatty: also status updates and small talk (never below 10,000 ft)</option></select></label></div>
+        <div class="row"><label>Its hands<select id="s-crew-hands">
+          <option value="pm" ${st.crew.hands === "pm" ? "selected" : ""}>It works its own side: radios in standby, transponder, altimeter, lights, gear and flaps after takeoff</option>
+          <option value="calls" ${st.crew.hands === "calls" ? "selected" : ""}>Calls only: it says what's due and touches nothing</option></select></label></div>
+        <span class="hint">Your side (parking brake, engines, the autopilot, flaps for takeoff and landing) it never touches: it tells you when something's missed. Say "quiet please" or "keep me posted" to change how much it talks mid-flight.</span>
       </div>
 
       <div class="card">
@@ -877,6 +885,8 @@ const Settings = {
     on("#s-crew", "change", (e) => this.save("crew", "enabled", e.target.checked));
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
     on("#s-crew-llm", "change", () => this.save("crew", "llm", val("#s-crew-llm")));
+    on("#s-crew-verbosity", "change", () => this.save("crew", "verbosity", val("#s-crew-verbosity")));
+    on("#s-crew-hands", "change", () => this.save("crew", "hands", val("#s-crew-hands")));
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
     on("#s-crew-preview", "click", async (e) => {
       e.target.disabled = true;
@@ -1085,7 +1095,7 @@ const Settings = {
 const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path fill="${color}" stroke="#000" stroke-width="1" d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
 
 const MapView = {
-  map: null, ownMarker: null, trail: null, trailPts: [], tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
+  map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "",
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
@@ -1103,7 +1113,7 @@ const MapView = {
     this.setZones(this.zonesOn);
     $("#map-zones").onclick = () => this.setZones(!this.zonesOn);
     this.map.on("moveend", () => this.viewChanged());
-    this.trail = L.polyline(this.trailPts, { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
+    this.trail = L.polyline(this.path.pts, { color: "#5fd068", weight: 2, opacity: 0.7 }).addTo(this.map);
     this.map.on("dragstart", () => this.setFollow(false));
     $("#map-follow").onclick = () => this.setFollow(!this.follow);
     $("#map-route").onclick = () => { this.setFollow(false); if (this.route) this.map.fitBounds(this.route.getBounds(), { padding: [30, 30] }); else toast("No flight plan route"); };
@@ -1145,21 +1155,14 @@ const MapView = {
      covered stops reading for a while; what it missed is in here, not drawn as one straight line). */
   setTrail(points) {
     if (!Array.isArray(points) || !points.length) return;
-    this.trailPts = points.map((p) => [p[0], p[1]]);
-    if (S.own) this.trailPts.push([S.own.lat, S.own.lon]);
-    if (this.trail) this.trail.setLatLngs(this.trailPts);
+    this.path.set(points);
+    if (S.own) this.path.pts.push([S.own.lat, S.own.lon]);
+    if (this.trail) this.trail.setLatLngs(this.path.pts);
   },
   own(o) {
     // The track is kept whether or not the map has ever been opened, so opening it mid-flight shows
     // where the flight has been rather than starting a line from that moment.
-    const last = this.trailPts[this.trailPts.length - 1];
-    if (!last || Math.abs(last[0] - o.lat) + Math.abs(last[1] - o.lon) > 0.0015) {
-      this.trailPts.push([o.lat, o.lon]);
-      // Past 3,000 points every other one goes (the last kept): the whole flight from the gate, less dense. Dropping
-      // the oldest moved the start of the line along behind a long flight.
-      if (this.trailPts.length > 3000) this.trailPts = this.trailPts.filter((p, i, all) => i % 2 === 0 || i === all.length - 1);
-      if (this.trail) this.trail.setLatLngs(this.trailPts);
-    }
+    if (this.path.add(o.lat, o.lon, o.ground) && this.trail) this.trail.setLatLngs(this.path.pts);
     if (!this.map) return;
     const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${PLANE("#5fd068")}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
     if (!this.ownMarker) { this.ownMarker = L.marker([o.lat, o.lon], { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView([o.lat, o.lon], 11); }

@@ -47,6 +47,7 @@ public struct FlightStatus: Codable, Sendable, Equatable {
     public var next: Station?
     public var ete: ETE?
     public var lastAtc: LastATC?
+    public var crew: Bool?  // the copilot is on the intercom: a typed line can go to it
     public var updatedAt: String?
 
     public init(active: Bool = false) { self.active = active }
@@ -112,17 +113,20 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
         self.mhz = mhz
     }
 
-    /// Who spoke, for styling: ATC, the pilot (or copilot), somebody else on the frequency, or LocalTC itself.
+    /// Who spoke, for styling: ATC, the pilot (or the copilot on the radio), somebody else on the frequency, the
+    /// copilot on the intercom, the pilot to the copilot, or LocalTC itself.
     public var speaker: Speaker {
         switch kind {
         case "atc", "atis": .atc
         case "pilot", "copilot": .pilot
         case "chatter": .other
+        case "crew": .crew
+        case "intercom": .intercom
         default: .system
         }
     }
 
-    public enum Speaker: Sendable { case atc, pilot, other, system }
+    public enum Speaker: Sendable { case atc, pilot, other, crew, intercom, system }
 }
 
 public struct FlightAlert: Codable, Sendable, Equatable, Identifiable {

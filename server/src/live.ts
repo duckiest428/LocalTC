@@ -27,10 +27,12 @@ import { limit } from "./rate";
 const STALE_MS = 10 * 60_000; // no word from the app for this long: the flight is over (or the PC is off)
 const CONNECT_MS = 24 * 3600_000; // local-network details older than this are dropped
 const MAX_STATUS = 8 * 1024;
-const MAX_FRAME = 64 * 1024;
+const MAX_FRAME = 128 * 1024; // the path flown (up to TRAIL_KEEP points) and the traffic around a big airport
 const RADIO_KEEP = 50;
-const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight (thinned beyond: ``thin``)
-const TRAIL_STEP_DEG = 0.002; // a new point every ~200 m of movement
+const TRAIL_KEEP = 2000; // points of the path flown, for a map opened mid-flight (simplified beyond: ``thin``)
+const TRAIL_STEP_DEG = 0.002; // a new point every ~200 m of movement in the air
+const TRAIL_STEP_GROUND_DEG = 0.0001; // and every ~10 m on the ground, so the taxi from the gate keeps its turns
+const TRAIL_TOLERANCE_DEG = 0.00003; // the simplification's first try (~3 m off the line), doubled until it fits
 const MAX_AIRPORTS = 32 * 1024;
 const MAX_MAP = 384 * 1024; // the route and the zones: a long flight crosses a dozen centres' outlines
 const CALL_TTL_MS = 60_000; // a radio call from the phone or website the desktop hasn't picked up by then is dropped
@@ -55,11 +57,12 @@ export interface Status {
   next?: Station;
   ete?: { nm: number; min: number } | null;
   last_atc?: { station?: string; mhz?: number; text?: string } | null;
+  crew?: boolean; // the copilot is on the intercom: a typed call can go to it
   updated_at?: string;
 }
 
 const STATUS_KEYS = ["active", "callsign", "aircraft", "origin", "destination", "phase", "phase_label", "squawk",
-  "altitude_ft", "runway", "gate", "rules", "tuned", "next", "ete", "last_atc"] as const;
+  "altitude_ft", "runway", "gate", "rules", "tuned", "next", "ete", "last_atc", "crew"] as const;
 const OWN_KEYS = ["t", "lat", "lon", "alt", "agl", "hdg", "hdg_mag", "gs", "vs", "ground", "com1", "com2", "squawk"] as const;
 const TRAFFIC_KEYS = ["id", "callsign", "type", "lat", "lon", "alt", "hdg", "gs", "ground"] as const;
 const RADIO_KEYS = ["kind", "t", "station", "mhz", "text", "ok", "level", "unclear", "radio"] as const;
@@ -77,6 +80,7 @@ export function cleanStatus(raw: Record<string, unknown>): Status {
   const out = pick(raw, STATUS_KEYS);
   out.active = !!raw.active;
   if ("rules" in out) out.rules = out.rules === "VFR" ? "VFR" : "IFR";
+  if ("crew" in out) out.crew = out.crew === true;
   if (JSON.stringify(out).length > MAX_STATUS) throw new HttpError(413, "The status is too big.");
   return out as unknown as Status;
 }
@@ -94,18 +98,44 @@ export function cleanFrame(raw: Record<string, unknown>): Frame {
   // The path flown so far, which the app sends when someone starts watching mid-flight: [[lat, lon], ...].
   if (Array.isArray(raw.trail)) {
     out.trail = thin(raw.trail.slice(0, 8 * TRAIL_KEEP).filter(isLatLon)
-      .map(([lat, lon]) => [Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4] as Point));
+      .map(([lat, lon]) => [round5(lat), round5(lon)] as Point));
   }
   if (JSON.stringify(out).length > MAX_FRAME) throw new HttpError(413, "Too much traffic at once.");
   return out;
 }
 
-/** Every other point (the last kept) until the path fits TRAIL_KEEP: all of the flight, less dense. Cutting the
- * oldest points off instead moved the start of the line along behind a long flight. */
+const round5 = (x: number) => Math.round(x * 1e5) / 1e5;
+
+/** The path in at most TRAIL_KEEP points with its shape: Douglas-Peucker, the tolerance doubled until it fits in
+ * three quarters of that. Straight legs lose their points; the turns and the taxi from the gate keep theirs.
+ * (Every other point dropped lost the taxi altogether a few hours in; cutting the oldest off moved the start.) */
 export function thin(path: Point[]): Point[] {
+  if (path.length <= TRAIL_KEEP) return path;
   let out = path;
-  while (out.length > TRAIL_KEEP) out = out.filter((_, i) => i % 2 === 0 && i !== out.length - 1).concat([out[out.length - 1]]);
+  for (let tol = TRAIL_TOLERANCE_DEG; out.length > (TRAIL_KEEP * 3) / 4 && out.length > 2; tol *= 2) out = douglasPeucker(out, tol);
   return out;
+}
+
+function douglasPeucker(path: Point[], tolerance: number): Point[] {
+  const keep = new Array<boolean>(path.length).fill(false);
+  keep[0] = keep[path.length - 1] = true;
+  const stack: [number, number][] = [[0, path.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    if (b <= a + 1) continue;
+    const k = Math.cos((path[a][0] * Math.PI) / 180); // a degree of longitude is shorter away from the equator
+    const ax = path[a][1] * k, ay = path[a][0], dx = path[b][1] * k - ax, dy = path[b][0] - ay;
+    const len2 = dx * dx + dy * dy;
+    let worst = -1, at = a;
+    for (let i = a + 1; i < b; i++) {
+      const px = path[i][1] * k - ax, py = path[i][0] - ay;
+      const u = len2 === 0 ? 0 : Math.max(0, Math.min(1, (px * dx + py * dy) / len2));
+      const d = Math.hypot(px - u * dx, py - u * dy);
+      if (d > worst) { worst = d; at = i; }
+    }
+    if (worst > tolerance) { keep[at] = true; stack.push([a, at], [at, b]); }
+  }
+  return path.filter((_, i) => keep[i]);
 }
 
 export function cleanRadio(raw: unknown): Record<string, unknown>[] {
@@ -231,13 +261,14 @@ export function pushFor(before: Status | null, after: Status): { title: string; 
 }
 
 /** A radio call to transmit: the words, trimmed to one line. */
-export function cleanCall(raw: Record<string, unknown>): string {
+/** A typed call: its words, and who it's for: ATC on COM1 ("atc") or the copilot on the intercom ("crew"). */
+export function cleanCall(raw: Record<string, unknown>): { text: string; to: "atc" | "crew" } {
   const text = typeof raw.text === "string" ? raw.text.replace(/\s+/g, " ").trim() : "";
   if (!text) throw new HttpError(400, "Nothing to say.");
-  return text.slice(0, CALL_MAX);
+  return { text: text.slice(0, CALL_MAX), to: raw.to === "crew" ? "crew" : "atc" };
 }
 
-export interface Call { id: string; text: string; at: number }
+export interface Call { id: string; text: string; to: "atc" | "crew"; at: number }
 
 export class LiveRoom extends DurableObject<Env> {
   // In memory only. Never written to this.ctx.storage.
@@ -247,6 +278,7 @@ export class LiveRoom extends DurableObject<Env> {
   private radio: Record<string, unknown>[] = [];
   private airports: Record<string, unknown>[] = [];
   private trail: Point[] = [];
+  private trailGround = false;
   private route: Obj | null = null;
   private zones: Obj | null = null;
 
@@ -324,10 +356,12 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "POST /say": {
         // A call typed on the phone or the website. Only while a flight is on: otherwise nothing would answer it.
-        const { text } = (await request.json()) as { text: string };
-        if (!(await this.current()).active) return json({ error: "LocalTC isn't flying right now." }, 409);
-        this.calls = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS).concat([{ id: crypto.randomUUID(), text, at: Date.now() }])
-          .slice(-CALLS_KEEP);
+        const { text, to } = (await request.json()) as { text: string; to?: "atc" | "crew" };
+        const now = await this.current();
+        if (!now.active) return json({ error: "LocalTC isn't flying right now." }, 409);
+        if (to === "crew" && !now.crew) return json({ error: "The copilot isn't on in LocalTC." }, 409);
+        this.calls = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS)
+          .concat([{ id: crypto.randomUUID(), text, to: to === "crew" ? "crew" : "atc", at: Date.now() }]).slice(-CALLS_KEEP);
         return json({ ok: true, waiting: this.calls.length });
       }
       case "GET /calls":  // the desktop's poll while somebody watches and nothing else is going up
@@ -355,9 +389,13 @@ export class LiveRoom extends DurableObject<Env> {
   private extendTrail(own: Record<string, unknown>): void {
     const { lat, lon } = own;
     if (typeof lat !== "number" || typeof lon !== "number") return;
+    const ground = own.ground === true;
     const last = this.trail[this.trail.length - 1];
-    if (last && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < TRAIL_STEP_DEG) return;
-    this.trail.push([Math.round(lat * 1e4) / 1e4, Math.round(lon * 1e4) / 1e4]);
+    // Lifting off or touching down is always a point.
+    if (last && ground === this.trailGround
+      && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < (ground ? TRAIL_STEP_GROUND_DEG : TRAIL_STEP_DEG)) return;
+    this.trailGround = ground;
+    this.trail.push([round5(lat), round5(lon)]);
     this.trail = thin(this.trail);
   }
 
@@ -422,9 +460,9 @@ export async function alert(env: Env, request: Request, auth: Auth): Promise<Res
  * with its cookie, which a browser sends by itself: only the site's own pages may send one that way. */
 export async function say(env: Env, request: Request, auth: Auth): Promise<Response> {
   if (auth.viaCookie && !allowedOrigin(env, request.headers.get("Origin"))) throw new HttpError(403, "Not from this site.");
-  const text = cleanCall(await readJson(request, 4 * 1024));
+  const call = cleanCall(await readJson(request, 4 * 1024));
   await limit(env, `say:${auth.user.id}`, 120, 3600);
-  return send(env, auth, "POST", "/say", { text });
+  return send(env, auth, "POST", "/say", call);
 }
 
 /** The desktop picking up the calls waiting for it. */

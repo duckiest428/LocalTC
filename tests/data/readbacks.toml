@@ -233,12 +233,13 @@ missing = ["frequency"]
 
 # --- KGYR -> KPHX voice flight (2026-09-18) --------------------------------------------------------
 
-# Speech-to-text lost the zero: "12.1" for 120.1. Probably right: ATC asks to confirm.
+# Speech-to-text lost the zero: "12.1" for 120.1. It does it every time the frequency is said ("confirm 120.42"
+# went round in circles): taken as the frequency given.
 [[case]]
 instruction = "ground.handoff_tower"
 slots = "contact_tower"
 text = "Paine Tower on 12.2, 2LT."
-status = "unclear"
+status = "correct"
 
 # "1508": 1,500 misheard (altitudes come in hundreds): confirm.
 [[case]]

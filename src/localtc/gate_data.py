@@ -19,8 +19,9 @@ from localtc.atc_core.airport.real_gates import GateData, parse_overpass
 log = logging.getLogger(__name__)
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-QUERY = ('[out:json][timeout:60];nwr["aeroway"="aerodrome"]["icao"="{icao}"]->.a;'
-         '(node(around.a:500)["aeroway"="gate"];way(around.a:500)["aeroway"="terminal"];);out tags geom;')
+QUERY = ('[out:json][timeout:90];nwr["aeroway"="aerodrome"]["icao"="{icao}"]->.a;'
+         '(node(around.a:500)["aeroway"="gate"];node(around.a:500)["aeroway"="parking_position"]["ref"];'
+         'way(around.a:500)["aeroway"="terminal"];way(around.a:500)["aeroway"="taxiway"]["ref"];);out tags geom;')
 MAX_AGE_S = 60 * 86400  # gates change slowly: a cached airport is fetched again after 60 days
 RETRY_S = 600.0  # a failed fetch (offline, Overpass busy) is tried again after this long
 TIMEOUT_S = 90.0

@@ -4,6 +4,7 @@ Fixtures: tests/fixtures/real_gates: the sim's parking at Las Vegas (numbered "G
 (lettered "GATE S 2"), and OSM's gates and terminals there (Overpass, trimmed to the tags used).
 """
 
+import gzip
 import json
 from pathlib import Path
 
@@ -20,9 +21,16 @@ from localtc.sim_api import Airport
 HERE = Path(__file__).parent / "fixtures" / "real_gates"
 
 
+def _read(name: str) -> dict:
+    path = HERE / name
+    if not path.exists():
+        return json.loads(gzip.decompress((HERE / f"{name}.gz").read_bytes()))
+    return json.loads(path.read_text())
+
+
 def load(icao: str) -> tuple[AirportGeometry, real_gates.GateData]:
-    geo = AirportGeometry(msgspec.convert(json.loads((HERE / f"{icao}_sim.json").read_text()), Airport))
-    return geo, real_gates.parse_overpass(icao, json.loads((HERE / f"{icao}_osm.json").read_text()))
+    geo = AirportGeometry(msgspec.convert(_read(f"{icao}_sim.json"), Airport))
+    return geo, real_gates.parse_overpass(icao, _read(f"{icao}_osm.json"))
 
 
 def by_scenery_name(geo, data) -> dict[str, stands.Gate]:
@@ -64,6 +72,26 @@ def test_without_real_gates_nothing_changes():
 
 def test_requested_gate_echo_nine():
     assert stands.requested(normalize("we'd like gate echo 9")) == "E9"
+    assert stands.requested(normalize("We have a preferred gate at Alpha 73.")) == "A73"
+
+
+def test_zurich_taxiways_named_from_openstreetmap():
+    """Zurich's scenery names none of its taxiways: ATC could only say "taxi to the apron". Named from OSM, the taxi
+    in from runway 34 is a real route to a gate, and the tower says which way off the runway."""
+    from localtc.atc_core.airport.taxi_route import TaxiGraph
+
+    geo, data = load("LSZH")
+    assert not any(p.name for p in geo.airport.taxi_paths)
+    named = real_gates.name_taxiways(geo.airport, data, geo.xy)
+    assert sum(1 for p in named.taxi_paths if p.name) > 1000
+    assert real_gates.name_taxiways(named, data, geo.xy) is None  # named already: left alone
+    graph = TaxiGraph(AirportGeometry(named))
+    gate = stands.assign(AirportGeometry(named), airline=True, aircraft_type="A340-300", traffic=[], seed="EDW87")
+    route = graph.parking_route(47.464086, 8.544269, gate.index)  # rolling out on 34
+    assert route is not None and route.taxiways and all(route.taxiways)
+    assert graph.runway_exit(47.464086, 8.544269, 335.0) == ("right", "E4")
+    assert real_gates._taxiway_ref("E4 (from 2026-11-26)") == "E4" and real_gates._taxiway_ref("Romeo") == "R"
+    assert real_gates._taxiway_ref("Turn Pad") == ""
 
 
 def test_international_by_country():

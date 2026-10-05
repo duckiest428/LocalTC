@@ -278,13 +278,18 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("ready_to_taxi", atis=_atis(tokens), **vfr)
     taxi_asked = _has_any(tokens, ("a", "taxi"), ("request", "taxi"), ("get", "taxi"), ("taxi", "for")) \
         and not _has_any(tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"))
-    if not taxi_asked and _has_any(
-        tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("ready", "for", "take", "off"),
-        ("ready", "to", "depart"), ("ready", "to", "departure"), ("ready", "for", "departures"),
-        ("like", "to", "get", "the", "departure"), ("get", "the", "departure"), ("request", "departure"),
+    # Asking about the departure ("what runway can we expect to depart from?", "we're just asking for the departure
+    # runway") isn't being ready for it: only "ready ..." itself counts then (it got a taxi clearance).
+    asking = _has_any(tokens, ("what",), ("which",), ("when",), ("where",), ("how",), ("asking",), ("disregard",),
+                      ("expect",))
+    ready = _has_any(tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"),
+                     ("ready", "for", "take", "off"), ("ready", "to", "depart"), ("ready", "to", "departure"),
+                     ("ready", "for", "departures"), ("ready", "in", "sequence"))
+    if not taxi_asked and (ready or not asking and _has_any(
+        tokens, ("like", "to", "get", "the", "departure"), ("get", "the", "departure"), ("request", "departure"),
         ("for", "departure"), ("to", "depart"), ("for", "takeoff"),
-        ("request", "the", "departure"), ("like", "the", "departure"), ("ready", "in", "sequence")
-    ):
+        ("request", "the", "departure"), ("like", "the", "departure"),
+    )):
         add("ready_for_departure", runway=_any_runway(tokens), **vfr)
     elif (hold_short(tokens) or _has_any(tokens, ("holding", "point"), ("at", "the", "holding"))) and not _has_any(
             tokens, ("taxi",), ("via",), ("cleared",), ("hold", "position"), ("holding", "position")):

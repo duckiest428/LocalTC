@@ -91,14 +91,14 @@ pilot_readback = "Turn {turn} heading {heading}, descend and maintain {altitude}
 [[template]]
 id = "approach.downwind"
 controller = "approach"
-text = ["{callsign}, turn {turn} heading {heading}, vectors {approach} approach.", "{callsign}, fly heading {heading}, downwind for runway {runway}."]
+text = ["{callsign}, turn {turn} heading {heading}, vectors {approach} approach.", "{callsign}, turn {turn} heading {heading}, vectors for runway {runway}."]
 readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
 [[template]]
 id = "approach.base"
 controller = "approach"
-text = ["{callsign}, turn {turn} heading {heading}, base leg.", "{callsign}, turn {turn} heading {heading}."]
+text = ["{callsign}, turn {turn} heading {heading}.", "{callsign}, turn {turn} heading {heading}, vectors to final."]
 readback = { required = ["heading"] }
 pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."
 

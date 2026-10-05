@@ -326,3 +326,73 @@ def test_the_intercom_key_goes_to_the_copilot_not_atc():
     heard, radio, calls = asyncio.run(main())
     assert [h.text for h in heard] == ["Flaps two"] and radio == []
     assert "Gear down" in calls[0][1] and "Runway 34L" not in calls[0][1]  # primed with crew words, not ATC's
+
+
+# --- questions and the language model ---------------------------------------------------------------------------
+
+
+def test_common_questions_are_answered_from_the_data():
+    pm = started()
+    pm.observe(own(2.0, fuel_lb=41300.0, fuel_flow_pph=2500.0))
+    pm.observe(AircraftSystems(t=2.0, flaps_positions=4, engines_running=2))
+    assert said(pm.observe(IntercomHeard(t=3.0, text="How much fuel do we have on board?"))) == \
+        ["We've got 41,300 pounds, about 8 hours 16 minutes at this burn."]
+    from localtc.sim_api import AtcTransmission
+    pm.observe(AtcTransmission(t=4.0, station="Zurich Approach", frequency_mhz=120.755, text="EDW87, fly heading 150."))
+    assert said(pm.observe(IntercomHeard(t=5.0, text="what did ATC say?"))) == \
+        ["Zurich Approach said: EDW87, fly heading 150."]
+    assert said(pm.observe(IntercomHeard(t=6.0, text="Go ahead and set the altimeter to 30.10"))) == []  # a command
+
+
+class FakeBackend:
+    model = "fake"
+
+    def __init__(self, answer):
+        self.answer, self.asked = answer, []
+
+    def complete(self, request, *, timeout_s):
+        from localtc.atc_core.llm.backend import LlmReply
+        self.asked.append(request)
+        return LlmReply(self.answer, 50.0)
+
+
+def test_the_model_answers_from_the_facts_and_never_makes_numbers_up():
+    from localtc.crew.model import CrewModel
+
+    pm = started()
+    pm.model = CrewModel(FakeBackend('{"kind": "reply", "reply": "Smooth so far, nothing on the radar."}'))
+    out = pm.observe(IntercomHeard(t=2.0, text="how's the ride looking"))
+    assert said(out) == ["Smooth so far, nothing on the radar."]
+    assert pm.model.backend.asked[0].purpose == "crew" and "altitude: 5,000 feet" in pm.model.backend.asked[0].prompt
+    pm.model = CrewModel(FakeBackend('{"kind": "reply", "reply": "We land in 42 minutes."}'))
+    assert said(pm.observe(IntercomHeard(t=3.0, text="anything interesting coming up"))) == ["Say again?"]  # 42 isn't known
+
+
+def test_a_command_in_other_words_waits_for_confirm():
+    from localtc.crew.model import CrewModel
+
+    pm = started()
+    pm.model = CrewModel(FakeBackend('{"kind": "command", "action": "gear", "value": "down", "reply": "Gear down."}'))
+    out = pm.observe(IntercomHeard(t=2.0, text="drop the wheels for me would you"))
+    assert said(out) == ["Gear down, confirm?"] and not [o for o in out if isinstance(o, SendSimEvent)]
+    assert SendSimEvent(name="GEAR_DOWN") in pm.observe(IntercomHeard(t=4.0, text="affirm"))
+    pm.model = CrewModel(FakeBackend('{"kind": "command", "action": "heading", "value": "310", "reply": "Heading 310."}'))
+    assert said(pm.observe(IntercomHeard(t=6.0, text="bring us round a bit"))) == ["Say again?"]  # 310 wasn't said
+    pm.model = CrewModel(FakeBackend("{}"), mode="questions")
+    pm.model.backend.answer = '{"kind": "command", "action": "gear", "value": "up", "reply": "Gear up."}'
+    assert said(pm.observe(IntercomHeard(t=8.0, text="suck the wheels up")))[:1] == ["Gear up."]  # questions only: words
+
+
+def test_a_shortcut_on_the_intercom_key_sends_nothing():
+    from localtc.stt.ptt import KeyboardPtt
+
+    calls = []
+    ptt = KeyboardPtt.__new__(KeyboardPtt)
+    ptt.key, ptt.key_name, ptt.what, ptt._held, ptt._listener = "ALT", "alt_l", "x", False, None
+    ptt._on_down, ptt._on_up, ptt._on_cancel = (lambda: calls.append("down")), (lambda: calls.append("up")), \
+        (lambda: calls.append("cancel"))
+    ptt._modifier, ptt._combo = True, False
+    ptt._matches = lambda key: key == "ALT"
+    ptt._press("ALT"), ptt._press("TAB"), ptt._release("TAB"), ptt._release("ALT")
+    ptt._press("ALT"), ptt._release("ALT")
+    assert calls == ["down", "cancel", "down", "up"]

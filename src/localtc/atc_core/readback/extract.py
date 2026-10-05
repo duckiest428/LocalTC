@@ -265,7 +265,9 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
         elif token.text.isdigit() and isinstance(expected, float) and expected == int(token.text):
             found.append(expected)  # "tower on 121" for 121.0
         elif "." in token.text and expected is not None and _dropped_digit(token.text, expected):
-            found.append(Unclear(token.text))
+            # "12.42" for 120.42: speech-to-text losing a digit of the very frequency ATC gave, every time it's said
+            # ("confirm 120.42" went round and round). Taken as said.
+            found.append(float(expected))
     return found
 
 

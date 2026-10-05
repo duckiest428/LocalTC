@@ -60,7 +60,7 @@
 [  1382.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 300, vectors for the RNAV runway 14R approach.
 [  1384.0] PILOT     119.2: Heading three zero zero, Cessna two lima tango.
 [  1384.0] READBACK  approach.vectors correct
-[  1425.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn right heading 210.
+[  1425.0] ATC       Seattle Approach 119.2: Cessna 2LT, turn right heading 210, vectors to final.
 [  1427.0] PILOT     119.2: Turn right heading two one zero, Cessna two lima tango.
 [  1427.0] READBACK  approach.base correct
 [  1485.0] ATC       Seattle Approach 119.2: Cessna 2LT, check heading, fly heading 210.

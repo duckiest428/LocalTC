@@ -63,6 +63,15 @@ controller = "tower"
 text = ["{callsign}, continue, runway {runway}.", "{callsign}, continue approach runway {runway}.", "{callsign}, runway {runway}, continue, I'll call your clearance."]
 
 [[template]]
+id = "tower.exit_vacate"
+controller = "tower"
+text = ["{callsign}, vacate {side} onto {exit}, contact {station} {frequency}.",
+        "{callsign}, vacate {side} {exit}, contact {station} on {frequency}.",
+        "{callsign}, turn {side} onto {exit} when able, contact {station} {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "Vacate {side} {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
 id = "tower.exit_contact_ground"
 controller = "tower"
 text = ["{callsign}, contact {station} {frequency}.",

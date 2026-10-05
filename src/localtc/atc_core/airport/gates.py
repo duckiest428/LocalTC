@@ -142,7 +142,7 @@ def requested(tokens: list[Token]) -> str | None:
     for i, token in enumerate(tokens):
         if token.text not in ("gate", "stand", "to"):
             continue
-        rest = tokens[i + 1:i + 3]
+        rest = [t for t in tokens[i + 1:i + 5] if t.text not in ("at", "number", "the")][:2]  # "gate at Alpha 73"
         if len(rest) == 2 and len(rest[0].text) == 1 and rest[0].text.isalpha() and rest[1].text.isdigit():
             return rest[0].text.upper() + rest[1].text
         if token.text in ("gate", "stand") and rest and rest[0].text.isdigit():

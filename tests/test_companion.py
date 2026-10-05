@@ -258,3 +258,36 @@ def test_calls_through_the_account_are_transmitted_and_a_failed_one_is_said():
     pilot.on_call = nothing_flying
     pilot._deliver_calls()
     assert hub.radio[-1]["kind"] == "alert" and "Not transmitted: start a flight first" in hub.radio[-1]["text"]
+
+
+def test_a_page_that_stopped_reading_is_caught_up_not_left_with_a_gap():
+    """WebView2 freezes the app window while the sim covers it: past the backlog, the page got nothing of hours of
+    the flight and the Live Map drew one straight line across them. Now its queue starts again from all of it."""
+    import asyncio
+
+    from localtc.ui.server import BACKLOG, EventStream, sse
+
+    stream = EventStream(lambda: [sse("trail", [[1.0, 2.0], [3.0, 4.0]])])
+    queue = stream.open()
+    for i in range(BACKLOG + 5):
+        stream.publish("own", {"i": i})
+    messages = []
+    while not queue.empty():
+        messages.append(queue.get_nowait())
+    assert messages[0].startswith(b"event: trail") and len(messages) == 1 + 5
+    asyncio.run(asyncio.sleep(0))
+
+
+def test_the_whole_path_goes_up_to_the_relay_now_and_then(monkeypatch):
+    from localtc.ui import companion as hub_module
+
+    hub = hub_module.CompanionHub()
+    sent = []
+    hub.remote = lambda kind, data: sent.append((kind, data))
+    hub.remote_watchers = 1
+    clock = iter(float(i) for i in range(0, 100000, 61))
+    monkeypatch.setattr(hub_module.time, "monotonic", lambda: next(clock))
+    for i in range(6):
+        hub.set_own({"lat": 45.0 + i * 0.1, "lon": -73.0})
+    frames = [d for k, d in sent if k == "frame"]
+    assert any("trail" in f and len(f["trail"]) >= 2 for f in frames[1:])  # sent again, the whole path so far

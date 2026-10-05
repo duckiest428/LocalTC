@@ -82,6 +82,8 @@ SLOTS: dict[str, SlotType] = {
     "distance": MILES,  # nautical miles to somewhere: "Yuma, 38 miles"
     "length": LENGTH,  # a runway's length in feet
     "bearing": TEXT,  # where somewhere is from the aircraft: "southeast"
+    "side": TEXT,  # which way off the runway: "left" or "right"
+    "exit": TAXI_POINT,  # the taxiway it leaves by
 }
 
 # What a slot says when nothing better is known. "Expect FL350 one zero minutes after departure" is what a

@@ -405,6 +405,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self.airport_requests: list[str] = []  # airports the engine needs; the service fetches them
         # The real gates of an airport (``localtc.gate_data``), or None while unknown; None: the scenery's names only.
         self.gate_source: Callable[[str], real_gates.GateData | None] | None = None
+        self._taxiways_named: set[str] = set()  # airports whose unnamed taxiways were named from the real ones
+        self._taxi_in_route: tuple[str, ...] | None = None  # the route to the gate ground gave, said again if asked
+        self._atis_told: set[tuple[str | None, str]] = set()  # (airport, letter) ATC has told the pilot is current
         self._requested: set[str] = set()
         self._scheduled: list[_Scheduled] = []
         self._rng: random.Random | None = None
@@ -639,6 +642,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
     def _taxi_graph(self, geo: AirportGeometry) -> TaxiGraph:
         """The airport's taxiways, routed around any its ATIS says are closed."""
+        geo = self._with_taxiway_names(geo)
         info = self.current_atis(geo.airport.icao)
         closed = info.operations.closed_taxiways if info is not None and info.operations is not None else frozenset()
         return TaxiGraph(geo, closed=closed)
@@ -728,10 +732,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind)
 
     def _atis_note(self, icao: str | None, reported: str | None) -> Phrase | None:
-        """"information Charlie is current, altimeter 29.92" when the pilot didn't report the current ATIS."""
+        """"information Charlie is current, altimeter 29.92" when the pilot didn't report the current ATIS: once (FAA
+        7110.65 2-9-3; ICAO the same), after which the pilot has it. The second taxi clearance said it all again."""
         info = self.current_atis(icao)
-        if info is None or (reported or "").upper() == info.letter:
+        if info is None or (reported or "").upper() == info.letter or (icao, info.letter) in self._atis_told:
             return None
+        self._atis_told.add((icao, info.letter))
         parts = [("information {atis} is current", {"atis": info.letter})]
         if info.weather.altimeter_inhg is not None:
             parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": info.weather.altimeter_inhg}))
@@ -1045,7 +1051,18 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._clear_to_land(t, own, st.comms.tuned, delay=False)
         elif phase is P.TAXI_IN and tuned == "tower" and once("exit_contact_ground"):
             if (ground := self.facility("ground")) is not None:
-                self._handoff(t, "tower.exit_contact_ground", st.comms.tuned, ground)
+                geo = self.geometry(st.flight.destination)
+                way_off = None
+                if geo is not None and own.on_runway:  # still on it: which way off, by which taxiway
+                    landed = geo.end(st.assignments.arrival_runway) if st.assignments.arrival_runway else None
+                    heading = landed.heading_true if landed is not None else own.hdg_true  # (not mid-turn off it)
+                    way_off = self._taxi_graph(geo).runway_exit(own.lat, own.lon, heading)
+                if way_off is not None:
+                    self._schedule(t, "tower.exit_vacate", {"side": way_off[0], "exit": way_off[1],
+                                                            "station": ground.station, "frequency": ground.mhz},
+                                   st.comms.tuned, handoff_to=ground)
+                else:
+                    self._handoff(t, "tower.exit_contact_ground", st.comms.tuned, ground)
         else:
             out += self._ambient(own)
         return out
@@ -2130,6 +2147,17 @@ class AtcEngine(VfrMixin, DiversionMixin):
             note = self._answer_message(topic) if topic is not None else None
             self._schedule(t, "common.maintain", {"altitude": before}, facility, note=note,
                            on_issue=lambda: self._assign(altitude_ft=before))
+            return []
+        if "taxi" in words and "taxi" in st.clearances and facility.controller == "ground":
+            # "Can we disregard our taxi clearance? We were just asking for the departure runway": cancelled, and
+            # what they asked answered (it was "contact Montreal Clearance").
+            if pending is not None and pending.instruction_id.startswith("ground.taxi"):
+                st.pending = None
+            st.clearances.pop("taxi", None)
+            self._assign(taxi_route=())
+            topic = question_topic(text)
+            note = self._answer_message(topic) if topic is not None else None
+            self._schedule(t, "ground.taxi_cancelled", {}, facility, note=note, expects_readback=False)
             return []
         if len(words - CANCEL_WORDS - COURTESY - CANCEL_FILLER) <= 2:
             self._schedule(t, "common.roger", {}, facility, expects_readback=False)
@@ -3775,14 +3803,20 @@ class AtcEngine(VfrMixin, DiversionMixin):
         geo = ctx.airport
         a = self.state.assignments
         # Asked again, ATC repeats the route it gave, it doesn't invent a new one: the search starts from
-        # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time.
-        taxiways = a.taxi_route if "taxi_in" in self.state.clearances and requested is None else None
+        # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time. Only
+        # the route in: the one out was at the other airport (Zurich was given Montreal's "A, F, B4, B").
+        taxiways = self._taxi_in_route if "taxi_in" in self.state.clearances and requested is None else None
+        if geo is not None:
+            geo = self._with_taxiway_names(geo)
+        gate = None
         if requested is not None and geo is not None:
             gate = stands.named(geo, requested, self._real_gates(geo.icao))
-            if gate is None:
-                self._assign(gate=None, gate_index=None)
-        else:
-            gate = self._gate(geo) if taxiways is None else None
+        if gate is None and taxiways is None:
+            # A gate always: the one asked for if it's there, else the one already given, else one ATC picks.
+            given = None
+            if geo is not None and a.gate_index is not None and requested is None:
+                given = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
+            gate = given or self._gate(geo)
         if taxiways is None:
             graph = self._taxi_graph(geo) if geo is not None and own is not None else None
             route = graph.parking_route(own.lat, own.lon, gate.index) if graph is not None and gate is not None else None
@@ -3792,13 +3826,15 @@ class AtcEngine(VfrMixin, DiversionMixin):
             if route is not None and graph is not None:
                 self._taxi_path = (geo.icao, [graph.positions[n] for n in route.nodes if n in graph.positions])
             self._assign(gate=gate.display if gate else None, gate_index=gate.index if gate else None)
-        where = a.gate if a.gate and taxiways else None
-        if where:
+        where = a.gate
+        keep = lambda: setattr(self, "_taxi_in_route", taxiways)  # noqa: E731
+        if where and taxiways:
             self._schedule(t, "ground.taxi_to_gate", {"taxi_route": taxiways, "gate": where}, facility, clearance="taxi_in",
-                           on_issue=lambda: self._assign(taxi_route=taxiways))
+                           on_issue=keep)
+        elif where:  # a way there, but no names to give it by: the gate alone
+            self._schedule(t, "ground.taxi_to_gate_no_route", {"gate": where}, facility, clearance="taxi_in", on_issue=keep)
         elif taxiways:
-            self._schedule(t, "ground.taxi_in", {"taxi_route": taxiways}, facility, clearance="taxi_in",
-                           on_issue=lambda: self._assign(taxi_route=taxiways))
+            self._schedule(t, "ground.taxi_in", {"taxi_route": taxiways}, facility, clearance="taxi_in", on_issue=keep)
         else:
             self._schedule(t, "ground.taxi_in_no_route", {}, facility, clearance="taxi_in")
 
@@ -3813,6 +3849,26 @@ class AtcEngine(VfrMixin, DiversionMixin):
                              traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}",
                              real=self._real_gates(geo.icao),
                              international=real_gates.is_international(flight.origin, flight.destination))
+
+    def _with_taxiway_names(self, geo: AirportGeometry) -> AirportGeometry:
+        """The airport with names for its taxiways where the scenery has none (Zurich's: "taxi to the apron" was all
+        ATC could say), from the real taxiways (``gate_source``). Once an airport; the same geometry otherwise."""
+        icao = geo.icao
+        if icao in self._taxiways_named:
+            return self.tracker.context_builder.airports.get(icao, geo)
+        data = self._real_gates(icao)
+        if data is None:
+            return geo  # not fetched (yet): asked again next time
+        self._taxiways_named.add(icao)
+        renamed = real_gates.name_taxiways(geo.airport, data, geo.xy)
+        if renamed is None:
+            return geo
+        named = AirportGeometry(renamed)
+        named.hold_taxiways = geo.hold_taxiways
+        self.tracker.context_builder.airports[icao] = named
+        logging.getLogger(__name__).info("Taxiway names for %s from OpenStreetMap: %d paths named", icao,
+                                         sum(1 for p in renamed.taxi_paths if p.name))
+        return named
 
     def _real_gates(self, icao: str | None) -> "real_gates.GateData | None":
         """The airport's real gates (``gate_source``: the app's OpenStreetMap cache), or None: the scenery's names."""

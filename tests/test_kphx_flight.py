@@ -59,7 +59,8 @@ def test_asking_for_the_tower_frequency(replay):
 
 def test_misheard_numbers_in_readbacks_are_confirmed(replay):
     # Probably right but not what ATC said: not "negative", not waved through either.
-    assert "confirm frequency 120.1" in after(replay, "Goodyear Tower on 12.1, EXP69", 2)[1]  # 120.1 lost its zero
+    # 120.1 lost its zero: taken as said (asked to confirm, speech-to-text only drops it again).
+    assert not any("confirm" in line for line in after(replay, "Goodyear Tower on 12.1, EXP69", 2))
     assert "confirm maintain 1,500" in after(replay, "Maintain 1508 EXP69", 2)[1]
     assert "READBACK  departure.radar_contact correct" in after(replay, "Maintain 1500 EXP69", 1)[0]
 

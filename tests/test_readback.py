@@ -141,6 +141,8 @@ def random_slots(rng: random.Random) -> dict:
         "taxi_route": tuple(rng.choice(names) + rng.choice(["", "", str(rng.randint(1, 9))]) for _ in range(rng.randint(1, 4))),
         "hold_point": rng.choice(names) + rng.choice(["", str(rng.randint(1, 9))]),
         "turn": rng.choice(["left", "right"]),
+        "side": rng.choice(["left", "right"]),
+        "exit": rng.choice(names) + rng.choice(["", str(rng.randint(1, 9))]),
         "direction": rng.choice(["northbound", "southwestbound", "straight-out"]),
         "approach": Approach(rng.choice(["ILS", "RNAV"]), runway()),
         "procedure": rng.choice(["MONTN2", "SEA9", "XIBI3A", "BAYST1"]),
@@ -198,8 +200,8 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
 def test_affirm_answers_a_confirm():
     slots = slots_from_toml(CORPUS["slots"]["contact_tower"])
     pending = pending_for("ground.handoff_tower", slots)
-    unclear = GrammarInterpreter().interpret("Paine Tower on 12.2, 2LT", pending, CONTEXT)
-    assert unclear.status == "unclear" and list(unclear.unclear) == ["frequency"]
+    # (A dropped zero of the frequency given is the frequency: "12.2" for 120.2 is no longer asked to confirm.)
+    assert GrammarInterpreter().interpret("Paine Tower on 12.2, 2LT", pending, CONTEXT).status == "correct"
     confirming = replace(pending, required=("frequency",), confirming=True)
     assert GrammarInterpreter().interpret("Affirm, 2LT", confirming, CONTEXT).status == "correct"
     assert GrammarInterpreter().interpret("120.2, 2LT", confirming, CONTEXT).status == "correct"

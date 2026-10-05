@@ -386,3 +386,16 @@ table.lb td { white-space: nowrap; }
 .llm-timing label { flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap; }
 .llm-timing input[type=number] { width: 72px; }
 .sub-h { margin: 10px 0 4px; font-size: 13px; color: var(--text); font-weight: 600; }
+
+/* Settings: cloud language models */
+.rec-badge { font-size: 11px; font-weight: 600; color: var(--green); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
+.cloud-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+.cloud-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.2)); }
+.cloud-row .cloud-test { grid-column: 1 / -1; }
+.cloud-row .cloud-test .ok { color: var(--green); }
+.cloud-row .cloud-test .bad { color: var(--red, #e5484d); }
+.cloud-key { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.cloud-key input { width: 220px; max-width: 100%; }
+.cloud-kind { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: rgba(127,127,127,.15); }
+.cloud-kind.ok { color: var(--green); }
+@media (max-width: 640px) { .cloud-row { grid-template-columns: 1fr; } .cloud-key { justify-content: flex-start; } }

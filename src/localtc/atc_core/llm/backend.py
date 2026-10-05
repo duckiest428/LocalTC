@@ -22,6 +22,8 @@ class LlmRequest:
     messages: tuple[tuple[str, str], ...]  # (role, content): few-shot turns, then the real question last
     schema: dict[str, Any]  # JSON schema the answer must follow
     max_tokens: int = 200
+    # More of the flight than a small local model can take: given to cloud models only (``localtc.llm.cloud``).
+    context: str = ""
 
     @property
     def prompt(self) -> str:
@@ -29,7 +31,8 @@ class LlmRequest:
         return self.messages[-1][1]
 
     def key(self, model: str) -> str:
-        blob = json.dumps([model, self.purpose, self.system, self.messages, self.schema], sort_keys=True)
+        parts = [model, self.purpose, self.system, self.messages, self.schema] + ([self.context] if self.context else [])
+        blob = json.dumps(parts, sort_keys=True)
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
 

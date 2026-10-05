@@ -209,6 +209,23 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
+CLOUD_ORDER = ["pollinations", "longcat", "qwen", "cerebras", "mistral", "nvidia", "siliconflow", "hunyuan", "spark",
+               "baidu", "opencode"]
+
+
+class CloudConfig(_Section):
+    """Language models in the cloud (localtc.llm.cloud): off unless turned on. Better answers than a small local model;
+    the flight's words go to the service answering while it's on. Keys live in the system's credential store, not
+    here."""
+
+    enabled: bool = False
+    # The services to try, first to last: those with no key first. A service that needs a key and has none is skipped.
+    order: list[str] = msgspec.field(default_factory=lambda: list(CLOUD_ORDER))
+    models: dict[str, list[str]] = msgspec.field(default_factory=dict)  # a service's models, replacing its own list
+    local_fallback: bool = True  # every cloud service failing: the local model (Ollama) answers, when it's there
+    timeout_s: float = 6.0  # per call, all services tried in it (the cloud is quick, but the first may be busy)
+
+
 class VoiceConfig(_Section):
     """Speaking to ATC: push-to-talk, the microphone, and Whisper."""
 
@@ -317,6 +334,7 @@ class Config(_Section):
     flight: FlightConfig = msgspec.field(default_factory=FlightConfig)
     atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
+    cloud: CloudConfig = msgspec.field(default_factory=CloudConfig)
     session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)

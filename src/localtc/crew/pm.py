@@ -140,7 +140,10 @@ class PilotMonitoring:
         which waits for the pilot's "confirm"."""
         if self.model is None:
             return [self._say(t, "Say again?")]
-        reading, exchanges = self.model.ask(t, text, facts(self.picture))
+        more = None
+        if getattr(self.model.backend, "rich", False) and self.engine is not None and hasattr(self.engine, "_flight_more"):
+            more = self.engine._flight_more(None, t)  # a cloud model: the whole flight, not just the copilot's facts
+        reading, exchanges = self.model.ask(t, text, facts(self.picture), more=more)
         if reading is None:
             return [*exchanges, self._say(t, "Say again?")]
         if reading.command is None:

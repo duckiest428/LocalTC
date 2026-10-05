@@ -656,3 +656,24 @@ def test_the_app_is_told_when_the_model_timed_out():
 
     line = radio_line(gave_up)
     assert line["code"] == "llm_timeout" and line["text"].startswith("The language model timed out: no answer")
+
+
+def test_a_cloud_model_gets_the_whole_flight_and_may_use_it():
+    # Runway lengths are a topic a small local model gets only when asked about them; a cloud model always has them,
+    # and the rest of the flight besides, and a reply using them passes the checks.
+    route = "Ground, DP69. Do we have any bad weather on route to Quebec today? We've lost internet access up here"
+    backend = ScriptedBackend(phrase={route: '{"reply":"nothing reported en route, runway 06L/24R is 11000 ft"}'})
+    backend.rich = True
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "semi"
+    assert engine.rich_model
+    out = say(engine, own, route, mhz=121.0)
+    request = backend.requests[-1]
+    assert "runways" in request.context and "destination" in request.context and "callsign: DP69" in request.context
+    assert "runways" not in request.prompt  # the lean facts stay lean
+    assert atc(out) and "11000" in atc(out)[0]
+    lean = ScriptedBackend(phrase={route: '{"reply":"nothing reported en route"}'})
+    engine, own = cyul_engine(lean)
+    engine.interpreter.mode = "semi"
+    say(engine, own, route, mhz=121.0)
+    assert not engine.rich_model and lean.requests[-1].context == ""

@@ -73,6 +73,7 @@ class InterpretContext:
     approach: str | None = None  # the approach in use or cleared, "ILS 34R"
     traffic: str | None = None
     recent: tuple[str, ...] = ()  # the last few exchanges on this frequency, oldest first: 'ATC: "..."', 'Pilot: "..."'
+    more: str = ""  # the rest of the flight, for a cloud model only (``LlmRequest.context``)
 
 
 @dataclass(frozen=True)

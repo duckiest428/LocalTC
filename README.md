@@ -229,6 +229,14 @@ A readback the grammar finds correct, and a request it matched confidently, neve
 
 **Timing** (Quick Settings → ATC → Language model timing, or `[llm] timeout_s`, `budget_s`, `patience_s`): how long to wait for an answer, for all tries of one call, and for the second try. Longer is more patient with a busy PC; shorter answers sooner. **Whenever the model runs out of time, the app says so**: a notice on screen, a line in the radio log and an entry under the alerts, saying whether it's being asked once more or ATC answered without it.
 
+**Cloud language model** (`[cloud]`, Quick Settings → Cloud language model; off by default, **recommended for quality**). A large model in the cloud reads your calls and words replies far better than a 3B one beside the sim, and gets the whole flight as context (`LlmRequest.context`: every fact the engine has, the route, both ATIS, the last half hour on the radio), where the local model keeps its lean, topic-gated facts. `localtc.llm.cloud` speaks the OpenAI chat API to each service:
+
+| No key | Key (free tier or credits) | Paid key |
+|---|---|---|
+| Pollinations | LongCat, Qwen (Alibaba Model Studio), Cerebras, Mistral, NVIDIA NIM, SiliconFlow, Tencent Hunyuan, iFlytek Spark, Baidu Qianfan | OpenCode Zen |
+
+A call walks the services in `[cloud] order` (no key first), each service's models in turn. A route that answers 429 or 402 rests until its `Retry-After` (else 30 s, doubling to 10 min) with the rest of its service; 5xx, a timeout or a non-JSON answer rests it the same way; a refused key takes out the service and a missing model only that model, for the flight. Each try gets at most half the remaining wait while others are left, and when every route has failed the local model answers with its usual prompt (`local_fallback`). Answers go through the same checks as the local model's. Keys are kept in the system credential store, not the settings file. Qwen Chat's, Qwen Code's, Qoder's and OpenCode's own free tiers are only for their own apps (private endpoints), so they aren't used.
+
 **CPU or graphics card** (`[llm] cpu_only`, on by default): the model runs on the CPU and leaves the graphics card and its memory to the sim; its timeouts are doubled to match. Turn it off (Quick Settings → ATC) on a machine with video memory to spare.
 
 **Standard pressure.** "We're on STD", "set to standard", "QNE" and "29.92" are understood. Up in the flight levels ATC reads your altitude as the flight level (pressure altitude), whatever the sim's altimeter setting says. Some airliners keep their own STD while the sim's setting stays on the local one, and that is not an altitude deviation.

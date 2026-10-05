@@ -628,8 +628,9 @@ const Settings = {
   async load() {
     const body = $("#settings-body");
     try {
-      const [s, m, d] = await Promise.all([api("settings"), api("models"), S.devices ? Promise.resolve(S.devices) : api("devices")]);
-      S.settings = s; S.models = m; S.devices = d;
+      const [s, m, d, c] = await Promise.all([api("settings"), api("models"), S.devices ? Promise.resolve(S.devices) : api("devices"),
+        api("cloud").catch(() => null)]);
+      S.settings = s; S.models = m; S.devices = d; S.cloud = c;
       this.render();
     } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
   },
@@ -650,6 +651,71 @@ const Settings = {
     this.render();
   },
   statusOf(kind) { return S.models.status.find((x) => x.kind === kind); },
+  // Cloud language models: optional, off by default, recommended for quality. Keys go to the system's credential
+  // store through the app and never come back to the page.
+  cloudCard(st) {
+    const c = S.cloud;
+    if (!c) return "";
+    const on = !!st.cloud?.enabled;
+    const kinds = { none: ["No key", "ok"], free: ["Free key", ""], required: ["Paid key", "muted"] };
+    const live = Object.fromEntries((c.live || []).map((r) => [r.route.split("/")[0], r]));
+    const state = (p) => {
+      const r = live[p.id];
+      if (r?.dead) return `<span class="mstatus missing">${esc(r.dead)}</span>`;
+      if (r?.resting_s) return `<span class="mstatus missing">resting ${r.resting_s} s</span>`;
+      if (r?.ok) return `<span class="mstatus ok">&#10003; ${r.ok} answers</span>`;
+      if (p.key === "none" || p.has_key) return '<span class="mstatus ok">ready</span>';
+      return '<span class="mstatus muted">needs a key</span>';
+    };
+    return `<div class="card" id="cloud-card">
+        <h3>Cloud language model <span class="rec-badge">Recommended for quality</span></h3>
+        <p class="muted small">A large model in the cloud understands your calls and words ATC's and the copilot's replies far
+          better than one small enough to run beside the sim, and it's given the whole flight (the route, every clearance,
+          the ATIS, what was said) where the model on this PC gets only the essentials. Off unless you turn it on: while it's
+          on, what you say and your flight's details go to the service answering. Services that need no key are tried first;
+          one that's busy, out of allowance or down steps aside and the next answers, and the model on this PC answers last.</p>
+        <label class="check-row"><input type="checkbox" id="s-cloud" ${on ? "checked" : ""}> Use cloud language models (from the next flight)</label>
+        <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback !== false ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
+        ${c.via ? `<p class="small">This flight's last answer came from <b>${esc(c.via)}</b>.</p>` : ""}
+        <div class="cloud-list">${c.providers.map((p) => `<div class="cloud-row" data-provider="${p.id}">
+          <div class="cloud-name"><b>${esc(p.name)}</b> <span class="cloud-kind ${kinds[p.key][1]}">${kinds[p.key][0]}</span> ${state(p)}
+            <div class="small muted">${esc(p.note)} ${p.signup && p.key !== "none" ? `<a href="${esc(p.signup)}">Get a key</a>` : ""}</div>
+            <div class="small muted">Models, in order: ${p.models.map(esc).join(", ")}</div></div>
+          <div class="cloud-key">${p.key === "none" ? "" : `<input type="password" autocomplete="off" spellcheck="false"
+              placeholder="${p.has_key ? "Key saved: paste a new one to replace it" : "Paste your API key"}" data-key="${p.id}">
+            <button class="btn small" data-key-save="${p.id}">Save</button>${p.has_key ? `<button class="btn small" data-key-clear="${p.id}">Remove</button>` : ""}`}
+            <button class="btn small" data-cloud-test="${p.id}" ${p.key === "none" || p.has_key ? "" : "disabled"}>Test</button></div>
+          <div class="small cloud-test" id="cloud-test-${p.id}"></div></div>`).join("")}</div>
+        <p class="muted small">Qwen Chat's, Qoder's and OpenCode's own unlimited free use is only for their own apps, so LocalTC
+          can't use it: Qwen is reached through Alibaba Model Studio with a key, OpenCode Zen with a paid key. The order and each
+          service's models can be changed in the settings file ([cloud] order, models).</p>
+      </div>`;
+  },
+  bindCloud() {
+    const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);
+    on("#s-cloud", "change", (e) => this.save("cloud", "enabled", e.target.checked));
+    on("#s-cloud-local", "change", (e) => this.save("cloud", "local_fallback", e.target.checked));
+    const refresh = (c) => { S.cloud = c; this.render(); };
+    $$("[data-key-save]").forEach((b) => (b.onclick = async () => {
+      const id = b.dataset.keySave, key = $(`[data-key="${id}"]`).value.trim();
+      if (!key) { toast("Paste the key first", true); return; }
+      try { refresh(await api("cloud/key", { provider: id, key })); toast("Key saved"); } catch (e) { fail(e); }
+    }));
+    $$("[data-key-clear]").forEach((b) => (b.onclick = async () => {
+      try { refresh(await api("cloud/key", { provider: b.dataset.keyClear, key: "" })); toast("Key removed"); } catch (e) { fail(e); }
+    }));
+    $$("[data-cloud-test]").forEach((b) => (b.onclick = async () => {
+      const id = b.dataset.cloudTest, out = $(`#cloud-test-${id}`);
+      b.disabled = true; out.textContent = "Asking ...";
+      try {
+        const { results } = await api("cloud/test", { provider: id });
+        out.innerHTML = results.length ? results.map((r) => r.ok
+          ? `<span class="ok">&#10003; ${esc(r.route)} answered in ${(r.ms / 1000).toFixed(1)} s</span>`
+          : `<span class="bad">&#10007; ${esc(r.route)}: ${esc(r.detail)}</span>`).join("<br>") : "Nothing to test: it needs a key.";
+      } catch (e) { out.textContent = e.message; }
+      b.disabled = false;
+    }));
+  },
   render() {
     const st = S.settings.settings, m = S.models, cat = m.catalog, hw = m.hardware;
     const opt = (list, cur) => list.map((o) => `<option value="${esc(o.id)}" ${o.id === cur ? "selected" : ""}>${esc(o.label)}${o.tested ? "" : ""} — ${esc(o.speed)}, ${esc(o.quality)} (${o.size_mb >= 1000 ? (o.size_mb / 1000).toFixed(1) + " GB" : o.size_mb + " MB"})</option>`).join("");
@@ -678,7 +744,8 @@ const Settings = {
 
       <div class="card">
         <h3>Models</h3>
-        <p class="muted small">Bigger models understand and hear better but answer more slowly. All run on this computer.</p>
+        <p class="muted small">Bigger models understand and hear better but answer more slowly. All run on this computer.
+          For the best understanding and replies, a <a href="#cloud-card" class="jump">cloud language model</a> is recommended (below).</p>
         <div class="row"><label>Language model (reads your calls)
           <select id="s-llm"><option value="__off" ${llmCur === "__off" ? "selected" : ""}>Off: grammar only (fastest, strict phrasing)</option>${opt(cat.llm, llmCur)}
           ${extra.map((n) => `<option value="${esc(n)}" ${n === llmCur ? "selected" : ""}>${esc(n)} (installed in Ollama, untested)</option>`).join("")}</select>
@@ -698,6 +765,7 @@ const Settings = {
         ${missing ? `<div class="row"><button class="btn primary" id="s-install-all">Download everything missing</button><span class="muted small">Once; flights then work offline.</span></div>` : ""}
         <div class="muted small" id="job-msg"></div>
       </div>
+      ${this.cloudCard(st)}
 
       <div class="card">
         <h3>Push-to-talk</h3>
@@ -943,6 +1011,7 @@ const Settings = {
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-beyond-facts", "change", (e) => this.save("llm", "beyond_facts", e.target.checked));
+    this.bindCloud();
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
     on("#s-cpu-only", "change", () => this.save("llm", "cpu_only", $("#s-cpu-only").checked));
     for (const [id, key, low, high] of [["#s-llm-timeout", "timeout_s", 1, 60], ["#s-llm-budget", "budget_s", 1, 120],

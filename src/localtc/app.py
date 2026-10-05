@@ -101,10 +101,48 @@ def _in_flight_keep_alive(setting: str) -> str:
 
 
 async def language_model(cfg: Config, source: SimSource):
-    """The model backend for this session, or None (grammar only). Never fails the session."""
+    """The model backend for this session, or None (grammar only). Never fails the session. With [cloud] on: the
+    cloud services, the local model (when it's there) behind them."""
     llm = cfg.llm
-    if not llm.enabled or (llm.mode == "off" and not llm.phrasing):
+    if llm.mode == "off" and not llm.phrasing:
         return None
+    if cfg.cloud.enabled and not (isinstance(source, ReplaySource) and llm.replay != "live"):
+        return await cloud_model(cfg, source)
+    if not llm.enabled:
+        return None
+    return await local_model(cfg, source)
+
+
+def cloud_keys():
+    from localtc.account import TokenStore
+    from localtc.llm.cloud import KeyStore
+
+    return KeyStore(TokenStore())
+
+
+def cloud_routes(cfg: Config, keys: dict[str, str] | None = None):
+    from localtc.llm.cloud import routes
+
+    return routes(cfg.cloud.order, cloud_keys().all() if keys is None else keys, cfg.cloud.models)
+
+
+async def cloud_model(cfg: Config, source: SimSource):
+    from localtc.llm.cloud import CloudBackend
+
+    found = await asyncio.to_thread(cloud_routes, cfg)
+    local = await local_model(cfg, source, behind_cloud=True) if cfg.cloud.local_fallback and cfg.llm.enabled else None
+    if not found:
+        log.warning("Cloud language models are on, but no service can be used (each needs a key in Settings > Cloud)%s",
+                    ": using the local model" if local is not None else "")
+        return local
+    services = list(dict.fromkeys(r.provider.name for r in found))
+    log.info("Cloud language models: %s%s", ", ".join(services), ", then the local model" if local is not None else "")
+    return CloudBackend(found, fallback=local)
+
+
+async def local_model(cfg: Config, source: SimSource, *, behind_cloud: bool = False):
+    llm = cfg.llm
+    say = log.info if behind_cloud else log.warning  # behind the cloud, no Ollama is only no last resort
     if isinstance(source, ReplaySource) and llm.replay != "live":
         if llm.replay == "off":
             return None
@@ -119,11 +157,11 @@ async def language_model(cfg: Config, source: SimSource):
     backend = ollama_backend(llm)
     status = await asyncio.to_thread(backend.status)
     if not status.reachable:
-        log.warning("Ollama isn't running at %s (%s): using the grammar only. Start Ollama, or set [llm] enabled = false.",
+        say("Ollama isn't running at %s (%s): using the grammar only. Start Ollama, or set [llm] enabled = false.",
                     llm.base_url, status.error)
         return None
     if not status.has(llm.model):
-        log.warning("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
+        say("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
         return None
     # Loaded somewhere else than asked (CPU only switched on or off since): out, so it loads again where it should.
     placed = await asyncio.to_thread(backend.placement)
@@ -218,6 +256,9 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
     slower = 2.0 if llm.cpu_only and getattr(backend, "cpu_only", False) else 1.0  # a CPU answers in about twice the time
     timeout_s = llm.timeout_s * slower
     budget_s = max(llm.budget_s, llm.timeout_s) * slower  # (a budget shorter than one call would cut every call short)
+    if getattr(backend, "rich", False):  # the cloud: the call's time is shared out among its services
+        timeout_s = max(timeout_s, cfg.cloud.timeout_s)
+        budget_s = max(budget_s, timeout_s)
     if backend is not None and llm.mode != "off":
         interpreter = LlmInterpreter(backend, mode=llm.mode, timeout_s=timeout_s,
                                      max_attempts=llm.max_attempts, budget_s=budget_s, patience_s=llm.patience_s)
@@ -338,7 +379,9 @@ async def run_session(
 
                 from localtc.crew.model import CrewModel
 
-                crew_model = (CrewModel(backend, mode=cfg.crew.llm, timeout_s=cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
+                crew_wait = max(cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
+                                cfg.cloud.timeout_s if getattr(backend, "rich", False) else 0.0)
+                crew_model = (CrewModel(backend, mode=cfg.crew.llm, timeout_s=crew_wait,
                                         patience_s=cfg.llm.patience_s)
                               if backend is not None and cfg.crew.llm != "off" else None)
                 service = atc_service

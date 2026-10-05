@@ -69,13 +69,17 @@ class CrewModel:
     def __init__(self, backend, *, mode: str = "full", timeout_s: float = 8.0, patience_s: float = 20.0) -> None:
         self.backend, self.mode, self.timeout_s, self.patience_s = backend, mode, timeout_s, patience_s
 
-    def ask(self, t: float, text: str, facts: dict[str, str]) -> tuple[Reading | None, list[LlmExchange]]:
-        """The model's answer to ``text`` (checked), and the exchange to record; None when it has nothing usable."""
+    def ask(self, t: float, text: str, facts: dict[str, str],
+            more: dict[str, str] | None = None) -> tuple[Reading | None, list[LlmExchange]]:
+        """The model's answer to ``text`` (checked), and the exchange to record; None when it has nothing usable.
+        ``more``: the rest of the flight, for a model that can take it (a cloud one); a reply may use it too."""
         if self.mode == "off" or self.backend is None:
             return None, []
         prompt = "Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items()) + f'\n\nCaptain: "{text}"'
         messages = tuple(m for q, a in EXAMPLES for m in (("user", q), ("assistant", a))) + (("user", prompt),)
-        request = LlmRequest("crew", SYSTEM, messages, SCHEMA, max_tokens=120)
+        request = LlmRequest("crew", SYSTEM, messages, SCHEMA, max_tokens=120,
+                             context="\n".join(f"- {k}: {v}" for k, v in (more or {}).items()))
+        facts = {**(more or {}), **facts}  # what the reply is checked against
         timeout_s, _ = waits(self.backend, self.timeout_s, self.timeout_s, self.patience_s)
         result = self.backend.complete(request, timeout_s=timeout_s)
         model = getattr(self.backend, "model", "")

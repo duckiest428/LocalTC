@@ -208,12 +208,18 @@ def spoken(text: str) -> str:
     return NUMBER_RE.sub(lambda m: speech.digits(m.group(0)), text)
 
 
-def phrase_request(pilot: str, decision: str, facts: dict[str, str], *, beyond_facts: bool = False) -> LlmRequest:
+def more_lines(more: dict[str, str] | None) -> str:
+    """Facts past what a small model is given, one per line, for a cloud model (``LlmRequest.context``)."""
+    return "\n".join(f"- {k}: {v}" for k, v in (more or {}).items())
+
+
+def phrase_request(pilot: str, decision: str, facts: dict[str, str], *, beyond_facts: bool = False,
+                   more: dict[str, str] | None = None) -> LlmRequest:
     """The request for a reply's wording: the examples, then this call."""
     messages: tuple[tuple[str, str], ...] = tuple(
         turn for user, assistant in EXAMPLES for turn in (("user", user), ("assistant", assistant))
     ) + (("user", user_message(pilot, decision, facts)),)
-    return LlmRequest("phrase", system(beyond_facts), messages, SCHEMA, max_tokens=80)
+    return LlmRequest("phrase", system(beyond_facts), messages, SCHEMA, max_tokens=80, context=more_lines(more))
 
 
 # --- rewording the script's replies -------------------------------------------------------------------------------
@@ -386,12 +392,14 @@ class LlmPhraser:
         self._clock = clock
 
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
-              trigger: str = "", required: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
+              trigger: str = "", required: str = "", more: dict[str, str] | None = None) -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template.
-        ``required``: the data's answer, which the reply must give (``check_reply``)."""
+        ``required``: the data's answer, which the reply must give (``check_reply``). ``more``: the rest of what's
+        known, for a model that can take it (a cloud one); a reply may use it as it may the facts."""
         beyond = self.beyond_facts
-        text, exchanges = self._run(phrase_request(pilot, decision, facts, beyond_facts=beyond),
-                                    lambda raw: check_reply(raw, facts, callsigns, required, beyond_facts=beyond),
+        known = {**(more or {}), **facts}
+        text, exchanges = self._run(phrase_request(pilot, decision, facts, beyond_facts=beyond, more=more),
+                                    lambda raw: check_reply(raw, known, callsigns, required, beyond_facts=beyond),
                                     t, trigger)
         return (Phrase(text, spoken(text)) if text is not None else None), exchanges
 

@@ -320,7 +320,7 @@ def build_request(text: str, pending: PendingReadback | None, context: Interpret
         expect=_expected_items(pending) if mode == "readback" else [], pilot=text,
     ))]
     return LlmRequest("understand", system_prompt(examples), tuple(messages), schema(pending if mode == "readback" else None, context),
-                      max_tokens=ANSWER_TOKENS)
+                      max_tokens=ANSWER_TOKENS, context=context.more)
 
 
 # --- reading the answer ----------------------------------------------------------------------------------

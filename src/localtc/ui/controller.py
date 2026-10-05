@@ -148,6 +148,9 @@ class AppController:
             (get, "settings"): self.api_settings,
             (post, "settings"): self.api_save_settings,
             (get, "models"): self.api_models,
+            (get, "cloud"): self.api_cloud,
+            (post, "cloud/key"): self.api_cloud_key,
+            (post, "cloud/test"): self.api_cloud_test,
             (post, "models/install"): self.api_install,
             (post, "models/profile"): self.api_profile,
             (get, "devices"): self.api_devices,
@@ -722,6 +725,42 @@ class AppController:
             self.live.speaker.player.volume = cfg.tts.volume
         self._push_state()
         return {"saved": str(path), "restart": live_now}
+
+    async def api_cloud(self, args: dict) -> dict:
+        """The cloud services: which there are, which have a key (never the key itself), and how each is doing in
+        this flight."""
+        from localtc.app import cloud_keys
+        from localtc.llm.cloud import PROVIDERS
+
+        keys = await asyncio.to_thread(lambda: cloud_keys().all())
+        backend = getattr(getattr(self.live.engine, "phraser", None) or getattr(self.live.engine, "interpreter", None),
+                          "backend", None) if self.live is not None else None
+        live = backend.status() if getattr(backend, "rich", False) else []
+        return {"providers": [{"id": p.id, "name": p.name, "key": p.key, "has_key": p.id in keys, "signup": p.signup,
+                               "note": p.note, "models": list(self.cfg.cloud.models.get(p.id) or p.models)} for p in PROVIDERS],
+                "live": live, "via": getattr(backend, "last_via", "") if live else ""}
+
+    async def api_cloud_key(self, args: dict) -> dict:
+        from localtc.app import cloud_keys
+        from localtc.llm.cloud import BY_ID
+
+        provider = str(args.get("provider") or "")
+        if provider not in BY_ID:
+            raise HttpError(400, f"unknown service {provider!r}")
+        await asyncio.to_thread(cloud_keys().set, provider, str(args.get("key") or ""))
+        return await self.api_cloud({})
+
+    async def api_cloud_test(self, args: dict) -> dict:
+        """Each service asked once, now: which answer, how fast, and why not."""
+        from localtc.app import cloud_routes
+        from localtc.llm.cloud import check
+
+        found = await asyncio.to_thread(cloud_routes, self.cfg)
+        wanted = args.get("provider")
+        found = [r for r in found if not wanted or r.provider.id == wanted]
+        first = list({r.provider.id: r for r in reversed(found)}.values())[::-1]  # each service's first model
+        results = await asyncio.to_thread(check, first, timeout_s=15.0)
+        return {"results": [r.__dict__ for r in results]}
 
     async def api_models(self, args: dict) -> dict:
         hw = await asyncio.to_thread(models.detect_hardware)

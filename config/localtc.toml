@@ -74,6 +74,13 @@ auto_stop_in_replay = false   # ... in a replay too
 gate_radius_m = 30.0          # this close to a gate or parking spot counts as at it
 auto_stop_delay_s = 8.0       # time for ATC's last words before the flight stops
 
+[cloud]                       # optional: language models in the cloud, recommended for quality (off by default)
+enabled = false               # on: the flight's words go to the service answering; keys are kept in the system's credential store
+# Tried first to last; no-key services first. One that needs a key is skipped until it has one (Settings > Cloud).
+order = ["pollinations", "longcat", "qwen", "cerebras", "mistral", "nvidia", "siliconflow", "hunyuan", "spark", "baidu", "opencode"]
+local_fallback = true         # every service failing: the local model answers
+timeout_s = 6.0               # per call, every service tried in it
+
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false
 ptt = "keyboard"              # keyboard | joystick | enter (Enter in this window starts and stops a transmission)

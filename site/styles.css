@@ -667,3 +667,7 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 #support .note p { margin: 0 0 1em; }
 .support-row { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); align-items: start; }
 @media (max-width: 760px) { .support-row { grid-template-columns: 1fr; } }
+
+/* "Recommended for quality" on the cloud model's card */
+.tag.rec { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--green); border: 1px solid currentColor; }

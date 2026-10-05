@@ -28,7 +28,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 24 September 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 5 October 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -99,7 +99,8 @@
     </li>
     <li>
       <strong>The language model</strong> runs locally through Ollama, on
-      <code class="inline">127.0.0.1</code>: your own machine talking to itself.
+      <code class="inline">127.0.0.1</code>: your own machine talking to itself, unless you turn on
+      the cloud language model (below).
     </li>
     <li>
       <strong>Recordings, logs, settings and the logbook</strong> are written to your own disk, under
@@ -117,6 +118,16 @@
       <strong>Setup.</strong> Downloading LocalTC, the speech model, the ATC voice and the language model
       from the services that publish them (GitHub, PyPI, Hugging Face, Ollama). After that, flights work
       offline.
+    </li>
+    <li>
+      <strong>The cloud language model (only if you turn it on).</strong> Off by default. While it's on,
+      the words of your transmissions (as transcribed) and your flight's details (callsign, route,
+      clearances, position, the airports' weather and what was said on the radio) go to the service that
+      answers, from the ones listed in Quick Settings → Cloud language model: Pollinations, LongCat, Alibaba
+      Model Studio (Qwen), Cerebras, Mistral, NVIDIA, SiliconFlow, Tencent Hunyuan, iFlytek Spark, Baidu
+      Qianfan and OpenCode Zen. Each handles it under its own privacy policy. Your audio is never sent,
+      and nothing goes to us. The API keys you add are kept in your system's credential store (Windows
+      Credential Manager), never in a file, and are sent only to the service they belong to.
     </li>
     <li>
       <strong>The update check.</strong> At most once a day, the app asks GitHub's public API what the

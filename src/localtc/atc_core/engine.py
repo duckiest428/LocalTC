@@ -3235,10 +3235,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
         facts = self._facts(facility, interp.text or "")
         if known is not None:
             facts["here and now"] = known.display
+        more = None
+        if self.rich_model:
+            more = {k: v for k, v in {**self._facts(facility, everything=True), **self._flight_more(facility, t)}.items()
+                    if k not in facts}
         message, exchanges = self.phraser.reply(
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger={"answer": "question", "reply": "conversation"}.get(decision, "unsupported_request"),
-            required=known.display if known is not None and require else "",
+            required=known.display if known is not None and require else "", more=more,
         )
         if message is not None:
             self._schedule(t, "common.info", {"message": message}, facility, worded_by="model")
@@ -3341,10 +3345,80 @@ class AtcEngine(VfrMixin, DiversionMixin):
             station=facility.station, station_role=facility.controller, last_atc=last_atc, confidence=confidence,
             patient=self._patient, cleared_altitude_ft=a.altitude_ft, cleared_heading=a.heading, squawk=a.squawk,
             runway=self._runway_in_use(st.aircraft), traffic=traffic, recent=recent,
-            approach=approach,
+            approach=approach, more=self._more_for_model(facility, t),
         )
 
-    def _facts(self, facility: Facility | None = None, text: str = "") -> dict[str, str]:
+    def _more_for_model(self, facility: Facility, t: float) -> str:
+        """A cloud model's view of the whole flight, for understanding a call (empty for a local one)."""
+        if not self.rich_model:
+            return ""
+        from localtc.atc_core.llm.phrase import more_lines
+
+        return more_lines({**self._facts(facility, everything=True), **self._flight_more(facility, t)})
+
+    @property
+    def rich_model(self) -> bool:
+        """The language model can take the whole flight (a cloud one): it gets far more than a small local one."""
+        for part in (self.phraser, self.interpreter):
+            if getattr(getattr(part, "backend", None), "rich", False):
+                return True
+        return False
+
+    def _flight_more(self, facility: Facility | None, t: float) -> dict[str, str]:
+        """The rest of the flight, for a model that can take it: the plan, the clearances, where the aircraft is and
+        what it's doing, the full ATIS, and what's been said on the radio lately."""
+        st, a, own = self.state, self.state.assignments, self.state.aircraft
+        more: dict[str, str] = {}
+        f = st.flight
+        if f.callsign is not None:
+            more["callsign"] = speech.callsign_display(f.callsign)
+        if f.aircraft_type:
+            more["aircraft"] = f.aircraft_type
+        more["flight rules"] = f.rules
+        for label, icao in (("origin", f.origin), ("destination", f.destination)):
+            geo = self.geometry(icao)
+            if icao:
+                more[label] = f"{speech.airport_name(geo.airport.name, icao)} ({icao})" if geo else icao
+        if self.cfg.sid:
+            more["filed departure procedure"] = self.cfg.sid
+        if self.cfg.star:
+            more["filed arrival procedure"] = self.cfg.star
+        if self.cfg.approach:
+            more["filed approach"] = str(self.cfg.approach)
+        if self.cfg.route:
+            more["route"] = " ".join(fix.ident for fix in self.cfg.route[:80])
+        for label, value in (("squawk", a.squawk), ("assigned heading", a.heading and f"{a.heading:03d}"),
+                             ("assigned speed", a.speed_kt and f"{a.speed_kt} kt"), ("departure runway", a.departure_runway),
+                             ("arrival runway", a.arrival_runway), ("taxi route", " ".join(a.taxi_route)),
+                             ("cleared approach", a.approach), ("gate", a.gate or a.departure_gate),
+                             ("cleared altitude", a.altitude_ft and speech.altitude_display(a.altitude_ft))):
+            if value:
+                more[label] = str(value)
+        if own is not None:
+            more["aircraft now"] = (f"{'on the ground' if own.on_ground else 'airborne'}, {int(round(own.alt_indicated_ft, -1))} ft, "
+                                    f"{int(own.gs_kt)} kt ground speed, heading {int(own.hdg_mag) % 360:03d}, "
+                                    f"{int(round(own.vs_fpm, -1))} ft/min")
+            dest = self.geometry(f.destination)
+            if dest is not None:
+                more["to destination"] = f"{dest.distance_nm(own.lat, own.lon):.0f} nm"
+            orig = self.geometry(f.origin)
+            if orig is not None:
+                more["from origin"] = f"{orig.distance_nm(own.lat, own.lon):.0f} nm"
+        for icao in dict.fromkeys(x for x in (f.origin, f.destination) if x):
+            info = self.current_atis(icao)
+            if info is not None:
+                more[f"{icao} ATIS"] = info.text
+        said = [f'{"ATC" if e.speaker == "atc" else "Pilot"} ({e.controller or "?"}): "{e.text}"'
+                for e in st.exchanges if t - e.t <= 1800][-12:]
+        if said:
+            more["radio, last half hour"] = " | ".join(said)
+        if (tuned := st.comms.tuned) is not None:
+            more["tuned"] = f"{tuned.station} {tuned.mhz:.3f}"
+        if st.comms.expected is not None and st.comms.expected is not st.comms.tuned:
+            more["sent to"] = f"{st.comms.expected.station} {st.comms.expected.mhz:.3f}"
+        return more
+
+    def _facts(self, facility: Facility | None = None, text: str = "", *, everything: bool = False) -> dict[str, str]:
         """What the phrasing model may use, in display form. Nothing here is an instruction to fly.
 
         What matters for any reply: who's talking, the time, where the flight is and is going, the weather and runway
@@ -3355,7 +3429,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         words = set(re.findall(r"[a-z']+", text.lower()))
 
         def about(topic: str) -> bool:
-            return bool(words & FACT_TOPICS[topic])
+            return everything or bool(words & FACT_TOPICS[topic])
 
         facts: dict[str, str] = {}
         if facility is not None:

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LocalTC — offline ATC for Microsoft Flight Simulator 2024</title>
-<meta name="description" content="Free, open-source air traffic control for MSFS 2024. Runs entirely on your PC: local speech recognition, local voices, a local language model. No cloud, no API keys, no subscription.">
+<meta name="description" content="Free, open-source air traffic control for MSFS 2024. Runs entirely on your PC: local speech recognition, local voices, a local language model. No subscription; a cloud language model is optional, and recommended for quality.">
 <meta property="og:title" content="LocalTC — offline ATC for MSFS 2024">
 <meta property="og:description" content="Real ATC that runs on your own machine. No cloud, no account needed, no monthly fee.">
 <meta property="og:type" content="website">
@@ -143,6 +143,18 @@
         A 1B–4B model via <b>Ollama</b> reads what you said and fills in a small form. It never talks
         to you and never decides anything: every value it reports must actually appear in your words,
         or the whole answer is thrown away and the grammar wins.
+      </p>
+    </article>
+
+    <article class="card">
+      <span class="ico">☁️</span>
+      <h3>Or a big model in the cloud <span class="tag rec">Recommended for quality</span></h3>
+      <p>
+        Optional and off by default. A large cloud model understands you and words ATC's and the copilot's
+        replies far better than one that fits beside the sim, and it's given the whole flight. Services with
+        no key come first; when one is busy or out of allowance the next answers, and the model on your PC
+        last. Or bring your own key: Cerebras, NVIDIA NIM, Mistral, SiliconFlow, Tencent Hunyuan, Baidu
+        Qianfan, iFlytek Spark, LongCat, Qwen, OpenCode Zen. The same checks apply to every answer.
       </p>
     </article>
 

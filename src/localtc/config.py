@@ -209,7 +209,7 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
-CLOUD_ORDER = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "qwen", "siliconflow"]
+CLOUD_ORDER = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "siliconflow"]
 
 
 class CloudConfig(_Section):
@@ -221,6 +221,9 @@ class CloudConfig(_Section):
     # The services to try, first to last: Mistral (the most generous free limits), then the one needing no key. A service that needs a key and has none is skipped.
     order: list[str] = msgspec.field(default_factory=lambda: list(CLOUD_ORDER))
     models: dict[str, list[str]] = msgspec.field(default_factory=dict)  # a service's models, replacing its own list
+    # The copilot on the intercom asks the cloud too, with its own connection to it (its waits and rests are its
+    # own, never holding up ATC's calls). Off: the copilot uses the model on this PC.
+    copilot: bool = True
     local_fallback: bool = False  # on: every cloud service failing, the local model (Ollama) answers
     timeout_s: float = 6.0  # per call, all services tried in it (the cloud is quick, but the first may be busy)
 

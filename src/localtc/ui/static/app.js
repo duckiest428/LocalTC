@@ -691,26 +691,99 @@ const Settings = {
           on, what you say and your flight's details go to the service answering. Mistral is tried first (the most generous free
           limits), then Pollinations (no key); one that's busy, out of allowance or down steps aside and the next answers.</p>
         <label class="check-row"><input type="checkbox" id="s-cloud" ${on ? "checked" : ""}> Use cloud language models (from the next flight)</label>
+        <label class="check-row"><input type="checkbox" id="s-cloud-copilot" ${st.cloud?.copilot !== false ? "checked" : ""}> The copilot uses it too, with its own connection (its questions never hold up ATC's). Off: the copilot uses the model on this PC</label>
         <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
         ${c.via ? `<p class="small">This flight's last answer came from <b>${esc(c.via)}</b>.</p>` : ""}
-        <div class="cloud-list">${c.providers.map((p) => `<div class="cloud-row" data-provider="${p.id}">
-          <div class="cloud-name"><b>${esc(p.name)}</b> <span class="cloud-kind ${kinds[p.key][1]}">${kinds[p.key][0]}</span> ${state(p)}
+        <details class="cloud-services" ${this.cloudOpen?.has("_all") ? "open" : ""} data-cloud-fold="_all">
+          <summary><b>Services</b> <span class="muted small">${c.providers.filter((p) => p.key === "none" || p.has_key).length} of ${c.providers.length} ready</span></summary>
+        <div class="cloud-list">${c.providers.map((p) => `<details class="cloud-row" data-provider="${p.id}" data-cloud-fold="${p.id}" ${this.cloudOpen?.has(p.id) ? "open" : ""}>
+          <summary class="cloud-name"><b>${esc(p.name)}</b> <span class="cloud-kind ${kinds[p.key][1]}">${kinds[p.key][0]}</span> ${state(p)}</summary>
+          <div class="cloud-body">
             <div class="small muted">${esc(p.note)} ${p.signup && p.key !== "none" ? `<a href="${esc(p.signup)}">Get a key</a>` : ""}</div>
-            <div class="small muted">Models, in order: ${p.models.map(esc).join(", ")}</div></div>
+            <div class="small muted">Models, in order: ${p.models.map(esc).join(", ")}</div>
           <div class="cloud-key">${p.key === "none" ? "" : `<input type="password" autocomplete="off" spellcheck="false"
-              placeholder="${p.has_key ? "Key saved: paste a new one to replace it" : "Paste your API key"}" data-key="${p.id}">
+              placeholder="${p.has_key ? "Key saved: paste a new one to replace it" : p.id === "cloudflare" ? "ACCOUNT_ID:API_TOKEN" : "Paste your API key"}" data-key="${p.id}">
             <button class="btn small" data-key-save="${p.id}">Save</button>${p.has_key ? `<button class="btn small" data-key-clear="${p.id}">Remove</button>` : ""}`}
             <button class="btn small" data-cloud-test="${p.id}" ${p.key === "none" || p.has_key ? "" : "disabled"}>Test</button></div>
-          <div class="small cloud-test" id="cloud-test-${p.id}"></div></div>`).join("")}</div>
+          <div class="small cloud-test" id="cloud-test-${p.id}"></div></div></details>`).join("")}</div>
+        </details>
         <p class="muted small">Qwen Chat's, Qoder's and OpenCode's own unlimited free use is only for their own apps, so LocalTC
-          can't use it: Qwen is reached through Alibaba Model Studio with a free key. The order and each
+          can't use them. The order and each
           service's models can be changed in the settings file ([cloud] order, models).</p>
       </div>`;
+  },
+  // A yoke or joystick button found by pressing it: pick the device from the list (the controllers Windows has
+  // connected, through the window's Gamepad API), press Detect, then the button. Written as MSFS names it,
+  // joystick:<device>:button:<n>, the device numbered in the order Windows lists them, as MSFS does.
+  joyPicker(id) {
+    return `<div class="joy-pick">
+      <select id="joy-dev-${id}" title="The device the button is on"><option value="">Any device (press its button)</option></select>
+      <button class="btn small" id="joy-detect-${id}">Detect</button>
+      <span class="muted small" id="joy-hint-${id}"></span></div>`;
+  },
+  joyDevices() {
+    try { return [...(navigator.getGamepads?.() || [])].filter(Boolean); } catch { return []; }
+  },
+  fillJoyDevices(id) {
+    const sel = $(`#joy-dev-${id}`);
+    if (!sel) return;
+    const cur = sel.value, pads = this.joyDevices();
+    sel.innerHTML = `<option value="">${pads.length ? "Any device (press its button)" : "No controllers seen yet: press any button on one"}</option>` +
+      pads.map((g) => `<option value="${g.index}" ${String(g.index) === cur ? "selected" : ""}>${g.index}: ${esc(g.id.replace(/\s*\(.*?Vendor.*\)$/i, ""))}</option>`).join("");
+  },
+  bindJoy(id, input, key) {
+    this.fillJoyDevices(id);
+    if (!this._joyListening) {
+      this._joyListening = true;
+      const refill = () => ["ptt", "ic"].forEach((x) => this.fillJoyDevices(x));
+      window.addEventListener("gamepadconnected", refill);
+      window.addEventListener("gamepaddisconnected", refill);
+    }
+    const button = $(`#joy-detect-${id}`), hint = $(`#joy-hint-${id}`);
+    if (!button) return;
+    button.onclick = (e) => {
+      e.preventDefault();
+      if (!navigator.getGamepads) { hint.textContent = "This window can't see controllers: type the button's MSFS name."; return; }
+      if (this._joyStop) this._joyStop();
+      hint.textContent = "Press the button now ...";
+      button.disabled = true;
+      // What's already held is not the answer: only a button that goes down after Detect.
+      const held = new Map(this.joyDevices().map((g) => [g.index, g.buttons.map((b) => b.pressed)]));
+      const started = performance.now();
+      let raf = 0;
+      const stop = (text) => { cancelAnimationFrame(raf); button.disabled = false; this._joyStop = null; if (text !== undefined) hint.textContent = text; };
+      this._joyStop = () => stop("");
+      const poll = () => {
+        this.fillJoyDevices(id);
+        const want = $(`#joy-dev-${id}`)?.value;
+        for (const g of this.joyDevices()) {
+          if (want !== "" && want !== undefined && String(g.index) !== want) continue;
+          const before = held.get(g.index) || [];
+          const n = g.buttons.findIndex((b, i) => b.pressed && !before[i]);
+          if (n >= 0) {
+            const name = `joystick:${g.index}:button:${n}`;
+            $(input).value = name;
+            this.save("voice", key, name);
+            stop(`Got it: button ${n} on ${g.id.split("(")[0].trim() || "device " + g.index}.`);
+            return;
+          }
+          held.set(g.index, g.buttons.map((b) => b.pressed));
+        }
+        if (performance.now() - started > 15000) { stop("Nothing pressed in 15 s. Pick the device and try again."); return; }
+        raf = requestAnimationFrame(poll);
+      };
+      raf = requestAnimationFrame(poll);
+    };
   },
   bindCloud() {
     const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);
     on("#s-cloud", "change", (e) => this.save("cloud", "enabled", e.target.checked));
     on("#s-cloud-local", "change", (e) => this.save("cloud", "local_fallback", e.target.checked));
+    on("#s-cloud-copilot", "change", (e) => this.save("cloud", "copilot", e.target.checked));
+    this.cloudOpen ??= new Set();
+    $$("[data-cloud-fold]").forEach((d) => d.addEventListener("toggle", () => {
+      this.cloudOpen[d.open ? "add" : "delete"](d.dataset.cloudFold);  // stays as it was when the card is drawn again
+    }));
     const refresh = (c) => { S.cloud = c; this.render(); };
     $$("[data-key-save]").forEach((b) => (b.onclick = async () => {
       const id = b.dataset.keySave, key = $(`[data-key="${id}"]`).value.trim();
@@ -798,6 +871,7 @@ const Settings = {
         </div>
         <div class="row" id="ptt-joy-row" ${st.voice.ptt === "joystick" ? "" : "hidden"}>
           <label>Button, as MSFS names it<input id="s-joy" value="${esc(st.voice.ptt_joystick)}" placeholder="joystick:0:button:3"></label>
+          ${this.joyPicker("ptt")}
         </div>
         <div class="row"><label>Microphone<select id="s-mic">${devOpts(S.devices.inputs || [], st.voice.input_device)}</select></label></div>
       </div>
@@ -826,7 +900,8 @@ const Settings = {
           <span>Intercom key</span><span class="keycap" id="s-ic-key">${esc(keyLabel(st.voice.intercom_key))}</span>
           <button class="btn small" id="s-ic-key-set">Change</button><span class="muted small" id="s-ic-key-hint"></span>
         </div>
-        <div class="row"><label>Or a button, as MSFS names it<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label></div>
+        <div class="row"><label>Or a button, as MSFS names it<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label>
+          ${this.joyPicker("ic")}</div>
         <div class="row">
           <label>Copilot's voice<select id="s-crew-sex">${["female", "male", "any"].map((s) => `<option value="${s}" ${st.crew.voice_sex === s ? "selected" : ""}>${{ female: "Female", male: "Male", any: "Either" }[s]}</option>`).join("")}</select></label>
           <label style="flex:0 1 120px">Voice<select id="s-crew-pick">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<option value="${i}" ${st.crew.voice_pick === i ? "selected" : ""}>${i + 1}</option>`).join("")}</select></label>
@@ -992,6 +1067,8 @@ const Settings = {
     on("#s-key-set", "click", () => this.captureKey());
     on("#s-ic-key-set", "click", () => this.captureKey("intercom_key", "#s-ic-key", "#s-ic-key-hint"));
     on("#s-ic-joy", "change", () => this.save("voice", "intercom_joystick", val("#s-ic-joy").trim()));
+    this.bindJoy("ptt", "#s-joy", "ptt_joystick");
+    this.bindJoy("ic", "#s-ic-joy", "intercom_joystick");
     on("#s-crew", "change", (e) => this.save("crew", "enabled", e.target.checked));
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
     on("#s-crew-llm", "change", () => this.save("crew", "llm", val("#s-crew-llm")));

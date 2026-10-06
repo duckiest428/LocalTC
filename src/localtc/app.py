@@ -140,6 +140,21 @@ async def cloud_model(cfg: Config, source: SimSource):
     return CloudBackend(found, fallback=local)
 
 
+def copilot_model(cfg: Config, backend):
+    """The copilot's own language model. With the cloud on for it: a connection of its own to the same services (its
+    rests and waits never hold up ATC's), the same local model behind it; with the cloud off for it: the local model
+    only. Without the cloud, ATC's model."""
+    from localtc.llm.cloud import CloudBackend, Route
+
+    if not getattr(backend, "rich", False):
+        return backend
+    local = backend.fallback
+    if not cfg.cloud.copilot:
+        return local
+    own = [Route(r.provider, r.model, r.key, json_mode=r.json_mode, dead=r.dead) for r in backend.routes]
+    return CloudBackend(own, fallback=local)
+
+
 async def local_model(cfg: Config, source: SimSource, *, behind_cloud: bool = False):
     llm = cfg.llm
     say = log.info if behind_cloud else log.warning  # behind the cloud, no Ollama is only no last resort
@@ -379,11 +394,15 @@ async def run_session(
 
                 from localtc.crew.model import CrewModel
 
+                crew_backend = copilot_model(cfg, backend)
                 crew_wait = max(cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
-                                cfg.cloud.timeout_s if getattr(backend, "rich", False) else 0.0)
-                crew_model = (CrewModel(backend, mode=cfg.crew.llm, timeout_s=crew_wait,
+                                cfg.cloud.timeout_s if getattr(crew_backend, "rich", False) else 0.0)
+                crew_model = (CrewModel(crew_backend, mode=cfg.crew.llm, timeout_s=crew_wait,
                                         patience_s=cfg.llm.patience_s)
-                              if backend is not None and cfg.crew.llm != "off" else None)
+                              if crew_backend is not None and cfg.crew.llm != "off" else None)
+                if crew_model is not None:
+                    log.info("Copilot's language model: %s", "the cloud" if getattr(crew_backend, "rich", False)
+                             else crew_backend.model)
                 service = atc_service
                 pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,

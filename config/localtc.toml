@@ -77,7 +77,8 @@ auto_stop_delay_s = 8.0       # time for ATC's last words before the flight stop
 [cloud]                       # optional: language models in the cloud, recommended for quality (off by default)
 enabled = false               # on: the flight's words go to the service answering; keys are kept in the system's credential store
 # Tried first to last: Mistral (most generous free limits), then the no-key one. One that needs a key is skipped until it has one (Settings > Cloud).
-order = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "qwen", "siliconflow"]
+order = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "siliconflow"]
+copilot = true                # the copilot asks the cloud too (its own connection); off: the model on this PC
 local_fallback = false        # on: every service failing, the local model answers
 timeout_s = 6.0               # per call, every service tried in it
 

@@ -247,4 +247,36 @@ def test_cloudflare_key_holds_the_account_and_the_token():
 
 def test_the_paid_and_dropped_services_are_gone():
     assert {p.id for p in cloud.PROVIDERS} == {"mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia",
-                                               "qwen", "siliconflow"}
+                                               "siliconflow"}
+
+
+def test_the_copilot_gets_its_own_cloud_connection_or_the_local_model():
+    from localtc.app import copilot_model
+
+    local = Local()
+    atc = CloudBackend(routes(["mistral"], {"mistral": "k"}), fallback=local)
+    atc.routes[0].until = 1e12  # ATC's route resting ...
+    cfg = Config()
+    own = copilot_model(cfg, atc)
+    assert own is not atc and own.rich and own.fallback is local
+    assert own.routes[0].until == 0 and own.routes[0].key == "k"  # ... the copilot's isn't: its own state
+    cfg.cloud.copilot = False
+    assert copilot_model(cfg, atc) is local
+    assert copilot_model(cfg, local) is local  # no cloud: ATC's model
+
+
+def test_a_cloud_copilot_gets_the_whole_flight():
+    from localtc.crew.model import CrewModel
+
+    seen = []
+
+    class Rich(Local):
+        rich = True
+
+        def complete(self, request, *, timeout_s):
+            seen.append(request)
+            return LlmReply('{"reply": "eleven thousand feet"}', 5.0)
+
+    reading, _ = CrewModel(Rich()).ask(0.0, "how long is the runway", {"fuel": "5000 kg"},
+                                       more={"runway": "24R 11000 ft"})
+    assert "- runway: 24R 11000 ft" in seen[0].context and "fuel: 5000 kg" in seen[0].prompt

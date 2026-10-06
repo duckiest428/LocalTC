@@ -390,16 +390,24 @@ table.lb td { white-space: nowrap; }
 /* Settings: cloud language models */
 .rec-badge { font-size: 11px; font-weight: 600; color: var(--green); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; }
 .cloud-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
-.cloud-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.2)); }
-.cloud-row .cloud-test { grid-column: 1 / -1; }
+.cloud-services > summary, .cloud-row > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cloud-services > summary::-webkit-details-marker, .cloud-row > summary::-webkit-details-marker { display: none; }
+.cloud-services > summary::before, .cloud-row > summary::before { content: "▸"; display: inline-block; transition: transform .15s; opacity: .7; }
+.cloud-services[open] > summary::before, .cloud-row[open] > summary::before { transform: rotate(90deg); }
+.cloud-services { margin: 10px 0; }
+.cloud-row { padding: 8px 0; border-top: 1px solid var(--line, rgba(127,127,127,.2)); }
+.cloud-body { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 2px 18px; }
 .cloud-row .cloud-test .ok { color: var(--green); }
 .cloud-row .cloud-test .bad { color: var(--red, #e5484d); }
-.cloud-key { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.cloud-key { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .cloud-key input { width: 220px; max-width: 100%; }
 .cloud-kind { font-size: 11px; padding: 1px 6px; border-radius: 6px; background: rgba(127,127,127,.15); }
 .cloud-kind.ok { color: var(--green); }
-@media (max-width: 640px) { .cloud-row { grid-template-columns: 1fr; } .cloud-key { justify-content: flex-start; } }
 
 /* The account suggestion */
 .benefits { margin: 8px 0 12px; padding-left: 18px; }
 .benefits li { margin: 4px 0; }
+
+/* Finding a yoke or joystick button by pressing it */
+.joy-pick { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.joy-pick select { max-width: 280px; }

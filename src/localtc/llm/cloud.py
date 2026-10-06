@@ -85,9 +85,6 @@ PROVIDERS: tuple[Provider, ...] = (
     Provider("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1",
              ("openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"),
              key="free", signup="https://build.nvidia.com", note="Free developer access."),
-    Provider("qwen", "Qwen (Alibaba Model Studio)", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-             ("qwen-flash", "qwen-plus"), key="free", signup="https://modelstudio.console.alibabacloud.com",
-             note="Free quota for new accounts. (Qwen Chat's and Qwen Code's own free use isn't open to other apps.)"),
     Provider("siliconflow", "SiliconFlow", "https://api.siliconflow.com/v1", ("Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"),
              key="free", signup="https://cloud.siliconflow.com", note="Some models free; the rest from credits."),
 )

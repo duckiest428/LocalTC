@@ -127,9 +127,9 @@ def cloud_routes(cfg: Config, keys: dict[str, str] | None = None):
 
 
 async def cloud_model(cfg: Config, source: SimSource):
-    from localtc.llm.cloud import CloudBackend
+    from localtc.llm.cloud import CloudBackend, discover
 
-    found = await asyncio.to_thread(cloud_routes, cfg)
+    found = await asyncio.to_thread(lambda: discover(cloud_routes(cfg)))
     local = await local_model(cfg, source, behind_cloud=True) if cfg.cloud.local_fallback and cfg.llm.enabled else None
     if not found:
         log.warning("Cloud language models are on, but no service can be used (each needs a key in Settings > Cloud)%s",

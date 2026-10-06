@@ -776,13 +776,14 @@ class AppController:
     async def api_cloud_test(self, args: dict) -> dict:
         """Each service asked once, now: which answer, how fast, and why not."""
         from localtc.app import cloud_routes
-        from localtc.llm.cloud import check
+        from localtc.llm.cloud import check, discover
 
-        found = await asyncio.to_thread(cloud_routes, self.cfg)
         wanted = args.get("provider")
-        found = [r for r in found if not wanted or r.provider.id == wanted]
-        first = list({r.provider.id: r for r in reversed(found)}.values())[::-1]  # each service's first model
-        results = await asyncio.to_thread(check, first, timeout_s=15.0)
+        found = [r for r in await asyncio.to_thread(cloud_routes, self.cfg) if not wanted or r.provider.id == wanted]
+        found = await asyncio.to_thread(discover, found)
+        if not wanted:
+            found = list({r.provider.id: r for r in reversed(found)}.values())[::-1]  # each service's first model
+        results = await asyncio.to_thread(check, found, timeout_s=15.0)  # one service: every model it has
         return {"results": [r.__dict__ for r in results]}
 
     async def api_models(self, args: dict) -> dict:

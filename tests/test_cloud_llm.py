@@ -59,14 +59,14 @@ class Local:
 
 
 def test_no_key_services_come_first_and_keyless_paid_ones_are_skipped():
-    found = routes(CLOUD_ORDER, {"cerebras": "k1"})
+    found = routes(CLOUD_ORDER, {"groq": "k1"})
     assert [r.provider.id for r in found][0] == "pollinations"
-    assert {r.provider.id for r in found} == {"pollinations", "cerebras"}
-    assert all(r.key == "k1" for r in found if r.provider.id == "cerebras")
+    assert {r.provider.id for r in found} == {"pollinations", "groq"}  # no key, no Mistral
+    assert all(r.key == "k1" for r in found if r.provider.id == "groq")
 
 
 def test_models_setting_replaces_a_services_list():
-    found = routes(["cerebras"], {"cerebras": "k"}, {"cerebras": ["my-model"]})
+    found = routes(["groq"], {"groq": "k"}, {"groq": ["my-model"]})
     assert [r.model for r in found] == ["my-model"]
 
 
@@ -88,13 +88,13 @@ def test_first_route_answers_with_the_full_context_and_the_schema():
 
 def test_rate_limit_falls_through_and_the_service_rests():
     clock = Clock()
-    net = Net({"pollinations": [(402, {}, b"{}")], "cerebras": [ok()]})
-    backend = CloudBackend(routes(["pollinations", "cerebras"], {"cerebras": "k"}), transport=net, clock=clock)
+    net = Net({"pollinations": [(402, {}, b"{}")], "groq": [ok()]})
+    backend = CloudBackend(routes(["pollinations", "groq"], {"groq": "k"}), transport=net, clock=clock)
     assert backend.complete(REQ, timeout_s=5).text
     assert backend.complete(REQ, timeout_s=5).text
     hosts = net.hosts()
-    assert hosts[0].startswith("text.pollinations.ai") and hosts[1].startswith("api.cerebras.ai")
-    assert hosts[2].startswith("api.cerebras.ai")  # pollinations resting: not asked again
+    assert hosts[0].startswith("text.pollinations.ai") and hosts[1].startswith("api.groq.com")
+    assert hosts[2].startswith("api.groq.com")  # pollinations resting: not asked again
     assert net.calls[1][2]["Authorization"] == "Bearer k"
     clock.t += cloud.COOLDOWN_S + 1
     backend.complete(REQ, timeout_s=5)
@@ -114,20 +114,20 @@ def test_rest_doubles_and_honours_retry_after():
 
 
 def test_refused_key_takes_out_every_model_of_that_service():
-    net = Net({"cerebras": [(401, {}, b'{"error": {"message": "bad key"}}')], "mistral": [ok()]})
-    backend = CloudBackend(routes(["cerebras", "mistral"], {"cerebras": "x", "mistral": "y"}), transport=net)
+    net = Net({"groq": [(401, {}, b'{"error": {"message": "bad key"}}')], "mistral": [ok()]})
+    backend = CloudBackend(routes(["groq", "mistral"], {"groq": "x", "mistral": "y"}), transport=net)
     assert backend.complete(REQ, timeout_s=5).text
-    assert all(r.dead for r in backend.routes if r.provider.id == "cerebras")
+    assert all(r.dead for r in backend.routes if r.provider.id == "groq")
     backend.complete(REQ, timeout_s=5)
-    assert sum(1 for h in net.hosts() if "cerebras" in h) == 1
+    assert sum(1 for h in net.hosts() if "groq" in h) == 1
 
 
 def test_a_missing_model_is_skipped_but_the_service_stays():
-    first, second = BY_ID["cerebras"].models[:2]
-    net = Net({f"cerebras#{first}": [(404, {}, b'{"message": "model not found"}')], f"cerebras#{second}": [ok()]})
-    backend = CloudBackend(routes(["cerebras"], {"cerebras": "k"}), transport=net)
+    first, second = BY_ID["groq"].models[:2]
+    net = Net({f"groq#{first}": [(404, {}, b'{"message": "model not found"}')], f"groq#{second}": [ok()]})
+    backend = CloudBackend(routes(["groq"], {"groq": "k"}), transport=net)
     assert backend.complete(REQ, timeout_s=5).text
-    assert net.hosts() == [f"api.cerebras.ai:{first}", f"api.cerebras.ai:{second}"]
+    assert net.hosts() == [f"api.groq.com:{first}", f"api.groq.com:{second}"]
     assert backend.routes[0].dead and not backend.routes[1].dead
 
 
@@ -196,9 +196,9 @@ def test_keys_live_in_the_credential_store():
             self.pop(k, None)
 
     store = cloud.KeyStore(Tokens())
-    store.set("cerebras", " abc ")
-    assert store.all() == {"cerebras": "abc"}
-    store.set("cerebras", "")
+    store.set("groq", " abc ")
+    assert store.all() == {"groq": "abc"}
+    store.set("groq", "")
     assert store.all() == {}
 
 
@@ -206,3 +206,45 @@ def test_check_reports_each_route():
     net = Net({"pollinations": [ok('{"ok": true}')], "mistral": [(401, {}, b"{}")]})
     results = cloud.check(routes(["pollinations", "mistral"], {"mistral": "k"}), transport=net)
     assert [(r.route.split("/")[0], r.ok) for r in results][:2] == [("pollinations", True), ("mistral", False)]
+
+
+def test_a_limit_of_zero_drops_the_model_and_the_next_model_answers():
+    # Mistral's free plan shows mistral-small with a limit of 0 requests a minute: never usable, so out at once,
+    # and the service's other models carry on (a 429 rests only its model).
+    first, second = "mistral-small-latest", "ministral-8b-latest"
+    net = Net({f"mistral#{first}": [(429, {"x-ratelimit-limit-req-minute": "0"}, b'{"message": "Rate limit exceeded"}')],
+               f"mistral#{second}": [ok()]})
+    backend = CloudBackend(routes(["mistral"], {"mistral": "k"}, {"mistral": [first, second]}), transport=net)
+    assert backend.complete(REQ, timeout_s=5).text
+    assert backend.routes[0].dead and "plan" in backend.routes[0].dead and not backend.routes[1].dead
+    net2 = Net({f"mistral#{first}": [(429, {"x-ratelimit-limit-req-minute": "30"}, b"{}")], f"mistral#{second}": [ok()]})
+    busy = CloudBackend(routes(["mistral"], {"mistral": "k"}, {"mistral": [first, second]}), transport=net2)
+    assert busy.complete(REQ, timeout_s=5).text
+    assert not busy.routes[0].dead and busy.routes[0].until > 0 and busy.routes[1].until == 0
+
+
+def test_discover_drops_models_the_service_doesnt_offer():
+    found = routes(["mistral", "pollinations"], {"mistral": "k"}, {"mistral": ["gone-model", "ministral-8b-latest"]})
+
+    def get(url, headers, timeout_s):
+        assert url == "https://api.mistral.ai/v1/models" and headers["Authorization"] == "Bearer k"
+        return 200, json.dumps({"data": [{"id": "ministral-8b-latest"}]}).encode()
+
+    kept = cloud.discover(found, get=get)
+    assert [r.name for r in kept] == ["mistral/ministral-8b-latest", "pollinations/openai-fast"]
+    # A service that can't say keeps its list.
+    assert len(cloud.discover(found, get=lambda *a: (500, b""))) == 3
+
+
+def test_cloudflare_key_holds_the_account_and_the_token():
+    net = Net({"api.cloudflare.com": [ok()]})
+    backend = CloudBackend(routes(["cloudflare"], {"cloudflare": "acc123:tok456"}), transport=net)
+    assert backend.complete(REQ, timeout_s=5).text
+    url, _, headers, _ = net.calls[0]
+    assert url == "https://api.cloudflare.com/client/v4/accounts/acc123/ai/v1/chat/completions"
+    assert headers["Authorization"] == "Bearer tok456"
+
+
+def test_the_paid_and_dropped_services_are_gone():
+    assert {p.id for p in cloud.PROVIDERS} == {"mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia",
+                                               "qwen", "siliconflow"}

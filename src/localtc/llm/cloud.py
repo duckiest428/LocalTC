@@ -6,7 +6,8 @@ address, whether it needs a key, and the models to try there, in order. A *route
 goes down the routes in priority order (Mistral first, for its generous free limits, then the no-key service),
 and a route that fails steps aside for a while:
 
-- rate limited or out of free allowance (429, 402): until its ``Retry-After``, else 30 s, doubling each time to 10 min;
+- rate limited or out of free allowance (429, 402): that model, until its ``Retry-After``, else 30 s, doubling each
+  time to 10 min (limits are per model; a limit of 0, a model the plan doesn't include, drops it for the session);
 - the service down, slow or garbled (5xx, a timeout, no JSON): 30 s, doubling the same way;
 - the key refused (401, 403): until the key is changed (``set_key``), the rest of the services carrying on;
 - the model gone (404, or a 400 naming the model): that model, for the session.
@@ -57,34 +58,38 @@ class Provider:
 
 
 # Priority order: Mistral first (the most generous free limits), then no key, then the other free keys. Model names
-# are the services' own; a gone one is
-# skipped (and [cloud] models replaces a service's list).
+# are the services' own, best first; when a flight starts, each keyed service's own model list is read (``discover``)
+# and a model it doesn't have is dropped ([cloud] models replaces a service's list).
 PROVIDERS: tuple[Provider, ...] = (
-    Provider("mistral", "Mistral", "https://api.mistral.ai/v1", ("mistral-small-latest", "mistral-medium-latest"),
-             key="free", signup="https://console.mistral.ai", note="Free Experiment plan: the most generous free limits here."),
+    # The free Experiment plan allows ministral at 30-750 requests a minute; mistral-small and -medium show a
+    # limit of 0 there (paid plans only), so they come last and drop out on their first refusal.
+    Provider("mistral", "Mistral", "https://api.mistral.ai/v1",
+             ("ministral-14b-latest", "ministral-8b-latest", "ministral-3b-latest", "mistral-small-latest"),
+             key="free", signup="https://console.mistral.ai",
+             note="Free Experiment plan: the most generous free limits here (the Ministral models)."),
     Provider("pollinations", "Pollinations", "https://text.pollinations.ai/openai", ("openai-fast",), key="none",
              signup="https://enter.pollinations.ai",
              note="No key, no account. Its anonymous allowance is small and comes and goes: when it's used up, the "
                   "next service answers."),
-    Provider("longcat", "LongCat", "https://api.longcat.chat/openai/v1", ("LongCat-Flash-Chat", "LongCat-2.5-Preview"),
-             key="free", signup="https://longcat.chat/platform", note="Free account: a daily token allowance."),
+    Provider("groq", "Groq", "https://api.groq.com/openai/v1",
+             ("openai/gpt-oss-120b", "openai/gpt-oss-20b"), key="free",
+             signup="https://console.groq.com/keys", note="Free tier, per-model daily limits; answers in well under a second."),
+    Provider("aistudio", "Google AI Studio (Gemini)", "https://generativelanguage.googleapis.com/v1beta/openai",
+             ("gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3-flash"), key="free",
+             signup="https://aistudio.google.com/apikey", note="Free tier with daily limits per model."),
+    Provider("cloudflare", "Cloudflare Workers AI", "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1",
+             ("@cf/openai/gpt-oss-120b", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/openai/gpt-oss-20b"),
+             key="free", signup="https://dash.cloudflare.com/profile/api-tokens",
+             note="Free daily allowance. The key is your account ID and an API token with Workers AI access, as "
+                  "ACCOUNT_ID:TOKEN."),
+    Provider("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1",
+             ("openai/gpt-oss-20b", "nvidia/nemotron-3.5-lightning-30b-a3b"),
+             key="free", signup="https://build.nvidia.com", note="Free developer access."),
     Provider("qwen", "Qwen (Alibaba Model Studio)", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
              ("qwen-flash", "qwen-plus"), key="free", signup="https://modelstudio.console.alibabacloud.com",
              note="Free quota for new accounts. (Qwen Chat's and Qwen Code's own free use isn't open to other apps.)"),
-    Provider("cerebras", "Cerebras", "https://api.cerebras.ai/v1", ("gpt-oss-120b", "llama-3.3-70b", "qwen-3-32b"),
-             key="free", signup="https://cloud.cerebras.ai", note="Free tier: a daily token allowance; very fast."),
-    Provider("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1",
-             ("deepseek-ai/deepseek-v4.1-flash", "nvidia/nemotron-3.5-lightning-30b-a3b", "openai/gpt-oss-20b"),
-             key="free", signup="https://build.nvidia.com", note="Free developer credits."),
     Provider("siliconflow", "SiliconFlow", "https://api.siliconflow.com/v1", ("Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"),
              key="free", signup="https://cloud.siliconflow.com", note="Some models free; the rest from credits."),
-    Provider("hunyuan", "Tencent Hunyuan", "https://api.hunyuan.cloud.tencent.com/v1", ("hunyuan-lite", "hunyuan-turbos-latest"),
-             key="free", signup="https://console.cloud.tencent.com/hunyuan", note="hunyuan-lite is free."),
-    Provider("spark", "iFlytek SparkDesk", "https://spark-api-open.xf-yun.com/v1", ("lite", "4.0Ultra"), key="free",
-             signup="https://console.xfyun.cn", note="Lite is free. The key is the service's APIPassword.",
-             json_mode=False),
-    Provider("baidu", "Baidu Qianfan", "https://qianfan.baidubce.com/v2", ("ernie-speed-128k", "ernie-4.5-turbo-32k"),
-             key="free", signup="https://console.bce.baidu.com/qianfan", note="ERNIE Speed and Lite are free."),
 )
 BY_ID = {p.id: p for p in PROVIDERS}
 
@@ -139,6 +144,55 @@ def routes(order: Iterable[str], keys: dict[str, str], models: dict[str, list[st
         for model in (models or {}).get(pid) or p.models:
             out.append(Route(p, model, key, json_mode=p.json_mode))
     return out
+
+
+def base_url(p: Provider, key: str) -> str:
+    """The service's address; Cloudflare's has the account in it (its key is "ACCOUNT_ID:TOKEN")."""
+    url = p.base_url.rstrip("/")
+    if "{account}" in url:
+        url = url.replace("{account}", key.split(":", 1)[0].strip() if ":" in key else "")
+    return url
+
+
+def token(p: Provider, key: str) -> str:
+    return key.split(":", 1)[1].strip() if "{account}" in p.base_url and ":" in key else key
+
+
+Getter = Callable[[str, dict[str, str], float], tuple[int, bytes]]
+
+
+def _get(url: str, headers: dict[str, str], timeout_s: float) -> tuple[int, bytes]:
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read() or b""
+
+
+def discover(found: list[Route], *, timeout_s: float = 8.0, get: Getter = _get) -> list[Route]:
+    """Each keyed service asked which models it has (its /models list), and the routes to models it doesn't have
+    dropped: a renamed or retired model then costs nothing in flight. A service that can't say keeps its list."""
+    listed: dict[str, set[str] | None] = {}
+    for route in found:
+        p = route.provider
+        if p.id in listed or not route.key or "{account}" in p.base_url:
+            continue
+        try:
+            status, raw = get(base_url(p, route.key) + "/models",
+                              {"Authorization": f"Bearer {token(p, route.key)}", "User-Agent": USER_AGENT}, timeout_s)
+            ids = {str(m.get("id", "")).removeprefix("models/") for m in json.loads(raw).get("data", [])} if status == 200 else None
+        except (OSError, ValueError, AttributeError, urllib.error.URLError):
+            ids = None
+        listed[p.id] = ids or None
+    kept = [r for r in found if listed.get(r.provider.id) is None or r.model in listed[r.provider.id]]
+    for r in found:
+        if r not in kept:
+            log.info("Cloud model %s isn't offered by %s now: skipped", r.model, r.provider.name)
+    # A service none of whose models are listed keeps them all: better a refusal in flight than no service.
+    for pid in {r.provider.id for r in found} - {r.provider.id for r in kept}:
+        kept += [r for r in found if r.provider.id == pid]
+    return sorted(kept, key=found.index)
 
 
 def extract_json(text: str) -> str | None:
@@ -244,8 +298,8 @@ class CloudBackend:
             body["response_format"] = {"type": "json_object"}
         headers = {"Content-Type": "application/json", "Accept": "application/json", "User-Agent": USER_AGENT}
         if route.key:
-            headers["Authorization"] = f"Bearer {route.key}"
-        url = p.base_url.rstrip("/") + "/chat/completions"
+            headers["Authorization"] = f"Bearer {token(p, route.key)}"
+        url = base_url(p, route.key) + "/chat/completions"
         try:
             status, resp_headers, raw = self._transport(url, body, headers, timeout_s)
         except (TimeoutError, OSError, urllib.error.URLError) as exc:
@@ -281,7 +335,7 @@ class CloudBackend:
             route.strikes += 1
             wait = exc.retry_after if exc.retry_after else min(COOLDOWN_S * 2 ** (route.strikes - 1), COOLDOWN_MAX_S)
             route.until = self._clock() + wait
-            if exc.kind == "limit":  # a service's allowance is the service's: its other models rest too
+            if exc.kind == "limit" and route.provider.key == "none":  # an anonymous allowance is the service's
                 for r in self.routes:
                     if r.provider.id == route.provider.id:
                         r.until = max(r.until, route.until)
@@ -312,6 +366,9 @@ def _http_error(status: int, headers: dict[str, str], raw: bytes) -> CloudError:
                 pass
     if status in (401, 403) and "free tier" not in message.lower():
         return CloudError("auth", f"the key was refused ({status}: {message})")
+    limits = [v.strip() for n, v in headers.items() if n.lower().startswith("x-ratelimit-limit-req")]
+    if status == 429 and limits and all(v == "0" for v in limits):
+        return CloudError("model", f"not in your plan (a limit of 0 requests; {message})")
     if status in (402, 403, 429):
         return CloudError("limit", f"limit reached ({status}: {message})", retry)
     if status == 404 or (status == 400 and re.search(r"model", message, re.I) and

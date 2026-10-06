@@ -209,8 +209,7 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
-CLOUD_ORDER = ["mistral", "pollinations", "longcat", "qwen", "cerebras", "nvidia", "siliconflow", "hunyuan", "spark",
-               "baidu"]
+CLOUD_ORDER = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "qwen", "siliconflow"]
 
 
 class CloudConfig(_Section):

@@ -62,6 +62,17 @@ Turn on **Use cloud language models**, start a flight, then check `%LOCALAPPDATA
 - [ ] Asking the copilot something while ATC is talking doesn't delay ATC's reply (separate connection).
 - [ ] With **The copilot uses it too** off: the log says the local model (or none without Ollama), and ATC still uses the cloud.
 
+## 4b. Copilot settings (Quick Settings → Copilot)
+
+- [ ] **Intercom copilot** has a master switch on the right.
+  - [ ] Off greys out everything below it, and the next flight has no intercom, callouts or checklists. The radio copilot (the Copilot switch) still works.
+  - [ ] On brings it all back.
+- [ ] **Copilot's language model** section:
+  - [ ] **What it uses the model for**: full / questions / off. Off: "what's the weather like in Paris" gets "Say again?", while "fuel?" and "flaps one" still work.
+  - [ ] **Which model**: cloud or this PC. It matches "The copilot uses it too" on the Cloud card; changing one changes the other after the page redraws.
+  - [ ] **Answer beyond what it knows**: off, "how long does the APU take to start" gets "I don't have that" (or "Say again?"); on, a real answer.
+  - [ ] **Wait for an answer** and **At most** save, and reject values out of range.
+
 ## 5. Yoke / joystick button detection (Quick Settings → Push-to-talk, and Copilot → intercom)
 
 - [ ] Set push-to-talk to **A yoke or joystick button**: a device list and **Detect** appear.

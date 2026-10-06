@@ -738,6 +738,8 @@ class AppController:
             crew.monitor.verbosity = cfg.crew.verbosity  # what the copilot says by itself, from now
             crew.monitor.hands = cfg.crew.hands == "pm"
             crew.monitor.repeat_atc = cfg.crew.repeat_atc
+            if crew.model is not None:  # the copilot's model: its use and its checks from the next question
+                crew.model.mode, crew.model.beyond_facts = cfg.crew.llm, cfg.crew.beyond_facts
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()

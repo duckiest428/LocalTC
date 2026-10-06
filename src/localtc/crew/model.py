@@ -26,7 +26,7 @@ ACTIONS = ("gear", "flaps", "light", "spoilers", "autopilot", "ap_mode", "autoth
            "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake")
 SYSTEM = """You are the first officer (pilot monitoring) in an airliner cockpit, talking with the captain on the \
 intercom. Answer the captain in one or two short spoken sentences, the way a calm, professional first officer \
-would. Use ONLY the facts given; if the answer isn't in them, say you don't have it. Never invent numbers.
+would. {facts_rule}
 
 If the captain asks you to set, move or switch something in the cockpit, answer with kind "command" and the action:
 gear (value up|down), flaps (value: the setting, e.g. 1, 2, full, up), light (target landing|taxi|strobe|beacon|nav|logo, \
@@ -65,9 +65,20 @@ class Reading:
     command: Command | None = None
 
 
+FACTS_RULE = "Use ONLY the facts given; if the answer isn't in them, say you don't have it. Never invent numbers."
+BEYOND_RULE = ("Use the facts first. Where they say nothing, you may answer from what a first officer knows about "
+               "flying and this aircraft; if you don't know, say so. Never contradict the facts.")
+
+
+def system(beyond_facts: bool = False) -> str:
+    return SYSTEM.replace("{facts_rule}", BEYOND_RULE if beyond_facts else FACTS_RULE)
+
+
 class CrewModel:
-    def __init__(self, backend, *, mode: str = "full", timeout_s: float = 8.0, patience_s: float = 20.0) -> None:
+    def __init__(self, backend, *, mode: str = "full", timeout_s: float = 8.0, patience_s: float = 20.0,
+                 beyond_facts: bool = False) -> None:
         self.backend, self.mode, self.timeout_s, self.patience_s = backend, mode, timeout_s, patience_s
+        self.beyond_facts = beyond_facts  # [crew] beyond_facts: replies may go past what the copilot knows
 
     def ask(self, t: float, text: str, facts: dict[str, str],
             more: dict[str, str] | None = None) -> tuple[Reading | None, list[LlmExchange]]:
@@ -77,7 +88,7 @@ class CrewModel:
             return None, []
         prompt = "Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items()) + f'\n\nCaptain: "{text}"'
         messages = tuple(m for q, a in EXAMPLES for m in (("user", q), ("assistant", a))) + (("user", prompt),)
-        request = LlmRequest("crew", SYSTEM, messages, SCHEMA, max_tokens=120,
+        request = LlmRequest("crew", system(self.beyond_facts), messages, SCHEMA, max_tokens=120,
                              context="\n".join(f"- {k}: {v}" for k, v in (more or {}).items()))
         facts = {**(more or {}), **facts}  # what the reply is checked against
         timeout_s, _ = waits(self.backend, self.timeout_s, self.timeout_s, self.patience_s)
@@ -109,6 +120,8 @@ class CrewModel:
             return Reading(reply or f"{action} {value}".strip(), Command(action, value, target)), ""
         if not reply:
             return None, "no reply"
+        if self.beyond_facts:
+            return Reading(reply), ""
         known = numbers_in(said) | {n for v in facts.values() for n in numbers_in(v)}
         made_up = {n for n in numbers_in(reply) if n not in known}
         if made_up:

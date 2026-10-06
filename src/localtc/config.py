@@ -280,6 +280,11 @@ class CrewConfig(_Section):
     # "questions" also answers anything else from what it knows; "full" also takes commands said in other words
     # (read back for your "confirm" before it acts).
     llm: Literal["off", "questions", "full"] = "full"
+    # Its answers may go past what the copilot knows from the sim and ATC (what's usual, how a system works): they can
+    # be wrong. Off: a reply with a number the facts don't have is turned away. Commands are always checked.
+    beyond_facts: bool = False
+    timeout_s: float = 6.0  # how long the copilot waits for the model (doubled on the CPU only)
+    patience_s: float = 15.0  # at most this, whatever the model's usual pace on this PC
     # How much the copilot says by itself: "quiet" only what's safety (config, gear, not cleared to land, speed),
     # "standard" also the standard callouts, ATC relays and reminders, "chatty" also status updates and small talk.
     # Below 10,000 feet it never chats (the sterile cockpit).

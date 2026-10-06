@@ -358,3 +358,26 @@ def test_the_named_arrival_and_its_restrictions_from_the_sims_replies():
     assert [(l.fix, l.altitude, l.alt1_ft, l.alt2_ft, l.speed_kt, l.transition) for l in data.legs] == [
         ("CEPIN", "below", 12000, 0, 250, ""), ("UBG", "between", 11000, 9000, 0, ""), ("HAWKZ", "above", 16000, 0, 0, "HAWKZ")]
     assert struct.calcsize("<i8sddifff") == LEG.size
+
+
+def test_the_copilots_model_may_answer_beyond_its_facts_when_allowed():
+    from localtc.atc_core.llm import LlmReply
+    from localtc.crew.model import CrewModel
+
+    class Backend:
+        model = "m"
+
+        def __init__(self):
+            self.requests = []
+
+        def complete(self, request, *, timeout_s):
+            self.requests.append(request)
+            return LlmReply('{"kind": "reply", "reply": "The APU takes about 90 seconds to start."}', 5.0)
+
+    strict = Backend()
+    reading, _ = CrewModel(strict).ask(0.0, "how long does the apu take", {"fuel": "5000 kg"})
+    assert reading is None  # 90 isn't in the facts
+    assert "Use ONLY the facts" in strict.requests[0].system
+    free = Backend()
+    reading, _ = CrewModel(free, beyond_facts=True).ask(0.0, "how long does the apu take", {"fuel": "5000 kg"})
+    assert reading.reply.startswith("The APU") and "you may answer from what a first officer knows" in free.requests[0].system

@@ -395,10 +395,10 @@ async def run_session(
                 from localtc.crew.model import CrewModel
 
                 crew_backend = copilot_model(cfg, backend)
-                crew_wait = max(cfg.llm.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
+                crew_wait = max(cfg.crew.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
                                 cfg.cloud.timeout_s if getattr(crew_backend, "rich", False) else 0.0)
                 crew_model = (CrewModel(crew_backend, mode=cfg.crew.llm, timeout_s=crew_wait,
-                                        patience_s=cfg.llm.patience_s)
+                                        patience_s=max(cfg.crew.patience_s, crew_wait), beyond_facts=cfg.crew.beyond_facts)
                               if crew_backend is not None and cfg.crew.llm != "off" else None)
                 if crew_model is not None:
                     log.info("Copilot's language model: %s", "the cloud" if getattr(crew_backend, "rich", False)

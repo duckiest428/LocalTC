@@ -895,7 +895,13 @@ const Settings = {
         <div class="row"><label>When the Copilot switch is on, it
           <select id="s-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
           <option value="assist" ${st.ui.copilot === "assist" ? "selected" : ""}>reads back and changes frequencies; you make the calls</option></select></label></div>
-        <label class="check-row"><input type="checkbox" id="s-crew" ${st.crew.enabled ? "checked" : ""}> Intercom: talk to the copilot on a key of its own. It works the aircraft for you ("flaps two", "gear down", "set heading 270", "squawk 4521") and says when it's done, or why not</label>
+        <div class="master-row">
+          <div><b>Intercom copilot</b><div class="muted small">Talk to the copilot on a key of its own. It works the aircraft for you
+            ("flaps two", "gear down", "set heading 270", "squawk 4521"), makes the callouts, runs checklists and answers
+            questions. Off: none of it, and only the radio copilot above.</div></div>
+          <label class="toggle" title="Intercom copilot on or off"><input type="checkbox" id="s-crew" ${st.crew.enabled ? "checked" : ""}><span></span></label>
+        </div>
+        <div id="crew-opts" class="${st.crew.enabled ? "" : "off"}">
         <div class="row">
           <span>Intercom key</span><span class="keycap" id="s-ic-key">${esc(keyLabel(st.voice.intercom_key))}</span>
           <button class="btn small" id="s-ic-key-set">Change</button><span class="muted small" id="s-ic-key-hint"></span>
@@ -908,10 +914,6 @@ const Settings = {
           <div><button class="btn small" id="s-crew-preview">&#9654; Preview</button></div>
         </div>
         <span class="hint">The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS).</span>
-        <div class="row"><label>Language model on the intercom<select id="s-crew-llm">
-          <option value="full" ${st.crew.llm === "full" ? "selected" : ""}>Questions and commands in your own words (it reads them back for "confirm")</option>
-          <option value="questions" ${st.crew.llm === "questions" ? "selected" : ""}>Questions only: commands as listed</option>
-          <option value="off" ${st.crew.llm === "off" ? "selected" : ""}>Off: the listed commands and common questions (fuel, distance, ATC's last call)</option></select></label></div>
         <div class="row"><label>What it says by itself<select id="s-crew-verbosity">
           <option value="quiet" ${st.crew.verbosity === "quiet" ? "selected" : ""}>Quiet: only what's safety (config, gear, not cleared to land, speed)</option>
           <option value="standard" ${st.crew.verbosity === "standard" ? "selected" : ""}>Standard: callouts, ATC relays and reminders</option>
@@ -921,6 +923,27 @@ const Settings = {
           <option value="calls" ${st.crew.hands === "calls" ? "selected" : ""}>Calls only: it says what's due and touches nothing</option></select></label></div>
         <label class="check-row"><input type="checkbox" id="s-crew-repeat" ${st.crew.repeat_atc ? "checked" : ""}> Chatty only: it says the key part of each ATC instruction back to you before your readback ("Descend and maintain 8,000"), unless you read it back first</label>
         <span class="hint">Your side (parking brake, engines, the autopilot, flaps for takeoff and landing) it never touches: it tells you when something's missed. Say "quiet please" or "keep me posted" to change how much it talks mid-flight.</span>
+
+        <p class="sub-h">Copilot's language model</p>
+        <div class="row"><label>What it uses the model for<select id="s-crew-llm">
+          <option value="full" ${st.crew.llm === "full" ? "selected" : ""}>Questions and commands in your own words (it reads commands back for "confirm") (recommended)</option>
+          <option value="questions" ${st.crew.llm === "questions" ? "selected" : ""}>Questions only: commands must be the listed ones</option>
+          <option value="off" ${st.crew.llm === "off" ? "selected" : ""}>Off: the listed commands and the common questions (fuel, distance, ATC's last call) only (lightest)</option></select>
+          <span class="hint">Checklists, callouts, the listed commands and the common questions never need the model: they come
+            straight from the aircraft and the flight. The model is for everything else you say.</span></label></div>
+        <div class="row"><label>Which model
+          <select id="s-crew-which">
+            <option value="cloud" ${st.cloud?.copilot !== false ? "selected" : ""}>The cloud model, when it's on (its own connection, never holding up ATC; the whole flight as context)</option>
+            <option value="local" ${st.cloud?.copilot === false ? "selected" : ""}>The model on this PC</option></select>
+          <span class="hint">${st.cloud?.enabled ? "The cloud language model is on." : 'The cloud language model is off (<a href="#cloud-card" class="jump">Cloud language model</a>): the copilot uses the model on this PC either way.'}</span></label></div>
+        <label class="check-row"><input type="checkbox" id="s-crew-beyond" ${st.crew.beyond_facts ? "checked" : ""}> Let it answer beyond what it knows from the sim and ATC: its answers may use what a first officer would know (how a system works, what's usual). They can be wrong. Commands are still read back and checked</label>
+        <div class="row llm-timing"><label>Wait for an answer
+          <input id="s-crew-timeout" type="number" min="1" max="60" step="0.5" value="${st.crew.timeout_s}"> s</label>
+          <label>At most, on a busy PC
+          <input id="s-crew-patience" type="number" min="1" max="120" step="1" value="${st.crew.patience_s}"> s</label>
+          <span class="hint">How long the copilot waits for the model before "say again?". On the CPU only the first is doubled;
+            with the cloud, at least the cloud's own wait. From the next flight.</span></div>
+        </div>
       </div>
 
       <div class="card">
@@ -1069,7 +1092,15 @@ const Settings = {
     on("#s-ic-joy", "change", () => this.save("voice", "intercom_joystick", val("#s-ic-joy").trim()));
     this.bindJoy("ptt", "#s-joy", "ptt_joystick");
     this.bindJoy("ic", "#s-ic-joy", "intercom_joystick");
-    on("#s-crew", "change", (e) => this.save("crew", "enabled", e.target.checked));
+    on("#s-crew", "change", (e) => { this.save("crew", "enabled", e.target.checked); $("#crew-opts")?.classList.toggle("off", !e.target.checked); });
+    on("#s-crew-which", "change", () => this.save("cloud", "copilot", val("#s-crew-which") === "cloud"));
+    on("#s-crew-beyond", "change", (e) => this.save("crew", "beyond_facts", e.target.checked));
+    for (const [id, key, low, high] of [["#s-crew-timeout", "timeout_s", 1, 60], ["#s-crew-patience", "patience_s", 1, 120]])
+      on(id, "change", () => {
+        const value = Number(val(id));
+        if (!Number.isFinite(value) || value < low || value > high) { toast(`Between ${low} and ${high} seconds`, true); return; }
+        this.save("crew", key, value);
+      });
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
     on("#s-crew-llm", "change", () => this.save("crew", "llm", val("#s-crew-llm")));
     on("#s-crew-verbosity", "change", () => this.save("crew", "verbosity", val("#s-crew-verbosity")));

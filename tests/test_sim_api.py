@@ -56,7 +56,7 @@ def test_xpdr_mode_names():
 # Tags are the recording format: changing one breaks existing recordings.
 def test_event_tags_are_stable():
     assert sorted(t.__struct_config__.tag for t in BUS_EVENT_TYPES) == [
-        "ai_object_assigned", "aircraft_identity", "aircraft_systems", "airport_data", "arrival_data", "atc_alert", "atc_decision", "atc_thinking",
+        "ai_object_assigned", "aircraft_identity", "aircraft_input_events", "aircraft_systems", "airport_data", "arrival_data", "atc_alert", "atc_decision", "atc_thinking",
         "atc_transmission", "atis_broadcast", "connection_status", "crew_action", "crew_speech", "flight_arrived",
         "intercom_heard", "intercom_pressed", "intercom_released", "llm_exchange", "model_list", "nearby_airports",
         "ownship_state", "phase_changed", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "readback_evaluated",

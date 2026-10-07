@@ -1,0 +1,463 @@
+"""Checks against the live sim: what only MSFS can answer, run on the PC with the sim (``localtc debug ...``).
+
+Each check talks to the sim through the same ``SimSource`` the app flies with, and writes what it saw to a JSON
+report, so the result can be read without the sim (by a developer, or a Claude session on another machine):
+
+- ``aircraft``: who the user aircraft is, the copilot profile it gets, and every MSFS 2024 input event it lists
+  (what a profile's ``[actions.x] input = "NAME"`` can name), with the profile's own input names checked against it.
+- ``hands``: the copilot's hands, one control at a time: the command the copilot would send for it (``crew.actions``,
+  with the aircraft's profile), whether the sim then shows it (read back as the copilot reads it), and the control
+  put back as it was. Parked only: on the ground, stopped. Never the gear, never the engines; the parking brake only
+  with the engines off, the autopilot only when asked.
+- ``traffic``: the sim's AI traffic as LocalTC sees it (snapshots, identities, installed models, FSLTL), and one
+  aircraft created beside the user's, seen in the traffic, then removed. With an airport and runway, one flying in
+  on a flight plan to that runway, watched to see whether the sim's AI flies it.
+
+``FakeSim`` (tests/test_simcheck.py) stands in for the sim on a machine without one.
+"""
+
+import asyncio
+import contextlib
+import json
+import math
+import time
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from localtc.crew import actions, profiles
+from localtc.crew.commands import Command
+from localtc.sim_api import (
+    AircraftIdentity,
+    AircraftInputEvents,
+    AircraftSystems,
+    AiObjectAssigned,
+    AirportData,
+    EnumerateModels,
+    ModelList,
+    OwnshipState,
+    RemoveAiAircraft,
+    RequestAirportData,
+    SendSimEvent,
+    SetInputEvent,
+    SetSimVar,
+    SpawnAiAircraft,
+    TrafficIdentity,
+    TrafficSnapshot,
+)
+
+READBACK_S = 4.0  # how long a control has to show it moved (the systems come once a second)
+SPAWN_REQUEST = 9001
+
+
+@dataclass
+class Step:
+    """One thing tried: ``result`` pass (the sim showed it), fail (it didn't), sent (sent; the sim gives no way to
+    read it back), skip (not tried, ``detail`` says why), info (something seen, nothing tried)."""
+
+    name: str
+    result: str
+    detail: str = ""
+    sent: list[str] = field(default_factory=list)
+    before: Any = None
+    after: Any = None
+    restored: bool | None = None
+
+
+@dataclass
+class Report:
+    check: str
+    sim: str = ""
+    aircraft: str = ""
+    model: str = ""
+    profile: str = ""
+    started: str = field(default_factory=lambda: time.strftime("%Y-%m-%d %H:%M:%S"))
+    input_events: list[str] = field(default_factory=list)
+    steps: list[Step] = field(default_factory=list)
+
+    def add(self, step: Step) -> Step:
+        self.steps.append(step)
+        return step
+
+    @property
+    def failed(self) -> list[Step]:
+        return [s for s in self.steps if s.result == "fail"]
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), indent=1, default=str)
+
+    def text(self) -> str:
+        head = [f"{self.check}: {self.aircraft or '(no aircraft)'} [{self.model}] profile {self.profile or '-'}  ({self.sim})"]
+        marks = {"pass": "PASS", "fail": "FAIL", "sent": "SENT", "skip": "skip", "info": "info"}
+        for s in self.steps:
+            line = f"  {marks.get(s.result, s.result):<4}  {s.name}"
+            if s.sent:
+                line += f"  <- {'; '.join(s.sent)}"
+            if s.detail:
+                line += f"  ({s.detail})"
+            if s.restored is False:
+                line += "  NOT RESTORED"
+            head.append(line)
+        counts = {k: sum(1 for s in self.steps if s.result == k) for k in marks}
+        head.append("  " + ", ".join(f"{n} {k}" for k, n in counts.items() if n))
+        return "\n".join(head)
+
+
+def describe(cmd: Any) -> str:
+    """A sim command as it reads in a report: "SendSimEvent LANDING_LIGHTS_SET 1"."""
+    if isinstance(cmd, SendSimEvent):
+        return f"event {cmd.name} {cmd.value}" + (f" #{cmd.index}" if cmd.index else "")
+    if isinstance(cmd, SetInputEvent):
+        return f"input {cmd.name} = {cmd.value:g}"
+    if isinstance(cmd, SetSimVar):
+        return f"var {cmd.name} = {cmd.value:g}"
+    return f"{type(cmd).__name__} {getattr(cmd, 'hz', '')}".strip()
+
+
+class Probe:
+    """The sim as the checks see it: everything it sends, kept up to date in the background."""
+
+    def __init__(self, source: Any, *, readback_s: float = READBACK_S) -> None:
+        self.source = source
+        self.readback_s = readback_s
+        self.cockpit = actions.Cockpit()
+        self.identity: AircraftIdentity | None = None
+        self.input_events: tuple[str, ...] | None = None
+        self.snapshots: list[TrafficSnapshot] = []
+        self.identities: dict[int, TrafficIdentity] = {}
+        self.assigned: dict[int, int] = {}  # request id -> object id
+        self.models: tuple[tuple[str, str], ...] | None = None
+        self.airports: dict[str, Any] = {}
+        self.session: Any = None
+        self._task: asyncio.Task | None = None
+        self._profiles = profiles.load_all(None)
+
+    async def __aenter__(self) -> "Probe":
+        self.session = await self.source.start()
+        self._task = asyncio.create_task(self._read())
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+        await self.source.stop()
+
+    async def _read(self) -> None:
+        async for ev in self.source.events():
+            if isinstance(ev, OwnshipState):
+                self.cockpit.own = ev
+            elif isinstance(ev, AircraftSystems):
+                self.cockpit.systems = ev
+            elif isinstance(ev, AircraftIdentity):
+                self.identity = ev
+                self.cockpit.profile = profiles.for_aircraft(self._profiles, ev.title, ev.atc_model)
+            elif isinstance(ev, AircraftInputEvents):
+                self.input_events = ev.names
+            elif isinstance(ev, TrafficSnapshot):
+                self.snapshots.append(ev)
+                del self.snapshots[:-50]
+            elif isinstance(ev, TrafficIdentity):
+                self.identities[ev.object_id] = ev
+            elif isinstance(ev, AiObjectAssigned):
+                self.assigned[ev.request_id] = ev.object_id
+            elif isinstance(ev, ModelList):
+                self.models = ev.models
+            elif isinstance(ev, AirportData):
+                self.airports[ev.airport.icao.upper()] = ev.airport
+
+    async def until(self, ready: Callable[[], Any], timeout: float) -> bool:
+        """Wait for ``ready()`` to be true, up to ``timeout`` seconds."""
+        end = time.monotonic() + timeout
+        while True:
+            if ready():
+                return True
+            if time.monotonic() >= end:
+                return False
+            await asyncio.sleep(0.1)
+
+    async def ready(self, timeout: float = 30.0) -> bool:
+        """The aircraft, where it is and its switches: what every check needs first."""
+        return await self.until(lambda: self.cockpit.own is not None and self.cockpit.systems is not None
+                                and self.identity is not None, timeout)
+
+    def fill(self, report: Report) -> None:
+        report.sim = f"{getattr(self.session, 'sim_product', '')} {getattr(self.session, 'sim_version', '')}".strip()
+        if self.identity is not None:
+            report.aircraft, report.model = self.identity.title, self.identity.atc_model
+        report.profile = self.cockpit.profile.name
+        report.input_events = list(self.input_events or ())
+
+    async def act(self, cmd: Command) -> tuple[str, list[str], str]:
+        """Send what the copilot would for ``cmd`` and wait for the sim to show it: (result, what was sent, why)."""
+        plan = actions.plan(cmd, self.cockpit)
+        if isinstance(plan, str):
+            return "skip", [], plan
+        sent = [describe(w) for w in plan.writes]
+        for w in plan.writes:
+            await self.source.send(w)
+        if plan.check(self.cockpit) is None and self.cockpit.systems is not None:
+            await asyncio.sleep(self.readback_s / 2)  # nothing to read it back by: it goes as sent
+            return ("sent" if plan.check(self.cockpit) is None else "pass" if plan.check(self.cockpit) else "fail"), sent, ""
+        ok = await self.until(lambda: plan.check(self.cockpit) is True, self.readback_s)
+        return ("pass" if ok else "fail"), sent, "" if ok else "the sim didn't show it"
+
+
+# --- aircraft ------------------------------------------------------------------------------------------------------
+
+
+async def check_aircraft(probe: Probe, *, wait_s: float = 20.0) -> Report:
+    report = Report("aircraft")
+    if not await probe.ready():
+        report.add(Step("connected", "fail", "no aircraft data from the sim in 30 s: is a flight loaded?"))
+        return report
+    await probe.until(lambda: probe.input_events is not None, wait_s)
+    probe.fill(report)
+    events = set(probe.input_events or ())
+    report.add(Step("input events", "info" if events else "fail",
+                    f"{len(events)} listed" if events else "none listed (MSFS 2020, or the aircraft has none)"))
+    for key, write in sorted(probe.cockpit.profile.actions.items()):
+        if write.input:
+            known = write.input.upper() in events
+            report.add(Step(f"profile {key}: input {write.input}", "pass" if known else "fail",
+                            "" if known else "this aircraft has no input event by that name"))
+    s = probe.cockpit.systems
+    report.add(Step("systems", "info", detail=", ".join(f"{k}={v}" for k, v in _fields(s).items()) if s else "none"))
+    return report
+
+
+def _fields(obj: Any) -> dict:
+    import msgspec
+
+    return {k: v for k, v in msgspec.structs.asdict(obj).items() if k != "t"} if obj is not None else {}
+
+
+# --- hands -----------------------------------------------------------------------------------------------------------
+
+
+def _light(c: actions.Cockpit, name: str) -> bool:
+    return bool(getattr(c.systems, f"light_{name}"))
+
+
+def hands_plan(c: actions.Cockpit, *, autopilot: bool = False) -> list[tuple[str, Command, Command | None, str]]:
+    """What to try on this aircraft as it is now: (name, the command, the one that puts it back, why it's skipped)."""
+    own, sys_ = c.own, c.systems
+    out: list[tuple[str, Command, Command | None, str]] = []
+    for name in ("landing", "taxi", "nav", "beacon", "strobe", "logo"):
+        now = _light(c, name)
+        out.append((f"{name} light {'off' if now else 'on'}", Command("light", "off" if now else "on", name),
+                    Command("light", "on" if now else "off", name), ""))
+    flaps_now = own.flaps_index if own else 0
+    target = "1" if flaps_now == 0 else "up"
+    back = c.profile.detent_name(flaps_now, c.flap_positions) if c.flap_positions else str(flaps_now)
+    out.append((f"flaps {target}", Command("flaps", target), Command("flaps", back if flaps_now else "up"), ""))
+    armed = bool(sys_ and sys_.spoilers_armed)
+    out.append((f"spoilers {'disarm' if armed else 'arm'}", Command("spoilers", "disarm" if armed else "arm"),
+                Command("spoilers", "arm" if armed else "disarm"), ""))
+    hdg = round(sys_.ap_heading_sel) % 360 if sys_ else 0
+    out.append(("heading bug", Command("heading", str((hdg + 40) % 360 or 360)), Command("heading", str(hdg or 360)), ""))
+    alt = int(round((sys_.ap_altitude_sel if sys_ else 0) / 100) * 100)
+    out.append(("autopilot altitude", Command("altitude", str(12000 if alt != 12000 else 14000)),
+                Command("altitude", str(alt)) if alt > 0 else None, ""))
+    spd = int(round(sys_.ap_speed_sel)) if sys_ else 0
+    out.append(("autopilot speed", Command("speed", "250" if spd != 250 else "240"),
+                Command("speed", str(spd)) if spd > 0 else None, ""))
+    vs = int(round((sys_.ap_vs_sel if sys_ else 0) / 100) * 100)
+    out.append(("vertical speed", Command("vs", "1500" if vs != 1500 else "1200"), Command("vs", str(vs)), ""))
+    squawk = own.squawk if own else "1200"
+    out.append(("squawk", Command("squawk", "4521" if squawk != "4521" else "4522"), Command("squawk", squawk), ""))
+    stby = sys_.com1_standby_mhz if sys_ else 0.0
+    out.append(("COM1 standby", Command("com_standby", "121.900" if abs(stby - 121.9) > 0.001 else "122.800"),
+                Command("com_standby", f"{stby:.3f}") if stby else None, ""))
+    com1 = own.com1_mhz if own else 0.0
+    out.append(("COM1 active", Command("com_active", "122.950" if abs(com1 - 122.95) > 0.001 else "123.000"),
+                Command("com_active", f"{com1:.3f}") if com1 else None, ""))
+    baro = own.altimeter_setting_inhg if own and own.altimeter_setting_inhg else 29.92
+    out.append(("altimeter (first officer's)", Command("altimeter", "30.12" if abs(baro - 30.12) > 0.005 else "30.02"),
+                Command("altimeter", f"{baro:.2f}"), ""))
+    engines_off = sys_ is not None and sys_.engines_running == 0
+    brake = bool(own and own.parking_brake)
+    out.append((f"parking brake {'release' if brake else 'set'}", Command("parking_brake", "off" if brake else "on"),
+                Command("parking_brake", "on" if brake else "off"), "" if engines_off else "the engines are running"))
+    ap = bool(sys_ and sys_.ap_master)
+    out.append((f"autopilot {'off' if ap else 'on'}", Command("autopilot", "off" if ap else "on"),
+                Command("autopilot", "on" if ap else "off"), "" if autopilot else "only with --autopilot"))
+    if c.profile.autobrake:
+        out.append(("autobrake (read only)", Command("check"), None,
+                    f"switch at {sys_.autobrake if sys_ else '?'}: {c.profile.autobrake_name(sys_.autobrake) if sys_ else '?'}"))
+    return out
+
+
+def _state(c: actions.Cockpit, cmd: Command) -> Any:
+    """What the sim shows for the control ``cmd`` moves, for the report."""
+    own, s = c.own, c.systems
+    if own is None or s is None:
+        return None
+    return {
+        "light": lambda: _light(c, cmd.target), "flaps": lambda: own.flaps_index, "spoilers": lambda: s.spoilers_armed,
+        "heading": lambda: s.ap_heading_sel, "altitude": lambda: s.ap_altitude_sel, "speed": lambda: s.ap_speed_sel,
+        "vs": lambda: s.ap_vs_sel, "squawk": lambda: own.squawk, "com_standby": lambda: s.com1_standby_mhz,
+        "com_active": lambda: own.com1_mhz, "altimeter": lambda: own.altimeter_setting_inhg,
+        "parking_brake": lambda: own.parking_brake, "autopilot": lambda: s.ap_master,
+    }.get(cmd.action, lambda: None)()
+
+
+async def check_hands(probe: Probe, *, autopilot: bool = False, only: tuple[str, ...] = ()) -> Report:
+    report = Report("hands")
+    if not await probe.ready():
+        report.add(Step("connected", "fail", "no aircraft data from the sim in 30 s: is a flight loaded?"))
+        return report
+    await probe.until(lambda: probe.input_events is not None, 5.0)
+    probe.fill(report)
+    own = probe.cockpit.own
+    if not own.on_ground or own.gs_kt > 1.0:
+        report.add(Step("parked", "fail", "only parked: on the ground and stopped"))
+        return report
+    for name, cmd, back, skip in hands_plan(probe.cockpit, autopilot=autopilot):
+        if only and not any(o.lower() in name.lower() for o in only):
+            continue
+        if cmd.action == "check":
+            report.add(Step(name, "info", skip))
+            continue
+        if skip:
+            report.add(Step(name, "skip", skip))
+            continue
+        before = _state(probe.cockpit, cmd)
+        result, sent, why = await probe.act(cmd)
+        step = report.add(Step(name, result, why, sent, before, _state(probe.cockpit, cmd)))
+        if back is not None and result in ("pass", "fail", "sent"):
+            back_result, back_sent, _ = await probe.act(back)
+            step.restored = back_result in ("pass", "sent")
+            step.sent += [f"(back) {s}" for s in back_sent]
+    return report
+
+
+# --- traffic ---------------------------------------------------------------------------------------------------------
+
+
+def offset(lat: float, lon: float, bearing_deg: float, metres: float) -> tuple[float, float]:
+    """The point ``metres`` from ``lat, lon`` towards ``bearing_deg`` (true)."""
+    d = metres / 6_371_000
+    b, la, lo = math.radians(bearing_deg), math.radians(lat), math.radians(lon)
+    la2 = math.asin(math.sin(la) * math.cos(d) + math.cos(la) * math.sin(d) * math.cos(b))
+    lo2 = lo + math.atan2(math.sin(b) * math.sin(d) * math.cos(la), math.cos(d) - math.sin(la) * math.sin(la2))
+    return math.degrees(la2), (math.degrees(lo2) + 540) % 360 - 180
+
+
+def _seen(probe: Probe, object_id: int) -> bool:
+    return bool(probe.snapshots) and any(t.object_id == object_id for t in probe.snapshots[-1].targets)
+
+
+async def check_traffic(probe: Probe, *, spawn: bool = True, title: str = "", enroute: tuple[str, str] | None = None,
+                        watch_s: float = 120.0, plan_dir: Path | None = None) -> Report:
+    report = Report("traffic")
+    if not await probe.ready():
+        report.add(Step("connected", "fail", "no aircraft data from the sim in 30 s: is a flight loaded?"))
+        return report
+    probe.fill(report)
+    got = await probe.until(lambda: len(probe.snapshots) >= 2, 15.0)
+    n = len(probe.snapshots[-1].targets) if probe.snapshots else 0
+    report.add(Step("traffic snapshots", "pass" if got else "fail", f"{n} aircraft around (the sim's AI and others)"))
+    await probe.until(lambda: probe.identities, 15.0)
+    states = sorted({i.state for i in probe.identities.values() if i.state})
+    report.add(Step("traffic identity", "pass" if probe.identities else "fail" if n else "skip",
+                    f"{len(probe.identities)} identified; AI states {', '.join(states) or '-'}" if probe.identities
+                    else "no identities (title, livery, destination)" if n else "no traffic to identify"))
+    await probe.source.send(EnumerateModels())
+    await probe.until(lambda: probe.models is not None, 20.0)
+    models = probe.models or ()
+    fsltl = sum(1 for t, _ in models if t.upper().startswith("FSLTL"))
+    report.add(Step("installed models", "pass" if models else "fail", f"{len(models)} models, {fsltl} FSLTL"))
+    own = probe.cockpit.own
+    model = title or (probe.identity.title if probe.identity else "")
+    if spawn and model:
+        lat, lon = offset(own.lat, own.lon, (own.hdg_true + 90) % 360, 120)  # beside the user's aircraft
+        await probe.source.send(SpawnAiAircraft(request_id=SPAWN_REQUEST, kind="parked", title=model, tail="LTC01",
+                                                lat=lat, lon=lon, alt_ft=own.alt_msl_ft, heading=own.hdg_true, on_ground=True))
+        ok = await probe.until(lambda: SPAWN_REQUEST in probe.assigned, 15.0)
+        step = report.add(Step("create a parked aircraft", "pass" if ok else "fail",
+                               f"{model}, 120 m to the right" + ("" if ok else ": no object id from the sim in 15 s")))
+        if ok:
+            oid = probe.assigned[SPAWN_REQUEST]
+            seen = await probe.until(lambda: _seen(probe, oid), 15.0)
+            report.add(Step("... seen in the traffic", "pass" if seen else "fail", f"object {oid}"))
+            await probe.source.send(RemoveAiAircraft(object_id=oid))
+            gone = await probe.until(lambda: not _seen(probe, oid), 15.0)
+            step.restored = gone
+            report.add(Step("... removed", "pass" if gone else "fail", f"object {oid}"))
+    elif spawn:
+        report.add(Step("create a parked aircraft", "skip", "no model to create (the user aircraft's title unknown)"))
+    if enroute:
+        await _enroute(probe, report, model, enroute, watch_s, plan_dir)
+    return report
+
+
+async def _enroute(probe: Probe, report: Report, model: str, where: tuple[str, str], watch_s: float,
+                   plan_dir: Path | None) -> None:
+    """One aircraft 12 nm out from ``where`` (ICAO, runway), on a flight plan to it: does the sim's AI fly it, and
+    to that runway?"""
+    from localtc.traffic.control import Shadow, flight_plan
+
+    icao, runway = where[0].upper(), where[1].upper()
+    await probe.source.send(RequestAirportData(icao=icao))
+    if not await probe.until(lambda: icao in probe.airports, 60.0):
+        report.add(Step(f"fly in to {icao} {runway}", "fail", f"no airport data for {icao}"))
+        return
+    apt = probe.airports[icao]
+    found = next(((r, r.primary is e) for r in apt.runways for e in (r.primary, r.secondary)
+                  if e.ident.upper() == runway.zfill(2 + (not runway[-1].isdigit()))), None)
+    if found is None:
+        report.add(Step(f"fly in to {icao} {runway}", "fail", f"{icao} has no runway {runway}"))
+        return
+    rwy, primary = found
+    inbound = rwy.heading_true if primary else (rwy.heading_true + 180) % 360
+    thr_lat, thr_lon = offset(rwy.lat, rwy.lon, (inbound + 180) % 360, rwy.length_m / 2)  # the landing threshold
+    lat, lon = offset(thr_lat, thr_lon, (inbound + 180) % 360, 12 * 1852)
+    alt = apt.elev_ft + 3500
+    shadow = Shadow(object_id=0, callsign="LTC02", lat=lat, lon=lon, alt_ft=alt)
+    directory = plan_dir or Path.cwd()
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "LTC02"
+    path.with_suffix(".pln").write_text(flight_plan(shadow, (apt.lat, apt.lon, apt.elev_ft), icao, runway), encoding="utf-8")
+    await probe.source.send(SpawnAiAircraft(request_id=SPAWN_REQUEST + 1, kind="enroute", title=model, tail="LTC02",
+                                            plan=str(path), plan_position=0.0))
+    if not await probe.until(lambda: SPAWN_REQUEST + 1 in probe.assigned, 20.0):
+        report.add(Step(f"fly in to {icao} {runway}", "fail", f"no object id from the sim (plan {path}.pln)"))
+        return
+    oid = probe.assigned[SPAWN_REQUEST + 1]
+    track: list[tuple[float, float, float, float, float]] = []
+    end_at = time.monotonic() + watch_s
+    while time.monotonic() < end_at:
+        target = next((t for t in (probe.snapshots[-1].targets if probe.snapshots else ()) if t.object_id == oid), None)
+        if target is not None:
+            track.append((round(target.lat, 5), round(target.lon, 5), round(target.alt_ft), round(target.gs_kt), round(target.hdg_true)))
+        await asyncio.sleep(2.0)
+    await probe.source.send(RemoveAiAircraft(object_id=oid))
+    if not track:
+        report.add(Step(f"fly in to {icao} {runway}", "fail", f"object {oid} never in the traffic"))
+        return
+    first, last = track[0], track[-1]
+    d0 = _nm(first[0], first[1], thr_lat, thr_lon)
+    d1 = _nm(last[0], last[1], thr_lat, thr_lon)
+    lined_up = abs(((last[4] - inbound + 540) % 360) - 180) <= 20
+    moving = any(p[3] > 60 for p in track)
+    ok = moving and d1 < d0 - 1
+    report.add(Step(f"fly in to {icao} {runway}", "pass" if ok else "fail",
+                    f"{d0:.1f} nm out -> {d1:.1f} nm in {watch_s:.0f} s, {'moving' if moving else 'not moving'}, "
+                    f"heading {last[4]} (runway {inbound:.0f}{', lined up' if lined_up else ''})",
+                    after=track[-30:]))
+
+
+def _nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * 3440.065 * math.asin(math.sqrt(a))
+
+
+def write(report: Report, out: Path | None) -> Path:
+    """The report as JSON (``out``, else ``simcheck-<check>-<time>.json`` here)."""
+    path = out or Path(f"simcheck-{report.check}-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    path.write_text(report.to_json(), encoding="utf-8")
+    return path

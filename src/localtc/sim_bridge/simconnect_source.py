@@ -20,6 +20,7 @@ from msgspec.structs import replace
 
 from localtc.config import LiveConfig
 from localtc.sim_api import (
+    AircraftInputEvents,
     AircraftSystems,
     AirportData,
     BusEvent,
@@ -530,6 +531,7 @@ class SimConnectSource:
             names = sorted(self._input_events)
             # The aircraft's controls by name, for its copilot profile ([actions.x] input = "NAME"); in a bug report.
             log.info("Input events of this aircraft (%d): %s", len(names), ", ".join(names))
+            self._emit(AircraftInputEvents(t=self._clock.now(), names=tuple(names)))
 
     def _set_simvar(self, dll: SimConnectApi, handle: int, command: SetSimVar) -> None:
         """A variable from the copilot (an add-on's L:var), through a data definition of its own."""

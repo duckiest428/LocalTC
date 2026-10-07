@@ -14,7 +14,7 @@ from localtc import __version__
 from localtc.airports import AirportCache, dump_airport, load_airport_dir
 from localtc.atc_core.phase import PhaseThresholds, PhaseTracker
 from localtc.app import debug_airport, run_session
-from localtc.config import ConfigError, load_config
+from localtc.config import ConfigError, data_dir, load_config
 from localtc.replay import Recording, RecordingFormatError
 from localtc.replay.inspect import format_summary, summarize
 from localtc.sim_api import (
@@ -236,6 +236,26 @@ def _cmd_debug_airport(args: argparse.Namespace) -> int:
     if args.raw:
         print(f"Raw messages in {args.raw}")
     return 0
+
+
+def _cmd_debug_check(args: argparse.Namespace) -> int:
+    """``localtc debug aircraft|hands|traffic``: a check against the live sim, printed and written as JSON."""
+    from localtc import simcheck
+    from localtc.app import sim_check
+
+    cfg = load_config(args.config)
+    kw: dict = {}
+    if args.check == "hands":
+        kw = {"autopilot": args.autopilot, "only": tuple(args.only)}
+    elif args.check == "traffic":
+        kw = {"spawn": not args.no_spawn, "title": args.title, "enroute": tuple(args.enroute) if args.enroute else None,
+              "watch_s": args.watch, "plan_dir": data_dir() / "simcheck"}
+    report = asyncio.run(sim_check(cfg, args.check, **kw))
+    print(report.text())
+    if args.check == "aircraft" and report.input_events:
+        print(f"Input events ({len(report.input_events)}): {', '.join(report.input_events)}")
+    print(f"Report: {simcheck.write(report, args.out)}")
+    return 1 if report.failed else 0
 
 
 def format_airport(airport) -> str:
@@ -708,6 +728,22 @@ def build_parser() -> argparse.ArgumentParser:
     airport.add_argument("--raw", type=Path, help="write raw facility messages (length-prefixed) to this file")
     airport.add_argument("--timeout", type=float, default=60.0)
     airport.set_defaults(func=_cmd_debug_airport)
+    for name, text in (("aircraft", "the user aircraft, its copilot profile and its MSFS 2024 input events"),
+                       ("hands", "the copilot's hands: move each control, see the sim show it, put it back (parked only)"),
+                       ("traffic", "the AI traffic as LocalTC sees it; create one aircraft beside yours and remove it")):
+        check = with_config(debug_sub.add_parser(name, help=text))
+        check.add_argument("--out", type=Path, help="write the JSON report here (default: simcheck-<check>-<time>.json)")
+        if name == "hands":
+            check.add_argument("--autopilot", action="store_true", help="also turn the autopilot on and off")
+            check.add_argument("--only", action="append", default=[], metavar="WORD",
+                               help="only the controls whose name has this word (repeatable): light, flaps, squawk ...")
+        if name == "traffic":
+            check.add_argument("--no-spawn", action="store_true", help="only watch, create nothing")
+            check.add_argument("--title", default="", help="the model to create (default: the user aircraft's)")
+            check.add_argument("--enroute", nargs=2, metavar=("ICAO", "RUNWAY"),
+                               help="also one flying in on a flight plan to this runway, watched (--watch seconds)")
+            check.add_argument("--watch", type=float, default=120.0, metavar="SECONDS")
+        check.set_defaults(func=_cmd_debug_check, check=name)
 
     phases = with_config(sub.add_parser("phases", help="print the flight phase timeline of a recording"))
     phases.add_argument("path", help="recording directory or session.jsonl[.gz]")

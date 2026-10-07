@@ -422,6 +422,13 @@ class ModelList(Event, tag="model_list"):
     models: tuple[tuple[str, str], ...] = ()
 
 
+class AircraftInputEvents(Event, tag="aircraft_input_events"):
+    """The user aircraft's MSFS 2024 input events by name ("LIGHTING_LANDING_1"), listed once per aircraft: what its
+    copilot profile can move them by (``[actions.x] input``), and what ``localtc debug aircraft`` writes out."""
+
+    names: tuple[str, ...] = ()
+
+
 class TrafficControlEntry(msgspec.Struct, frozen=True, kw_only=True):
     object_id: int
     callsign: str
@@ -446,7 +453,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus]
+                 TrafficControlStatus, AircraftInputEvents]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

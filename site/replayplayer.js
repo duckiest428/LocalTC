@@ -43,7 +43,6 @@ class ReplayPlayer {
   destroy() {
     this.pause();
     document.removeEventListener("keydown", this.onKey);
-    cancelAnimationFrame(this.glideFrame);
     this.resized?.disconnect();
     if (this.map) this.map.remove();
     this.el.innerHTML = "";
@@ -68,7 +67,7 @@ class ReplayPlayer {
   }
 
   /** The map zoom a pilot would want here, as the phone's map has it: close on the ground, wider with height
-   * (a view about twelve times the altitude across, from 15 km to 400 km). Not rounded: the follow glides to it. */
+   * (a view about twelve times the altitude across, from 15 km to 400 km). */
   static zoomFor(map, s) {
     const across = s.gnd ? 4000 : Math.min(Math.max(s.alt * 12, 15000), 400000);
     const px = (map.getSize && map.getSize().x) || 640;
@@ -162,11 +161,11 @@ class ReplayPlayer {
   }
 
   drawMap(el, tiles) {
-    // zoomSnap 0: any zoom, so following glides between them; the buttons and the wheel still go by half a level.
-    this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 });
+    this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 });
     if (tiles) {
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        updateWhenIdle: false, keepBuffer: 4 }).addTo(this.map);  // tiles load while it moves, and stay around it
     }
     el.classList.add(tiles ? "fm-tiles" : "fm-plain");
     const pts = this.track.t.map((_, i) => [this.track.lat[i], this.lon[i]]);
@@ -236,30 +235,23 @@ class ReplayPlayer {
     }
   }
 
-  /** Following: the map on the aircraft, now; the zoom glides to the one for this height (and the pilot's own). */
+  /** Following: the aircraft kept in view. The map moves only when it nears the edge (then centred on it again),
+   * and zooms in half-level steps with Leaflet's own animation: a new zoom every frame makes Leaflet drop and
+   * reload every tile, a grey map. */
   view(s, now = false) {
-    this.target = { at: [s.lat, s.lon], z: Math.max(2, Math.min(17, ReplayPlayer.zoomFor(this.map, s) + this.zoomBias)) };
-    if (now) {
-      this.setView(this.target.at, this.target.z);
+    const at = [s.lat, s.lon];
+    const z = Math.max(2, Math.min(17, Math.round((ReplayPlayer.zoomFor(this.map, s) + this.zoomBias) * 2) / 2));
+    if (now) return this.setView(at, z);
+    if (this.map._animatingZoom || this.map._panAnim?._inProgress) return;
+    if (Math.abs(z - this.map.getZoom()) >= 0.5) {
+      this.ours = true;
+      this.map.once("zoomend", () => { this.ours = false; });
+      this.map.setView(at, z, { animate: true });
       return;
     }
-    if (!this.glideFrame) this.glideFrame = requestAnimationFrame((t) => this.glide(t));
-  }
-
-  glide(now) {
-    this.glideFrame = null;
-    if (!this.follow || !this.target) return (this.lastGlide = null);
-    if (this.map._animatingZoom) {  // the pilot's own zoom still moving: after it
-      this.glideFrame = requestAnimationFrame((t) => this.glide(t));
-      return;
-    }
-    const dt = this.lastGlide == null ? 1 / 60 : Math.min(0.1, (now - this.lastGlide) / 1000);
-    this.lastGlide = now;
-    const z0 = this.map.getZoom(), z1 = this.target.z;
-    const z = Math.abs(z1 - z0) < 0.01 ? z1 : z0 + (z1 - z0) * (1 - Math.exp(-dt * 2.5));  // eased, about a second
-    this.setView(this.target.at, z);
-    if (z !== z1) this.glideFrame = requestAnimationFrame((t) => this.glide(t));
-    else this.lastGlide = null;
+    const size = this.map.getSize(), p = this.map.latLngToContainerPoint(at);
+    const off = Math.max(Math.abs(p.x - size.x / 2) / size.x, Math.abs(p.y - size.y / 2) / size.y);
+    if (off > 0.25) this.map.panTo(at, { animate: true, duration: 0.4 });
   }
 
   setView(at, z) {

@@ -13,7 +13,7 @@ a new minor version adds features, a patch fixes them.
 
 ### Changed
 - **The app clears the last flight** 10 minutes after it ends (the map, the aircraft, the radio log and the flight's details), and opens clean: a flight plan that's been flown isn't loaded again.
-- **Replays follow more smoothly**: Follow glides between zooms instead of jumping, and keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
+- **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases along the timeline in their places.

@@ -61,3 +61,7 @@
   text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; }
 .vfr-apt.towered { color: #1d5bbf; } .vfr-apt.other { color: #8e2c7c; }
 @media (prefers-reduced-motion: reduce) { .atc-badge.next { animation: none; box-shadow: 0 0 0 2px var(--z-final); } }
+
+/* Tiles still loading show the map's own dark ground, never a white flash. */
+.leaflet-container { background: #1b2026; }
+.leaflet-tile { transition: none !important; }

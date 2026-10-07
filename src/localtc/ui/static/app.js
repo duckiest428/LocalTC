@@ -1061,7 +1061,7 @@ const Settings = {
 
       <div class="card" id="s-support-card">
         <h3>Support &amp; feedback</h3>
-        <p class="muted small" id="sup-who">Goes straight to LocalTC's developer by email. Needs the account (above): the answer goes to its address.</p>
+        <p class="muted small" id="sup-who">Sent to support@localtc.tech. Needs the account (above): the answer goes to its address.</p>
         <div class="row">
           <label>About <select id="sup-kind"><option value="feedback">Feedback or an idea</option><option value="bug">Something went wrong</option>
             <option value="support">Help setting it up</option></select></label>
@@ -1247,7 +1247,7 @@ const Settings = {
     if (!who) return;
     $("#sup-send").disabled = !signedIn;
     who.textContent = signedIn
-      ? `Goes straight to LocalTC's developer by email. The answer comes to ${S.account.email}.`
+      ? `Sent to support@localtc.tech. The answer comes to ${S.account.email}.`
       : "Sign in to the account (above) to send a message: the answer goes to its email address.";
   },
   account() {

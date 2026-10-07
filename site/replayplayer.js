@@ -157,7 +157,7 @@ class ReplayPlayer {
   }
 
   drawMap(el, tiles) {
-    this.map = L.map(el, { worldCopyJump: true, attributionControl: tiles, zoomSnap: 0.5 });
+    this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0.5 });
     if (tiles) {
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);

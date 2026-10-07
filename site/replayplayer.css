@@ -91,3 +91,7 @@
   .rp-side { height: 50vh; }
   .rp-time { margin-left: 0; }
 }
+
+/* Tiles still loading show the map's own dark ground, never a white flash. */
+.leaflet-container { background: #1b2026; }
+.leaflet-tile { transition: none !important; }

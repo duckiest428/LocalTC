@@ -25,7 +25,7 @@
     </div>
     <a class="coffee" id="btn-coffee" href="https://buymeacoffee.com/petey1" target="_blank" rel="noopener" hidden
        title="LocalTC is free. If it made a flight better, a coffee keeps it going. (Click once and this goes away.)">&#9749; Buy me a coffee</a>
-    <button class="iconbtn" id="btn-settings" title="Quick settings">
+    <button class="iconbtn" id="btn-settings" title="Settings: account, appearance, updates, support">
       <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3.3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.6 7.6 0 0 0 1.7 1l.3 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
     </button>
     <button class="iconbtn" id="btn-alerts" title="Alerts">
@@ -205,9 +205,17 @@
         <li><b>The flow.</b> Clearance: "Request IFR to Boeing Field". Ground: "ready to taxi with information Alpha". Tower: "holding short runway 34L, ready for departure". Then read back each instruction and check in after every handoff: "Seattle Departure, N172LT, 2,000 climbing 5,000".</li>
         <li><b>Copilot.</b> Flip the <b>Copilot</b> switch and it works the radio with ATC for you: every call, or only readbacks and frequency changes (Quick Settings).</li>
       </ol>
-      <p class="muted small">Something went wrong? Turn on <b>Developer mode</b> in Quick Settings. Every flight is then recorded with its audio. Press <b>Mark</b> at the moment it happens, then <b>Export session</b> and send the zip.</p>
+      <p class="muted small">Something went wrong? Turn on <b>Developer mode</b> in Settings (the gear). Every flight is then recorded with its audio. Press <b>Mark</b> at the moment it happens, then <b>Export session</b> and send the zip.</p>
     </div>
   </form>
+</dialog>
+
+<!-- Settings (the gear): what isn't about flying -->
+<dialog id="dlg-settings" class="dialog dialog-wide" aria-label="Settings">
+  <div class="dlg">
+    <div class="dlghead"><h2>Settings</h2><button type="button" class="iconbtn" id="dlg-settings-close" title="Close">&#10005;</button></div>
+    <div class="settings settings-more" id="settings-more"><div class="muted pad">Loading ...</div></div>
+  </div>
 </dialog>
 
 <!-- The one-time account suggestion, after the third flight -->

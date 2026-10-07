@@ -329,10 +329,18 @@ function showTab(name) {
   else Logbook.player?.pause();
 }
 $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
-$("#btn-settings").onclick = () => showTab("settings");
+// The gear: Settings, the things that aren't about flying (the account, appearance, updates, support, the sim
+// connection, developer mode). Quick Settings (the tab) keeps what changes how a flight goes.
+$("#btn-settings").onclick = () => {
+  const dlg = $("#dlg-settings");
+  if (!dlg.open) dlg.showModal();
+  Settings.load();  // fresh each time it opens (the account, the update state)
+};
+$("#dlg-settings-close").onclick = () => $("#dlg-settings").close();
+$("#dlg-settings").addEventListener("click", (e) => { if (e.target === $("#dlg-settings")) $("#dlg-settings").close(); });
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
 $("#btn-help").onclick = () => $("#dlg-help").showModal();
-// The account suggestion: answered either way, it's never shown again; yes opens the account card in Quick Settings.
+// The account suggestion: answered either way, it's never shown again; yes opens the account card in Settings.
 $("#dlg-account").addEventListener("close", () => {
   const yes = $("#dlg-account").returnValue === "yes";
   if (S.state) S.state.account_prompt = false;
@@ -995,6 +1003,10 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
       </div>
 
+      <div class="savebar"><span class="muted small" title="${esc(S.settings.path)}">Changes save as you make them.</span><span class="small green" id="saved-note"></span>
+        <span id="restart-bar" hidden><button class="btn small primary" id="s-restart">Restart flight to apply</button></span></div>`;
+    // Everything that isn't about flying: in Settings (the gear), not Quick Settings.
+    $("#settings-more").innerHTML = `
       <div class="card">
         <h3>Third party</h3>
         <p class="muted small">Accounts LocalTC reads flight plans from. Nothing is sent anywhere else.</p>
@@ -1046,8 +1058,7 @@ const Settings = {
           <button class="btn small" data-open="data">Open data folder</button></div>
         <div id="s-sessions"></div>
       </div>
-      <div class="savebar"><span class="muted small" title="${esc(S.settings.path)}">Changes save as you make them.</span><span class="small green" id="saved-note"></span>
-        <span id="restart-bar" hidden><button class="btn small primary" id="s-restart">Restart flight to apply</button></span></div>`;
+      <div class="savebar"><span class="muted small">Changes save as you make them.</span></div>`;
     this.wire();
     this.jobs(S.state.jobs || {});
     this.update(S.state.update);

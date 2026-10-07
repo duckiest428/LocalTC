@@ -24,7 +24,7 @@ it against the release's `SHA256SUMS`, installs it to `%LOCALAPPDATA%\Programs\L
 below. Windows may warn that the installer is from an unknown publisher (it isn't code-signed): choose
 **More info → Run anyway**.
 
-**Updates:** the app checks GitHub once a day (Quick Settings → Updates) and says when a new version is
+**Updates:** the app checks GitHub once a day (Settings, the gear → Updates) and says when a new version is
 out. Install it with one click, let it install itself when LocalTC closes, or turn the check off. It never
 updates during a flight, and keeps the Python environment, recordings and downloaded models. What changed
 is in [CHANGELOG.md](CHANGELOG.md).
@@ -80,7 +80,7 @@ touchdown, and how many readbacks and alerts there were. It needs no account and
 Turn it off with `[logbook] enabled = false`. Each line knows its flight's recording (`[recorder]`), which is
 what the Logbook's **Replay** plays.
 
-An **account is optional** (Quick Settings → Account). It copies those logbook lines to
+An **account is optional** (Settings (the gear) → Account). It copies those logbook lines to
 [localtc.tech](https://localtc.tech/dashboard)'s Dashboard, where there are totals, a map of the airports and
 routes, a live **Flight Tracker** for the flight you're flying (the same map as the app's Live Map: the ATC
 zones, the route, the path flown, the traffic), an export and a delete button, and it feeds the companion app while you fly (the phase, the frequency tuned

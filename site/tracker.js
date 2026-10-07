@@ -95,7 +95,7 @@ const Tracker = {
     $("#tr-body").hidden = !s.active;
     if (!s.active) {
       $("#tr-status").innerHTML = `<p class="hint">No flight right now. Start one in the LocalTC app, signed in with this
-        account and the companion on (Quick Settings → Account), and it shows up here.</p>`;
+        account and the companion on (Settings (the gear) → Account), and it shows up here.</p>`;
       $("#tr-nomap").hidden = true;
       if (was) this.clearMap();
       return;

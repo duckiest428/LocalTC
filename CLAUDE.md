@@ -17,7 +17,9 @@ Two machines work on it:
   `.claude/launch.json` unless asked. No git repack, gc or alternates without asking.
 - Commit messages and the CHANGELOG say what changed, never which test flight it came from.
 - New work goes in the CHANGELOG's top section, `## [0.5.0] - Upcoming`, until the user names the next release. Don't
-  bump `pyproject.toml` / `__version__` and don't build the installer unless asked.
+  bump `pyproject.toml` / `__version__` and don't build the installer (the exe) unless asked. Every commit is
+  installable on the PC without it: `install\install-commit.ps1` installs the checked-out commit, the way the test
+  setup does. Keep it working, and after a commit tell the user to pull and run it.
 - The language model: never silently swap a rejected model reply for an unrelated scripted line (a fallback must fit
   the call, and the pilot is told). In the LLM modes every call gets the model's reply.
 - API keys only from environment variables, never written to a file or committed. Free tiers only through their
@@ -42,4 +44,5 @@ Windows (PowerShell, the venv not activated; after a pull `.venv\Scripts\pip ins
 .venv\Scripts\python -m pytest tests -q -p no:cacheprovider --ignore=tests/test_llm_live.py
 .venv\Scripts\localtc app
 .venv\Scripts\localtc debug aircraft | hands | traffic
+powershell -ExecutionPolicy Bypass -File install\install-commit.ps1   # install this commit, as the setup would
 ```

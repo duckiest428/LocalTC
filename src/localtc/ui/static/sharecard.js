@@ -611,8 +611,13 @@ ${body}</svg>`;
 ${moments.length ? `<div class="share-quotes" role="radiogroup" aria-label="The line from the radio on the card">${quotes}
 <label><input type="radio" name="sc-quote" value="-1"${moments.length ? "" : " checked"}><b>No quote</b><span>Just the route and the numbers</span></label></div>`
     : `<p>Upload the flight's replay to quote a line from the radio on the card.</p>`}
-${opts.replay ? `<label class="share-opt"><input type="checkbox" class="sc-replay" checked><span><b>Put the replay on the page</b>
-A small replay under the card: the path you flew and the radio, both sides, timed from the start of the flight.</span></label>` : ""}
+${opts.replay ? `<fieldset class="share-replay" aria-label="The replay on the page"><legend>The replay on the page</legend>
+<label class="share-opt"><input type="radio" name="sc-replay" value="mini" checked><span><b>Short replay</b>
+Plays by itself under the card: the path you flew and the radio, both sides, sped through the quiet parts.</span></label>
+<label class="share-opt"><input type="radio" name="sc-replay" value="full"><span><b>The whole replay</b>
+The logbook's player: the aircraft on the map, a timeline to scrub, follow and zoom, every call on the radio.</span></label>
+<label class="share-opt"><input type="radio" name="sc-replay" value="none"><span><b>No replay</b>
+Just the card and the flight's details.</span></label></fieldset>` : ""}
 <p class="sc-privacy"></p>
 <div class="share-row sc-link" hidden><input type="text" readonly aria-label="The link"><button class="btn btn-ghost btn-sm sc-copy" type="button">Copy</button></div>
 <div class="share-row">
@@ -634,13 +639,16 @@ A small replay under the card: the path you flew and the radio, both sides, time
       return i >= 0 ? moments[i] : null;
     };
     const preview = () => mount(q(".share-card"), opts.card(chosen()), { base: opts.base || "" });
-    const withReplay = () => !!(q(".sc-replay") && q(".sc-replay").checked);
+    const withReplay = () => {  // false, true (the short replay) or "full"
+      const r = box.querySelector("input[name=sc-replay]:checked");
+      return !r || r.value === "none" ? false : r.value === "full" ? "full" : true;
+    };
     const privacy = () => {
       q(".sc-privacy").textContent = `Anyone with the link sees this card: the route, the date, these numbers${moments.length ? ", the line you pick" : ""}`
-        + ` and the aircraft and runways${withReplay() ? ", with the path flown and the radio (gates included, if ATC said them)" : ""}.`
+        + ` and the aircraft and runways${withReplay() ? `, with the path flown and the radio${withReplay() === "full" ? " (the whole flight, every call)" : ""} (gates included, if ATC said them)` : ""}.`
         + ` Never your email or the time of day${withReplay() ? "" : ", the track or the rest of the radio"}. Stop sharing whenever you like.`;
     };
-    if (q(".sc-replay")) q(".sc-replay").addEventListener("change", privacy);
+    box.querySelectorAll("input[name=sc-replay]").forEach((r) => r.addEventListener("change", privacy));
     const linked = () => {
       q(".sc-link").hidden = !url;
       q(".sc-link input").value = url || "";

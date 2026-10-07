@@ -89,10 +89,10 @@ private struct ReplayPlayer: View {
     private func map(_ s: ReplayClock.Sample, _ here: CLLocationCoordinate2D) -> some View {
         Map(position: $position) {
             if routeCoords.count > 1 {
-                MapPolyline(coordinates: routeCoords).stroke(.purple.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                MapPolyline(coordinates: routeCoords, contourStyle: .geodesic).stroke(.purple.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
             }
-            MapPolyline(coordinates: coords).stroke(.gray.opacity(0.6), lineWidth: 2)
-            MapPolyline(coordinates: Array(coords[...s.index]) + [here]).stroke(.green, lineWidth: 3)
+            MapPolyline(coordinates: coords, contourStyle: .geodesic).stroke(.gray.opacity(0.6), lineWidth: 2)
+            MapPolyline(coordinates: Array(coords[...s.index]) + [here], contourStyle: .geodesic).stroke(.green, lineWidth: 3)
             ForEach(clock.replay.airports.sorted(by: { $0.key < $1.key }), id: \.key) { icao, a in
                 Annotation(icao, coordinate: CLLocationCoordinate2D(latitude: a.lat, longitude: a.lon)) {
                     Circle().fill(.cyan).stroke(.white, lineWidth: 2).frame(width: 12, height: 12)

@@ -72,12 +72,13 @@ async function upsert(env: Env, auth: Auth, kind: string, ref: string, data: Obj
     `INSERT INTO shares (slug, user_id, kind, ref, created_at, data, extra) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
      ON CONFLICT(user_id, kind, ref) DO UPDATE SET data = excluded.data, extra = excluded.extra, image = NULL`,
   ).bind(slug, auth.user.id, kind, ref, now(), JSON.stringify(data), extra ? JSON.stringify(extra) : null).run();
-  return json({ slug, kind, ref, url: shareUrl(env, kind, slug), card: data, replay: !!extra?.replay });
+  return json({ slug, kind, ref, url: shareUrl(env, kind, slug), card: data, replay: extra?.full ? "full" : !!extra?.replay });
 }
 
 /**
  * POST /v1/shares {kind: "flight", ref: <flight id>, quote?, names?, replay?} or {kind: "wrapped", ref, from, to, tz?}.
- * ``replay: true`` puts the flight's mini replay on the page, if its replay is uploaded.
+ * ``replay: true`` puts the flight's mini replay on the page, if its replay is uploaded; ``replay: "full"`` the whole
+ * replay, in the logbook's player (scrub, follow, the whole radio), with the mini one as the fallback.
  */
 export async function create(env: Env, request: Request, auth: Auth): Promise<Response> {
   const body = await readJson(request, 16 * 1024);
@@ -87,9 +88,11 @@ export async function create(env: Env, request: Request, auth: Auth): Promise<Re
     const row = await env.DB.prepare("SELECT * FROM flights WHERE user_id = ?1 AND id = ?2").bind(auth.user.id, ref).first<Obj>();
     if (!row) throw new HttpError(404, "Sync the flight's logbook line first.");
     const card = flightCard(row, { quote: cleanQuote(body.quote, String(row.callsign ?? "")), names: cleanNames(body.names) });
-    const mini = body.replay === true ? await replays.mini(env, auth.user.id, ref) : null;
+    const wanted = body.replay === true || body.replay === "full";
+    const mini = wanted ? await replays.mini(env, auth.user.id, ref) : null;
     const extra: Obj = { details: flightDetails(row, mini) };
     if (mini) extra.replay = { duration_s: mini.duration_s, track: mini.track, radio: mini.radio, phases: mini.phases, route: mini.route };
+    if (mini && body.replay === "full") extra.full = true;
     return upsert(env, auth, "flight", ref, card, extra);
   }
   if (body.kind === "wrapped") {
@@ -210,6 +213,8 @@ ${card && extra ? `<section id="share-more" class="share-more" aria-label="The f
 <script type="application/json" id="share-data">${data}</script>
 ${card && extra ? `<script type="application/json" id="share-extra">${inline(extra)}</script>` : ""}
 <script src="${asset("sharecard.js")}"></script>
+${card && extra?.full ? `<link rel="stylesheet" href="${site}/vendor/leaflet/leaflet.css"><link rel="stylesheet" href="${asset("replayplayer.css")}">
+<script src="${site}/vendor/leaflet/leaflet.js"></script><script src="${asset("replayplayer.js")}"></script>` : ""}
 ${card && extra ? `<script src="${asset("minireplay.js")}"></script>` : ""}
 </body>
 </html>`;
@@ -227,6 +232,17 @@ function pageHeaders(env: Env): Record<string, string> {
 }
 
 /** GET /f/<slug>, /w/<slug> (the page) and /f/<slug>.png (its card): public, no sign-in. */
+/** GET /f/:slug/replay.json: the whole replay of a flight shared with it (the pilot chose "full"), for its page. */
+export async function replay(env: Env, slug: string): Promise<Response> {
+  const row = await env.DB.prepare("SELECT user_id, ref, extra FROM shares WHERE slug = ?1 AND kind = 'flight'")
+    .bind(slug).first<{ user_id: string; ref: string; extra: string | null }>();
+  const extra = row?.extra ? (JSON.parse(row.extra) as Obj) : null;
+  if (!row || !extra?.full) throw new HttpError(404, "No replay shared here.");
+  const data = await replays.publicData(env, row.user_id, row.ref);
+  if (data === null) throw new HttpError(404, "No replay shared here.");
+  return new Response(data, { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=600" } });
+}
+
 export async function view(env: Env, kind: string, slug: string, png: boolean): Promise<Response> {
   if (!SLUG.test(slug)) throw new HttpError(404, "Not found.");
   const row = await env.DB.prepare(

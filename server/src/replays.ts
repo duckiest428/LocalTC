@@ -202,6 +202,16 @@ export async function mini(env: Env, userId: string, id: string): Promise<Obj | 
   return made;
 }
 
+/** A flight's replay as JSON for its shared page, or null: the pilot's own data, minus nothing they didn't share
+ * (the page only exists because they chose to put the whole replay on it). */
+export async function publicData(env: Env, userId: string, id: string): Promise<string | null> {
+  const row = await env.DB.prepare("SELECT data FROM replays WHERE user_id = ?1 AND flight_id = ?2")
+    .bind(userId, id).first<{ data: ArrayBuffer | number[] }>();
+  if (!row) return null;
+  const bytes = row.data instanceof ArrayBuffer ? row.data : new Uint8Array(row.data).buffer;
+  return gunzip(bytes, MAX_JSON);
+}
+
 /** Every replay in the account, for the export. */
 export async function all(env: Env, auth: Auth): Promise<Obj[]> {
   const { results } = await env.DB.prepare("SELECT flight_id, data FROM replays WHERE user_id = ?1 ORDER BY flight_id")

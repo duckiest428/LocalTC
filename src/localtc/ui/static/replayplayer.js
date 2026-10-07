@@ -11,11 +11,14 @@ class ReplayPlayer {
   static LEAD_S = 8;  // ... jumps to this long before the next call
 
   /** ``el``: an empty element to fill. ``tiles``: an OpenStreetMap background (false: a plain dark map). */
-  constructor(el, replay, { tiles = true } = {}) {
+  constructor(el, replay, { tiles = true, follow = false } = {}) {
     if (!replay || replay.v !== 1) throw new Error("This replay is from a newer LocalTC: update to play it.");
     this.el = el;
     this.r = replay;
     this.track = replay.track;
+    // Longitudes unwrapped: a flight across the date line goes on past 180 instead of jumping back across the world,
+    // and the aircraft moves between two points on either side of it the short way.
+    this.lon = ReplayPlayer.unwrap(this.track.lon);
     this.duration = replay.flight.duration_s || this.track.t[this.track.t.length - 1] || 0;
     this.t = 0;
     this.speed = 4;
@@ -31,6 +34,7 @@ class ReplayPlayer {
     this.events = [...replay.radio.map((l) => l.t), ...(replay.marks || []).map((m) => m.t)].sort((a, b) => a - b);
     this.render(tiles);
     this.seek(0);
+    if (follow) this.setFollow(true);
     this.onKey = (e) => this.key(e);
     document.addEventListener("keydown", this.onKey);
   }
@@ -46,6 +50,27 @@ class ReplayPlayer {
 
   static esc(v) {
     return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  /** Each longitude moved by whole turns to within 180 degrees of the one before it. */
+  static unwrap(lons) {
+    const out = [];
+    for (const lon of lons) out.push(out.length ? ReplayPlayer.near(lon, out[out.length - 1]) : lon);
+    return out;
+  }
+
+  /** ``lon`` moved by whole turns to within 180 degrees of ``to``. */
+  static near(lon, to) {
+    return lon + 360 * Math.round((to - lon) / 360);
+  }
+
+  /** The map zoom a pilot would want here, as the phone's map has it: close on the ground, wider with height
+   * (a view about twelve times the altitude across, from 15 km to 400 km). */
+  static zoomFor(map, s) {
+    const across = s.gnd ? 4000 : Math.min(Math.max(s.alt * 12, 15000), 400000);
+    const px = (map.getSize && map.getSize().x) || 640;
+    const z = Math.log2((156543.03 * Math.cos((s.lat * Math.PI) / 180) * px) / across);
+    return Math.max(3, Math.min(15, Math.round(z * 2) / 2));
   }
 
   static clock(s) {
@@ -138,15 +163,24 @@ class ReplayPlayer {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
     }
     el.classList.add(tiles ? "fm-tiles" : "fm-plain");
-    const pts = this.track.t.map((_, i) => [this.track.lat[i], this.track.lon[i]]);
+    const pts = this.track.t.map((_, i) => [this.track.lat[i], this.lon[i]]);
     this.pts = pts;
-    if (this.r.route?.length) {
-      L.polyline(this.r.route.map((f) => [f.lat, f.lon]), { className: "rp-route", weight: 1.5, dashArray: "4 6", interactive: false }).addTo(this.map);
+    if (this.r.route?.length) {  // the route filed, unwrapped from the start of the track the same way
+      let prev = this.lon[0];
+      const route = this.r.route.map((f) => { prev = ReplayPlayer.near(f.lon, prev); return [f.lat, prev]; });
+      L.polyline(route, { className: "rp-route", weight: 1.5, dashArray: "4 6", interactive: false }).addTo(this.map);
     }
     L.polyline(pts, { className: "rp-track", weight: 2, interactive: false }).addTo(this.map);
     this.flown = L.polyline([], { className: "rp-flown", weight: 3, interactive: false }).addTo(this.map);
     for (const [icao, a] of Object.entries(this.r.airports || {})) {
-      L.circleMarker([a.lat, a.lon], { radius: 5, className: "rp-apt" }).bindTooltip(icao, { permanent: true, direction: "right", className: "rp-apt-label" }).addTo(this.map);
+      // Next to the part of the track nearest it: the destination across the date line at the end of the line.
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < pts.length; i += Math.max(1, Math.floor(pts.length / 400))) {
+        const d = (pts[i][0] - a.lat) ** 2 + (((((pts[i][1] - a.lon) % 360) + 540) % 360) - 180) ** 2;
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      const lon = ReplayPlayer.near(a.lon, pts.length ? pts[best][1] : a.lon);
+      L.circleMarker([a.lat, lon], { radius: 5, className: "rp-apt" }).bindTooltip(icao, { permanent: true, direction: "right", className: "rp-apt-label" }).addTo(this.map);
     }
     this.plane = L.marker(pts[0], { icon: this.icon(this.track.hdg[0]), zIndexOffset: 1000, keyboard: false }).addTo(this.map);
     this.bounds = L.latLngBounds(pts);
@@ -175,7 +209,7 @@ class ReplayPlayer {
     this.el.querySelector(".rp-follow")?.classList.toggle("on", on);
     if (on) {
       const s = this.sample(this.t);
-      this.map.setView([s.lat, s.lon], Math.max(this.map.getZoom(), s.gnd ? 14 : 9));
+      this.map.setView([s.lat, s.lon], ReplayPlayer.zoomFor(this.map, s), { animate: false });
     }
   }
 
@@ -200,7 +234,7 @@ class ReplayPlayer {
   sample(t) {
     const k = this.track, i = Math.max(0, ReplayPlayer.before(k.t, t)), j = Math.min(i + 1, k.t.length - 1);
     const span = k.t[j] - k.t[i], f = span > 0 ? Math.min(1, Math.max(0, (t - k.t[i]) / span)) : 0;
-    const lerp = (col) => k[col][i] + (k[col][j] - k[col][i]) * f;
+    const lerp = (col) => { const c = col === "lon" ? this.lon : k[col]; return c[i] + (c[j] - c[i]) * f; };
     const turn = ((k.hdg[j] - k.hdg[i] + 540) % 360) - 180;
     return { i, lat: lerp("lat"), lon: lerp("lon"), alt: lerp("alt"), gs: lerp("gs"), vs: lerp("vs"),
       hdg: (k.hdg[i] + turn * f + 360) % 360, gnd: k.gnd[f < 0.5 ? i : j] };
@@ -272,7 +306,11 @@ class ReplayPlayer {
       this.flown.setLatLngs(this.pts.slice(0, s.i + 1).concat([at]));
       this.shownIdx = s.i;
     }
-    if (this.follow) this.map.panTo(at, { animate: false });
+    if (this.follow) {  // following: the zoom too, as the phone's map does (closer on the ground, wider up high)
+      const z = ReplayPlayer.zoomFor(this.map, s);
+      if (Math.abs(z - this.map.getZoom()) >= 0.5) this.map.setView(at, z, { animate: false });
+      else this.map.panTo(at, { animate: false });
+    }
     const p = ReplayPlayer.before(this.phases, this.t, (m) => m.t);
     const phase = p >= 0 ? this.phases[p].text : "";
     const zulu = f.zulu0 == null ? "" : (() => { const z = (f.zulu0 + this.t) % 86400; return `${String(Math.floor(z / 3600)).padStart(2, "0")}${String(Math.floor((z % 3600) / 60)).padStart(2, "0")}Z`; })();

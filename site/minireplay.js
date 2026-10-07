@@ -79,13 +79,16 @@
     for (const r of rings) {
       let a = 180, b = 90, c = -180, d = -90;
       for (let i = 0; i < r.length; i += 2) { a = Math.min(a, r[i]); c = Math.max(c, r[i]); b = Math.min(b, r[i + 1]); d = Math.max(d, r[i + 1]); }
-      if (c < x0 || a > x1 || d < y0 || b > y1 || c - a > 300) continue;
-      let p = "";
-      for (let i = 0; i < r.length; i += 2) {
-        const [x, y] = f.xy(r[i + 1], r[i]);
-        p += `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+      if (d < y0 || b > y1 || c - a > 300) continue;
+      for (const shift of [-360, 0, 360]) {  // the map may run past the date line: the land on its other side too
+        if (c + shift < x0 || a + shift > x1) continue;
+        let p = "";
+        for (let i = 0; i < r.length; i += 2) {
+          const [x, y] = f.xy(r[i + 1], r[i] + shift);
+          p += `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+        }
+        out.push(`${p}Z`);
       }
-      out.push(`${p}Z`);
     }
     return out.join("");
   }
@@ -118,9 +121,28 @@
 
   // --- the replay ----------------------------------------------------------------------------------------------
 
+  const near = (lon, to) => lon + 360 * Math.round((to - lon) / 360);
+
   async function replay(host, r, card, base) {
-    const track = r.track || [];
+    let track = r.track || [];
     if (track.length < 2) return;
+    // Longitudes unwrapped from the first point: a flight across the date line goes on past 180 rather than across
+    // the whole map; the route and the airports go next to the part of the track nearest them.
+    let prevLon = track[0][2];
+    track = track.map((p) => { prevLon = near(p[2], prevLon); const q = p.slice(); q[2] = prevLon; return q; });
+    const nearTrack = (lat, lon) => {
+      let best = track[0][2], bestD = Infinity;
+      for (let i = 0; i < track.length; i += Math.max(1, Math.floor(track.length / 300))) {
+        const d = (track[i][1] - lat) ** 2 + ((((track[i][2] - lon) % 360) + 540) % 360 - 180) ** 2;
+        if (d < bestD) { bestD = d; best = track[i][2]; }
+      }
+      return near(lon, best);
+    };
+    let prevRoute = track[0][2];
+    r = { ...r, route: (r.route || []).map((x) => { prevRoute = near(x.lon, prevRoute); return { ...x, lon: prevRoute }; }) };
+    card = { ...card,
+      origin: typeof card.origin?.lat === "number" ? { ...card.origin, lon: nearTrack(card.origin.lat, card.origin.lon) } : card.origin,
+      destination: typeof card.destination?.lat === "number" ? { ...card.destination, lon: nearTrack(card.destination.lat, card.destination.lon) } : card.destination };
     const duration = Math.max(r.duration_s || 0, track[track.length - 1][0], 1);
     const radio = (r.radio || []).filter((l) => l.t <= duration + 60);
     const origin = card.origin || {}, destination = card.destination || {};
@@ -256,6 +278,23 @@ ${airport(origin, "mr-apt")}${airport(destination, "mr-apt mr-dest")}
     }, { threshold: 0.25 }).observe(host.querySelector(".mini-replay"));
   }
 
+  /** The whole replay, in the logbook's player (the pilot chose it): loaded from the page's own address; the short
+   * replay if it can't be. */
+  async function full(host, extra, card, base) {
+    const slot = document.createElement("div");
+    slot.className = "share-full-replay";
+    host.insertBefore(slot, host.firstChild);
+    try {
+      const res = await fetch(`${location.pathname.replace(/\/$/, "")}/replay.json`);
+      if (!res.ok) throw new Error(String(res.status));
+      const player = new window.ReplayPlayer(slot, await res.json(), { tiles: true, follow: true });
+      requestAnimationFrame(() => player.fit());
+    } catch (_) {
+      slot.remove();
+      if (extra.replay) replay(host, extra.replay, card, base);
+    }
+  }
+
   function boot() {
     const host = document.getElementById("share-more");
     const extra = readJson("share-extra");
@@ -263,7 +302,11 @@ ${airport(origin, "mr-apt")}${airport(destination, "mr-apt mr-dest")}
     if (!host || !extra || !card) return;
     const base = `${(document.getElementById("share") || {}).dataset?.site || ""}/`;
     host.insertAdjacentHTML("beforeend", details(extra.details, card));
-    if (extra.replay) replay(host, extra.replay, card, base);
+    if (extra.full && typeof window.ReplayPlayer === "function" && typeof window.L !== "undefined") {
+      full(host, extra, card, base);
+    } else if (extra.replay) {
+      replay(host, extra.replay, card, base);
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

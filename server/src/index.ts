@@ -45,6 +45,7 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["DELETE", /^\/v1\/shares\/(\w+)$/, signedIn((env, _req, a, _u, p) => shares.remove(env, a, p[0]))],
   ["GET", /^\/v1\/wrapped$/, signedIn((env, _req, a, url) => wrapped.get(env, url, a))],
   // The public pages of what's shared: localtc.tech/f/<slug> and /w/<slug> are routed to this Worker.
+  ["GET", /^\/f\/(\w+)\/replay\.json$/, (env, _req, _u, p) => shares.replay(env, p[0])],
   ["GET", /^\/f\/(\w+?)(\.png)?$/, (env, _req, _u, p) => shares.view(env, "flight", p[0], !!p[1])],
   ["GET", /^\/w\/(\w+?)(\.png)?$/, (env, _req, _u, p) => shares.view(env, "wrapped", p[0], !!p[1])],
   ["GET", /^\/v1\/stats$/, signedIn((env, _req, a) => flights.stats(env, a))],

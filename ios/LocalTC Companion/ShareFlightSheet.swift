@@ -10,7 +10,7 @@ struct ShareFlightSheet: View {
     @State private var renderer = CardRenderer(site: AppModel.siteURL)
     @State private var kept = Moments(moments: [], names: [:])
     @State private var quote: Int = 0  // index into the moments; -1: none
-    @State private var withReplay = true  // the path flown and the radio on the page, when there's a replay
+    @State private var pageReplay = APIClient.PageReplay.short  // the replay on the page, when there's one
     @State private var link: URL?
     @State private var slug: String?
     @State private var busy = false
@@ -31,10 +31,15 @@ struct ShareFlightSheet: View {
                         Text(link.absoluteString).font(.caption.monospaced()).textSelection(.enabled)
                     }
                     if flight.hasReplay == true {
-                        Toggle(isOn: $withReplay) {
+                        Picker(selection: $pageReplay) {
+                            Text("Short replay").tag(APIClient.PageReplay.short)
+                            Text("The whole replay").tag(APIClient.PageReplay.full)
+                            Text("No replay").tag(APIClient.PageReplay.none)
+                        } label: {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Put the replay on the page")
-                                Text("The path you flew and the radio, both sides").font(.caption).foregroundStyle(.secondary)
+                                Text("The replay on the page")
+                                Text(pageReplay == .full ? "The logbook's player: scrub, follow, every call"
+                                     : "The path you flew and the radio, both sides").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                         .accessibilityIdentifier("share-replay")
@@ -80,7 +85,7 @@ struct ShareFlightSheet: View {
         }
     }
 
-    private var replayOn: Bool { flight.hasReplay == true && withReplay }
+    private var replayOn: Bool { flight.hasReplay == true && pageReplay != .none }
 
     private var privacy: String {
         "Anyone with the link sees this card: the route, the date, these numbers\(kept.moments.isEmpty ? "" : ", the line you pick") and the aircraft and runways"
@@ -101,7 +106,8 @@ struct ShareFlightSheet: View {
         defer { busy = false }
         do {
             status = "Sharing ..."
-            let made = try await model.api.shareFlight(id: flight.id, quote: chosen, names: kept.names, replay: replayOn)
+            let made = try await model.api.shareFlight(id: flight.id, quote: chosen, names: kept.names,
+                                                       pageReplay: replayOn ? pageReplay : .none)
             link = made.url
             slug = made.slug
             onChange(made.url.absoluteString)

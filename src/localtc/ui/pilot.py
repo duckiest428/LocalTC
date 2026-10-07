@@ -154,7 +154,8 @@ class PilotRoutes:
             raise HttpError(404, "No such flight")
         if record.synced_at is None:  # the server shares its own copy of the line
             await self._do(self.account.sync)
-        with_replay = args.get("replay") is True
+        wanted = args.get("replay")
+        with_replay = "full" if wanted == "full" else wanted is True  # the short replay, or the whole one ("full")
         if with_replay and record.replay_uploaded_at is None and record.recording:
             # The page's mini replay is cut from the account's copy of the replay: it goes up first.
             await self.upload_replay(flight_id, raise_errors=True)

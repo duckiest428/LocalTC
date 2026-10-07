@@ -184,6 +184,22 @@ describe("the shared page's extras", () => {
     expect(html).not.toContain("21:26"); // the clock runs from the start of the flight, never the time of day
   });
 
+  it("puts the whole replay on the page in the logbook's player when the pilot chooses it", async () => {
+    const { token } = await withReplay();
+    const mini = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1", replay: true }, bearer(token)));
+    expect((await view(`/f/${mini.slug}/replay.json`)).status).toBe(404); // the short one: no whole replay to fetch
+    const whole = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1", replay: "full" }, bearer(token)));
+    expect(whole.replay).toBe("full");
+    const html = await (await view(`/f/${whole.slug}`)).text();
+    expect(html).toContain("replayplayer.js");
+    expect(html).toContain("leaflet.js");
+    const res = await view(`/f/${whole.slug}/replay.json`);
+    expect(res.status).toBe(200);
+    const replay = await res.json() as any;
+    expect(replay.track.t.length).toBe(3);
+    expect(replay.radio.some((l: any) => /cleared to land/.test(l.text))).toBe(true);
+  });
+
   it("shows who flew it once the pilot gives a name, and never the email", async () => {
     const { token, email } = await withReplay();
     const share = await data(await call("POST", "/v1/shares", { kind: "flight", ref: "p1" }, bearer(token)));

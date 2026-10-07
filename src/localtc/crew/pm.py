@@ -31,6 +31,7 @@ from localtc.sim_api import (
     CrewSpeech,
     IntercomHeard,
     OwnshipState,
+    PhaseChanged,
     SimCommand,
     Transcript,
 )
@@ -40,6 +41,8 @@ log = logging.getLogger(__name__)
 CHECK_S = 3.0  # the sim shows a command within this, or it didn't take
 CONFIRM_S = 10.0  # a "confirm?" waits this long for the answer
 OFFER_S = 15.0  # "send it?" for a radio call said on the intercom
+ACK = ("check", "checked", "set", "checks", "noted", "copy", "roger", "okay", "ok")  # the last word: a statement, said
+SHORT_COMMAND_WORDS = 5  # a command this short is clear: done straight away, whatever the mode
 STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure", "clearance", "delivery", "unicom",
                  "radio", "traffic")
 
@@ -75,10 +78,14 @@ class PilotMonitoring:
         """``ev`` happened; returns the events to publish and the sim commands to send, in order."""
         out: list[Any] = []
         if isinstance(ev, OwnshipState):
+            self._note_own(ev)
             self.cockpit.own = ev
             self._read_clearance()
         elif isinstance(ev, AircraftSystems):
+            self._note_systems(ev)
             self.cockpit.systems = ev
+        elif isinstance(ev, PhaseChanged):
+            self._note(ev.t, f"phase now {ev.phase.lower().replace('_', ' ')}")
         elif isinstance(ev, AircraftIdentity):
             profile = for_aircraft(self.profiles, ev.title, ev.atc_model)
             if profile is not self.cockpit.profile:
@@ -86,6 +93,9 @@ class PilotMonitoring:
                 self.cockpit.profile = profile
         elif isinstance(ev, AtcTransmission):
             self.picture.last_atc = ev
+            self._note(ev.t, f'{ev.station} said: "{ev.text}"')
+        elif isinstance(ev, Transcript) and ev.radio != 0 and ev.text:
+            self._note(ev.t, f'{"the copilot" if ev.source == "copilot" else "you"} said on the radio: "{ev.text}"')
         elif isinstance(ev, IntercomHeard):
             self._read_clearance()
             out += self._heard(ev.t, ev.text)
@@ -112,7 +122,16 @@ class PilotMonitoring:
             if cmd.action != "altimeter":  # an airliner's own STD and QNH buttons often leave the sim's setting alone
                 self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
         kind = "alert" if call.priority >= SAFETY else "callout"
-        out.append(CrewSpeech(t=t, text=call.text, spoken=call.spoken, kind=kind))
+        text, spoken = call.text, call.spoken
+        if self.model is not None and call.priority < SAFETY and not call.urgent and not call.before_readback \
+                and not call.key.startswith(("run:", "rotate", "v1", "speed_check", "positive_rate")):
+            words, exchanges = self.model.reword(t, text)
+            out += exchanges
+            if words:
+                text, spoken = words, ""
+        if self.model is not None:
+            self.model.heard("You", text)
+        out.append(CrewSpeech(t=t, text=text, spoken=spoken, kind=kind))
         if call.radio:  # then on the radio: the copilot asking ATC
             out.append(Transcript(t=t, text=call.radio, source="copilot"))
         return out
@@ -120,35 +139,76 @@ class PilotMonitoring:
     # --- the pilot ------------------------------------------------------------------------------------------------
 
     def _heard(self, t: float, text: str) -> list[Any]:
+        """What the captain said on the intercom, read as the mode says (``crew.model``): the grammar and the data
+        first in the scripted modes, the model first in the LLM ones."""
         if not text.strip():
             return []
+        mode = self.model.mode if self.model is not None else "off"
         commands = parse(text)
-        if not commands:
-            if self._radio_call(text):
-                self._offer = (t + OFFER_S, text)
-                return [self._say(t, "That was on the intercom. Want me to send it?", "confirm")]
-            if (said := answer(text, self.picture)) is not None:
-                return [self._say(t, said)]
-            return self._ask_model(t, text)
-        out: list[Any] = []
-        for cmd in commands:
-            out += self._command(t, cmd)
-        return out
+        words = text.lower().strip(" .!?").replace(",", " ").split()
+        acked = bool(words) and words[-1] in ACK
+        # An answer to a checklist item ("on", "set", "one plus F, checked") is taken as that, whatever the words.
+        if self.monitor.cr is not None and not any(c.action in ("checklist", "brief", "status", "verbosity")
+                                                   for c in commands) and len(words) <= 8:
+            done: list[Any] = []
+            for cmd in commands:  # "flaps one" as the answer to "Flaps?": set too
+                if cmd.action not in ("yes", "no", "check"):
+                    done += self._command(t, cmd)
+            if self.monitor.respond(text, t):
+                return done + self._now(t)
+        if acked and not commands and (self._confirm is not None or self.monitor.offer is not None):
+            return self._answer(t, True)  # "beacon, check": yes to what was asked
+        if acked and not commands and mode in ("off", "scripted", "semi"):
+            return [self._say(t, self.monitor.rng.choice(["Check.", "Checked.", "Copy."]))]
+        if commands:
+            control = [c for c in commands if c.action in ("checklist", "brief", "status", "verbosity", "check",
+                                                            "yes", "no")]
+            clear = len(words) <= SHORT_COMMAND_WORDS or mode in ("off", "scripted", "semi")
+            if control or clear:
+                out: list[Any] = []
+                for cmd in commands:
+                    out += self._command(t, cmd)
+                if self.model is not None:
+                    self.model.heard("Captain", text)
+                return out
+        if self._radio_call(text) and mode != "llm":
+            self._offer = (t + OFFER_S, text)
+            return [self._say(t, "That was on the intercom. Want me to send it?", "confirm")]
+        if mode in ("off", "scripted") and (said := answer(text, self.picture)) is not None:
+            return [self._say(t, said)]
+        if mode == "off" and commands:
+            out = []
+            for cmd in commands:
+                out += self._command(t, cmd)
+            return out
+        return self._ask_model(t, text, grammar=commands)
 
-    def _ask_model(self, t: float, text: str) -> list[Any]:
-        """What neither the grammar nor the data answers could take: the model's reply, or its reading of a command,
-        which waits for the pilot's "confirm"."""
+    def _ask_model(self, t: float, text: str, grammar: list[Command] | None = None) -> list[Any]:
+        """The model's reply, or its reading of a command: done straight away when the grammar read the same command,
+        otherwise said back for the pilot's "confirm"."""
         if self.model is None:
             return [self._say(t, "Say again?")]
         more = None
         if getattr(self.model.backend, "rich", False) and self.engine is not None and hasattr(self.engine, "_flight_more"):
             more = self.engine._flight_more(None, t)  # a cloud model: the whole flight, not just the copilot's facts
-        reading, exchanges = self.model.ask(t, text, facts(self.picture), more=more)
+        known = facts(self.picture)
+        if (said := answer(text, self.picture)) is not None:
+            known["the answer from the instruments"] = said  # the data's own answer, for the model to put in words
+        reading, exchanges = self.model.ask(t, text, known, more=more)
         if reading is None:
+            if grammar:  # the model had nothing; the grammar did
+                out = list(exchanges)
+                for cmd in grammar:
+                    out += self._command(t, cmd)
+                return out
+            if said is not None:
+                return [*exchanges, self._say(t, said)]
             return [*exchanges, self._say(t, "Say again?")]
         if reading.command is None:
             return [*exchanges, self._say(t, reading.reply)]
         cmd = reading.command
+        if grammar and any(g.action == cmd.action and g.value.lower() == cmd.value.lower() for g in grammar):
+            return [*exchanges, *self._command(t, cmd)]  # the model and the grammar read the same: no need to ask
         verdict = safety(cmd, self.cockpit)
         if verdict.kind == "refuse":
             return [*exchanges, self._say(t, verdict.reason, "refused"),
@@ -310,9 +370,40 @@ class PilotMonitoring:
         telephony = getattr(callsign, "telephony", "") or ""
         return bool(telephony) and lowered.startswith(telephony.lower())
 
-    @staticmethod
-    def _say(t: float, text: str, kind: str = "reply", spoken: str = "") -> CrewSpeech:
+    def _say(self, t: float, text: str, kind: str = "reply", spoken: str = "") -> CrewSpeech:
+        if self.model is not None and kind != "reply":  # its replies the model remembers itself
+            self.model.heard("You", text)
         return CrewSpeech(t=t, text=text, spoken=spoken, kind=kind)
+
+    # --- what the model remembers of the flight deck ----------------------------------------------------------------
+
+    def _note(self, t: float, what: str) -> None:
+        if self.model is not None:
+            self.model.event(t, what)
+
+    def _note_own(self, own: OwnshipState) -> None:
+        was = self.cockpit.own
+        if was is None:
+            return
+        if was.parking_brake != own.parking_brake:
+            self._note(own.t, "parking brake set" if own.parking_brake else "parking brake released")
+        if was.on_ground and not own.on_ground:
+            self._note(own.t, "airborne")
+        elif not was.on_ground and own.on_ground:
+            self._note(own.t, "touched down")
+        if was.gear_down != own.gear_down:
+            self._note(own.t, "gear down" if own.gear_down else "gear up")
+        if was.flaps_index != own.flaps_index:
+            self._note(own.t, f"flaps to {self.profile.detent_name(own.flaps_index, self.cockpit.flap_positions, on_ground=own.on_ground)}")
+
+    def _note_systems(self, s: AircraftSystems) -> None:
+        was = self.cockpit.systems
+        if was is None:
+            return
+        if s.engines_running != was.engines_running:
+            self._note(s.t, f"{s.engines_running} engine{'s' if s.engines_running != 1 else ''} running")
+        if s.ap_master != was.ap_master:
+            self._note(s.t, "autopilot on" if s.ap_master else "autopilot off")
 
 
 def _seed(engine: Any) -> int:

@@ -11,6 +11,7 @@ from localtc.sim_api import (
     ArrivalData,
     AtcAlert,
     AtcTransmission,
+    CrewSpeech,
     FlightArrived,
     IntercomHeard,
     IntercomPressed,
@@ -27,6 +28,7 @@ from localtc.sim_api import (
 )
 
 log = logging.getLogger(__name__)
+REPLY_PAUSE_S = 0.9  # the copilot's answer comes at least this long after the captain's words are in
 
 
 class CrewService:
@@ -40,15 +42,22 @@ class CrewService:
                                      IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData)
 
     async def run(self) -> None:
+        loop = asyncio.get_running_loop()
         async for event in self._inputs:
+            started = loop.time()
             try:
-                if isinstance(event, IntercomHeard):  # maybe a language model call: off the event loop
+                # Off the event loop, in order: what the pilot says may need the language model, and so may the
+                # copilot's own calls (put in its own words in the LLM modes); the sim's data doesn't wait for either.
+                if isinstance(event, IntercomHeard) or self.pm.model is not None:
                     outputs = await asyncio.to_thread(self.pm.observe, event)
                 else:
                     outputs = self.pm.observe(event)
             except Exception:
                 log.exception("Copilot failed on %s", type(event).__name__)
                 continue
+            if isinstance(event, IntercomHeard) and any(isinstance(o, CrewSpeech) for o in outputs):
+                # A person answers after a beat, not the instant the captain stops talking.
+                await asyncio.sleep(max(0.0, REPLY_PAUSE_S - (loop.time() - started)))
             for output in outputs:
                 if isinstance(output, SimCommand):
                     if self.source is not None:

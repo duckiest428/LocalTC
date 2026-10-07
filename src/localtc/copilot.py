@@ -82,6 +82,7 @@ class _Queued:
     # another frequency).
     answers: str | None = field(default=None, compare=False)
     heard_on: Facility | None = field(default=None, compare=False)
+    created: float = field(default=0.0, compare=False)
 
 
 class Copilot:
@@ -111,6 +112,8 @@ class Copilot:
             self._evaluated[event.instruction_id] = event
         elif isinstance(event, Transcript):
             self._pilot_spoke_last = event.source != "copilot"
+            if event.source != "copilot" and event.radio != 0 and event.text and event.text != self._last_said:
+                self._pilot_said_t = event.t  # the pilot's own call, not the copilot's
         elif isinstance(event, AtcTransmission):
             self._last_radio_t = event.t
             self._on_atc(event)
@@ -256,6 +259,8 @@ class Copilot:
             miles = f"{max(1, round(final.distance_nm))} mile final" if final else "inbound"
             return f"{f.station}, {cs}, {miles} runway {runway}".rstrip()
         if f.controller == "ground":
+            if "taxi_in" in st.clearances or st.assignments.gate:
+                return None  # already given the way in
             runway = st.assignments.arrival_runway
             return f"{f.station}, {cs}, clear of runway {runway}, taxi to parking" if runway else \
                 f"{f.station}, {cs}, clear of the runway, taxi to parking"
@@ -268,7 +273,12 @@ class Copilot:
         if getattr(self.engine, "_going_around", False):
             # Sent back from tower: going around, and nothing about the ATIS (heard it once already).
             return f"{f.station}, {cs}, going around, {alt:,}" + (f" climbing {assigned:,}" if assigned and assigned > alt + 300 else "")
+        star = self.engine.cfg.star
+        if getattr(self.engine, "_via_floor", None) is not None and star and own.vs_fpm < -300:
+            return f"{f.station}, {cs}, {alt:,} descending via the {star}" + atis
         if assigned and abs(assigned - alt) > 300:
+            if assigned > alt and own.vs_fpm < -300:  # going down below an old clearance: say what it's doing
+                return f"{f.station}, {cs}, {alt:,} descending" + atis
             verb = "climbing" if assigned > alt else "descending"
             return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}" + atis
         return f"{f.station}, {cs}, level {alt:,}" + atis
@@ -287,7 +297,7 @@ class Copilot:
         base = max(t, self._queue[-1].due if self._queue else t) if after is None else after
         if pause is None:
             pause = self._delay() if kind != "tune" else 1.0
-        item = _Queued(base + pause, self._seq, kind, text, facility, answers=answers, heard_on=heard_on)
+        item = _Queued(base + pause, self._seq, kind, text, facility, answers=answers, heard_on=heard_on, created=t)
         self._queue.append(item)
         self._queue.sort()
         return item
@@ -303,6 +313,8 @@ class Copilot:
             return []  # answered already (by the pilot), replaced, or that controller is no longer the one listening
         if item.kind == "checkin":
             assert item.facility is not None
+            if getattr(self, "_pilot_said_t", -1e9) > item.created:
+                return []  # the pilot called them already: a second call-up on top of theirs is noise
             text = self._checkin_text(item.facility, st.aircraft) or ""
         if item.facility is not None and (st.comms.tuned is None or not st.comms.tuned.matches(item.facility.mhz)):
             # The radio isn't on the frequency yet (the tune hasn't shown up in the sim data): retry, then give up.

@@ -96,7 +96,7 @@ def test_positive_rate_then_the_copilot_raises_the_gear_itself():
     pm.observe(systems(0.6))
     out = fly(pm, [own(1, on_ground=True, ias_kt=150, gs_kt=150)]
               + [own(2 + i, on_ground=False, alt_agl_ft=40 + 60 * i, alt_indicated_ft=440 + 60 * i, vs_fpm=1800,
-                     ias_kt=155, gs_kt=155) for i in range(6)])
+                     ias_kt=155, gs_kt=155) for i in range(14)])
     assert "Positive rate." in said(out)
     assert any(isinstance(o, SendSimEvent) and o.name == "GEAR_UP" for o in out)
     assert "Gear up." in said(out)
@@ -132,7 +132,7 @@ def test_never_over_atc_but_safety_cuts_in():
     pm.monitor._call("safety", 3, 1.0, "Config!")
     assert said(pm.observe(own(1.5))) == ["Config!"]
     assert said(pm.observe(own(2.5))) == []  # ATC is still talking
-    assert "Something routine." in said(fly(pm, [own(4 + i) for i in range(6)]))
+    assert "Something routine." in said(fly(pm, [own(4 + i) for i in range(12)]))
 
 
 @pytest.mark.parametrize("verbosity, heard", [("quiet", 0), ("standard", 1), ("chatty", 1)])
@@ -159,38 +159,56 @@ def test_not_configured_at_a_thousand_and_not_cleared_at_five_hundred():
     assert "We're not cleared to land!" in words
 
 
-def test_the_before_takeoff_checklist_holds_for_the_flaps_and_sets_the_copilots_side():
+def test_the_before_takeoff_checklist_is_challenge_and_response():
+    """The captain's items are asked and answered; a wrong answer holds the checklist till the aircraft shows it
+    right; the copilot's own items it answers (and sets) itself."""
     pm = crew(perf=PlanPerf(takeoff_flaps="1+F"))
     pm.observe(PhaseChanged(t=0.5, previous="TAXI_OUT", phase="RUNWAY_HOLD"))
     pm.observe(systems(0.6, light_strobe=False, light_landing=False))
     pm.observe(own(1, flaps_index=0))
     out = pm.observe(IntercomHeard(t=2, text="before takeoff checklist"))
-    text = " ".join(said(out))
-    assert text.startswith("Before takeoff checklist. Flaps: up, set them for takeoff, plan says 1 plus F. Holding")
+    assert " ".join(said(out)) == "Before takeoff checklist. Flaps?"
     assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "FLAPS_1"]  # the captain's side
+    out = pm.observe(IntercomHeard(t=3, text="one plus F, set"))  # said, but not so yet
+    assert said(out) == ["Flaps shows up, set them for takeoff, plan says 1 plus F. Holding the checklist till it's right."]
     out, lit = [], False
     for i in range(8):
-        out += pm.observe(own(3 + i, flaps_index=1))
-        lit = lit or any(isinstance(o, SendSimEvent) and o.name == "STROBES_SET" for o in out)
-        out += pm.observe(systems(3.5 + i, light_strobe=lit, light_landing=lit))  # the sim shows what was set
+        out += pm.observe(own(4 + i, flaps_index=1))
+        out += pm.observe(systems(4.5 + i, light_strobe=lit, light_landing=lit))
     text = " ".join(said(out))
-    assert "Flaps, 1 plus F. Transponder, TA/RA. Strobes, on, set. Landing lights, on, set." in text
-    assert text.endswith("Before takeoff checklist complete.")
-    assert {o.name for o in out if isinstance(o, SendSimEvent)} >= {"STROBES_SET", "LANDING_LIGHTS_SET"}
+    assert text.startswith("Flaps, 1 plus F. Transponder?")
+    out = pm.observe(IntercomHeard(t=13, text="TA RA"))
+    lit = any(isinstance(o, SendSimEvent) and o.name == "STROBES_SET" for o in out)
+    text = " ".join(said(out))
+    assert text == "Strobes, on, set. Landing lights, on, set. Before takeoff checklist complete."
+    assert lit and {o.name for o in out if isinstance(o, SendSimEvent)} >= {"STROBES_SET", "LANDING_LIGHTS_SET"}
 
 
-def test_a_handoff_goes_in_standby_when_the_pilot_works_the_radio():
+def test_an_unanswered_item_is_asked_once_more():
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PARKED"))
+    pm.observe(systems(0.6))
+    pm.observe(own(1, parking_brake=True))
+    assert said(pm.observe(IntercomHeard(t=2, text="before start checklist")))[0].startswith("Before start checklist. Parking brake?")
+    words = said(fly(pm, [own(3 + i, parking_brake=True) for i in range(30)]))
+    assert words.count("Parking brake?") == 1
+
+
+def test_a_handoff_leaves_the_pilots_radio_alone_and_reminds_only_when_late():
     engine = FakeEngine()
     pm = crew(engine)
     pm.observe(systems(0.1))
-    pm.observe(own(0.2, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250))
+    pm.observe(own(0.2, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250, flaps_index=0,
+                   gear_down=False))
     engine.state.comms.expected = SimpleNamespace(station="Seattle Center", mhz=128.5, controller="center")
     pm.observe(AtcTransmission(t=1.0, station="Seattle Departure", frequency_mhz=119.2, controller="departure",
                                instruction_id="departure.handoff_center", text="Alaska 123, contact Seattle Center 128.5."))
-    out = fly(pm, [own(2 + i, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250)
-                   for i in range(8)])
-    assert any(w in said(out) for w in ("Seattle Center, 128.5, in standby.", "128.5 for Seattle Center in standby."))
-    assert any(isinstance(o, SendSimEvent) and o.name == "COM_STBY_RADIO_SET_HZ" and o.value == 128_500_000 for o in out)
+    out = fly(pm, [own(2 + i, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250,
+                       flaps_index=0, gear_down=False) for i in range(8)])
+    assert not [o for o in out if isinstance(o, SendSimEvent)] and not said(out)  # the radios are the pilot's
+    out = fly(pm, [own(70 + i, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250,
+                       flaps_index=0, gear_down=False) for i in range(10)])
+    assert "We should be with Seattle Center on 128.5 by now." in said(out)
 
 
 def test_the_parking_brake_is_the_captains_the_copilot_only_says():
@@ -201,7 +219,7 @@ def test_the_parking_brake_is_the_captains_the_copilot_only_says():
     pm.observe(systems(12, engines_running=2, light_beacon=True))
     pm.observe(own(13, parking_brake=False))
     out = pm.observe(systems(20, engines_running=0, light_beacon=True))
-    out += fly(pm, [own(21 + i, parking_brake=False) for i in range(15)])
+    out += fly(pm, [own(21 + i, parking_brake=False) for i in range(30)])
     assert "Parking brake?" in said(out)
     assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "PARKING_BRAKE_SET"]
     assert any(isinstance(o, SendSimEvent) and o.name == "BEACON_LIGHTS_SET" for o in out)  # the copilot's side
@@ -219,7 +237,7 @@ def test_each_call_once():
 def test_the_greeting_checks_the_fuel_against_the_plan():
     engine = FakeEngine()
     pm = crew(engine, perf=PlanPerf(block_fuel_lb=20000), plan_source="simbrief")
-    out = fly(pm, [own(1 + i, fuel_lb=17000) for i in range(6)])
+    out = fly(pm, [own(1 + i, fuel_lb=17000) for i in range(26)])
     greeting = said(out)[0]
     assert "KSEA to KPDX" in greeting and "3,000 pounds less than the plan's block" in greeting
 
@@ -294,5 +312,6 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     for expected in ("Positive rate.", "Before takeoff checklist when you're ready.", "Ten thousand. Landing lights off.",
                      "Level at FL350.", "Seventy knots."):
         assert expected in words or expected.replace("Level at", "Top of climb, level") in words, expected
-    assert words[0].startswith(("Hi,", "Hey.", "Morning.")) and "San Diego" in words[0]
+    greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
+    assert "San Diego" in greeting
     assert max(words.count(w) for w in set(words)) <= 2  # nothing said over and over

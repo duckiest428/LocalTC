@@ -58,9 +58,9 @@ class Local:
         return LlmReply(self.text, 10.0) if self.text else LlmReply(None, 10.0, "timeout")
 
 
-def test_no_key_services_come_first_and_keyless_paid_ones_are_skipped():
+def test_keyed_services_come_first_pollinations_last_and_keyless_ones_are_skipped():
     found = routes(CLOUD_ORDER, {"groq": "k1"})
-    assert [r.provider.id for r in found][0] == "pollinations"
+    assert [r.provider.id for r in found][0] == "groq" and found[-1].provider.id == "pollinations"
     assert {r.provider.id for r in found} == {"pollinations", "groq"}  # no key, no Mistral
     assert all(r.key == "k1" for r in found if r.provider.id == "groq")
 

@@ -407,6 +407,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self.gate_source: Callable[[str], real_gates.GateData | None] | None = None
         self._taxiways_named: set[str] = set()  # airports whose unnamed taxiways were named from the real ones
         self._taxi_in_route: tuple[str, ...] | None = None  # the route to the gate ground gave, said again if asked
+        self._gates_taken: set[int] = set()  # gates the pilot said (or the traffic showed) are taken: not given again
         self._atis_told: set[tuple[str | None, str]] = set()  # (airport, letter) ATC has told the pilot is current
         self._requested: set[str] = set()
         self._scheduled: list[_Scheduled] = []
@@ -762,7 +763,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         own = self.state.aircraft
         if own is not None and own.alt_indicated_ft >= self.region.transition_ft:
             return None
-        return self._phrases([(f"{self._airport_name(icao).split()[0]} {self._altimeter_word} {{altimeter}}", {"altimeter": altimeter})])
+        return self._phrases([(f"{_place(self._airport_name(icao))} {self._altimeter_word} {{altimeter}}", {"altimeter": altimeter})])
 
     def _phrases(self, parts: list[tuple[str, dict[str, Any]]]) -> Phrase:
         phrases = [Phrase(*self.library.fill(text, slots, context="note")) for text, slots in parts]
@@ -1056,7 +1057,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 if geo is not None and own.on_runway:  # still on it: which way off, by which taxiway
                     landed = geo.end(st.assignments.arrival_runway) if st.assignments.arrival_runway else None
                     heading = landed.heading_true if landed is not None else own.hdg_true  # (not mid-turn off it)
-                    way_off = self._taxi_graph(geo).runway_exit(own.lat, own.lon, heading)
+                    way_off = self._taxi_graph(geo).runway_exit(own.lat, own.lon, heading, toward=self._where_to_park(geo))
                 if way_off is not None:
                     self._schedule(t, "tower.exit_vacate", {"side": way_off[0], "exit": way_off[1],
                                                             "station": ground.station, "frequency": ground.mhz},
@@ -2023,6 +2024,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if self.cfg.callsign_check and ev.source != "copilot":
             verdict = judge_callsign(normalize(ev.text), self._callsign())
             if verdict == "other" and self._talking_about_another_flight(ev.text, facility, t):
+                verdict = "ours"
+            if verdict == "close" and pending is None and not self._close_callsign_taken(ev.text):
+                # One digit off ("Frontier 1649" for 1629) and nobody around flies that number: speech-to-text, not
+                # another flight. Answered as this flight's, with its callsign said right.
                 verdict = "ours"
             if verdict == "other" or (verdict == "close" and pending is None):
                 # Somebody else's callsign ("Westjet 452", "Air Canada 452"), or one slip away from ours on a call
@@ -3492,6 +3497,33 @@ class AtcEngine(VfrMixin, DiversionMixin):
             facts["squawk"] = st.assignments.squawk
         return facts
 
+    def _where_to_park(self, geo: AirportGeometry) -> tuple[float, float] | None:
+        """Where the aircraft goes after landing: its gate if it has one, else the middle of the airport's stands
+        (the terminal side)."""
+        spots = list(getattr(geo.airport, "parking", ()) or ())
+        a = self.state.assignments
+        if a.gate_index is not None:
+            spot = next((p for p in spots if getattr(p, "index", None) == a.gate_index), None)
+            if spot is not None:
+                return spot.lat, spot.lon
+        gates = [p for p in spots if p.kind.startswith("gate")] if self._callsign().is_airline else []
+        spots = gates or spots
+        if not spots:
+            return None
+        return sum(p.lat for p in spots) / len(spots), sum(p.lon for p in spots) / len(spots)
+
+    def _close_callsign_taken(self, text: str) -> bool:
+        """A flight number heard in ``text`` that an aircraft around actually flies (the sim's traffic): then a near
+        miss on ours might really be that one, and the controller asks."""
+        heard = {t.text.replace(",", "").lstrip("0") for t in normalize(text) if t.kind == "number"
+                 and t.text.replace(",", "").isdigit() and 1 <= len(t.text.replace(",", "")) <= 4}
+        ours = self._callsign().flight_number.lstrip("0") if getattr(self._callsign(), "is_airline", False) else ""
+        for target in self._traffic.values():
+            number = (target.flight_number or "").lstrip("0")
+            if number and number in heard and number != ours:
+                return True
+        return False
+
     def _traffic_summary(self, own: OwnshipState | None) -> str:
         """The traffic around, for "any traffic ahead of us?": on the ground, what's taxiing nearby; in the air, what
         ATC last called."""
@@ -3717,8 +3749,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return
         elif facility.controller == "approach" and "approach" not in st.clearances and own is not None:
             plan = self._arrival_plan(own)
+            # Still on the STAR it was cleared down: above its floor, or below it and still descending on it (the
+            # flight plan's floor isn't always the STAR's last restriction; a "descend and maintain" and a vector
+            # then made no sense with the STAR's next fix right there).
+            on_star = own.alt_indicated_ft > self._via_floor + 500 or own.vs_fpm < -300 \
+                if self._via_floor is not None else False
             if plan is not None and self._via_floor is not None and self.cfg.star \
-                    and own.alt_indicated_ft > self._via_floor + 500 and not self._going_around:
+                    and on_star and not self._going_around:
                 # Checking in on the STAR it was cleared to descend via: it carries on down it, and the descent isn't
                 # said again ("how many times do I need to tell you"); nor is the approach, if the centre gave it.
                 if st.assignments.approach == plan["approach"].display:
@@ -3883,13 +3920,30 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if geo is not None:
             geo = self._with_taxiway_names(geo)
         gate = None
+        busy_note: Phrase | None = None
+        text = (self.state.exchanges[-1].text if self.state.exchanges and self.state.exchanges[-1].speaker == "pilot"
+                else "").lower()
+        taken_said = bool(re.search(r"\b(?:aircraft|airplane|plane|someone|somebody|occupied|taken)\b", text)) \
+            and bool(re.search(r"\b(?:gate|stand)\b", text))
+        if taken_said and a.gate_index is not None:
+            self._gates_taken.add(a.gate_index)  # "there's an aircraft at our gate": not sent there again
         if requested is not None and geo is not None:
             gate = stands.named(geo, requested, self._real_gates(geo.icao))
-        if gate is None and taxiways is None:
-            # A gate always: the one asked for if it's there, else the one already given, else one ATC picks.
+            if gate is not None and (gate.index in self._gates_taken or stands.occupied(gate, geo, self._traffic.values())):
+                busy_note = Phrase(f"{gate.display} is occupied", f"{gate.display} is occupied")
+                self._gates_taken.add(gate.index)
+                gate, taxiways = None, None
+        if gate is None and (taxiways is None or taken_said):
+            taxiways = None
+            # A gate always: the one asked for if it's there and free, else the one already given (still free), else
+            # one ATC picks.
             given = None
-            if geo is not None and a.gate_index is not None and requested is None:
+            if geo is not None and a.gate_index is not None and requested is None and a.gate_index not in self._gates_taken:
                 given = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
+                if given is not None and stands.occupied(given, geo, self._traffic.values()):
+                    busy_note = Phrase(f"{given.display} is occupied", f"{given.display} is occupied")
+                    self._gates_taken.add(given.index)
+                    given = None
             gate = given or self._gate(geo)
         if taxiways is None:
             graph = self._taxi_graph(geo) if geo is not None and own is not None else None
@@ -3904,9 +3958,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         keep = lambda: setattr(self, "_taxi_in_route", taxiways)  # noqa: E731
         if where and taxiways:
             self._schedule(t, "ground.taxi_to_gate", {"taxi_route": taxiways, "gate": where}, facility, clearance="taxi_in",
-                           on_issue=keep)
+                           on_issue=keep, note=busy_note)
         elif where:  # a way there, but no names to give it by: the gate alone
-            self._schedule(t, "ground.taxi_to_gate_no_route", {"gate": where}, facility, clearance="taxi_in", on_issue=keep)
+            self._schedule(t, "ground.taxi_to_gate_no_route", {"gate": where}, facility, clearance="taxi_in", on_issue=keep,
+                           note=busy_note)
         elif taxiways:
             self._schedule(t, "ground.taxi_in", {"taxi_route": taxiways}, facility, clearance="taxi_in", on_issue=keep)
         else:
@@ -3921,6 +3976,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         flight = self.state.flight
         return stands.assign(geo, airline=callsign.is_airline, aircraft_type=flight.aircraft_type or "",
                              traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}",
+                             exclude=self._gates_taken,
                              real=self._real_gates(geo.icao),
                              international=real_gates.is_international(flight.origin, flight.destination))
 
@@ -4256,7 +4312,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
             away = origin is not None and origin.distance_nm(own.lat, own.lon) >= DEPARTURE_ENDS_NM
         if phase is P.CRUISE and area is None:
             return own.t - self.state.phase_since_t >= 30  # level, with nothing to say where departure ends
-        return above or away
+        # Climbing to departure's top altitude with more to come: over to centre before the level-off, so the
+        # climb goes on without a stop at 17,000 waiting for the handoff.
+        assigned = self.state.assignments.altitude_ft
+        cruise = self.state.assignments.cruise_ft or self.state.flight.cruise_ft
+        near_top = assigned is not None and cruise is not None and cruise > assigned + 1000 \
+            and assigned >= min(cruise, DEPARTURE_TOP_FT) and own.alt_indicated_ft >= assigned - 2500 and own.vs_fpm > 300
+        return above or away or near_top
 
     def terminal_area(self, icao: str | None, role: str) -> Area | None:
         """The approach (or departure) area working ``icao``, if the airspace data has one around it."""
@@ -4518,3 +4580,16 @@ def _display(value: Any) -> str:
     if isinstance(value, Approach):
         return value.display
     return str(value)
+
+
+GENERIC_AIRPORT_WORDS = {"international", "intl", "airport", "regional", "municipal", "field", "county", "metropolitan",
+                         "national", "executive", "airfield", "aerodrome", "air", "base", "memorial"}
+
+
+def _place(name: str) -> str:
+    """An airport's name as said before "altimeter": "Los Angeles", not "Los" (the first word) nor the whole
+    "Los Angeles International"."""
+    words = name.split()
+    while len(words) > 1 and words[-1].lower().strip(".,") in GENERIC_AIRPORT_WORDS:
+        words.pop()
+    return " ".join(words[:3])

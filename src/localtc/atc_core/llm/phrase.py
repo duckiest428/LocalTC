@@ -314,10 +314,36 @@ def _has_word(text: str, word: str) -> bool:
     return re.search(rf"(?<![A-Za-z0-9]){re.escape(word)}(?![A-Za-z0-9])", text, re.IGNORECASE) is not None
 
 
+# Said digit by digit ("one-two-one-point-one", "two eight zero"): the same numbers as "121.1" and "280".
+_DIGIT_WORDS = {"zero": "0", "one": "1", "two": "2", "three": "3", "tree": "3", "four": "4", "five": "5", "fife": "5",
+                "six": "6", "seven": "7", "eight": "8", "nine": "9", "niner": "9"}
+_DIGIT_RUN = re.compile(r"\b(?:(?:%s)(?:[\s-]+(?:point|decimal)[\s-]+|[\s-]+)){1,}(?:%s)\b" % (
+    "|".join(_DIGIT_WORDS), "|".join(_DIGIT_WORDS)), re.IGNORECASE)
+# Phrases whose words carry the meaning together: kept as phrases ("tail right" is not "tailwind right").
+KEPT_PHRASES = ("tail right", "tail left", "hold short", "line up and wait", "cleared for takeoff", "cleared to land",
+                "go around", "until established", "descend via", "climb via", "at or above", "at or below",
+                "give way", "cleared for the option", "touch and go", "low approach", "readback correct", "radar contact")
+
+
+def digits_from_words(text: str) -> str:
+    """A model's "one-two-one point one" as "121.1", so a reply that says a number digit by digit isn't turned away
+    for leaving it out."""
+    def join(m: re.Match) -> str:
+        out = ""
+        for part in re.split(r"[\s-]+", m.group(0)):
+            low = part.lower()
+            out += "." if low in ("point", "decimal") else _DIGIT_WORDS.get(low, "")
+        return out
+    return _DIGIT_RUN.sub(join, text)
+
+
 def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     """The model's words for the script's reply ``scripted``, or PhraseError: something of it lost, or added."""
-    text = _reply_text(raw, callsigns)
+    text = digits_from_words(_reply_text(raw, callsigns).replace("**", ""))
     said, got = _plain(scripted), _plain(text)
+    for phrase in KEPT_PHRASES:
+        if phrase in said and phrase not in got:
+            raise PhraseError(f'reply leaves out "{phrase}"; keep those words as they are')
     words, want = set(re.findall(r"[a-z']+", got)), set(re.findall(r"[a-z']+", said))
     if not words:
         raise PhraseError("reply has no words")
@@ -370,12 +396,19 @@ def spoken_as(text: str, pairs: list[tuple[str, str]]) -> str:
             forms.setdefault(display, said)
             forms.setdefault(THOUSANDS_RE.sub("", display), said)
     alternatives = [re.escape(d) for d in sorted(forms, key=len, reverse=True)]
-    pattern = re.compile(r"(?<![\w.])(?:" + "|".join(alternatives) + r")(?![\w])" + r"|\d+(?:[.,]\d+)*" if alternatives
-                         else r"\d+(?:[.,]\d+)*")
+    runway = r"\b\d{1,2}[LRC]\b"  # "25R": "two five right", not "two five" and a letter
+    pattern = re.compile(r"(?<![\w.])(?:" + "|".join(alternatives) + r")(?![\w])|" + runway + r"|\d+(?:[.,]\d+)*"
+                         if alternatives else runway + r"|\d+(?:[.,]\d+)*")
 
     def say(m: re.Match) -> str:
         found = m.group(0)
-        return forms.get(found) or speech.digits(THOUSANDS_RE.sub("", found))
+        if found in forms:
+            return forms[found]
+        if re.fullmatch(r"\d{1,2}[LRC]", found):
+            return speech.runway(found)
+        if re.fullmatch(r"(?:2[89]|3[01])\.\d\d", found):  # an altimeter setting: "two niner eight four"
+            return speech.digits(found.replace(".", ""))
+        return speech.digits(THOUSANDS_RE.sub("", found))
 
     return pattern.sub(say, text)
 

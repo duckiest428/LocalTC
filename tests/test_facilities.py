@@ -254,3 +254,28 @@ def test_published_approaches_are_read_and_offered():
     assert select_approach(airport, "34L", aircraft_type="Piper Cub") == "VISUAL"  # no instrument capability
     assert select_approach(None, "34L", has_ils=True) == "ILS"  # airport data with no approaches at all
     assert select_approach(None, "34L", has_ils=False) == "RNAV"
+
+
+def test_input_events_list_is_read_by_its_layout():
+    import struct
+
+    from localtc.sim_bridge.protocol import FACILITIES_LIST_OFFSET, InputEventList
+
+    events = [("LIGHTING_LANDING_1", 0xABCDEF, 1), ("HANDLING_GEAR_LEVER", 0x123, 1)]
+    payload = b"".join(n.encode().ljust(64, b"\0") + struct.pack("<QI", h, k) for n, h, k in events)
+    size = FACILITIES_LIST_OFFSET + len(payload)
+    raw = struct.pack("<IIIIIII", size, 6, 35, 8, len(events), 0, 1) + payload
+    msg = parse_message(raw)
+    assert isinstance(msg, InputEventList) and msg.request_id == 8
+    assert msg.events == tuple(events)
+
+
+def test_a_profile_can_move_a_control_by_its_input_event():
+    from localtc.crew.actions import Cockpit, plan
+    from localtc.crew.commands import Command
+    from localtc.crew.profiles import Profile, Write
+    from localtc.sim_api import SetInputEvent
+
+    p = Profile(name="x", actions={"light_landing": Write(input="LIGHTING_LANDING_1", on=2, off=0)})
+    got = plan(Command("light", "on", "landing"), Cockpit(profile=p))
+    assert got.writes == (SetInputEvent(name="LIGHTING_LANDING_1", value=2.0),)

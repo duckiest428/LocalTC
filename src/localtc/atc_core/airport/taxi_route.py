@@ -175,12 +175,16 @@ class TaxiGraph:
         best, _ = min(routes, key=lambda rd: (end.runway.name in rd[0].crossings, len(rd[0].crossings), rd[1], rd[0].length_m))
         return best
 
-    def runway_exit(self, lat: float, lon: float, heading_true: float, *, ahead_m: float = 2500.0) -> tuple[str, str] | None:
+    def runway_exit(self, lat: float, lon: float, heading_true: float, *, ahead_m: float = 2500.0,
+                    toward: tuple[float, float] | None = None, extra_m: float = 1200.0) -> tuple[str, str] | None:
         """The next taxiway off the runway ahead of an aircraft rolling out: (side, taxiway), "left"/"right" as the
-        pilot sees it ("vacate left onto E4"), or None when none is named ahead."""
+        pilot sees it ("vacate left onto E4"), or None when none is named ahead. ``toward`` (lat, lon): where the
+        aircraft goes next (its gate, the terminal): an exit on that side is taken over the very next one, when it's
+        not much further down the runway (``extra_m``). Vacating left with every gate to the right only made a long
+        taxi back across."""
         here = self.geometry.xy(lat, lon)
         hx, hy = math.sin(math.radians(heading_true)), math.cos(math.radians(heading_true))
-        best: tuple[float, str, str] | None = None
+        found: list[tuple[float, str, str]] = []
         for node, edges in self.edges.items():
             if node[0] != "point" or not self._on_runway(node):
                 continue
@@ -193,9 +197,18 @@ class TaxiGraph:
                     continue
                 vx, vy = self.positions[edge.to][0] - nx, self.positions[edge.to][1] - ny
                 side = "left" if hx * vy - hy * vx > 0 else "right"
-                if best is None or along < best[0]:
-                    best = (along, side, edge.name)
-        return (best[1], best[2]) if best else None
+                found.append((along, side, edge.name))
+        if not found:
+            return None
+        found.sort()
+        first = found[0]
+        if toward is not None:
+            tx, ty = self.geometry.xy(*toward)
+            want = "left" if hx * (ty - here[1]) - hy * (tx - here[0]) > 0 else "right"
+            on_side = next((f for f in found if f[1] == want), None)
+            if on_side is not None and on_side[0] - first[0] <= extra_m:
+                return on_side[1], on_side[2]
+        return first[1], first[2]
 
     def parking_route(self, lat: float, lon: float, spot: int | None = None) -> TaxiRoute | None:
         """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned)."""

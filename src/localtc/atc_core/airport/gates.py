@@ -94,7 +94,8 @@ def occupied(gate: Gate, geometry: AirportGeometry, traffic: Iterable[TrafficTar
 
 
 def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traffic: Iterable[TrafficTarget],
-           seed: str, real: GateData | None = None, international: bool = False) -> Gate | None:
+           seed: str, real: GateData | None = None, international: bool = False,
+           exclude: Iterable[int] = ()) -> Gate | None:
     """A free stand for this aircraft, picked the same way every time the same flight replays. An airliner
     with no free gate of its size gets any free gate; if the whole field is full, nothing is assigned and
     ground just says "taxi to parking". With the real gates: a stand with a real gate's name over one the
@@ -102,7 +103,8 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
     traffic = list(traffic)
     heavy = airline and is_heavy(aircraft_type)
     everything = gates(geometry, real)
-    free = [g for g in everything if not occupied(g, geometry, traffic)]
+    skip = set(exclude)  # a gate the pilot said is taken, whatever the sim's traffic shows
+    free = [g for g in everything if not occupied(g, geometry, traffic) and g.index not in skip]
     choices = [g for g in free if suitable(g, airline=airline, heavy=heavy)]
     if not choices and airline:
         choices = [g for g in free if g.word == "gate"]

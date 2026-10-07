@@ -267,7 +267,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("clear_of_runway", runway=_any_runway(tokens))
     wants_stand = _has_any(tokens, ("request", "gate"), ("request", "parking"), ("request", "stand"), ("request", "ramp"),
                            ("requesting", "gate"), ("requesting", "parking"), ("gate", "assignment"), ("which", "gate"),
-                           ("request", "taxi", "to", "gate"), ("request", "taxi", "gate"), ("for", "gate"), ("to", "our", "gate"))
+                           ("request", "taxi", "to", "gate"), ("request", "taxi", "gate"), ("for", "gate"), ("to", "our", "gate"),
+                           ("get", "gate"), ("grab", "gate"), ("have", "gate"), ("another", "gate"), ("different", "gate"),
+                           ("at", "our", "gate"), ("gate", "instead"), ("other", "gate"))
     if (parking and _has_any(tokens, ("taxi",))) or (wants_stand and not pushing):
         add("request_taxi_parking")  # "request taxi to the gate", "request gate", "request parking"
     elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),

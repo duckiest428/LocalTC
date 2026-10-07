@@ -689,7 +689,7 @@ const Settings = {
           better than one small enough to run beside the sim, and it's given the whole flight (the route, every clearance,
           the ATIS, what was said) where the model on this PC gets only the essentials. Off unless you turn it on: while it's
           on, what you say and your flight's details go to the service answering. Mistral is tried first (the most generous free
-          limits), then Pollinations (no key); one that's busy, out of allowance or down steps aside and the next answers.</p>
+          limits), Pollinations (no key) last; one that's busy, out of allowance or down steps aside and the next answers.</p>
         <label class="check-row"><input type="checkbox" id="s-cloud" ${on ? "checked" : ""}> Use cloud language models (from the next flight)</label>
         <label class="check-row"><input type="checkbox" id="s-cloud-copilot" ${st.cloud?.copilot !== false ? "checked" : ""}> The copilot uses it too, with its own connection (its questions never hold up ATC's). Off: the copilot uses the model on this PC</label>
         <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
@@ -925,12 +925,17 @@ const Settings = {
         <span class="hint">Your side (parking brake, engines, the autopilot, flaps for takeoff and landing) it never touches: it tells you when something's missed. Say "quiet please" or "keep me posted" to change how much it talks mid-flight.</span>
 
         <p class="sub-h">Copilot's language model</p>
-        <div class="row"><label>What it uses the model for<select id="s-crew-llm">
-          <option value="full" ${st.crew.llm === "full" ? "selected" : ""}>Questions and commands in your own words (it reads commands back for "confirm") (recommended)</option>
-          <option value="questions" ${st.crew.llm === "questions" ? "selected" : ""}>Questions only: commands must be the listed ones</option>
-          <option value="off" ${st.crew.llm === "off" ? "selected" : ""}>Off: the listed commands and the common questions (fuel, distance, ATC's last call) only (lightest)</option></select>
-          <span class="hint">Checklists, callouts, the listed commands and the common questions never need the model: they come
-            straight from the aircraft and the flight. The model is for everything else you say.</span></label></div>
+        <div class="row"><label>Script or model<select id="s-crew-mode">${[
+            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)"],
+            ["llm", "Fully LLM: the model reads everything you say and words everything it says but the safety calls"],
+            ["mostly_llm", "Mostly LLM: short clear commands straight away; the rest, and its own calls, the model's"],
+            ["semi", "Semi script/LLM: the listed commands from the script; everything else you say to the model"],
+            ["scripted", "Fully scripted: the listed commands and common questions; the model only when nothing else understood"],
+            ["off", "Off: no model at all (the listed commands and common questions only)"],
+          ].map(([v, t]) => `<option value="${v}" ${(st.crew.llm === "off" ? "off" : st.crew.mode || "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">How much the copilot leans on the language model, as ATC's setting does. A command it reads from your
+            own words that the script didn't read the same is said back for "confirm" first; checklists, callouts and safety
+            calls never wait on the model.</span></label></div>
         <div class="row"><label>Which model
           <select id="s-crew-which">
             <option value="cloud" ${st.cloud?.copilot !== false ? "selected" : ""}>The cloud model, when it's on (its own connection, never holding up ATC; the whole flight as context)</option>
@@ -1102,7 +1107,11 @@ const Settings = {
         this.save("crew", key, value);
       });
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
-    on("#s-crew-llm", "change", () => this.save("crew", "llm", val("#s-crew-llm")));
+    on("#s-crew-mode", "change", async () => {
+      const v = val("#s-crew-mode");
+      if (S.settings.settings.crew.llm === "off" && v !== "off") await this.save("crew", "llm", "full");
+      this.save("crew", "mode", v);
+    });
     on("#s-crew-verbosity", "change", () => this.save("crew", "verbosity", val("#s-crew-verbosity")));
     on("#s-crew-hands", "change", () => this.save("crew", "hands", val("#s-crew-hands")));
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));

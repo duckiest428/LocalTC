@@ -3,7 +3,7 @@ sim's PC, at the price of the flight's words leaving it (to the service answerin
 
 Every service here speaks the OpenAI chat-completions API, so one client serves them all. Each is a ``Provider``: its
 address, whether it needs a key, and the models to try there, in order. A *route* is one model at one service; a call
-goes down the routes in priority order (Mistral first, for its generous free limits, then the no-key service),
+goes down the routes in priority order (Mistral first, for its generous free limits; the no-key one last),
 and a route that fails steps aside for a while:
 
 - rate limited or out of free allowance (429, 402): that model, until its ``Retry-After``, else 30 s, doubling each
@@ -57,7 +57,8 @@ class Provider:
         return self.key != "none"
 
 
-# Priority order: Mistral first (the most generous free limits), then no key, then the other free keys. Model names
+# Priority order: Mistral first (the most generous free limits), the other free keys, Pollinations (no key, the tightest
+# and least reliable allowance) last. Model names
 # are the services' own, best first; when a flight starts, each keyed service's own model list is read (``discover``)
 # and a model it doesn't have is dropped ([cloud] models replaces a service's list).
 PROVIDERS: tuple[Provider, ...] = (
@@ -67,10 +68,6 @@ PROVIDERS: tuple[Provider, ...] = (
              ("ministral-14b-latest", "ministral-8b-latest", "ministral-3b-latest", "mistral-small-latest"),
              key="free", signup="https://console.mistral.ai",
              note="Free Experiment plan: the most generous free limits here (the Ministral models)."),
-    Provider("pollinations", "Pollinations", "https://text.pollinations.ai/openai", ("openai-fast",), key="none",
-             signup="https://enter.pollinations.ai",
-             note="No key, no account. Its anonymous allowance is small and comes and goes: when it's used up, the "
-                  "next service answers."),
     Provider("groq", "Groq", "https://api.groq.com/openai/v1",
              ("openai/gpt-oss-120b", "openai/gpt-oss-20b"), key="free",
              signup="https://console.groq.com/keys", note="Free tier, per-model daily limits; answers in well under a second."),
@@ -87,6 +84,10 @@ PROVIDERS: tuple[Provider, ...] = (
              key="free", signup="https://build.nvidia.com", note="Free developer access."),
     Provider("siliconflow", "SiliconFlow", "https://api.siliconflow.com/v1", ("Qwen/Qwen3-8B", "deepseek-ai/DeepSeek-V3"),
              key="free", signup="https://cloud.siliconflow.com", note="Some models free; the rest from credits."),
+    Provider("pollinations", "Pollinations", "https://text.pollinations.ai/openai", ("openai-fast",), key="none",
+             signup="https://enter.pollinations.ai",
+             note="No key, no account. Its anonymous allowance is small and comes and goes: when it's used up, the "
+                  "next service answers."),
 )
 BY_ID = {p.id: p for p in PROVIDERS}
 

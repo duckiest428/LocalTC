@@ -35,6 +35,7 @@ from localtc.sim_api import (
     RequestAirportData,
     RequestArrival,
     SendSimEvent,
+    SetInputEvent,
     SetComFrequency,
     SetSimVar,
     SimCommand,
@@ -46,6 +47,7 @@ from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
+    InputEventList,
     EVENT_FLAG_GROUPID_IS_PRIORITY,
     GROUP_PRIORITY_HIGHEST,
     OBJECT_ID_USER,
@@ -76,6 +78,7 @@ DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_AIRCRAFT_EXTRA, DEF_FA
 DEF_AIRCRAFT_MORE, DEF_FACILITY_ARRIVALS = 6, 11
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
 REQ_AIRCRAFT_MORE = 7
+REQ_INPUT_EVENTS = 8
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
@@ -260,6 +263,9 @@ class SimConnectSource:
                 self._stop.wait(1.0)
 
     def _session(self, dll: SimConnectApi, handle: int) -> None:
+        self._input_events: dict[str, int] = {}
+        self._identity_title: str | None = None
+        self._want_input_events = False
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
@@ -343,6 +349,12 @@ class SimConnectSource:
                     self._airport_list, self._airport_list_received = [], 0
                     dll.request_facilities_list(handle, FacilityListType.AIRPORT, REQ_AIRPORT_LIST)
                     next_nearest = now + nearest_period
+                if self._want_input_events and hasattr(dll, "enumerate_input_events"):
+                    self._want_input_events = False
+                    try:
+                        dll.enumerate_input_events(handle, REQ_INPUT_EVENTS)
+                    except SimConnectError as exc:
+                        log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
@@ -394,6 +406,8 @@ class SimConnectSource:
                 self._on_facility_end(msg, t)
         elif isinstance(msg, AirportList) and msg.request_id == REQ_AIRPORT_LIST:
             self._on_airport_list(msg)
+        elif isinstance(msg, InputEventList) and msg.request_id == REQ_INPUT_EVENTS:
+            self._on_input_events(msg)
         return True
 
     # --- airport data -----------------------------------------------------------
@@ -420,6 +434,8 @@ class SimConnectSource:
                 self._send_event(dll, handle, command)
             elif isinstance(command, SetSimVar):
                 self._set_simvar(dll, handle, command)
+            elif isinstance(command, SetInputEvent):
+                self._set_input_event(dll, handle, command)
             else:
                 log.warning("unsupported command %r", command)
 
@@ -431,11 +447,35 @@ class SimConnectSource:
                 event_id = FIRST_COPILOT_EVENT + len(self._copilot_events)
                 dll.map_client_event_to_sim_event(handle, event_id, command.name)
                 self._copilot_events[command.name] = event_id
-            dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.value, GROUP_PRIORITY_HIGHEST,
-                                      EVENT_FLAG_GROUPID_IS_PRIORITY)
-            log.info("Copilot: %s %s", command.name, command.value)
+            if command.index and hasattr(dll, "transmit_client_event_ex1"):
+                dll.transmit_client_event_ex1(handle, OBJECT_ID_USER, event_id, GROUP_PRIORITY_HIGHEST,
+                                              EVENT_FLAG_GROUPID_IS_PRIORITY, command.value, command.index)
+            else:
+                dll.transmit_client_event(handle, OBJECT_ID_USER, event_id, command.value, GROUP_PRIORITY_HIGHEST,
+                                          EVENT_FLAG_GROUPID_IS_PRIORITY)
+            log.info("Copilot: %s %s%s", command.name, command.value, f" (#{command.index})" if command.index else "")
         except SimConnectError as exc:
             log.warning("Copilot couldn't send %s: %s", command.name, exc)
+
+    def _set_input_event(self, dll: SimConnectApi, handle: int, command: SetInputEvent) -> None:
+        """A cockpit control through the aircraft's own input event (MSFS 2024), by its name in the aircraft's list."""
+        hash_ = self._input_events.get(command.name.upper())
+        if hash_ is None:
+            log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
+            return
+        try:
+            dll.set_input_event(handle, hash_, command.value)
+            log.info("Copilot: input event %s = %s", command.name, command.value)
+        except (SimConnectError, AttributeError) as exc:
+            log.warning("Copilot couldn't set %s: %s", command.name, exc)
+
+    def _on_input_events(self, msg: InputEventList) -> None:
+        for name, hash_, _kind in msg.events:
+            self._input_events[name.upper()] = hash_
+        if msg.entry + 1 >= msg.out_of:
+            names = sorted(self._input_events)
+            # The aircraft's controls by name, for its copilot profile ([actions.x] input = "NAME"); in a bug report.
+            log.info("Input events of this aircraft (%d): %s", len(names), ", ".join(names))
 
     def _set_simvar(self, dll: SimConnectApi, handle: int, command: SetSimVar) -> None:
         """A variable from the copilot (an add-on's L:var), through a data definition of its own."""
@@ -542,7 +582,12 @@ class SimConnectSource:
             self._position = (ownship.lat, ownship.lon)
             self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:
-            self._emit(defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t))
+            identity = defs.identity_from_raw(defs.unpack(defs.IDENTITY, msg.payload), t)
+            if identity.title != self._identity_title:  # a new aircraft: its own controls
+                self._identity_title = identity.title
+                self._input_events = {}
+                self._want_input_events = True
+            self._emit(identity)
         elif msg.request_id in (REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA, REQ_AIRCRAFT_MORE):
             if msg.request_id == REQ_AIRCRAFT:
                 self._aircraft_raw = defs.unpack(defs.AIRCRAFT, msg.payload)

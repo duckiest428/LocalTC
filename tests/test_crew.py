@@ -122,7 +122,7 @@ def test_values_go_to_the_sim_as_it_expects_them():
     c = cockpit()
     assert plan(Command("squawk", "7700"), c).writes == (SendSimEvent(name="XPNDR_SET", value=0x7700),)
     assert plan(Command("com_active", "121.9"), c).writes == (SetComFrequency(hz=121_900_000),)
-    assert plan(Command("altimeter", "1013", "hpa"), c).writes == (SendSimEvent(name="KOHLSMAN_SET", value=16208),)
+    assert plan(Command("altimeter", "1013", "hpa"), c).writes == (SendSimEvent(name="KOHLSMAN_SET", value=16208, index=2),)
     assert plan(Command("vs", "-1500"), c).writes == (SendSimEvent(name="AP_VS_VAR_SET_ENGLISH", value=-1500),)
     p = plan(Command("altitude", "24000"), c)
     assert p.done == "FL240 set." and p.done_spoken == "flight level two four zero set"
@@ -341,7 +341,8 @@ def test_common_questions_are_answered_from_the_data():
     pm.observe(AtcTransmission(t=4.0, station="Zurich Approach", frequency_mhz=120.755, text="EDW87, fly heading 150."))
     assert said(pm.observe(IntercomHeard(t=5.0, text="what did ATC say?"))) == \
         ["Zurich Approach said: EDW87, fly heading 150."]
-    assert said(pm.observe(IntercomHeard(t=6.0, text="Go ahead and set the altimeter to 30.10"))) == []  # a command
+    assert said(pm.observe(IntercomHeard(t=6.0, text="Go ahead and set the altimeter to 30.10"))) == \
+        ["Altimeter 30.10 set on my side."]  # a command, on the copilot's own altimeter
 
 
 class FakeBackend:
@@ -377,10 +378,9 @@ def test_a_command_in_other_words_waits_for_confirm():
     assert said(out) == ["Gear down, confirm?"] and not [o for o in out if isinstance(o, SendSimEvent)]
     assert SendSimEvent(name="GEAR_DOWN") in pm.observe(IntercomHeard(t=4.0, text="affirm"))
     pm.model = CrewModel(FakeBackend('{"kind": "command", "action": "heading", "value": "310", "reply": "Heading 310."}'))
-    assert said(pm.observe(IntercomHeard(t=6.0, text="bring us round a bit"))) == ["Say again?"]  # 310 wasn't said
-    pm.model = CrewModel(FakeBackend("{}"), mode="questions")
-    pm.model.backend.answer = '{"kind": "command", "action": "gear", "value": "up", "reply": "Gear up."}'
-    assert said(pm.observe(IntercomHeard(t=8.0, text="suck the wheels up")))[:1] == ["Gear up."]  # questions only: words
+    assert "Say again?" in said(pm.observe(IntercomHeard(t=6.0, text="bring us round a bit")))  # 310 was not said
+    pm.model = CrewModel(FakeBackend("{}"), mode="off")
+    assert "Say again?" in said(pm.observe(IntercomHeard(t=8.0, text="suck the wheels up")))  # no model: no guess
 
 
 def test_a_shortcut_on_the_intercom_key_sends_nothing():
@@ -396,3 +396,39 @@ def test_a_shortcut_on_the_intercom_key_sends_nothing():
     ptt._press("ALT"), ptt._press("TAB"), ptt._release("TAB"), ptt._release("ALT")
     ptt._press("ALT"), ptt._release("ALT")
     assert calls == ["down", "cancel", "down", "up"]
+
+
+def test_mostly_llm_lets_the_model_word_and_read_beyond_short_commands():
+    from localtc.crew.model import CrewModel, effective_mode
+
+    class Rich(FakeBackend):
+        rich = True
+
+    assert effective_mode("auto", Rich("{}")) == "mostly_llm" and effective_mode("auto", FakeBackend("{}")) == "scripted"
+    pm = started()
+    pm.model = CrewModel(Rich('{"kind": "reply", "reply": "Check."}'))
+    # A plain statement goes to the model (it says "Check."), a short command is done at once, no model needed.
+    assert said(pm.observe(IntercomHeard(t=2.0, text="engine two is started and stable"))) == ["Check."]
+    asked = len(pm.model.backend.asked)
+    out = pm.observe(IntercomHeard(t=3.0, text="gear down"))
+    assert SendSimEvent(name="GEAR_DOWN") in out and len(pm.model.backend.asked) == asked
+    # The conversation is remembered for the next question.
+    pm.observe(IntercomHeard(t=4.0, text="what did I just ask you"))
+    assert "engine two is started and stable" in pm.model.backend.asked[-1].prompt
+
+
+def test_check_and_set_are_a_yes_to_a_question():
+    from localtc.crew.model import CrewModel
+
+    pm = started()
+    pm.model = CrewModel(FakeBackend('{"kind": "command", "action": "gear", "value": "down", "reply": "Gear down."}'))
+    pm.observe(IntercomHeard(t=2.0, text="drop the wheels for me would you"))
+    assert SendSimEvent(name="GEAR_DOWN") in pm.observe(IntercomHeard(t=3.0, text="yep, check"))
+
+
+def test_a_reworded_call_keeps_every_number_and_name():
+    from localtc.crew.model import check_reworded
+
+    assert check_reworded('{"reply": "Squawk 2711 and 6,000 are in."}', "Squawk 2711, initial 6,000 set.")[0]
+    assert check_reworded('{"reply": "Squawk set, 6,000 in."}', "Squawk 2711, initial 6,000 set.")[0] is None
+    assert check_reworded('{"reply": "We\'re on the departure."}', "We're planned on the RADYR2.")[0] is None

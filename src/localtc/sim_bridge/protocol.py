@@ -248,6 +248,20 @@ class AirportList:
 
 
 @dataclass(frozen=True)
+class InputEventList:
+    """MSFS 2024's input events of the user's aircraft (SimConnect_EnumerateInputEvents): the B: vars its cockpit
+    switches move through. (name, hash, type) each."""
+
+    request_id: int
+    entry: int
+    out_of: int
+    events: tuple[tuple[str, int, int], ...]
+
+
+INPUT_EVENT_SIZE = 76  # SIMCONNECT_INPUT_EVENT_DESCRIPTOR: char Name[64], UINT64 Hash, DWORD eType (packed)
+
+
+@dataclass(frozen=True)
 class FacilityData:
     request_id: int
     unique_id: int
@@ -279,6 +293,7 @@ class ObjectData:
 
 Message = (
     OpenInfo | QuitInfo | ExceptionInfo | EventInfo | ObjectData | AirportList | FacilityData | FacilityDataEnd
+    | InputEventList
 )
 
 
@@ -329,7 +344,28 @@ def parse_message(buf: bytes) -> Message | None:
         return _parse_facility(buf)
     if rid == RecvId.AIRPORT_LIST:
         return _parse_airport_list(buf)
+    if 32 <= rid <= 40:  # the input events' list; its ID moved between SDK versions, so it's told by its layout
+        return _parse_input_events(buf)
     return None
+
+
+def _parse_input_events(buf: bytes) -> InputEventList | None:
+    if len(buf) < FACILITIES_LIST_OFFSET:
+        return None
+    m = _read(RecvFacilitiesList, buf)
+    end = _message_end(m.dwSize, buf)
+    count = m.dwArraySize
+    if count == 0 or end - FACILITIES_LIST_OFFSET != count * INPUT_EVENT_SIZE:
+        return None
+    events = []
+    for i in range(count):
+        base = FACILITIES_LIST_OFFSET + i * INPUT_EVENT_SIZE
+        name = _cstr(buf[base:base + 64])
+        if not name or not name.isprintable():
+            return None
+        hash_, kind = struct.unpack_from("<QI", buf, base + 64)
+        events.append((name, hash_, kind))
+    return InputEventList(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, events=tuple(events))
 
 
 def _parse_facility(buf: bytes) -> "FacilityData | FacilityDataEnd | None":

@@ -109,7 +109,7 @@ def test_working_the_radio_the_copilot_asks_atc_itself():
     engine = planned_steps(FakeEngine())
     pm = crew(engine, radio_mode=lambda: "full")
     cruise(pm)
-    out = fly(pm, [air(1.0, lat=46.9), air(5.0, lat=46.91)])
+    out = fly(pm, [air(1.0, lat=46.9), air(5.0, lat=46.91), air(10.0, lat=46.92)])
     radio = [o.text for o in out if isinstance(o, Transcript) and o.source == "copilot"]
     assert radio == ["Seattle Center, " + radio[0].split(", ")[1] + ", request climb FL370"]
     assert "Step climb point ahead, asking for FL370." in said(out)
@@ -132,7 +132,7 @@ def test_without_steps_in_the_plan_the_weight_burned_suggests_one():
     cruise(pm)
     pm.observe(systems(0.6))
     out = fly(pm, [air(1.0, gross_weight_lb=150000), air(1.5, gross_weight_lb=150000)]
-              + [air(2.0 + 2 * i, gross_weight_lb=141000) for i in range(4)])
+              + [air(2.0 + 2 * i, gross_weight_lb=141000) for i in range(8)])
     assert any(w.startswith("We're light enough to go higher, suggest FL370") for w in said(out))
 
 
@@ -223,7 +223,7 @@ def test_autobrake_confirmed_before_landing_and_the_reversers_after():
     out = fly(pm, [air(4.0, alt_agl_ft=10, alt_indicated_ft=10, ias_kt=140, gs_kt=140, vs_fpm=-150, **landed),
                    own(5.0, ias_kt=135, gs_kt=135, **landed),
                    systems(7.5, autobrake=2, jet=True, reverser_pct=80, autobrake_active=True, spoilers_pct=80)]
-              + [own(8.0 + i, ias_kt=120 - 2 * i, gs_kt=120 - 2 * i, **landed) for i in range(20)])
+              + [own(8.0 + i, ias_kt=120 - i, gs_kt=120 - i, **landed) for i in range(40)])
     words = said(out)
     assert "Reversers." in words and "Autobrake engaged." in words
 
@@ -235,7 +235,7 @@ def test_no_reversers_said_for_a_jet_that_didnt_deploy_them():
     pm.monitor.f.said.update({"no_landing_clearance:0": 0, "1000:0": 0, "greeting": 0})
     pm.monitor.f.takeoff_t = 0.0
     words = said(fly(pm, [air(1.0, alt_agl_ft=10, alt_indicated_ft=10, ias_kt=140, gs_kt=140, gear_down=True, flaps_index=3)]
-                     + [own(2.0 + i, ias_kt=135 - 3 * i, gs_kt=135 - 3 * i, flaps_index=3) for i in range(10)]))
+                     + [own(2.0 + i, ias_kt=135 - i, gs_kt=135 - i, flaps_index=3) for i in range(30)]))
     assert "No reversers." in words
 
 

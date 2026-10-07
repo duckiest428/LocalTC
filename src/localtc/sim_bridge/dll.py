@@ -79,6 +79,17 @@ class SimConnectDll:
         self._transmit_client_event = _bind(
             lib, "SimConnect_TransmitClientEvent", [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32]
         )
+        try:  # (with a second value: "which one", for KOHLSMAN_SET and the like)
+            self._transmit_client_event_ex1 = _bind(
+                lib, "SimConnect_TransmitClientEvent_EX1",
+                [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32])
+        except SimConnectUnavailable:
+            self._transmit_client_event_ex1 = None
+        try:  # MSFS 2024 only: the aircraft's input events (B: vars)
+            self._enumerate_input_events = _bind(lib, "SimConnect_EnumerateInputEvents", [c_void_p, c_uint32])
+            self._set_input_event = _bind(lib, "SimConnect_SetInputEvent", [c_void_p, ctypes.c_uint64, c_uint32, c_void_p])
+        except SimConnectUnavailable:
+            self._enumerate_input_events = self._set_input_event = None
         self._add_client_event_to_group = _bind(
             lib, "SimConnect_AddClientEventToNotificationGroup", [c_void_p, c_uint32, c_uint32, c_int]
         )
@@ -153,6 +164,27 @@ class SimConnectDll:
     def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None:
         hr = self._transmit_client_event(handle, object_id, event_id, data & 0xFFFFFFFF, group, flags)
         _check(hr, f"TransmitClientEvent({event_id}, {data})")
+
+    def transmit_client_event_ex1(self, handle: int, object_id: int, event_id: int, group: int, flags: int,
+                                  data0: int, data1: int = 0) -> None:
+        if self._transmit_client_event_ex1 is None:
+            self.transmit_client_event(handle, object_id, event_id, data0, group, flags)
+            return
+        hr = self._transmit_client_event_ex1(handle, object_id, event_id, group, flags, data0 & 0xFFFFFFFF,
+                                             data1 & 0xFFFFFFFF, 0, 0, 0)
+        _check(hr, f"TransmitClientEvent_EX1({event_id}, {data0}, {data1})")
+
+    def enumerate_input_events(self, handle: int, request_id: int) -> None:
+        if self._enumerate_input_events is None:
+            raise SimConnectError("this SimConnect has no input events")
+        _check(self._enumerate_input_events(handle, request_id), "EnumerateInputEvents")
+
+    def set_input_event(self, handle: int, hash_: int, value: float) -> None:
+        if self._set_input_event is None:
+            raise SimConnectError("this SimConnect has no input events")
+        v = ctypes.c_double(value)
+        _check(self._set_input_event(handle, ctypes.c_uint64(hash_), ctypes.sizeof(v), ctypes.byref(v)),
+               f"SetInputEvent({hash_:x}, {value})")
 
     def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None:
         """A key or joystick button (``definition``, e.g. "joystick:0:button:3") sends ``down_event`` when pressed

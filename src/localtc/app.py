@@ -397,12 +397,13 @@ async def run_session(
                 crew_backend = copilot_model(cfg, backend)
                 crew_wait = max(cfg.crew.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
                                 cfg.cloud.timeout_s if getattr(crew_backend, "rich", False) else 0.0)
-                crew_model = (CrewModel(crew_backend, mode=cfg.crew.llm, timeout_s=crew_wait,
+                crew_model = (CrewModel(crew_backend, mode="off" if cfg.crew.llm == "off" else cfg.crew.mode,
+                                        timeout_s=crew_wait,
                                         patience_s=max(cfg.crew.patience_s, crew_wait), beyond_facts=cfg.crew.beyond_facts)
-                              if crew_backend is not None and cfg.crew.llm != "off" else None)
+                              if crew_backend is not None and cfg.crew.llm != "off" and cfg.crew.mode != "off" else None)
                 if crew_model is not None:
-                    log.info("Copilot's language model: %s", "the cloud" if getattr(crew_backend, "rich", False)
-                             else crew_backend.model)
+                    log.info("Copilot's language model: %s, %s", "the cloud" if getattr(crew_backend, "rich", False)
+                             else crew_backend.model, crew_model.mode.replace("_", " "))
                 service = atc_service
                 pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,

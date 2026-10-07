@@ -13,7 +13,15 @@ from localtc.atc_core.phraseology import speech
 from localtc.atc_core.facilities import channel_khz
 from localtc.crew.commands import Command
 from localtc.crew.profiles import Profile, Write
-from localtc.sim_api import AircraftSystems, OwnshipState, SendSimEvent, SetComFrequency, SetSimVar, SimCommand
+from localtc.sim_api import (
+    AircraftSystems,
+    OwnshipState,
+    SendSimEvent,
+    SetComFrequency,
+    SetInputEvent,
+    SetSimVar,
+    SimCommand,
+)
 
 FLAPS_MAX = 16383  # FLAPS_SET's full travel
 DETENT_EVENTS = ("FLAPS_UP", "FLAPS_1", "FLAPS_2", "FLAPS_3", "FLAPS_DOWN")
@@ -98,6 +106,9 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
     custom: Write | None = profile.actions.get(key)
     if custom is None:
         return default
+    if custom.input:
+        level = custom.on if on else custom.off if on is not None else (value or 0.0)
+        return SetInputEvent(name=custom.input, value=float(level))
     if custom.lvar:
         level = custom.on if on else custom.off if on is not None else (value or 0.0)
         return SetSimVar(name=custom.lvar, unit=custom.unit, value=float(level))
@@ -217,8 +228,10 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         said = f"QNH {int(v)} set." if cmd.target == "hpa" else ("Standard set." if v == "29.92" else f"Altimeter {v} set.")
         spoken = (f"Q N H {speech.digits(v)} set" if cmd.target == "hpa" else "standard set" if v == "29.92"
                   else f"altimeter {speech.digits(v.replace('.', ''))} set")
-        return Plan(a, v, (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16)), hpa),),
-                    _own(lambda o: abs(o.altimeter_inhg - inhg) <= 0.015), said, spoken)
+        # The first officer's own altimeter (index 2): the captain's is the captain's. The sim reports the captain's
+        # setting, so whether it took can't be seen: said as done.
+        return Plan(a, v, (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=2), hpa),),
+                    lambda c2: None, said.replace(" set.", " set on my side."), spoken + " on my side")
     if a == "parking_brake":
         on = v == "on"
         event = SendSimEvent(name="PARKING_BRAKE_SET", value=int(on))

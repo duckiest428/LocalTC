@@ -35,6 +35,16 @@ class SendSimEvent(SimCommand, tag="send_sim_event"):
 
     name: str
     value: int = 0
+    index: int = 0  # which one, for events that take it second (KOHLSMAN_SET: 2 is the first officer's altimeter)
+
+
+class SetInputEvent(SimCommand, tag="set_input_event"):
+    """Move a cockpit control through its MSFS 2024 input event (a B: var, "LIGHTING_LANDING_1"), the way the
+    aircraft's own switches do: what an aircraft whose panel ignores the old key events needs. The name as the
+    aircraft lists it (case doesn't matter)."""
+
+    name: str
+    value: float = 0.0
 
 
 class SetSimVar(SimCommand, tag="set_sim_var"):
@@ -46,4 +56,4 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar]
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent]

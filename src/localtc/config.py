@@ -209,7 +209,7 @@ class LlmConfig(_Section):
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
 
-CLOUD_ORDER = ["mistral", "pollinations", "groq", "aistudio", "cloudflare", "nvidia", "siliconflow"]
+CLOUD_ORDER = ["mistral", "groq", "aistudio", "cloudflare", "nvidia", "siliconflow", "pollinations"]
 
 
 class CloudConfig(_Section):
@@ -279,7 +279,10 @@ class CrewConfig(_Section):
     # The language model on the intercom (needs [llm]): "off" the fixed commands and common questions only;
     # "questions" also answers anything else from what it knows; "full" also takes commands said in other words
     # (read back for your "confirm" before it acts).
-    llm: Literal["off", "questions", "full"] = "full"
+    llm: Literal["off", "questions", "full"] = "full"  # older setting; ``mode`` decides (kept so old files load)
+    # How much the copilot leans on the language model, as ATC's [llm] mode: "auto" (mostly LLM with the cloud model,
+    # fully scripted with the one on this PC), "llm", "mostly_llm", "semi", "scripted", or "off".
+    mode: Literal["auto", "llm", "mostly_llm", "semi", "scripted", "off"] = "auto"
     # Its answers may go past what the copilot knows from the sim and ATC (what's usual, how a system works): they can
     # be wrong. Off: a reply with a number the facts don't have is turned away. Commands are always checked.
     beyond_facts: bool = False

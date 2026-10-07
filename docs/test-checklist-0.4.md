@@ -118,3 +118,62 @@ Turn on **Use cloud language models**, start a flight, then check `%LOCALAPPDATA
 - [ ] Website links have no `.html` (tracker, dashboard, privacy ...), and the old `.html` links still work.
 - [ ] The website's Worker is redeployed (`cd server && npx wrangler deploy`) so the copilot, COM2 and play buttons work through the relay.
 - [ ] Privacy and Terms pages mention the cloud model; the home page's cloud card lists the current services.
+
+## 9. This round (7 October)
+
+### Copilot
+- [ ] Quick Settings → Copilot → **Script or model** shows the ATC-style modes. Automatic = Mostly LLM with the cloud model on, Fully scripted without. The log says "Copilot's language model: the cloud, mostly llm".
+- [ ] Mostly LLM:
+  - [ ] "engine two started", "packs off" get a short "Check." / "Copy.", not the cockpit read back;
+  - [ ] "flaps 1" / "gear down" happen at once;
+  - [ ] "turn on your flight director" gets "that's yours" instead of the autopilot.
+- [ ] It remembers: "No, I said the clearance" after a misheard line is understood.
+- [ ] Its routine calls (the ATIS, briefings, reminders) are in its own words, with every number kept.
+- [ ] Pacing:
+  - [ ] no greeting for the first ~20 s;
+  - [ ] calls spaced out;
+  - [ ] nothing right after a radio call;
+  - [ ] "waiting for a readback" only ~45 s after a clearance;
+  - [ ] ATIS mentioned only when the runway, approach or altimeter changed.
+- [ ] No "Speed, speed!" on a normal A320 climb-out; no fuel alarm right after takeoff.
+- [ ] Checklists are challenge and response:
+  - [ ] "Flaps?" waits for your answer;
+  - [ ] a wrong one holds the checklist;
+  - [ ] "set" / "check" moves on.
+- [ ] "Beacon, check" answers a "confirm?".
+- [ ] The altimeter it sets is its own side, and it never sets your standby frequency.
+- [ ] At the gate: one short line ("Nice landing. 39 minutes in the air."), not statistics.
+- [ ] Send a report from an A320 flight. The log has "Input events of this aircraft (...)", which lets its profile be mapped so the copilot's switches move in the cockpit.
+
+### ATC
+- [ ] A misheard callsign one digit off still gets an answer.
+- [ ] "Can we get gate 148, there's an aircraft at 150" gives a new gate and route.
+- [ ] Exits go toward the terminal.
+- [ ] Departure hands you to centre before you level at 17,000.
+- [ ] Approach keeps you on the STAR.
+- [ ] "tail right" stays "tail right".
+- [ ] **Personalities** (Quick Settings → ATC, on):
+  - [ ] stations differ in greeting, "roger" vs "copy", sign-offs and pace;
+  - [ ] the same station is the same next flight;
+  - [ ] a second wrong readback gets "negative, I say again ..." from a strict one;
+  - [ ] the log names each controller's kind.
+
+### Maps and sharing
+- [ ] A New York–Tokyo replay (logbook, website, phone, shared page) draws over Alaska, with Tokyo at the end of the line.
+- [ ] The logbook's map hides overlapping names until zoomed.
+- [ ] Follow in a replay zooms in on the ground and out at altitude.
+- [ ] Share a flight with **The whole replay**: the page shows the full player.
+- [ ] Settings (the gear) opens a window with Account, Appearance, Sim, Updates, Support and Developer mode; Quick Settings keeps the flying ones.
+
+### Traffic control (EXPERIMENTAL; Quick Settings → ATC)
+- [ ] **Shadow**: the status shows the count shadowed. The log notes teleports, duplicates and vanishing; MSFS traffic is untouched.
+- [ ] **Reinject**:
+  - [ ] an aircraft MSFS drops nearby comes back (parked where it was, or flying to your destination);
+  - [ ] FSLTL's model is used if installed;
+  - [ ] turning it off or ending the flight removes them.
+
+### Website (after the Pages deploy)
+- [ ] Home: tiles with drawings, the local/BYOK diagram, the new "not there yet".
+- [ ] /pricing: four $0 plans.
+- [ ] /sitemap.xml and /robots.txt load; submit the sitemap in Google Search Console.
+- [ ] Redeploy the Worker (`cd server && npx wrangler deploy`): the full shared replay needs it.

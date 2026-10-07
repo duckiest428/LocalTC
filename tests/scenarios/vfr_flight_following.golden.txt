@@ -30,7 +30,7 @@
 [  1079.0] PILOT     125.1: Seattle Center, Cessna two lima tango, level 4,500.
 [  1082.0] ATC       Seattle Center 125.1: N172LT, roger.
 [  1362.0] PHASE     DEPARTURE -> ARRIVAL (sustained descent)
-[  1769.0] ATC       Seattle Center 125.1: Cessna 2LT, radar service terminated, squawk VFR, frequency change approved, contact Boeing Tower 120.6, see ya.
+[  1769.0] ATC       Seattle Center 125.1: Cessna 2LT, radar service terminated, squawk VFR, frequency change approved, contact Boeing Tower 120.6, good day.
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1771.0] PILOT     125.1: Squawk VFR, Boeing Tower one two zero point six, Cessna two lima tango.
 [  1771.0] READBACK  vfr.service_terminated correct
@@ -43,7 +43,7 @@
 [  2070.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway, so long.
+[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway, bye.
 [  2343.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
 [  2343.0] READBACK  tower.exit_contact_ground correct
 [  2349.0] PILOT     121.9: Boeing Ground, Cessna two lima tango, clear of runway 14R, taxi to parking.

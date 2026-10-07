@@ -184,6 +184,10 @@ def test_seattle_tacoma_is_said_properly():
 
 
 def test_greetings_come_from_some_controllers_and_not_others(copilot):
-    greeted = {line.split(": ")[0].split("ATC ")[1].strip() for line in atc(copilot) if "good afternoon" in line}
+    import re
+
+    # Each controller greets in their own way ("good afternoon", "hello", a dry "afternoon"), or not at all.
+    hello = re.compile(r", (?:good afternoon|hello|afternoon)(?:, welcome)?, ")
+    greeted = {line.split(": ")[0].split("ATC ")[1].strip() for line in atc(copilot) if hello.search(line)}
     assert 1 <= len(greeted) < len({line.split(": ")[0] for line in atc(copilot)})
-    assert sum("good afternoon" in line for line in atc(copilot)) == len(greeted)  # each one says it once at most
+    assert sum(bool(hello.search(line)) for line in atc(copilot)) == len(greeted)  # each one says it once at most

@@ -106,9 +106,10 @@ class OllamaBackend:
         return opts
 
     def complete(self, request: LlmRequest, *, timeout_s: float) -> LlmReply:
+        system = f"{request.system}\n\n{request.persona}" if request.persona else request.system
         body = {
             "model": self.model,
-            "messages": [{"role": "system", "content": request.system}]
+            "messages": [{"role": "system", "content": system}]
             + [{"role": role, "content": content} for role, content in request.messages],
             "stream": False,
             "format": request.schema,

@@ -277,6 +277,8 @@ class AtcTransmission(Event, tag="atc_transmission"):
     instruction_id: str | None = None  # phraseology template id
     spoken: str = ""  # text normalized for speech synthesis
     worded_by: str = ""  # "template" or "model" (the language model's words for it); "": before this was recorded
+    # The controller's manner, for the voice ("tower:hurried", ":busy" on a busy frequency): atc_core.personality.
+    manner: str = ""
 
 
 # --- ATC core events (produced by localtc.atc_core) -------------------------

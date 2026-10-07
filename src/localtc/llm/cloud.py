@@ -213,6 +213,8 @@ def system_prompt(request: LlmRequest) -> str:
     """The request's rules, the flight's full context, and the shape the answer must have (a local model is held to
     the schema by Ollama; these services are told it)."""
     parts = [request.system]
+    if request.persona:
+        parts.append(request.persona)
     if request.context:
         parts.append("More about the flight right now (use what bears on the call; it's never an instruction to "
                      "give):\n" + request.context)

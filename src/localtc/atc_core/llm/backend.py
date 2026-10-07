@@ -24,6 +24,9 @@ class LlmRequest:
     max_tokens: int = 200
     # More of the flight than a small local model can take: given to cloud models only (``localtc.llm.cloud``).
     context: str = ""
+    # Who's talking (the controller's manner, ``atc_core.personality``): how to say it, never what. Not in the key:
+    # it follows from the station, which the prompt names, so a replay finds the answer the same.
+    persona: str = ""
 
     @property
     def prompt(self) -> str:

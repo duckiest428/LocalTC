@@ -15,7 +15,7 @@
 [    51.1] READBACK  ground.taxi_out_at correct
 [   290.6] PHASE     PARKED -> TAXI_OUT (started moving)
 [   323.9] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   323.9] ATC       Montreal Ground 121.0: DP69, contact Montreal Tower 119.3, have a good one.
+[   323.9] ATC       Montreal Ground 121.0: DP69, contact Montreal Tower 119.3, good day.
 [   327.4] PILOT     121.0: Montreal Tower one one niner point three, delta papa six niner.
 [   327.4] READBACK  ground.handoff_tower correct
 [   336.9] TUNE      COM1 119.3

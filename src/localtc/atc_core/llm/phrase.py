@@ -425,22 +425,25 @@ class LlmPhraser:
         self._clock = clock
 
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
-              trigger: str = "", required: str = "", more: dict[str, str] | None = None) -> tuple[Phrase | None, list[LlmExchange]]:
+              trigger: str = "", required: str = "", more: dict[str, str] | None = None,
+              persona: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template.
         ``required``: the data's answer, which the reply must give (``check_reply``). ``more``: the rest of what's
         known, for a model that can take it (a cloud one); a reply may use it as it may the facts."""
         beyond = self.beyond_facts
         known = {**(more or {}), **facts}
-        text, exchanges = self._run(phrase_request(pilot, decision, facts, beyond_facts=beyond, more=more),
+        request = replace(phrase_request(pilot, decision, facts, beyond_facts=beyond, more=more), persona=persona)
+        text, exchanges = self._run(request,
                                     lambda raw: check_reply(raw, known, callsigns, required, beyond_facts=beyond),
                                     t, trigger)
         return (Phrase(text, spoken(text)) if text is not None else None), exchanges
 
     def reword(self, *, pilot: str, scripted: str, callsigns: tuple[str, ...], t: float,
-               trigger: str = "") -> tuple[str | None, list[LlmExchange]]:
+               trigger: str = "", persona: str = "") -> tuple[str | None, list[LlmExchange]]:
         """The model's words for the script's reply ``scripted`` (without the callsign), checked; None: the
-        template's words stand."""
-        return self._run(reword_request(pilot, scripted), lambda raw: check_reworded(raw, scripted, callsigns), t, trigger)
+        template's words stand. ``persona``: the controller's manner (their words, never other values)."""
+        request = replace(reword_request(pilot, scripted), persona=persona)
+        return self._run(request, lambda raw: check_reworded(raw, scripted, callsigns), t, trigger)
 
     def _run(self, request: LlmRequest, check: Callable[[str], str], t: float,
              trigger: str) -> tuple[str | None, list[LlmExchange]]:

@@ -129,7 +129,25 @@ DELIVERY: dict[str, Delivery] = {
 }
 
 
+# The controller's own manner on top of the role's (atc_core.personality's kinds): how fast, how much life in it.
+KIND_DELIVERY = {"calm": (0.96, 0.0), "formal": (0.98, -0.05), "friendly": (1.0, 0.05), "strict": (1.03, -0.03),
+                 "hurried": (1.08, 0.0), "dry": (1.01, -0.06), "conversational": (0.97, 0.06)}
+BUSY_PACE = 1.04  # a busy frequency: a little quicker still
+
+
 def delivery_for(key: str, kind: str) -> Delivery:
+    """``kind``: the role ("tower"), or "role:manner[:busy]" from the transmission ("tower:hurried:busy")."""
+    role, _, rest = kind.partition(":")
+    manner, _, load = rest.partition(":")
+    base = _delivery_for(key, role)
+    if manner not in KIND_DELIVERY:
+        return base
+    pace, life = KIND_DELIVERY[manner]
+    pace *= BUSY_PACE if load == "busy" else 1.0
+    return Delivery(round(base.pace * pace, 3), round(max(0.2, base.noise_scale + life), 3), base.noise_w)
+
+
+def _delivery_for(key: str, kind: str) -> Delivery:
     """The manner of a controller (``kind``: clearance ... center, atis, pilot) with this station's own touch
     (``key``: its name): up to 5 % on the pace and a little on the rest, the same every time."""
     base = DELIVERY.get(kind, Delivery())

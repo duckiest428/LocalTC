@@ -162,6 +162,10 @@ class AtcConfig(_Section):
     traffic_runways: bool = True
     real_gates: bool = True  # the airports' real gate names and international gates, from OpenStreetMap
     callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
+    # Each station a controller with a manner of their own (calm, formal, friendly, strict, hurried, dry, conversational):
+    # their greetings, acknowledgements, corrections and pace, and how the language model words their replies. The
+    # same controller every time at a station. Off: plain greetings and sign-offs only.
+    personalities: bool = True
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"
     transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere

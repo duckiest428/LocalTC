@@ -35,7 +35,7 @@
 [   974.0] READBACK  tower.land correct
 [  1143.0] PHASE     APPROACH -> LANDING (short final runway 34L)
 [  1234.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Paine Ground on 121.8 when clear of the runway, have a good one.
+[  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Paine Ground on 121.8 when clear of the runway, good day.
 [  1236.0] PILOT     120.2: Paine Ground one two one point eight, Cessna two lima tango.
 [  1236.0] READBACK  tower.exit_contact_ground correct
 [  1242.0] PILOT     121.8: Paine Ground, Cessna two lima tango, clear of runway 34L, taxi to parking.

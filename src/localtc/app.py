@@ -62,6 +62,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         center_mhz=atc.center_mhz,
         strict_callsign=atc.strict_callsign,
         callsign_check=atc.callsign_check,
+        personalities=atc.personalities,
         radio_range=atc.radio_range,
         chatter=atc.chatter,
         transition_ft=atc.transition_ft,

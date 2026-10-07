@@ -29,7 +29,7 @@
 [   365.0] ATC       Paine Tower 120.2: N172LT, fly runway heading, runway 34L, cleared for takeoff, wind 130 at 3.
 [   367.0] PILOT     120.2: Runway three four left, two lima tango.
 [   367.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
-[   369.0] ATC       Paine Tower 120.2: Cessna 2LT, read back cleared for takeoff.
+[   369.0] ATC       Paine Tower 120.2: Cessna 2LT, I need a full readback, read back cleared for takeoff.
 [   371.0] PILOT     120.2: Runway three four left, two lima tango.
 [   373.0] ATC       Paine Tower 120.2: Cessna 2LT, say again.
 [   375.0] PILOT     120.2: Cleared for takeoff runway three four left, two lima tango.

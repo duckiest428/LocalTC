@@ -69,7 +69,7 @@ class VoiceOut:
         try:
             async for ev in self._events:
                 if isinstance(ev, AtcTransmission):
-                    await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc", keep=clip_id(ev))
+                    await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.manner or ev.controller or "atc", keep=clip_id(ev))
                 elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
                     if ev.speaker == "atc":
                         await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc", keep=clip_id(ev))

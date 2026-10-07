@@ -334,6 +334,9 @@ class EngineConfig:
     chatter: bool = False  # other flights on the frequency now and then (atc_core/chatter.py); the app turns it on
     radio_range: bool = True  # an airport's frequencies reach only so far (atc_core/radio_range.py)
     callsign_check: bool = True  # another aircraft's callsign (or a near miss on a new call): "say again your callsign"
+    # Each station a controller of their own (personality.py): their greetings, acknowledgements, corrections, their
+    # manner in the model's words and their pace on the voice. Off: the plain greetings and sign-offs only.
+    personalities: bool = True
     seed: int = 0  # 0 = derived from the callsign
     thresholds: PhaseThresholds = field(default_factory=PhaseThresholds)
     response_delay_s: tuple[float, float] = (1.5, 3.0)
@@ -452,6 +455,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._greeted: set[str] = set()  # stations that have had their first word with the flight
         # Greetings and sign-offs draw from their own generator: they never shift which wording a template gets.
         self._voice_rng = random.Random(self.cfg.seed or 0)
+        self._persona_rng = random.Random((self.cfg.seed or 0) + 7919)  # the controllers' own choices: their own stream
+        self._said_on: list[tuple[float, str]] = []  # (when, station): every transmission heard, for the workload
+        self._met: set[str] = set()  # stations whose controller has been logged
         self._vector_t = -math.inf  # when approach last gave a vector or a speed
         self._vector_leg: str | None = None  # the leg of the pattern approach last gave (vectors.py)
         self._vector_side: float | None = None  # ... and the side of the final it is flown on
@@ -1096,6 +1102,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         out: list[BusEvent] = []
         at = t
         for line in lines:
+            self._said_on.append((at, facility.station))
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker=line.speaker,
                                     callsign=line.callsign, text=line.text, spoken=line.spoken, controller=facility.controller))
             at += self._speech_s(line.spoken) + CHATTER_TURN_S
@@ -1902,7 +1909,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             if body is None:
                 continue
             text, exchanges = self.phraser.reword(pilot=ev.text, scripted=body, callsigns=callsigns, t=ev.t,
-                                                  trigger=interp.trigger or "")
+                                                  trigger=interp.trigger or "", persona=self._persona(item.facility))
             out += exchanges
             if text is None:
                 last = exchanges[-1] if exchanges else None
@@ -3248,6 +3255,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger={"answer": "question", "reply": "conversation"}.get(decision, "unsupported_request"),
             required=known.display if known is not None and require else "", more=more,
+            persona=self._persona(facility),
         )
         if message is not None:
             self._schedule(t, "common.info", {"message": message}, facility, worded_by="model")
@@ -4160,6 +4168,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             rendered = replace(rendered, text=f"{rendered.text.rstrip('.')}, {item.note.display}.",
                                spoken=f"{rendered.spoken.rstrip('.')}, {item.note.spoken}.")
         rendered = self._personalize(rendered, item, facility, callsign)
+        self._said_on.append((t, facility.station))
         st.comms.contacted.add(facility.controller)
         self._radio_busy_until = t + self._speech_s(rendered.spoken)
         st.comms.last_atc_t = max(t, self._radio_busy_until)
@@ -4193,6 +4202,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             t=t, station=facility.station, frequency_mhz=facility.mhz, text=rendered.text, controller=facility.controller,
             instruction_id=item.instruction_id, spoken=rendered.spoken,
             worded_by="model" if item.worded_by == "model" else "template",
+            manner=self._manner(facility),
         )
 
     # --- helpers ------------------------------------------------------------------------------------------------
@@ -4457,19 +4467,80 @@ class AtcEngine(VfrMixin, DiversionMixin):
     def _callsign(self) -> Callsign:
         return self.state.flight.callsign or Callsign("UNKNOWN")
 
+    # --- the controller as a person (personality.py) ----------------------------------------------------------
+
+    def _controller(self, facility: Facility) -> "personality.Personality":
+        who = personality.profile(facility.station, facility.controller, icao=self.region.icao)
+        if facility.station not in self._met:
+            self._met.add(facility.station)
+            logging.getLogger(__name__).info("ATC: the controller at %s is %s (%s)", facility.station, who.kind,
+                                             who.traits.manner)
+        return who
+
+    def _workload(self, facility: Facility, t: float | None = None) -> str:
+        """How busy this frequency is: what's been said on it in the last five minutes, and the traffic around."""
+        now = t if t is not None else (self.state.aircraft.t if self.state.aircraft is not None else 0.0)
+        self._said_on = [x for x in self._said_on if now - x[0] <= 300]
+        said = sum(1 for _, station in self._said_on if station == facility.station)
+        own = self.state.aircraft
+        near = sum(1 for x in self._traffic.values()
+                   if own is not None and _distance_nm(own.lat, own.lon, x.lat, x.lon) <= 15) if own is not None else 0
+        return personality.workload(said, near)
+
+    def _persona(self, facility: Facility | None) -> str:
+        """The controller's manner, for the language model's wording ([atc] personalities)."""
+        if facility is None or not self.cfg.personalities:
+            return ""
+        return self._controller(facility).describe(self._workload(facility))
+
+    def _manner(self, facility: Facility) -> str:
+        """For the voice: the role, the controller's kind and a busy frequency ("tower:hurried:busy")."""
+        if not self.cfg.personalities:
+            return facility.controller
+        busy = self._workload(facility) == "busy"
+        return self._controller(facility).manner + (":busy" if busy else "")
+
     def _personalize(self, rendered: Any, item: _Scheduled, facility: Facility, callsign: Callsign) -> Any:
-        """The controller's own habits (personality.py): a greeting on its first real call to the flight, a
-        sign-off on a handoff. Only around the instruction: the words that are read back never change."""
-        who = personality.personality(facility.station, icao=self.region.icao)
+        """The controller's own way of saying it (personality.py): a greeting on its first real call to the flight, a
+        sign-off on a handoff, their acknowledgement and "say again", a correction firmer for the same mistake again.
+        Only around the instruction: the words that are read back never change."""
+        who = self._controller(facility) if self.cfg.personalities else personality.profile(facility.station, icao=self.region.icao)
+        traits = who.traits
         rng = self._voice_rng
         iid = item.instruction_id
         own = self.state.aircraft
+        busy = self.cfg.personalities and self._workload(facility) == "busy"
+        shown_cs, said_cs = speech.callsign_display(callsign), speech.callsign(callsign)
+
+        def both(fn, *args) -> Any:
+            return replace(rendered, text=fn(rendered.text, shown_cs, *args), spoken=fn(rendered.spoken, said_cs, *args))
+
+        if self.cfg.personalities:
+            mine = self._persona_rng
+            if iid == "common.roger" and item.worded_by != "model":
+                ack = traits.acks[0] if busy else who.ack if mine.random() > 0.2 else mine.choice(traits.acks)
+                return both(personality.acknowledge, ack)
+            if iid == "common.say_again":
+                return both(personality.say_again, traits.say_again[0] if busy else mine.choice(traits.say_again))
+            if iid in ("common.negative", "common.read_back"):
+                pending = self.state.pending
+                tries = pending.attempts if pending is not None else 0
+                if traits.correction == "firm" or tries >= traits.patience:
+                    if tries >= 1:
+                        return both(personality.firmer)
+                elif traits.correction == "gentle" and tries == 0 and iid == "common.negative" and not busy:
+                    return both(personality.gentler)
+                return rendered
         if item.handoff_to is not None:
             self._greeted.add(facility.station)
             # Going around: the flight is back with this tower in a few minutes, no "have a good flight".
-            if "go_around" not in iid and rng.random() < who.signs_off:
-                words = "good night" if own is not None and personality.part_of_day(own.zulu_s, own.lon) == "evening" \
-                    and rng.random() < 0.5 else who.sign_off
+            chance = who.signs_off * (0.5 if busy else 1.0)
+            if "go_around" not in iid and rng.random() < chance:
+                evening = own is not None and personality.part_of_day(own.zulu_s, own.lon) == "evening"
+                words = "good night" if evening and rng.random() < 0.5 else who.sign_off
+                if self.cfg.personalities and self._persona_rng.random() < 0.25:
+                    offs = traits.icao_sign_offs if who.icao else traits.sign_offs
+                    words = self._persona_rng.choice(offs)
                 return replace(rendered, text=personality.sign_off(rendered.text, words),
                                spoken=personality.sign_off(rendered.spoken, words))
             return rendered
@@ -4480,12 +4551,13 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if not first or any(word in iid for word in NO_GREETING):
             return rendered
         when = personality.part_of_day(own.zulu_s, own.lon) if own is not None else None
-        if when is None or rng.random() >= who.greets:
+        if when is None or rng.random() >= who.greets * (0.3 if busy else 1.0):
             return rendered
-        words = f"good {when}"
+        pattern = self._persona_rng.choice(traits.greetings) if self.cfg.personalities else "good {when}"
+        words = pattern.format(when=when)  # "good evening", the dry controller's "evening"
         return replace(rendered,
-                       text=personality.greet(rendered.text, speech.callsign_display(callsign), facility.station, words),
-                       spoken=personality.greet(rendered.spoken, speech.callsign(callsign), facility.station, words))
+                       text=personality.greet(rendered.text, shown_cs, facility.station, words),
+                       spoken=personality.greet(rendered.spoken, said_cs, facility.station, words))
 
     def _random(self) -> random.Random:
         if self._rng is None:

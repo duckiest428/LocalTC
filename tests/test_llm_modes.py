@@ -343,7 +343,8 @@ def test_small_talk_and_remarks_get_the_models_reply_where_it_words_atcs(mode, m
 
 @pytest.mark.parametrize(("said", "instead"), [
     # Never something unrelated, and never silently: what fits the call, with the app saying the model's was turned away.
-    ("Montreal Ground, DP69, that taxiway sign back there was pretty faded", "DP69, roger."),  # a remark
+    # A remark: acknowledged, in the controller's own way (Montreal Ground's is dry: "copy").
+    ("Montreal Ground, DP69, that taxiway sign back there was pretty faded", "DP69, copy."),
     ("Montreal Ground, DP69, would you like to grab a coffee after your shift today?",
      "DP69, unable, that information is not available."),  # a question
     ("DP69 the uh thing", "DP69, say again."),  # nothing to it but noise

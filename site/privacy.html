@@ -16,6 +16,7 @@
   <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
   <nav class="nav">
     <a href="./#features">Features</a>
+    <a href="pricing">Pricing</a>
     <a href="./#why">Why not a subscription</a>
     <a href="./#install">Install</a>
     <a href="./#status">Status</a>
@@ -28,7 +29,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 5 October 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 7 October 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -91,7 +92,9 @@
   </p>
 
   <h2>2. The software</h2>
-  <p>LocalTC runs on your computer and is built to keep working with the network cable pulled out.</p>
+  <p>LocalTC is air traffic control and a copilot that run on your computer. It's local by default and built to keep
+    working with the network cable pulled out. The few things that can reach the internet are all yours to turn on,
+    and are listed below, every one of them.</p>
   <ul>
     <li>
       <strong>Your voice</strong> is captured by push-to-talk and transcribed on your own CPU or GPU. It
@@ -99,8 +102,8 @@
     </li>
     <li>
       <strong>The language model</strong> runs locally through Ollama, on
-      <code class="inline">127.0.0.1</code>: your own machine talking to itself, unless you turn on
-      the cloud language model (below).
+      <code class="inline">127.0.0.1</code>: your own machine talking to itself, unless you bring your own key for
+      a cloud model (below).
     </li>
     <li>
       <strong>Recordings, logs, settings and the logbook</strong> are written to your own disk, under
@@ -120,13 +123,20 @@
       offline.
     </li>
     <li>
-      <strong>The cloud language model (only if you turn it on).</strong> Off by default. While it's on,
-      the words of your transmissions (as transcribed) and your flight's details (callsign, route,
-      clearances, position, the airports' weather and what was said on the radio) go to the service that
-      answers, from the ones listed in Quick Settings → Cloud language model: Mistral, Pollinations, Groq,
-      Google AI Studio, Cloudflare Workers AI, NVIDIA and SiliconFlow. Each handles it under its own privacy policy. Your audio is never sent,
-      and nothing goes to us. The API keys you add are kept in your system's credential store (Windows
-      Credential Manager), never in a file, and are sent only to the service they belong to.
+      <strong>A cloud language model: bring your own key (only if you turn it on).</strong> Off by default. It's
+      your choice and your account with the provider: you add your own key (most have a free tier) in Quick Settings →
+      Cloud language model. While it's on, the words of your transmissions (as transcribed) and your flight's
+      details (callsign, route, clearances, position, the airports' weather and what was said on the radio, and what
+      you say to the copilot) go to the provider that answers, from the ones you've added: Mistral, Groq, Google AI
+      Studio, Cloudflare Workers AI, NVIDIA, SiliconFlow, or Pollinations (no key). They go straight from your PC to
+      that provider, under its own privacy policy: never to us, and never your audio. Your keys are kept in your
+      system's credential store (Windows Credential Manager), never in a file, and are sent only to the provider
+      they belong to.
+    </li>
+    <li>
+      <strong>Experimental traffic control (only if you turn it on).</strong> It talks only to the sim on your PC:
+      it reads which aircraft are around and, in "reinject", puts some back in the sim, writing their flight plans
+      to your own disk. Nothing leaves your computer.
     </li>
     <li>
       <strong>The update check.</strong> At most once a day, the app asks GitHub's public API what the

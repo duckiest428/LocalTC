@@ -2,19 +2,32 @@
 
 # LocalTC
 
-Free, open-source, offline-capable ATC for **Microsoft Flight Simulator 2024**. No cloud, no API keys.
+Free, open-source **air traffic control and a copilot** for **Microsoft Flight Simulator 2024**. The point is ATC:
+talking to controllers from clearance delivery to the gate, the way a real flight goes, with nothing to pay, ever.
 
-- A small local LLM (1B–4B, via Ollama) reads every pilot call; a grammar checks it and takes over when the model is slow, missing or wrong.
-- A deterministic engine makes every ATC decision (clearances, handoffs, sequencing). Routine calls use exact phraseology (FAA in the US and Canada, ICAO elsewhere, or forced either way) for IFR and VFR flights; the model words only replies that have no template.
-- You talk with push-to-talk; faster-whisper transcribes locally. ATC answers in Piper voices through a radio effect, one voice per controller.
-- An optional copilot works the radio for you: readbacks, frequency changes, or every call.
-- **The LocalTC app**: the radio log, frequencies to click, a live map, airport lookup, SimBrief import, and settings for models, voice and push-to-talk.
+**Local by default.** Speech recognition, the voices, the ATC engine, the copilot and a small language model all run
+on your PC, and flights work offline. **Bring your own key** if you want a cloud model for better wording (Mistral,
+Groq, Gemini, Cloudflare, NVIDIA and others, most with a free tier): then your transmissions go from your PC to the
+provider you picked, and to no one else. LocalTC has no server your flight goes through; the optional account only
+copies your logbook and feeds the phone and the web tracker.
+
+- **The controllers:** a deterministic engine makes every decision (clearances, SIDs and STARs, vectors, approaches,
+  sequencing, handoffs); routine calls use exact phraseology (FAA or ICAO, IFR and VFR). Each station is a controller
+  with a voice and a manner of their own, the same every flight. Other traffic talks on the frequency.
+- **Your voice:** push-to-talk, transcribed locally by faster-whisper; ATC answers in Piper voices through a radio effect.
+- **The language model:** reads your calls and words the replies that have no template, local (Ollama) or the cloud
+  with your key; everything it says is checked against the script: every number, runway, route and readback.
+- **The copilot:** a first officer on the intercom with its own key and voice: callouts, challenge-and-response
+  checklists, watches (turbulence, wind shear, ice, fuel, the arrival's restrictions), its own side of the cockpit, and
+  the radio if you hand it over.
+- **The apps:** the desktop app (radio log, live map with ATC zones, airport lookup, SimBrief), the iPhone companion
+  (COM1, COM2 and the copilot on INT), the website's live tracker, a logbook with replays you can share, and Wrapped.
+- **Experimental:** traffic control, which follows MSFS's Live Traffic and puts back aircraft the sim drops nearby.
 
 Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
 
-> **Status: Phase 5 (the app).**
-> - **Working:** the full IFR flow, from clearance delivery to taxi-in; voice in and out; ATIS and weather; unscripted moments; the copilot; the app.
-> - **Not yet:** holding patterns, published missed approaches, and each chart's own minima (typical values are used).
+> **Not there yet:** ground services (GSX and the like), a proper cabin crew, airline operations (dispatch, ACARS),
+> careers and missions, shared ATC in multiplayer, and other sims.
 
 ## Install (Windows)
 

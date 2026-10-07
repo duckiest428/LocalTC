@@ -39,6 +39,7 @@ PAGE = """<!DOCTYPE html>
   <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
   <nav class="nav">
     <a href="./#features">Features</a>
+    <a href="pricing">Pricing</a>
     <a href="./#install">Install</a>
     <a href="changelog" aria-current="page">Changelog</a>
     <a href="dashboard#support">Support</a>
@@ -129,7 +130,7 @@ def render(markdown: str) -> tuple[str, str]:
 ASSET = re.compile(r'((?:src|href)=")([\w./-]+\.(?:js|css))(")')
 IMPORT = re.compile(r'(import\("\./)([\w./-]+\.js)("\))')
 # What a shared flight's page loads from the site (server/src/shares.ts).
-SHARE_PAGE_ASSETS = ("styles.css", "sharecard.css", "sharecard.js", "minireplay.js")
+SHARE_PAGE_ASSETS = ("styles.css", "sharecard.css", "sharecard.js", "minireplay.js", "replayplayer.js", "replayplayer.css")
 
 
 def _hash(site: Path, name: str) -> str | None:

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /tracker
+Disallow: /f/
+Disallow: /w/
+
+Sitemap: https://localtc.tech/sitemap.xml

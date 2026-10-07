@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LocalTC — offline ATC for Microsoft Flight Simulator 2024</title>
-<meta name="description" content="Free, open-source air traffic control for MSFS 2024. Runs entirely on your PC: local speech recognition, local voices, a local language model. No subscription; a cloud language model is optional, and recommended for quality.">
-<meta property="og:title" content="LocalTC — offline ATC for MSFS 2024">
-<meta property="og:description" content="Real ATC that runs on your own machine. No cloud, no account needed, no monthly fee.">
+<title>LocalTC — free ATC for Microsoft Flight Simulator 2024</title>
+<meta name="description" content="Free, open-source air traffic control and a copilot for MSFS 2024. Local by default: speech recognition, voices and the language model run on your PC. Bring your own key for a cloud model if you want it. No subscription, ever.">
+<meta property="og:title" content="LocalTC — free ATC for MSFS 2024">
+<meta property="og:description" content="Real ATC and a copilot, on your own machine. Free forever, local by default, bring your own key if you want a cloud model.">
+<link rel="canonical" href="https://localtc.tech/">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://duckiest428.github.io/LocalTC/og.png">
 <meta property="og:image:width" content="1200">
@@ -22,6 +23,7 @@
   <a class="brand" href="#top"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
   <nav class="nav">
     <a href="#features">Features</a>
+    <a href="pricing">Pricing</a>
     <a href="#why">Why not a subscription</a>
     <a href="#install">Install</a>
     <a href="#status">Status</a>
@@ -40,13 +42,12 @@
   <div class="hero-inner">
     <div class="hero-copy">
       <p class="eyebrow">Microsoft Flight Simulator 2024 &middot; Windows</p>
-      <h1>Air traffic control that never leaves your computer.</h1>
+      <h1>Air traffic control on your own computer.</h1>
       <p class="lede">
-        LocalTC gives you a full IFR flight on the radio — clearance delivery to taxi&#8209;in — with your
-        voice, real phraseology and readbacks that are actually checked. Speech recognition, the
-        voices and the language model all run on your own machine.
+        Talk to controllers from clearance delivery to the gate, with a first officer beside you on the
+        intercom. Real phraseology, readbacks that are checked, a voice and a manner for every station.
       </p>
-      <p class="lede lede-strong">No cloud. No account needed. No API keys. No monthly fee. Ever.</p>
+      <p class="lede lede-strong">Free forever. Local by default. Bring your own key if you want a cloud model.</p>
       <div class="cta">
         <a class="btn btn-primary" href="#install">Install it free</a>
         <a class="btn btn-coffee" href="https://buymeacoffee.com/petey1" rel="noopener">
@@ -56,7 +57,8 @@
       </div>
       <ul class="hero-facts">
         <li><b>$0</b> forever</li>
-        <li><b>Offline</b> after setup</li>
+        <li><b>Local</b> by default</li>
+        <li><b>BYOK</b> optional</li>
         <li><b>Open source</b></li>
       </ul>
     </div>
@@ -89,145 +91,92 @@
 <!-- --------------------------------------------------------------- features -->
 <section id="features" class="band">
   <h2 class="section-title">What it does</h2>
-  <p class="section-lede">
-    Everything below runs on your PC while you fly. Nothing here is a demo or a mock-up —
-    it is what LocalTC does today.
-  </p>
+  <p class="section-lede">Everything here is in LocalTC today, and free.</p>
 
-  <div class="grid">
-    <article class="card">
-      <span class="ico">🎙️</span>
-      <h3>You talk, it listens</h3>
-      <p>
-        Hold push&#8209;to&#8209;talk (a key or a yoke button) and speak. <b>faster&#8209;whisper</b>
-        transcribes locally and is primed with this flight's callsign, stations, runways and taxiways,
-        so it hears "hold short runway one three", not "whole short".
-      </p>
-    </article>
+  <ol class="flight-strip" aria-label="A flight, station by station">
+    <li>Clearance</li><li>Ground</li><li>Tower</li><li>Departure</li><li>Centre</li><li>Approach</li><li>Tower</li><li>Ground</li>
+  </ol>
 
-    <article class="card">
-      <span class="ico">🔊</span>
-      <h3>Every controller has a voice</h3>
-      <p>
-        ATC answers through <b>Piper</b> with a proper radio effect — band-pass, compression, carrier
-        fade, a squelch burst at the end. Each station draws its own speaker from a pool of 40, and
-        keeps it: Phoenix Tower never sounds like Phoenix Approach.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">📋</span>
-      <h3>A real IFR flight, in order</h3>
-      <p>
-        Clearance delivery → ground → tower → departure → centre → approach → tower → ground.
-        Taxi routes are computed from the sim's own taxiway graph. Phraseology comes from FAA
-        templates, so routine calls are word-for-word correct every time.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">✅</span>
-      <h3>Readbacks that count</h3>
-      <p>
-        Get it right and you get "readback correct". Get it wrong and you get
-        <span class="q">"negative, squawk 4512"</span>. Miss something and you get
-        <span class="q">"read back hold short runway 13"</span>. Nearly right — "12.1" for 120.1 —
-        gets <span class="q">"confirm"</span>. Self-corrections count.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🧠</span>
-      <h3>A small language model, kept on a leash</h3>
-      <p>
-        A 1B–4B model via <b>Ollama</b> reads what you said and fills in a small form. It never talks
-        to you and never decides anything: every value it reports must actually appear in your words,
-        or the whole answer is thrown away and the grammar wins.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">☁️</span>
-      <h3>Or a big model in the cloud <span class="tag rec">Recommended for quality</span></h3>
-      <p>
-        Optional and off by default. A large cloud model understands you and words ATC's and the copilot's
-        replies far better than one that fits beside the sim, and it's given the whole flight. Services with
-        Mistral comes first, for its generous free limits, and Pollinations, with no key at all, last; when one is
-        busy or out of allowance the next answers. Free keys work too: Groq, Google AI Studio (Gemini),
-        Cloudflare Workers AI, NVIDIA NIM, SiliconFlow. The same checks apply to every answer.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">💬</span>
-      <h3>Go off script</h3>
-      <p>
-        "Request direct BLAKO." "Request vectors for the ILS." "Could we get runway 16R?"
-        "We'd like the visual." "Moderate chop at seven thousand." "Going around."
-        You get a real answer — or a real <span class="q">"unable"</span>, with the reason.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">📡</span>
-      <h3>Radar vectors and sequencing</h3>
-      <p>
-        Headings and altitudes mid-flight, speed control on the arrival, a turn to intercept the
-        final. Tower sequences you against the sim's real traffic — "number two, follow the 737 on a
-        four mile final" — and sends you around if the runway is still occupied.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🌦️</span>
-      <h3>ATIS and weather it builds itself</h3>
-      <p>
-        MSFS won't hand out its ATIS, so LocalTC makes one: wind and gusts, visibility, temperature,
-        altimeter, approach and runway in use, and cautions. Tune it and hear it on a loop. The letter
-        advances when the weather really changes, and ATC tells you when it does.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🚨</span>
-      <h3>ATC starts things too</h3>
-      <p>
-        Traffic advisories on the sim's real AI traffic. "Check altitude, maintain five thousand" when
-        you drift. "How do you read?" when you go quiet. A nudge when you sit on the old frequency
-        after a handoff. And a full emergency tree when you declare one.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🧑‍✈️</span>
-      <h3>An optional copilot</h3>
-      <p>
-        <b>Assist</b> reads back every instruction and tunes COM1 for you. <b>Full</b> works the whole
-        radio — clearance, taxi, ready for departure, check-ins, final — while you just fly. Turn it
-        on or off mid-flight with a switch.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🗺️</span>
-      <h3>The app</h3>
-      <p>
-        Radios and transponder up top, the airport's frequencies to click, your clearance at a glance,
-        and the radio log underneath. Plus a live map with your track and AI traffic, an airport
-        lookup with runways and taxiways, and one-click <b>SimBrief</b> import.
-      </p>
-    </article>
-
-    <article class="card">
-      <span class="ico">🔒</span>
-      <h3>Private by construction</h3>
-      <p>
-        Your microphone audio is transcribed on your CPU or GPU. The model runs on your machine.
-        There is no server it needs, no account to make, no telemetry. Pull the network cable and
-        the whole thing still flies.
-      </p>
-    </article>
+  <h3 class="tile-group" id="feat-atc">The controllers</h3>
+  <div class="tiles">
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="26" y="6" width="12" height="22" rx="6"/><path d="M18 22a14 14 0 0 0 28 0M32 36v6M24 42h16"/></svg>
+        <h3>You talk, it listens</h3><p>Push-to-talk, and Whisper on your PC hears your callsign, runways and taxiways.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="22" height="14" rx="5"/><path d="M12 22l-2 6 7-6"/><rect x="36" y="16" width="22" height="14" rx="5"/><path d="M52 30l2 6-7-6"/><circle cx="17" cy="15" r="1.5" class="f"/><circle cx="47" cy="23" r="1.5" class="f"/></svg>
+        <h3>Every station a person</h3><p>Their own voice, manner and habits: calm, friendly, strict, hurried. The same every flight.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="8" cy="38" r="4"/><circle cx="56" cy="10" r="4"/><path d="M12 36c10-4 8-16 18-18s14 4 22-6" stroke-dasharray="3 4"/></svg>
+        <h3>Gate to gate</h3><p>Clearance, SIDs and STARs, vectors, approaches, taxi routes from the sim's own taxiways.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="52" height="32" rx="6"/><path d="M18 24l7 7 14-14"/></svg>
+        <h3>Readbacks that count</h3><p><span class="q">"Readback correct."</span> Or <span class="q">"negative, squawk 4512."</span></p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M28 44l4-22 4 22M24 22h16M32 22v-6"/><path d="M22 12a14 14 0 0 1 20 0M18 8a20 20 0 0 1 28 0"/></svg>
+        <h3>An ATIS of its own</h3><p>Weather, runway in use, cautions, and a new letter when it really changes.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M6 30h52" stroke-dasharray="2 5"/><path d="M14 30l4-6h4l-3 6zM32 30l4-6h4l-3 6zM50 30l4-6h4l-3 6z" class="f"/></svg>
+        <h3>A busy frequency</h3><p>Other flights on the radio, sequencing, go-arounds against the sim's real traffic.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="8" width="48" height="26" rx="8"/><path d="M20 34l-4 8 10-8"/><path d="M28 17a4 4 0 1 1 5 4c-1 .5-1 1.5-1 2.5M32 28v.5"/></svg>
+        <h3>Off script</h3><p>Ask for a runway, a shortcut, the weather. A real answer, or a real <span class="q">"unable"</span>.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M32 8l24 34H8z"/><path d="M32 20v10M32 35v.5"/></svg>
+        <h3>When it goes wrong</h3><p>Mayday and pan-pan, the nearest suitable airport, ATC starting things itself.</p></article>
   </div>
+
+  <h3 class="tile-group" id="feat-copilot">Your first officer</h3>
+  <div class="tiles">
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M14 30v-6a18 18 0 0 1 36 0v6"/><rect x="10" y="28" width="8" height="12" rx="3"/><rect x="46" y="28" width="8" height="12" rx="3"/><path d="M50 40c0 4-6 6-12 6"/></svg>
+        <h3>On the intercom</h3><p>Its own key and voice. Talk to it like a person; it remembers the conversation.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 38a22 22 0 1 1 44 0"/><path d="M32 38l10-14"/><circle cx="32" cy="38" r="2.5" class="f"/></svg>
+        <h3>Callouts and watches</h3><p>V1, rotate, stable at a thousand. Turbulence, wind shear, ice, fuel.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="12" y="6" width="40" height="38" rx="5"/><path d="M20 18l3 3 6-6M20 30l3 3 6-6M34 18h10M34 30h10"/></svg>
+        <h3>Checklists that ask</h3><p>Challenge and response: it reads, you answer, it checks the aircraft.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="12" width="14" height="24" rx="3"/><path d="M15 18v6"/><rect x="26" y="12" width="14" height="24" rx="3"/><path d="M33 30v-6"/><rect x="44" y="12" width="12" height="24" rx="3"/><circle cx="50" cy="20" r="2" class="f"/></svg>
+        <h3>Its own hands</h3><p>Lights, gear and flaps on schedule, its altimeter, the after-landing flow.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="16" width="48" height="24" rx="5"/><path d="M14 16l24-8"/><circle cx="20" cy="28" r="5"/><path d="M34 24h16M34 31h12"/></svg>
+        <h3>The radio, if you like</h3><p>Readbacks only, or every call. Switch it mid-flight.</p></article>
+  </div>
+
+  <h3 class="tile-group" id="feat-models">Smart, and kept on a leash</h3>
+  <div class="tiles">
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="18" y="12" width="28" height="24" rx="4"/><path d="M24 6v6M32 6v6M40 6v6M24 36v6M32 36v6M40 36v6M12 18h6M12 30h6M46 18h6M46 30h6"/></svg>
+        <h3>Local by default</h3><p>Whisper, Piper and a local model on your PC. Flights work offline.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="20" cy="24" r="9"/><path d="M29 24h26M48 24v7M54 24v5"/><path d="M40 8c6 0 10 4 10 8" stroke-dasharray="2 3"/></svg>
+        <h3>Bring your own key</h3><p>Want sharper words? Add a free key for a cloud model. Recommended for quality.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="20" height="28" rx="4"/><path d="M14 18h8M14 24h8M14 30h5"/><path d="M28 24h10"/><path d="M38 16l8 8-8 8" /><path d="M48 18l4 4 6-8"/></svg>
+        <h3>Checked, always</h3><p>Every number, runway, route and readback is checked against the script.</p></article>
+  </div>
+
+  <h3 class="tile-group" id="feat-apps">Everywhere you look</h3>
+  <div class="tiles">
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="52" height="30" rx="4"/><path d="M24 44h16M32 38v6"/><path d="M14 30l8-8 6 4 10-10 10 6" class="o"/></svg>
+        <h3>The app</h3><p>Radios, a live map with ATC zones and traffic, airport lookup, SimBrief.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="20" y="4" width="24" height="40" rx="5"/><path d="M28 9h8"/><path d="M25 22h14M25 28h9M25 34h12"/></svg>
+        <h3>On your phone</h3><p>COM1, COM2 and the copilot on INT, the map, talk with dictation.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M6 12l16-6 20 6 16-6v32l-16 6-20-6-16 6z"/><path d="M22 6v32M42 12v32"/><circle cx="32" cy="24" r="3" class="f"/></svg>
+        <h3>Live tracker</h3><p>Your flight full screen on the web: the map, the radio, the copilot.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="48" height="28" rx="4"/><path d="M28 18l10 6-10 6z" class="f"/><path d="M8 44h48"/><circle cx="20" cy="44" r="2" class="f"/></svg>
+        <h3>Logbook and replays</h3><p>Rewatch any flight, share it, and Wrapped: your year in flying.</p></article>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ local -->
+<section id="local" class="band band-deep">
+  <h2 class="section-title">Local by default. Your key if you want more.</h2>
+  <p class="section-lede">
+    The ATC, the copilot, your voice and the model all run on your PC. A cloud model is yours to add, with your own
+    free key, when you want better words: then your transmissions go to the provider you picked, and to no one else.
+  </p>
+  <div class="local-diagram" role="img" aria-label="Your PC does everything; a cloud provider only if you add your key">
+    <div class="ld-box ld-pc">
+      <b>Your PC</b>
+      <span class="chip">Whisper hears you</span><span class="chip">The ATC engine decides</span><span class="chip">Piper speaks</span>
+      <span class="chip">The copilot</span><span class="chip">A local model (Ollama)</span>
+    </div>
+    <div class="ld-arrow" aria-hidden="true"><span>only if you turn it on</span></div>
+    <div class="ld-box ld-cloud">
+      <b>The provider you choose</b>
+      <span class="chip">Mistral, Groq, Gemini, Cloudflare, NVIDIA ...</span>
+      <span class="hint">Your key, kept in Windows Credential Manager. The words of your calls and the flight's details,
+        nothing else. Never your audio.</span>
+    </div>
+  </div>
+  <p class="fineprint">LocalTC itself has no server your flight goes through. The optional account copies your logbook and
+    feeds the phone and the tracker, only if you sign in. <a href="privacy">Privacy, in plain words</a>.</p>
 </section>
 
 <!-- -------------------------------------------------------------------- why -->
@@ -248,6 +197,7 @@
         <tr><td>Price</td><td class="us"><b>$0</b>, forever</td><td>Usually $10–$20 a month</td></tr>
         <tr><td>Works without internet</td><td class="us yes">Yes — that's the point</td><td class="no">No, it's a cloud service</td></tr>
         <tr><td>Where your voice goes</td><td class="us yes">Your CPU or GPU</td><td class="no">Uploaded and processed remotely</td></tr>
+        <tr><td>The AI model</td><td class="us yes">On your PC, or the provider you pick, with your own key</td><td>Theirs, on their terms</td></tr>
         <tr><td>Account, login, DRM</td><td class="us yes">None needed</td><td class="no">Required</td></tr>
         <tr><td>If the company folds</td><td class="us yes">Still on your disk, still flies</td><td class="no">It stops working</td></tr>
         <tr><td>Change the phraseology</td><td class="us yes">Edit a text file</td><td class="no">File a feature request</td></tr>
@@ -352,24 +302,23 @@
     <div class="status-col">
       <h3 class="ok">Working today</h3>
       <ul>
-        <li>The full IFR flow, clearance delivery to taxi-in</li>
-        <li>Voice in and voice out, with push-to-talk</li>
-        <li>ATIS, weather and the runway in use</li>
-        <li>Radar vectors, speed control, approach clearances</li>
-        <li>Traffic sequencing and go-arounds against the sim's AI</li>
-        <li>Emergencies, and off-script requests</li>
-        <li>The copilot, in assist or full</li>
-        <li>The app: map with ATC zones, airport lookup, SimBrief, settings</li>
-        <li>Gates at the destination, a logbook of every flight, one-click updates</li>
+        <li>IFR and VFR, clearance delivery to the gate, FAA and ICAO phraseology</li>
+        <li>SIDs, STARs, vectors, approaches, holds, go-arounds</li>
+        <li>Controllers with their own voices and manners, other traffic on the frequency</li>
+        <li>A copilot on the intercom: callouts, checklists, watches, its own side of the cockpit</li>
+        <li>Your own key for a cloud model, or the local one, or none</li>
+        <li>The app, the phone, the live tracker, a logbook with replays and Wrapped</li>
       </ul>
     </div>
     <div class="status-col">
-      <h3 class="todo">Not yet</h3>
+      <h3 class="todo">Not there yet</h3>
       <ul>
-        <li>SIDs, STARs and published arrivals — ATC clears "as filed" and vectors you instead</li>
-        <li>AI aircraft talking on the frequency alongside you</li>
-        <li>VFR and ICAO phraseology (it speaks FAA)</li>
-        <li>macOS and Linux at the controls — they're for development against recordings</li>
+        <li>Ground services: GSX and the like (pushback crews, catering, fuel trucks you talk to)</li>
+        <li>A proper cabin crew: announcements, a purser at the door, the cabin ready call</li>
+        <li>Airline operations: dispatch, ACARS, company messages</li>
+        <li>Careers and missions</li>
+        <li>Shared ATC in multiplayer</li>
+        <li>Other sims, and macOS or Linux at the controls (they're for development)</li>
       </ul>
       <p class="hint">
         Nothing here is hidden behind a paywall or a "pro" tier. When it's built, it ships.

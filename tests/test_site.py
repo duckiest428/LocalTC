@@ -35,7 +35,7 @@ def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
     assert site == app, f"copy site/{name} over src/localtc/ui/static/{name} (or the other way)"
 
 
-PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html"]
+PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html"]
 
 
 def test_every_page_has_the_same_header_links():
@@ -55,7 +55,7 @@ def test_the_site_loads_nothing_it_does_not_serve_itself_except_the_api_and_map_
 
     for page in [*PAGES, "tracker.html"]:
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
-        for src in re.findall(r'<(?:script|link)[^>]+(?:src|href)="([^"]+)"', html):
+        for src in re.findall(r'<(?:script|link)(?![^>]*rel="canonical")[^>]+(?:src|href)="([^"]+)"', html):
             assert not src.startswith(("http:", "https:", "//")), f"{page} loads {src} from elsewhere"
 
 
@@ -107,3 +107,23 @@ def test_the_pages_link_to_each_other_without_html():
         assert not re.findall(r'href="(?!https?:)[^"]*\.html', text), page
     assert ".html" not in build_site.PAGE.split("<main")[0]
 
+
+
+def test_the_sitemap_lists_the_public_pages_without_html():
+    import re
+
+    xml = (ROOT / "site" / "sitemap.xml").read_text(encoding="utf-8")
+    urls = re.findall(r"<loc>([^<]+)</loc>", xml)
+    assert urls[0] == "https://localtc.tech/" and all(".html" not in u for u in urls)
+    for name in ("pricing", "changelog", "privacy", "terms", "cookies"):
+        assert f"https://localtc.tech/{name}" in urls
+    assert "Sitemap: https://localtc.tech/sitemap.xml" in (ROOT / "site" / "robots.txt").read_text(encoding="utf-8")
+
+
+def test_every_plan_costs_nothing():
+    import re
+
+    html = (ROOT / "site" / "pricing.html").read_text(encoding="utf-8")
+    prices = re.findall(r'<p class="price"><b>([^<]+)</b>', html)
+    assert len(prices) >= 3 and set(prices) == {"$0"}
+    assert html.count("LocalTC-Setup.exe") >= len(prices)  # a download on every plan

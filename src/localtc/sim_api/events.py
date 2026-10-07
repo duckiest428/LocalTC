@@ -394,8 +394,59 @@ class SessionNote(Event, tag="session_note"):
     text: str
 
 
+# --- EXPERIMENTAL traffic control (localtc.traffic): only with [traffic] control on ---------------------------------
+
+
+class TrafficIdentity(Event, tag="traffic_identity"):
+    """Who an AI aircraft is and where it's going, as the sim's AI has it: its model and livery (to put the same one
+    back), its origin and destination, and its AI state ("taxi", "takeoff", "sleep" ...). Asked every few seconds."""
+
+    object_id: int
+    title: str = ""
+    livery: str = ""
+    origin: str = ""
+    destination: str = ""
+    state: str = ""
+
+
+class AiObjectAssigned(Event, tag="ai_object_assigned"):
+    """The sim's answer to an aircraft LocalTC created: its object id (``SpawnAiAircraft.request_id``)."""
+
+    request_id: int
+    object_id: int
+
+
+class ModelList(Event, tag="model_list"):
+    """The aircraft models and liveries installed (MSFS 2024's EnumerateSimObjectsAndLiveries): (title, livery)."""
+
+    models: tuple[tuple[str, str], ...] = ()
+
+
+class TrafficControlEntry(msgspec.Struct, frozen=True, kw_only=True):
+    object_id: int
+    callsign: str
+    mode: str  # shadowed (the sim's, watched), reinjected (LocalTC's copy), lost, removed
+    phase: str = ""
+    model: str = ""
+    issues: tuple[str, ...] = ()
+
+
+class TrafficControlStatus(Event, tag="traffic_control_status"):
+    """EXPERIMENTAL: what traffic control is doing, for the app and the log."""
+
+    mode: str  # off, shadow, reinject
+    shadowed: int = 0
+    reinjected: int = 0
+    lost: int = 0
+    failed: int = 0
+    fsltl: bool = False
+    note: str = ""  # a limitation, said plainly
+    entries: tuple[TrafficControlEntry, ...] = ()
+
+
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
-                 NearbyAirports, AircraftSystems, ArrivalData]
+                 NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
+                 TrafficControlStatus]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

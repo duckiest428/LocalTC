@@ -38,6 +38,7 @@ function connect() {
   const es = new EventSource("/api/events");
   const on = (kind, fn) => es.addEventListener(kind, (e) => fn(JSON.parse(e.data)));
   on("state", setState);
+  on("traffic_control", (s) => { if (S.state) S.state.traffic_control = s; const el = $("#traffic-status"); if (el) el.innerHTML = trafficStatus(s); });
   on("radio_history", (lines) => { clearLog(); lines.forEach(addLine); });
   on("trail", (points) => MapView.setTrail(points));
   on("radio", addLine);
@@ -647,6 +648,16 @@ $("#wrapped-back").onclick = () => {
 
 /* ---------- Quick Settings ---------- */
 
+/** EXPERIMENTAL traffic control's last status, in a line. */
+function trafficStatus(s) {
+  if (!s || s.mode === "off") return "";
+  const parts = [`${s.shadowed} shadowed`, `${s.reinjected} put back`];
+  if (s.lost) parts.push(`${s.lost} dropped by MSFS`);
+  if (s.failed) parts.push(`${s.failed} couldn't be put back`);
+  if (s.fsltl) parts.push("FSLTL models");
+  return `<br><b>Now:</b> ${esc(parts.join(", "))}.${(s.issues || []).length ? ` <span class="muted">${esc(s.issues.join("; "))}</span>` : ""}`;
+}
+
 const Settings = {
   seenJobs: new Set(),
   async load() {
@@ -968,6 +979,15 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
+        <div class="row"><label>Traffic control <b class="exp-badge">EXPERIMENTAL</b><select id="s-traffic">${[
+            ["off", "Off: MSFS's traffic as it is (recommended)"],
+            ["shadow", "Shadow: LocalTC follows every aircraft and reports anything odd; never touches them"],
+            ["reinject", "Reinject: also puts back aircraft MSFS drops nearby (its model and livery, FSLTL's if installed)"],
+          ].map(([v, t]) => `<option value="${v}" ${(st.traffic?.control || "off") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">SimConnect can't remove or take over MSFS's own Live Traffic, so it is never moved: shadowed only.
+            What LocalTC puts back is its own, flies to this flight's airports with the runway from LocalTC's ATIS, and is taken
+            out again when this is turned off or the flight ends. May be limited by what SimConnect allows.
+            <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></span></label></div>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same every flight, in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
@@ -1151,6 +1171,7 @@ const Settings = {
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
+    on("#s-traffic", "change", () => this.save("traffic", "control", val("#s-traffic")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));

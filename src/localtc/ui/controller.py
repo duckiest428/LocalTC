@@ -61,6 +61,7 @@ from localtc.sim_api import (
     PttPressed,
     PttReleased,
     RadioTuned,
+    TrafficControlStatus,
     TrafficSnapshot,
     encode_event,
 )
@@ -103,7 +104,8 @@ class AppController:
         self.flight: dict = {}
         self.jobs: dict[str, dict] = {}
         self.muted = False
-        self.account_prompt = False  # show the one-time account suggestion (after the third flight)
+        self.account_prompt = False
+        self.traffic_control: dict | None = None  # EXPERIMENTAL traffic control's last status  # show the one-time account suggestion (after the third flight)
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
         self._ticker: asyncio.Task | None = None
@@ -248,7 +250,7 @@ class AppController:
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
-            "account_prompt": self.account_prompt,
+            "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
         }
 
     async def _count_flight(self) -> None:
@@ -434,6 +436,12 @@ class AppController:
                              "type": _model(t.atc_model), "lat": t.lat, "lon": t.lon, "alt": round(t.alt_ft),
                              "hdg": round(t.hdg_true), "gs": round(t.gs_kt), "ground": t.on_ground} for t in ev.targets]
             self.publish("traffic", self.traffic)
+            return
+        if isinstance(ev, TrafficControlStatus):  # EXPERIMENTAL traffic control, for Quick Settings
+            self.traffic_control = {"mode": ev.mode, "shadowed": ev.shadowed, "reinjected": ev.reinjected, "lost": ev.lost,
+                                    "failed": ev.failed, "fsltl": ev.fsltl, "note": ev.note,
+                                    "issues": [f"{e.callsign}: {', '.join(e.issues)}" for e in ev.entries if e.issues][:8]}
+            self.publish("traffic_control", self.traffic_control)
             return
         if isinstance(ev, AtcThinking):
             self.publish("thinking", {"station": ev.station, "mhz": ev.frequency_mhz, "busy": ev.busy})
@@ -741,6 +749,8 @@ class AppController:
             if crew.model is not None:  # the copilot's model: its use and its checks from the next question
                 crew.model.mode = "off" if cfg.crew.llm == "off" else cfg.crew.mode
                 crew.model.beyond_facts = cfg.crew.beyond_facts
+        if cfg.traffic.control != self.cfg.traffic.control and getattr(self.live, "traffic", None) is not None:
+            await self.live.traffic.set_mode(cfg.traffic.control, self.live.now())  # off: LocalTC's copies out at once
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()

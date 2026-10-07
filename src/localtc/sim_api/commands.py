@@ -47,6 +47,37 @@ class SetInputEvent(SimCommand, tag="set_input_event"):
     value: float = 0.0
 
 
+class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
+    """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
+    non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
+    own AI, from ``plan_position`` along it. The sim answers with ``AiObjectAssigned``."""
+
+    request_id: int
+    kind: str  # parked, enroute
+    title: str
+    livery: str = ""
+    tail: str = ""
+    flight_number: int = -1
+    lat: float = 0.0
+    lon: float = 0.0
+    alt_ft: float = 0.0
+    heading: float = 0.0
+    on_ground: bool = True
+    airspeed_kt: float = 0.0
+    plan: str = ""
+    plan_position: float = 0.0
+
+
+class RemoveAiAircraft(SimCommand, tag="remove_ai_aircraft"):
+    """EXPERIMENTAL: take out an aircraft LocalTC created (only those: the sim's own can't be removed)."""
+
+    object_id: int
+
+
+class EnumerateModels(SimCommand, tag="enumerate_models"):
+    """EXPERIMENTAL: ask for the installed aircraft and liveries (answered with ``ModelList``)."""
+
+
 class SetSimVar(SimCommand, tag="set_sim_var"):
     """Write a variable an aircraft exposes, for the switches its key events don't reach: an add-on's L:var
     ("L:INI_SEATBELTS_SWITCH") in MSFS 2024."""
@@ -56,4 +87,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent]
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent,
+                      SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

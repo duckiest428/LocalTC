@@ -160,6 +160,17 @@ TRAFFIC: tuple[Datum, ...] = (
     Datum("on_ground", "SIM ON GROUND", "Bool", I32),
 )
 
+# EXPERIMENTAL traffic control only: who each AI aircraft is (its model, to put the same one back) and where its AI
+# is taking it. Asked every few seconds, and only with [traffic] control on.
+TRAFFIC_IDENTITY: tuple[Datum, ...] = (
+    Datum("title", "TITLE", None, S256),
+    Datum("origin", "AI TRAFFIC FROMAIRPORT", None, S8),
+    Datum("destination", "AI TRAFFIC TOAIRPORT", None, S8),
+    Datum("state", "AI TRAFFIC STATE", None, S32),
+)
+# Its livery, MSFS 2024 only (a definition of its own: a sim without it loses only this).
+TRAFFIC_LIVERY: tuple[Datum, ...] = (Datum("livery", "LIVERY NAME", None, S256),)
+
 _FORMAT_CODES = {
     DataType.INT32: "i",
     DataType.INT64: "q",

@@ -36,6 +36,12 @@ from localtc.sim_api import (
     RequestArrival,
     SendSimEvent,
     SetInputEvent,
+    SpawnAiAircraft,
+    RemoveAiAircraft,
+    EnumerateModels,
+    AiObjectAssigned,
+    ModelList,
+    TrafficIdentity,
     SetComFrequency,
     SetSimVar,
     SimCommand,
@@ -47,7 +53,9 @@ from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
+    AssignedObject,
     InputEventList,
+    ModelLivery,
     EVENT_FLAG_GROUPID_IS_PRIORITY,
     GROUP_PRIORITY_HIGHEST,
     OBJECT_ID_USER,
@@ -79,6 +87,9 @@ DEF_AIRCRAFT_MORE, DEF_FACILITY_ARRIVALS = 6, 11
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
 REQ_AIRCRAFT_MORE = 7
 REQ_INPUT_EVENTS = 8
+REQ_TRAFFIC_IDENT, REQ_TRAFFIC_LIVERY, REQ_MODELS, REQ_AI_REMOVE = 9, 10, 11, 12
+DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
+TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
 FACILITY_TIMEOUT_S = 60.0
@@ -292,6 +303,16 @@ class SimConnectSource:
                 log.info("Intercom: %s (through the sim)", self._cfg.intercom_input)
             except SimConnectError as exc:
                 log.warning("Can't use %s for the intercom: %s", self._cfg.intercom_input, exc)
+        self._traffic_liveries: dict[int, str] = {}
+        self._models: list[tuple[str, str]] = []
+        if self._cfg.traffic_identity:  # EXPERIMENTAL traffic control only
+            for d in defs.TRAFFIC_IDENTITY:
+                dll.add_to_data_definition(handle, DEF_TRAFFIC_IDENT, d.simvar, d.units, d.datatype)
+            try:
+                for d in defs.TRAFFIC_LIVERY:
+                    dll.add_to_data_definition(handle, DEF_TRAFFIC_LIVERY, d.simvar, d.units, d.datatype)
+            except SimConnectError as exc:
+                log.info("No livery names from this sim: %s", exc)
         dll.request_data_on_sim_object(
             handle, REQ_IDENTITY, DEF_IDENTITY, OBJECT_ID_USER, Period.SECOND, RequestFlag.CHANGED
         )
@@ -322,7 +343,7 @@ class SimConnectSource:
         own_period = 1.0 / self._cfg.ownship_hz if self._cfg.ownship_hz > 0 else None
         traffic_period = self._cfg.traffic_interval_s if self._cfg.traffic_interval_s > 0 else None
         opened_at = time.monotonic()
-        next_own = next_traffic = 0.0
+        next_own = next_traffic = next_ident = 0.0
         self._traffic = _TrafficRound()
 
         while not self._stop.is_set():
@@ -345,6 +366,14 @@ class SimConnectSource:
                         handle, REQ_TRAFFIC, DEF_TRAFFIC, self._cfg.traffic_radius_m, SimObjectType.AIRCRAFT
                     )
                     next_traffic = _next_deadline(next_traffic, traffic_period, now)
+                if self._cfg.traffic_identity and now >= next_ident:
+                    next_ident = now + TRAFFIC_IDENT_EVERY_S
+                    for req, definition in ((REQ_TRAFFIC_IDENT, DEF_TRAFFIC_IDENT), (REQ_TRAFFIC_LIVERY, DEF_TRAFFIC_LIVERY)):
+                        try:
+                            dll.request_data_on_sim_object_type(handle, req, definition, self._cfg.traffic_radius_m,
+                                                                SimObjectType.AIRCRAFT)
+                        except SimConnectError as exc:
+                            log.info("Traffic identity not available: %s", exc)
                 if nearest_period and self._position is not None and now >= next_nearest:
                     self._airport_list, self._airport_list_received = [], 0
                     dll.request_facilities_list(handle, FacilityListType.AIRPORT, REQ_AIRPORT_LIST)
@@ -408,6 +437,12 @@ class SimConnectSource:
             self._on_airport_list(msg)
         elif isinstance(msg, InputEventList) and msg.request_id == REQ_INPUT_EVENTS:
             self._on_input_events(msg)
+        elif isinstance(msg, AssignedObject):
+            self._emit(AiObjectAssigned(t=t, request_id=msg.request_id, object_id=msg.object_id))
+        elif isinstance(msg, ModelLivery) and msg.request_id == REQ_MODELS:
+            self._models += list(msg.models)
+            if msg.entry + 1 >= msg.out_of:
+                self._emit(ModelList(t=t, models=tuple(self._models)))
         return True
 
     # --- airport data -----------------------------------------------------------
@@ -436,6 +471,25 @@ class SimConnectSource:
                 self._set_simvar(dll, handle, command)
             elif isinstance(command, SetInputEvent):
                 self._set_input_event(dll, handle, command)
+            elif isinstance(command, SpawnAiAircraft):
+                try:
+                    dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
+                                  flight_number=command.flight_number, lat=command.lat, lon=command.lon,
+                                  alt_ft=command.alt_ft, heading=command.heading, on_ground=command.on_ground,
+                                  airspeed_kt=command.airspeed_kt, plan=command.plan, plan_position=command.plan_position)
+                except (SimConnectError, AttributeError) as exc:
+                    log.warning("Traffic control couldn't create %s: %s", command.tail or command.title, exc)
+            elif isinstance(command, RemoveAiAircraft):
+                try:
+                    dll.ai_remove(handle, command.object_id, REQ_AI_REMOVE)
+                except (SimConnectError, AttributeError) as exc:
+                    log.info("Traffic control couldn't remove object %d: %s", command.object_id, exc)
+            elif isinstance(command, EnumerateModels):
+                try:
+                    self._models = []
+                    dll.enumerate_models(handle, REQ_MODELS)
+                except (SimConnectError, AttributeError) as exc:
+                    log.info("No list of installed aircraft: %s", exc)
             else:
                 log.warning("unsupported command %r", command)
 
@@ -601,6 +655,15 @@ class SimConnectSource:
             if self._systems is None or replace(systems, t=self._systems.t) != self._systems:  # only what's kept changing
                 self._systems = systems
                 self._emit(systems)
+        elif msg.request_id == REQ_TRAFFIC_LIVERY and msg.out_of > 0:
+            if len(msg.payload) >= defs.payload_size(defs.TRAFFIC_LIVERY):
+                self._traffic_liveries[msg.object_id] = defs.unpack(defs.TRAFFIC_LIVERY, msg.payload)["livery"]
+        elif msg.request_id == REQ_TRAFFIC_IDENT and msg.out_of > 0:
+            if msg.object_id != self._user_object_id and len(msg.payload) >= defs.payload_size(defs.TRAFFIC_IDENTITY):
+                raw = defs.unpack(defs.TRAFFIC_IDENTITY, msg.payload)
+                self._emit(TrafficIdentity(t=t, object_id=msg.object_id, title=raw["title"], origin=raw["origin"],
+                                           destination=raw["destination"], state=raw["state"],
+                                           livery=self._traffic_liveries.get(msg.object_id, "")))
         elif msg.request_id == REQ_TRAFFIC:
             target = None
             has_data = msg.out_of > 0 and len(msg.payload) >= defs.payload_size(defs.TRAFFIC)

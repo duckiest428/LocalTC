@@ -56,6 +56,7 @@ class LiveConfig(_Section):
     nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
     ptt_input: str = ""  # a joystick button or key as push-to-talk through the sim, e.g. "joystick:0:button:3"
     intercom_input: str = ""  # ... and as the intercom key (talking to the copilot)
+    traffic_identity: bool = False  # ask who the AI traffic is (model, livery, destination): EXPERIMENTAL traffic control
 
 
 class ReplayConfig(_Section):
@@ -232,6 +233,20 @@ class CloudConfig(_Section):
     timeout_s: float = 6.0  # per call, all services tried in it (the cloud is quick, but the first may be busy)
 
 
+class TrafficConfig(_Section):
+    """EXPERIMENTAL: LocalTC and MSFS's Live Traffic (localtc.traffic). Off unless changed.
+
+    "shadow": every aircraft the sim has around followed and checked (teleports, duplicates, vanishing); the sim's
+    traffic is never touched. "reinject": the same, and an aircraft the sim drops nearby is put back by LocalTC, the
+    same model and livery (FSLTL's, when installed), parked or flying on to one of this flight's airports with the
+    runway from LocalTC's ATIS. SimConnect can't remove or take over the sim's own traffic; only what LocalTC puts
+    back is LocalTC's, and it's taken out again when this is turned off or the flight ends."""
+
+    control: Literal["off", "shadow", "reinject"] = "off"
+    max_reinjected: int = 8  # never more of LocalTC's copies than this at once
+    radius_nm: float = 25.0  # within this of the aircraft (the sim's traffic bubble is about 27 nm)
+
+
 class VoiceConfig(_Section):
     """Speaking to ATC: push-to-talk, the microphone, and Whisper."""
 
@@ -351,6 +366,7 @@ class Config(_Section):
     atc: AtcConfig = msgspec.field(default_factory=AtcConfig)
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     cloud: CloudConfig = msgspec.field(default_factory=CloudConfig)
+    traffic: TrafficConfig = msgspec.field(default_factory=TrafficConfig)
     session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)

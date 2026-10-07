@@ -82,6 +82,11 @@ copilot = true                # the copilot asks the cloud too (its own connecti
 local_fallback = false        # on: every service failing, the local model answers
 timeout_s = 6.0               # per call, every service tried in it
 
+[traffic]                     # EXPERIMENTAL: LocalTC and MSFS's Live Traffic (off by default)
+control = "off"               # off | shadow (follow and check every aircraft, never touch them) | reinject (also put back what MSFS drops nearby)
+max_reinjected = 8            # never more of LocalTC's own copies at once
+radius_nm = 25.0              # within this of you
+
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false
 ptt = "keyboard"              # keyboard | joystick | enter (Enter in this window starts and stops a transmission)

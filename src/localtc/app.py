@@ -141,6 +141,26 @@ async def cloud_model(cfg: Config, source: SimSource):
     return CloudBackend(found, fallback=local)
 
 
+def traffic_control(cfg: Config, engine, source: SimSource, bus, *, live: bool):
+    """EXPERIMENTAL traffic control: the shadows of the sim's traffic, and (reinject) LocalTC's copies, which fly
+    to this flight's airports with the runway its ATIS has in use."""
+    from localtc.traffic.control import TrafficControl
+    from localtc.traffic.service import TrafficControlService
+
+    def runway_for(icao: str) -> str | None:
+        info = engine.current_atis(icao) if engine is not None else None
+        return info.runway if info is not None else None
+
+    def airport_at(icao: str) -> tuple[float, float, float] | None:
+        geo = engine.geometry(icao) if engine is not None else None
+        return (geo.airport.lat, geo.airport.lon, geo.airport.elev_ft) if geo is not None else None
+
+    control = TrafficControl(cfg.traffic.control, radius_nm=cfg.traffic.radius_nm, max_reinjected=cfg.traffic.max_reinjected,
+                             live=live, runway_for=runway_for, airport_at=airport_at, plan_dir=data_dir() / "traffic")
+    log.info("Traffic control (EXPERIMENTAL): %s%s", cfg.traffic.control, "" if live else ", watching only in a replay")
+    return TrafficControlService(control, bus, source)
+
+
 def copilot_model(cfg: Config, backend):
     """The copilot's own language model. With the cloud on for it: a connection of its own to the same services (its
     rests and waits never hold up ATC's), the same local model behind it; with the cloud off for it: the local model
@@ -329,6 +349,7 @@ async def run_session(
     the running session's controls (the app uses them) once everything has started.
     """
     record = cfg.recorder.enabled if record is None else record
+    cfg.live.traffic_identity = cfg.traffic.control != "off"  # only then is the sim asked who its traffic is
     if cfg.voice.enabled and cfg.voice.ptt == "joystick" and not cfg.live.ptt_input:
         cfg.live.ptt_input = cfg.voice.ptt_joystick  # the bridge binds it before connecting
     if cfg.voice.enabled and cfg.crew.enabled and cfg.voice.intercom_joystick and not cfg.live.intercom_input:
@@ -344,6 +365,7 @@ async def run_session(
     backend = None
     typed_task: asyncio.Task | None = None
     voice = speaker = None
+    traffic = None
     engine = atc_service = None
     pm = None
     flight_log = None
@@ -413,6 +435,9 @@ async def run_session(
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
+        if cfg.traffic.control != "off":  # EXPERIMENTAL: never built unless asked for
+            traffic = traffic_control(cfg, engine, source, bus, live=session.source_kind == "live")
+            consumers.append(asyncio.create_task(traffic.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
             consumers.append(asyncio.create_task(speaker.service.run()))
@@ -432,12 +457,15 @@ async def run_session(
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
                                  voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None,
-                                 crew=pm))
+                                 crew=pm, traffic=traffic))
         waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
         await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
         for task in waits:
             task.cancel()
     finally:
+        if traffic is not None:
+            with suppress(Exception):
+                await asyncio.wait_for(traffic.close(), timeout=2.0)  # LocalTC's copies out before the sim goes
         if backend is not None and hasattr(backend, "stop_keeping"):
             # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
             threading.Thread(target=backend.stop_keeping, args=(cfg.llm.keep_alive,), name="llm-release", daemon=True).start()
@@ -501,6 +529,7 @@ class LiveSession:
     speaker: "VoiceOutput | None" = None
     recording: Path | None = None
     crew: object | None = None  # crew.pm.PilotMonitoring
+    traffic: object | None = None  # traffic.service.TrafficControlService (EXPERIMENTAL; None when off)
 
     def now(self) -> float:
         return self.source.clock.now()

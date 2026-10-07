@@ -47,6 +47,14 @@ def find_dll(explicit: str | None = None) -> Path:
     )
 
 
+class InitPosition(ctypes.Structure):
+    """SIMCONNECT_DATA_INITPOSITION: where an AI aircraft starts."""
+
+    _fields_ = [("Latitude", ctypes.c_double), ("Longitude", ctypes.c_double), ("Altitude", ctypes.c_double),
+                ("Pitch", ctypes.c_double), ("Bank", ctypes.c_double), ("Heading", ctypes.c_double),
+                ("OnGround", ctypes.c_uint32), ("Airspeed", ctypes.c_uint32)]
+
+
 class SimConnectDll:
     def __init__(self, path: Path) -> None:
         if sys.platform != "win32":
@@ -90,6 +98,21 @@ class SimConnectDll:
             self._set_input_event = _bind(lib, "SimConnect_SetInputEvent", [c_void_p, ctypes.c_uint64, c_uint32, c_void_p])
         except SimConnectUnavailable:
             self._enumerate_input_events = self._set_input_event = None
+        self._ai = {}  # creating and removing AI aircraft (EXPERIMENTAL traffic control); whichever this DLL has
+        for key, names, args in (
+            ("non_atc_ex1", ("SimConnect_AICreateNonATCAircraft_EX1",), [c_void_p, c_char_p, c_char_p, c_char_p, InitPosition, c_uint32]),
+            ("non_atc", ("SimConnect_AICreateNonATCAircraft",), [c_void_p, c_char_p, c_char_p, InitPosition, c_uint32]),
+            ("enroute_ex1", ("SimConnect_AICreateEnrouteATCAircraft_EX1",),
+             [c_void_p, c_char_p, c_char_p, c_char_p, ctypes.c_int, c_char_p, ctypes.c_double, ctypes.c_int, c_uint32]),
+            ("enroute", ("SimConnect_AICreateEnrouteATCAircraft",),
+             [c_void_p, c_char_p, c_char_p, ctypes.c_int, c_char_p, ctypes.c_double, ctypes.c_int, c_uint32]),
+            ("remove", ("SimConnect_AIRemoveObject",), [c_void_p, c_uint32, c_uint32]),
+            ("models", ("SimConnect_EnumerateSimObjectsAndLiveries",), [c_void_p, c_uint32, ctypes.c_int]),
+        ):
+            try:
+                self._ai[key] = _bind(lib, names, args)
+            except SimConnectUnavailable:
+                pass
         self._add_client_event_to_group = _bind(
             lib, "SimConnect_AddClientEventToNotificationGroup", [c_void_p, c_uint32, c_uint32, c_int]
         )
@@ -185,6 +208,39 @@ class SimConnectDll:
         v = ctypes.c_double(value)
         _check(self._set_input_event(handle, ctypes.c_uint64(hash_), ctypes.sizeof(v), ctypes.byref(v)),
                f"SetInputEvent({hash_:x}, {value})")
+
+    def ai_create(self, handle: int, kind: str, request_id: int, title: str, livery: str, tail: str, *,
+                  flight_number: int = -1, lat: float = 0, lon: float = 0, alt_ft: float = 0, heading: float = 0,
+                  on_ground: bool = True, airspeed_kt: float = 0, plan: str = "", plan_position: float = 0) -> None:
+        """An AI aircraft: ``parked`` (still, where it's put) or ``enroute`` (flying ``plan`` under the sim's AI)."""
+        if kind == "enroute":
+            if "enroute_ex1" in self._ai:
+                hr = self._ai["enroute_ex1"](handle, title.encode(), livery.encode(), tail.encode(), flight_number,
+                                             plan.encode(), plan_position, 0, request_id)
+            elif "enroute" in self._ai:
+                hr = self._ai["enroute"](handle, title.encode(), tail.encode(), flight_number, plan.encode(),
+                                         plan_position, 0, request_id)
+            else:
+                raise SimConnectError("this SimConnect can't create AI aircraft")
+        else:
+            pos = InitPosition(lat, lon, alt_ft, 0.0, 0.0, heading, int(on_ground), int(airspeed_kt))
+            if "non_atc_ex1" in self._ai:
+                hr = self._ai["non_atc_ex1"](handle, title.encode(), livery.encode(), tail.encode(), pos, request_id)
+            elif "non_atc" in self._ai:
+                hr = self._ai["non_atc"](handle, title.encode(), tail.encode(), pos, request_id)
+            else:
+                raise SimConnectError("this SimConnect can't create AI aircraft")
+        _check(hr, f"AICreate {kind} {title}")
+
+    def ai_remove(self, handle: int, object_id: int, request_id: int) -> None:
+        if "remove" not in self._ai:
+            raise SimConnectError("this SimConnect can't remove AI aircraft")
+        _check(self._ai["remove"](handle, object_id, request_id), f"AIRemoveObject({object_id})")
+
+    def enumerate_models(self, handle: int, request_id: int) -> None:
+        if "models" not in self._ai:
+            raise SimConnectError("this SimConnect can't list the installed aircraft (MSFS 2024 only)")
+        _check(self._ai["models"](handle, request_id, 1), "EnumerateSimObjectsAndLiveries")  # 1: aircraft
 
     def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None:
         """A key or joystick button (``definition``, e.g. "joystick:0:button:3") sends ``down_event`` when pressed

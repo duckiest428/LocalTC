@@ -66,6 +66,7 @@ class RecvId(enum.IntEnum):
     EVENT_FRAME = 7
     SIMOBJECT_DATA = 8
     SIMOBJECT_DATA_BYTYPE = 9
+    ASSIGNED_OBJECT_ID = 12
     AIRPORT_LIST = 18
     # The docs number these 29/30/31, but MSFS 2024 was observed sending FACILITY_DATA_END as 29
     # (so FACILITY_DATA = 28). parse_message() tells them apart by layout; see FACILITY_IDS.
@@ -262,6 +263,24 @@ INPUT_EVENT_SIZE = 76  # SIMCONNECT_INPUT_EVENT_DESCRIPTOR: char Name[64], UINT6
 
 
 @dataclass(frozen=True)
+class AssignedObject:
+    """The object id the sim gave an AI aircraft LocalTC created."""
+
+    request_id: int
+    object_id: int
+
+
+@dataclass(frozen=True)
+class ModelLivery:
+    """MSFS 2024's installed aircraft and liveries (EnumerateSimObjectsAndLiveries), one part of the list."""
+
+    request_id: int
+    entry: int
+    out_of: int
+    models: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class FacilityData:
     request_id: int
     unique_id: int
@@ -293,7 +312,7 @@ class ObjectData:
 
 Message = (
     OpenInfo | QuitInfo | ExceptionInfo | EventInfo | ObjectData | AirportList | FacilityData | FacilityDataEnd
-    | InputEventList
+    | InputEventList | AssignedObject | ModelLivery
 )
 
 
@@ -344,9 +363,35 @@ def parse_message(buf: bytes) -> Message | None:
         return _parse_facility(buf)
     if rid == RecvId.AIRPORT_LIST:
         return _parse_airport_list(buf)
-    if 32 <= rid <= 40:  # the input events' list; its ID moved between SDK versions, so it's told by its layout
-        return _parse_input_events(buf)
+    if rid == RecvId.ASSIGNED_OBJECT_ID and len(buf) >= 20:
+        request_id, object_id = struct.unpack_from("<II", buf, 12)
+        return AssignedObject(request_id=request_id, object_id=object_id)
+    if 32 <= rid <= 41:  # MSFS 2024's lists; their IDs moved between SDK versions, so they're told by their layout
+        return _parse_input_events(buf) or _parse_models(buf)
     return None
+
+
+def _parse_models(buf: bytes) -> ModelLivery | None:
+    """Pairs of fixed-length strings (the title, the livery): the element size from the message."""
+    if len(buf) < FACILITIES_LIST_OFFSET:
+        return None
+    m = _read(RecvFacilitiesList, buf)
+    end = _message_end(m.dwSize, buf)
+    count = m.dwArraySize
+    if count == 0 or (end - FACILITIES_LIST_OFFSET) % count:
+        return None
+    element = (end - FACILITIES_LIST_OFFSET) // count
+    if element not in (512, 520, 1024):
+        return None
+    half = element // 2
+    models = []
+    for i in range(count):
+        base = FACILITIES_LIST_OFFSET + i * element
+        title, livery = _cstr(buf[base:base + half]), _cstr(buf[base + half:base + element])
+        if not title.isprintable() or not livery.isprintable():
+            return None
+        models.append((title, livery))
+    return ModelLivery(request_id=m.dwRequestID, entry=m.dwEntryNumber, out_of=m.dwOutOf, models=tuple(models))
 
 
 def _parse_input_events(buf: bytes) -> InputEventList | None:

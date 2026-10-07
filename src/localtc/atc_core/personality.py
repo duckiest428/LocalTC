@@ -12,8 +12,9 @@ conversational. It decides
 
 How busy the frequency is (``workload``) shifts it: a busy controller greets less, chats less and talks faster.
 
-A controller is picked from the station's name (``profile``): Denver Center is the same person every flight, and in
-a replay, and not the same as Salt Lake Center next door. The kind follows the role (a tower is more often hurried or
+A controller is picked from the station's name and the shift (``profile``): Denver Center is the same person all
+flight, and in its replay, and not the same as Salt Lake Center next door. A flight 5 hours or more after the last
+one is a new shift (``[atc] shift``, moved on by the app): other people, and other voices, at every station. The kind follows the role (a tower is more often hurried or
 strict, a ground controller friendly or dry) with the name choosing among them; the rest has small variations of its
 own. Only the words around the instruction change: what's read back, the numbers, the runways and the routes never
 do. The engine's checks see the result the same as any other.
@@ -114,10 +115,15 @@ class Personality:
                 "frequency and readback stays exactly as decided.")
 
 
-def profile(station: str, role: str = "", *, icao: bool = False) -> Personality:
-    """The controller at ``station`` (its ``role``: clearance, ground, tower, departure, approach, center): from the
-    name, the same every time."""
-    h = zlib.crc32(station.lower().encode())
+def shift_key(station: str, shift: int = 0) -> str:
+    """Who's on at ``station`` this shift: the key their manner and voice are picked by (the name on shift 0)."""
+    return f"{station} #{shift}" if shift else station
+
+
+def profile(station: str, role: str = "", *, icao: bool = False, shift: int = 0) -> Personality:
+    """The controller at ``station`` (its ``role``: clearance, ground, tower, departure, approach, center) on
+    ``shift``: from the name and the shift, the same every time."""
+    h = zlib.crc32(shift_key(station, shift).lower().encode())
     kinds = ROLE_KINDS.get(role, KINDS)
     kind = kinds[h % len(kinds)]
     t = TRAITS[kind]

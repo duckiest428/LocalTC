@@ -4,6 +4,21 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
+## [0.5.0] - Upcoming
+
+### Added
+- **ATC works in shifts**: each station keeps the same controller, voice and manner all flight (and in its replay), and when you fly again 5 hours or more after your last flight ended, other people are on: other personalities and other voices at every station.
+- **Checks against the sim** (`localtc debug aircraft`, `hands` and `traffic`): the aircraft's copilot profile and its MSFS 2024 input events; every control the copilot moves, read back and put back as it was; the AI traffic as LocalTC sees it, and an aircraft created and removed. Each writes a report.
+- **A close button on the Wrapped banner** in the logbook, which also goes away for good once Wrapped is opened.
+
+### Changed
+- **The app clears the last flight** 10 minutes after it ends (the map, the aircraft, the radio log and the flight's details), and opens clean: a flight plan that's been flown isn't loaded again.
+- **Replays follow more smoothly**: Follow glides between zooms instead of jumping, and keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
+
+### Fixed
+- **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases along the timeline in their places.
+- **A replay's map fills its whole area** when the player opens or the window changes size, instead of a corner of it.
+
 ## [0.4.0] - 2026-09-28
 
 ### Added

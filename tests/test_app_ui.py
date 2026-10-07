@@ -266,3 +266,49 @@ def test_cloud_defaults_mistral_first_no_paid_only_and_no_local_fallback():
     cloud = Config().cloud
     assert cloud.order[0] == "mistral" and not cloud.local_fallback and not cloud.enabled
     assert PROVIDERS[0].id == "mistral" and all(p.key in ("none", "free") for p in PROVIDERS)
+
+
+def test_a_finished_flight_is_cleared_from_the_screen_and_the_app_opens_clean(tmp_path, monkeypatch):
+    from localtc.flightplan import save_plan
+    from localtc.ui import controller as ctl
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    monkeypatch.setattr(ctl, "CLEAR_AFTER_S", 0.05)
+    plan = manual_plan(callsign="DAL123", origin="KSEA", destination="KPDX", cruise="FL200")
+    save_plan(plan, tmp_path / "flightplan.json")
+    controller = AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
+    assert controller.plan is not None  # a plan loaded but never flown is kept for the next start
+    published = []
+    controller.publish = lambda kind, data: published.append(kind)
+
+    async def flown():
+        controller.flight, controller.own = {"callsign": "DAL123"}, {"lat": 47.4, "lon": -122.3}
+        controller.radio.append({"kind": "atc", "text": "hello"})
+        controller._clear_soon()
+        assert not (tmp_path / "flightplan.json").exists()  # the next time the app opens, it opens clean
+        assert controller.plan == plan and controller.own  # ... but the flight stays on screen for a while
+        await asyncio.sleep(0.2)
+
+    asyncio.run(flown())
+    assert controller.plan is None and controller.own is None and not controller.flight and not controller.radio
+    assert "cleared" in published
+    assert AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None).plan is None
+
+
+def test_a_new_plan_or_flight_in_the_meantime_is_not_cleared(tmp_path, monkeypatch):
+    from localtc.ui import controller as ctl
+
+    monkeypatch.setattr(ctl, "CLEAR_AFTER_S", 0.05)
+    controller = AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
+    controller.publish = lambda kind, data: None
+    old = manual_plan(callsign="DAL123", origin="KSEA", destination="KPDX", cruise="FL200")
+    new = manual_plan(callsign="DAL124", origin="KPDX", destination="KSEA", cruise="FL200")
+
+    async def run():
+        controller.plan = old
+        controller._clear_soon()
+        controller.plan = new  # loaded after the flight
+        await asyncio.sleep(0.2)
+
+    asyncio.run(run())
+    assert controller.plan is new

@@ -384,10 +384,20 @@ function nudge(flights) {
   const now = new Date();
   const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const flewThen = flights.some((f) => { const d = new Date(f.started_at); return d >= lastMonth && d < new Date(now.getFullYear(), now.getMonth(), 1); });
-  const fresh = now.getDate() <= 7 && flewThen;
+  const january = now.getMonth() === 0;
+  // Once opened or dismissed, gone for that month (or year): remembered in this browser.
+  const which = january ? `year:${now.getFullYear() - 1}` : `month:${lastMonth.getFullYear()}-${lastMonth.getMonth() + 1}`;
+  let seen = "";
+  try { seen = localStorage.getItem("localtc.wrNudgeSeen") || ""; } catch { /* storage off: shown each visit */ }
+  const fresh = now.getDate() <= 7 && flewThen && seen !== which;
   $("#wr-nudge").hidden = !fresh;
   if (!fresh) return;
-  const january = now.getMonth() === 0;
+  const done = () => {
+    $("#wr-nudge").hidden = true;
+    try { localStorage.setItem("localtc.wrNudgeSeen", which); } catch { /* storage off */ }
+  };
+  $("#wr-nudge-go").onclick = done;
+  $("#wr-nudge-x").onclick = done;
   $("#wr-nudge-text").textContent = january ? `Your ${now.getFullYear() - 1} in flying is ready.` : `Your ${lastMonth.toLocaleDateString("en-GB", { month: "long" })} Wrapped is ready.`;
   $("#wr-nudge-go").href = january ? "#wrapped/year:-1" : "#wrapped/month:-1";
 }

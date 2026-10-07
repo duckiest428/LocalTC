@@ -45,6 +45,7 @@ function connect() {
   on("own", setOwn);
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
   on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
+  on("cleared", clearFlight);
   on("ptt", (p) => $(p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
   on("thinking", thinking);
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
@@ -219,6 +220,20 @@ function setOwn(o) {
   MapView.own(o);
 }
 
+/* The last flight gone from the screen (10 minutes after it ended): the aircraft, its path, the traffic, the radio
+   log and the flight's details. The state with the plan (or none) follows. */
+function clearFlight() {
+  S.own = null;
+  S.traffic = [];
+  clearLog();
+  $("#com1").textContent = "---.---";
+  $("#com2").textContent = "OFF";
+  $("#squawk").textContent = "----";
+  $("#xmode").textContent = "";
+  setFlight({});
+  MapView.clear();
+}
+
 function planHeader(plan) {
   $("#fl-callsign").textContent = plan?.callsign || "—";
   $("#fl-type").textContent = plan?.aircraft ? `[${plan.aircraft}]` : "";
@@ -256,6 +271,9 @@ function setFlight(f) {
       freqs.innerHTML = ap.frequencies.map((q) => `<div class="fq" data-mhz="${q.mhz}" title="Tune COM1 to ${mhz(q.mhz)}${q.others.length ? " (also " + q.others.map(mhz).join(", ") + ")" : ""}">
         <span class="fl">${esc(q.label)}</span><span class="fv">${mhz(q.mhz)}</span></div>`).join("");
     }
+  } else if (!ap && freqs.dataset.key) {
+    freqs.innerHTML = '<div class="muted small">Frequencies appear when the flight starts.</div>';
+    freqs.dataset.key = "";
   }
   markTuned();
 }
@@ -988,7 +1006,7 @@ const Settings = {
             What LocalTC puts back is its own, flies to this flight's airports with the runway from LocalTC's ATIS, and is taken
             out again when this is turned off or the flight ends. May be limited by what SimConnect allows.
             <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></span></label></div>
-        <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same every flight, in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
+        <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
         <div class="row"><label>Phraseology
@@ -1438,6 +1456,14 @@ const MapView = {
     else { this.ownMarker.setLatLng(at); this.ownMarker.setIcon(icon); }
     if (this.follow) this.map.panTo(at, { animate: false });
     $("#map-info").textContent = `${o.alt.toLocaleString()} ft  ${o.gs} kt  HDG ${String(o.hdg_mag).padStart(3, "0")}  VS ${o.vs > 0 ? "+" : ""}${o.vs}`;
+  },
+  clear() {
+    this.path = AtcMap.track();
+    this.trail?.setLatLngs([]);
+    if (this.ownMarker) { this.map.removeLayer(this.ownMarker); this.ownMarker = null; }
+    this.traffic([]);
+    this.drawnRef = null;
+    $("#map-info").textContent = "";
   },
   traffic(list) {
     if (!this.map) return;

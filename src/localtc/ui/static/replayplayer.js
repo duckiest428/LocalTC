@@ -25,6 +25,7 @@ class ReplayPlayer {
     this.playing = false;
     this.skipQuiet = true;
     this.follow = false;
+    this.zoomBias = 0;  // following: the pilot's own zoom in or out on top of the automatic one
     this.userScrolled = 0;
     this.shownIdx = -1;
     this.line = -1;
@@ -42,6 +43,8 @@ class ReplayPlayer {
   destroy() {
     this.pause();
     document.removeEventListener("keydown", this.onKey);
+    cancelAnimationFrame(this.glideFrame);
+    this.resized?.disconnect();
     if (this.map) this.map.remove();
     this.el.innerHTML = "";
   }
@@ -65,12 +68,12 @@ class ReplayPlayer {
   }
 
   /** The map zoom a pilot would want here, as the phone's map has it: close on the ground, wider with height
-   * (a view about twelve times the altitude across, from 15 km to 400 km). */
+   * (a view about twelve times the altitude across, from 15 km to 400 km). Not rounded: the follow glides to it. */
   static zoomFor(map, s) {
     const across = s.gnd ? 4000 : Math.min(Math.max(s.alt * 12, 15000), 400000);
     const px = (map.getSize && map.getSize().x) || 640;
     const z = Math.log2((156543.03 * Math.cos((s.lat * Math.PI) / 180) * px) / across);
-    return Math.max(3, Math.min(15, Math.round(z * 2) / 2));
+    return Math.max(3, Math.min(15, z));
   }
 
   static clock(s) {
@@ -118,6 +121,8 @@ class ReplayPlayer {
     const q = (s) => this.el.querySelector(s);
     this.ui = { readout: q(".rp-readout"), list: q(".rp-list"), play: q(".rp-play"), time: q(".rp-time"), range: q(".rp-range") };
     this.items = [...this.ui.list.children];
+    // Placed here, not in the markup: a shared flight's page allows no inline styles.
+    this.el.querySelectorAll(".rp-ticks [data-at]").forEach((i) => { i.style.left = i.dataset.at; });
     q(".rp-play").onclick = () => (this.playing ? this.pause() : this.play());
     q(".rp-prev").onclick = () => this.jump(-1);
     q(".rp-next").onclick = () => this.jump(1);
@@ -150,14 +155,15 @@ class ReplayPlayer {
   ticksHtml() {
     const at = (t) => `${((t / (this.duration || 1)) * 100).toFixed(3)}%`;
     const esc = ReplayPlayer.esc;
-    const calls = this.calls.map((l) => `<i class="rp-tick ${l.kind === "atc" ? "atc" : "pilot"}" style="left:${at(l.t)}"></i>`);
+    const calls = this.calls.map((l) => `<i class="rp-tick ${l.kind === "atc" ? "atc" : "pilot"}" data-at="${at(l.t)}"></i>`);
     const marks = (this.r.marks || []).filter((m) => m.kind !== "phase" || /Takeoff|Final|Landed|Airborne|Taxiing/.test(m.text))
-      .map((m) => `<i class="rp-mark ${m.kind}" style="left:${at(m.t)}" title="+${ReplayPlayer.clock(m.t)} ${esc(m.text)}"></i>`);
+      .map((m) => `<i class="rp-mark ${m.kind}" data-at="${at(m.t)}" title="+${ReplayPlayer.clock(m.t)} ${esc(m.text)}"></i>`);
     return calls.join("") + marks.join("");
   }
 
   drawMap(el, tiles) {
-    this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0.5 });
+    // zoomSnap 0: any zoom, so following glides between them; the buttons and the wheel still go by half a level.
+    this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 });
     if (tiles) {
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
@@ -182,9 +188,24 @@ class ReplayPlayer {
       const lon = ReplayPlayer.near(a.lon, pts.length ? pts[best][1] : a.lon);
       L.circleMarker([a.lat, lon], { radius: 5, className: "rp-apt" }).bindTooltip(icao, { permanent: true, direction: "right", className: "rp-apt-label" }).addTo(this.map);
     }
-    this.plane = L.marker(pts[0], { icon: this.icon(this.track.hdg[0]), zIndexOffset: 1000, keyboard: false }).addTo(this.map);
+    this.plane = L.marker(pts[0], { icon: this.icon(), zIndexOffset: 1000, keyboard: false }).addTo(this.map);
+    this.turn(this.track.hdg[0]);
     this.bounds = L.latLngBounds(pts);
     this.map.on("dragstart", () => this.setFollow(false));
+    // The pilot zooming while following: the follow keeps their zoom (in or out of the automatic one) from now on.
+    this.map.on("zoomend", () => {
+      if (this.ours || !this.follow) return;
+      this.zoomBias = Math.max(-5, Math.min(5, this.map.getZoom() - ReplayPlayer.zoomFor(this.map, this.sample(this.t))));
+    });
+    // Measured again whenever its box changes (a dialog opening, the window resized): otherwise the tiles cover only
+    // the size it had when it was made.
+    if (typeof ResizeObserver !== "undefined") {
+      this.resized = new ResizeObserver(() => {
+        this.map.invalidateSize({ pan: false });
+        if (this.follow) this.view(this.sample(this.t), true);
+      });
+      this.resized.observe(el);
+    }
     const ctl = L.control({ position: "topright" });
     ctl.onAdd = () => {
       const box = L.DomUtil.create("div", "rp-mapbtns");
@@ -207,15 +228,54 @@ class ReplayPlayer {
   setFollow(on) {
     this.follow = on;
     this.el.querySelector(".rp-follow")?.classList.toggle("on", on);
+    // Following, the wheel and a pinch zoom on the aircraft (it's in the middle), not on the pointer.
+    this.map.options.scrollWheelZoom = this.map.options.touchZoom = this.map.options.doubleClickZoom = on ? "center" : true;
     if (on) {
-      const s = this.sample(this.t);
-      this.map.setView([s.lat, s.lon], ReplayPlayer.zoomFor(this.map, s), { animate: false });
+      this.zoomBias = 0;
+      this.view(this.sample(this.t), true);
     }
   }
 
-  icon(hdg) {
+  /** Following: the map on the aircraft, now; the zoom glides to the one for this height (and the pilot's own). */
+  view(s, now = false) {
+    this.target = { at: [s.lat, s.lon], z: Math.max(2, Math.min(17, ReplayPlayer.zoomFor(this.map, s) + this.zoomBias)) };
+    if (now) {
+      this.setView(this.target.at, this.target.z);
+      return;
+    }
+    if (!this.glideFrame) this.glideFrame = requestAnimationFrame((t) => this.glide(t));
+  }
+
+  glide(now) {
+    this.glideFrame = null;
+    if (!this.follow || !this.target) return (this.lastGlide = null);
+    if (this.map._animatingZoom) {  // the pilot's own zoom still moving: after it
+      this.glideFrame = requestAnimationFrame((t) => this.glide(t));
+      return;
+    }
+    const dt = this.lastGlide == null ? 1 / 60 : Math.min(0.1, (now - this.lastGlide) / 1000);
+    this.lastGlide = now;
+    const z0 = this.map.getZoom(), z1 = this.target.z;
+    const z = Math.abs(z1 - z0) < 0.01 ? z1 : z0 + (z1 - z0) * (1 - Math.exp(-dt * 2.5));  // eased, about a second
+    this.setView(this.target.at, z);
+    if (z !== z1) this.glideFrame = requestAnimationFrame((t) => this.glide(t));
+    else this.lastGlide = null;
+  }
+
+  setView(at, z) {
+    this.ours = true;  // the follow's own move, not the pilot's zoom
+    try { this.map.setView(at, z, { animate: false }); } finally { this.ours = false; }
+  }
+
+  icon() {
     const svg = '<svg viewBox="0 0 32 32" width="30" height="30"><path d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>';
-    return L.divIcon({ className: "rp-plane", html: `<div style="transform:rotate(${Number(hdg) || 0}deg)">${svg}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    return L.divIcon({ className: "rp-plane", html: `<div class="rp-plane-turn">${svg}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+  }
+
+  /** The aircraft pointed along its heading: set on the element (a shared flight's page allows no inline styles). */
+  turn(hdg) {
+    const el = this.plane.getElement()?.firstElementChild;
+    if (el) el.style.transform = `rotate(${Number(hdg) || 0}deg)`;
   }
 
   // --- time ------------------------------------------------------------------------------------------------------
@@ -301,16 +361,12 @@ class ReplayPlayer {
     const s = this.sample(this.t), f = this.r.flight;
     const at = [s.lat, s.lon];
     this.plane.setLatLng(at);
-    this.plane.setIcon(this.icon(s.hdg));
+    this.turn(s.hdg);
     if (s.i !== this.shownIdx) {
       this.flown.setLatLngs(this.pts.slice(0, s.i + 1).concat([at]));
       this.shownIdx = s.i;
     }
-    if (this.follow) {  // following: the zoom too, as the phone's map does (closer on the ground, wider up high)
-      const z = ReplayPlayer.zoomFor(this.map, s);
-      if (Math.abs(z - this.map.getZoom()) >= 0.5) this.map.setView(at, z, { animate: false });
-      else this.map.panTo(at, { animate: false });
-    }
+    if (this.follow) this.view(s);  // following: the zoom too, as the phone's map does (closer on the ground, wider up high)
     const p = ReplayPlayer.before(this.phases, this.t, (m) => m.t);
     const phase = p >= 0 ? this.phases[p].text : "";
     const zulu = f.zulu0 == null ? "" : (() => { const z = (f.zulu0 + this.t) % 86400; return `${String(Math.floor(z / 3600)).padStart(2, "0")}${String(Math.floor((z % 3600) / 60)).padStart(2, "0")}Z`; })();

@@ -381,6 +381,40 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .changelog .release h2 { margin-top: 0; display: flex; align-items: baseline; gap: 14px; }
 .changelog .release h2 .date { font-family: var(--mono); font-size: 13px; font-weight: 450; color: var(--text-3); letter-spacing: 0; }
 .changelog .release h3 { font-size: 13px; font-family: var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.changelog .release.upcoming { padding: 4px 22px 10px; margin-left: -22px; margin-right: -22px; border-radius: var(--r3);
+  box-shadow: inset 0 0 0 1px rgba(231, 178, 74, .28); background: rgba(231, 178, 74, .04); }
+.changelog .release.upcoming h2 { margin-top: 1em; }
+.changelog .release.upcoming h2 .date { color: var(--amber, #e7b24a); text-transform: uppercase; letter-spacing: .1em; }
+.changelog .cl-note { font-size: 14px; color: var(--text-3); margin-top: -.2em; }
+.changelog [hidden] { display: none !important; }
+
+/* The versions to jump to: a column beside the notes, a row of chips above them on a phone. */
+.cl-layout { display: grid; grid-template-columns: 180px minmax(0, 760px); gap: 56px; justify-content: center;
+  max-width: 1060px; margin: 0 auto; padding: 0 22px; }
+.cl-layout .legal { margin: 0; padding-left: 0; padding-right: 0; max-width: none; }
+.cl-side { position: sticky; top: 76px; align-self: start; padding-top: clamp(56px, 8vw, 104px);
+  max-height: calc(100vh - 76px); overflow-y: auto; }
+.cl-side-h { font-family: var(--mono); font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-3); margin: 0 0 12px; }
+.cl-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); margin: 0 0 14px;
+  cursor: pointer; user-select: none; }
+.cl-toggle input { accent-color: var(--green, #5fd068); width: 15px; height: 15px; margin: 0; }
+.cl-versions { display: flex; flex-direction: column; gap: 2px; }
+.cl-versions a { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 10px;
+  border-radius: 8px; color: var(--text-2); font-family: var(--mono); font-size: 13.5px; text-decoration: none; }
+.cl-versions a:hover { background: rgba(255, 255, 255, .05); color: var(--text); text-decoration: none; }
+.cl-versions a.on { background: rgba(95, 208, 104, .1); color: var(--text); box-shadow: inset 2px 0 0 var(--green, #5fd068); }
+.cl-versions .cl-date { font-size: 11px; color: var(--text-3); }
+.cl-versions .cl-up { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--amber, #e7b24a); }
+.cl-versions [hidden] { display: none; }
+@media (max-width: 900px) {
+  .cl-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .cl-side { position: static; max-height: none; padding-top: 32px; }
+  .cl-versions { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  .cl-versions a { flex: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+  .cl-versions .cl-date { display: none; }
+  .cl-layout .legal { padding-top: 28px; }
+}
 
 /* ---------------------------------------------------------- the logbook dashboard */
 .dash [hidden] { display: none !important; }

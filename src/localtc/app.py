@@ -63,6 +63,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         strict_callsign=atc.strict_callsign,
         callsign_check=atc.callsign_check,
         personalities=atc.personalities,
+        shift=atc.shift,
         radio_range=atc.radio_range,
         chatter=atc.chatter,
         transition_ft=atc.transition_ft,
@@ -654,7 +655,7 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
 
     copilot_voice = crew_speaker(cfg.crew.voice_sex, cfg.crew.voice_pick, synth.speakers, t.voice)
     service = VoiceOut(bus, synth, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
-                       crew_speaker=copilot_voice)
+                       crew_speaker=copilot_voice, shift=cfg.atc.shift if cfg.atc.personalities else 0)
     return VoiceOutput(service, player)
 
 
@@ -732,6 +733,21 @@ class FacilityDebugReport:
     # (message id, Type field, bytes after a 40-byte header) -> count
     messages: Counter = field(default_factory=Counter)
     raw_path: Path | None = None
+
+
+async def sim_check(cfg: Config, check: str, *, source=None, **kw):
+    """One of ``localtc.simcheck``'s checks (aircraft, hands, traffic) against the live sim (or ``source``)."""
+    from localtc import simcheck
+
+    if source is None:
+        from localtc.sim_bridge.simconnect_source import SimConnectSource
+
+        cfg.live.traffic_identity = check == "traffic"
+        cfg.live.nearest_airport_interval_s = 0.0
+        source = SimConnectSource(cfg.live)
+    run = {"aircraft": simcheck.check_aircraft, "hands": simcheck.check_hands, "traffic": simcheck.check_traffic}[check]
+    async with simcheck.Probe(source) as probe:
+        return await run(probe, **kw)
 
 
 async def debug_airport(

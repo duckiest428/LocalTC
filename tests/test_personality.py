@@ -99,3 +99,33 @@ def test_in_a_flight_the_controller_shapes_the_words_and_the_prompt():
     engine.cfg.personalities = False  # off: no manner for the model, the role's voice
     assert engine._persona(engine.facility("ground")) == "" and engine._manner(engine.facility("ground")) == "ground"
     assert atc(out)
+
+
+def test_a_new_shift_after_a_long_break_brings_other_controllers_and_voices():
+    from localtc.tts.voices import shift_key, speaker_for
+    from localtc.ui.controller import SHIFT_BREAK_S, next_shift
+
+    assert next_shift(0.0, 0, 1e9) == 0  # the first flight ever
+    assert next_shift(1000.0, 2, 1000.0 + SHIFT_BREAK_S - 60) == 2  # a short break: the same people
+    assert next_shift(1000.0, 2, 1000.0 + SHIFT_BREAK_S) == 3  # five hours: the next shift
+    assert pers.profile("Denver Center", "center", shift=4) == pers.profile("Denver Center", "center", shift=4)
+    assert pers.profile("Denver Center", "center") == pers.profile("Denver Center", "center", shift=0)  # as before
+    shifts = [pers.profile(s, r, shift=n) for s, r in STATIONS for n in range(6)]
+    by_station = {}
+    for p in shifts:
+        by_station.setdefault(p.station, set()).add((p.kind, p.ack, p.sign_off, p.pace))
+    assert all(len(v) > 1 for v in by_station.values())  # each station has other people on other shifts
+    assert pers.shift_key("Denver Center", 3) == shift_key("Denver Center", 3)  # the voice follows the same person
+    voices = {speaker_for(shift_key("Denver Center", n), 904) for n in range(8)}
+    assert len(voices) > 1
+
+
+def test_the_engine_uses_the_shift():
+    from helpers.llm import ScriptedBackend
+    from test_llm import cyul_engine
+
+    engine, _ = cyul_engine(ScriptedBackend())
+    engine.cfg.shift = 5
+    ground = engine.facility("ground")
+    who = engine._controller(ground)
+    assert who == pers.profile(ground.station, "ground", icao=engine.region.icao, shift=5)

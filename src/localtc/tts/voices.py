@@ -95,6 +95,11 @@ def speaker_count(voice_file: Path) -> int:
     return int(config.get("num_speakers", 1))
 
 
+def shift_key(station: str, shift: int = 0) -> str:
+    """The voice of whoever is on shift at ``station`` (the same key as atc_core.personality.shift_key)."""
+    return f"{station} #{shift}" if shift else station
+
+
 def speaker_for(key: str, count: int, speakers: tuple[int, ...] = SPEAKERS) -> int | None:
     """A stable speaker for a station ("Phoenix Tower") or role; None for a single-speaker voice."""
     if count <= 1:

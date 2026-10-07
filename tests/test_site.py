@@ -127,3 +127,23 @@ def test_every_plan_costs_nothing():
     prices = re.findall(r'<p class="price"><b>([^<]+)</b>', html)
     assert len(prices) >= 3 and set(prices) == {"$0"}
     assert html.count("LocalTC-Setup.exe") >= len(prices)  # a download on every plan
+
+
+def test_an_upcoming_version_is_on_the_page_hidden_until_asked_for():
+    text = ("# Changelog\n\n## [0.5.0] - Upcoming\n\n### Added\n- **New** thing\n\n"
+            "## [0.4.0] - 2026-09-28\n\n### Added\n- Old thing\n")
+    latest, body = build_site.render(text)
+    assert latest == "0.4.0"  # the latest released, not the upcoming one
+    assert '<section class="release upcoming" id="v0.5.0" data-upcoming hidden>' in body
+    assert '<section class="release" id="v0.4.0">' in body
+    toggle, links = build_site.sidebar(text)
+    assert 'id="cl-upcoming"' in toggle and "checked" not in toggle  # off by default
+    assert '<a href="#v0.5.0" data-upcoming hidden>' in links and '<a href="#v0.4.0">0.4.0' in links
+    assert build_site.sidebar("## [0.4.0] - 2026-09-28\n- x\n")[0] == ""  # nothing upcoming: no switch
+
+
+def test_the_changelogs_upcoming_section_is_the_next_version():
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    versions = build_site.releases(text)
+    assert versions[0][2], "new work goes under an upcoming version at the top"
+    assert [v for v, _, up in versions if not up][0] == __version__

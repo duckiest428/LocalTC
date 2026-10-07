@@ -13,7 +13,7 @@ copies your logbook and feeds the phone and the web tracker.
 
 - **The controllers:** a deterministic engine makes every decision (clearances, SIDs and STARs, vectors, approaches,
   sequencing, handoffs); routine calls use exact phraseology (FAA or ICAO, IFR and VFR). Each station is a controller
-  with a voice and a manner of their own, the same every flight. Other traffic talks on the frequency.
+  with a voice and a manner of their own, the same through a flight, and new people on shift after a 5-hour break. Other traffic talks on the frequency.
 - **Your voice:** push-to-talk, transcribed locally by faster-whisper; ATC answers in Piper voices through a radio effect.
 - **The language model:** reads your calls and words the replies that have no template, local (Ollama) or the cloud
   with your key; everything it says is checked against the script: every number, runway, route and readback.

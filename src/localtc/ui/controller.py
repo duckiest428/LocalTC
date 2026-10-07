@@ -83,6 +83,16 @@ FREQ_ORDER = list(FREQ_LABELS)
 DEPARTING = {"PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
 
 
+CLEAR_AFTER_S = 600  # a flight's map, details and radio log stay this long after it ends, then the app is clean
+SHIFT_BREAK_S = 5 * 3600  # this long between flights and ATC's on a new shift
+
+
+def next_shift(last_end: float, shift: int, now: float) -> int:
+    """ATC's shift for a flight starting ``now``: the next one after a break of 5 hours or more since the last flight
+    ended (each station's controller and voice the same through a flight, others after a long break)."""
+    return shift + 1 if last_end and now - last_end >= SHIFT_BREAK_S else shift
+
+
 class AppController:
     def __init__(self, cfg: Config | None = None, *, config_path: str | None = None,
                  plan_path: Path | None = None, cache: AirportCache | None = None) -> None:
@@ -114,6 +124,7 @@ class AppController:
         self._airport_waiters: dict[str, list[asyncio.Future]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._last_recording: Path | None = None
+        self._clear_task: asyncio.Task | None = None
         self.companion = CompanionHub()
         self.companion.set_route(route_view(self.plan))
         self.window_on_top: Callable[[bool], None] | None = None  # set by the app window (ui/__init__.py)
@@ -257,6 +268,8 @@ class AppController:
         """One more flight flown. After the third, without an account, the app suggests one, once."""
         ui = self.cfg.ui
         ui.flights_done += 1
+        if self.source_kind == "live":
+            ui.last_flight_end = time.time()
         if ui.flights_done >= ACCOUNT_PROMPT_FLIGHTS and not ui.account_prompted:
             signed_in = await asyncio.to_thread(lambda: self.pilot.account.signed_in)
             self.account_prompt = not signed_in
@@ -316,6 +329,12 @@ class AppController:
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
             raise HttpError(409, "a flight is already running")
+        if self.source_kind == "live" and next_shift(self.cfg.ui.last_flight_end, self.cfg.atc.shift, time.time()) != self.cfg.atc.shift:
+            self.cfg.atc.shift += 1  # back after a break: other controllers on (saved with the flight count)
+            log.info("ATC: a new shift (%d) since the last flight", self.cfg.atc.shift)
+        if self._clear_task is not None:
+            self._clear_task.cancel()
+            self._clear_task = None
         cfg = self.flight_config()
         record = cfg.recorder.enabled or cfg.ui.dev_mode
         self._stop = asyncio.Event()
@@ -340,19 +359,54 @@ class AppController:
             asyncio.create_task(self.pilot.live({"active": False}, force=True))
             asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
             await self._count_flight()
+            self._clear_soon()
             self._set_status("idle")
         except asyncio.CancelledError:
             self._set_status("idle")
         except (ConfigError, FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
             log.warning("Flight stopped: %s", exc)
+            self._clear_soon()
             self._set_status("error", str(exc))
         except Exception as exc:
             log.exception("Flight failed")
+            self._clear_soon()
             self._set_status("error", f"{type(exc).__name__}: {exc}")
         finally:
             self.live = None
             if self._ticker:
                 self._ticker.cancel()
+
+    def _clear_soon(self) -> None:
+        """The flight over: its plan is no longer kept for the next time the app opens (it opens clean), and in
+        ``CLEAR_AFTER_S`` the map, the flight's details and the radio log are cleared, unless another flight began."""
+        if self._clear_task is not None:
+            self._clear_task.cancel()
+        flown = self.plan
+        if flown is not None and self.source_kind == "live":
+            try:
+                self.plan_path.unlink(missing_ok=True)
+            except OSError as exc:
+                log.debug("Couldn't remove the flown plan: %s", exc)
+        self._clear_task = asyncio.create_task(self._clear_later(flown))
+
+    async def _clear_later(self, flown: FlightPlan | None) -> None:
+        await asyncio.sleep(CLEAR_AFTER_S)
+        if self.live is None and self.status not in ("starting", "running"):
+            self.clear_flight(flown)
+
+    def clear_flight(self, flown: FlightPlan | None = None) -> None:
+        """Nothing of the last flight left on screen: the aircraft, the traffic, the path, the radio log and the
+        flight's details; its plan too (``flown``), unless a new one was loaded since."""
+        self._clear_task = None
+        self.flight, self.own, self.traffic = {}, None, []
+        self.radio.clear()
+        self.companion.trail = []
+        if flown is not None and self.plan is flown:
+            self.plan = None
+            self.companion.set_route(route_view(None))
+        self.publish("cleared", {})
+        self._push_state()
+        log.info("The last flight cleared from the screen")
 
     def _on_ready(self, live: LiveSession) -> None:
         self.live = live

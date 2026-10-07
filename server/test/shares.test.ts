@@ -47,6 +47,7 @@ describe("shared flights", () => {
     expect(html).toContain("PADRZ3");
     for (const secret of [email, "Gate 17", "Gate C14", "21:26", token]) expect(html).not.toContain(secret);
     expect(page.headers.get("Content-Security-Policy")).toContain("script-src https://localtc.test");
+    expect(page.headers.get("Content-Security-Policy")).toContain("img-src https://localtc.test https://tile.openstreetmap.org");
 
     expect((await putImage(token, share.slug, png())).status).toBe(200);
     html = await (await view(`/f/${share.slug}`)).text();

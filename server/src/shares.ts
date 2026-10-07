@@ -220,12 +220,14 @@ ${card && extra ? `<script src="${asset("minireplay.js")}"></script>` : ""}
 </html>`;
 }
 
+/** The page's headers. Its policy allows no inline styles (scripts set them on elements instead), and images only
+ * from the site and the map's tiles (OpenStreetMap, for the whole replay). */
 function pageHeaders(env: Env): Record<string, string> {
   const site = env.SITE_URL;
   return {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": PUBLIC_CACHE,
-    "Content-Security-Policy": `default-src 'none'; script-src ${site}; style-src ${site}; img-src ${site} data: blob:; ` +
+    "Content-Security-Policy": `default-src 'none'; script-src ${site}; style-src ${site}; img-src ${site} https://tile.openstreetmap.org data: blob:; ` +
       `font-src ${site} data:; connect-src ${site}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "Referrer-Policy": "no-referrer",
   };

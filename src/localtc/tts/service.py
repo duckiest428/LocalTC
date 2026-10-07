@@ -26,7 +26,7 @@ from localtc.sim_api import (
     Transcript,
 )
 from localtc.tts.player import Clip
-from localtc.tts.voices import PILOT_SPEAKER_SALT, SPEAKERS, delivery_for, speaker_for
+from localtc.tts.voices import PILOT_SPEAKER_SALT, SPEAKERS, delivery_for, shift_key, speaker_for
 
 log = logging.getLogger(__name__)
 
@@ -57,10 +57,12 @@ class VoiceOut:
         copilot: bool = True,
         speakers: tuple[int, ...] = SPEAKERS,
         crew_speaker: int | None = None,  # the copilot's own voice (``[crew] voice``); None: one picked for "pilot"
+        shift: int = 0,  # ATC's shift ([atc] shift): each station's voice is the person on shift's
     ) -> None:
         self.bus, self.synth, self.player = bus, synth, player
         self.effect, self.static, self.atis, self.copilot, self.speakers = effect, static, atis, copilot, speakers
         self.crew_speaker = crew_speaker
+        self.shift = shift
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
@@ -69,10 +71,12 @@ class VoiceOut:
         try:
             async for ev in self._events:
                 if isinstance(ev, AtcTransmission):
-                    await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.manner or ev.controller or "atc", keep=clip_id(ev))
+                    await self.say(ev.spoken or ev.text, shift_key(ev.station, self.shift), "atc",
+                                   manner=ev.manner or ev.controller or "atc", keep=clip_id(ev))
                 elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
                     if ev.speaker == "atc":
-                        await self.say(ev.spoken or ev.text, ev.station, "atc", manner=ev.controller or "atc", keep=clip_id(ev))
+                        await self.say(ev.spoken or ev.text, shift_key(ev.station, self.shift), "atc",
+                                       manner=ev.controller or "atc", keep=clip_id(ev))
                     else:
                         await self.say(ev.spoken or ev.text, f"chatter {ev.callsign}", "atc", manner="chatter", keep=clip_id(ev))
                 elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:

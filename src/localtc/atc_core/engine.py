@@ -337,6 +337,7 @@ class EngineConfig:
     # Each station a controller of their own (personality.py): their greetings, acknowledgements, corrections, their
     # manner in the model's words and their pace on the voice. Off: the plain greetings and sign-offs only.
     personalities: bool = True
+    shift: int = 0  # which shift is on ([atc] shift): other controllers at every station after a 5-hour break
     seed: int = 0  # 0 = derived from the callsign
     thresholds: PhaseThresholds = field(default_factory=PhaseThresholds)
     response_delay_s: tuple[float, float] = (1.5, 3.0)
@@ -4470,7 +4471,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
     # --- the controller as a person (personality.py) ----------------------------------------------------------
 
     def _controller(self, facility: Facility) -> "personality.Personality":
-        who = personality.profile(facility.station, facility.controller, icao=self.region.icao)
+        who = personality.profile(facility.station, facility.controller, icao=self.region.icao, shift=self.cfg.shift)
         if facility.station not in self._met:
             self._met.add(facility.station)
             logging.getLogger(__name__).info("ATC: the controller at %s is %s (%s)", facility.station, who.kind,

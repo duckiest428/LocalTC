@@ -73,6 +73,7 @@
 .rp-mark.takeoff, .rp-mark.landing { background: var(--rp-green); }
 
 .rp-plane { background: none; border: 0; }
+.rp-plane-turn { width: 30px; height: 30px; }
 .rp-plane svg path { fill: var(--green, #5fd068); stroke: #000; stroke-width: 1; }
 .rp-track { stroke: #9aa4ae; stroke-opacity: .45; fill: none; }
 .rp-flown { stroke: var(--green, #5fd068); stroke-opacity: .95; fill: none; }

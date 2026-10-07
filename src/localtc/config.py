@@ -167,6 +167,9 @@ class AtcConfig(_Section):
     # their greetings, acknowledgements, corrections and pace, and how the language model words their replies. The
     # same controller every time at a station. Off: plain greetings and sign-offs only.
     personalities: bool = True
+    # Which shift is on: the app moves it on when a flight starts 5 hours or more after the last one ended, so the
+    # controllers (and their voices) are new people then and the same through a flight and its replay. 0: the first.
+    shift: int = 0
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"
     transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere
@@ -349,6 +352,7 @@ class UiConfig(_Section):
     updates: Literal["notify", "auto", "off"] = "notify"
     flights_done: int = 0  # flights ended, for the one-time account suggestion
     account_prompted: bool = False  # the account suggestion was shown (once only)
+    last_flight_end: float = 0.0  # when the last flight ended (Unix time), for ATC's shifts ([atc] shift)
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"

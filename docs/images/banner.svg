@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-label="LocalTC: free air traffic control and a copilot for Microsoft Flight Simulator 2024">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1512"/>
+      <stop offset="0.55" stop-color="#0f1d1a"/>
+      <stop offset="1" stop-color="#132a24"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#2fbf71" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#2fbf71" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.035"/>
+    </pattern>
+    <path id="plane" d="M0 -70C5 -70 8 -64 8 -56L8 -22L74 8L74 18L8 2L8 28L26 40L26 48L4 42L4 54C4 60 2 64 0 66C-2 64 -4 60 -4 54L-4 42L-26 48L-26 40L-8 28L-8 2L-74 18L-74 8L-8 -22L-8 -56C-8 -64 -5 -70 0 -70Z"/>
+  </defs>
+  <rect width="1280" height="400" rx="24" fill="url(#sky)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#grid)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#glow)"/>
+
+  <!-- radar rings and a route -->
+  <g fill="none" stroke="#2fbf71" stroke-opacity="0.18">
+    <circle cx="1000" cy="190" r="70"/>
+    <circle cx="1000" cy="190" r="135"/>
+    <circle cx="1000" cy="190" r="200"/>
+  </g>
+  <path d="M760 360 C 860 300, 900 240, 1000 190 S 1160 90, 1250 40" fill="none" stroke="#d58cd6" stroke-width="3" stroke-dasharray="2 10" stroke-linecap="round" opacity="0.8"/>
+  <g transform="translate(1000 190) rotate(57) scale(0.62)" fill="#f2f5f3"><use href="#plane"/></g>
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#7fd6a4" opacity="0.9">
+    <text x="1040" y="236">ACA8272</text>
+    <text x="1040" y="256" fill="#9fb3aa">13,000 ft  336 kt</text>
+  </g>
+
+  <!-- the logo and the name -->
+  <g transform="translate(96 112)">
+    <rect width="88" height="88" rx="20" fill="#0a0e0c" stroke="#2fbf71" stroke-opacity="0.45"/>
+    <g transform="translate(44 44) scale(0.5)" fill="#f2f5f3"><use href="#plane"/></g>
+  </g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif">
+    <text x="208" y="172" font-size="64" font-weight="800" fill="#f2f5f3" letter-spacing="-1">Local<tspan fill="#2fbf71">TC</tspan></text>
+    <text x="98" y="248" font-size="27" font-weight="600" fill="#e6ece9">Air traffic control and a copilot for MSFS 2024</text>
+    <text x="98" y="284" font-size="20" fill="#9fb3aa">Talk to real-sounding controllers, gate to gate. Free, open source, runs on your PC.</text>
+  </g>
+
+  <!-- a radio call -->
+  <g transform="translate(98 312)" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">
+    <rect width="600" height="54" rx="10" fill="#0a0e0c" fill-opacity="0.75" stroke="#2fbf71" stroke-opacity="0.3"/>
+    <text x="16" y="22" fill="#58c4dd" font-weight="700">ATC <tspan fill="#58c4dd" font-weight="400">Vancouver Ground 121.700</tspan></text>
+    <text x="16" y="42" fill="#e6ece9">Air Canada 8272, taxi to runway 31 via INNER, JA, J, H, E.</text>
+  </g>
+</svg>

@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="300" viewBox="0 0 1280 300" role="img" aria-label="How LocalTC works: you speak, Whisper hears you, the ATC engine decides, a voice answers through the radio">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#2fbf71"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="300" rx="24" fill="#0f1714"/>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" text-anchor="middle">
+    <g fill="#16231e" stroke="#2fbf71" stroke-opacity="0.35">
+      <rect x="40" y="70" width="200" height="140" rx="18"/>
+      <rect x="290" y="70" width="200" height="140" rx="18"/>
+      <rect x="540" y="70" width="200" height="140" rx="18"/>
+      <rect x="790" y="70" width="200" height="140" rx="18"/>
+      <rect x="1040" y="70" width="200" height="140" rx="18"/>
+    </g>
+    <g font-size="40">
+      <text x="140" y="128">🎙️</text>
+      <text x="390" y="128">👂</text>
+      <text x="640" y="128">🗼</text>
+      <text x="890" y="128">🗣️</text>
+      <text x="1140" y="128">📻</text>
+    </g>
+    <g font-size="20" font-weight="700" fill="#f2f5f3">
+      <text x="140" y="165">You speak</text>
+      <text x="390" y="165">It hears you</text>
+      <text x="640" y="165">ATC decides</text>
+      <text x="890" y="165">A voice answers</text>
+      <text x="1140" y="165">Over the radio</text>
+    </g>
+    <g font-size="14" fill="#9fb3aa">
+      <text x="140" y="190">push-to-talk, any key</text>
+      <text x="390" y="190">Whisper, on your PC</text>
+      <text x="640" y="190">real phraseology</text>
+      <text x="890" y="190">a person per station</text>
+      <text x="1140" y="190">static, squelch, the works</text>
+    </g>
+    <g stroke="#2fbf71" stroke-width="3" marker-end="url(#arrow)">
+      <line x1="244" y1="140" x2="284" y2="140"/>
+      <line x1="494" y1="140" x2="534" y2="140"/>
+      <line x1="744" y1="140" x2="784" y2="140"/>
+      <line x1="994" y1="140" x2="1034" y2="140"/>
+    </g>
+    <text x="640" y="44" font-size="22" font-weight="700" fill="#e6ece9">How a radio call works</text>
+    <text x="640" y="262" font-size="16" fill="#9fb3aa">All of it runs on your PC and works offline. A cloud model or cloud voice is optional, with your own key.</text>
+  </g>
+</svg>

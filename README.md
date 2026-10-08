@@ -1,35 +1,210 @@
-# ***https://buymeacoffee.com/petey1***
+<p align="center">
+  <img src="docs/images/banner.svg" alt="LocalTC: air traffic control and a copilot for Microsoft Flight Simulator 2024" width="100%">
+</p>
 
-# LocalTC
+<p align="center">
+  <a href="https://github.com/duckiest428/LocalTC/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/duckiest428/LocalTC?style=for-the-badge&color=2fbf71&label=release"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white">
+  <img alt="MSFS 2024" src="https://img.shields.io/badge/MSFS-2024-1f6feb?style=for-the-badge">
+  <img alt="Free forever" src="https://img.shields.io/badge/price-free%20forever-2fbf71?style=for-the-badge">
+  <a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-555?style=for-the-badge"></a>
+</p>
 
-Free, open-source **air traffic control and a copilot** for **Microsoft Flight Simulator 2024**. The point is ATC:
-talking to controllers from clearance delivery to the gate, the way a real flight goes, with nothing to pay, ever.
+<p align="center">
+  <a href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe"><b>⬇️ Download for Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://localtc.tech">🌐 Website</a>
+  &nbsp;·&nbsp;
+  <a href="CHANGELOG.md">📝 What's new</a>
+  &nbsp;·&nbsp;
+  <a href="https://localtc.tech/dashboard#support">💬 Support</a>
+  &nbsp;·&nbsp;
+  <a href="https://buymeacoffee.com/petey1">☕ Buy me a coffee</a>
+</p>
 
-**Local by default.** Speech recognition, the voices, the ATC engine, the copilot and a small language model all run
-on your PC, and flights work offline. **Bring your own key** if you want a cloud model for better wording (Mistral,
-Groq, Gemini, Cloudflare, NVIDIA and others, most with a free tier): then your transmissions go from your PC to the
-provider you picked, and to no one else. LocalTC has no server your flight goes through; the optional account only
-copies your logbook and feeds the phone and the web tracker.
+<p align="center"><a href="#for-pilots"><b>For pilots</b></a> · <a href="#for-developers"><b>For developers</b></a></p>
 
-- **The controllers:** a deterministic engine makes every decision (clearances, SIDs and STARs, vectors, approaches,
-  sequencing, handoffs); routine calls use exact phraseology (FAA or ICAO, IFR and VFR). Each station is a controller
-  with a voice and a manner of their own, the same through a flight, and new people on shift after a 5-hour break. Other traffic talks on the frequency.
-- **Your voice:** push-to-talk, transcribed locally by faster-whisper; ATC answers in Piper voices through a radio effect.
-- **The language model:** reads your calls and words the replies that have no template, local (Ollama) or the cloud
-  with your key; everything it says is checked against the script: every number, runway, route and readback.
-- **The copilot:** a first officer on the intercom with its own key and voice: callouts, challenge-and-response
-  checklists, watches (turbulence, wind shear, ice, fuel, the arrival's restrictions), its own side of the cockpit, and
-  the radio if you hand it over.
-- **The apps:** the desktop app (radio log, live map with ATC zones, airport lookup, SimBrief), the iPhone companion
-  (COM1, COM2 and the copilot on INT), the website's live tracker, a logbook with replays you can share, and Wrapped.
-- **Experimental:** traffic control, which follows MSFS's Live Traffic and puts back aircraft the sim drops nearby.
+---
 
-Windows is the only supported runtime. Development works on macOS too, using recorded sim sessions.
+<a id="for-pilots"></a>
 
-> **Not there yet:** ground services (GSX and the like), a proper cabin crew, airline operations (dispatch, ACARS),
-> careers and missions, shared ATC in multiplayer, and other sims.
+# ✈️ For pilots
 
-## Install (Windows)
+**LocalTC gives Microsoft Flight Simulator 2024 air traffic control you can actually talk to.** Press your
+push-to-talk key, make your call the way a real pilot would, and a controller answers, from clearance delivery
+to the gate. Every station is a different person with their own voice. You get a first officer on the intercom
+too.
+
+It runs on your own PC, works offline, and costs nothing. There's no subscription and no catch.
+
+<p align="center">
+  <img src="docs/images/radio.jpg" alt="The radio log: Vancouver Clearance and Ground, the pilot's calls and readbacks, other traffic on the frequency" width="100%">
+  <br><sub><i>A real flight out of Vancouver: the clearance, the taxi, your readbacks and the other traffic on the frequency.</i></sub>
+</p>
+
+## ✨ What you get
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<h3>🗼 Real controllers</h3>
+<p>Clearance, ground, tower, departure, centre, approach. SIDs and STARs, vectors, approaches, sequencing and handoffs, in real FAA or ICAO phraseology, for IFR and VFR. Get a readback wrong and they'll catch it.</p>
+</td>
+<td width="50%" valign="top">
+<h3>🎙️ Just talk</h3>
+<p>Hold a key or a yoke button and speak naturally. Speech recognition runs on your PC. Typing a call works too.</p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<h3>🧑‍✈️ A copilot beside you</h3>
+<p>Callouts, warnings for turbulence, wind shear, ice and fuel, and the arrival's restrictions, all over the intercom. Hand it the radios and it flies the comms for you.</p>
+</td>
+<td valign="top">
+<h3>📻 It sounds like a radio</h3>
+<p>Static, squelch and a voice for each station that stays the same all flight. Other aircraft talk on the frequency. Optional natural voices: <a href="docs/voices.md">Kokoro</a> on your PC, or Azure in the cloud.</p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<h3>🗺️ A live map that explains ATC</h3>
+<p>Your aircraft, the route, AI traffic, and who controls which airspace. You can see where each handoff will happen before it does. VFR mode shows terrain and airspace classes.</p>
+</td>
+<td valign="top">
+<h3>📒 Logbook, replays and Wrapped</h3>
+<p>Every flight is logged with its landing rate. Replay it with the whole radio transcript, share a flight card, and look back on your month or year in Wrapped.</p>
+</td>
+</tr>
+<tr>
+<td valign="top">
+<h3>📱 iPhone companion and web tracker</h3>
+<p>COM1, COM2 and the copilot on your phone, plus a live tracker on <a href="https://localtc.tech">localtc.tech</a> for friends to follow along. Both are optional.</p>
+</td>
+<td valign="top">
+<h3>🔒 Yours, offline</h3>
+<p>Everything runs on your PC. A cloud language model or cloud voice is optional and uses your own key. Nothing goes through a LocalTC server.</p>
+</td>
+</tr>
+</table>
+
+<p align="center">
+  <img src="docs/images/map.jpg" alt="The Live Map in flight: the departure and centre airspace, the tower's zone, the route and the aircraft climbing out" width="100%">
+  <br><sub><i>The Live Map with ATC zones: climbing out with Vancouver Departure, the centre's boundary ahead.</i></sub>
+</p>
+
+## 🛫 How it works
+
+<p align="center"><img src="docs/images/how-it-works.svg" alt="You speak, Whisper hears you on your PC, the ATC engine decides, a voice answers over the radio" width="100%"></p>
+
+The controllers' decisions come from a rules engine that follows real procedures, not from a chatbot. A small
+language model helps understand calls phrased in your own words. Everything it produces is checked against the
+script: every number, runway and route.
+
+## 🚀 Get started in three steps
+
+1. **[Download LocalTC-Setup.exe](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)**
+   and run it. It needs no admin rights. Windows may warn about an unknown publisher (the installer isn't
+   code-signed): choose **More info → Run anyway**.
+2. **Let it set up.** It picks the right speech and language models for your PC and downloads them once. After
+   that, flights work offline.
+3. **Open LocalTC** from the desktop, press **New Flight** to import your **SimBrief** plan (or type one in), load
+   up in MSFS 2024, and press **Start**. Hold **Right Ctrl** and call clearance.
+
+> [!TIP]
+> New to talking to ATC? **Getting Started**, at the bottom of the app, walks you through your first flight call
+> by call.
+
+### What you need
+
+| | |
+|---|---|
+| 🖥️ **System** | Windows 10 or 11 with Microsoft Flight Simulator 2024 |
+| 🎧 **Audio** | A microphone and speakers or a headset |
+| 💾 **Disk** | About 3 GB for the speech and language models (downloaded once) |
+| ⚡ **Hardware** | Any PC that runs MSFS. An NVIDIA card makes speech recognition faster and more accurate. |
+
+Updates are checked once a day and install with one click, never during a flight
+(Settings → Updates).
+
+## 🔊 Voices
+
+| | Where it runs | Sound | Speed | Cost |
+|---|---|---|---|---|
+| **Piper** (default) | your PC | clear radio voices, 904 speakers | instant | free |
+| **Kokoro** | your PC | more natural | a second or two per call | free (337 MB download) |
+| **Azure AI Speech** | Microsoft's cloud | the most natural, with regional accents | quick, over the internet | free tier, your own key |
+
+Choose in **Quick Settings → Models → ATC and copilot voices**. If a voice can't speak a line, the next one does.
+More in [docs/voices.md](docs/voices.md).
+
+## 🔐 Privacy
+
+- **Local by default.** Speech recognition, the voices, ATC, the copilot and the language model all run on your
+  PC.
+- **Cloud is opt-in, with your own key.** Turn on a cloud language model or cloud voice and your transmissions go
+  from your PC straight to the provider you picked, and to no one else.
+- **The account is optional.** It copies your logbook to the website and feeds the phone and the live tracker.
+  It never sends voice, recordings or settings. Details are on the [privacy page](https://localtc.tech/privacy).
+
+## ❓ FAQ
+
+<details>
+<summary><b>Is it really free?</b></summary>
+
+Yes. LocalTC is open source (AGPL-3.0) with no paid tier. If it made a flight better, you can
+[buy the developer a coffee](https://buymeacoffee.com/petey1).
+</details>
+
+<details>
+<summary><b>Do I need to know real ATC phraseology?</b></summary>
+
+No. Standard phraseology works best, but the language model understands calls in your own words.
+**Getting Started** in the app shows you what to say, and the copilot can work the radio for you.
+</details>
+
+<details>
+<summary><b>Does it work with add-on aircraft?</b></summary>
+
+ATC works with any aircraft. The copilot's hands (flaps, gear, lights) depend on the aircraft. Where it can't
+move an aircraft's switches, it calls them out for you instead.
+</details>
+
+<details>
+<summary><b>Does it work offline?</b></summary>
+
+Yes. After the first setup, everything runs on your PC. The cloud options are extras.
+</details>
+
+<details>
+<summary><b>Does it replace MSFS's own ATC or VATSIM?</b></summary>
+
+It's an alternative to MSFS's built-in ATC, for flying on your own. It isn't for shared online networks like VATSIM.
+</details>
+
+<details>
+<summary><b>Something went wrong. How do I report it?</b></summary>
+
+Turn on **Developer mode** in Quick Settings. Every flight is then recorded, **Mark** notes the moment it went
+wrong, and **Export session** zips everything up to send through **Support & feedback**.
+</details>
+
+> [!NOTE]
+> **Not there yet:** ground services (GSX and the like), a proper cabin crew, airline operations (dispatch,
+> ACARS), careers and missions, shared ATC in multiplayer, and other sims.
+
+<p align="center"><sub>Made for simmers who want the radio to feel real. ☕ <a href="https://buymeacoffee.com/petey1">Buy me a coffee</a></sub></p>
+
+---
+
+<a id="for-developers"></a>
+
+# 🛠 For developers
+
+The technical reference: installing from source, how the app and the ATC work inside, the layout of the code,
+and testing. LocalTC runs only on Windows, but everything except the live sim bridge builds and tests on macOS
+and Linux against recorded sessions. Where to start: [docs/architecture.md](docs/architecture.md).
+
+## Installing, in detail
 
 Download **[LocalTC-Setup.exe](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)**
 and run it. It needs no administrator rights and no git: it fetches the latest release from GitHub, checks
@@ -59,7 +234,7 @@ Options: `-Quality light|balanced|quality` (instead of automatic), `-Cpu` (no GP
 
 On macOS/Linux (development against recordings): `./install/install.sh`.
 
-## The app
+## The app, in detail
 
 Start **LocalTC** from the shortcut, or run `.venv\Scripts\localtc` with no command.
 

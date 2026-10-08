@@ -1,9 +1,5 @@
 # LocalTC Product Roadmap
-
-A staged roadmap for turning LocalTC into a broader flight-operations companion while preserving its strongest property: deterministic, testable ATC behavior with LLM assistance where it adds value.
-
-This roadmap is informed by the current LocalTC architecture and the public feature set of SayIntentions.AI, especially its GSX ground-services integration, AI cabin crew, co-pilot/checklists, AI traffic, missions, companion tools, and live operational context.
-
+;
 ## Product Direction
 
 LocalTC should become three connected systems:
@@ -14,33 +10,6 @@ LocalTC should become three connected systems:
 
 The LLM should provide natural interpretation, dialogue, and personality. Deterministic systems must remain authoritative for simulator state, safety-critical clearances, timing, data provenance, and replay.
 
-## Existing Foundations
-
-LocalTC already provides useful building blocks:
-
-- SimConnect owns live simulator polling, facility data, traffic snapshots, lifecycle events, COM tuning, and simulator commands.
-- Typed events in `src/localtc/sim_api/events.py` are the correct cross-module boundary.
-- `src/localtc/sim_bridge/definitions.py` can add simulator data, and `src/localtc/sim_api/commands.py` can add simulator actions.
-- The ATC engine already handles IFR/VFR, taxi, runways, approaches, readbacks, traffic advisories, gates, emergencies, ATIS, and deterministic replay.
-- `src/localtc/crew/` already contains a cockpit crew/PM model with facts, commands, aircraft profiles, and simulator mutations.
-- Airport layouts, taxi graphs, parking spots, gates, approaches, and cached facility data already exist.
-- Local Ollama, cloud models, and recorded LLM backends share an `LlmBackend` contract.
-- Piper, Whisper, radio DSP, copilot, ATIS, chatter, recordings, the desktop UI, iOS companion, account server, logbook, and Wrapped provide extension points.
-
-New features should use these boundaries instead of creating parallel state systems.
-
-## Non-Negotiable Principles
-
-- Keep flight-critical decisions deterministic and validated.
-- Treat LLM output as a proposal until it passes domain validation.
-- Every new event must be typed, timestamped, recordable, replayable, and diagnosable.
-- Real-world data must include source, retrieval time, expiry/freshness, and offline behavior.
-- Every external integration must have a capability check and a graceful no-integration mode.
-- Features that can disrupt a flight must be independently toggleable.
-- Preserve a useful experience when cloud services, GSX, charts, live data, or traffic injection are unavailable.
-- Do not silently invent operational facts.
-- Prefer one shared flight state over duplicated state in ATC, crew, UI, and companion code.
-- Keep Windows/SimConnect-specific code behind the existing bridge boundary.
 
 # Phase 0: Shared Operations Foundation
 
@@ -183,6 +152,8 @@ Integration goals:
 Use the safest available integration mechanism after researching GSX/MSFS support. Prefer a documented local API, process bridge, or supported command interface. Do not simulate completion when the external service has not completed.
 
 Each request needs a correlation ID, timeout, cancellation path, duplicate protection, and a fallback when GSX is absent. GSX must never be required for ordinary LocalTC flights.
+
+GSX Pro can be fully controlled using the remote control using its port. The main thing is to translate requests into a GSX command, if unsure put it through the LLM, and then get a response from the ground crew.
 
 ## Cockpit-to-cabin crew
 
@@ -616,32 +587,3 @@ Document clearly:
 - audio retention and account upload behavior
 - user controls for disabling incidents, cloud services, traffic, and data sharing
 
-# Suggested Delivery Order
-
-1. Shared flight operations state, event provenance, replay versioning, and diagnostics.
-2. ATC personality profiles and improved LLM response ownership.
-3. Real-world data provider abstraction plus toggleable ATIS/NOTAM/weather sources.
-4. Turnaround timeline, airport operations, cockpit-to-ground, and cabin crew foundations.
-5. GSX adapter with pushback and service status, then full turnaround services.
-6. Checklists, EFB, scratchpad, gate request map, and ChartFox links/integration.
-7. Conditional clearances, dynamic routing, holds, sequencing, and terrain safety.
-8. Experimental traffic control shadow, then carefully scoped reinjection.
-9. Missions, pilot profiles, route explorer, statistics, and achievements.
-10. Voice/provider expansion, regional voices, and broader companion polish.
-
-# Research and Integration References
-
-- SayIntentions.AI ATC: https://sayintentions.ai/atc
-- SayIntentions.AI ground services/GSX: https://sayintentions.ai/ground-services
-- SayIntentions.AI traffic injection: https://sayintentions.ai/traffic-injection
-- SayIntentions.AI co-pilot/checklists: https://sayintentions.ai/co-pilot
-- SayIntentions.AI cabin crew/crisis: https://sayintentions.ai/cabin-crew
-- SayIntentions.AI missions: https://sayintentions.ai/skyops
-- SayIntentions.AI product overview: https://sayintentions.ai/premium
-- ChartFox: https://chartfox.org/
-- GSX product information: https://www.fsdreamteam.com/products_gsx.html
-- LocalTC architecture: `docs/architecture.md`
-- LocalTC companion protocol: `docs/companion-protocol.md`
-- LocalTC replay format: `docs/replay-format.md`
-
-SayIntentions feature descriptions above are public product claims, not a statement of its private implementation. Verify API access, licensing, compatibility, and data rights before committing to any external integration.

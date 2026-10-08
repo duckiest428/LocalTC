@@ -15,6 +15,8 @@ class Speech:
     audio: np.ndarray  # mono float32, -1..1
     rate: int
     latency_ms: float
+    provider: str = "piper"  # who spoke it (tts.providers)
+    voice: str = ""  # which of its voices
 
     @property
     def seconds(self) -> float:

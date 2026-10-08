@@ -166,6 +166,9 @@ class AppController:
             (get, "cloud"): self.api_cloud,
             (post, "cloud/key"): self.api_cloud_key,
             (post, "cloud/test"): self.api_cloud_test,
+            (get, "tts"): self.api_tts,
+            (post, "tts/key"): self.api_tts_key,
+            (post, "tts/test"): self.api_tts_test,
             (post, "models/install"): self.api_install,
             (post, "models/profile"): self.api_profile,
             (get, "devices"): self.api_devices,
@@ -853,6 +856,53 @@ class AppController:
         results = await asyncio.to_thread(check, found, timeout_s=15.0)  # one service: every model it has
         return {"results": [r.__dict__ for r in results]}
 
+    async def api_tts(self, args: dict) -> dict:
+        """The voices: the provider chosen and its fallbacks, whether each can speak and why not, how each has done this
+        flight (latency, real-time factor, failures), Azure's characters this month, and whether a key is set (never
+        the key itself)."""
+        from localtc.app import KEY_ENV, tts_key, tts_region, voice_chain
+        from localtc.tts import kokoro
+
+        t = self.cfg.tts
+        key = await asyncio.to_thread(tts_key)
+        service = getattr(getattr(self.live, "speaker", None), "service", None) if self.live is not None else None
+        chain = getattr(service, "voices", None)
+        live = chain is not None
+        if chain is None:  # no flight: what the next one would have (Piper counted as there)
+            chain = await asyncio.to_thread(voice_chain, self.cfg, _PiperStandIn())
+        voices_dir = Path(t.voices_dir) if t.voices_dir else None
+        from localtc.tts.voices import default_voices_dir
+
+        return {"provider": t.provider, "live": live, "providers": chain.status() if chain else [],
+                "text_only": getattr(chain, "text_only", 0), "has_key": bool(key),
+                "key_from_env": any(os.environ.get(n) for n in KEY_ENV), "region": tts_region(self.cfg),
+                "kokoro": {"package": kokoro.available(), "installed": kokoro.installed(voices_dir or default_voices_dir(),
+                                                                                          t.kokoro_model),
+                           "model": t.kokoro_model,
+                           "size_mb": round((kokoro.FILES[kokoro.MODELS[t.kokoro_model]][0]
+                                             + kokoro.FILES[kokoro.VOICES_FILE][0]) / 2**20)},
+                "jobs": {k: v for k, v in self.jobs.items() if k == "kokoro"}}
+
+    async def api_tts_key(self, args: dict) -> dict:
+        from localtc.app import set_tts_key
+
+        await asyncio.to_thread(set_tts_key, str(args.get("key") or ""))
+        service = getattr(getattr(self.live, "speaker", None), "service", None) if self.live is not None else None
+        for p in getattr(getattr(service, "voices", None), "providers", ()):
+            if p.id == "azure":
+                from localtc.app import tts_key
+
+                p.key = await asyncio.to_thread(tts_key)
+                service.voices.reset("azure")
+        return await self.api_tts({})
+
+    async def api_tts_test(self, args: dict) -> dict:
+        """Each provider asked for the same ATC line, now: how long it took and how long the speech is, or why not.
+        Azure's test costs about 90 characters."""
+        from localtc.app import voice_chain
+
+        return {"results": await asyncio.to_thread(_tts_test, self.cfg, voice_chain, str(args.get("provider") or ""))}
+
     async def api_models(self, args: dict) -> dict:
         hw = await asyncio.to_thread(models.detect_hardware)
         status = await asyncio.to_thread(models.status, self.cfg)
@@ -874,7 +924,7 @@ class AppController:
     async def api_install(self, args: dict) -> dict:
         kinds = args.get("kinds") or [args.get("kind")]
         for kind in kinds:
-            if kind not in ("llm", "whisper", "voice"):
+            if kind not in ("llm", "whisper", "voice", "kokoro"):
                 raise HttpError(400, f"unknown model kind {kind!r}")
             if self.jobs.get(kind, {}).get("state") == "running":
                 continue
@@ -1169,6 +1219,50 @@ def _preview(cfg: Config, voice: str, station: str, text: str) -> float:
     player.play(Clip(audio, speech.rate)).done.wait(timeout=30)
     player.close()
     return round(speech.seconds, 1)
+
+
+class _PiperStandIn:
+    """Piper as the status shows it before a flight (the voice isn't loaded until then)."""
+
+    speakers = 904
+
+    def synthesize(self, text, speaker=None):  # never called
+        raise RuntimeError("not loaded")
+
+
+TEST_LINE = "Speedbird one two, runway two seven left, cleared for takeoff, wind two seven zero at eight."
+
+
+def _tts_test(cfg: Config, voice_chain, wanted: str) -> list[dict]:
+    from localtc.tts.persona import persona_for
+    from localtc.tts.providers import TtsError, check_audio
+    from localtc.tts.synth import PiperSynth
+    from localtc.tts.voices import download
+
+    piper = None
+    try:
+        piper = PiperSynth(download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None), rate=cfg.tts.rate)
+    except Exception:  # noqa: BLE001 - reported as Piper's result
+        pass
+    chain = voice_chain(cfg, piper)
+    out = []
+    for p in chain.providers if chain else []:
+        if wanted and p.id != wanted:
+            continue
+        row = {"id": p.id, "name": p.name}
+        if why := p.ready():
+            out.append(row | {"ok": False, "why": why})
+            continue
+        try:
+            speech = check_audio(p.synthesize(TEST_LINE, persona_for("London Heathrow Tower", "atc", manner="tower", locale="en-GB")), TEST_LINE)
+            seconds = len(speech.audio) / speech.rate
+            out.append(row | {"ok": True, "latency_ms": round(speech.latency_ms), "seconds": round(seconds, 1),
+                              "rtf": round(speech.latency_ms / 1000 / seconds, 3), "voice": speech.voice})
+        except TtsError as exc:
+            out.append(row | {"ok": False, "why": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            out.append(row | {"ok": False, "why": f"{type(exc).__name__}: {exc}"})
+    return out
 
 
 def _crew_preview(cfg: Config, sex: str, pick: int) -> float:

@@ -210,6 +210,17 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         path = download(cfg.tts.voice, voices_dir)
         say(f"Voice ready ({path.stat().st_size // 2**20} MB)" if path.exists() else "Voice ready", 1.0)
         return voice_path(cfg.tts.voice, voices_dir).exists()
+    if kind == "kokoro":
+        from localtc.tts import kokoro
+        from localtc.tts.voices import default_voices_dir
+
+        if why := kokoro.available():
+            say(f"Kokoro can't run: {why}", None)
+            return False
+        voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else default_voices_dir()
+        kokoro.download(voices_dir, cfg.tts.kokoro_model, say)
+        say("Kokoro ready", 1.0)
+        return kokoro.installed(voices_dir, cfg.tts.kokoro_model)
     if kind == "llm":
         backend = _ollama(cfg)
         state = backend.status()

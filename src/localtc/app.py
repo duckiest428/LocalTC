@@ -629,8 +629,77 @@ class VoiceOutput:
         self.player.close()
 
 
+TTS_KEY = "tts:azure"  # the Azure Speech key's name in the credential store
+KEY_ENV = ("AZURE_SPEECH_KEY", "SPEECH_KEY")  # Microsoft's samples call it SPEECH_KEY
+REGION_ENV = ("AZURE_SPEECH_REGION", "SPEECH_REGION")
+
+
+def tts_key() -> str:
+    """The Azure Speech key: from the environment, else the system's credential store (never the settings file)."""
+    for name in KEY_ENV:
+        if key := os.environ.get(name, "").strip():
+            return key
+    from localtc.account import TokenStore
+
+    return TokenStore().get(TTS_KEY) or ""
+
+
+def set_tts_key(key: str) -> None:
+    from localtc.account import TokenStore
+
+    store = TokenStore()
+    if key.strip():
+        store.set(TTS_KEY, key.strip())
+    else:
+        store.delete(TTS_KEY)
+
+
+def tts_region(cfg: Config) -> str:
+    return cfg.tts.azure_region.strip() or next((os.environ[n].strip() for n in REGION_ENV if os.environ.get(n, "").strip()), "")
+
+
+def voice_chain(cfg: Config, piper: object | None, *, key: str | None = None):
+    """The voices in fallback order: the provider chosen, Kokoro (when on), Piper (when loaded)."""
+    from localtc.tts.providers import PiperVoices, VoiceChain
+    from localtc.tts.voices import default_voices_dir
+
+    t = cfg.tts
+    voices_dir = Path(t.voices_dir) if t.voices_dir else default_voices_dir()
+    providers: list = []
+    if t.provider == "azure":
+        from localtc.tts.azure import AudioCache, AzureVoices, Usage
+
+        providers.append(AzureVoices(tts_key() if key is None else key, tts_region(cfg),
+                                     usage=Usage(data_dir() / "tts_usage.json", limit=t.azure_monthly_chars),
+                                     cache=AudioCache(data_dir() / "tts_cache", t.cache_mb), rate=t.rate,
+                                     styles=t.azure_styles, per_minute=t.azure_per_minute, timeout_s=t.timeout_s))
+    if t.provider == "kokoro" or t.kokoro:
+        from localtc.tts.kokoro import KokoroVoices
+
+        providers.append(KokoroVoices(voices_dir, model=t.kokoro_model, rate=t.rate, threads=t.kokoro_threads))
+    if piper is not None:
+        providers.append(PiperVoices(piper))
+    return VoiceChain(providers, timeout_s=t.timeout_s) if providers else None
+
+
+def _warm_kokoro(chain) -> None:
+    """Kokoro loaded and run once before the first line (half a second, then each line is quicker)."""
+    from localtc.tts.persona import persona_for
+
+    for p in chain.providers:
+        if p.id == "kokoro" and not p.ready():
+            try:
+                p.load()
+                p.synthesize("Radio check.", persona_for("warm up"))
+                p.casting.given.clear()
+                p.casting.taken.clear()
+            except Exception as exc:  # noqa: BLE001 - it's skipped, Piper speaks
+                log.warning("Kokoro unavailable (%s): Piper speaks", exc)
+
+
 async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
-    """Piper, the radio effect and the speakers. Never fails the session: without them ATC is text only."""
+    """The voices (tts.providers: the one chosen, falling back to Kokoro and Piper), the radio effect and the
+    speakers. Never fails the session: without them ATC is text only."""
     t = cfg.tts
     try:
         from localtc.tts.player import AudioPlayer
@@ -641,21 +710,35 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
         log.warning("ATC voice unavailable (%s): text only. Reinstall with the installer, or pip install piper-tts", exc)
         return None
     voices_dir = Path(t.voices_dir) if t.voices_dir else None
+    synth = None
     try:
         if not installed(t.voice, voices_dir):
             log.info("Downloading ATC voice %s (about 80 MB, once) ...", t.voice, extra=CONSOLE)
         voice_file = await asyncio.to_thread(download, t.voice, voices_dir)
         synth = await asyncio.to_thread(PiperSynth, voice_file, rate=t.rate)
+    except Exception as exc:  # no network for the first download, a broken voice file
+        log.warning("Piper unavailable (%s)", exc)
+    chain = await asyncio.to_thread(voice_chain, cfg, synth)
+    if chain is None:
+        log.warning("ATC voice unavailable: text only")
+        return None
+    try:
         player = AudioPlayer(t.output_device or None, volume=t.volume)
-    except Exception as exc:  # no network for the first download, a bad device name, a broken voice file
+    except Exception as exc:  # a bad device name
         log.warning("ATC voice unavailable (%s): text only", exc)
         return None
-    log.info("ATC voice: %s through %s", t.voice, player.name, extra=CONSOLE)
+    await asyncio.to_thread(_warm_kokoro, chain)
+    for row in chain.status():
+        if row["order"] == 0 and not row["ready"]:
+            log.info("%s can't speak (%s): the next voice will", row["name"], row["why"], extra=CONSOLE)
+    log.info("ATC voice: %s through %s", " > ".join(p.name for p in chain.providers), player.name, extra=CONSOLE)
     from localtc.tts.voices import crew_speaker
 
-    copilot_voice = crew_speaker(cfg.crew.voice_sex, cfg.crew.voice_pick, synth.speakers, t.voice)
-    service = VoiceOut(bus, synth, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
-                       crew_speaker=copilot_voice, shift=cfg.atc.shift if cfg.atc.personalities else 0)
+    copilot_voice = crew_speaker(cfg.crew.voice_sex, cfg.crew.voice_pick, synth.speakers, t.voice) if synth else None
+    sex = {"female": "F", "male": "M"}.get(cfg.crew.voice_sex, "")
+    service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
+                       crew_speaker=copilot_voice, crew_sex=sex, crew_pick=cfg.crew.voice_pick,
+                       shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional)
     return VoiceOutput(service, player)
 
 

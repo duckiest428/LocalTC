@@ -279,6 +279,7 @@ class AtcTransmission(Event, tag="atc_transmission"):
     worded_by: str = ""  # "template" or "model" (the language model's words for it); "": before this was recorded
     # The controller's manner, for the voice ("tower:hurried", ":busy" on a busy frequency): atc_core.personality.
     manner: str = ""
+    locale: str = ""  # the region's English, for the voice ("en-GB", "en-AU"); "": none in particular (region.accent)
 
 
 # --- ATC core events (produced by localtc.atc_core) -------------------------
@@ -373,6 +374,7 @@ class AtisBroadcast(Event, tag="atis_broadcast"):
     spoken: str
     # The same broadcast worded a little differently for each time round the loop (0.4); () reads ``spoken`` each time.
     variants: tuple[str, ...] = ()
+    locale: str = ""  # the region's English, for the voice
 
 
 class RadioChatter(Event, tag="radio_chatter"):
@@ -386,6 +388,7 @@ class RadioChatter(Event, tag="radio_chatter"):
     text: str
     spoken: str = ""
     controller: str = ""  # tower, ground, ... (the controller's manner of speaking)
+    locale: str = ""  # the region's English, for the voices
 
 
 class SessionNote(Event, tag="session_note"):

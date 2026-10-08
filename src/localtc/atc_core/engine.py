@@ -709,7 +709,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
                     current = self.atis.current[key]
                     out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.com1_mhz,
                                              letter=current.letter, text=current.text, spoken=current.spoken,
-                                             variants=current.variants))
+                                             variants=current.variants, locale=regions.accent(icao)))
         return out
 
     def _runway_end(self, icao: str | None, own: OwnshipState):
@@ -1112,7 +1112,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         for line in lines:
             self._said_on.append((at, facility.station))
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker=line.speaker,
-                                    callsign=line.callsign, text=line.text, spoken=line.spoken, controller=facility.controller))
+                                    callsign=line.callsign, text=line.text, spoken=line.spoken, controller=facility.controller,
+                                    locale=self._locale(facility)))
             at += self._speech_s(line.spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)  # ATC doesn't talk over its own other traffic
         return out
@@ -4234,7 +4235,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             t=t, station=facility.station, frequency_mhz=facility.mhz, text=rendered.text, controller=facility.controller,
             instruction_id=item.instruction_id, spoken=rendered.spoken,
             worded_by="model" if item.worded_by == "model" else "template",
-            manner=self._manner(facility),
+            manner=self._manner(facility), locale=self._locale(facility),
         )
 
     # --- helpers ------------------------------------------------------------------------------------------------
@@ -4524,6 +4525,15 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if facility is None or not self.cfg.personalities:
             return ""
         return self._controller(facility).describe(self._workload(facility))
+
+    def _locale(self, facility: Facility) -> str:
+        """The English of the controller's region, for the voice: its airport's, or for a centre the FIR the aircraft
+        is in."""
+        code = facility.airport
+        own = self.state.aircraft
+        if code is None and own is not None and (area := self.center_area(own)) is not None:
+            code = area.id
+        return regions.accent(code or self.state.flight.origin or self.state.flight.destination)
 
     def _manner(self, facility: Facility) -> str:
         """For the voice: the role, the controller's kind and a busy frequency ("tower:hurried:busy")."""

@@ -89,6 +89,18 @@ None of it has run against the sim yet.
    shows what's shadowed, put back and dropped. Check nothing is put back twice, onto a runway, or on top of another
    aircraft, and that everything LocalTC created goes when it's turned off.
 
+## Task 3: the voices with the sim running
+
+[docs/voices.md](voices.md): Kokoro (a more natural voice on the PC) took 1.1-1.8 s a line on the Mac (real-time
+factor 0.2-0.3); nobody has measured it beside MSFS.
+
+1. `localtc tts kokoro` (a 337 MB download), then with MSFS running a flight: `localtc tts bench --whisper`. Note each
+   voice's latency, real-time factor and word error in windows-findings.md, and try `--provider kokoro` with
+   `[tts] kokoro_model = "int8"` and `kokoro_threads` 2, 4 and 8: which is quickest without the sim stuttering?
+2. A flight with Quick Settings > ATC voice > Voices: Kokoro. Does ATC answer late? Does the sim's frame rate drop
+   while it speaks? Is any line given to Piper (the status under Voices says)?
+3. If the user has an Azure Speech key: the same with Azure, and the characters it counted for the flight.
+
 ## Fixing and leaving a note
 
 - Fix in the code, add or adjust a unit test where the fix can be tested without the sim (tests/test_traffic_control.py,

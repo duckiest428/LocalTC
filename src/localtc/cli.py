@@ -625,21 +625,44 @@ def _cmd_tts_devices(args: argparse.Namespace) -> int:
     return 0
 
 
+def _tts_chain(cfg, provider: str | None):
+    """The voices as a flight would have them ([tts] provider, or ``provider`` alone)."""
+    from localtc.app import voice_chain
+    from localtc.tts.synth import PiperSynth
+    from localtc.tts.voices import download
+
+    if provider:
+        cfg.tts.provider = provider if provider != "piper" else cfg.tts.provider
+    piper = None
+    if provider in (None, "piper"):
+        piper = PiperSynth(download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None),
+                           rate=cfg.tts.rate)
+    chain = voice_chain(cfg, piper)
+    if chain is not None and provider:
+        chain.providers = [p for p in chain.providers if p.id == provider] or chain.providers
+        chain.states = {p.id: chain.states[p.id] for p in chain.providers}
+    return chain
+
+
 def _cmd_tts_say(args: argparse.Namespace) -> int:
     from localtc.dsp.radio import clean, radio_effect
     from localtc.stt.audio import write_wav
+    from localtc.tts.aviation import speakable
+    from localtc.tts.persona import persona_for
     from localtc.tts.player import AudioPlayer, Clip
-    from localtc.tts.service import radio_words
-    from localtc.tts.synth import PiperSynth
-    from localtc.tts.voices import download, speaker_for
 
     cfg = load_config(args.config)
-    voice_file = download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None)
-    synth = PiperSynth(voice_file, rate=cfg.tts.rate)
-    speaker = speaker_for(args.station, synth.speakers)
-    speech = synth.synthesize(radio_words(args.text), speaker)
+    chain = _tts_chain(cfg, args.provider)
+    who = persona_for(args.station, "atc", locale=args.locale or "")
+    speech = chain.speak(speakable(args.text), who) if chain else None
+    if speech is None:
+        for row in chain.status() if chain else []:
+            print(f"{row['name']}: {row['why'] or row['last_error'] or 'failed'}")
+        print("No voice could speak it.")
+        return 1
     audio = clean(speech.audio) if args.no_effect else radio_effect(speech.audio, speech.rate, static=cfg.tts.static)
-    print(f"{args.station}: speaker {speaker}, {speech.seconds:.1f} s of speech in {speech.latency_ms:.0f} ms")
+    print(f"{args.station}: {speech.provider} {speech.voice}, {len(speech.audio) / speech.rate:.1f} s of speech in "
+          f"{speech.latency_ms:.0f} ms")
     if args.out:
         write_wav(args.out, audio, speech.rate)
         print(f"Wrote {args.out}")
@@ -647,6 +670,30 @@ def _cmd_tts_say(args: argparse.Namespace) -> int:
     player = AudioPlayer(args.device or cfg.tts.output_device or None, volume=cfg.tts.volume)
     print(f"Playing on {player.name} ...")
     player.play(Clip(audio, speech.rate)).done.wait()
+    return 0
+
+
+def _cmd_tts_kokoro(args: argparse.Namespace) -> int:
+    from localtc.models import install
+
+    cfg = load_config(args.config)
+    if args.model:
+        cfg.tts.kokoro_model = args.model
+    ok = install(cfg, "kokoro", lambda message, fraction: print(
+        f"\r{message} {'' if fraction is None else f'{fraction * 100:.0f} %'}   ", end="", flush=True))
+    print()
+    print("Kokoro is ready: choose it in Settings > Voices, or [tts] provider = \"kokoro\"." if ok else "Kokoro isn't ready.")
+    return 0 if ok else 1
+
+
+def _cmd_tts_bench(args: argparse.Namespace) -> int:
+    """Each provider on the same ATC lines: load time, latency, real-time factor, memory; with --whisper, how well
+    Whisper understands it through the radio (the word error rate)."""
+    from localtc.ttsbench import bench
+
+    cfg = load_config(args.config)
+    for line in bench(cfg, providers=args.provider or None, whisper=args.whisper):
+        print(line, flush=True)
     return 0
 
 
@@ -795,7 +842,7 @@ def build_parser() -> argparse.ArgumentParser:
     veval.add_argument("--llm", choices=["off", "live"], default="live", help="understand with the model (default) or not")
     veval.set_defaults(func=_cmd_voice_eval)
 
-    tts = sub.add_parser("tts", help="ATC's voice (Piper)")
+    tts = sub.add_parser("tts", help="ATC's voice (Piper, Kokoro, Azure)")
     tts_sub = tts.add_subparsers(dest="tts_command", required=True)
     tdevices = tts_sub.add_parser("devices", help="list speakers and headsets")
     tdevices.set_defaults(func=_cmd_tts_devices)
@@ -806,7 +853,17 @@ def build_parser() -> argparse.ArgumentParser:
     tsay.add_argument("--no-effect", action="store_true", help="without the radio effect")
     tsay.add_argument("--out", help="write a WAV file instead of playing it")
     tsay.add_argument("--device", help="output: its number or part of its name (default: [tts] output_device)")
+    tsay.add_argument("--provider", choices=["piper", "kokoro", "azure"], help="this voice only (default: [tts] provider)")
+    tsay.add_argument("--locale", help="the station's English: en-US, en-GB, en-AU, ... (default: none in particular)")
     tsay.set_defaults(func=_cmd_tts_say)
+    tkokoro = with_config(tts_sub.add_parser("kokoro", help="download the Kokoro voice model (once, 340 MB)"))
+    tkokoro.add_argument("--model", choices=["fp32", "int8"], help="default: [tts] kokoro_model")
+    tkokoro.set_defaults(func=_cmd_tts_kokoro)
+    tbench = with_config(tts_sub.add_parser("bench", help="time each voice on the same ATC lines"))
+    tbench.add_argument("--provider", action="append", choices=["piper", "kokoro", "azure"],
+                        help="only this one (repeatable; default: Piper, and Kokoro and Azure when they can speak)")
+    tbench.add_argument("--whisper", action="store_true", help="also score how well Whisper understands each, through the radio")
+    tbench.set_defaults(func=_cmd_tts_bench)
 
     setup = with_config(sub.add_parser("setup", help="download the speech, voice and language models; check the microphone"))
     setup.add_argument("--whisper-model", action="append", help="model(s) to download (default: the one [voice] uses)")

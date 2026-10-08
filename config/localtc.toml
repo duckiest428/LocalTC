@@ -104,8 +104,19 @@ vocabulary = true             # prime Whisper with aviation words and this fligh
 pre_roll_ms = 300
 tail_ms = 250
 
-[tts]                         # ATC talks back (Piper); --no-tts for text only
+[tts]                         # ATC talks back; --no-tts for text only
 enabled = true
+provider = "piper"            # piper (this PC, quick) | kokoro (this PC, more natural, slower) | azure (cloud, your key)
+kokoro = false                # Kokoro behind Azure too, before Piper (when downloaded: localtc tts kokoro)
+kokoro_model = "fp32"         # fp32 (310 MB) | int8 (88 MB)
+kokoro_threads = 4            # CPU threads Kokoro may use
+azure_region = ""             # your Azure Speech resource's region (eastus, westeurope, ...); key: Settings > Voices or AZURE_SPEECH_KEY
+azure_monthly_chars = 500000  # stay within this many characters a month (the free tier's 500,000)
+azure_per_minute = 20         # requests a minute (the free tier's 20); 0 = no limit
+azure_styles = false          # each controller's manner as a speaking style, where the voice has one
+cache_mb = 50                 # cloud speech kept on this PC so repeated lines aren't sent again
+timeout_s = 8.0               # a provider slower than this for a line hands it to the next
+regional = true               # stations speak their region's English where the provider has it
 voice = "en_US-libritts_r-medium"   # multi-speaker: every controller gets its own voice (localtc setup downloads it)
 voices_dir = ""               # blank = %LOCALAPPDATA%\LocalTC\voices
 output_device = ""            # blank = default speakers/headset; or part of its name (localtc tts devices)

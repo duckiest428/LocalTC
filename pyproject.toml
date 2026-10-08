@@ -19,6 +19,9 @@ dependencies = [
     "pynput>=1.7",
     # Voice out: Piper speech synthesis (prebuilt wheels for Windows, macOS and Linux; no separate binary).
     "piper-tts>=1.3",
+    # Kokoro-82M, the more natural voice on this PC (optional in the settings; its model is downloaded when chosen).
+    # kokoro-onnx (MIT) runs it on ONNX Runtime, as Piper does; it brings phonemizer and espeak-ng (GPL-3.0).
+    "kokoro-onnx>=0.6,<0.7; python_version < '3.14'",
     # The app's window (Edge WebView2, built into Windows 10/11). Elsewhere the app opens in the browser.
     "pywebview>=5.3; sys_platform == 'win32'",
     # The optional account's sign-in, kept in Windows Credential Manager / the macOS Keychain.
@@ -51,6 +54,7 @@ markers = [
     "windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)",
     "ollama: needs a running Ollama with the configured model (skipped otherwise)",
     "whisper: needs the Whisper base.en model (localtc setup); skipped otherwise",
+    "voices: needs the downloaded Piper and Kokoro voices (localtc setup, localtc tts kokoro); skipped otherwise",
 ]
 
 # Architecture rules. Run with `lint-imports`; tests/test_architecture.py checks the same rules.

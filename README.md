@@ -144,7 +144,7 @@ src/localtc/
   copilot.py   the copilot: reads back, changes frequencies, makes calls
   scenario.py  offline scripted-pilot scenarios
   stt/         microphone, push-to-talk, Whisper
-  tts/ dsp/    Piper voices, the radio effect, audio out
+  tts/ dsp/    the voices (Piper, Kokoro, Azure), the radio effect, audio out
   ui/          the app: local HTTP/SSE server, controller, static page (HTML/CSS/JS, Leaflet)
   flightplan.py  SimBrief import and typed flight plans
   models.py    model catalog, hardware profiles, downloads
@@ -299,6 +299,8 @@ localtc run ... --no-tts                          # text only
 ```
 
 ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for Windows, macOS and Linux, so there's no separate binary to install). The voice is `en_US-libritts_r-medium`: one 80 MB download (`localtc setup`, or automatically on the first flight) with 904 speakers. Every station gets its own speaker, and the same one every time: Phoenix Tower never sounds like Phoenix Approach. The pool is the 40 speakers Whisper understood best reading ATC phraseology over the radio (`tools/pick_speakers.py`). Synthesis takes about 0.3 s for a 10 s clearance.
+
+**Other voices, optional** (Quick Settings → ATC voice → Voices; [docs/voices.md](docs/voices.md)): **Kokoro** (Kokoro-82M, on your PC, more natural, slower: a 337 MB download, about 0.2-0.3 s of CPU work per second of speech) and **Azure AI Speech** (Microsoft's neural voices in every regional English, in the cloud, with your own key; the free tier's 500,000 characters a month cover about 50-60 hours of flying; while it's chosen, the words to be spoken go to Microsoft). The words are put into aviation English first, the same for every voice, and each station is the same person whichever voice speaks. If the chosen voice can't speak a line, Kokoro (when on) and then Piper do; with none, ATC is text.
 
 **Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
 

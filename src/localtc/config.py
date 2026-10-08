@@ -272,9 +272,24 @@ class VoiceConfig(_Section):
 
 
 class TtsConfig(_Section):
-    """ATC's voice: Piper speech, through a radio effect, out of the speakers or headset."""
+    """ATC's voice: speech (Piper, Kokoro or Azure: localtc.tts.providers), through a radio effect, out of the
+    speakers or headset."""
 
     enabled: bool = True
+    # Who speaks: piper (on this PC, quick, always there) | kokoro (on this PC, more natural, slower; a 340 MB
+    # download) | azure (Microsoft's neural voices in the cloud: your own key, the words leave this PC).
+    # Falls back to Kokoro (when kokoro is on) and then Piper; with none, ATC is text.
+    provider: Literal["piper", "kokoro", "azure"] = "piper"
+    kokoro: bool = False  # Kokoro behind a cloud provider too (before Piper), when it's downloaded
+    kokoro_model: Literal["fp32", "int8"] = "fp32"  # fp32 310 MB (the quicker on the CPUs tried); int8 88 MB
+    kokoro_threads: int = 4  # CPU threads for Kokoro (the sim needs the rest)
+    azure_region: str = ""  # the region of your Azure Speech resource (eastus, westeurope, ...); the key isn't kept here
+    azure_monthly_chars: int = 500_000  # the allowance to stay within (F0, the free tier: 500,000 a month)
+    azure_per_minute: int = 20  # requests a minute (F0: 20); 0 for no limit (a paid resource)
+    azure_styles: bool = False  # the controller's manner as a speaking style, where the voice has one (billed characters)
+    cache_mb: float = 50.0  # cloud speech kept on this PC so a repeated line isn't sent again; 0 none
+    timeout_s: float = 8.0  # the longest a provider may take for a line before the next is asked
+    regional: bool = True  # stations speak their region's English (British in the UK, Australian in Australia) where a provider can
     voice: str = "en_US-libritts_r-medium"  # a Piper voice; multi-speaker voices give each controller its own
     voices_dir: str = ""  # blank = %LOCALAPPDATA%\LocalTC\voices
     output_device: str = ""  # blank = the system default output; or part of its name, or its number

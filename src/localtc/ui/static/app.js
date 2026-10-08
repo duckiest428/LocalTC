@@ -681,9 +681,9 @@ const Settings = {
   async load() {
     const body = $("#settings-body");
     try {
-      const [s, m, d, c] = await Promise.all([api("settings"), api("models"), S.devices ? Promise.resolve(S.devices) : api("devices"),
-        api("cloud").catch(() => null)]);
-      S.settings = s; S.models = m; S.devices = d; S.cloud = c;
+      const [s, m, d, c, v] = await Promise.all([api("settings"), api("models"), S.devices ? Promise.resolve(S.devices) : api("devices"),
+        api("cloud").catch(() => null), api("tts").catch(() => null)]);
+      S.settings = s; S.models = m; S.devices = d; S.cloud = c; S.tts = v;
       this.render();
     } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
   },
@@ -748,6 +748,59 @@ const Settings = {
           can't use them. The order and each
           service's models can be changed in the settings file ([cloud] order, models).</p>
       </div>`;
+  },
+  // Who speaks for ATC and the copilot: Piper (here, quick), Kokoro (here, more natural, slower) or Azure (the cloud,
+  // your own key), each falling back to the next. The key goes to the system's credential store and never comes back.
+  voicesPart(st) {
+    const v = S.tts;
+    if (!v) return "";
+    const by = Object.fromEntries((v.providers || []).map((p) => [p.id, p]));
+    const state = (id) => {
+      const p = by[id];
+      if (!p) return "";
+      if (!p.ready) return `<span class="mstatus missing">${esc(p.why)}</span>`;
+      if (p.resting_s) return `<span class="mstatus missing">resting ${p.resting_s} s (${esc(p.last_error)})</span>`;
+      const speed = p.latency_ms != null ? ` · ${p.latency_ms} ms a line, ${p.rtf}× real time` : "";
+      return `<span class="mstatus ok">&#10003; ${p.ok ? `${p.ok} lines` : "ready"}${speed}</span>`;
+    };
+    const k = v.kokoro, job = (v.jobs || {}).kokoro;
+    const usage = by.azure?.usage;
+    const opts = [["piper", "Piper: on this PC, quick, always there"], ["kokoro", "Kokoro: on this PC, more natural, slower"],
+      ["azure", "Azure AI Speech: Microsoft's neural voices, in the cloud (your key)"]];
+    return `<div class="row"><label>Voices<select id="s-provider">${opts.map(([id, label]) =>
+        `<option value="${id}" ${st.tts.provider === id ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
+      <div class="small voices-status">
+        ${by.azure ? `<div><b>Azure</b> ${state("azure")}</div>` : ""}
+        ${by.kokoro ? `<div><b>Kokoro</b> ${state("kokoro")}</div>` : ""}
+        ${by.piper ? `<div><b>Piper</b> ${state("piper")}</div>` : ""}
+        ${v.text_only ? `<div class="mstatus missing">${v.text_only} lines this flight had no voice (text only)</div>` : ""}
+        <div class="muted">If the voice chosen can't speak a line, the next one does: ${st.tts.provider === "azure" ? "Azure, " : ""}${st.tts.provider === "kokoro" || st.tts.kokoro ? "Kokoro, " : ""}Piper, then text.</div>
+      </div>
+      <details class="cloud-services" ${this.voicesOpen ? "open" : ""} id="voices-more">
+        <summary><b>Kokoro and Azure</b></summary>
+        <p class="small"><b>Kokoro</b> (Kokoro-82M, Apache-2.0) runs on this PC: nothing leaves it. Its voices sound more natural
+          than Piper's, American or British. It needs a ${k.size_mb} MB download and about 0.2-0.3 s of CPU work per second of
+          speech, so a long clearance starts a second or two later than with Piper.
+          ${k.package ? `<br><span class="mstatus missing">${esc(k.package)}</span>` : k.installed
+            ? '<br><span class="mstatus ok">&#10003; Downloaded</span>'
+            : `<br><button class="btn small" id="s-kokoro-get" ${job?.state === "running" ? "disabled" : ""}>Download Kokoro (${k.size_mb} MB)</button>`}
+          </p><div class="progress busy" id="p-kokoro" hidden><div></div></div>
+        <label class="check-row"><input type="checkbox" id="s-kokoro" ${st.tts.kokoro ? "checked" : ""}> Kokoro stands in for Azure before Piper does</label>
+        <p class="small"><b>Azure AI Speech</b> is Microsoft's: natural voices in every regional English (British in the UK,
+          Australian in Australia ...). It's off unless chosen, and needs your own Speech resource (the free F0 tier: 500,000
+          characters and 20 lines a minute; a flight uses roughly 8,000-10,000 characters an hour). While it's chosen, the
+          words ATC and the copilot say go to Microsoft to be spoken, nothing else of the flight; Microsoft says it doesn't
+          keep the text or the audio. Lines heard before come from this PC.
+          <a href="${"https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices"}">Create a Speech resource</a></p>
+        <div class="row"><label>Region<input id="s-az-region" value="${esc(st.tts.azure_region || "")}" placeholder="eastus" spellcheck="false"></label></div>
+        <div class="cloud-key">${v.key_from_env ? '<span class="small muted">The key comes from AZURE_SPEECH_KEY.</span>' :
+          `<input type="password" autocomplete="off" spellcheck="false" id="s-az-key" placeholder="${v.has_key ? "Key saved: paste a new one to replace it" : "Paste your Speech resource key"}">
+          <button class="btn small" id="s-az-save">Save</button>${v.has_key ? '<button class="btn small" id="s-az-clear">Remove</button>' : ""}`}
+          <button class="btn small" id="s-tts-test">Test the voices</button></div>
+        ${usage ? `<div class="small">This month: <b>${usage.chars.toLocaleString()}</b> of ${usage.limit.toLocaleString()} characters
+          (${usage.percent} %, LocalTC's own count)${usage.cached ? `, ${usage.cached} lines from this PC` : ""}.</div>` : ""}
+        <div class="small cloud-test" id="tts-test"></div>
+      </details>`;
   },
   // A yoke or joystick button found by pressing it: pick the device from the list (the controllers Windows has
   // connected, through the window's Gamepad API), press Detect, then the button. Written as MSFS names it,
@@ -815,6 +868,34 @@ const Settings = {
   bindCloud() {
     const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);
     on("#s-cloud", "change", (e) => this.save("cloud", "enabled", e.target.checked));
+    const ttsRefresh = async (v) => { S.tts = v || await api("tts"); this.render(); };
+    on("#s-provider", "change", async () => { if (await this.save("tts", "provider", $("#s-provider").value)) ttsRefresh(); });
+    on("#s-kokoro", "change", async (e) => { if (await this.save("tts", "kokoro", e.target.checked)) ttsRefresh(); });
+    on("#s-az-region", "change", async () => { if (await this.save("tts", "azure_region", $("#s-az-region").value.trim().toLowerCase())) ttsRefresh(); });
+    $("#voices-more")?.addEventListener("toggle", (e) => { this.voicesOpen = e.target.open; });
+    on("#s-kokoro-get", "click", async () => {
+      try { await api("models/install", { kinds: ["kokoro"] }); toast("Downloading Kokoro ..."); } catch (e) { fail(e); }
+    });
+    on("#s-az-save", "click", async () => {
+      const key = $("#s-az-key").value.trim();
+      if (!key) { toast("Paste the key first", true); return; }
+      try { await ttsRefresh(await api("tts/key", { key })); toast("Key saved"); } catch (e) { fail(e); }
+    });
+    on("#s-az-clear", "click", async () => {
+      try { await ttsRefresh(await api("tts/key", { key: "" })); toast("Key removed"); } catch (e) { fail(e); }
+    });
+    on("#s-tts-test", "click", async (e) => {
+      const out = $("#tts-test");
+      e.target.disabled = true; out.textContent = "Speaking the same line with each voice ...";
+      try {
+        const { results } = await api("tts/test", {});
+        out.innerHTML = results.map((r) => r.ok
+          ? `<span class="ok">&#10003; ${esc(r.name)} (${esc(r.voice)}): ${r.seconds} s of speech in ${r.latency_ms} ms (${r.rtf}× real time)</span>`
+          : `<span class="bad">&#10007; ${esc(r.name)}: ${esc(r.why)}</span>`).join("<br>");
+        S.tts = await api("tts");
+      } catch (err) { out.textContent = err.message; }
+      e.target.disabled = false;
+    });
     on("#s-cloud-local", "change", (e) => this.save("cloud", "local_fallback", e.target.checked));
     on("#s-cloud-copilot", "change", (e) => this.save("cloud", "copilot", e.target.checked));
     this.cloudOpen ??= new Set();
@@ -915,6 +996,7 @@ const Settings = {
 
       <div class="card">
         <h3>ATC voice</h3>
+        ${this.voicesPart(st)}
         <div class="row"><label>Speakers or headset<select id="s-out">${devOpts(S.devices.outputs || [], st.tts.output_device)}</select></label></div>
         <div class="row">
           <label>Volume <input type="range" id="s-volume" min="0" max="1" step="0.05" value="${st.tts.volume}"></label>
@@ -1346,7 +1428,7 @@ const Settings = {
   jobs(jobs) {
     if (!$("#settings-body .card")) return;
     let msg = [];
-    for (const kind of ["llm", "whisper", "voice"]) {
+    for (const kind of ["llm", "whisper", "voice", "kokoro"]) {
       const bar = $(`#p-${kind}`), j = jobs[kind];
       if (!bar) continue;
       bar.hidden = !j || j.state !== "running";
@@ -1354,9 +1436,13 @@ const Settings = {
         bar.classList.toggle("busy", j.fraction == null);
         bar.firstElementChild.style.width = j.fraction == null ? "" : `${Math.round(j.fraction * 100)}%`;
       }
-      if (j) msg.push(`${{ llm: "Language model", whisper: "Whisper", voice: "Voice" }[kind]}: ${j.message}`);
+      if (j) msg.push(`${{ llm: "Language model", whisper: "Whisper", voice: "Voice", kokoro: "Kokoro" }[kind]}: ${j.message}`);
       const key = j ? `${kind}:${j.state}:${j.message}` : "";
-      if (j && j.state !== "running" && !this.seenJobs.has(key)) { this.seenJobs.add(key); if (S.models) setTimeout(() => this.refreshModels(), 300); }
+      if (j && j.state !== "running" && !this.seenJobs.has(key)) {
+        this.seenJobs.add(key);
+        if (kind === "kokoro") setTimeout(async () => { S.tts = await api("tts").catch(() => S.tts); this.render(); }, 300);
+        else if (S.models) setTimeout(() => this.refreshModels(), 300);
+      }
     }
     const el = $("#job-msg");
     if (el) el.textContent = msg.join(" · ");

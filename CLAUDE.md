@@ -45,5 +45,6 @@ Windows (PowerShell, the venv not activated; after a pull `.venv\Scripts\pip ins
 .venv\Scripts\python -m pytest tests -q -p no:cacheprovider --ignore=tests/test_llm_live.py
 .venv\Scripts\localtc app
 .venv\Scripts\localtc debug aircraft | hands | traffic
+.venv\Scripts\localtc tts bench --whisper   # the voices' speed beside the sim (docs/voices.md)
 "Install LocalTC.cmd"   # install this commit (double-click works too)
 ```

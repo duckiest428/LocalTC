@@ -57,6 +57,25 @@ def region_for(code: str | None) -> Region:
     return ICAO_DEFAULT
 
 
+# Where English is spoken as a first language (or is the language of the radio there), the voice's English: a
+# controller in London sounds British, one in Sydney Australian. Longest prefix wins; elsewhere none in particular.
+ACCENTS: dict[str, str] = {
+    "K": "en-US", "PA": "en-US", "PH": "en-US", "PG": "en-US", "PF": "en-US", "PO": "en-US", "PP": "en-US",
+    "TJ": "en-US", "C": "en-CA", "EG": "en-GB", "EI": "en-IE", "Y": "en-AU", "NZ": "en-NZ", "VA": "en-IN",
+    "VE": "en-IN", "VI": "en-IN", "VO": "en-IN", "FA": "en-ZA", "WS": "en-SG", "VH": "en-HK", "RP": "en-PH",
+}
+
+
+def accent(code: str | None) -> str:
+    """The English ATC speaks with at an airport or FIR ("en-GB" for EGLL), "" where it's nobody's first language
+    (a voice with no region in particular)."""
+    code = (code or "").upper()
+    for size in (2, 1):
+        if code[:size] in ACCENTS:
+            return ACCENTS[code[:size]]
+    return ""
+
+
 def forced(style: str, transition_ft: int = 0) -> Region | None:
     """A region from the setting ``[atc] phraseology``: None for "auto"."""
     if style == "faa":

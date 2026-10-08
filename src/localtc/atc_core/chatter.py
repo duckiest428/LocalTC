@@ -48,6 +48,7 @@ class Other:
     callsign: Callsign
     doing: str  # one of DOINGS
     level_ft: int = 0  # its altitude, to the nearest thousand (airborne)
+    runway: str = ""  # landing: the runway it's lined up with (not the one in use: Heathrow's A321 was on 27L)
 
 
 @dataclass
@@ -127,7 +128,7 @@ class Chatter:
                 out.append(("atc", "tower.takeoff", {"runway": runway}))
                 out.append(("atc", "tower.luaw", {"runway": runway}))
             elif doing == "landing" and wind is not None:
-                out.append(("atc", "tower.land", {"runway": runway, "wind": wind}))
+                out.append(("atc", "tower.land", {"runway": other.runway or runway, "wind": wind}))
         elif c in ("departure", "approach") and doing in ("climbing", "descending", "level"):
             if doing == "climbing":
                 out.append(("atc", "common.climb", {"altitude": min(17000, other.level_ft + rng.choice((2000, 4000, 6000)))}))

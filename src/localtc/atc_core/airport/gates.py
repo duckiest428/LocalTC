@@ -95,11 +95,12 @@ def occupied(gate: Gate, geometry: AirportGeometry, traffic: Iterable[TrafficTar
 
 def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traffic: Iterable[TrafficTarget],
            seed: str, real: GateData | None = None, international: bool = False,
-           exclude: Iterable[int] = ()) -> Gate | None:
+           exclude: Iterable[int] = (), near: tuple[float, float] | None = None) -> Gate | None:
     """A free stand for this aircraft, picked the same way every time the same flight replays. An airliner
     with no free gate of its size gets any free gate; if the whole field is full, nothing is assigned and
     ground just says "taxi to parking". With the real gates: a stand with a real gate's name over one the
-    scenery numbered on its own, an international gate for an international flight, and a domestic one otherwise."""
+    scenery numbered on its own, an international gate for an international flight, and a domestic one otherwise.
+    ``near``: (lat, lon) of a gate that turned out taken: the free one nearest to it instead."""
     traffic = list(traffic)
     heavy = airline and is_heavy(aircraft_type)
     everything = gates(geometry, real)
@@ -117,6 +118,9 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
         if any(g.international for g in everything):
             choices = [g for g in choices if g.international == international] or choices
     choices.sort(key=lambda g: g.index)
+    if near is not None:  # instead of one that was taken: the closest to it
+        there = geometry.xy(*near)
+        return min(choices, key=lambda g: (math.dist(there, geometry.xy(g.spot.lat, g.spot.lon)), g.index))
     return random.Random(zlib.crc32(f"gate{geometry.airport.icao}{seed}".encode())).choice(choices)
 
 

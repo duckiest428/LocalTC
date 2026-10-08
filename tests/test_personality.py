@@ -46,7 +46,7 @@ def test_what_a_controller_says_around_an_instruction_never_changes_it(kind):
 def test_a_correction_gets_firmer_never_different():
     assert pers.firmer("DP69, negative, taxi via Q1, Q, C1.", "DP69") == "DP69, negative, I say again, taxi via Q1, Q, C1."
     assert pers.firmer("DP69, read back cleared for takeoff.", "DP69") == \
-        "DP69, I need a full readback, read back cleared for takeoff."
+        "DP69, I still need the readback of cleared for takeoff."
     assert pers.gentler("DP69, negative, taxi via Q1.", "DP69") == "DP69, not quite, negative, taxi via Q1."
 
 

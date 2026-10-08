@@ -13,18 +13,28 @@ import sys
 from pathlib import Path
 
 
-def thin(source: Path, target: Path, *, own_every_s: float = 1.0, traffic_every_s: float = 10.0) -> tuple[int, int]:
+def thin(source: Path, target: Path, *, own_every_s: float = 1.0, traffic_every_s: float = 10.0,
+         cruise_every_s: float = 10.0) -> tuple[int, int]:
+    """``cruise_every_s``: own-aircraft state this sparse while level up high (above 18,000 ft, under 300 fpm up or
+    down), where nothing changes from one second to the next: an ocean crossing stays a small fixture."""
     src = source / "session.jsonl" if source.is_dir() else source
     opener = gzip.open if src.suffix == ".gz" else open
     target.mkdir(parents=True, exist_ok=True)
     kept = total = 0
     last: dict[str, float] = {}
+    high = False  # the own aircraft level up high (the cruise)
     with opener(src, "rt", encoding="utf-8") as fin, gzip.open(target / "session.jsonl.gz", "wt", encoding="utf-8") as fout:
         for line in fin:
             total += 1
             row = json.loads(line)
             kind, t = row.get("type"), row.get("t", 0.0)
             every = {"ownship_state": own_every_s, "traffic_snapshot": traffic_every_s}.get(kind)
+            if kind == "ownship_state":
+                high = row.get("alt_msl_ft", 0) > 18000 and abs(row.get("vs_fpm", 0)) < 300
+                if high:
+                    every = cruise_every_s
+            elif kind == "traffic_snapshot" and high:
+                every = traffic_every_s * 6
             if every is not None:
                 if t - last.get(kind, -1e9) < every:
                     continue

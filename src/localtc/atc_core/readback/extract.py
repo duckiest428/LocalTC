@@ -119,6 +119,8 @@ def hold_short(tokens: list[Token], expected: Any = None) -> list[str]:
     for i, token in enumerate(tokens):
         if token.kind != "number":
             continue
+        if i > 0 and tokens[i - 1].kind == "letter" and len(token.text) <= 2:
+            continue  # a taxiway's number ("delta eight" is D8), not the runway 08
         hit = _runway_at(tokens, i)
         if hit is None:
             continue
@@ -379,6 +381,16 @@ def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] 
             if filler and token.kind == "word" and token.text in ROUTE_FILLER and route:
                 i += 1
                 continue
+            if filler and route and _garbled(tokens, i, names):
+                # A word speech-to-text made of a taxiway ("charlie" heard as "trile") in the middle of a route: a
+                # name not understood, not the end of the route ("?", or "?1" for "trile 1").
+                name = "?"
+                if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
+                    name += tokens[i + 1].text
+                    i += 1
+                route.append(name)
+                i += 1
+                continue
             break
         name = token.text.upper()
         if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
@@ -389,6 +401,28 @@ def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] 
         if not filler and i < len(tokens) and not _is_route_token(tokens[i], names):
             break
     return tuple(route), i
+
+
+# Words that end a route or are never a taxiway heard wrong.
+NOT_GARBLED = {"runway", "runways", "hold", "holding", "short", "cross", "crossing", "contact", "monitor", "gate", "stand",
+               "parking", "ramp", "apron", "left", "right", "center", "centre", "behind", "follow", "give", "way",
+               "expedite", "tower", "ground", "and", "then", "via", "taxi", "to", "for", "information", "with", "the",
+               "spot", "pad", "terminal", "position", "line", "up", "wait", "continue", "approach", "departure",
+               "frequency", "point", "at", "on", "off", "of", "is", "we", "have", "squawk", "altimeter", "wind"}
+
+
+def _garbled(tokens: list[Token], i: int, names: set[str] | frozenset[str]) -> bool:
+    """``tokens[i]`` is a taxiway name speech-to-text didn't spell: a word that means nothing here, with more of the
+    route right after it (a name, or a garbled name and its number then a name)."""
+    token = tokens[i]
+    if token.kind != "word" or len(token.text) < 3 or token.text in NOT_GARBLED or token.text in names:
+        return False
+    j = i + 1
+    if j < len(tokens) and tokens[j].kind == "number" and len(tokens[j].text) <= 2:
+        j += 1
+    if j < len(tokens) and tokens[j].kind == "word" and j + 1 < len(tokens) and _garbled(tokens, j, names):
+        return True  # two in a row: "trile, trile 1, bravo"
+    return j < len(tokens) and _is_route_token(tokens[j], names) and not _callsign_letter(tokens, j)
 
 
 PROCEDURE_END = ("departure", "arrival", "transition")
@@ -453,6 +487,8 @@ def route_cost(said: list[str], want: list[str]) -> float:
             if j < len(want):
                 name = want[j]
                 shorter = {name[:m] + name[m + 1:] for m in range(len(name))} if len(name) > 1 else set()
+                if i < len(said) and said[i].startswith("?") and _wildcard(said[i], name):
+                    cost[i + 1][j + 1] = min(cost[i + 1][j + 1], here + 0.5)  # a name heard as nothing: half
                 for k in range(1, len(name) + 1):  # one entry, or several letters spelling this name
                     if i + k > len(said):
                         break
@@ -462,6 +498,12 @@ def route_cost(said: list[str], want: list[str]) -> float:
                     elif spelled in shorter:
                         cost[i + k][j + 1] = min(cost[i + k][j + 1], here + 0.5)
     return cost[len(said)][len(want)]
+
+
+def _wildcard(heard: str, name: str) -> bool:
+    """ "?" stands for any name, "?1" for one ending in that number ("C1")."""
+    digits = heard[1:]
+    return not digits or (name.endswith(digits) and name[: -len(digits)].isalpha())
 
 
 APPROACH_KINDS = {"ils": "ILS", "rnav": "RNAV", "gps": "RNAV", "rnp": "RNP", "visual": "VISUAL", "localizer": "LOC",

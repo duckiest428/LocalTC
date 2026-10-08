@@ -220,7 +220,8 @@ def firmer(text: str, callsign: str) -> str:
         return f"{head}I say again, {text[len(head):]}"
     head = f"{callsign}, read back "
     if text.startswith(head):
-        return f"{callsign}, I need a full readback, read back {text[len(head):]}"
+        # Only what's missing is wanted: "I need a full readback, read back frequency 125.2" asked for both.
+        return f"{callsign}, I still need the readback of {text[len(head):].rstrip('.')}."
     return text
 
 

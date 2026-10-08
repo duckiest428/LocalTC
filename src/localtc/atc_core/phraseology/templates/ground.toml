@@ -60,10 +60,32 @@ text = ["{callsign}, taxi to {gate} via {taxi_route}.", "{callsign}, {gate}, tax
 readback = { optional = ["taxi_route"] }
 pilot_readback = "Taxi to {gate} via {taxi_route}, {callsign_short}."
 
+# A runway on the way in: hold short of it, and the clearance to cross comes as the aircraft reaches it.
+[[template]]
+id = "ground.taxi_to_gate_hold_short"
+controller = "ground"
+text = ["{callsign}, taxi to {gate} via {taxi_route}, hold short runway {hold_short}.",
+        "{callsign}, {gate}, taxi via {taxi_route}, hold short of runway {hold_short}."]
+readback = { required = ["hold_short"], optional = ["taxi_route"] }
+pilot_readback = "Taxi to {gate} via {taxi_route}, hold short runway {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_hold_short"
+controller = "ground"
+text = ["{callsign}, taxi to parking via {taxi_route}, hold short runway {hold_short}."]
+readback = { required = ["hold_short"], optional = ["taxi_route"] }
+pilot_readback = "Taxi to parking via {taxi_route}, hold short runway {hold_short}, {callsign_short}."
+
 [[template]]
 id = "ground.taxi_cancelled"
 controller = "ground"
 text = ["{callsign}, roger, taxi clearance cancelled, hold position.", "{callsign}, roger, hold position."]
+
+# Still at the gate, not ready after all: nothing to hold.
+[[template]]
+id = "ground.taxi_cancelled_ready"
+controller = "ground"
+text = ["{callsign}, roger, taxi clearance cancelled, advise when ready.", "{callsign}, roger, call me when you're ready."]
 
 [[template]]
 id = "ground.taxi_to_gate_no_route"

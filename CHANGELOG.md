@@ -36,6 +36,14 @@ a new minor version adds features, a patch fixes them.
 - "Vectors" heard as "factors", and "taxi via" as "taxiviate".
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases along the timeline in their places.
 - **A replay's map fills its whole area** when the player opens or the window changes size, instead of a corner of it.
+- **Readbacks**: "125 decimal to" is 125.2 (and "point for" is 4); a taxiway speech-to-text turned into a word ("trile" for Charlie) no longer cuts the route short and fails a good readback; a taxiway's number ("delta eight") is never taken for the runway to hold short of. A second request for a missing item asks for that item ("I still need the readback of frequency 125.2"), not "a full readback".
+- **Taking back a request**: "can we abort our taxi request, we're not quite ready" (abort, withdraw and belay join cancel and disregard) cancels the taxi clearance, and ground says "advise when ready" instead of giving it again and asking "did you copy?".
+- **"Request back and start"** (speech-to-text's "push back and start") is the pushback request.
+- **A centre on a frequency an airport also uses**: after the handoff to Gander Oceanic on 120.4, LocalTC took the frequency for Heathrow Director's, 1,900 miles away, and nobody answered the check-in.
+- **No handing back and forth along a boundary**: a route along two centres' boundary was handed Shannon, Scottish, Shannon, Scottish in eight minutes; going back to the centre just left now takes ten minutes in its airspace.
+- **The landing order**: tower clears you to land only with nobody still ahead on the same final; traffic that appears ahead after the clearance (the sim adds AI aircraft late) gets "number two, follow the A321 on a two mile final, continue", and the clearance comes again once the runway's free. Other traffic is cleared for the runway it's lined up with, not the one in use.
+- **The taxi in across a runway** says "hold short runway 09R" in the clearance, and the clearance to cross comes as you reach it, not as you leave the runway you landed on (the same runway, crossed further along).
+- **A gate taken on the way in** is swapped for the free one nearest to it, with an apology first ("sorry, Gate 403 is occupied, taxi to Gate 402 via W, T"), not one across the airfield.
 
 ## [0.4.0] - 2026-09-28
 

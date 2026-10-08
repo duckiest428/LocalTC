@@ -254,6 +254,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     ) and not landing and not b_in_flight:
         add("request_ifr_clearance", atis=_atis(tokens), **vfr)
     pushing = _has_any(tokens, ("pushback",), ("push", "back"), ("push", "and", "start"), ("push", "start"),
+                       ("back", "and", "start"), ("bush", "back"), ("push", "pack"),  # speech-to-text: "request back and start"
                        ("request", "push"), ("ready", "for", "push"), ("ready", "to", "push"))
     tail = tail_side(tokens)
     if pushing and _has_any(tokens, *PUSH_READBACK) and not _has_any(tokens, *REQUEST_WORDS):

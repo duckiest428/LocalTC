@@ -767,7 +767,7 @@ const Settings = {
     const usage = by.azure?.usage;
     const opts = [["piper", "Piper: on this PC, quick, always there"], ["kokoro", "Kokoro: on this PC, more natural, slower"],
       ["azure", "Azure AI Speech: Microsoft's neural voices, in the cloud (your key)"]];
-    return `<div class="row"><label>Voices<select id="s-provider">${opts.map(([id, label]) =>
+    return `<div class="row"><label>ATC and copilot voices<select id="s-provider">${opts.map(([id, label]) =>
         `<option value="${id}" ${st.tts.provider === id ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
       <div class="small voices-status">
         ${by.azure ? `<div><b>Azure</b> ${state("azure")}</div>` : ""}
@@ -965,7 +965,8 @@ const Settings = {
           <label style="flex:0 1 120px">Runs on<select id="s-device">${["auto", "cpu", "cuda"].map((d) => `<option ${st.voice.device === d ? "selected" : ""} value="${d}">${{ auto: "Automatic", cpu: "CPU", cuda: "NVIDIA GPU" }[d]}</option>`).join("")}</select></label>
           <div>${status("whisper")}</div></div>
         <div class="progress" id="p-whisper" hidden><div></div></div>
-        <div class="row"><label>ATC voice (Piper)
+        ${this.voicesPart(st)}
+        <div class="row"><label>Piper voice (the default, and the fallback for the others)
           <select id="s-voice">${opt(cat.voice, st.tts.voice)}</select><span class="hint">${note(cat.voice, st.tts.voice)}</span></label>
           <div><button class="btn small" id="s-preview">&#9654; Preview</button> ${status("voice")}</div></div>
         <div class="progress" id="p-voice" hidden><div></div></div>
@@ -996,7 +997,6 @@ const Settings = {
 
       <div class="card">
         <h3>ATC voice</h3>
-        ${this.voicesPart(st)}
         <div class="row"><label>Speakers or headset<select id="s-out">${devOpts(S.devices.outputs || [], st.tts.output_device)}</select></label></div>
         <div class="row">
           <label>Volume <input type="range" id="s-volume" min="0" max="1" step="0.05" value="${st.tts.volume}"></label>

@@ -1,0 +1,26 @@
+# The FSLabs A319/A320/A321 (MSFS 2024). Its systems are its own: the sim's key events don't move its switches, and
+# the sim's flap handle and autopilot variables don't follow its own (the flap index reads 0-8, the autopilot always
+# off). So the copilot calls and checks what it can see (lights, gear, speeds), and leaves the switches to the pilot.
+# Its own L:vars could move them: [actions.x] lvar = "L:..." (docs/windows-session.md), then hands = true.
+[aircraft]
+name = "FSLabs Airbus"
+match = ["FSLabs", "FSL A3"]
+hands = false
+reads_flaps = false
+reads_autopilot = false
+flaps = "detents"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 230, 215, 195, 190]
+gear_extend_kt = 250
+gear_retract_kt = 220
+gear_extended_kt = 280
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+vmo_kt = 350
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 39000
+short_runway_ft = 7000

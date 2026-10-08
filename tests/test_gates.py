@@ -118,3 +118,45 @@ def test_the_live_map_pins_the_assigned_gate():
     engine._taxi_in(4520.0, engine.facility("ground"), engine.state.aircraft)
     pin = zones(engine, None, lambda icao: None, None)["gate"]
     assert pin["icao"] == "KPHX" and pin["name"] == engine.state.assignments.gate
+
+
+def phoenix_taxiing_in() -> AtcEngine:
+    cfg = with_recorded(load_config(), Recording(FLIGHT).header.config)
+    engine = AtcEngine(engine_config(cfg.flight, cfg.atc))
+    for event in Recording(FLIGHT).events():
+        if isinstance(event, SIM_EVENT_TYPES):
+            engine.handle(event)
+        if isinstance(event, OwnshipState) and event.t > 4520:
+            break
+    engine._scheduled.clear()
+    engine._taxi_in(4520.0, engine.facility("ground"), engine.state.aircraft)
+    engine.state.clearances["taxi_in"] = engine.state.clearances.get("taxi_in") or object()
+    engine._scheduled[-1].on_issue()
+    return engine
+
+
+def test_the_taxi_in_is_the_route_the_copilot_checks():
+    engine = phoenix_taxiing_in()
+    call = engine._scheduled[-1]
+    assert engine.state.assignments.taxi_route == tuple(call.slots["taxi_route"])  # not still the route out
+
+
+def test_a_gate_taken_on_the_way_in_is_swapped_for_a_free_one():
+    """The sim parks aircraft at the gates only as the flight gets close: the gate given free can be taken by the
+    time it's reached. Ground says so and sends the flight to another."""
+    engine = phoenix_taxiing_in()
+    a = engine.state.assignments
+    geo = engine.geometry("KPHX")
+    gate = next(g for g in stands.gates(geo, engine._real_gates("KPHX")) if g.index == a.gate_index)
+    own = engine.state.aircraft
+    assert engine._gate_now_taken(own) is None
+    engine._traffic = {9: TrafficTarget(object_id=9, lat=gate.spot.lat, lon=gate.spot.lon, alt_ft=1135.0, hdg_true=0.0,
+                                        gs_kt=0.0, on_ground=True)}
+    assert engine._gate_now_taken(own) == gate
+    engine._scheduled.clear()
+    engine._gates_taken.add(gate.index)
+    engine._taxi_in_route = None
+    engine.state.clearances.pop("taxi_in", None)
+    engine._taxi_in(4600.0, engine.facility("ground"), own, note=None)
+    call = engine._scheduled[-1]
+    assert call.instruction_id == "ground.taxi_to_gate" and call.slots["gate"] != gate.display

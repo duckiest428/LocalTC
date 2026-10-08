@@ -133,6 +133,10 @@ on = "approach.downwind"
 say = "{readback}"
 
 [[pilot]]
+on = "approach.turn"
+say = "{readback}"
+
+[[pilot]]
 on = "approach.base"
 say = "{readback}"
 

@@ -10,12 +10,25 @@ a new minor version adds features, a patch fixes them.
 - **ATC works in shifts**: each station keeps the same controller, voice and manner all flight (and in its replay), and when you fly again 5 hours or more after your last flight ended, other people are on: other personalities and other voices at every station.
 - **Checks against the sim** (`localtc debug aircraft`, `hands` and `traffic`): the aircraft's copilot profile and its MSFS 2024 input events; every control the copilot moves, read back and put back as it was; the AI traffic as LocalTC sees it, and an aircraft created and removed. Each writes a report.
 - **A close button on the Wrapped banner** in the logbook, which also goes away for good once Wrapped is opened.
+- **"Where are we?"** is answered from the aircraft's position and a list of towns and cities ("about 20 miles north-northeast of Charlotte, North Carolina"), never guessed.
+- **The FSLabs Airbus** has a copilot profile: its switches can't be moved from outside the aircraft, so the copilot calls and leaves them to you (saying so once), and it ignores the flap and autopilot readings, which don't follow the FSLabs' own.
+- **A gate taken on the way in**: the sim parks aircraft at the gates only as you get close, so ground checks the gate again on the taxi in and sends you to another, saying the first is occupied.
 
 ### Changed
+- **The copilot talks less, and only when it should.** No more prompts for the briefings and the clearance after you've said "later" (or "not now", "quiet"): its suggestions wait a quarter of an hour, while the callouts and warnings carry on. No ATIS read out unasked (it still sets its side of the altimeter), no "they're waiting for a readback", no "autopilot's available", no lights asked about one by one. A "check", "roger" or "yep" gets no reply.
+- **No checklists until there are real ones**: the copilot doesn't offer or read its made-up checklists; asked for one, it says so.
+- **The copilot only says what it knows.** Its language model gets the aircraft's position, the autopilot, the localizer and glideslope, the autobrake and what it can't see (the weather radar, outside), and every reply is checked against them: one claiming the autoland is armed, that we're on the glideslope, that the spoilers or autobrake are set, naming a place, or saying "we'll be fine" without the facts for it isn't said ("Can't tell that from here." instead). What you tell it you did ("I've deployed the speedbrakes") is acknowledged, never taken as a request, and a command it reads must name the thing ("auto brake off" is no longer the autopilot).
+- **Only the copilot's own talk is put in its words**: callouts and warnings keep theirs (reworded, "moderate turbulence" had become "turbulence ahead").
+- **The copilot's fuel calls**: the fuel against the plan's block is checked when the engines start (an add-on's tanks are often filled after the flight loads), and said only when it's off; the cruise burn is measured over level flight only and the descent counted at its own burn, so a level-off no longer projects "we'd land with 0".
+- **A switch that doesn't take is said once**; if none of the copilot's own ever take, it stops reaching for them and says so.
+- **Reminders that no longer apply aren't said**: a heading or speed reminder after ATC gave a new one, "gear up" after you called it; the assigned speed isn't nagged once cleared for the approach. Turbulence is called at most every ten minutes, and "smooth again" after two calm minutes. A step climb is asked for only once checked in with the new controller. The taxi speed call starts at 5 knots over the limit.
 - **The app clears the last flight** 10 minutes after it ends (the map, the aircraft, the radio log and the flight's details), and opens clean: a flight plan that's been flown isn't loaded again.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **Vectors from far out**: an arrival 30 miles out at 12,000 feet was judged too high from the join point alone and turned away on a downwind, heading north from an airport to its south. The miles before the join count now (a light aircraft still gets no steep descent).
+- **Runways on the taxi in** are crossed with a clearance, as on the way out, and the taxi-in route replaces the one out (the copilot quoted the departure airport's taxiways at the arrival).
+- "Vectors" heard as "factors", and "taxi via" as "taxiviate".
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases along the timeline in their places.
 - **A replay's map fills its whole area** when the player opens or the window changes size, instead of a corner of it.
 

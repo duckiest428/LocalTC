@@ -90,6 +90,8 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^(?:a|uh) (?:from|firm)\b|\ba firm\b", "affirm"),  # "affirm" said quickly: two words, one of them wrong
     (r"\bholding (?:port|pint|pointe)\b", "holding point"),
     (r"\bon my discussion\b|\bat my discussion\b|\bat your discussion\b", "at my discretion"),
+    (r"\b(?:factors|vectoring|vector's|victors)\b(?= (?:for|to|onto|as filed)\b)|\bsome (?:factors|victors)\b", "vectors"),
+    (r"\b(?:taxi ?viate|taxi via it|taxiv[ie]a)\b", "taxi via"),
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in FIXUPS]
 

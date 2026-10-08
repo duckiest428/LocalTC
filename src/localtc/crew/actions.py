@@ -58,6 +58,26 @@ class Cockpit:
         return self.own is not None and not self.own.on_ground
 
     @property
+    def flaps_known(self) -> bool:
+        """The sim's flap handle index means this aircraft's detents: not in an aircraft whose profile says it doesn't
+        read them, nor when the sim counts other positions than the profile names (an add-on's handle, 0-8)."""
+        p = self.profile
+        if not p.reads_flaps:
+            return False
+        if p.detents and self.systems is not None and self.systems.flaps_positions:
+            return self.systems.flaps_positions in (len(p.detents) - 1, len(p.detents))
+        return True
+
+    @property
+    def flaps_index(self) -> int | None:
+        """The flap handle's detent, None where it can't be told."""
+        return self.own.flaps_index if self.own is not None and self.flaps_known else None
+
+    @property
+    def autopilot_known(self) -> bool:
+        return self.profile.reads_autopilot
+
+    @property
     def flap_positions(self) -> int:
         if self.systems is not None and self.systems.flaps_positions:
             return self.systems.flaps_positions
@@ -139,7 +159,8 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
             event = SendSimEvent(name="FLAPS_SET", value=round(index / positions * FLAPS_MAX) if positions else 0)
         said = "Flaps up." if index == 0 else f"Flaps {name.upper() if '+' in name else name}."
         spoken = said.replace("+F", " plus F").replace("+f", " plus F")
-        return Plan(a, name, (_write(p, f"flaps_{index}", event, index),), _own(lambda o: o.flaps_index == index),
+        flaps_check: Check = lambda c2: None if not c2.flaps_known or c2.own is None else c2.own.flaps_index == index  # noqa: E731
+        return Plan(a, name, (_write(p, f"flaps_{index}", event, index),), flaps_check,
                     said, spoken, already=f"Flaps are already {name.replace('+F', ' plus F')}.")
     if a == "light":
         on = v == "on"
@@ -260,7 +281,7 @@ def safety(cmd: Command, c: Cockpit) -> Verdict:  # noqa: C901 - one rule per li
         if rolling:
             return Verdict("refuse", "Negative, not on the roll.")
         index = p.detent_index(v.replace("+f", ""), c.flap_positions)
-        current = own.flaps_index if own is not None else 0
+        current = c.flaps_index or 0
         if index is not None and index > current and c.airborne and (limit := p.vfe_for(index)) and ias > limit + SPEED_MARGIN_KT:
             name = p.detent_name(index, c.flap_positions)
             return Verdict("refuse", f"Unable, speed {ias:.0f}, flaps {name} limit {limit:.0f}.")

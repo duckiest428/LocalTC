@@ -125,12 +125,13 @@ STEEP_FT_PER_NM = 400  # a jet with the speedbrakes out, which has the miles to 
 STEEP_FROM_NM = 20.0  # further than this from the join, there's room to get down steeper than the glideslope
 
 
-def too_high(leg: Vector, altitude_ft: float, elev_ft: float) -> bool:
-    """Too high to go in this way: close in, more than 1,500 ft above a three degree path from where it would
-    join; further out, more than a steep descent can lose on the way (an arrival 30 miles out at 12,000 ft
-    comes down; it isn't sent away on a downwind)."""
-    miles = leg.join_nm if leg.join_nm is not None else leg.track_nm
-    rate = STEEP_FT_PER_NM if miles > STEEP_FROM_NM else GLIDESLOPE_FT_PER_NM
+def too_high(leg: Vector, altitude_ft: float, elev_ft: float, *, slow: bool = False) -> bool:
+    """Too high to go in this way: more than 1,500 ft above what the miles still to fly can lose (a three degree
+    path close in; further out, a steep descent). The miles are the whole way to the threshold, the flying to
+    the join included: an arrival 32 miles out at 12,500 ft, joining at 10, has 32 miles to get down in (only
+    the 10 had it turned away on a downwind, heading north, from an airport to its south)."""
+    miles = leg.track_nm
+    rate = STEEP_FT_PER_NM if miles > STEEP_FROM_NM and not slow else GLIDESLOPE_FT_PER_NM  # a light aircraft can't dive
     return altitude_ft - elev_ft > miles * rate + 1500
 
 

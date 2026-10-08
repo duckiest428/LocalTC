@@ -45,7 +45,8 @@ SAFETY, ROUTINE, CHATTER = 3, 2, 1  # as crew.monitor
 
 TURB_WINDOW_S = 20.0
 TURB_LEVELS = (("severe", 0.35, 1.0), ("moderate", 0.15, 0.5), ("light", 0.06, 0.25))  # (name, std g, peak g)
-TURB_CALM_S = 60.0
+TURB_CALM_S = 120.0
+TURB_AGAIN_S = 600.0  # "moderate turbulence" (and "smooth again") at most this often: not a running commentary
 SHEAR_WINDOW_S = 5.0
 SHEAR_KT = 15.0
 SHEAR_AGL = 1500.0
@@ -283,13 +284,14 @@ class WatchMixin:
         if level in ("moderate", "severe"):
             if level == "severe":
                 self._call(f"turb:severe:{t:.0f}", SAFETY, t, "Severe turbulence!")
-            else:
-                self._call(f"turb:moderate:{t:.0f}", ROUTINE, t, ["Moderate turbulence.", "Getting bumpy, moderate turbulence."])
-            self._call(f"turb:belts:{t:.0f}", CHATTER, t + 1, "Seatbelt sign on for the cabin?")
+            elif not self._call("turb:moderate", ROUTINE, t, ["Moderate turbulence.", "Getting bumpy, moderate turbulence."],
+                                again_s=TURB_AGAIN_S):
+                return  # said a little while ago: the same bumps, not news
+            self._call("turb:belts", CHATTER, t + 1, "Seatbelt sign on for the cabin?", again_s=TURB_AGAIN_S * 3)
             self.f.said["turb_called"] = t
         elif level in ("smooth", "light") and "turb_called" in self.f.said:
             self.f.said.pop("turb_called")
-            self._call(f"turb:smooth:{t:.0f}", ROUTINE, t, ["Smooth again.", "That's smoothed out."])
+            self._call("turb:smooth", ROUTINE, t, ["Smooth again.", "That's smoothed out."], again_s=TURB_AGAIN_S)
 
     # --- step climbs -----------------------------------------------------------------------------------------------
 
@@ -315,6 +317,11 @@ class WatchMixin:
         if abs(own.vs_fpm) > 300:
             return  # changing level: not now
         if t - self.unable_t < UNABLE_QUIET_S:
+            return
+        # Settled with the controller first: not with a handoff under way, and the station tuned has answered (asked
+        # before the check-in, the request went to the controller just left behind).
+        tuned = st.comms.tuned
+        if self.handoff is not None or tuned is None or self.p.last_atc is None or self.p.last_atc.station != tuned.station:
             return
         assigned = st.assignments.altitude_ft or level
         steps = self._steps()

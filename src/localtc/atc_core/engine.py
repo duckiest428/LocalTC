@@ -986,10 +986,17 @@ class AtcEngine(VfrMixin, DiversionMixin):
         # (A new ATIS letter isn't announced on its own: pilots found "information Juliett is now current" every few
         # minutes nothing like the real thing. The next clearance mentions it, or the pilot's check-in with the old
         # letter gets the new one: ``_atis_note``.)
-        if phase in (P.TAXI_OUT, P.RUNWAY_HOLD) and tuned == "ground" and (crossing := self._crossing_due(own)) is not None:
+        if phase in (P.TAXI_OUT, P.RUNWAY_HOLD, P.TAXI_IN) and tuned == "ground" and (crossing := self._crossing_due(own)) is not None:
             self._crossed.add(crossing)
             self._crossing = crossing
             self._schedule(t, "ground.cross_runway", {"runway": crossing.split("/")[0]}, st.comms.tuned, delay=False)
+        elif phase is P.TAXI_IN and tuned == "ground" and st.pending is None and (taken := self._gate_now_taken(own)) is not None:
+            # The sim puts parked aircraft at the gates only as the flight comes close: one given free can be taken
+            # by the time it gets there (a Cessna at gate 76). Ground says so and gives another, before it's reached.
+            self._gates_taken.add(taken.index)
+            self._taxi_in_route = None
+            st.clearances.pop("taxi_in", None)
+            self._taxi_in(t, st.comms.tuned, own, note=Phrase(f"{taken.display} is occupied", f"{taken.display} is occupied"))
         elif phase in (P.RUNWAY_HOLD, P.TAXI_OUT) and tuned == "tower" and self._takeoff_wait is not None \
                 and "takeoff" not in st.clearances and st.pending is None:
             self._release(t, st.comms.tuned, self._takeoff_wait, answering=False)
@@ -2811,7 +2818,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         leg = vectors.vector(geo, end, own.lat, own.lon, slow=own.gs_kt < vectors.SLOW_KT, after=self._vector_leg,
                              side=self._vector_side, heading_true=own.hdg_true)
         if leg.leg in ("straight_in", "base", "intercept") and self._vector_leg != "intercept" \
-                and vectors.too_high(leg, own.alt_indicated_ft, geo.airport.elev_ft):
+                and vectors.too_high(leg, own.alt_indicated_ft, geo.airport.elev_ft, slow=own.gs_kt < vectors.SLOW_KT):
             self._vector_side = None  # a new downwind, on the side it is on now
             return vectors.extended(geo, end, own.lat, own.lon)
         return leg
@@ -3916,7 +3923,22 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._schedule(t, landing, {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
                        on_issue=lambda: self._assign(arrival_runway=runway), note=self._caution_note(st.flight.destination))
 
-    def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None, *, requested: str | None = None) -> None:
+    def _gate_now_taken(self, own: OwnshipState) -> "stands.Gate | None":
+        """The gate ground gave, with an aircraft parked on it now (it wasn't when it was given), while there's still
+        taxiing to do to it."""
+        a = self.state.assignments
+        if a.gate_index is None or a.gate_index in self._gates_taken or "taxi_in" not in self.state.clearances:
+            return None
+        geo = self.geometry(self.state.flight.destination)
+        if geo is None:
+            return None
+        gate = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
+        if gate is None or math.dist(geo.xy(own.lat, own.lon), geo.xy(gate.spot.lat, gate.spot.lon)) < 60:
+            return None  # there already (the aircraft in it is ours)
+        return gate if stands.occupied(gate, geo, self._traffic.values()) else None
+
+    def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None, *, requested: str | None = None,
+                 note: Phrase | None = None) -> None:
         """The taxi to the gate. ``requested``: the gate the pilot asked for ("we'd like gate Echo 9"): theirs if the
         scenery has it; if it doesn't, parking, never a gate number made up in its place (Las Vegas's "Gate 88")."""
         ctx = self.tracker.context
@@ -3929,7 +3951,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if geo is not None:
             geo = self._with_taxiway_names(geo)
         gate = None
-        busy_note: Phrase | None = None
+        busy_note: Phrase | None = note
         text = (self.state.exchanges[-1].text if self.state.exchanges and self.state.exchanges[-1].speaker == "pilot"
                 else "").lower()
         taken_said = bool(re.search(r"\b(?:aircraft|airplane|plane|someone|somebody|occupied|taken)\b", text)) \
@@ -3962,9 +3984,18 @@ class AtcEngine(VfrMixin, DiversionMixin):
             taxiways = route.taxiways if route is not None else None
             if route is not None and graph is not None:
                 self._taxi_path = (geo.icao, [graph.positions[n] for n in route.nodes if n in graph.positions])
+                # Runways on the way in (not the one just left): cleared across each as the aircraft reaches it, as
+                # on the way out (Orlando's 18L, crossed with no word from ground).
+                landed = a.arrival_runway or ""
+                self._crossings = tuple(r for r in route.crossings if landed not in r.split("/"))
+                self._crossed = set()
             self._assign(gate=gate.display if gate else None, gate_index=gate.index if gate else None)
         where = a.gate
-        keep = lambda: setattr(self, "_taxi_in_route", taxiways)  # noqa: E731
+
+        def keep() -> None:
+            self._taxi_in_route = taxiways
+            self._assign(taxi_route=tuple(taxiways or ()))  # the route in, not still the one out (the copilot checks it)
+
         if where and taxiways:
             self._schedule(t, "ground.taxi_to_gate", {"taxi_route": taxiways, "gate": where}, facility, clearance="taxi_in",
                            on_issue=keep, note=busy_note)
@@ -4252,7 +4283,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         ctx = self.tracker.context
         if not self._crossings or ctx.hold_short is None or ctx.hold_short_distance_m is None:
             return None
-        if ctx.hold_short_distance_m > CROSSING_CLEARANCE_M or "taxi" not in self.state.clearances:
+        if ctx.hold_short_distance_m > CROSSING_CLEARANCE_M or not ({"taxi", "taxi_in"} & set(self.state.clearances)):
             return None
         runway = ctx.hold_short.runway.name
         if runway not in self._crossings or runway in self._crossed:

@@ -68,6 +68,16 @@ def test_the_pattern_only_moves_on():
     assert vectors.vector(geo, end, *close_in, after="intercept").leg == "intercept"
 
 
+def test_a_straight_in_from_afar_isnt_too_high_for_the_miles_before_the_join():
+    """32 miles out at 12,500 ft, joining 10 miles out: the 22 miles before the join count. Only the join's 10 had
+    the arrival sent north on a downwind, away from the airport."""
+    geo = AirportGeometry(KSEA)
+    leg = vectors.vector(geo, geo.end("16L"), *start(345, 32))
+    assert leg.leg == "straight_in" and leg.join_nm < 20 < leg.track_nm
+    assert not vectors.too_high(leg, 12500, KSEA.elev_ft)
+    assert vectors.too_high(leg, 20000, KSEA.elev_ft)  # really too high still is
+
+
 def test_step_down_altitudes():
     assert vectors.step_altitude(40, 433, 2500) == 10000  # 10,433 ft: the thousand below
     assert vectors.step_altitude(20, 433, 2500) == 5000

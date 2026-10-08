@@ -11,6 +11,7 @@ from typing import Any
 
 from localtc.atc_core.phraseology import speech
 from localtc.crew.actions import Cockpit
+from localtc.crew.places import where
 from localtc.sim_api import AtcTransmission
 from localtc.sim_api.geo import haversine_nm
 
@@ -25,6 +26,7 @@ class Picture:
     engine: Any = None  # the ATC engine, read only
     last_atc: AtcTransmission | None = None
     metric: bool = False  # fuel in kilograms (outside North America)
+    burn_pph: float | None = None  # the cruise burn measured from the fuel used (the monitor's), pounds an hour
 
     @property
     def destination(self) -> str | None:
@@ -49,8 +51,14 @@ class Picture:
         return f"{round(own.fuel_lb / 100) * 100:,} pounds"
 
     def endurance_min(self) -> float | None:
+        """Fuel over the burn: the one measured in the cruise where there is one (an add-on's fuel flow variable can
+        be anything), else the sim's fuel flow."""
         own = self.cockpit.own
-        if own is None or not own.fuel_lb or not own.fuel_flow_pph or own.fuel_flow_pph < 50:
+        if own is None or not own.fuel_lb:
+            return None
+        if self.burn_pph:
+            return own.fuel_lb / self.burn_pph * 60
+        if not own.fuel_flow_pph or own.fuel_flow_pph < 50:
             return None
         engines = (self.cockpit.systems.engines_running if self.cockpit.systems is not None else 0) or 1
         return own.fuel_lb / (own.fuel_flow_pph * engines) * 60
@@ -78,8 +86,14 @@ def facts(p: Picture) -> dict[str, str]:
             out["cleared altitude"] = speech.altitude_display(a.altitude_ft)
         if a.squawk:
             out["squawk"] = a.squawk
-        if a.departure_runway and st.phase in ("PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF"):
+        departing = st.phase in (None, "PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF")
+        if a.departure_runway and departing:
             out["departure runway"] = a.departure_runway
+        elif departing:
+            info = p.engine.current_atis(f.origin) if f.origin else None
+            planned = getattr(getattr(p.engine, "cfg", None), "dep_runway", None)
+            out["departure runway"] = "not assigned yet" + (f"; the ATIS has runway {info.runway} in use" if info else "") \
+                + (f"; the flight plan says {planned}" if planned else "")
         if a.arrival_runway:
             out["landing runway"] = a.arrival_runway
         if a.approach:
@@ -108,8 +122,13 @@ def facts(p: Picture) -> dict[str, str]:
             out["fuel"] = fuel
         if (endurance := p.endurance_min()) is not None:
             out["endurance"] = _hm(endurance)
+        out["position"] = where(own.lat, own.lon) or f"{abs(own.lat):.1f}{'N' if own.lat >= 0 else 'S'} " \
+            f"{abs(own.lon):.1f}{'E' if own.lon >= 0 else 'W'}, no town within 60 miles"
         out["gear"] = "down" if own.gear_down else "up"
-        out["flaps"] = c.profile.detent_name(own.flaps_index, c.flap_positions, on_ground=own.on_ground)
+        if c.flaps_index is not None:
+            out["flaps"] = c.profile.detent_name(c.flaps_index, c.flap_positions, on_ground=own.on_ground)
+        else:
+            out["flaps"] = "can't be read in this aircraft"
         if own.temperature_c is not None:
             out["outside temperature"] = f"{own.temperature_c:.0f} degrees"
         if own.wind_kt >= 3:
@@ -125,8 +144,21 @@ def facts(p: Picture) -> dict[str, str]:
                                      ("beacon", s.light_beacon), ("nav", s.light_nav), ("logo", s.light_logo)) if lit]
         out["lights on"] = ", ".join(on) or "none"
         out["spoilers"] = "armed" if s.spoilers_armed else "extended" if s.spoilers_pct > 40 else "stowed"
+        if c.autopilot_known:
+            modes = [m for m, on in (("heading", s.ap_heading), ("nav", s.ap_nav), ("approach", s.ap_approach),
+                                     ("altitude hold", s.ap_altitude), ("vertical speed", s.ap_vs), ("level change", s.ap_flc)) if on]
+            out["autopilot"] = ("on" + (f", {', '.join(modes)}" if modes else "")) if s.ap_master else "off"
+        else:
+            out["autopilot"] = "can't be read in this aircraft"
+        if own is not None and not own.on_ground:
+            out["localizer"] = ("captured" if abs(s.loc_deviation) < 20 else "alive") if s.loc_received else "not received"
+            out["glideslope"] = (("on it" if abs(s.gs_deviation) < 20 else "above us" if s.gs_deviation > 0 else "below us")
+                                 if s.gs_received else "not received")
+        if (brake := c.profile.autobrake_name(s.autobrake)):
+            out["autobrake"] = brake
     if p.last_atc is not None:
         out["ATC last said"] = f'{p.last_atc.station}: "{p.last_atc.text}"'
+    out["what I can't see"] = "the weather radar, the view outside, the autoland status, anything not listed here"
     return out
 
 
@@ -140,7 +172,8 @@ QUESTIONS: tuple[tuple[str, str], ...] = (
     (r"\bsquawk\b|transponder code", "squawk"),
     (r"\bweather\b|\bwinds?\b at|\bmetar\b|\batis\b", "weather"),
     (r"what time|\btime is it\b|\bzulu\b", "time"),
-    (r"(?:what|which) runway", "runway"),
+    (r"(?:what|which) runway|runway (?:are we|do we|will we)", "runway"),
+    (r"where are we|what (?:city|town|state|country)|which (?:city|town|state)|are we over|our (?:position|location)", "where"),
     (r"(?:what|which) gate", "gate"),
 )
 
@@ -148,7 +181,8 @@ QUESTIONS: tuple[tuple[str, str], ...] = (
 def answer(text: str, p: Picture) -> str | None:
     """The answer to one of the common questions, from the facts; None when it isn't one of them."""
     lowered = text.lower()
-    if not ("?" in text or re.match(r"^\s*(?:what|how|when|where|which|who|do|did|are|is|can you tell|tell me)\b", lowered)):
+    if not ("?" in text or re.match(r"^\s*(?:[a-z']+[,\s]+){0,2}(?:what|how|when|where|which|who|do|did|are|is|can you tell|tell me)\b",
+                                    lowered)):
         return None
     kind = next((k for pattern, k in QUESTIONS if re.search(pattern, lowered)), None)
     if kind is None:
@@ -177,8 +211,15 @@ def answer(text: str, p: Picture) -> str | None:
     if kind == "runway":
         for key in ("departure runway", "landing runway"):
             if key in f:
-                return f"Runway {f[key]}."
+                value = f[key]
+                return f"Runway {value}." if not value.startswith("not") else f"Not assigned yet{value[len('not assigned yet'):]}."
         return "No runway assigned yet."
+    if kind == "where":
+        own = p.cockpit.own
+        if own is None:
+            return None
+        place = where(own.lat, own.lon)
+        return f"We're {place}." if place else "Nowhere near a town; " + f["position"].split(",")[0] + "."
     if kind == "gate":
         return f"{f['gate']}." if "gate" in f else "No gate assigned yet."
     return None

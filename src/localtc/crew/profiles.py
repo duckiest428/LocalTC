@@ -61,14 +61,25 @@ class Profile:
     reversers: bool | None = None
     ceiling_ft: int = 41000
     short_runway_ft: int = 7000
+    # What the copilot can do and see in this aircraft. ``hands``: its switches move with the sim's events (an add-on
+    # with its own systems, the FSLabs Airbus, ignores them: the copilot calls, it doesn't reach). ``reads_flaps`` /
+    # ``reads_autopilot``: the sim's flap handle and autopilot variables follow the aircraft's own (not in the FSLabs).
+    hands: bool = True
+    reads_flaps: bool = True
+    reads_autopilot: bool = True
 
     def autobrake_name(self, position: int) -> str:
         """The switch position as said ("medium"), or "" when this aircraft's positions aren't known."""
         return self.autobrake[position] if 0 <= position < len(self.autobrake) else ""
 
     def matches(self, title: str, model: str) -> bool:
+        return self.match_length(title, model) > 0
+
+    def match_length(self, title: str, model: str) -> int:
+        """How specific the match is: the longest of its names in the title or model (0: none). "FSLabs" in "FSLabs
+        A321-211" beats "A321"."""
         words = f"{title} {model}".upper()
-        return any(m.upper() in words for m in self.match)
+        return max((len(m) for m in self.match if m and m.upper() in words), default=0)
 
     def detent_index(self, name: str, positions: int) -> int | None:
         """The handle index of a detent as the pilot says it ("2", "full", "one plus f", "up"), or None."""
@@ -116,7 +127,8 @@ def parse(data: dict) -> Profile:
         landing_detent=str(a.get("landing_detent", "")).lower(), taxi_max_kt=float(a.get("taxi_max_kt", 30)),
         autobrake=tuple(str(x).lower() for x in a.get("autobrake", ())),
         reversers=bool(a["reversers"]) if "reversers" in a else None, ceiling_ft=int(a.get("ceiling_ft", 41000)),
-        short_runway_ft=int(a.get("short_runway_ft", 7000)),
+        short_runway_ft=int(a.get("short_runway_ft", 7000)), hands=bool(a.get("hands", True)),
+        reads_flaps=bool(a.get("reads_flaps", True)), reads_autopilot=bool(a.get("reads_autopilot", True)),
     )
 
 
@@ -135,4 +147,8 @@ def load_all(user_dir: Path | None = None) -> list[Profile]:
 
 
 def for_aircraft(profiles: list[Profile], title: str, model: str) -> Profile:
-    return next((p for p in profiles if p.matches(title, model)), next((p for p in profiles if not p.match), Profile()))
+    """The profile that names the aircraft most specifically (the pilot's own first on a tie), else ``stock``."""
+    best = max(profiles, key=lambda p: p.match_length(title, model), default=None)
+    if best is not None and best.match_length(title, model) > 0:
+        return best
+    return next((p for p in profiles if not p.match), Profile())

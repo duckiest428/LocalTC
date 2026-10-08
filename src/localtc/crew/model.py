@@ -34,18 +34,26 @@ log = logging.getLogger(__name__)
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 ACTIONS = ("gear", "flaps", "light", "spoilers", "autopilot", "ap_mode", "autothrottle", "heading", "altitude",
            "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake")
-SYSTEM = """You are the first officer, pilot monitoring, in an airliner cockpit. You talk with the captain on the \
-intercom like a real, calm, experienced airline first officer: short, natural, to the point.
+SYSTEM = """You are the first officer, pilot monitoring, in an airliner cockpit, talking with the captain on the \
+intercom. Sound like a real, calm, experienced airline first officer: short, plain, accurate. A colleague, not an \
+assistant and not an actor.
 
 How you talk:
-- One short sentence, two at most. Spoken words, no lists.
-- When the captain tells you something or says a check ("engine two started", "packs off", "V1 rotate", \
-"flaps one, check"), acknowledge briefly: "Check.", "Copy.", "Checked.", "Roger." Don't repeat the facts back.
-- Only give numbers when the captain asks for them. Never recite the cockpit state unprompted.
-- Know where we are: the phase in the facts says it (parked at the gate, pushback, taxiing, climbing...). Never say \
-we're taxiing, cleared or ready for something the facts don't say.
-- Use the conversation so far: if the captain corrects you ("no, I said..."), take the correction.
+- One short sentence, two at most. Spoken words, no lists. Don't put "Captain" in every line.
+- Answer what was asked, nothing more. Never prompt the captain to do the next thing ("ground's next", "ready when \
+you are", "let's brief"), never suggest calling ATC, never volunteer the cockpit state.
+- A remark or a check ("engine two started", "beautiful sunset", "flaps one, check"): a word or two ("Check.", \
+"Copy.", "Yeah, nice."). Don't repeat facts back.
+- The captain telling you what HE did or is doing ("I've deployed the speedbrakes", "I'm going to slow down", \
+"applying takeoff thrust") is not a request: acknowledge it ("Check."), never act on it.
 - {facts_rule}
+- Only what the facts show about the aircraft. Never say something is armed, set, captured, on the glideslope, \
+stable, fine or safe unless the facts say exactly that. If the facts say a thing can't be read, say you can't see it.
+- You can't see the weather radar, outside, or anything not in the facts. Asked about weather or whether things will \
+be fine, give what the facts have (the ATIS, the wind) and say what you can't tell; don't reassure.
+- Where we are is the "position" fact: use it word for word; never guess a place.
+- Know the phase from the facts; never say we're cleared or doing something the facts don't say.
+- Use the conversation so far: if the captain corrects you, take the correction.
 
 Doing things: if the captain asks you to set, move or switch something, answer with kind "command" and the action:
 gear (value up|down), flaps (value: the setting, e.g. 1, 2, full, up), light (target landing|taxi|strobe|beacon|nav|logo, \
@@ -54,10 +62,11 @@ heading|nav|approach|altitude|vs|flc, value on), autothrottle (value on|off), he
 (value feet), speed (value knots), vs (value feet per minute, negative down), squawk (value 4 digits), com_active or \
 com_standby (value MHz), com_swap, altimeter (value inches like 29.92, or target hpa and value like 1013), \
 parking_brake (value on|off).
-Only those. Something not on the list (the flight director, the packs, the fuel pumps, the EFB, the payload): say \
-it's the captain's to do, or that you can't from your seat. Never pick another action instead, never claim you did \
-something you didn't return as a command. A value you weren't given ("set it when we reach 210") is a reply, not a \
-command. Otherwise kind "reply". Your words go in "reply" either way."""
+Only those, and only when the captain names the thing (gear, flaps, lights...). Not on the list (the autobrake, the \
+flight director, the packs, anti-ice, the seatbelt sign, the fuel pumps, the EFB): say it's the captain's, or that \
+you can't from your seat. Never pick another action instead, never claim you did something you didn't return as a \
+command. A value you weren't given is a reply, not a command. Words that make no sense: kind "reply", ask "Say \
+again?". Otherwise kind "reply". Your words go in "reply" either way."""
 SCHEMA = {
     "type": "object",
     "properties": {
@@ -80,6 +89,15 @@ EXAMPLES = (
      '{"kind": "reply", "action": "", "value": "", "target": "", "reply": "Flight director on my side is yours to switch, I can\'t from here."}'),
     ('Facts:\nphase: cruise\naltitude: 35,000 feet\n\nCaptain: "how\'s the weather looking at the destination"',
      '{"kind": "reply", "action": "", "value": "", "target": "", "reply": "No ATIS for them yet, I\'ll get it once we\'re closer."}'),
+    ('Facts:\nphase: arrival\nspoilers: stowed\n\nCaptain: "we\'re high, I\'ve deployed the speed brakes"',
+     '{"kind": "reply", "action": "", "value": "", "target": "", "reply": "Check."}'),
+    ('Facts:\nphase: cruise\nposition: about 20 miles north-northeast of Charlotte, North Carolina\n\n'
+     'Captain: "what city are we over"',
+     '{"kind": "reply", "action": "", "value": "", "target": "", "reply": "About 20 miles north-northeast of Charlotte."}'),
+    ('Facts:\nphase: arrival\ndestination weather: information D, wind 100 at 6, runway 18R in use\n'
+     'what I can\'t see: the weather radar, the view outside\n\nCaptain: "look at that weather, are we going to be alright?"',
+     '{"kind": "reply", "action": "", "value": "", "target": "", "reply": "Can\'t see the radar from here; the ATIS has '
+     'wind 100 at 6 for 18R."}'),
 )
 WORD_VALUES = {"up", "down", "on", "off", "arm", "disarm", "extend", "retract", "full"}
 REWORD_SYSTEM = """You are an airline first officer saying something to the captain on the intercom. Say the given \
@@ -98,8 +116,9 @@ class Reading:
 
 
 FACTS_RULE = "Use ONLY the facts given; if the answer isn't in them, say you don't have it. Never invent numbers."
-BEYOND_RULE = ("Use the facts first. Where they say nothing, you may answer from what a first officer knows about "
-               "flying and this aircraft; if you don't know, say so. Never contradict the facts.")
+BEYOND_RULE = ("Use the facts first. Where they say nothing about the flight, you may answer from what a first officer "
+               "knows about flying and this aircraft in general; if you don't know, say so. Never contradict the facts, "
+               "never invent anything about this flight (where we are, the weather, what's set).")
 
 
 def system(beyond_facts: bool = False) -> str:
@@ -215,11 +234,18 @@ class CrewModel:
             if action not in ACTIONS:
                 return None, f"no such action {action!r}"
             heard = said.lower()
+            if is_report(heard):  # "I've deployed the speed brakes": what he did, not a request
+                self.heard("You", "Check.")
+                return Reading("Check."), "a report of the captain's own, not a request: acknowledged"
+            if not re.search(ACTION_WORDS[action], heard):
+                return None, f"the captain didn't name the {action.replace('_', ' ')}"
             if value and value not in WORD_VALUES and not (set(re.findall(r"\d+", value)) <= numbers_in(said) | _spoken_digits(heard)):
                 return None, f"the captain didn't say {value}"
             return Reading(reply or f"{action} {value}".strip(), Command(action, value, target)), ""
         if not reply:
             return None, "no reply"
+        if (claim := unsupported_claim(reply, facts)) is not None:
+            return None, claim
         if not self.beyond_facts:
             known = numbers_in(said) | {n for v in facts.values() for n in numbers_in(v)}
             made_up = {n for n in numbers_in(reply) if n not in known}
@@ -227,6 +253,63 @@ class CrewModel:
                 return None, f"reply has {', '.join(sorted(made_up))}, which isn't in the facts"
         self.heard("You", reply)
         return Reading(reply), ""
+
+
+# The words that name each action: a command read by the model must have one ("auto break off" is no autopilot).
+ACTION_WORDS = {
+    "gear": r"\bgear\b|\bwheels\b", "flaps": r"\bflaps?\b|\bconfig\b",
+    "light": r"\blights?\b|\bbeacon\b|\bstrobes?\b|\blogo\b",
+    "spoilers": r"\bspoilers?\b|speed ?brakes?", "autopilot": r"auto ?pilot|\bap\b|\ba p\b",
+    "ap_mode": r"\bmode\b|\bheading\b|\bnav\b|\bapproach\b|\bloc\b|\bapp\b|vertical speed|level change|altitude hold",
+    "autothrottle": r"auto ?throttle|auto ?thrust|\bathr\b|\ba thr\b", "heading": r"\bheading\b|\bhdg\b",
+    "altitude": r"altitude|\blevel\b|thousand|\bfl\b|\bfeet\b", "speed": r"\bspeed\b|\bknots\b",
+    "vs": r"vertical speed|per minute|\bfpm\b|\bv ?s\b", "squawk": r"squawk|transponder|\bcode\b",
+    "com_active": r"frequency|\btune\b|\bcom\b|\bradio\b|\bpoint\b|decimal|\d{3}\.\d",
+    "com_standby": r"standby|frequency|\btune\b|\bcom\b|\bpoint\b|decimal|\d{3}\.\d", "com_swap": r"\bswap\b|\bflip\b",
+    "altimeter": r"altimeter|\bqnh\b|\bbaro|\bstandard\b|\bstd\b", "parking_brake": r"parking brake|park(?:ing)? brakes?",
+}
+REPORT = re.compile(r"\b(?:i've|i have|i'm|i am|i just|i'll|i will|i deployed|i set|i put|we've|we just)\b")
+REQUEST = re.compile(r"\b(?:can you|could you|would you|please|go ahead and|give me|set|put|let's)\b")
+
+
+def is_report(heard: str) -> bool:
+    """The captain saying what he did or is doing himself, not asking for it."""
+    return bool(REPORT.search(heard)) and not REQUEST.search(heard)
+
+
+# Claims about the aircraft a reply may only make when the facts say so (the model's habit of reassuring: "auto land's
+# armed", "we're on the glideslope", "we'll be fine").
+_NEGATED = re.compile(r"\b(?:not|no|n't|isn't|aren't|can't|cannot|don't)\b")
+
+
+def unsupported_claim(reply: str, facts: dict[str, str]) -> str | None:
+    """Why ``reply`` says something about this flight the facts don't show (None: it doesn't)."""
+    get = lambda k: str(facts.get(k, "")).lower()  # noqa: E731
+    for sentence in re.split(r"(?<=[.!?;])\s+|,\s+(?:and|but)\s+", reply.replace("\u2019", "'")):
+        low = sentence.lower()
+        if _NEGATED.search(low):
+            continue
+        if re.search(r"auto ?land", low) and re.search(r"armed|set|engaged|ready|on\b", low):
+            return "claims the autoland is armed (nothing shows it)"
+        if re.search(r"on (?:the )?(?:glide ?slope|glide ?path)|on profile|established", low) \
+                and get("glideslope") != "on it" and get("localizer") != "captured":
+            return "claims we're on the glideslope (the facts don't show it)"
+        if re.search(r"spoilers?\b.*\barmed|\barmed\b.*spoilers?", low) and get("spoilers") != "armed":
+            return "claims the spoilers are armed (the facts don't show it)"
+        if re.search(r"auto ?brakes?\b.*\b(?:set|armed|ready|low|medium|max)\b", low) and not get("autobrake"):
+            return "claims the autobrake is set (the facts don't show it)"
+        if re.search(r"(?:landing|full) flaps?\b.*\bset|flaps (?:full|\d)\b.*\bset", low) and "flaps" in facts \
+                and not re.search(r"full|\d", get("flaps")):
+            return "claims the flaps are set (the facts don't show it)"
+        if re.search(r"\b(?:we'll be|we will be|we're|we are|it'll be) (?:fine|ok|okay|alright|all right|safe|good)\b"
+                     r"|no problem|nothing to worry|tracking (?:well|fine|nicely)", low):
+            return "reassures without facts to back it"
+        if re.search(r"\b(?:over|near|miles (?:\w+ )?of|south of|north of|east of|west of)\s+[A-Z]", sentence):
+            places = re.findall(r"\b(?:over|near|of)\s+((?:[A-Z][\w.'-]+\s?)+)", sentence)
+            known = get("position") + " " + " ".join(str(v).lower() for v in facts.values())
+            if any(place.strip().lower() not in known for place in places):
+                return "names a place the facts don't give"
+    return None
 
 
 NAMED = re.compile(r"\b(?:[A-Z]{2,}\d*[A-Z]*|[A-Z]\d+[A-Z]?|FL\d{3}|\d{1,2}[LRC])\b")  # RADYR2, KLAS, C1, FL280, 26R

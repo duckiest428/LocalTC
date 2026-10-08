@@ -64,6 +64,10 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    [sim_bridge/definitions.py](../src/localtc/sim_bridge/definitions.py)) doesn't follow that switch in this
    aircraft. Note which, and fix the read for that aircraft if there's a variable that does follow it.
 4. If a control **didn't move and has no input event**, note it; don't guess.
+   The FSLabs A319/A320/A321 is the known case: its profile ([crew/profiles/fslabs_a3xx.toml](../src/localtc/crew/profiles/fslabs_a3xx.toml))
+   has `hands = false` because the sim's events don't reach it, and `reads_flaps` / `reads_autopilot = false` because
+   the sim's variables don't follow it (flap index 0-8, autopilot always off). If its own L:vars can be found
+   (the FSLabs SDK, or the sim's dev mode), map them and set `hands = true`.
 5. Run `hands` again until it's clean, then fly a short test with the copilot's hands on (Quick Settings → Copilot →
    Its hands) and check it does them in the flight. Repeat for the other aircraft the user flies (a new profile in
    `crew/profiles/`, matched by title or model).

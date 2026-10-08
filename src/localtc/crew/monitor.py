@@ -25,6 +25,7 @@ Pure, like the rest of the copilot: ``observe`` every event, ``due(t)`` for what
 
 import random
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -75,13 +76,24 @@ RETRACT_MARGIN_KT = 15.0  # a notch up this far below the current detent's placa
 RETRACT_MIN_AGL = 1000.0
 HANDOFF_LATE_S = 60.0
 READBACK_LATE_S = 18.0
+TAXI_SPEED_MARGIN_KT = 5.0  # a knot or two over the taxi limit isn't worth a word
 TAXI_RUNWAY_M = 60.0  # this close to a runway's edge, closing on it: hold short
 TRAFFIC_NM, TRAFFIC_FT = 2.0, 1000.0
 TOD_WARN_MIN = 10.0
 FUEL_WINDOW_S = 900.0  # the cruise burn: fuel used over this long
 FUEL_MIN_SPAN_S = 300.0  # ... at least this much of it
 FINAL_RESERVE_H = 0.5  # 30 minutes, where the plan gives none
-APPROACH_ALLOWANCE_H = 0.25  # the descent, the approach and a little holding beyond the straight line
+APPROACH_ALLOWANCE_H = 0.15  # the approach and a little more beyond the straight line, at half the cruise burn
+DESCENT_BURN = 0.4  # the descent's burn, of the cruise one
+FUEL_PLAN_MARGIN_LB = 1100.0  # a projection this far (or 15 percent) under the plan's landing fuel is worth a word
+FUEL_MATCH_LB = 1100.0  # on board against the plan's block: this close (or 3 percent) matches
+# Checklists aren't offered or read until there are real ones to read from (the aircraft's own); asked for, the
+# copilot says so. The challenge-and-response machinery below stays for then.
+CHECKLISTS = False
+DECLINE_QUIET_S = 900.0  # "later", "not now": the copilot's own suggestions wait this long
+# The copilot's suggestions (not callouts, not warnings): what "later" quiets.
+PROMPTS = ("clearance_prompt", "brief", "prompt:", "flaps_for_takeoff", "tod_soon", "step:", "divert:", "sight",
+           "app_mode", "lights:", "push_brake", "seatbelt", "turb:belts")
 
 
 @dataclass
@@ -95,6 +107,7 @@ class Call:
     urgent: bool = False  # said even over the frequency (the end of the flight, before it stops)
     radio: str = ""  # then said on the radio by the copilot (asking ATC for a step climb, a diversion)
     before_readback: bool = False  # ATC's instruction repeated: in the moment before the readback, or not at all
+    valid: Callable[[], bool] | None = None  # still worth saying when its turn comes (None: always)
 
     @property
     def expires(self) -> float:
@@ -158,7 +171,9 @@ class Monitor(WatchMixin):
                  alternate: str = "", repeat_atc: bool = False) -> None:
         self.p = picture
         self.verbosity = verbosity if verbosity in VERBOSITY else "standard"
-        self.hands = hands == "pm"
+        self.hands_setting = hands == "pm"
+        self.hands_dead = False  # the aircraft ignored the copilot's switches: calls only, for the rest of the flight
+        self.declined_t = -1e9  # the pilot said "later" to a suggestion
         self.perf = perf or PlanPerf()
         self.plan_source = plan_source
         self.radio_mode = radio_mode  # the radio copilot's mode: "off", "assist" or "full"
@@ -196,6 +211,17 @@ class Monitor(WatchMixin):
         self._init_watches(alternate, repeat_atc)
 
     # --- in ----------------------------------------------------------------------------------------------------
+
+    @property
+    def hands(self) -> bool:
+        """The copilot works its own side: as set, in an aircraft whose switches it can reach."""
+        return self.hands_setting and self.c.profile.hands and not self.hands_dead
+
+    def declined(self, t: float) -> None:
+        """The pilot said "later" / "not now" / "quiet": the copilot's suggestions wait (callouts and warnings don't)."""
+        self.declined_t = t
+        self.queue = [q for q in self.queue if not q.key.startswith(PROMPTS)]
+        self.offer = None
 
     @property
     def c(self) -> Cockpit:
@@ -264,6 +290,7 @@ class Monitor(WatchMixin):
             self.queue = [q for q in self.queue if q.priority > CHATTER or q.before_readback]
         if self.offer is not None and t > self.offer.until:
             self.offer = None
+        self.queue = [q for q in self.queue if q.valid is None or q.valid()]  # no longer true: not said
         if not self.queue:
             return []
         ready = [q for q in self.queue if q.t <= t]  # a call for later (a prompt after the readback) waits its turn
@@ -304,10 +331,14 @@ class Monitor(WatchMixin):
         return when is not None and (again_s is None or t - when < again_s)
 
     def _call(self, key: str, priority: int, t: float, text: str | list[str], *, commands: tuple[Command, ...] = (),
-              again_s: float | None = None, urgent: bool = False, radio: str = "", before_readback: bool = False) -> bool:
-        """Queue ``text`` (one of the wordings, picked) under ``key``, once (or again after ``again_s``)."""
+              again_s: float | None = None, urgent: bool = False, radio: str = "", before_readback: bool = False,
+              valid: Callable[[], bool] | None = None) -> bool:
+        """Queue ``text`` (one of the wordings, picked) under ``key``, once (or again after ``again_s``). ``valid``:
+        checked again when its turn comes (a heading reminder after ATC gave a new one isn't said)."""
         if self._said(key, again_s, t) or any(q.key == key for q in self.queue):
             return False
+        if key.startswith(PROMPTS) and t - self.declined_t < DECLINE_QUIET_S and priority < SAFETY:
+            return False  # "later": not now
         if priority < VERBOSITY[self.verbosity] and not commands:
             self.f.said[key] = t  # not said at this verbosity, and not later either
             return False
@@ -317,7 +348,7 @@ class Monitor(WatchMixin):
         airports = (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
         self.queue.append(Call(key, words, max(priority, VERBOSITY[self.verbosity]) if commands else priority, t,
                                spoken=spoken(words, airports), commands=commands if self.hands else (), urgent=urgent,
-                               radio=radio, before_readback=before_readback))
+                               radio=radio, before_readback=before_readback, valid=valid))
         return True
 
     def _readback_due(self, t: float) -> bool:
@@ -389,13 +420,14 @@ class Monitor(WatchMixin):
         """Cleared for the approach (or going around): the cleared altitude and heading no longer hold."""
         return self._cleared("approach") or self.phase in ("APPROACH", "LANDING")
 
-    def _nag(self, key: str, priority: int, t: float, text: str, *, every_s: float, most: int = 2) -> None:
+    def _nag(self, key: str, priority: int, t: float, text: str, *, every_s: float, most: int = 2,
+             valid: Callable[[], bool] | None = None) -> None:
         """A reminder that may come again after ``every_s``, but only ``most`` times for the same thing."""
         count = int(self.f.said.get(f"{key}#", 0))
         if count >= most or self._said(key, every_s, t) or any(q.key == key for q in self.queue):
             return
         self.f.said.pop(key, None)
-        if self._call(key, priority, t, text):
+        if self._call(key, priority, t, text, valid=valid):
             self.f.said[f"{key}#"] = count + 1
 
     # --- ATC ---------------------------------------------------------------------------------------------------
@@ -428,19 +460,10 @@ class Monitor(WatchMixin):
                 if parts:
                     self._call("clearance_set", ROUTINE, t, f"{', '.join(parts).capitalize()} set." if self.hands
                                else f"Don't forget {' and '.join(parts)}.", commands=tuple(cmds))
-                self._prompt_checklist("before_start", t + 60.0)  # after the readback and a moment to write it down
             elif iid.startswith("ground.pushback"):
                 self._lights(t, "push", beacon=True, said="Beacon on.")
             elif iid.startswith("ground.taxi_out") or iid == "ground.taxi_out_hold_short":
                 self._lights(t, "taxi", taxi=True, said="Taxi light on.")
-                own = self.c.own
-                if own is not None and own.flaps_index == 0 and self.c.flap_positions:
-                    plan = f", plan says {self.perf.takeoff_flaps.replace('+F', ' plus F')}" if self.perf.takeoff_flaps else ""
-                    self._call("flaps_for_takeoff", ROUTINE, t + 25, f"Flaps for takeoff when you're ready{plan}.")
-                if "departure" not in self.f.briefed:
-                    self._call("brief_reminder", ROUTINE, t + 45, ["We haven't briefed the departure yet. Want it now?",
-                                                                    "Departure briefing before we go?"])
-                    self.offer = Offer("brief", "departure", t + 90.0)
             elif iid in ("tower.luaw", "tower.takeoff", "tower.takeoff_rnav", "tower.takeoff_sid"):
                 self._lights(t, "lineup", strobe=True, landing=True, said="Strobes and landing lights on.")
                 own = self.c.own
@@ -450,16 +473,15 @@ class Monitor(WatchMixin):
                 self.f.said.setdefault("approach_cleared_t", t)
 
     def _lights(self, t: float, key: str, *, said: str, **want: bool) -> None:
+        """The exterior lights for the moment, by the copilot's hand; where it can't reach them, they're the pilot's
+        and it says nothing (asking about each light was a running commentary)."""
         s = self.c.systems
-        if s is None:
+        if s is None or not self.hands:
             return
         cmds = tuple(Command("light", "on" if on else "off", name) for name, on in want.items()
                      if getattr(s, f"light_{name}") != on)
-        if cmds and self.hands:
+        if cmds:
             self._call(f"lights:{key}", ROUTINE, t, said, commands=cmds)
-        elif cmds:
-            names = " and ".join("strobes" if c.target == "strobe" else f"{c.target} light" for c in cmds)
-            self._call(f"lights:{key}", ROUTINE, t, f"{names.capitalize()} on?")
 
     # --- phases ------------------------------------------------------------------------------------------------
 
@@ -496,7 +518,9 @@ class Monitor(WatchMixin):
             self._call("engine_failure_roll", SAFETY, t, "Engine failure! Below V1." if below else "Engine failure!")
         if s.engines_running > was.engines_running and own.on_ground and self.phase in (None, "PARKED", "PUSHBACK"):
             self._prompt_checklist("after_start", t + 20.0)
-        if was.ap_master and not s.ap_master and not own.on_ground and t - self.commanded.get("autopilot", -1e9) > 10:
+            self._fuel_check(own, t)
+        if was.ap_master and not s.ap_master and not own.on_ground and t - self.commanded.get("autopilot", -1e9) > 10 \
+                and self.c.autopilot_known:
             self._call("ap_off", ROUTINE, t, ["Autopilot's off.", "Autopilot disconnected."], again_s=30)
         if s.engines_running == 0 and was.engines_running > 0 and own.on_ground and self.f.landing_t is not None:
             self._parked(t)
@@ -524,50 +548,26 @@ class Monitor(WatchMixin):
         f = st.flight
         with regions.speaking(self._region()):
             if f.origin and t - self.first_t >= GREETING_AFTER_S and not self._said("greeting") and not self.ptt_down:
+                # Hello, who and where; nothing else. The fuel is checked once the engines start (an add-on's tanks
+                # are often filled after the flight loads), the briefings and the ATIS when asked.
                 callsign = speech.callsign_display(f.callsign) if f.callsign else ""
-                aircraft = self.c.profile.name if self.c.profile.name != "stock" else speech.aircraft_type(f.aircraft_type)[0] if f.aircraft_type else ""
+                aircraft = _aircraft_name(self.title) or (speech.aircraft_type(f.aircraft_type)[0] if f.aircraft_type else "")
                 route = f"{self._name(f.origin)} to {self._name(f.destination)}" if f.destination else f"out of {self._name(f.origin)}"
-                lines = [self.rng.choice(["Hi, I'm with you.", "Hey. All set on my side.", "Morning. I'm with you."]),
+                lines = [self.rng.choice(["Hi, I'm with you.", "Hey. All set on my side."]),
                          ", ".join(x for x in (callsign, route, f"in the {aircraft}" if aircraft else "") if x) + "."]
-                if own.fuel_lb:
-                    fuel = f"{self._fuel(own.fuel_lb)} on board"
-                    if self.perf.block_fuel_lb:
-                        diff = own.fuel_lb - self.perf.block_fuel_lb
-                        if abs(diff) > max(0.02 * self.perf.block_fuel_lb, 500):
-                            fuel += f", {self._fuel(abs(diff))} {'more' if diff > 0 else 'less'} than the plan's block"
-                        else:
-                            fuel += ", matches the plan"
-                    lines.append(fuel.capitalize() + ".")
                 if not self.plan_source:
                     lines.append("No SimBrief plan loaded, so I'm going by the sim.")
-                elif self.perf.zfw_lb and own.gross_weight_lb and own.fuel_lb:
-                    zfw = own.gross_weight_lb - own.fuel_lb
-                    diff = zfw - self.perf.zfw_lb
-                    if abs(diff) > 0.03 * self.perf.zfw_lb:
-                        lines.append(f"Zero fuel weight's {self._fuel(abs(diff))} {'over' if diff > 0 else 'under'} the plan; check the payload.")
+                if not self.c.profile.hands and self.hands_setting:
+                    lines.append("I can't reach this aircraft's switches from here, so they're yours; I'll call.")
                 self._call("greeting", ROUTINE, t, " ".join(lines))
+            # The ATIS: the copilot's side of the altimeter set to it, quietly. Read out only when asked ("weather").
             info = self._atis(f.origin)
-            if info is not None and self.atis_seen.get(f.origin or "") != info.letter and self._said("greeting") \
-                    and t - self.f.said["greeting"] > 30 and t - self.last_pilot_radio_t > 30 \
-                    and self._atis_news(f.origin or "", info):
+            if info is not None and self.atis_seen.get(f.origin or "") != info.letter:
                 self.atis_seen[f.origin or ""] = info.letter
                 w = info.weather
-                words = [f"{self._name(f.origin)} has information {info.letter}: runway {info.runway}, wind {speech.wind_display(w.wind)}"]
-                if w.altimeter_inhg:
-                    words.append(f"{'QNH' if self._region().icao else 'altimeter'} {speech.altimeter_display(w.altimeter_inhg)}")
-                text = ", ".join(words) + "."
-                if self.engine.cfg.sid:
-                    text += f" We're planned on the {self.engine.cfg.sid}."
-                cmds: tuple[Command, ...] = ()
-                if w.altimeter_inhg and abs(own.altimeter_inhg - w.altimeter_inhg) > 0.015:
-                    cmds = (Command("altimeter", f"{w.altimeter_inhg:.2f}"),)
-                    if self.hands:
-                        text += " Altimeter set."
-                self._call(f"atis:{f.origin}:{info.letter}", ROUTINE, t, text, commands=cmds)
-            if self._said("greeting") and t - self.f.said["greeting"] > 75 and "departure" not in self.f.briefed \
-                    and self._call("brief_prompt", ROUTINE, t, ["Departure briefing whenever you're ready; just say brief.",
-                                                                "Ready to brief the departure when you are."]):
-                self.offer = Offer("brief", "departure", t + 40.0)
+                if self.hands and w.altimeter_inhg and abs(own.altimeter_inhg - w.altimeter_inhg) > 0.015:
+                    self._call(f"atis:{f.origin}:{info.letter}", ROUTINE, t, "",
+                               commands=(Command("altimeter", f"{w.altimeter_inhg:.2f}"),))
             tuned = st.comms.tuned
             on_clearance = tuned is not None and tuned.controller in ("clearance", "ground")
             if f.rules == "IFR" and self._said("greeting") and t - self.f.said["greeting"] > 150 and not self._cleared("ifr") \
@@ -593,16 +593,29 @@ class Monitor(WatchMixin):
                 self._call("stall", SAFETY, t, "Speed, speed!", again_s=10)
         if (s is not None and s.overspeed_warning) or (p.vmo_kt and own.ias_kt > p.vmo_kt + 3):
             self._call("overspeed", SAFETY, t, "Overspeed!", again_s=15)
-        if airborne and own.flaps_index > 0 and (vfe := p.vfe_for(own.flaps_index)) and own.ias_kt > vfe + 5:
+        flaps = self.c.flaps_index
+        if airborne and flaps and (vfe := p.vfe_for(flaps)) and own.ias_kt > vfe + 5:
             self._call("flap_speed", SAFETY, t, f"Flap speed! {own.ias_kt:.0f}, limit {vfe:.0f}.", again_s=15)
         if airborne and own.gear_down and p.gear_extended_kt and own.ias_kt > p.gear_extended_kt + 5:
             self._call("gear_speed", SAFETY, t, f"Gear speed! {own.ias_kt:.0f}, limit {p.gear_extended_kt:.0f}.", again_s=15)
+
+    def _fuel_check(self, own: OwnshipState, t: float) -> None:
+        """The fuel against the plan's block, once, when the engines start (by then it's loaded): only when it's off."""
+        block = self.perf.block_fuel_lb
+        if not block or not own.fuel_lb or self._said("fuel_check"):
+            return
+        diff = own.fuel_lb - block
+        if abs(diff) <= max(0.03 * block, FUEL_MATCH_LB):
+            self.f.said["fuel_check"] = t
+            return
+        self._call("fuel_check", ROUTINE, t, f"Fuel's {self._fuel(own.fuel_lb)}, {self._fuel(abs(diff))} "
+                   f"{'over' if diff > 0 else 'under'} the plan's block.")
 
     def _below_stall(self, own: OwnshipState, s: AircraftSystems) -> bool:
         """The sim's stall warning is the call; this only backs it up where the aircraft has none. The design stall
         speeds are rough (the stock A320 says 179 knots clean, its green dot), so only well below them, slowing, and
         never with the flaps out above the landing stall speed plus a margin."""
-        if own.flaps_index > 0 or own.gear_down:
+        if (self.c.flaps_index or 0) > 0 or own.gear_down:
             ref = s.vs0_kt
             margin = 1.0
         else:
@@ -638,7 +651,7 @@ class Monitor(WatchMixin):
         if self.f.touchdown_t is not None and prev.ias_kt > p.rollout_call_kt >= own.ias_kt and own.gs_kt > 20:
             self._call(f"rollout:{self.f.approaches}", ROUTINE, t, f"{speech.miles(p.rollout_call_kt).capitalize()} knots.")
         # Taxiing.
-        if self.phase in ("TAXI_OUT", "TAXI_IN") and own.gs_kt > p.taxi_max_kt and not own.on_runway:
+        if self.phase in ("TAXI_OUT", "TAXI_IN") and own.gs_kt > p.taxi_max_kt + TAXI_SPEED_MARGIN_KT and not own.on_runway:
             self._call("taxi_speed", ROUTINE, t, [f"Watch the speed, {own.gs_kt:.0f} knots.", f"Bit quick, {own.gs_kt:.0f} knots."], again_s=60)
         if self.phase in ("TAXI_OUT", "TAXI_IN", "PUSHBACK") and own.gs_kt > 3:
             self._runway_ahead(own, t)
@@ -655,7 +668,7 @@ class Monitor(WatchMixin):
         # The takeoff roll.
         if own.on_runway and prev.gs_kt < 30 <= own.gs_kt and self.f.touchdown_t is None and self.phase != "TAXI_IN":
             problems = []
-            if own.flaps_index == 0 and self.c.flap_positions:
+            if self.c.flaps_index == 0 and self.c.flap_positions:
                 problems.append("flaps")
             if own.parking_brake:
                 problems.append("parking brake")
@@ -728,15 +741,17 @@ class Monitor(WatchMixin):
             self._call("positive_rate", ROUTINE, t, "Positive rate.")
         if self.f.positive_rate_t is not None and own.gear_down and t - self.f.positive_rate_t >= GEAR_UP_WAIT_S \
                 and t - self.commanded.get("gear", -1e9) > 10 and departing:
+            still_down = lambda: self.c.own is not None and self.c.own.gear_down and t - self.commanded.get("gear", -1e9) > 10  # noqa: E731
             if self.hands:
-                self._call("gear_up", ROUTINE, t, "Gear up.", commands=(Command("gear", "up"),))
+                self._call("gear_up", ROUTINE, t, "Gear up.", commands=(Command("gear", "up"),), valid=still_down)
             elif agl > 400:
-                self._call("gear_up", ROUTINE, t, "Gear's still down.")
-        if departing and not own.gear_down and own.flaps_index > 0 and agl > RETRACT_MIN_AGL and own.vs_fpm > 0 \
+                self._call("gear_up", ROUTINE, t, "Gear's still down.", valid=still_down)
+        flaps = self.c.flaps_index
+        if departing and not own.gear_down and flaps and agl > RETRACT_MIN_AGL and own.vs_fpm > 0 \
                 and t - self.flap_step_t > FLAP_STEP_WAIT_S and t - self.commanded.get("flaps", -1e9) > 15:
-            vfe = p.vfe_for(own.flaps_index)
+            vfe = p.vfe_for(flaps)
             if vfe and own.ias_kt >= vfe - RETRACT_MARGIN_KT:
-                up = own.flaps_index - 1
+                up = flaps - 1
                 name = "up" if up == 0 else self._flaps(up)
                 if self.hands:
                     self.flap_step_t = t
@@ -746,10 +761,8 @@ class Monitor(WatchMixin):
                     self._call(f"flaps_retract:{up}", ROUTINE, t, f"Speed checked, flaps {name}?")
             elif not vfe and agl > 3000 and own.ias_kt > 210:
                 self._call("flaps_still_out", ROUTINE, t, "Flaps are still out.")
-        if departing and not own.gear_down and own.flaps_index == 0 and agl > 1500 and "after_takeoff" not in self.f.checklists:
+        if departing and not own.gear_down and flaps == 0 and agl > 1500 and "after_takeoff" not in self.f.checklists:
             self._run("after_takeoff", t)
-        if departing and agl > 2000 and s is not None and not s.ap_master and self.f.takeoff_t is not None and t - self.f.takeoff_t > 60:
-            self._call("ap_available", ROUTINE, t, "Autopilot's available whenever you want it.")
         # Climbing and descending: the cleared altitude.
         target = st.assignments.altitude_ft if st is not None else None
         if target != self.cleared_alt:
@@ -769,7 +782,7 @@ class Monitor(WatchMixin):
                 if t - self.off_since > 5:
                     off = round(abs(alt - target), -2)
                     self._nag(f"altitude_dev:{target}", SAFETY, t, f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}.",
-                              every_s=45)
+                              every_s=45, valid=lambda: st.assignments.altitude_ft == target and not self._on_approach())
             else:
                 self.off_since = None
         heading = st.assignments.heading if st is not None else None
@@ -787,7 +800,8 @@ class Monitor(WatchMixin):
                 self.heading_off_since = self.heading_off_since or t
                 if t - self.heading_off_since > 15:
                     self._nag(f"heading_dev:{heading}:{self.cleared_heading[1]:.0f}", ROUTINE, t,
-                              f"Heading, we're assigned {heading:03d}.", every_s=60)
+                              f"Heading, we're assigned {heading:03d}.", every_s=60,
+                              valid=lambda: st.assignments.heading == heading and not self._on_approach())
             else:
                 self.heading_off_since = None
         # Ten thousand, the transition, the speed limit.
@@ -822,12 +836,13 @@ class Monitor(WatchMixin):
                 self._nag("speed_250", ROUTINE, t, "Speed, two fifty below ten thousand.", every_s=120)
         else:
             self.speed_high_since = None
-        if st is not None and st.assignments.speed_kt and abs(own.ias_kt - st.assignments.speed_kt) > 15 and agl > 1500 \
-                and self.phase != "LANDING":
+        # An assigned speed holds until the approach clearance (and then it's the approach's own).
+        assigned_kt = st.assignments.speed_kt if st is not None else None
+        if assigned_kt and abs(own.ias_kt - assigned_kt) > 15 and agl > 1500 and not self._on_approach():
             since = self.f.said.setdefault("speed_off_t", t)
             if t - since > 20:
-                self._nag(f"speed_dev:{st.assignments.speed_kt}", ROUTINE, t, f"Speed, we're assigned {st.assignments.speed_kt}.",
-                          every_s=90)
+                self._nag(f"speed_dev:{assigned_kt}", ROUTINE, t, f"Speed, we're assigned {assigned_kt}.", every_s=90,
+                          valid=lambda: st.assignments.speed_kt == assigned_kt and not self._on_approach())
         else:
             self.f.said.pop("speed_off_t", None)
         if own.in_cloud and own.temperature_c is not None and -40 <= own.temperature_c <= 5 \
@@ -849,25 +864,30 @@ class Monitor(WatchMixin):
         minutes = (to_go - tod_nm) / own.gs_kt * 60
         descending = st.assignments.altitude_ft is not None and st.assignments.altitude_ft < level - 500
         if self.phase == "CRUISE" and 0 < minutes <= TOD_WARN_MIN:
-            if self._call("tod_soon", ROUTINE, t, "Top of descent in about ten minutes. Arrival briefing when you're ready."):
-                self.offer = Offer("brief", "approach", t + 40.0)
+            self._call("tod_soon", ROUTINE, t, "Top of descent in about ten minutes.")
         if self.phase == "CRUISE" and minutes <= 0 and to_go > 20:
             self._call("tod", ROUTINE, t, "That's top of descent." + ("" if descending else " No descent clearance yet."))
         # Fuel against the plan and the reserve: only from a steady cruise burn, measured over minutes. The burn in
         # the climb is twice the cruise one, and projecting it called "below final reserve" just after takeoff.
-        if own.fuel_lb:
+        # The samples are of level cruise only: a climb or descent starts them again (a climb's burn leaking into the
+        # window had a level-off projecting "we'd land with 0").
+        if own.fuel_lb and self.phase == "CRUISE" and abs(own.vs_fpm) <= 300:
             self._fuel_samples.append((t, own.fuel_lb))
             self._fuel_samples = [x for x in self._fuel_samples if t - x[0] <= FUEL_WINDOW_S]
+        else:
+            self._fuel_samples = []
         burn = self._cruise_burn_pph(own, t)
+        if burn:
+            self.p.burn_pph = burn
         if burn and own.fuel_lb:
-            hours_to_go = to_go / own.gs_kt + APPROACH_ALLOWANCE_H
-            at_landing = own.fuel_lb - burn * hours_to_go
+            at_landing = own.fuel_lb - landing_burn(burn, to_go, tod_nm, own.gs_kt)
             reserve = self.perf.reserve_fuel_lb or burn * FINAL_RESERVE_H
             if at_landing < reserve:
                 self._call("fuel_reserve", SAFETY, t, f"Fuel: at this burn we'd land with about {self._fuel(max(at_landing, 0))}, "
                            f"under the final reserve of {self._fuel(reserve)}.", again_s=1800)
                 self._watch_emergency(t, "fuel")
-            elif self.perf.landing_fuel_lb and at_landing < self.perf.landing_fuel_lb * 0.85:
+            elif self.perf.landing_fuel_lb and self.perf.landing_fuel_lb - at_landing > max(
+                    0.15 * self.perf.landing_fuel_lb, FUEL_PLAN_MARGIN_LB):
                 short = self.perf.landing_fuel_lb - at_landing
                 self._call("fuel_plan", ROUTINE, t, f"We're tracking about {self._fuel(short)} under the planned landing fuel.", again_s=2700)
         info = self._atis(st.flight.destination)
@@ -906,17 +926,18 @@ class Monitor(WatchMixin):
             if s.gs_received and abs(s.gs_deviation) < 110 and self._said(f"loc_alive:{n}"):
                 self._call(f"gs_alive:{n}", ROUTINE, t, "Glideslope alive.")
             cleared_t = self.f.said.get("approach_cleared_t")
-            if ils and cleared_t is not None and t - cleared_t > 30 and s.ap_master and not s.ap_approach:
+            if ils and cleared_t is not None and t - cleared_t > 30 and s.ap_master and not s.ap_approach and self.c.autopilot_known:
                 self._call(f"app_mode:{n}", ROUTINE, t, "We're cleared the ILS; approach mode?")
         if self.phase in ("APPROACH", "LANDING") and own.vs_fpm < 0:
             positions = self.c.flap_positions
-            nxt = own.flaps_index + 1
+            flaps = self.c.flaps_index
+            nxt = flaps + 1 if flaps is not None else positions + 1
             vfe = p.vfe_for(nxt) if nxt <= positions else 0
             if vfe and own.ias_kt < vfe - 5 and agl < 6000 and t - self.commanded.get("flaps", -1e9) > 20:
                 self._call(f"flaps_ext:{n}:{nxt}", ROUTINE, t, f"Speed checked for flaps {self._flaps(nxt)}.")
             if own.gear_down is False and prev_agl > 2000 >= agl:
                 self._call(f"gear_prompt:{n}", ROUTINE, t, "Two thousand. Gear down?")
-            if own.gear_down and own.flaps_index >= p.landing_index(positions) and agl < 3000:
+            if own.gear_down and flaps is not None and flaps >= p.landing_index(positions) and agl < 3000:
                 self._run("landing", t, key=f"landing:{n}")
             if prev_agl > 1000 >= agl:
                 problems = self._unstable(own)
@@ -946,7 +967,7 @@ class Monitor(WatchMixin):
         out = []
         if not own.gear_down:
             out.append("gear")
-        if self.c.flap_positions and own.flaps_index < p.landing_index(self.c.flap_positions):
+        if self.c.flap_positions and self.c.flaps_index is not None and self.c.flaps_index < p.landing_index(self.c.flap_positions):
             out.append("flaps")
         if own.vs_fpm < -1100:
             out.append(f"sinking {abs(round(own.vs_fpm, -2)):,.0f}")
@@ -957,7 +978,7 @@ class Monitor(WatchMixin):
     def _after_landing(self, t: float) -> None:
         own, s = self.c.own, self.c.systems
         cmds = []
-        if own is not None and own.flaps_index > 0:
+        if own is not None and self.c.flaps_index:
             cmds.append(Command("flaps", "up"))
         if s is not None and s.spoilers_armed:
             cmds.append(Command("spoilers", "disarm"))
@@ -970,7 +991,7 @@ class Monitor(WatchMixin):
         if self.hands and cmds:
             text = "Clear of the runway. " + (", ".join(done).capitalize() + "." if done else "After landing flow done.")
         else:
-            text = "Clear of the runway." + (" After landing flow when you're ready." if cmds else "")
+            text = "Clear of the runway."
         self._call("after_landing", ROUTINE, t, text, commands=tuple(cmds))
         self.f.checklists.add("after_landing")
 
@@ -1021,15 +1042,8 @@ class Monitor(WatchMixin):
                 self._call(f"late_handoff:{facility.station}:{when:.0f}", ROUTINE, t,
                            f"We should be with {facility.station} on {speech.frequency_display(facility.mhz)} by now.")
                 self.handoff = None
-        pending = st.pending
-        late = 45.0 if pending is not None and pending.instruction_id.startswith("clearance.") else READBACK_LATE_S
-        if pending is not None and not self.pilot_since_atc and t - self.last_atc_t > late \
-                and self.radio_mode() == "off" and self.p.last_atc is not None and not pending.attempts \
-                and not pending.nudged and pending.instruction_id == self.p.last_atc.instruction_id:
-            # Once for an instruction (ATC saying it again is ATC's own reminder), only when it's ATC's latest words
-            # with nothing said since, and not once ATC has asked "how do you read".
-            self._call(f"readback:{pending.instruction_id}", ROUTINE, t,
-                       f"{self.p.last_atc.station} is waiting for a readback.", again_s=300)
+        # (No "they're waiting for a readback": ATC asks for it itself when it wants one, and the copilot telling the
+        # captain to answer the radio isn't how a crew works.)
 
     def _traffic(self, ev: TrafficSnapshot, t: float) -> None:
         own = self.c.own
@@ -1056,7 +1070,7 @@ class Monitor(WatchMixin):
     # --- checklists, briefings, status ---------------------------------------------------------------------------
 
     def _prompt_checklist(self, name: str, t: float) -> None:
-        if name in self.f.checklists:
+        if not CHECKLISTS or name in self.f.checklists:
             return
         if self._call(f"prompt:{name}", ROUTINE, t, [f"{checklists.NAMES[name]} checklist?",
                                                       f"{checklists.NAMES[name]} checklist when you're ready."]):
@@ -1082,7 +1096,7 @@ class Monitor(WatchMixin):
     def _run(self, name: str, t: float, *, key: str | None = None, asked: bool = False) -> None:
         """Read ``name`` challenge and response: each item of the captain's asked and answered in turn, the copilot's
         own answered (and set) by itself."""
-        if name in self.f.checklists and not asked:
+        if not CHECKLISTS or (name in self.f.checklists and not asked):
             return
         key = key or f"run:{name}"
         if self._said(key):
@@ -1247,6 +1261,24 @@ class Monitor(WatchMixin):
                     q.priority = CHATTER
             else:
                 self.f.said["status_auto"] = t  # the first one half an hour into the cruise
+
+
+def landing_burn(burn_pph: float, to_go_nm: float, tod_nm: float, gs_kt: float) -> float:
+    """The fuel burned from here to landing: the cruise at the cruise burn to the top of descent, the descent at a
+    fraction of it (idle, and slower), and a little for the approach."""
+    cruise_nm = max(to_go_nm - tod_nm, 0.0)
+    descent_nm = min(tod_nm, to_go_nm)
+    return (burn_pph * cruise_nm / gs_kt + burn_pph * DESCENT_BURN * descent_nm / (gs_kt * 0.75)
+            + burn_pph * 0.5 * APPROACH_ALLOWANCE_H)
+
+
+def _aircraft_name(title: str) -> str:
+    """The sim's title as a pilot says it: "FSLabs A321-211 - Air Canada (C-FJNX)" -> "A321"."""
+    m = re.search(r"\b(A3[1-8]\d|B7[0-8]7|7[0-8]7|[A-Z]{1,2}\d{2,3})(?:neo|NEO|-\d+)?", title or "")
+    if m is None:
+        return ""
+    name = m.group(1)
+    return name + ("neo" if re.search(r"neo", title, re.I) and name.startswith("A3") else "")
 
 
 def _minimums(approach: str | None) -> int | None:

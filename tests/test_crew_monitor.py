@@ -159,7 +159,25 @@ def test_not_configured_at_a_thousand_and_not_cleared_at_five_hundred():
     assert "We're not cleared to land!" in words
 
 
-def test_the_before_takeoff_checklist_is_challenge_and_response():
+@pytest.fixture
+def checklists_on(monkeypatch):
+    """The checklists are off until there are real ones (monitor.CHECKLISTS); their machinery is still tested."""
+    from localtc.crew import monitor
+
+    monkeypatch.setattr(monitor, "CHECKLISTS", True)
+
+
+def test_no_checklists_until_there_are_real_ones():
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="TAXI_OUT", phase="RUNWAY_HOLD"))
+    pm.observe(systems(0.6))
+    out = fly(pm, [own(1 + i) for i in range(40)])
+    assert not [w for w in said(out) if "checklist" in w.lower()]  # none offered
+    words = said(pm.observe(IntercomHeard(t=50, text="before takeoff checklist")))
+    assert words == ["No checklists from me yet; I'll read them once we have the real ones for this aircraft."]
+
+
+def test_the_before_takeoff_checklist_is_challenge_and_response(checklists_on):
     """The captain's items are asked and answered; a wrong answer holds the checklist till the aircraft shows it
     right; the copilot's own items it answers (and sets) itself."""
     pm = crew(perf=PlanPerf(takeoff_flaps="1+F"))
@@ -184,7 +202,7 @@ def test_the_before_takeoff_checklist_is_challenge_and_response():
     assert lit and {o.name for o in out if isinstance(o, SendSimEvent)} >= {"STROBES_SET", "LANDING_LIGHTS_SET"}
 
 
-def test_an_unanswered_item_is_asked_once_more():
+def test_an_unanswered_item_is_asked_once_more(checklists_on):
     pm = crew()
     pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PARKED"))
     pm.observe(systems(0.6))
@@ -234,15 +252,27 @@ def test_each_call_once():
     assert said(out).count("Level at FL350.") + said(out).count("Top of climb, level FL350.") == 1
 
 
-def test_the_greeting_checks_the_fuel_against_the_plan():
+def test_the_fuel_is_checked_against_the_plan_once_the_engines_start():
+    """Not in the greeting (an add-on's tanks are filled after the flight loads: 2,000 kilos "on board" at the
+    gate), and only when it's off."""
     engine = FakeEngine()
     pm = crew(engine, perf=PlanPerf(block_fuel_lb=20000), plan_source="simbrief")
-    out = fly(pm, [own(1 + i, fuel_lb=17000) for i in range(26)])
+    pm.observe(systems(0.5, engines_running=0))
+    out = fly(pm, [own(1 + i, fuel_lb=4500, engine_running=False) for i in range(26)])
     greeting = said(out)[0]
-    assert "KSEA to KPDX" in greeting and "3,000 pounds less than the plan's block" in greeting
+    assert "KSEA to KPDX" in greeting and "pounds" not in greeting and "fuel" not in greeting.lower()
+    pm.observe(own(29, fuel_lb=17000))  # fuelled at the gate
+    out = pm.observe(systems(30, engines_running=1))
+    out += fly(pm, [own(31 + i, fuel_lb=17000) for i in range(30)])
+    assert "Fuel's 17,000 pounds, 3,000 pounds under the plan's block." in said(out)
+    pm2 = crew(FakeEngine(), perf=PlanPerf(block_fuel_lb=20000), plan_source="simbrief")
+    pm2.observe(systems(0.5, engines_running=0))
+    pm2.observe(own(1, fuel_lb=19800, engine_running=False))
+    out = pm2.observe(systems(2, engines_running=1)) + fly(pm2, [own(3 + i, fuel_lb=19800) for i in range(40)])
+    assert not [w for w in said(out) if "Fuel" in w]  # it matches: nothing said
 
 
-def test_a_readback_left_waiting_is_said_once():
+def test_a_readback_left_waiting_is_atcs_business():
     engine = FakeEngine()
     pm = crew(engine)
     pm.observe(own(0.1, on_ground=False, alt_indicated_ft=12000, alt_agl_ft=11000))
@@ -251,7 +281,7 @@ def test_a_readback_left_waiting_is_said_once():
     pm.observe(AtcTransmission(t=1.0, station="Seattle Center", frequency_mhz=128.5, controller="center",
                                instruction_id="common.climb", text="Alaska 123, climb and maintain FL240."))
     out = fly(pm, [own(2 + i, on_ground=False, alt_indicated_ft=12000, alt_agl_ft=11000) for i in range(40)])
-    assert said(out).count("Seattle Center is waiting for a readback.") == 1
+    assert not [w for w in said(out) if "readback" in w]  # ATC asks for it itself; the copilot doesn't nag
 
 
 def test_briefing_and_status_on_request():
@@ -309,8 +339,9 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     finally:
         scenarios.AtcEngine = real
     words = [o.text for o in result.outputs if isinstance(o, CrewSpeech)]
-    for expected in ("Positive rate.", "Before takeoff checklist when you're ready.", "Ten thousand. Landing lights off.",
-                     "Level at FL350.", "Seventy knots."):
+    # Replayed, nothing the copilot sends ever shows in the recording: after two, it stops reaching (said once).
+    assert words.count("My switches aren't reaching this aircraft. I'll leave them to you and call.") == 1
+    for expected in ("Positive rate.", "Ten thousand. Landing lights off?", "Level at FL350.", "Seventy knots."):
         assert expected in words or expected.replace("Level at", "Top of climb, level") in words, expected
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting

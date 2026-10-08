@@ -43,8 +43,8 @@ def test_turbulence_comes_in_at_once_and_goes_only_after_a_calm_minute():
     assert set(levels) == {None}
     bumps = [turb.add(10 + i, 1.0 + (0.4 if i % 2 else -0.4)) for i in range(4)]
     assert "moderate" in bumps or "severe" in bumps
-    calm = [turb.add(14 + i, 1.0) for i in range(80)]
-    assert calm.index("smooth") >= 55  # not the moment it's calm
+    calm = [turb.add(14 + i, 1.0) for i in range(160)]
+    assert calm.index("smooth") >= 115  # not the moment it's calm: two minutes of it
 
 
 def test_a_steady_turn_is_not_turbulence():
@@ -60,7 +60,11 @@ def test_moderate_turbulence_is_said_once_and_smooth_again_later():
         g = 1.0 + (0.25 if i % 2 else -0.25) if 5 <= i < 15 else 1.0
         out += pm.observe(systems(i + 0.1, g_force=g))
         out += pm.observe(air(i + 0.2))
-    for i in range(40, 140):
+    for i in range(40, 260):
+        out += pm.observe(air(i + 0.2))
+    for i in range(260, 280):  # bumpy again soon after: the same weather, not said again
+        g = 1.0 + (0.25 if i % 2 else -0.25)
+        out += pm.observe(systems(i + 0.1, g_force=g))
         out += pm.observe(air(i + 0.2))
     words = said(out)
     assert sum("turbulence" in w for w in words) == 1
@@ -95,10 +99,17 @@ def planned_steps(engine):
     return engine
 
 
+def settled(pm, t=0.6):
+    """Checked in with the centre: it has spoken on the frequency tuned."""
+    pm.observe(AtcTransmission(t=t, station="Seattle Center", frequency_mhz=125.1, text="Alaska 123, roger.",
+                               instruction_id="common.roger"))
+
+
 def test_a_step_climb_from_the_plan_is_offered_and_asked_for_on_yes():
     engine = planned_steps(FakeEngine())
     pm = crew(engine, radio_mode=lambda: "assist")
     cruise(pm)
+    settled(pm)
     out = fly(pm, [air(1.0 + 2 * i, lat=46.9 + 0.001 * i) for i in range(5)])
     assert "Step climb point ahead, suggest FL370. Want me to ask?" in said(out)
     reply = pm.observe(IntercomHeard(t=11.0, text="yes"))
@@ -109,6 +120,10 @@ def test_working_the_radio_the_copilot_asks_atc_itself():
     engine = planned_steps(FakeEngine())
     pm = crew(engine, radio_mode=lambda: "full")
     cruise(pm)
+    pm.monitor.handoff = (0.1, SimpleNamespace(station="Seattle Center", mhz=125.1))
+    assert not fly(pm, [air(0.3, lat=46.9)])  # handed off, not checked in yet: not now
+    pm.monitor.handoff = None
+    settled(pm)
     out = fly(pm, [air(1.0, lat=46.9), air(5.0, lat=46.91), air(10.0, lat=46.92)])
     radio = [o.text for o in out if isinstance(o, Transcript) and o.source == "copilot"]
     assert radio == ["Seattle Center, " + radio[0].split(", ")[1] + ", request climb FL370"]
@@ -128,8 +143,11 @@ def test_no_step_climb_once_up_there_or_after_unable():
 
 
 def test_without_steps_in_the_plan_the_weight_burned_suggests_one():
-    pm = crew()
+    engine = FakeEngine()
+    engine.state.comms.tuned = SimpleNamespace(station="Seattle Center", mhz=125.1)
+    pm = crew(engine)
     cruise(pm)
+    settled(pm)
     pm.observe(systems(0.6))
     out = fly(pm, [air(1.0, gross_weight_lb=150000), air(1.5, gross_weight_lb=150000)]
               + [air(2.0 + 2 * i, gross_weight_lb=141000) for i in range(8)])

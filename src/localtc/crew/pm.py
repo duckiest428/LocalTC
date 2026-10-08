@@ -13,6 +13,7 @@ same way.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,6 +22,7 @@ from localtc.config import PlanPerf
 from localtc.crew.actions import Cockpit, Plan, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command, parse
+from localtc.crew import monitor as monitors
 from localtc.crew.monitor import SAFETY, Call, Monitor
 from localtc.crew.profiles import Profile, for_aircraft, load_all
 from localtc.sim_api import (
@@ -42,6 +44,13 @@ CHECK_S = 3.0  # the sim shows a command within this, or it didn't take
 CONFIRM_S = 10.0  # a "confirm?" waits this long for the answer
 OFFER_S = 15.0  # "send it?" for a radio call said on the intercom
 ACK = ("check", "checked", "set", "checks", "noted", "copy", "roger", "okay", "ok")  # the last word: a statement, said
+# Words that only acknowledge ("check", "roger that", "yep"): nothing to answer. A first officer doesn't reply to them.
+ACK_ONLY = re.compile(r"^(?:(?:check(?:ed)?|copy(?: that)?|roger(?: that)?|ok(?:ay)?|yep|yup|yeah|got it|gotcha|alright|"
+                      r"all right|noted|thanks|thank you|cool|good|sounds good|understood|affirm|right|sure)[\s,.!]*)+$")
+# "Later", "not now", "quiet please": the copilot's suggestions wait (crew.monitor.DECLINE_QUIET_S).
+DECLINE = re.compile(r"\b(?:later|not (?:yet|now|right now)|no,? not|stop (?:talking|it|that)|shut up|be quiet|"
+                     r"enough|i didn'?t ask)\b")
+OWN_HANDS_FAILED = 2  # the copilot's own switches not taking this many times, none ever taking: it can't reach them
 SHORT_COMMAND_WORDS = 5  # a command this short is clear: done straight away, whatever the mode
 STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure", "clearance", "delivery", "unicom",
                  "radio", "traffic")
@@ -69,6 +78,9 @@ class PilotMonitoring:
         self._waiting: list[_Waiting] = []
         self._confirm: tuple[float, Command] | None = None  # (deadline, the command waiting for "confirm")
         self._offer: tuple[float, str] | None = None  # (deadline, a radio call to send)
+        self._failed_said: set[str] = set()  # "didn't take" said once per control
+        self._own_failed = self._own_took = 0
+        self._no_hands_said = False
 
     @property
     def profile(self) -> Profile:
@@ -123,8 +135,12 @@ class PilotMonitoring:
                 self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
         kind = "alert" if call.priority >= SAFETY else "callout"
         text, spoken = call.text, call.spoken
+        if not text:  # a hand only (the altimeter to the ATIS): nothing said
+            return out
+        # Only the copilot's talk is put in its own words; a callout or a warning keeps its words (reworded,
+        # "moderate turbulence" became "turbulence ahead" and a heading reminder "heading's set").
         if self.model is not None and call.priority < SAFETY and not call.urgent and not call.before_readback \
-                and not call.key.startswith(("run:", "rotate", "v1", "speed_check", "positive_rate")):
+                and call.key.startswith(REWORDED):
             words, exchanges = self.model.reword(t, text)
             out += exchanges
             if words:
@@ -147,6 +163,20 @@ class PilotMonitoring:
         commands = parse(text)
         words = text.lower().strip(" .!?").replace(",", " ").split()
         acked = bool(words) and words[-1] in ACK
+        lowered = text.lower().strip()
+        if not monitors.CHECKLISTS and any(c.action == "checklist" for c in commands):  # none to read yet
+            return [self._say(t, "No checklists from me yet; I'll read them once we have the real ones for this aircraft.")]
+        if DECLINE.search(lowered) and self._confirm is None and self._offer is None:
+            self.monitor.declined(t)
+            if self.model is not None:
+                self.model.heard("Captain", text)
+            return [self._say(t, "Copy.")]
+        if ACK_ONLY.match(lowered) and not commands and self._confirm is None and self._offer is None \
+                and self.monitor.offer is None and self.monitor.cr is None:
+            if self.model is not None:
+                self.model.heard("Captain", text)
+            # Nothing to answer: in the scripted modes a word back, as before; otherwise silence, as a crew does.
+            return [self._say(t, self.monitor.rng.choice(["Check.", "Copy."]))] if mode in ("off", "scripted") else []
         # An answer to a checklist item ("on", "set", "one plus F, checked") is taken as that, whatever the words.
         if self.monitor.cr is not None and not any(c.action in ("checklist", "brief", "status", "verbosity")
                                                    for c in commands) and len(words) <= 8:
@@ -203,6 +233,11 @@ class PilotMonitoring:
                 return out
             if said is not None:
                 return [*exchanges, self._say(t, said)]
+            why = exchanges[-1].detail if exchanges else ""
+            if why.startswith(("claims", "reassures", "names a place")):  # it said what isn't so: what fits instead
+                asked = "?" in text or re.match(r"^\s*(?:[a-z']+[,\s]+){0,2}(?:what|how|where|which|who|do|did|are|is|will|can)\b",
+                                                 text.lower())
+                return [*exchanges, self._say(t, "Can't tell that from here." if asked else "Copy.")]
             return [*exchanges, self._say(t, "Say again?")]
         if reading.command is None:
             return [*exchanges, self._say(t, reading.reply)]
@@ -240,6 +275,13 @@ class PilotMonitoring:
             return [self._say(t, {"quiet": "Copy, only what matters.", "chatty": "Copy, I'll keep you posted.",
                                   "standard": "Copy, the usual calls."}[cmd.value])]
         self.monitor.pilot_said(cmd, t)
+        if not self.monitor.hands and self.monitor.hands_setting and cmd.action != "com_active":
+            # Can't reach this aircraft's switches: said, not pretended (once fully, then briefly).
+            if self._no_hands_said:
+                return [self._say(t, "That one's yours.", "refused")]
+            self._no_hands_said = True
+            return [self._say(t, "I can't move this aircraft's switches from here; they're yours.", "refused"),
+                    CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail="no hands in this aircraft")]
         verdict = safety(cmd, self.cockpit)
         if verdict.kind == "refuse":
             return [self._say(t, verdict.reason, "refused"),
@@ -270,6 +312,7 @@ class PilotMonitoring:
     def _answer(self, t: float, yes: bool) -> list[Any]:
         if (offer := self.monitor.take_offer(t)) is not None:
             if not yes:
+                self.monitor.declined(t)
                 return [self._say(t, "Copy, later then.")]
             if offer.kind == "checklist":
                 self.monitor.checklist(offer.value, t)
@@ -331,12 +374,22 @@ class PilotMonitoring:
             if shown or shown is None:
                 if not w.quiet:
                     out.append(self._say(t, w.plan.done, "done", w.plan.done_spoken))
+                if shown and w.quiet:
+                    self._own_took += 1
                 out.append(CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="done"))
             elif t >= w.deadline:
-                what = w.plan.done.rstrip(".").replace(" set", "")
-                out += [self._say(t, f"{what} didn't take, check it.", "alert"),
-                        CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="failed",
-                                   detail=f"the sim didn't show it within {CHECK_S:.0f} s")]
+                out.append(CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="failed",
+                                      detail=f"the sim didn't show it within {CHECK_S:.0f} s"))
+                if w.quiet:
+                    self._own_failed += 1
+                if w.quiet and self._own_failed >= OWN_HANDS_FAILED and not self._own_took and not self.monitor.hands_dead:
+                    # Its switches never reach this aircraft: calls only from now on, said once.
+                    self.monitor.hands_dead = True
+                    out.append(self._say(t, "My switches aren't reaching this aircraft. I'll leave them to you and call.", "alert"))
+                elif w.plan.action not in self._failed_said and not self.monitor.hands_dead:
+                    self._failed_said.add(w.plan.action)  # once for each control: then it's known
+                    what = w.plan.done.rstrip(".").replace(" set", "")
+                    out.append(self._say(t, f"{what} didn't take, check it.", "alert"))
             else:
                 still.append(w)
         self._waiting = still
@@ -404,6 +457,9 @@ class PilotMonitoring:
             self._note(s.t, f"{s.engines_running} engine{'s' if s.engines_running != 1 else ''} running")
         if s.ap_master != was.ap_master:
             self._note(s.t, "autopilot on" if s.ap_master else "autopilot off")
+
+
+REWORDED = ("greeting", "summary", "brief:", "status", "tod", "fuel_check", "divert", "step:", "clear")  # its own talk
 
 
 def _seed(engine: Any) -> int:

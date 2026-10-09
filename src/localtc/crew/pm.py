@@ -208,6 +208,7 @@ class PilotMonitoring:
             if profile is not self.cockpit.profile:
                 log.info("Copilot: %s profile for %s", profile.name, ev.title or ev.atc_model)
                 self.cockpit.profile = profile
+                self.cockpit.dead = set(profile.cannot)
             self._aircraft = monitors._aircraft_name(ev.title or ev.atc_model)
             self._persona()
         elif isinstance(ev, AtcTransmission):

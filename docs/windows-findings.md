@@ -4,6 +4,22 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-08: Fenix A319 (FenixA319 IAE WF SD), the copilot's hands
+- It got the stock A320neo profile ("A319" in its title). New `fenix_a32x.toml` (match "Fenix"). Only 130 input
+  events (audio volumes): its controls are L:vars, named in its package (`grep -a` over fnx-aircraft-320).
+- Work, checked: `L:S_OH_EXT_LT_BEACON` 0/1, `STROBE` 0 off/1 auto/2 on, `NAV_LOGO` (one switch), `NOSE` 0/1 taxi/2
+  T.O. (the sim's LIGHT LANDING follows NOSE=2, not the landing lights), `LANDING_L` and `LANDING_R` 2 on (by eye;
+  `LANDING_BOTH` moves neither), `S_FC_FLAPS` 0-4 (the lever moves; FLAPS HANDLE INDEX doesn't follow).
+- FCU: `L:E_FCU_SPEED` / `E_FCU_ALTITUDE` are encoders that turn by how much they change (+50 = 50 clicks, by eye);
+  no variable shows the windows. New `NudgeVar`: read the counter, add past the stop (speed 100, altitude 100), then
+  the clicks up (altitude in 1000s from 100). SPD 250 / ALT 12000 checked by eye. Profile: `encoder = true`, `stop`,
+  `low`, `step`.
+- New profile keys: `cannot = [...]` (straight to "that one's yours"), `unread = [...]` (readings not checked:
+  `light_landing`, `ap_speed_sel`, `ap_altitude_sel` here), `lvar = "L:A, L:B"` (a switch each side).
+- Open: heading (no stop to count from; dashes when managed), V/S, AP1 (`S_FCU_AP1`, not tried parked), spoilers arm
+  (`A_FC_SPEEDBRAKE` is an axis, 1 at rest; nothing followed -1/0), autobrake (`S_MIP_AUTOBRAKE_*` presses moved no
+  `I_MIP_AUTOBRAKE_*` light parked), COM standby (the sim's didn't follow), gear (`S_MIP_GEAR`, never touched).
+
 ## 2026-10-08: the copilot's hands, stock A320neo V2 and A350-1000
 - `debug aircraft` listed no input events in any aircraft: MSFS 2024 (12.2) sends one descriptor (76 bytes) more than
   `dwArraySize` counts, and `_parse_input_events` wanted an exact fit. Now at least, under one more. 588 (A320neo),

@@ -51,3 +51,43 @@ def test_a_profile_knob_turns_to_the_value():
     assert got.writes == (TurnKnob(name="INSTRUMENT_FCU_ALT_KNOB", var="AUTOPILOT ALTITUDE LOCK VAR", unit="feet",
                                    target=12000.0, step=1000.0),)
     assert got.check_s == KNOB_CHECK_S
+
+
+def _fenix():
+    from localtc.crew.profiles import for_aircraft, load_all
+    return for_aircraft(load_all(), "FenixA319 IAE WF SD", "A319")
+
+
+def test_the_fenix_fcu_is_turned_past_its_stop_then_up():
+    from localtc.crew.actions import Cockpit, plan
+    from localtc.crew.commands import Command
+    from localtc.sim_api import NudgeVar
+
+    c = Cockpit(profile=_fenix())
+    assert plan(Command("speed", "250"), c).writes == (NudgeVar(name="L:E_FCU_SPEED", deltas=(-500, 150)),)
+    # in thousands from 100: 12 clicks is 12,000 (11,900 would round up the same)
+    assert plan(Command("altitude", "12000"), c).writes == (NudgeVar(name="L:E_FCU_ALTITUDE", deltas=(-600, 12)),)
+    assert plan(Command("speed", "250"), c).check(c) is None  # nothing reads the Fenix's FCU back: sent, not checked
+
+
+def test_a_switch_each_side_is_two_writes_and_an_unread_light_isnt_checked():
+    from localtc.crew.actions import Cockpit, plan
+    from localtc.crew.commands import Command
+    from localtc.sim_api import AircraftSystems
+
+    c = Cockpit(profile=_fenix(), systems=AircraftSystems(t=0.0, light_landing=True))
+    got = plan(Command("light", "on", "landing"), c)
+    assert [w.name for w in got.writes] == ["L:S_OH_EXT_LT_LANDING_L", "L:S_OH_EXT_LT_LANDING_R"]
+    assert got.check(c) is None and not got.already  # the sim's landing light is the Fenix's nose T.O. light
+
+
+def test_what_an_aircraft_cant_do_is_the_pilots_from_the_start():
+    from localtc.crew.pm import PilotMonitoring
+    from localtc.sim_api import AircraftIdentity
+
+    from tests.test_copilot_deck import FakeEngine, heard, said, sent
+
+    pm = PilotMonitoring(FakeEngine())
+    pm.observe(AircraftIdentity(t=0.0, title="FenixA320 CFM", atc_model="A320"))
+    out = heard(pm, 1.0, "heading two four zero", 0.95)
+    assert not sent(out) and any("that one's yours" in w for w in said(out))

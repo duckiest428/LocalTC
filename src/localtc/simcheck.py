@@ -42,6 +42,7 @@ from localtc.sim_api import (
     SendSimEvent,
     SetInputEvent,
     TurnKnob,
+    NudgeVar,
     SetSimVar,
     SpawnAiAircraft,
     TrafficIdentity,
@@ -111,6 +112,8 @@ def describe(cmd: Any) -> str:
         return f"event {cmd.name} {cmd.value}" + (f" #{cmd.index}" if cmd.index else "")
     if isinstance(cmd, SetInputEvent):
         return f"input {cmd.name} = {cmd.value:g}"
+    if isinstance(cmd, NudgeVar):
+        return f"encoder {cmd.name} by " + " then ".join(f"{d:+g}" for d in cmd.deltas)
     if isinstance(cmd, TurnKnob):
         return f"knob {cmd.name} to {cmd.target:g}"
     if isinstance(cmd, SetSimVar):

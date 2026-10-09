@@ -9,6 +9,8 @@ goes against the clearance, waits for a "confirm".
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
+from msgspec.structs import replace as replace_struct
+
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.facilities import channel_khz
 from localtc.crew.commands import Command
@@ -20,6 +22,7 @@ from localtc.sim_api import (
     SetComFrequency,
     SetInputEvent,
     SetSimVar,
+    NudgeVar,
     SimCommand,
     TurnKnob,
 )
@@ -177,6 +180,9 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
         var, unit, wrap = KNOB_READS.get(key, ("", "number", 0.0))
         return TurnKnob(name=custom.knob, var=custom.var or var, unit=custom.var_unit or unit, target=float(value or 0.0),
                         step=custom.step, wrap=wrap)
+    if custom.encoder and custom.lvar:
+        clicks = max(0, -(-(float(value or 0.0) - custom.low) // custom.step))  # rounded up: from 100, a click is 1,000
+        return NudgeVar(name=custom.lvar, deltas=(custom.stop, clicks))
     if custom.input:
         level = custom.on if on else custom.off if on is not None else (value or 0.0)
         return SetInputEvent(name=custom.input, value=float(level))
@@ -191,7 +197,14 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
 def plan(cmd: Command, c: Cockpit) -> Plan | str:
     """What to send for ``cmd``, or why it can't be done on this aircraft ("unable ...")."""
     got = _plan(cmd, c)
-    if isinstance(got, Plan) and any(isinstance(w, TurnKnob) for w in got.writes):
+    if not isinstance(got, Plan):
+        return got
+    if any(isinstance(w, SetSimVar) and "," in w.name for w in got.writes):  # one switch each side: "L:A, L:B"
+        got = replace(got, writes=tuple(x for w in got.writes for x in (
+            [replace_struct(w, name=n.strip()) for n in w.name.split(",")] if isinstance(w, SetSimVar) else [w])))
+    if got.reads and got.reads in c.profile.unread:
+        got = replace(got, check=lambda _c: None, already="")
+    if any(isinstance(w, TurnKnob) for w in got.writes):
         return replace(got, check_s=KNOB_CHECK_S)
     return got
 

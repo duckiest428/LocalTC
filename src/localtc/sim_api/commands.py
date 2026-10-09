@@ -60,6 +60,14 @@ class TurnKnob(SimCommand, tag="turn_knob"):
     wrap: float = 0.0
 
 
+class NudgeVar(SimCommand, tag="nudge_var"):
+    """Add to a counter variable, one amount after another: an add-on's encoder that turns by how much its L:var
+    changes (the Fenix's FCU knobs, L:E_FCU_SPEED: +50 is 50 clicks). The variable is read first."""
+
+    name: str
+    deltas: tuple[float, ...]
+
+
 class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
     """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
     non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
@@ -100,5 +108,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob,
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

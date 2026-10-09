@@ -38,6 +38,7 @@ from localtc.sim_api import (
     SendSimEvent,
     SetInputEvent,
     TurnKnob,
+    NudgeVar,
     SpawnAiAircraft,
     RemoveAiAircraft,
     EnumerateModels,
@@ -95,6 +96,7 @@ DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
+NUDGE_GAP_S = 0.1
 KNOB_READ_REQUEST = 1000  # + the variable's data definition: a knob being turned reads it back (TurnKnob)
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
@@ -283,6 +285,8 @@ class SimConnectSource:
         self._want_input_events = False
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
+        self._nudges: dict[int, list[float]] = {}  # an encoder's definition -> the amounts still to add (NudgeVar)
+        self._nudge_at: dict[int, tuple[float, float]] = {}  # ... -> its value as read and added to, the next write
         self._knobs: dict[str, tuple[KnobTurn, int]] = {}  # input event -> the turn and its variable's definition
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
                                   (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
@@ -391,6 +395,7 @@ class SimConnectSource:
                         log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
                 self._turn_knobs(dll, handle)
+                self._nudge(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
                     self._nearest_to_fetch = None
@@ -477,6 +482,8 @@ class SimConnectSource:
                 self._set_simvar(dll, handle, command)
             elif isinstance(command, SetInputEvent):
                 self._set_input_event(dll, handle, command)
+            elif isinstance(command, NudgeVar):
+                self._start_nudge(dll, handle, command)
             elif isinstance(command, TurnKnob):
                 self._start_knob(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
@@ -535,19 +542,57 @@ class SimConnectSource:
         if command.name.upper() not in self._input_events:
             log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
             return
-        key = f"{command.var}|{command.unit}"
         try:
-            define_id = self._simvar_definitions.get(key)
-            if define_id is None:
-                define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
-                dll.add_to_data_definition(handle, define_id, command.var, command.unit, defs.F64)
-                self._simvar_definitions[key] = define_id
+            define_id = self._var_definition(dll, handle, command.var, command.unit)
         except SimConnectError as exc:
             log.warning("Copilot can't read %s to turn %s: %s", command.var, command.name, exc)
             return
         self._knobs[command.name.upper()] = (KnobTurn(command.name.upper(), command.target, command.step, command.wrap),
                                              define_id)
         log.info("Copilot: turning %s to %s", command.name, command.target)
+
+    def _var_definition(self, dll: SimConnectApi, handle: int, var: str, unit: str) -> int:
+        key = f"{var}|{unit}" if unit != "number" else var
+        define_id = self._simvar_definitions.get(key)
+        if define_id is None:
+            define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+            dll.add_to_data_definition(handle, define_id, var, unit, defs.F64)
+            self._simvar_definitions[key] = define_id
+        return define_id
+
+    def _start_nudge(self, dll: SimConnectApi, handle: int, command: NudgeVar) -> None:
+        """Read the counter; the amounts are added as it comes back (``_on_nudge``)."""
+        try:
+            define_id = self._var_definition(dll, handle, command.name, "number")
+            self._nudges[define_id] = list(command.deltas)
+            self._nudge_at.pop(define_id, None)
+            log.info("Copilot: %s by %s", command.name, " then ".join(f"{d:+g}" for d in command.deltas))
+            dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER, Period.ONCE)
+        except SimConnectError as exc:
+            log.warning("Copilot couldn't turn %s: %s", command.name, exc)
+
+    def _on_nudge(self, define_id: int, value: float) -> None:
+        self._nudge_at[define_id] = (value, 0.0)
+
+    def _nudge(self, dll: SimConnectApi, handle: int) -> None:
+        """The counters read: add the next amount, each its own write a little apart (the add-on sees the counter
+        move twice: past the stop, then up)."""
+        now = time.monotonic()
+        for define_id, (value, next_t) in list(self._nudge_at.items()):
+            deltas = self._nudges.get(define_id)
+            if not deltas:
+                del self._nudge_at[define_id]
+                self._nudges.pop(define_id, None)
+                continue
+            if now < next_t:
+                continue
+            value += deltas.pop(0)
+            self._nudge_at[define_id] = (value, now + NUDGE_GAP_S)
+            try:
+                dll.set_data_on_sim_object(handle, define_id, OBJECT_ID_USER, struct.pack("<d", value))
+            except SimConnectError as exc:
+                log.warning("Copilot couldn't turn an encoder: %s", exc)
+                self._nudges.pop(define_id, None)
 
     def _turn_knobs(self, dll: SimConnectApi, handle: int) -> None:
         now = time.monotonic()
@@ -675,6 +720,8 @@ class SimConnectSource:
 
     def _on_data(self, msg: ObjectData, t: float) -> None:
         if msg.request_id >= KNOB_READ_REQUEST:
+            if msg.request_id - KNOB_READ_REQUEST in self._nudges and len(msg.payload) >= 8                     and msg.request_id - KNOB_READ_REQUEST not in self._nudge_at:
+                self._on_nudge(msg.request_id - KNOB_READ_REQUEST, struct.unpack_from("<d", msg.payload)[0])
             for turn, define_id in self._knobs.values():
                 if KNOB_READ_REQUEST + define_id == msg.request_id and len(msg.payload) >= 8:
                     turn.on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())

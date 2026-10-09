@@ -18,8 +18,8 @@ SHIPPED = Path(__file__).with_name("profiles")
 
 @dataclass(frozen=True)
 class Write:
-    """One action sent another way: a key event (``event``, with ``value``), or an L:var (``lvar``) set to
-    ``on``/``off`` or the action's value."""
+    """One action sent another way: a key event (``event``, with ``value``), or an L:var (``lvar``; several, comma
+    separated, for a switch each side) set to ``on``/``off`` or the action's value."""
 
     event: str = ""
     value: int | None = None
@@ -32,6 +32,11 @@ class Write:
     # variable it drives reads the value. ``step``: one step's change of the reading ("1000" for an altitude knob in
     # thousands); ``var``/``var_unit``: the reading, if not the action's usual one.
     knob: str = ""
+    # An encoder L:var (``lvar`` with ``encoder = true``) that turns by how much it changes, with nothing to read the
+    # value back by: turned ``stop`` clicks (past its lowest, where it reads ``low``), then up to the value.
+    encoder: bool = False
+    stop: float = 0.0
+    low: float = 0.0
     step: float = 1.0
     var: str = ""
     var_unit: str = ""
@@ -74,6 +79,11 @@ class Profile:
     hands: bool = True
     reads_flaps: bool = True
     reads_autopilot: bool = True
+    # The actions the copilot can't do in this aircraft ("heading": nothing reaches it, or nothing to set it by): left
+    # to the pilot, said so, from the start.
+    cannot: tuple[str, ...] = ()
+    # Readings that don't follow this aircraft's own switch ("light_landing"): what's sent there isn't checked.
+    unread: tuple[str, ...] = ()
 
     def autobrake_name(self, position: int) -> str:
         """The switch position as said ("medium"), or "" when this aircraft's positions aren't known."""
@@ -136,6 +146,7 @@ def parse(data: dict) -> Profile:
         reversers=bool(a["reversers"]) if "reversers" in a else None, ceiling_ft=int(a.get("ceiling_ft", 41000)),
         short_runway_ft=int(a.get("short_runway_ft", 7000)), hands=bool(a.get("hands", True)),
         reads_flaps=bool(a.get("reads_flaps", True)), reads_autopilot=bool(a.get("reads_autopilot", True)),
+        cannot=tuple(str(x) for x in a.get("cannot", ())), unread=tuple(str(x) for x in a.get("unread", ())),
     )
 
 

@@ -26,6 +26,7 @@ from localtc.sim_api.commands import (
     SetComFrequency,
     SetInputEvent,
     TurnKnob,
+    NudgeVar,
     SetSimVar,
     SimCommand,
 )
@@ -127,6 +128,7 @@ __all__ = [
     "SendSimEvent",
     "SetInputEvent",
     "TurnKnob",
+    "NudgeVar",
     "SetSimVar",
     "AircraftSystems",
     "CREW_EVENT_TYPES",

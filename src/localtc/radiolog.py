@@ -56,7 +56,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         who = ev.station if ev.speaker == "atc" else ev.callsign
         return {"kind": "chatter", "t": t, "station": who, "mhz": ev.frequency_mhz, "text": ev.text, "atc": ev.speaker == "atc"}
     if isinstance(ev, AtisBroadcast):
-        return {"kind": "atis", "t": t, "station": f"{ev.station} information {ev.letter}", "mhz": ev.frequency_mhz,
+        return {"kind": "atis", "t": t, "station": f"{ev.station} information {ev.letter}"
+                + (f" · {ev.source}" if ev.source else ""), "mhz": ev.frequency_mhz,
                 "text": ev.text}
     if isinstance(ev, PhaseChanged):
         return {"kind": "phase", "t": t, "text": PHASES.get(ev.phase, ev.phase)}

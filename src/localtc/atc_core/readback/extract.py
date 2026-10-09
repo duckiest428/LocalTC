@@ -6,6 +6,7 @@ incorrect, and no candidates means missing.
 """
 
 import difflib
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -304,6 +305,8 @@ def headings(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
     for i in _find_phrase(tokens, ("heading",)):
         num = _number(tokens, i)
+        if num and num.isdigit() and len(num) == 4 and num.endswith("0") and 0 < int(num) // 10 <= 360:
+            num = num[:-1]  # "heading 3500": speech-to-text's "three fifty zero" for 350
         if num and num.isdigit() and 0 <= int(num) <= 360:
             found.append(int(num) % 360 or 360)
     return found
@@ -536,9 +539,10 @@ def approaches(tokens: list[Token], expected: Any = None) -> list[Approach]:
     for after, kind in starts:
         j = after
         suffix = ""
+        slips = 0  # words speech-to-text put in between ("ILS young Yankee for the runway 26L")
         while j < len(tokens):
             text = tokens[j].text
-            if text in ("approach", "runway", "to", "slash"):
+            if text in ("approach", "runway", "to", "slash", "for", "the", "on"):
                 j += 1
             elif text == "dme" and kind in WITH_DME:
                 kind, j = WITH_DME[kind], j + 1
@@ -546,6 +550,10 @@ def approaches(tokens: list[Token], expected: Any = None) -> list[Approach]:
                 kind, j = "LOC BC", j + 2
             elif (text in ("y", "z", "x", "w") or tokens[j].kind == "letter" and text in "wxyz") and not suffix:
                 suffix, j = text.upper(), j + 1
+            elif tokens[j].kind == "word" and slips < 2 and text not in APPROACH_KINDS and _runway_at(tokens, j) is None \
+                    and any(_runway_at(tokens, k) is not None or tokens[k].text in ("y", "z", "x", "w")
+                            for k in range(j + 1, min(j + 4, len(tokens)))):
+                slips, j = slips + 1, j + 1
             else:
                 break
         if (hit := _runway_at(tokens, j)) is not None:
@@ -773,12 +781,24 @@ def values_close(element: str, heard: Any, expected: Any, confidence: float | No
     return False
 
 
+def opposite_end(runway: str) -> str:
+    """The other end of a runway: "01L" -> "19R", "26" -> "08", "36C" -> "18C"."""
+    m = re.fullmatch(r"(\d{1,2})([LRC]?)", runway)
+    if m is None:
+        return runway
+    number = (int(m.group(1)) + 17) % 36 + 1
+    return f"{number:02d}{ {'L': 'R', 'R': 'L'}.get(m.group(2), m.group(2)) }".replace(" ", "")
+
+
 def values_equal(element: str, heard: Any, expected: Any) -> bool:
     if isinstance(heard, Unclear):
         return False
     if element == "frequency":
         return abs(float(heard) - float(expected)) < 0.0005
-    if element in ("runway", "hold_short"):
+    if element == "hold_short":
+        # The runway to hold short of or cross, by either end: "19R" for "01L" is the same strip of concrete.
+        return normalize_runway(heard) in (normalize_runway(expected), opposite_end(normalize_runway(expected)))
+    if element == "runway":
         return normalize_runway(heard) == normalize_runway(expected)
     if element == "approach":
         if not expected.runway:  # VOR-A: the name is all there is

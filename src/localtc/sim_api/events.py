@@ -189,6 +189,17 @@ class WeatherReport(Event, tag="weather_report"):
     dewpoint_c: float | None = None
 
 
+class AtisReport(Event, tag="atis_report"):
+    """An airport's real ATIS, as published (the FAA's digital ATIS, from atis.info): used with ``[atc] atis_source``
+    "real" or "hybrid". Recorded, so a replay hears the ATIS the flight had."""
+
+    icao: str
+    letter: str
+    text: str  # as published
+    kind: str = "both"  # both, arrival, departure
+    zulu: str = ""  # "1756"
+
+
 class NearbyAirport(msgspec.Struct, frozen=True, kw_only=True):
     icao: str
     lat: float
@@ -405,6 +416,7 @@ class AtisBroadcast(Event, tag="atis_broadcast"):
     # The same broadcast worded a little differently for each time round the loop (0.4); () reads ``spoken`` each time.
     variants: tuple[str, ...] = ()
     locale: str = ""  # the region's English, for the voice
+    source: str = ""  # where it's from and how old ("real ATIS 1756Z", "METAR 1753Z", "simulator, observed 2 min ago")
 
 
 class RadioChatter(Event, tag="radio_chatter"):
@@ -486,7 +498,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus, AircraftInputEvents, WeatherReport]
+                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

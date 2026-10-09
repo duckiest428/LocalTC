@@ -265,6 +265,7 @@ class AppController:
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
+            "welcome": not self.cfg.ui.welcome_seen,
         }
 
     async def _count_flight(self) -> None:
@@ -469,6 +470,7 @@ class AppController:
             "phase": snap.phase, "phase_label": PHASES.get(snap.phase or "", snap.phase or ""),
             "airport": airport_summary(airport, engine) if airport else ({"icao": icao} if icao else None),
             "atis": atis.letter if atis else None,
+            "atis_source": engine.atis_source_text(atis, engine.state.aircraft) if atis else None,
             "squawk": a.get("squawk"), "altitude_ft": a.get("altitude_ft"),
             "runway": a.get("departure_runway") if departing else a.get("arrival_runway"),
             "approach": str(a["approach"]) if a.get("approach") else None,
@@ -1087,6 +1089,20 @@ def airport_summary(airport, engine=None) -> dict:
     rows = [{"label": FREQ_LABELS.get(kind, kind.upper()), "kind": kind, "mhz": mhzs[0], "others": mhzs[1:]}
             for kind, mhzs in sorted(freqs.items(), key=lambda kv: FREQ_ORDER.index(kv[0]) if kv[0] in FREQ_ORDER else 99)]
     if engine is not None:
+        # The departure frequency ATC gives in the clearance, where the sim lists it as approach's (San Francisco's
+        # NORCAL 120.35): DEP, as the clearance said, not APP.
+        departure = engine.facility("departure")
+        if departure is not None and departure.airport == airport.icao and not any(r["kind"] == "departure" for r in rows):
+            for row in rows:
+                if row["kind"] == "approach" and departure.mhz in [row["mhz"], *row["others"]]:
+                    rest = [m for m in [row["mhz"], *row["others"]] if m != departure.mhz]
+                    if rest:
+                        row["mhz"], row["others"] = rest[0], rest[1:]
+                    else:
+                        rows.remove(row)
+                    break
+            at = next((i for i, r in enumerate(rows) if r["kind"] in ("approach", "center")), len(rows))
+            rows.insert(at, {"label": "DEP", "kind": "departure", "mhz": departure.mhz, "others": []})
         center = engine.facility("center")
         if center is not None and not any(r["kind"] == "center" for r in rows):
             rows.append({"label": "CTR", "kind": "center", "mhz": center.mhz, "others": []})

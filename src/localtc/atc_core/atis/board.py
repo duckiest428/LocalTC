@@ -100,17 +100,27 @@ class AtisBoard:
         return self._notices[icao]
 
     def update(self, icao: str, geo: AirportGeometry, weather: Weather, zulu_s: float | None, name: str,
-               t: float = 0.0, *, kind: str = "both") -> AtisInfo | None:
-        """Refresh an airport's ATIS; returns it if it's new or its letter changed."""
+               t: float = 0.0, *, kind: str = "both", real=None, source: tuple = ("simulator", None, "")) -> AtisInfo | None:
+        """Refresh an airport's ATIS; returns it if it's new or its letter changed. ``real``: the airport's real ATIS
+        (``atis.real.RealAtis``): its letter, and its runways where the wind allows them. ``source``: where it's from."""
         key = icao if kind == "both" else f"{icao}/{kind}"
         old = self.current.get(key)
         since = t - self._issued.get(key, -math.inf)
-        if old is not None and since < RUNWAY_UPDATE_S:
+        new_real = real is not None and (old is None or old.letter != real.letter)
+        if old is not None and since < RUNWAY_UPDATE_S and not new_real and old.source[0] == source[0]:
             return None
         notices = self.notices(icao, geo)
         closed = closed_ends(geo, notices)
         out = outages(notices)
         end = self._runway(geo, weather, old.runway if old else None, closed, out, flow=self.flows.get(icao))
+        if real is not None:
+            # The real ATIS's runway, while the wind here allows it (never one with a tailwind in the sim's weather).
+            wanted = real.departing if kind == "departure" else real.landing or real.departing
+            for ident in wanted:
+                e = geo.end(ident)
+                if e is not None and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT:
+                    end = e
+                    break
         if end is None:
             return None
         region = self.region or region_for(icao)
@@ -147,12 +157,19 @@ class AtisBoard:
         notes = remarks(geo, end, weather)
         slot = observation_slot(zulu_s)
         new_observation = old is not None and slot != old.observation
-        if old is not None and not new_observation and since < MIN_UPDATE_S and end.ident == old.runway:
+        changed_source = old is not None and old.source[0] != source[0]
+        if real is None and not changed_source and old is not None and not new_observation and since < MIN_UPDATE_S \
+                and end.ident == old.runway:
             return None  # a special so soon after the last one: it waits (the runway changing doesn't)
-        if old is not None and not new_observation and not _changed(old, weather, end.ident, notes) \
-                and old.operations is not None and old.operations.key() == ops.key():
+        if real is None and not changed_source and old is not None and not new_observation \
+                and not _changed(old, weather, end.ident, notes) and old.operations is not None \
+                and old.operations.key() == ops.key():
             return None
-        if old is None:
+        if real is not None and old is not None and not new_real and end.ident == old.runway and not changed_source:
+            return None  # the same real ATIS
+        if real is not None:
+            letter = real.letter
+        elif old is None:
             which = "" if kind == "both" else kind  # separate arrival and departure broadcasts run their own letters
             letter = LETTERS[zlib.crc32(f"{icao}{which}{self.seed}{int((zulu_s or 0) // 3600)}".encode()) % 26]
         else:
@@ -160,8 +177,11 @@ class AtisBoard:
         now = zulu_s if zulu_s is not None else weather.t
         routine = old is None or new_observation
         stamp = _zulu(((slot * 3600) + OBSERVED_AT_MIN * 60) if routine and zulu_s is not None else now)
+        if real is not None and real.zulu:
+            stamp = real.zulu
         primary = approaches[end.ident]
-        info = AtisInfo(icao, name, letter, stamp, weather, end.ident, primary.kind, notes, ops, region, kind, slot)
+        info = AtisInfo(icao, name, letter, stamp, weather, end.ident, primary.kind, notes, ops, region, kind, slot,
+                        source=source)
         self.current[key] = info
         self._issued[key] = t
         return info

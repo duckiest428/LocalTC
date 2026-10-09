@@ -74,6 +74,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         notams=atc.notams,
         squawk_per_flight=atc.squawk_per_flight,
         destination_weather=atc.destination_weather,
+        atis_source=atc.atis_source,
         approach=flight.approach,
         sid=flight.sid or None,
         star=flight.star or None,
@@ -418,9 +419,13 @@ async def run_session(
             atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
             atc_service.deck = deck
             if session.source_kind == "live" and os.environ.get("LOCALTC_METAR", "1"):
-                from localtc.metar_data import MetarStore
+                from localtc.metar_data import AtisStore, MetarStore
 
-                atc_service.weather_source = MetarStore().get  # the departure's and destination's real METARs
+                # The departure's and destination's real METARs and ATIS, as [atc] atis_source uses them.
+                if cfg.atc.atis_source == "hybrid":
+                    atc_service.weather_source = MetarStore().get
+                if cfg.atc.atis_source in ("real", "hybrid"):
+                    atc_service.atis_source = AtisStore().get
             consumers.append(asyncio.create_task(atc_service.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring

@@ -36,6 +36,9 @@ strict_callsign = false       # true: a readback without the callsign is incompl
 transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?"
 notams = true                 # notices on the ATIS (a taxiway closed, an ILS out, birds ...); ATC works to them
+atis_source = "hybrid"        # the ATIS: "hybrid" (real ATIS, else real METAR, else the sim), "real" (real ATIS where
+                              # there is one, else the sim), "sim" (the sim's weather only). The sim's own weather at an
+                              # airport, observed in the last half hour, always wins over a real-world report
 chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)
 enforce_fpln_runways = false  # true: ATC gives the flight plan's runways; false: the runways in use (ATIS, else wind)
 real_gates = true             # gates by their real names (E9), international flights to international gates: from OpenStreetMap, cached

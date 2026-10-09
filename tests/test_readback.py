@@ -16,7 +16,7 @@ from localtc.atc_core.readback import (
     SayAgainInterpreter,
     normalize,
 )
-from localtc.atc_core.readback.extract import values_close
+from localtc.atc_core.readback.extract import values_equal, values_close
 from localtc.atc_core.readback.normalize import render
 from localtc.atc_core.values import Approach, Callsign, Phrase, Wind
 
@@ -192,6 +192,8 @@ def test_dropping_or_changing_an_element_is_caught(instruction):
             other = random_slots(random.Random(rng.random()))
             if element not in other or other[element] == slots[element] or values_close(element, other[element], slots[element]):
                 continue  # a near miss ("15 left" for 15) gets "confirm", tested in the corpus
+            if element == "hold_short" and values_equal(element, other[element], slots[element]):
+                continue  # the other end of the same runway ("32L" for 14R): the same runway to hold short of
             text = readback(changed={element: other[element]})
             result = GrammarInterpreter().interpret(text, pending, context)
             assert result.status == "incorrect" and element in result.mismatched, (element, text, render(normalize(text)), result)

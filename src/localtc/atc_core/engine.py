@@ -87,7 +87,9 @@ from localtc.atc_core.values import (
     Wind,
     clean_sim_name,
 )
+from localtc.atc_core.atis import real as real_atis
 from localtc.atc_core.atis.observation import from_report
+from localtc.atc_core.atis.real import with_magvar
 from localtc.atc_core.vfr import VfrMixin, VfrState
 from localtc.atc_core.weather import (
     AtisBoard,
@@ -100,6 +102,7 @@ from localtc.sim_api import (
     AircraftIdentity,
     Airport,
     AirportData,
+    AtisReport,
     WeatherReport,
     AtcAlert,
     AtcDecision,
@@ -133,6 +136,7 @@ FREQUENCY_CHANGE = re.compile(r"\b(?:request(?:ing)?|can we|could we|like|want|r
                               r"change|radio|frequency|over|go|contact)\b(?: over)? to (?:the )?"
                               r"(tower|ground|approach|departure|center)\b", re.I)
 WEATHER_WORDS = {"weather", "wind", "winds", "metar", "conditions", "visibility", "altimeter", "temperature"}
+SIM_FRESH_S = 1800.0  # the sim's own weather at an airport, observed this recently, beats any real-world report
 ON_COURSE_MIN_NM = 5.0  # a route fix closer than this is behind or abeam already: departure sends it to the next
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
@@ -162,7 +166,8 @@ INTERCEPT_GAP_S = 15.0  # the intercept waits no longer than this after the last
 STAR_CLEAR_NM = 25.0  # on a STAR that runs onto the final: cleared for the approach this far (along it) from the join
 STAR_END_NM = 1.0  # on a STAR that ends off the final: vectors start this close to its last fix
 TOWER_AT_NM = 6.0  # cleared on the intercept, the arrival goes to tower about this far out (plus a margin)  # an altitude step on its own no more often than this
-CROSSING_CLEARANCE_M = 200.0  # how close to a hold-short point the clearance to cross comes
+CROSSING_CLEARANCE_M = 90.0  # how close to a hold-short point the clearance to cross comes (200 m came while still
+# taxiing out of the gate area: "I wasn't even near it")
 GIVE_WAY_NM = 0.15  # traffic this close on the ground is close enough to wait for
 GIVE_WAY_MOVING_KT = 3.0  # both have to be moving for one to be in the other's way
 GIVE_WAY_AHEAD_DEG = 60.0  # how far off the nose it can be and still be in front
@@ -260,6 +265,13 @@ CLIMBING_FPM = 300.0  # traffic climbing faster than this low over a runway has 
 OVER_RUNWAY_FT = 500.0  # airborne this low over a runway: landing on it (or just off it), the runway isn't free
 LANDING_ZONE_M = 1800.0  # the part of the runway a landing uses: traffic further on and moving is off it in time ...
 RUNWAY_VACATING_KT = 15.0  # ... at this speed or more
+CROSSING_ARRIVAL_NM = 2.5  # traffic this close in on a runway that crosses the departure runway goes first
+ROLLING_KT = 20.0  # on the ground at this speed or more: rolling along a runway, not taxiing
+ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it isn't free
+STOP_KT = 80.0  # on the takeoff roll below this, tower stops it for an aircraft about to be on the runway ahead
+LANDING_BEHIND_M = 1500.0  # landed traffic ahead this far down the runway as this one crosses the threshold: spaced
+# (about 5,000 ft: between the FAA's 4,500 and 6,000 ft for jets landing behind each other; the positions are seconds old)
+KT_TO_MS = 0.514444
 RUNWAY_CLEAR_KT = 40.0  # faster than this on the runway and it is getting off it
 SEQUENCE_NM = 12.0  # where the landing order is given
 SEQUENCE_ALT_FT = 3000.0  # traffic within this of our altitude counts as being on the same final
@@ -298,7 +310,7 @@ DEPARTURE_TOP_FT = 17000  # departure climbs a flight this high and no higher: t
 # ... in steps: on radar contact a few thousand feet above the clearance's altitude, and the next as the flight nears
 # each one (a flight still climbing to 5,000 was given 17,000 straight away, the same every time). Each controller and
 # flight its own, so no two departures climb alike.
-DEPARTURE_STEPS_FT = (2000, 3000, 4000, 6000, 8000)
+DEPARTURE_STEPS_FT = (6000, 8000, 10000, 12000)  # (3,000 at a time: "too small, would really congest the ATC")
 DEPARTURE_REACHING_FT = 2000  # this close below its altitude (climbing), a departure gets the next step at once
 CENTER_STEPS = (23000, 24000, 26000, 28000)  # a centre's usual intermediate level on the way up (one each)
 CENTER_STEP_GAP_FT = 4000  # ... when the cruise is at least this far above it
@@ -375,6 +387,7 @@ class EngineConfig:
     phraseology: str = "auto"  # "auto": FAA or ICAO by where the controller is; or "faa" / "icao" always
     notams: bool = False  # notices on the ATIS, which ATC works to (the app's default is on: [atc] notams)
     squawk_per_flight: bool = True  # the squawk differs each flight; off: from the callsign alone (older recordings)
+    atis_source: str = "hybrid"  # sim, real, hybrid (``_atis_inputs``)
     destination_weather: bool = True  # a far airport's runway from its weather or calm; off: the wind here (older ones)
     gate_radius_m: float = 30.0  # this close to a gate or parking spot at the destination is parked at it (``arrived``)
 
@@ -477,6 +490,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._greeted: set[str] = set()  # stations that have had their first word with the flight
         self._squawk_code: str | None = None  # the flight's code, once given (_squawk)
         self._reports: dict[str, WeatherReport] = {}  # each airport's latest METAR (WeatherReport)
+        self._real_atis: dict[tuple[str, str], real_atis.RealAtis] = {}  # (airport, kind): its real ATIS, read
         # Greetings and sign-offs draw from their own generator: they never shift which wording a template gets.
         self._voice_rng = random.Random(self.cfg.seed or 0)
         self._persona_rng = random.Random((self.cfg.seed or 0) + 7919)  # the controllers' own choices: their own stream
@@ -569,6 +583,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if isinstance(event, AirportData):
             self.tracker.handle(event)
             self._rebuild_facilities()
+        elif isinstance(event, AtisReport):
+            if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(event.text, event.kind)) is not None:
+                self._real_atis[(event.icao, event.kind)] = parsed
+        elif isinstance(event, WeatherReport) and self.cfg.atis_source != "hybrid":
+            pass  # the METAR is used in hybrid only ([atc] atis_source)
         elif isinstance(event, WeatherReport):
             geo = self.geometry(event.icao)
             self.weather.report(event.icao, from_report(event, geo.airport.magvar if geo is not None else 0.0, event.t))
@@ -724,20 +743,25 @@ class AtcEngine(VfrMixin, DiversionMixin):
         out: list[BusEvent] = []
         for icao in dict.fromkeys(a for a in (st.flight.origin, st.flight.destination, self._atis_tuned) if a):
             geo = airports.get(icao)
-            weather = self.weather.surface(icao, airports) if geo is not None else None
-            if geo is None or weather is None:
+            if geo is None:
                 continue
             broadcasts = self._atis_broadcasts(geo) or {"both": 0.0}
             for kind, mhz in broadcasts.items():
                 key = icao if kind == "both" else f"{icao}/{kind}"
-                info = self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind)
+                inputs = self._atis_inputs(icao, geo, kind, own)
+                if inputs is None:
+                    continue
+                weather, real, source = inputs
+                info = self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind,
+                                        real=real, source=source)
                 atis_reach = self._reach(Facility("atis", "ATIS", 0.0, icao), own)
                 tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.com1_mhz))
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
                     out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.com1_mhz,
                                              letter=current.letter, text=current.text, spoken=current.spoken,
-                                             variants=current.variants, locale=regions.accent(icao)))
+                                             variants=current.variants, locale=regions.accent(icao),
+                                             source=self.atis_source_text(current, own)))
         return out
 
     def _runway_end(self, icao: str | None, own: OwnshipState):
@@ -767,10 +791,60 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return select_runway(geo, 0.0, 0.0)
 
     def _atis_now(self, icao: str, geo, own: OwnshipState) -> None:
-        weather = self.weather.surface(icao, self.tracker.context_builder.airports)
-        if weather is not None:
-            for kind in self._atis_broadcasts(geo) or ("both",):
-                self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind)
+        for kind in self._atis_broadcasts(geo) or ("both",):
+            if (inputs := self._atis_inputs(icao, geo, kind, own)) is not None:
+                weather, real, source = inputs
+                self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind,
+                                 real=real, source=source)
+
+    def _atis_inputs(self, icao: str, geo, kind: str, own: OwnshipState):
+        """What an airport's ATIS is made from, by ``[atc] atis_source``: (weather, the real ATIS or None, where it's
+        from). None: nothing known of it.
+
+        - "sim": the simulator's weather, as LocalTC observes it.
+        - "real": the airport's real ATIS (its letter, runways and weather) where it has one; else the simulator's.
+        - "hybrid": the real ATIS, else LocalTC's own from the real METAR, else from the simulator.
+
+        Never the real one over fresher conditions in the sim: once the aircraft has observed the airport itself
+        (``SIM_FRESH_S``), the sim's weather is what the pilot is flying in, and the ATIS gives it, saying when the
+        real report differs."""
+        airports = self.tracker.context_builder.airports
+        mode = self.cfg.atis_source
+        sampled = self.weather.samples.get(icao)
+        fresh = sampled is not None and own.t - sampled.t <= SIM_FRESH_S
+        real = None
+        if mode in ("real", "hybrid"):
+            arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
+            wanted = (kind,) if kind != "both" else ("both", "arrival" if arriving else "departure")
+            real = next((self._real_atis[(icao, k)] for k in wanted if (icao, k) in self._real_atis), None)
+        if fresh:
+            weather = self.weather.surface(icao, airports, reports=False)
+            differs = _differs(weather, real.weather if real is not None else None) or (
+                mode == "hybrid" and _differs(weather, self.weather.reports.get(icao)))
+            note = " (the real-world report differs)" if differs else ""
+            return weather, (real if real is not None and not differs else None), ("simulator" + note, sampled.t, "")
+        if real is not None and real.weather is not None:
+            weather = with_magvar(real.weather, geo.airport.magvar)
+            weather = replace(weather, t=own.t, elevation_ft=geo.airport.elev_ft,
+                              altimeter_inhg=weather.altimeter_inhg or self.weather.altimeter_at(icao))
+            return weather, real, ("real ATIS", None, real.zulu)
+        if mode == "hybrid" and icao in self.weather.reports:
+            report = self._reports.get(icao)
+            return self.weather.surface(icao, airports), None, ("METAR", None, (report.observed if report else "").rstrip("Z"))
+        weather = self.weather.surface(icao, airports, reports=False)
+        if weather is None:
+            return None
+        return weather, None, ("simulator", weather.t, "")
+
+    def atis_source_text(self, info: AtisInfo, own: OwnshipState | None) -> str:
+        """Where an ATIS is from and how old: "real ATIS 1756Z, 12 min old", "simulator, observed 3 min ago"."""
+        label, observed_t, zulu = info.source
+        if zulu and own is not None and own.zulu_s is not None and zulu.isdigit():
+            age = (int(own.zulu_s // 60) - (int(zulu[:2]) * 60 + int(zulu[2:]))) % 1440
+            return f"{label} {zulu}Z, {age} min old"
+        if observed_t is not None and own is not None:
+            return f"{label}, observed {max(0, round((own.t - observed_t) / 60))} min ago"
+        return label
 
     def _atis_note(self, icao: str | None, reported: str | None) -> Phrase | None:
         """"information Charlie is current, altimeter 29.92" when the pilot didn't report the current ATIS: once (FAA
@@ -940,6 +1014,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 st.pending = None
             self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(airborne)]
             self._going_around = False
+        elif phase is P.DEPARTURE and change.previous == P.TAKEOFF.value:
+            # Off the ground: what was still to be said about the runway is over (a takeoff clearance said again,
+            # after a "did you copy?", with the aircraft already climbing out).
+            on_ground = ("tower.takeoff", "tower.luaw", "tower.hold_short", "tower.continue_hold_short", "tower.stop_takeoff",
+                         "ground.")
+            if st.pending is not None and st.pending.instruction_id.startswith(on_ground):
+                st.pending = None
+            self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(on_ground)]
         elif phase is P.TAKEOFF:
             self._landed = False  # off again (a touch and go, another leg)
             # The taxi-out's runway crossings are behind: the destination's runway of the same name ("13/31") was
@@ -991,6 +1073,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
         if (entered := self._vfr_class_b_watch(own)) is not None:
             out.append(entered)
+        if self.cfg.unscripted and not self._transmitting(t) and self._stop_takeoff(own):
+            return out  # an aircraft about to be on the runway ahead of the takeoff roll: that can't wait either
         if self.cfg.unscripted and st.phase is not None and P(st.phase) in (P.APPROACH, P.LANDING) \
                 and not self._transmitting(t) and (self._runway_conflict(own) or self._not_with_tower(own)):
             # Short final onto an occupied runway: "go around" can't wait for a quiet moment, and the last mile
@@ -1028,7 +1112,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if phase in (P.TAXI_OUT, P.RUNWAY_HOLD, P.TAXI_IN) and tuned == "ground" and (crossing := self._crossing_due(own)) is not None:
             self._crossed.add(crossing)
             self._crossing = crossing
-            self._schedule(t, "ground.cross_runway", {"runway": crossing.split("/")[0]}, st.comms.tuned, delay=False)
+            hold = self.tracker.context.hold_short
+            side = hold.end.ident if hold is not None and hold.runway.name == crossing else crossing.split("/")[0]
+            self._schedule(t, "ground.cross_runway", {"runway": side}, st.comms.tuned, delay=False)
         elif phase is P.TAXI_IN and tuned == "ground" and st.pending is None and (taken := self._gate_now_taken(own)) is not None:
             # The sim puts parked aircraft at the gates only as the flight comes close: one given free can be taken
             # by the time it gets there (a Cessna at gate 76). Ground says so and gives another, before it's reached.
@@ -1673,10 +1759,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return None
         occupied: TrafficTarget | None = None
         arriving: list[tuple[float, int, TrafficTarget]] = []
+        ours = end.runway
         for target in self._traffic.values():
             if target.on_ground:
-                on = geo.runway_at(target.lat, target.lon)
-                if on is not None and on.name == end.runway.name:
+                # On it (where two runways cross, on either), or rolling along a runway that crosses it and about to
+                # be on it: San Francisco's 737s rolling out on 28R across 01R, one 500 m ahead on the takeoff roll.
+                if ours.contains(geo.xy(target.lat, target.lon)) or self._rolling_onto(geo, ours, target) is not None:
                     occupied = target
                 continue
             if target.alt_ft - geo.airport.elev_ft < OVER_RUNWAY_FT and (on := geo.runway_at(target.lat, target.lon, 60.0)) \
@@ -1693,11 +1781,59 @@ class AtcEngine(VfrMixin, DiversionMixin):
             final = geo.final_approach(target.lat, target.lon, target.hdg_true, max_distance_nm=OCCUPIED_ARRIVAL_NM)
             if final is not None and final.end.runway.name == end.runway.name and target.alt_ft - geo.airport.elev_ft < 3000:
                 arriving.append((final.distance_nm, target.object_id, target))
+            elif final is not None and target.alt_ft - geo.airport.elev_ft < 3000 and final.distance_nm <= CROSSING_ARRIVAL_NM \
+                    and _runways_cross(final.end.runway, ours):
+                arriving.append((final.distance_nm, target.object_id, target))  # landing across ours: it goes first
         closest = min(arriving, default=None)
         margin = LINED_UP_ARRIVAL_NM if lined_up else OCCUPIED_ARRIVAL_NM if occupied is not None else DEPARTURE_ARRIVAL_NM
         if closest is not None and closest[0] <= margin:
             return "arrival", closest[2], closest[0]
         return ("occupied", occupied, 0.0) if occupied is not None else None
+
+    @staticmethod
+    def _rolling_onto(geo: AirportGeometry, runway, target: TrafficTarget, horizon_s: float = ROLLING_ONTO_S) -> float | None:
+        """Seconds until ``target``, rolling on the ground (a landing rollout, a takeoff) on another runway, is on
+        ``runway``; None when it isn't heading onto it that soon."""
+        if not target.on_ground or target.gs_kt < ROLLING_KT or runway.contains(geo.xy(target.lat, target.lon)):
+            return None
+        on = geo.runway_at(target.lat, target.lon)
+        if on is None or on.name == runway.name:
+            return None
+        x, y = geo.xy(target.lat, target.lon)
+        speed = target.gs_kt * KT_TO_MS
+        ux, uy = math.sin(math.radians(target.hdg_true)), math.cos(math.radians(target.hdg_true))
+        for step in range(1, int(horizon_s) + 1):
+            if runway.contains((x + ux * speed * step, y + uy * speed * step), 10.0):
+                return float(step)
+        return None
+
+    def _stop_takeoff(self, own: OwnshipState) -> bool:
+        """On the takeoff roll, still slow, with an aircraft about to be on the runway ahead: "stop immediately".
+        Above ``STOP_KT`` it's the pilot's to judge: stopping is the greater danger."""
+        st = self.state
+        tuned = st.comms.tuned
+        if st.phase is None or P(st.phase) is not P.TAKEOFF or tuned is None or tuned.controller != "tower" \
+                or not own.on_ground or own.gs_kt >= STOP_KT or "stop_takeoff" in st.flags:
+            return False
+        geo = self.geometry(st.flight.origin)
+        runway = geo.runway_at(own.lat, own.lon) if geo is not None else None
+        if geo is None or runway is None:
+            return False
+        here = runway.along_across(geo.xy(own.lat, own.lon))[0]
+        ahead_sign = 1 if abs(((own.hdg_true - runway.ends[0].heading_true + 540) % 360) - 180) < 90 else -1
+        for target in self._traffic.values():
+            if not target.on_ground:
+                continue
+            xy = geo.xy(target.lat, target.lon)
+            soon = 0.0 if runway.contains(xy) and target.gs_kt < RUNWAY_CLEAR_KT else self._rolling_onto(geo, runway, target)
+            if soon is None:
+                continue
+            along = runway.along_across(xy)[0]
+            if (along - here) * ahead_sign > 50.0:  # ahead of it, not behind
+                st.flags.add("stop_takeoff")
+                self._schedule(own.t, "tower.stop_takeoff", {}, tuned, delay=False, expects_readback=False)
+                return True
+        return False
 
     def landing_runway(self, own: OwnshipState) -> str | None:
         """The runway the aircraft is landing on: the one it's lined up with, or was cleared for."""
@@ -1723,6 +1859,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if geo is None or end is None:
             return None
         ux, uy = math.sin(math.radians(end.heading_true)), math.cos(math.radians(end.heading_true))
+        own_xy = geo.xy(own.lat, own.lon)
         for target in self._traffic.values():
             if not target.on_ground or target.gs_kt > RUNWAY_CLEAR_KT:
                 continue
@@ -1736,6 +1873,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 continue  # beside the pavement (LAX's 737 at a holding point by the 25R threshold): not on it
             if along > LANDING_ZONE_M and target.gs_kt >= RUNWAY_VACATING_KT:
                 continue  # rolling out well down the runway (Las Vegas's A321, 2 km on at 40 kt): off it in time
+            away = abs(((target.hdg_true - end.heading_true + 540) % 360) - 180) < 45
+            if away and target.gs_kt >= RUNWAY_VACATING_KT and own.gs_kt > 30:
+                # Where it will be as this one crosses the threshold: landed traffic ahead rolling on, that far down
+                # the runway by then, is the spacing a controller works to (FAA 3-10-3). A 737
+                # 1,500 m down 26L at 40 kt, this flight 0.86 nm out, was sent around for it.
+                to_threshold_s = math.hypot(own_xy[0] - end.threshold[0], own_xy[1] - end.threshold[1]) / (own.gs_kt * KT_TO_MS)
+                if along + target.gs_kt * KT_TO_MS * to_threshold_s >= LANDING_BEHIND_M:
+                    continue
             return target
         return None
 
@@ -2207,7 +2352,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
             pending = None
         if interp.kind == "readback":
             out += self._on_readback(interp, facility, t)
-            if interp.then is not None and interp.then.intent != "emergency":
+            if interp.then is not None and interp.then.intent not in ("emergency", "acknowledge", "pleasantry", "other", None):
+                # (An acknowledgement riding along, "heading 230 as well as the other stuff", isn't a request: it got
+                # "unable".)
                 # "Cleared to land 14R, can we make it a low approach?": the readback taken, then the request.
                 out += self._on_request(interp.then, facility, t)
             return out
@@ -3882,7 +4029,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         instruction = "ground.taxi_out"
         if route.crossings:
             instruction = "ground.taxi_out_hold_short"
-            slots["hold_short"] = route.crossings[0].split("/")[0]
+            slots["hold_short"] = self._crossing_side(geo, route.crossings[0], route.nodes)
             self._crossings = route.crossings
         elif route.hold_point and route.taxiways != (route.hold_point,):  # "runway 25L at Delta, taxi via Charlie, Delta"
             # (Only one taxiway, the one with the hold line: "runway 06L, taxi via A4", not "at A4, via A4".)
@@ -4202,6 +4349,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             if busy is not None:
                 lead = Phrase(f"sorry, {busy.display} is occupied", f"sorry, {busy.display} is occupied")
         ramp = False  # to the GA ramp
+        route = None
         if taxiways is None:
             graph = self._taxi_graph(geo) if geo is not None and own is not None else None
             route = graph.parking_route(own.lat, own.lon, gate.index) if graph is not None and gate is not None else None
@@ -4229,7 +4377,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._assign(taxi_route=tuple(taxiways or ()))  # the route in, not still the one out (the copilot checks it)
 
         # On the way in across a runway: "hold short runway 09R" in the taxi clearance, crossed when it's reached.
-        hold_short = self._crossings[0].split("/")[0] if self._crossings and taxiways else None
+        hold_short = self._crossing_side(geo, self._crossings[0], route.nodes if route is not None else ()) \
+            if self._crossings and taxiways and geo is not None else None
         if where and taxiways and hold_short:
             self._schedule(t, "ground.taxi_to_gate_hold_short", {"taxi_route": taxiways, "gate": where, "hold_short": hold_short},
                            facility, clearance="taxi_in", on_issue=keep, note=busy_note, lead=lead)
@@ -4522,6 +4671,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
             [], self.cfg.center_name, self.cfg.center_mhz
         )
 
+    @staticmethod
+    def _crossing_side(geo: AirportGeometry, runway: str, nodes) -> str:
+        """The name a runway to cross goes by where the route reaches it: the end its holding point is nearest
+        ("hold short runway 01L" on the 01L side; "19R" there confused the pilot). The first end without it."""
+        on_route = {n[1] for n in nodes if n[0] == "point"}
+        hold = next((h for h in geo.hold_shorts if h.runway.name == runway and h.point.index in on_route), None)
+        return hold.end.ident if hold is not None else runway.split("/")[0]
+
     def _crossing_due(self, own: OwnshipState) -> str | None:
         """A runway the taxi route goes across, with the aircraft nearly at it.
 
@@ -4557,7 +4714,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             here = max(assigned, own.alt_indicated_ft if own is not None else 0.0)
             pick = zlib.crc32(f"{facility.station}{self._callsign().ident}{assigned}".encode()) % len(DEPARTURE_STEPS_FT)
             step = int(math.ceil((here + DEPARTURE_STEPS_FT[pick]) / 1000.0)) * 1000
-            return top if top - step < 2000 else step  # the last bit of the way in one go
+            return top if top - step < 4000 else step  # the last bit of the way in one go
         step = CENTER_STEPS[zlib.crc32(facility.station.encode()) % len(CENTER_STEPS)]
         here = own.alt_indicated_ft if own is not None else 0.0
         assigned = self.state.assignments.altitude_ft or 0
@@ -5017,3 +5174,33 @@ def _place(name: str) -> str:
     while len(words) > 1 and words[-1].lower().strip(".,") in GENERIC_AIRPORT_WORDS:
         words.pop()
     return " ".join(words[:3])
+
+
+def _runways_cross(a, b) -> bool:
+    """Two runways' centrelines cross (San Francisco's 28s and 01s; parallels never do)."""
+    if a.name == b.name:
+        return False
+    (ax, ay), (bx, by) = a.ends[0].threshold, a.ends[1].threshold
+    (cx, cy), (dx, dy) = b.ends[0].threshold, b.ends[1].threshold
+
+    def side(px, py, qx, qy, rx, ry):
+        return (qx - px) * (ry - py) - (qy - py) * (rx - px)
+
+    return side(ax, ay, bx, by, cx, cy) * side(ax, ay, bx, by, dx, dy) < 0 \
+        and side(cx, cy, dx, dy, ax, ay) * side(cx, cy, dx, dy, bx, by) < 0
+
+
+def _differs(sim, real) -> bool:
+    """The real-world report and the sim's own observation disagree enough to matter: the wind by 60 degrees (at 10 kt
+    or more) or 10 kt, or the altimeter by 0.03 inHg. ``real`` a Weather or WeatherReport, or None."""
+    if real is None or sim is None:
+        return False
+    if hasattr(real, "wind_kt"):  # a WeatherReport
+        r_dir, r_kt, r_alt = real.wind_dir_true, real.wind_kt, real.altimeter_inhg
+    else:
+        r_dir, r_kt, r_alt = real.wind_dir_true, real.wind.speed_kt, real.altimeter_inhg
+    if abs(sim.wind.speed_kt - r_kt) >= 10:
+        return True
+    if r_dir is not None and max(sim.wind.speed_kt, r_kt) >= 10 and abs(((sim.wind_dir_true - r_dir) + 180) % 360 - 180) >= 60:
+        return True
+    return sim.altimeter_inhg is not None and r_alt is not None and abs(sim.altimeter_inhg - r_alt) >= 0.03

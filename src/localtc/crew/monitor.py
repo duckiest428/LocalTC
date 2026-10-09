@@ -93,6 +93,8 @@ LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: sa
 # Checklists aren't offered or read until there are real ones to read from (the aircraft's own); asked for, the
 # copilot says so. The challenge-and-response machinery below stays for then.
 CHECKLISTS = False
+SPEED_TREND_S = 10.0  # the speed's trend is taken over this long ...
+SPEED_GRACE_S = 60.0  # ... and an assigned speed not yet reached is reminded only after this long off it
 DECLINE_QUIET_S = 900.0  # "later", "not now": the copilot's own suggestions wait this long
 # The copilot's suggestions (not callouts, not warnings): what "later" quiets.
 PROMPTS = ("clearance_prompt", "brief", "prompt:", "flaps_for_takeoff", "tod_soon", "step:", "divert:", "sight",
@@ -177,6 +179,8 @@ class Monitor(WatchMixin):
         self.hands_setting = hands == "pm"
         self.hands_dead = False  # the aircraft ignored the copilot's switches: calls only, for the rest of the flight
         self.declined_t = -1e9  # the pilot said "later" to a suggestion
+        self.hushed_t = -1e9  # ... or "shut up", "chill out": nothing but safety calls for a while
+        self.ias_history: list[tuple[float, float]] = []  # (t, IAS) over the last SPEED_TREND_S
         self.perf = perf or PlanPerf()
         self.plan_source = plan_source
         self.radio_mode = radio_mode  # the radio copilot's mode: "off", "assist" or "full"
@@ -222,6 +226,14 @@ class Monitor(WatchMixin):
     def hands(self) -> bool:
         """The copilot works its own side: as set, in an aircraft whose switches it can reach."""
         return self.hands_setting and self.c.profile.hands and not self.hands_dead
+
+    def hushed(self, t: float) -> None:
+        """The pilot told the copilot to be quiet ("shut up", "chill out, man"): its reminders and callouts wait, and
+        only safety calls are said, for ``DECLINE_QUIET_S``. "Speed, we're assigned 180" came three times, "missed the
+        280 knots at ARYEL" right after "shut up"."""
+        self.declined(t)
+        self.hushed_t = t
+        self.queue = [q for q in self.queue if q.priority >= SAFETY]
 
     def declined(self, t: float) -> None:
         """The pilot said "later" / "not now" / "quiet": the copilot's suggestions wait (callouts and warnings don't)."""
@@ -345,6 +357,8 @@ class Monitor(WatchMixin):
             return False
         if key.startswith(PROMPTS) and t - self.declined_t < DECLINE_QUIET_S and priority < SAFETY:
             return False  # "later": not now
+        if t - self.hushed_t < DECLINE_QUIET_S and priority < SAFETY and not urgent:
+            return False  # "shut up", "chill out": only what matters for a while
         if priority < VERBOSITY[self.verbosity] and not commands:
             self.f.said[key] = t  # not said at this verbosity, and not later either
             return False
@@ -873,9 +887,17 @@ class Monitor(WatchMixin):
             self.speed_high_since = None
         # An assigned speed holds until the approach clearance (and then it's the approach's own).
         assigned_kt = st.assignments.speed_kt if st is not None else None
-        if assigned_kt and abs(own.ias_kt - assigned_kt) > 15 and agl > 1500 and not self._on_approach():
+        history = self.ias_history
+        history.append((t, own.ias_kt))
+        while history and t - history[0][0] > SPEED_TREND_S:
+            history.pop(0)
+        trend = own.ias_kt - history[0][1]  # over the last SPEED_TREND_S
+        # Slowing down to it (or speeding up to it) already: nothing to remind. "Speed, we're assigned 180" three
+        # times while decelerating from 210 ("we're decelerating, chill out, man").
+        converging = (own.ias_kt - assigned_kt) * trend < 0 and abs(trend) >= 3 if assigned_kt else False
+        if assigned_kt and abs(own.ias_kt - assigned_kt) > 15 and agl > 1500 and not self._on_approach() and not converging:
             since = self.f.said.setdefault("speed_off_t", t)
-            if t - since > 20:
+            if t - since > SPEED_GRACE_S:
                 self._nag(f"speed_dev:{assigned_kt}", ROUTINE, t, f"Speed, we're assigned {assigned_kt}.", every_s=90,
                           valid=lambda: st.assignments.speed_kt == assigned_kt and not self._on_approach())
         else:
@@ -927,13 +949,17 @@ class Monitor(WatchMixin):
                 short = self.perf.landing_fuel_lb - at_landing
                 self._call("fuel_plan", ROUTINE, t, f"We're tracking about {self._fuel(short)} under the planned landing fuel.", again_s=2700)
         info = self._atis(st.flight.destination)
+        # Not once ATC has said which approach to expect, nor after a go-around: then the ATIS's runway and approach
+        # only contradict the clearance ("expect VISUAL approach" read out after being vectored for the ILS).
         if info is not None and self.atis_seen.get(st.flight.destination or "") != info.letter and to_go < 250 \
+                and not st.assignments.approach and not self.f.approaches \
                 and self._atis_news(st.flight.destination or "", info):
             self.atis_seen[st.flight.destination or ""] = info.letter
             w = info.weather
             with regions.speaking(regions.region_for(st.flight.destination)):
                 q = f", {'QNH' if regions.CURRENT.get().icao else 'altimeter'} {speech.altimeter_display(w.altimeter_inhg)}" if w.altimeter_inhg else ""
-                text = (f"{self._name(st.flight.destination)} has information {info.letter}: runway {info.runway}, "
+                text = (f"{self._name(st.flight.destination)} has information {speech.letter(info.letter).capitalize()}: "
+                        f"runway {info.runway}, "
                         f"wind {speech.wind_display(w.wind)}{q}, expect {info.approach or 'the'} approach.")
             self._call(f"atis:{st.flight.destination}:{info.letter}", ROUTINE, t, text.replace("expect the approach", "expect vectors"))
 

@@ -185,6 +185,10 @@ class AtcConfig(_Section):
     # A far destination's runway from its weather (its METAR), or the calm-wind runway when nothing is known of it.
     # Recordings made before took it from the wind where the aircraft was, and replay with that.
     destination_weather: bool = True
+    # Where each airport's ATIS comes from: "sim" (LocalTC's, from the simulator's weather), "real" (the airport's real
+    # ATIS where it has one, else the simulator's), "hybrid" (the real ATIS, else the real METAR, else the
+    # simulator). The sim's own weather, observed at the airport in the last half hour, always wins.
+    atis_source: Literal["sim", "real", "hybrid"] = "hybrid"
 
 
 LlmMode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]
@@ -375,6 +379,7 @@ class UiConfig(_Section):
     account_prompted: bool = False  # the account suggestion was shown (once only)
     last_flight_end: float = 0.0  # when the last flight ended (Unix time), for ATC's shifts ([atc] shift)
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
+    welcome_seen: bool = False  # the welcome notes were shown (once, on the first start: existing installs too)
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"
     # The app's colors (and the companion's, which has its own pick): radio (the dark panel), midnight, oled, amber,
@@ -422,6 +427,8 @@ def with_recorded(cfg: Config, recorded: dict) -> Config:
         data["atc"]["squawk_per_flight"] = False  # recorded when the squawk came from the callsign: the same code
     if isinstance(recorded.get("atc"), dict) and "destination_weather" not in recorded["atc"]:
         data["atc"]["destination_weather"] = False  # recorded before METARs: its runways as they were chosen then
+    if isinstance(recorded.get("atc"), dict) and "atis_source" not in recorded["atc"]:
+        data["atc"]["atis_source"] = "sim"  # recorded before the ATIS source setting: the simulator's, as it had
     try:
         return msgspec.convert(data, Config)
     except msgspec.ValidationError:

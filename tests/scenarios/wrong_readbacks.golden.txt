@@ -3,7 +3,7 @@
 [     9.0] ATC       Paine Ground 121.8: N172LT, contact Paine Clearance 127.25, good day.
 [    11.0] PILOT     127.25: Paine Clearance, november one seven two lima tango, IFR to Boeing Field, ready to copy.
 [    13.0] ATC       Paine Clearance 127.25: N172LT, stand by for your clearance.
-[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field airport as filed, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
+[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field as filed, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    31.0] PILOT     127.25: Cleared to Boeing Field, climb and maintain five thousand, departure one two four point six seven five, squawk one two three four, two lima tango.
 [    31.0] READBACK  clearance.ifr_at_cruise incorrect heard=squawk:1234
 [    33.0] ATC       Paine Clearance 127.25: Cessna 2LT, negative, squawk 3260.

@@ -50,7 +50,7 @@ def gates(icao: str) -> GateData | None:
 def replay(recording: Path, *, pinned: bool = False) -> list[str]:
     cfg = with_recorded(load_config(), Recording(FLIGHT).header.config)
     # The destination's runway as a flight now has it (recorded before, it replays with the wind where it was).
-    atc = msgspec.structs.replace(cfg.atc, destination_weather=True, enforce_fpln_runways=pinned)
+    atc = msgspec.structs.replace(cfg.atc, destination_weather=True, enforce_fpln_runways=pinned, atis_source="hybrid")
     scenario = Scenario(scenario=ScenarioMeta(recording=str(recording)), flight=cfg.flight, atc=atc)
     return run(scenario, recording, recording=recording, recorded_pilot=True, copilot="assist", gate_source=gates).lines
 
@@ -211,9 +211,9 @@ def test_the_climb_goes_on_past_departures_last_step(runway_05):
     """ "Reached 15,000, did not get higher climb": level at 15,000 for four minutes, departure waiting for the centre
     and the centre for the handoff."""
     handoff = next(line for line in runway_05 if "Des Moines Departure" in line and "Center" in line and "contact" in line)
-    assert at(handoff) < 1790, handoff  # before the level-off at 15,000 (1,795 s)
-    climb = next(line for line in runway_05 if " ATC " in line and "Center" in line and "FL" in line and at(line) > at(handoff))
-    assert at(climb) < 1860, climb
+    assert at(handoff) < 1790, handoff  # before the level-off at 15,000 (1,795 s), still climbing
+    climbs = [line for line in atc(runway_05, 1500, at(handoff)) if "Des Moines Departure" in line and "climb" in line]
+    assert len(climbs) == 1 and "17,000" in climbs[0], climbs  # departure's whole climb in one go
 
 
 # --- the arrival ----------------------------------------------------------------------------------------------------

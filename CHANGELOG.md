@@ -34,6 +34,9 @@ a new minor version adds features, a patch fixes them.
 - **Departure turns you on course**: off on runway heading with no SID, radar contact comes with "proceed direct" the first fix of your route (or your destination when the route has none).
 - **GA flights taxi to the GA ramp** ("taxi to the general aviation ramp via C, D, B"), the scenery's GA parking, never an airliner's gate.
 - **"Requesting radio to the tower"**, "request frequency change to tower" and the like are asked for a frequency change; from a centre working the approach, it comes with the approach clearance.
+- **ATIS source** (Quick Settings → ATC): **Hybrid** (the default) gives the airport's real ATIS where it has one (US airports, the FAA's digital ATIS), else LocalTC's ATIS from the airport's real METAR, else from the simulator; **Real-world ATIS** gives the real one where there is one and the simulator's otherwise; **Simulator only** downloads nothing. The real ATIS keeps its letter and runways in use, spoken in LocalTC's words. Real-world data never overrides what the sim is giving you: once you're at or near an airport, the sim's own weather there wins, and the ATIS says when the real report differs; a real runway with a tailwind in the sim's wind isn't used. Every ATIS shows where it's from and how old it is (in the radio log, and under the airport on the ATC tab).
+- **A welcome**, once, the first time LocalTC starts (existing installs too): what to expect, and the recommended language model, voices and speech-to-text.
+- **"Stop immediately"**: on the takeoff roll, still below 80 knots, with an aircraft about to be on the runway ahead, tower stops you.
 
 ### Changed
 - **Numbers are put into words before any voice speaks them** (frequencies digit by digit, "niner", runways, flight levels, callsigns and taxiway letters in the phonetic alphabet), the same for every voice, so none reads "119.2" or "FL350" its own way.
@@ -78,6 +81,15 @@ a new minor version adds features, a patch fixes them.
 - **The taxi in asked for again** after reading it back is said again without asking for another readback ("how do you read?" followed); "loud and clear" to ATC's "how do you read?" is taken as the answer, not answered "say again".
 - **No runway crossing left from the departure**: just off Joplin's runway 13, ground cleared the flight across "runway 13", Des Moines's 13/31 crossed on the way out.
 - **"Direct" to a place with a phonetic-alphabet word in its name** ("direct Quebec") is read back right; it was taken for the letter Q.
+- **No takeoff clearance with traffic landing across your runway**: tower waits for an arrival close in on a runway that crosses yours (San Francisco's 28s and 01s), and for an aircraft rolling along it onto yours.
+- **No go-around for landed traffic well down the runway**: an aircraft ahead rolling on is judged where it will be as you cross the threshold (about 5,000 ft down is enough), not where it is two miles out.
+- **The runway to cross is named by the end on your side** ("hold short runway 01L", not 19R), and a readback naming either end is right. The clearance to cross comes about 90 m from the hold line, not 200.
+- **Departure climbs in big steps**: 6,000 to 12,000 ft at a time up to its top, not 3,000.
+- **Controllers are mostly men**, as in the job: about a fifth of stations are women (by region), and other pilots on the frequency about one in twenty. It was half and half.
+- **The departure frequency is listed as DEP** on the ATC tab where the sim has it as an approach frequency.
+- **Readbacks**: "heading 3500" is 350; "ILS young Yankee for the runway 26L" is the ILS Y 26L; "an I-less for 26 left" is an ILS; "we're probably going to do another go around ... can we get 26 left" asks for 26L instead of going around; "heading 230 as well as the other stuff" isn't answered "unable". The model can't ask for a readback of something ATC didn't give ("read back the altitude" to an approach).
+- **No takeoff clearance said again once airborne**, and no "Harry Reid International Airport airport".
+- **The copilot**: turbulence only when the aircraft is jolted back and forth, not when it pitches over at a level-off; "shut up", "chill out" and "I know" keep it to safety calls for a quarter of an hour; no "speed, we're assigned 180" while slowing down to it; restrictions said plainly ("We're high for COKTL: between 16,000 and FL190."); no ATIS read out once ATC has given the approach, nor after a go-around, and its letter said as a word; a remark like "time to start up our engines" whose model reply was turned away gets "Copy.", not "Say again?".
 
 ## [0.4.0] - 2026-09-28
 

@@ -48,6 +48,7 @@ def normalize(text: str) -> list[Token]:
     # After "point", a digit is what was said, whatever speech-to-text spelled: "125 decimal to" is 125.2.
     lowered = re.sub(r"\b(point|decimal) (?:to|too)\b", r"\1 two", lowered)
     lowered = re.sub(r"\b(point|decimal) (?:for|fore)\b", r"\1 four", lowered)
+    lowered = re.sub(r"\b(?:an? )?(?:i less|eye less|i l s|i els|iless)\b", "an ils", lowered)  # "an I-less for 26 left"
     matches = list(TOKEN_RE.finditer(lowered))
     raw = [m.group() for m in matches]
     # Digits glued to letters ("2LT", "EXP69") belong to a word; they're never one of a list of digits.

@@ -132,7 +132,7 @@ def test_the_taxi_in_holds_short_of_the_runway_it_crosses(replay):
 def test_the_crossing_comes_as_the_runway_is_reached_not_at_the_exit(replay):
     """Just off 27L, moving away from it, ground cleared the flight across 09R (the same runway, three minutes on)."""
     taxi_in = next(line for line in replay if "ATC       Heathrow Ground" in line and "taxi to" in line)
-    crossing = next(line for line in replay if "cross runway 09R" in line and " ATC " in line)
+    crossing = next(line for line in replay if ("cross runway 09R" in line or "cross runway 27L" in line) and " ATC " in line)
     assert at(crossing) - at(taxi_in) > 60, (taxi_in, crossing)
 
 

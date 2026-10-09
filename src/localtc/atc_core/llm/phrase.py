@@ -191,6 +191,13 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
         raise PhraseError(f"reply gives an instruction ({', '.join(banned)}); only answer or say unable")
     if internal := sorted(set(words) & INTERNAL):
         raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
+    if asked := re.search(r"\bread ?back (?:the |your )?([a-z]+)", text.lower()):
+        # "Read back the altitude" to a readback of the approach: asking for what ATC isn't waiting for.
+        waiting = facts.get("waiting for the pilot to read back", "").lower()
+        if asked.group(1) not in ("it", "that", "please", "again", "everything", "clearance", "instructions") \
+                and asked.group(1).rstrip("s") not in waiting:
+            raise PhraseError(f"reply asks for a readback of the {asked.group(1)}, which isn't waited for"
+                              + (f" (waiting for: {waiting})" if waiting else ""))
     if not beyond_facts:
         _check_facts(text, words, facts)
     if required and "unable" not in words:

@@ -1,6 +1,7 @@
 """Loads, validates and renders the TOML phraseology templates."""
 
 import random
+import re
 import string
 import tomllib
 from collections.abc import Callable
@@ -219,7 +220,12 @@ class TemplateLibrary:
             said = said.replace(f"cleared {spoken['approach']} approach", f"cleared {spoken['approach']} approach, {circle_said}")
         if "approach" in display and isinstance(approach, Approach) and " RWY " in display["approach"]:
             shown = shown.replace(display["approach"], display["approach"].replace(" RWY ", " runway "))  # as said
+        # "Cleared to Harry Reid International Airport airport": a name that ends as a place already.
+        shown, said = (DOUBLED_PLACE.sub(r"\1", x) for x in (shown, said))
         return shown, _spoken_sentence(said)
+
+
+DOUBLED_PLACE = re.compile(r"\b(airport|field|airfield|airpark|aerodrome|airstrip)\s+airport\b", re.IGNORECASE)
 
 
 def _spoken_sentence(text: str) -> str:

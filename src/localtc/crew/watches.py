@@ -46,6 +46,8 @@ SAFETY, ROUTINE, CHATTER = 3, 2, 1  # as crew.monitor
 TURB_WINDOW_S = 20.0
 TURB_LEVELS = (("severe", 0.35, 1.0), ("moderate", 0.15, 0.5), ("light", 0.06, 0.25))  # (name, std g, peak g)
 TURB_CALM_S = 120.0
+TURB_JOLT_G = 0.08  # a change in the load factor this big from one sample to the next is a jolt ...
+TURB_REVERSALS = 4  # ... and turbulence turns it back this many times in the window at least
 TURB_AGAIN_S = 600.0  # "moderate turbulence" (and "smooth again") at most this often: not a running commentary
 SHEAR_WINDOW_S = 5.0
 SHEAR_KT = 15.0
@@ -82,14 +84,16 @@ class Restriction:
     passed: bool = False
 
     def words(self) -> str:
+        """The restriction as said: "11,000", "at or below 12,000", "between 16,000 and FL190". (Put after "the" it read
+        "we're high for the between 16,000 and FL190 at COKTL".)"""
         if self.altitude == "at":
-            return f"the {_alt(self.alt1_ft)}"
+            return _alt(self.alt1_ft)
         if self.altitude == "above":
-            return f"the at or above {_alt(self.alt1_ft)}"
+            return f"at or above {_alt(self.alt1_ft)}"
         if self.altitude == "below":
-            return f"the at or below {_alt(self.alt1_ft)}"
+            return f"at or below {_alt(self.alt1_ft)}"
         if self.altitude == "between":
-            return f"the between {_alt(self.alt2_ft)} and {_alt(self.alt1_ft)}"
+            return f"between {_alt(self.alt2_ft)} and {_alt(self.alt1_ft)}"
         return ""
 
     def ceiling(self) -> int | None:
@@ -134,6 +138,10 @@ class Turbulence:
         std = math.sqrt(sum((v - mean) ** 2 for v in values) / len(values))
         peak = max(abs(v - mean) for v in values)
         now = next((name for name, s, p in TURB_LEVELS if std >= s or peak >= p), "smooth")
+        if self._reversals() < TURB_REVERSALS:
+            # The g going one way and back, smoothly: the pilot pitching (a level-off, 1.35 g and then 0.65), not the
+            # air. Turbulence jolts it up and down, again and again. "That isn't turbulence, just the plane moving."
+            now = "smooth"
         rank = ("smooth", "light", "moderate", "severe")
         if rank.index(now) > rank.index(self.level):
             self._calm_since = None
@@ -152,6 +160,12 @@ class Turbulence:
         else:
             self._calm_since = None
         return None
+
+    def _reversals(self) -> int:
+        """How often the load factor turned back on itself, by ``TURB_JOLT_G`` or more each way, in the window."""
+        values = [g for i, (t, g) in enumerate(self.samples) if i == 0 or t != self.samples[i - 1][0]]
+        steps = [b - a for a, b in zip(values, values[1:]) if abs(b - a) >= TURB_JOLT_G]
+        return sum(1 for a, b in zip(steps, steps[1:]) if a * b < 0)
 
     def reset(self) -> None:
         self.samples.clear()
@@ -381,9 +395,9 @@ class WatchMixin:
             elif r.closest_nm <= RESTRICTION_NM and d > r.closest_nm + 0.5:
                 r.passed = True
                 if via and not r.met(r.alt_there) and r.altitude:
-                    self._call(f"restriction:{r.fix}", ROUTINE, t, f"Missed {r.words()} at {r.fix}.")
+                    self._call(f"restriction:{r.fix}", ROUTINE, t, f"We missed {r.fix}'s restriction: {r.words()}.")
                 elif via and r.speed_kt and r.ias_there > r.speed_kt + 10:
-                    self._call(f"restriction_speed:{r.fix}", ROUTINE, t, f"Missed the {r.speed_kt} knots at {r.fix}.")
+                    self._call(f"restriction_speed:{r.fix}", ROUTINE, t, f"We missed {r.fix}'s speed: {r.speed_kt} knots.")
                 continue
             if upcoming is None:
                 upcoming = (r, d)
@@ -394,7 +408,7 @@ class WatchMixin:
                 minutes = d / max(own.gs_kt, 120.0) * 60
                 projected = alt + min(own.vs_fpm, 0.0) * minutes
                 if (alt - top) / FT_PER_NM_3DEG > d - 1 and projected > top + 500:
-                    self._call(f"restriction_high:{r.fix}", ROUTINE, t, f"We're high for {r.words()} at {r.fix}.")
+                    self._call(f"restriction_high:{r.fix}", ROUTINE, t, f"We're high for {r.fix}: {r.words()}.")
 
     # --- field in sight, approach lights ---------------------------------------------------------------------------
 

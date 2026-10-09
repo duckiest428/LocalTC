@@ -134,3 +134,10 @@ text = ["{callsign}, hold short runway {hold_short}."]
 readback = { required = ["hold_short"] }
 pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
 
+
+# On the takeoff roll, still slow, with an aircraft about to be on the runway ahead (one rolling out across it on a
+# runway that crosses it): stop.
+[[template]]
+id = "tower.stop_takeoff"
+controller = "tower"
+text = ["{callsign}, stop immediately, I say again, stop immediately, traffic on the runway."]

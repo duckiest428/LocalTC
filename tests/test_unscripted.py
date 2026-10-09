@@ -61,7 +61,7 @@ def test_return_to_the_departure_airport():
                                       say="Seattle Center, 2LT, we'd like to return to Paine Field"),
                             PilotRule(on="common.return", say="{readback}"))
     back = next(line for line in atc(lines) if "cleared direct" in line)
-    assert "Paine Field airport" in back and "expect ILS runway 34L approach" in back and "Paine altimeter" in back
+    assert "cleared direct Paine Field," in back and "expect ILS runway 34L approach" in back and "Paine altimeter" in back
 
 
 def cruising_engine() -> tuple[AtcEngine, OwnshipState]:

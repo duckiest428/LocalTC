@@ -31,7 +31,7 @@ import numpy as np
 
 from localtc.tts.persona import Persona
 from localtc.tts.synth import Speech
-from localtc.tts.voices import SPEAKERS, delivery_for, speaker_for
+from localtc.tts.voices import DEFAULT_VOICE, SPEAKERS, delivery_for, sex_of, speaker_for
 
 log = logging.getLogger(__name__)
 
@@ -275,6 +275,13 @@ class PiperVoices:
         count = getattr(self.synth, "speakers", 1)
         if persona.piper_speaker is not None and persona.piper_speaker < count:
             return persona.piper_speaker
+        if count > 1 and persona.sex in ("F", "M") and persona.role in ("atc", "atis", "chatter"):
+            # A speaker of the person's sex, where the voice's speakers' sexes are known (the default voice's).
+            voice_file = getattr(self.synth, "voice_file", None)
+            voice = voice_file.stem if voice_file is not None else DEFAULT_VOICE
+            same = tuple(s for s in self.speakers if s < count and sex_of(s, voice) == persona.sex)
+            if same:
+                return speaker_for(persona.key, count, same)
         return speaker_for(persona.key, count, self.speakers)
 
     def synthesize(self, text: str, persona: Persona) -> Speech:

@@ -52,6 +52,7 @@ class AtcService:
         self.weather_source: Callable[[str], WeatherReport | None] | None = None
         self._weather_t = -WEATHER_CHECK_S
         self._weather_sent: dict[str, str] = {}  # icao: the METAR last published for it
+        self.atis_source: Callable[[str], list | None] | None = None  # the real ATIS (the app's ``AtisStore.get``)
         # Subscribe now, not in run(): a fast source could publish everything before run() starts.
         # Only inputs: the engine's own outputs (AtcTransmission, PhaseChanged, ...) are not fed back in.
         self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased)
@@ -119,16 +120,21 @@ class AtcService:
 
     def _fetch_weather(self, t: float) -> None:
         """A new METAR for the departure or the destination: published (recorded, and the engine takes it in)."""
-        if self.weather_source is None or t - self._weather_t < WEATHER_CHECK_S:
+        if (self.weather_source is None and self.atis_source is None) or t - self._weather_t < WEATHER_CHECK_S:
             return
         self._weather_t = t
         flight = self.engine.state.flight
         for icao in dict.fromkeys(a for a in (flight.origin, flight.destination) if a):
             try:
-                report = self.weather_source(icao)
+                report = self.weather_source(icao) if self.weather_source is not None else None
+                atis = self.atis_source(icao) if self.atis_source is not None else None
             except Exception:  # noqa: BLE001 - the weather is a nicety: never stops ATC
-                log.exception("METAR for %s failed", icao)
+                log.exception("METAR or ATIS for %s failed", icao)
                 continue
             if report is not None and self._weather_sent.get(icao) != report.raw:
                 self._weather_sent[icao] = report.raw
                 self.bus.publish(msgspec.structs.replace(report, t=t))
+            for one in atis or ():
+                if self._weather_sent.get(f"{icao}/{one.kind}") != one.text:
+                    self._weather_sent[f"{icao}/{one.kind}"] = one.text
+                    self.bus.publish(msgspec.structs.replace(one, t=t))

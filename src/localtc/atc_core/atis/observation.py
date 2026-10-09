@@ -304,13 +304,13 @@ class WeatherTracker:
         """An airport's METAR (``WeatherReport``): its weather until the aircraft samples its own there."""
         self.reports[icao] = weather
 
-    def surface(self, icao: str, airports: dict[str, AirportGeometry]) -> Weather | None:
+    def surface(self, icao: str, airports: dict[str, AirportGeometry], *, reports: bool = True) -> Weather | None:
         """The airport's own sample, else its METAR, else the freshest sample from an airport in the same region; with
         the clouds seen near it, its altimeter and the pressure's trend. (Without the METAR, Joplin's runway was chosen
         from the wind at FL300, and its weather was "not available".)"""
         own = self.samples.get(icao)
         geo = airports.get(icao)
-        if own is None and icao in self.reports:
+        if own is None and reports and icao in self.reports:
             report = self.reports[icao]
             return replace(report, altimeter_inhg=self.altimeter_at(icao) or report.altimeter_inhg,
                            elevation_ft=geo.airport.elev_ft if geo is not None else report.elevation_ft)

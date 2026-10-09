@@ -52,6 +52,7 @@
       <div class="panel airport" id="airport-box">
         <div class="arow">
           <div class="aname"><span class="icao" id="ap-icao">----</span> <span id="ap-name" class="muted">No airport yet</span></div>
+          <div id="ap-atis" class="muted small" hidden></div>
           <div class="acall"><span id="fl-callsign">—</span> <span class="muted" id="fl-type"></span>
             <span class="check" id="fl-plan-ok" title="Flight plan loaded" hidden>&#9745;</span>
             <span class="plane" title="Flight">&#9992;</span></div>
@@ -219,6 +220,40 @@
 </dialog>
 
 <!-- The one-time account suggestion, after the third flight -->
+<dialog id="dlg-welcome" class="dialog">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><span></span><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="help welcome">
+      <h2>Welcome to LocalTC!</h2>
+      <p>A couple of notes and recommendations before your first flight:</p>
+      <ul class="benefits">
+        <li><b>ATC and the copilot aren't perfect.</b> They're made from your sim's data and a lot of rules, and they
+          still get things wrong now and then: a runway, a taxi route, a misheard call. When something goes wrong, send
+          it in (the gear &rarr; Support &amp; feedback): each report makes them better.</li>
+        <li><b>Talk like on a real radio.</b> Hold push-to-talk a moment before you speak and until you've finished,
+          say your callsign, and read back what ATC gives you. Typing a call works too.</li>
+        <li><b>Recommended language model: Mistral</b>, free with your own key (Quick Settings &rarr; Cloud language model).
+          It understands far more than the model on your PC and words ATC's replies naturally. The local model works
+          offline, just more strictly.</li>
+        <li><b>Recommended voices: Azure AI Speech</b>, free up to 500,000 characters a month with your own key (Quick
+          Settings &rarr; ATC voice): the most natural voices, with each region's accent. <b>Kokoro</b> is a good
+          voice that runs on your PC; <b>Piper</b> is the fast default.</li>
+        <li><b>Speech-to-text:</b> the bigger Whisper model (small.en, or medium.en with an NVIDIA GPU) hears you
+          much better than base.en, if your PC can spare it alongside the sim.</li>
+        <li><b>Your flight plan:</b> put your SimBrief username in New Flight and LocalTC clears you as filed, with your
+          callsign, route and runways.</li>
+        <li><b>The copilot</b> works the radio with the Copilot switch. In aircraft it has no profile for, it calls
+          things out but can't move the switches: they're yours.</li>
+        <li><b>Real-world data:</b> real gate names, taxiway names, the destination's METAR and real ATIS (Quick Settings
+          &rarr; ATC &rarr; ATIS source) come over the internet; everything else works offline.</li>
+      </ul>
+      <p class="muted small">You can read the Getting Started notes any time (the Getting Started button). This message won't
+        show again.</p>
+      <div class="row welcome-go"><button class="btn primary" value="ok">Let's fly</button></div>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-account" class="dialog">
   <form method="dialog" class="dlg">
     <div class="dlghead"><h2>Three flights in: want an account?</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>

@@ -79,7 +79,11 @@ function setState(st) {
   $("#devbar").hidden = !st.dev_mode;
   $("#btn-coffee").hidden = !!st.coffee_clicked;
   const dlg = $("#dlg-account");
-  if (st.account_prompt && dlg && !dlg.open) dlg.showModal();
+  const welcome = $("#dlg-welcome");
+  if (st.welcome && welcome && !welcome.open && !S.welcomed) {
+    S.welcomed = true;  // once a session; saved as seen when it's closed
+    welcome.showModal();
+  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open) dlg.showModal();
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -263,6 +267,10 @@ function setFlight(f) {
   const ap = f.airport;
   $("#ap-icao").textContent = ap?.icao || "----";
   $("#ap-name").textContent = ap?.name || (ap ? "" : "No airport yet");
+  // The ATIS, where it's from and how old ([atc] atis_source): "ATIS W · real ATIS 1756Z, 12 min old".
+  const atisLine = $("#ap-atis");
+  atisLine.hidden = !f.atis;
+  atisLine.textContent = f.atis ? `ATIS ${f.atis}${f.atis_source ? " · " + f.atis_source : ""}` : "";
   const freqs = $("#ap-freqs");
   if (ap?.frequencies?.length) {
     const key = JSON.stringify(ap.frequencies) + ap.icao;
@@ -359,6 +367,11 @@ $("#dlg-settings-close").onclick = () => $("#dlg-settings").close();
 $("#dlg-settings").addEventListener("click", (e) => { if (e.target === $("#dlg-settings")) $("#dlg-settings").close(); });
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
 $("#btn-help").onclick = () => $("#dlg-help").showModal();
+// The welcome notes: shown once ever (existing installs included), seen for good once closed.
+$("#dlg-welcome")?.addEventListener("close", () => {
+  if (S.state) S.state.welcome = false;
+  api("settings", { settings: { ui: { welcome_seen: true } } }).catch(() => {});
+});
 // The account suggestion: answered either way, it's never shown again; yes opens the account card in Settings.
 $("#dlg-account").addEventListener("close", () => {
   const yes = $("#dlg-account").returnValue === "yes";
@@ -1087,6 +1100,15 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
         <label class="check-row"><input type="checkbox" id="s-fpln-rwy" ${st.atc.enforce_fpln_runways ? "checked" : ""}> Enforce FPLN runway assignments: ATC gives the flight plan's departure and arrival runways. Off: the runways in use, from the ATIS</label>
         <label class="check-row"><input type="checkbox" id="s-real-gates" ${st.atc.real_gates !== false ? "checked" : ""}> Real gate names: gates as the airport numbers them (E9, not the scenery's 88), and international flights to international gates. Downloaded from OpenStreetMap and kept; off: the scenery's names</label>
+        <div class="row"><label>ATIS source<select id="s-atis-source">${[
+            ["hybrid", "Hybrid: real-world first (the airport's real ATIS, else its real METAR), the simulator's otherwise (recommended)"],
+            ["real", "Real-world ATIS when the airport has one (US airports); the simulator's otherwise"],
+            ["sim", "Simulator only: LocalTC's ATIS from the sim's weather, nothing downloaded"],
+          ].map(([v, t]) => `<option value="${v}" ${(st.atc.atis_source || "hybrid") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">The real ATIS is the FAA's digital ATIS (atis.info) and the METAR is aviationweather.gov's; only the
+            airport codes are sent. Once you're at or near an airport, the weather the sim has there wins over any real-world
+            report, so ATC never gives you conditions you aren't flying in; the ATIS says when the two differ. Each ATIS shows
+            where it's from and how old it is. Takes effect on the next flight.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
@@ -1283,6 +1305,7 @@ const Settings = {
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
     on("#s-traffic", "change", () => this.save("traffic", "control", val("#s-traffic")));
+    on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));

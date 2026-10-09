@@ -72,7 +72,10 @@ STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure",
                  "radio", "traffic")
 # The copilot's suggestions the pilot can put off ("later", "not now"): the monitor's DECLINE.
 DECLINE = re.compile(r"\b(?:later|not (?:yet|now|right now)|stop (?:talking|it)|shut up|be quiet|enough|"
-                     r"i didn'?t ask)\b")
+                     r"i didn'?t ask|chill(?: out)?|relax|cut it out|i know|we know|knock it off|give it a rest)\b")
+# ... and of them, the ones that quiet the routine calls too, not just the suggestions.
+HUSH = re.compile(r"\b(?:stop talking|shut up|be quiet|enough|chill(?: out)?|relax|cut it out|i know|we know|knock it off|"
+                  r"give it a rest|stop it)\b")
 SAID_AS = {"go_around": "go around", "emergency": "declare an emergency"}
 CONTROL_WORDS = {"flaps?": "flaps", "gear": "gear", "lights?": "light", "auto ?pilot": "autopilot", "auto ?brakes?": "autobrake",
                  "spoilers?|speed ?brakes?": "spoilers", "parking brakes?": "parking_brake", "transponder|squawk": "squawk",
@@ -80,6 +83,13 @@ CONTROL_WORDS = {"flaps?": "flaps", "gear": "gear", "lights?": "light", "auto ?p
 FUEL_DOUBT = re.compile(r"\bfuel (?:prediction|projection|estimate|calc\w*|calls?|numbers?)s? (?:is|are|was|were|seems?)? ?"
                         r"(?:off|wrong|broken|bogus|not right)|\b(?:stop|enough|no more) (?:with )?(?:the )?fuel (?:calls?|warnings?|"
                         r"predictions?)")
+
+
+# What the captain is about to do, or what's happening, said aloud: "time to start up our engines", "let's get
+# rolling", "alright, boarding's complete". Nothing for the copilot to do.
+REMARK = re.compile(r"^(?:(?:alright|all right|ok|okay|so|well|right|and)[,.\s]+)*(?:time to|let's|lets|we're going to|"
+                    r"we are going to|we're gonna|gonna|going to|i'm going to|i'll|we'll|here we go|boarding|"
+                    r"spooling|starting|engines?\b)")
 
 
 @dataclass
@@ -337,7 +347,10 @@ class PilotMonitoring:
             self._heard_by_model(text)
             return [self._say(t, "Copy, I'll leave the fuel predictions to the box.")]
         if act != "answer" and DECLINE.search(text.lower()) and self.intent is None:
-            self.monitor.declined(t)
+            if HUSH.search(text.lower()):
+                self.monitor.hushed(t)
+            else:
+                self.monitor.declined(t)
             self._heard_by_model(text)
             return [self._say(t, "Copy.")]
         if self.monitor.cr is not None and act in ("acknowledgement", "answer", "report", "command", "chat") \
@@ -802,11 +815,14 @@ class PilotMonitoring:
             if said is not None:
                 return [*exchanges, self._say(t, said)]
             why = exchanges[-1].detail if exchanges else ""
-            if why.startswith(("claims", "reassures", "names a place")):  # it said what isn't so: what fits instead
+            remark = REMARK.match(text.lower().strip()) is not None
+            if why.startswith(("claims", "reassures", "names a place")) or (remark and why):
+                # Its reply turned away (it said what isn't so, or made a command of a remark: "time to start up our
+                # engines" was "landing lights on"): what fits the call instead, not "say again?" to words heard well.
                 asked = "?" in text or re.match(r"^\s*(?:[a-z']+[,\s]+){0,2}(?:what|how|where|which|who|do|did|are|is|will|can)\b",
                                                  text.lower())
                 return [*exchanges, self._say(t, "Can't tell that from here." if asked else "Copy.")]
-            return [*exchanges, self._say(t, "Say again?")]
+            return [*exchanges, self._say(t, "Say again?")]  # a command it couldn't make out, or no reply at all
         if reading.command is None:
             return [*exchanges, self._say(t, reading.reply)]
         cmd = reading.command

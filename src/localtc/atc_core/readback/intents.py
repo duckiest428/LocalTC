@@ -330,7 +330,10 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("request_crossing", runway=crossed[0])  # "request to cross runway 08R"
     if (turn := _turn(tokens)) is not None:
         add("request_turn", turn=turn)
-    if _has_any(tokens, ("going", "around"), ("go", "around"), ("missed", "approach"), ("executing", "missed")):
+    if _has_any(tokens, ("going", "around"), ("go", "around"), ("missed", "approach"), ("executing", "missed")) \
+            and not _has_any(tokens, ("another", "go", "around"), ("going", "to", "do"), ("probably",), ("might",),
+                             ("if", "we"), ("in", "case"), ("may", "have")):
+        # (Not "we're probably going to do another go around" asking for another runway: not going around now.)
         add("going_around")
     if (traffic := _traffic(tokens)) is not None and (_has_any(tokens, ("traffic",)) or traffic != "in_sight"):
         add("traffic_report", traffic=traffic)

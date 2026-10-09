@@ -45,11 +45,22 @@ def _hash(text: str) -> int:
     return zlib.crc32(text.lower().encode())
 
 
-def sex_for(key: str) -> str:
-    """The sex of the person at ``key``: the one Piper's default voice gives them (so a substitute keeps it), else
-    an even split by name."""
-    found = sex_of(speaker_for(key, LIBRITTS, SPEAKERS))
-    return found or ("F" if _hash("sex" + key) % 2 else "M")
+# The share of women among controllers and airline pilots, roughly (the FAA's, NATS's, NAV CANADA's and Europe's
+# published figures: about a fifth of controllers; about one airline pilot in twenty). Half the stations had a woman's
+# voice: "most ATCs seem to be women, not realistic".
+WOMEN_CONTROLLERS = {"en-US": 0.18, "en-CA": 0.22, "en-GB": 0.22, "en-IE": 0.2, "en-AU": 0.2, "en-NZ": 0.2,
+                     "en-IN": 0.12, "": 0.2}
+WOMEN_PILOTS = 0.06
+WEIGHTED = ("atc", "atis", "chatter")  # the roles whose sex goes by these shares
+
+
+def sex_for(key: str, role: str = "atc", locale: str = "") -> str:
+    """The sex of the person at ``key``: by the share of women in the job (controllers by region, pilots on the
+    frequency), decided by the name, so a station is the same person every flight; the crew evenly."""
+    if role not in WEIGHTED:  # the crew: the sex Piper's default voice gives them (so a substitute keeps it)
+        return sex_of(speaker_for(key, LIBRITTS, SPEAKERS)) or ("F" if _hash("sex" + key) % 2 else "M")
+    share = WOMEN_CONTROLLERS.get(locale, WOMEN_CONTROLLERS[""]) if role in ("atc", "atis") else WOMEN_PILOTS
+    return "F" if _hash("sex" + key) % 1000 < share * 1000 else "M"
 
 
 def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = "", sex: str = "",
@@ -68,7 +79,7 @@ def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = 
     _, _, rest = manner.partition(":")
     style = "" if role in ("atis", "copilot") else STYLES.get(rest.partition(":")[0], "")
     pitch = 0 if role in ("atis", "copilot") else _hash("pitch" + key) % (2 * PITCH_SPAN + 1) - PITCH_SPAN
-    return Persona(key=key, role=role, manner=kind, sex=want or sex_for(key), locale=locale, pace=pace, pitch=pitch,
+    return Persona(key=key, role=role, manner=kind, sex=want or sex_for(key, role, locale), locale=locale, pace=pace, pitch=pitch,
                    style=style, pick=pick, piper_speaker=piper_speaker)
 
 

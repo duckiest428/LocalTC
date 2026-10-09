@@ -48,6 +48,9 @@ class AtisInfo:
     region: Region | None = None
     kind: str = "both"  # both, arrival, departure (airports with separate ATIS broadcasts)
     observation: int = 0  # the hourly observation it's from (a new one is a new letter)
+    # Where it's from ([atc] atis_source): (label, when the sim observed it (session time) or None, the report's "HHMM"
+    # or ""): ("real ATIS", None, "1756"), ("METAR", None, "1753"), ("simulator", 812.0, "").
+    source: tuple = ("simulator", None, "")
 
     @property
     def icao_style(self) -> bool:

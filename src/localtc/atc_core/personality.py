@@ -76,7 +76,7 @@ TRAITS: dict[str, Traits] = {
     "conversational": Traits(("roger, thanks", "copy that, thanks", "roger"), ("sorry, you were cut out, say again?", "say again"),
                              ("good {when}", "good {when}, welcome"), ("have a good one", "enjoy the flight", "good day"),
                              ("good day", "bye bye"), 0.9, 0.9, "long", 2, "gentle", 3, 0.97, 0.06,
-                             ("thanks", "nice and easy", "appreciate the help"),
+                             ("thanks", "appreciate it", "appreciate the help"),  # ("nice and easy": "what does that even mean?")
                              "chatty and personable, likes a word with the crews when it's quiet"),
 }
 

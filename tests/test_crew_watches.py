@@ -41,10 +41,19 @@ def test_turbulence_comes_in_at_once_and_goes_only_after_a_calm_minute():
     turb = Turbulence()
     levels = [turb.add(t, 1.0) for t in range(10)]
     assert set(levels) == {None}
-    bumps = [turb.add(10 + i, 1.0 + (0.4 if i % 2 else -0.4)) for i in range(4)]
+    bumps = [turb.add(10 + i, 1.0 + (0.4 if i % 2 else -0.4)) for i in range(8)]
     assert "moderate" in bumps or "severe" in bumps
-    calm = [turb.add(14 + i, 1.0) for i in range(160)]
+    calm = [turb.add(18 + i, 1.0) for i in range(160)]
     assert calm.index("smooth") >= 115  # not the moment it's calm: two minutes of it
+
+
+def test_pitching_up_and_over_is_not_turbulence():
+    """A level-off: 1.35 g pulling up, then 0.65 g pushing over, sampled once a second ("that isn't turbulence,
+    just the plane moving")."""
+    turb = Turbulence()
+    g = [1.0, 1.0, 1.05, 1.0, 0.95, 0.9, 0.95, 1.0, 1.05, 1.0, 1.1, 1.2, 1.25, 1.25, 1.2, 1.15, 1.25, 1.35, 1.3, 1.0,
+         0.65, 0.7, 0.85, 1.0, 1.0, 1.0]
+    assert {turb.add(t, v) for t, v in enumerate(g)} == {None}
 
 
 def test_a_steady_turn_is_not_turbulence():
@@ -196,7 +205,7 @@ def test_a_missed_restriction_is_said_under_descend_via_only():
         assert [r.fix for r in pm.monitor.restrictions] == ["CEPIN"]  # a transition not on the route isn't flown
         return said(fly(pm, [air(1 + i, lat=46.95 + 0.01 * i, alt_indicated_ft=15000, vs_fpm=-500) for i in range(12)]))
 
-    assert "Missed the at or below 12,000 at CEPIN." in run(None)
+    assert "We missed CEPIN's restriction: at or below 12,000." in run(None)
     assert not any("Missed" in w for w in run(270))  # vectors cancel it
 
 
@@ -207,7 +216,7 @@ def test_a_heads_up_when_too_high_for_the_next_one():
     pm.observe(ArrivalData(t=0.6, airport="KPDX", name="CEPIN2", legs=(
         ArrivalLeg(fix="CEPIN", lat=47.2, lon=-122.0, altitude="at", alt1_ft=10000),)))
     words = said(fly(pm, [air(1.0, lat=47.0, alt_indicated_ft=24000), air(2.0, lat=47.001, alt_indicated_ft=24000)]))
-    assert "We're high for the 10,000 at CEPIN." in words
+    assert "We're high for CEPIN: 10,000." in words
 
 
 # --- field in sight, minimums --------------------------------------------------------------------------------------------

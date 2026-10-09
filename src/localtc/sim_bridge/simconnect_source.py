@@ -37,6 +37,7 @@ from localtc.sim_api import (
     RequestArrival,
     SendSimEvent,
     SetInputEvent,
+    TurnKnob,
     SpawnAiAircraft,
     RemoveAiAircraft,
     EnumerateModels,
@@ -52,6 +53,7 @@ from localtc.sim_api import (
 )
 from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
+from localtc.sim_bridge.knob import KnobTurn
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
     AssignedObject,
@@ -93,6 +95,7 @@ DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
+KNOB_READ_REQUEST = 1000  # + the variable's data definition: a knob being turned reads it back (TurnKnob)
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
 NEARBY_AIRPORTS, NEARBY_NM = 40, 150.0  # the airports around the aircraft reported to ATC, for diversions
@@ -280,6 +283,7 @@ class SimConnectSource:
         self._want_input_events = False
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
+        self._knobs: dict[str, tuple[KnobTurn, int]] = {}  # input event -> the turn and its variable's definition
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
                                   (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
                                   (DEF_AIRCRAFT_MORE, defs.AIRCRAFT_MORE)):
@@ -386,6 +390,7 @@ class SimConnectSource:
                     except SimConnectError as exc:
                         log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
+                self._turn_knobs(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
                     self._nearest_to_fetch = None
@@ -472,6 +477,8 @@ class SimConnectSource:
                 self._set_simvar(dll, handle, command)
             elif isinstance(command, SetInputEvent):
                 self._set_input_event(dll, handle, command)
+            elif isinstance(command, TurnKnob):
+                self._start_knob(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
                 try:
                     dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
@@ -523,6 +530,41 @@ class SimConnectSource:
             log.info("Copilot: input event %s = %s", command.name, command.value)
         except (SimConnectError, AttributeError) as exc:
             log.warning("Copilot couldn't set %s: %s", command.name, exc)
+
+    def _start_knob(self, dll: SimConnectApi, handle: int, command: TurnKnob) -> None:
+        if command.name.upper() not in self._input_events:
+            log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
+            return
+        key = f"{command.var}|{command.unit}"
+        try:
+            define_id = self._simvar_definitions.get(key)
+            if define_id is None:
+                define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+                dll.add_to_data_definition(handle, define_id, command.var, command.unit, defs.F64)
+                self._simvar_definitions[key] = define_id
+        except SimConnectError as exc:
+            log.warning("Copilot can't read %s to turn %s: %s", command.var, command.name, exc)
+            return
+        self._knobs[command.name.upper()] = (KnobTurn(command.name.upper(), command.target, command.step, command.wrap),
+                                             define_id)
+        log.info("Copilot: turning %s to %s", command.name, command.target)
+
+    def _turn_knobs(self, dll: SimConnectApi, handle: int) -> None:
+        now = time.monotonic()
+        for name, (turn, define_id) in list(self._knobs.items()):
+            if turn.done:
+                del self._knobs[name]
+                continue
+            try:
+                what = turn.due(now)
+                if what == "step":
+                    dll.set_input_event(handle, self._input_events[name], turn.pending.pop())
+                elif what == "read":
+                    dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER,
+                                                   Period.ONCE)
+            except (SimConnectError, KeyError, AttributeError) as exc:
+                log.warning("Copilot couldn't turn %s: %s", name, exc)
+                del self._knobs[name]
 
     def _on_input_events(self, msg: InputEventList) -> None:
         for name, hash_, _kind in msg.events:
@@ -632,7 +674,13 @@ class SimConnectSource:
         self._resolve_ready(info)
 
     def _on_data(self, msg: ObjectData, t: float) -> None:
-        if msg.request_id == REQ_OWNSHIP:
+        if msg.request_id >= KNOB_READ_REQUEST:
+            for turn, define_id in self._knobs.values():
+                if KNOB_READ_REQUEST + define_id == msg.request_id and len(msg.payload) >= 8:
+                    turn.on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())
+                    if turn.done:
+                        log.info("Copilot: %s turned to %g", turn.name, struct.unpack_from("<d", msg.payload)[0])
+        elif msg.request_id == REQ_OWNSHIP:
             self._user_object_id = msg.object_id
             ownship = defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t)
             self._position = (ownship.lat, ownship.lon)

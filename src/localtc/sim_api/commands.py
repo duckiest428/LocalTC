@@ -47,6 +47,19 @@ class SetInputEvent(SimCommand, tag="set_input_event"):
     value: float = 0.0
 
 
+class TurnKnob(SimCommand, tag="turn_knob"):
+    """Turn a knob that moves a step at a time (an MSFS 2024 FCU knob's input event, +1/-1 whatever it's set to)
+    until ``var`` reads ``target``: read, a few steps, read again (sim_bridge/knob.py). ``step``: one step's change of
+    the reading; ``wrap`` 360 for a heading."""
+
+    name: str
+    var: str
+    unit: str
+    target: float
+    step: float = 1.0
+    wrap: float = 0.0
+
+
 class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
     """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
     non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
@@ -87,5 +100,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent,
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

@@ -1,0 +1,33 @@
+# The MSFS 2024 stock Airbus A350-900/-1000. Flaps by the handle (FLAPS_SET); VFE per configuration from the A350's
+# limitations. Mapped against the sim on 2026-10-08 (localtc debug aircraft / hands).
+[aircraft]
+name = "Airbus A350"
+match = ["A350", "A359", "A35K"]
+flaps = "set"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 255, 212, 195, 186]
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 43100
+
+# The landing lights ignore LANDING_LIGHTS_SET: the switch's input event (1 on, 0 off).
+[actions.light_landing]
+input = "AIRLINER_LIGHTS_EXT_LANDING"
+on = 1
+off = 0
+
+# The FCU ignores the autopilot key events: its knobs turn a step at a time (sim_bridge/knob.py).
+[actions.heading]
+knob = "AIRLINER_FCU_HDG_KNOB"
+
+[actions.speed]
+knob = "AIRLINER_FCU_SPD_KNOB"
+
+[actions.altitude]
+knob = "AIRLINER_FCU_ALT_KNOB"
+step = 1000

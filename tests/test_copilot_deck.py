@@ -20,6 +20,7 @@ from localtc.crew.pm import CONFIRM_S, PilotMonitoring
 from localtc.crew.profiles import load_all
 from localtc.flightdeck import FlightDeck
 from localtc.sim_api import (
+    TurnKnob,
     AircraftIdentity,
     AircraftSystems,
     AtcTransmission,
@@ -36,8 +37,8 @@ from localtc.sim_api import (
 PROFILES = load_all()
 
 
-def sent(outputs) -> list[SendSimEvent]:
-    return [o for o in outputs if isinstance(o, SendSimEvent)]
+def sent(outputs) -> list[SendSimEvent | TurnKnob]:
+    return [o for o in outputs if isinstance(o, (SendSimEvent, TurnKnob))]
 
 
 def heard(pm, t, text, confidence=None):
@@ -91,7 +92,7 @@ def test_a_command_heard_badly_is_asked_about_not_done():
     pm = started()
     out = heard(pm, 1.0, "heading two four zero", confidence=0.45)
     assert said(out) == ["Did you say heading 240?"] and not sent(out)
-    assert sent(heard(pm, 3.0, "affirm")) == [SendSimEvent(name="HEADING_BUG_SET", value=240)]
+    assert [(w.name, w.target) for w in sent(heard(pm, 3.0, "affirm"))] == [("INSTRUMENT_FCU_HDG_KNOB", 240)]
 
 
 def test_a_command_heard_fairly_well_is_said_back_first():

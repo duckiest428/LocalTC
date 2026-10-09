@@ -28,6 +28,13 @@ class Write:
     unit: str = "number"
     on: float = 1.0
     off: float = 0.0
+    # A knob that turns a step at a time (an MSFS 2024 FCU: +1/-1 a step, whatever it's set to): turned until the
+    # variable it drives reads the value. ``step``: one step's change of the reading ("1000" for an altitude knob in
+    # thousands); ``var``/``var_unit``: the reading, if not the action's usual one.
+    knob: str = ""
+    step: float = 1.0
+    var: str = ""
+    var_unit: str = ""
 
 
 @dataclass(frozen=True)

@@ -268,6 +268,9 @@ def test_input_events_list_is_read_by_its_layout():
     msg = parse_message(raw)
     assert isinstance(msg, InputEventList) and msg.request_id == 8
     assert msg.events == tuple(events)
+    # MSFS 2024 12.2 sends one descriptor's worth more than it counts (539 events in 41,068 bytes)
+    padded = struct.pack("<IIIIIII", size + 76, 6, 34, 8, len(events), 0, 1) + payload + bytes(76)
+    assert parse_message(padded).events == tuple(events)
 
 
 def test_a_profile_can_move_a_control_by_its_input_event():

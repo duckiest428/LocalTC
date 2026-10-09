@@ -41,6 +41,7 @@ from localtc.sim_api import (
     RequestAirportData,
     SendSimEvent,
     SetInputEvent,
+    TurnKnob,
     SetSimVar,
     SpawnAiAircraft,
     TrafficIdentity,
@@ -110,6 +111,8 @@ def describe(cmd: Any) -> str:
         return f"event {cmd.name} {cmd.value}" + (f" #{cmd.index}" if cmd.index else "")
     if isinstance(cmd, SetInputEvent):
         return f"input {cmd.name} = {cmd.value:g}"
+    if isinstance(cmd, TurnKnob):
+        return f"knob {cmd.name} to {cmd.target:g}"
     if isinstance(cmd, SetSimVar):
         return f"var {cmd.name} = {cmd.value:g}"
     return f"{type(cmd).__name__} {getattr(cmd, 'hz', '')}".strip()
@@ -201,7 +204,7 @@ class Probe:
         if plan.check(self.cockpit) is None and self.cockpit.systems is not None:
             await asyncio.sleep(self.readback_s / 2)  # nothing to read it back by: it goes as sent
             return ("sent" if plan.check(self.cockpit) is None else "pass" if plan.check(self.cockpit) else "fail"), sent, ""
-        ok = await self.until(lambda: plan.check(self.cockpit) is True, self.readback_s)
+        ok = await self.until(lambda: plan.check(self.cockpit) is True, max(self.readback_s, plan.check_s))
         return ("pass" if ok else "fail"), sent, "" if ok else "the sim didn't show it"
 
 

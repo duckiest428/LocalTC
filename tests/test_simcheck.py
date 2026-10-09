@@ -9,6 +9,7 @@ import pytest
 
 from localtc import simcheck
 from localtc.sim_api import (
+    TurnKnob,
     AircraftIdentity,
     AircraftInputEvents,
     AircraftSystems,
@@ -74,6 +75,9 @@ class FakeSim:
     async def send(self, cmd):
         self.sent.append(cmd)
         own, sys_ = {}, {}
+        if isinstance(cmd, TurnKnob) and cmd.name not in self.deaf:  # turned all the way at once
+            sys_[{"AUTOPILOT HEADING LOCK DIR": "ap_heading_sel", "AUTOPILOT ALTITUDE LOCK VAR": "ap_altitude_sel",
+                  "AUTOPILOT AIRSPEED HOLD VAR": "ap_speed_sel", "AUTOPILOT VERTICAL HOLD VAR": "ap_vs_sel"}[cmd.var]] = cmd.target
         if isinstance(cmd, SendSimEvent) and cmd.name not in self.deaf:
             n, v = cmd.name, cmd.value
             if n in LIGHTS:

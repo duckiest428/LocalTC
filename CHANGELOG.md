@@ -48,6 +48,7 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The copilot's hands in MSFS 2024 airliners**: the aircraft's list of cockpit controls (its input events) was thrown away because the sim sends a little more than it counts, so no aircraft could be worked through them. The stock A320neo's and A350's FCU (heading, speed, altitude) ignores the autopilot key events: the copilot now turns the FCU's knobs until the window shows the value, so what it sets is what you see. The A350 has a profile of its own (flap speeds, its landing lights).
 - **The app's window shows LocalTC's icon** in its title bar and on the taskbar, as an app of its own, not Python's.
 - **Vectors from far out**: an arrival 30 miles out at 12,000 feet was judged too high from the join point alone and turned away on a downwind, heading north from an airport to its south. The miles before the join count now (a light aircraft still gets no steep descent).
 - **Runways on the taxi in** are crossed with a clearance, as on the way out, and the taxi-in route replaces the one out (the copilot quoted the departure airport's taxiways at the arrival).

@@ -248,7 +248,7 @@ class PilotMonitoring:
                                           detail=f"{call.key}: " + "; ".join(_describe(w) for w in p.writes))]
             self.deck.memory.did(t, f"set {p.value} ({p.action})" if p.action != "light" else f"{p.value}")
             if cmd.action != "altimeter":  # an airliner's own STD and QNH buttons often leave the sim's setting alone
-                self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
+                self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p, quiet=True))
         kind = "alert" if call.priority >= SAFETY else "callout"
         text, spoken = call.text, call.spoken
         if skipped and text.endswith(" set."):
@@ -845,7 +845,7 @@ class PilotMonitoring:
             out.append(self._say(t, p.done, "done", p.done_spoken))
         else:
             self._waiting = [w for w in self._waiting if w.plan.action != p.action or w.plan.action == "light"]
-            self._waiting.append(_Waiting(t + CHECK_S, p))
+            self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p))
         return out
 
     # --- the sim ---------------------------------------------------------------------------------------------------
@@ -875,7 +875,7 @@ class PilotMonitoring:
     def _didnt_take(self, t: float, w: _Waiting) -> list[Any]:
         p = w.plan
         out: list[Any] = [CrewAction(t=t, action=p.action, value=p.value, outcome="failed",
-                                     detail=f"the sim didn't show it within {CHECK_S:.0f} s")]
+                                     detail=f"the sim didn't show it within {p.check_s or CHECK_S:.0f} s")]
         self._failures[p.action] = self._failures.get(p.action, 0) + 1
         what = p.done.rstrip(".").replace(" set", "")
         if w.quiet:

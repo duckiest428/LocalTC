@@ -28,3 +28,16 @@ short_runway_ft = 7000
 # lvar = "L:XMLVAR_SWITCH_OVHD_INTLT_SEATBELT_Position"
 # on = 1
 # off = 0
+
+# MSFS 2024: the FCU ignores the autopilot key events (AP_ALT_VAR_SET_ENGLISH, AP_SPD_VAR_SET); its knobs are input
+# events that move one step each time they're set (+1/-1), so they're turned until the reading gets there. Checked
+# against the FCU's windows in the stock A320neo V2 (2026-10-08). The altitude knob goes in thousands.
+[actions.heading]
+knob = "INSTRUMENT_FCU_HDG_KNOB"
+
+[actions.speed]
+knob = "INSTRUMENT_FCU_SPD_KNOB"
+
+[actions.altitude]
+knob = "INSTRUMENT_FCU_ALT_KNOB"
+step = 1000

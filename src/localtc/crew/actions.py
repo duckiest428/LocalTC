@@ -7,7 +7,7 @@ goes against the clearance, waits for a "confirm".
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.facilities import channel_khz
@@ -21,6 +21,7 @@ from localtc.sim_api import (
     SetInputEvent,
     SetSimVar,
     SimCommand,
+    TurnKnob,
 )
 
 FLAPS_MAX = 16383  # FLAPS_SET's full travel
@@ -40,6 +41,12 @@ MOVING_KT = 5.0
 SPOILERS_MIN_AGL = 1000.0
 AP_OFF_CONFIRM_AGL = 500.0
 SPEED_MARGIN_KT = 5.0  # a placard speed is exceeded by more than this
+# What a knob (TurnKnob) is turned until, for each action: the variable, its unit, the wrap (a heading's 360).
+KNOB_READS = {"heading": ("AUTOPILOT HEADING LOCK DIR", "degrees", 360.0),
+              "altitude": ("AUTOPILOT ALTITUDE LOCK VAR", "feet", 0.0),
+              "speed": ("AUTOPILOT AIRSPEED HOLD VAR", "knots", 0.0),
+              "vs": ("AUTOPILOT VERTICAL HOLD VAR", "feet per minute", 0.0)}
+KNOB_CHECK_S = 20.0  # a knob takes a while to turn (a few seconds for 150 kt): the check waits this long
 
 
 @dataclass
@@ -135,6 +142,7 @@ class Plan:
     done_spoken: str = ""
     already: str = ""  # said instead, when the sim already shows it: "Flaps already 2."
     reads: str = ""  # the reading the check looks at (``Cockpit.moved``): believed once it's been seen to move
+    check_s: float = 0.0  # how long the sim takes to show it (0: the copilot's usual)
 
 
 @dataclass(frozen=True)
@@ -165,6 +173,10 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
     custom: Write | None = profile.actions.get(key)
     if custom is None:
         return default
+    if custom.knob:
+        var, unit, wrap = KNOB_READS.get(key, ("", "number", 0.0))
+        return TurnKnob(name=custom.knob, var=custom.var or var, unit=custom.var_unit or unit, target=float(value or 0.0),
+                        step=custom.step, wrap=wrap)
     if custom.input:
         level = custom.on if on else custom.off if on is not None else (value or 0.0)
         return SetInputEvent(name=custom.input, value=float(level))
@@ -176,8 +188,15 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
     return default
 
 
-def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per command, flat
+def plan(cmd: Command, c: Cockpit) -> Plan | str:
     """What to send for ``cmd``, or why it can't be done on this aircraft ("unable ...")."""
+    got = _plan(cmd, c)
+    if isinstance(got, Plan) and any(isinstance(w, TurnKnob) for w in got.writes):
+        return replace(got, check_s=KNOB_CHECK_S)
+    return got
+
+
+def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per command, flat
     p = c.profile
     a, v = cmd.action, cmd.value
     if a == "gear":

@@ -400,7 +400,8 @@ def _parse_input_events(buf: bytes) -> InputEventList | None:
     m = _read(RecvFacilitiesList, buf)
     end = _message_end(m.dwSize, buf)
     count = m.dwArraySize
-    if count == 0 or end - FACILITIES_LIST_OFFSET != count * INPUT_EVENT_SIZE:
+    # MSFS 2024 (12.2) sends one descriptor's worth of bytes more than dwArraySize counts: at least, not exactly.
+    if count == 0 or not count * INPUT_EVENT_SIZE <= end - FACILITIES_LIST_OFFSET < (count + 2) * INPUT_EVENT_SIZE:
         return None
     events = []
     for i in range(count):

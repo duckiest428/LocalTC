@@ -286,7 +286,9 @@ def hands_plan(c: actions.Cockpit, *, autopilot: bool = False) -> list[tuple[str
     engines_off = sys_ is not None and sys_.engines_running == 0
     brake = bool(own and own.parking_brake)
     out.append((f"parking brake {'release' if brake else 'set'}", Command("parking_brake", "off" if brake else "on"),
-                Command("parking_brake", "on" if brake else "off"), "" if engines_off else "the engines are running"))
+                Command("parking_brake", "on" if brake else "off"),
+                "the engines are running" if not engines_off else
+                "the sim doesn't show this aircraft's brake: not touched" if "parking_brake" in c.profile.unread else ""))
     ap = bool(sys_ and sys_.ap_master)
     out.append((f"autopilot {'off' if ap else 'on'}", Command("autopilot", "off" if ap else "on"),
                 Command("autopilot", "on" if ap else "off"), "" if autopilot else "only with --autopilot"))

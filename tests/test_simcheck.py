@@ -228,3 +228,13 @@ def test_the_command_lines_entry_runs_a_check_on_any_source():
 
     report = asyncio.run(sim_check(Config(), "hands", source=FakeSim(), only=("squawk",)))
     assert [s.name for s in report.steps] == ["squawk"] and report.steps[0].result == "pass"
+
+
+def test_a_parking_brake_the_sim_cant_read_is_left_alone():
+    """The FlyByWire A380's brake isn't the sim's: read as off while set, "set" then "back" released it."""
+    from localtc.crew import actions
+    from localtc.crew.profiles import Profile
+
+    c = actions.Cockpit(profile=Profile(unread=("parking_brake",)), systems=AircraftSystems(t=0.0, engines_running=0))
+    steps = {name: skip for name, _cmd, _back, skip in simcheck.hands_plan(c)}
+    assert "not touched" in next(v for k, v in steps.items() if k.startswith("parking brake"))

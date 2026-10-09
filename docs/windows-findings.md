@@ -4,6 +4,20 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-08: FlyByWire A380X, the copilot's hands
+- Lights, squawk, COM active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` / `ALT_SET` (FlyByWire's custom
+  events) set the FCU (by eye) and the sim's AUTOPILOT vars follow; AP_SPD_VAR_SET didn't. New `fbw_a380.toml`.
+- Flaps: FLAPS_1/2/UP and FLAPS_SET (quarters) move `L:A32NX_FLAPS_HANDLE_INDEX` 0-4; FLAPS HANDLE INDEX stays 0, so
+  `reads_flaps = false`. Setting the L:var itself sticks but moved no flaps.
+- Parking brake: `L:A32NX_PARK_BRAKE_LEVER_POS` 1/0 (set directly, sticks); BRAKE PARKING POSITION reads 0 while it's
+  set. `debug hands` chose "set" from that and released it on the way back (put back at once, the aircraft didn't
+  move): it now leaves a brake the profile marks `unread` alone.
+- Open: spoilers arm (only SPOILERS_ARM_TOGGLE, `L:A32NX_SPOILERS_ARMED` follows it but can't be set; `cannot` for
+  now, a toggle against that L:var would do it if the copilot could read L:vars), `A32NX.FCU_VS_SET` (window dashes
+  parked), COM standby (the RMP's), autopilot (not tried parked).
+- A copilot that could read an aircraft's own L:vars (flaps, spoilers, brake, the Fenix's switches) would check what
+  it now only sends: worth a `[reads]` table in profiles and a dynamic definition in simconnect_source.
+
 ## 2026-10-08: Fenix A319 (FenixA319 IAE WF SD), the copilot's hands
 - It got the stock A320neo profile ("A319" in its title). New `fenix_a32x.toml` (match "Fenix"). Only 130 input
   events (audio volumes): its controls are L:vars, named in its package (`grep -a` over fnx-aircraft-320).

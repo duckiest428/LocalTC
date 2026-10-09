@@ -4,6 +4,41 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-09: traffic control (shadow, reinject) at RJTT, Live Traffic with FSLTL
+Run against the sim from scratch harnesses driving the real `TrafficControl` and `SimConnectSource` (25 min watched,
+30-40 aircraft around), then `debug traffic`.
+- The installed-aircraft list never came: `EnumerateSimObjectsAndLiveries` was asked for type 1 (ALL: refused,
+  exception ERROR); AIRCRAFT is 2. Then its pages (RecvId 38) were all dropped: like the input events, 79 entries in
+  80 x 512 bytes. Now 6,110 models, 3,441 FSLTL. FSLTL titles: "FSLTL_A359_JAL-Japan Airlines",
+  "FSLTL_FAIB_B738_ASA-Alaska Airlines", "FSLTL_B738_ANA old", placeholders "-STUB"; the livery field is empty.
+  `fsltl_model` matched by `CODE` (no match after "_") and the raw atc_model ("ATCCOM.AC_MODEL B737.0.tts"):
+  now the type token's family and the airline code as FSLTL writes it (capitals; "Sky_Victor" isn't SKY), stubs out,
+  another airline's colours never.
+- Half the "traffic" is static scenery: "Asobo PassiveAircraft ...", STATE_SLEEP, no flight, made-up ids shared by
+  many ("ASXGSA" x10). Flagged as duplicate callsigns before; now not followed (`Shadow.flight`).
+- Bug: ANA471, taxiing out, stopped in the queue (< 2 kt) when dropped, was put back *parked on the taxiway*. Now
+  anything ever seen moving, or in a TAXI/TAKEOFF/LANDING state, isn't put back parked.
+- Re-spawns under a new id are sometimes renamed (JA336J -> "Japanair 259"): matched by registration too.
+- What `AICreateEnrouteATCAircraft_EX1` allows (docs: `dFlightPlanPosition` = waypoint index + fraction; positions
+  where it would be taxiing, taking off or landing are refused): the old plans (from a point in the air, position
+  0.05) always failed (exception 22). Created where it was only with: a plan filed from a real airport other than the
+  destination, through a waypoint behind it and one where it is, position 2.0, and the aircraft nearer its
+  destination than its departure (filed from Kisarazu 13 nm away it came out at -900 ft as a departure; from Narita,
+  at 6,900 ft). Arrivals 12 nm / 3,500 ft and 14 nm / 4,500 ft were put on the ground at RJTT; 16 nm / 5,000 ft and
+  up worked: `MIN_ARRIVAL_NM` 16, `MIN_ARRIVAL_ABOVE_FT` 5,000. Departures: refused at 3,000-8,000 ft, at 35 nm
+  started from -900 ft: not put back.
+- A created aircraft starts at 0 kt (60 s to 196 kt) and with the model's ATC airline ("Ltu" on FSLTL's JAL A350).
+  `SetDataOnSimObject` on it works: VELOCITY BODY Z (feet per second) gives it its speed at once (221 kt at 3 s), ATC
+  AIRLINE / ATC FLIGHT NUMBER its callsign. New `SetAiVar` command.
+- The sim's 40 nearest airports at Haneda are all heliports and strips ("RJ26P", "GESF1"): the source now adds the 8
+  nearest four-letter ICAO airports to NearbyAirports (diversions get real airports too).
+- In the end: parked drops at RJTT put back as FSLTL's model with their callsigns (JAL114, SKY710, ANA248, SNJ22),
+  seen by ATC as "Japanair 114". An arrival put back 22 nm out at 7,000 ft flew the 34L final at its speed as
+  "Japanair 901" (FSLTL A350) and landed on 34L in one test; in two others it was too high at the end and went around
+  (the sim AI descends late; a waypoint on the final didn't change it).
+- Open: whether Live Traffic drops arrivals 16+ nm out often enough to matter (none in 25 min at RJTT; the drops were
+  parked aircraft, departures just after takeoff, and taxiing ones). Removing a copy that has landed and parked.
+
 ## 2026-10-08: stock 787-10 and FSLabs A321neo, the copilot's hands
 - 787-10: every control passes with the sim's events (as the 787-9 and 747-8i).
 - FSLabs A321-271NX: no input events; its package names only display L:vars (`L:FSLA320_landing_light`,

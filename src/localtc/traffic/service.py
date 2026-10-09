@@ -8,6 +8,7 @@ from localtc.sim_api import (
     AiObjectAssigned,
     ConnectionStatus,
     ModelList,
+    NearbyAirports,
     OwnshipState,
     SimCommand,
     SimLifecycle,
@@ -24,7 +25,7 @@ class TrafficControlService:
     def __init__(self, control: TrafficControl, bus: EventBus, source: SimSource | None) -> None:
         self.control, self.bus, self.source = control, bus, source
         self._inputs = bus.subscribe(OwnshipState, TrafficSnapshot, TrafficIdentity, AiObjectAssigned, ModelList,
-                                     ConnectionStatus, SimLifecycle)
+                                     ConnectionStatus, SimLifecycle, NearbyAirports)
 
     async def _out(self, outputs: list) -> None:
         for output in outputs:

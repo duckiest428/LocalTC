@@ -466,6 +466,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
     fsltl: bool = False
     note: str = ""  # a limitation, said plainly
     entries: tuple[TrafficControlEntry, ...] = ()
+    recent: tuple[str, ...] = ()  # what it did last, newest first: "JAL570 put back, flying to RJTT 34L"
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,

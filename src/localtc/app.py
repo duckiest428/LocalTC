@@ -834,7 +834,7 @@ async def sim_check(cfg: Config, check: str, *, source=None, **kw):
         from localtc.sim_bridge.simconnect_source import SimConnectSource
 
         cfg.live.traffic_identity = check == "traffic"
-        cfg.live.nearest_airport_interval_s = 0.0
+        cfg.live.nearest_airport_interval_s = 10.0 if check == "traffic" else 0.0  # (an arrival's plan is filed from one)
         source = SimConnectSource(cfg.live)
     run = {"aircraft": simcheck.check_aircraft, "hands": simcheck.check_hands, "traffic": simcheck.check_traffic}[check]
     async with simcheck.Probe(source) as probe:

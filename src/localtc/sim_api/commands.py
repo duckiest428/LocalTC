@@ -68,6 +68,18 @@ class NudgeVar(SimCommand, tag="nudge_var"):
     deltas: tuple[float, ...]
 
 
+class SetAiVar(SimCommand, tag="set_ai_var"):
+    """EXPERIMENTAL (traffic control): a variable of an AI aircraft LocalTC created: its speed as it was ("VELOCITY
+    BODY Z", feet per second: the sim starts a created aircraft at 0), its airline and flight number for ATC ("ATC
+    AIRLINE", "ATC FLIGHT NUMBER": ``text``)."""
+
+    object_id: int
+    name: str
+    unit: str = ""
+    value: float = 0.0
+    text: str = ""
+
+
 class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
     """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
     non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
@@ -108,5 +120,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar,
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

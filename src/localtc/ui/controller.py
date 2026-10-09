@@ -497,6 +497,7 @@ class AppController:
         if isinstance(ev, TrafficControlStatus):  # EXPERIMENTAL traffic control, for Quick Settings
             self.traffic_control = {"mode": ev.mode, "shadowed": ev.shadowed, "reinjected": ev.reinjected, "lost": ev.lost,
                                     "failed": ev.failed, "fsltl": ev.fsltl, "note": ev.note,
+                                    "recent": list(ev.recent),
                                     "issues": [f"{e.callsign}: {', '.join(e.issues)}" for e in ev.entries if e.issues][:8]}
             self.publish("traffic_control", self.traffic_control)
             return

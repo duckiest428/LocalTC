@@ -9,6 +9,7 @@ thread reconnects with back-off and reports ``ConnectionStatus`` events.
 import asyncio
 import logging
 import queue
+import re
 import struct
 import threading
 import time
@@ -38,6 +39,7 @@ from localtc.sim_api import (
     SendSimEvent,
     SetInputEvent,
     TurnKnob,
+    SetAiVar,
     NudgeVar,
     SpawnAiAircraft,
     RemoveAiAircraft,
@@ -101,6 +103,7 @@ KNOB_READ_REQUEST = 1000  # + the variable's data definition: a knob being turne
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
 NEARBY_AIRPORTS, NEARBY_NM = 40, 150.0  # the airports around the aircraft reported to ATC, for diversions
+NEARBY_ICAO = 8  # beyond those, the nearest with a four-letter ICAO code
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
 # Client events LocalTC sends to the sim (same ID space as the system events above).
@@ -486,6 +489,8 @@ class SimConnectSource:
                 self._start_nudge(dll, handle, command)
             elif isinstance(command, TurnKnob):
                 self._start_knob(dll, handle, command)
+            elif isinstance(command, SetAiVar):
+                self._set_ai_var(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
                 try:
                     dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
@@ -559,6 +564,25 @@ class SimConnectSource:
             dll.add_to_data_definition(handle, define_id, var, unit, defs.F64)
             self._simvar_definitions[key] = define_id
         return define_id
+
+    def _set_ai_var(self, dll: SimConnectApi, handle: int, command: SetAiVar) -> None:
+        """A variable of an AI aircraft LocalTC created (traffic control): a number, or a string (``text``)."""
+        kind = defs.F64 if not command.text and command.unit else DataType.STRING64 if len(command.text) >= 8             else DataType.STRING8
+        key = f"ai|{command.name}|{command.unit}|{int(kind)}"
+        try:
+            define_id = self._simvar_definitions.get(key)
+            if define_id is None:
+                define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+                dll.add_to_data_definition(handle, define_id, command.name, command.unit or None, kind)
+                self._simvar_definitions[key] = define_id
+            if kind == defs.F64:
+                data = struct.pack("<d", command.value)
+            else:
+                size = 64 if kind == DataType.STRING64 else 8
+                data = command.text.encode("ascii", "replace")[:size - 1].ljust(size, bytes(1))
+            dll.set_data_on_sim_object(handle, define_id, command.object_id, data)
+        except SimConnectError as exc:
+            log.info("Traffic control couldn't set %s on object %d: %s", command.name, command.object_id, exc)
 
     def _start_nudge(self, dll: SimConnectApi, handle: int, command: NudgeVar) -> None:
         """Read the counter; the amounts are added as it comes back (``_on_nudge``)."""
@@ -687,6 +711,10 @@ class SimConnectSource:
         self._nearest_to_fetch = by_distance[0].icao
         # The ones around, for ATC to pick a diversion from in an emergency (their layouts are fetched then).
         near = [a for a in by_distance[:NEARBY_AIRPORTS] if facilities.haversine_nm(lat, lon, a.lat, a.lon) <= NEARBY_NM]
+        # Among the nearest, a city's heliports and strips ("RJ26P") can be all of them (Haneda's 40 nearest): the
+        # nearest few with an ICAO code too, for a diversion and for a flight plan traffic control files from one.
+        near += [a for a in by_distance[NEARBY_AIRPORTS:] if re.fullmatch(r"[A-Z]{4}", a.icao)
+                 and facilities.haversine_nm(lat, lon, a.lat, a.lon) <= NEARBY_NM][:NEARBY_ICAO]
         self._emit(NearbyAirports(t=self._clock.now(), airports=tuple(
             NearbyAirport(icao=a.icao, lat=round(a.lat, 5), lon=round(a.lon, 5), elev_ft=round(a.alt_m * 3.28084))
             for a in near)))

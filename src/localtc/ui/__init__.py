@@ -102,14 +102,47 @@ def _open_window(url: str, *, on_top: bool = False) -> bool:
     except ImportError:
         log.info("pywebview isn't installed: opening LocalTC in the browser")
         return False
+    _own_app_identity()
     try:
-        webview.create_window("LocalTC", url, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=WINDOW_MIN,
-                              background_color="#1b1e22", on_top=on_top)
-        webview.start()
+        window = webview.create_window("LocalTC", url, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=WINDOW_MIN,
+                                       background_color="#1b1e22", on_top=on_top)
+        window.events.shown += lambda: _set_icon(window)
+        webview.start(icon=str(ICON))
         return True
     except Exception as exc:  # no WebView2 runtime, no GUI
         log.warning("No app window (%s): opening LocalTC in the browser", exc)
         return False
+
+
+ICON = Path(__file__).with_name("static") / "localtc.ico"
+APP_ID = "LocalTC.App"
+
+
+def _own_app_identity() -> None:
+    """On Windows the window belongs to pythonw.exe: the taskbar showed Python's name and icon, grouped with any other
+    Python program. Its own app id makes it a window of its own, with its own icon (``_set_icon``) and title."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+    except Exception as exc:  # noqa: BLE001 - cosmetic
+        log.debug("No app id: %s", exc)
+
+
+def _set_icon(window) -> None:
+    """The LocalTC icon on the window and the taskbar (WinForms takes the running exe's: Python's)."""
+    if sys.platform != "win32" or not ICON.exists():
+        return
+    try:
+        from System import Action  # pythonnet, which pywebview's WinForms backend runs on
+        from System.Drawing import Icon
+
+        form = window.native
+        form.Invoke(Action(lambda: setattr(form, "Icon", Icon(str(ICON)))))
+    except Exception as exc:  # noqa: BLE001 - cosmetic
+        log.debug("Couldn't set the window icon: %s", exc)
 
 
 def main() -> int:

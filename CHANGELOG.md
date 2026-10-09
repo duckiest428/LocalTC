@@ -48,6 +48,7 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The app's window shows LocalTC's icon** in its title bar and on the taskbar, as an app of its own, not Python's.
 - **Vectors from far out**: an arrival 30 miles out at 12,000 feet was judged too high from the join point alone and turned away on a downwind, heading north from an airport to its south. The miles before the join count now (a light aircraft still gets no steep descent).
 - **Runways on the taxi in** are crossed with a clearance, as on the way out, and the taxi-in route replaces the one out (the copilot quoted the departure airport's taxiways at the arrival).
 - "Vectors" heard as "factors", and "taxi via" as "taxiviate".

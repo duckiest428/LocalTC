@@ -110,6 +110,20 @@ def test_a_command_heard_clearly_is_done():
     assert sent(heard(pm, 1.0, "gear down", confidence=0.95)) == [SendSimEvent(name="GEAR_DOWN")]
 
 
+def test_the_same_words_heard_twice_are_done_once():
+    """Speech-to-text handing the same call over twice (or the pilot repeating it before the copilot answered)."""
+    pm = started()
+    first = heard(pm, 1.0, "gear down", 0.95)
+    again = heard(pm, 1.8, "gear down", 0.95)
+    assert sent(first) and not sent(again)
+
+
+def test_a_command_cut_off_mid_number_isnt_guessed():
+    pm = started()
+    out = heard(pm, 1.0, "set heading two", 0.9)  # the push-to-talk let go mid-word
+    assert not sent(out)
+
+
 @pytest.mark.parametrize("text", ["did you set the gear down?", "is the gear down?", "should we put the gear down?",
                                   "I'll put the gear down", "gear down, three green"])
 def test_questions_and_reports_never_move_anything(text):
@@ -138,8 +152,20 @@ def test_a_number_against_the_atis_is_asked_about():
 def test_several_commands_in_one_breath_are_each_handled():
     pm = started()
     out = heard(pm, 1.0, "go ahead and put flaps 2 and set your QNH at 1013", confidence=0.9)
-    names = [s.name for s in sent(out)]
-    assert "FLAPS_2" in names and "KOHLSMAN_SET" in names  # the QNH used to be dropped
+    assert [s.name for s in sent(out)] == ["FLAPS_2"]
+    assert said(out) == ["Confirm QNH 1013?"]  # the QNH used to be dropped; a spoken number nothing backs: read back
+    assert [s.name for s in sent(heard(pm, 2.0, "yes"))] == ["KOHLSMAN_SET"]
+
+
+def test_a_spoken_number_atc_gave_is_set_one_it_didnt_is_read_back():
+    engine = FakeEngine()
+    engine.state.assignments.altitude_ft = 6000
+    pm = crew(engine)
+    pm.observe(own(0.5, on_ground=False, alt_agl_ft=3000, alt_indicated_ft=3000))
+    assert sent(heard(pm, 1.0, "altitude six thousand", 0.9))
+    out = heard(pm, 2.0, "set heading two four zero", 0.9)
+    assert said(out) == ["Confirm heading 240?"] and not sent(out)
+    assert sent(heard(pm, 3.0, "heading two four zero"))  # typed: as written
 
 
 # --- confirmations bound to their question -------------------------------------------------------------------------
@@ -250,6 +276,18 @@ def test_nothing_goes_out_while_the_pilot_is_talking():
     assert deck.check(item, 2.0) == "the pilot is on the radio" and not item.cancelled  # held, not dropped
     deck.observe(PttReleased(t=3.0))
     assert deck.check(item, 3.5) is None
+
+
+def test_two_copilots_never_talk_at_once():
+    """The intercom copilot's own request (a step climb) waits while the radio copilot has a readback queued."""
+    deck = FlightDeck()
+    pm = PilotMonitoring(FakeEngine(), profiles=PROFILES, deck=deck, radio_mode=lambda: "full")
+    pm.observe(own(0.5))
+    readback = deck.submit("radio", "readback", "common.climb:Center", 1.0, text="Climb FL370, Virgin six")
+    pm._radio_queue.append(deck.submit("crew", "request", "step:37000", 1.0, text="Center, Virgin six, request FL370"))
+    assert not [o for o in pm.observe(own(2.0)) if isinstance(o, Transcript)]
+    deck.done(readback, 3.0)
+    assert [o.text for o in pm.observe(own(12.0)) if isinstance(o, Transcript)] == ["Center, Virgin six, request FL370"]
 
 
 def test_the_same_words_twice_are_not_said_again():
@@ -407,3 +445,29 @@ def test_a_copilot_failure_never_stops_the_next_event():
     pm.monitor.observe = lambda ev: (_ for _ in ()).throw(RuntimeError("boom"))
     out = pm.observe(own(2.0))  # doesn't raise
     assert events(out, "error") and "boom" in events(out, "error")[0].detail
+
+
+def test_a_readback_goes_before_the_other_copilots_request():
+    deck = FlightDeck()
+    request = deck.submit("crew", "request", "step:37000", 1.0, text="request FL370")
+    readback = deck.submit("radio", "readback", "common.climb:Center", 1.0, text="climb FL350")
+    assert deck.check(request, 1.5) == "a more urgent call first" and not request.cancelled
+    assert deck.check(readback, 1.5) is None
+    deck.done(readback, 2.0)
+    assert deck.check(request, 2.5) is None
+
+
+def test_every_utterance_is_kept_with_who_whom_and_the_moment():
+    deck = FlightDeck()
+    pm = PilotMonitoring(FakeEngine(), profiles=PROFILES, deck=deck)
+    pm.observe(own(0.5, alt_indicated_ft=5000))
+    pm.observe(IntercomHeard(t=1.0, text="gear down", confidence=0.91, audio_ref="audio/0036.wav"))
+    pm.observe(own(1.5, alt_indicated_ft=5000, gear_down=True))  # "Gear down." once the sim shows it
+    pm.observe(Transcript(t=2.0, text="Tower, Virgin 6, ten mile final", radio=1, confidence=0.8, source="voice"))
+    pm.observe(AtcTransmission(t=3.0, station="Tower", frequency_mhz=118.5, text="Virgin 6, continue"))
+    kept = list(deck.memory.utterances)
+    mine = next(u for u in kept if u.recipient == "intercom" and u.source == "pilot")
+    assert (mine.text, mine.confidence, mine.audio_ref, mine.act) == ("gear down", 0.91, "audio/0036.wav", "command")
+    assert dict(mine.snapshot)["altitude"] == 5000 and mine.id
+    assert [(u.source, u.recipient) for u in kept if u.recipient == "com1"] == [("pilot", "com1"), ("atc", "com1")]
+    assert any(u.source == "copilot" and u.recipient == "intercom" for u in kept)  # its answer too

@@ -65,7 +65,8 @@ CONFIRM_S = 10.0  # a question waits this long for its "yes"
 OFFER_S = 15.0  # "send it?" for a radio call said on the intercom
 OWN_HANDS_FAILED = 2  # the copilot's own switches not taking this many times, none ever taking: it can't reach them
 CONTROL_FAILED = 2  # one control not taking this many times, its reading never moving: left to the pilot
-PAUSE_SUMMARY_S = 120.0  # back from a pause this long: what's going on, in a sentence or two
+PAUSE_SUMMARY_S = 120.0
+REPEAT_HEARD_S = 3.0  # the same words on the intercom again this soon: one utterance, not two  # back from a pause this long: what's going on, in a sentence or two
 QNH_TOLERANCE_HPA = 1.5  # a QNH this far from the ATIS's is asked about
 STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure", "clearance", "delivery", "unicom",
                  "radio", "traffic")
@@ -140,6 +141,7 @@ class PilotMonitoring:
         self._own_failed = self._own_took = 0
         self._no_hands_said = False
         self._heard_n = 0
+        self._last_heard: tuple[float, str] | None = None
         self.utterances: deque[speech_acts.Reading | Any] = deque(maxlen=20)
         self._last_line: CrewSpeech | None = None  # for "say again"
         self._radio_queue: list[Any] = []  # the copilot's own radio calls (crew.monitor's), waiting for a free moment
@@ -281,7 +283,7 @@ class PilotMonitoring:
                 waiting.append(item)
                 continue
             if self.deck.check(item, t) is not None:
-                if not item.cancelled:  # held (the pilot on the radio): try again
+                if not item.cancelled:  # held (the pilot on the radio, a more urgent call first): try again
                     waiting.append(item)
                 continue
             self.deck.done(item, t)
@@ -308,12 +310,20 @@ class PilotMonitoring:
         t, text = ev.t, ev.text
         if not text.strip():
             return []
+        last = self._last_heard
+        if last is not None and last[1] == text.strip().lower() and t - last[0] <= REPEAT_HEARD_S:
+            self.deck.note("duplicate", t, f'"{text}" again: done once')
+            return []  # the same words handed over twice: once is enough
+        self._last_heard = (t, text.strip().lower())
         self._heard_n += 1
-        uid = f"u{self.deck.generation}.{self._heard_n}"
         reading = speech_acts.read(text, ev.confidence, radio_call=self._radio_call(text))
+        utterance = self.deck.said(t, "pilot", "intercom", text, confidence=ev.confidence, audio_ref=ev.audio_ref,
+                                   act=reading.act, extra=(("input", ev.source),))
+        uid = utterance.id
         self.utterances.append(reading)
         self.deck.note("heard", t, f'"{text}" ({reading.certainty}' + (f", {ev.confidence:.2f}" if ev.confidence is not None
-                                                                         else ", typed") + ")",
+                                                                         else ", typed")
+                       + (f", {ev.audio_ref}" if ev.audio_ref else "") + ")",
                        utterance=uid, act=reading.act, action=", ".join(str(c) for c in reading.commands))
         mode = self.model.mode if self.model is not None else "off"
         act = reading.act
@@ -530,6 +540,11 @@ class PilotMonitoring:
             question = conflict
         elif sure == "low":
             question = f"Did you say {_said(cmd)}?"
+        elif reading is not None and reading.spoken and cmd.action in speech_acts.NUMERIC and cmd.action != "com_standby" \
+                and not self._corroborated(cmd):
+            # A number heard, not typed, that nothing ATC gave backs up: read back before it's set ("Confirm heading
+            # 240?"). One that matches the clearance, the code, the handoff or the ATIS is set straight away.
+            question = f"Confirm {_said(cmd)}?"
         elif sure == "medium" and risk != "low":
             question = f"{_said(cmd).capitalize()}?"
         else:
@@ -562,6 +577,33 @@ class PilotMonitoring:
             if given and int(v) % 360 != int(given) % 360:
                 return f"ATC gave us heading {int(given):03d}. Heading {int(v):03d}?"
         return ""
+
+    def _corroborated(self, cmd: Command) -> bool:
+        """The number in ``cmd`` is the one ATC gave (the cleared altitude, the heading, the code, a frequency it
+        sent the flight to, the ATIS's QNH)."""
+        if self.engine is None:
+            return False
+        st, a, v = self.engine.state, self.engine.state.assignments, cmd.value
+        try:
+            if cmd.action == "altitude":
+                return a.altitude_ft is not None and int(v) == int(a.altitude_ft)
+            if cmd.action == "heading":
+                return getattr(a, "heading", None) is not None and int(v) % 360 == int(a.heading) % 360
+            if cmd.action == "speed":
+                return getattr(a, "speed_kt", None) is not None and int(v) == int(a.speed_kt)
+            if cmd.action == "squawk":
+                return v == a.squawk
+            if cmd.action == "com_active":
+                known = [f.mhz for f in getattr(self.engine, "facilities", [])]
+                if st.comms.expected is not None:
+                    known.append(st.comms.expected.mhz)
+                return any(abs(float(v) - m) < 0.006 for m in known)
+            if cmd.action == "altimeter" and cmd.target == "hpa":
+                qnh = self._atis_qnh()
+                return qnh is not None and abs(int(v) - qnh) <= QNH_TOLERANCE_HPA
+        except (TypeError, ValueError):
+            return False
+        return False
 
     def _atis_qnh(self) -> int | None:
         """The QNH ATC gave or the ATIS has, in hectopascals: the destination's once on the way down, else the origin's."""
@@ -920,6 +962,7 @@ class PilotMonitoring:
 
     def _line(self, line: CrewSpeech) -> CrewSpeech:
         self._last_line = line
+        self.deck.said(line.t, "copilot", "intercom", line.text)
         return line
 
     # --- what the model remembers of the flight deck ----------------------------------------------------------------

@@ -27,7 +27,7 @@ from localtc.atc_core.airport import gates as stands
 from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
 from localtc.atc_core.phraseology import speech
-from localtc.flightdeck import FlightDeck, Item
+from localtc.flightdeck import HELD, FlightDeck, Item
 from localtc.sim_api import (
     AircraftSystems,
     AtcTransmission,
@@ -473,7 +473,7 @@ class Copilot:
     def _fire(self, item: _Queued, t: float) -> list[Action]:
         st = self.engine.state
         if item.item is not None and item.kind != "say" and (why := self.deck.check(item.item, t)) is not None:
-            if why == "the pilot is on the radio":
+            if why in HELD:
                 item.due = t + 1.0
                 self._queue.append(item)
                 self._queue.sort()
@@ -513,7 +513,7 @@ class Copilot:
         if not text:
             return []
         if item.item is not None and item.kind == "say" and (why := self.deck.check(item.item, t)) is not None:
-            if why == "the pilot is on the radio":
+            if why in HELD:
                 item.due = t + 1.0
                 self._queue.append(item)
                 self._queue.sort()

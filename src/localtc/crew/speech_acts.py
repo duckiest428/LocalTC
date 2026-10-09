@@ -69,6 +69,7 @@ class Reading:
     commands: tuple[Command, ...] = ()
     certainty: str = "high"  # high, medium, low
     why: str = ""  # what it was read from, for the record
+    spoken: bool = False  # from speech-to-text (a number in it may be misheard); typed: as written
 
 
 def certainty(confidence: float | None) -> str:
@@ -116,46 +117,47 @@ def looping(text: str) -> bool:
 def read(text: str, confidence: float | None = None, *, radio_call: bool = False) -> Reading:
     """What ``text`` is (``Reading``). ``radio_call``: it sounds like a radio call (the PM knows the stations)."""
     sure = certainty(confidence)
+    spoken = confidence is not None
     lowered = " ".join(text.lower().replace("’", "'").split())
     bare = lowered.strip(" .!?,")
     if not bare or NOISE.match(bare) or looping(lowered):
-        return Reading("unclear", certainty="low", why="no words, or the same ones over and over")
+        return _spoken(Reading("unclear", certainty="low", why="no words, or the same ones over and over"), spoken)
     if radio_call:
-        return Reading("radio", certainty=sure, why="a station or the callsign first")
+        return _spoken(Reading("radio", certainty=sure, why="a station or the callsign first"), spoken)
     commands = tuple(parse(text))
     if (corrected := CORRECTION.match(bare)) and len(bare) > corrected.end():
         commands = tuple(parse(bare[corrected.end():])) or commands  # "no, flaps two": what's said after the "no"
     actions = [c for c in commands if c.action not in ("yes", "no")]
     if YES.match(bare):
-        return Reading("answer", (Command("yes"),), sure, "yes")
+        return _spoken(Reading("answer", (Command("yes"),), sure, "yes"), spoken)
     if NO.match(bare) and not actions:
-        return Reading("answer", (Command("no"),), sure, "no")
+        return _spoken(Reading("answer", (Command("no"),), sure, "no"), spoken)
     asked = "?" in text or QUESTION.match(bare)
     if asked and not actions and not POLITE.search(lowered):
         return Reading("question", (), sure, "a question")  # "which days do you not like?" isn't a "don't"
     if NEGATION.search(lowered) and not POLITE.search(lowered):
         # "No, no, no, don't go around": whatever's named is what's not wanted.
-        return Reading("negation", tuple(actions), sure, "don't / never mind")
+        return _spoken(Reading("negation", tuple(actions), sure, "don't / never mind"), spoken)
     if ACK_ONLY.match(bare):
-        return Reading("acknowledgement", certainty=sure)
+        return _spoken(Reading("acknowledgement", certainty=sure), spoken)
     if any(c.action == "check" for c in actions):
-        return Reading("command", (Command("check"),), sure, "an intercom check")
+        return _spoken(Reading("command", (Command("check"),), sure, "an intercom check"), spoken)
     if any(c.action == "say_again" for c in actions):
-        return Reading("command", (Command("say_again"),), sure, "say again")
+        return _spoken(Reading("command", (Command("say_again"),), sure, "say again"), spoken)
     control = [c for c in actions if c.action in CONTROL]
     if control and not asked:
-        return Reading("command", tuple(control), sure, "a request to the copilot itself")
+        return _spoken(Reading("command", tuple(control), sure, "a request to the copilot itself"), spoken)
     if asked and not POLITE.search(lowered):
-        return Reading("question", tuple(actions), sure, "a question")
+        return _spoken(Reading("question", tuple(actions), sure, "a question"), spoken)
     if CORRECTION.match(bare) and actions:
-        return Reading("correction", tuple(actions), sure, "no / I said / not that, this")
+        return _spoken(Reading("correction", tuple(actions), sure, "no / I said / not that, this"), spoken)
     if actions and _reported(lowered, actions):
-        return Reading("report", tuple(actions), sure, "the captain's own, or how things are")
+        return _spoken(Reading("report", tuple(actions), sure, "the captain's own, or how things are"), spoken)
     if actions:
-        return Reading("command", tuple(actions), sure, "asked for")
+        return _spoken(Reading("command", tuple(actions), sure, "asked for"), spoken)
     if REPORT_START.match(bare) or REPORT_END.search(bare):
-        return Reading("report", certainty=sure, why="a statement")
-    return Reading("chat", certainty=sure)
+        return _spoken(Reading("report", certainty=sure, why="a statement"), spoken)
+    return _spoken(Reading("chat", certainty=sure), spoken)
 
 
 def _reported(lowered: str, actions: list[Command]) -> bool:
@@ -168,3 +170,9 @@ def _reported(lowered: str, actions: list[Command]) -> bool:
         return True
     last = re.findall(r"[a-z']+", lowered)[-1:] or [""]
     return last[0] in ACK_WORDS or bool(re.search(r"\bthree green\b|\bis (?:set|down|up|on|off|armed)\b", lowered))
+
+
+def _spoken(reading: Reading, spoken: bool) -> Reading:
+    from dataclasses import replace
+
+    return replace(reading, spoken=spoken)

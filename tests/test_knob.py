@@ -91,3 +91,15 @@ def test_what_an_aircraft_cant_do_is_the_pilots_from_the_start():
     pm.observe(AircraftIdentity(t=0.0, title="FenixA320 CFM", atc_model="A320"))
     out = heard(pm, 1.0, "heading two four zero", 0.95)
     assert not sent(out) and any("that one's yours" in w for w in said(out))
+
+
+def test_an_fcu_altitude_at_index_3_is_the_one_the_copilot_reads():
+    from localtc.crew.pm import PilotMonitoring
+    from localtc.sim_api import AircraftIdentity, AircraftSystems
+
+    from tests.test_copilot_deck import FakeEngine
+
+    pm = PilotMonitoring(FakeEngine())
+    pm.observe(AircraftIdentity(t=0.0, title="Airbus A330-900neo Delta", atc_model="A330"))
+    pm.observe(AircraftSystems(t=1.0, ap_altitude_sel=5000, ap_altitude_sel_3=12000))
+    assert pm.cockpit.profile.name == "Headwind A330-900" and pm.cockpit.systems.ap_altitude_sel == 12000

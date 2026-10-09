@@ -33,6 +33,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from msgspec.structs import replace
+
 from localtc.atc_core import region as regions
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
@@ -198,6 +200,8 @@ class PilotMonitoring:
             self.cockpit.watch()
             self._read_clearance()
         elif isinstance(ev, AircraftSystems):
+            if self.cockpit.profile.altitude_index == 3:  # the FCU's altitude, as the copilot reads it everywhere
+                ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
             self._note_systems(ev)
             self.cockpit.systems = ev
             self.cockpit.watch()

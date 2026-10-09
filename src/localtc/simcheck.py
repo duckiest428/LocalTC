@@ -26,6 +26,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from msgspec.structs import replace
+
 from localtc.crew import actions, profiles
 from localtc.crew.commands import Command
 from localtc.sim_api import (
@@ -156,6 +158,8 @@ class Probe:
             if isinstance(ev, OwnshipState):
                 self.cockpit.own = ev
             elif isinstance(ev, AircraftSystems):
+                if self.cockpit.profile.altitude_index == 3:  # as the copilot reads it (crew/pm.py)
+                    ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
                 self.cockpit.systems = ev
             elif isinstance(ev, AircraftIdentity):
                 self.identity = ev
@@ -329,6 +333,8 @@ async def check_hands(probe: Probe, *, autopilot: bool = False, only: tuple[str,
         if cmd.action == "check":
             report.add(Step(name, "info", skip))
             continue
+        if not skip and cmd.action in probe.cockpit.profile.cannot:
+            skip = "the profile leaves it to the pilot (cannot)"
         if skip:
             report.add(Step(name, "skip", skip))
             continue

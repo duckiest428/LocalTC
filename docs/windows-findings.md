@@ -4,6 +4,15 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-08: Headwind A330-900neo, the copilot's hands
+- 24 input events. Lights, squawk, COM standby and active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` /
+  `ALT_SET` set the FCU (by eye: 250 / 147 / 12000); the altitude shows in AUTOPILOT ALTITUDE LOCK VAR:3 only. New
+  `AircraftSystems.ap_altitude_sel_3` (AIRCRAFT_MORE) and profile `altitude_index = 3`: the copilot and the checks
+  read it as `ap_altitude_sel`. Flaps and parking brake as the FBW A380 (`L:A32NX_*`), spoilers toggle only.
+- `debug hands` sent PARKING_BRAKE_SET from the sim's "off" here too; it didn't reach the aircraft (the lever stayed
+  1). `debug hands` now also skips what a profile `cannot` do.
+- Open: V/S (dashes parked), spoilers arm, autopilot.
+
 ## 2026-10-08: FlyByWire A380X, the copilot's hands
 - Lights, squawk, COM active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` / `ALT_SET` (FlyByWire's custom
   events) set the FCU (by eye) and the sim's AUTOPILOT vars follow; AP_SPD_VAR_SET didn't. New `fbw_a380.toml`.

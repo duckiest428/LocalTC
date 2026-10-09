@@ -84,6 +84,8 @@ class Profile:
     cannot: tuple[str, ...] = ()
     # Readings that don't follow this aircraft's own switch ("light_landing"): what's sent there isn't checked.
     unread: tuple[str, ...] = ()
+    # The FCU's altitude is AUTOPILOT ALTITUDE LOCK VAR at this index (3 in the A32NX-based aircraft), not 0.
+    altitude_index: int = 0
 
     def autobrake_name(self, position: int) -> str:
         """The switch position as said ("medium"), or "" when this aircraft's positions aren't known."""
@@ -147,6 +149,7 @@ def parse(data: dict) -> Profile:
         short_runway_ft=int(a.get("short_runway_ft", 7000)), hands=bool(a.get("hands", True)),
         reads_flaps=bool(a.get("reads_flaps", True)), reads_autopilot=bool(a.get("reads_autopilot", True)),
         cannot=tuple(str(x) for x in a.get("cannot", ())), unread=tuple(str(x) for x in a.get("unread", ())),
+        altitude_index=int(a.get("altitude_index", 0)),
     )
 
 

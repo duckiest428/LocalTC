@@ -169,6 +169,25 @@ No. Standard phraseology works best, but the language model understands calls in
 
 ATC works with any aircraft. The copilot's hands (flaps, gear, lights) depend on the aircraft. Where it can't
 move an aircraft's switches, it calls them out for you instead.
+
+**Copilot's hands, checked in MSFS 2024** (each control moved by the copilot and seen in the cockpit, parked at a
+gate; engaging the autopilot and V/S can only be checked in flight and haven't been yet):
+
+| Aircraft | Lights | Flaps | Speed / heading / altitude | Spoilers arm | Squawk, COM | Parking brake |
+|---|---|---|---|---|---|---|
+| Asobo A320neo (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ❌ yours | ✅ | ✅ |
+| Asobo A350 (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ❌ yours | ✅ | ✅ |
+| Fenix A319 / A320 / A321 | ✅ | ✅ | speed, altitude ✅; heading yours | ❌ yours | squawk ✅, COM standby yours | ✅ |
+| FlyByWire A380X | ✅ | ✅ | ✅ | ❌ yours | squawk ✅, COM standby yours | ✅ |
+| Headwind A330-900 | ✅ | ✅ | ✅ | ❌ yours | ✅ | ✅ |
+| Boeing 737 MAX 8 (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Boeing 747-8i (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Boeing 787-9 (HorizonSim) / 787-10 (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| FSLabs A319 / A320 / A321 | calls only: its switches can't be moved from outside the aircraft | | | | | |
+
+"Yours": the copilot tells you it can't reach that one on this aircraft, rather than pretending. Another aircraft gets
+the sim's standard controls, which most stock aircraft follow; if one doesn't, the copilot notices after two tries and
+leaves it to you. A profile for it can be added (`src/localtc/crew/profiles/`, [docs/windows-session.md](docs/windows-session.md)).
 </details>
 
 <details>

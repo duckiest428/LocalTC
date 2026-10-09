@@ -96,6 +96,7 @@ class AircraftSystems(Event, tag="aircraft_systems"):
     athr_armed: bool = False
     ap_heading_sel: float = 0.0  # the heading bug, degrees
     ap_altitude_sel: float = 0.0  # feet
+    ap_altitude_sel_3: float = 0.0  # the same, index 3: the FCU of the A32NX-based aircraft (Headwind A330)
     ap_speed_sel: float = 0.0  # knots
     ap_vs_sel: float = 0.0  # feet per minute
     com1_standby_mhz: float = 0.0
@@ -494,6 +495,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
     fsltl: bool = False
     note: str = ""  # a limitation, said plainly
     entries: tuple[TrafficControlEntry, ...] = ()
+    recent: tuple[str, ...] = ()  # what it did last, newest first: "JAL570 put back, flying to RJTT 34L"
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,

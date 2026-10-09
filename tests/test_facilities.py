@@ -268,6 +268,9 @@ def test_input_events_list_is_read_by_its_layout():
     msg = parse_message(raw)
     assert isinstance(msg, InputEventList) and msg.request_id == 8
     assert msg.events == tuple(events)
+    # MSFS 2024 12.2 sends one descriptor's worth more than it counts (539 events in 41,068 bytes)
+    padded = struct.pack("<IIIIIII", size + 76, 6, 34, 8, len(events), 0, 1) + payload + bytes(76)
+    assert parse_message(padded).events == tuple(events)
 
 
 def test_a_profile_can_move_a_control_by_its_input_event():
@@ -279,3 +282,16 @@ def test_a_profile_can_move_a_control_by_its_input_event():
     p = Profile(name="x", actions={"light_landing": Write(input="LIGHTING_LANDING_1", on=2, off=0)})
     got = plan(Command("light", "on", "landing"), Cockpit(profile=p))
     assert got.writes == (SetInputEvent(name="LIGHTING_LANDING_1", value=2.0),)
+
+
+def test_the_installed_aircraft_list_is_read_with_its_extra_entry():
+    """MSFS 2024 12.2: dwArraySize 79 in 80 entries of 512 bytes (the title, the livery)."""
+    import struct
+
+    from localtc.sim_bridge.protocol import ModelLivery
+
+    models = [("FSLTL_FAIB_A20N_Archangelsk_Air", ""), ("FSLTL_FAIB_B738_ASA-Alaska Airlines", "")]
+    payload = b"".join(t.encode().ljust(256, b"\0") + v.encode().ljust(256, b"\0") for t, v in models) + bytes(512)
+    raw = struct.pack("<IIIIIII", 28 + len(payload), 6, 38, 11, len(models), 0, 1) + payload
+    msg = parse_message(raw)
+    assert isinstance(msg, ModelLivery) and msg.models == tuple(models)

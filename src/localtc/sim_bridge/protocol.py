@@ -378,10 +378,12 @@ def _parse_models(buf: bytes) -> ModelLivery | None:
     m = _read(RecvFacilitiesList, buf)
     end = _message_end(m.dwSize, buf)
     count = m.dwArraySize
-    if count == 0 or (end - FACILITIES_LIST_OFFSET) % count:
+    if count == 0:
         return None
-    element = (end - FACILITIES_LIST_OFFSET) // count
-    if element not in (512, 520, 1024):
+    # MSFS 2024 (12.2) sends one entry's worth more than dwArraySize counts (79 in 80 x 512 bytes), as with input events
+    body = end - FACILITIES_LIST_OFFSET
+    element = next((e for e in (512, 520, 1024) if count * e <= body < (count + 2) * e), 0)
+    if not element:
         return None
     half = element // 2
     models = []
@@ -400,7 +402,8 @@ def _parse_input_events(buf: bytes) -> InputEventList | None:
     m = _read(RecvFacilitiesList, buf)
     end = _message_end(m.dwSize, buf)
     count = m.dwArraySize
-    if count == 0 or end - FACILITIES_LIST_OFFSET != count * INPUT_EVENT_SIZE:
+    # MSFS 2024 (12.2) sends one descriptor's worth of bytes more than dwArraySize counts: at least, not exactly.
+    if count == 0 or not count * INPUT_EVENT_SIZE <= end - FACILITIES_LIST_OFFSET < (count + 2) * INPUT_EVENT_SIZE:
         return None
     events = []
     for i in range(count):

@@ -47,6 +47,39 @@ class SetInputEvent(SimCommand, tag="set_input_event"):
     value: float = 0.0
 
 
+class TurnKnob(SimCommand, tag="turn_knob"):
+    """Turn a knob that moves a step at a time (an MSFS 2024 FCU knob's input event, +1/-1 whatever it's set to)
+    until ``var`` reads ``target``: read, a few steps, read again (sim_bridge/knob.py). ``step``: one step's change of
+    the reading; ``wrap`` 360 for a heading."""
+
+    name: str
+    var: str
+    unit: str
+    target: float
+    step: float = 1.0
+    wrap: float = 0.0
+
+
+class NudgeVar(SimCommand, tag="nudge_var"):
+    """Add to a counter variable, one amount after another: an add-on's encoder that turns by how much its L:var
+    changes (the Fenix's FCU knobs, L:E_FCU_SPEED: +50 is 50 clicks). The variable is read first."""
+
+    name: str
+    deltas: tuple[float, ...]
+
+
+class SetAiVar(SimCommand, tag="set_ai_var"):
+    """EXPERIMENTAL (traffic control): a variable of an AI aircraft LocalTC created: its speed as it was ("VELOCITY
+    BODY Z", feet per second: the sim starts a created aircraft at 0), its airline and flight number for ATC ("ATC
+    AIRLINE", "ATC FLIGHT NUMBER": ``text``)."""
+
+    object_id: int
+    name: str
+    unit: str = ""
+    value: float = 0.0
+    text: str = ""
+
+
 class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
     """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
     non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
@@ -87,5 +120,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent,
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

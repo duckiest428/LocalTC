@@ -1,0 +1,59 @@
+# The FlyByWire A380X (MSFS 2024). Its lights take the sim's events; its FCU takes FlyByWire's own (A32NX.FCU_*_SET,
+# which the sim's autopilot variables follow); its flap lever takes FLAPS_1 ... FLAPS_DOWN, but the sim's flap handle
+# index doesn't follow it (L:A32NX_FLAPS_HANDLE_INDEX does); its parking brake is L:A32NX_PARK_BRAKE_LEVER_POS.
+# Tried against the sim 2026-10-08. VFE from the A380's limitations.
+[aircraft]
+name = "FlyByWire A380"
+match = ["A380X", "FlyByWire A380"]
+reads_flaps = false
+flaps = "detents"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 263, 220, 196, 182]
+gear_extend_kt = 250
+gear_retract_kt = 250
+gear_extended_kt = 250
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+vmo_kt = 340
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 43000
+# Spoilers arm only by a toggle (SPOILERS_ARM_TOGGLE) and nothing the sim reads follows it; COM standby is the RMP's.
+cannot = ["spoilers", "com_standby"]
+unread = ["parking_brake"]
+
+[actions.heading]
+event = "A32NX.FCU_HDG_SET"
+
+[actions.speed]
+event = "A32NX.FCU_SPD_SET"
+
+[actions.altitude]
+event = "A32NX.FCU_ALT_SET"
+
+[actions.vs]
+event = "A32NX.FCU_VS_SET"
+
+[actions.flaps_0]
+event = "FLAPS_UP"
+
+[actions.flaps_1]
+event = "FLAPS_1"
+
+[actions.flaps_2]
+event = "FLAPS_2"
+
+[actions.flaps_3]
+event = "FLAPS_3"
+
+[actions.flaps_4]
+event = "FLAPS_DOWN"
+
+[actions.parking_brake_on]
+lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"
+
+[actions.parking_brake_off]
+lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"

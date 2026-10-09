@@ -33,6 +33,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from msgspec.structs import replace
+
 from localtc.atc_core import region as regions
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
@@ -208,6 +210,8 @@ class PilotMonitoring:
             self.cockpit.watch()
             self._read_clearance()
         elif isinstance(ev, AircraftSystems):
+            if self.cockpit.profile.altitude_index == 3:  # the FCU's altitude, as the copilot reads it everywhere
+                ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
             self._note_systems(ev)
             self.cockpit.systems = ev
             self.cockpit.watch()
@@ -218,6 +222,7 @@ class PilotMonitoring:
             if profile is not self.cockpit.profile:
                 log.info("Copilot: %s profile for %s", profile.name, ev.title or ev.atc_model)
                 self.cockpit.profile = profile
+                self.cockpit.dead = set(profile.cannot)
             self._aircraft = monitors._aircraft_name(ev.title or ev.atc_model)
             self._persona()
         elif isinstance(ev, AtcTransmission):
@@ -258,7 +263,7 @@ class PilotMonitoring:
                                           detail=f"{call.key}: " + "; ".join(_describe(w) for w in p.writes))]
             self.deck.memory.did(t, f"set {p.value} ({p.action})" if p.action != "light" else f"{p.value}")
             if cmd.action != "altimeter":  # an airliner's own STD and QNH buttons often leave the sim's setting alone
-                self._waiting.append(_Waiting(t + CHECK_S, p, quiet=True))
+                self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p, quiet=True))
         kind = "alert" if call.priority >= SAFETY else "callout"
         text, spoken = call.text, call.spoken
         if skipped and text.endswith(" set."):
@@ -861,7 +866,7 @@ class PilotMonitoring:
             out.append(self._say(t, p.done, "done", p.done_spoken))
         else:
             self._waiting = [w for w in self._waiting if w.plan.action != p.action or w.plan.action == "light"]
-            self._waiting.append(_Waiting(t + CHECK_S, p))
+            self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p))
         return out
 
     # --- the sim ---------------------------------------------------------------------------------------------------
@@ -891,7 +896,7 @@ class PilotMonitoring:
     def _didnt_take(self, t: float, w: _Waiting) -> list[Any]:
         p = w.plan
         out: list[Any] = [CrewAction(t=t, action=p.action, value=p.value, outcome="failed",
-                                     detail=f"the sim didn't show it within {CHECK_S:.0f} s")]
+                                     detail=f"the sim didn't show it within {p.check_s or CHECK_S:.0f} s")]
         self._failures[p.action] = self._failures.get(p.action, 0) + 1
         what = p.done.rstrip(".").replace(" set", "")
         if w.quiet:

@@ -26,6 +26,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from msgspec.structs import replace
+
 from localtc.crew import actions, profiles
 from localtc.crew.commands import Command
 from localtc.sim_api import (
@@ -34,6 +36,7 @@ from localtc.sim_api import (
     AircraftSystems,
     AiObjectAssigned,
     AirportData,
+    NearbyAirports,
     EnumerateModels,
     ModelList,
     OwnshipState,
@@ -41,6 +44,9 @@ from localtc.sim_api import (
     RequestAirportData,
     SendSimEvent,
     SetInputEvent,
+    SetAiVar,
+    TurnKnob,
+    NudgeVar,
     SetSimVar,
     SpawnAiAircraft,
     TrafficIdentity,
@@ -110,6 +116,10 @@ def describe(cmd: Any) -> str:
         return f"event {cmd.name} {cmd.value}" + (f" #{cmd.index}" if cmd.index else "")
     if isinstance(cmd, SetInputEvent):
         return f"input {cmd.name} = {cmd.value:g}"
+    if isinstance(cmd, NudgeVar):
+        return f"encoder {cmd.name} by " + " then ".join(f"{d:+g}" for d in cmd.deltas)
+    if isinstance(cmd, TurnKnob):
+        return f"knob {cmd.name} to {cmd.target:g}"
     if isinstance(cmd, SetSimVar):
         return f"var {cmd.name} = {cmd.value:g}"
     return f"{type(cmd).__name__} {getattr(cmd, 'hz', '')}".strip()
@@ -129,6 +139,7 @@ class Probe:
         self.assigned: dict[int, int] = {}  # request id -> object id
         self.models: tuple[tuple[str, str], ...] | None = None
         self.airports: dict[str, Any] = {}
+        self.nearby: list[Any] = []  # the sim's airports around (NearbyAirports)
         self.session: Any = None
         self._task: asyncio.Task | None = None
         self._profiles = profiles.load_all(None)
@@ -150,6 +161,8 @@ class Probe:
             if isinstance(ev, OwnshipState):
                 self.cockpit.own = ev
             elif isinstance(ev, AircraftSystems):
+                if self.cockpit.profile.altitude_index == 3:  # as the copilot reads it (crew/pm.py)
+                    ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
                 self.cockpit.systems = ev
             elif isinstance(ev, AircraftIdentity):
                 self.identity = ev
@@ -167,6 +180,8 @@ class Probe:
                 self.models = ev.models
             elif isinstance(ev, AirportData):
                 self.airports[ev.airport.icao.upper()] = ev.airport
+            elif isinstance(ev, NearbyAirports):
+                self.nearby = list(ev.airports)
 
     async def until(self, ready: Callable[[], Any], timeout: float) -> bool:
         """Wait for ``ready()`` to be true, up to ``timeout`` seconds."""
@@ -201,7 +216,7 @@ class Probe:
         if plan.check(self.cockpit) is None and self.cockpit.systems is not None:
             await asyncio.sleep(self.readback_s / 2)  # nothing to read it back by: it goes as sent
             return ("sent" if plan.check(self.cockpit) is None else "pass" if plan.check(self.cockpit) else "fail"), sent, ""
-        ok = await self.until(lambda: plan.check(self.cockpit) is True, self.readback_s)
+        ok = await self.until(lambda: plan.check(self.cockpit) is True, max(self.readback_s, plan.check_s))
         return ("pass" if ok else "fail"), sent, "" if ok else "the sim didn't show it"
 
 
@@ -280,7 +295,9 @@ def hands_plan(c: actions.Cockpit, *, autopilot: bool = False) -> list[tuple[str
     engines_off = sys_ is not None and sys_.engines_running == 0
     brake = bool(own and own.parking_brake)
     out.append((f"parking brake {'release' if brake else 'set'}", Command("parking_brake", "off" if brake else "on"),
-                Command("parking_brake", "on" if brake else "off"), "" if engines_off else "the engines are running"))
+                Command("parking_brake", "on" if brake else "off"),
+                "the engines are running" if not engines_off else
+                "the sim doesn't show this aircraft's brake: not touched" if "parking_brake" in c.profile.unread else ""))
     ap = bool(sys_ and sys_.ap_master)
     out.append((f"autopilot {'off' if ap else 'on'}", Command("autopilot", "off" if ap else "on"),
                 Command("autopilot", "on" if ap else "off"), "" if autopilot else "only with --autopilot"))
@@ -321,6 +338,8 @@ async def check_hands(probe: Probe, *, autopilot: bool = False, only: tuple[str,
         if cmd.action == "check":
             report.add(Step(name, "info", skip))
             continue
+        if not skip and cmd.action in probe.cockpit.profile.cannot:
+            skip = "the profile leaves it to the pilot (cannot)"
         if skip:
             report.add(Step(name, "skip", skip))
             continue
@@ -396,9 +415,10 @@ async def check_traffic(probe: Probe, *, spawn: bool = True, title: str = "", en
 
 async def _enroute(probe: Probe, report: Report, model: str, where: tuple[str, str], watch_s: float,
                    plan_dir: Path | None) -> None:
-    """One aircraft 12 nm out from ``where`` (ICAO, runway), on a flight plan to it: does the sim's AI fly it, and
-    to that runway?"""
-    from localtc.traffic.control import Shadow, flight_plan
+    """One aircraft out on the final of ``where`` (ICAO, runway) as traffic control puts an arrival back (20 nm out,
+    6,000 ft above the field, filed from an airport farther away, created at waypoint 2 at its speed): does the sim's
+    AI fly it, and to that runway?"""
+    from localtc.traffic.control import MIN_ARRIVAL_ABOVE_FT, PLAN_POSITION, Shadow, TrafficControl, flight_plan
 
     icao, runway = where[0].upper(), where[1].upper()
     await probe.source.send(RequestAirportData(icao=icao))
@@ -414,19 +434,29 @@ async def _enroute(probe: Probe, report: Report, model: str, where: tuple[str, s
     rwy, primary = found
     inbound = rwy.heading_true if primary else (rwy.heading_true + 180) % 360
     thr_lat, thr_lon = offset(rwy.lat, rwy.lon, (inbound + 180) % 360, rwy.length_m / 2)  # the landing threshold
-    lat, lon = offset(thr_lat, thr_lon, (inbound + 180) % 360, 12 * 1852)
-    alt = apt.elev_ft + 3500
-    shadow = Shadow(object_id=0, callsign="LTC02", lat=lat, lon=lon, alt_ft=alt)
+    lat, lon = offset(thr_lat, thr_lon, (inbound + 180) % 360, 20 * 1852)
+    alt = apt.elev_ft + MIN_ARRIVAL_ABOVE_FT + 1000
+    shadow = Shadow(object_id=0, callsign="LTC02", lat=lat, lon=lon, alt_ft=alt, hdg=inbound, gs_kt=220, on_ground=False,
+                    destination=icao)
+    await probe.until(lambda: probe.nearby, 30.0)
+    control = TrafficControl("reinject")
+    control.airports = {a.icao.upper(): (a.lat, a.lon, a.elev_ft) for a in probe.nearby}
+    departure = control._departure(shadow, (apt.lat, apt.lon, apt.elev_ft))
+    if departure is None:
+        report.add(Step(f"fly in to {icao} {runway}", "fail", "no airport around farther than it to file the plan from"))
+        return
     directory = plan_dir or Path.cwd()
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "LTC02"
-    path.with_suffix(".pln").write_text(flight_plan(shadow, (apt.lat, apt.lon, apt.elev_ft), icao, runway), encoding="utf-8")
+    path.with_suffix(".pln").write_text(flight_plan(shadow, (apt.lat, apt.lon, apt.elev_ft), icao, runway, departure),
+                                        encoding="utf-8")
     await probe.source.send(SpawnAiAircraft(request_id=SPAWN_REQUEST + 1, kind="enroute", title=model, tail="LTC02",
-                                            plan=str(path), plan_position=0.0))
+                                            plan=str(path), plan_position=PLAN_POSITION))
     if not await probe.until(lambda: SPAWN_REQUEST + 1 in probe.assigned, 20.0):
         report.add(Step(f"fly in to {icao} {runway}", "fail", f"no object id from the sim (plan {path}.pln)"))
         return
     oid = probe.assigned[SPAWN_REQUEST + 1]
+    await probe.source.send(SetAiVar(object_id=oid, name="VELOCITY BODY Z", unit="feet per second", value=220 * 1.6878))
     track: list[tuple[float, float, float, float, float]] = []
     end_at = time.monotonic() + watch_s
     while time.monotonic() < end_at:

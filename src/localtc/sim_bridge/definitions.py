@@ -145,6 +145,7 @@ AIRCRAFT_MORE: tuple[Datum, ...] = (
     Datum("rev1", "TURB ENG REVERSE NOZZLE PERCENT:1", "percent"),
     Datum("rev2", "TURB ENG REVERSE NOZZLE PERCENT:2", "percent"),
     Datum("engine_type", "ENGINE TYPE", "Enum", I32),
+    Datum("ap_altitude_sel_3", "AUTOPILOT ALTITUDE LOCK VAR:3", "feet"),
 )
 
 TRAFFIC: tuple[Datum, ...] = (
@@ -298,6 +299,7 @@ def _more(raw: dict[str, Any]) -> dict[str, Any]:
     if not raw:
         return {}
     return {
+        "ap_altitude_sel_3": float(round(raw["ap_altitude_sel_3"])),
         # To 0.05 g: turbulence shows in how it varies, and a level cruise doesn't send a new message every second.
         "g_force": round(raw["g_force"] * 20) / 20, "ice_pct": float(round(max(0.0, raw["ice_pct"]))),
         "anti_ice": bool(raw["eng_anti_ice"]) or bool(raw["wing_deice"]),

@@ -9,6 +9,7 @@ thread reconnects with back-off and reports ``ConnectionStatus`` events.
 import asyncio
 import logging
 import queue
+import re
 import struct
 import threading
 import time
@@ -37,6 +38,9 @@ from localtc.sim_api import (
     RequestArrival,
     SendSimEvent,
     SetInputEvent,
+    TurnKnob,
+    SetAiVar,
+    NudgeVar,
     SpawnAiAircraft,
     RemoveAiAircraft,
     EnumerateModels,
@@ -52,6 +56,7 @@ from localtc.sim_api import (
 )
 from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
+from localtc.sim_bridge.knob import KnobTurn
 from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
 from localtc.sim_bridge.protocol import (
     AssignedObject,
@@ -93,9 +98,12 @@ DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
+NUDGE_GAP_S = 0.1
+KNOB_READ_REQUEST = 1000  # + the variable's data definition: a knob being turned reads it back (TurnKnob)
 FACILITY_TIMEOUT_S = 60.0
 FACILITY_MESSAGES = {RecvId.AIRPORT_LIST, *FACILITY_IDS}
 NEARBY_AIRPORTS, NEARBY_NM = 40, 150.0  # the airports around the aircraft reported to ATC, for diversions
+NEARBY_ICAO = 8  # beyond those, the nearest with a four-letter ICAO code
 
 EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, EVT_CRASHED = range(1, 7)
 # Client events LocalTC sends to the sim (same ID space as the system events above).
@@ -280,6 +288,9 @@ class SimConnectSource:
         self._want_input_events = False
         self._copilot_events: dict[str, int] = {}
         self._simvar_definitions: dict[str, int] = {}
+        self._nudges: dict[int, list[float]] = {}  # an encoder's definition -> the amounts still to add (NudgeVar)
+        self._nudge_at: dict[int, tuple[float, float]] = {}  # ... -> its value as read and added to, the next write
+        self._knobs: dict[str, tuple[KnobTurn, int]] = {}  # input event -> the turn and its variable's definition
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
                                   (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
                                   (DEF_AIRCRAFT_MORE, defs.AIRCRAFT_MORE)):
@@ -386,6 +397,8 @@ class SimConnectSource:
                     except SimConnectError as exc:
                         log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
+                self._turn_knobs(dll, handle)
+                self._nudge(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
                     self._nearest_to_fetch = None
@@ -472,6 +485,12 @@ class SimConnectSource:
                 self._set_simvar(dll, handle, command)
             elif isinstance(command, SetInputEvent):
                 self._set_input_event(dll, handle, command)
+            elif isinstance(command, NudgeVar):
+                self._start_nudge(dll, handle, command)
+            elif isinstance(command, TurnKnob):
+                self._start_knob(dll, handle, command)
+            elif isinstance(command, SetAiVar):
+                self._set_ai_var(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
                 try:
                     dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
@@ -523,6 +542,98 @@ class SimConnectSource:
             log.info("Copilot: input event %s = %s", command.name, command.value)
         except (SimConnectError, AttributeError) as exc:
             log.warning("Copilot couldn't set %s: %s", command.name, exc)
+
+    def _start_knob(self, dll: SimConnectApi, handle: int, command: TurnKnob) -> None:
+        if command.name.upper() not in self._input_events:
+            log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
+            return
+        try:
+            define_id = self._var_definition(dll, handle, command.var, command.unit)
+        except SimConnectError as exc:
+            log.warning("Copilot can't read %s to turn %s: %s", command.var, command.name, exc)
+            return
+        self._knobs[command.name.upper()] = (KnobTurn(command.name.upper(), command.target, command.step, command.wrap),
+                                             define_id)
+        log.info("Copilot: turning %s to %s", command.name, command.target)
+
+    def _var_definition(self, dll: SimConnectApi, handle: int, var: str, unit: str) -> int:
+        key = f"{var}|{unit}" if unit != "number" else var
+        define_id = self._simvar_definitions.get(key)
+        if define_id is None:
+            define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+            dll.add_to_data_definition(handle, define_id, var, unit, defs.F64)
+            self._simvar_definitions[key] = define_id
+        return define_id
+
+    def _set_ai_var(self, dll: SimConnectApi, handle: int, command: SetAiVar) -> None:
+        """A variable of an AI aircraft LocalTC created (traffic control): a number, or a string (``text``)."""
+        kind = defs.F64 if not command.text and command.unit else DataType.STRING64 if len(command.text) >= 8             else DataType.STRING8
+        key = f"ai|{command.name}|{command.unit}|{int(kind)}"
+        try:
+            define_id = self._simvar_definitions.get(key)
+            if define_id is None:
+                define_id = FIRST_SIMVAR_DEFINITION + len(self._simvar_definitions)
+                dll.add_to_data_definition(handle, define_id, command.name, command.unit or None, kind)
+                self._simvar_definitions[key] = define_id
+            if kind == defs.F64:
+                data = struct.pack("<d", command.value)
+            else:
+                size = 64 if kind == DataType.STRING64 else 8
+                data = command.text.encode("ascii", "replace")[:size - 1].ljust(size, bytes(1))
+            dll.set_data_on_sim_object(handle, define_id, command.object_id, data)
+        except SimConnectError as exc:
+            log.info("Traffic control couldn't set %s on object %d: %s", command.name, command.object_id, exc)
+
+    def _start_nudge(self, dll: SimConnectApi, handle: int, command: NudgeVar) -> None:
+        """Read the counter; the amounts are added as it comes back (``_on_nudge``)."""
+        try:
+            define_id = self._var_definition(dll, handle, command.name, "number")
+            self._nudges[define_id] = list(command.deltas)
+            self._nudge_at.pop(define_id, None)
+            log.info("Copilot: %s by %s", command.name, " then ".join(f"{d:+g}" for d in command.deltas))
+            dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER, Period.ONCE)
+        except SimConnectError as exc:
+            log.warning("Copilot couldn't turn %s: %s", command.name, exc)
+
+    def _on_nudge(self, define_id: int, value: float) -> None:
+        self._nudge_at[define_id] = (value, 0.0)
+
+    def _nudge(self, dll: SimConnectApi, handle: int) -> None:
+        """The counters read: add the next amount, each its own write a little apart (the add-on sees the counter
+        move twice: past the stop, then up)."""
+        now = time.monotonic()
+        for define_id, (value, next_t) in list(self._nudge_at.items()):
+            deltas = self._nudges.get(define_id)
+            if not deltas:
+                del self._nudge_at[define_id]
+                self._nudges.pop(define_id, None)
+                continue
+            if now < next_t:
+                continue
+            value += deltas.pop(0)
+            self._nudge_at[define_id] = (value, now + NUDGE_GAP_S)
+            try:
+                dll.set_data_on_sim_object(handle, define_id, OBJECT_ID_USER, struct.pack("<d", value))
+            except SimConnectError as exc:
+                log.warning("Copilot couldn't turn an encoder: %s", exc)
+                self._nudges.pop(define_id, None)
+
+    def _turn_knobs(self, dll: SimConnectApi, handle: int) -> None:
+        now = time.monotonic()
+        for name, (turn, define_id) in list(self._knobs.items()):
+            if turn.done:
+                del self._knobs[name]
+                continue
+            try:
+                what = turn.due(now)
+                if what == "step":
+                    dll.set_input_event(handle, self._input_events[name], turn.pending.pop())
+                elif what == "read":
+                    dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER,
+                                                   Period.ONCE)
+            except (SimConnectError, KeyError, AttributeError) as exc:
+                log.warning("Copilot couldn't turn %s: %s", name, exc)
+                del self._knobs[name]
 
     def _on_input_events(self, msg: InputEventList) -> None:
         for name, hash_, _kind in msg.events:
@@ -600,6 +711,10 @@ class SimConnectSource:
         self._nearest_to_fetch = by_distance[0].icao
         # The ones around, for ATC to pick a diversion from in an emergency (their layouts are fetched then).
         near = [a for a in by_distance[:NEARBY_AIRPORTS] if facilities.haversine_nm(lat, lon, a.lat, a.lon) <= NEARBY_NM]
+        # Among the nearest, a city's heliports and strips ("RJ26P") can be all of them (Haneda's 40 nearest): the
+        # nearest few with an ICAO code too, for a diversion and for a flight plan traffic control files from one.
+        near += [a for a in by_distance[NEARBY_AIRPORTS:] if re.fullmatch(r"[A-Z]{4}", a.icao)
+                 and facilities.haversine_nm(lat, lon, a.lat, a.lon) <= NEARBY_NM][:NEARBY_ICAO]
         self._emit(NearbyAirports(t=self._clock.now(), airports=tuple(
             NearbyAirport(icao=a.icao, lat=round(a.lat, 5), lon=round(a.lon, 5), elev_ft=round(a.alt_m * 3.28084))
             for a in near)))
@@ -632,7 +747,15 @@ class SimConnectSource:
         self._resolve_ready(info)
 
     def _on_data(self, msg: ObjectData, t: float) -> None:
-        if msg.request_id == REQ_OWNSHIP:
+        if msg.request_id >= KNOB_READ_REQUEST:
+            if msg.request_id - KNOB_READ_REQUEST in self._nudges and len(msg.payload) >= 8                     and msg.request_id - KNOB_READ_REQUEST not in self._nudge_at:
+                self._on_nudge(msg.request_id - KNOB_READ_REQUEST, struct.unpack_from("<d", msg.payload)[0])
+            for turn, define_id in self._knobs.values():
+                if KNOB_READ_REQUEST + define_id == msg.request_id and len(msg.payload) >= 8:
+                    turn.on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())
+                    if turn.done:
+                        log.info("Copilot: %s turned to %g", turn.name, struct.unpack_from("<d", msg.payload)[0])
+        elif msg.request_id == REQ_OWNSHIP:
             self._user_object_id = msg.object_id
             ownship = defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t)
             self._position = (ownship.lat, ownship.lon)

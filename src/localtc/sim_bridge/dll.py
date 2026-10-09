@@ -240,7 +240,7 @@ class SimConnectDll:
     def enumerate_models(self, handle: int, request_id: int) -> None:
         if "models" not in self._ai:
             raise SimConnectError("this SimConnect can't list the installed aircraft (MSFS 2024 only)")
-        _check(self._ai["models"](handle, request_id, 1), "EnumerateSimObjectsAndLiveries")  # 1: aircraft
+        _check(self._ai["models"](handle, request_id, 2), "EnumerateSimObjectsAndLiveries")  # SIMCONNECT_SIMOBJECT_TYPE_AIRCRAFT (1 is ALL: refused)
 
     def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None:
         """A key or joystick button (``definition``, e.g. "joystick:0:button:3") sends ``down_event`` when pressed

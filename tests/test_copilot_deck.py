@@ -20,6 +20,7 @@ from localtc.crew.pm import CONFIRM_S, PilotMonitoring
 from localtc.crew.profiles import load_all
 from localtc.flightdeck import FlightDeck
 from localtc.sim_api import (
+    TurnKnob,
     AircraftIdentity,
     AircraftSystems,
     AtcTransmission,
@@ -36,8 +37,8 @@ from localtc.sim_api import (
 PROFILES = load_all()
 
 
-def sent(outputs) -> list[SendSimEvent]:
-    return [o for o in outputs if isinstance(o, SendSimEvent)]
+def sent(outputs) -> list[SendSimEvent | TurnKnob]:
+    return [o for o in outputs if isinstance(o, (SendSimEvent, TurnKnob))]
 
 
 def heard(pm, t, text, confidence=None):
@@ -91,7 +92,7 @@ def test_a_command_heard_badly_is_asked_about_not_done():
     pm = started()
     out = heard(pm, 1.0, "heading two four zero", confidence=0.45)
     assert said(out) == ["Did you say heading 240?"] and not sent(out)
-    assert sent(heard(pm, 3.0, "affirm")) == [SendSimEvent(name="HEADING_BUG_SET", value=240)]
+    assert [(w.name, w.target) for w in sent(heard(pm, 3.0, "affirm"))] == [("INSTRUMENT_FCU_HDG_KNOB", 240)]
 
 
 def test_a_command_heard_fairly_well_is_said_back_first():
@@ -367,9 +368,10 @@ def test_back_from_a_long_pause_the_copilot_says_where_things_stand():
 
 
 def test_a_switch_that_never_moves_on_this_aircraft_is_left_to_the_pilot():
-    """The A350's autopilot knobs never moved for the copilot: "6,000 set", "didn't take", for nine hours."""
+    """An aircraft whose autopilot knobs never move for the copilot (the A350 before its profile): not "6,000 set",
+    "didn't take", for nine hours."""
     pm = PilotMonitoring(FakeEngine(), profiles=PROFILES)
-    pm.observe(AircraftIdentity(t=0.0, title="A350-1000 (Default Cabin)", atc_model="A350-1000"))  # the stock profile
+    pm.observe(AircraftIdentity(t=0.0, title="Generic Jet", atc_model="GJET"))  # the stock profile
     pm.observe(own(0.5, on_ground=False, alt_agl_ft=9000, alt_indicated_ft=9000))
     pm.observe(AircraftSystems(t=0.5, flaps_positions=4, ap_altitude_sel=100))
     words = []

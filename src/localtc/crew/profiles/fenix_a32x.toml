@@ -1,0 +1,81 @@
+# The Fenix A319/A320/A321 (MSFS 2024). Its cockpit is its own: the sim's key events don't move its switches, and its
+# FCU isn't in the sim's autopilot variables. The sim's LIGHT LANDING follows the nose light's T.O. position, not the
+# landing lights. Its own L:vars move them (found in the aircraft's files, tried against
+# the sim 2026-10-08): the light switches (the sim's LIGHT variables follow them), and the FCU's encoders, which turn
+# by how much they change (+50 = 50 clicks) with nothing to read the windows back by, so they're turned past the
+# stop first. The heading knob has no stop: left to the pilot.
+[aircraft]
+name = "Fenix Airbus"
+match = ["Fenix", "FNX"]
+reads_autopilot = false
+reads_flaps = false     # the sim's flap handle index doesn't follow the lever
+flaps = "detents"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 230, 215, 200, 185]
+gear_extend_kt = 250
+gear_retract_kt = 220
+gear_extended_kt = 280
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+vmo_kt = 350
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 39000
+cannot = ["heading", "vs", "autopilot", "com_standby", "spoilers"]   # no way found yet (spoilers: the lever is an axis)
+unread = ["light_landing", "ap_speed_sel", "ap_altitude_sel"]
+
+[actions.light_beacon]
+lvar = "L:S_OH_EXT_LT_BEACON"
+
+[actions.light_strobe]
+lvar = "L:S_OH_EXT_LT_STROBE"   # 0 off, 1 auto, 2 on
+on = 2
+
+[actions.light_nav]
+lvar = "L:S_OH_EXT_LT_NAV_LOGO"   # nav and logo on one switch
+on = 1
+
+[actions.light_logo]
+lvar = "L:S_OH_EXT_LT_NAV_LOGO"
+on = 1
+
+[actions.light_taxi]
+lvar = "L:S_OH_EXT_LT_NOSE"   # 0 off, 1 taxi, 2 takeoff
+on = 1
+
+[actions.light_landing]
+lvar = "L:S_OH_EXT_LT_LANDING_L, L:S_OH_EXT_LT_LANDING_R"   # 0 retract, 1 off, 2 on; each its own (BOTH moves neither)
+on = 2
+
+[actions.speed]
+lvar = "L:E_FCU_SPEED"
+encoder = true
+stop = -500     # down to 100 kt, the knob's lowest
+low = 100
+step = 1
+
+[actions.altitude]
+lvar = "L:E_FCU_ALTITUDE"
+encoder = true
+stop = -600     # down to 100 ft
+low = 100
+step = 1000     # the scale switch at 1000 (the usual): from 100 a click is 1,000
+
+# The flap lever: 0 up, 1, 2, 3, 4 full (the handle index).
+[actions.flaps_0]
+lvar = "L:S_FC_FLAPS"
+
+[actions.flaps_1]
+lvar = "L:S_FC_FLAPS"
+
+[actions.flaps_2]
+lvar = "L:S_FC_FLAPS"
+
+[actions.flaps_3]
+lvar = "L:S_FC_FLAPS"
+
+[actions.flaps_4]
+lvar = "L:S_FC_FLAPS"

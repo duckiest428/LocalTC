@@ -4,6 +4,116 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-09: traffic control (shadow, reinject) at RJTT, Live Traffic with FSLTL
+Run against the sim from scratch harnesses driving the real `TrafficControl` and `SimConnectSource` (25 min watched,
+30-40 aircraft around), then `debug traffic`.
+- The installed-aircraft list never came: `EnumerateSimObjectsAndLiveries` was asked for type 1 (ALL: refused,
+  exception ERROR); AIRCRAFT is 2. Then its pages (RecvId 38) were all dropped: like the input events, 79 entries in
+  80 x 512 bytes. Now 6,110 models, 3,441 FSLTL. FSLTL titles: "FSLTL_A359_JAL-Japan Airlines",
+  "FSLTL_FAIB_B738_ASA-Alaska Airlines", "FSLTL_B738_ANA old", placeholders "-STUB"; the livery field is empty.
+  `fsltl_model` matched by `CODE` (no match after "_") and the raw atc_model ("ATCCOM.AC_MODEL B737.0.tts"):
+  now the type token's family and the airline code as FSLTL writes it (capitals; "Sky_Victor" isn't SKY), stubs out,
+  another airline's colours never.
+- Half the "traffic" is static scenery: "Asobo PassiveAircraft ...", STATE_SLEEP, no flight, made-up ids shared by
+  many ("ASXGSA" x10). Flagged as duplicate callsigns before; now not followed (`Shadow.flight`).
+- Bug: ANA471, taxiing out, stopped in the queue (< 2 kt) when dropped, was put back *parked on the taxiway*. Now
+  anything ever seen moving, or in a TAXI/TAKEOFF/LANDING state, isn't put back parked.
+- Re-spawns under a new id are sometimes renamed (JA336J -> "Japanair 259"): matched by registration too.
+- What `AICreateEnrouteATCAircraft_EX1` allows (docs: `dFlightPlanPosition` = waypoint index + fraction; positions
+  where it would be taxiing, taking off or landing are refused): the old plans (from a point in the air, position
+  0.05) always failed (exception 22). Created where it was only with: a plan filed from a real airport other than the
+  destination, through a waypoint behind it and one where it is, position 2.0, and the aircraft nearer its
+  destination than its departure (filed from Kisarazu 13 nm away it came out at -900 ft as a departure; from Narita,
+  at 6,900 ft). Arrivals 12 nm / 3,500 ft and 14 nm / 4,500 ft were put on the ground at RJTT; 16 nm / 5,000 ft and
+  up worked: `MIN_ARRIVAL_NM` 16, `MIN_ARRIVAL_ABOVE_FT` 5,000. Departures: refused at 3,000-8,000 ft, at 35 nm
+  started from -900 ft: not put back.
+- A created aircraft starts at 0 kt (60 s to 196 kt) and with the model's ATC airline ("Ltu" on FSLTL's JAL A350).
+  `SetDataOnSimObject` on it works: VELOCITY BODY Z (feet per second) gives it its speed at once (221 kt at 3 s), ATC
+  AIRLINE / ATC FLIGHT NUMBER its callsign. New `SetAiVar` command.
+- The sim's 40 nearest airports at Haneda are all heliports and strips ("RJ26P", "GESF1"): the source now adds the 8
+  nearest four-letter ICAO airports to NearbyAirports (diversions get real airports too).
+- In the end: parked drops at RJTT put back as FSLTL's model with their callsigns (JAL114, SKY710, ANA248, SNJ22),
+  seen by ATC as "Japanair 114". An arrival put back 22 nm out at 7,000 ft flew the 34L final at its speed as
+  "Japanair 901" (FSLTL A350) and landed on 34L in one test; in two others it was too high at the end and went around
+  (the sim AI descends late; a waypoint on the final didn't change it).
+- Open: whether Live Traffic drops arrivals 16+ nm out often enough to matter (none in 25 min at RJTT; the drops were
+  parked aircraft, departures just after takeoff, and taxiing ones). Removing a copy that has landed and parked.
+
+## 2026-10-08: stock 787-10 and FSLabs A321neo, the copilot's hands
+- 787-10: every control passes with the sim's events (as the 787-9 and 747-8i).
+- FSLabs A321-271NX: no input events; its package names only display L:vars (`L:FSLA320_landing_light`,
+  `L:FSLA320_ParkBrake`, mouse-rect IDs like `L:FCUKnobID`). Writing `L:FSLA320_landing_light` moved nothing (LIGHT
+  LANDING stayed 0); BRAKE PARKING POSITION reads 0 with its brake set. Its profile stays `hands = false`: the copilot
+  says the switches are the pilot's. Its own SDK would be the way in, if FSLabs publishes one for MSFS 2024.
+- Still open for every aircraft: engaging the autopilot (refused parked in all of them, as the real ones do) and V/S;
+  a short flight with Quick Settings → Copilot → Its hands on is what checks them.
+
+## 2026-10-08: stock 747-8i, HorizonSim 787-9, stock 737 MAX 8, the copilot's hands
+- 747-8i and 787-9 (HorizonSim, "Boeing 787-9 (GE) Air Canada OC", on the stock Boeing systems): every control passes
+  with the sim's key events, and the MCP showed the values (by eye). No profile needed.
+- 737 MAX 8: all pass but landing, nav and strobe lights. New `b737_stock.toml`: `LIGHTING_LANDING_LIGHT_FIXED_L/_R`
+  0 on, 1 off (each its own); `LIGHTING_POSITION_LIGHT` 0 steady, 1 off, 2 strobe and steady. Input events can now be
+  named two at a time (`input = "A, B"`) like L:vars. Strobes off puts the switch at steady (nav on): one switch.
+- Open on all three: the autopilot (not tried parked).
+
+## 2026-10-08: Headwind A330-900neo, the copilot's hands
+- 24 input events. Lights, squawk, COM standby and active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` /
+  `ALT_SET` set the FCU (by eye: 250 / 147 / 12000); the altitude shows in AUTOPILOT ALTITUDE LOCK VAR:3 only. New
+  `AircraftSystems.ap_altitude_sel_3` (AIRCRAFT_MORE) and profile `altitude_index = 3`: the copilot and the checks
+  read it as `ap_altitude_sel`. Flaps and parking brake as the FBW A380 (`L:A32NX_*`), spoilers toggle only.
+- `debug hands` sent PARKING_BRAKE_SET from the sim's "off" here too; it didn't reach the aircraft (the lever stayed
+  1). `debug hands` now also skips what a profile `cannot` do.
+- Open: V/S (dashes parked), spoilers arm, autopilot.
+
+## 2026-10-08: FlyByWire A380X, the copilot's hands
+- Lights, squawk, COM active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` / `ALT_SET` (FlyByWire's custom
+  events) set the FCU (by eye) and the sim's AUTOPILOT vars follow; AP_SPD_VAR_SET didn't. New `fbw_a380.toml`.
+- Flaps: FLAPS_1/2/UP and FLAPS_SET (quarters) move `L:A32NX_FLAPS_HANDLE_INDEX` 0-4; FLAPS HANDLE INDEX stays 0, so
+  `reads_flaps = false`. Setting the L:var itself sticks but moved no flaps.
+- Parking brake: `L:A32NX_PARK_BRAKE_LEVER_POS` 1/0 (set directly, sticks); BRAKE PARKING POSITION reads 0 while it's
+  set. `debug hands` chose "set" from that and released it on the way back (put back at once, the aircraft didn't
+  move): it now leaves a brake the profile marks `unread` alone.
+- Open: spoilers arm (only SPOILERS_ARM_TOGGLE, `L:A32NX_SPOILERS_ARMED` follows it but can't be set; `cannot` for
+  now, a toggle against that L:var would do it if the copilot could read L:vars), `A32NX.FCU_VS_SET` (window dashes
+  parked), COM standby (the RMP's), autopilot (not tried parked).
+- A copilot that could read an aircraft's own L:vars (flaps, spoilers, brake, the Fenix's switches) would check what
+  it now only sends: worth a `[reads]` table in profiles and a dynamic definition in simconnect_source.
+
+## 2026-10-08: Fenix A319 (FenixA319 IAE WF SD), the copilot's hands
+- It got the stock A320neo profile ("A319" in its title). New `fenix_a32x.toml` (match "Fenix"). Only 130 input
+  events (audio volumes): its controls are L:vars, named in its package (`grep -a` over fnx-aircraft-320).
+- Work, checked: `L:S_OH_EXT_LT_BEACON` 0/1, `STROBE` 0 off/1 auto/2 on, `NAV_LOGO` (one switch), `NOSE` 0/1 taxi/2
+  T.O. (the sim's LIGHT LANDING follows NOSE=2, not the landing lights), `LANDING_L` and `LANDING_R` 2 on (by eye;
+  `LANDING_BOTH` moves neither), `S_FC_FLAPS` 0-4 (the lever moves; FLAPS HANDLE INDEX doesn't follow).
+- FCU: `L:E_FCU_SPEED` / `E_FCU_ALTITUDE` are encoders that turn by how much they change (+50 = 50 clicks, by eye);
+  no variable shows the windows. New `NudgeVar`: read the counter, add past the stop (speed 100, altitude 100), then
+  the clicks up (altitude in 1000s from 100). SPD 250 / ALT 12000 checked by eye. Profile: `encoder = true`, `stop`,
+  `low`, `step`.
+- New profile keys: `cannot = [...]` (straight to "that one's yours"), `unread = [...]` (readings not checked:
+  `light_landing`, `ap_speed_sel`, `ap_altitude_sel` here), `lvar = "L:A, L:B"` (a switch each side).
+- Open: heading (no stop to count from; dashes when managed), V/S, AP1 (`S_FCU_AP1`, not tried parked), spoilers arm
+  (`A_FC_SPEEDBRAKE` is an axis, 1 at rest; nothing followed -1/0), autobrake (`S_MIP_AUTOBRAKE_*` presses moved no
+  `I_MIP_AUTOBRAKE_*` light parked), COM standby (the sim's didn't follow), gear (`S_MIP_GEAR`, never touched).
+
+## 2026-10-08: the copilot's hands, stock A320neo V2 and A350-1000
+- `debug aircraft` listed no input events in any aircraft: MSFS 2024 (12.2) sends one descriptor (76 bytes) more than
+  `dwArraySize` counts, and `_parse_input_events` wanted an exact fit. Now at least, under one more. 588 (A320neo),
+  780 (A350) listed.
+- Both FCUs ignore `AP_ALT_VAR_SET_ENGLISH` / `AP_SPD_VAR_SET` (sent with index 3, ALTITUDE LOCK VAR:3 moved but the
+  FCU window didn't: checked by eye). Their knobs (`INSTRUMENT_FCU_*_KNOB` A320, `AIRLINER_FCU_*_KNOB` A350) move one
+  step per set whatever the value (sign = direction; altitude in 1000s), several in one frame count once, and they
+  speed up when turned steadily (30 steps gave +259 kt). New `TurnKnob` command + `sim_bridge/knob.py`: read, a burst
+  of at most 20 steps, settle 0.35 s, read again. 3-10 s for 150 kt. A profile asks for it with `knob = "..."`
+  (`step`, `var`). The FCU windows showed the values set (A320, checked by the user). Copilot checks wait 20 s for it.
+- A350: profile `a350.toml` (landing light input event `AIRLINER_LIGHTS_EXT_LANDING` 1/0, knobs, VFE). Flaps by
+  FLAPS_SET pass.
+- Squawk and COM standby failed once on the A320 while it was powering up; pass after.
+- Open (needs flight, not parked): autopilot on (AP1 input events don't engage on the ground, engines off), V/S
+  (the window shows dashes until V/S is pulled), spoilers arm (no response to SPOILERS_ARM_* or `AIRLINER_SPEEDBRAKE`
+  parked), A350 autobrake (`AIRLINER_LDG_AUTO_BRK` 0-3 moved no AUTO BRAKE SWITCH CB).
+- Unrelated, failing before this: tests/test_cardmodel.py mini replay, test_copilot.py service test (flaky),
+  tts providers speed.
+
 <!-- ## 2026-10-08: stock A320neo, hands
 - FAIL logo light: LOGO_LIGHTS_SET ignored. Mapped [actions.light_logo] input = "LIGHTING_LOGO_1". Passes now.
 - Open: ... -->

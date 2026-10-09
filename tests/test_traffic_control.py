@@ -10,15 +10,18 @@ from localtc.sim_api import (
     ConnectionStatus,
     EnumerateModels,
     ModelList,
+    NearbyAirport,
+    NearbyAirports,
     OwnshipState,
     RemoveAiAircraft,
+    SetAiVar,
     SpawnAiAircraft,
     TrafficControlStatus,
     TrafficIdentity,
     TrafficSnapshot,
     TrafficTarget,
 )
-from localtc.traffic.control import GRACE_S, TrafficControl, flight_plan, fsltl_model
+from localtc.traffic.control import GRACE_S, PLAN_POSITION, TrafficControl, flight_plan, fsltl_model, type_code
 
 
 def own(t=0.0, lat=36.08, lon=-115.15):
@@ -120,14 +123,26 @@ def test_nothing_taxiing_or_landing_is_put_back():
 def test_a_flying_one_goes_on_to_its_destination_with_localtcs_runway(tmp_path):
     tc = control(runway_for=lambda icao: "24R" if icao == "KLAX" else None,
                  airport_at=lambda icao: (33.94, -118.40, 125.0) if icao == "KLAX" else None, plan_dir=tmp_path)
-    feed(tc, snap(1, target(1, ground=False, alt=11000, gs=280)),
+    tc.observe(own(lat=34.10, lon=-118.10))  # 18 nm from KLAX
+    feed(tc, NearbyAirports(t=0.5, airports=(NearbyAirport(icao="CL44", lat=34.15, lon=-118.15, elev_ft=900),  # a strip
+                                             NearbyAirport(icao="KBUR", lat=34.20, lon=-118.36, elev_ft=778),  # nearer
+                                             NearbyAirport(icao="KPSP", lat=33.83, lon=-116.51, elev_ft=477),
+                                             NearbyAirport(icao="KLAX", lat=33.94, lon=-118.40, elev_ft=125))))
+    feed(tc, snap(1, target(1, lat=34.15, lon=-118.05, ground=False, alt=11000, gs=280)),
          TrafficIdentity(t=1.5, object_id=1, title="737", destination="KLAX"))
     out = feed(tc, snap(2), snap(2 + GRACE_S + 1))
     [spawn] = commands(out, SpawnAiAircraft)
-    assert spawn.kind == "enroute" and spawn.plan.endswith("Southwest3721")
+    assert spawn.kind == "enroute" and spawn.plan.endswith("Southwest3721") and spawn.plan_position == PLAN_POSITION
     plan = (tmp_path / "Southwest3721.pln").read_text()
     assert "<DestinationID>KLAX</DestinationID>" in plan and "<RunwayNumberFP>24</RunwayNumberFP>" in plan
     assert "<RunwayDesignatorFP>RIGHT</RunwayDesignatorFP>" in plan
+    # filed from a real airport farther than KLAX (nearer, the sim has it departing), then behind it, then where it was
+    assert "<DepartureID>KPSP</DepartureID>" in plan and plan.index('id="BEHIND"') < plan.index('id="HERE"')
+    # the sim starts a copy with no speed and the model's own airline: given its own at once
+    out = feed(tc, AiObjectAssigned(t=12, request_id=spawn.request_id, object_id=500))
+    sets = {c.name: c for c in commands(out, SetAiVar)}
+    assert sets["VELOCITY BODY Z"].value == pytest.approx(280 * 1.6878, rel=0.01)
+    assert sets["ATC AIRLINE"].text == "Southwest" and sets["ATC FLIGHT NUMBER"].text == "3721"
 
 
 def test_a_flying_one_to_somewhere_localtc_doesnt_know_isnt_put_back(tmp_path):
@@ -144,7 +159,8 @@ def test_fsltl_models_are_used_when_installed():
     tc = control()
     assert tc.start() == [EnumerateModels()]
     feed(tc, ModelList(t=0.5, models=tuple(models)))
-    feed(tc, snap(1, target(1, airline="SWA")), TrafficIdentity(t=1.5, object_id=1, title="Boeing 737-800 Asobo"))
+    # the sim's own generic model ("PassiveAircraft"): FSLTL's of its type and airline instead
+    feed(tc, snap(1, target(1, airline="SWA")), TrafficIdentity(t=1.5, object_id=1, title="Asobo PassiveAircraft B737-800"))
     [spawn] = commands(feed(tc, snap(2), snap(2 + GRACE_S + 1)), SpawnAiAircraft)
     assert spawn.title.startswith("FSLTL_B738")
 
@@ -207,3 +223,58 @@ def test_with_it_off_the_bridge_asks_nothing_new():
 
     cfg = Config()
     assert cfg.traffic.control == "off" and cfg.live.traffic_identity is False
+
+
+def test_fsltls_names_as_installed_are_matched_by_type_and_airline():
+    models = [("FSLTL_B733F_PKW_Sierra-West-Airlines-STUB", ""), ("FSLTL_A359_JAL-Japan Airlines", ""),
+              ("FSLTL_FAIB_B738_ASA-Alaska Airlines", ""), ("FSLTL_FAIB_B738_JAL-Japan Airlines", "")]
+    assert type_code("ATCCOM.AC_MODEL B737.0.tts") == "B737" and type_code("$$:ERJ") == "ERJ"
+    assert fsltl_model(models, "A350", "JAL") == ("FSLTL_A359_JAL-Japan Airlines", "")
+    assert fsltl_model(models, "ATCCOM.AC_MODEL B737.0.tts", "ASA") == ("FSLTL_FAIB_B738_ASA-Alaska Airlines", "")
+    assert fsltl_model(models, "B733", "PKW") is None  # a stub is a placeholder
+    assert fsltl_model([("FSLTL_FAIB_B733_Sky_Victor", "")], "B733", "SKY") is None  # not Skymark's
+
+
+def test_one_that_stopped_in_the_taxi_queue_isnt_left_parked_on_the_taxiway():
+    """ANA471 at RJTT: taxiing out, stopped in the queue (under 2 kt) when the sim dropped it."""
+    tc = control()
+    feed(tc, snap(1, target(1, gs=8)), TrafficIdentity(t=1.5, object_id=1, title="737", state="STATE_TAXI_FOR_TAKEOFF"))
+    out = feed(tc, snap(3, target(1, gs=0.5)), snap(4), snap(4 + GRACE_S + 1))
+    assert not commands(out, SpawnAiAircraft) and tc.lost == 1 and not tc.pending
+
+
+def test_the_sims_static_aircraft_arent_traffic():
+    """Many share one made-up id ("ASXGSA"), no flight: not duplicates, not lost, not put back."""
+    tc = control()
+    static = [TrafficTarget(object_id=i, atc_id="ASXGSA", atc_model="$$:ERJ", lat=36.085 + i * 1e-3, lon=-115.16,
+                            alt_ft=2200, hdg_true=0, gs_kt=0, on_ground=True) for i in (1, 2, 3)]
+    out = feed(tc, snap(1, *static))
+    assert not any(tc.shadows[i].issues for i in (1, 2, 3))
+    out += feed(tc, snap(2), snap(2 + GRACE_S + 1))
+    assert tc.lost == 0 and not commands(out, SpawnAiAircraft)
+    assert [o for o in out if isinstance(o, TrafficControlStatus)][-1].shadowed == 0
+
+
+def test_departures_and_arrivals_too_close_in_arent_put_back(tmp_path):
+    """The sim won't make a climbing aircraft, and puts a copy closer in than 16 nm on the ground at the airport."""
+    rjtt = (35.5533, 139.7811, 21.0)
+    tc = control(airport_at=lambda icao: rjtt if icao == "RJTT" else None, plan_dir=tmp_path)
+    tc.observe(own(lat=35.55, lon=139.78))
+    feed(tc, NearbyAirports(t=0.5, airports=(NearbyAirport(icao="RJAA", lat=35.76, lon=140.39, elev_ft=141),)))
+    feed(tc, snap(1, target(1, lat=35.62, lon=139.75, ground=False, alt=2400, gs=160),  # just off RJTT
+                  target(2, number="2", lat=35.40, lon=139.86, ground=False, alt=3500, gs=180)),  # 10 nm final
+         TrafficIdentity(t=1.5, object_id=1, title="737", origin="RJTT", destination="RJCB"),
+         TrafficIdentity(t=1.5, object_id=2, title="737", origin="RJCB", destination="RJTT"))
+    out = feed(tc, snap(2), snap(2 + GRACE_S + 1))
+    assert not commands(out, SpawnAiAircraft) and tc.lost == 2
+    recent = tc.status(20).recent  # what the app shows: why not
+    assert any("departing" in r for r in recent) and any("too close in" in r for r in recent)
+
+
+def test_a_copy_that_flies_out_of_the_area_goes():
+    tc = control(radius_nm=25)
+    feed(tc, snap(1, target(1)), TrafficIdentity(t=1.5, object_id=1, title="737"))
+    [spawn] = commands(feed(tc, snap(2), snap(2 + GRACE_S + 1)), SpawnAiAircraft)
+    feed(tc, AiObjectAssigned(t=12, request_id=spawn.request_id, object_id=500))
+    out = feed(tc, snap(20, target(500, lat=36.7, ground=False, alt=9000, gs=250)))  # 37 nm away
+    assert RemoveAiAircraft(object_id=500) in out and not tc.ours

@@ -1,0 +1,60 @@
+# The Headwind A330-900neo (MSFS 2024), built on FlyByWire's A32NX: its FCU takes FlyByWire's events
+# (A32NX.FCU_*_SET) and shows the altitude in AUTOPILOT ALTITUDE LOCK VAR:3; its flap lever takes FLAPS_1 ... FLAPS_DOWN
+# (L:A32NX_FLAPS_HANDLE_INDEX follows, the sim's handle index doesn't); its parking brake is
+# L:A32NX_PARK_BRAKE_LEVER_POS. Tried against the sim 2026-10-08 (the FCU's windows by eye). VFE from the A330's
+# limitations.
+[aircraft]
+name = "Headwind A330-900"
+match = ["A330-900", "A339"]
+reads_flaps = false
+altitude_index = 3
+flaps = "detents"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 240, 196, 186, 180]
+gear_extend_kt = 250
+gear_retract_kt = 250
+gear_extended_kt = 250
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+vmo_kt = 330
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 41450
+cannot = ["spoilers"]   # only a toggle (SPOILERS_ARM_TOGGLE), and nothing the copilot reads follows it
+unread = ["parking_brake"]
+
+[actions.heading]
+event = "A32NX.FCU_HDG_SET"
+
+[actions.speed]
+event = "A32NX.FCU_SPD_SET"
+
+[actions.altitude]
+event = "A32NX.FCU_ALT_SET"
+
+[actions.vs]
+event = "A32NX.FCU_VS_SET"
+
+[actions.flaps_0]
+event = "FLAPS_UP"
+
+[actions.flaps_1]
+event = "FLAPS_1"
+
+[actions.flaps_2]
+event = "FLAPS_2"
+
+[actions.flaps_3]
+event = "FLAPS_3"
+
+[actions.flaps_4]
+event = "FLAPS_DOWN"
+
+[actions.parking_brake_on]
+lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"
+
+[actions.parking_brake_off]
+lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"

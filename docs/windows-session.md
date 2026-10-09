@@ -68,7 +68,7 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    has `hands = false` because the sim's events don't reach it, and `reads_flaps` / `reads_autopilot = false` because
    the sim's variables don't follow it (flap index 0-8, autopilot always off). If its own L:vars can be found
    (the FSLabs SDK, or the sim's dev mode), map them and set `hands = true`.
-5. **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
+5. *(Done 2026-10-08: `a350.toml`; see windows-findings.md.)* **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
    lights took, but the altitude, heading and autopilot never did, and the sim's flap, gear and autopilot readings
    never moved (flaps read up at flaps 1). The copilot now drops a control after it fails twice with its reading never
    moving, and says so. Map it properly: `debug aircraft` and `debug hands --autopilot` in the A350, then a profile
@@ -82,20 +82,17 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
 
 ## Task 2: traffic control (EXPERIMENTAL)
 
-[traffic/control.py](../src/localtc/traffic/control.py) shadows the sim's Live Traffic and, in *reinject* mode, puts
-back an aircraft the sim drops nearby (`SimConnect_AICreateNonATCAircraft_EX1` for a parked one, `AICreateEnrouteATCAircraft_EX1` for a flying one, `AIRemoveObject`
-in [sim_bridge/dll.py](../src/localtc/sim_bridge/dll.py), the answers in [sim_bridge/protocol.py](../src/localtc/sim_bridge/protocol.py)).
-None of it has run against the sim yet.
+*(Run at RJTT 2026-10-09, fixed; see windows-findings.md.)* [traffic/control.py](../src/localtc/traffic/control.py)
+shadows the sim's Live Traffic and, in *reinject* mode, puts back what the sim drops nearby: parked ones, and arrivals
+16 nm or more out (what MSFS 2024 allows; the module's docstring has the details).
 
-1. `localtc debug traffic`: do snapshots and identities arrive (title, livery, origin, destination, AI state)? Does
-   the model list come back, with FSLTL's models if it's installed? Is the created aircraft seen, and gone after the
-   remove? Fix what fails (the struct layouts in `protocol.py` are the likely place for a wrong parse).
-2. `localtc debug traffic --enroute <ICAO> <RUNWAY> --watch 180` at an airport near the user: does the aircraft fly
-   the plan, towards that runway? The plan is written to `%LOCALAPPDATA%\LocalTC\simcheck\LTC02.pln`. If the sim
-   ignores the runway in the plan, note it: then LocalTC's ATIS runway can't steer the AI this way.
-3. Then in the app: Quick Settings → ATC → Traffic control → Shadow, then Reinject, at a busy airport. The status line
-   shows what's shadowed, put back and dropped. Check nothing is put back twice, onto a runway, or on top of another
-   aircraft, and that everything LocalTC created goes when it's turned off.
+1. `localtc debug traffic`: snapshots, identities, the installed models (FSLTL's counted), one aircraft created and
+   removed. `localtc debug traffic --no-spawn --enroute <ICAO> <RUNWAY> --watch 180`: one arrival created 20 nm out as
+   reinject makes them; does it fly towards that runway?
+2. Still to see in the app: Quick Settings → ATC → Traffic control → Reinject at a busy airport over a long session.
+   The status line lists what it did and why. Check nothing is put back twice, onto a taxiway or runway, or on top of
+   another aircraft, that ATC calls the copies by their flights' callsigns, and that everything LocalTC created goes
+   when it's turned off.
 
 ## Task 3: the voices with the sim running
 

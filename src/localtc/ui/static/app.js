@@ -686,7 +686,8 @@ function trafficStatus(s) {
   if (s.lost) parts.push(`${s.lost} dropped by MSFS`);
   if (s.failed) parts.push(`${s.failed} couldn't be put back`);
   if (s.fsltl) parts.push("FSLTL models");
-  return `<br><b>Now:</b> ${esc(parts.join(", "))}.${(s.issues || []).length ? ` <span class="muted">${esc(s.issues.join("; "))}</span>` : ""}`;
+  const recent = (s.recent || []).slice(0, 4);
+  return `<br><b>Now:</b> ${esc(parts.join(", "))}.${recent.length ? `<br><span class="muted">${recent.map(esc).join("<br>")}</span>` : ""}`;
 }
 
 const Settings = {
@@ -1115,11 +1116,13 @@ const Settings = {
         <div class="row"><label>Traffic control <b class="exp-badge">EXPERIMENTAL</b><select id="s-traffic">${[
             ["off", "Off: MSFS's traffic as it is (recommended)"],
             ["shadow", "Shadow: LocalTC follows every aircraft and reports anything odd; never touches them"],
-            ["reinject", "Reinject: also puts back aircraft MSFS drops nearby (its model and livery, FSLTL's if installed)"],
+            ["reinject", "Reinject: also puts back aircraft MSFS drops nearby: parked ones, and arrivals, which land on LocalTC's runway"],
           ].map(([v, t]) => `<option value="${v}" ${(st.traffic?.control || "off") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
           <span class="hint">SimConnect can't remove or take over MSFS's own Live Traffic, so it is never moved: shadowed only.
-            What LocalTC puts back is its own, flies to this flight's airports with the runway from LocalTC's ATIS, and is taken
-            out again when this is turned off or the flight ends. May be limited by what SimConnect allows.
+            When MSFS drops an aircraft nearby, LocalTC puts the same flight back (its callsign, and FSLTL's model of its type and
+            airline when MSFS used a generic one) where MSFS allows it: parked at its stand, or arriving 16 nm or more out, at its
+            speed, landing on the runway in LocalTC's ATIS. MSFS won't put back one taxiing, departing or close in. Taken out
+            again when this is turned off, it flies out of the area, or the flight ends.
             <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></span></label></div>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>

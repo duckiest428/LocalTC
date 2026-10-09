@@ -143,7 +143,7 @@ def test_hands_moves_each_control_reads_it_back_and_puts_it_back():
     assert steps["squawk"].result == "pass" and sim.own.squawk == "1200"  # put back
     assert steps["COM1 active"].result == "pass" and abs(sim.own.com1_mhz - 121.7) < 0.001
     assert steps["altimeter (first officer's)"].result == "sent"  # the sim can't show the first officer's
-    assert steps["parking brake release"].result == "pass" and sim.own.parking_brake  # engines off: tried, and set again
+    assert steps["parking brake release"].result == "skip" and sim.own.parking_brake  # the pilot's side: left alone
     assert steps["autopilot on"].result == "skip"  # only when asked
     assert not report.failed
     assert not any(isinstance(c, SendSimEvent) and c.name.startswith("GEAR") for c in sim.sent)  # never the gear

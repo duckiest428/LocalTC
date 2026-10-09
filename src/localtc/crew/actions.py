@@ -7,6 +7,7 @@ goes against the clearance, waits for a "confirm".
 """
 
 from collections.abc import Callable
+from typing import Any
 from dataclasses import dataclass, field, replace
 
 from msgspec.structs import replace as replace_struct
@@ -14,9 +15,10 @@ from msgspec.structs import replace as replace_struct
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.facilities import channel_khz
 from localtc.crew.commands import Command
-from localtc.crew.profiles import Profile, Write
+from localtc.crew.profiles import Profile, Write, read_var
 from localtc.sim_api import (
     AircraftSystems,
+    ClickSequence,
     OwnshipState,
     SendSimEvent,
     SetComFrequency,
@@ -50,6 +52,10 @@ KNOB_READS = {"heading": ("AUTOPILOT HEADING LOCK DIR", "degrees", 360.0),
               "speed": ("AUTOPILOT AIRSPEED HOLD VAR", "knots", 0.0),
               "vs": ("AUTOPILOT VERTICAL HOLD VAR", "feet per minute", 0.0)}
 KNOB_CHECK_S = 20.0  # a knob takes a while to turn (a few seconds for 150 kt): the check waits this long
+# Whose hands: the pilot flying's side of the cockpit (the captain's seat, the thrust and the speedbrake levers, the
+# parking brake, the autopilot's engagement). The copilot works its own side and the shared panels on request; these it
+# leaves, saying so in a word. ("spoilers": the speedbrake lever, armed or out.)
+PILOT_SIDE = frozenset({"parking_brake", "spoilers", "autothrottle", "autopilot"})
 
 
 @dataclass
@@ -67,6 +73,8 @@ class Cockpit:
     # controls that never took from the copilot's side, twice: not reached for again.
     moved: set[str] = field(default_factory=set)
     dead: set[str] = field(default_factory=set)
+    # The aircraft's own variables its profile reads (AircraftVars): the FSLabs's switch positions and windows.
+    vars: dict[str, float] = field(default_factory=dict)
 
     def watch(self) -> None:
         """Note which readings changed since the last look (``own`` and ``systems`` just replaced)."""
@@ -113,6 +121,19 @@ class Cockpit:
         if self.systems is not None and self.systems.flaps_positions:
             return self.systems.flaps_positions
         return max(len(self.profile.detents) - 1, 0)
+
+
+def as_read(ev: Any, profile: Profile, values: dict[str, float]) -> Any:
+    """An OwnshipState or AircraftSystems with the fields this aircraft's profile reads from its own variables (the
+    FSLabs's lights, levers and FCU windows) as they say."""
+    if not profile.reads or not values:
+        return ev
+    changes: dict[str, Any] = {}
+    for name, expr in profile.reads.items():
+        if name in type(ev).__struct_fields__ and (value := read_var(expr, values)) is not None:
+            kind = type(getattr(ev, name))
+            changes[name] = bool(value) if kind is bool else int(round(value)) if kind is int else float(value)
+    return replace_struct(ev, **changes) if changes else ev
 
 
 def _readings(c: Cockpit) -> dict[str, object]:
@@ -170,12 +191,40 @@ def _own(get: Callable[[OwnshipState], bool]) -> Check:
     return lambda c: None if c.own is None else get(c.own)
 
 
+def _clicks(custom: Write, key: str, target: float) -> tuple[SimCommand, ...]:
+    """An add-on's clickspots turned until its variable reads ``target`` (each knob in turn), then any presses."""
+    knobs = list(custom.knobs) or ([{"up": custom.click_up, "down": custom.click_down, "step": custom.step,
+                                     "learn": custom.learn}] if custom.click_up or custom.click_down else [])
+    out: list[SimCommand] = [
+        TurnKnob(name=f"{key} {i + 1}" if len(knobs) > 1 else key, var=k.get("var", custom.var), unit="number",
+                 target=float(k["target"]) if "target" in k else target,
+                 step=float(k.get("step", 1.0)), wrap=360.0 if key == "heading" else 0.0, event=custom.click_event,
+                 up=int(k.get("up", 0)), down=int(k.get("down", 0)), learn=bool(k.get("learn", False)),
+                 div=float(k.get("div", 0.0)), mod=float(k.get("mod", 0.0)), burst=int(k.get("burst", 20)))
+        for i, k in enumerate(knobs)]
+    if custom.press:
+        out.append(ClickSequence(name=key, codes=tuple(custom.press), event=custom.click_event))
+    return tuple(out)
+
+
+def _keys(custom: Write, key: str, text: str) -> tuple[SimCommand, ...]:
+    """Typed on the aircraft's keypad: each character's key, then its release."""
+    codes: list[int] = []
+    for ch in text:
+        code = custom.keys[ch]
+        codes += [code, code + custom.release] if custom.release else [code]
+    return (ClickSequence(name=key, codes=tuple(codes), event=custom.click_event),)
+
+
 def _write(profile: Profile, key: str, default: SimCommand, value: float | None = None,
-           on: bool | None = None) -> SimCommand:
-    """The profile's own way for this action (an add-on's event or L:var), else the standard event."""
+           on: bool | None = None) -> SimCommand | tuple[SimCommand, ...]:
+    """The profile's own way for this action (an add-on's event, L:var or clickspots), else the standard event."""
     custom: Write | None = profile.actions.get(key)
     if custom is None:
         return default
+    if custom.clicks:
+        target = custom.on if on or (on is None and value is None) else custom.off if on is not None             else float(value) * custom.scale  # (a lever with no value, the gear: where ``on`` says)
+        return _clicks(custom, key, target)
     if custom.knob:
         var, unit, wrap = KNOB_READS.get(key, ("", "number", 0.0))
         return TurnKnob(name=custom.knob, var=custom.var or var, unit=custom.var_unit or unit, target=float(value or 0.0),
@@ -199,13 +248,15 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:
     got = _plan(cmd, c)
     if not isinstance(got, Plan):
         return got
+    if any(isinstance(w, tuple) for w in got.writes):  # an add-on's clickspots: several commands for one action
+        got = replace(got, writes=tuple(x for w in got.writes for x in (w if isinstance(w, tuple) else (w,))))
     if any(isinstance(w, (SetSimVar, SetInputEvent)) and "," in w.name for w in got.writes):  # a switch each side: "A, B"
         got = replace(got, writes=tuple(x for w in got.writes for x in (
             [replace_struct(w, name=n.strip()) for n in w.name.split(",")]
             if isinstance(w, (SetSimVar, SetInputEvent)) else [w])))
     if got.reads and got.reads in c.profile.unread:
         got = replace(got, check=lambda _c: None, already="")
-    if any(isinstance(w, TurnKnob) for w in got.writes):
+    if any(isinstance(w, (TurnKnob, ClickSequence)) for w in got.writes):
         return replace(got, check_s=KNOB_CHECK_S)
     return got
 
@@ -279,7 +330,11 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                     f"heading {speech.heading(deg)} set", reads="ap_heading_sel")
     if a == "altitude":
         ft = int(v)
-        return Plan(a, v, (_write(p, "altitude", SendSimEvent(name="AP_ALT_VAR_SET_ENGLISH", value=ft), ft),),
+        first: tuple[SimCommand, ...] = ()
+        if (w := p.actions.get("altitude")) is not None and w.fine_var and ft % 1000 \
+                and c.vars.get(w.fine_var, w.fine_value) != w.fine_value:
+            first = (ClickSequence(name="altitude 100s", codes=tuple(w.fine_codes), event=w.click_event),)
+        return Plan(a, v, (*first, _write(p, "altitude", SendSimEvent(name="AP_ALT_VAR_SET_ENGLISH", value=ft), ft)),
                     _sys("ap_altitude_sel", float(ft)), f"{speech.altitude_display(ft)} set.",
                     f"{speech.altitude(ft)} set", reads="ap_altitude_sel")
     if a == "speed":
@@ -294,20 +349,23 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         return Plan(a, v, (_write(p, "vs", SendSimEvent(name="AP_VS_VAR_SET_ENGLISH", value=fpm), fpm),), check_vs,
                     said, spoken, reads="ap_vs_sel")
     if a == "squawk":
-        return Plan(a, v, (_write(p, "squawk", SendSimEvent(name="XPNDR_SET", value=int(v, 16))),),
+        w = p.actions.get("squawk")
+        typed = _keys(w, "squawk", v) if w is not None and w.keys else None
+        return Plan(a, v, (typed or _write(p, "squawk", SendSimEvent(name="XPNDR_SET", value=int(v, 16))),),
                     _own(lambda o: o.squawk == v), f"Squawk {v} set.", f"squawk {speech.squawk(v)} set",
                     already=f"Squawk's already {v}.", reads="squawk")
     if a == "com_active":
         mhz = float(v)
         hz = channel_khz(mhz) * 1000
-        return Plan(a, v, (_write(p, "com_active", SetComFrequency(hz=hz)),),
+        return Plan(a, v, (_write(p, "com_active", SetComFrequency(hz=hz), hz / 1000),),
                     _own(lambda o: channel_khz(o.com1_mhz) == channel_khz(mhz)), f"{speech.frequency_display(mhz)} set.",
                     f"{speech.frequency(mhz)} set")
     if a == "com_standby":
         mhz = float(v)
         hz = channel_khz(mhz) * 1000
         check_stby: Check = lambda c2: None if c2.systems is None else channel_khz(c2.systems.com1_standby_mhz) == channel_khz(mhz)  # noqa: E731
-        return Plan(a, v, (_write(p, "com_standby", SendSimEvent(name="COM_STBY_RADIO_SET_HZ", value=hz)),), check_stby,
+        return Plan(a, v, (_write(p, "com_standby", SendSimEvent(name="COM_STBY_RADIO_SET_HZ", value=hz), hz / 1000),),
+                    check_stby,
                     f"{speech.frequency_display(mhz)} in standby.", f"{speech.frequency(mhz)} in standby")
     if a == "com_swap":
         if c.systems is None or not c.systems.com1_standby_mhz:
@@ -324,8 +382,12 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                   else f"altimeter {speech.digits(v.replace('.', ''))} set")
         # The first officer's own altimeter (index 2): the captain's is the captain's. The sim reports the captain's
         # setting, so whether it took can't be seen: said as done.
-        return Plan(a, v, (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=2), hpa),),
-                    lambda c2: None, said.replace(" set.", " set on my side."), spoken + " on my side")
+        w = p.actions.get("altimeter")
+        if w is not None and w.clicks:
+            writes = _baro(w, c, hpa, std=v == "29.92" and cmd.target != "hpa")
+        else:
+            writes = (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=2), hpa),)
+        return Plan(a, v, writes, lambda c2: None, said.replace(" set.", " set on my side."), spoken + " on my side")
     if a == "parking_brake":
         on = v == "on"
         event = SendSimEvent(name="PARKING_BRAKE_SET", value=int(on))
@@ -335,6 +397,19 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
     if a == "autobrake":
         return _autobrake(cmd, c)
     return f"Unable, I can't do {cmd} yet."
+
+
+def _baro(w: Write, c: Cockpit, hpa: float, *, std: bool) -> tuple[SimCommand, ...]:
+    """The first officer's baro knob (an add-on's): pulled to STD, or pushed back from it and turned to the QNH, in the
+    window's own unit (``fine_var`` reads 1 in inches: hundredths of an inch; else hectopascals)."""
+    is_std = c.vars.get(w.var.replace("_BARO", "_BARO_STD"), 0.0) >= 0.5
+    if std:
+        return () if is_std else (ClickSequence(name="altimeter std", codes=tuple(w.press), event=w.click_event),)
+    inches = c.vars.get(w.fine_var, 1.0) >= 0.5 if w.fine_var else True
+    target = round(hpa / 33.8639 * 100) if inches else round(hpa)
+    push = (ClickSequence(name="altimeter qnh", codes=tuple(w.fine_codes), event=w.click_event),) if is_std else ()
+    return (*push, TurnKnob(name="altimeter", var=w.var, unit="number", target=float(target), step=1.0,
+                            event=w.click_event, up=w.click_up, down=w.click_down))
 
 
 AUTOBRAKE_EVENTS = {"off": "AUTOBRAKE_DISARM", "low": "AUTOBRAKE_LO_SET", "medium": "AUTOBRAKE_MED_SET",

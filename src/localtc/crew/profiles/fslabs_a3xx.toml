@@ -1,13 +1,16 @@
 # The FSLabs A319/A320/A321 (MSFS 2024). Its systems are its own: the sim's key events don't move its switches, and
-# the sim's flap handle and autopilot variables don't follow its own (the flap index reads 0-8, the autopilot always
-# off). So the copilot calls and checks what it can see (lights, gear, speeds), and leaves the switches to the pilot.
-# Its own L:vars could move them: [actions.x] lvar = "L:..." (docs/windows-session.md), then hands = true.
+# the sim's flap handle, light and autopilot variables don't follow them. Its cockpit's clickspots do: each one sends
+# K:ROTOR_BRAKE with its own code (the code in the aircraft's ModelBehaviorDefs, +1 for a step up, +0 for a step down;
+# a button +0 pressed, +2 released), and its own L:vars read the switches back (VC_..._Switch, the FCU's windows
+# FSL_FCU_*). So the copilot clicks a control a step at a time until its variable reads the position, as a hand on
+# it would. Tried against the sim 2026-10-09 (an A321neo, on battery): lights, flap and speedbrake levers, the FCU's
+# knobs and 100/1,000 switch, the first officer's baro (turn, STD), RMP 1's knobs and transfer. Not yet seen powered:
+# the transponder's digits (CLR took; digits didn't, cold), the gear lever (not moved on the ground), the FCU's
+# push and pull (no answer with the FMGC off: its modes are the pilot's).
 [aircraft]
 name = "FSLabs Airbus"
 match = ["FSLabs", "FSL A3"]
-hands = false
-reads_flaps = false
-reads_autopilot = false
+reads_autopilot = false   # nothing reads its autopilot's engagement
 flaps = "detents"
 detents = ["up", "1", "2", "3", "full"]
 aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
@@ -24,3 +27,167 @@ landing_detent = "3"
 reversers = true
 ceiling_ft = 39000
 short_runway_ft = 7000
+cannot = ["ap_mode"]   # the FCU's push and pull: not found to answer yet
+
+# What the copilot sees by: the aircraft's own switch positions (0, 10, 20 a step; the flap lever 105 a detent).
+[reads]
+light_landing = "L:VC_OVHD_EXTLT_Land_L_Switch >= 15"   # 0 retract, 10 off, 20 on
+light_taxi = "L:VC_OVHD_EXTLT_Nose_Switch >= 5"         # 0 off, 10 taxi, 20 takeoff
+light_strobe = "L:VC_OVHD_EXTLT_Strobe_Switch >= 15"    # 0 off, 10 auto, 20 on
+light_beacon = "L:VC_OVHD_EXTLT_Beacon_Switch >= 5"
+light_nav = "L:VC_OVHD_EXTLT_NavLogo_Switch >= 5"       # 0 off, 10 "1", 20 "2"
+light_logo = "L:VC_OVHD_EXTLT_NavLogo_Switch >= 5"
+flaps_index = "L:VC_PED_FLAP_LEVER / 105"
+flaps_positions = "4"                                   # (the sim counts 0-8)
+parking_brake = "L:VC_PED_PARK_BRAKE_Switch >= 50"
+ap_speed_sel = "L:FSL_FCU_SPD"
+ap_heading_sel = "L:FSL_FCU_HDG"
+ap_altitude_sel = "L:FSL_FCU_ALT"
+ap_vs_sel = "L:FSL_FCU_VS"
+baro_std = "L:FSL_EFIS_FO_BARO_STD"   # (not a field: read for the altimeter)
+
+[actions.light_landing]
+knobs = [{ var = "L:VC_OVHD_EXTLT_Land_L_Switch", up = 72497, down = 72496, step = 10 },
+         { var = "L:VC_OVHD_EXTLT_Land_R_Switch", up = 72507, down = 72506, step = 10 }]
+on = 20
+off = 0
+
+[actions.light_taxi]
+var = "L:VC_OVHD_EXTLT_Nose_Switch"
+click_up = 72512
+click_down = 72511
+step = 10
+on = 10
+
+[actions.light_strobe]
+var = "L:VC_OVHD_EXTLT_Strobe_Switch"
+click_up = 72472
+click_down = 72471
+step = 10
+on = 20
+off = 10   # AUTO: an Airbus's strobes "off" (dark on the ground)
+
+[actions.light_beacon]
+var = "L:VC_OVHD_EXTLT_Beacon_Switch"
+click_up = 72477
+click_down = 72476
+step = 10
+on = 10
+
+[actions.light_nav]
+var = "L:VC_OVHD_EXTLT_NavLogo_Switch"
+click_up = 72487
+click_down = 72486
+step = 10
+on = 10
+
+[actions.light_logo]
+var = "L:VC_OVHD_EXTLT_NavLogo_Switch"
+click_up = 72487
+click_down = 72486
+step = 10
+on = 10
+
+# The gear lever: 0 down, 100 up (up is +1, as every lever's step up is).
+[actions.gear_up]
+var = "L:VC_GEAR_Lever"
+click_up = 76001
+click_down = 76000
+step = 100
+on = 100
+
+[actions.gear_down]
+var = "L:VC_GEAR_Lever"
+click_up = 76001
+click_down = 76000
+step = 100
+on = 0
+
+# The flap lever: 0 up, 105 a detent (+0 is a step down the quadrant, more flap).
+[actions.flaps_0]
+var = "L:VC_PED_FLAP_LEVER"
+click_up = 78364
+click_down = 78365
+step = 105
+scale = 105
+
+[actions.flaps_1]
+var = "L:VC_PED_FLAP_LEVER"
+click_up = 78364
+click_down = 78365
+step = 105
+scale = 105
+
+[actions.flaps_2]
+var = "L:VC_PED_FLAP_LEVER"
+click_up = 78364
+click_down = 78365
+step = 105
+scale = 105
+
+[actions.flaps_3]
+var = "L:VC_PED_FLAP_LEVER"
+click_up = 78364
+click_down = 78365
+step = 105
+scale = 105
+
+[actions.flaps_4]
+var = "L:VC_PED_FLAP_LEVER"
+click_up = 78364
+click_down = 78365
+step = 105
+scale = 105
+
+# The FCU's knobs (+5 a click clockwise, +6 back).
+[actions.speed]
+var = "L:FSL_FCU_SPD"
+click_up = 71226
+click_down = 71227
+
+[actions.heading]
+var = "L:FSL_FCU_HDG"
+click_up = 71240
+click_down = 71241
+
+[actions.vs]
+var = "L:FSL_FCU_VS"
+click_up = 71275
+click_down = 71276
+step = 100
+
+[actions.altitude]
+var = "L:FSL_FCU_ALT"
+click_up = 71261
+click_down = 71262
+step = 100
+learn = true            # 100 or 1,000 a click, as the 100/1000 switch is
+fine_var = "L:VC_GSLD_FCU_100_1000_Switch"   # 0 at 100, 10 at 1,000: an altitude between thousands wants 100
+fine_value = 0
+fine_codes = [71243]
+
+# The first officer's baro knob (its own side; the captain's is the captain's): +5 up, +6 down, a hundredth of an
+# inch (or a hectopascal) a click; pulled for STD, pushed back for QNH (then released).
+[actions.altimeter]
+var = "L:FSL_EFIS_FO_BARO"
+click_up = 71078
+click_down = 71079
+press = [71081, 71083]
+fine_codes = [71080, 71083]
+fine_var = "L:FSL_EFIS_FO_BARO_UNIT"   # 1 in inches
+
+# VHF 1 on RMP 1: the outer knob's MHz, then the inner's kHz (5 a click at 8.33 spacing, 25 at 25; it speeds up from
+# the third click in quick succession, so two at a time), transfer.
+[actions.com_standby]
+var = "L:FSL_RMP1.VHF.STBY"
+knobs = [{ up = 77554, down = 77553, div = 1000 }, { up = 77561, down = 77560, mod = 1000, step = 5, learn = true, burst = 2 }]
+
+[actions.com_active]
+var = "L:FSL_RMP1.VHF.STBY"
+knobs = [{ up = 77554, down = 77553, div = 1000 }, { up = 77561, down = 77560, mod = 1000, step = 5, learn = true, burst = 2 }]
+press = [77518, 77520]
+
+# The transponder's keypad: each digit pressed and released.
+[actions.squawk]
+keys = { "0" = 78327, "1" = 78292, "2" = 78297, "3" = 78302, "4" = 78307, "5" = 78312, "6" = 78317, "7" = 78322 }
+release = 2

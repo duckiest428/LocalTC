@@ -2,7 +2,8 @@
 are input events that move one step per frame, whatever value they're set to, and speed up when turned steadily).
 
 So it goes in closed loop: read the variable the knob drives, turn it a few steps towards the target (fewer as it
-nears), let it settle, read again, until it's there or it stops moving.
+nears), let it settle, read again, until it's there or it stops moving. The same loop moves an add-on's clickspots (the
+FSLabs Airbus's switches and knobs, a click at a time) until its own variable reads the position.
 """
 
 from dataclasses import dataclass, field
@@ -10,7 +11,7 @@ from dataclasses import dataclass, field
 STEP_GAP_S = 0.02  # one step a frame or so: sent faster, steps in the same frame count once
 SETTLE_S = 0.35  # after a burst, before the next read: the knob's speed-up wears off
 BURST = 20  # at most this many steps between reads (the speed-up builds after ~30)
-MAX_READS = 40
+MAX_READS = 60
 READ_TIMEOUT_S = 2.0
 STALLED_READS = 3  # the reading didn't move for this many bursts: the knob doesn't drive it, give up
 
@@ -21,7 +22,12 @@ class KnobTurn:
     target: float
     step: float  # what one step moves the reading (the smallest: 1 kt, 1 degree, 100 ft)
     wrap: float = 0.0  # 360 for a heading: the short way round
+    learn: bool = False  # the first step is one, and what it moved is the step (a knob at 100 or 1,000 ft a click)
+    div: float = 0.0  # compare value // div (a radio's MHz knob) ...
+    mod: float = 0.0  # ... or value % mod (its kHz knob, which wraps without carrying)
+    burst: int = BURST  # at most this many steps between reads: fewer for a knob that speeds up sooner
     reads: int = 0
+    sent: int = 0  # steps since the last read
     stalled: int = 0
     last: float | None = None
     pending: list[float] = field(default_factory=list)  # the steps still to send in this burst (+1/-1)
@@ -29,18 +35,36 @@ class KnobTurn:
     reading: bool = False  # a read is out
     done: bool = False
 
+    def __post_init__(self) -> None:
+        self.target = self.reading_of(self.target)
+        self.least = self.step  # there when within half the smallest step, whatever a click turned out to move
+        if self.mod and not self.wrap:
+            self.wrap = self.mod
+
     def error(self, value: float) -> float:
         err = self.target - value
         if self.wrap:
             err = (err + self.wrap / 2) % self.wrap - self.wrap / 2
         return err
 
+    def reading_of(self, value: float) -> float:
+        if self.div:
+            return float(value // self.div)
+        if self.mod:
+            return value % self.mod
+        return value
+
     def on_value(self, value: float, now: float) -> None:
         """The variable as just read: turn towards the target, or stop."""
         self.reading = False
         self.reads += 1
+        value = self.reading_of(value)
+        if self.learn and self.sent and self.last is not None and value != self.last:
+            self.step = abs(self.error(value) - self.error(self.last)) / self.sent
+            self.learn = False
+        self.sent = 0
         err = self.error(value)
-        if abs(err) <= self.step / 2 or self.reads >= MAX_READS:
+        if abs(err) <= min(self.step, self.least) / 2 or self.reads >= MAX_READS:
             self.done = True
             return
         self.stalled = self.stalled + 1 if self.last is not None and value == self.last else 0
@@ -49,7 +73,7 @@ class KnobTurn:
             return
         self.last = value
         steps = abs(err) / self.step
-        n = min(BURST, int(steps) // 2) if steps > 4 else 1  # half the way at most: the speed-up overshoots
+        n = 1 if self.learn else min(self.burst, int(steps) // 2) if steps > 4 else 1  # half the way at most: the speed-up overshoots
         self.pending = [1.0 if err > 0 else -1.0] * max(1, n)
         self.next_t = now
 
@@ -59,6 +83,7 @@ class KnobTurn:
             return None
         if self.pending:
             self.next_t = now + (STEP_GAP_S if len(self.pending) > 1 else SETTLE_S)
+            self.sent += 1
             return "step"
         self.reading = True  # asked again if no answer comes in this long
         self.next_t = now + READ_TIMEOUT_S

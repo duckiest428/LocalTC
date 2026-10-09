@@ -39,7 +39,7 @@ from localtc.atc_core import region as regions
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
 from localtc.crew import speech_acts
-from localtc.crew.actions import Cockpit, Plan, plan, safety
+from localtc.crew.actions import PILOT_SIDE, Cockpit, Plan, as_read, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command
 from localtc.crew.monitor import SAFETY, Call, Monitor
@@ -48,6 +48,7 @@ from localtc.flightdeck import FlightDeck
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AircraftVars,
     AtcTransmission,
     CopilotEvent,
     CrewAction,
@@ -58,6 +59,7 @@ from localtc.sim_api import (
     SimCommand,
     SimLifecycle,
     Transcript,
+    WatchVars,
 )
 
 log = logging.getLogger(__name__)
@@ -152,6 +154,10 @@ class PilotMonitoring:
         self._failures: dict[str, int] = {}  # times each control didn't take
         self._own_failed = self._own_took = 0
         self._no_hands_said = False
+        self._yours_said = 0
+        self._raw_own: OwnshipState | None = None
+        self._raw_systems: AircraftSystems | None = None
+        self._watching: tuple[str, ...] = ()
         self._heard_n = 0
         self._last_heard: tuple[float, str] | None = None
         self.utterances: deque[speech_acts.Reading | Any] = deque(maxlen=20)
@@ -198,6 +204,9 @@ class PilotMonitoring:
             out = []
         return out + self.deck.drain()
 
+    def _as_read(self, ev: Any) -> Any:
+        return as_read(ev, self.cockpit.profile, self.cockpit.vars)
+
     def _observe(self, ev: Any) -> list[Any]:
         out: list[Any] = []
         self.deck.observe(ev)
@@ -205,6 +214,8 @@ class PilotMonitoring:
             self._generation = self.deck.generation
             self._start()
         if isinstance(ev, OwnshipState):
+            self._raw_own = ev
+            ev = self._as_read(ev)
             self._note_own(ev)
             self.cockpit.own = ev
             self.cockpit.watch()
@@ -212,8 +223,19 @@ class PilotMonitoring:
         elif isinstance(ev, AircraftSystems):
             if self.cockpit.profile.altitude_index == 3:  # the FCU's altitude, as the copilot reads it everywhere
                 ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
+            self._raw_systems = ev
+            ev = self._as_read(ev)
             self._note_systems(ev)
             self.cockpit.systems = ev
+            self.cockpit.watch()
+        elif isinstance(ev, AircraftVars):
+            # The aircraft's own switches read: what the copilot sees is as they say, until the sim says otherwise.
+            self.cockpit.vars.update(ev.values)
+            if self._raw_own is not None:
+                self.cockpit.own = self._as_read(self._raw_own)
+            if self._raw_systems is not None:
+                self.cockpit.systems = self._as_read(self._raw_systems)
+                self.monitor.observe(self.cockpit.systems)  # the monitor sees the switches move too
             self.cockpit.watch()
         elif isinstance(ev, PhaseChanged):
             self._note(ev.t, f"phase now {ev.phase.lower().replace('_', ' ')}")
@@ -223,6 +245,10 @@ class PilotMonitoring:
                 log.info("Copilot: %s profile for %s", profile.name, ev.title or ev.atc_model)
                 self.cockpit.profile = profile
                 self.cockpit.dead = set(profile.cannot)
+                self.cockpit.vars = {}
+            if profile.watch != self._watching:
+                self._watching = profile.watch
+                out.append(WatchVars(names=profile.watch))
             self._aircraft = monitors._aircraft_name(ev.title or ev.atc_model)
             self._persona()
         elif isinstance(ev, AtcTransmission):
@@ -542,6 +568,11 @@ class PilotMonitoring:
             self._no_hands_said = True
             return [self._say(t, "I can't move this aircraft's switches from here; they're yours.", "refused"),
                     CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail="no hands in this aircraft")]
+        if cmd.action in PILOT_SIDE:
+            # Not the copilot's side: said in a word, and it's the pilot's to do.
+            self._yours_said += 1
+            return [self._say(t, _yours(self._yours_said - 1), "refused"),
+                    CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail="the pilot's side")]
         if cmd.action in self.cockpit.dead:
             return [self._say(t, f"My {_said(cmd).split()[0]} doesn't reach this aircraft; that one's yours.", "refused")]
         verdict = safety(cmd, self.cockpit)
@@ -1053,6 +1084,13 @@ def _seed(engine: Any) -> int:
     """The copilot's wording varies, the same way each time for the same flight (replays, tests)."""
     callsign = getattr(getattr(getattr(engine, "state", None), "flight", None), "callsign", None)
     return sum(map(ord, str(callsign))) if callsign else 0
+
+
+YOURS = ("Your side.", "That's yours.", "Yours.")
+
+
+def _yours(n: int) -> str:
+    return YOURS[min(n, len(YOURS) - 1)]
 
 
 def _describe(command: SimCommand) -> str:

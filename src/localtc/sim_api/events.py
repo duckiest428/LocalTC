@@ -475,6 +475,13 @@ class AircraftInputEvents(Event, tag="aircraft_input_events"):
     names: tuple[str, ...] = ()
 
 
+class AircraftVars(Event, tag="aircraft_vars"):
+    """Variables the copilot's profile reads (``WatchVars``): an add-on's own switch positions and windows, by name
+    ("L:VC_GEAR_Lever"), whatever the sim's standard variables say."""
+
+    values: dict[str, float] = {}
+
+
 class TrafficControlEntry(msgspec.Struct, frozen=True, kw_only=True):
     object_id: int
     callsign: str
@@ -500,7 +507,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport]
+                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

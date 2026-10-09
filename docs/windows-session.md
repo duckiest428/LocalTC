@@ -64,10 +64,11 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    [sim_bridge/definitions.py](../src/localtc/sim_bridge/definitions.py)) doesn't follow that switch in this
    aircraft. Note which, and fix the read for that aircraft if there's a variable that does follow it.
 4. If a control **didn't move and has no input event**, note it; don't guess.
-   The FSLabs A319/A320/A321 is the known case: its profile ([crew/profiles/fslabs_a3xx.toml](../src/localtc/crew/profiles/fslabs_a3xx.toml))
-   has `hands = false` because the sim's events don't reach it, and `reads_flaps` / `reads_autopilot = false` because
-   the sim's variables don't follow it (flap index 0-8, autopilot always off). If its own L:vars can be found
-   (the FSLabs SDK, or the sim's dev mode), map them and set `hands = true`.
+   *(The FSLabs A319/A320/A321 was the known case; done 2026-10-09:)* its cockpit's clickspots send `K:ROTOR_BRAKE`
+   with a code each (in its `ModelBehaviorDefs/Interior/*.xml`, `<EVENT_ID>`: +1 a step up, +0 down; a button +0
+   pressed, +2 released) and its `L:VC_..._Switch` / `L:FSL_FCU_*` variables read them back, so its profile
+   clicks (`click_up`/`click_down`, `knobs`, `press`, `keys`) and reads (`[reads]`). Another add-on that ignores the
+   sim's events may work the same way: look in its interior XML for what the clickspots send.
 5. *(Done 2026-10-08: `a350.toml`; see windows-findings.md.)* **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
    lights took, but the altitude, heading and autopilot never did, and the sim's flap, gear and autopilot readings
    never moved (flaps read up at flaps 1). The copilot now drops a control after it fails twice with its reading never

@@ -58,6 +58,34 @@ class TurnKnob(SimCommand, tag="turn_knob"):
     target: float
     step: float = 1.0
     wrap: float = 0.0
+    # A clickspot instead of an input event: ``event`` (an add-on's, "ROTOR_BRAKE") with ``up`` for a step that raises
+    # the reading and ``down`` for one that lowers it (the FSLabs Airbus's cockpit). ``learn``: the first step is one,
+    # and what it moved is the step from then on (an FCU altitude knob at 100 or 1,000 a click). ``div`` / ``mod``:
+    # the reading compared is ``value // div`` or ``value % mod`` (a radio's MHz knob, then its kHz one).
+    event: str = ""
+    up: int = 0
+    down: int = 0
+    learn: bool = False
+    div: float = 0.0
+    mod: float = 0.0
+    burst: int = 20  # steps at most between reads (the FSLabs's RMP knob speeds up after two)
+
+
+class ClickSequence(SimCommand, tag="click_sequence"):
+    """Clickspots one after another, a little apart (press, release; a transponder's digits): ``event`` with each of
+    ``codes``. The copilot's hands do one thing at a time: this and ``TurnKnob`` wait their turn."""
+
+    name: str
+    codes: tuple[int, ...]
+    event: str = "ROTOR_BRAKE"
+    gap_s: float = 0.15
+
+
+class WatchVars(SimCommand, tag="watch_vars"):
+    """Read these variables (an add-on's L:vars, its switches as the copilot sees them) every second, as
+    ``AircraftVars``; an empty list stops it."""
+
+    names: tuple[str, ...] = ()
 
 
 class NudgeVar(SimCommand, tag="nudge_var"):
@@ -121,4 +149,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
 
 
 AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
+                      ClickSequence, WatchVars,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

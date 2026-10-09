@@ -34,6 +34,9 @@ from localtc.sim_api import (
     AircraftIdentity,
     AircraftInputEvents,
     AircraftSystems,
+    AircraftVars,
+    ClickSequence,
+    WatchVars,
     AiObjectAssigned,
     AirportData,
     NearbyAirports,
@@ -120,6 +123,8 @@ def describe(cmd: Any) -> str:
         return f"encoder {cmd.name} by " + " then ".join(f"{d:+g}" for d in cmd.deltas)
     if isinstance(cmd, TurnKnob):
         return f"knob {cmd.name} to {cmd.target:g}"
+    if isinstance(cmd, ClickSequence):
+        return f"clicks {cmd.name} " + " ".join(map(str, cmd.codes))
     if isinstance(cmd, SetSimVar):
         return f"var {cmd.name} = {cmd.value:g}"
     return f"{type(cmd).__name__} {getattr(cmd, 'hz', '')}".strip()
@@ -143,6 +148,8 @@ class Probe:
         self.session: Any = None
         self._task: asyncio.Task | None = None
         self._profiles = profiles.load_all(None)
+        self._raw_own: OwnshipState | None = None
+        self._raw_systems: AircraftSystems | None = None
 
     async def __aenter__(self) -> "Probe":
         self.session = await self.source.start()
@@ -158,15 +165,26 @@ class Probe:
 
     async def _read(self) -> None:
         async for ev in self.source.events():
+            c = self.cockpit
             if isinstance(ev, OwnshipState):
-                self.cockpit.own = ev
+                self._raw_own = ev
+                c.own = actions.as_read(ev, c.profile, c.vars)
             elif isinstance(ev, AircraftSystems):
-                if self.cockpit.profile.altitude_index == 3:  # as the copilot reads it (crew/pm.py)
+                if c.profile.altitude_index == 3:  # as the copilot reads it (crew/pm.py)
                     ev = replace(ev, ap_altitude_sel=ev.ap_altitude_sel_3)
-                self.cockpit.systems = ev
+                self._raw_systems = ev
+                c.systems = actions.as_read(ev, c.profile, c.vars)
+            elif isinstance(ev, AircraftVars):  # the aircraft's own switches (its profile's [reads])
+                c.vars.update(ev.values)
+                if self._raw_own is not None:
+                    c.own = actions.as_read(self._raw_own, c.profile, c.vars)
+                if self._raw_systems is not None:
+                    c.systems = actions.as_read(self._raw_systems, c.profile, c.vars)
             elif isinstance(ev, AircraftIdentity):
                 self.identity = ev
-                self.cockpit.profile = profiles.for_aircraft(self._profiles, ev.title, ev.atc_model)
+                c.profile = profiles.for_aircraft(self._profiles, ev.title, ev.atc_model)
+                if c.profile.watch:
+                    await self.source.send(WatchVars(names=c.profile.watch))
             elif isinstance(ev, AircraftInputEvents):
                 self.input_events = ev.names
             elif isinstance(ev, TrafficSnapshot):
@@ -340,6 +358,8 @@ async def check_hands(probe: Probe, *, autopilot: bool = False, only: tuple[str,
             continue
         if not skip and cmd.action in probe.cockpit.profile.cannot:
             skip = "the profile leaves it to the pilot (cannot)"
+        if not skip and cmd.action in actions.PILOT_SIDE:
+            skip = "the pilot's side: the copilot leaves it to the pilot"
         if skip:
             report.add(Step(name, "skip", skip))
             continue

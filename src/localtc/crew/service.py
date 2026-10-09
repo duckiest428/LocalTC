@@ -8,6 +8,7 @@ from localtc.crew.pm import PilotMonitoring
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AircraftVars,
     ArrivalData,
     AtcAlert,
     AtcTransmission,
@@ -37,7 +38,7 @@ class CrewService:
         # Subscribed now, not in run(): a fast source could publish before run() starts.
         # Everything the copilot watches to speak first (crew.monitor): ATC and the pilot on the radio (so it doesn't
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
-        self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftIdentity, IntercomHeard, AtcTransmission,
+        self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftVars, AircraftIdentity, IntercomHeard, AtcTransmission,
                                      PhaseChanged, ReadbackEvaluated, PttPressed, PttReleased, IntercomPressed,
                                      IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData)
 

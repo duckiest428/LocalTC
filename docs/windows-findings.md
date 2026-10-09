@@ -4,6 +4,26 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-09: FSLabs A321neo, the copilot's hands; joystick buttons
+- Joystick buttons bound through SimConnect (`MapInputEventToClientEvent`, "joystick:0:button:1") are accepted and
+  never reported by MSFS 2024 (the log showed "Intercom: joystick:0:button:1 (through the sim)" and no presses). Now
+  read from Windows (winmm `joyGetPosEx`, `stt/joystick.py`): a T.Flight Hotas One's buttons 0 and 1 came through
+  with the sim focused.
+- The FSLabs has hands after all: its clickspots (`ModelBehaviorDefs/Interior/FSLA32X_Interior_Common_*.xml`) send
+  `K:ROTOR_BRAKE` with `<EVENT_ID>` (+1 up, +0 down; buttons +0 press, +2 release; FCU knobs +5/+6; the EFIS baro
+  +5/+6 and pull +1 / push +0 at its id+7, release +3). Its `L:VC_*` variables read the switches (0/10/20; the flap
+  lever 0/110/210, about 105 a detent; the speedbrake lever 10 retracted, 0 armed, and the sim's SPOILERS ARMED
+  follows it), `L:FSL_FCU_SPD/HDG/ALT/VS` the FCU's windows, `L:FSL_EFIS_FO_BARO` the first officer's baro (hundredths
+  of an inch), `L:FSL_RMP1.VHF.STBY` RMP 1's standby (the sim's COM STANDBY follows RMP 1; the sim's
+  COM_STBY_RADIO_SET_HZ doesn't reach the RMP). The sim's LIGHT LANDING etc. never move. Its local HTTP server
+  (port 8080) lists L:vars at `/Sim/ListLvar`, which is how the names were found.
+- `debug hands` on battery: lights, flaps lever, heading, altitude, speed, V/S, COM standby and active pass. The FCU's
+  altitude knob is 100 or 1,000 a click by its 100/1000 switch (`L:VC_GSLD_FCU_100_1000_Switch` 0 = 100); RMP 1's
+  inner knob speeds up from the third quick click (2 clicks 15 kHz, 12 clicks 250), so it's turned two at a time.
+- Open: the transponder's digits (CLR took, digits didn't, cold: needs AC?), the gear lever (not moved on the
+  ground: +1 up, by every other lever), the FCU's push/pull (no answer with the FMGC off), the autopilot's engagement
+  (no variable found).
+
 ## 2026-10-09: traffic control (shadow, reinject) at RJTT, Live Traffic with FSLTL
 Run against the sim from scratch harnesses driving the real `TrafficControl` and `SimConnectSource` (25 min watched,
 30-40 aircraft around), then `debug traffic`.

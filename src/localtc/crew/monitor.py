@@ -17,8 +17,9 @@ design speeds; the flap and gear limits from the aircraft's profile.
 The copilot works its own side of the cockpit (``[crew] hands = "pm"``): the radios in standby on a handoff, the
 transponder code, the altimeter at the transition, the exterior lights, the gear on positive rate and the flaps on
 schedule after takeoff, the selected altitude and heading as cleared, the after-landing flow. The captain's side
-(parking brake, engines, thrust, the autopilot, the flaps for takeoff and landing) it never touches: it notices when
-something there is missed and says so. With ``hands = "calls"`` it touches nothing at all and only says.
+(parking brake, engines, thrust, the speedbrake lever, the autopilot, the flaps for takeoff and landing) it never
+touches: it notices when something there is missed and says so in a word ("Spoilers, your side."); asked to, it says
+"Your side." (crew.actions PILOT_SIDE). With ``hands = "calls"`` it touches nothing at all and only says.
 
 Pure, like the rest of the copilot: ``observe`` every event, ``due(t)`` for what to say now.
 """
@@ -1042,8 +1043,6 @@ class Monitor(WatchMixin):
         cmds = []
         if own is not None and self.c.flaps_index:
             cmds.append(Command("flaps", "up"))
-        if s is not None and s.spoilers_armed:
-            cmds.append(Command("spoilers", "disarm"))
         if s is not None and s.light_strobe:
             cmds.append(Command("light", "off", "strobe"))
         if s is not None and s.light_landing:
@@ -1054,6 +1053,8 @@ class Monitor(WatchMixin):
             text = "Clear of the runway. " + (", ".join(done).capitalize() + "." if done else "After landing flow done.")
         else:
             text = "Clear of the runway."
+        if s is not None and s.spoilers_armed:  # the speedbrake lever is the pilot's side: a word, not a hand
+            text += " Spoilers, your side."
         self._call("after_landing", ROUTINE, t, text, commands=tuple(cmds))
         self.f.checklists.add("after_landing")
 

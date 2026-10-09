@@ -7,6 +7,8 @@ which win). The aircraft is matched by its title or ATC model ("A20N", "Airbus A
 """
 
 import logging
+import operator
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +42,49 @@ class Write:
     step: float = 1.0
     var: str = ""
     var_unit: str = ""
+    # An add-on's clickspots (the FSLabs Airbus): ``click_up`` / ``click_down`` raise / lower ``var`` a click at a time
+    # (``click_event``, its ROTOR_BRAKE codes), turned until ``var`` reads ``on``/``off`` or the value times ``scale``.
+    # ``knobs``: several in turn, each {up, down, step, div, mod, learn} (a radio's MHz, then its kHz); ``press``: codes
+    # clicked after (a transfer button: press, release); ``keys``: a keypad, a code for each character, each followed
+    # by itself plus ``release`` (a transponder's digits).
+    click_event: str = "ROTOR_BRAKE"
+    click_up: int = 0
+    click_down: int = 0
+    scale: float = 1.0
+    learn: bool = False
+    knobs: tuple[dict, ...] = ()
+    press: tuple[int, ...] = ()
+    keys: dict[str, int] = field(default_factory=dict)
+    release: int = 0
+    # A switch to put somewhere first, when the value wants it ("fine" = an FCU altitude that isn't a whole thousand:
+    # the 100/1,000 switch at 100): ``fine_var`` reads ``fine_value`` there, ``fine_codes`` put it there.
+    fine_var: str = ""
+    fine_value: float = 0.0
+    fine_codes: tuple[int, ...] = ()
+
+    @property
+    def clicks(self) -> bool:
+        return bool(self.click_up or self.click_down or self.knobs or self.press or self.keys)
+
+
+# A reading of the aircraft's own variables, for a field of the sim's state ("L:VC_GEAR_Lever >= 50"): the variable, and
+# optionally an operator and a number.
+READ = re.compile(r"^\s*(L:[\w.]+)\s*(?:(>=|<=|==|!=|>|<|/|\*)\s*(-?[\d.]+))?\s*$")
+OPS = {">=": operator.ge, "<=": operator.le, "==": operator.eq, "!=": operator.ne, ">": operator.gt, "<": operator.lt,
+       "/": operator.truediv, "*": operator.mul}
+
+
+def read_var(expr: str, values: dict[str, float]) -> float | bool | None:
+    """``expr`` worked out from the variables read (None while its variable hasn't been)."""
+    try:
+        return float(expr)  # a fixed number ("4": the detents the sim miscounts)
+    except ValueError:
+        pass
+    m = READ.match(expr)
+    if not m or m.group(1) not in values:
+        return None
+    value = values[m.group(1)]
+    return OPS[m.group(2)](value, float(m.group(3))) if m.group(2) else value
 
 
 @dataclass(frozen=True)
@@ -86,6 +131,17 @@ class Profile:
     unread: tuple[str, ...] = ()
     # The FCU's altitude is AUTOPILOT ALTITUDE LOCK VAR at this index (3 in the A32NX-based aircraft), not 0.
     altitude_index: int = 0
+    # The aircraft's own variables for the sim's (``[reads]``: ``light_landing = "L:VC_..._Switch >= 15"``), where the
+    # sim's don't follow its switches: what the copilot checks and watches by. A field of OwnshipState or
+    # AircraftSystems; a bool field takes a comparison, a number field the variable (divided or multiplied).
+    reads: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def watch(self) -> tuple[str, ...]:
+        """The variables to read for this aircraft: its ``reads``, and the switches its actions look at first."""
+        names = [m.group(1) for expr in self.reads.values() if (m := READ.match(expr))]
+        names += [w.fine_var for w in self.actions.values() if w.fine_var]
+        return tuple(dict.fromkeys(names))
 
     def autobrake_name(self, position: int) -> str:
         """The switch position as said ("medium"), or "" when this aircraft's positions aren't known."""
@@ -132,7 +188,8 @@ class Profile:
 
 def parse(data: dict) -> Profile:
     a = data.get("aircraft", {})
-    actions = {name: Write(**{k: v for k, v in spec.items() if k in Write.__dataclass_fields__})
+    actions = {name: Write(**{k: tuple(v) if isinstance(v, list) else v for k, v in spec.items()
+                              if k in Write.__dataclass_fields__})
                for name, spec in data.get("actions", {}).items()}
     return Profile(
         name=str(a.get("name", "stock")), match=tuple(a.get("match", ())), flaps=str(a.get("flaps", "set")),
@@ -149,7 +206,7 @@ def parse(data: dict) -> Profile:
         short_runway_ft=int(a.get("short_runway_ft", 7000)), hands=bool(a.get("hands", True)),
         reads_flaps=bool(a.get("reads_flaps", True)), reads_autopilot=bool(a.get("reads_autopilot", True)),
         cannot=tuple(str(x) for x in a.get("cannot", ())), unread=tuple(str(x) for x in a.get("unread", ())),
-        altitude_index=int(a.get("altitude_index", 0)),
+        altitude_index=int(a.get("altitude_index", 0)), reads={str(k): str(v) for k, v in data.get("reads", {}).items()},
     )
 
 

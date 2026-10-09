@@ -103,19 +103,28 @@ def test_later_quiets_the_suggestions_but_not_the_callouts():
     assert pm.monitor._call("clearance_prompt", monitor.ROUTINE, 2000.0, "Call for the clearance when you're ready.")
 
 
-def test_the_fslabs_gets_its_own_profile_and_hands_off():
+def test_the_fslabs_is_worked_by_its_clickspots_and_read_by_its_own_variables():
+    """The FSLabs ignores the sim's key events and variables: the copilot clicks its controls (ROTOR_BRAKE codes) a
+    step at a time until its own L:vars read the position, and sees the cockpit by them."""
+    from localtc.sim_api import AircraftVars, TurnKnob, WatchVars
+
     fsl = for_aircraft(PROFILES, "FSLabs A321-211 - Air Canada (C-FJNX)", "A321")
-    assert fsl.name == "FSLabs Airbus" and not fsl.hands and not fsl.reads_flaps
+    assert fsl.name == "FSLabs Airbus" and fsl.hands and "L:VC_PED_FLAP_LEVER" in fsl.watch
     assert for_aircraft(PROFILES, "Airbus A320neo Asobo", "A20N").name == "Airbus A320neo"
     pm = PilotMonitoring(FakeEngine(), profiles=PROFILES)
-    pm.observe(AircraftIdentity(t=0.0, title="FSLabs A321-211 - Air Canada (C-FJNX)", atc_model="A321"))
+    out = pm.observe(AircraftIdentity(t=0.0, title="FSLabs A321-211 - Air Canada (C-FJNX)", atc_model="A321"))
+    assert [o for o in out if isinstance(o, WatchVars)][0].names == fsl.watch
     pm.observe(AircraftSystems(t=0.1, flaps_positions=9, flaps_pct=0))
-    pm.observe(own(0.2, flaps_index=6))
-    assert pm.cockpit.flaps_index is None  # the FSLabs' handle reads 0-8: not its detents
+    pm.observe(own(0.2, flaps_index=6))  # the sim's handle, 0-8: not believed
+    pm.observe(AircraftVars(t=0.3, values={"L:VC_PED_FLAP_LEVER": 0.0, "L:VC_OVHD_EXTLT_Land_L_Switch": 0.0}))
+    assert pm.cockpit.flaps_index == 0 and not pm.cockpit.systems.light_landing
     out = pm.observe(IntercomHeard(t=1.0, text="flaps one"))
-    assert said(out) == ["I can't move this aircraft's switches from here; they're yours."]
+    knobs = [o for o in out if isinstance(o, TurnKnob)]
+    assert knobs and knobs[0].event == "ROTOR_BRAKE" and knobs[0].var == "L:VC_PED_FLAP_LEVER" and knobs[0].target == 105
     assert not [o for o in out if isinstance(o, SendSimEvent)]
-    assert said(pm.observe(IntercomHeard(t=2.0, text="gear down"))) == ["That one's yours."]
+    pm.observe(AircraftVars(t=2.0, values={"L:VC_PED_FLAP_LEVER": 110.0}))
+    assert pm.cockpit.flaps_index == 1
+    assert said(pm.observe(IntercomHeard(t=3.0, text="set the parking brake"))) == ["Your side."]  # the captain's
 
 
 def test_no_flap_speed_warning_from_a_handle_that_cant_be_read():

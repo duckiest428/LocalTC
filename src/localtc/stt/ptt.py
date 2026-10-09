@@ -1,8 +1,8 @@
 """A keyboard key as the push-to-talk switch, working while another window (the sim) has focus.
 
 Uses pynput's global keyboard hook. Windows needs nothing; macOS asks to allow Input Monitoring
-for the terminal the first time. Joystick buttons go through SimConnect instead (the bridge's
-``live.ptt_input``), and ``ptt = "enter"`` uses the terminal with no permissions at all.
+for the terminal the first time. Joystick buttons are read from Windows instead (``stt/joystick.py``), and
+``ptt = "enter"`` uses the terminal with no permissions at all.
 """
 
 import logging

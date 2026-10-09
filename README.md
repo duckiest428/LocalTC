@@ -173,17 +173,21 @@ move an aircraft's switches, it calls them out for you instead.
 **Copilot's hands, checked in MSFS 2024** (each control moved by the copilot and seen in the cockpit, parked at a
 gate; engaging the autopilot and V/S can only be checked in flight and haven't been yet):
 
-| Aircraft | Lights | Flaps | Speed / heading / altitude | Spoilers arm | Squawk, COM | Parking brake |
-|---|---|---|---|---|---|---|
-| Asobo A320neo (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ❌ yours | ✅ | ✅ |
-| Asobo A350 (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ❌ yours | ✅ | ✅ |
-| Fenix A319 / A320 / A321 | ✅ | ✅ | speed, altitude ✅; heading yours | ❌ yours | squawk ✅, COM standby yours | ✅ |
-| FlyByWire A380X | ✅ | ✅ | ✅ | ❌ yours | squawk ✅, COM standby yours | ✅ |
-| Headwind A330-900 | ✅ | ✅ | ✅ | ❌ yours | ✅ | ✅ |
-| Boeing 737 MAX 8 (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Boeing 747-8i (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Boeing 787-9 (HorizonSim) / 787-10 (stock) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| FSLabs A319 / A320 / A321 | calls only: its switches can't be moved from outside the aircraft | | | | | |
+| Aircraft | Lights | Flaps | Speed / heading / altitude | Squawk, COM |
+|---|---|---|---|---|
+| Asobo A320neo (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ✅ |
+| Asobo A350 (stock) | ✅ | ✅ | ✅ (turns the FCU knobs) | ✅ |
+| Fenix A319 / A320 / A321 | ✅ | ✅ | speed, altitude ✅; heading yours | squawk ✅, COM standby yours |
+| FlyByWire A380X | ✅ | ✅ | ✅ | squawk ✅, COM standby yours |
+| Headwind A330-900 | ✅ | ✅ | ✅ | ✅ |
+| Boeing 737 MAX 8 (stock) | ✅ | ✅ | ✅ | ✅ |
+| Boeing 747-8i (stock) | ✅ | ✅ | ✅ | ✅ |
+| Boeing 787-9 (HorizonSim) / 787-10 (stock) | ✅ | ✅ | ✅ | ✅ |
+| FSLabs A319 / A320 / A321 | ✅ | ✅ | ✅ (clicks the FCU knobs, V/S too) | COM ✅ (RMP 1); squawk not yet seen powered |
+
+The copilot works its own side: the radios, transponder, its own altimeter, the lights, and the gear, flaps and FCU
+when you ask. The parking brake, the speedbrake lever (spoilers), the thrust and engaging the autopilot are yours:
+asked for one, it says "Your side." and leaves it.
 
 "Yours": the copilot tells you it can't reach that one on this aircraft, rather than pretending. Another aircraft gets
 the sim's standard controls, which most stock aircraft follow; if one doesn't, the copilot notices after two tries and

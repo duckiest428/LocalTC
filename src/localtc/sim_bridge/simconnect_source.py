@@ -13,6 +13,7 @@ import re
 import struct
 import threading
 import time
+from collections import deque
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from typing import Protocol
@@ -35,6 +36,9 @@ from localtc.sim_api import (
     SendSimEvent,
     SetInputEvent,
     TurnKnob,
+    ClickSequence,
+    WatchVars,
+    AircraftVars,
     SetAiVar,
     NudgeVar,
     SpawnAiAircraft,
@@ -91,6 +95,7 @@ REQ_AIRCRAFT_MORE = 7
 REQ_INPUT_EVENTS = 8
 REQ_TRAFFIC_IDENT, REQ_TRAFFIC_LIVERY, REQ_MODELS, REQ_AI_REMOVE = 9, 10, 11, 12
 DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
+REQ_WATCH, FIRST_WATCH_DEFINITION = 13, 900  # the profile's own variables (WatchVars): a new definition each time
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
 FIRST_FACILITY_REQUEST = 100
@@ -282,7 +287,13 @@ class SimConnectSource:
         self._simvar_definitions: dict[str, int] = {}
         self._nudges: dict[int, list[float]] = {}  # an encoder's definition -> the amounts still to add (NudgeVar)
         self._nudge_at: dict[int, tuple[float, float]] = {}  # ... -> its value as read and added to, the next write
-        self._knobs: dict[str, tuple[KnobTurn, int]] = {}  # input event -> the turn and its variable's definition
+        # The copilot's hands do one thing at a time: knobs turned and clickspots clicked in turn (TurnKnob,
+        # ClickSequence), the one in hand with its variable's definition (a knob) or its clicks still to send.
+        self._hands: deque[SimCommand] = deque()
+        self._hand: tuple | None = None
+        self._watch: tuple[str, ...] = ()
+        self._watch_define = 0
+        self._watch_count = 0
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
                                   (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
                                   (DEF_AIRCRAFT_MORE, defs.AIRCRAFT_MORE)):
@@ -377,7 +388,7 @@ class SimConnectSource:
                     except SimConnectError as exc:
                         log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
-                self._turn_knobs(dll, handle)
+                self._work_hands(dll, handle)
                 self._nudge(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
@@ -459,8 +470,10 @@ class SimConnectSource:
                 self._set_input_event(dll, handle, command)
             elif isinstance(command, NudgeVar):
                 self._start_nudge(dll, handle, command)
-            elif isinstance(command, TurnKnob):
-                self._start_knob(dll, handle, command)
+            elif isinstance(command, (TurnKnob, ClickSequence)):
+                self._hands.append(command)
+            elif isinstance(command, WatchVars):
+                self._watch_vars(dll, handle, command.names)
             elif isinstance(command, SetAiVar):
                 self._set_ai_var(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
@@ -515,18 +528,93 @@ class SimConnectSource:
         except (SimConnectError, AttributeError) as exc:
             log.warning("Copilot couldn't set %s: %s", command.name, exc)
 
-    def _start_knob(self, dll: SimConnectApi, handle: int, command: TurnKnob) -> None:
-        if command.name.upper() not in self._input_events:
+    def _start_knob(self, dll: SimConnectApi, handle: int, command: TurnKnob) -> bool:
+        if not command.event and command.name.upper() not in self._input_events:
             log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
-            return
+            return False
         try:
             define_id = self._var_definition(dll, handle, command.var, command.unit)
         except SimConnectError as exc:
             log.warning("Copilot can't read %s to turn %s: %s", command.var, command.name, exc)
-            return
-        self._knobs[command.name.upper()] = (KnobTurn(command.name.upper(), command.target, command.step, command.wrap),
-                                             define_id)
+            return False
+        turn = KnobTurn(command.name.upper(), command.target, command.step, command.wrap, learn=command.learn,
+                        div=command.div, mod=command.mod, burst=command.burst)
+        self._hand = (turn, define_id, command)
         log.info("Copilot: turning %s to %s", command.name, command.target)
+        return True
+
+    def _event_id(self, dll: SimConnectApi, handle: int, name: str) -> int:
+        event_id = self._copilot_events.get(name)
+        if event_id is None:
+            event_id = FIRST_COPILOT_EVENT + len(self._copilot_events)
+            dll.map_client_event_to_sim_event(handle, event_id, name)
+            self._copilot_events[name] = event_id
+        return event_id
+
+    def _click(self, dll: SimConnectApi, handle: int, event: str, code: int) -> None:
+        dll.transmit_client_event(handle, OBJECT_ID_USER, self._event_id(dll, handle, event), code,
+                                  GROUP_PRIORITY_HIGHEST, EVENT_FLAG_GROUPID_IS_PRIORITY)
+
+    def _work_hands(self, dll: SimConnectApi, handle: int) -> None:
+        """The control in hand a step further (a knob read or turned, the next click), else the next one taken up."""
+        now = time.monotonic()
+        while self._hand is None and self._hands:
+            command = self._hands.popleft()
+            if isinstance(command, ClickSequence):
+                self._hand = (list(command.codes), now, command)
+                log.info("Copilot: %s (%s)", command.name, " ".join(map(str, command.codes)))
+            else:
+                self._start_knob(dll, handle, command)
+        if self._hand is None:
+            return
+        try:
+            if isinstance(self._hand[2], ClickSequence):
+                codes, next_t, seq = self._hand
+                if now >= next_t:
+                    if codes:
+                        self._click(dll, handle, seq.event, codes.pop(0))
+                        self._hand = (codes, now + seq.gap_s, seq)
+                    else:
+                        self._hand = None
+                return
+            turn, define_id, command = self._hand
+            if turn.done:
+                self._hand = None
+                return
+            what = turn.due(now)
+            if what == "step":
+                step = turn.pending.pop()
+                if command.event:
+                    self._click(dll, handle, command.event, command.up if step > 0 else command.down)
+                else:
+                    dll.set_input_event(handle, self._input_events[turn.name], step)
+            elif what == "read":
+                dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER,
+                                               Period.ONCE)
+        except (SimConnectError, KeyError, AttributeError) as exc:
+            log.warning("Copilot couldn't work %s: %s", getattr(self._hand[2], "name", "a control"), exc)
+            self._hand = None
+
+    def _watch_vars(self, dll: SimConnectApi, handle: int, names: tuple[str, ...]) -> None:
+        """The profile's variables read every second from now (a new definition: they can't be taken out of one)."""
+        if names == self._watch:
+            return
+        try:
+            if self._watch_define:
+                dll.request_data_on_sim_object(handle, REQ_WATCH, self._watch_define, OBJECT_ID_USER, Period.NEVER)
+            self._watch, self._watch_define = names, 0
+            if not names:
+                return
+            define_id = FIRST_WATCH_DEFINITION + self._watch_count
+            self._watch_count += 1
+            for name in names:
+                dll.add_to_data_definition(handle, define_id, name, "number", defs.F64)
+            dll.request_data_on_sim_object(handle, REQ_WATCH, define_id, OBJECT_ID_USER, Period.SECOND,
+                                           RequestFlag.CHANGED)
+            self._watch_define = define_id
+            log.info("Copilot: reading %d of the aircraft's own variables", len(names))
+        except SimConnectError as exc:
+            log.warning("Copilot can't read the aircraft's own variables: %s", exc)
 
     def _var_definition(self, dll: SimConnectApi, handle: int, var: str, unit: str) -> int:
         key = f"{var}|{unit}" if unit != "number" else var
@@ -589,23 +677,6 @@ class SimConnectSource:
             except SimConnectError as exc:
                 log.warning("Copilot couldn't turn an encoder: %s", exc)
                 self._nudges.pop(define_id, None)
-
-    def _turn_knobs(self, dll: SimConnectApi, handle: int) -> None:
-        now = time.monotonic()
-        for name, (turn, define_id) in list(self._knobs.items()):
-            if turn.done:
-                del self._knobs[name]
-                continue
-            try:
-                what = turn.due(now)
-                if what == "step":
-                    dll.set_input_event(handle, self._input_events[name], turn.pending.pop())
-                elif what == "read":
-                    dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER,
-                                                   Period.ONCE)
-            except (SimConnectError, KeyError, AttributeError) as exc:
-                log.warning("Copilot couldn't turn %s: %s", name, exc)
-                del self._knobs[name]
 
     def _on_input_events(self, msg: InputEventList) -> None:
         for name, hash_, _kind in msg.events:
@@ -722,11 +793,16 @@ class SimConnectSource:
         if msg.request_id >= KNOB_READ_REQUEST:
             if msg.request_id - KNOB_READ_REQUEST in self._nudges and len(msg.payload) >= 8                     and msg.request_id - KNOB_READ_REQUEST not in self._nudge_at:
                 self._on_nudge(msg.request_id - KNOB_READ_REQUEST, struct.unpack_from("<d", msg.payload)[0])
-            for turn, define_id in self._knobs.values():
-                if KNOB_READ_REQUEST + define_id == msg.request_id and len(msg.payload) >= 8:
-                    turn.on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())
-                    if turn.done:
-                        log.info("Copilot: %s turned to %g", turn.name, struct.unpack_from("<d", msg.payload)[0])
+            hand = self._hand
+            if hand is not None and isinstance(hand[0], KnobTurn) and len(msg.payload) >= 8 \
+                    and KNOB_READ_REQUEST + hand[1] == msg.request_id:
+                hand[0].on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())
+                if hand[0].done:
+                    log.info("Copilot: %s turned to %g", hand[0].name, struct.unpack_from("<d", msg.payload)[0])
+        elif msg.request_id == REQ_WATCH and self._watch:
+            n = min(len(self._watch), len(msg.payload) // 8)
+            values = struct.unpack_from(f"<{n}d", msg.payload)
+            self._emit(AircraftVars(t=t, values=dict(zip(self._watch, values))))
         elif msg.request_id == REQ_OWNSHIP:
             self._user_object_id = msg.object_id
             ownship = defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t)

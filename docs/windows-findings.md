@@ -4,6 +4,14 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-08: stock 747-8i, HorizonSim 787-9, stock 737 MAX 8, the copilot's hands
+- 747-8i and 787-9 (HorizonSim, "Boeing 787-9 (GE) Air Canada OC", on the stock Boeing systems): every control passes
+  with the sim's key events, and the MCP showed the values (by eye). No profile needed.
+- 737 MAX 8: all pass but landing, nav and strobe lights. New `b737_stock.toml`: `LIGHTING_LANDING_LIGHT_FIXED_L/_R`
+  0 on, 1 off (each its own); `LIGHTING_POSITION_LIGHT` 0 steady, 1 off, 2 strobe and steady. Input events can now be
+  named two at a time (`input = "A, B"`) like L:vars. Strobes off puts the switch at steady (nav on): one switch.
+- Open on all three: the autopilot (not tried parked).
+
 ## 2026-10-08: Headwind A330-900neo, the copilot's hands
 - 24 input events. Lights, squawk, COM standby and active take the sim's events. `A32NX.FCU_HDG_SET` / `SPD_SET` /
   `ALT_SET` set the FCU (by eye: 250 / 147 / 12000); the altitude shows in AUTOPILOT ALTITUDE LOCK VAR:3 only. New

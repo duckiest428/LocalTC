@@ -1,0 +1,26 @@
+# The MSFS 2024 stock Boeing 737 MAX 8. Everything takes the sim's events but three lights, which go through their
+# input events, with the switch positions as the sim has them (tried 2026-10-08): the fixed landing lights 0 on, 1 off
+# (a switch each side); the position light 0 steady, 1 off, 2 strobe and steady.
+[aircraft]
+name = "Boeing 737 MAX"
+match = ["737 Max", "B38M"]
+spoilers = true
+reversers = true
+speed_check_kt = 80
+rollout_call_kt = 60
+ceiling_ft = 41000
+
+[actions.light_landing]
+input = "LIGHTING_LANDING_LIGHT_FIXED_L, LIGHTING_LANDING_LIGHT_FIXED_R"
+on = 0
+off = 1
+
+[actions.light_nav]
+input = "LIGHTING_POSITION_LIGHT"
+on = 0
+off = 1
+
+[actions.light_strobe]
+input = "LIGHTING_POSITION_LIGHT"
+on = 2
+off = 0

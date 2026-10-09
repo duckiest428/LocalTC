@@ -103,3 +103,15 @@ def test_an_fcu_altitude_at_index_3_is_the_one_the_copilot_reads():
     pm.observe(AircraftIdentity(t=0.0, title="Airbus A330-900neo Delta", atc_model="A330"))
     pm.observe(AircraftSystems(t=1.0, ap_altitude_sel=5000, ap_altitude_sel_3=12000))
     assert pm.cockpit.profile.name == "Headwind A330-900" and pm.cockpit.systems.ap_altitude_sel == 12000
+
+
+def test_the_737s_landing_lights_are_a_switch_each_side_and_on_is_0():
+    from localtc.crew.actions import Cockpit, plan
+    from localtc.crew.commands import Command
+    from localtc.crew.profiles import for_aircraft, load_all
+    from localtc.sim_api import SetInputEvent
+
+    c = Cockpit(profile=for_aircraft(load_all(), "737 Max 8 Passengers", "N738B"))
+    assert plan(Command("light", "on", "landing"), c).writes == (
+        SetInputEvent(name="LIGHTING_LANDING_LIGHT_FIXED_L", value=0.0),
+        SetInputEvent(name="LIGHTING_LANDING_LIGHT_FIXED_R", value=0.0))

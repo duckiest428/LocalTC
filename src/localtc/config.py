@@ -54,8 +54,6 @@ class LiveConfig(_Section):
     retry_max_s: float = 15.0
     connect_timeout_s: float = 0.0  # 0 = wait indefinitely
     nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
-    ptt_input: str = ""  # a joystick button or key as push-to-talk through the sim, e.g. "joystick:0:button:3"
-    intercom_input: str = ""  # ... and as the intercom key (talking to the copilot)
     traffic_identity: bool = False  # ask who the AI traffic is (model, livery, destination): EXPERIMENTAL traffic control
 
 

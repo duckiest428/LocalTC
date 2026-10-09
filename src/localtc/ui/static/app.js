@@ -821,67 +821,32 @@ const Settings = {
         <div class="small cloud-test" id="tts-test"></div>
       </details>`;
   },
-  // A yoke or joystick button found by pressing it: pick the device from the list (the controllers Windows has
-  // connected, through the window's Gamepad API), press Detect, then the button. Written as MSFS names it,
-  // joystick:<device>:button:<n>, the device numbered in the order Windows lists them, as MSFS does.
+  // A yoke or joystick button found by pressing it: LocalTC reads the controllers from Windows (as during a flight,
+  // whichever window has focus), so Detect then press it. Written as MSFS names it, joystick:<device>:button:<n>.
   joyPicker(id) {
     return `<div class="joy-pick">
-      <select id="joy-dev-${id}" title="The device the button is on"><option value="">Any device (press its button)</option></select>
       <button class="btn small" id="joy-detect-${id}">Detect</button>
       <span class="muted small" id="joy-hint-${id}"></span></div>`;
   },
-  joyDevices() {
-    try { return [...(navigator.getGamepads?.() || [])].filter(Boolean); } catch { return []; }
-  },
-  fillJoyDevices(id) {
-    const sel = $(`#joy-dev-${id}`);
-    if (!sel) return;
-    const cur = sel.value, pads = this.joyDevices();
-    sel.innerHTML = `<option value="">${pads.length ? "Any device (press its button)" : "No controllers seen yet: press any button on one"}</option>` +
-      pads.map((g) => `<option value="${g.index}" ${String(g.index) === cur ? "selected" : ""}>${g.index}: ${esc(g.id.replace(/\s*\(.*?Vendor.*\)$/i, ""))}</option>`).join("");
-  },
   bindJoy(id, input, key) {
-    this.fillJoyDevices(id);
-    if (!this._joyListening) {
-      this._joyListening = true;
-      const refill = () => ["ptt", "ic"].forEach((x) => this.fillJoyDevices(x));
-      window.addEventListener("gamepadconnected", refill);
-      window.addEventListener("gamepaddisconnected", refill);
-    }
     const button = $(`#joy-detect-${id}`), hint = $(`#joy-hint-${id}`);
     if (!button) return;
-    button.onclick = (e) => {
+    button.onclick = async (e) => {
       e.preventDefault();
-      if (!navigator.getGamepads) { hint.textContent = "This window can't see controllers: type the button's MSFS name."; return; }
-      if (this._joyStop) this._joyStop();
       hint.textContent = "Press the button now ...";
       button.disabled = true;
-      // What's already held is not the answer: only a button that goes down after Detect.
-      const held = new Map(this.joyDevices().map((g) => [g.index, g.buttons.map((b) => b.pressed)]));
-      const started = performance.now();
-      let raf = 0;
-      const stop = (text) => { cancelAnimationFrame(raf); button.disabled = false; this._joyStop = null; if (text !== undefined) hint.textContent = text; };
-      this._joyStop = () => stop("");
-      const poll = () => {
-        this.fillJoyDevices(id);
-        const want = $(`#joy-dev-${id}`)?.value;
-        for (const g of this.joyDevices()) {
-          if (want !== "" && want !== undefined && String(g.index) !== want) continue;
-          const before = held.get(g.index) || [];
-          const n = g.buttons.findIndex((b, i) => b.pressed && !before[i]);
-          if (n >= 0) {
-            const name = `joystick:${g.index}:button:${n}`;
-            $(input).value = name;
-            this.save("voice", key, name);
-            stop(`Got it: button ${n} on ${g.id.split("(")[0].trim() || "device " + g.index}.`);
-            return;
-          }
-          held.set(g.index, g.buttons.map((b) => b.pressed));
+      try {
+        const r = await api("joystick/detect", {});
+        if (!r.button) {
+          const d = await api("joystick").catch(() => ({ devices: [] }));
+          hint.textContent = d.devices.length ? "Nothing pressed in 15 s: Detect, then press it." : "No controller connected.";
+        } else {
+          $(input).value = r.button;
+          await this.save("voice", key, r.button);
+          hint.textContent = `Got it: button ${r.number + 1} on ${r.device}.`;
         }
-        if (performance.now() - started > 15000) { stop("Nothing pressed in 15 s. Pick the device and try again."); return; }
-        raf = requestAnimationFrame(poll);
-      };
-      raf = requestAnimationFrame(poll);
+      } catch (err) { hint.textContent = ""; fail(err); }
+      button.disabled = false;
     };
   },
   bindCloud() {
@@ -1006,7 +971,7 @@ const Settings = {
         <div class="row">
           <label>Push-to-talk switch<select id="s-ptt">
             <option value="keyboard" ${st.voice.ptt === "keyboard" ? "selected" : ""}>A keyboard key (works while the sim has focus)</option>
-            <option value="joystick" ${st.voice.ptt === "joystick" ? "selected" : ""}>A yoke or joystick button (through the sim)</option>
+            <option value="joystick" ${st.voice.ptt === "joystick" ? "selected" : ""}>A yoke or joystick button (works while the sim has focus)</option>
             <option value="enter" ${st.voice.ptt === "enter" ? "selected" : ""}>Only the headset button in this window</option></select></label>
         </div>
         <div class="row" id="ptt-key-row" ${st.voice.ptt === "keyboard" ? "" : "hidden"}>
@@ -1014,7 +979,7 @@ const Settings = {
           <button class="btn small" id="s-key-set">Change</button><span class="muted small" id="s-key-hint"></span>
         </div>
         <div class="row" id="ptt-joy-row" ${st.voice.ptt === "joystick" ? "" : "hidden"}>
-          <label>Button, as MSFS names it<input id="s-joy" value="${esc(st.voice.ptt_joystick)}" placeholder="joystick:0:button:3"></label>
+          <label>Button<input id="s-joy" value="${esc(st.voice.ptt_joystick)}" placeholder="joystick:0:button:3"></label>
           ${this.joyPicker("ptt")}
         </div>
         <div class="row"><label>Microphone<select id="s-mic">${devOpts(S.devices.inputs || [], st.voice.input_device)}</select></label></div>
@@ -1050,7 +1015,7 @@ const Settings = {
           <span>Intercom key</span><span class="keycap" id="s-ic-key">${esc(keyLabel(st.voice.intercom_key))}</span>
           <button class="btn small" id="s-ic-key-set">Change</button><span class="muted small" id="s-ic-key-hint"></span>
         </div>
-        <div class="row"><label>Or a button, as MSFS names it<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label>
+        <div class="row"><label>Or a yoke or joystick button<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label>
           ${this.joyPicker("ic")}</div>
         <div class="row">
           <label>Copilot's voice<select id="s-crew-sex">${["female", "male", "any"].map((s) => `<option value="${s}" ${st.crew.voice_sex === s ? "selected" : ""}>${{ female: "Female", male: "Male", any: "Either" }[s]}</option>`).join("")}</select></label>

@@ -252,8 +252,7 @@ def test_the_log_shows_the_intercom():
 
 def test_the_bridge_sends_the_copilots_events_and_reads_the_switches():
     fake = FakeSimConnect()
-    fast = LiveConfig(ownship_hz=50, traffic_interval_s=0, nearest_airport_interval_s=0, retry_max_s=0.05,
-                      intercom_input="joystick:0:button:4")
+    fast = LiveConfig(ownship_hz=50, traffic_interval_s=0, nearest_airport_interval_s=0, retry_max_s=0.05)
 
     async def main():
         source = SimConnectSource(fast, dll_factory=lambda: fake)
@@ -276,7 +275,6 @@ def test_the_bridge_sends_the_copilots_events_and_reads_the_switches():
     assert sorted(n for e, n in fake.client_events.items() if e >= 100) == ["FLAPS_2", "GEAR_DOWN"]  # mapped once each
     assert fake.written == [("L:ADDON_LDG", struct.pack("<d", 2.0))]
     assert systems.flaps_positions == 4 and systems.light_beacon and not systems.light_landing
-    assert ("joystick:0:button:4", 32, 33) in fake.input_maps  # the intercom button
 
 
 # --- voices and the intercom key --------------------------------------------------------------------------------------------

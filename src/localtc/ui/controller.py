@@ -172,6 +172,8 @@ class AppController:
             (post, "models/install"): self.api_install,
             (post, "models/profile"): self.api_profile,
             (get, "devices"): self.api_devices,
+            (get, "joystick"): self.api_joystick,
+            (post, "joystick/detect"): self.api_joystick_detect,
             (post, "voice/preview"): self.api_preview,
             (get, "airport"): self.api_airport,
             (get, "zones"): self.api_zones,
@@ -960,6 +962,23 @@ class AppController:
 
     async def api_devices(self, args: dict) -> dict:
         return await asyncio.to_thread(_devices)
+
+    async def api_joystick(self, args: dict) -> dict:
+        from localtc.stt.joystick import devices
+
+        return {"devices": [{"index": d.index, "name": d.name, "buttons": d.buttons}
+                            for d in await asyncio.to_thread(devices)]}
+
+    async def api_joystick_detect(self, args: dict) -> dict:
+        """The next joystick button pressed (read as the flight reads it), as MSFS names it; null after 15 s."""
+        from localtc.stt.joystick import detect, devices, parse_button
+
+        name = await asyncio.to_thread(detect, 15.0)
+        if name is None:
+            return {"button": None}
+        device, button = parse_button(name)
+        found = {d.index: d.name for d in await asyncio.to_thread(devices)}
+        return {"button": name, "device": found.get(device, f"controller {device}"), "number": button}
 
     async def api_preview(self, args: dict) -> dict:
         voice = str(args.get("voice") or self.cfg.tts.voice)

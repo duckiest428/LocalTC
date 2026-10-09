@@ -269,37 +269,47 @@ def test_low_speech_confidence_asks_the_model():
 # --- joystick push-to-talk through the sim -----------------------------------------------------------------------
 
 
-def test_joystick_button_through_simconnect():
-    from helpers.sim_fakes import FakeSimConnect, build_message
+def test_joystick_button_names():
+    from localtc.stt.joystick import button_name, parse_button
 
-    from localtc.config import LiveConfig
-    from localtc.sim_bridge.protocol import RecvEvent, RecvId
-    from localtc.sim_bridge.simconnect_source import EVT_PTT_DOWN, EVT_PTT_UP, SimConnectSource
+    assert parse_button("joystick:0:button:3") == (0, 3)
+    assert parse_button(" Joystick:1 : button:12 ") == (1, 12)
+    assert button_name(0, 1) == "joystick:0:button:1"
+    with pytest.raises(ValueError):
+        parse_button("ctrl_r")
 
-    fake = FakeSimConnect()
-    cfg = LiveConfig(ownship_hz=0, traffic_interval_s=0, nearest_airport_interval_s=0, retry_max_s=0.1,
-                     ptt_input="joystick:0:button:3")
 
-    async def main():
-        source = SimConnectSource(cfg, dll_factory=lambda: fake)
-        await asyncio.wait_for(source.start(), 3)
-        fake.push(build_message(RecvEvent(uEventID=EVT_PTT_DOWN, dwData=0), RecvId.EVENT))
-        fake.push(build_message(RecvEvent(uEventID=EVT_PTT_UP, dwData=0), RecvId.EVENT))
-        got = []
+def test_joystick_buttons_are_read_from_windows(monkeypatch):
+    """MSFS 2024 never sends a button bound through SimConnect: they're polled from Windows, pressed and released
+    once each, and a controller unplugged while held lets go."""
+    import threading
+    import time
 
-        async def collect():
-            async for ev in source.events():
-                if isinstance(ev, (PttPressed, PttReleased)):
-                    got.append(type(ev).__name__)
-                    if len(got) == 2:
-                        return
+    from localtc.stt import joystick
 
-        await asyncio.wait_for(collect(), 3)
-        await source.stop()
-        return got
+    states = [0b00, 0b10, 0b10, 0b00, 0b01, None]  # button 1 down, up; button 0 down; unplugged
+    polled = threading.Event()
 
-    assert asyncio.run(main()) == ["PttPressed", "PttReleased"]
-    assert fake.input_maps == [("joystick:0:button:3", EVT_PTT_DOWN, EVT_PTT_UP)]
+    class FakeWinmm:
+        def buttons(self, device):
+            assert device == 0
+            if len(states) > 1:
+                return states.pop(0)
+            polled.set()
+            return states[0]
+
+    monkeypatch.setattr(joystick, "_Winmm", FakeWinmm)
+    got = []
+    buttons = joystick.JoystickButtons()
+    buttons.bind("joystick:0:button:1", lambda: got.append("ic down"), lambda: got.append("ic up"), "Intercom")
+    buttons.bind("joystick:0:button:0", lambda: got.append("ptt down"), lambda: got.append("ptt up"), "PTT")
+    thread = threading.Thread(target=buttons._run, daemon=True)
+    thread.start()
+    assert polled.wait(3)
+    time.sleep(0.05)
+    buttons.stop()
+    thread.join(2)
+    assert got == ["ic down", "ic up", "ptt down", "ptt up"]
 
 
 # --- speaking scenarios and voice recordings ------------------------------------------------------------------------

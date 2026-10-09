@@ -26,14 +26,10 @@ from localtc.sim_api import (
     AirportData,
     BusEvent,
     ConnectionStatus,
-    IntercomPressed,
-    IntercomReleased,
     NearbyAirport,
     NearbyAirports,
     SessionClock,
     SessionInfo,
-    PttPressed,
-    PttReleased,
     RequestAirportData,
     RequestArrival,
     SendSimEvent,
@@ -109,10 +105,7 @@ EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, 
 # Client events LocalTC sends to the sim (same ID space as the system events above).
 EVT_COM1_SET_HZ, EVT_COM2_SET_HZ = 20, 21
 CLIENT_EVENTS = {EVT_COM1_SET_HZ: "COM_RADIO_SET_HZ", EVT_COM2_SET_HZ: "COM2_RADIO_SET_HZ"}
-EVT_PTT_DOWN, EVT_PTT_UP = 30, 31  # push-to-talk from a joystick button or key bound through the sim
-EVT_INTERCOM_DOWN, EVT_INTERCOM_UP = 32, 33  # the intercom (talking to the copilot), the same way
 FIRST_COPILOT_EVENT = 100  # key events the copilot sends ("GEAR_DOWN"), mapped as first used, from here up
-GROUP_PTT, GROUP_INTERCOM = 1, 2
 SYSTEM_EVENTS = {
     EVT_SIM_START: "SimStart",
     EVT_SIM_STOP: "SimStop",
@@ -152,7 +145,6 @@ class SimConnectApi(Protocol):
     def request_facilities_list(self, handle: int, list_type: FacilityListType, request_id: int) -> None: ...
     def map_client_event_to_sim_event(self, handle: int, event_id: int, name: str) -> None: ...
     def transmit_client_event(self, handle: int, object_id: int, event_id: int, data: int, group: int, flags: int) -> None: ...
-    def map_input_to_events(self, handle: int, group: int, definition: str, down_event: int, up_event: int) -> None: ...
     def set_data_on_sim_object(self, handle: int, define_id: int, object_id: int, data: bytes) -> None: ...
     def get_next_dispatch(self, handle: int) -> bytes | None: ...
 
@@ -303,18 +295,6 @@ class SimConnectSource:
                 dll.map_client_event_to_sim_event(handle, event_id, name)
             except SimConnectError as exc:  # the copilot can't tune, but everything else works
                 log.warning("Can't map %s: %s", name, exc)
-        if self._cfg.ptt_input:
-            try:
-                dll.map_input_to_events(handle, GROUP_PTT, self._cfg.ptt_input, EVT_PTT_DOWN, EVT_PTT_UP)
-                log.info("Push-to-talk: %s (through the sim)", self._cfg.ptt_input)
-            except SimConnectError as exc:
-                log.warning("Can't use %s as push-to-talk: %s", self._cfg.ptt_input, exc)
-        if self._cfg.intercom_input:
-            try:
-                dll.map_input_to_events(handle, GROUP_INTERCOM, self._cfg.intercom_input, EVT_INTERCOM_DOWN, EVT_INTERCOM_UP)
-                log.info("Intercom: %s (through the sim)", self._cfg.intercom_input)
-            except SimConnectError as exc:
-                log.warning("Can't use %s for the intercom: %s", self._cfg.intercom_input, exc)
         self._traffic_liveries: dict[int, str] = {}
         self._models: list[tuple[str, str]] = []
         if self._cfg.traffic_identity:  # EXPERIMENTAL traffic control only
@@ -423,15 +403,7 @@ class SimConnectSource:
         elif isinstance(msg, ExceptionInfo):
             log.warning("SimConnect exception %s (send id %d, index %d)", msg.name, msg.send_id, msg.index)
         elif isinstance(msg, EventInfo):
-            if msg.event_id == EVT_PTT_DOWN:
-                self._emit(PttPressed(t=t))
-            elif msg.event_id == EVT_PTT_UP:
-                self._emit(PttReleased(t=t))
-            elif msg.event_id == EVT_INTERCOM_DOWN:
-                self._emit(IntercomPressed(t=t))
-            elif msg.event_id == EVT_INTERCOM_UP:
-                self._emit(IntercomReleased(t=t))
-            elif (event := _lifecycle_event(msg, t)) is not None:
+            if (event := _lifecycle_event(msg, t)) is not None:
                 self._emit(event)
         elif isinstance(msg, ObjectData):
             self._on_data(msg, t)

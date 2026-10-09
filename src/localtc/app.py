@@ -354,10 +354,6 @@ async def run_session(
     """
     record = cfg.recorder.enabled if record is None else record
     cfg.live.traffic_identity = cfg.traffic.control != "off"  # only then is the sim asked who its traffic is
-    if cfg.voice.enabled and cfg.voice.ptt == "joystick" and not cfg.live.ptt_input:
-        cfg.live.ptt_input = cfg.voice.ptt_joystick  # the bridge binds it before connecting
-    if cfg.voice.enabled and cfg.crew.enabled and cfg.voice.intercom_joystick and not cfg.live.intercom_input:
-        cfg.live.intercom_input = cfg.voice.intercom_joystick
     source = make_source(cfg)
     session = await source.start()
     log.info("Source ready: %s %s %s", session.source_kind, session.sim_product, session.sim_version)
@@ -767,9 +763,10 @@ class VoiceInput:
     capture: object
     ptt: object | None = None
     intercom: object | None = None  # the intercom key's listener
+    buttons: object | None = None  # joystick buttons for either
 
     def close(self) -> None:
-        for listener in (self.ptt, self.intercom):
+        for listener in (self.ptt, self.intercom, self.buttons):
             if listener is not None:
                 listener.stop()
         self.capture.close()
@@ -803,12 +800,25 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
 
         ptt = KeyboardPtt(v.ptt_key, service.press, service.release, on_cancel=service.cancel)
         ptt.start()
-    elif v.ptt == "joystick":
-        log.info("Push-to-talk: %s (through the sim)", cfg.live.ptt_input or v.ptt_joystick, extra=CONSOLE)
+    from localtc.stt.joystick import JoystickButtons
+    from localtc.stt.service import INTERCOM
+
+    buttons = JoystickButtons()  # read from Windows: MSFS 2024 never sends a button bound through SimConnect
+    for name, what, down, up in (
+        (v.ptt_joystick if v.ptt == "joystick" else "", "Push-to-talk", service.press, service.release),
+        (v.intercom_joystick if cfg.crew.enabled else "", "Intercom (the copilot)", lambda: service.press(INTERCOM),
+         lambda: service.release(INTERCOM)),
+    ):
+        if name.strip():
+            try:
+                buttons.bind(name, down, up, what)
+            except ValueError as exc:
+                log.warning("%s: %s", what, exc)
+    if not buttons.start():
+        buttons = None
     intercom = None
     if cfg.crew.enabled and v.intercom_key and v.ptt != "enter" and (v.ptt != "keyboard" or v.intercom_key != v.ptt_key):
         from localtc.stt.ptt import KeyboardPtt
-        from localtc.stt.service import INTERCOM
 
         try:
             intercom = KeyboardPtt(v.intercom_key, lambda: service.press(INTERCOM), lambda: service.release(INTERCOM),
@@ -816,7 +826,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
             intercom.start()
         except ValueError as exc:
             log.warning("No intercom key: %s", exc)
-    return VoiceInput(service, capture, ptt, intercom)
+    return VoiceInput(service, capture, ptt, intercom, buttons)
 
 
 async def _cache_airports(sub: Subscription, cache: AirportCache) -> None:

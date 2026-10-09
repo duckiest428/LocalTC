@@ -1,3 +1,5 @@
+# _https://buymeacoffee.com/petey1_
+
 <p align="center">
   <img src="docs/images/banner.svg" alt="LocalTC: air traffic control and a copilot for Microsoft Flight Simulator 2024" width="100%">
 </p>

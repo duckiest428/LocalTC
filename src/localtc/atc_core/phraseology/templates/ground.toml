@@ -53,6 +53,22 @@ text = ["{callsign}, taxi to parking via {taxi_route}.",
 readback = { optional = ["taxi_route"] }
 pilot_readback = "Taxi to parking via {taxi_route}, {callsign_short}."
 
+# A GA flight, to the scenery's general aviation parking ("taxi to parking" said nothing of which ramp).
+[[template]]
+id = "ground.taxi_in_ramp"
+controller = "ground"
+text = ["{callsign}, taxi to the general aviation ramp via {taxi_route}.",
+        "{callsign}, taxi via {taxi_route} to the GA ramp."]
+readback = { optional = ["taxi_route"] }
+pilot_readback = "Taxi to the GA ramp via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+controller = "ground"
+text = ["{callsign}, taxi to the general aviation ramp via {taxi_route}, hold short runway {hold_short}."]
+readback = { required = ["hold_short"], optional = ["taxi_route"] }
+pilot_readback = "Taxi to the GA ramp via {taxi_route}, hold short runway {hold_short}, {callsign_short}."
+
 [[template]]
 id = "ground.taxi_to_gate"
 controller = "ground"
@@ -108,6 +124,12 @@ text = ["{callsign}, push and start approved, tail {turn}.", "{callsign}, push a
 id = "ground.pushback_straight"
 controller = "ground"
 text = ["{callsign}, push and start approved.", "{callsign}, push and start at your discretion."]
+
+# Start-up without a push (a GA ramp, a stand the aircraft taxis out of): "request engine start".
+[[template]]
+id = "ground.startup"
+controller = "ground"
+text = ["{callsign}, start up approved, advise ready to taxi.", "{callsign}, start at your discretion, advise ready to taxi."]
 
 # A runway the taxi route crosses: the clearance to cross it comes as the aircraft reaches it.
 [[template]]

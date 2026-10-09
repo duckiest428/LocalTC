@@ -15,6 +15,23 @@ text = ["{callsign}, {station}, radar contact.",
         "{callsign}, radar contact."]
 pilot_readback = "{callsign_short}."
 
+# Off on runway heading (no SID): departure turns the flight onto its route, by the first fix on it.
+[[template]]
+id = "departure.radar_contact_direct"
+controller = "departure"
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}, proceed direct {fix}.",
+        "{callsign}, radar contact, proceed direct {fix}, climb and maintain {altitude}."]
+readback = { required = ["altitude"], optional = ["fix"] }
+pilot_readback = "Climb and maintain {altitude}, direct {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+controller = "departure"
+text = ["{callsign}, {station}, radar contact, proceed direct {fix}.",
+        "{callsign}, radar contact, turn on course, proceed direct {fix}."]
+readback = { required = ["fix"] }
+pilot_readback = "Direct {fix}, {callsign_short}."
+
 [[template]]
 id = "departure.handoff_center"
 controller = "departure"

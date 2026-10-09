@@ -210,9 +210,14 @@ class TaxiGraph:
                 return on_side[1], on_side[2]
         return first[1], first[2]
 
-    def parking_route(self, lat: float, lon: float, spot: int | None = None) -> TaxiRoute | None:
-        """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned)."""
+    def parking_route(self, lat: float, lon: float, spot: int | None = None, *, kind: str = "") -> TaxiRoute | None:
+        """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned). ``kind``: only spots whose
+        kind starts with it ("ramp_ga": a GA flight's), when the airport has any."""
         goals = {n for n in self.positions if n[0] == "parking" and (spot is None or n[1] == spot)}
+        if kind and spot is None:
+            kinds = {s.index: s.kind for s in self.geometry.airport.parking}
+            wanted = {n for n in goals if kinds.get(n[1], "").startswith(kind)}
+            goals = wanted or goals
         start = self.nearest_node(lat, lon)
         if start is None or not goals:
             return None

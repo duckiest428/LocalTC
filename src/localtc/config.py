@@ -179,6 +179,12 @@ class AtcConfig(_Section):
     # Notices on each airport's ATIS (a taxiway closed, an ILS out, bird activity ...), a few per session, and ATC
     # works to them: a closed runway isn't used, an ILS out isn't an approach.
     notams: bool = True
+    # The squawk: a different one each flight (the route and the time it's given go into it). Recordings made before
+    # it had one from the callsign alone, and replay with that.
+    squawk_per_flight: bool = True
+    # A far destination's runway from its weather (its METAR), or the calm-wind runway when nothing is known of it.
+    # Recordings made before took it from the wind where the aircraft was, and replay with that.
+    destination_weather: bool = True
 
 
 LlmMode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]
@@ -412,6 +418,10 @@ def with_recorded(cfg: Config, recorded: dict) -> Config:
             data[section] = {**data[section], **recorded[section]}
     if isinstance(recorded.get("atc"), dict) and "notams" not in recorded["atc"]:
         data["atc"]["notams"] = False  # recorded before ATIS notices: replayed as it was flown
+    if isinstance(recorded.get("atc"), dict) and "squawk_per_flight" not in recorded["atc"]:
+        data["atc"]["squawk_per_flight"] = False  # recorded when the squawk came from the callsign: the same code
+    if isinstance(recorded.get("atc"), dict) and "destination_weather" not in recorded["atc"]:
+        data["atc"]["destination_weather"] = False  # recorded before METARs: its runways as they were chosen then
     try:
         return msgspec.convert(data, Config)
     except msgspec.ValidationError:

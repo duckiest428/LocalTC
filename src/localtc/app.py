@@ -72,6 +72,8 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         thresholds=msgspec.convert(atc.phase, PhaseThresholds),
         unscripted=atc.unscripted,
         notams=atc.notams,
+        squawk_per_flight=atc.squawk_per_flight,
+        destination_weather=atc.destination_weather,
         approach=flight.approach,
         sid=flight.sid or None,
         star=flight.star or None,
@@ -415,6 +417,10 @@ async def run_session(
                          else "works the radio for the whole flight", extra=CONSOLE)
             atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
             atc_service.deck = deck
+            if session.source_kind == "live" and os.environ.get("LOCALTC_METAR", "1"):
+                from localtc.metar_data import MetarStore
+
+                atc_service.weather_source = MetarStore().get  # the departure's and destination's real METARs
             consumers.append(asyncio.create_task(atc_service.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring

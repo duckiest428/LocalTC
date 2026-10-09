@@ -59,11 +59,11 @@ STATUS_KEYS = ("active", "callsign", "aircraft", "origin", "destination", "phase
 # not every "roger".
 CLEARANCE_IDS = {
     "clearance.ifr", "clearance.ifr_at_cruise", "clearance.ifr_sid", "clearance.ifr_sid_at_cruise",
-    "ground.taxi_out", "ground.taxi_out_at", "ground.taxi_out_hold_short", "ground.taxi_in", "ground.taxi_to_gate",
+    "ground.taxi_out", "ground.taxi_out_at", "ground.taxi_out_hold_short", "ground.taxi_in", "ground.taxi_in_ramp", "ground.taxi_to_gate",
     "ground.cross_runway", "ground.pushback", "ground.pushback_straight", "ground.hold_position",
     "tower.takeoff", "tower.takeoff_rnav", "tower.takeoff_sid", "tower.luaw", "tower.hold_short_traffic", "tower.land", "tower.go_around",
     "tower.go_around_traffic", "tower.go_around_traffic_contact", "approach.cleared", "approach.cleared_star", "approach.intercept_visual", "approach.missed", "approach.vectors", "approach.descend",
-    "center.descend", "center.descend_pd", "center.descend_via", "center.radar_contact", "departure.radar_contact",
+    "center.descend", "center.descend_pd", "center.descend_via", "center.radar_contact", "departure.radar_contact", "departure.radar_contact_direct", "departure.radar_contact_only_direct",
     "common.climb", "common.descend", "common.direct",
 }
 TRAFFIC_IDS = {"common.traffic", "tower.sequence"}

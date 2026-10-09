@@ -95,7 +95,7 @@ said a different number, write the pilot's. Callsign digits are never a value. L
 - When a readback is expected and the pilot repeats any of it, kind is readback.
 kind: readback (repeats an ATC instruction; if they also ask something, add intent or topic), request (asks \
 for or reports something: intent), question (asks for information: topic), unintelligible.
-intent: request_ifr_clearance, request_pushback, ready_to_taxi, request_crossing (a runway), \
+intent: request_ifr_clearance, request_pushback (push and start, or engine start-up alone), ready_to_taxi, request_crossing (a runway), \
 ready_for_departure (holding short, ready), request_turn, need_time (not ready yet), checkin (first call to a \
 controller: "with you at 6000", "level 110"), report_final ("established", "5 mile final"), position_report \
 (pattern leg), request_option (touch and go, low approach), clear_of_runway, request_taxi_parking, \

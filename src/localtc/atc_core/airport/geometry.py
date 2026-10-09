@@ -1,8 +1,11 @@
 """Airport geometry in local meters: runway polygons, thresholds, hold-short points, final approach alignment."""
 
 import math
+import re
 from dataclasses import dataclass
 from functools import cached_property
+
+import msgspec
 
 from localtc.sim_api import Airport, Runway, TaxiPoint
 from localtc.sim_api.geo import METERS_PER_NM, LocalFrame, angle_diff, haversine_nm, unit
@@ -82,8 +85,45 @@ class FinalApproach:
     lateral_m: float
 
 
+PHONETIC = {"alpha": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F", "golf": "G",
+            "hotel": "H", "india": "I", "juliet": "J", "kilo": "K", "lima": "L", "mike": "M", "november": "N",
+            "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R", "sierra": "S", "tango": "T", "uniform": "U",
+            "victor": "V", "whiskey": "W", "xray": "X", "x-ray": "X", "yankee": "Y", "zulu": "Z"}
+
+
+def taxiway_name(raw: str) -> str:
+    """A scenery's taxiway name as ATC says it: "Charlie" -> "C", "Delta3" -> "D3", "Kelo" -> "K" (a typo of Kilo),
+    "Charlie1vDelta" -> "C1". Joplin's scenery spells its taxiways out, and ATC said "vacate right Charlie1vDelta"
+    and "taxi via Charlie, Delta, Bravo", read back letter by letter. Names already like "A", "B12", "RA" and the
+    ones that aren't a spelled letter stay as they are."""
+    name = raw.strip()
+    if re.fullmatch(r"[A-Z]{1,2}\d{0,2}", name) or not name:
+        return name
+    m = re.match(r"([A-Za-z-]+)\s*(\d{0,2})", name)
+    if m is None:
+        return name
+    word, digits = m.group(1).lower(), m.group(2)
+    letter = PHONETIC.get(word) or _near_phonetic(word)
+    return letter + digits if letter else name
+
+
+def _near_phonetic(word: str) -> str:
+    """The letter of a phonetic word misspelled by a letter, or cut short ("kelo", "lim"); "" for other words."""
+    if len(word) < 3:
+        return ""
+    for spelled, letter in PHONETIC.items():
+        if spelled.startswith(word):
+            return letter
+        if len(spelled) == len(word) and sum(a != b for a, b in zip(spelled, word)) == 1:
+            return letter
+    return ""
+
+
 class AirportGeometry:
     def __init__(self, airport: Airport) -> None:
+        if any(p.name and taxiway_name(p.name) != p.name for p in airport.taxi_paths):
+            airport = msgspec.structs.replace(airport, taxi_paths=tuple(
+                msgspec.structs.replace(p, name=taxiway_name(p.name)) if p.name else p for p in airport.taxi_paths))
         self.airport = airport
         self.frame = LocalFrame(airport.lat, airport.lon)
         self.runways = tuple(RunwayGeometry(r, self.frame) for r in airport.runways)

@@ -239,6 +239,7 @@ class WeatherTracker:
     _estimated: dict[str, float] = field(default_factory=dict)  # ... or first guessed from afar, and kept
     _clouds: dict[str, CloudProfile] = field(default_factory=dict)
     _pressures: dict[str, deque] = field(default_factory=dict)  # (t, inHg) at the airport, for the trend
+    reports: dict[str, Weather] = field(default_factory=dict)  # each airport's latest METAR (``report``)
 
     def altimeter_at(self, icao: str | None) -> float | None:
         """An airport's altimeter: measured on or near it, else the pressure where the aircraft was when it was first
@@ -248,6 +249,8 @@ class WeatherTracker:
             return self.altimeter_inhg
         if icao in self._measured:
             return self._measured[icao]
+        if icao in self.reports and self.reports[icao].altimeter_inhg is not None:
+            return self.reports[icao].altimeter_inhg  # its METAR's, until it's measured there
         if icao not in self._estimated and self.altimeter_inhg is not None:
             self._estimated[icao] = self.altimeter_inhg
         return self._estimated.get(icao)
@@ -297,11 +300,20 @@ class WeatherTracker:
                 elevation_ft=geo.airport.elev_ft,
             )
 
+    def report(self, icao: str, weather: Weather) -> None:
+        """An airport's METAR (``WeatherReport``): its weather until the aircraft samples its own there."""
+        self.reports[icao] = weather
+
     def surface(self, icao: str, airports: dict[str, AirportGeometry]) -> Weather | None:
-        """The airport's own sample, or the freshest one from an airport in the same region; with the clouds seen
-        near it, its altimeter and the pressure's trend."""
+        """The airport's own sample, else its METAR, else the freshest sample from an airport in the same region; with
+        the clouds seen near it, its altimeter and the pressure's trend. (Without the METAR, Joplin's runway was chosen
+        from the wind at FL300, and its weather was "not available".)"""
         own = self.samples.get(icao)
         geo = airports.get(icao)
+        if own is None and icao in self.reports:
+            report = self.reports[icao]
+            return replace(report, altimeter_inhg=self.altimeter_at(icao) or report.altimeter_inhg,
+                           elevation_ft=geo.airport.elev_ft if geo is not None else report.elevation_ft)
         if own is None:
             nearby = [w for other, w in self.samples.items() if other != icao and geo is not None and other in airports
                       and airports[other].distance_nm(geo.airport.lat, geo.airport.lon) <= REGION_NM]
@@ -344,3 +356,16 @@ def _variability(directions_true: list[float], own: OwnshipState) -> tuple[int, 
         return int(round(((mean + offset - magvar) % 360) / 10) * 10) % 360 or 360
 
     return mag(low), mag(high)
+
+
+def from_report(report, magvar: float, t: float = 0.0) -> Weather:
+    """A ``WeatherReport`` (METAR) as the airport's surface weather. ``magvar``: the airport's, east positive."""
+    true = report.wind_dir_true
+    speed = int(round(report.wind_kt))
+    mag = int(round(((true if true is not None else 0.0) - magvar) / 10) * 10) % 360 or 360
+    gust = int(round(report.gust_kt)) if report.gust_kt else None
+    temperature = int(round(report.temperature_c)) if report.temperature_c is not None else None
+    dewpoint = int(round(report.dewpoint_c)) if report.dewpoint_c is not None else None
+    return Weather(wind=Wind(direction_mag=mag if true is not None and speed else 0, speed_kt=speed), gust_kt=gust,
+                   visibility_sm=report.visibility_sm, temperature_c=temperature, altimeter_inhg=report.altimeter_inhg,
+                   t=t, wind_dir_true=true if true is not None else 0.0, dewpoint_c=dewpoint)

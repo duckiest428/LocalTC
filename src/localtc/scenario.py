@@ -162,6 +162,7 @@ def run(
     speech_s_per_char: float = 0.0,
     chatter: bool = False,
     crew: Any = None,
+    gate_source: Any = None,
 ) -> ScenarioResult:
     """Run a scenario; ``base`` is the folder its relative paths start from.
 
@@ -171,7 +172,8 @@ def run(
     ``chatter``: other flights on the frequency now and then. ``recorded_pilot``: also replay the pilot's recorded push-to-talk and transcripts (a real flight, re-judged by
     the current ATC). ``recorded_copilot``: with it, the copilot's recorded calls too (the flight's radio as it was, when
     the pilot handed it the radio for part of the way). ``crew``: a ``crew.pm.PilotMonitoring`` on the intercom, given
-    every event and ATC's words; what the copilot says on it goes into the lines ("CREW").
+    every event and ATC's words; what the copilot says on it goes into the lines ("CREW"). ``gate_source``: the
+    airports' real gates and taxiways (``icao -> GateData``), as the app's OpenStreetMap cache gives them.
     """
     from localtc.app import engine_config
     from localtc.copilot import Copilot, Note, Say, Tune
@@ -181,6 +183,7 @@ def run(
     # clearance coming a dozen seconds or so after "stand by" (a readback from the recording can't come before the
     # clearance it reads back, nor the taxi before the aircraft rolls).
     engine.cfg.standby_s = RECORDED_STANDBY_S
+    engine.gate_source = gate_source
     engine.cfg.speech_s_per_char = speech_s_per_char  # as with voice out: ATC's words take time to say
     engine.cfg.chatter = chatter  # other flights on the frequency (off for goldens: they'd be all chatter)
     if voice is not None:
@@ -195,7 +198,7 @@ def run(
 
     queue: list[tuple[float, int, PilotRule, dict[str, Any]]] = []
     fired: set[int] = set()
-    state = {"com1": None, "last_own": None, "squawk": None}
+    state = {"com1": None, "last_own": None, "squawk": None, "recorded_com1": None}
     counter = 0
 
     def schedule(rule_index: int, rule: PilotRule, due: float, context: dict[str, Any]) -> None:
@@ -325,6 +328,14 @@ def run(
             break
         run_due(event.t)
         if isinstance(event, OwnshipState):
+            if event.com1_mhz != state["recorded_com1"]:
+                # Tuned in the sim (the recording's COM1 changed), with the pilot's own calls replayed and the copilot
+                # only reading back: the pilot's tuning wins over what the copilot tuned last. Its tune held for the
+                # rest of the flight, and the pilot's call to a tower they'd tuned themselves went to ground. (With
+                # the copilot on the radio all the way, or the pilot's calls not replayed, the copilot is the radio.)
+                if state["recorded_com1"] is not None and recorded_pilot and mode != "full":
+                    state["com1"] = None
+                state["recorded_com1"] = event.com1_mhz
             if state["com1"] is not None:
                 event = msgspec.structs.replace(event, com1_mhz=state["com1"])
             if state["squawk"] is not None:

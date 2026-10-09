@@ -39,7 +39,7 @@
 [  1236.0] PILOT     120.2: Paine Ground one two one point eight, Cessna two lima tango.
 [  1236.0] READBACK  tower.exit_contact_ground correct
 [  1242.0] PILOT     121.8: Paine Ground, Cessna two lima tango, clear of runway 34L, taxi to parking.
-[  1245.0] ATC       Paine Ground 121.8: Cessna 2LT, taxi to parking via A1, A, C.
-[  1247.0] PILOT     121.8: Taxi to parking via alpha one, alpha, charlie, Cessna two lima tango.
-[  1247.0] READBACK  ground.taxi_in correct
+[  1245.0] ATC       Paine Ground 121.8: Cessna 2LT, taxi via A1, A, C to the GA ramp.
+[  1247.0] PILOT     121.8: Taxi to the GA ramp via alpha one, alpha, charlie, Cessna two lima tango.
+[  1247.0] READBACK  ground.taxi_in_ramp correct
 [  1602.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

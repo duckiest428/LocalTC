@@ -60,7 +60,7 @@ def test_event_tags_are_stable():
         "atc_transmission", "atis_broadcast", "connection_status", "copilot_event", "crew_action", "crew_speech", "flight_arrived",
         "intercom_heard", "intercom_pressed", "intercom_released", "llm_exchange", "model_list", "nearby_airports",
         "ownship_state", "phase_changed", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "readback_evaluated",
-        "sim_lifecycle", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript",
+        "sim_lifecycle", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "weather_report",
     ]
 
 

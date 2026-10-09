@@ -28,6 +28,12 @@ a new minor version adds features, a patch fixes them.
 - **Head, tail and crosswind on the landing runway** are worked out from the wind and the runway, and the copilot's model can't give other numbers (it said 12 knots of crosswind with the wind straight down the runway).
 - **The copilot is one person**: its model is given a fixed first officer (a name that goes with its voice, a base, years and types) and answers about itself the same way all flight.
 - **When the radio copilot's frequency change doesn't take, or a check-in gets no answer**, you're told on the intercom; with no answer twice it goes back to the frequency it came from.
+- **The destination's real weather**: LocalTC fetches the departure's and the destination's METAR (aviationweather.gov's free public service; only the airport codes are sent) every half hour. "What's the weather at the destination?" (or "at KJLN", "at Joplin", "at the airport" once you're on your way) is answered from it ("Joplin Regional wind 120 at 3, visibility 10, temperature 18, altimeter 30.01"), and the runway and approach to expect are chosen from it. Close in, the sim's own weather there takes over. Offline, there's no report, and ATC says the weather isn't available; a far airport's runway is then the one for calm wind.
+- **Where an airport has no approach controller, the centre works the approach**: vectors onto the final, the descent and speed, "maintain 4,000 until established on the localizer, cleared ILS runway 13 approach", then "contact Joplin Tower".
+- **"Requesting engine startup"** from a stand you taxi out of (a GA ramp) gets "start up approved, advise ready to taxi", with no push.
+- **Departure turns you on course**: off on runway heading with no SID, radar contact comes with "proceed direct" the first fix of your route (or your destination when the route has none).
+- **GA flights taxi to the GA ramp** ("taxi to the general aviation ramp via C, D, B"), the scenery's GA parking, never an airliner's gate.
+- **"Requesting radio to the tower"**, "request frequency change to tower" and the like are asked for a frequency change; from a centre working the approach, it comes with the approach clearance.
 
 ### Changed
 - **Numbers are put into words before any voice speaks them** (frequencies digit by digit, "niner", runways, flight levels, callsigns and taxiway letters in the phonetic alphabet), the same for every voice, so none reads "119.2" or "FL350" its own way.
@@ -62,6 +68,16 @@ a new minor version adds features, a patch fixes them.
 - **The landing order**: tower clears you to land only with nobody still ahead on the same final; traffic that appears ahead after the clearance (the sim adds AI aircraft late) gets "number two, follow the A321 on a two mile final, continue", and the clearance comes again once the runway's free. Other traffic is cleared for the runway it's lined up with, not the one in use.
 - **The taxi in across a runway** says "hold short runway 09R" in the clearance, and the clearance to cross comes as you reach it, not as you leave the runway you landed on (the same runway, crossed further along).
 - **A gate taken on the way in** is swapped for the free one nearest to it, with an apology first ("sorry, Gate 403 is occupied, taxi to Gate 402 via W, T"), not one across the airfield.
+- **The squawk is different every flight.** It came from the callsign alone, so flying as the same callsign gave the same code each time. It's the same for the whole flight once given.
+- **The runway in use follows the wind**: it changed only once the tailwind on it was too strong, so a wind swinging from 070 to 110 at 16 knots left runway 05 in use with 14 knots across it and 13 nearly into the wind. With a crosswind of 12 knots or more and another runway nearly into the wind, the runway changes, with a new ATIS.
+- **Taxiway names**: where the scenery leaves most taxiways unnamed or has old names, the real ones (OpenStreetMap's) are used: Des Moines's taxiway P had been called "A" and its D "B". Taxiways the scenery spells out ("Charlie", "Delta3", "Charlie1vDelta") are said as letters ("C", "D3", "C1"): ATC had said "vacate right Charlie1vDelta" and the copilot read every name back letter by letter.
+- **No level-off waiting for a handoff**: a flight given 15,000 sat level there for four minutes, departure leaving the next climb to the centre and the centre waiting for the handoff. It's handed over while still climbing.
+- **A far airport's runway isn't chosen from the wind up high**: with nothing known of Joplin's weather, "expect RNAV runway 31" came from the wind at FL300.
+- **The weather asked for in the cruise** is the destination's, not the departure's 300 miles behind, and never the wind where the aircraft is.
+- **The first call to ground after landing** ("Ground, good evening, on Charlie") gets the taxi in; it got "copy that". "Requesting taxi" is understood.
+- **The taxi in asked for again** after reading it back is said again without asking for another readback ("how do you read?" followed); "loud and clear" to ATC's "how do you read?" is taken as the answer, not answered "say again".
+- **No runway crossing left from the departure**: just off Joplin's runway 13, ground cleared the flight across "runway 13", Des Moines's 13/31 crossed on the way out.
+- **"Direct" to a place with a phonetic-alphabet word in its name** ("direct Quebec") is read back right; it was taken for the letter Q.
 
 ## [0.4.0] - 2026-09-28
 

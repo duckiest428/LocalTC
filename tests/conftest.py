@@ -8,3 +8,4 @@ import os
 os.environ["LOCALTC_SETTINGS"] = ""
 # ... nor the real gates fetched from OpenStreetMap: no network, the scenery's gate names.
 os.environ["LOCALTC_REAL_GATES"] = ""
+os.environ["LOCALTC_METAR"] = ""

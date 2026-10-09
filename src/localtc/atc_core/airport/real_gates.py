@@ -20,15 +20,15 @@ from typing import Any
 
 import msgspec
 
+from localtc.atc_core.airport.geometry import PHONETIC
 from localtc.sim_api import Airport
 
 MATCH_M = 90.0  # an OSM gate this far from a stand's centre names it
 TAXIWAY_MATCH_M = 30.0  # an OSM taxiway this close to the middle of an unnamed taxi path names it ...
 TAXIWAY_MATCH_DEG = 35.0  # ... if it runs the same way (a taxiway crossing it doesn't)
-PHONETIC = {"alpha": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F", "golf": "G",
-            "hotel": "H", "india": "I", "juliet": "J", "kilo": "K", "lima": "L", "mike": "M", "november": "N",
-            "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R", "sierra": "S", "tango": "T", "uniform": "U",
-            "victor": "V", "whiskey": "W", "xray": "X", "x-ray": "X", "yankee": "Y", "zulu": "Z"}
+UNNAMED_SHARE = 0.3  # the scenery leaves this share of its taxi paths unnamed or more: OSM names those
+RENAME_M = 12.0  # a path the scenery names lying this close along an OSM taxiway of another name takes OSM's ...
+RENAME_MIN_M = 10.0  # ... if it's this long at least (not a point at a junction)
 INTERNATIONAL_WORDS = ("international", "intl", "int'l", "tom bradley")
 
 # Gates OSM doesn't mark: the concourses that take international arrivals (customs), by gate letter.
@@ -148,30 +148,51 @@ def _segment_distance(p: tuple[float, float], a: tuple[float, float], b: tuple[f
 
 
 def name_taxiways(airport: Airport, data: GateData, xy) -> Airport | None:
-    """The airport with its unnamed taxi paths named after the OSM taxiway each lies along; None when there's nothing
-    to name (the scenery names its taxiways, or OSM has none here). ``xy(lat, lon)`` -> metres."""
-    if not data.taxiways or any(p.name for p in airport.taxi_paths if p.kind in ("taxi", "path")):
+    """The airport with its taxi paths named after the real taxiway (OSM's) each lies along; None when nothing changes
+    (OSM has no taxiways here, or they agree with the scenery). ``xy(lat, lon)`` -> metres.
+
+    - An unnamed path gets the name of the OSM taxiway it lies along, when the scenery leaves enough of them unnamed
+      (``UNNAMED_SHARE``): Zurich's names none; Des Moines's names only A and B.
+    - A named path lying right on an OSM taxiway of another name (``RENAME_M``), with none of its own name near,
+      takes the real name: Des Moines's scenery calls taxiway P "A", and ATC sent a flight "via A" where the charts
+      say P.
+    """
+    if not data.taxiways:
         return None
+    taxi = [p for p in airport.taxi_paths if p.kind in ("taxi", "path")]
+    fill = bool(taxi) and sum(1 for p in taxi if not p.name) >= UNNAMED_SHARE * len(taxi)
     points = {p.index: xy(p.lat, p.lon) for p in airport.taxi_points}
     lines = [(w.ref, [xy(la, lo) for la, lo in w.line]) for w in data.taxiways]
     named = []
+    changed = False
     for path in airport.taxi_paths:
         a, b = points.get(path.start), points.get(path.end)
-        if path.kind not in ("taxi", "path") or a is None or b is None:
+        if path.kind not in ("taxi", "path") or a is None or b is None or (path.name and math.dist(a, b) < RENAME_MIN_M) \
+                or (not path.name and not fill):
             named.append(path)
             continue
         middle = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
         heading = math.degrees(math.atan2(b[0] - a[0], b[1] - a[1])) % 180
         best: tuple[float, str] | None = None
+        own_near = False
         for ref, line in lines:
             for p, q in zip(line, line[1:]):
                 distance, bearing = _segment_distance(middle, p, q)
                 turn = abs(bearing - heading)
+                if distance <= TAXIWAY_MATCH_M and ref == path.name:
+                    own_near = True
                 if distance <= TAXIWAY_MATCH_M and min(turn, 180 - turn) <= TAXIWAY_MATCH_DEG \
                         and (best is None or distance < best[0]):
                     best = (distance, ref)
-        named.append(msgspec.structs.replace(path, name=best[1]) if best else path)
-    return msgspec.structs.replace(airport, taxi_paths=tuple(named))
+        if best is not None and not path.name:
+            named.append(msgspec.structs.replace(path, name=best[1]))
+            changed = True
+        elif best is not None and path.name and best[1] != path.name and best[0] <= RENAME_M and not own_near:
+            named.append(msgspec.structs.replace(path, name=best[1]))
+            changed = True
+        else:
+            named.append(path)
+    return msgspec.structs.replace(airport, taxi_paths=tuple(named)) if changed else None
 
 
 def match(spots: list[tuple[int, str, float, float]], data: GateData, xy) -> dict[int, RealGate]:

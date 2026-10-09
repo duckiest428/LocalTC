@@ -30,13 +30,15 @@
 [   562.4] READBACK  tower.handoff_departure correct
 [   571.1] TUNE      COM1 120.425
 [   580.1] PILOT     120.425: Montreal Departure, DP69, 1,700 climbing 6,000
-[   582.3] ATC       Montreal Departure 120.42: DP69, Montreal Departure, radar contact, proceed on course.
+[   582.3] ATC       Montreal Departure 120.42: DP69, radar contact, turn on course, proceed direct Quebec.
+[   584.4] PILOT     120.425: Direct Quebec, delta papa six niner.
+[   584.4] READBACK  departure.radar_contact_only_direct correct
 [   614.9] ATC       Montreal Departure 120.42: DP69, climb and maintain 8,000.
-[   617.1] PILOT     120.425: Climb and maintain eight thousand, delta papa six niner.
-[   617.1] READBACK  common.climb correct
+[   617.8] PILOT     120.425: Climb and maintain eight thousand, delta papa six niner.
+[   617.8] READBACK  common.climb correct
 [   642.6] ATC       Montreal Departure 120.42: DP69, climb and maintain 10,000.
-[   645.6] PILOT     120.425: Climb and maintain one zero thousand, delta papa six niner.
-[   645.6] READBACK  common.climb correct
+[   646.1] PILOT     120.425: Climb and maintain one zero thousand, delta papa six niner.
+[   646.1] READBACK  common.climb correct
 [   682.6] ATC       Montreal Departure 120.42: DP69, climb and maintain 12,000.
-[   686.1] PILOT     120.425: Climb and maintain one two thousand, delta papa six niner.
-[   686.1] READBACK  common.climb correct
+[   685.1] PILOT     120.425: Climb and maintain one two thousand, delta papa six niner.
+[   685.1] READBACK  common.climb correct

@@ -30,9 +30,9 @@
 [   482.0] READBACK  tower.handoff_departure correct
 [   491.0] TUNE      COM1 124.675
 [   500.0] PILOT     124.675: Seattle Departure, N172LT, 1,400 climbing 5,000
-[   503.0] ATC       Seattle Departure 124.675: N172LT, Seattle Departure, radar contact, climb and maintain 5,000, proceed on course.
-[   506.0] PILOT     124.675: Climb and maintain five thousand, Cessna two lima tango.
-[   506.0] READBACK  departure.radar_contact correct
+[   503.0] ATC       Seattle Departure 124.675: N172LT, radar contact, proceed direct Boeing Field, climb and maintain 5,000.
+[   506.0] PILOT     124.675: Climb and maintain five thousand, direct Boeing Field, Cessna two lima tango.
+[   506.0] READBACK  departure.radar_contact_direct correct
 [   843.0] PHASE     DEPARTURE -> CRUISE (level at 5000 ft)
 [   843.0] ATC       Seattle Departure 124.675: Cessna 2LT, descend at pilot's discretion, maintain 3,000, expect ILS runway 14R approach, Boeing altimeter 29.92.
 [   846.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
@@ -74,7 +74,7 @@
 [  2344.0] READBACK  tower.exit_contact_ground correct
 [  2353.0] TUNE      COM1 121.9
 [  2359.0] PILOT     121.9: Boeing Ground, N172LT, clear of runway 14R, taxi to parking
-[  2362.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to parking via A, C.
-[  2365.0] PILOT     121.9: Taxi to parking via alpha, charlie, Cessna two lima tango.
-[  2365.0] READBACK  ground.taxi_in correct
+[  2362.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to the general aviation ramp via A, C.
+[  2365.0] PILOT     121.9: Taxi to the GA ramp via alpha, charlie, Cessna two lima tango.
+[  2365.0] READBACK  ground.taxi_in_ramp correct
 [  2751.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

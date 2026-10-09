@@ -58,6 +58,8 @@ def _any_runway(tokens: list[Token]) -> str | None:
 
 REQUEST_WORDS = (("request",), ("requesting",), ("ready", "for"), ("ready", "to"), ("can", "we"), ("could", "we"),
                  ("like", "to"), ("looking", "for"))
+START_WORDS = (("startup",), ("start", "up"), ("engine", "start"), ("engines", "start"), ("start", "engines"),
+               ("start", "the", "engines"), ("start", "engine"), ("request", "start"), ("requesting", "start"))
 PUSH_READBACK = (("approved",), ("discretion",), ("tail",), ("facing",), ("face",))
 
 
@@ -142,6 +144,13 @@ def _turn(tokens: list[Token]) -> str | None:
 
 
 CORRECTING = {"actually", "sorry", "correction", "instead", "rather", "mean"}
+
+
+def start_only(tokens) -> bool:
+    """Asking to start the engines, with no push: "Ground, NBV requesting engine startup" (a GA ramp)."""
+    pushing = _has_any(tokens, ("pushback",), ("push",), ("bush", "back"), ("back", "and", "start"))
+    return _has_any(tokens, *START_WORDS) and _has_any(tokens, *REQUEST_WORDS) and not pushing \
+        and not _has_any(tokens, ("approved",), ("discretion",))
 
 
 def tail_side(tokens: list[Token]) -> str | None:
@@ -261,6 +270,8 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("acknowledge")  # "push back at my discretion, tail right": reading back the approval, not asking again
     elif pushing or (tail is not None and _has_any(tokens, *REQUEST_WORDS)):
         add("request_pushback", tail=tail)  # "can we tail left?" asks for the pushback the other way round
+    elif start_only(tokens):
+        add("request_pushback", start_only=True)  # "requesting engine startup": a GA stand, no push
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"),
                        ("to", "a", "gate"), ("to", "our", "gate"), ("to", "the", "stand"), ("to", "a", "stand"), ("to", "stand"),
                        ("to", "the", "apron"))
@@ -273,7 +284,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
                            ("at", "our", "gate"), ("gate", "instead"), ("other", "gate"))
     if (parking and _has_any(tokens, ("taxi",))) or (wants_stand and not pushing):
         add("request_taxi_parking")  # "request taxi to the gate", "request gate", "request parking"
-    elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
+    elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("requesting", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
                   ("get", "taxi"), ("have", "taxi"), ("taxi", "please"), ("like", "taxi"), ("a", "taxi"),
                   ("taxi", "for", "departure"), ("taxi", "for", "the", "departure"),
                   ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),

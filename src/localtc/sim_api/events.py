@@ -172,6 +172,23 @@ class AirportData(Event, tag="airport_data"):
     airport: Airport
 
 
+class WeatherReport(Event, tag="weather_report"):
+    """An airport's latest real observation (its METAR, from aviationweather.gov): the weather ATC gives for an airport
+    the aircraft is far from. The sim only gives the weather where the aircraft is. Recorded, so a replay decides
+    with the report the flight had."""
+
+    icao: str
+    raw: str = ""  # the METAR as published
+    observed: str = ""  # "1553Z"
+    wind_dir_true: float | None = None  # None: variable (VRB) or calm
+    wind_kt: float = 0.0
+    gust_kt: float | None = None
+    visibility_sm: float | None = None
+    altimeter_inhg: float | None = None
+    temperature_c: float | None = None
+    dewpoint_c: float | None = None
+
+
 class NearbyAirport(msgspec.Struct, frozen=True, kw_only=True):
     icao: str
     lat: float
@@ -469,7 +486,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus, AircraftInputEvents]
+                 TrafficControlStatus, AircraftInputEvents, WeatherReport]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

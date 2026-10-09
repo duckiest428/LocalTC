@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from localtc.atc_core.readback.normalize import FILLERS, Token
+from localtc.atc_core.readback.normalize import FILLERS, Token, normalize
 from localtc.atc_core.values import Approach, Callsign
 
 Extractor = Callable[[list[Token], Any], list[Any]]
@@ -662,7 +662,10 @@ def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
         rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
         if isinstance(expected, str):
             wanted = [w.lower() for w in expected.replace(" airport", "").split()]
-            if wanted and all(w in rest or w in words for w in wanted):
+            # ... or as the pilot's words come out of normalizing: "direct Quebec" (the airport) reads as the letter Q.
+            spelled = _words(normalize(expected.replace(" airport", "")))
+            if wanted and (all(w in rest or w in words for w in wanted)
+                           or spelled and all(w in rest or w in words for w in spelled)):
                 found.append(expected)
                 continue
         if rest:

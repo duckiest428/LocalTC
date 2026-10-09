@@ -53,9 +53,23 @@ id = "ground.pushback_straight"
 text = ["{callsign}, push back and start up approved."]
 
 [[template]]
+id = "ground.startup"
+text = ["{callsign}, start up approved, report ready for taxi."]
+
+[[template]]
 id = "ground.taxi_in"
 text = ["{callsign}, taxi to the apron via {taxi_route}."]
 pilot_readback = "Taxi to the apron via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp"
+text = ["{callsign}, taxi to the general aviation apron via {taxi_route}."]
+pilot_readback = "Taxi to the general aviation apron via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+text = ["{callsign}, taxi to the general aviation apron via {taxi_route}, hold short runway {hold_short}."]
+pilot_readback = "Taxi to the general aviation apron via {taxi_route}, hold short runway {hold_short}, {callsign_short}."
 
 [[template]]
 id = "ground.taxi_to_gate"
@@ -94,6 +108,16 @@ text = ["{callsign}, vacate when able, contact {station} {frequency}."]
 id = "departure.radar_contact"
 text = ["{callsign}, {station}, identified, climb to {altitude}."]
 pilot_readback = "Climb to {altitude}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_direct"
+text = ["{callsign}, {station}, identified, climb to {altitude}, proceed direct {fix}."]
+pilot_readback = "Climb to {altitude}, direct {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+text = ["{callsign}, {station}, identified, proceed direct {fix}."]
+pilot_readback = "Direct {fix}, {callsign_short}."
 
 [[template]]
 id = "center.radar_contact"

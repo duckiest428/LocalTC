@@ -6,7 +6,10 @@ events, its frequency changes become sim commands.
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
+
+import msgspec
 
 from localtc.airports import AirportCache
 from localtc.atc_core.engine import AtcEngine
@@ -21,9 +24,12 @@ from localtc.sim_api import (
     SetComFrequency,
     SimSource,
     Transcript,
+    WeatherReport,
 )
 
 log = logging.getLogger(__name__)
+
+WEATHER_CHECK_S = 30.0  # the airports' METARs looked at this often (session time); fetched in the background
 
 
 class AtcService:
@@ -42,6 +48,10 @@ class AtcService:
         self.cache = cache
         self.copilot = copilot
         self.deck = None  # the flight deck the copilot shares with the intercom copilot (set by the app)
+        # The flight's airports' real weather reports (the app's ``MetarStore.get``), or None: none.
+        self.weather_source: Callable[[str], WeatherReport | None] | None = None
+        self._weather_t = -WEATHER_CHECK_S
+        self._weather_sent: dict[str, str] = {}  # icao: the METAR last published for it
         # Subscribe now, not in run(): a fast source could publish everything before run() starts.
         # Only inputs: the engine's own outputs (AtcTransmission, PhaseChanged, ...) are not fed back in.
         self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased)
@@ -75,6 +85,7 @@ class AtcService:
                 except Exception:  # the copilot failing never stops ATC
                     log.exception("Copilot failed on %s", type(event).__name__)
             await self._fetch_airports(event.t)
+            self._fetch_weather(event.t)
 
     async def _copilot(self, event, outputs) -> None:
         for observed in (event, *outputs):
@@ -105,3 +116,19 @@ class AtcService:
                 await self.source.send(RequestAirportData(icao=icao))
             else:
                 log.warning("No airport data for %s", icao)
+
+    def _fetch_weather(self, t: float) -> None:
+        """A new METAR for the departure or the destination: published (recorded, and the engine takes it in)."""
+        if self.weather_source is None or t - self._weather_t < WEATHER_CHECK_S:
+            return
+        self._weather_t = t
+        flight = self.engine.state.flight
+        for icao in dict.fromkeys(a for a in (flight.origin, flight.destination) if a):
+            try:
+                report = self.weather_source(icao)
+            except Exception:  # noqa: BLE001 - the weather is a nicety: never stops ATC
+                log.exception("METAR for %s failed", icao)
+                continue
+            if report is not None and self._weather_sent.get(icao) != report.raw:
+                self._weather_sent[icao] = report.raw
+                self.bus.publish(msgspec.structs.replace(report, t=t))

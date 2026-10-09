@@ -47,7 +47,7 @@
 [  2343.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
 [  2343.0] READBACK  tower.exit_contact_ground correct
 [  2349.0] PILOT     121.9: Boeing Ground, Cessna two lima tango, clear of runway 14R, taxi to parking.
-[  2351.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to parking via A, C.
-[  2353.0] PILOT     121.9: Taxi to parking via alpha, charlie, Cessna two lima tango.
-[  2353.0] READBACK  ground.taxi_in correct
+[  2351.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to the general aviation ramp via A, C.
+[  2353.0] PILOT     121.9: Taxi to the GA ramp via alpha, charlie, Cessna two lima tango.
+[  2353.0] READBACK  ground.taxi_in_ramp correct
 [  2751.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

@@ -180,11 +180,11 @@ class AtisBoard:
         open_ends = [e for e in geo.ends if e.ident not in closed]
         if not open_ends:
             return None
-        if current is not None and current not in closed and (end := geo.end(current)) is not None:
-            headwind, _ = components(end, weather)
-            if headwind >= -MAX_TAILWIND_KT:
-                return end  # still fine: keep the runway in use
         best = select_runway(geo, weather.wind_dir_true, weather.wind.speed_kt, exclude=closed)
+        if current is not None and current not in closed and (end := geo.end(current)) is not None:
+            headwind, crosswind = components(end, weather)
+            if headwind >= -MAX_TAILWIND_KT and not _better(best, end, weather):
+                return end  # still fine: keep the runway in use
         instrument = (weather.visibility_sm is not None and weather.visibility_sm < 3) or \
             (weather.ceiling_ft is not None and weather.ceiling_ft < 1000) or weather.in_cloud
         if best is not None and instrument and not options(geo.airport, best.ident, TYPICAL, out) and geo.airport.approaches:
@@ -195,6 +195,17 @@ class AtisBoard:
             if fitting:
                 return max(fitting, key=lambda e: components(e, weather)[0])
         return best
+
+
+def _better(best: RunwayEndGeometry | None, current: RunwayEndGeometry, w: Weather) -> bool:
+    """The wind has swung so the runway in use has a strong crosswind (``CROSSWIND_CAUTION_KT``) and another one
+    is nearly into it: the runway changes. The wind went from 070 to 110 at 16 with runway 05 kept (14 kt across)
+    and 13 a few degrees off the wind; a tailwind alone moved it."""
+    if best is None or best.ident == current.ident:
+        return False
+    _, crosswind = components(current, w)
+    best_head, best_cross = components(best, w)
+    return crosswind >= CROSSWIND_CAUTION_KT and best_head > 0 and best_cross <= crosswind / 2
 
 
 def _changed(old: AtisInfo, new: Weather, runway: str, notes: tuple[str, ...]) -> bool:

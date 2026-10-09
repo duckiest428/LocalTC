@@ -68,7 +68,15 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    has `hands = false` because the sim's events don't reach it, and `reads_flaps` / `reads_autopilot = false` because
    the sim's variables don't follow it (flap index 0-8, autopilot always off). If its own L:vars can be found
    (the FSLabs SDK, or the sim's dev mode), map them and set `hands = true`.
-5. Run `hands` again until it's clean, then fly a short test with the copilot's hands on (Quick Settings → Copilot →
+5. **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
+   lights took, but the altitude, heading and autopilot never did, and the sim's flap, gear and autopilot readings
+   never moved (flaps read up at flaps 1). The copilot now drops a control after it fails twice with its reading never
+   moving, and says so. Map it properly: `debug aircraft` and `debug hands --autopilot` in the A350, then a profile
+   `crew/profiles/a350.toml` (match `A350`) with the FCU's input events or L:vars for `altitude`, `heading`, `speed`,
+   `autopilot_on/off`, the flap detents (A350: up, 1, 2, 3, full; VFE 255/212/195/186) and `autobrake_*`
+   (`autobrake_low`, `autobrake_medium`, `autobrake_max`, `autobrake_off`), and `reads_flaps` / `reads_autopilot =
+   false` if no variable follows them.
+6. Run `hands` again until it's clean, then fly a short test with the copilot's hands on (Quick Settings → Copilot →
    Its hands) and check it does them in the flight. Repeat for the other aircraft the user flies (a new profile in
    `crew/profiles/`, matched by title or model).
 
@@ -99,7 +107,9 @@ factor 0.2-0.3); nobody has measured it beside MSFS.
    `[tts] kokoro_model = "int8"` and `kokoro_threads` 2, 4 and 8: which is quickest without the sim stuttering?
 2. A flight with Quick Settings > ATC voice > Voices: Kokoro. Does ATC answer late? Does the sim's frame rate drop
    while it speaks? Is any line given to Piper (the status under Voices says)?
-3. If the user has an Azure Speech key: the same with Azure, and the characters it counted for the flight.
+3. If the user has an Azure Speech key (KEY 1 from the resource's Keys and Endpoint page, in Quick Settings > ATC voice >
+   Voices, and the region): the same with Azure, and the characters it counted for the flight. On the Mac it took
+   about 0.55 s a line and Whisper understood it best of the three (word error 0.10).
 
 ## Fixing and leaving a note
 

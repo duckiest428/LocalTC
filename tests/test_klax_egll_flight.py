@@ -141,3 +141,20 @@ def test_a_gate_taken_is_swapped_for_the_one_next_door_with_an_apology(replay):
     parked at 402, next door."""
     swapped = next(line for line in replay if "is occupied" in line)
     assert "sorry, Gate 403 is occupied, taxi to" in swapped and "402" in swapped, swapped
+
+
+# --- the copilot on the radio (full) --------------------------------------------------------------------------------
+
+
+def test_the_copilot_doesnt_call_ready_to_taxi_from_the_gate(replay):
+    """ "What is that sequence, no pushback from the copilot": it called ready to taxi straight after the clearance,
+    parked at the gate. Now it waits for the crew (the beacon, the captain's "request push", or the push itself)."""
+    push = next(at(line) for line in replay if "-> PUSHBACK" in line)
+    early = [line for line in replay if " PILOT " in line and "ready to taxi" in line and at(line) < push]
+    assert not early, early
+
+
+def test_the_copilot_never_asks_for_a_step_climb_by_itself(replay):
+    """ "Our cruising was supposed to be 350 all the way, did the copilot accept another altitude?" It had asked for
+    the plan's FL370 on its own."""
+    assert not [line for line in replay if " PILOT " in line and "request climb" in line]

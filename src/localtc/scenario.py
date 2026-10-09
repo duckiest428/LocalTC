@@ -188,7 +188,7 @@ def run(
     speaking: list[tuple[float, BusEvent]] = []  # push-to-talk releases and transcripts still to come
     result = ScenarioResult(engine=engine)
     mode = copilot if copilot is not None else scenario.scenario.copilot
-    pilot = Copilot(engine, mode=mode) if mode else None
+    pilot = Copilot(engine, mode=mode, deck=getattr(crew, "deck", None)) if mode else None  # one flight deck for both
     for directory in scenario.scenario.airports:
         for airport in load_airport_dir(base / directory):
             engine.handle(AirportData(t=0.0, airport=airport))
@@ -257,12 +257,12 @@ def run(
         text = rule.say.format_map(_SafeDict(_placeholders(engine, own, context, scenario.scenario.vars)))
         say_text(text, at)
 
-    def say_text(text: str, at: float) -> None:
+    def say_text(text: str, at: float, source: str = "") -> None:
         own = state["last_own"]
         mhz = state["com1"] if state["com1"] is not None else (own.com1_mhz if own else 0.0)
-        if voice is None:
+        if voice is None or source == "copilot":
             result.lines.append(f"[{at:8.1f}] PILOT     {speech.frequency_display(mhz)}: {text}")
-            feed(Transcript(t=at, text=text))
+            feed(Transcript(t=at, text=text, source=source))
             return
         feed(PttPressed(t=at))
         clip = voice.speak(text, at)
@@ -299,7 +299,7 @@ def run(
                     state["last_own"] = msgspec.structs.replace(state["last_own"], t=at, com1_mhz=state["com1"])
                     feed(state["last_own"])
             elif isinstance(action, Say):
-                say_text(action.text, at)
+                say_text(action.text, at, "copilot")
             elif isinstance(action, Note):
                 result.lines.append(f"[{at:8.1f}] NOTE      {action.text}")
 

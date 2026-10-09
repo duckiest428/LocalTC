@@ -10,7 +10,7 @@ from localtc.crew import monitor, places
 from localtc.crew.model import CrewModel, unsupported_claim
 from localtc.crew.pm import PilotMonitoring
 from localtc.crew.profiles import for_aircraft, load_all
-from localtc.sim_api import AircraftIdentity, AircraftSystems, CrewAction, IntercomHeard, SendSimEvent
+from localtc.sim_api import AircraftIdentity, AircraftSystems, CopilotEvent, CrewAction, IntercomHeard, SendSimEvent
 
 PROFILES = load_all()
 
@@ -62,7 +62,7 @@ def test_a_report_is_acknowledged_never_done():
     assert said(out) == ["Check."] and not [o for o in out if isinstance(o, CrewAction) and o.outcome == "confirm"]
 
 
-@pytest.mark.parametrize(("text", "action", "value"), [("Auto break off.", "autopilot", "off"), ("Hey from.", "flaps", "up")])
+@pytest.mark.parametrize(("text", "action", "value"), [("Auto thing off.", "autopilot", "off"), ("Hey from.", "flaps", "up")])
 def test_a_command_must_name_the_thing(text, action, value):
     pm = started()
     pm.model = CrewModel(FakeBackend(f'{{"kind": "command", "action": "{action}", "value": "{value}", "reply": "x"}}'), mode="llm")
@@ -75,7 +75,9 @@ def test_an_acknowledgement_gets_no_reply(text):
     backend = FakeBackend(reply("V1, rotate."))
     pm = started()
     pm.model = CrewModel(backend, mode="llm")
-    assert pm.observe(IntercomHeard(t=2.0, text=text)) == [] and not backend.asked
+    out = pm.observe(IntercomHeard(t=2.0, text=text))
+    assert [o for o in out if not isinstance(o, CopilotEvent)] == [] and not backend.asked
+    assert [o.act for o in out if isinstance(o, CopilotEvent) and o.kind == "heard"][0] in ("acknowledgement", "answer")
 
 
 def test_where_are_we_from_the_position():

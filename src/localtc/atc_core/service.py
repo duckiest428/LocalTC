@@ -41,6 +41,7 @@ class AtcService:
         self.source = source
         self.cache = cache
         self.copilot = copilot
+        self.deck = None  # the flight deck the copilot shares with the intercom copilot (set by the app)
         # Subscribe now, not in run(): a fast source could publish everything before run() starts.
         # Only inputs: the engine's own outputs (AtcTransmission, PhaseChanged, ...) are not fed back in.
         self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased)
@@ -69,7 +70,10 @@ class AtcService:
                 for output in later:
                     self.bus.publish(output)
             if self.copilot is not None:
-                await self._copilot(event, outputs)
+                try:
+                    await self._copilot(event, outputs)
+                except Exception:  # the copilot failing never stops ATC
+                    log.exception("Copilot failed on %s", type(event).__name__)
             await self._fetch_airports(event.t)
 
     async def _copilot(self, event, outputs) -> None:
@@ -84,6 +88,10 @@ class AtcService:
             elif action.kind == "note":
                 log.warning("Copilot: %s", action.text)
                 self.bus.publish(AtcAlert(t=action.t, kind="copilot", detail=action.text))
+        deck = getattr(self.copilot, "deck", None)
+        if deck is not None:
+            for note in deck.drain():  # the copilot's record (each published once, by whichever drains it first)
+                self.bus.publish(note)
 
     async def _fetch_airports(self, t: float) -> None:
         while self.engine.airport_requests:

@@ -116,18 +116,30 @@ def test_a_step_climb_from_the_plan_is_offered_and_asked_for_on_yes():
     assert said(reply) and said(reply)[0].startswith("Your radios: ask Seattle Center")
 
 
-def test_working_the_radio_the_copilot_asks_atc_itself():
+def test_working_the_radio_the_copilot_asks_atc_only_on_yes():
+    """With the copilot on the radio it asked for the plan's FL370 by itself; the flight was meant to stay at FL350.
+    The step is the captain's call: offered, asked for on "yes", and on "no" never offered again this flight."""
     engine = planned_steps(FakeEngine())
     pm = crew(engine, radio_mode=lambda: "full")
     cruise(pm)
     pm.monitor.handoff = (0.1, SimpleNamespace(station="Seattle Center", mhz=125.1))
-    assert not fly(pm, [air(0.3, lat=46.9)])  # handed off, not checked in yet: not now
+    assert not said(fly(pm, [air(0.3, lat=46.9)]))  # handed off, not checked in yet: not now
     pm.monitor.handoff = None
     settled(pm)
     out = fly(pm, [air(1.0, lat=46.9), air(5.0, lat=46.91), air(10.0, lat=46.92)])
+    assert "Step climb point ahead, suggest FL370. Want me to ask?" in said(out)
+    assert not [o for o in out if isinstance(o, Transcript)]
+    out = pm.observe(IntercomHeard(t=12.0, text="yes"))
     radio = [o.text for o in out if isinstance(o, Transcript) and o.source == "copilot"]
     assert radio == ["Seattle Center, " + radio[0].split(", ")[1] + ", request climb FL370"]
-    assert "Step climb point ahead, asking for FL370." in said(out)
+
+    pm2 = crew(planned_steps(FakeEngine()), radio_mode=lambda: "full")
+    cruise(pm2)
+    settled(pm2)
+    fly(pm2, [air(1.0, lat=46.9), air(5.0, lat=46.91)])
+    assert said(pm2.observe(IntercomHeard(t=8.0, text="no"))) == ["Copy, later then."]
+    later = fly(pm2, [air(2000.0 + i, lat=48.99) for i in range(5)])  # the next step, at CCC
+    assert not [w for w in said(later) if "Step" in w] and pm2.monitor.steps_declined
 
 
 def test_no_step_climb_once_up_there_or_after_unable():

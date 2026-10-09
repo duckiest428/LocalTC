@@ -121,8 +121,28 @@ BEYOND_RULE = ("Use the facts first. Where they say nothing about the flight, yo
                "never invent anything about this flight (where we are, the weather, what's set).")
 
 
-def system(beyond_facts: bool = False) -> str:
-    return SYSTEM.replace("{facts_rule}", BEYOND_RULE if beyond_facts else FACTS_RULE)
+def system(beyond_facts: bool = False, persona: str = "") -> str:
+    text = SYSTEM.replace("{facts_rule}", BEYOND_RULE if beyond_facts else FACTS_RULE)
+    return text + (f"\n\nWho you are (the same every time you're asked; nothing more made up about it): {persona}"
+                   if persona else "")
+
+
+FIRST_NAMES = {"male": ("Tom", "James", "Daniel", "Marco", "Raj", "Luke", "Chris", "Sam"),
+               "female": ("Emma", "Sarah", "Priya", "Laura", "Hannah", "Sofia", "Kate", "Sam")}
+EARLIER_TYPES = ("the A320", "the 737", "the A330", "the 777", "the 787", "the Embraer 190", "the Dash 8")
+
+
+def persona(seed: int, sex: str, base: str, aircraft: str) -> str:
+    """The first officer's own story, fixed for the flight: a name, a base, years and types. Asked twice, the same
+    answer (it was "never been to London" and then "based at Heathrow")."""
+    names = FIRST_NAMES.get(sex) or FIRST_NAMES["male"] + FIRST_NAMES["female"]
+    years = 4 + seed % 9
+    on_type = 1 + seed % min(years, 4)
+    before = EARLIER_TYPES[seed % len(EARLIER_TYPES)]
+    return (f"you're {names[seed % len(names)]}, a first officer for {years} years, {on_type} of them on "
+            f"{aircraft or 'this type'}, before that {before}; based at {base or 'the airline’s main base'}. A calm, "
+            f"dry, friendly colleague: you say when you're not sure, ask when you didn't catch something, and never "
+            f"pretend to have done or seen something.")
 
 
 def effective_mode(mode: str, backend) -> str:
@@ -141,6 +161,7 @@ class CrewModel:
         self.backend, self.timeout_s, self.patience_s = backend, timeout_s, patience_s
         self.setting = mode
         self.beyond_facts = beyond_facts  # [crew] beyond_facts: replies may go past what the copilot knows
+        self.persona = ""  # the first officer's own story (``persona``), set for each flight
         self.history: deque[tuple[str, str]] = deque(maxlen=HISTORY)  # ("Captain" or "You", words)
         self.events: deque[tuple[float, str]] = deque(maxlen=EVENTS)  # what happened on the flight deck
 
@@ -185,7 +206,7 @@ class CrewModel:
         prompt = ("Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items())
                   + (f"\n\n{context}" if context else "") + f'\n\nCaptain: "{text}"')
         messages = tuple(m for q, a in EXAMPLES for m in (("user", q), ("assistant", a))) + (("user", prompt),)
-        request = LlmRequest("crew", system(self.beyond_facts), messages, SCHEMA, max_tokens=120,
+        request = LlmRequest("crew", system(self.beyond_facts, self.persona), messages, SCHEMA, max_tokens=120,
                              context="\n".join(f"- {k}: {v}" for k, v in (more or {}).items()))
         known = {**(more or {}), **facts}  # what the reply is checked against
         timeout_s, _ = waits(self.backend, self.timeout_s, self.timeout_s, self.patience_s)
@@ -285,6 +306,9 @@ _NEGATED = re.compile(r"\b(?:not|no|n't|isn't|aren't|can't|cannot|don't)\b")
 def unsupported_claim(reply: str, facts: dict[str, str]) -> str | None:
     """Why ``reply`` says something about this flight the facts don't show (None: it doesn't)."""
     get = lambda k: str(facts.get(k, "")).lower()  # noqa: E731
+    whole = reply.replace("\u2019", "'").lower()
+    if (done := _claimed(whole, facts)) is not None or (done := _wind_claim(whole, facts)) is not None:
+        return done
     for sentence in re.split(r"(?<=[.!?;])\s+|,\s+(?:and|but)\s+", reply.replace("\u2019", "'")):
         low = sentence.lower()
         if _NEGATED.search(low):
@@ -309,6 +333,45 @@ def unsupported_claim(reply: str, facts: dict[str, str]) -> str | None:
             known = get("position") + " " + " ".join(str(v).lower() for v in facts.values())
             if any(place.strip().lower() not in known for place in places):
                 return "names a place the facts don't give"
+    return None
+
+
+def _claimed(low: str, facts: dict[str, str]) -> str | None:
+    """A reply saying the copilot set something (or that a control is so) that it didn't do and the facts don't show:
+    "just the QNH set at 1020" (never set), "Copy, autopilot off" (the autopilot can't even be read)."""
+    did = str(facts.get("what I did lately", "")).lower()
+    for word, pattern in (("qnh", r"\b(?:qnh|altimeter|baro)\b"), ("heading", r"\bheading\b"), ("altitude", r"\baltitude\b"),
+                          ("squawk", r"\bsquawk\b")):
+        for m in re.finditer(pattern + r"[^.;,]*?\b(?:set|selected|dialled|dialed)\b", low):
+            if _NEGATED.search(m.group(0)) or word in did or (word == "qnh" and "altimeter" in did):
+                continue
+            return f"claims the {word} is set (the copilot didn't set it)"
+    shown = str(facts.get("autopilot", "")).lower()
+    if (m := re.search(r"\bauto ?pilot(?:'s| is)? (on|off|engaged|disengaged|disconnected)\b", low)):
+        state = "on" if m.group(1) in ("on", "engaged") else "off"
+        if "can't" in shown or (shown and not shown.startswith(state)):
+            if state not in did and f"autopilot {state}" not in did:
+                return f"claims the autopilot is {state} (the facts show {shown or 'nothing'})"
+    gear = str(facts.get("gear", "")).lower()
+    if gear and (m := re.search(r"\bgear(?:'s| is)? (up|down)\b", low)) and m.group(1) != gear and "gear" not in did:
+        return f"claims the gear is {m.group(1)} (it shows {gear})"
+    return None
+
+
+def _wind_claim(low: str, facts: dict[str, str]) -> str | None:
+    """Head, tail and crosswind numbers must be the ones worked out from the wind and the runway (it said "about 12
+    knots crosswind" with the wind straight down the runway)."""
+    said = re.findall(r"(\d+)\s*(?:knots?|kts?)?\s*(?:of\s+)?(cross|head|tail) ?wind", low) + \
+        [(n, k) for k, n in re.findall(r"(cross|head|tail) ?wind(?: of| component of|,)?\s*(?:about |around )?(\d+)", low)]
+    if not said:
+        return None
+    known = " ".join(v for k, v in facts.items() if k.startswith("wind on runway")).lower()
+    if not known:
+        return "gives wind components the facts don't have"
+    for number, kind in said:
+        m = re.search(rf"(\d+) knots? {kind}wind", known)
+        if m is None or abs(int(m.group(1)) - int(number)) > 3:
+            return f"says {number} knots {kind}wind (the runway and wind give {known})"
     return None
 
 

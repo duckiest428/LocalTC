@@ -229,7 +229,8 @@ def test_intercom_check_and_unclear_words():
 def test_a_radio_call_on_the_intercom_is_offered_to_be_sent():
     pm = started()
     out = pm.observe(IntercomHeard(t=1.0, text="Seattle Tower, Alaska 123, ready for departure runway 16R"))
-    assert said(out) == ["That was on the intercom. Want me to send it?"]
+    assert said(out) == ["That sounded like a radio call. I haven't sent it; want me to?"]
+    assert not [o for o in out if isinstance(o, Transcript)]  # never sent unasked
     out = pm.observe(IntercomHeard(t=4.0, text="yes"))
     assert out[0] == Transcript(t=4.0, text="Seattle Tower, Alaska 123, ready for departure runway 16R", source="copilot")
 

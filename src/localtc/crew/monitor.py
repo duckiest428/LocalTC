@@ -87,6 +87,9 @@ APPROACH_ALLOWANCE_H = 0.15  # the approach and a little more beyond the straigh
 DESCENT_BURN = 0.4  # the descent's burn, of the cruise one
 FUEL_PLAN_MARGIN_LB = 1100.0  # a projection this far (or 15 percent) under the plan's landing fuel is worth a word
 FUEL_MATCH_LB = 1100.0  # on board against the plan's block: this close (or 3 percent) matches
+FUEL_STEADY_S = 20.0  # the fuel unchanged this long after engine start: loaded, and checked against the block
+FUEL_LAST_H = 1.0  # the projections to landing only this close to the destination: a long way out they're guesses
+LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
 # Checklists aren't offered or read until there are real ones to read from (the aircraft's own); asked for, the
 # copilot says so. The challenge-and-response machinery below stays for then.
 CHECKLISTS = False
@@ -194,6 +197,9 @@ class Monitor(WatchMixin):
         self.pilot_since_atc = True
         self.last_pilot_radio_t = -1e9
         self._fuel_samples: list[tuple[float, float]] = []
+        self.fuel_check_from: float | None = None  # the engines started: the fuel against the block, once it's steady
+        self._fuel_recent: list[tuple[float, float]] = []
+        self.cleared_alt_t = 0.0  # when the cleared altitude was last given
         self.atis_said: dict[str, tuple] = {}  # airport: (runway, approach, setting) last told
         self.cr: _Challenge | None = None  # a checklist read challenge and response
         self.handoff: tuple[float, Any] | None = None  # (when, the facility ATC sent the flight to)
@@ -518,7 +524,7 @@ class Monitor(WatchMixin):
             self._call("engine_failure_roll", SAFETY, t, "Engine failure! Below V1." if below else "Engine failure!")
         if s.engines_running > was.engines_running and own.on_ground and self.phase in (None, "PARKED", "PUSHBACK"):
             self._prompt_checklist("after_start", t + 20.0)
-            self._fuel_check(own, t)
+            self.fuel_check_from = t  # checked once the fuel stops going up (a refuel still running isn't "under")
         if was.ap_master and not s.ap_master and not own.on_ground and t - self.commanded.get("autopilot", -1e9) > 10 \
                 and self.c.autopilot_known:
             self._call("ap_off", ROUTINE, t, ["Autopilot's off.", "Autopilot disconnected."], again_s=30)
@@ -583,6 +589,10 @@ class Monitor(WatchMixin):
                     self._call("push_brake", ROUTINE, t, "We're cleared to push; parking brake's still set.")
 
     def _always(self, own: OwnshipState, prev: OwnshipState, t: float) -> None:
+        self._fuel_steady(own, t)
+        self._always_rest(own, prev, t)
+
+    def _always_rest(self, own: OwnshipState, prev: OwnshipState, t: float) -> None:
         s, p = self.c.systems, self.c.profile
         airborne = not own.on_ground
         if airborne and self._agl(own) > 50:
@@ -598,6 +608,22 @@ class Monitor(WatchMixin):
             self._call("flap_speed", SAFETY, t, f"Flap speed! {own.ias_kt:.0f}, limit {vfe:.0f}.", again_s=15)
         if airborne and own.gear_down and p.gear_extended_kt and own.ias_kt > p.gear_extended_kt + 5:
             self._call("gear_speed", SAFETY, t, f"Gear speed! {own.ias_kt:.0f}, limit {p.gear_extended_kt:.0f}.", again_s=15)
+
+    def _fuel_steady(self, own: OwnshipState, t: float) -> None:
+        """The block check, once the fuel has stopped changing for ``FUEL_STEADY_S`` (a refuel in progress at
+        engine start had "120,800 pounds under the plan's block"); not after takeoff."""
+        if self.fuel_check_from is None or not own.fuel_lb:
+            return
+        if not own.on_ground:
+            self.fuel_check_from = None
+            return
+        self._fuel_recent = [x for x in self._fuel_recent if t - x[0] <= FUEL_STEADY_S] + [(t, own.fuel_lb)]
+        if t - self.fuel_check_from < FUEL_STEADY_S or self._fuel_recent[0][0] > t - FUEL_STEADY_S + 1:
+            return
+        amounts = [f for _, f in self._fuel_recent]
+        if max(amounts) - min(amounts) <= max(0.005 * own.fuel_lb, 50.0):
+            self.fuel_check_from = None
+            self._fuel_check(own, t)
 
     def _fuel_check(self, own: OwnshipState, t: float) -> None:
         """The fuel against the plan's block, once, when the engines start (by then it's loaded): only when it's off."""
@@ -767,6 +793,7 @@ class Monitor(WatchMixin):
         target = st.assignments.altitude_ft if st is not None else None
         if target != self.cleared_alt:
             self.cleared_alt, self.captured, self.off_since = target, None, None
+            self.cleared_alt_t = t
             if target and self.hands and s is not None and abs(s.ap_altitude_sel - target) > 50 and self.f.takeoff_t is not None:
                 self._call(f"set_alt:{target}", ROUTINE, t, f"{speech.altitude_display(target)} set.",
                            commands=(Command("altitude", str(target)),))
@@ -777,6 +804,14 @@ class Monitor(WatchMixin):
             if abs(alt - target) < 150:
                 self.captured = target
             via = self._via()
+            if self.captured != target and abs(alt - target) >= 1000 and abs(own.vs_fpm) < 300 and not via \
+                    and t - self.cleared_alt_t > LEVEL_BELOW_S and self.phase in ("DEPARTURE", "CRUISE", "ARRIVAL"):
+                # Cleared to FL370 and still level at 350 an hour later (the selected altitude never reached the
+                # aircraft): the pilot monitoring says so.
+                where = "below" if alt < target else "above"
+                self._nag(f"level_{where}:{target}", ROUTINE, t, f"We're cleared to {speech.altitude_display(target)}, "
+                          f"still level at {speech.altitude_display(int(round(alt, -2)))}.", every_s=600,
+                          valid=lambda: st.assignments.altitude_ft == target)
             if self.captured == target and abs(alt - target) > 300 and not via:
                 self.off_since = self.off_since or t
                 if t - self.off_since > 5:
@@ -845,7 +880,7 @@ class Monitor(WatchMixin):
                           valid=lambda: st.assignments.speed_kt == assigned_kt and not self._on_approach())
         else:
             self.f.said.pop("speed_off_t", None)
-        if own.in_cloud and own.temperature_c is not None and -40 <= own.temperature_c <= 5 \
+        if own.in_cloud and own.temperature_c is not None and round(own.temperature_c) > -40 and own.temperature_c <= 5 \
                 and not (s is not None and s.anti_ice):
             self._call("icing", ROUTINE, t, f"In cloud at {own.temperature_c:.0f} degrees; engine anti-ice?", again_s=1200)
         self._cruise(own, t)
@@ -879,7 +914,8 @@ class Monitor(WatchMixin):
         burn = self._cruise_burn_pph(own, t)
         if burn:
             self.p.burn_pph = burn
-        if burn and own.fuel_lb:
+        last_hour = to_go / own.gs_kt <= FUEL_LAST_H  # the pilot: "only an hour away, then it's a real concern"
+        if burn and own.fuel_lb and last_hour and not self.p.fuel_doubted:
             at_landing = own.fuel_lb - landing_burn(burn, to_go, tod_nm, own.gs_kt)
             reserve = self.perf.reserve_fuel_lb or burn * FINAL_RESERVE_H
             if at_landing < reserve:

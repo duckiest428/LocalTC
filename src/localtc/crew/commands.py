@@ -4,8 +4,9 @@
 "approach mode", "set heading two seven zero", "altitude one zero thousand", "flight level two four zero",
 "speed two fifty", "vertical speed minus one thousand five hundred", "squawk four five five three",
 "tune one two one point niner", "standby one one eight seven", "swap", "altimeter two niner niner two",
-"QNH one zero one three", "standard", "parking brake set". Several in one breath ("gear down, flaps three") are
-read in order. "Confirm" / "negative" answer the copilot's question, and "how do you hear me" checks the intercom.
+"QNH one zero one three", "standard", "parking brake set", "autobrake max". Several in one breath ("gear down, flaps
+three") are read in order. "Request pushback" / "get us taxi" asks the copilot to make that call on the radio; "go
+around" and "declare an emergency" are the captain's calls (the copilot confirms the emergency before saying it). "Confirm" / "negative" answer the copilot's question, and "how do you hear me" checks the intercom.
 "Before takeoff checklist" (or "run the checklist": the one that's due) reads a checklist, "brief" / "approach
 briefing" a briefing, "status" how the flight's going; "quiet please" / "keep me posted" / "normal callouts" set how
 much the copilot says by itself.
@@ -20,8 +21,9 @@ from localtc.atc_core.readback.normalize import Token, normalize
 @dataclass(frozen=True)
 class Command:
     action: str  # gear, flaps, light, spoilers, autopilot, ap_mode, autothrottle, heading, altitude, speed, vs,
-    #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, yes, no, check,
-    #              checklist, brief, status, verbosity
+    #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, autobrake, yes, no, check,
+    #              checklist, brief, status, verbosity, say_again, radio (a call to make: pushback, taxi,
+    #              clearance, departure), go_around, emergency (mayday, pan)
     value: str = ""  # "down", "2", "on", "270", "10000", "-1500", "4553", "121.9", "29.92"
     target: str = ""  # which light, which autopilot mode; "hpa" for an altimeter setting in hectopascals
 
@@ -36,6 +38,8 @@ LIGHTS = {"landing": "landing", "taxi": "taxi", "strobe": "strobe", "strobes": "
 AP_MODES = {"heading": "heading", "hdg": "heading", "nav": "nav", "lnav": "nav", "approach": "approach",
             "app": "approach", "appr": "approach", "loc": "approach", "altitude": "altitude", "alt": "altitude",
             "vertical": "vs", "vs": "vs", "level": "flc", "flch": "flc", "flc": "flc"}
+# The last word of a statement that only reports or acknowledges ("flaps one, check", "gear down, three green").
+ACK_WORDS = ("check", "checked", "set", "checks", "noted", "copy", "roger", "okay", "ok", "green")
 YES = {"confirm", "confirmed", "affirm", "affirmative", "yes", "yeah", "correct", "go", "do"}
 NO = {"negative", "no", "cancel", "disregard", "stop", "belay"}
 FILLER = {"to", "the", "at", "please", "our", "my", "your", "for", "me", "us", "now", "new"}  # "set the altimeter to 30.10"
@@ -47,6 +51,19 @@ CHATTY = ("keep me posted", "talk more", "more chatter", "chatty", "chat more")
 STANDARD = ("normal callouts", "standard callouts", "usual callouts", "back to normal")
 STATUS = ("status report", "status update", "give me a status", "how are we doing", "how's it going", "hows it going",
           "how is it going", "status")
+SAY_AGAIN = re.compile(r"^(?:\w+,?\s+)?(?:say again|what did you say|come again|repeat that|pardon|sorry\?|what was that)\b")
+# Calls the pilot asks the copilot to make on the radio: "request pushback", "get us taxi", "ask for the clearance".
+RADIO_ASK = r"(?:request|get us|get|ask for|call for|call (?:them )?for|ask (?:ground|tower|them) for)"
+RADIO_REQUESTS = (
+    (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?(?:push ?back|push and start|push|start ?up|startup)\b"), "pushback"),
+    (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?taxi\b|\bcall (?:for )?taxi\b"), "taxi"),
+    (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?(?:ifr |)clearance\b|\bget (?:us )?cleared\b"), "clearance"),
+    (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?(?:takeoff|take off|departure)(?: clearance)?\b|\btell tower (?:we're|we are) ready\b"),
+     "departure"),
+)
+AUTOBRAKE_LEVELS = {"off": "off", "disarm": "off", "low": "low", "lo": "low", "medium": "medium", "med": "medium",
+                    "high": "max", "hi": "max", "max": "max", "maximum": "max", "rto": "max", "on": "", "arm": "",
+                    "armed": "", "set": "", "one": "1", "two": "2", "three": "3", "four": "4"}
 
 
 def _number(tokens: list[Token], i: int) -> float | None:
@@ -72,9 +89,22 @@ def _on_off(tokens: list[Token], start: int, end: int) -> str:
 
 def parse(text: str) -> list[Command]:
     """Every command in ``text``, in order; [] when it isn't one (a question, chat, a radio call)."""
+    # "Q and H", "Q N H", "auto brake": speech-to-text's spellings, one word each.
+    text = re.sub(r"\b(?:q|queue|cue)[\s.]*(?:and|n|en)[\s.]*h\b", "qnh", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bauto[\s-]?brakes?\b", "autobrake", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
         return [Command("check")]
+    if SAY_AGAIN.search(lowered.strip(" ?!.")) and len(lowered.split()) <= 5:
+        return [Command("say_again")]
+    for pattern, call in RADIO_REQUESTS:
+        if pattern.search(lowered):
+            return [Command("radio", call)]
+    if re.search(r"\b(?:declare (?:an )?emergency|mayday|pan[ -]?pan)\b", lowered):
+        return [Command("emergency", "pan" if re.search(r"\bpan[ -]?pan\b", lowered) else "mayday")]
+    if re.search(r"\bgo[ -]?around\b|\bgoing around\b", lowered):
+        return [Command("go_around")]
     for phrases, level in ((QUIET, "quiet"), (CHATTY, "chatty"), (STANDARD, "standard")):
         if any(phrase in lowered for phrase in phrases):
             return [Command("verbosity", level)]
@@ -188,7 +218,19 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
         return (Command("altimeter", f"{inhg:.2f}") if inhg else None), i + 2
     if w in ("standard", "std") and (i == 0 or _word(tokens, i - 1) in ("set", "altimeter", "altimeters", "baro")):
         return Command("altimeter", "29.92"), i + 1
-    if w == "parking" and nxt == "brake":
+    if w == "parking" and nxt in ("brake", "brakes"):
         state = _on_off(tokens, i - 2, i + 4)
         return (Command("parking_brake", state) if state else None), i + 2
+    if w == "autobrake":
+        # "autobrake max", "autobrake to low", "set autobrake three", "turn on the autobrake" (no setting: asked)
+        near = [*range(i + 1, min(len(tokens), i + 4)), *range(max(0, i - 2), i)]  # after it first, then before
+        for j in near:
+            word = tokens[j].text
+            if AUTOBRAKE_LEVELS.get(word):
+                return Command("autobrake", AUTOBRAKE_LEVELS[word]), max(i, j) + 1
+            if j > i and tokens[j].kind == "number" and word in ("1", "2", "3", "4", "5", "6"):
+                return Command("autobrake", word), j + 1
+        if any(tokens[j].text in AUTOBRAKE_LEVELS or tokens[j].text == "turn" for j in near):
+            return Command("autobrake", ""), i + 1  # "turn on the autobrake": which setting is asked
+        return None, i + 1
     return None, i + 1

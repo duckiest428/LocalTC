@@ -268,6 +268,19 @@ class CrewAction(Event, tag="crew_action"):
     detail: str = ""
 
 
+class CopilotEvent(Event, tag="copilot_event"):
+    """What the copilot made of something and did about it, for the record and the replay: ``kind`` heard (an
+    utterance and how it was read), asked (a confirmation or "did you mean"), done, cancelled (a queued call or action
+    dropped, and why), expired, held, failed, recovered, error. ``utterance``: the id of the words it's about."""
+
+    kind: str
+    detail: str = ""
+    utterance: str = ""
+    act: str = ""  # command, question, report, correction, negation, acknowledgement, answer, radio, chat, unclear
+    action: str = ""  # the command or call concerned
+    generation: int = 0  # the flight it belongs to (a new flight or a reconnect starts the next)
+
+
 class AtcTransmission(Event, tag="atc_transmission"):
     station: str  # spoken station name, e.g. "Paine Tower"
     frequency_mhz: float
@@ -461,7 +474,7 @@ RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]
 AppEvent = Union[SessionNote]
-CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction]
+CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

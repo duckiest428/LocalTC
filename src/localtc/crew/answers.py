@@ -7,6 +7,7 @@ do we have", "how far to go", "what did ATC say"): fast, exact, and the same eve
 
 import re
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from localtc.atc_core.phraseology import speech
@@ -27,6 +28,7 @@ class Picture:
     last_atc: AtcTransmission | None = None
     metric: bool = False  # fuel in kilograms (outside North America)
     burn_pph: float | None = None  # the cruise burn measured from the fuel used (the monitor's), pounds an hour
+    fuel_doubted: bool = False  # the pilot said the fuel projections are off: none until told otherwise
 
     @property
     def destination(self) -> str | None:
@@ -62,6 +64,21 @@ class Picture:
             return None
         engines = (self.cockpit.systems.engines_running if self.cockpit.systems is not None else 0) or 1
         return own.fuel_lb / (own.fuel_flow_pph * engines) * 60
+
+
+def _components(engine: Any, icao: str, runway: str | None, w: Any) -> tuple[str, str] | None:
+    """(runway, "23 knots headwind, 1 knot crosswind from the left") from the ATIS wind; None when it can't be told."""
+    from localtc.atc_core.weather import components
+
+    geo = engine.geometry(icao) if engine is not None and runway else None
+    end = geo.end(runway) if geo is not None else None
+    if end is None or w is None or not getattr(w.wind, "speed_kt", 0):
+        return None
+    head, cross = components(end, w)
+    side = "right" if ((w.wind_dir_true - end.heading_true + 360) % 360) < 180 else "left"
+    knots = lambda n: f"{n} knot{'' if n == 1 else 's'}"  # noqa: E731
+    along = f"{knots(abs(round(head)))} {'headwind' if head >= 0 else 'tailwind'}"
+    return end.ident, f"{along}, {knots(round(cross))} crosswind from the {side}"
 
 
 def _hm(minutes: float) -> str:
@@ -112,6 +129,8 @@ def facts(p: Picture) -> dict[str, str]:
             if w.temperature_c is not None:
                 weather += f", temperature {w.temperature_c}"
             out["destination weather"] = weather + f", runway {info.runway} in use"
+            if (comp := _components(p.engine, dest, a.arrival_runway or info.runway, w)) is not None:
+                out[f"wind on runway {comp[0]}"] = comp[1]
     if own is not None:
         out["altitude"] = f"{round(own.alt_indicated_ft / 10) * 10:,.0f} feet"
         out["speed"] = f"{own.ias_kt:.0f} knots indicated, {own.gs_kt:.0f} over the ground"
@@ -135,6 +154,12 @@ def facts(p: Picture) -> dict[str, str]:
             out["wind here"] = f"{round(own.wind_dir_true - own.magvar) % 360 or 360:03d} at {own.wind_kt:.0f} knots"
         if own.zulu_s is not None:
             out["time"] = f"{int(own.zulu_s // 3600) % 24:02d}{int(own.zulu_s % 3600 // 60):02d} Zulu"
+    if st is not None and own is not None and not any(k.startswith("wind on runway") for k in out) \
+            and st.assignments.arrival_runway and own.wind_kt >= 1 and (p.to_go() or (999.0,))[0] <= 60:
+        # No ATIS for it: the wind where the aircraft is, on the runway it's landing on.
+        here = SimpleNamespace(wind=SimpleNamespace(speed_kt=own.wind_kt), gust_kt=None, wind_dir_true=own.wind_dir_true)
+        if (comp := _components(p.engine, st.flight.destination, st.assignments.arrival_runway, here)) is not None:
+            out[f"wind on runway {comp[0]}"] = comp[1] + " (the wind here)"
     if (to_go := p.to_go()) is not None:
         nm, minutes = to_go
         out["to go"] = f"{nm:,.0f} miles" + (f", about {_hm(minutes)}" if minutes is not None else "")
@@ -175,6 +200,10 @@ QUESTIONS: tuple[tuple[str, str], ...] = (
     (r"(?:what|which) runway|runway (?:are we|do we|will we)", "runway"),
     (r"where are we|what (?:city|town|state|country)|which (?:city|town|state)|are we over|our (?:position|location)", "where"),
     (r"(?:what|which) gate", "gate"),
+    (r"cross ?wind|head ?wind|tail ?wind", "components"),
+    (r"\bgear\b", "gear"),
+    (r"\bflaps?\b", "flaps"),
+    (r"auto ?pilot", "autopilot"),
 )
 
 
@@ -222,6 +251,17 @@ def answer(text: str, p: Picture) -> str | None:
         return f"We're {place}." if place else "Nowhere near a town; " + f["position"].split(",")[0] + "."
     if kind == "gate":
         return f"{f['gate']}." if "gate" in f else "No gate assigned yet."
+    if kind == "components":
+        wind = [(k, v) for k, v in f.items() if k.startswith("wind on runway")]
+        return f"Runway {wind[0][0].split()[-1]}: {wind[0][1]}." if wind else "I don't have the runway's wind yet."
+    if kind == "gear":
+        return f"Gear's {f['gear']}." if "gear" in f else None
+    if kind == "flaps":
+        return None if f.get("flaps", "").startswith("can't") else f"Flaps {f['flaps']}." if "flaps" in f else None
+    if kind == "autopilot":
+        value = f.get("autopilot", "")
+        return ("I can't read the autopilot on this aircraft." if value.startswith("can't") else
+                f"Autopilot's {value}." if value else None)
     return None
 
 

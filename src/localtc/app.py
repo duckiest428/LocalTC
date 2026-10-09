@@ -403,13 +403,18 @@ async def run_session(
                 for airport in load_airport_dir(directory):
                     engine.handle(AirportData(t=0.0, airport=airport))
             copilot = None
+            from localtc.flightdeck import FlightDeck
+
+            deck = FlightDeck()  # the radio copilot and the intercom copilot work from the same one
             if cfg.copilot.mode != "off":
                 from localtc.copilot import Copilot
 
-                copilot = Copilot(engine, mode=cfg.copilot.mode, delay_s=(cfg.copilot.delay_min_s, cfg.copilot.delay_max_s))
+                copilot = Copilot(engine, mode=cfg.copilot.mode, delay_s=(cfg.copilot.delay_min_s, cfg.copilot.delay_max_s),
+                                  deck=deck)
                 log.info("Copilot: %s", "reads back and changes frequencies" if cfg.copilot.mode == "assist"
                          else "works the radio for the whole flight", extra=CONSOLE)
             atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
+            atc_service.deck = deck
             consumers.append(asyncio.create_task(atc_service.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring
@@ -432,7 +437,7 @@ async def run_session(
                 pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
                                      plan_source=cfg.flight.plan_source, alternate=cfg.flight.alternate,
-                                     repeat_atc=cfg.crew.repeat_atc,
+                                     repeat_atc=cfg.crew.repeat_atc, deck=deck, voice_sex=cfg.crew.voice_sex,
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
@@ -567,15 +572,18 @@ class LiveSession:
         """"off", "assist" or "full", mid-flight. The copilot picks up from where the flight is."""
         if self.atc is None or self.engine is None:
             return False
+        deck = getattr(self.atc, "deck", None)
         if mode == "off":
             self.atc.copilot = None
+            if deck is not None:
+                deck.set_radio_mode("off", deck.t)  # what it had queued goes with it
             return True
         from localtc.copilot import Copilot
 
         current = self.atc.copilot or getattr(self, "_copilot", None)
         if current is None:
             c = self.cfg.copilot
-            current = Copilot(self.engine, mode=mode, delay_s=(c.delay_min_s, c.delay_max_s))
+            current = Copilot(self.engine, mode=mode, delay_s=(c.delay_min_s, c.delay_max_s), deck=deck)
         current.mode = mode
         self._copilot = current
         self.atc.copilot = current

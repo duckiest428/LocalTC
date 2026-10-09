@@ -44,9 +44,9 @@ logged and the next line is spoken.
 | Download | 80 MB (the 904-speaker LibriTTS voice) | 337 MB (fp32 model 310 MB + voices 27 MB), or 115 MB with the int8 model | none |
 | Voices | 904 speakers, US English | 54 voices, English: 20 US and 8 British (graded A to F; the pools use C and up, plus blends of two) | hundreds; every regional English (US, GB, AU, CA, IE, IN, NZ, ZA, SG, HK, PH) |
 | Pace / pitch / style | pace and expressiveness (length/noise scales) | pace | SSML: pace, pitch, pauses, `express-as` styles on some voices |
-| Latency (M4 Mac, CPU) | 100-200 ms a line, real-time factor 0.03 | 1.1-1.8 s a line, real-time factor 0.21-0.30 (fp32; int8 was slower: 0.44) | not measured (no key here); a network round trip plus synthesis |
+| Latency (M4 Mac, CPU) | 100-200 ms a line, real-time factor 0.03 | 1.1-1.8 s a line, real-time factor 0.21-0.30 (fp32; int8 was slower: 0.44) | 0.5-0.75 s a line from eastus (a network round trip plus synthesis), real-time factor 0.09; repeated lines from this PC's cache |
 | Memory | about 280 MB | about 210 MB more | none |
-| Whisper's word error after the radio (5 ATC lines, small.en) | 0.29 | 0.17 | not measured |
+| Whisper's word error after the radio (5 ATC lines, small.en) | 0.29 | 0.17 | 0.10 (base.en; Piper 0.32, Kokoro 0.24 in the same run) |
 
 The word error is how the ATC lines came back from Whisper after the radio effect, the same check Piper's speakers were
 picked by (`localtc tts bench --whisper`); with base.en the two were close (0.26 and 0.24). Kokoro's voices sound
@@ -70,6 +70,9 @@ it takes.
   resource's region; nothing else of the flight. Microsoft states that text and audio of real-time synthesis aren't
   stored. Off unless chosen; the key lives in the credential store (Settings > Voices) or `AZURE_SPEECH_KEY`, never in
   the settings file.
+- **The key**: a Speech resource's, or a Foundry / AI services resource's (its "Keys and Endpoint" page; the endpoint
+  shown there, `<region>.api.cognitive.microsoft.com`, isn't needed: the region is). Either of its two keys works; the
+  app says to use KEY 1 and keep KEY 2 as the spare while KEY 1 is regenerated.
 - **The API**: Microsoft's documented REST endpoint (`https://<region>.tts.speech.microsoft.com/cognitiveservices/v1`,
   SSML in, `raw-24khz-16bit-mono-pcm` out; the voice list from `/cognitiveservices/voices/list`), the same service the
   Speech SDK uses, without its native library.

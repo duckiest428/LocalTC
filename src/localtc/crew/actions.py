@@ -7,7 +7,7 @@ goes against the clearance, waits for a "confirm".
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.facilities import channel_khz
@@ -52,6 +52,27 @@ class Cockpit:
     profile: Profile = Profile()
     cleared_altitude_ft: int | None = None
     assigned_squawk: str | None = None
+    # The readings seen to move this flight ("flaps", "ap_altitude_sel", ...): only those are believed when they say a
+    # thing is already so (an A350's flap reading sat at 0 with the flaps at 1: "flaps are already up"). And the
+    # controls that never took from the copilot's side, twice: not reached for again.
+    moved: set[str] = field(default_factory=set)
+    dead: set[str] = field(default_factory=set)
+
+    def watch(self) -> None:
+        """Note which readings changed since the last look (``own`` and ``systems`` just replaced)."""
+        now = _readings(self)
+        before = getattr(self, "_last", None)
+        if before is not None:
+            self.moved |= {k for k, v in now.items() if k in before and before[k] != v}
+        self._last = now
+
+    def trusts(self, reading: str) -> bool:
+        return not reading or reading in self.moved
+
+    def believes(self, reading: str) -> bool:
+        """Whether this aircraft's ``reading`` can be taken at its word: one seen to move this flight, or any in an
+        aircraft with a profile of its own (checked against it). The stock profile's readings have to show it first."""
+        return self.trusts(reading) or self.profile.name != "stock"
 
     @property
     def airborne(self) -> bool:
@@ -84,6 +105,23 @@ class Cockpit:
         return max(len(self.profile.detents) - 1, 0)
 
 
+def _readings(c: Cockpit) -> dict[str, object]:
+    out: dict[str, object] = {}
+    if c.own is not None:
+        o = c.own
+        out.update(flaps=o.flaps_index, gear=o.gear_down, parking_brake=o.parking_brake, squawk=o.squawk,
+                   com1=round(o.com1_mhz, 3))
+    if c.systems is not None:
+        y = c.systems
+        out.update(ap_master=y.ap_master, ap_heading_sel=y.ap_heading_sel, ap_altitude_sel=y.ap_altitude_sel,
+                   ap_speed_sel=y.ap_speed_sel, ap_vs_sel=y.ap_vs_sel, ap_modes=(y.ap_heading, y.ap_nav, y.ap_approach,
+                                                                                 y.ap_altitude, y.ap_vs, y.ap_flc),
+                   athr=y.athr_armed, spoilers_armed=y.spoilers_armed, spoilers=round(y.spoilers_pct, -1),
+                   autobrake=y.autobrake, com1_standby=round(y.com1_standby_mhz, 3),
+                   **{f"light_{n}": getattr(y, f"light_{n}") for n in LIGHT_EVENTS})
+    return out
+
+
 Check = Callable[[Cockpit], bool | None]  # True: the sim shows it; False: not (yet); None: can't tell
 
 
@@ -96,6 +134,7 @@ class Plan:
     done: str  # what the copilot says when it took: "Flaps 2."
     done_spoken: str = ""
     already: str = ""  # said instead, when the sim already shows it: "Flaps already 2."
+    reads: str = ""  # the reading the check looks at (``Cockpit.moved``): believed once it's been seen to move
 
 
 @dataclass(frozen=True)
@@ -145,7 +184,7 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         down = v == "down"
         event = SendSimEvent(name="GEAR_DOWN" if down else "GEAR_UP")
         return Plan(a, v, (_write(p, f"gear_{v}", event),), _own(lambda o: o.gear_down == down), f"Gear {v}.",
-                    already=f"Gear's already {v}.")
+                    already=f"Gear's already {v}.", reads="gear")
     if a == "flaps":
         positions = c.flap_positions
         index = p.detent_index(v.replace("+f", "") if v.endswith("+f") else v, positions)
@@ -161,20 +200,21 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         spoken = said.replace("+F", " plus F").replace("+f", " plus F")
         flaps_check: Check = lambda c2: None if not c2.flaps_known or c2.own is None else c2.own.flaps_index == index  # noqa: E731
         return Plan(a, name, (_write(p, f"flaps_{index}", event, index),), flaps_check,
-                    said, spoken, already=f"Flaps are already {name.replace('+F', ' plus F')}.")
+                    said, spoken, already=f"Flaps are already {name.replace('+F', ' plus F')}.", reads="flaps")
     if a == "light":
         on = v == "on"
         event = SendSimEvent(name=LIGHT_EVENTS[cmd.target], value=int(on))
         what = LIGHT_NAMES[cmd.target]
         return Plan(a, f"{cmd.target} {v}", (_write(p, f"light_{cmd.target}", event, on=on),),
-                    _sys(f"light_{cmd.target}", on), f"{what.capitalize()} {v}.", already=f"{what.capitalize()} already {v}.")
+                    _sys(f"light_{cmd.target}", on), f"{what.capitalize()} {v}.", already=f"{what.capitalize()} already {v}.",
+                    reads=f"light_{cmd.target}")
     if a == "spoilers":
         if v in ("arm", "disarm"):
             arm = v == "arm"
             event = SendSimEvent(name="SPOILERS_ARM_ON" if arm else "SPOILERS_ARM_OFF")
             return Plan(a, v, (_write(p, f"spoilers_{v}", event, on=arm),), _sys("spoilers_armed", arm),
                         "Spoilers armed." if arm else "Spoilers disarmed.",
-                        already="Spoilers are already armed." if arm else "Spoilers aren't armed.")
+                        already="Spoilers are already armed." if arm else "Spoilers aren't armed.", reads="spoilers_armed")
         out = v == "extend"
         event = SendSimEvent(name="SPOILERS_ON" if out else "SPOILERS_OFF")
         check: Check = lambda c2: None if c2.systems is None else (c2.systems.spoilers_pct > 40 if out else c2.systems.spoilers_pct < 5)  # noqa: E731
@@ -184,7 +224,7 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         on = v == "on"
         event = SendSimEvent(name="AUTOPILOT_ON" if on else "AUTOPILOT_OFF")
         return Plan(a, v, (_write(p, f"autopilot_{v}", event, on=on),), _sys("ap_master", on),
-                    "Autopilot on." if on else "Autopilot off.", already=f"Autopilot's already {v}.")
+                    "Autopilot on." if on else "Autopilot off.", already=f"Autopilot's already {v}.", reads="ap_master")
     if a == "autothrottle":
         on = v == "on"
         if c.systems is not None and c.systems.athr_armed == on:
@@ -198,32 +238,32 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         field = {"heading": "ap_heading", "nav": "ap_nav", "approach": "ap_approach", "altitude": "ap_altitude",
                  "vs": "ap_vs", "flc": "ap_flc"}[mode]
         return Plan(a, mode, (_write(p, f"ap_{mode}", event, on=True),), _sys(field, True),
-                    f"{MODE_NAMES[mode].capitalize()}.", already=f"Already in {MODE_NAMES[mode]}.")
+                    f"{MODE_NAMES[mode].capitalize()}.", already=f"Already in {MODE_NAMES[mode]}.", reads="ap_modes")
     if a == "heading":
         deg = int(v)
         return Plan(a, v, (_write(p, "heading", SendSimEvent(name="HEADING_BUG_SET", value=deg), deg),),
                     _sys("ap_heading_sel", float(deg % 360)), f"Heading {deg:03d} set.",
-                    f"heading {speech.heading(deg)} set")
+                    f"heading {speech.heading(deg)} set", reads="ap_heading_sel")
     if a == "altitude":
         ft = int(v)
         return Plan(a, v, (_write(p, "altitude", SendSimEvent(name="AP_ALT_VAR_SET_ENGLISH", value=ft), ft),),
                     _sys("ap_altitude_sel", float(ft)), f"{speech.altitude_display(ft)} set.",
-                    f"{speech.altitude(ft)} set")
+                    f"{speech.altitude(ft)} set", reads="ap_altitude_sel")
     if a == "speed":
         kt = int(v)
         return Plan(a, v, (_write(p, "speed", SendSimEvent(name="AP_SPD_VAR_SET", value=kt), kt),),
-                    _sys("ap_speed_sel", float(kt)), f"Speed {kt} set.", f"speed {speech.speed(kt)} set")
+                    _sys("ap_speed_sel", float(kt)), f"Speed {kt} set.", f"speed {speech.speed(kt)} set", reads="ap_speed_sel")
     if a == "vs":
         fpm = int(v)
         said = f"{'Minus' if fpm < 0 else 'Plus'} {abs(fpm):,} set."
         spoken = f"vertical speed {'minus' if fpm < 0 else 'plus'} {speech._feet(abs(fpm))} set" if abs(fpm) >= 100 else "vertical speed zero set"
         check_vs: Check = lambda c2: None if c2.systems is None else abs(c2.systems.ap_vs_sel - fpm) <= 50  # noqa: E731
         return Plan(a, v, (_write(p, "vs", SendSimEvent(name="AP_VS_VAR_SET_ENGLISH", value=fpm), fpm),), check_vs,
-                    said, spoken)
+                    said, spoken, reads="ap_vs_sel")
     if a == "squawk":
         return Plan(a, v, (_write(p, "squawk", SendSimEvent(name="XPNDR_SET", value=int(v, 16))),),
                     _own(lambda o: o.squawk == v), f"Squawk {v} set.", f"squawk {speech.squawk(v)} set",
-                    already=f"Squawk's already {v}.")
+                    already=f"Squawk's already {v}.", reads="squawk")
     if a == "com_active":
         mhz = float(v)
         hz = channel_khz(mhz) * 1000
@@ -258,8 +298,35 @@ def plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch per
         event = SendSimEvent(name="PARKING_BRAKE_SET", value=int(on))
         return Plan(a, v, (_write(p, f"parking_brake_{v}", event, on=on),), _own(lambda o: o.parking_brake == on),
                     "Parking brake set." if on else "Parking brake released.",
-                    already="Parking brake's already set." if on else "Parking brake's already off.")
+                    already="Parking brake's already set." if on else "Parking brake's already off.", reads="parking_brake")
+    if a == "autobrake":
+        return _autobrake(cmd, c)
     return f"Unable, I can't do {cmd} yet."
+
+
+AUTOBRAKE_EVENTS = {"off": "AUTOBRAKE_DISARM", "low": "AUTOBRAKE_LO_SET", "medium": "AUTOBRAKE_MED_SET",
+                    "max": "AUTOBRAKE_HI_SET"}
+
+
+def _autobrake(cmd: Command, c: Cockpit) -> Plan | str:
+    """The autobrake to a setting: the profile's own names where it has them ("low" is position 1), else the sim's
+    standard events; a numbered setting (a 737's "3") by its position."""
+    p, level = c.profile, cmd.value
+    if not level:
+        return "Which setting for the autobrake?"
+    names = list(p.autobrake)
+    index = names.index(level) if level in names else (int(level) if level.isdigit() and names and int(level) < len(names) else None)
+    if level in AUTOBRAKE_EVENTS:
+        event = SendSimEvent(name=AUTOBRAKE_EVENTS[level])
+    elif level.isdigit():
+        event = SendSimEvent(name="SET_AUTOBRAKE_CONTROL", value=int(level))
+    else:
+        return f"Unable, there's no autobrake {level} on this aircraft."
+    check: Check = (lambda c2: None if c2.systems is None or c2.systems.autobrake < 0 else c2.systems.autobrake == index) \
+        if index is not None else (lambda c2: None)
+    said = "Autobrake off." if level == "off" else f"Autobrake {level}."
+    return Plan("autobrake", level, (_write(p, f"autobrake_{level}", event),), check, said,
+                already=f"Autobrake's already {level}.", reads="autobrake")
 
 
 def safety(cmd: Command, c: Cockpit) -> Verdict:  # noqa: C901 - one rule per line, flat
@@ -289,6 +356,8 @@ def safety(cmd: Command, c: Cockpit) -> Verdict:  # noqa: C901 - one rule per li
         return Verdict("refuse", "Negative, not below 1,000 feet.")
     if a == "parking_brake" and v == "on" and own is not None and own.gs_kt > MOVING_KT:
         return Verdict("refuse", "Negative, not while we're moving.")
+    if a == "autobrake" and rolling:
+        return Verdict("refuse", "Not on the roll.")
     if a == "autopilot" and v == "off" and c.airborne and own is not None and own.alt_agl_ft < AP_OFF_CONFIRM_AGL \
             and (c.systems is None or c.systems.ap_master):
         return Verdict("confirm", f"Autopilot off at {own.alt_agl_ft:.0f} feet, confirm?")

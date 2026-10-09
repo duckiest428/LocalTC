@@ -192,6 +192,7 @@ class WatchMixin:
         self.step_weight: float | None = None  # the weight at the last cruise level (the fallback's reference)
         self.step_level = 0
         self.step_asked: dict[int, float] = {}  # level -> when it was suggested
+        self.steps_declined = False  # the captain said no to a step climb: none suggested again this flight
         self.unable_t = -1e9
         self.taxi_joined: tuple[Any, ...] | None = None  # the route (as given) the aircraft got onto
         self.taxi_off_since: float | None = None
@@ -343,15 +344,15 @@ class WatchMixin:
         if want is None:
             return
         alt, why = want
-        if alt in self.step_asked:
+        if alt in self.step_asked or self.steps_declined:
             return
         self.step_asked[alt] = t
         if not steps:
             self.step_weight = own.gross_weight_lb  # the next suggestion after another 5 percent
         said = _alt(alt)
-        if self.hands and self.radio_mode() == "full":
-            self._call(f"step:{alt}", ROUTINE, t, f"{why}, asking for {said}.", radio=self._radio_words(f"request climb {said}"))
-        elif self._call(f"step:{alt}", ROUTINE, t, f"{why}, suggest {said}. Want me to ask?"):
+        # Always the captain's call, even with the copilot on the radio: it asked for the plan's FL370 by itself, and
+        # the flight was meant to stay at FL350. A "no" (or "later") and it isn't suggested again this flight.
+        if self._call(f"step:{alt}", ROUTINE, t, f"{why}, suggest {said}. Want me to ask?"):
             self.offer = self._offer("step", str(alt), t + 45.0)
 
     # --- the arrival's restrictions --------------------------------------------------------------------------------

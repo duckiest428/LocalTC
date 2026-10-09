@@ -792,6 +792,11 @@ const Settings = {
           words ATC and the copilot say go to Microsoft to be spoken, nothing else of the flight; Microsoft says it doesn't
           keep the text or the audio. Lines heard before come from this PC.
           <a href="${"https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices"}">Create a Speech resource</a></p>
+        <p class="small">Both are on your resource's <b>Keys and Endpoint</b> page in the Azure portal (a Speech resource,
+          or a Foundry / AI services one). Azure shows two keys: either works. <b>Use KEY 1</b> here and keep KEY 2 as the
+          spare: when you regenerate KEY 1 (now and then, or if it was ever shared), paste KEY 2 here first so the voices
+          keep working, then regenerate KEY 1. The region is the <b>Location/Region</b> on that page (eastus, westeurope
+          ...); the endpoint isn't needed (pasted here, its region is taken from it).</p>
         <div class="row"><label>Region<input id="s-az-region" value="${esc(st.tts.azure_region || "")}" placeholder="eastus" spellcheck="false"></label></div>
         <div class="cloud-key">${v.key_from_env ? '<span class="small muted">The key comes from AZURE_SPEECH_KEY.</span>' :
           `<input type="password" autocomplete="off" spellcheck="false" id="s-az-key" placeholder="${v.has_key ? "Key saved: paste a new one to replace it" : "Paste your Speech resource key"}">
@@ -871,7 +876,13 @@ const Settings = {
     const ttsRefresh = async (v) => { S.tts = v || await api("tts"); this.render(); };
     on("#s-provider", "change", async () => { if (await this.save("tts", "provider", $("#s-provider").value)) ttsRefresh(); });
     on("#s-kokoro", "change", async (e) => { if (await this.save("tts", "kokoro", e.target.checked)) ttsRefresh(); });
-    on("#s-az-region", "change", async () => { if (await this.save("tts", "azure_region", $("#s-az-region").value.trim().toLowerCase())) ttsRefresh(); });
+    on("#s-az-region", "change", async () => {
+      // "https://eastus.api.cognitive.microsoft.com/" (the endpoint, pasted by mistake) is the region eastus.
+      let region = $("#s-az-region").value.trim().toLowerCase();
+      const host = region.match(/^(?:https?:\/\/)?([a-z0-9-]+)\.(?:api\.cognitive|tts\.speech|stt\.speech)\./);
+      if (host) $("#s-az-region").value = region = host[1];
+      if (await this.save("tts", "azure_region", region)) ttsRefresh();
+    });
     $("#voices-more")?.addEventListener("toggle", (e) => { this.voicesOpen = e.target.open; });
     on("#s-kokoro-get", "click", async () => {
       try { await api("models/install", { kinds: ["kokoro"] }); toast("Downloading Kokoro ..."); } catch (e) { fail(e); }

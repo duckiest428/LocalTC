@@ -46,6 +46,9 @@ class SourceConfig(_Section):
 
 
 class LiveConfig(_Section):
+    # "builtin": LocalTC talks to the sim itself (nothing to install). "dll": through the MSFS SDK's SimConnect.dll
+    # (``dll_path``, or found as before), for a sim that only answers the DLL.
+    connection: Literal["builtin", "dll"] = "builtin"
     dll_path: str = ""
     app_name: str = "LocalTC"
     ownship_hz: float = 4.0

@@ -159,16 +159,10 @@ try {
 } finally { Pop-Location }
 
 # --- 6. SimConnect ------------------------------------------------------------------------------------------------
+# Nothing to install: LocalTC talks to the sim itself (live.connection = "builtin"). The SDK's SimConnect.dll is only
+# for live.connection = "dll".
 Step "MSFS 2024 SimConnect"
-$Dll = @(
-    $env:LOCALTC_SIMCONNECT_DLL,
-    $(if ($env:MSFS2024_SDK) { Join-Path $env:MSFS2024_SDK "SimConnect SDK\lib\SimConnect.dll" }),
-    $(if ($env:MSFS_SDK) { Join-Path $env:MSFS_SDK "SimConnect SDK\lib\SimConnect.dll" }),
-    "$env:SystemDrive\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll",
-    (Join-Path $Root "SimConnect.dll")
-) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if ($Dll) { Ok "Found $Dll" }
-else { Note "SimConnect.dll not found. In MSFS 2024: Options > General > Developers > Developer Mode, then install the SDK." }
+Ok "Built in: nothing to install (the sim just has to be running)"
 
 # --- 7. The app window ---------------------------------------------------------------------------------------------
 Step "App window"

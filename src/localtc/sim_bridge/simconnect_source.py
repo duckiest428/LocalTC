@@ -57,7 +57,8 @@ from localtc.sim_api import (
 from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.knob import KnobTurn
-from localtc.sim_bridge.dll import SimConnectDll, SimConnectError, find_dll
+from localtc.sim_bridge.dll import SimConnectError
+from localtc.sim_bridge.wire import make_client
 from localtc.sim_bridge.protocol import (
     AssignedObject,
     InputEventList,
@@ -165,7 +166,7 @@ class SimConnectSource:
     ) -> None:
         """``raw_tap`` receives every raw facility message (for ``localtc debug``)."""
         self._cfg = cfg or LiveConfig()
-        self._dll_factory = dll_factory or (lambda: SimConnectDll(find_dll(self._cfg.dll_path or None)))
+        self._dll_factory = dll_factory or (lambda: make_client(self._cfg.connection, self._cfg.dll_path or None))
         self._clock = clock or SessionClock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None

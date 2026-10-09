@@ -667,7 +667,9 @@ ignore those (PMDG, Fenix) need a profile of their own; until then the copilot s
 
 ## Live bridge setup (Windows)
 
-1. **SimConnect.dll.** Install the MSFS 2024 SDK (in the sim: Options → General → Developers → enable Developer Mode, then download the SDK). LocalTC finds the DLL in this order:
+1. **Nothing to install.** LocalTC talks SimConnect to the sim itself (`live.connection = "builtin"`, the default),
+   over the sim's own local pipe, or the ports in its `SimConnect.xml`. To go through the MSFS SDK's `SimConnect.dll`
+   instead, set `live.connection = "dll"`; it's then found in this order:
    1. `live.dll_path` in the config
    2. `LOCALTC_SIMCONNECT_DLL`
    3. `%MSFS2024_SDK%\SimConnect SDK\lib\SimConnect.dll` (or `%MSFS_SDK%`)

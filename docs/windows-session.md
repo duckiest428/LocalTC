@@ -8,7 +8,7 @@ what doesn't work, fix it, and leave a note for the Mac session. Read [CLAUDE.md
 
 - Repo: `C:\Users\peter\Documents\LocalTC`. PowerShell, venv not activated: `.venv\Scripts\python`, `.venv\Scripts\localtc`.
 - Pull with GitHub Desktop first (ask the user if it isn't done), then `.venv\Scripts\pip install -e ".[dev]"`.
-- MSFS 2024 SDK: `C:\MSFS 2024 SDK` (SimConnect.dll is found there automatically).
+- MSFS 2024 SDK: `C:\MSFS 2024 SDK` (only for `live.connection = "dll"`; LocalTC's own SimConnect client is the default).
 - Logs: `%LOCALAPPDATA%\LocalTC\logs\` (the app's), reports from the checks in `%LOCALAPPDATA%\LocalTC\simcheck\`.
 - The unit tests run here too: `.venv\Scripts\python -m pytest tests -q -p no:cacheprovider --ignore=tests/test_llm_live.py`.
 

@@ -1150,6 +1150,8 @@ const Settings = {
           <option value="replay" ${st.ui.source === "replay" ? "selected" : ""}>A recorded flight (replay, for development)</option></select></label></div>
         <div class="row" ${st.ui.source === "replay" ? "" : "hidden"}><label>Recording<input id="s-replay" value="${esc(st.replay.path)}"></label>
           <label style="flex:0 1 100px">Speed<input id="s-replay-speed" type="number" step="0.5" min="0" value="${st.replay.speed}"></label></div>
+        <label class="check-row" ${st.ui.source === "replay" ? "hidden" : ""}><input type="checkbox" id="s-sc-builtin" ${(st.live.connection || "builtin") === "builtin" ? "checked" : ""}> Built-in SimConnect: nothing to install</label>
+        <span class="hint" ${st.ui.source === "replay" ? "hidden" : ""}>Off: through the MSFS SDK's SimConnect.dll instead (installed with the SDK). From the next flight.</span>
         <label class="check-row"><input type="checkbox" id="s-tiles" ${st.ui.map_tiles ? "checked" : ""}> Map background from OpenStreetMap (needs the internet)</label>
         <div class="row"><label>Keep LocalTC above other windows<select id="s-on-top">${[["off", "Never"], ["flying", "While flying (above the sim)"], ["always", "Always"]]
           .map(([v, label]) => `<option value="${v}" ${st.ui.on_top === v ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
@@ -1310,6 +1312,7 @@ const Settings = {
     }));
     on("#s-replay", "change", () => this.save("replay", "path", val("#s-replay").trim()));
     on("#s-replay-speed", "change", () => this.save("replay", "speed", Number(val("#s-replay-speed"))));
+    on("#s-sc-builtin", "change", (e) => this.save("live", "connection", e.target.checked ? "builtin" : "dll"));
     on("#s-tiles", "change", async (e) => { await this.save("ui", "map_tiles", e.target.checked); S.state.map_tiles = e.target.checked; MapView.tiles(); });
     on("#s-dev", "change", async (e) => { await this.save("ui", "dev_mode", e.target.checked); this.render(); });
     $$("[data-open]").forEach((b) => (b.onclick = () => api("open", { what: b.dataset.open }).catch(fail)));

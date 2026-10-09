@@ -4,6 +4,15 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-08: stock 787-10 and FSLabs A321neo, the copilot's hands
+- 787-10: every control passes with the sim's events (as the 787-9 and 747-8i).
+- FSLabs A321-271NX: no input events; its package names only display L:vars (`L:FSLA320_landing_light`,
+  `L:FSLA320_ParkBrake`, mouse-rect IDs like `L:FCUKnobID`). Writing `L:FSLA320_landing_light` moved nothing (LIGHT
+  LANDING stayed 0); BRAKE PARKING POSITION reads 0 with its brake set. Its profile stays `hands = false`: the copilot
+  says the switches are the pilot's. Its own SDK would be the way in, if FSLabs publishes one for MSFS 2024.
+- Still open for every aircraft: engaging the autopilot (refused parked in all of them, as the real ones do) and V/S;
+  a short flight with Quick Settings → Copilot → Its hands on is what checks them.
+
 ## 2026-10-08: stock 747-8i, HorizonSim 787-9, stock 737 MAX 8, the copilot's hands
 - 747-8i and 787-9 (HorizonSim, "Boeing 787-9 (GE) Air Canada OC", on the stock Boeing systems): every control passes
   with the sim's key events, and the MCP showed the values (by eye). No profile needed.

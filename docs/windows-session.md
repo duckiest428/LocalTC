@@ -68,7 +68,7 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    has `hands = false` because the sim's events don't reach it, and `reads_flaps` / `reads_autopilot = false` because
    the sim's variables don't follow it (flap index 0-8, autopilot always off). If its own L:vars can be found
    (the FSLabs SDK, or the sim's dev mode), map them and set `hands = true`.
-5. **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
+5. *(Done 2026-10-08: `a350.toml`; see windows-findings.md.)* **The A350-1000** (title "A350-1000 (Default Cabin)", no profile yet: it gets `stock`). On a 2026-10-08 flight the
    lights took, but the altitude, heading and autopilot never did, and the sim's flap, gear and autopilot readings
    never moved (flaps read up at flaps 1). The copilot now drops a control after it fails twice with its reading never
    moving, and says so. Map it properly: `debug aircraft` and `debug hands --autopilot` in the A350, then a profile

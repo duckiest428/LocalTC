@@ -456,3 +456,45 @@ def test_tower_tells_the_real_flights_on_its_frequency():
     for kind in ("hold_short", "takeoff", "go_around"):
         lines = engine.traffic_call("UAL531", kind, tower.airport, "16R", own_.t + 1)
         assert [c.speaker for c in lines if isinstance(c, RadioChatter)][:1] == ["atc"], kind
+
+
+def test_a_turn_is_rolled_into_and_out_of_with_the_nose_along_the_path():
+    """Turning on the heading alone, wings level then a sudden bank, looked robotic."""
+    track = Track(1, 0.0, 0.0, 5000.0, 0.0, 250.0, 0.0, 3.0, False, 2.0, 0.0, 0.0, 0.0)  # rate one, right
+    banks, hdgs = [], []
+    for i in range(1, 121):
+        _, _, _, hdg, _, bank = track.at(i * 0.1)
+        banks.append(bank)
+        hdgs.append(hdg)
+    assert banks[0] < 1.0  # not snapped to the bank ...
+    assert all(b - a <= 5.0 * 0.1 + 1e-6 for a, b in zip(banks, banks[1:]))  # ... rolled in at a few degrees a second
+    assert 15.0 < banks[-1] <= 25.0  # to the bank a rate one turn at 250 kt takes
+    assert all(0 <= (b - a) % 360 < 1.0 for a, b in zip(hdgs, hdgs[1:]))  # the nose swinging steadily, the way it turns
+
+
+def test_one_taxiing_onto_its_stand_stops_on_the_marker_not_in_the_terminal():
+    """An arrival carried on past its last report taxied into LAX's terminal."""
+    m = manager()
+    gate = GATES[1]
+    # 80 m south of gate A 2, taxiing north towards it at 8 kt.
+    m.on_feed([flight(lat=gate.lat - 80 / 111_320, lon=gate.lon, ground=True, gs=8.0, track=0.0)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    m.on_feed([flight(lat=gate.lat - 60 / 111_320, lon=gate.lon, ground=True, gs=6.0, track=0.0, t=NOW + 5)], "adsb.lol",
+              NOW + 5)
+    out = m.tick(NOW + 5)
+    plane = next(iter(m.planes.values()))
+    assert plane.spot == ("KTST", 1) and plane.mode == "parked"
+    [track] = of(AiTrack, out)
+    assert (track.lat, track.lon, track.gs_kt, track.hdg) == (gate.lat, gate.lon, 0.0, gate.heading_true)
+    assert track.blend_s >= 60 / 3.0  # rolled onto it slowly
+    # Never heard again (its transponder off at the gate): it stays there.
+    for i in range(6, 120):
+        m.tick(NOW + i)
+    assert plane.object_id in m.by_object and plane.mode == "parked"
+
+
+def test_on_the_ground_it_isnt_carried_on_far_past_its_last_report():
+    lat0 = 0.003
+    track = Track(1, lat0, 0.0, 100.0, 0.0, 15.0, 0.0, 0.0, True, 0.0, 0.0, 0.0, 0.0)
+    lat, *_ = track.at(60.0)
+    assert (lat - lat0) * 111_320 < 15 * 1852 / 3600 * 8 + 1  # 8 s at most, not a minute

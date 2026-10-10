@@ -42,7 +42,7 @@ a new minor version adds features, a patch fixes them.
 - **"Stop immediately"**: on the takeoff roll, still below 80 knots, with an aircraft about to be on the runway ahead, tower stops you.
 
 ### Changed
-- **The other flights' pilots on the frequency speak in the voices on this PC** (Kokoro or Piper), so the cloud voice's characters go on ATC and the copilot, not on chatter (`[tts] chatter_cloud` to have them in the cloud voice too).
+- **The other flights' pilots on the frequency speak in the voices on this PC** (Kokoro or Piper), so the cloud voice's characters go on ATC and the copilot, not on chatter. A setting (Settings → Voice: "Other pilots on the frequency in this PC's voices", on by default) puts them back in the cloud voice.
 - **Numbers are put into words before any voice speaks them** (frequencies digit by digit, "niner", runways, flight levels, callsigns and taxiway letters in the phonetic alphabet), the same for every voice, so none reads "119.2" or "FL350" its own way.
 - **A voice failing never stops ATC**: a line no voice could speak stays text, and the next is spoken.
 - **The copilot talks less, and only when it should.** No more prompts for the briefings and the clearance after you've said "later" (or "not now", "quiet"): its suggestions wait a quarter of an hour, while the callouts and warnings carry on. No ATIS read out unasked (it still sets its side of the altimeter), no "they're waiting for a readback", no "autopilot's available", no lights asked about one by one. A "check", "roger" or "yep" gets no reply.
@@ -64,6 +64,8 @@ a new minor version adds features, a patch fixes them.
 - **Changing a setting during a flight works again** (choosing Real-world ATIS, for one, gave an error and wasn't kept).
 - **LocalTC's traffic stopped** for the rest of the flight the first time tower held a real departure short for you.
 - **LocalTC's traffic looks natural**: a new aircraft appears where it is and carries on from there (it flew off on its own while the sim loaded it, then slid back); each live position is eased in slowly enough that it never looks faster or slower than it is (the two free sources' clocks put them a few seconds apart, and the aircraft surged back and forth); a few reports missed no longer stops one in mid-air.
+- **LocalTC's traffic turns like an aircraft**: it rolls into a turn and out of it at an airliner's roll rate, banks as far as the turn takes, and its nose points the way it's going, on a taxiway too (it turned on its heading alone, wings level, then snapped to a bank).
+- **An arrival taxiing in stops on its stand's marker**, facing the terminal, instead of driving on into the building when its transponder went off at the gate; on the ground, one is carried on past its last report a few seconds at most.
 - **Departures held short for you go one at a time, the way you went**: four were cleared at once, two of them down the runway the other way, with eight calls in a row on tower.
 - **Fewer dropped frames with LocalTC's traffic**: 40 parked aircraft at most by default (it was 80), made a couple a second (all at once stalled the sim while it loaded their textures), nearest you first, and drawn with a handful of models over and over instead of a new livery for each.
 - **"Gear up didn't take"** when it had: some airliners' gear handles take seconds to show it (the Headwind A330's took 4), so the copilot waits for the handle or the gear moving.

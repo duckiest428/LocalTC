@@ -997,6 +997,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-effect" ${st.tts.radio_effect ? "checked" : ""}> Radio effect (band-pass, compression, squelch)</label>
         <label class="check-row"><input type="checkbox" id="s-atis" ${st.tts.atis ? "checked" : ""}> Read the ATIS aloud while it's tuned</label>
         <label class="check-row"><input type="checkbox" id="s-cpvoice" ${st.tts.copilot ? "checked" : ""}> Speak the copilot's calls too</label>
+        <label class="check-row"><input type="checkbox" id="s-chatter-local" ${st.tts.chatter_cloud ? "" : "checked"}> Other pilots on the frequency in this PC's voices (Kokoro or Piper), so no Azure characters go on chatter. Off: in the cloud voice too</label>
         <label class="check-row"><input type="checkbox" id="s-replay" ${st.ui.replay_audio ? "checked" : ""}> Play buttons on the radio log: ATC and the copilot as you heard them, you as the microphone took it (here, on the phone and on the website's Flight Tracker; the last 80, in memory only)</label>
       </div>
 
@@ -1261,6 +1262,7 @@ const Settings = {
     on("#s-effect", "change", (e) => this.save("tts", "radio_effect", e.target.checked));
     on("#s-atis", "change", (e) => this.save("tts", "atis", e.target.checked));
     on("#s-cpvoice", "change", (e) => this.save("tts", "copilot", e.target.checked));
+    on("#s-chatter-local", "change", (e) => this.save("tts", "chatter_cloud", !e.target.checked));
     on("#s-replay", "change", (e) => this.save("ui", "replay_audio", e.target.checked));
     on("#s-crew-repeat", "change", (e) => this.save("crew", "repeat_atc", e.target.checked));
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));

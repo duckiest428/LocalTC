@@ -5,17 +5,27 @@ between); the sim draws them every frame. So the bridge carries each one on from
 (its speed, climb and turn), writes it to the sim as often as it can be seen to matter (many times a second close
 by, less far away), and when an update lands somewhere else than it was being shown, eases the difference out over a
 few seconds instead of jumping.
+
+It's flown as a crew flies it: the nose points the way it's going (on a taxiway too, never sideways), it rolls into a
+turn and out of it at an airliner's roll rate and banks as far as the turn takes (``Track.at``), and the pitch changes
+gently. Turning on the heading alone, wings level, then snapping to a bank, looked robotic.
 """
 
 import math
 from dataclasses import dataclass, field
 
-from localtc.sim_api.geo import advance
+from localtc.sim_api.geo import advance, bearing_deg
 
 M_PER_NM = 1852.0
 M_PER_DEG = 111_320.0
 HORIZON_S = 60.0  # carried on this long past its last update at most, then held where it got to (a few missed
 # reports must never stop one in mid-air)
+HORIZON_GROUND_S = 8.0  # on the ground: a few seconds at most (one driving on past its last report ran into a terminal)
+ROLL_DPS = 5.0  # how quickly it rolls into a turn and out (an airliner: a few degrees a second)
+MAX_BANK = 25.0
+YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 20.0  # the most its nose swings a second
+PITCH_DPS = 2.0
+LOOK_S = 1.0  # the way it's going: from where it is to where it is this much later
 # How often it's written to the sim, by its distance from the user: close by every frame or so, far away a few times
 # a minute is plenty.
 RATES = ((3.0, 1 / 30), (10.0, 1 / 10), (30.0, 1 / 2), (math.inf, 2.0))
@@ -48,16 +58,18 @@ class Track:
     next_write: float = 0.0
     frozen: bool = False
     lights: tuple = field(default_factory=tuple)
+    # What's being shown (the nose, the wings, the pitch), changed gently from one write to the next.
+    shown: tuple[float, float, float, float] | None = None  # (when, heading, bank, pitch)
 
     def raw(self, now: float) -> tuple[float, float, float, float]:
         """Lat, lon, altitude and heading on its own reckoning, without the easing."""
-        dt = min(max(0.0, now - self.t0), HORIZON_S)
+        dt = min(max(0.0, now - self.t0), HORIZON_GROUND_S if self.on_ground else HORIZON_S)
         lat, lon, hdg = advance(self.lat, self.lon, self.hdg, self.gs_kt, self.turn_dps, dt)
         alt = self.alt_ft + self.vs_fpm * dt / 60.0
         return lat, lon, alt, hdg
 
-    def at(self, now: float) -> tuple[float, float, float, float, float, float]:
-        """Lat, lon, altitude, heading, pitch and bank to show now."""
+    def position(self, now: float) -> tuple[float, float, float, float]:
+        """Lat, lon, altitude and heading with the easing, before the attitude is smoothed."""
         lat, lon, alt, hdg = self.raw(now)
         k = max(0.0, 1.0 - (now - self.t0) / self.blend_s) if self.blend_s > 0 else 0.0
         k = k * k * (3 - 2 * k)  # eased: no sudden stop at the end
@@ -65,11 +77,38 @@ class Track:
         alt, hdg = alt + self.off[2] * k, (hdg + self.off[3] * k) % 360
         if self.on_ground and self.ground_ft is not None:
             alt = self.ground_ft
-        return lat, lon, alt, hdg, self.pitch, self.bank
+        return lat, lon, alt, hdg
+
+    def at(self, now: float) -> tuple[float, float, float, float, float, float]:
+        """Lat, lon, altitude, heading, pitch and bank to show now: the nose the way it's going, the wings rolled
+        into the turn it's making."""
+        lat, lon, alt, hdg = self.position(now)
+        ahead = self.position(now + LOOK_S)
+        moved = math.hypot((ahead[0] - lat) * M_PER_DEG, (ahead[1] - lon) * M_PER_DEG * math.cos(math.radians(lat)))
+        if moved > 1.5 * LOOK_S:  # moving (over 3 kt): the nose along the path
+            hdg = bearing_deg(lat, lon, ahead[0], ahead[1])
+        if self.shown is None or not 0 < now - self.shown[0] < 5:
+            bank = 0.0 if self.on_ground else self.bank
+            self.shown = (now, hdg, bank, self.pitch)
+            return lat, lon, alt, hdg, self.pitch, bank
+        then, was_hdg, was_bank, was_pitch = self.shown
+        dt = now - then
+        yaw = YAW_DPS_GROUND if self.on_ground else YAW_DPS_AIR
+        turn = max(-yaw * dt, min(yaw * dt, _wrap(hdg - was_hdg)))
+        hdg = (was_hdg + turn) % 360
+        if self.on_ground:
+            want = 0.0
+        else:  # the bank that turn takes at this speed (rate one at 250 kt: about 25 degrees)
+            v = max(self.gs_kt, 100.0) * M_PER_NM / 3600.0
+            want = max(-MAX_BANK, min(MAX_BANK, math.degrees(math.atan(v * math.radians(turn / dt) / 9.81))))
+        bank = was_bank + max(-ROLL_DPS * dt, min(ROLL_DPS * dt, want - was_bank))
+        pitch = was_pitch + max(-PITCH_DPS * dt, min(PITCH_DPS * dt, self.pitch - was_pitch))
+        self.shown = (now, hdg, bank, pitch)
+        return lat, lon, alt, hdg, pitch, bank
 
     def update(self, new: "Track", now: float) -> None:
         """A new state: the difference from what's being shown now is eased out from here."""
-        shown = self.at(now)
+        shown = self.position(now)
         self.lat, self.lon, self.alt_ft, self.hdg = new.lat, new.lon, new.alt_ft, new.hdg
         self.gs_kt, self.vs_fpm, self.turn_dps = new.gs_kt, new.vs_fpm, new.turn_dps
         self.pitch, self.bank, self.blend_s, self.t0 = new.pitch, new.bank, new.blend_s, now

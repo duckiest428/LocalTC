@@ -84,7 +84,12 @@ LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this
 QUIET_S = 20.0  # an arrival on final not heard from this long (low, out of the receivers' sight): LocalTC lands it
 FINAL_NM = 15.0
 GLIDE = math.tan(math.radians(3.0))
-EXTRAPOLATE_S = 60.0  # carried on past its last position this long at most (as the bridge does)
+EXTRAPOLATE_S = 60.0  # carried on past its last position this long at most (as the bridge does) ...
+EXTRAPOLATE_GROUND_S = 8.0  # ... on the ground only a few seconds (one carried on past its last report taxied into
+# LAX's terminal)
+STAND_NM = 150 / 1852  # one taxiing in this close to a free stand it's heading for is put on it ...
+STAND_SLOW_KT = 20.0  # ... at taxi speed or less
+TAXI_IN_MPS = 2.5  # and rolls onto the stand's marker at a walking pace, stopping there
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
 NATIVE_NOTE = ("MSFS's own traffic is on as well: set its air traffic to off (Options > General > Traffic) so only "
@@ -355,7 +360,10 @@ class TrafficManager:
             if plane is not None:
                 if plane.mode == "live" and f.t > plane.used_t and plane.object_id is not None:
                     plane.flight = f
-                    out += self._track(plane, now)
+                    if plane.spot is None and (spot := self._stand_ahead(f)) is not None:
+                        out += self._onto_stand(plane, spot, now)
+                    else:
+                        out += self._track(plane, now)
                 continue
             if made >= LIVE_PER_TICK or now - f.t > STALE_S:
                 continue
@@ -398,7 +406,7 @@ class TrafficManager:
             lat, lon = self._spot_latlon(plane.spot)
             return lat, lon, self._elev(lat, lon), self._spot_heading(plane.spot)
         f = plane.flight
-        dt = min(max(0.0, now - f.t), EXTRAPOLATE_S)
+        dt = min(max(0.0, now - f.t), EXTRAPOLATE_GROUND_S if f.on_ground else EXTRAPOLATE_S)
         u = unit(f.track)
         d = f.gs_kt * dt / 3600.0 * M_PER_NM
         lat = f.lat + u[1] * d / 111_320.0
@@ -512,6 +520,50 @@ class TrafficManager:
 
     def _spot_heading(self, spot: tuple[str, int]) -> float:
         return self.airports[spot[0]].parking[spot[1]].heading_true
+
+    def _stand_ahead(self, f: Flight) -> tuple[str, int] | None:
+        """The free stand one taxiing in is about to turn onto: close, ahead of it (or right by it), its size."""
+        if not f.on_ground or f.gs_kt > STAND_SLOW_KT:
+            return None
+        icao = self._near_airport(f.lat, f.lon)
+        if icao is None:
+            return None
+        taken = {p.spot for p in self.planes.values() if p.spot is not None}
+        best = None
+        for i, p in enumerate(self.airports[icao].parking):
+            if not p.kind.startswith(("gate", "ramp")) or (icao, i) in taken:
+                continue
+            d = haversine_nm(f.lat, f.lon, p.lat, p.lon)
+            if d > STAND_NM:
+                continue
+            u = unit(f.track)
+            dx = (p.lon - f.lon) * 111_320.0 * math.cos(math.radians(f.lat))
+            dy = (p.lat - f.lat) * 111_320.0
+            ahead = dx * u[0] + dy * u[1]
+            if ahead < 0 and d * M_PER_NM > 40:
+                continue  # behind it: one it's taxiing past
+            if self._reserved_at(p.lat, p.lon):
+                continue
+            if best is None or d < best[0]:
+                best = (d, (icao, i))
+        return best[1] if best is not None else None
+
+    def _onto_stand(self, plane: Plane, spot: tuple[str, int], now: float) -> list[Any]:
+        """Turned onto its stand and stopped on the marker, facing the terminal as the stand has it: the real one
+        about to switch its transponder off (and the receivers losing it among the buildings) was carried on, through
+        the terminal."""
+        out: list[Any] = []
+        for other in [p for p in self.planes.values() if p.spot == spot and p is not plane]:
+            out += self._remove(other)  # one parked there gives way to the real one coming in
+        plane.spot, plane.mode = spot, "parked"
+        lat, lon = self._spot_latlon(spot)
+        f = plane.flight
+        metres = haversine_nm(f.lat, f.lon, lat, lon) * M_PER_NM if f is not None else 0.0
+        self._did(f"{plane.callsign or 'An arrival'} on its stand")
+        blend = max(BLEND_MIN_S, metres / TAXI_IN_MPS)
+        out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=self._elev(lat, lon),
+                                             hdg=self._spot_heading(spot), on_ground=True, blend_s=blend), now))
+        return out + self._lights(plane, on_ground=True, gs=0.0, agl=0.0, parked=True)
 
     def _spot_for(self, f: Flight) -> tuple[str, int] | None:
         """The parking spot a live aircraft standing still is on (the sim's spot within a few metres of the real)."""

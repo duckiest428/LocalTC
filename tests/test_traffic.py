@@ -350,3 +350,109 @@ def test_the_sims_own_parked_aircraft_are_noticed():
         TrafficTarget(object_id=9000 + i, lat=0.006, lon=0.0, alt_ft=100, hdg_true=0, gs_kt=0, on_ground=True)
         for i in range(8))))
     assert "parked aircraft" in m.status(NOW).note
+
+
+def test_held_departures_go_one_at_a_time_the_way_the_user_went_with_one_hold_call():
+    """Four held short for the user were all cleared at once, two of them the other way down the runway, eight calls in a
+    row on tower."""
+    atc = Atc()
+    m = manager(atc.link())
+    edge = (22.5 + 60) / 111_320
+    m.on_feed([flight(hex_=f"h{i}", callsign=f"UAL{10 + i}", lat=-edge, lon=-0.004 + i * 0.004, ground=True, gs=10.0,
+                      track=0.0) for i in range(3)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW) + m.tick(NOW + 0.5))
+    atc.runway = ("KTST", "27", "takeoff")
+    m.tick(NOW + 1)
+    held = [p for p in m.planes.values() if p.mode == "hold"]
+    assert len(held) == 3 and [k for _, k, _ in atc.said] == ["hold_short"]  # one call, not three
+    atc.runway = None
+    for i in range(200):
+        m.tick(NOW + 2 + i)
+    takeoffs = [(cs, rwy) for cs, k, rwy in atc.said if k == "takeoff"]
+    assert len(takeoffs) == 3 and {rwy for _, rwy in takeoffs} == {"27"}
+    released = sorted(p.local.started for p in m.planes.values() if p.mode == "departing")
+    assert all(b - a >= 90 for a, b in zip(released, released[1:]))  # spaced as a tower spaces them
+
+
+def test_one_taxiing_at_the_user_gives_way_and_goes_on_once_clear():
+    m = manager()
+    # The user stands still on a taxiway; one taxis straight at them from 150 m east.
+    m.on_own(own(lat=0.003, lon=0.0, gs=0.0))
+    m.on_feed([flight(lat=0.003, lon=150 / 111_320, ground=True, gs=15.0, track=270.0)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    m.tick(NOW + 1)
+    plane = next(iter(m.planes.values()))
+    assert plane.mode == "give_way" and "gave way" in m.recent[-1]
+    m.on_own(own(lat=0.003, lon=-400 / 111_320, gs=12.0))  # the user taxied on, well clear
+    m.tick(NOW + 30)
+    assert plane.mode == "live"
+
+
+def test_a_new_position_is_eased_in_slowly_never_jumped_to():
+    m = manager()
+    m.on_feed([flight(lat=0.1, t=NOW)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    # The next report puts it 200 m further on than it was carried to: eased over long enough to look natural.
+    ahead = 180 * 1852 / 3600 * 6 + 200
+    m.on_feed([flight(lat=0.1 - ahead / 111_320, t=NOW + 6)], "adsb.lol", NOW + 6)
+    track = of(AiTrack, m.tick(NOW + 6))[-1]
+    assert track.blend_s >= 15
+
+
+def test_the_feed_times_positions_by_the_sources_clock(monkeypatch):
+    import localtc.traffic.feed as feed_module
+
+    now = 1_791_600_000.0  # (a real clock: the sources send milliseconds)
+    monkeypatch.setattr(feed_module.time, "time", lambda: now)
+    data = {"now": (now - 4) * 1000, "ac": [{"hex": "abc", "lat": 1.0, "lon": 2.0, "alt_baro": 3000, "seen_pos": 1.0}]}
+    assert parse(data)[0].t == now - 5  # kept 4 s by the source before it was sent: that much older
+    assert parse({**data, "now": (now - 4000) * 1000})[0].t == now - 1  # a clock far off: this PC's
+
+
+def test_the_gates_get_the_airlines_that_fly_there_and_a_few_models():
+    from collections import Counter
+
+    from localtc.traffic.airlines import weights
+    from localtc.traffic.feed import Route
+
+    assert max(weights("LPPT", Counter(), Counter()).items(), key=lambda kv: kv[1])[0] == "TAP"  # its hub
+    assert set(weights("LFMN", Counter(), Counter())) == {"AFR"}  # nothing known: the country's
+    live = weights("KLAX", Counter({"QFA": 10}), Counter())
+    assert live["UAL"] > 0 and live["QFA"] > 0  # what flies there today, and its based airlines
+
+    models = [(f"FSLTL_B738_{a}-X", "") for a in ("UAL", "DAL", "AAL", "SWA", "ASA", "JBU", "FFT", "NKS", "SCX", "QFA",
+                                                  "BAW", "AFR")]
+    gates = tuple(ParkingSpot(index=i, name=f"GATE B {i}", kind="gate_medium", lat=0.006 + (i // 10) * 0.001,
+                              lon=-0.02 + (i % 10) * 0.002, heading_true=180.0, radius_m=22.0) for i in range(40))
+    m = TrafficManager(TrafficSettings(max_parked=40), picker=ModelPicker(models),
+                       routes=lambda cs: Route("KTST", "KXYZ") if cs.startswith("QFA") else None)
+    m.on_airport(Airport(icao="KTST", lat=0.0, lon=0.0, elev_ft=100.0, runways=(RWY,), parking=gates))
+    m.on_own(own(zulu_h=8.0))  # and a few live flights out of here
+    m.on_feed([flight(hex_=f"q{i}", callsign=f"QFA{i + 1}", lat=0.3) for i in range(5)], "adsb.lol", NOW)
+    m.tick(NOW)
+    parked = [p for p in m.planes.values() if p.mode == "parked"]
+    assert parked and len({p.title for p in parked}) <= 10  # drawn with a few models over and over
+    assert any("QFA" in p.title for p in parked)  # the airline that flies here today
+
+
+def test_tower_tells_the_real_flights_on_its_frequency():
+    """Holding one short raised (a slot given as text), and the traffic stopped for the rest of the flight."""
+    from pathlib import Path
+
+    import msgspec
+
+    from localtc.airports import load_airport_dir
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.replay import Recording
+    from localtc.sim_api import AirportData, RadioChatter
+
+    fixtures = Path(__file__).parent / "fixtures"
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, unscripted=False))
+    for airport in load_airport_dir(fixtures / "airports"):
+        engine.handle(AirportData(t=0.0, airport=airport))
+    own_ = next(e for e in Recording(fixtures / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))
+    tower = engine.facility("tower")
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz))
+    for kind in ("hold_short", "takeoff", "go_around"):
+        lines = engine.traffic_call("UAL531", kind, tower.airport, "16R", own_.t + 1)
+        assert [c.speaker for c in lines if isinstance(c, RadioChatter)][:1] == ["atc"], kind

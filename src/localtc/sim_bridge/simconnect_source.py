@@ -304,6 +304,7 @@ class SimConnectSource:
         self._watch_define = 0
         self._watch_count = 0
         self._ai_tracks: dict[int, Track] = {}  # LocalTC's traffic, as it's being moved (AiTrack)
+        self._ai_spawned: dict[int, SpawnAiAircraft] = {}  # made, not there yet: held where it was made once it is
         self._ai_ground_next = 0.0
         for name, unit in (("PLANE LATITUDE", "degrees"), ("PLANE LONGITUDE", "degrees"), ("PLANE ALTITUDE", "feet"),
                            ("PLANE PITCH DEGREES", "degrees"), ("PLANE BANK DEGREES", "degrees"),
@@ -453,6 +454,12 @@ class SimConnectSource:
         elif isinstance(msg, InputEventList) and msg.request_id == REQ_INPUT_EVENTS:
             self._on_input_events(msg)
         elif isinstance(msg, AssignedObject):
+            if (spawned := self._ai_spawned.pop(msg.request_id, None)) is not None:
+                # Held where it was made, carried on at its speed, the moment it's there: left to the sim until the
+                # traffic's own word came, it flew off on its own, then slid back.
+                self._commands.put(AiTrack(object_id=msg.object_id, lat=spawned.lat, lon=spawned.lon,
+                                           alt_ft=spawned.alt_ft, hdg=spawned.heading, gs_kt=spawned.airspeed_kt,
+                                           on_ground=spawned.on_ground, pitch=0.0 if spawned.on_ground else 2.5))
             self._emit(AiObjectAssigned(t=t, request_id=msg.request_id, object_id=msg.object_id))
         elif isinstance(msg, ModelLivery) and msg.request_id == REQ_MODELS:
             self._models += list(msg.models)
@@ -495,6 +502,10 @@ class SimConnectSource:
             elif isinstance(command, SetAiVar):
                 self._set_ai_var(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):
+                if command.kind == "parked":
+                    self._ai_spawned[command.request_id] = command
+                    if len(self._ai_spawned) > 200:  # never answered: forgotten
+                        self._ai_spawned.pop(next(iter(self._ai_spawned)))
                 try:
                     dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
                                   flight_number=command.flight_number, lat=command.lat, lon=command.lon,

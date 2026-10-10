@@ -86,13 +86,13 @@ copilot = true                # the copilot asks the cloud too (its own connecti
 local_fallback = false        # on: every service failing, the local model answers
 timeout_s = 6.0               # per call, every service tried in it
 
-[traffic]                     # LocalTC's traffic: the real flights around (free ADS-B), FSLTL's models, the gates filled, answering to ATC
+[traffic]                     # EXPERIMENTAL. LocalTC's traffic: the real flights around (free ADS-B), FSLTL's models, the gates filled, under ATC's control
 enabled = false               # on: set MSFS's own air traffic and parked aircraft to off (Options > General > Traffic)
 radius_nm = 40.0              # the real flights within this of you
-max_live = 40                 # never more of them at once (the nearest)
+max_live = 30                 # never more of them at once (the nearest)
 parked = true                 # aircraft parked at the gates of the airport you're at or going to, as many as at that hour
-max_parked = 80
-atc_control = true            # real flights sent around or held short when you have the runway
+max_parked = 40               # more costs frames (each model loads its textures)
+atc_control = true            # real flights sent around, held short or stopped to give way when they'd be in your way
 
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false
@@ -133,6 +133,7 @@ radio_effect = true           # band-pass, compression, static and squelch
 static = 0.35                 # 0-1
 atis = true                   # read the ATIS aloud while it's tuned
 copilot = true                # speak the copilot's calls too
+chatter_cloud = false         # the other flights' pilots in the cloud voice too (off: this PC's voices, no credits spent)
 
 [copilot]                     # works the radio for you (or use --copilot)
 mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)

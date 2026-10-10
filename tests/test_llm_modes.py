@@ -16,7 +16,7 @@ from localtc.atc_core.readback import GrammarInterpreter, InterpretContext
 from localtc.atc_core.readback.normalize import normalize
 from localtc.atc_core.values import Callsign
 from localtc.config import load_config
-from localtc.sim_api import AtcAlert, AtcDecision, AtcTransmission, LlmExchange
+from localtc.sim_api import AtcAlert, AtcDecision, AtcTransmission, LlmExchange, Transcript
 
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 GROUND = InterpretContext(callsign=Callsign("DP69"), phase="PARKED", station="Montreal Ground", station_role="ground")
@@ -608,3 +608,49 @@ def test_a_routine_call_the_grammar_is_sure_of_isnt_made_a_question():
     tower = InterpretContext(callsign=Callsign("DP69"), phase="APPROACH", station="Montreal Tower", station_role="tower")
     result = LlmInterpreter(backend, mode="llm").interpret(clear, None, tower)
     assert result.intent == "report_final" and "gave way to the grammar" in result.fallback
+
+
+def test_noise_neither_could_make_out_gets_say_again_not_the_models_copy():
+    """0.8 s of noise came back from speech-to-text as "A,B4, A5, A7 ..." (confidence 0.42); the model filed it as
+    unintelligible, and its reply to it went out: "copy"."""
+    noise = "The Air Portugal Command Zone Opener, A,B4, A5, A7, B7, A7, A9, B2"
+    backend = ScriptedBackend({noise: {"kind": "unintelligible"}}, phrase={noise: '{"reply":"copy"}'})
+    engine, own = cyul_engine(backend)
+    engine.interpreter.mode = "llm"
+    engine.handle(msgspec.structs.replace(own, com1_mhz=121.0))
+    out = engine.handle(Transcript(t=own.t + 1, text=noise, confidence=0.42))
+    out += engine.handle(msgspec.structs.replace(own, t=own.t + 6, com1_mhz=121.0))
+    assert atc(out) == ["DP69, say again."]
+
+
+def test_the_stations_name_is_left_out_of_the_cues_only_where_its_said_as_the_name():
+    asked = "Air Portugal 248 request clearance to Lisbon airport as filed."
+    answer = parse_answer('{"kind":"request","intent":"request_ifr_clearance"}', None, normalize(asked),
+                          station="Los Angeles Clearance")
+    assert answer.intent == "request_ifr_clearance"  # it was turned away: "clearance" taken for the station's name
+    named = "San Francisco Clearance, any restricted airspace around?"
+    answer = parse_answer('{"kind":"request","intent":"request_ifr_clearance"}', None, normalize(named),
+                          asked=True, question=True, station="San Francisco Clearance")
+    assert answer.kind == "question"
+
+
+def test_a_free_reply_never_gives_an_instruction_in_more_than_one_word():
+    raw = '{"reply":"copy, hold short runway 25R, pushback tail left"}'  # to "request clearance to Lisbon"
+    with pytest.raises(PhraseError, match="instruction"):
+        check_reply(raw, {"controller": "Los Angeles Clearance"}, ("Air Portugal 248",), beyond_facts=True)
+
+
+def test_the_models_words_say_procedures_and_flight_levels_as_a_controller_does():
+    from localtc.atc_core.llm.phrase import spoken
+
+    assert spoken("negative, OSHNN1 departure, via OSHNN1") == "negative, oshnn one departure, via oshnn one"
+    assert spoken("expect FL330, runway 25R, 8,000") == "expect flight level three three zero, runway two five right, " \
+                                                        "eight thousand"
+
+
+def test_numbers_the_script_says_in_words_are_its_numbers():
+    scripted = "cleared to Lisbon airport via the OSHNN1 departure, then as filed, climb and maintain 8,000, expect " \
+               "FL330 two six minutes after departure, departure frequency 125.2, squawk 1041"
+    raw = '{"reply":"cleared to Lisbon via the OSHNN1 departure, then as filed, climb and maintain 8,000, expect FL330 ' \
+          'two six minutes after departure, departure frequency 125.2, squawk 1041"}'
+    assert "26 minutes" in check_reworded(raw, scripted, ("Air Portugal 248",))

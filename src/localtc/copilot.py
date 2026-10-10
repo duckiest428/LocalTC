@@ -225,9 +225,13 @@ class Copilot:
         if tx.instruction_id == "common.traffic":
             self._push("say", tx.t, text=f"Looking, {self._callsign()}")
             return
-        if tx.instruction_id == "common.how_read":
-            self._push("say", tx.t, text=f"Loud and clear, {self._callsign()}")
         pending = st.pending
+        if tx.instruction_id == "common.how_read":
+            # Asked after a handoff nobody read back: the readback is the answer (it went out along with "loud and
+            # clear", both at once, over each other).
+            owed = pending is not None and pending.instruction_id in st.issued                 and self.engine.library.get(pending.instruction_id).pilot_readback
+            if not owed:
+                self._push("say", tx.t, text=f"Loud and clear, {self._callsign()}")
         if pending is None or (pending.instruction_id, tx.t) in self._answered:
             return
         issued = st.issued.get(pending.instruction_id)

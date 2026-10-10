@@ -14,7 +14,13 @@ service (service.py) does the waiting and the network.
   there; the gate ATC gave the user (and wherever the user is parked) is kept clear: anything there is taken away.
 - **ATC**: real flights don't know about the user. So when the user has the runway (cleared to land, lined up,
   taking off, rolling out), a real arrival on short final for it is sent around, and a real departure about to go
-  onto it is held short until the user's done, then lines up and goes. ATC says so on the tower frequency.
+  onto it is held short until the user's done, then lines up and goes (one at a time, spaced as a tower spaces them).
+  On the ground, one taxiing towards the user gives way and waits until the user is clear. Tower says so on its
+  frequency, now and then (never a string of calls at once).
+
+Each is moved smoothly: a new live position is never jumped to. The difference from where it was being shown is
+eased out slowly enough that it never looks more than a little faster or slower than it is (``_blend``), and one
+just made carries on from where it was made (the bridge holds it there the moment the sim makes it).
 """
 
 import logging
@@ -23,7 +29,7 @@ import random
 import zlib
 from collections import Counter, deque
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from localtc.atc_core.airport.geometry import AirportGeometry
@@ -39,7 +45,8 @@ from localtc.sim_api import (
     TrafficControlStatus,
     TrafficSnapshot,
 )
-from localtc.sim_api.geo import haversine_nm, unit
+from localtc.sim_api.geo import advance, haversine_nm, unit
+from localtc.traffic import airlines as airline_data
 from localtc.traffic.feed import Flight
 from localtc.traffic.models import ModelPicker
 
@@ -59,17 +66,27 @@ RESERVED_M = 35.0
 PARKED_AROUND_NM = 12.0  # the airports parked aircraft are put at: within this of the user ...
 PARKED_INBOUND_NM = 45.0  # ... or the destination, once this close
 PARKED_LEAVE_NM = 30.0  # and taken away once the user is this far from the airport again
-PARKED_PER_TICK = 8
+PARKED_PER_TICK = 2  # made a couple a second: the sim loads each model's textures as it comes (all at once stutters)
+LIVE_PER_TICK = 2
+PARKED_MODELS = 10  # an airport's parked aircraft drawn with this many models at most (each one more is memory)
 STATUS_EVERY_S = 5.0
 SHORT_FINAL_NM = 4.0
 SHORT_FINAL_AGL = 2000.0
 RUNWAY_NEAR_M = 120.0
 HELD_RELEASE_S = 20.0  # the user off the runway this long: the held departure goes
+DEPARTURE_GAP_S = 90.0  # then the next one this long after (a tower's spacing on one runway)
+CALL_GAP_S = 60.0  # tower tells one held short this often at most (the departures go spaced, a go-around is always said)
+GIVE_WAY_M = 90.0  # one taxiing that would come this close to the user on the ground stops and gives way ...
+GIVE_WAY_AHEAD_S = 20.0  # ... looking this far ahead
+GIVE_WAY_CLEAR_M = 150.0  # ... and goes on once the user is this far away (or behind it)
+GIVE_WAY_MAX_S = 180.0  # ... or after this long at most
 LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this long at most, then taken away
 QUIET_S = 20.0  # an arrival on final not heard from this long (low, out of the receivers' sight): LocalTC lands it
 FINAL_NM = 15.0
 GLIDE = math.tan(math.radians(3.0))
-EXTRAPOLATE_S = 20.0  # carried on past its last position this long at most (as the bridge does)
+EXTRAPOLATE_S = 60.0  # carried on past its last position this long at most (as the bridge does)
+CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
+BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
 NATIVE_NOTE = ("MSFS's own traffic is on as well: set its air traffic to off (Options > General > Traffic) so only "
                "LocalTC's flies, or two of each will be about.")
 NO_FEED_NOTE = "No live positions: no internet, or the free sources are busy. Trying again."
@@ -90,9 +107,9 @@ TYPES_BY_SIZE = {"heavy": ("B789", "B77W", "A359", "A333", "B763", "B788", "B772
 @dataclass(frozen=True)
 class TrafficSettings:
     radius_nm: float = 40.0
-    max_live: int = 40
+    max_live: int = 30
     parked: bool = True
-    max_parked: int = 80
+    max_parked: int = 40
     atc_control: bool = True
 
 
@@ -148,6 +165,9 @@ class Plane:
     lights: tuple = ()
     created_t: float = 0.0
     note: str = ""  # what ATC did with it, said once
+    sent: tuple[float, ...] | None = None  # (lat, lon, alt, hdg, gs, vs, turn, when): the last state the bridge has
+    runway: tuple[str, str] | None = None  # (airport, runway end) it was held short of
+    give_way_t: float = 0.0  # when it stopped for the user
 
     @property
     def live(self) -> bool:
@@ -184,6 +204,8 @@ class TrafficManager:
         self._first_t: float | None = None
         self._user_runway: tuple[str, str, str] | None = None
         self._user_runway_t = 0.0  # when the user last had a runway
+        self._released_t = -1e9  # the last held departure sent on its way
+        self._call_t = -1e9  # the last time tower told one to hold short
 
     # --- what happens ------------------------------------------------------------------------------------------
 
@@ -227,7 +249,7 @@ class TrafficManager:
             if plane.flight is not None and plane.flight.airline:
                 out += [SetAiVar(object_id=ev.object_id, name="ATC AIRLINE", text=plane.flight.airline),
                         SetAiVar(object_id=ev.object_id, name="ATC FLIGHT NUMBER", text=plane.callsign[3:])]
-        out += self._track(plane, now, blend_s=0.0)
+        out += self._track(plane, now)  # from where it was made (the bridge holds it there): eased, not jumped
         return out
 
     def on_snapshot(self, snap: TrafficSnapshot) -> None:
@@ -307,7 +329,7 @@ class TrafficManager:
                 plane.mode, plane.local, plane.flight = "live", None, f  # heard again: the real one from here
                 out += self._track(plane, now, blend_s=8.0)
                 continue
-            if not plane.live or plane.mode in ("go_around", "departing", "hold", "landing"):
+            if not plane.live or plane.mode in ("go_around", "departing", "hold", "landing", "give_way"):
                 continue
             if f is not None and plane.mode == "live" and not f.on_ground and now - f.t > QUIET_S \
                     and plane.object_id is not None and (landing := self._landing(plane, now)):
@@ -335,7 +357,7 @@ class TrafficManager:
                     plane.flight = f
                     out += self._track(plane, now)
                 continue
-            if made >= 6 or now - f.t > STALE_S:
+            if made >= LIVE_PER_TICK or now - f.t > STALE_S:
                 continue
             if not f.on_ground and now - self._first_t > FIRST_LOT_S and d < POP_IN_NM:
                 continue  # would appear out of nowhere in front of the user: it comes in from further out instead
@@ -362,9 +384,12 @@ class TrafficManager:
                       spot=spot, created_t=now)
         self._add(plane)
         lat, lon, alt, hdg = self._where(plane, now)
+        gs = 0.0 if spot is not None and f.gs_kt < 3 else f.gs_kt
+        # The bridge holds it here from the moment the sim makes it, carried on at its speed (sim_bridge, spawned).
+        plane.sent = (lat, lon, alt, hdg, gs, 0.0, 0.0, now)
         out.append(SpawnAiAircraft(request_id=plane.request_id, kind="parked", title=plane.title, livery=plane.livery,
                                    tail=(f.registration or f.callsign)[:9], lat=lat, lon=lon, alt_ft=alt, heading=hdg,
-                                   on_ground=f.on_ground, airspeed_kt=0 if f.on_ground else f.gs_kt))
+                                   on_ground=f.on_ground, airspeed_kt=gs))
         return out
 
     def _where(self, plane: Plane, now: float) -> tuple[float, float, float, float]:
@@ -381,8 +406,26 @@ class TrafficManager:
         alt = self._elev(lat, lon) if f.on_ground or f.alt_ft is None else self._true_alt(f.alt_ft + f.vs_fpm * dt / 60)
         return lat, lon, alt, f.track
 
-    def _track(self, plane: Plane, now: float, blend_s: float = 5.0) -> list[Any]:
-        """Where one is going now, to the bridge (and its lights when they change)."""
+    def _blend(self, plane: Plane, lat: float, lon: float, alt: float, gs_kt: float, now: float) -> float:
+        """How long the difference between where the bridge is showing it and where it is now takes to ease out:
+        long enough that it never looks more than ``CATCH_UP`` faster or slower than it's going."""
+        s = plane.sent
+        if s is None:
+            return 0.0
+        dt = min(max(0.0, now - s[7]), EXTRAPOLATE_S)
+        plat, plon, _ = advance(s[0], s[1], s[3], s[4], s[6], dt)
+        palt = s[2] + s[5] * dt / 60.0
+        err = math.hypot(haversine_nm(lat, lon, plat, plon) * M_PER_NM, (alt - palt) * 0.3048 * 3)
+        speed = max(gs_kt, s[4], 15.0) * M_PER_NM / 3600.0
+        return max(BLEND_MIN_S, min(BLEND_MAX_S, 1.5 * err / (CATCH_UP * speed)))
+
+    def _send(self, plane: Plane, track: AiTrack, now: float) -> AiTrack:
+        plane.sent = (track.lat, track.lon, track.alt_ft, track.hdg, track.gs_kt, track.vs_fpm, track.turn_dps, now)
+        return track
+
+    def _track(self, plane: Plane, now: float, blend_s: float | None = None) -> list[Any]:
+        """Where one is going now, to the bridge (and its lights when they change). ``blend_s``: how long the
+        difference from where it's shown takes to ease out (by default: as long as it takes to look natural)."""
         if plane.object_id is None:
             return []
         f = plane.flight
@@ -396,8 +439,10 @@ class TrafficManager:
                 lat, lon, hdg = f.lat, f.lon, f.track
             else:
                 return []
-            out: list[Any] = [AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=self._elev(lat, lon), hdg=hdg,
-                                      on_ground=True, blend_s=blend_s)]
+            alt = self._elev(lat, lon)
+            blend = blend_s if blend_s is not None else self._blend(plane, lat, lon, alt, 5.0, now)
+            out: list[Any] = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg,
+                                                        on_ground=True, blend_s=blend), now)]
             return out + self._lights(plane, on_ground=True, gs=0.0, agl=0.0, parked=plane.mode == "parked")
         if f is None:
             return []
@@ -414,9 +459,10 @@ class TrafficManager:
             climb = math.degrees(math.atan2(f.vs_fpm / 196.85, max(gs, 60) * 0.5144))
             pitch = max(-4.0, min(16.0, climb + (3.0 if f.vs_fpm > -300 else 1.5)))
             bank = max(-30.0, min(30.0, math.degrees(math.atan(gs * 0.5144 * math.radians(plane.turn_dps) / 9.81))))
-        out = [AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg, gs_kt=gs,
-                       vs_fpm=f.vs_fpm if airborne else 0.0, turn_dps=plane.turn_dps, on_ground=not airborne,
-                       pitch=pitch, bank=bank, blend_s=blend_s)]
+        blend = blend_s if blend_s is not None else self._blend(plane, lat, lon, alt, gs, now)
+        out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg, gs_kt=gs,
+                                         vs_fpm=f.vs_fpm if airborne else 0.0, turn_dps=plane.turn_dps,
+                                         on_ground=not airborne, pitch=pitch, bank=bank, blend_s=blend), now)]
         agl = alt - self._elev(lat, lon) if airborne else 0.0
         return out + self._lights(plane, on_ground=not airborne, gs=gs, agl=agl, lat=lat, lon=lon,
                                   climbing=f.vs_fpm > 300)
@@ -559,8 +605,7 @@ class TrafficManager:
         share = self.occupancy(airport, live_here)
         hour = int(self._local_hour(airport.lon))
         rng = random.Random(zlib.crc32(f"{icao}:{hour}:{self.seed}".encode()))
-        airlines = Counter(f.airline for f in self.flights.values() if f.airline
-                           and haversine_nm(f.lat, f.lon, airport.lat, airport.lon) < 40)
+        airlines = self._airlines_at(icao)
         taken = [self._spot_latlon(p.spot) for p in self.planes.values() if p.spot is not None and p.spot[0] == icao]
         spots = []
         for i, p in enumerate(airport.parking):
@@ -575,9 +620,13 @@ class TrafficManager:
             spots.append(i)
         rng.shuffle(spots)
         count = min(int(round(len(spots) * share)), self.s.max_parked - sum(1 for p in self.planes.values() if not p.live))
+        # Nearest the user first (what's seen from the gate), and drawn with a few models over and over.
+        if self.own is not None:
+            spots.sort(key=lambda i: haversine_nm(self.own.lat, self.own.lon, airport.parking[i].lat, airport.parking[i].lon))
+        used: dict[tuple[str, str], list[tuple[str, str]]] = {}  # (size, airline) -> the models drawn with
         for i in spots[:max(0, count)]:
             spot = airport.parking[i]
-            model = self._parked_model(spot.kind, spot.radius_m, airlines, rng)
+            model = self._parked_model(spot.kind, spot.radius_m, airlines, rng, used)
             if model is None:
                 continue
             plane = Plane(f"parked:{icao}:{i}", 0, model[0], model[1], spot=(icao, i), mode="parked", created_t=now)
@@ -586,20 +635,61 @@ class TrafficManager:
         self._did(f"{sum(1 for p in self.planes.values() if not p.live and p.spot and p.spot[0] == icao)} aircraft "
                   f"parked at {icao}'s gates ({round(share * 100)}% full this {what})")
 
-    def _parked_model(self, kind: str, radius_m: float, airlines: Counter, rng: random.Random) -> tuple[str, str] | None:
+    def _airlines_at(self, icao: str) -> Counter:
+        """The airlines whose aircraft stand at ``icao``'s gates (airlines.py): the live flights to and from it (their
+        routes), the ones close by, its own based airlines, else its country's."""
+        airport = self.airports[icao]
+        flown: Counter = Counter()
+        near: Counter = Counter()
+        for f in self.flights.values():
+            if not f.airline:
+                continue
+            route = self.routes(f.callsign)
+            if route is not None and icao in (route.origin, route.destination):
+                flown[f.airline] += 1
+            elif route is None and haversine_nm(f.lat, f.lon, airport.lat, airport.lon) < 15:
+                near[f.airline] += 1
+        return airline_data.weights(icao, flown, near)
+
+    def _parked_model(self, kind: str, radius_m: float, airlines: Counter, rng: random.Random,
+                      used: dict[tuple[str, str], list[tuple[str, str]]] | None = None) -> tuple[str, str] | None:
+        """A model for a parking spot of that kind and size: an airline's that flies here (by its share), one of the
+        models already drawn there when the airport has its few (``PARKED_MODELS``)."""
+        used = {} if used is None else used
         for prefix, types in (("ramp_ga", GA_TYPES), ("ramp_cargo", CARGO_TYPES)):
             if kind.startswith(prefix):
-                return next((m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None), None)
+                return self._reuse(used, (prefix, ""), rng, lambda: next(
+                    (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None), None))
         size = "heavy" if "heavy" in kind or radius_m >= 30 else "small" if "small" in kind or radius_m < 18 else "medium"
         names = list(airlines)
         weights = [airlines[n] for n in names]
-        for _ in range(4):
-            airline = rng.choices(names, weights)[0] if names else ""
-            for kind_code in rng.sample(TYPES_BY_SIZE[size], k=len(TYPES_BY_SIZE[size])):
-                model = self.picker.pick(kind_code, airline)
-                if model is not None and (not airline or "ZZZ" not in model[0].upper()):
-                    return model
-        return self.picker.pick(TYPES_BY_SIZE[size][0])
+        airline = rng.choices(names, weights)[0] if names else ""
+
+        def pick() -> tuple[str, str] | None:
+            for name in [airline] + [n for n in rng.choices(names, weights, k=3) if n != airline] if names else [""]:
+                for kind_code in rng.sample(TYPES_BY_SIZE[size], k=len(TYPES_BY_SIZE[size])):
+                    model = self.picker.pick(kind_code, name)
+                    if model is not None and (not name or "ZZZ" not in model[0].upper()):
+                        return model
+            return self.picker.pick(TYPES_BY_SIZE[size][0])
+
+        return self._reuse(used, (size, airline), rng, pick)
+
+    @staticmethod
+    def _reuse(used: dict[tuple[str, str], list[tuple[str, str]]], key: tuple[str, str], rng: random.Random,
+               pick: Callable[[], tuple[str, str] | None]) -> tuple[str, str] | None:
+        """A new model while the airport has few, else one already there (of that airline and size if it has one)."""
+        models = {m for ms in used.values() for m in ms}
+        if key in used and (len(models) >= PARKED_MODELS or len(used[key]) >= 2):
+            return rng.choice(used[key])
+        if len(models) >= PARKED_MODELS:
+            same_size = [m for k, ms in used.items() if k[0] == key[0] for m in ms]
+            if same_size:
+                return rng.choice(same_size)
+        model = pick()
+        if model is not None:
+            used.setdefault(key, []).append(model)
+        return model
 
     def _create_parked(self, plane: Plane, airport: Airport) -> list[Any]:
         plane.request_id = self._request()
@@ -616,11 +706,13 @@ class TrafficManager:
         user = self.atc.user_runway()
         if user is not None:
             self._user_runway, self._user_runway_t = user, now
-        held = [p for p in self.planes.values() if p.mode == "hold"]
+        out += self._give_way(now)
+        held = sorted((p for p in self.planes.values() if p.mode == "hold"), key=lambda p: p.local.started if p.local else 0)
         if user is None:
-            if held and now - self._user_runway_t >= HELD_RELEASE_S:
-                for plane in held:
-                    out += self._release(plane, now)
+            # One at a time: the first held goes once the user's been off the runway a while, the next spaced after.
+            if held and now - self._user_runway_t >= HELD_RELEASE_S and now - self._released_t >= DEPARTURE_GAP_S:
+                self._released_t = now
+                out += self._release(held[0], now)
             return out
         icao, end_ident, kind = user
         geo = self._geo(icao)
@@ -660,25 +752,85 @@ class TrafficManager:
         ahead = (xy[0] + u[0] * 40, xy[1] + u[1] * 40)
         return runway.distance_to(ahead) < runway.distance_to(xy) or runway.contains(ahead, 5)
 
+    def _say(self, callsign: str, kind: str, icao: str, runway: str, now: float) -> list[Any]:
+        """Tower telling a real flight: each held short only if it hasn't just told another (two or three held at
+        once was a string of calls); the departures go spaced anyway, and a go-around is always said."""
+        if kind == "hold_short":
+            if now - self._call_t < CALL_GAP_S:
+                return []
+            self._call_t = now
+        return self.atc.say(callsign, kind, icao, runway)
+
     def _hold(self, plane: Plane, geo: AirportGeometry, end, now: float) -> list[Any]:
         lat, lon, alt, hdg = self._where(plane, now)
         plane.mode = "hold"
+        plane.runway = (geo.icao, end.ident)
         plane.local = Local(lat, lon, alt, hdg, 0.0, 0.0, True, started=now)
         self._did(f"{plane.callsign} held short of {end.ident} for you")
-        out = [AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg, on_ground=True, blend_s=4.0)]
-        return out + self.atc.say(plane.callsign, "hold_short", geo.icao, end.ident)
+        # Stopping where it is (taxiing at a few knots: a few metres on, not back to where it was).
+        out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg, on_ground=True,
+                                         blend_s=4.0), now)]
+        return out + self._say(plane.callsign, "hold_short", geo.icao, end.ident, now)
+
+    def _give_way(self, now: float) -> list[Any]:
+        """On the ground, a real flight taxiing at the user stops and waits (the real one doesn't know the user is
+        there); it goes on once the user is clear, catching up with the real one slowly."""
+        out: list[Any] = []
+        own = self.own
+        for plane in list(self.planes.values()):
+            if plane.object_id is None or plane.flight is None:
+                continue
+            if plane.mode == "give_way":
+                lat, lon = plane.local.lat, plane.local.lon
+                away = haversine_nm(lat, lon, own.lat, own.lon) * M_PER_NM
+                behind = self._closing(lat, lon, plane.local.hdg, own) is None
+                if away > GIVE_WAY_CLEAR_M or (behind and away > GIVE_WAY_M) or now - plane.give_way_t > GIVE_WAY_MAX_S \
+                        or not own.on_ground:
+                    plane.mode, plane.local = "live", None
+                    out += self._track(plane, now)
+                continue
+            f = plane.flight
+            if plane.mode != "live" or not f.on_ground or f.gs_kt < 3 or not own.on_ground:
+                continue
+            lat, lon, alt, hdg = self._where(plane, now)
+            closest = self._closing(lat, lon, hdg, own, f.gs_kt)
+            if closest is not None and closest < GIVE_WAY_M:
+                plane.mode, plane.give_way_t = "give_way", now
+                plane.local = Local(lat, lon, alt, hdg, 0.0, 0.0, True, started=now)
+                self._did(f"{plane.callsign or 'An aircraft'} gave way to you")
+                out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=alt, hdg=hdg,
+                                                     on_ground=True, blend_s=5.0), now))
+        return out
+
+    @staticmethod
+    def _closing(lat: float, lon: float, hdg: float, own: OwnshipState, gs_kt: float = 15.0) -> float | None:
+        """How close one at ``lat, lon`` heading ``hdg`` comes to the user over the next ``GIVE_WAY_AHEAD_S`` (both
+        moving on as they are), or None when it's moving away."""
+        best, moving_closer = math.inf, False
+        start = haversine_nm(lat, lon, own.lat, own.lon) * M_PER_NM
+        for k in range(1, int(GIVE_WAY_AHEAD_S) + 1, 2):
+            a = advance(lat, lon, hdg, gs_kt, 0.0, k)
+            b = advance(own.lat, own.lon, own.hdg_true, own.gs_kt, 0.0, k)
+            d = haversine_nm(a[0], a[1], b[0], b[1]) * M_PER_NM
+            moving_closer = moving_closer or d < start - 5
+            best = min(best, d)
+        return best if moving_closer else None
 
     def _release(self, plane: Plane, now: float) -> list[Any]:
         """The user's done with the runway: the held one lines up on it and takes off (LocalTC flying it: the real
         one's long gone)."""
         user = self._user_runway
-        geo = self._geo(user[0]) if user else None
+        icao = plane.runway[0] if plane.runway else user[0] if user else ""
+        geo = self._geo(icao) if icao else None
         local = plane.local
         if geo is None or local is None:
             return self._remove(plane)
         xy = geo.xy(local.lat, local.lon)
-        runway = min(geo.runways, key=lambda r: r.distance_to(xy))
-        end = min(runway.ends, key=lambda e: math.dist(e.threshold, xy))  # from the end it was waiting at
+        # The way it was held for (the way the user went: the runway in use), from where it waited.
+        end = geo.end(plane.runway[1]) if plane.runway else None
+        runway = end.runway if end is not None else min(geo.runways, key=lambda r: r.distance_to(xy))
+        if end is None:
+            end = min(runway.ends, key=lambda e: math.dist(e.threshold, xy))
         along, _ = runway.along_across(xy)
         u = unit(runway.ends[0].heading_true)
         on_line = (runway.center[0] + u[0] * along, runway.center[1] + u[1] * along)
@@ -688,9 +840,9 @@ class TrafficManager:
                             target_alt=geo.airport.elev_ft + 5000, target_kt=250.0, accel=2.5, rotate_kt=150.0,
                             started=now)
         self._did(f"{plane.callsign} cleared for takeoff {end.ident} after you")
-        out = [AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=geo.airport.elev_ft, hdg=end.heading_true,
-                       on_ground=True, blend_s=12.0)]
-        return out + self.atc.say(plane.callsign, "takeoff", geo.icao, end.ident)
+        out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=geo.airport.elev_ft,
+                                         hdg=end.heading_true, on_ground=True, blend_s=12.0), now)]
+        return out + self._say(plane.callsign, "takeoff", geo.icao, end.ident, now)
 
     def _go_around(self, plane: Plane, geo: AirportGeometry, end, now: float) -> list[Any]:
         loc = plane.local
@@ -701,7 +853,7 @@ class TrafficManager:
         plane.local = Local(lat, lon, alt, end.heading_true, max(f.gs_kt, 140.0), 1800.0, False,
                             target_alt=geo.airport.elev_ft + 3000, target_kt=200.0, accel=1.0, started=now)
         self._did(f"{plane.callsign} sent around: you had {end.ident}")
-        return self.atc.say(plane.callsign, "go_around", geo.icao, end.ident)
+        return self._say(plane.callsign, "go_around", geo.icao, end.ident, now)
 
     def _landing(self, plane: Plane, now: float) -> list[Any]:
         """A real arrival gone quiet on final (low, out of the receivers' sight): LocalTC flies it down the glide path,
@@ -775,8 +927,9 @@ class TrafficManager:
             pitch = 0.0 if loc.on_ground else (12.0 if loc.vs_fpm > 0 else 2.5)
             if plane.mode == "landing":
                 plane.used_t = plane.flight.t if plane.flight is not None else plane.used_t
-            out.append(AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft, hdg=loc.hdg,
-                               gs_kt=loc.gs_kt, vs_fpm=loc.vs_fpm, on_ground=loc.on_ground, pitch=pitch, blend_s=1.5))
+            out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
+                                                 hdg=loc.hdg, gs_kt=loc.gs_kt, vs_fpm=loc.vs_fpm, on_ground=loc.on_ground,
+                                                 pitch=pitch, blend_s=1.5), now))
             agl = 0.0 if loc.on_ground else max(0.0, loc.alt_ft - self._elev(loc.lat, loc.lon))
             out += self._lights(plane, on_ground=loc.on_ground, gs=loc.gs_kt, agl=agl, lat=loc.lat, lon=loc.lon,
                                 climbing=loc.vs_fpm > 300)

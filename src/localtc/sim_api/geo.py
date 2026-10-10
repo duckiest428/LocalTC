@@ -46,3 +46,20 @@ def unit(heading_deg: float) -> tuple[float, float]:
     """East/north unit vector for a true heading."""
     h = math.radians(heading_deg)
     return math.sin(h), math.cos(h)
+
+
+_M_PER_DEG = 111_320.0
+_KT_TO_MPS = 1852.0 / 3600.0
+
+
+def advance(lat: float, lon: float, hdg: float, gs_kt: float, turn_dps: float, dt: float) -> tuple[float, float, float]:
+    """Where an aircraft at ``lat, lon`` heading ``hdg`` is ``dt`` seconds on, turning steadily."""
+    steps = max(1, int(abs(dt)))
+    step = dt / steps
+    for _ in range(steps):
+        mid = math.radians(hdg + turn_dps * step / 2)
+        d = gs_kt * _KT_TO_MPS * step
+        lat += d * math.cos(mid) / _M_PER_DEG
+        lon += d * math.sin(mid) / (_M_PER_DEG * max(0.01, math.cos(math.radians(lat))))
+        hdg = (hdg + turn_dps * step) % 360
+    return lat, lon, hdg

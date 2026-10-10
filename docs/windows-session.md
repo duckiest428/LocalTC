@@ -81,17 +81,20 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    Its hands) and check it does them in the flight. Repeat for the other aircraft the user flies (a new profile in
    `crew/profiles/`, matched by title or model).
 
-## Task 2: LocalTC's traffic
+## Task 2: LocalTC's traffic (EXPERIMENTAL)
 
 [traffic/manager.py](../src/localtc/traffic/manager.py) flies the real flights around in the sim (live ADS-B, FSLTL's
-models), fills the gates for the hour and makes the traffic answer to ATC. Tried at KORD 2026-10-09 (windows-findings.md).
+models), fills the gates for the hour and makes the traffic answer to ATC. Tried at KORD 2026-10-09 and over a flight
+out of KLAX 2026-10-10 (windows-findings.md: frames, spawns sliding, the holds).
 
 1. `localtc debug traffic --live --no-spawn --watch 120`: the flights fetched, created, followed (each within a few
    hundred metres of the real one, no jumps), the gates filled, all taken away at the end.
 2. Still to see in the app, with MSFS's own air traffic off: Quick Settings → ATC → LocalTC's traffic on, at a busy
    airport, over a whole flight. Look at the aircraft taxiing, taking off and landing (smooth, on the ground, gear and
    lights right), the gates (nobody on yours; none on top of another), ATC's go-arounds and holds when you have the
-   runway, and that everything goes when it's turned off.
+   runway, and that everything goes when it's turned off. Since 2026-10-10: a new aircraft appears where it stays
+   (no slide), the frame rate with 40 parked, departures held for you going one at a time, and one taxiing at you
+   stopping until you're clear.
 
 ## Task 3: the voices with the sim running
 

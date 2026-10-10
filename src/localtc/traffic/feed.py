@@ -28,6 +28,7 @@ UNKNOWN_TTL_S = 3 * 3600.0
 STALE_S = 30.0  # a position older than this isn't used
 USER_AGENT = "LocalTC (https://localtc.tech)"
 BUSY_S = 90.0  # a source that says it's busy (HTTP 429) is left alone this long
+CLOCK_SLACK_S = 120.0
 
 
 @dataclass(frozen=True)
@@ -57,8 +58,16 @@ class Flight:
 
 
 def parse(data: dict, now: float | None = None) -> list[Flight]:
-    """A readsb-style answer ({"ac": [...], "now": ms}) as flights; the ones without a position left out."""
-    now = now if now is not None else time.time()
+    """A readsb-style answer ({"ac": [...], "now": ms}) as flights; the ones without a position left out. Each
+    position's time is the source's own clock less its age: an answer a source kept a few seconds before sending it
+    (the two sources' differently) was otherwise that much behind, and the aircraft surged back and forth."""
+    if now is None:
+        now = time.time()
+        server = data.get("now")
+        if isinstance(server, (int, float)) and server > 0:
+            server_s = server / 1000.0 if server > 1e11 else float(server)
+            if abs(server_s - now) < CLOCK_SLACK_S:  # (a clock far off on either side: this one's)
+                now = server_s
     out = []
     for a in data.get("ac") or data.get("aircraft") or ():
         if a.get("lat") is None or a.get("lon") is None:

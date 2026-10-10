@@ -52,10 +52,11 @@ KNOB_READS = {"heading": ("AUTOPILOT HEADING LOCK DIR", "degrees", 360.0),
               "speed": ("AUTOPILOT AIRSPEED HOLD VAR", "knots", 0.0),
               "vs": ("AUTOPILOT VERTICAL HOLD VAR", "feet per minute", 0.0)}
 KNOB_CHECK_S = 20.0  # a knob takes a while to turn (a few seconds for 150 kt): the check waits this long
+GEAR_CHECK_S = 10.0  # some airliners' handles take seconds to show it (the A330's: 4 s), the gear longer to move
 # Whose hands: the pilot flying's side of the cockpit (the captain's seat, the thrust and the speedbrake levers, the
-# parking brake, the autopilot's engagement). The copilot works its own side and the shared panels on request; these it
-# leaves, saying so in a word. ("spoilers": the speedbrake lever, armed or out.)
-PILOT_SIDE = frozenset({"parking_brake", "spoilers", "autothrottle", "autopilot"})
+# parking brake, the autopilot's engagement, the exterior lights). The copilot works its own side and the shared
+# panels on request; these it leaves, saying so in a word. ("spoilers": the speedbrake lever, armed or out.)
+PILOT_SIDE = frozenset({"parking_brake", "spoilers", "autothrottle", "autopilot", "light"})
 
 
 @dataclass
@@ -267,8 +268,15 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
     if a == "gear":
         down = v == "down"
         event = SendSimEvent(name="GEAR_DOWN" if down else "GEAR_UP")
-        return Plan(a, v, (_write(p, f"gear_{v}", event),), _own(lambda o: o.gear_down == down), f"Gear {v}.",
-                    already=f"Gear's already {v}.", reads="gear")
+        def moving(c: Cockpit) -> bool | None:  # the handle there, or the gear on its way
+            if c.own is None:
+                return None
+            if c.own.gear_down == down:
+                return True
+            return c.systems is not None and (c.systems.gear_pct > 0.05 if down else c.systems.gear_pct < 0.95)
+
+        return Plan(a, v, (_write(p, f"gear_{v}", event),), moving, f"Gear {v}.", already=f"Gear's already {v}.",
+                    reads="gear", check_s=GEAR_CHECK_S)
     if a == "flaps":
         positions = c.flap_positions
         index = p.detent_index(v.replace("+f", "") if v.endswith("+f") else v, positions)

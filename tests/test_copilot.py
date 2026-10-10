@@ -114,3 +114,25 @@ def test_the_service_carries_out_the_copilots_actions():
     assert pilot[0] == "Paine Clearance, N172LT, IFR to Boeing Field, ready to copy"
     assert pilot[1].startswith("Cleared to Boeing Field as filed")
     assert any(isinstance(e, AtcTransmission) and (e.instruction_id or "").startswith("ground.taxi_out") for e in events)
+
+
+def test_how_do_you_read_after_an_unread_handoff_gets_the_readback_alone():
+    """Tower asked "how do you read?" about a handoff nobody had read back: the copilot said the readback and "loud
+    and clear" at once, over each other."""
+    from localtc.atc_core.facilities import Facility
+    from localtc.atc_core.readback.interpreter import PendingReadback
+    from localtc.atc_core.session import IssuedInstruction
+
+    engine = AtcEngine(EngineConfig(callsign="N172LT"))
+    tower = Facility("tower", "Paine Tower", 120.2, "KPAE")
+    departure = Facility("departure", "Seattle Departure", 124.675)
+    slots = {"station": departure.station, "frequency": departure.mhz, "callsign": engine._callsign()}
+    engine.state.issued["tower.handoff_departure"] = IssuedInstruction("tower.handoff_departure", slots, tower, 10.0)
+    engine.state.pending = PendingReadback("tower.handoff_departure", "tower", {"frequency": departure.mhz},
+                                           ("frequency",), issued_t=10.0)
+    copilot = Copilot(engine, mode="full", delay_s=(1.0, 1.0))
+    copilot._answered.add(("tower.handoff_departure", 10.0))  # (heard in assist: the pilot's to read back)
+    copilot.observe(AtcTransmission(t=50.0, station="Paine Tower", frequency_mhz=120.2, text="how do you read?",
+                                    instruction_id="common.how_read"))
+    said = [a.text for a in copilot.due(60.0) if isinstance(a, Say)]
+    assert len(said) == 1 and "Seattle Departure" in said[0]  # the readback, and only that

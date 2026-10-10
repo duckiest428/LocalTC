@@ -186,10 +186,10 @@ def test_it_acts_then_says_so_once_the_sim_shows_it():
 
 def test_it_says_when_a_command_didnt_take():
     pm = started()
-    pm.observe(IntercomHeard(t=1.0, text="landing lights on"))
+    pm.observe(IntercomHeard(t=1.0, text="squawk four five two one"))
     assert said(pm.observe(own(2.0))) == []
     out = pm.observe(own(1.0 + CHECK_S + 0.1))
-    assert said(out) == ["Landing lights on didn't take, check it."]
+    assert said(out) == ["Squawk 4521 didn't take, check it."]
     assert any(isinstance(a, CrewAction) and a.outcome == "failed" for a in out)
 
 
@@ -238,7 +238,7 @@ def test_a_radio_call_on_the_intercom_is_offered_to_be_sent():
 def test_without_the_aircraft_reporting_it_the_copilot_says_it_sent_it():
     pm = PilotMonitoring(profiles=PROFILES)
     pm.observe(own(0.5))  # no AircraftSystems yet (an add-on, or an older recording)
-    assert said(pm.observe(IntercomHeard(t=1.0, text="landing lights on"))) == ["Landing lights on."]
+    assert said(pm.observe(IntercomHeard(t=1.0, text="standby one two one point five"))) == ["121.5 in standby."]
 
 
 def test_the_log_shows_the_intercom():
@@ -431,3 +431,16 @@ def test_a_reworded_call_keeps_every_number_and_name():
     assert check_reworded('{"reply": "Squawk 2711 and 6,000 are in."}', "Squawk 2711, initial 6,000 set.")[0]
     assert check_reworded('{"reply": "Squawk set, 6,000 in."}', "Squawk 2711, initial 6,000 set.")[0] is None
     assert check_reworded('{"reply": "We\'re on the departure."}', "We're planned on the RADYR2.")[0] is None
+
+
+def test_the_gear_is_given_the_time_an_airliners_handle_takes():
+    """The A330's handle showed up 4 s after GEAR_UP and the gear came up after it: "Gear up didn't take" was wrong."""
+    pm = started()
+    pm.observe(own(1.0, gear_down=True, ias_kt=170.0))
+    pm.observe(AircraftSystems(t=1.0, flaps_positions=4, gear_pct=1.0))
+    pm.observe(IntercomHeard(t=2.0, text="gear up"))
+    out = pm.observe(own(2.0 + CHECK_S + 0.5, gear_down=True, ias_kt=170.0))
+    assert "didn't take" not in " ".join(said(out))
+    out = pm.observe(AircraftSystems(t=6.0, flaps_positions=4, gear_pct=0.9))  # on its way up
+    out += pm.observe(own(6.5, gear_down=True, ias_kt=170.0))
+    assert "Gear up." in said(out)

@@ -429,27 +429,45 @@ def _garbled(tokens: list[Token], i: int, names: set[str] | frozenset[str]) -> b
 
 
 PROCEDURE_END = ("departure", "arrival", "transition")
+# Words never in a procedure's name: "expect FL330 26 minutes after departure" names none.
+NOT_A_PROCEDURE = {"the", "via", "after", "minutes", "minute", "expect", "maintain", "climb", "then", "as", "filed", "to",
+                   "and", "cleared", "clear", "on", "for", "of", "level", "flight", "feet", "thousand", "hundred"}
+PROCEDURE_LETTERS = 6  # the most letters a SID's or a STAR's name has (MONTN, OSHNN, LAXX)
 
 
 def procedures(tokens: list[Token], expected: Any = None) -> list[str]:
-    """A SID or STAR read back: "via the montn two departure" -> "MONTN2".
+    """A SID or STAR read back: "via the montn two departure" -> "MONTN2", "osh, nn 1 departure" -> "OSHNN1".
 
     Only counted when the naming word follows, so a taxi route ("taxi via bravo, charlie") is never
-    mistaken for one.
+    mistaken for one: the name, then its number (one digit), right before it. Spelled in pieces, the pieces that
+    make the expected one are taken, else as many as a name has letters.
     """
     found = []
-    for start in _find_phrase(tokens, ("via",)) + _find_phrase(tokens, ("expect",)):
-        i = start
-        if i < len(tokens) and tokens[i].text == "the":
-            i += 1
-        name = ""
-        while i < len(tokens) and tokens[i].text not in PROCEDURE_END:
-            token = tokens[i]
-            if token.kind not in ("word", "number", "letter") or not token.text.isalnum():
+    for k, token in enumerate(tokens):
+        if token.text not in PROCEDURE_END or k < 2:
+            continue
+        n = k - 1
+        suffix = ""
+        if tokens[n].kind == "letter" and len(tokens[n].text) == 1 and n >= 2:  # "laze one alpha": LAZE1A
+            suffix, n = tokens[n].text.upper(), n - 1
+        number = tokens[n]
+        if number.kind != "number" or len(number.text) != 1:
+            continue
+        pieces: list[str] = []
+        for i in range(n - 1, max(-1, n - 5), -1):
+            t = tokens[i]
+            if t.kind not in ("word", "letter") or not t.text.isalpha() or t.text in NOT_A_PROCEDURE:
                 break
-            name += token.text.upper()
-            i += 1
-        if name and i < len(tokens) and tokens[i].text in PROCEDURE_END and name not in found:
+            pieces.insert(0, t.text.upper())
+        names = [("".join(pieces[j:]) + number.text + suffix) for j in range(len(pieces))]
+        if not names:
+            continue
+        want = str(expected or "")
+        like = sorted((n for n in names if want and procedure_matches(n, want)),
+                      key=lambda n: -difflib.SequenceMatcher(None, n, want.upper()).ratio())
+        name = like[0] if like else next((n for n in names if sum(c.isalpha() for c in n) - len(suffix) <= PROCEDURE_LETTERS),
+                                         names[-1])
+        if name not in found:
             found.append(name)
     return found
 

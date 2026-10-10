@@ -229,7 +229,7 @@ def test_a_handoff_leaves_the_pilots_radio_alone_and_reminds_only_when_late():
     assert "We should be with Seattle Center on 128.5 by now." in said(out)
 
 
-def test_the_parking_brake_is_the_captains_the_copilot_only_says():
+def test_the_parking_brake_and_the_lights_are_the_captains_the_copilot_only_says():
     engine = FakeEngine()
     pm = crew(engine)
     pm.monitor.f.landing_t = 10.0
@@ -240,7 +240,7 @@ def test_the_parking_brake_is_the_captains_the_copilot_only_says():
     out += fly(pm, [own(21 + i, parking_brake=False) for i in range(30)])
     assert "Parking brake?" in said(out)
     assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "PARKING_BRAKE_SET"]
-    assert any(isinstance(o, SendSimEvent) and o.name == "BEACON_LIGHTS_SET" for o in out)  # the copilot's side
+    assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "BEACON_LIGHTS_SET"]  # the captain's too
 
 
 def test_each_call_once():
@@ -341,8 +341,8 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     words = [o.text for o in result.outputs if isinstance(o, CrewSpeech)]
     # Replayed, nothing the copilot sends ever shows in the recording: after two, it stops reaching (said once).
     assert words.count("My switches aren't reaching this aircraft. I'll leave them to you and call.") == 1
-    for expected in ("Positive rate.", "Ten thousand. Landing lights off?", "Level at FL350.", "Seventy knots."):
-        assert expected in words or expected.replace("Level at", "Top of climb, level") in words, expected
+    for expected in ("Positive rate.", "Ten thousand.", "Level at FL350.", "Seventy knots."):
+        assert any(w.startswith((expected, expected.replace("Level at", "Top of climb, level"))) for w in words), expected
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting
     assert max(words.count(w) for w in set(words)) <= 2  # nothing said over and over

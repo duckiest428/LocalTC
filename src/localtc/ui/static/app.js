@@ -1079,11 +1079,12 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
-        <div class="master-row"><div><b>LocalTC's traffic</b>
+        <div class="master-row"><div><b>LocalTC's traffic</b> <span class="exp-badge">EXPERIMENTAL</span>
           <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
-            airline's FSLTL model, the gates fill as busy as the airport is at that hour, and they answer to ATC: sent around
-            or held short when you have the runway, and the gate you're given kept clear. <b>Turn MSFS's own air traffic and
-            parked aircraft off</b> (Options &gt; General &gt; Traffic) or both are there. Off: MSFS's traffic as it is.
+            airline's FSLTL model, the gates fill with the airlines that fly there, as busy as the airport is at that hour, and
+            ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground,
+            and the gate you're given kept clear. <b>Turn MSFS's own air traffic and parked aircraft off</b>
+            (Options &gt; General &gt; Traffic) or both are there. Off: MSFS's traffic as it is.
             <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></div></div>
           <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
         </div>

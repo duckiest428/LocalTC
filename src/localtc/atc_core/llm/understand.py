@@ -403,6 +403,23 @@ def _said_digits(value: str, tokens: list[Token]) -> bool:
 EMPTY = {"", "none", "null", "nil", "n/a", "na", "unknown", "-", "no", "not given", "not said"}
 
 
+
+def _without_station(tokens: list[Token], station: str | None) -> list[Token]:
+    """The call's words without the station's name where it's said as one ("San Francisco Clearance", or
+    "Clearance" first): its words next to each other, or the first word of the call."""
+    named = set(re.findall(r"[a-z]+", (station or "").lower()))
+    words = [i for i, t in enumerate(tokens) if t.kind == "word"]
+    drop = set()
+    for n, i in enumerate(words):
+        if tokens[i].text not in named:
+            continue
+        before = n > 0 and tokens[words[n - 1]].text in named
+        after = n + 1 < len(words) and tokens[words[n + 1]].text in named
+        if before or after or n == 0:
+            drop.add(i)
+    return [t for i, t in enumerate(tokens) if i not in drop]
+
+
 def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token], *, asked: bool = False,
                  question: bool = False, station: str | None = None) -> Answer:
     """The model's answer, checked against the pilot's words. ``asked``: the pilot asked a question and used no
@@ -494,9 +511,8 @@ def parse_answer(raw: str, pending: PendingReadback | None, tokens: list[Token],
     ignored += [f"the pilot did not say {d}" for d in dropped]
     note = "; ".join(f"left out: {i}" for i in ignored)
     # The station's name is no word of the call's: "Clearance" in "San Francisco Clearance, any restricted airspace
-    # around?" doesn't ask for a clearance.
-    named = set(re.findall(r"[a-z]+", (station or "").lower()))
-    said = [t for t in tokens if not (t.kind == "word" and t.text in named)]
+    # around?" doesn't ask for a clearance. "Request clearance to Lisbon" does: only the name as said is left out.
+    said = _without_station(tokens, station)
     if kind == "request" and (problem := missing_cue(intent, said)):
         if asked or (question and topic in TOPICS and topic != "other"):
             # "How long is runway 24R?" filed as request_runway: the pilot asked something and asked for nothing.

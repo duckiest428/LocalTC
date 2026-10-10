@@ -133,9 +133,11 @@ class VoiceChain:
     def selected(self) -> Any:
         return self.providers[0]
 
-    def speak(self, text: str, persona: Persona) -> Speech | None:
-        """The first provider's good audio for ``text``, or None (text only)."""
-        for provider in self.providers:
+    def speak(self, text: str, persona: Persona, *, local: bool = False) -> Speech | None:
+        """The first provider's good audio for ``text``, or None (text only). ``local``: only those on this PC (none
+        there: the cloud's after all)."""
+        providers = [p for p in self.providers if getattr(p, "local", True)] if local else self.providers
+        for provider in providers or self.providers:
             st = self.states[provider.id]
             if self._resting(provider, st):
                 continue

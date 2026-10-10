@@ -103,7 +103,7 @@ def test_a_command_heard_fairly_well_is_said_back_first():
 
 def test_a_low_risk_command_heard_fairly_well_is_done():
     pm = started()
-    assert sent(heard(pm, 1.0, "landing lights on", confidence=0.65)) == [SendSimEvent(name="LANDING_LIGHTS_SET", value=1)]
+    assert sent(heard(pm, 1.0, "standby one two one point five", confidence=0.65)) ==         [SendSimEvent(name="COM_STBY_RADIO_SET_HZ", value=121_500_000)]
 
 
 def test_a_command_heard_clearly_is_done():

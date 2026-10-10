@@ -529,7 +529,7 @@ def test_a_voice_crashing_never_stops_the_next_line():
 def test_the_service_survives_a_bug_of_its_own(monkeypatch):
     calls = []
 
-    def render(self, text, who, kind, manner=None):
+    def render(self, text, who, kind, manner=None, local=False):
         calls.append(text)
         if len(calls) == 1:
             raise ValueError("bug")
@@ -538,6 +538,15 @@ def test_the_service_survives_a_bug_of_its_own(monkeypatch):
     monkeypatch.setattr(VoiceOut, "render", render)
     player = speak([atc("one"), atc("two", t=2.0)], VoiceChain([Fake("p")]))
     assert len(calls) == 2 and len(player.played) == 1
+
+
+def test_the_other_crews_chatter_is_spoken_on_this_pc():
+    """Other pilots on the frequency in a voice on this PC: a cloud voice for each was credits spent on chatter."""
+    cloud, here = Fake("azure"), PiperVoices(FakeSynth())
+    cloud.local = False
+    chain = VoiceChain([cloud, here])
+    assert chain.speak("x ray", persona_for("A"), local=True).provider == "piper"
+    assert chain.speak("x ray", persona_for("A")).provider == "azure"
 
 
 def test_a_provider_that_isnt_ready_is_skipped_without_counting_as_a_call():

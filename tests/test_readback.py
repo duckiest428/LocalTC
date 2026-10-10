@@ -228,3 +228,16 @@ def test_ideal_icao_readback_is_correct(instruction):
             pending = PendingReadback(instruction, rendered.controller, rendered.expected, rendered.required, rendered.optional)
             result = GrammarInterpreter().interpret(text, pending, InterpretContext(callsign=slots["callsign"]))
             assert (result.kind, result.status) == ("readback", "correct"), (text, render(normalize(text)), result)
+
+
+def test_a_procedure_read_back_in_pieces_and_an_expect_time_after_departure():
+    """"VAD, OSH, NN1 Departure ... Expect 330, 26 minutes after departure" was read as procedure 33026MINUTESAFTER,
+    and a right readback got "negative"."""
+    from localtc.atc_core.readback.extract import procedures
+    from localtc.atc_core.readback.normalize import normalize
+
+    said = normalize("Clear to Lisbon VAD, OSH, NN1 Departure, the NISFOD, climb maintain 8,000. Expect 330, 26 minutes "
+                     "after departure. Departure frequency is on 125 decimal, 2, squawk 1041.")
+    assert procedures(said, "OSHNN1") == ["OSHNN1"] and procedures(said) == ["OSHNN1"]
+    assert procedures(normalize("descend via the laze one alpha arrival"), "LAZE1A") == ["LAZE1A"]
+    assert procedures(normalize("expect FL330 26 minutes after departure")) == []

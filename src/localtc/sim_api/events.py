@@ -75,7 +75,7 @@ class AircraftSystems(Event, tag="aircraft_systems"):
     """The cockpit's switches and settings the copilot checks and sets (``localtc.crew``): sent once a second while
     any of them changes. Read with key-event names the stock aircraft honour; an add-on may leave some at 0."""
 
-    gear_pct: float = 0.0  # 0 up, 100 down and locked (in transit between)
+    gear_pct: float = 0.0  # 0 up, 1 down and locked (in transit between)
     flaps_pct: float = 0.0  # trailing-edge flaps, 0-100
     flaps_positions: int = 0  # handle detents beyond "up"
     spoilers_pct: float = 0.0

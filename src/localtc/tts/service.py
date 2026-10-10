@@ -59,12 +59,13 @@ class VoiceOut:
         crew_pick: int | None = None,  # and which of their voices of that sex
         shift: int = 0,  # ATC's shift ([atc] shift): each station's voice is the person on shift's
         regional: bool = True,  # each station in its region's English, where a provider has it
+        chatter_cloud: bool = False,  # the other flights' pilots in a cloud voice too (off: this PC's, no credits)
     ) -> None:
         self.bus, self.player = bus, player
         self.voices = synth if isinstance(synth, VoiceChain) else VoiceChain([PiperVoices(synth, speakers=speakers)])
         self.effect, self.static, self.atis, self.copilot, self.speakers = effect, static, atis, copilot, speakers
         self.crew_speaker, self.crew_sex, self.crew_pick = crew_speaker, crew_sex, crew_pick
-        self.shift, self.regional = shift, regional
+        self.shift, self.regional, self.chatter_cloud = shift, regional, chatter_cloud
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
@@ -93,9 +94,10 @@ class VoiceOut:
         elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
             if ev.speaker == "atc":
                 who = self.persona(shift_key(ev.station, self.shift), "atc", manner=ev.controller or "atc", locale=locale)
-            else:
+                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev))
+            else:  # the other crews: this PC's voices unless asked (each line a cloud voice was credits spent on noise)
                 who = self.persona(f"chatter {ev.callsign}", "chatter", locale=locale)
-            await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev))
+                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), local=not self.chatter_cloud)
         elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
             await self.say(ev.text, self.persona("", "copilot"), "pilot", keep=clip_id(ev))
         elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
@@ -106,18 +108,20 @@ class VoiceOut:
         elif isinstance(ev, RadioTuned) and ev.controller != "atis":
             self._stop_atis()
 
-    async def say(self, text: str, who: Persona | str, kind: str, *, manner: str | None = None, keep: str = "") -> Clip | None:
+    async def say(self, text: str, who: Persona | str, kind: str, *, manner: str | None = None, keep: str = "",
+                  local: bool = False) -> Clip | None:
         """``who``: the person speaking (a voice key: a station). ``keep``: the id to keep the audio under, to be
-        played again (``dsp.clips``, when that's on)."""
+        played again (``dsp.clips``, when that's on). ``local``: only the voices on this PC."""
         async with self._lock:
-            clip = await asyncio.to_thread(self.render, text, who, kind, manner)
+            clip = await asyncio.to_thread(self.render, text, who, kind, manner, local)
             if clip is not None:
                 self.player.play(clip)
                 if keep and CLIPS.enabled:
                     await asyncio.to_thread(CLIPS.put, keep, clip.audio, clip.rate)
             return clip
 
-    def render(self, text: str, who: Persona | str, kind: str, manner: str | None = None) -> Clip | None:
+    def render(self, text: str, who: Persona | str, kind: str, manner: str | None = None,
+               local: bool = False) -> Clip | None:
         """The line as heard: speakable words, the person's voice from the first provider that can, then the radio
         (or the intercom). None when there's nothing to say or nobody could say it (text only)."""
         words = speakable(text)
@@ -126,7 +130,7 @@ class VoiceOut:
         if isinstance(who, str):
             role = "copilot" if kind in ("pilot", "intercom") else "atis" if kind == "atis" else "atc"
             who = self.persona(who, role, manner=manner or (kind if role == "atc" else ""))
-        speech = self.voices.speak(words, who)
+        speech = self.voices.speak(words, who, local=local)
         if speech is None:
             return None
         seed = zlib.crc32(words.encode())

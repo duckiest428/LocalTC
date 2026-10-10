@@ -78,7 +78,9 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
 )
 
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
-          "proceed", "vectors", "expect", "line", "takeoff", "monitor", "identify"}
+          "proceed", "vectors", "expect", "line", "takeoff", "monitor", "identify", "pushback", "push", "vacate", "cross"}
+# Instructions in more than one word ("copy, hold short runway 25R, pushback tail left" to a clearance request).
+BANNED_PHRASES = re.compile(r"hold(?:ing)? (?:short|position)|tail (?:left|right)|go around|give way")
 # The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
 INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
 NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
@@ -187,7 +189,7 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
         raise PhraseError("reply has no words")
     if len(text.split()) > MAX_WORDS:
         raise PhraseError(f"reply is longer than {MAX_WORDS} words")
-    if banned := sorted(set(words) & BANNED):
+    if banned := sorted(set(words) & BANNED) or [m.group(0) for m in BANNED_PHRASES.finditer(text.lower())]:
         raise PhraseError(f"reply gives an instruction ({', '.join(banned)}); only answer or say unable")
     if internal := sorted(set(words) & INTERNAL):
         raise PhraseError(f"reply talks about the prompt ({', '.join(internal)}); answer as a controller would")
@@ -211,8 +213,8 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
 
 
 def spoken(text: str) -> str:
-    """Numbers read digit by digit, as controllers say them."""
-    return NUMBER_RE.sub(lambda m: speech.digits(m.group(0)), text)
+    """Numbers read digit by digit, as controllers say them (a runway, a flight level, a procedure as they're said)."""
+    return spoken_as(text, [])
 
 
 def more_lines(more: dict[str, str] | None) -> str:
@@ -357,9 +359,12 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     limit = max(MAX_WORDS, len(scripted.split()) + 8)
     if len(text.split()) > limit:
         raise PhraseError(f"reply is longer than {limit} words")
-    if missing := sorted(numbers(scripted) - numbers(text)):
+    # (The script's numbers in words too, "expect FL330 two six minutes after departure": the model keeping them was
+    # turned away for adding 26.)
+    scripted_numbers = numbers(digits_from_words(scripted))
+    if missing := sorted(scripted_numbers - numbers(text)):
         raise PhraseError(f"reply leaves out {', '.join(missing)}; keep every number")
-    if added := sorted(numbers(text) - numbers(scripted)):
+    if added := sorted(numbers(text) - scripted_numbers):
         raise PhraseError(f"reply adds {', '.join(added)}, which the controller didn't say")
     for level in re.findall(r"\bFL\s?(\d{2,3})\b", scripted):
         if not re.search(rf"\b(?:fl\s?|flight level\s+){level}\b", got):  # "240" alone is 240 feet
@@ -404,13 +409,22 @@ def spoken_as(text: str, pairs: list[tuple[str, str]]) -> str:
             forms.setdefault(THOUSANDS_RE.sub("", display), said)
     alternatives = [re.escape(d) for d in sorted(forms, key=len, reverse=True)]
     runway = r"\b\d{1,2}[LRC]\b"  # "25R": "two five right", not "two five" and a letter
-    pattern = re.compile(r"(?<![\w.])(?:" + "|".join(alternatives) + r")(?![\w])|" + runway + r"|\d+(?:[.,]\d+)*"
-                         if alternatives else runway + r"|\d+(?:[.,]\d+)*")
+    # "FL330": "flight level three three zero"; "OSHNN1", "LAZE1A": a procedure, "oshnn one" (not "OSHNNone").
+    named = r"\bFL ?\d{2,3}\b|\b[A-Z]{2,6}\d[A-Z]?\b|"
+    number = r"(?<![A-Za-z])\d+(?:,\d{3})*(?:\.\d+)?"
+    pattern = re.compile(r"(?<![\w.])(?:" + "|".join(alternatives) + r")(?![\w])|" + named + runway + "|" + number
+                         if alternatives else named + runway + "|" + number)
 
     def say(m: re.Match) -> str:
         found = m.group(0)
         if found in forms:
             return forms[found]
+        if found.startswith("FL") and found[2:].strip().isdigit():
+            return "flight level " + speech.digits(found[2:].strip())
+        if found[:1].isalpha():
+            return speech.procedure(found)
+        if re.fullmatch(r"\d{1,2},\d00", found):  # "8,000": "eight thousand", as an altitude is said
+            return speech.altitude(int(found.replace(",", "")))
         if re.fullmatch(r"\d{1,2}[LRC]", found):
             return speech.runway(found)
         if re.fullmatch(r"(?:2[89]|3[01])\.\d\d", found):  # an altimeter setting: "two niner eight four"

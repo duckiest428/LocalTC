@@ -10,26 +10,15 @@ few seconds instead of jumping.
 import math
 from dataclasses import dataclass, field
 
+from localtc.sim_api.geo import advance
+
 M_PER_NM = 1852.0
 M_PER_DEG = 111_320.0
-KT_TO_MPS = M_PER_NM / 3600.0
-HORIZON_S = 20.0  # carried on this long past its last update at most, then held where it got to
+HORIZON_S = 60.0  # carried on this long past its last update at most, then held where it got to (a few missed
+# reports must never stop one in mid-air)
 # How often it's written to the sim, by its distance from the user: close by every frame or so, far away a few times
 # a minute is plenty.
 RATES = ((3.0, 1 / 30), (10.0, 1 / 10), (30.0, 1 / 2), (math.inf, 2.0))
-
-
-def advance(lat: float, lon: float, hdg: float, gs_kt: float, turn_dps: float, dt: float) -> tuple[float, float, float]:
-    """Where an aircraft at ``lat, lon`` heading ``hdg`` is ``dt`` seconds on, turning steadily."""
-    steps = max(1, int(abs(dt)))
-    step = dt / steps
-    for _ in range(steps):
-        mid = math.radians(hdg + turn_dps * step / 2)
-        d = gs_kt * KT_TO_MPS * step
-        lat += d * math.cos(mid) / M_PER_DEG
-        lon += d * math.sin(mid) / (M_PER_DEG * max(0.01, math.cos(math.radians(lat))))
-        hdg = (hdg + turn_dps * step) % 360
-    return lat, lon, hdg
 
 
 def _wrap(a: float) -> float:

@@ -15,9 +15,9 @@ under (or again only after its cooldown), and a priority:
 design speeds; the flap and gear limits from the aircraft's profile.
 
 The copilot works its own side of the cockpit (``[crew] hands = "pm"``): the radios in standby on a handoff, the
-transponder code, the altimeter at the transition, the exterior lights, the gear on positive rate and the flaps on
-schedule after takeoff, the selected altitude and heading as cleared, the after-landing flow. The captain's side
-(parking brake, engines, thrust, the speedbrake lever, the autopilot, the flaps for takeoff and landing) it never
+transponder code, the altimeter at the transition, the gear on positive rate and the flaps on schedule after
+takeoff, the selected altitude and heading as cleared, the flaps up after landing. The captain's side (parking brake,
+engines, thrust, the speedbrake lever, the autopilot, the exterior lights, the flaps for takeoff and landing) it never
 touches: it notices when something there is missed and says so in a word ("Spoilers, your side."); asked to, it says
 "Your side." (crew.actions PILOT_SIDE). With ``hands = "calls"`` it touches nothing at all and only says.
 
@@ -481,28 +481,12 @@ class Monitor(WatchMixin):
                 if parts:
                     self._call("clearance_set", ROUTINE, t, f"{', '.join(parts).capitalize()} set." if self.hands
                                else f"Don't forget {' and '.join(parts)}.", commands=tuple(cmds))
-            elif iid.startswith("ground.pushback"):
-                self._lights(t, "push", beacon=True, said="Beacon on.")
-            elif iid.startswith("ground.taxi_out") or iid == "ground.taxi_out_hold_short":
-                self._lights(t, "taxi", taxi=True, said="Taxi light on.")
             elif iid in ("tower.luaw", "tower.takeoff", "tower.takeoff_rnav", "tower.takeoff_sid"):
-                self._lights(t, "lineup", strobe=True, landing=True, said="Strobes and landing lights on.")
                 own = self.c.own
                 if own is not None and own.xpdr_mode not in ("alt",):
                     self._call("tara", ROUTINE, t + 2, "Transponder to TA/RA.")
             elif iid.startswith("approach.cleared") or iid == "approach.intercept_cleared":
                 self.f.said.setdefault("approach_cleared_t", t)
-
-    def _lights(self, t: float, key: str, *, said: str, **want: bool) -> None:
-        """The exterior lights for the moment, by the copilot's hand; where it can't reach them, they're the pilot's
-        and it says nothing (asking about each light was a running commentary)."""
-        s = self.c.systems
-        if s is None or not self.hands:
-            return
-        cmds = tuple(Command("light", "on" if on else "off", name) for name, on in want.items()
-                     if getattr(s, f"light_{name}") != on)
-        if cmds:
-            self._call(f"lights:{key}", ROUTINE, t, said, commands=cmds)
 
     # --- phases ------------------------------------------------------------------------------------------------
 
@@ -857,12 +841,11 @@ class Monitor(WatchMixin):
         # Ten thousand, the transition, the speed limit.
         region = self._region()
         if prev_alt < STERILE_FT <= alt and own.vs_fpm > 0:
-            self._call("10k_climb", ROUTINE, t, "Ten thousand." + (" Landing lights off." if self.hands else " Landing lights off?"),
-                       commands=(Command("light", "off", "landing"),) if s is not None and s.light_landing else ())
+            # The lights are the pilot's: a word when they're still on, nothing more.
+            self._call("10k_climb", ROUTINE, t, "Ten thousand." + (" Landing lights off?" if s is not None and s.light_landing else ""))
         if prev_alt > STERILE_FT >= alt and own.vs_fpm < 0:
-            on = s is not None and not s.light_landing
-            self._call("10k_descent", ROUTINE, t, "Ten thousand." + (" Landing lights on." if self.hands and on else "")
-                       + " Seatbelt sign on for the cabin?", commands=(Command("light", "on", "landing"),) if on else ())
+            lights = " Landing lights?" if s is not None and not s.light_landing else ""
+            self._call("10k_descent", ROUTINE, t, f"Ten thousand.{lights} Seatbelt sign on for the cabin?")
         ta = region.transition_ft
         if prev_alt < ta <= alt and own.vs_fpm > 0:
             std = abs(own.altimeter_inhg - 29.92) < 0.015
@@ -1043,14 +1026,8 @@ class Monitor(WatchMixin):
         cmds = []
         if own is not None and self.c.flaps_index:
             cmds.append(Command("flaps", "up"))
-        if s is not None and s.light_strobe:
-            cmds.append(Command("light", "off", "strobe"))
-        if s is not None and s.light_landing:
-            cmds.append(Command("light", "off", "landing"))
-        done = [w for c, w in ((Command("flaps", "up"), "flaps up"), (Command("light", "off", "strobe"), "strobes off"),
-                               (Command("light", "off", "landing"), "landing lights off")) if c in cmds]
         if self.hands and cmds:
-            text = "Clear of the runway. " + (", ".join(done).capitalize() + "." if done else "After landing flow done.")
+            text = "Clear of the runway. Flaps up."
         else:
             text = "Clear of the runway."
         if s is not None and s.spoilers_armed:  # the speedbrake lever is the pilot's side: a word, not a hand
@@ -1064,8 +1041,6 @@ class Monitor(WatchMixin):
             return
         if not self._said("summary"):
             self._call("summary", ROUTINE, t, self._summary(own), urgent=arrived)
-        if s is not None and s.engines_running == 0 and s.light_beacon:
-            self._call("beacon_off", ROUTINE, t, "Beacon off.", commands=(Command("light", "off", "beacon"),))
         if s is not None and s.engines_running == 0 and not own.parking_brake:
             self._call("park_brake", ROUTINE, t, "Parking brake?")
         if s is not None and s.engines_running == 0:

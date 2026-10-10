@@ -250,15 +250,15 @@ class CloudConfig(_Section):
 class TrafficConfig(_Section):
     """LocalTC's traffic (localtc.traffic): the real flights around, live from free ADS-B sources, flown in the sim
     with FSLTL's models when FSLTL is installed; the gates filled as busy as the airport is at that hour; the traffic
-    answering to ATC (sent around or held short when the user has the runway). Off unless turned on, and then MSFS's
-    own air traffic should be off (Options > General > Traffic), or both fly."""
+    answering to ATC (sent around or held short when the user has the runway, giving way on the ground). EXPERIMENTAL.
+    Off unless turned on, and then MSFS's own air traffic should be off (Options > General > Traffic), or both fly."""
 
     enabled: bool = False
     radius_nm: float = 40.0  # the real flights within this of the user
-    max_live: int = 40  # never more of them at once (the nearest)
+    max_live: int = 30  # never more of them at once (the nearest)
     parked: bool = True  # aircraft parked at the gates of the airport the user is at or going to
-    max_parked: int = 80
-    atc_control: bool = True  # real flights sent around or held short when the user has the runway
+    max_parked: int = 40  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
+    atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
     # The experiment this replaced (shadowing and putting back MSFS's own): still read from old settings, not used.
     control: str = ""
     max_reinjected: int = 0
@@ -313,6 +313,7 @@ class TtsConfig(_Section):
     static: float = 0.35  # 0-1: hiss and squelch under the voice
     atis: bool = True  # read the ATIS aloud while it's tuned
     copilot: bool = True  # the copilot's calls are spoken too (in a different voice)
+    chatter_cloud: bool = False  # the other flights' pilots in a cloud voice too; off: the voices on this PC (no credits)
 
 
 class CopilotConfig(_Section):

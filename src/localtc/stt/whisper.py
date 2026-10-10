@@ -21,6 +21,10 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
+# The most a call can say: a few words a second (a fast radio call is 4), and room for the callsign. (The prompt and
+# these together stay inside Whisper's 448.)
+TOKENS_BASE, TOKENS_PER_S, TOKENS_MAX = 24, 8, 200
+TEMPERATURES = (0.0, 0.3, 0.6)
 MODELS = ("tiny.en", "base.en", "small.en", "medium.en", "large-v3", "distil-large-v3")
 
 
@@ -137,6 +141,7 @@ class WhisperTranscriber:
         """``audio``: mono float32 samples at 16 kHz."""
         self.load()
         started = time.monotonic()
+        seconds = len(audio) / SAMPLE_RATE
         segments, _info = self._model.transcribe(
             audio,
             language="en",
@@ -144,6 +149,10 @@ class WhisperTranscriber:
             initial_prompt=prompt or None,
             hotwords=hotwords or None,
             condition_on_previous_text=False,
+            # Never more words than the audio could hold, and a garbled try retried twice at most: 0.8 s of noise came
+            # back as "A,B4, A5, A7, ..." sixty times over, after 28 s of retries.
+            max_new_tokens=min(TOKENS_MAX, int(TOKENS_BASE + TOKENS_PER_S * seconds)),
+            temperature=TEMPERATURES,
             without_timestamps=True,
             vad_filter=False,  # push-to-talk already marks the speech
         )

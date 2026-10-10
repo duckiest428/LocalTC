@@ -11,6 +11,7 @@ The intercom key (``radio`` 0) works the same with the same microphone and model
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -28,6 +29,7 @@ NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignor
 # Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
 # key pressed for a shortcut, at 0.17-0.34): heard as nothing.
 GUESSED_CONFIDENCE, GUESSED_MAX_S = 0.35, 3.0
+WORDS_PER_S = 6.0  # more words a second than this: made up
 INTERCOM = 0  # the "radio" of the intercom key: the copilot, not a COM radio
 # What Whisper is primed with on the intercom: the words a pilot says to the copilot.
 CREW_STYLE = (
@@ -37,6 +39,16 @@ CREW_STYLE = (
     "Tune 121.9. Set standby 118.7. Altimeter 29.92. Standard. Parking brake set. Confirm. Negative. Cancel. "
     "How do you hear me? Check. Set. Before start checklist. Your radios. My radios."
 )
+
+
+
+def made_up(text: str, audio_s: float) -> bool:
+    """Words Whisper made up: more than anyone says in that long (a fast call is 4 words a second), or a few words
+    over and over ("A7, B7, A7, A9, B2, A7, ..." from 0.8 s of noise)."""
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    if len(words) > WORDS_PER_S * audio_s + 6:
+        return True
+    return len(words) >= 16 and len(set(words)) < len(words) / 4
 
 
 class VoiceService:
@@ -147,6 +159,9 @@ class VoiceService:
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
         if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:
             log.info("Dropped %r: confidence %.2f on %.1f s of audio, made up from noise", text, result.confidence, audio_s)
+            text = ""
+        elif text and made_up(text, audio_s):
+            log.info("Dropped %r: more words than %.1f s of audio holds, or the same few over and over", text[:80], audio_s)
             text = ""
         log.info("Heard %r in %.1f s of audio (%.1f s with speech, %.0f ms, confidence %.2f)", text, audio_s,
                  result.audio_s, result.latency_ms, result.confidence)

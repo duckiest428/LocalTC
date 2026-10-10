@@ -797,7 +797,8 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
     sex = {"female": "F", "male": "M"}.get(cfg.crew.voice_sex, "")
     service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
                        crew_speaker=copilot_voice, crew_sex=sex, crew_pick=cfg.crew.voice_pick,
-                       shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional)
+                       shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional,
+                       chatter_cloud=t.chatter_cloud)
     return VoiceOutput(service, player)
 
 

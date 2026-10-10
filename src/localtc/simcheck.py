@@ -359,7 +359,7 @@ async def check_hands(probe: Probe, *, autopilot: bool = False, only: tuple[str,
             continue
         if not skip and cmd.action in probe.cockpit.profile.cannot:
             skip = "the profile leaves it to the pilot (cannot)"
-        if not skip and cmd.action in actions.PILOT_SIDE:
+        if not skip and cmd.action in actions.PILOT_SIDE - {"light"}:  # (the lights: harmless, and put back)
             skip = "the pilot's side: the copilot leaves it to the pilot"
         if skip:
             report.add(Step(name, "skip", skip))

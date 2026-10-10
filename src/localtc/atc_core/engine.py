@@ -1237,7 +1237,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         elev = geo.airport.elev_ft if geo is not None else 0.0
         iid, slots = {
             "go_around": ("tower.go_around_traffic", {"altitude": int(round((elev + 3000) / 100) * 100)}),
-            "hold_short": ("tower.hold_short_traffic", {"hold_short": runway, "message": "landing traffic"}),
+            "hold_short": ("tower.hold_short_traffic", {"hold_short": runway,
+                                                       "message": Phrase("traffic landing", "traffic landing")}),
             "takeoff": ("tower.takeoff", {"runway": runway}),
         }[kind]
         slots = {**slots, "callsign": callsign}
@@ -2417,9 +2418,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
             st.pending = replace(st.pending, attempts=st.pending.attempts + 1)
             if st.pending.attempts >= MAX_READBACK_ATTEMPTS:
                 return out + self._give_up_readback(facility, t)
-        if self._model_replies():
+        garbled = interp.kind == "unknown" and interp.source == "llm" and ev.confidence is not None             and ev.confidence < CONVERSE_CONFIDENCE
+        if self._model_replies() and not garbled:
             # The model's modes: a call nothing could classify ("would you like a coffee after your shift?", "that's not
-            # parallel, you'd need both 28s", a garbled readback) still gets the model's reply, not the script's.
+            # parallel, you'd need both 28s", a garbled readback) still gets the model's reply, not the script's. One the
+            # model couldn't make out either, from words speech-to-text wasn't sure of: "say again" (it got "copy").
             return out + self._phrase(interp, facility, t, "reply", otherwise=self._unplaced_fallback(ev, pending))
         if self._patient and pending is None and len(ev.text.split()) >= LONG_STATEMENT_WORDS:
             # Gave the model its time, and still nothing to act on: a long call in the pilot's

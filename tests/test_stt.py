@@ -361,3 +361,14 @@ def test_replays_use_the_recorded_flight_settings():
     recording = Recording(FIXTURES / "voice_kpae")
     cfg = with_recorded(Config(), recording.header.config)
     assert (cfg.flight.destination, cfg.flight.callsign, cfg.atc.seed) == ("KBFI", "", 7)
+
+
+def test_words_whisper_made_up_are_dropped():
+    from localtc.stt.service import made_up
+
+    noise = ("The Air Portugal Command Zone Opener, A,B4, A5, A7, B7, A7, A9, B2, A7, A6, B8, A7, B8, B7, A7, A7, A6, B6, "
+             "B8, B7, B7, A6, B8, B7, A9, B9, A8, B7, A7, A6, B8, B7, A7, A7, A7, A9")
+    assert made_up(noise, 0.8)  # from 0.8 s of noise
+    assert not made_up("Air Portugal 248 request clearance to Lisbon airport as filed.", 4.0)
+    assert not made_up("Clear to Lisbon via the OSHNN1 departure, climb maintain 8,000, expect 330 26 minutes after "
+                       "departure, departure frequency 125.2, squawk 1041, Air Portugal 248.", 11.0)

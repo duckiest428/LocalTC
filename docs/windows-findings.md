@@ -4,6 +4,22 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-10: a whole flight with LocalTC's traffic on (KLAX, Headwind A330-900neo)
+- Live traffic plus 80 parked FSLTL aircraft at KLAX: frames dropped, liveries came in late, and the GPU driver crashed
+  later in the flight (with the copilot's radios just switched to full). Now 40 parked at most by default, two made a
+  second, nearest first, and ten models at most for an airport's parked aircraft (each model's textures are memory).
+- New airborne aircraft appeared and then slid quickly somewhere else: the sim flies a non-ATC aircraft on its own
+  until it's frozen, which waited for the traffic's first word. The bridge now freezes it the moment the sim assigns
+  its object id, where it was made. The two sources' answers were timed by this PC's clock: now by each source's own
+  "now" (a source's answer can be a few seconds old), and a correction is eased over 3-20 s by its size.
+- Tower holding a departure short raised (a text slot where a Phrase is needed), and the traffic stopped ticking
+  for the rest of the flight. Four held departures were then cleared together, two "07R"/"07L" (the runway end
+  nearest to where each waited, the opposite way): now one at a time, 90 s apart, the end the user was given.
+- The Headwind A330's GEAR HANDLE POSITION showed GEAR_UP 4 s later, the gear moving after that: the copilot's
+  check said it didn't take. The gear's check waits 10 s and counts the gear moving.
+- Open: the traffic over a whole flight again (frames, the new spawns, the ground give-way), and the FSLabs squawk with
+  the aircraft powered.
+
 ## 2026-10-09: LocalTC's traffic (live ADS-B, FSLTL) at KORD and KPHX
 - A non-ATC aircraft (`AICreateNonATCAircraft_EX1`, an FSLTL title, livery "") frozen with FREEZE_LATITUDE_LONGITUDE_SET,
   FREEZE_ALTITUDE_SET and FREEZE_ATTITUDE_SET (value 1, to its object id) stays exactly where `SetDataOnSimObject`

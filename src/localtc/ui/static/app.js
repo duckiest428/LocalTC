@@ -1082,8 +1082,8 @@ const Settings = {
         <div class="master-row"><div><b>LocalTC's traffic</b>
           <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
             airline's FSLTL model, the gates fill as busy as the airport is at that hour, and they answer to ATC: sent around
-            or held short when you have the runway, and the gate you're given kept clear. <b>Turn MSFS's own air traffic off</b>
-            (Options &gt; General &gt; Traffic) or both fly. Off: MSFS's traffic as it is.
+            or held short when you have the runway, and the gate you're given kept clear. <b>Turn MSFS's own air traffic and
+            parked aircraft off</b> (Options &gt; General &gt; Traffic) or both are there. Off: MSFS's traffic as it is.
             <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></div></div>
           <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
         </div>

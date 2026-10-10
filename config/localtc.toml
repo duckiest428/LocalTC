@@ -87,7 +87,7 @@ local_fallback = false        # on: every service failing, the local model answe
 timeout_s = 6.0               # per call, every service tried in it
 
 [traffic]                     # LocalTC's traffic: the real flights around (free ADS-B), FSLTL's models, the gates filled, answering to ATC
-enabled = false               # on: set MSFS's own air traffic to off (Options > General > Traffic), or both fly
+enabled = false               # on: set MSFS's own air traffic and parked aircraft to off (Options > General > Traffic)
 radius_nm = 40.0              # the real flights within this of you
 max_live = 40                 # never more of them at once (the nearest)
 parked = true                 # aircraft parked at the gates of the airport you're at or going to, as many as at that hour

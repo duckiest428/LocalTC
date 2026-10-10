@@ -66,13 +66,16 @@ SHORT_FINAL_AGL = 2000.0
 RUNWAY_NEAR_M = 120.0
 HELD_RELEASE_S = 20.0  # the user off the runway this long: the held departure goes
 LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this long at most, then taken away
-QUIET_S = 10.0  # an arrival on final not heard from this long (low, out of the receivers' sight): LocalTC lands it
+QUIET_S = 20.0  # an arrival on final not heard from this long (low, out of the receivers' sight): LocalTC lands it
 FINAL_NM = 15.0
 GLIDE = math.tan(math.radians(3.0))
 EXTRAPOLATE_S = 20.0  # carried on past its last position this long at most (as the bridge does)
 NATIVE_NOTE = ("MSFS's own traffic is on as well: set its air traffic to off (Options > General > Traffic) so only "
                "LocalTC's flies, or two of each will be about.")
 NO_FEED_NOTE = "No live positions: no internet, or the free sources are busy. Trying again."
+PARKED_NOTE = ("MSFS's own parked aircraft are on: set them to off as well (Options > General > Traffic, parked or "
+               "static aircraft) so LocalTC fills the gates with the airlines that fly here.")
+NATIVE_PARKED = 6  # this many of the sim's own standing about: its parked aircraft are on
 # How full an airport's gates are, by the hour (local): overnight nearly all aircraft are home; through the day
 # a third or more are out flying.
 BY_HOUR = (0.92, 0.93, 0.93, 0.92, 0.9, 0.85, 0.75, 0.62, 0.58, 0.6, 0.62, 0.62, 0.6, 0.58, 0.6, 0.6, 0.58, 0.58,
@@ -266,7 +269,8 @@ class TrafficManager:
     def status(self, now: float) -> TrafficControlStatus:
         live = sum(1 for p in self.planes.values() if p.live and p.object_id is not None and p.mode != "parked")
         parked = sum(1 for p in self.planes.values() if p.object_id is not None and p.mode == "parked")
-        note = NATIVE_NOTE if self.native > 2 else NO_FEED_NOTE if not self.feed_ok else ""
+        note = NATIVE_NOTE if self.native > 2 else PARKED_NOTE if len(self.native_spots) >= NATIVE_PARKED \
+            else NO_FEED_NOTE if not self.feed_ok else ""
         return TrafficControlStatus(t=self.own.t if self.own else 0.0, mode="on" if self.on else "off", source=self.source,
                                     live=live, parked=parked, native=self.native, fsltl=self.picker.fsltl, note=note,
                                     recent=tuple(reversed(self.recent)))

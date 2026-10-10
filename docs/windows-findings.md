@@ -4,6 +4,23 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-09: LocalTC's traffic (live ADS-B, FSLTL) at KORD and KPHX
+- A non-ATC aircraft (`AICreateNonATCAircraft_EX1`, an FSLTL title, livery "") frozen with FREEZE_LATITUDE_LONGITUDE_SET,
+  FREEZE_ALTITUDE_SET and FREEZE_ATTITUDE_SET (value 1, to its object id) stays exactly where `SetDataOnSimObject`
+  puts it (PLANE LATITUDE/LONGITUDE/ALTITUDE, PITCH, BANK, HEADING TRUE): moved 59.5 m in 6 s at 20 Hz, still there 3 s
+  later. On the ground its height is GROUND ALTITUDE + STATIC CG TO GROUND read from it (652.3 + 12.5 ft at KORD).
+- adsb.lol (and adsb.fi, its fallback) answered about 100 aircraft within 40-50 nm of KORD; adsbdb.com has routes by
+  callsign and types by hex. adsb.lol said 429 when asked every 5 s on top of test runs: the sources now take turns
+  and a busy one is left for 90 s. airplanes.live answered 403 from this PC.
+- `debug traffic --live` at KORD: 24-32 real flights and 23 parked (FSLTL), all taken away at the end. The sim shows
+  each within a few metres of where the bridge puts it; the bridge is about 200 m (5-7 s) behind the real flight,
+  the corrections eased. Arrivals low on final drop out of the receivers' sight: LocalTC lands them.
+- In the app at KPHX with MSFS's air traffic off: 76 parked, the moving traffic "looked excellent". MSFS's own static
+  parked aircraft ("Asobo PassiveAircraft", 32 at KPHX, state SLEEP) are a separate setting: still there with air
+  traffic off, and LocalTC can't remove them; it now says to turn them off too.
+- Open: a whole flight with it on (the go-arounds and holds when the user has the runway, the user's gate kept
+  clear), and the FSLabs squawk with the aircraft powered.
+
 ## 2026-10-09: SimConnect without the SDK (LocalTC's own client)
 - The SDK's DLL was run through a logging TCP proxy (SimConnect.cfg pointing it at 127.0.0.1:5599, relayed to the
   sim's port 500) to see its packets: a 16-byte header (size, protocol 6, 0xF0000000 + the call's number, a running

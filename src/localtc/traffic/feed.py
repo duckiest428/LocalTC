@@ -27,6 +27,7 @@ ROUTE_TTL_S = 20 * 3600.0  # a flight number flies the same route all day
 UNKNOWN_TTL_S = 3 * 3600.0
 STALE_S = 30.0  # a position older than this isn't used
 USER_AGENT = "LocalTC (https://localtc.tech)"
+BUSY_S = 90.0  # a source that says it's busy (HTTP 429) is left alone this long
 
 
 @dataclass(frozen=True)
@@ -85,23 +86,38 @@ def _get(url: str, timeout_s: float = TIMEOUT_S, data: bytes | None = None) -> d
 
 
 class LiveFeed:
-    """The aircraft within ``nm`` of a point, from the first source that answers."""
+    """The aircraft within ``nm`` of a point. The sources take turns (each asked half as often), and one that says
+    it's busy is left alone for a while."""
 
-    def __init__(self, fetch=_get) -> None:
-        self._fetch = fetch
+    def __init__(self, fetch=_get, clock=time.monotonic) -> None:
+        self._fetch, self._clock = fetch, clock
         self.source = ""
         self.failures = 0
+        self._turn = 0
+        self._busy_until: dict[str, float] = {}
 
     def around(self, lat: float, lon: float, nm: float) -> list[Flight] | None:
         """The flights now, or None when no source answered (no internet, all busy)."""
         nm = min(max(nm, 5.0), MAX_NM)
-        for name, url in SOURCES:
+        now = self._clock()
+        order = SOURCES[self._turn % len(SOURCES):] + SOURCES[:self._turn % len(SOURCES)]
+        self._turn += 1
+        for name, url in sorted(order, key=lambda s: self._busy_until.get(s[0], 0.0) > now):
+            if self._busy_until.get(name, 0.0) > now:
+                continue
             try:
                 flights = parse(self._fetch(url.format(lat=lat, lon=lon, nm=nm)))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429:
+                    self._busy_until[name] = now + BUSY_S
+                    log.info("Traffic: %s is busy, asking the others for %.0f s", name, BUSY_S)
+                else:
+                    log.info("Traffic: %s didn't answer (%s)", name, exc)
+                continue
             except (OSError, ValueError, urllib.error.URLError) as exc:
                 log.info("Traffic: %s didn't answer (%s)", name, exc)
                 continue
-            if self.source != name:
+            if not self.source:
                 log.info("Traffic: live positions from %s", name)
             self.source, self.failures = name, 0
             return flights

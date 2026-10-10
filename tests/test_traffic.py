@@ -320,3 +320,33 @@ def test_switched_off_everything_of_localtcs_goes_and_the_sims_own_traffic_is_no
     out = m.set_on(False)
     assert {c.object_id for c in of(RemoveAiAircraft, out)} == ours and not m.planes
     assert m.tick(NOW + 10) == []
+
+
+def test_a_busy_source_is_left_alone_and_the_sources_take_turns():
+    import urllib.error
+
+    asked = []
+    clock = [0.0]
+
+    def fetch(url):
+        asked.append(url.split("/")[2])
+        if "adsb.lol" in url:
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", {}, None)
+        return {"ac": []}
+
+    feed = LiveFeed(fetch, clock=lambda: clock[0])
+    for _ in range(4):
+        assert feed.around(1.0, 2.0, 40) == []
+    assert asked == ["api.adsb.lol", "opendata.adsb.fi", "opendata.adsb.fi", "opendata.adsb.fi", "opendata.adsb.fi"]
+    clock[0] = 200.0  # long after: asked again in its turn
+    feed.around(1.0, 2.0, 40)
+    feed.around(1.0, 2.0, 40)
+    assert "api.adsb.lol" in asked[5:]
+
+
+def test_the_sims_own_parked_aircraft_are_noticed():
+    m = manager()
+    m.on_snapshot(TrafficSnapshot(t=0.0, targets=tuple(
+        TrafficTarget(object_id=9000 + i, lat=0.006, lon=0.0, alt_ft=100, hdg_true=0, gs_kt=0, on_ground=True)
+        for i in range(8))))
+    assert "parked aircraft" in m.status(NOW).note

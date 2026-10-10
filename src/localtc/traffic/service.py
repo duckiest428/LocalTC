@@ -23,7 +23,7 @@ from localtc.traffic.manager import TrafficManager
 
 log = logging.getLogger(__name__)
 
-FEED_EVERY_S = 5.0  # the live positions asked for this often (the free sources' fair use)
+FEED_EVERY_S = 6.0  # the live positions asked for this often (the free sources' fair use)
 FEED_SLOWER_S = 30.0  # ... and this often while none answers
 TICK_S = 1.0
 

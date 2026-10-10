@@ -42,7 +42,7 @@ a new minor version adds features, a patch fixes them.
 - **"Stop immediately"**: on the takeoff roll, still below 80 knots, with an aircraft about to be on the runway ahead, tower stops you.
 
 ### Changed
-- **The other flights' pilots on the frequency speak in the voices on this PC** (Kokoro or Piper), so the cloud voice's characters go on ATC and the copilot, not on chatter. A setting (Settings → Voice: "Other pilots on the frequency in this PC's voices", on by default) puts them back in the cloud voice.
+- **The other flights' pilots on the frequency speak in the voices on this PC** (Kokoro or Piper), so the cloud voice's characters go on ATC and the copilot, not on chatter. A setting under the Azure key (Kokoro and Azure: "Other pilots on the frequency in this PC's voices", on by default) puts them back in the cloud voice.
 - **Numbers are put into words before any voice speaks them** (frequencies digit by digit, "niner", runways, flight levels, callsigns and taxiway letters in the phonetic alphabet), the same for every voice, so none reads "119.2" or "FL350" its own way.
 - **A voice failing never stops ATC**: a line no voice could speak stays text, and the next is spoken.
 - **The copilot talks less, and only when it should.** No more prompts for the briefings and the clearance after you've said "later" (or "not now", "quiet"): its suggestions wait a quarter of an hour, while the callouts and warnings carry on. No ATIS read out unasked (it still sets its side of the altimeter), no "they're waiting for a readback", no "autopilot's available", no lights asked about one by one. A "check", "roger" or "yep" gets no reply.

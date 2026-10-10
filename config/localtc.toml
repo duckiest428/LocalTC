@@ -86,10 +86,13 @@ copilot = true                # the copilot asks the cloud too (its own connecti
 local_fallback = false        # on: every service failing, the local model answers
 timeout_s = 6.0               # per call, every service tried in it
 
-[traffic]                     # EXPERIMENTAL: LocalTC and MSFS's Live Traffic (off by default)
-control = "off"               # off | shadow (follow and check every aircraft, never touch them) | reinject (also put back what MSFS drops nearby)
-max_reinjected = 8            # never more of LocalTC's own copies at once
-radius_nm = 25.0              # within this of you
+[traffic]                     # LocalTC's traffic: the real flights around (free ADS-B), FSLTL's models, the gates filled, answering to ATC
+enabled = false               # on: set MSFS's own air traffic to off (Options > General > Traffic), or both fly
+radius_nm = 40.0              # the real flights within this of you
+max_live = 40                 # never more of them at once (the nearest)
+parked = true                 # aircraft parked at the gates of the airport you're at or going to, as many as at that hour
+max_parked = 80
+atc_control = true            # real flights sent around or held short when you have the runway
 
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false

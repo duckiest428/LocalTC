@@ -1212,6 +1212,51 @@ class AtcEngine(VfrMixin, DiversionMixin):
             out += self._ambient(own)
         return out
 
+    # --- LocalTC's traffic (localtc.traffic) ----------------------------------------------------------------------
+
+    def assigned_gate_position(self) -> tuple[float, float] | None:
+        """Where the gate ground gave this flight is (the traffic keeps it clear), or None."""
+        a, dest = self.state.assignments, self.state.flight.destination
+        geo = self.geometry(dest)
+        if a.gate_index is None or geo is None:
+            return None
+        gate = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
+        return (gate.spot.lat, gate.spot.lon) if gate is not None else None
+
+    def traffic_call(self, ident: str, kind: str, icao: str, runway: str, t: float) -> list[BusEvent]:
+        """Tower telling one of the real flights (LocalTC's traffic) what it does because of this one: "go_around",
+        "hold_short" (for landing traffic) or "takeoff", and its readback. Heard only on that airport's tower, when
+        it's the frequency tuned and nothing else is being said."""
+        facility = self.state.comms.tuned
+        if facility is None or facility.controller != "tower" or (facility.airport or "").upper() != icao.upper():
+            return []
+        callsign = Callsign.named(ident)
+        if not callsign.ident:
+            return []
+        geo = self.geometry(icao)
+        elev = geo.airport.elev_ft if geo is not None else 0.0
+        iid, slots = {
+            "go_around": ("tower.go_around_traffic", {"altitude": int(round((elev + 3000) / 100) * 100)}),
+            "hold_short": ("tower.hold_short_traffic", {"hold_short": runway, "message": "landing traffic"}),
+            "takeoff": ("tower.takeoff", {"runway": runway}),
+        }[kind]
+        slots = {**slots, "callsign": callsign}
+        shown = callsign.telephony + " " + callsign.flight_number if callsign.is_airline else callsign.ident
+        atc = self.library.render(iid, slots, rng=random.Random(zlib.crc32(f"{ident}{kind}".encode())))
+        at = max(t, self._radio_busy_until)
+        out: list[BusEvent] = [RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz,
+                                            speaker="atc", callsign=shown, text=atc.text, spoken=atc.spoken,
+                                            controller=facility.controller, locale=self._locale(facility))]
+        at += self._speech_s(atc.spoken) + CHATTER_TURN_S
+        if self.library.get(iid).pilot_readback:
+            spoken = self.library.pilot_readback(iid, slots)
+            out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker="pilot",
+                                    callsign=shown, text=spoken[:1].upper() + spoken[1:], spoken=spoken,
+                                    controller=facility.controller, locale=self._locale(facility)))
+            at += self._speech_s(spoken) + CHATTER_TURN_S
+        self._radio_busy_until = max(self._radio_busy_until, at)
+        return out
+
     def _ambient(self, own: OwnshipState) -> list[BusEvent]:
         """The rest of the frequency (atc_core/chatter.py): now and then, when it's quiet, the controller and
         some other flight. Never while the pilot owes a readback, has just spoken or is about to be answered."""

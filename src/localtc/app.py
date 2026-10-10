@@ -145,24 +145,69 @@ async def cloud_model(cfg: Config, source: SimSource):
     return CloudBackend(found, fallback=local)
 
 
-def traffic_control(cfg: Config, engine, source: SimSource, bus, *, live: bool):
-    """EXPERIMENTAL traffic control: the shadows of the sim's traffic, and (reinject) LocalTC's copies, which fly
-    to this flight's airports with the runway its ATIS has in use."""
-    from localtc.traffic.control import TrafficControl
-    from localtc.traffic.service import TrafficControlService
+LANDING_NEAR_NM = 4.0  # cleared to land and this close: the user has the runway (departures wait)
 
-    def runway_for(icao: str) -> str | None:
-        info = engine.current_atis(icao) if engine is not None else None
-        return info.runway if info is not None else None
 
-    def airport_at(icao: str) -> tuple[float, float, float] | None:
-        geo = engine.geometry(icao) if engine is not None else None
-        return (geo.airport.lat, geo.airport.lon, geo.airport.elev_ft) if geo is not None else None
+def traffic_atc(engine) -> "AtcLink":
+    """What LocalTC's traffic needs from ATC: the runway the user has now, the gate ATC gave it, tower's words."""
+    from localtc.sim_api.geo import haversine_nm
+    from localtc.traffic.manager import AtcLink
 
-    control = TrafficControl(cfg.traffic.control, radius_nm=cfg.traffic.radius_nm, max_reinjected=cfg.traffic.max_reinjected,
-                             live=live, runway_for=runway_for, airport_at=airport_at, plan_dir=data_dir() / "traffic")
-    log.info("Traffic control (EXPERIMENTAL): %s%s", cfg.traffic.control, "" if live else ", watching only in a replay")
-    return TrafficControlService(control, bus, source)
+    def user_runway() -> tuple[str, str, str] | None:
+        st = engine.state
+        own, a, c = st.aircraft, st.assignments, st.clearances
+        if own is None:
+            return None
+        if not own.on_ground:
+            dest = st.flight.destination
+            geo = engine.geometry(dest)
+            end = geo.end(a.arrival_runway) if geo is not None and a.arrival_runway else None
+            if "landing" in c and end is not None:
+                lat, lon = geo.frame.to_latlon(*end.threshold)
+                if haversine_nm(own.lat, own.lon, lat, lon) <= LANDING_NEAR_NM:
+                    return dest, end.ident, "landing"
+            return None
+        for icao in (st.flight.origin, st.flight.destination):
+            geo = engine.geometry(icao)
+            if geo is None or geo.distance_nm(own.lat, own.lon) > 5:
+                continue
+            runway = geo.runway_at(own.lat, own.lon, 5.0)
+            if runway is not None:
+                end = runway.end_for_heading(own.hdg_true, 90) or runway.ends[0]
+                return icao, end.ident, "on"
+            if ("takeoff" in c or "line_up" in c) and a.departure_runway and icao == st.flight.origin:
+                return icao, a.departure_runway, "takeoff"
+        return None
+
+    def reserved() -> list[tuple[float, float]]:
+        out = []
+        if (gate := engine.assigned_gate_position()) is not None:
+            out.append(gate)
+        own = engine.state.aircraft
+        if own is not None and own.on_ground and own.gs_kt < 3:
+            out.append((own.lat, own.lon))
+        return out
+
+    def say(callsign: str, kind: str, icao: str, runway: str) -> list:
+        own = engine.state.aircraft
+        return engine.traffic_call(callsign, kind, icao, runway, own.t if own is not None else 0.0)
+
+    return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
+                   destination=lambda: engine.state.flight.destination or "")
+
+
+def start_traffic(cfg: Config, engine, source: SimSource, bus):
+    """LocalTC's traffic: the real flights around flown in the sim, the gates filled, answering to ATC."""
+    from localtc.traffic.manager import AtcLink, TrafficManager, TrafficSettings
+    from localtc.traffic.service import TrafficService
+
+    t = cfg.traffic
+    settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
+                               atc_control=t.atc_control and engine is not None)
+    manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
+    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, ATC %s)", t.radius_nm,
+             "on" if t.parked else "off", "on" if settings.atc_control else "off")
+    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json")
 
 
 def copilot_model(cfg: Config, backend):
@@ -353,7 +398,6 @@ async def run_session(
     the running session's controls (the app uses them) once everything has started.
     """
     record = cfg.recorder.enabled if record is None else record
-    cfg.live.traffic_identity = cfg.traffic.control != "off"  # only then is the sim asked who its traffic is
     source = make_source(cfg)
     session = await source.start()
     log.info("Source ready: %s %s %s", session.source_kind, session.sim_product, session.sim_version)
@@ -448,8 +492,8 @@ async def run_session(
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
-        if cfg.traffic.control != "off":  # EXPERIMENTAL: never built unless asked for
-            traffic = traffic_control(cfg, engine, source, bus, live=session.source_kind == "live")
+        if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
+            traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
             consumers.append(asyncio.create_task(traffic.run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
@@ -542,7 +586,7 @@ class LiveSession:
     speaker: "VoiceOutput | None" = None
     recording: Path | None = None
     crew: object | None = None  # crew.pm.PilotMonitoring
-    traffic: object | None = None  # traffic.service.TrafficControlService (EXPERIMENTAL; None when off)
+    traffic: object | None = None  # traffic.service.TrafficService (None when off)
 
     def now(self) -> float:
         return self.source.clock.now()

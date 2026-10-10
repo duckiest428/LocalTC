@@ -53,6 +53,7 @@ from localtc.sim_api import (
     SetSimVar,
     SpawnAiAircraft,
     TrafficIdentity,
+    TrafficControlStatus,
     TrafficSnapshot,
 )
 
@@ -389,8 +390,8 @@ def _seen(probe: Probe, object_id: int) -> bool:
     return bool(probe.snapshots) and any(t.object_id == object_id for t in probe.snapshots[-1].targets)
 
 
-async def check_traffic(probe: Probe, *, spawn: bool = True, title: str = "", enroute: tuple[str, str] | None = None,
-                        watch_s: float = 120.0, plan_dir: Path | None = None) -> Report:
+async def check_traffic(probe: Probe, *, spawn: bool = True, title: str = "", live: bool = False,
+                        watch_s: float = 120.0) -> Report:
     report = Report("traffic")
     if not await probe.ready():
         report.add(Step("connected", "fail", "no aircraft data from the sim in 30 s: is a flight loaded?"))
@@ -428,76 +429,106 @@ async def check_traffic(probe: Probe, *, spawn: bool = True, title: str = "", en
             report.add(Step("... removed", "pass" if gone else "fail", f"object {oid}"))
     elif spawn:
         report.add(Step("create a parked aircraft", "skip", "no model to create (the user aircraft's title unknown)"))
-    if enroute:
-        await _enroute(probe, report, model, enroute, watch_s, plan_dir)
+    if live:
+        await _live(probe, report, watch_s)
     return report
 
 
-async def _enroute(probe: Probe, report: Report, model: str, where: tuple[str, str], watch_s: float,
-                   plan_dir: Path | None) -> None:
-    """One aircraft out on the final of ``where`` (ICAO, runway) as traffic control puts an arrival back (20 nm out,
-    6,000 ft above the field, filed from an airport farther away, created at waypoint 2 at its speed): does the sim's
-    AI fly it, and to that runway?"""
-    from localtc.traffic.control import MIN_ARRIVAL_ABOVE_FT, PLAN_POSITION, Shadow, TrafficControl, flight_plan
+async def _live(probe: Probe, report: Report, watch_s: float) -> None:
+    """LocalTC's traffic for ``watch_s`` seconds: the real flights around fetched, created in the sim, followed, the
+    gates around filled; then all taken away. Each one is checked against where its real one is."""
+    from localtc.sim_api import AiObjectAssigned
+    from localtc.traffic.feed import FlightBook, LiveFeed
+    from localtc.traffic.manager import TrafficManager, TrafficSettings
+    from localtc.traffic.models import ModelPicker
 
-    icao, runway = where[0].upper(), where[1].upper()
-    await probe.source.send(RequestAirportData(icao=icao))
-    if not await probe.until(lambda: icao in probe.airports, 60.0):
-        report.add(Step(f"fly in to {icao} {runway}", "fail", f"no airport data for {icao}"))
+    own = probe.cockpit.own
+    feed, book = LiveFeed(), FlightBook(None)
+    flights = await asyncio.to_thread(feed.around, own.lat, own.lon, 50.0)
+    if not flights:
+        report.add(Step("live flights", "fail", "no source answered (adsb.lol, adsb.fi): no internet?"))
         return
-    apt = probe.airports[icao]
-    found = next(((r, r.primary is e) for r in apt.runways for e in (r.primary, r.secondary)
-                  if e.ident.upper() == runway.zfill(2 + (not runway[-1].isdigit()))), None)
-    if found is None:
-        report.add(Step(f"fly in to {icao} {runway}", "fail", f"{icao} has no runway {runway}"))
-        return
-    rwy, primary = found
-    inbound = rwy.heading_true if primary else (rwy.heading_true + 180) % 360
-    thr_lat, thr_lon = offset(rwy.lat, rwy.lon, (inbound + 180) % 360, rwy.length_m / 2)  # the landing threshold
-    lat, lon = offset(thr_lat, thr_lon, (inbound + 180) % 360, 20 * 1852)
-    alt = apt.elev_ft + MIN_ARRIVAL_ABOVE_FT + 1000
-    shadow = Shadow(object_id=0, callsign="LTC02", lat=lat, lon=lon, alt_ft=alt, hdg=inbound, gs_kt=220, on_ground=False,
-                    destination=icao)
-    await probe.until(lambda: probe.nearby, 30.0)
-    control = TrafficControl("reinject")
-    control.airports = {a.icao.upper(): (a.lat, a.lon, a.elev_ft) for a in probe.nearby}
-    departure = control._departure(shadow, (apt.lat, apt.lon, apt.elev_ft))
-    if departure is None:
-        report.add(Step(f"fly in to {icao} {runway}", "fail", "no airport around farther than it to file the plan from"))
-        return
-    directory = plan_dir or Path.cwd()
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "LTC02"
-    path.with_suffix(".pln").write_text(flight_plan(shadow, (apt.lat, apt.lon, apt.elev_ft), icao, runway, departure),
-                                        encoding="utf-8")
-    await probe.source.send(SpawnAiAircraft(request_id=SPAWN_REQUEST + 1, kind="enroute", title=model, tail="LTC02",
-                                            plan=str(path), plan_position=PLAN_POSITION))
-    if not await probe.until(lambda: SPAWN_REQUEST + 1 in probe.assigned, 20.0):
-        report.add(Step(f"fly in to {icao} {runway}", "fail", f"no object id from the sim (plan {path}.pln)"))
-        return
-    oid = probe.assigned[SPAWN_REQUEST + 1]
-    await probe.source.send(SetAiVar(object_id=oid, name="VELOCITY BODY Z", unit="feet per second", value=220 * 1.6878))
-    track: list[tuple[float, float, float, float, float]] = []
-    end_at = time.monotonic() + watch_s
+    report.add(Step("live flights", "pass", f"{len(flights)} within 50 nm from {feed.source}, "
+                                           f"{sum(1 for f in flights if f.on_ground)} on the ground"))
+    await probe.until(lambda: probe.airports, 30.0)
+    m = TrafficManager(TrafficSettings(radius_nm=30.0, max_live=25, max_parked=40), picker=ModelPicker(list(probe.models or ())),
+                       types=book.type_of)
+    for airport in probe.airports.values():
+        m.on_airport(airport)
+    m.on_own(own)
+    m.on_feed(flights, feed.source, time.time())
+    seen: set[int] = set()
+    errors: list[float] = []
+    jumps: list[float] = []
+    last_pos: dict[int, tuple[float, float, float]] = {}
+    end_at, next_feed = time.monotonic() + watch_s, time.monotonic() + 5
+    looked: set[int] = set()
     while time.monotonic() < end_at:
-        target = next((t for t in (probe.snapshots[-1].targets if probe.snapshots else ()) if t.object_id == oid), None)
-        if target is not None:
-            track.append((round(target.lat, 5), round(target.lon, 5), round(target.alt_ft), round(target.gs_kt), round(target.hdg_true)))
-        await asyncio.sleep(2.0)
-    await probe.source.send(RemoveAiAircraft(object_id=oid))
-    if not track:
-        report.add(Step(f"fly in to {icao} {runway}", "fail", f"object {oid} never in the traffic"))
-        return
-    first, last = track[0], track[-1]
-    d0 = _nm(first[0], first[1], thr_lat, thr_lon)
-    d1 = _nm(last[0], last[1], thr_lat, thr_lon)
-    lined_up = abs(((last[4] - inbound + 540) % 360) - 180) <= 20
-    moving = any(p[3] > 60 for p in track)
-    ok = moving and d1 < d0 - 1
-    report.add(Step(f"fly in to {icao} {runway}", "pass" if ok else "fail",
-                    f"{d0:.1f} nm out -> {d1:.1f} nm in {watch_s:.0f} s, {'moving' if moving else 'not moving'}, "
-                    f"heading {last[4]} (runway {inbound:.0f}{', lined up' if lined_up else ''})",
-                    after=track[-30:]))
+        m.on_own(probe.cockpit.own)
+        if probe.snapshots:
+            m.on_snapshot(probe.snapshots[-1])
+        for request_id, object_id in list(probe.assigned.items()):
+            if request_id in m.by_request:
+                for cmd in m.on_assigned(AiObjectAssigned(t=0.0, request_id=request_id, object_id=object_id), time.time()):
+                    await probe.source.send(cmd)
+        for cmd in m.tick(time.time()):
+            if not isinstance(cmd, TrafficControlStatus):
+                await probe.source.send(cmd)
+        if time.monotonic() >= next_feed:
+            next_feed = time.monotonic() + 5
+            got = await asyncio.to_thread(feed.around, probe.cockpit.own.lat, probe.cockpit.own.lon, 50.0)
+            m.on_feed(got, feed.source, time.time())
+            if got:
+                await asyncio.to_thread(book.look_up, got)
+        latest = probe.snapshots[-1] if probe.snapshots else None
+        if latest is None or id(latest) in looked:
+            await asyncio.sleep(0.5)
+            continue
+        looked.add(id(latest))
+        # When the sim's traffic was read (its clock), on this one's: the real ones compared at that moment.
+        now = time.time() - (probe.source.clock.now() - latest.t)
+        for target in latest.targets:
+            plane = m.by_object.get(target.object_id)
+            if plane is None:
+                continue
+            seen.add(target.object_id)
+            o = probe.cockpit.own
+            if _nm(target.lat, target.lon, o.lat, o.lon) > 10:
+                continue  # (written to the sim twice a second or less out there: nobody sees it)
+            if plane.mode == "live" and plane.flight is not None and not plane.flight.on_ground and plane.flight.t <= now:
+                lat, lon, _alt, _hdg = m._where(plane, now)
+                errors.append(_nm(target.lat, target.lon, lat, lon) * 1852)
+            prev = last_pos.get(target.object_id)
+            if prev is not None and target.gs_kt < 400:
+                moved = _nm(prev[0], prev[1], target.lat, target.lon) * 1852
+                expected = target.gs_kt * 0.5144 * (now - prev[2])
+                jumps.append(moved - expected)
+            last_pos[target.object_id] = (target.lat, target.lon, now)
+        await asyncio.sleep(0.5)
+    live = sum(1 for p in m.planes.values() if p.live and p.object_id is not None)
+    parked = sum(1 for p in m.planes.values() if not p.live and p.object_id is not None)
+    report.add(Step("created", "pass" if live + parked else "fail",
+                    f"{live} real flights, {parked} parked at {', '.join(sorted(m.parked_at)) or 'no airport'} "
+                    f"(models: {'FSLTL' if m.picker.fsltl else 'the sim own'})"))
+    report.add(Step("seen in the sim's traffic", "pass" if seen else "fail", f"{len(seen)} of LocalTC's"))
+    if errors:
+        errors.sort()
+        median = errors[len(errors) // 2]
+        report.add(Step("following the real ones", "pass" if median < 400 else "fail",
+                        f"within 10 nm: median {median:.0f} m from where the real one is, 90% within "
+                        f"{errors[int(len(errors) * 0.9)]:.0f} m ({len(errors)} looks)"))
+    if jumps:
+        worst = max(jumps)
+        report.add(Step("no jumps", "pass" if worst < 300 else "fail",
+                        f"within 10 nm, the most one moved more than its speed accounts for between two looks: {worst:.0f} m"))
+    removed = m.set_on(False)
+    for cmd in removed:
+        await probe.source.send(cmd)
+    gone = await probe.until(lambda: not any(t.object_id in seen for t in (probe.snapshots[-1].targets
+                                                                           if probe.snapshots else ())), 20.0)
+    report.add(Step("all taken away", "pass" if gone else "fail", f"{len(removed)} removed"))
+    for line in m.recent:
+        report.add(Step("note", "info", line))
 
 
 def _nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

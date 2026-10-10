@@ -440,7 +440,7 @@ class SessionNote(Event, tag="session_note"):
     text: str
 
 
-# --- EXPERIMENTAL traffic control (localtc.traffic): only with [traffic] control on ---------------------------------
+# --- LocalTC's traffic (localtc.traffic): only with [traffic] enabled ------------------------------------------------
 
 
 class TrafficIdentity(Event, tag="traffic_identity"):
@@ -482,27 +482,19 @@ class AircraftVars(Event, tag="aircraft_vars"):
     values: dict[str, float] = {}
 
 
-class TrafficControlEntry(msgspec.Struct, frozen=True, kw_only=True):
-    object_id: int
-    callsign: str
-    mode: str  # shadowed (the sim's, watched), reinjected (LocalTC's copy), lost, removed
-    phase: str = ""
-    model: str = ""
-    issues: tuple[str, ...] = ()
-
-
 class TrafficControlStatus(Event, tag="traffic_control_status"):
-    """EXPERIMENTAL: what traffic control is doing, for the app and the log."""
+    """What LocalTC's traffic is doing, for the app and the log: the real flights it's flying in the sim (``live``),
+    the aircraft it parked at the gates (``parked``), and the sim's own traffic still around (``native``: it should be
+    off while LocalTC's is on)."""
 
-    mode: str  # off, shadow, reinject
-    shadowed: int = 0
-    reinjected: int = 0
-    lost: int = 0
-    failed: int = 0
+    mode: str  # off, on
+    source: str = ""  # where the live positions come from ("adsb.lol"), "" while none has answered
+    live: int = 0
+    parked: int = 0
+    native: int = 0
     fsltl: bool = False
-    note: str = ""  # a limitation, said plainly
-    entries: tuple[TrafficControlEntry, ...] = ()
-    recent: tuple[str, ...] = ()  # what it did last, newest first: "JAL570 put back, flying to RJTT 34L"
+    note: str = ""  # a problem, said plainly ("MSFS's own traffic is on: ...")
+    recent: tuple[str, ...] = ()  # what it did last, newest first: "Delta 123 told to go around: you're on 28C"
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,

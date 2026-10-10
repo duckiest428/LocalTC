@@ -498,11 +498,9 @@ class AppController:
                              "hdg": round(t.hdg_true), "gs": round(t.gs_kt), "ground": t.on_ground} for t in ev.targets]
             self.publish("traffic", self.traffic)
             return
-        if isinstance(ev, TrafficControlStatus):  # EXPERIMENTAL traffic control, for Quick Settings
-            self.traffic_control = {"mode": ev.mode, "shadowed": ev.shadowed, "reinjected": ev.reinjected, "lost": ev.lost,
-                                    "failed": ev.failed, "fsltl": ev.fsltl, "note": ev.note,
-                                    "recent": list(ev.recent),
-                                    "issues": [f"{e.callsign}: {', '.join(e.issues)}" for e in ev.entries if e.issues][:8]}
+        if isinstance(ev, TrafficControlStatus):  # LocalTC's traffic, for Quick Settings
+            self.traffic_control = {"mode": ev.mode, "source": ev.source, "live": ev.live, "parked": ev.parked,
+                                    "native": ev.native, "fsltl": ev.fsltl, "note": ev.note, "recent": list(ev.recent)}
             self.publish("traffic_control", self.traffic_control)
             return
         if isinstance(ev, AtcThinking):
@@ -770,6 +768,20 @@ class AppController:
         self._push_state()
         return {"muted": self.muted}
 
+    async def _traffic_on(self, cfg) -> None:
+        """LocalTC's traffic switched on or off in a flight: started now (a live flight), or its aircraft taken out."""
+        live = self.live
+        if cfg.traffic.enabled and live.traffic is None and live.session.source_kind == "live":
+            from localtc.app import start_traffic
+
+            live.traffic = start_traffic(cfg, live.engine, live.source, live.bus)
+            self._traffic_task = asyncio.ensure_future(live.traffic.run())
+        elif live.traffic is not None:
+            await live.traffic.set_on(cfg.traffic.enabled)
+        if not cfg.traffic.enabled:
+            self.traffic_control = {"mode": "off"}
+            self.publish("traffic_control", self.traffic_control)
+
     async def api_settings(self, args: dict) -> dict:
         return {"settings": msgspec.to_builtins(self.cfg), "path": str(settings_path() or ""),
                 "catalog": models.catalog()}
@@ -811,8 +823,8 @@ class AppController:
             if crew.model is not None:  # the copilot's model: its use and its checks from the next question
                 crew.model.mode = "off" if cfg.crew.llm == "off" else cfg.crew.mode
                 crew.model.beyond_facts = cfg.crew.beyond_facts
-        if cfg.traffic.control != self.cfg.traffic.control and getattr(self.live, "traffic", None) is not None:
-            await self.live.traffic.set_mode(cfg.traffic.control, self.live.now())  # off: LocalTC's copies out at once
+        if cfg.traffic.enabled != self.cfg.traffic.enabled and self.live is not None:
+            await self._traffic_on(cfg)
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()

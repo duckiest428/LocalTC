@@ -57,7 +57,7 @@ class LiveConfig(_Section):
     retry_max_s: float = 15.0
     connect_timeout_s: float = 0.0  # 0 = wait indefinitely
     nearest_airport_interval_s: float = 60.0  # 0 disables automatic airport data fetches
-    traffic_identity: bool = False  # ask who the AI traffic is (model, livery, destination): EXPERIMENTAL traffic control
+    traffic_identity: bool = False  # ask who the sim's own AI traffic is (model, livery, destination): debug traffic
 
 
 class ReplayConfig(_Section):
@@ -248,17 +248,20 @@ class CloudConfig(_Section):
 
 
 class TrafficConfig(_Section):
-    """EXPERIMENTAL: LocalTC and MSFS's Live Traffic (localtc.traffic). Off unless changed.
+    """LocalTC's traffic (localtc.traffic): the real flights around, live from free ADS-B sources, flown in the sim
+    with FSLTL's models when FSLTL is installed; the gates filled as busy as the airport is at that hour; the traffic
+    answering to ATC (sent around or held short when the user has the runway). Off unless turned on, and then MSFS's
+    own air traffic should be off (Options > General > Traffic), or both fly."""
 
-    "shadow": every aircraft the sim has around followed and checked (teleports, duplicates, vanishing); the sim's
-    traffic is never touched. "reinject": the same, and an aircraft the sim drops nearby is put back by LocalTC, the
-    same model and livery (FSLTL's, when installed), parked or flying on to one of this flight's airports with the
-    runway from LocalTC's ATIS. SimConnect can't remove or take over the sim's own traffic; only what LocalTC puts
-    back is LocalTC's, and it's taken out again when this is turned off or the flight ends."""
-
-    control: Literal["off", "shadow", "reinject"] = "off"
-    max_reinjected: int = 8  # never more of LocalTC's copies than this at once
-    radius_nm: float = 25.0  # within this of the aircraft (the sim's traffic bubble is about 27 nm)
+    enabled: bool = False
+    radius_nm: float = 40.0  # the real flights within this of the user
+    max_live: int = 40  # never more of them at once (the nearest)
+    parked: bool = True  # aircraft parked at the gates of the airport the user is at or going to
+    max_parked: int = 80
+    atc_control: bool = True  # real flights sent around or held short when the user has the runway
+    # The experiment this replaced (shadowing and putting back MSFS's own): still read from old settings, not used.
+    control: str = ""
+    max_reinjected: int = 0
 
 
 class VoiceConfig(_Section):

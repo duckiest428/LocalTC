@@ -680,14 +680,15 @@ $("#wrapped-back").onclick = () => {
 /* ---------- Quick Settings ---------- */
 
 /** EXPERIMENTAL traffic control's last status, in a line. */
+/** LocalTC's traffic now, in a line or two (Quick Settings). */
 function trafficStatus(s) {
   if (!s || s.mode === "off") return "";
-  const parts = [`${s.shadowed} shadowed`, `${s.reinjected} put back`];
-  if (s.lost) parts.push(`${s.lost} dropped by MSFS`);
-  if (s.failed) parts.push(`${s.failed} couldn't be put back`);
-  if (s.fsltl) parts.push("FSLTL models");
+  const parts = [`${s.live} real flights`, `${s.parked} parked`];
+  if (s.source) parts.push(`positions from ${s.source}`);
+  parts.push(s.fsltl ? "FSLTL models" : "the sim's models (FSLTL isn't installed)");
   const recent = (s.recent || []).slice(0, 4);
-  return `<br><b>Now:</b> ${esc(parts.join(", "))}.${recent.length ? `<br><span class="muted">${recent.map(esc).join("<br>")}</span>` : ""}`;
+  return `<br><b>Now:</b> ${esc(parts.join(", "))}.${s.note ? `<br><b style="color:var(--amber)">${esc(s.note)}</b>` : ""}` +
+    `${recent.length ? `<br><span class="muted">${recent.map(esc).join("<br>")}</span>` : ""}`;
 }
 
 const Settings = {
@@ -1078,17 +1079,14 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
-        <div class="row"><label>Traffic control <b class="exp-badge">EXPERIMENTAL</b><select id="s-traffic">${[
-            ["off", "Off: MSFS's traffic as it is (recommended)"],
-            ["shadow", "Shadow: LocalTC follows every aircraft and reports anything odd; never touches them"],
-            ["reinject", "Reinject: also puts back aircraft MSFS drops nearby: parked ones, and arrivals, which land on LocalTC's runway"],
-          ].map(([v, t]) => `<option value="${v}" ${(st.traffic?.control || "off") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">SimConnect can't remove or take over MSFS's own Live Traffic, so it is never moved: shadowed only.
-            When MSFS drops an aircraft nearby, LocalTC puts the same flight back (its callsign, and FSLTL's model of its type and
-            airline when MSFS used a generic one) where MSFS allows it: parked at its stand, or arriving 16 nm or more out, at its
-            speed, landing on the runway in LocalTC's ATIS. MSFS won't put back one taxiing, departing or close in. Taken out
-            again when this is turned off, it flies out of the area, or the flight ends.
-            <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></span></label></div>
+        <div class="master-row"><div><b>LocalTC's traffic</b>
+          <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
+            airline's FSLTL model, the gates fill as busy as the airport is at that hour, and they answer to ATC: sent around
+            or held short when you have the runway, and the gate you're given kept clear. <b>Turn MSFS's own air traffic off</b>
+            (Options &gt; General &gt; Traffic) or both fly. Off: MSFS's traffic as it is.
+            <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></div></div>
+          <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
+        </div>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
@@ -1274,7 +1272,7 @@ const Settings = {
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
-    on("#s-traffic", "change", () => this.save("traffic", "control", val("#s-traffic")));
+    on("#s-traffic", "change", (e) => this.save("traffic", "enabled", e.target.checked));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));

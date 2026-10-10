@@ -97,9 +97,8 @@ class NudgeVar(SimCommand, tag="nudge_var"):
 
 
 class SetAiVar(SimCommand, tag="set_ai_var"):
-    """EXPERIMENTAL (traffic control): a variable of an AI aircraft LocalTC created: its speed as it was ("VELOCITY
-    BODY Z", feet per second: the sim starts a created aircraft at 0), its airline and flight number for ATC ("ATC
-    AIRLINE", "ATC FLIGHT NUMBER": ``text``)."""
+    """A variable of an AI aircraft LocalTC created (its traffic): its airline and flight number for ATC ("ATC
+    AIRLINE", "ATC FLIGHT NUMBER", "ATC ID": ``text``), or a number."""
 
     object_id: int
     name: str
@@ -109,9 +108,9 @@ class SetAiVar(SimCommand, tag="set_ai_var"):
 
 
 class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
-    """EXPERIMENTAL (traffic control): put an AI aircraft in the sim. ``kind`` "parked": still, where it's put (a
-    non-ATC aircraft at its stand); "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's
-    own AI, from ``plan_position`` along it. The sim answers with ``AiObjectAssigned``."""
+    """Put an aircraft in the sim (LocalTC's traffic). ``kind`` "parked": a non-ATC aircraft where it's put, still
+    until ``AiTrack`` moves it; "enroute": flying ``plan`` (a .PLN path, without the extension) under the sim's own AI.
+    The sim answers with ``AiObjectAssigned``."""
 
     request_id: int
     kind: str  # parked, enroute
@@ -130,13 +129,46 @@ class SpawnAiAircraft(SimCommand, tag="spawn_ai_aircraft"):
 
 
 class RemoveAiAircraft(SimCommand, tag="remove_ai_aircraft"):
-    """EXPERIMENTAL: take out an aircraft LocalTC created (only those: the sim's own can't be removed)."""
+    """Take out an aircraft LocalTC created (only those: the sim's own can't be removed)."""
 
     object_id: int
 
 
 class EnumerateModels(SimCommand, tag="enumerate_models"):
-    """EXPERIMENTAL: ask for the installed aircraft and liveries (answered with ``ModelList``)."""
+    """Ask for the installed aircraft and liveries (answered with ``ModelList``)."""
+
+
+class AiTrack(SimCommand, tag="ai_track"):
+    """Where one of LocalTC's aircraft is now and how it's moving: the bridge holds it still (frozen against the sim's
+    own physics), carries it on from here every frame (dead reckoning on its speed, climb and turn), and eases out the
+    difference from where it was being shown over ``blend_s``, so it never jumps. On the ground its height is the
+    ground's under it (``alt_ft`` is then ignored)."""
+
+    object_id: int
+    lat: float
+    lon: float
+    alt_ft: float = 0.0
+    hdg: float = 0.0
+    gs_kt: float = 0.0
+    vs_fpm: float = 0.0
+    turn_dps: float = 0.0  # degrees a second, right positive
+    on_ground: bool = True
+    pitch: float = 0.0  # degrees, nose up positive
+    bank: float = 0.0  # degrees, right positive
+    blend_s: float = 3.0
+
+
+class AiLights(SimCommand, tag="ai_lights"):
+    """One of LocalTC's aircraft's gear and lights (sent when they change)."""
+
+    object_id: int
+    gear_down: bool = True
+    landing: bool = False
+    taxi: bool = False
+    beacon: bool = False
+    strobe: bool = False
+    nav: bool = True
+    logo: bool = False
 
 
 class SetSimVar(SimCommand, tag="set_sim_var"):
@@ -149,5 +181,5 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
 
 
 AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
-                      ClickSequence, WatchVars,
+                      ClickSequence, WatchVars, AiTrack, AiLights,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]

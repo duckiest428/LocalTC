@@ -39,6 +39,8 @@ from localtc.sim_api import (
     ClickSequence,
     WatchVars,
     AircraftVars,
+    AiTrack,
+    AiLights,
     SetAiVar,
     NudgeVar,
     SpawnAiAircraft,
@@ -57,6 +59,7 @@ from localtc.sim_api import (
 from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.knob import KnobTurn
+from localtc.sim_bridge.motion import Track
 from localtc.sim_bridge.dll import SimConnectError
 from localtc.sim_bridge.wire import make_client
 from localtc.sim_bridge.protocol import (
@@ -96,6 +99,11 @@ REQ_AIRCRAFT_MORE = 7
 REQ_INPUT_EVENTS = 8
 REQ_TRAFFIC_IDENT, REQ_TRAFFIC_LIVERY, REQ_MODELS, REQ_AI_REMOVE = 9, 10, 11, 12
 DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
+DEF_AI_MOVE, DEF_AI_GROUND, REQ_AI_GROUND = 14, 15, 15  # LocalTC's traffic: moved, and the ground under it
+AI_GROUND_EVERY_S = 2.0
+AI_LIGHT_EVENTS = ("LANDING_LIGHTS_SET", "TAXI_LIGHTS_SET", "BEACON_LIGHTS_SET", "STROBES_SET", "NAV_LIGHTS_SET",
+                   "LOGO_LIGHTS_SET")
+AI_FREEZE = ("FREEZE_LATITUDE_LONGITUDE_SET", "FREEZE_ALTITUDE_SET", "FREEZE_ATTITUDE_SET")
 REQ_WATCH, FIRST_WATCH_DEFINITION = 13, 900  # the profile's own variables (WatchVars): a new definition each time
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
@@ -295,6 +303,14 @@ class SimConnectSource:
         self._watch: tuple[str, ...] = ()
         self._watch_define = 0
         self._watch_count = 0
+        self._ai_tracks: dict[int, Track] = {}  # LocalTC's traffic, as it's being moved (AiTrack)
+        self._ai_ground_next = 0.0
+        for name, unit in (("PLANE LATITUDE", "degrees"), ("PLANE LONGITUDE", "degrees"), ("PLANE ALTITUDE", "feet"),
+                           ("PLANE PITCH DEGREES", "degrees"), ("PLANE BANK DEGREES", "degrees"),
+                           ("PLANE HEADING DEGREES TRUE", "degrees")):
+            dll.add_to_data_definition(handle, DEF_AI_MOVE, name, unit, defs.F64)
+        for name in ("GROUND ALTITUDE", "STATIC CG TO GROUND"):
+            dll.add_to_data_definition(handle, DEF_AI_GROUND, name, "feet", defs.F64)
         for define_id, datums in ((DEF_OWNSHIP, defs.OWNSHIP), (DEF_IDENTITY, defs.IDENTITY), (DEF_TRAFFIC, defs.TRAFFIC),
                                   (DEF_AIRCRAFT, defs.AIRCRAFT), (DEF_AIRCRAFT_EXTRA, defs.AIRCRAFT_EXTRA),
                                   (DEF_AIRCRAFT_MORE, defs.AIRCRAFT_MORE)):
@@ -390,6 +406,7 @@ class SimConnectSource:
                         log.info("No input events from this sim: %s", exc)
                 self._run_commands(dll, handle)
                 self._work_hands(dll, handle)
+                self._move_ai(dll, handle)
                 self._nudge(dll, handle)
                 if self._nearest_to_fetch:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
@@ -485,7 +502,12 @@ class SimConnectSource:
                                   airspeed_kt=command.airspeed_kt, plan=command.plan, plan_position=command.plan_position)
                 except (SimConnectError, AttributeError) as exc:
                     log.warning("Traffic control couldn't create %s: %s", command.tail or command.title, exc)
+            elif isinstance(command, AiTrack):
+                self._track_ai(dll, handle, command)
+            elif isinstance(command, AiLights):
+                self._light_ai(dll, handle, command)
             elif isinstance(command, RemoveAiAircraft):
+                self._ai_tracks.pop(command.object_id, None)
                 try:
                     dll.ai_remove(handle, command.object_id, REQ_AI_REMOVE)
                 except (SimConnectError, AttributeError) as exc:
@@ -595,6 +617,60 @@ class SimConnectSource:
         except (SimConnectError, KeyError, AttributeError) as exc:
             log.warning("Copilot couldn't work %s: %s", getattr(self._hand[2], "name", "a control"), exc)
             self._hand = None
+
+    def _track_ai(self, dll: SimConnectApi, handle: int, c: AiTrack) -> None:
+        """One of LocalTC's aircraft's new state: frozen against the sim's own physics the first time, then carried
+        on from here (motion.py)."""
+        now = time.monotonic()
+        new = Track(c.object_id, c.lat, c.lon, c.alt_ft, c.hdg, c.gs_kt, c.vs_fpm, c.turn_dps, c.on_ground, c.pitch,
+                    c.bank, now, c.blend_s)
+        track = self._ai_tracks.get(c.object_id)
+        if track is None:
+            self._ai_tracks[c.object_id] = track = new
+            track.blend_s = 0.0
+            try:
+                for name in AI_FREEZE:
+                    dll.transmit_client_event(handle, c.object_id, self._event_id(dll, handle, name), 1,
+                                              GROUP_PRIORITY_HIGHEST, EVENT_FLAG_GROUPID_IS_PRIORITY)
+                track.frozen = True
+                if c.on_ground:
+                    dll.request_data_on_sim_object(handle, REQ_AI_GROUND, DEF_AI_GROUND, c.object_id, Period.ONCE)
+            except SimConnectError as exc:
+                log.info("Traffic: couldn't take hold of object %d: %s", c.object_id, exc)
+        else:
+            track.update(new, now)
+
+    def _light_ai(self, dll: SimConnectApi, handle: int, c: AiLights) -> None:
+        try:
+            event = "GEAR_DOWN" if c.gear_down else "GEAR_UP"
+            dll.transmit_client_event(handle, c.object_id, self._event_id(dll, handle, event), 0, GROUP_PRIORITY_HIGHEST,
+                                      EVENT_FLAG_GROUPID_IS_PRIORITY)
+            for name, on in zip(AI_LIGHT_EVENTS, (c.landing, c.taxi, c.beacon, c.strobe, c.nav, c.logo)):
+                dll.transmit_client_event(handle, c.object_id, self._event_id(dll, handle, name), int(on),
+                                          GROUP_PRIORITY_HIGHEST, EVENT_FLAG_GROUPID_IS_PRIORITY)
+        except SimConnectError as exc:
+            log.info("Traffic: couldn't set the lights of object %d: %s", c.object_id, exc)
+
+    def _move_ai(self, dll: SimConnectApi, handle: int) -> None:
+        """LocalTC's traffic written where it is now: each as often as its distance from the user calls for."""
+        if not self._ai_tracks:
+            return
+        now = time.monotonic()
+        ask_ground = now >= self._ai_ground_next
+        if ask_ground:
+            self._ai_ground_next = now + AI_GROUND_EVERY_S
+        for oid, track in list(self._ai_tracks.items()):
+            if now < track.next_write:
+                continue
+            lat, lon, alt, hdg, pitch, bank = track.at(now)
+            track.next_write = now + track.interval(self._position, lat, lon)
+            try:
+                dll.set_data_on_sim_object(handle, DEF_AI_MOVE, oid, struct.pack("<6d", lat, lon, alt, pitch, bank, hdg))
+                if ask_ground and track.on_ground and (track.gs_kt > 1.0 or track.ground_ft is None):
+                    dll.request_data_on_sim_object(handle, REQ_AI_GROUND, DEF_AI_GROUND, oid, Period.ONCE)
+            except SimConnectError as exc:
+                log.info("Traffic: object %d can't be moved (%s): let go", oid, exc)
+                self._ai_tracks.pop(oid, None)
 
     def _watch_vars(self, dll: SimConnectApi, handle: int, names: tuple[str, ...]) -> None:
         """The profile's variables read every second from now (a new definition: they can't be taken out of one)."""
@@ -800,6 +876,10 @@ class SimConnectSource:
                 hand[0].on_value(struct.unpack_from("<d", msg.payload)[0], time.monotonic())
                 if hand[0].done:
                     log.info("Copilot: %s turned to %g", hand[0].name, struct.unpack_from("<d", msg.payload)[0])
+        elif msg.request_id == REQ_AI_GROUND and msg.define_id == DEF_AI_GROUND and len(msg.payload) >= 16:
+            if (track := self._ai_tracks.get(msg.object_id)) is not None:
+                ground, cg = struct.unpack_from("<2d", msg.payload)
+                track.ground_ft = ground + cg
         elif msg.request_id == REQ_WATCH and self._watch:
             n = min(len(self._watch), len(msg.payload) // 8)
             values = struct.unpack_from(f"<{n}d", msg.payload)

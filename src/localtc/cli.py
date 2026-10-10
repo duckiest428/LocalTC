@@ -248,8 +248,7 @@ def _cmd_debug_check(args: argparse.Namespace) -> int:
     if args.check == "hands":
         kw = {"autopilot": args.autopilot, "only": tuple(args.only)}
     elif args.check == "traffic":
-        kw = {"spawn": not args.no_spawn, "title": args.title, "enroute": tuple(args.enroute) if args.enroute else None,
-              "watch_s": args.watch, "plan_dir": data_dir() / "simcheck"}
+        kw = {"spawn": not args.no_spawn, "title": args.title, "live": args.live, "watch_s": args.watch}
     report = asyncio.run(sim_check(cfg, args.check, **kw))
     print(report.text())
     if args.check == "aircraft" and report.input_events:
@@ -787,8 +786,8 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "traffic":
             check.add_argument("--no-spawn", action="store_true", help="only watch, create nothing")
             check.add_argument("--title", default="", help="the model to create (default: the user aircraft's)")
-            check.add_argument("--enroute", nargs=2, metavar=("ICAO", "RUNWAY"),
-                               help="also one flying in on a flight plan to this runway, watched (--watch seconds)")
+            check.add_argument("--live", action="store_true",
+                               help="also LocalTC's traffic for --watch seconds: the real flights around, the gates filled")
             check.add_argument("--watch", type=float, default=120.0, metavar="SECONDS")
         check.set_defaults(func=_cmd_debug_check, check=name)
 

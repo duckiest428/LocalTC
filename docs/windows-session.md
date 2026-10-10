@@ -81,19 +81,17 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    Its hands) and check it does them in the flight. Repeat for the other aircraft the user flies (a new profile in
    `crew/profiles/`, matched by title or model).
 
-## Task 2: traffic control (EXPERIMENTAL)
+## Task 2: LocalTC's traffic
 
-*(Run at RJTT 2026-10-09, fixed; see windows-findings.md.)* [traffic/control.py](../src/localtc/traffic/control.py)
-shadows the sim's Live Traffic and, in *reinject* mode, puts back what the sim drops nearby: parked ones, and arrivals
-16 nm or more out (what MSFS 2024 allows; the module's docstring has the details).
+[traffic/manager.py](../src/localtc/traffic/manager.py) flies the real flights around in the sim (live ADS-B, FSLTL's
+models), fills the gates for the hour and makes the traffic answer to ATC. Tried at KORD 2026-10-09 (windows-findings.md).
 
-1. `localtc debug traffic`: snapshots, identities, the installed models (FSLTL's counted), one aircraft created and
-   removed. `localtc debug traffic --no-spawn --enroute <ICAO> <RUNWAY> --watch 180`: one arrival created 20 nm out as
-   reinject makes them; does it fly towards that runway?
-2. Still to see in the app: Quick Settings → ATC → Traffic control → Reinject at a busy airport over a long session.
-   The status line lists what it did and why. Check nothing is put back twice, onto a taxiway or runway, or on top of
-   another aircraft, that ATC calls the copies by their flights' callsigns, and that everything LocalTC created goes
-   when it's turned off.
+1. `localtc debug traffic --live --no-spawn --watch 120`: the flights fetched, created, followed (each within a few
+   hundred metres of the real one, no jumps), the gates filled, all taken away at the end.
+2. Still to see in the app, with MSFS's own air traffic off: Quick Settings → ATC → LocalTC's traffic on, at a busy
+   airport, over a whole flight. Look at the aircraft taxiing, taking off and landing (smooth, on the ground, gear and
+   lights right), the gates (nobody on yours; none on top of another), ATC's go-arounds and holds when you have the
+   runway, and that everything goes when it's turned off.
 
 ## Task 3: the voices with the sim running
 

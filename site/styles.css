@@ -766,3 +766,9 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 .faq details { padding: 16px 18px; border-radius: 14px; background: var(--bg-2); box-shadow: var(--hair); margin-bottom: 10px; }
 .faq summary { cursor: pointer; font-weight: 640; color: var(--text); }
 .faq p { margin: 10px 0 0; color: var(--text-2); line-height: 1.6; }
+.cl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 1.6em 0 0; }
+.cl-tabs button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .12); background: transparent; color: var(--text-2); }
+.cl-tabs button:hover { color: var(--text); }
+.cl-tabs button[aria-selected="true"] { background: rgba(95, 208, 104, .12); border-color: var(--green, #5fd068); color: var(--text); }
+.cl-product[hidden] { display: none !important; }

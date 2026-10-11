@@ -183,6 +183,11 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.chatter { opacity: .62; }  /* somebody else on the frequency: there, but not for you */
 .line.chatter .who, .line.chatter .st { color: var(--muted); font-size: 12px; }
 .line.chatter .body { color: var(--text-3); font-size: 13px; }
+.line.chatter.live { opacity: 1; }  /* LocalTC's traffic: real flights, heard like any transmission */
+.line.chatter.live .who { color: var(--cyan); font-size: inherit; }
+.line.chatter.live .st { color: var(--cyan); }
+.line.chatter.live .body { color: var(--text-strong); font-size: inherit; }
+.line.chatter .cs { font-weight: 700; }
 .line.atis .who { color: #c79be6; }
 .line.atis .body { color: var(--text-3); font-size: 13px; }
 .line.readback .body { color: var(--muted); font-size: 12px; }
@@ -436,3 +441,10 @@ table.lb td { white-space: nowrap; }
 .help.welcome h2 { text-align: center; font-size: 22px; margin: 4px 0 8px; }
 .help.welcome > p:first-of-type { text-align: center; }
 .help.welcome .welcome-go { justify-content: center; }
+
+/* What's new: this version's notes, once after an update. */
+#dlg-whatsnew .whatsnew { max-width: 640px; }
+#wn-notes { max-height: 60vh; overflow-y: auto; padding-right: 6px; }
+#wn-notes h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
+#wn-notes ul { margin: 0; padding-left: 18px; }
+#wn-notes li { margin: 0 0 8px; line-height: 1.45; }

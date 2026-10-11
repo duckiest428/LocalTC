@@ -15,7 +15,7 @@ this module decides what is said.
 
 import random
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core.phraseology import TemplateLibrary, speech
@@ -34,6 +34,7 @@ class Line:
     callsign: str  # as displayed
     text: str
     spoken: str
+    ident: str = ""  # its callsign as filed ("RYR123"): the radio log colours an airline by it
 
 
 # What another aircraft is doing, as the engine sees it in the sim's traffic.
@@ -107,7 +108,7 @@ class Chatter:
         elif readback:
             spoken = self.library.pilot_readback(iid, slots)
             lines.append(Line("pilot", shown, _sentence(spoken), spoken))
-        return lines
+        return [replace(line, ident=cs.ident) for line in lines]
 
     def _options(self, scene: Scene, other: Other) -> list[tuple[str, str, dict[str, Any]]]:
         """What this controller would say to ``other``, given what it's doing."""

@@ -32,6 +32,7 @@ extension EnvironmentValues {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @State private var whatsNew = WhatsNew()
 
     var body: some View {
         Group {
@@ -44,6 +45,10 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             model.scenePhase = phase
             if phase == .active { model.checkSession() }
+        }
+        .task { await whatsNew.check(returning: model.signedIn, site: AppModel.siteURL) }
+        .sheet(isPresented: Binding(get: { whatsNew.shown != nil }, set: { if !$0 { whatsNew.dismiss() } })) {
+            if let release = whatsNew.shown { WhatsNewSheet(release: release) { whatsNew.dismiss() } }
         }
     }
 }

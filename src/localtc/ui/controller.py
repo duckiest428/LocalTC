@@ -115,6 +115,7 @@ class AppController:
         self.jobs: dict[str, dict] = {}
         self.muted = False
         self.account_prompt = False
+        self._notes: str | None = None  # this version's CHANGELOG section, read once for "what's new"
         self.traffic_control: dict | None = None  # EXPERIMENTAL traffic control's last status  # show the one-time account suggestion (after the third flight)
         self._task: asyncio.Task | None = None
         self._stop: asyncio.Event | None = None
@@ -268,7 +269,23 @@ class AppController:
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
             "welcome": not self.cfg.ui.welcome_seen,
+            "whats_new": self._whats_new(),
         }
+
+    def _whats_new(self) -> dict | None:
+        """This version's notes, once after an update: from CHANGELOG.md, beside the app. Not on a first start (the
+        welcome is shown then, and closing it counts as seen) nor with no notes for this version."""
+        ui = self.cfg.ui
+        if not ui.welcome_seen or ui.notes_seen == __version__:
+            return None
+        if self._notes is None:
+            from localtc.update import changelog_section, install_root
+
+            try:
+                self._notes = changelog_section((install_root() / "CHANGELOG.md").read_text(encoding="utf-8"), __version__)
+            except OSError:
+                self._notes = ""
+        return {"version": __version__, "notes": self._notes} if self._notes else None
 
     async def _count_flight(self) -> None:
         """One more flight flown. After the third, without an account, the app suggests one, once."""

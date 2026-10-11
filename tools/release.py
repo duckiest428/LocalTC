@@ -21,14 +21,23 @@ def versions() -> tuple[str, str]:
     return project, init
 
 
+def companion_versions() -> set[str]:
+    """The companion app's version (MARKETING_VERSION in its Xcode project): the same as LocalTC's."""
+    project = (ROOT / "ios" / "LocalTC Companion.xcodeproj" / "project.pbxproj").read_text(encoding="utf-8")
+    return set(re.findall(r"MARKETING_VERSION = ([^;]+);", project))
+
+
 def check(tag: str) -> int:
     version = tag.removeprefix("v")
     parse_version(version)
     project, init = versions()
     problems = [f"pyproject.toml says {project}"] if project != version else []
     problems += [f"localtc.__version__ says {init}"] if init != version else []
-    if not changelog_section((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), version):
-        problems.append(f"CHANGELOG.md has no ## [{version}] section")
+    if companion_versions() != {version}:
+        problems.append(f"the companion app says {', '.join(sorted(companion_versions()))}")
+    for name in ("CHANGELOG.md", "CHANGELOG-companion.md", "CHANGELOG-website.md"):
+        if not changelog_section((ROOT / name).read_text(encoding="utf-8"), version):
+            problems.append(f"{name} has no ## [{version}] section")
     for p in problems:
         print(f"{tag}: {p}", file=sys.stderr)
     return 1 if problems else 0

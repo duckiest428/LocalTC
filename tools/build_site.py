@@ -1,7 +1,7 @@
-"""Build the parts of the website that come from the repository: site/changelog.html from CHANGELOG.md, and
+"""Build the parts of the website that come from the repository: site/changelog.html (and changelog.json) from the three changelogs, and
 version stamps on the pages' own scripts and stylesheets.
 
-    python tools/build_site.py          # writes site/changelog.html, stamps site/*.html, writes site/assets.json
+    python tools/build_site.py          # writes site/changelog.html and changelog.json, stamps site/*.html, writes site/assets.json
 
 Run by .github/workflows/pages.yml before publishing; neither change is committed. The stamps: the site is
 cached for hours (by browsers and Cloudflare), so a page could arrive new with its script old, a dashboard
@@ -54,15 +54,17 @@ PAGE = """<!DOCTYPE html>
 <aside class="cl-side" aria-label="Versions">
   <p class="cl-side-h">Versions</p>
 {toggle}
-  <nav class="cl-versions">
 {versions}
-  </nav>
 </aside>
 <main class="legal changelog">
   <p class="kicker">Changelog</p>
   <h1>What changed.</h1>
-  <p class="updated">Latest: <b>{latest}</b>. The app shows the new version's notes when it offers the update.
+  <p class="updated">Latest: <b>{latest}</b>. LocalTC, the companion app and the website share one version; the app
+    and the companion show a new version's notes once, after the update.
     <a href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a></p>
+  <div class="cl-tabs" role="tablist">
+{tabs}
+  </div>
 {body}
   <nav class="legal-nav">
     <a href="./">&larr; Back to LocalTC</a>
@@ -71,18 +73,28 @@ PAGE = """<!DOCTYPE html>
 </main>
 </div>
 <script>
-  // "Show upcoming": what's done but not released yet, off unless asked for (or linked to).
+  // One tab each: the Main App, the Companion App and the Website; a link to a version opens its tab.
   (function () {{
+    const tabs = [...document.querySelectorAll(".cl-tabs [data-product]")];
+    const pick = (product) => {{
+      tabs.forEach((t) => t.setAttribute("aria-selected", String(t.dataset.product === product)));
+      document.querySelectorAll(".cl-product").forEach((el) => {{ el.hidden = el.dataset.product !== product; }});
+    }};
+    tabs.forEach((t) => t.addEventListener("click", () => {{ pick(t.dataset.product); history.replaceState(null, "", "#" + t.dataset.product); }}));
+    // "Show upcoming": what's done but not released yet, off unless asked for (or linked to).
     const box = document.getElementById("cl-upcoming");
-    if (!box) return;
     const show = (on) => {{
-      box.checked = on;
+      if (box) box.checked = on;
       document.querySelectorAll("[data-upcoming]").forEach((el) => {{ el.hidden = !on; }});
     }};
-    box.addEventListener("change", () => show(box.checked));
+    box?.addEventListener("change", () => show(box.checked));
     const linked = () => {{
-      const el = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
-      if (el && el.closest("[data-upcoming]")) {{ show(true); el.scrollIntoView(); }}
+      const id = decodeURIComponent(location.hash.slice(1));
+      if (tabs.some((t) => t.dataset.product === id)) {{ pick(id); return; }}
+      const el = id && document.getElementById(id);
+      pick(el?.closest(".cl-product")?.dataset.product || "app");
+      if (el && el.closest("[data-upcoming]")) show(true);
+      el?.scrollIntoView();
     }};
     window.addEventListener("hashchange", linked);
     show(false);
@@ -125,20 +137,21 @@ def releases(markdown: str) -> list[tuple[str, str, bool]]:
     return out
 
 
-def sidebar(markdown: str) -> tuple[str, str]:
-    """(the "Show upcoming" switch, or "" without an upcoming version; the links to each version)."""
+def sidebar(markdown: str, prefix: str = "") -> tuple[str, str]:
+    """(the "Show upcoming" switch, or "" without an upcoming version; the links to each version). ``prefix`` keeps
+    one product's version anchors apart from another's ("companion-v0.4.0"; the Main App's are plain "v0.4.0")."""
     links, toggle = [], ""
     for version, date, upcoming in releases(markdown):
         v = html.escape(version)
         if upcoming:
             toggle = ('  <label class="cl-toggle"><input type="checkbox" id="cl-upcoming"> Show upcoming</label>')
-            links.append(f'    <a href="#v{v}" data-upcoming hidden>{v} <span class="cl-up">upcoming</span></a>')
+            links.append(f'    <a href="#{prefix}v{v}" data-upcoming hidden>{v} <span class="cl-up">upcoming</span></a>')
         else:
-            links.append(f'    <a href="#v{v}">{v} <span class="cl-date">{html.escape(date)}</span></a>')
+            links.append(f'    <a href="#{prefix}v{v}">{v} <span class="cl-date">{html.escape(date)}</span></a>')
     return toggle, "\n".join(links)
 
 
-def render(markdown: str) -> tuple[str, str]:
+def render(markdown: str, prefix: str = "") -> tuple[str, str]:
     """(latest released version, the releases as HTML). The file's own title and preamble are left out; an upcoming
     version is in it, marked, hidden until shown."""
     out: list[str] = []
@@ -172,12 +185,12 @@ def render(markdown: str) -> tuple[str, str]:
             if not upcoming:
                 latest = latest or version
             if upcoming:
-                out.append(f'  <section class="release upcoming" id="v{html.escape(version)}" data-upcoming hidden>')
+                out.append(f'  <section class="release upcoming" id="{prefix}v{html.escape(version)}" data-upcoming hidden>')
                 out.append(f'  <h2>{html.escape(version)} <span class="date">Upcoming</span></h2>')
                 out.append('  <p class="cl-note">Done, not released yet: these come with the next version, and may '
                            'still change.</p>')
             else:
-                out.append(f'  <section class="release" id="v{html.escape(version)}">')
+                out.append(f'  <section class="release" id="{prefix}v{html.escape(version)}">')
                 out.append(f'  <h2>{html.escape(version)} <span class="date">{html.escape(date)}</span></h2>')
         elif not started:
             continue
@@ -235,12 +248,49 @@ def asset_stamps(site: Path) -> dict[str, str]:
     return stamps
 
 
+# The changelog page's tabs: (its id, its name, its file, its anchors' prefix). The Main App's file is the one the app
+# and the release read; all three carry the same version numbers.
+PRODUCTS = (("app", "Main App", "CHANGELOG.md", ""), ("companion", "Companion App", "CHANGELOG-companion.md", "companion-"),
+            ("website", "Website", "CHANGELOG-website.md", "website-"))
+
+
+def sections(markdown: str) -> list[dict]:
+    """Each version's notes as Markdown, newest first, for the companion's "what's new" (site/changelog.json)."""
+    out: list[dict] = []
+    for line in markdown.splitlines():
+        if m := re.match(r"## \[([^\]]+)\](?:\s*-\s*(.+))?", line):
+            date = (m.group(2) or "").strip()
+            out.append({"version": m.group(1), "date": date, "upcoming": bool(UPCOMING.search(date)), "notes": []})
+        elif out:
+            out[-1]["notes"].append(line)
+    for s in out:
+        s["notes"] = "\n".join(s["notes"]).strip()
+    return out
+
+
+def page(texts: dict[str, str]) -> str:
+    """The changelog page from each product's changelog ({id: its Markdown})."""
+    latest = ""
+    bodies, navs, tabs, toggle = [], [], [], ""
+    for product, name, _file, prefix in PRODUCTS:
+        text = texts.get(product, "")
+        last, body = render(text, prefix)
+        latest = latest or last
+        up, versions = sidebar(text, prefix)
+        toggle = toggle or up
+        tabs.append(f'    <button type="button" role="tab" data-product="{product}" aria-selected="false">{name}</button>')
+        bodies.append(f'  <div class="cl-product" data-product="{product}">\n{body}\n  </div>')
+        navs.append(f'  <nav class="cl-versions cl-product" data-product="{product}">\n{versions}\n  </nav>')
+    return PAGE.format(latest=html.escape(latest), body="\n".join(bodies), toggle=toggle, versions="\n".join(navs),
+                       tabs="\n".join(tabs))
+
+
 def main() -> int:
-    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    latest, body = render(text)
-    toggle, versions = sidebar(text)
-    (ROOT / "site" / "changelog.html").write_text(
-        PAGE.format(latest=html.escape(latest), body=body, toggle=toggle, versions=versions), encoding="utf-8")
+    texts = {product: (ROOT / file).read_text(encoding="utf-8") for product, _name, file, _prefix in PRODUCTS}
+    latest, _body = render(texts["app"])
+    (ROOT / "site" / "changelog.html").write_text(page(texts), encoding="utf-8")
+    (ROOT / "site" / "changelog.json").write_text(
+        json.dumps({product: sections(texts[product]) for product, *_ in PRODUCTS}, indent=1) + "\n", encoding="utf-8")
     print(f"site/changelog.html: latest {latest}")
     if "--no-stamp" not in sys.argv:
         print("stamped:", ", ".join(stamp(ROOT / "site")) or "nothing")

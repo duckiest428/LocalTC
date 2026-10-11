@@ -1270,7 +1270,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
         at = max(t, self._radio_busy_until)
         out: list[BusEvent] = [RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz,
                                             speaker="atc", callsign=shown, text=atc.text, spoken=atc.spoken,
-                                            controller=facility.controller, locale=self._locale(facility))]
+                                            controller=facility.controller, locale=self._locale(facility),
+                                            ident=callsign.ident)]
         at += self._speech_s(atc.spoken) + CHATTER_TURN_S
         if iid == "ground.pushback":  # the template has no readback: crews say it anyway
             spoken = f"Push and start, tail {slots['turn']}, {speech.callsign(callsign)}"
@@ -1282,7 +1283,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             spoken = self.library.pilot_readback(iid, slots)
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker="pilot",
                                     callsign=shown, text=spoken[:1].upper() + spoken[1:], spoken=spoken,
-                                    controller=facility.controller, locale=self._locale(facility)))
+                                    controller=facility.controller, locale=self._locale(facility), ident=callsign.ident))
             at += self._speech_s(spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)
         return out
@@ -1362,7 +1363,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             self._said_on.append((at, facility.station))
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker=line.speaker,
                                     callsign=line.callsign, text=line.text, spoken=line.spoken, controller=facility.controller,
-                                    locale=self._locale(facility)))
+                                    locale=self._locale(facility), ident=line.ident))
             at += self._speech_s(line.spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)  # ATC doesn't talk over its own other traffic
         return out

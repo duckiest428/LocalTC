@@ -83,7 +83,12 @@ function setState(st) {
   if (st.welcome && welcome && !welcome.open && !S.welcomed) {
     S.welcomed = true;  // once a session; saved as seen when it's closed
     welcome.showModal();
-  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open) dlg.showModal();
+  } else if (st.whats_new && !S.whatsNew && !welcome?.open) {
+    S.whatsNew = true;  // once a session; saved as seen when it's closed
+    $("#wn-version").textContent = st.whats_new.version;
+    $("#wn-notes").innerHTML = notesHtml(st.whats_new.notes);
+    $("#dlg-whatsnew").showModal();
+  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open && !$("#dlg-whatsnew").open) dlg.showModal();
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -159,6 +164,14 @@ function addLine(l) {
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
+      if (S.settings?.traffic?.enabled && l.callsign) {
+        // LocalTC's traffic (real flights): shown like a real transmission, by its callsign in its airline's colour.
+        row.classList.add("live");
+        const cs = `<span class="cs" style="color:${airlineColour(l.ident || l.callsign)}">${esc(l.callsign)}</span>`;
+        body = l.atc ? `<span class="who">ATC</span><span class="st">${esc(l.station)} ${mhz(l.mhz)}</span> <span class="st">to</span> ${cs}<div class="body">${esc(l.text)}</div>`
+          : `<span class="who">${cs}</span><span class="st">${mhz(l.mhz)}</span><div class="body">${esc(l.text)}</div>`;
+        break;
+      }
       body = `<span class="who">${l.atc ? "ATC" : "OTHER"}</span><span class="st">${esc(l.station)}</span><div class="body">${esc(l.text)}</div>`; break;
     case "atis":
       body = `<span class="who">ATIS</span><span class="st">${esc(l.station)}</span><div class="body">${esc(l.text)}</div>`; break;
@@ -180,6 +193,25 @@ function addLine(l) {
   // The model running out of time changes what ATC said: always shown, with where to give it longer.
   if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);
   if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → ATC → Language model timing.`, true, 12000);
+}
+
+// Each airline in its own colour (its livery's, where known), each of its flights a shade of it.
+const AIRLINE_HUES = {
+  RYR: 215, BAW: 355, EZY: 28, DLH: 45, AFR: 225, KLM: 200, UAE: 0, QTR: 330, AAL: 210, DAL: 350, UAL: 230,
+  SWA: 40, JBU: 220, ASA: 190, ACA: 0, WJA: 175, IBE: 5, VLG: 50, SAS: 220, FIN: 210, THY: 0, AUA: 0, SWR: 0,
+  EIN: 140, WZZ: 300, NKS: 55, FFT: 130, VIR: 340, QFA: 0, ANA: 210, JAL: 0, CPA: 170, SIA: 40, ETD: 35,
+};
+function airlineColour(ident) {
+  const id = String(ident || "").toUpperCase().replace(/\s+/g, "");
+  const m = id.match(/^([A-Z]{3})(\d.*)$/);
+  const prefix = m ? m[1] : id.slice(0, 3);
+  let h = 0;
+  for (const c of prefix) h = (h * 31 + c.charCodeAt(0)) % 360;
+  const hue = AIRLINE_HUES[prefix] ?? h;
+  let n = 0;
+  for (const c of (m ? m[2] : id)) n = (n * 17 + c.charCodeAt(0)) % 997;
+  const light = 50 + (n % 5) * 6;  // 50-74%: a shade per flight
+  return `hsl(${hue} ${m ? 75 : 25}% ${light}%)`;
 }
 
 let playing = null;
@@ -367,11 +399,36 @@ $("#dlg-settings-close").onclick = () => $("#dlg-settings").close();
 $("#dlg-settings").addEventListener("click", (e) => { if (e.target === $("#dlg-settings")) $("#dlg-settings").close(); });
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
 $("#btn-help").onclick = () => $("#dlg-help").showModal();
-// The welcome notes: shown once ever (existing installs included), seen for good once closed.
+// The welcome notes: shown once ever (existing installs included), seen for good once closed. This version's notes
+// count as seen with it: a new install has nothing to catch up on.
 $("#dlg-welcome")?.addEventListener("close", () => {
-  if (S.state) S.state.welcome = false;
-  api("settings", { settings: { ui: { welcome_seen: true } } }).catch(() => {});
+  if (S.state) { S.state.welcome = false; S.state.whats_new = null; }
+  api("settings", { settings: { ui: { welcome_seen: true, notes_seen: S.state?.version || "" } } }).catch(() => {});
 });
+// What's new: once after each update, this version's CHANGELOG section.
+$("#dlg-whatsnew")?.addEventListener("close", () => {
+  const version = S.state?.whats_new?.version;
+  if (S.state) S.state.whats_new = null;
+  if (version) api("settings", { settings: { ui: { notes_seen: version } } }).catch(() => {});
+});
+/** The CHANGELOG's Markdown (### headings, "- " items, **bold**, `code`) as HTML. */
+function notesHtml(md) {
+  const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const out = [];
+  let item = null, list = false;
+  const flush = () => { if (item !== null) out.push(`<li>${inline(item)}</li>`); item = null; };
+  const close = () => { flush(); if (list) out.push("</ul>"); list = false; };
+  for (const line of String(md || "").split("\n")) {
+    if (line.startsWith("### ")) { close(); out.push(`<h3>${inline(line.slice(4))}</h3>`); }
+    else if (line.startsWith("- ")) { flush(); if (!list) { out.push("<ul>"); list = true; } item = line.slice(2).trim(); }
+    else if (line.startsWith("  ") && item !== null) item += " " + line.trim();
+    else if (line.trim()) { close(); out.push(`<p>${inline(line.trim())}</p>`); }
+    else flush();
+  }
+  close();
+  return out.join("");
+}
 // The account suggestion: answered either way, it's never shown again; yes opens the account card in Settings.
 $("#dlg-account").addEventListener("close", () => {
   const yes = $("#dlg-account").returnValue === "yes";

@@ -54,7 +54,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         return {"kind": "readback", "t": t, "ok": False, "text": f"readback {ev.status}" + (f": {what}" if what else "")}
     if isinstance(ev, RadioChatter):  # somebody else on the frequency
         who = ev.station if ev.speaker == "atc" else ev.callsign
-        return {"kind": "chatter", "t": t, "station": who, "mhz": ev.frequency_mhz, "text": ev.text, "atc": ev.speaker == "atc"}
+        return {"kind": "chatter", "t": t, "station": who, "mhz": ev.frequency_mhz, "text": ev.text, "atc": ev.speaker == "atc",
+                "callsign": ev.callsign, "ident": ev.ident}
     if isinstance(ev, AtisBroadcast):
         return {"kind": "atis", "t": t, "station": f"{ev.station} information {ev.letter}"
                 + (f" · {ev.source}" if ev.source else ""), "mhz": ev.frequency_mhz,

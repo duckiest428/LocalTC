@@ -904,6 +904,7 @@ class PilotMonitoring:
             self.deck.expect_tune(float(cmd.value), t)
         if shown is None:  # nothing to read it back from (an add-on that doesn't report it): said as done
             out.append(self._say(t, p.done, "done", p.done_spoken))
+            out += list(p.after)
         else:
             self._waiting = [w for w in self._waiting if w.plan.action != p.action or w.plan.action == "light"]
             self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p))
@@ -922,6 +923,7 @@ class PilotMonitoring:
                 if shown and w.quiet:
                     self._own_took += 1
                 self._failures.pop(w.plan.action, None)
+                out += list(w.plan.after)
                 out.append(CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="done"))
             elif t >= w.deadline:
                 out += self._didnt_take(t, w)

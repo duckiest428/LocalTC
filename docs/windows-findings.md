@@ -4,6 +4,27 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-11: EGLL to RJTT, the stock A350-1000, LocalTC's traffic on (the sim crashed over Turkey)
+- The sim closed the connection 13 minutes after LocalTC's last log line, nothing unusual before it: not LocalTC's.
+- PLANE PITCH DEGREES and PLANE BANK DEGREES are positive nose down / left wing down: written as LocalTC computes
+  them (nose up positive), a KLM climbed out nose to the ground. Negated where the bridge writes them.
+- Tower's chatter cleared sim traffic for takeoff on the user's runway after the user's takeoff clearance (once at
+  140 kt into the roll), and held departures were frozen on the runway: "stop immediately" at 73 kt. Chatter now
+  leaves the runway alone while the user has it; LocalTC's aircraft on it are removed.
+- Ground chatter only ever said "push and start" to LocalTC's made-up parked aircraft. Now LocalTC's own aircraft
+  are left out of the chatter (``engine.managed_traffic``), and the traffic manager makes the calls as the real
+  flights do things, shown 30 s behind the live data (``TrafficSettings.live_delay_s``). Parked made-up aircraft
+  are on the ramps only by default (``fill_gates``).
+- Heathrow's taxi route came out as "Y, B, H, A, A6, A, A5, A, A3, A1": the OpenStreetMap names put the link
+  taxiways' names on short pieces of A. Pieces under 80 m between two of the same taxiway take its name. A1 (149 m
+  from the 27R threshold) is the right holding point for 27R.
+- Departure handed off to London Control at 1,500 ft before the check-in (the aircraft was below the departure
+  outline's floor); the copilot then checked in with London twice more, and said "no answer" (fixed both sides).
+- The A350-1000's input events include AIRLINER_FCU_ALT_KNOB_PUSH, AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL /
+  _PUSH and AIRLINER_SIGNS_SEAT_BELTS: in its profile (managed after an altitude change, STD by the knob). Open: does
+  the seatbelt input take 1/0 (it may be a three-way switch), and does the PULL show STD.
+- Open: the traffic with the 30 s delay over a whole flight (spawns, pushes, the controllers' calls in time).
+
 ## 2026-10-10: a seven-hour flight with LocalTC's traffic on (CYUL to LFPG, iniBuilds A330-200)
 - Six hours in, the microphone stream stopped calling back without an error: every press held the same 0.3 s of the
   ring buffer (61 clips, identical). `AudioCapture.idle_s` now says how long the stream has been quiet, and the voice

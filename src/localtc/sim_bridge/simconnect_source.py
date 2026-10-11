@@ -676,7 +676,9 @@ class SimConnectSource:
             lat, lon, alt, hdg, pitch, bank = track.at(now)
             track.next_write = now + track.interval(self._position, lat, lon)
             try:
-                dll.set_data_on_sim_object(handle, DEF_AI_MOVE, oid, struct.pack("<6d", lat, lon, alt, pitch, bank, hdg))
+                # The sim's pitch and bank are the other way round: nose up and a right bank are negative (a KLM
+                # climbing out with its nose to the ground).
+                dll.set_data_on_sim_object(handle, DEF_AI_MOVE, oid, struct.pack("<6d", lat, lon, alt, -pitch, -bank, hdg))
                 if ask_ground and track.on_ground and (track.gs_kt > 1.0 or track.ground_ft is None):
                     dll.request_data_on_sim_object(handle, REQ_AI_GROUND, DEF_AI_GROUND, oid, Period.ONCE)
             except SimConnectError as exc:

@@ -71,7 +71,7 @@ AFTER_ATC_S = 1.5  # and a moment after, for the readback to start
 READBACK_GRACE_S = 7.0  # an instruction that wants a readback: the pilot's turn first
 STERILE_FT = 10000.0
 STATUS_EVERY_S = 1800.0
-GEAR_UP_WAIT_S = 3.0  # positive rate: the pilot's "gear up" first, then the copilot's hand
+GEAR_UP_WAIT_S = 1.0  # positive rate, then "gear up" (and the gear up) straight after
 FLAP_STEP_WAIT_S = 6.0
 RETRACT_MARGIN_KT = 15.0  # a notch up this far below the current detent's placard speed
 RETRACT_MIN_AGL = 1000.0
@@ -705,10 +705,8 @@ class Monitor(WatchMixin):
             check = p.speed_check_kt
             if prev.ias_kt < check <= own.ias_kt:
                 self._call("speed_check", ROUTINE, t, f"{speech.miles(check).capitalize()} knots.")
-            if self.perf.v1 and prev.ias_kt < self.perf.v1 <= own.ias_kt:
-                self._call("v1", SAFETY, t, "V1.")
-            if (vr := self._vr()) and prev.ias_kt < vr <= own.ias_kt:
-                self._call("rotate", SAFETY, t, "Rotate.")
+            # No "V1" or "rotate": the pilot flying calls the speeds the aircraft's own voice doesn't (the
+            # copilot calling them sounded as if it were flying).
         # Parked at the destination.
         if self.f.landing_t is not None and own.gs_kt < 0.5 and own.parking_brake and self.phase == "TAXI_IN":
             stopped = self.f.said.setdefault("stopped_t", t)
@@ -803,7 +801,9 @@ class Monitor(WatchMixin):
             if abs(alt - target) < 150:
                 self.captured = target
             via = self._via()
-            if self.captured != target and abs(alt - target) >= 1000 and abs(own.vs_fpm) < 300 and not via \
+            # Not on the way up out of the departure, low down: a SID's level-offs ("6,000 at DET") are flown there.
+            sid_climb = self.phase == "DEPARTURE" and alt < 10000 and alt < target
+            if self.captured != target and abs(alt - target) >= 1000 and abs(own.vs_fpm) < 300 and not via and not sid_climb \
                     and t - self.cleared_alt_t > LEVEL_BELOW_S and self.phase in ("DEPARTURE", "CRUISE", "ARRIVAL"):
                 # Cleared to FL370 and still level at 350 an hour later (the selected altitude never reached the
                 # aircraft): the pilot monitoring says so.
@@ -852,9 +852,10 @@ class Monitor(WatchMixin):
         going_around = self.p.last_atc is not None and "go_around" in (self.p.last_atc.instruction_id or "")             and t - self.p.last_atc.t < 300
         climbing_out = self.phase in (None, "TAKEOFF", "DEPARTURE", "CRUISE") or going_around
         if prev_alt < ta <= alt and own.vs_fpm > 300 and climbing_out:
-            std = abs(own.altimeter_inhg - 29.92) < 0.015
-            self._call("transition_climb", ROUTINE, t, "Transition, standard." if std or not self.hands else "Transition, standard set.",
-                       commands=() if std else (Command("altimeter", "29.92"),))
+            # Set whatever the altimeter reads: a QNH of 1013 reads 29.92 and isn't standard (it was taken for set,
+            # and nothing was).
+            self._call("transition_climb", ROUTINE, t, "Transition, standard set." if self.hands else "Transition, standard.",
+                       commands=(Command("altimeter", "29.92"),) if self.hands else ())
         tl = ta + (1000 if region.icao else 0)
         if prev_alt > tl >= alt and own.vs_fpm < 0 and st is not None:
             info = self._atis(st.flight.destination)
@@ -890,9 +891,7 @@ class Monitor(WatchMixin):
                           valid=lambda: st.assignments.speed_kt == assigned_kt and not self._on_approach())
         else:
             self.f.said.pop("speed_off_t", None)
-        if own.in_cloud and own.temperature_c is not None and round(own.temperature_c) > -40 and own.temperature_c <= 5 \
-                and not (s is not None and s.anti_ice):
-            self._call("icing", ROUTINE, t, f"In cloud at {own.temperature_c:.0f} degrees; engine anti-ice?", again_s=1200)
+        # (No "in cloud at 2 degrees; engine anti-ice?" questions: ice building up is called when there is some.)
         self._cruise(own, t)
         self._approach(own, prev, t, agl)
 

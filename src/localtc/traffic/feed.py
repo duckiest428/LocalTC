@@ -138,6 +138,7 @@ class LiveFeed:
 class Route:
     origin: str  # ICAO
     destination: str
+    destination_name: str = ""  # its city, as a clearance says it ("Tokyo")
 
 
 class FlightBook:
@@ -174,7 +175,7 @@ class FlightBook:
 
     def route(self, callsign: str) -> Route | None:
         got = self.routes.get(callsign)
-        return Route(got[1], got[2]) if got and got[1] else None
+        return Route(got[1], got[2], got[3] if len(got) > 3 else "") if got and got[1] else None
 
     def type_of(self, hex_: str) -> str:
         got = self.types.get(hex_)
@@ -195,12 +196,14 @@ class FlightBook:
                 self.types[f.hex] = (now, self._ask_type(f.hex))
         return asked
 
-    def _ask_route(self, callsign: str) -> tuple[str, str]:
+    def _ask_route(self, callsign: str) -> tuple[str, str, str]:
         try:
             r = self._fetch(ROUTE_URL.format(callsign=callsign))["response"]["flightroute"]
-            return (r["origin"]["icao_code"] or "").upper(), (r["destination"]["icao_code"] or "").upper()
+            dest = r["destination"]
+            return (r["origin"]["icao_code"] or "").upper(), (dest["icao_code"] or "").upper(), \
+                str(dest.get("municipality") or "")
         except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError):
-            return "", ""
+            return "", "", ""
 
     def _ask_type(self, hex_: str) -> str:
         try:

@@ -474,3 +474,21 @@ def test_the_copilots_reworded_numbers_may_be_words():
     assert check_reworded(said, "Squawk 4732, initial 6,000 set.")[0]
     assert check_reworded('{"reply": "Bit firm. Six hours thirteen in the air."}', "Bit firm. 6 hours 13 minutes.")[0]
     assert check_reworded('{"reply": "That one is yours, six thousand."}', "6,000.")[0]
+
+
+def test_positive_rate_brings_the_gear_up():
+    assert parse("Positive rate.") == [Command("gear", "up")]
+
+
+def test_the_a350s_altitude_knob_is_pushed_and_its_baro_pulled_for_standard():
+    from localtc.crew.profiles import for_aircraft, load_all
+    from localtc.sim_api import OwnshipState, SetInputEvent
+
+    profile = for_aircraft(load_all(), "A350-1000 (Default Cabin)", "A350-1000")
+    flying = OwnshipState(t=0, lat=0, lon=0, alt_msl_ft=8000, alt_indicated_ft=8000, alt_agl_ft=8000, altimeter_inhg=29.92,
+                          hdg_mag=0, hdg_true=0, ias_kt=250, gs_kt=250, vs_fpm=0, on_ground=False, squawk="1200",
+                          xpdr_mode="alt", com1_mhz=118.0, com2_mhz=118.0)
+    altitude = plan(Command("altitude", "23000"), Cockpit(own=flying, profile=profile))
+    assert altitude.after == (SetInputEvent(name="AIRLINER_FCU_ALT_KNOB_PUSH", value=1.0),)
+    [std] = plan(Command("altimeter", "29.92"), Cockpit(own=flying, profile=profile)).writes
+    assert std.name.endswith("_RIGHT_PULL")

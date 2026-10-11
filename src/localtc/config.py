@@ -250,15 +250,18 @@ class CloudConfig(_Section):
 
 class TrafficConfig(_Section):
     """LocalTC's traffic (localtc.traffic): the real flights around, live from free ADS-B sources, flown in the sim
-    with FSLTL's models when FSLTL is installed; the gates filled as busy as the airport is at that hour; the traffic
-    answering to ATC (sent around or held short when the user has the runway, giving way on the ground). EXPERIMENTAL.
+    with FSLTL's models when FSLTL is installed; the ramps filled as busy as the airport is at that hour; the traffic
+    answering to ATC (told what to do as the real ones do it, sent around or held short when the user has the runway,
+    giving way on the ground). EXPERIMENTAL.
     Off unless turned on, and then MSFS's own air traffic should be off (Options > General > Traffic), or both fly."""
 
     enabled: bool = False
     radius_nm: float = 40.0  # the real flights within this of the user
     max_live: int = 30  # never more of them at once (the nearest)
-    parked: bool = True  # aircraft parked at the gates of the airport the user is at or going to
+    parked: bool = True  # aircraft parked on the ramps of the airport the user is on the ground at
     max_parked: int = 40  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
+    fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
+    live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
     # The experiment this replaced (shadowing and putting back MSFS's own): still read from old settings, not used.
     control: str = ""

@@ -23,7 +23,7 @@ HORIZON_S = 60.0  # carried on this long past its last update at most, then held
 HORIZON_GROUND_S = 8.0  # on the ground: a few seconds at most (one driving on past its last report ran into a terminal)
 ROLL_DPS = 5.0  # how quickly it rolls into a turn and out (an airliner: a few degrees a second)
 MAX_BANK = 25.0
-YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 20.0  # the most its nose swings a second
+YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 10.0  # the most its nose swings a second
 PITCH_DPS = 2.0
 LOOK_S = 1.0  # the way it's going: from where it is to where it is this much later
 # How often it's written to the sim, by its distance from the user: close by every frame or so, far away a few times
@@ -85,8 +85,10 @@ class Track:
         lat, lon, alt, hdg = self.position(now)
         ahead = self.position(now + LOOK_S)
         moved = math.hypot((ahead[0] - lat) * M_PER_DEG, (ahead[1] - lon) * M_PER_DEG * math.cos(math.radians(lat)))
-        if moved > 1.5 * LOOK_S:  # moving (over 3 kt): the nose along the path
+        if moved > 1.5 * LOOK_S and not self.on_ground:  # flying: the nose along the path
             hdg = bearing_deg(lat, lon, ahead[0], ahead[1])
+        # On the ground the nose is the heading sent (its track, or the way it points being pushed back): the path
+        # through a correction swung it left and right, and backwards on a push it turned round.
         if self.shown is None or not 0 < now - self.shown[0] < 5:
             bank = 0.0 if self.on_ground else self.bank
             self.shown = (now, hdg, bank, self.pitch)

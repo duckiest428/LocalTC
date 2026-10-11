@@ -42,6 +42,13 @@ a new minor version adds features, a patch fixes them.
 - **"Stop immediately"**: on the takeoff roll, still below 80 knots, with an aircraft about to be on the runway ahead, tower stops you.
 
 ### Changed
+- **LocalTC's traffic follows the real flights 30 seconds behind**, always between two positions known: the step from the ground into the air and back is as smooth as the rest, and what each does next is known in time for the controllers to tell it. Ground, tower and delivery now talk to the real flights as they do things: the clearance to its destination at the gate, push and start, the taxi out on the real taxiways, line up, takeoff, the landing clearance and the taxi in. The chatter no longer talks to aircraft that aren't there.
+- **The gates have only the real aircraft**: no terminal full of made-up ones at six in the morning (only the cargo and GA ramps are filled; `[traffic] fill_gates` puts the old behaviour back). An arrival stays on its stand 45 minutes, or until it's heard pushing back for its next flight, then goes.
+- **The copilot doesn't call "V1" or "rotate"**: it isn't flying. It calls "gear up" and raises the gear right after "positive rate", yours or its own.
+- **No more "in cloud at 2 degrees; engine anti-ice?" questions.**
+- **The copilot sets an Airbus's altitude knob to managed** once the new altitude shows (the A350's and the iniBuilds A330-200's knob pushed), and its own baro to STD by the knob (pulled) and back to QNH (pushed).
+- **No "still level below" calls on a SID**: below 10,000 ft on the departure, its level-offs are the procedure's.
+- **A taxi out given a new route when a new ATIS turns the runway round**, with a tailwind on the old one.
 - **The ATIS is the real one wherever there's a real report**: the airport's real ATIS (US airports), else LocalTC's from the real METAR, however old; the sim's weather only where there's no real report at all. (The sim's weather, once seen at the airport, used to win.)
 - **ATC may answer beyond what the sim tells it, by default** (Quick Settings → ATC → "Let the model answer beyond the sim's data"): its answers may use what it knows itself; it still never gives an instruction that way.
 - **The copilot works the seatbelt sign**, and takes "standard", "set standard" or "STD on your altimeter" for 29.92. Your own light calls ("taxi lights on, strobes and beacon on") get one "Check." instead of "Your side." for each light.
@@ -67,6 +74,15 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **LocalTC's traffic pointing its nose at the ground on takeoff**: the sim's pitch and bank are the other way round; climbing aircraft now pitch up and bank into their turns.
+- **Taxiing traffic swinging left and right**, and turning round while pushed back: on the ground the nose follows its heading.
+- **Tower clearing other aircraft onto your runway** while you were cleared for takeoff (one at 140 knots into your roll), and LocalTC's aircraft left sitting on your runway ("stop immediately, traffic on the runway"). One on it as you get the runway is taken away.
+- **Tower's "hold short, traffic landing"** said for a departure: "traffic departing" when you're the one taking off.
+- **Departure handing you to the centre at 1,500 ft**, before your check-in: it waits for the check-in, and for 5,000 ft near the field.
+- **The copilot checking in again and again**, then saying "no answer" and going back to departure: a check-in ATC already heard isn't made again, and a controller who spoke since counts as an answer.
+- **ATC ignoring a check-in** after you'd been on another frequency, and answering a later one with "roger": back on a frequency, a check-in is answered as one.
+- **"Transition, standard" without setting it**: a QNH of 1013 reads 29.92 and was taken for standard already. Standard is now set at the transition.
+- **Taxi routes with link taxiways' stubs in them**: "A, A6, A, A5, A, A3, A1" is "A, A1".
 - **The microphone stopping mid-flight**: after hours its stream can stop sending without an error, and every transmission was the same 0.3 s of silence ("can't transmit anything"). It's reopened at the next press.
 - **A long transmission lost**: a 21 s readback with a long vocabulary prompt asked speech-to-text for more than it can hold, and failed. The prompt is shortened to fit.
 - **Ground at the destination using the departure airport**: stopped with the brake set on the way in, a request for a gate got the departure airport's runway, taxiways and altimeter, and a second one "unable". Stopped after landing is the taxi in: the request is for a stand at the destination.

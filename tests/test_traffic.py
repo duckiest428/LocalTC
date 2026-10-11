@@ -52,7 +52,8 @@ def flight(hex_="a1", callsign="UAL123", type_="B738", lat=0.05, lon=0.0, alt=30
 
 
 def manager(atc: AtcLink | None = None, **settings) -> TrafficManager:
-    m = TrafficManager(TrafficSettings(**{"parked": False, **settings}), atc, picker=ModelPicker(MODELS))
+    m = TrafficManager(TrafficSettings(**{"parked": False, "live_delay_s": 0.0, "fill_gates": True, **settings}), atc,
+                       picker=ModelPicker(MODELS))
     m.on_airport(APT)
     m.on_own(own())
     return m
@@ -424,7 +425,7 @@ def test_the_gates_get_the_airlines_that_fly_there_and_a_few_models():
                                                   "BAW", "AFR")]
     gates = tuple(ParkingSpot(index=i, name=f"GATE B {i}", kind="gate_medium", lat=0.006 + (i // 10) * 0.001,
                               lon=-0.02 + (i % 10) * 0.002, heading_true=180.0, radius_m=22.0) for i in range(40))
-    m = TrafficManager(TrafficSettings(max_parked=40), picker=ModelPicker(models),
+    m = TrafficManager(TrafficSettings(max_parked=40, fill_gates=True), picker=ModelPicker(models),
                        routes=lambda cs: Route("KTST", "KXYZ") if cs.startswith("QFA") else None)
     m.on_airport(Airport(icao="KTST", lat=0.0, lon=0.0, elev_ft=100.0, runways=(RWY,), parking=gates))
     m.on_own(own(zulu_h=8.0))  # and a few live flights out of here
@@ -510,3 +511,113 @@ def test_no_aircraft_are_parked_while_the_user_is_flying():
     m.on_own(own(zulu_h=3.0, on_ground=True, gs=15.0))
     spawns = parked(m)
     assert spawns and len(spawns) <= 5  # one a second
+
+
+# --- shown 30 s behind, the controllers' calls --------------------------------------------------------------------
+
+
+def test_a_live_one_is_shown_thirty_seconds_behind_between_two_positions():
+    m = manager(live_delay_s=30.0)
+    m.on_feed([flight(lat=0.05, t=NOW)], "adsb.lol", NOW)
+    assert not of(SpawnAiAircraft, m.tick(NOW + 10))  # not heard for 30 s yet: not made
+    m.on_feed([flight(lat=0.04, t=NOW + 20)], "adsb.lol", NOW + 20)
+    spawn = of(SpawnAiAircraft, m.tick(NOW + 40))[0]
+    assert abs(spawn.lat - 0.045) < 1e-6  # half way between the two, where it was ten seconds after the first
+
+
+def test_the_controllers_tell_a_real_departure_what_it_does_before_it_does_it():
+    from localtc.traffic.feed import Route
+
+    calls = []
+    link = AtcLink(call=lambda **kw: calls.append((kw["kind"], kw["runway"])) or [])
+    m = TrafficManager(TrafficSettings(parked=False, live_delay_s=30.0), link, picker=ModelPicker(MODELS),
+                       routes=lambda cs: Route("KTST", "RJTT", "Tokyo"))
+    m.on_airport(APT)
+    m.on_own(own(lat=0.03))
+    gate = GATES[1]
+    t = NOW
+    for k in range(4):  # at its gate, transponder on
+        m.on_feed([flight(lat=gate.lat, lon=gate.lon, ground=True, gs=0.0, t=t + k * 10)], "adsb.lol", t + k * 10)
+    assign(m, m.tick(t + 31))
+    for k in range(31, 40):
+        m.tick(t + k)
+    assert calls[:1] == [("clearance", "")]
+    # It starts back: the push is called while it's still shown standing.
+    m.on_feed([flight(lat=gate.lat - 0.0001, lon=gate.lon, ground=True, gs=3.0, track=0.0, t=t + 40)], "adsb.lol", t + 40)
+    plane = next(iter(m.planes.values()))
+    for k in range(41, 65):
+        m.tick(t + k)
+        if ("pushback", "") in calls:
+            break
+    assert ("pushback", "") in calls
+    assert plane.flight.gs_kt < 1  # still shown at the gate: the call comes first
+
+
+def test_one_on_the_users_runway_is_taken_away():
+    atc = Atc()
+    m = manager(atc.link())
+    m.on_feed([flight(lat=0.0, lon=0.003, ground=True, gs=5.0, track=90.0)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    atc.runway = ("KTST", "09", "takeoff")
+    out = m.tick(NOW + 1)
+    assert of(RemoveAiAircraft, out) and not m.planes
+
+
+def test_an_arrival_stays_on_its_stand_three_quarters_of_an_hour():
+    m = manager()
+    gate = GATES[0]
+    m.on_feed([flight(lat=gate.lat, lon=gate.lon, ground=True, gs=0.0)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    for k in range(1, 200, 10):
+        m.tick(NOW + k)  # its transponder off: no more reports
+    plane = next(iter(m.planes.values()))
+    assert plane.mode == "parked"
+    assert not of(RemoveAiAircraft, m.tick(NOW + 40 * 60))
+    assert of(RemoveAiAircraft, m.tick(NOW + 50 * 60))
+
+
+def test_pushed_back_it_keeps_its_nose_and_goes_backwards():
+    m = manager()
+    m.on_feed([flight(lat=0.01, lon=0.0, ground=True, gs=5.0, track=180.0)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    m.on_feed([flight(lat=0.0101, lon=0.0, ground=True, gs=3.0, track=0.0, t=NOW + 5)], "adsb.lol", NOW + 5)
+    [track] = of(AiTrack, m.tick(NOW + 5))
+    assert track.hdg == 180.0 and track.gs_kt < 0
+
+
+def test_ground_and_delivery_talk_to_the_real_flights_and_hold_short_says_why():
+    from pathlib import Path
+
+    import msgspec
+
+    from localtc.airports import load_airport_dir
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.replay import Recording
+    from localtc.sim_api import AirportData, RadioChatter
+
+    fixtures = Path(__file__).parent / "fixtures"
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, unscripted=False))
+    for airport in load_airport_dir(fixtures / "airports"):
+        engine.handle(AirportData(t=0.0, airport=airport))
+    own_ = next(e for e in Recording(fixtures / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))
+    ground = engine.facility("ground")
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=ground.mhz))
+    lines = engine.traffic_call("UAL531", "pushback", ground.airport, "", own_.t + 1)
+    assert [c.speaker for c in lines] == ["atc", "pilot"] and "tail" in lines[0].text
+    assert not engine.traffic_call("UAL531", "land", ground.airport, "16R", own_.t + 1)  # tower's, not ground's
+    tower = engine.facility("tower")
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz, t=own_.t + 2))
+    [atc, _] = engine.traffic_call("UAL532", "hold_short", tower.airport, "16R", own_.t + 3)
+    assert "traffic departing" in atc.text  # the user's on the ground: departing, not landing
+
+
+def test_the_chatter_leaves_localtcs_own_aircraft_to_the_traffic():
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.sim_api import TrafficTarget
+
+    engine = AtcEngine(EngineConfig(destination="KBFI", callsign="N172LT"))
+    target = TrafficTarget(object_id=42, atc_id="UAL1", lat=0.0, lon=0.0, alt_ft=100.0, hdg_true=0.0, gs_kt=0.0,
+                           on_ground=True)
+    engine.managed_traffic = {42}
+    facility = type("F", (), {"controller": "ground"})()
+    assert engine._doing(target, None, facility) is None

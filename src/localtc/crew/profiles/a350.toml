@@ -31,3 +31,22 @@ knob = "AIRLINER_FCU_SPD_KNOB"
 [actions.altitude]
 knob = "AIRLINER_FCU_ALT_KNOB"
 step = 1000
+
+# Pushed once the new altitude shows, in the air: the climb or descent managed.
+[actions.altitude_push]
+input = "AIRLINER_FCU_ALT_KNOB_PUSH"
+on = 1
+
+# The first officer's baro knob: pulled for STD, pushed back to QNH (the altimeter itself by KOHLSMAN_SET).
+[actions.altimeter_std]
+input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL"
+on = 1
+
+[actions.altimeter_qnh]
+input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH"
+on = 1
+
+[actions.seatbelt]
+input = "AIRLINER_SIGNS_SEAT_BELTS"
+on = 1
+off = 0

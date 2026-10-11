@@ -106,6 +106,8 @@ def parse(text: str) -> list[Command]:
         return [Command("emergency", "pan" if re.search(r"\bpan[ -]?pan\b", lowered) else "mayday")]
     if re.search(r"\bgo[ -]?around\b|\bgoing around\b", lowered):
         return [Command("go_around")]
+    if re.search(r"\bpositive (?:rate|climb)\b", lowered) and "gear" not in lowered:
+        return [Command("gear", "up")]  # "positive rate": the gear's called up straight after it, and put up
     for phrases, level in ((QUIET, "quiet"), (CHATTY, "chatty"), (STANDARD, "standard")):
         if any(phrase in lowered for phrase in phrases):
             return [Command("verbosity", level)]

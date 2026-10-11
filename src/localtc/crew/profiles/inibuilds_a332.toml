@@ -30,6 +30,18 @@ knob = "AIRLINER_MCU_ALT"
 step = 1000
 learn = true
 
+[actions.altitude_push]
+input = "AIRLINER_MCU_ALT_PUSH"
+on = 1
+
+[actions.altimeter_std]
+input = "AIRLINER_FO_BARO_SET_PULL"
+on = 1
+
+[actions.altimeter_qnh]
+input = "AIRLINER_FO_BARO_SET_PUSH"
+on = 1
+
 [actions.vs]
 knob = "AIRLINER_MCU_VS"
 step = 100

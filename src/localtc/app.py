@@ -192,8 +192,15 @@ def traffic_atc(engine) -> "AtcLink":
         own = engine.state.aircraft
         return engine.traffic_call(callsign, kind, icao, runway, own.t if own is not None else 0.0)
 
+    def call(*, callsign: str, kind: str, icao: str, runway: str, **more) -> list:
+        own = engine.state.aircraft
+        return engine.traffic_call(callsign, kind, icao, runway, own.t if own is not None else 0.0, **more)
+
+    def managed(ids: set[int]) -> None:
+        engine.managed_traffic = ids
+
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
-                   destination=lambda: engine.state.flight.destination or "")
+                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed)
 
 
 def start_traffic(cfg: Config, engine, source: SimSource, bus):
@@ -203,7 +210,8 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
 
     t = cfg.traffic
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
-                               atc_control=t.atc_control and engine is not None)
+                               atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
+                               live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
     log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, ATC %s)", t.radius_nm,
              "on" if t.parked else "off", "on" if settings.atc_control else "off")

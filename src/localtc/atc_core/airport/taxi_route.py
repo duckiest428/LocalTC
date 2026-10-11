@@ -116,10 +116,7 @@ class TaxiGraph:
         if path is None:
             return None
         edges = [edge for _, edge in path if edge is not None]
-        names: list[str] = []
-        for edge in edges:
-            if edge.name and (not names or names[-1] != edge.name):
-                names.append(edge.name)
+        names = _named_runs(edges)
         target = self.geometry.end(hold_short).runway if hold_short and self.geometry.end(hold_short) else None
         crossed = [self._hold_short_runway.get(node) for node, _ in path[1:-1]]
         crossed += [
@@ -222,3 +219,27 @@ class TaxiGraph:
         if start is None or not goals:
             return None
         return self.route(start, goals)
+
+
+STUB_M = 80.0  # a piece of another taxiway this short between two of the same is that taxiway (a link's stub)
+
+
+def _named_runs(edges) -> list[str]:
+    """The taxiways a route follows, in order: each once per stretch. A short piece named for a link between two
+    stretches of the same taxiway is that taxiway (Heathrow's "A, A6, A, A5, A, A3, A1" is "A, A1")."""
+    runs: list[list] = []  # [name, length]
+    for edge in edges:
+        if not edge.name:
+            continue
+        if runs and runs[-1][0] == edge.name:
+            runs[-1][1] += edge.length
+        else:
+            runs.append([edge.name, edge.length])
+    i = 1
+    while i < len(runs) - 1:
+        if runs[i][1] < STUB_M and runs[i - 1][0] == runs[i + 1][0]:
+            runs[i - 1][1] += runs[i][1] + runs[i + 1][1]
+            del runs[i:i + 2]
+        else:
+            i += 1
+    return [name for name, _ in runs]

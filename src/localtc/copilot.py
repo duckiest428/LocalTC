@@ -352,6 +352,10 @@ class Copilot:
             return []
         when, facility, tries = self._checked_in
         tuned = self.engine.state.comms.tuned
+        last_atc = self.engine.state.comms.last_atc_t
+        if last_atc is not None and last_atc > when and tuned is not None and tuned.matches(facility.mhz):
+            self._checked_in = None  # the controller spoke since: heard
+            return []
         if t - when < UNANSWERED_S or not self.engine.idle:
             return []
         if tuned is None or not tuned.matches(facility.mhz):
@@ -498,6 +502,10 @@ class Copilot:
             assert item.facility is not None
             if self._pilot_said_t > item.created:
                 return []  # the pilot called them already: a second call-up on top of theirs is noise
+            if item.facility.station in getattr(self.engine, "_checked_in", ()):
+                # Heard already (London answered, then a second check-in went out, wasn't answered, and the copilot
+                # said "no answer" and went back to departure).
+                return []
             text = self._checkin_text(item.facility, st.aircraft) or ""
             if item.item is not None:
                 item.item.text = text

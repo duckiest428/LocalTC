@@ -90,8 +90,10 @@ timeout_s = 6.0               # per call, every service tried in it
 enabled = false               # on: set MSFS's own air traffic and parked aircraft to off (Options > General > Traffic)
 radius_nm = 40.0              # the real flights within this of you
 max_live = 30                 # never more of them at once (the nearest)
-parked = true                 # aircraft parked at the gates of the airport you're at or going to, as many as at that hour
+parked = true                 # aircraft parked on the cargo and GA ramps of the airport you're on the ground at
 max_parked = 40               # more costs frames (each model loads its textures)
+fill_gates = false            # true: the gates filled with made-up aircraft too (false: only the real ones)
+live_delay_s = 30.0           # each real flight shown this far behind, so it always moves between known positions
 atc_control = true            # real flights sent around, held short or stopped to give way when they'd be in your way
 
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"

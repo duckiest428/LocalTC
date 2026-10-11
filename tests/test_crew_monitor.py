@@ -80,14 +80,15 @@ def fly(pm: PilotMonitoring, states) -> list:
     return out
 
 
-def test_the_takeoff_callouts_come_from_the_plan_and_the_aircraft():
+def test_the_takeoff_speed_call_but_no_v1_or_rotate():
+    """The copilot isn't flying: no "V1" and "rotate" from it (they sounded as if it were)."""
     pm = crew(perf=PlanPerf(v1=140, vr=145, v2=150), plan_source="simbrief")
     pm.observe(PhaseChanged(t=0.5, previous="RUNWAY_HOLD", phase="TAKEOFF"))
     pm.observe(systems(0.6))
     out = fly(pm, [own(1 + i, on_runway=True, ias_kt=ias, gs_kt=ias) for i, ias in enumerate(range(20, 160, 10))])
     words = said(out)
-    assert words.index("One hundred knots.") < words.index("V1.") < words.index("Rotate.")  # Airbus: 100 knots
-    assert "Eighty knots." not in words
+    assert "One hundred knots." in words and "Eighty knots." not in words  # Airbus: 100 knots
+    assert "V1." not in words and "Rotate." not in words
 
 
 def test_positive_rate_then_the_copilot_raises_the_gear_itself():
@@ -346,3 +347,24 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting
     assert max(words.count(w) for w in set(words)) <= 2  # nothing said over and over
+
+
+def test_standard_is_set_at_the_transition_even_with_a_qnh_of_1013():
+    """QNH 1013 reads 29.92: it was taken for standard already, and nothing was set."""
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))
+    pm.observe(systems(0.6))
+    out = fly(pm, [own(1 + i, on_ground=False, alt_agl_ft=17000 + 300 * i, alt_indicated_ft=17500 + 300 * i,
+                       alt_msl_ft=17500 + 300 * i, vs_fpm=2000, ias_kt=280, gs_kt=280, gear_down=False, flaps_index=0)
+                   for i in range(5)])
+    assert "Transition, standard set." in said(out)
+    assert any(isinstance(o, SendSimEvent) and o.name == "KOHLSMAN_SET" for o in out)
+
+
+def test_no_anti_ice_question_in_cloud():
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="DEPARTURE", phase="CRUISE"))
+    pm.observe(systems(0.6))
+    out = fly(pm, [own(1 + i, on_ground=False, alt_agl_ft=9000, alt_indicated_ft=9400, in_cloud=True,
+                       temperature_c=1.0, ias_kt=250, gs_kt=250, gear_down=False, flaps_index=0) for i in range(5)])
+    assert not any("anti-ice" in w for w in said(out))

@@ -76,7 +76,8 @@ TRAITS: dict[str, Traits] = {
     "conversational": Traits(("roger, thanks", "copy that, thanks", "roger"), ("sorry, you were cut out, say again?", "say again"),
                              ("good {when}", "good {when}, welcome"), ("have a good one", "enjoy the flight", "good day"),
                              ("good day", "bye bye"), 0.9, 0.9, "long", 2, "gentle", 3, 0.97, 0.06,
-                             ("thanks", "appreciate it", "appreciate the help"),  # ("nice and easy": "what does that even mean?")
+                             ("thanks", "appreciate it"),  # ("nice and easy": "what does that even mean?"; "appreciate the help":
+                             # "what help??")
                              "chatty and personable, likes a word with the crews when it's quiet"),
 }
 
@@ -112,7 +113,8 @@ class Personality:
         return (f"The controller at {self.station} is {self.kind}: {t.manner}. They speak in {sentences}"
                 f"{' and use standard ICAO wording' if self.icao else ''}. They acknowledge with \"{self.ack}\"."
                 f"{habits}{busy} Their manner shapes the words, never the instruction: every value, runway, route, "
-                "frequency and readback stays exactly as decided.")
+                "frequency and readback stays exactly as decided. A thank-you only for something the pilot said or did; "
+                "no remarks about the pilot helping, the frequency or how quiet it is.")
 
 
 def shift_key(station: str, shift: int = 0) -> str:

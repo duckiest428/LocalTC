@@ -262,8 +262,10 @@ class PhaseDetector:
         if phase is FlightPhase.PARKED:
             if self._held("pushback", self._moving_astern(own), t, th.pushback_s):
                 return FlightPhase.PUSHBACK, "being pushed back"
-            # Not while going backwards: a tug taking up the slack jerks the aircraft back at a few knots.
-            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own)
+            # Not while going backwards: a tug taking up the slack jerks the aircraft back at a few knots. Not with the
+            # parking brake set: 3.8 kt at Montreal's gate, brake set and not a metre covered while GSX readied the push,
+            # was taken for taxiing without a clearance.
+            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own)                 and not own.parking_brake
             if self._held("taxi", moving_off, t, th.taxi_start_s):
                 if self._arrived:  # stopped on the way in (waiting for a gate), now moving on
                     return FlightPhase.TAXI_IN, "taxiing in again"

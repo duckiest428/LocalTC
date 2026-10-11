@@ -140,7 +140,11 @@ class Chatter:
         elif c == "center" and other.level_ft >= 10000:
             level = max(11000, min(41000, other.level_ft))
             if doing == "level":
-                out.append(("checkin", "common.roger", {"level": level}))
+                # Answered the way the pilot's own check-in is ("radar contact, maintain FL350"), not "roger" every time,
+                # and now and then a step climb.
+                out.append(("checkin", "center.checkin_level", {"level": level, "station": scene.station, "altitude": level}))
+                if level <= 39000 and rng.random() < 0.4:
+                    out.append(("atc", "common.climb", {"altitude": level + 2000}))
             elif doing == "climbing":
                 out.append(("atc", "common.climb", {"altitude": min(41000, level + rng.choice((2000, 4000)))}))
             else:

@@ -4,6 +4,28 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-10: a seven-hour flight with LocalTC's traffic on (CYUL to LFPG, iniBuilds A330-200)
+- Six hours in, the microphone stream stopped calling back without an error: every press held the same 0.3 s of the
+  ring buffer (61 clips, identical). `AudioCapture.idle_s` now says how long the stream has been quiet, and the voice
+  service reopens it before a press when it's over a second.
+- A 21 s readback failed in Whisper: a prompt of 260 tokens and 195 asked for, over its 448. The prompt is cut from the
+  front to fit (`WhisperTranscriber.budget`), the words it may say first.
+- Stopped with the brake set on a taxiway after landing (phase PARKED, in DEPARTURE_PHASES) put the engine back at the
+  origin: LFPG Ground gave CYUL's runway, taxiways and altimeter. `_arriving` counts landed as arriving everywhere.
+- A chatter callsign ending in two letters raised in `group_form` 15 times; chatter can't stop the engine any more.
+- At the gate, brake set, GSX readying the push: GROUND VELOCITY 3.8 kt with the position not moving, taken for a taxi
+  without clearance. Not with the parking brake set.
+- Parked aircraft were put at every airport within 12 nm while cruising (EICB, LFRC, LFOP ...) and at LFPG from 45 nm
+  out, on final. Now only at the airport the user is on the ground at, below 40 kt, one a second. A quiet arrival far
+  away was landed, removed for the distance and remade every 2 s: only within 15 nm now.
+- The iniBuilds A330-200 (title "A330-200 (RR)") ignored AP_ALT_VAR_SET and HEADING_BUG_SET. Its input events include
+  AIRLINER_MCU_HDG / _SPEED / _ALT / _VS (with _PUSH/_PULL), AIRLINER_CPT_BARO_SET / _FO_BARO_SET (+ _PUSH/_PULL),
+  AIRLINER_SEATBELTS_TOGGLE and the lights' *_TOGGLE: a profile (crew/profiles/inibuilds_a332.toml) turns the MCU knobs
+  (the altitude knob learns 100 or 1,000 a click) and sets the seatbelt switch. Open: try it in the sim with
+  `localtc debug hands` (does a knob step +1/-1, does AUTOPILOT ALTITUDE LOCK VAR follow the MCU, does the seatbelt
+  input take 1/0, and does STD want the baro PULL rather than 29.92).
+- Open: the traffic's frame rate after landing at a big airport now the parked ones come one a second.
+
 ## 2026-10-10: a whole flight with LocalTC's traffic on (KLAX, Headwind A330-900neo)
 - Live traffic plus 80 parked FSLTL aircraft at KLAX: frames dropped, liveries came in late, and the GPU driver crashed
   later in the flight (with the copilot's radios just switched to full). Now 40 parked at most by default, two made a

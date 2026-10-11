@@ -188,7 +188,7 @@ class AtcConfig(_Section):
     destination_weather: bool = True
     # Where each airport's ATIS comes from: "sim" (LocalTC's, from the simulator's weather), "real" (the airport's real
     # ATIS where it has one, else the simulator's), "hybrid" (the real ATIS, else the real METAR, else the
-    # simulator). The sim's own weather, observed at the airport in the last half hour, always wins.
+    # simulator: only where there's no real report at all, however old the real one is).
     atis_source: Literal["sim", "real", "hybrid"] = "hybrid"
 
 
@@ -208,8 +208,9 @@ class LlmConfig(_Section):
     mode: LlmMode = "mostly_llm"
     phrasing: bool = True  # the model may word replies at all (off: templates only, whatever the mode)
     # The model's answers may go past what the sim's data says (a number, a closure, a runway it isn't told about):
-    # off, a reply saying anything the facts don't is turned away. Instructions are never allowed either way.
-    beyond_facts: bool = False
+    # off, a reply saying anything the facts don't is turned away. Instructions are never allowed either way. On by
+    # default.
+    beyond_facts: bool = True
     timeout_s: float = 4.0  # per model call (Quick Settings → ATC → Language model timing)
     budget_s: float = 6.0  # per transmission, including one retry (at least timeout_s)
     # A question or anything off the script that the model couldn't answer in time: the app shows the controller

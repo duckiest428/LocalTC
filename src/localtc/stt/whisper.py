@@ -24,6 +24,9 @@ SAMPLE_RATE = 16000
 # The most a call can say: a few words a second (a fast radio call is 4), and room for the callsign. (The prompt and
 # these together stay inside Whisper's 448.)
 TOKENS_BASE, TOKENS_PER_S, TOKENS_MAX = 24, 8, 200
+MAX_LENGTH = 448  # Whisper's: the prompt, the hotwords and the words it may say, all together
+PROMPT_PART = MAX_LENGTH // 2 - 1  # faster-whisper keeps this much of the prompt, and of the hotwords
+SPECIAL_TOKENS = 8  # start of transcript, language, task, no timestamps (and room to spare)
 TEMPERATURES = (0.0, 0.3, 0.6)
 MODELS = ("tiny.en", "base.en", "small.en", "medium.en", "large-v3", "distil-large-v3")
 
@@ -137,21 +140,40 @@ class WhisperTranscriber:
             self._model = WhisperModel(str(path), device="cpu", compute_type="int8")
         log.info("%s ready", self.description)
 
+    def _tokens(self, text: str) -> list[int]:
+        tokenizer = getattr(self._model, "hf_tokenizer", None)
+        if not text.strip() or tokenizer is None:
+            return []
+        return list(tokenizer.encode(" " + text.strip(), add_special_tokens=False).ids)
+
+    def budget(self, prompt: str, hotwords: str, want: int) -> tuple[list[int] | str, int]:
+        """The prompt (as tokens, its start cut off if need be) and the most words Whisper may say, inside its 448:
+        a 21 s call with a long prompt asked for 455 and the call was lost."""
+        hot = min(len(self._tokens(hotwords)), PROMPT_PART)
+        tokens = self._tokens(prompt)[-PROMPT_PART:]
+        if not tokens:
+            return prompt, max(1, min(want, MAX_LENGTH - SPECIAL_TOKENS - hot))
+        room = MAX_LENGTH - SPECIAL_TOKENS - hot - want
+        if len(tokens) > room:  # the words it may say come first; the prompt's oldest words go
+            tokens = tokens[len(tokens) - max(room, 0):] if room > 0 else []
+        return tokens, max(1, min(want, MAX_LENGTH - SPECIAL_TOKENS - hot - len(tokens)))
+
     def transcribe(self, audio, *, prompt: str = "", hotwords: str = "") -> SttResult:
         """``audio``: mono float32 samples at 16 kHz."""
         self.load()
         started = time.monotonic()
         seconds = len(audio) / SAMPLE_RATE
+        initial, max_new = self.budget(prompt, hotwords, min(TOKENS_MAX, int(TOKENS_BASE + TOKENS_PER_S * seconds)))
         segments, _info = self._model.transcribe(
             audio,
             language="en",
             beam_size=self.beam_size,
-            initial_prompt=prompt or None,
+            initial_prompt=initial or None,
             hotwords=hotwords or None,
             condition_on_previous_text=False,
             # Never more words than the audio could hold, and a garbled try retried twice at most: 0.8 s of noise came
             # back as "A,B4, A5, A7, ..." sixty times over, after 28 s of retries.
-            max_new_tokens=min(TOKENS_MAX, int(TOKENS_BASE + TOKENS_PER_S * seconds)),
+            max_new_tokens=max_new,
             temperature=TEMPERATURES,
             without_timestamps=True,
             vad_filter=False,  # push-to-talk already marks the speech

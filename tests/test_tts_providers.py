@@ -720,3 +720,9 @@ def test_old_recordings_without_a_locale_still_load():
 
 def test_azure_module_names_its_limits():
     assert azure.FREE_CHARS == 500_000 and azure.FREE_PER_MINUTE == 20
+
+
+def test_abbreviations_are_said_as_letters_not_the_phonetic_alphabet():
+    assert speakable("Transition level, Q N H one zero one five set.") == "Transition level, QNH one zero one five set."
+    assert speakable("expect I L S runway two seven left") == "expect ILS runway two seven left"
+    assert speakable("taxi via A, B") == "taxi via alpha, bravo"

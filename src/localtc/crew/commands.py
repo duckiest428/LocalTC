@@ -22,7 +22,7 @@ from localtc.atc_core.readback.normalize import Token, normalize
 class Command:
     action: str  # gear, flaps, light, spoilers, autopilot, ap_mode, autothrottle, heading, altitude, speed, vs,
     #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, autobrake, yes, no, check,
-    #              checklist, brief, status, verbosity, say_again, radio (a call to make: pushback, taxi,
+    #              seatbelt (the sign), checklist, brief, status, verbosity, say_again, radio (a call to make: pushback, taxi,
     #              clearance, departure), go_around, emergency (mayday, pan)
     value: str = ""  # "down", "2", "on", "270", "10000", "-1500", "4553", "121.9", "29.92"
     target: str = ""  # which light, which autopilot mode; "hpa" for an altimeter setting in hectopascals
@@ -92,6 +92,7 @@ def parse(text: str) -> list[Command]:
     # "Q and H", "Q N H", "auto brake": speech-to-text's spellings, one word each.
     text = re.sub(r"\b(?:q|queue|cue)[\s.]*(?:and|n|en)[\s.]*h\b", "qnh", text, flags=re.IGNORECASE)
     text = re.sub(r"\bauto[\s-]?brakes?\b", "autobrake", text, flags=re.IGNORECASE)
+    text = re.sub(r"\bseat[\s-]?belts?(?:\s+signs?)?\b", "seatbelt", text, flags=re.IGNORECASE)
     text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
@@ -216,8 +217,14 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
             return Command("altimeter", str(int(n)), "hpa"), i + 2
         inhg = n / 100 if "." not in raw and 2700 <= n <= 3150 else n if 27 <= n <= 31.5 else None
         return (Command("altimeter", f"{inhg:.2f}") if inhg else None), i + 2
-    if w in ("standard", "std") and (i == 0 or _word(tokens, i - 1) in ("set", "altimeter", "altimeters", "baro")):
+    # "standard", "set standard", "put standard altimeter", "enable STD on your altimeter"
+    if w in ("standard", "std") and (i == 0 or _word(tokens, i - 1) in ("set", "altimeter", "altimeters", "baro", "put",
+                                                                         "enable", "go", "select")
+                                     or {_word(tokens, i + 1), _word(tokens, i + 2), _word(tokens, i + 3)}
+                                     & {"altimeter", "altimeters", "baro", "setting"}):
         return Command("altimeter", "29.92"), i + 1
+    if w == "seatbelt":  # "seatbelt sign on", "turn on the seatbelts" (no on or off: on)
+        return Command("seatbelt", _on_off(tokens, i - 3, i + 3) or "on"), i + 1
     if w == "parking" and nxt in ("brake", "brakes"):
         state = _on_off(tokens, i - 2, i + 4)
         return (Command("parking_brake", state) if state else None), i + 2

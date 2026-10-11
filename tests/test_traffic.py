@@ -498,3 +498,15 @@ def test_on_the_ground_it_isnt_carried_on_far_past_its_last_report():
     track = Track(1, lat0, 0.0, 100.0, 0.0, 15.0, 0.0, 0.0, True, 0.0, 0.0, 0.0, 0.0)
     lat, *_ = track.at(60.0)
     assert (lat - lat0) * 111_320 < 15 * 1852 / 3600 * 8 + 1  # 8 s at most, not a minute
+
+
+def test_no_aircraft_are_parked_while_the_user_is_flying():
+    """At FL390 they were parked at the fields below, and Paris's 36 came on final: only on the ground, slowed down."""
+    m = manager(parked=True)
+    m.on_own(own(zulu_h=3.0, on_ground=False, gs=250.0))
+    assert not parked(m)
+    m.on_own(own(zulu_h=3.0, on_ground=True, gs=90.0))  # the landing roll
+    assert not parked(m)
+    m.on_own(own(zulu_h=3.0, on_ground=True, gs=15.0))
+    spawns = parked(m)
+    assert spawns and len(spawns) <= 5  # one a second

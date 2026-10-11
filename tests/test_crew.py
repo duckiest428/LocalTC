@@ -444,3 +444,33 @@ def test_the_gear_is_given_the_time_an_airliners_handle_takes():
     out = pm.observe(AircraftSystems(t=6.0, flaps_positions=4, gear_pct=0.9))  # on its way up
     out += pm.observe(own(6.5, gear_down=True, ias_kt=170.0))
     assert "Gear up." in said(out)
+
+
+def test_the_seatbelt_sign_and_standard_are_the_copilots():
+    assert parse("Go ahead and turn on seat belt signs.") == [Command("seatbelt", "on")]
+    assert parse("seatbelt sign off") == [Command("seatbelt", "off")]
+    assert parse("Yeah turn on seatbelt ill turn landing lights on")[0] == Command("seatbelt", "on")
+    assert parse("Alright, go ahead and put standard altimeter right now.") == [Command("altimeter", "29.92")]
+    assert parse("Enable STD on your altimeter.") == [Command("altimeter", "29.92")]
+
+
+def test_the_a330s_fcu_and_seatbelt_sign_go_by_its_own_input_events():
+    from localtc.crew.profiles import for_aircraft, load_all
+    from localtc.sim_api import SetInputEvent, TurnKnob
+
+    profile = for_aircraft(load_all(), "A330-200 (RR)", "")
+    [knob] = plan(Command("heading", "130"), Cockpit(profile=profile)).writes
+    assert isinstance(knob, TurnKnob) and knob.name == "AIRLINER_MCU_HDG"
+    [alt] = plan(Command("altitude", "12000"), Cockpit(profile=profile)).writes
+    assert alt.name == "AIRLINER_MCU_ALT" and alt.learn
+    [belt] = plan(Command("seatbelt", "on"), Cockpit(profile=profile)).writes
+    assert isinstance(belt, SetInputEvent) and belt.name == "AIRLINER_SEATBELTS_TOGGLE" and belt.value == 1.0
+
+
+def test_the_copilots_reworded_numbers_may_be_words():
+    from localtc.crew.model import check_reworded
+
+    said = '{"reply": "Roger, squawk four-seven-three-two, initial six thousand set."}'
+    assert check_reworded(said, "Squawk 4732, initial 6,000 set.")[0]
+    assert check_reworded('{"reply": "Bit firm. Six hours thirteen in the air."}', "Bit firm. 6 hours 13 minutes.")[0]
+    assert check_reworded('{"reply": "That one is yours, six thousand."}', "6,000.")[0]

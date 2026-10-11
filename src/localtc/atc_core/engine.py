@@ -136,7 +136,6 @@ FREQUENCY_CHANGE = re.compile(r"\b(?:request(?:ing)?|can we|could we|like|want|r
                               r"change|radio|frequency|over|go|contact)\b(?: over)? to (?:the )?"
                               r"(tower|ground|approach|departure|center)\b", re.I)
 WEATHER_WORDS = {"weather", "wind", "winds", "metar", "conditions", "visibility", "altimeter", "temperature"}
-SIM_FRESH_S = 1800.0  # the sim's own weather at an airport, observed this recently, beats any real-world report
 ON_COURSE_MIN_NM = 5.0  # a route fix closer than this is behind or abeam already: departure sends it to the next
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
@@ -570,7 +569,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         elif own is not None and not own.on_ground and (area := self.center_area(own)) is not None:
             code = area.id
         elif own is not None and own.on_ground:
-            code = st.flight.origin if st.phase in DEPARTURE_PHASES else st.flight.destination
+            code = st.flight.destination if self._arriving else st.flight.origin
         code = code or st.flight.origin or st.flight.destination
         found = regions.region_for(code)
         if self.cfg.transition_ft:
@@ -659,13 +658,18 @@ class AtcEngine(VfrMixin, DiversionMixin):
         """Nothing scheduled to say and the pilot isn't transmitting: a good moment for the pilot to call."""
         return not self._scheduled and not self._transmitting(self._t) and self._t >= self._radio_busy_until
 
+    @property
+    def _arriving(self) -> bool:
+        """Past the departure: in the arrival's phases, or down at the destination and stopped again (stopped with the
+        brake set on a taxiway at Paris, ground answered with Montreal's runway, taxiways and altimeter)."""
+        return self._landed or (self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES)
+
     def facility(self, controller: str) -> Facility | None:
         """The facility for a controller in the current flight context (origin before arrival, destination after)."""
         candidates = [f for f in self.facilities if f.controller == controller]
         if not candidates:
             return None
-        arriving = self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES
-        preferred = self.state.flight.destination if arriving else self.state.flight.origin
+        preferred = self.state.flight.destination if self._arriving else self.state.flight.origin
         return next((f for f in candidates if f.airport == preferred), candidates[0])
 
     def geometry(self, icao: str | None) -> AirportGeometry | None:
@@ -687,8 +691,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
     def _working_airport(self) -> str | None:
         """The airport whose controllers the flight is talking to: the origin until the arrival, then the destination."""
-        arriving = self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES
-        return self.state.flight.destination if arriving else self.state.flight.origin
+        return self.state.flight.destination if self._arriving else self.state.flight.origin
 
     def _closed(self, icao: str | None, runway: str) -> bool:
         """The runway is closed (the airport's ATIS notices)."""
@@ -728,7 +731,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if (info := self.atis.current.get(icao)) is not None:
             return info
         if kind is None:
-            arriving = self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES
+            arriving = self._arriving
             kind = "arrival" if icao == self.state.flight.destination and (arriving or icao != self.state.flight.origin) \
                 else "departure"
         return self.atis.current.get(f"{icao}/{kind}")
@@ -805,24 +808,15 @@ class AtcEngine(VfrMixin, DiversionMixin):
         - "real": the airport's real ATIS (its letter, runways and weather) where it has one; else the simulator's.
         - "hybrid": the real ATIS, else LocalTC's own from the real METAR, else from the simulator.
 
-        Never the real one over fresher conditions in the sim: once the aircraft has observed the airport itself
-        (``SIM_FRESH_S``), the sim's weather is what the pilot is flying in, and the ATIS gives it, saying when the
-        real report differs."""
+        A real report wins over the sim's weather however old it is: the sim's only where there's no real one at all
+        (Montreal's ATIS was the sim's, its dew point not the METAR's, because the sim had been seen there lately)."""
         airports = self.tracker.context_builder.airports
         mode = self.cfg.atis_source
-        sampled = self.weather.samples.get(icao)
-        fresh = sampled is not None and own.t - sampled.t <= SIM_FRESH_S
         real = None
         if mode in ("real", "hybrid"):
             arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
             wanted = (kind,) if kind != "both" else ("both", "arrival" if arriving else "departure")
             real = next((self._real_atis[(icao, k)] for k in wanted if (icao, k) in self._real_atis), None)
-        if fresh:
-            weather = self.weather.surface(icao, airports, reports=False)
-            differs = _differs(weather, real.weather if real is not None else None) or (
-                mode == "hybrid" and _differs(weather, self.weather.reports.get(icao)))
-            note = " (the real-world report differs)" if differs else ""
-            return weather, (real if real is not None and not differs else None), ("simulator" + note, sampled.t, "")
         if real is not None and real.weather is not None:
             weather = with_magvar(real.weather, geo.airport.magvar)
             weather = replace(weather, t=own.t, elevation_ft=geo.airport.elev_ft,
@@ -830,7 +824,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return weather, real, ("real ATIS", None, real.zulu)
         if mode == "hybrid" and icao in self.weather.reports:
             report = self._reports.get(icao)
-            return self.weather.surface(icao, airports), None, ("METAR", None, (report.observed if report else "").rstrip("Z"))
+            return self.weather.surface(icao, airports, report_first=True), None, \
+                ("METAR", None, (report.observed if report else "").rstrip("Z"))
         weather = self.weather.surface(icao, airports, reports=False)
         if weather is None:
             return None
@@ -1280,7 +1275,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if (heard := self._reach(facility, own)) is not None and not heard.in_range:
             return []
         self._chatter_due = t + self._chatter.gap(facility.controller)
-        lines = self._chatter.exchange(self._scene(facility, own))
+        try:
+            lines = self._chatter.exchange(self._scene(facility, own))
+        except Exception:  # another crew's call that can't be said never stops ATC (15 times over the Atlantic)
+            logging.getLogger(__name__).exception("Chatter failed on %s", facility.station)
+            return []
         if self._chatter.last is not None:
             self._chatter_used.add((self._chatter.last.callsign.ident, facility.station))
         out: list[BusEvent] = []
@@ -2741,7 +2740,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         st = self.state
         intent = interp.intent
         own = st.aircraft
-        if intent == "ready_to_taxi" and st.phase is not None and P(st.phase) in (P.LANDING, P.TAXI_IN):
+        if intent == "ready_to_taxi" and (self._landed or (st.phase is not None and P(st.phase) in (P.LANDING, P.TAXI_IN))):
             intent = "request_taxi_parking"  # landed: "request taxi" is to the gate, never back out to a runway
         if intent == "ready_for_departure" and st.phase is not None and "taxi" not in st.clearances \
                 and facility.controller in ("ground", "clearance") and P(st.phase) in (P.PARKED, P.PUSHBACK, P.TAXI_OUT):
@@ -2767,7 +2766,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._assign(taxi_route=())
             self._schedule(t, "common.advise_ready", {}, facility, expects_readback=False)
             return []
-        if (letter := interp.values.get("atis")) and st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
+        if (letter := interp.values.get("atis")) and self._arriving:
             self._assign(arrival_atis=letter)  # "with information Delta" on arrival: the destination's ATIS
         if intent == "radio_check":
             self._schedule(t, "common.radio_check", {"station": facility.station}, facility, expects_readback=False)
@@ -3458,7 +3457,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
     def _airport_here(self, facility: Facility | None) -> str | None:
         """The airport a question to ``facility`` is about by default: its own, else the one the flight is at or going to."""
         st = self.state
-        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        arriving = self._arriving
         return (facility.airport if facility is not None else None) or (st.flight.destination if arriving else st.flight.origin)
 
     def _runway_lengths(self, text: str, facility: Facility) -> Phrase | None:
@@ -3594,7 +3593,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": altimeter}))
         if topic in ("wind", "weather") and own is not None:
             parts.insert(0, ("wind {wind}", {"wind": self._wind(own)}))
-        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        arriving = self._arriving
         info = self.current_atis(st.flight.destination if arriving else st.flight.origin)
         if topic == "atis" and info is not None:
             parts.insert(0, ("information {atis} is current", {"atis": info.letter}))
@@ -3744,7 +3743,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
             plan = self._arrival_plan(st.aircraft)
             approach = f"{plan['approach'].kind} {plan['approach'].runway}" if plan else None
         return InterpretContext(
-            callsign=self._callsign(), phase=st.phase, strict_callsign=self.cfg.strict_callsign, t=t,
+            # Stopped again after landing is still the taxi in: the request for a gate is the one that fits.
+            callsign=self._callsign(), phase=P.TAXI_IN.value if self._landed and st.phase == P.PARKED.value else st.phase,
+            strict_callsign=self.cfg.strict_callsign, t=t,
             station=facility.station, station_role=facility.controller, last_atc=last_atc, confidence=confidence,
             patient=self._patient, cleared_altitude_ft=a.altitude_ft, cleared_heading=a.heading, squawk=a.squawk,
             runway=self._runway_in_use(st.aircraft), traffic=traffic, recent=recent,
@@ -3851,7 +3852,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 facts["cleared altitude"] = speech.altitude_display(st.assignments.altitude_ft)
             if cruise := st.assignments.cruise_ft or st.flight.cruise_ft:
                 facts["filed cruise altitude"] = speech.altitude_display(cruise)
-        arriving = st.phase is not None and P(st.phase) not in DEPARTURE_PHASES
+        arriving = self._arriving
         here_icao = self._airport_here(facility)
         here = self.geometry(here_icao)
         near = here is not None and own is not None and (own.on_ground or here.distance_nm(own.lat, own.lon) <= NEARBY_NM)
@@ -3945,7 +3946,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
 
     def _runway_in_use(self, own: OwnshipState | None) -> str | None:
         st = self.state
-        if st.phase is not None and P(st.phase) not in DEPARTURE_PHASES:
+        if self._arriving:
             if st.assignments.arrival_runway:
                 return st.assignments.arrival_runway
             plan = self._arrival_plan(own) if own is not None else None
@@ -4983,7 +4984,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return expected
         # Parked again after landing is at the destination: its frequencies, not the departure airport's (San Diego's
         # 123.9 was "Seattle Departure" once parked at the gate).
-        arriving = self._landed or (self.state.phase is not None and P(self.state.phase) not in DEPARTURE_PHASES)
+        arriving = self._arriving
         preferred_airport = self.state.flight.destination if arriving else self.state.flight.origin
         ranked = sorted(matches, key=lambda f: (f.airport != preferred_airport, f.controller == ("departure" if arriving else "approach")))
         return ranked[0]
@@ -5236,19 +5237,3 @@ def _runways_cross(a, b) -> bool:
 
     return side(ax, ay, bx, by, cx, cy) * side(ax, ay, bx, by, dx, dy) < 0 \
         and side(cx, cy, dx, dy, ax, ay) * side(cx, cy, dx, dy, bx, by) < 0
-
-
-def _differs(sim, real) -> bool:
-    """The real-world report and the sim's own observation disagree enough to matter: the wind by 60 degrees (at 10 kt
-    or more) or 10 kt, or the altimeter by 0.03 inHg. ``real`` a Weather or WeatherReport, or None."""
-    if real is None or sim is None:
-        return False
-    if hasattr(real, "wind_kt"):  # a WeatherReport
-        r_dir, r_kt, r_alt = real.wind_dir_true, real.wind_kt, real.altimeter_inhg
-    else:
-        r_dir, r_kt, r_alt = real.wind_dir_true, real.wind.speed_kt, real.altimeter_inhg
-    if abs(sim.wind.speed_kt - r_kt) >= 10:
-        return True
-    if r_dir is not None and max(sim.wind.speed_kt, r_kt) >= 10 and abs(((sim.wind_dir_true - r_dir) + 180) % 360 - 180) >= 60:
-        return True
-    return sim.altimeter_inhg is not None and r_alt is not None and abs(sim.altimeter_inhg - r_alt) >= 0.03

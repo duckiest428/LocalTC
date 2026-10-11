@@ -145,3 +145,14 @@ def test_stand_by_means_a_while():
         assert 40 <= clearance.due - 5 <= 95, clearance.due
         return
     raise AssertionError("no stand by in 40 seeds")
+
+
+def test_stopped_again_after_landing_is_still_at_the_destination():
+    """Stopped with the brake set on a taxiway at Paris: ground answered a request for a gate with Montreal's runway,
+    taxiways and altimeter, the flight being "parked" as at the start of one."""
+    engine = AtcEngine(EngineConfig(destination="LFPG", callsign="TSC250"))
+    engine.state.flight.origin = "CYUL"
+    engine.state.phase = "PARKED"
+    assert engine._working_airport() == "CYUL"  # at the gate before the flight
+    engine._landed = True
+    assert engine._working_airport() == "LFPG"

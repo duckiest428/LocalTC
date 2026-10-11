@@ -61,10 +61,12 @@ def feet(n: int) -> str:
 def group_form(number: str) -> str:
     """Airline flight numbers: 123 -> "one twenty-three", 1234 -> "twelve thirty-four", 1200 -> "twelve hundred"."""
     num = number.lstrip("0") or "0"
-    suffix = ""
-    if num[-1].isalpha():
-        num, suffix = num[:-1], " " + PHONETIC[num[-1].upper()]
-    n = int(num)
+    # Letters after the number, one or more ("551A", "18AB": a chatter callsign with two stopped the ATC engine).
+    head = num.rstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+    suffix = "".join(" " + PHONETIC[c.upper()] for c in num[len(head):])
+    if not head.isdigit():  # letters in the middle too: said as they're written
+        return " ".join(PHONETIC.get(c.upper(), c) if c.isalpha() else ONES[int(c)] if c.isdigit() else c for c in number)
+    n = int(head)
     if n < 100:
         text = number_words(n)
     elif n < 1000:

@@ -229,7 +229,7 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
     if custom.knob:
         var, unit, wrap = KNOB_READS.get(key, ("", "number", 0.0))
         return TurnKnob(name=custom.knob, var=custom.var or var, unit=custom.var_unit or unit, target=float(value or 0.0),
-                        step=custom.step, wrap=wrap)
+                        step=custom.step, wrap=wrap, learn=custom.learn)
     if custom.encoder and custom.lvar:
         clicks = max(0, -(-(float(value or 0.0) - custom.low) // custom.step))  # rounded up: from 100, a click is 1,000
         return NudgeVar(name=custom.lvar, deltas=(custom.stop, clicks))
@@ -300,6 +300,13 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         return Plan(a, f"{cmd.target} {v}", (_write(p, f"light_{cmd.target}", event, on=on),),
                     _sys(f"light_{cmd.target}", on), f"{what.capitalize()} {v}.", already=f"{what.capitalize()} already {v}.",
                     reads=f"light_{cmd.target}")
+    if a == "seatbelt":
+        on = v == "on"
+        if c.systems is not None and c.systems.seatbelt == on:
+            return Plan(a, v, (), _sys("seatbelt", on), "", already=f"Seatbelt sign's already {v}.")
+        event = SendSimEvent(name="CABIN_SEATBELTS_ALERT_SWITCH_TOGGLE")  # a toggle: only sent when it isn't so
+        return Plan(a, v, (_write(p, "seatbelt", event, on=on),), _sys("seatbelt", on), f"Seatbelt sign {v}.",
+                    reads="seatbelt")
     if a == "spoilers":
         if v in ("arm", "disarm"):
             arm = v == "arm"

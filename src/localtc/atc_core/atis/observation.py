@@ -39,6 +39,7 @@ OBSERVE_NM = 30.0  # clouds seen this close to an airport are its clouds
 OBSERVE_TOP_FT = 12000  # ... up to this far above it
 OBSERVE_KEEP_S = 5400.0  # and for this long
 BAND_FT = 500
+SURFACE_FT = 200  # cloud seen below this isn't a layer (the sim's flag on the ground)
 TREND_WINDOW_S = 3600.0
 RAPID_INHG_PER_HR = 0.06  # "pressure falling rapidly": 0.06 inHg (2 hPa) in an hour or more
 
@@ -167,7 +168,9 @@ class CloudProfile:
     samples: deque = field(default_factory=deque)  # (t, band, in_cloud)
 
     def add(self, t: float, height_ft: float, in_cloud: bool) -> None:
-        if not 0 <= height_ft <= OBSERVE_TOP_FT:
+        # Not on or just off the ground: the sim says "in cloud" on a runway on a clear day (Montreal's ATIS was
+        # "ceiling 0 overcast" and low visibility operations, in 30 miles). Fog there is the sample's own (Weather).
+        if not SURFACE_FT <= height_ft <= OBSERVE_TOP_FT:
             return
         self.samples.append((t, int(height_ft // BAND_FT), in_cloud))
         while self.samples and t - self.samples[0][0] > OBSERVE_KEEP_S:
@@ -209,7 +212,7 @@ class CloudProfile:
 def _layer(shares: list[float], base_band: int) -> Layer:
     cover = max(shares)
     kind = "OVC" if cover >= 0.9 else "BKN" if cover >= 0.5 else "SCT" if cover >= 0.25 else "FEW"
-    return Layer(kind, _round_height(base_band * BAND_FT))
+    return Layer(kind, _round_height(max(base_band * BAND_FT, SURFACE_FT)))
 
 
 def _round_height(feet: float) -> int:
@@ -304,15 +307,18 @@ class WeatherTracker:
         """An airport's METAR (``WeatherReport``): its weather until the aircraft samples its own there."""
         self.reports[icao] = weather
 
-    def surface(self, icao: str, airports: dict[str, AirportGeometry], *, reports: bool = True) -> Weather | None:
+    def surface(self, icao: str, airports: dict[str, AirportGeometry], *, reports: bool = True,
+                report_first: bool = False) -> Weather | None:
         """The airport's own sample, else its METAR, else the freshest sample from an airport in the same region; with
         the clouds seen near it, its altimeter and the pressure's trend. (Without the METAR, Joplin's runway was chosen
-        from the wind at FL300, and its weather was "not available".)"""
+        from the wind at FL300, and its weather was "not available".) ``report_first``: the METAR over the sample, all
+        of it (an ATIS from the real report)."""
         own = self.samples.get(icao)
         geo = airports.get(icao)
-        if own is None and reports and icao in self.reports:
+        if reports and icao in self.reports and (own is None or report_first):
             report = self.reports[icao]
-            return replace(report, altimeter_inhg=self.altimeter_at(icao) or report.altimeter_inhg,
+            altimeter = report.altimeter_inhg if report_first else self.altimeter_at(icao) or report.altimeter_inhg
+            return replace(report, altimeter_inhg=altimeter or self.altimeter_at(icao),
                            elevation_ft=geo.airport.elev_ft if geo is not None else report.elevation_ft)
         if own is None:
             nearby = [w for other, w in self.samples.items() if other != icao and geo is not None and other in airports

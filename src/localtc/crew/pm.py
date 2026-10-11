@@ -155,6 +155,7 @@ class PilotMonitoring:
         self._own_failed = self._own_took = 0
         self._no_hands_said = False
         self._yours_said = 0
+        self._checked_uid = ""  # the call whose lights were acknowledged
         self._raw_own: OwnshipState | None = None
         self._raw_systems: AircraftSystems | None = None
         self._watching: tuple[str, ...] = ()
@@ -569,6 +570,14 @@ class PilotMonitoring:
             return [self._say(t, "I can't move this aircraft's switches from here; they're yours.", "refused"),
                     CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail="no hands in this aircraft")]
         if cmd.action in PILOT_SIDE:
+            refused = CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="refused", detail="the pilot's side")
+            if cmd.action == "light":
+                # The captain's lights, called as he sets them ("taxi lights on, strobes and beacon on"): a "check" once
+                # for the call, not "your side" for each of them.
+                if uid and self._checked_uid == uid:
+                    return [refused]
+                self._checked_uid = uid
+                return [self._say(t, "Check.", "reply"), refused]
             # Not the copilot's side: said in a word, and it's the pilot's to do.
             self._yours_said += 1
             return [self._say(t, _yours(self._yours_said - 1), "refused"),

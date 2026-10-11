@@ -429,7 +429,7 @@ def test_beyond_facts_end_to_end_and_the_notice_points_to_it():
     out = say(engine, own, wide, mhz=121.0)
     assert atc(out) == ["DP69, runway 24R is 200 feet wide."]
     assert "you may answer from what a controller would know" in backend.requests[-1].system
-    assert load_config(env={}, settings=None).llm.beyond_facts is False  # off unless the pilot turns it on
+    assert load_config(env={}, settings=None).llm.beyond_facts is True  # on unless the pilot turns it off
 
 
 # --- the third report: the script came back mid-conversation --------------------------------------------------------
@@ -654,3 +654,19 @@ def test_numbers_the_script_says_in_words_are_its_numbers():
     raw = '{"reply":"cleared to Lisbon via the OSHNN1 departure, then as filed, climb and maintain 8,000, expect FL330 ' \
           'two six minutes after departure, departure frequency 125.2, squawk 1041"}'
     assert "26 minutes" in check_reworded(raw, scripted, ("Air Portugal 248",))
+
+
+def test_a_controllers_wording_said_another_standard_way_is_kept():
+    from localtc.atc_core.llm.phrase import PhraseError, check_reworded
+
+    cs = ("Air Transat 250",)
+    clearance = ("cleared to Charles-De-Gaulle airport as filed, climb and maintain 6,000, expect FL390 two four minutes "
+                 "after departure, departure frequency 120.42, squawk 4732")
+    assert check_reworded('{"reply":"cleared to Charles-De-Gaulle as filed, climb and maintain 6,000, expect FL390 two four '
+                          'minutes after departure, contact departure 120.42, squawk 4732"}', clearance, cs)
+    assert check_reworded('{"reply":"radar contact, direct KEBGO"}', "radar contact, proceed direct KEBGO", cs)
+    assert check_reworded('{"reply":"roger, Air Transat 250, maintain flight level 390"}', "identified, maintain FL390", cs)
+    assert check_reworded('{"reply":"maintain flight level 390, no problem"}', "identified, maintain FL390", cs)
+    assert check_reworded('{"reply":"taxi to runway 24R via A, F, B4, B"}', "runway 24R at B, taxi via A, F, B4, B", cs)
+    with pytest.raises(PhraseError):
+        check_reworded('{"reply":"negative KEBGO"}', "negative, direct KEBGO", cs)

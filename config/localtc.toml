@@ -38,8 +38,8 @@ transition_ft = 18000         # at or above this, flight levels and no local alt
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?"
 notams = true                 # notices on the ATIS (a taxiway closed, an ILS out, birds ...); ATC works to them
 atis_source = "hybrid"        # the ATIS: "hybrid" (real ATIS, else real METAR, else the sim), "real" (real ATIS where
-                              # there is one, else the sim), "sim" (the sim's weather only). The sim's own weather at an
-                              # airport, observed in the last half hour, always wins over a real-world report
+                              # there is one, else the sim), "sim" (the sim's weather only). The sim's weather only
+                              # where there's no real report at all, however old the real one is
 chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)
 enforce_fpln_runways = false  # true: ATC gives the flight plan's runways; false: the runways in use (ATIS, else wind)
 real_gates = true             # gates by their real names (E9), international flights to international gates: from OpenStreetMap, cached
@@ -61,7 +61,7 @@ mode = "mostly_llm"           # how much ATC leans on the model, for reading cal
                               #   llm: the model reads and words every call (the script checks it, and answers when it fails)
                               #   off: the grammar and the templates only
 phrasing = true               # the model may word replies at all (false: templates only, whatever the mode)
-beyond_facts = false          # true: its answers may go past the sim's data (what it knows itself); never instructions
+beyond_facts = true           # true: its answers may go past the sim's data (what it knows itself); never instructions
 timeout_s = 4.0               # per model call; on timeout the grammar's answer is used
 budget_s = 6.0                # per pilot transmission, including one retry
 patience_s = 15.0             # off-script calls the model missed: one more try this long (the app shows ATC thinking)

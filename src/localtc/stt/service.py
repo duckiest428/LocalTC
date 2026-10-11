@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 MIN_CLIP_S = 0.3  # shorter: a click on the switch, not speech
 SILENCE_RMS = 0.003  # below this the mic heard nothing
+STALLED_S = 1.0  # the microphone sent nothing for this long: it has stopped, reopen it before a press
 NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignored
 # Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
 # key pressed for a shortcut, at 0.17-0.34): heard as nothing.
@@ -96,6 +97,8 @@ class VoiceService:
                 if self._held is not None:  # one microphone: the second key waits for the first to come up
                     continue
                 self._held = self._radio = radio
+                if getattr(self.capture, "idle_s", 0.0) > STALLED_S:
+                    await self._stalled_microphone()
                 self.capture.begin()
             elif isinstance(event, (PttReleased, IntercomReleased)):
                 radio = INTERCOM if isinstance(event, IntercomReleased) else event.radio
@@ -122,6 +125,15 @@ class VoiceService:
             return IntercomHeard(t=self.now(), text=text, confidence=confidence, audio_ref=ref, stt_ms=stt_ms)
         return Transcript(t=self.now(), text=text, radio=self._radio, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
                           source="voice")
+
+    async def _stalled_microphone(self) -> None:
+        """The microphone stopped sending audio without an error: reopened, so this press is heard."""
+        log.warning("%s stopped sending audio %.0f s ago; reopening it", getattr(self.capture, "name", "The microphone"),
+                    self.capture.idle_s)
+        try:
+            await asyncio.to_thread(self.capture.refresh)
+        except Exception as exc:  # a missing device: keep going, the next press tries again
+            log.warning("Could not reopen the microphone: %s", exc)
 
     async def _silent_microphone(self, audio_s: float) -> None:
         """The microphone sent silence. Reopen it: if the system default input was changed (Windows

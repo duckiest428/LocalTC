@@ -80,7 +80,7 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
           "proceed", "vectors", "expect", "line", "takeoff", "monitor", "identify", "pushback", "push", "vacate", "cross"}
 # Instructions in more than one word ("copy, hold short runway 25R, pushback tail left" to a clearance request).
-BANNED_PHRASES = re.compile(r"hold(?:ing)? (?:short|position)|tail (?:left|right)|go around|give way")
+BANNED_PHRASES = re.compile(r"bhold(?:ing)? (?:short|position)b|btail (?:left|right)b|bgo aroundb|bgive wayb")
 # The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
 INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
 NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
@@ -129,6 +129,8 @@ def _reply_text(raw: str, callsigns: tuple[str, ...]) -> str:
             text = text[len(callsign):].lstrip(" ,")
         if callsign and text.lower().endswith(callsign.lower()):  # "..., United 1596" at the end, as pilots hear it too
             text = text[:-len(callsign)].rstrip(" ,.")
+        if callsign:  # in the middle too ("roger, Air Transat 250, maintain FL390": not a number the model added)
+            text = re.sub(rf"\s*,?\s*\b{re.escape(callsign)}\b\s*,?\s*", ", ", text, flags=re.IGNORECASE).strip(" ,")
     return text
 
 
@@ -260,6 +262,8 @@ INSTRUCTION = BANNED | {"hold", "short", "cross", "wait", "land", "landing", "go
                         "via", "follow", "behind", "report", "reduce", "increase", "speed", "vacate", "pushback", "push",
                         "start", "resume", "continue", "enter", "join", "straight", "full", "stop", "option", "touch",
                         "low", "ident", "remain", "stand", "standby"}
+# An instruction word said another way: left out, or added, where the other is there.
+SAME_INSTRUCTION = {"proceed": {"direct"}, "contact": {"frequency"}}
 NEGATIONS = {"not", "no", "don't", "dont", "negative", "unable", "cannot", "can't", "never", "without"}
 RUNWAY_DESIGNATOR = re.compile(r"\b(\d{1,2})([LRC])\b")
 IDENT_RE = re.compile(r"\b(?=[A-Z0-9]*[A-Z])[A-Z][A-Z0-9]{0,6}\b|\b\d+[A-Z][A-Z0-9]*\b")  # KMCO, CAVVS4, B3, 4A
@@ -313,6 +317,12 @@ def _sequence(text: str) -> list[str]:
             if m.group(0) in idents]
 
 
+def _last_of_each(idents: list[str]) -> list[str]:
+    """Each ident where it comes last: "runway 24R at B, taxi via A, F, B4, B" is the route A, F, B4, B (the model's
+    "taxi to runway 24R via A, F, B4, B" was turned away for changing the order)."""
+    return [ident for i, ident in enumerate(idents) if ident not in idents[i + 1:]]
+
+
 def _in_order(wanted: list[str], said: list[str]) -> bool:
     """``wanted`` appears in ``said`` in the same order (other things may come between)."""
     rest = iter(said)
@@ -353,7 +363,9 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     for phrase in KEPT_PHRASES:
         if phrase in said and phrase not in got:
             raise PhraseError(f'reply leaves out "{phrase}"; keep those words as they are')
-    words, want = set(re.findall(r"[a-z']+", got)), set(re.findall(r"[a-z']+", said))
+    # A pleasantry isn't a "no" ("maintain flight level 390, no problem" was turned away for adding a negation).
+    words = set(re.findall(r"[a-z']+", re.sub(r"\bno (?:problem|worries)\b", "", got)))
+    want = set(re.findall(r"[a-z']+", said))
     if not words:
         raise PhraseError("reply has no words")
     limit = max(MAX_WORDS, len(scripted.split()) + 8)
@@ -372,15 +384,21 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     for number, side in RUNWAY_DESIGNATOR.findall(scripted):
         if not re.search(rf"(?<!\d)0?{int(number)}{side.lower()}\b", got):  # "06L", "6 left"
             raise PhraseError(f"reply leaves out runway {number}{side}")
-    if lost := sorted((want & (INSTRUCTION | NEGATIONS)) - words):
-        raise PhraseError(f"reply leaves out {', '.join(lost)}; keep every instruction")
-    if extra := sorted((words & (INSTRUCTION | NEGATIONS)) - want):
-        raise PhraseError(f"reply adds {', '.join(extra)}; say only what the controller decided")
+    lost, extra = (want & (INSTRUCTION | NEGATIONS)) - words, (words & (INSTRUCTION | NEGATIONS)) - want
+    for word, same in SAME_INSTRUCTION.items():
+        if same & words:
+            lost.discard(word)  # "direct KEBGO" is "proceed direct KEBGO"
+        if same & want:
+            extra.discard(word)  # "contact departure 120.42" is "departure frequency 120.42"
+    if lost:
+        raise PhraseError(f"reply leaves out {', '.join(sorted(lost))}; keep every instruction")
+    if extra:
+        raise PhraseError(f"reply adds {', '.join(sorted(extra))}; say only what the controller decided")
     if lost := sorted(i for i in _idents(scripted) if not _has_word(text, i)):
         raise PhraseError(f"reply leaves out {', '.join(lost)}")  # a taxiway, a fix, a procedure
     if extra := sorted(i for i in _idents(text) if not _has_word(scripted, i)):
         raise PhraseError(f"reply adds {', '.join(extra)}, which the controller didn't say")
-    if not _in_order(_sequence(scripted), _sequence(text)):
+    if not _in_order(_last_of_each(_sequence(scripted)), _sequence(text)):
         # "via G, C" is not "via C and G": a taxi route, the fixes of a route, are in the order given.
         raise PhraseError(f"reply changes the order of {' '.join(_sequence(scripted))}; keep them in order")
     if internal := sorted(words & INTERNAL):

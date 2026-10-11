@@ -275,15 +275,14 @@ def test_hybrid_takes_the_metar_where_there_is_no_real_atis():
     assert info.source[0] == "METAR" and info.weather.wind.speed_kt == 7
 
 
-def test_real_never_overrides_fresher_sim_conditions():
-    """At the airport, the sim's wind (15 knots from 150) is the one flown in: the real ATIS (calm) isn't given over it,
-    and the ATIS says the two differ."""
+def test_the_real_atis_is_given_over_the_sims_own_weather():
+    """A real report wins over the sim's weather, however fresh the sim's is: only where there's none is the sim's
+    given (Montreal's ATIS was the sim's because the aircraft had been there lately)."""
     engine, own = atis_engine("hybrid")
     engine.handle(AtisReport(t=own.t, icao="KLAS", letter="W", text=LAS_ATIS, zulu="1756"))
     engine.weather.samples["KLAS"] = Weather(wind=Wind(140, 15), wind_dir_true=150.0, t=own.t - 60, altimeter_inhg=29.87)
     info = las(engine, own)
-    assert info.source[0].startswith("simulator") and "differs" in info.source[0] and info.letter != "W"
-    assert info.weather.wind.speed_kt == 15
+    assert info.source[0] == "real ATIS" and info.letter == "W"
 
 
 def test_a_real_runway_with_a_tailwind_in_the_sims_wind_isnt_used():

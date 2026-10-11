@@ -125,6 +125,7 @@ class AircraftSystems(Event, tag="aircraft_systems"):
     autobrake_active: bool = False
     reverser_pct: float = 0.0  # the most deployed reverser
     jet: bool = False  # turbine engines (ENGINE TYPE 1): reversers expected
+    seatbelt: bool = False  # the seatbelt sign's switch
 
 
 class AircraftIdentity(Event, tag="aircraft_identity"):

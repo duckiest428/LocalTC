@@ -175,3 +175,11 @@ def test_cli_phases(capsys, tmp_path):
     assert main(["phases", str(fixture), "--destination", "KBFI", "--cruise-ft", "5000", "--config", str(config)]) == 0
     out = capsys.readouterr().out
     assert "ARRIVAL -> APPROACH" in out and "TAXI_IN -> PARKED" in out
+
+
+def test_ground_speed_with_the_parking_brake_set_is_not_a_taxi():
+    """3.8 kt from the sim at the gate, brake set and not a metre covered (GSX getting the push ready): not taxiing
+    without a clearance."""
+    det = PhaseDetector()
+    ticks = [own(0)] + [own(t, gs_kt=3.8, parking_brake=True) for t in range(1, 40)]
+    assert run(det, ticks) == [(0, FlightPhase.PARKED)]

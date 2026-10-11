@@ -372,3 +372,52 @@ def test_words_whisper_made_up_are_dropped():
     assert not made_up("Air Portugal 248 request clearance to Lisbon airport as filed.", 4.0)
     assert not made_up("Clear to Lisbon via the OSHNN1 departure, climb maintain 8,000, expect 330 26 minutes after "
                        "departure, departure frequency 125.2, squawk 1041, Air Portugal 248.", 11.0)
+
+
+class StalledMic(FakeCapture):
+    """A stream that stopped calling back without an error: every press held only the same 0.3 s of the ring buffer."""
+
+    def __init__(self) -> None:
+        super().__init__(2.0)
+        self.name, self.refreshed, self.idle_s = "Microphone (K66)", 0, 600.0
+
+    def refresh(self) -> str:
+        self.refreshed += 1
+        self.idle_s = 0.0
+        return self.name
+
+
+def test_a_microphone_that_stopped_sending_is_reopened_before_the_press(caplog):
+    capture = StalledMic()
+    [transcript] = talk(capture, FakeTranscriber("Paris Control, Transat 250"))
+    assert capture.refreshed == 1 and capture.began == 1
+    assert transcript.text == "Paris Control, Transat 250"
+    assert "stopped sending audio" in caplog.text
+
+
+def test_the_capture_says_how_long_its_stream_has_been_quiet():
+    capture = AudioCapture.__new__(AudioCapture)
+    capture._stream, capture._last_block = None, 0.0
+    assert capture.idle_s == 0.0  # not open
+    capture._stream, capture._last_block = object(), 1.0
+    assert capture.idle_s > 1.0
+
+
+def test_whisper_is_never_asked_for_more_than_it_can_hold():
+    """A 21 s call with a long prompt asked for 195 words on a prompt of 260: over Whisper's 448, and the call was lost."""
+    from localtc.stt.whisper import MAX_LENGTH, WhisperTranscriber
+
+    class Ids:
+        def __init__(self, n):
+            self.ids = list(range(n))
+
+    class Tokenizer:
+        def encode(self, text, add_special_tokens=False):
+            return Ids(len(text.split()))
+
+    t = WhisperTranscriber.__new__(WhisperTranscriber)
+    t._model = type("M", (), {"hf_tokenizer": Tokenizer()})()
+    prompt, hot = " ".join(["word"] * 300), " ".join(["hot"] * 100)
+    tokens, max_new = t.budget(prompt, hot, 195)
+    assert max_new == 195 and 100 + len(tokens) + max_new <= MAX_LENGTH - 8
+    assert t.budget("", "", 40) == ("", 40)

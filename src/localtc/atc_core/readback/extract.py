@@ -256,6 +256,15 @@ def _dropped_digit(text: str, expected: Any) -> bool:
     return any(want[:i] + want[i + 1:] == heard for i in range(len(want)))
 
 
+def _with_to(text: str, expected: Any) -> bool:
+    """ "121.02" for 121.0: the frequency and the "to" after it ("121.0 to Montreal Ground") run together."""
+    try:
+        want = f"{float(expected):.3f}".rstrip("0")
+    except (TypeError, ValueError):
+        return False
+    return "." in text and text == (want if not want.endswith(".") else want + "0") + "2"
+
+
 def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
     found = []
     for i, token in enumerate(tokens):
@@ -263,7 +272,9 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
             continue
         if i > 0 and tokens[i - 1].text in ("squawk", "code", "runway", "maintain", "heading", "expect", "level", "climbing"):
             continue
-        if (value := _as_frequency(token.text)) is not None:
+        if expected is not None and _with_to(token.text, expected):
+            found.append(float(expected))
+        elif (value := _as_frequency(token.text)) is not None:
             found.append(value)
         elif token.text.isdigit() and isinstance(expected, float) and expected == int(token.text):
             found.append(expected)  # "tower on 121" for 121.0
@@ -686,6 +697,18 @@ def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
     found = []
     for i in _find_phrase(tokens, ("direct",)):
         rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
+        # Spelled out a letter at a time ("direct K, E, B, G, O"): the letters together.
+        letters = []
+        for w in words[i : i + 8]:
+            if w in ("to", "the") and not letters:
+                continue
+            if len(w) != 1 or not w.isalpha():
+                break
+            letters.append(w)
+        if len(letters) >= 3:
+            spelled_out = "".join(letters).upper()
+            found.append(expected if isinstance(expected, str) and fix_matches(spelled_out, expected) else spelled_out)
+            continue
         if isinstance(expected, str):
             wanted = [w.lower() for w in expected.replace(" airport", "").split()]
             # ... or as the pilot's words come out of normalizing: "direct Quebec" (the airport) reads as the letter Q.

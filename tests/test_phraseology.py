@@ -98,3 +98,21 @@ def test_extra_template_dirs_override(tmp_path):
     )
     library = TemplateLibrary.load(tmp_path)
     assert library.render("common.roger", {"callsign": Callsign("N1")}).text == "N1, copy that."
+
+
+def test_flight_numbers_with_letters_after():
+    """A chatter callsign ending in two letters stopped the ATC engine 15 times over the Atlantic."""
+    assert speech.group_form("551A") == "five fifty-one alpha"
+    assert speech.group_form("18AB") == "eighteen alpha bravo"
+    assert speech.group_form("1A2") == "one alpha two"
+
+
+def test_other_flights_checking_in_with_a_centre_are_answered_like_the_pilot():
+    from localtc.atc_core.chatter import Chatter, Other, Scene
+
+    chatter = Chatter(TemplateLibrary.load(), seed=3)
+    cs = Callsign("EZY18AB", telephony="Easy", flight_number="18AB")
+    scene = Scene(controller="center", station="Shanwick Oceanic", others=[Other(1, cs, "level", 37000)])
+    replies = {line.text for _ in range(12) for line in chatter.exchange(scene) if line.speaker == "atc"}
+    assert all("FL370" in r or "FL390" in r for r in replies)
+    assert not any(r.endswith(", roger.") for r in replies)

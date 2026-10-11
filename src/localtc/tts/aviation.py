@@ -28,6 +28,9 @@ NUMBER = re.compile(r"\d+(?:\.\d+)?")
 # A single capital on its own, as a taxiway or an ATIS letter is written ("via A, B", "information C."): not "I", and
 # not "A" starting a sentence's next word ("A Cessna").
 LETTER = re.compile(r"(?<![\w-])([B-HJ-Z]|A(?=\s*(?:[,.;]|$|\s+(?:and|then)\b|\s+[A-Z](?:\W|$))))(?![\w-])")
+# Abbreviations said as letters, written spaced out for the voice ("Q N H", "I L S"): one word again, so the letters
+# aren't taken for taxiways and read "quebec november hotel", "I lima sierra".
+ACRONYM = re.compile(r"\b(Q N H|I L S|G P S|V O R|N D B|D M E|A T I S|A T C|I F R|V F R|T C A S|R N P)\b")
 
 
 def spell(code: str) -> str:
@@ -48,6 +51,7 @@ def speakable(text: str) -> str:
     zero", "two niner point niner two"), runways ("three four left"), flight levels, codes and lone letters
     phonetically. Words are left as they are."""
     text = THOUSANDS.sub(r"\1\2", text)
+    text = ACRONYM.sub(lambda m: m.group(1).replace(" ", ""), text)
     text = FLIGHT_LEVEL.sub(lambda m: "flight level " + spell(m.group(1)), text)
     text = RUNWAY.sub(lambda m: spell(m.group(1)) + " " + SIDES[m.group(2)], text)
     text = CODE.sub(lambda m: spell(m.group()), text)

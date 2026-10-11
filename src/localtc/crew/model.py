@@ -25,6 +25,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from localtc.atc_core.llm.backend import LlmRequest, waits
+from localtc.atc_core.llm.phrase import digits_from_words
 from localtc.crew.answers import numbers_in
 from localtc.crew.commands import Command
 from localtc.sim_api import LlmExchange
@@ -33,7 +34,7 @@ log = logging.getLogger(__name__)
 
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 ACTIONS = ("gear", "flaps", "light", "spoilers", "autopilot", "ap_mode", "autothrottle", "heading", "altitude",
-           "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake")
+           "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake", "seatbelt")
 SYSTEM = """You are the first officer, pilot monitoring, in an airliner cockpit, talking with the captain on the \
 intercom. Sound like a real, calm, experienced airline first officer: short, plain, accurate. A colleague, not an \
 assistant and not an actor.
@@ -60,10 +61,10 @@ gear (value up|down), flaps (value: the setting, e.g. 1, 2, full, up), light (ta
 value on|off), spoilers (value arm|disarm|extend|retract), autopilot (value on|off), ap_mode (target \
 heading|nav|approach|altitude|vs|flc, value on), autothrottle (value on|off), heading (value degrees), altitude \
 (value feet), speed (value knots), vs (value feet per minute, negative down), squawk (value 4 digits), com_active or \
-com_standby (value MHz), com_swap, altimeter (value inches like 29.92, or target hpa and value like 1013), \
-parking_brake (value on|off).
+com_standby (value MHz), com_swap, altimeter (value inches like 29.92, or target hpa and value like 1013; \
+"standard" or "STD" is 29.92), parking_brake (value on|off), seatbelt (the seatbelt sign, value on|off).
 Only those, and only when the captain names the thing (gear, flaps, lights...). Not on the list (the autobrake, the \
-flight director, the packs, anti-ice, the seatbelt sign, the fuel pumps, the EFB): say it's the captain's, or that \
+flight director, the packs, anti-ice, the fuel pumps, the EFB): say it's the captain's, or that \
 you can't from your seat. Never pick another action instead, never claim you did something you didn't return as a \
 command. A value you weren't given is a reply, not a command. Words that make no sense: kind "reply", ask "Say \
 again?". Otherwise kind "reply". Your words go in "reply" either way."""
@@ -260,7 +261,8 @@ class CrewModel:
                 return Reading("Check."), "a report of the captain's own, not a request: acknowledged"
             if not re.search(ACTION_WORDS[action], heard):
                 return None, f"the captain didn't name the {action.replace('_', ' ')}"
-            if value and value not in WORD_VALUES and not (set(re.findall(r"\d+", value)) <= numbers_in(said) | _spoken_digits(heard)):
+            standard = action == "altimeter" and value == "29.92" and re.search(r"\bstandard\b|\bstd\b", heard)
+            if value and value not in WORD_VALUES and not standard and not (set(re.findall(r"\d+", value)) <= numbers_in(said) | _spoken_digits(heard)):
                 return None, f"the captain didn't say {value}"
             return Reading(reply or f"{action} {value}".strip(), Command(action, value, target)), ""
         if not reply:
@@ -288,6 +290,7 @@ ACTION_WORDS = {
     "com_active": r"frequency|\btune\b|\bcom\b|\bradio\b|\bpoint\b|decimal|\d{3}\.\d",
     "com_standby": r"standby|frequency|\btune\b|\bcom\b|\bpoint\b|decimal|\d{3}\.\d", "com_swap": r"\bswap\b|\bflip\b",
     "altimeter": r"altimeter|\bqnh\b|\bbaro|\bstandard\b|\bstd\b", "parking_brake": r"parking brake|park(?:ing)? brakes?",
+    "seatbelt": r"seat ?belts?",
 }
 REPORT = re.compile(r"\b(?:i've|i have|i'm|i am|i just|i'll|i will|i deployed|i set|i put|we've|we just)\b")
 REQUEST = re.compile(r"\b(?:can you|could you|would you|please|go ahead and|give me|set|put|let's)\b")
@@ -378,6 +381,32 @@ def _wind_claim(low: str, facts: dict[str, str]) -> str | None:
 NAMED = re.compile(r"\b(?:[A-Z]{2,}\d*[A-Z]*|[A-Z]\d+[A-Z]?|FL\d{3}|\d{1,2}[LRC])\b")  # RADYR2, KLAS, C1, FL280, 26R
 
 
+UNITS = {w: i for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve thirteen "
+                                    "fourteen fifteen sixteen seventeen eighteen nineteen".split())} | {"niner": 9}
+TENS = {w: 10 * i for i, w in enumerate("twenty thirty forty fifty sixty seventy eighty ninety".split(), start=2)}
+NUMBER_RUN = re.compile(r"\b(?:(?:" + "|".join([*UNITS, *TENS, "hundred", "thousand"]) + r")(?:[\s-]+(?:and[\s-]+)?|\b))+",
+                        re.IGNORECASE)
+
+
+def number_words(text: str) -> str:
+    """``text`` with its numbers in words as digits: "four-seven-three-two" 4732, "six thousand" 6000, "thirteen" 13."""
+    def value(m: re.Match) -> str:
+        total = current = 0
+        if re.findall(r"[a-z]+", m.group(0).lower()) == ["one"]:  # "that one's yours": no number
+            return m.group(0)
+        for word in re.findall(r"[a-z]+", m.group(0).lower()):
+            if word in UNITS:
+                current += UNITS[word]
+            elif word in TENS:
+                current += TENS[word]
+            elif word == "hundred":
+                current = (current or 1) * 100
+            elif word == "thousand":
+                total, current = total + (current or 1) * 1000, 0
+        return f"{total + current}" + (" " if m.group(0)[-1:].isspace() else "")
+    return NUMBER_RUN.sub(value, digits_from_words(text))
+
+
 def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
     """A reworded call: every number and every name (a procedure, an airport, a taxiway, a runway) of the original
     still there, and nothing new; not much longer than it was."""
@@ -387,8 +416,10 @@ def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
         return None, "not JSON"
     if not reply:
         return None, "no reply"
-    if numbers_in(reply) != numbers_in(original):
-        return None, f"numbers changed: {sorted(numbers_in(original))} -> {sorted(numbers_in(reply))}"
+    # The model's "four-seven-three-two", "six thousand", "six hours thirteen" are the same numbers (each was turned away).
+    said = numbers_in(number_words(reply))
+    if said != numbers_in(original):
+        return None, f"numbers changed: {sorted(numbers_in(original))} -> {sorted(said)}"
     missing = {n for n in NAMED.findall(original)} - {n for n in NAMED.findall(reply)}
     if missing:
         return None, f"left out {', '.join(sorted(missing))}"

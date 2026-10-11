@@ -847,7 +847,11 @@ class Monitor(WatchMixin):
             lights = " Landing lights?" if s is not None and not s.light_landing else ""
             self._call("10k_descent", ROUTINE, t, f"Ten thousand.{lights} Seatbelt sign on for the cabin?")
         ta = region.transition_ft
-        if prev_alt < ta <= alt and own.vs_fpm > 0:
+        # Climbing out through it, not a bump at a level-off on the way down (Paris, 4,900 ft on the approach: standard
+        # set again over the QNH just set).
+        going_around = self.p.last_atc is not None and "go_around" in (self.p.last_atc.instruction_id or "")             and t - self.p.last_atc.t < 300
+        climbing_out = self.phase in (None, "TAKEOFF", "DEPARTURE", "CRUISE") or going_around
+        if prev_alt < ta <= alt and own.vs_fpm > 300 and climbing_out:
             std = abs(own.altimeter_inhg - 29.92) < 0.015
             self._call("transition_climb", ROUTINE, t, "Transition, standard." if std or not self.hands else "Transition, standard set.",
                        commands=() if std else (Command("altimeter", "29.92"),))

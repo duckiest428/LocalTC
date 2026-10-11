@@ -3,9 +3,14 @@ Windows and macOS).
 
 The stream stays open for the whole session and keeps a short ring buffer, so pressing the
 push-to-talk key a moment after starting to speak doesn't cut the first syllable.
+
+A stream can stop calling back without an error (six hours into a flight every press held the same 0.3 s of the
+ring buffer and nothing else): ``idle_s`` says how long since it last sent anything, and the voice service reopens it
+before a press when it has gone quiet.
 """
 
 import threading
+import time
 import wave
 from collections import deque
 from pathlib import Path
@@ -106,6 +111,14 @@ class AudioCapture:
         self._clip: list[np.ndarray] | None = None
         self._clip_len = 0
         self._stream = None
+        self._last_block = 0.0  # monotonic time of the last block the stream sent
+
+    @property
+    def idle_s(self) -> float:
+        """Seconds since the open stream last sent audio (0 when it isn't open)."""
+        if self._stream is None or not self._last_block:
+            return 0.0
+        return time.monotonic() - self._last_block
 
     def start(self) -> None:
         import sounddevice as sd
@@ -118,13 +131,20 @@ class AudioCapture:
             self.rate = int(sd.query_devices(self.device, "input")["default_samplerate"])
             self._stream = sd.InputStream(samplerate=self.rate, channels=1, dtype="float32", device=self.device,
                                           callback=self._callback)
+        self._last_block = time.monotonic()
         self._stream.start()
 
     def close(self) -> None:
         if self._stream is not None:
-            self._stream.stop()
-            self._stream.close()
+            try:
+                self._stream.stop()
+                self._stream.close()
+            except Exception:  # a stream that died on its own may not stop cleanly
+                pass
             self._stream = None
+        with self._lock:
+            self._pre.clear()
+            self._pre_len = 0
 
     @property
     def name(self) -> str:
@@ -164,6 +184,7 @@ class AudioCapture:
 
     def _callback(self, indata, frames, time_info, status) -> None:
         block = indata[:, 0].copy()
+        self._last_block = time.monotonic()
         with self._lock:
             if self._clip is not None and self._clip_len < self.max_clip_s * self.rate:
                 self._clip.append(block)

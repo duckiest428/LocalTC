@@ -152,3 +152,11 @@ def test_the_burn_to_landing_counts_the_descent_at_its_own_burn():
     # not the 7,000 of the whole way at the cruise burn (the landing fuel was right on the plan).
     burned = monitor.landing_burn(5600, 425, 110, 423)
     assert 4800 < burned < 5500
+
+
+def test_the_captains_light_calls_get_one_check():
+    """"Taxi lights on. Strobes and beacon lights on.": the captain's flow, a "check" once, not "your side" three times."""
+    pm = PilotMonitoring(FakeEngine(), profiles=PROFILES)
+    pm.observe(AircraftIdentity(t=0.0, title="Airbus A320neo Asobo", atc_model="A20N"))
+    pm.observe(own(0.2))
+    assert said(pm.observe(IntercomHeard(t=1.0, text="Taxi lights on. Strobes and Beacon lights on."))) == ["Check."]

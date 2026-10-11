@@ -63,10 +63,12 @@ FIRST_LOT_S = 30.0  # the first lot: everything around when the traffic comes on
 SNAP_M = 45.0  # a live aircraft standing this close to a parking spot is put on it
 CLEAR_OF_USER_M = 70.0
 RESERVED_M = 35.0
-PARKED_AROUND_NM = 12.0  # the airports parked aircraft are put at: within this of the user ...
-PARKED_INBOUND_NM = 45.0  # ... or the destination, once this close
+# Parked aircraft are put at the airport the user is on the ground at (the nearest within this), never while flying:
+# at FL390 they were put at the fields below (Cork, Cherbourg), and Paris's 36 came while on final, each a stutter.
+PARKED_AROUND_NM = 5.0
+PARKED_SLOW_KT = 40.0  # ... once off the landing roll
 PARKED_LEAVE_NM = 30.0  # and taken away once the user is this far from the airport again
-PARKED_PER_TICK = 2  # made a couple a second: the sim loads each model's textures as it comes (all at once stutters)
+PARKED_PER_TICK = 1  # made one a second: the sim loads each model's textures as it comes (all at once stutters)
 LIVE_PER_TICK = 2
 PARKED_MODELS = 10  # an airport's parked aircraft drawn with this many models at most (each one more is memory)
 STATUS_EVERY_S = 5.0
@@ -336,10 +338,13 @@ class TrafficManager:
                 continue
             if not plane.live or plane.mode in ("go_around", "departing", "hold", "landing", "give_way"):
                 continue
+            # Only one close enough to be flown down here (one further off was landed, taken away for the distance and
+            # made again from the next report, every 2 s).
             if f is not None and plane.mode == "live" and not f.on_ground and now - f.t > QUIET_S \
-                    and plane.object_id is not None and (landing := self._landing(plane, now)):
-                out += landing
-                continue
+                    and plane.object_id is not None and self._dist_nm(f.lat, f.lon) <= min(15.0, self.s.radius_nm):
+                out += self._landing(plane, now)
+                if plane.mode == "landing":
+                    continue
             if plane.mode == "parked":  # a real one that's switched off at its gate: there until the user's gone
                 if f is None or self._dist_nm(f.lat, f.lon) > PARKED_LEAVE_NM:
                     out += self._remove(plane)
@@ -618,14 +623,13 @@ class TrafficManager:
         return max(0.1, min(0.95, base * size * busy))
 
     def _parked_airports(self) -> list[str]:
+        """The airport the user is on the ground at, slowed down, if it has gates: none while flying."""
         own = self.own
-        out = [icao for icao, a in self.airports.items() if haversine_nm(own.lat, own.lon, a.lat, a.lon) <= PARKED_AROUND_NM]
-        dest = (self.atc.destination() or "").upper()
-        if dest and dest in self.airports and dest not in out:
-            a = self.airports[dest]
-            if haversine_nm(own.lat, own.lon, a.lat, a.lon) <= PARKED_INBOUND_NM:
-                out.append(dest)
-        return [icao for icao in out if any(p.kind.startswith(("gate", "ramp")) for p in self.airports[icao].parking)]
+        if not own.on_ground or own.gs_kt > PARKED_SLOW_KT:
+            return []
+        near = sorted((haversine_nm(own.lat, own.lon, a.lat, a.lon), icao) for icao, a in self.airports.items()
+                      if any(p.kind.startswith(("gate", "ramp")) for p in a.parking))
+        return [near[0][1]] if near and near[0][0] <= PARKED_AROUND_NM else []
 
     def _parked(self, now: float) -> list[Any]:
         out: list[Any] = []

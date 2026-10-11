@@ -241,3 +241,13 @@ def test_a_procedure_read_back_in_pieces_and_an_expect_time_after_departure():
     assert procedures(said, "OSHNN1") == ["OSHNN1"] and procedures(said) == ["OSHNN1"]
     assert procedures(normalize("descend via the laze one alpha arrival"), "LAZE1A") == ["LAZE1A"]
     assert procedures(normalize("expect FL330 26 minutes after departure")) == []
+
+
+def test_a_fix_spelled_out_and_a_frequency_run_into_to():
+    from localtc.atc_core.readback.extract import fixes, frequencies
+    from localtc.atc_core.readback.normalize import normalize
+
+    assert fixes(normalize("Direct to K, E, B, G, O, Air Transat 250"), "KEBGO") == ["KEBGO"]
+    assert fixes(normalize("Direct. K, E, B, G, O. Air Transat 250."), "KEBGO") == ["KEBGO"]
+    assert frequencies(normalize("121.02 Montreal Ground, when ready"), 121.0) == [121.0]  # "121.0 to Montreal Ground"
+    assert frequencies(normalize("121.2 ground"), 121.0) == [121.2]

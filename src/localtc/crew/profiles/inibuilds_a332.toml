@@ -1,0 +1,40 @@
+# The iniBuilds A330-200 for MSFS 2024 ("A330-200 (RR)"), on the sim's airliner systems: its FCU ignores the autopilot key events
+# (AP_ALT_VAR_SET, HEADING_BUG_SET: "didn't take" every time); its knobs are input events that turn a step at a time,
+# AIRLINER_MCU_*, the way the A350's AIRLINER_FCU_*_KNOB do. The seatbelt sign is AIRLINER_SEATBELTS_TOGGLE. Taken
+# from the aircraft's own list of input events (2026-10-10); not yet tried against the sim: the altitude knob learns
+# from its first click whether it moves 100 or 1,000 ft. VFE from the A330's limitations.
+[aircraft]
+name = "iniBuilds A330-200"
+match = ["A330-200"]
+flaps = "set"
+detents = ["up", "1", "2", "3", "full"]
+aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
+vfe = [0, 240, 196, 186, 180]
+first_detent_ground = "1+F"
+speed_check_kt = 100
+rollout_call_kt = 70
+vmo_kt = 330
+spoilers = true
+landing_detent = "3"
+reversers = true
+ceiling_ft = 41450
+
+[actions.heading]
+knob = "AIRLINER_MCU_HDG"
+
+[actions.speed]
+knob = "AIRLINER_MCU_SPEED"
+
+[actions.altitude]
+knob = "AIRLINER_MCU_ALT"
+step = 1000
+learn = true
+
+[actions.vs]
+knob = "AIRLINER_MCU_VS"
+step = 100
+
+[actions.seatbelt]
+input = "AIRLINER_SEATBELTS_TOGGLE"
+on = 1
+off = 0

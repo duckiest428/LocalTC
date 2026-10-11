@@ -433,6 +433,7 @@ class RadioChatter(Event, tag="radio_chatter"):
     spoken: str = ""
     controller: str = ""  # tower, ground, ... (the controller's manner of speaking)
     locale: str = ""  # the region's English, for the voices
+    ident: str = ""  # the other aircraft's callsign as filed ("RYR123"), for its airline's colour in the log
 
 
 class SessionNote(Event, tag="session_note"):

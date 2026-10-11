@@ -81,13 +81,10 @@ struct MapTab: View {
                   ? .hybrid(elevation: .realistic, pointsOfInterest: .including([.airport]))
                   : .standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { MapCompass(); MapScaleView() }
-        .onMapCameraChange(frequency: .onEnd) { context in
-            // The pilot moved the map by hand: stop following until they ask again.
-            if let own = store.own, follow {
-                let here = CLLocation(latitude: own.lat, longitude: own.lon)
-                let centre = CLLocation(latitude: context.region.center.latitude, longitude: context.region.center.longitude)
-                if here.distance(from: centre) > 20_000 { follow = false }
-            }
+        .onMapCameraChange(frequency: .continuous) { _ in
+            // The pilot panned, pinched or rotated the map: stop following (and zooming with the altitude) until the
+            // button is pressed again. MapKit marks a camera the user moved; the ones set here aren't.
+            if follow && position.positionedByUser { follow = false }
         }
         .onChange(of: store.status.rules, initial: true) { _, rules in
             mapMode.follow(rules: rules)
@@ -131,13 +128,22 @@ struct MapTab: View {
                         .accessibilityIdentifier("mapKey")
                     }
                     Spacer()
-                    Button { follow = true } label: {
+                    Button {
+                        follow.toggle()
+                        if follow, let own = store.own {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                position = .camera(MapCamera(centerCoordinate: CLLocationCoordinate2D(latitude: own.lat, longitude: own.lon),
+                                                             distance: distance(for: own)))
+                            }
+                        }
+                    } label: {
                         Image(systemName: follow ? "location.fill" : "location")
                             .font(.title3)
                             .padding(12)
                             .background(.regularMaterial, in: Circle())
                     }
-                    .accessibilityLabel("Follow the aircraft")
+                    .accessibilityLabel(follow ? "Stop following the aircraft" : "Follow the aircraft")
+                    .accessibilityIdentifier("mapFollow")
                 }
                 if store.status.active {
                     NavigationLink { FlightTab() } label: { FlightCard(status: store.status, own: store.own) }

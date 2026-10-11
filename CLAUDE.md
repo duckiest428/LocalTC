@@ -14,8 +14,12 @@ Two machines work on it:
 
 - Commit; never push. The user pushes and pulls with GitHub Desktop on both machines. Pull before starting.
 - Never commit `.DS_Store`, `ios/Info.plist`, `ios/*.xcodeproj/project.pbxproj`, `docs/roadmap.md` or
-  `.claude/launch.json` unless asked. No git repack, gc or alternates without asking.
+  `.claude/launch.json` unless asked (the one exception: the Xcode project's `MARKETING_VERSION`, which follows
+  LocalTC's version). No git repack, gc or alternates without asking.
 - Commit messages and the CHANGELOG say what changed, never which test flight it came from.
+- Three changelogs, one version: `CHANGELOG.md` (the Main App), `CHANGELOG-companion.md` and `CHANGELOG-website.md`;
+  the website's changelog page has a tab for each (`tools/release.py check` wants the version in all three and in the
+  companion's `MARKETING_VERSION`).
 - New work goes in the CHANGELOG's top section, `## [0.5.0] - Upcoming`, until the user names the next release. Don't
   bump `pyproject.toml` / `__version__` and don't build the installer (the exe) unless asked. Every commit is
   installed on the PC with `Install LocalTC.cmd` (the repo's root: it runs `install\install.ps1` on the checkout,

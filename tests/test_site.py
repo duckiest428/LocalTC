@@ -147,3 +147,28 @@ def test_the_changelogs_upcoming_section_is_the_next_version():
     versions = build_site.releases(text)
     assert versions[0][2], "new work goes under an upcoming version at the top"
     assert [v for v, _, up in versions if not up][0] == __version__
+
+
+def test_the_app_the_companion_and_the_website_share_one_version():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("release", ROOT / "tools" / "release.py")
+    release = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(release)
+    project, init = release.versions()
+    assert project == init and release.companion_versions() == {init}
+    for name in ("CHANGELOG.md", "CHANGELOG-companion.md", "CHANGELOG-website.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert build_site.releases(text)[0][2], f"{name} starts with its upcoming version"
+        assert f"## [{init}]" in text, f"{name} has this version's section"
+
+
+def test_the_changelog_page_has_a_tab_for_each_product():
+    texts = {p: (ROOT / f).read_text(encoding="utf-8") for p, _n, f, _x in build_site.PRODUCTS}
+    page = build_site.page(texts)
+    for product, name, _file, prefix in build_site.PRODUCTS:
+        assert f'data-product="{product}"' in page and f">{name}</button>" in page
+        assert f'id="{prefix}v0.4.0"' in page
+    assert page.count('id="v0.4.0"') == 1  # the Main App's anchors stay as they were
+    notes = build_site.sections(texts["companion"])
+    assert notes[0]["upcoming"] and notes[1]["version"] == "0.4.0" and "### Added" in notes[1]["notes"]

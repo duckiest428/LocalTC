@@ -75,7 +75,7 @@ struct LogbookTab: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if !flights.isEmpty {
-                    NavigationLink { WrappedScreen() } label: { Label("Wrapped", systemImage: "chart.bar.fill") }
+                    NavigationLink { WrappedScreen() } label: { Label("Wrapped", systemImage: "gift.fill") }
                         .accessibilityIdentifier("wrapped")
                 }
             }

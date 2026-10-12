@@ -412,6 +412,8 @@ Mission types can include:
 
 Missions should create structured objectives, not just a text description. Objectives must be evaluable from flight events and replay.
 
+Should be included on all platforms.
+
 ## Achievements
 
 Build an idempotent achievement system evaluated from structured events, for example:

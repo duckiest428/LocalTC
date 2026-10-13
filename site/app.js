@@ -7,8 +7,8 @@
 function reveals() {
   const quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (quiet || !("IntersectionObserver" in window)) return;
-  const groups = ".section-title, .section-lede, .card, .compare, .calc, .fineprint, .step," +
-                 " .callout, .status-col, .cta-center, .window";
+  const groups = ".section-title, .section-lede, .flight-strip, .feature-group, .local-diagram, .compare, .calc," +
+                 " .fineprint, .step, .callout, .status-col, .cta-center, .window";
   const seen = new IntersectionObserver((entries, self) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -117,6 +117,11 @@ function sum() {
   document.getElementById("years-out").textContent = `${y} year${y === 1 ? "" : "s"}`;
   document.getElementById("sub-total").textContent =
     `$${(monthly * 12 * y).toLocaleString("en-US")}`;
+  // The track fills up to the thumb (landing.css draws it from --p).
+  for (const input of [rate, years]) {
+    const share = (input.value - input.min) / (input.max - input.min);
+    input.style.setProperty("--p", `${share * 100}%`);
+  }
 }
 if (rate && years) {
   rate.addEventListener("input", sum);

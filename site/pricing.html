@@ -9,7 +9,7 @@
 <link rel="canonical" href="https://localtc.tech/pricing">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="landing.css">
 </head>
 <body>
 
@@ -36,6 +36,7 @@
       Compare the plans below. Take your time. They're all the same price.
     </p>
     <div class="billing" role="group" aria-label="Billing period">
+      <span class="billing-thumb" aria-hidden="true"></span>
       <button type="button" class="billing-opt on" data-bill="month">Monthly</button>
       <button type="button" class="billing-opt" data-bill="year">Yearly <span class="save">save 0%</span></button>
       <button type="button" class="billing-opt" data-bill="life">Lifetime <span class="save">also $0</span></button>
@@ -162,12 +163,27 @@
 </footer>
 
 <script>
-  // The billing switch: every option is the same price, as promised.
+  // The billing switch: every option is the same price, as promised. The thumb slides from wherever it is now
+  // to the option picked (a click mid-slide just turns it around), and follows the option if the layout moves.
+  const billing = document.querySelector(".billing");
+  const thumb = billing.querySelector(".billing-thumb");
+  const place = () => {
+    const on = billing.querySelector(".billing-opt.on");
+    thumb.style.width = `${on.offsetWidth}px`;
+    thumb.style.transform = `translateX(${on.offsetLeft}px)`;
+  };
   document.querySelectorAll(".billing-opt").forEach((b) => b.addEventListener("click", () => {
     document.querySelectorAll(".billing-opt").forEach((x) => x.classList.toggle("on", x === b));
     const per = { month: "/month", year: "/year", life: " once, forever" }[b.dataset.bill];
     document.querySelectorAll(".plan .per").forEach((p) => (p.textContent = per));
+    place();
   }));
+  thumb.style.transition = "none";  // the first placement doesn't slide in from the left edge
+  place();
+  billing.classList.add("ready");
+  requestAnimationFrame(() => requestAnimationFrame(() => thumb.style.removeProperty("transition")));
+  new ResizeObserver(place).observe(billing);
+  document.fonts?.ready.then(place);
 </script>
 </body>
 </html>

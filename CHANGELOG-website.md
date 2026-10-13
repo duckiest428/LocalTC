@@ -12,10 +12,6 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   along the timeline in their places.
 
 ### Changed
-- **A new look for the home page and the pricing page**: type and space do the work instead of glows, gradients
-  and icon tiles. The features read as lists under each group, the flight's stations sit on a route line, buttons
-  give on the press, and the pricing page's billing switch slides to your choice. Reduced motion, reduced
-  transparency and higher contrast are each respected.
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 
 ## [0.4.0] - 2026-09-28

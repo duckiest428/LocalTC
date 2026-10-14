@@ -5,8 +5,9 @@ never a closed one; in weather too poor for a visual, one with an instrument app
 Parallel runways the same way are in use too, with simultaneous approaches when each has a localizer and
 they're far enough apart for independent approaches (4,300 ft). LocalTC's own flight is given the first.
 
-**Notices (NOTAMs).** The sim has none, so each airport gets a few of the ordinary kind, drawn once per
-session from a seed: a taxiway closed or under construction, a runway closed (never the longest), an ILS or
+**Notices (NOTAMs).** An airport's real NOTAMs where they're known (``ops.notams``: a runway or taxiway closed, an
+ILS, its glide path, approach lights or a navaid out, birds), in place of drawn ones and never mixed with them. The sim
+has none, so an airport without real ones gets a few of the ordinary kind, drawn once per session from a seed: a taxiway closed or under construction, a runway closed (never the longest), an ILS or
 just its glideslope out, approach or edge lights out, a VOR out, bird activity. They're acted on, not just
 read: a closed runway is never used, a closed taxiway is routed around where there's another way, an ILS
 out is no approach, a glideslope out makes the ILS a localizer approach, approach lights out raise the
@@ -36,6 +37,7 @@ class Notice:
     kind: str  # runway_closed, taxiway_closed, construction, ils_out, glideslope_out, approach_lights_out,
     #            edge_lights_out, navaid_out, birds
     subject: str = ""  # "16L/34R", "B", "34R", "VOR"
+    real: str = ""  # a real NOTAM's number ("A1234/26"): from the FAA's NOTAMs, not drawn by LocalTC
 
     def text(self, icao_style: bool) -> str:
         s = self.subject

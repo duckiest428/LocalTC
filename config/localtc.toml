@@ -98,6 +98,12 @@ atc_control = true            # real flights sent around, held short or stopped 
 scheduled = true              # the departures due, at gates 45 min before they push (a free OpenSky or AirLabs account:
                               # Settings > Traffic); the real one takes over when its transponder comes on
 
+[ops]                         # real-world data, each from a free public source, kept on this PC with its age
+weather = true                # TAFs, SIGMETs and AIRMETs, the weather radar (aviationweather.gov, RainViewer)
+notams = true                 # real NOTAMs ATC works to (a free FAA NOTAM API key: Settings > Data)
+restrictions = true           # TFRs (FAA) and restricted, danger and prohibited areas (a free openAIP key)
+terrain = true                # terrain tiles (AWS Terrain Tiles): ATC keeps vectors and altitudes clear of the ground
+max_age_h = 6.0               # older than this: shown as stale, not used for a live flight
 [voice]                       # talk to ATC (or use --voice); install with the installer or pip install -e ".[voice]"
 enabled = false
 ptt = "keyboard"              # keyboard | joystick | enter (Enter in this window starts and stops a transmission)

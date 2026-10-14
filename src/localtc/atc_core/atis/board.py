@@ -91,8 +91,11 @@ class AtisBoard:
         self._issued: dict[str, float] = {}
         self._runway_changed: dict[str, float] = {}
         self._notices: dict[str, tuple[Notice, ...]] = {}
+        self.real: dict[str, tuple[Notice, ...]] = {}  # an airport's real NOTAMs, as ATC works to them (the app's)
 
     def notices(self, icao: str, geo: AirportGeometry) -> tuple[Notice, ...]:
+        if icao in self.real:
+            return self.real[icao]  # the real ones: never mixed with drawn ones
         if not self.notams:
             return ()
         if icao not in self._notices:

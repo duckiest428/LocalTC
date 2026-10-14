@@ -202,6 +202,40 @@ class AtisReport(Event, tag="atis_report"):
     zulu: str = ""  # "1756"
 
 
+class NoticeItem(msgspec.Struct, frozen=True, kw_only=True):
+    """One real NOTAM ATC can work to: a runway or taxiway closed, an ILS or its glide path, approach lights or a
+    navaid out, birds (``atc_core.atis.operations.Notice``'s kinds), with the NOTAM's own words."""
+
+    kind: str
+    subject: str = ""
+    id: str = ""  # "A1234/26"
+    text: str = ""
+
+
+class NoticesReport(Event, tag="notices_report"):
+    """An airport's real NOTAMs (the FAA's NOTAM API), as the ATIS and ATC work to them: in place of the notices
+    LocalTC draws for an airport, never mixed with them. Recorded, so a replay has the NOTAMs the flight had."""
+
+    icao: str
+    notices: tuple[NoticeItem, ...] = ()
+    source: str = ""
+    count: int = 0  # all the NOTAMs in force there (most are nothing ATC works to: a crane, a stand)
+
+
+class OpsSnapshot(Event, tag="ops_snapshot"):
+    """Real-world data as the flight had it, for the replay: ``kind`` (taf, sigmets, notams, tfrs, airspace, radar,
+    briefing), ``key`` (an airport or a region), where from, when it was got and until when it's current, and the
+    data itself (JSON)."""
+
+    kind: str
+    key: str = ""
+    source: str = ""
+    got: float = 0.0
+    expires: float = 0.0
+    stale: bool = False
+    data: str = ""
+
+
 class NearbyAirport(msgspec.Struct, frozen=True, kw_only=True):
     icao: str
     lat: float
@@ -501,7 +535,8 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars]
+                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
+                 OpsSnapshot]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]

@@ -272,6 +272,20 @@ class TrafficConfig(_Section):
     max_reinjected: int = 0
 
 
+class OpsConfig(_Section):
+    """Real-world operational data (localtc.ops), each from a free public source, cached here with its time and expiry:
+    the weather (TAFs, SIGMETs and AIRMETs, the radar), NOTAMs (the FAA's, with a free key: what ATC works to in place
+    of LocalTC's own notices), TFRs (the FAA's) and restricted airspace (openAIP, with a free key), and the terrain
+    (for ATC's minimum altitudes). On the Live Map, the companion's map and the briefing. Only airport codes and areas
+    are sent; nothing about the flight."""
+
+    weather: bool = True  # TAFs, SIGMETs/AIRMETs, the weather radar on the map
+    notams: bool = True  # real NOTAMs (needs a free FAA NOTAM API key: Settings > Data): ATC works to them
+    restrictions: bool = True  # TFRs (the US) and restricted, danger and prohibited areas (openAIP key)
+    terrain: bool = True  # terrain tiles: ATC's vectors and altitudes above the ground, minimum safe altitudes
+    max_age_h: float = 6.0  # data older than this isn't used for a live flight (shown as stale)
+
+
 class VoiceConfig(_Section):
     """Speaking to ATC: push-to-talk, the microphone, and Whisper."""
 
@@ -411,6 +425,7 @@ class Config(_Section):
     llm: LlmConfig = msgspec.field(default_factory=LlmConfig)
     cloud: CloudConfig = msgspec.field(default_factory=CloudConfig)
     traffic: TrafficConfig = msgspec.field(default_factory=TrafficConfig)
+    ops: OpsConfig = msgspec.field(default_factory=OpsConfig)
     session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)

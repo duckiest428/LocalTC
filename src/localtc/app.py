@@ -203,6 +203,39 @@ def traffic_atc(engine) -> "AtcLink":
                    destination=lambda: engine.state.flight.destination or "", call=call, managed=managed)
 
 
+_OPS = None
+
+
+def ops_data(cfg: Config | None = None):
+    """The real-world data (localtc.ops), one for the app: the briefing and the maps' layers, flying or not."""
+    global _OPS
+    if _OPS is None:
+        from localtc.ops.keys import default_keys
+        from localtc.ops.service import OpsData
+
+        _OPS = OpsData(data_dir() / "ops", default_keys(), max_age_h=cfg.ops.max_age_h if cfg else 6.0)
+    return _OPS
+
+
+def start_ops(cfg: Config, engine, bus):
+    """The flight's real-world data in the background: the airports' NOTAMs to ATC, the terrain ahead fetched."""
+    from localtc.ops.service import OpsService
+
+    data = ops_data(cfg)
+    if engine is not None and cfg.ops.terrain:
+        engine.terrain = data.terrain.highest_ft  # read from what's here only: the ATC never reaches the network
+
+    def flight() -> dict:
+        if engine is None:
+            return {}
+        st = engine.state
+        places = [(g.airport.lat, g.airport.lon) for icao in (st.flight.origin, st.flight.destination)
+                  if icao and (g := engine.geometry(icao)) is not None]
+        return {"own": st.aircraft, "origin": st.flight.origin, "destination": st.flight.destination, "places": places}
+
+    return OpsService(data, bus, flight=flight, cfg=cfg.ops)
+
+
 def start_traffic(cfg: Config, engine, source: SimSource, bus):
     """LocalTC's traffic: the real flights around flown in the sim, the gates filled, answering to ATC."""
     from localtc.traffic.manager import AtcLink, TrafficManager, TrafficSettings
@@ -516,6 +549,8 @@ async def run_session(
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
             traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
             consumers.append(asyncio.create_task(traffic.run()))
+        if session.source_kind == "live" and (cfg.ops.notams or cfg.ops.terrain):
+            consumers.append(asyncio.create_task(start_ops(cfg, engine if cfg.atc.enabled else None, bus).run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:
             consumers.append(asyncio.create_task(speaker.service.run()))

@@ -91,6 +91,7 @@ from localtc.atc_core.values import (
 from localtc.atc_core.atis import real as real_atis
 from localtc.atc_core.atis.observation import from_report
 from localtc.atc_core.atis.real import with_magvar
+from localtc.atc_core.atis.operations import Notice
 from localtc.atc_core.vfr import VfrMixin, VfrState
 from localtc.atc_core.weather import (
     AtisBoard,
@@ -101,6 +102,7 @@ from localtc.atc_core.weather import (
 )
 from localtc.sim_api import (
     AircraftIdentity,
+    NoticesReport,
     Airport,
     AirportData,
     AtisReport,
@@ -523,6 +525,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._altitude_checked_t = -math.inf
         self._altitude_checks: dict[int, int] = {}  # "check altitude" calls made, by assigned altitude
         self._aircraft_title = ""  # the sim's title for the aircraft ("A330-300 (RR)")
+        # The ground's height (the app's terrain tiles, read from what's on this PC): highest_ft(lat, lon, radius_nm)
+        # -> feet, or None where it isn't known. None: no terrain (ATC uses its usual minimums).
+        self.terrain = None
         self._checked_in: set[str] = set()  # stations the pilot has checked in with (or that called first)
         self._left_at: dict[str, float] = {}  # stations the pilot tuned away from (to another controller), and when
         self._checkin_t: dict[str, float] = {}  # when each station last heard a check-in
@@ -596,6 +601,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if isinstance(event, AirportData):
             self.tracker.handle(event)
             self._rebuild_facilities()
+        elif isinstance(event, NoticesReport):
+            # The airport's real NOTAMs: what the ATIS announces and ATC works to there, from the next ATIS on.
+            self.atis.real[event.icao] = tuple(Notice(n.kind, n.subject, real=n.id or "NOTAM") for n in event.notices)
         elif isinstance(event, AtisReport):
             if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(event.text, event.kind)) is not None:
                 self._real_atis[(event.icao, event.kind)] = parsed

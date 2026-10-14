@@ -310,6 +310,29 @@ def test_azure_reads_the_regions_voice_list_and_leaves_out_childrens_and_preview
     assert voices == {"en-GB": {"M": ("en-GB-RyanNeural",), "F": ("en-GB-SoniaNeural",)}}
 
 
+@pytest.mark.parametrize(("airport", "locale", "voice_prefix", "english"), [
+    ("EDDF", "de-DE", "de-DE-", "en-GB"), ("LFPG", "fr-FR", "fr-FR-", "en-GB"), ("RJTT", "ja-JP", "ja-JP-", "en-GB"),
+    ("SBGR", "pt-BR", "pt-BR-", "en-US"), ("RKSI", "ko-KR", "ko-KR-", "en-GB"), ("LIRF", "it-IT", "it-IT-", "en-GB"),
+])
+def test_azure_gives_every_region_its_own_voice_speaking_english(airport, locale, voice_prefix, english):
+    """Only England's controllers sounded of somewhere: Frankfurt's speak English in a German voice, Tokyo's in a
+    Japanese one (Azure's multilingual voices of the region, told to speak English)."""
+    from localtc.atc_core.region import accent
+
+    assert accent(airport) == locale
+    voices = azure_voices()
+    loc, voice = voices.voice_for(persona_for(f"{airport} Tower", locale=locale))
+    assert voice.startswith(voice_prefix) and "Multilingual" in voice
+    doc, _ = ssml("cleared to land", voice, loc)
+    assert f'<lang xml:lang="{english}">cleared to land</lang>' in doc
+
+
+def test_a_region_azure_has_no_voice_for_gets_the_nearest_english():
+    voices = azure_voices()
+    loc, voice = voices.voice_for(persona_for("EPWA Tower", locale="pl-PL"))  # no multilingual Polish voice known
+    assert loc == "en-GB" and voice.startswith("en-GB-")
+
+
 # --- SSML and Azure's allowance ----------------------------------------------------------------------------------
 
 
@@ -705,7 +728,7 @@ def test_engine_tells_the_voice_its_regions_english():
 
     assert accent("EGLL") == "en-GB" and accent("YSSY") == "en-AU" and accent("KSEA") == "en-US"
     assert accent("CYYZ") == "en-CA" and accent("EIDW") == "en-IE" and accent("VIDP") == "en-IN"
-    assert accent("LFPG") == "" and accent("") == ""  # nobody's first language: no accent in particular
+    assert accent("LFPG") == "fr-FR" and accent("") == ""  # France's controllers in a French voice; none: none in particular
 
 
 def test_old_recordings_without_a_locale_still_load():

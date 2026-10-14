@@ -129,17 +129,26 @@ def test_every_plan_costs_nothing():
     assert html.count("LocalTC-Setup.exe") >= len(prices)  # a download on every plan
 
 
-def test_an_upcoming_version_is_on_the_page_hidden_until_asked_for():
+def test_an_upcoming_version_is_on_the_page_first_and_marked():
+    """ "The website doesn't have an upcoming version": what's done but not released is shown, first, as it's added."""
     text = ("# Changelog\n\n## [0.5.0] - Upcoming\n\n### Added\n- **New** thing\n\n"
             "## [0.4.0] - 2026-09-28\n\n### Added\n- Old thing\n")
     latest, body = build_site.render(text)
     assert latest == "0.4.0"  # the latest released, not the upcoming one
-    assert '<section class="release upcoming" id="v0.5.0" data-upcoming hidden>' in body
-    assert '<section class="release" id="v0.4.0">' in body
-    toggle, links = build_site.sidebar(text)
-    assert 'id="cl-upcoming"' in toggle and "checked" not in toggle  # off by default
-    assert '<a href="#v0.5.0" data-upcoming hidden>' in links and '<a href="#v0.4.0">0.4.0' in links
-    assert build_site.sidebar("## [0.4.0] - 2026-09-28\n- x\n")[0] == ""  # nothing upcoming: no switch
+    assert '<section class="release upcoming" id="v0.5.0" data-upcoming>' in body and "hidden" not in body
+    assert body.index("v0.5.0") < body.index("v0.4.0")
+    links = build_site.sidebar(text)
+    assert '<a href="#v0.5.0" data-upcoming>0.5.0 <span class="cl-up">upcoming</span>' in links
+    assert '<a href="#v0.4.0">0.4.0' in links
+
+
+def test_one_products_changelog_is_always_the_one_showing():
+    """ "No platform selected" (every product at once, or none) isn't a state the page can be in."""
+    page = build_site.page({"app": "## [1.0.0] - 2026-01-01\n- a\n", "companion": "## [1.0.0] - 2026-01-01\n- b\n",
+                            "website": "## [1.0.0] - 2026-01-01\n- c\n"})
+    assert page.count('aria-selected="true"') == 1 and 'data-product="app" aria-selected="true"' in page
+    assert page.count('<div class="cl-product" data-product="companion" hidden>') == 1
+    assert '<div class="cl-product" data-product="app">' in page and "cl-upcoming" not in page
 
 
 def test_the_changelogs_upcoming_section_is_the_next_version():

@@ -107,7 +107,9 @@ def download(voices_dir: Path, model: str = "fp32", progress=None) -> Path:
 def pool_for(persona: Persona) -> tuple[str, list[str]]:
     """Kokoro's language ("en-us"/"en-gb") and the voices a persona is cast from: its sex, and its region's English
     (American for the US and Canada and none in particular, British for the rest of the English-speaking world)."""
-    locale = persona.locale.lower()
+    from localtc.tts.azure import english_of
+
+    locale = english_of(persona.locale).lower() if persona.locale else ""  # (Germany's: British English)
     lang = "en-gb" if locale in BRITISH else "en-us"
     return lang, list(POOLS[(lang, persona.sex if persona.sex in ("F", "M") else "M")])
 

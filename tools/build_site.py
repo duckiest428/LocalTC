@@ -8,8 +8,9 @@ cached for hours (by browsers and Cloudflare), so a page could arrive new with i
 whose Wrapped link went nowhere. Every ``src="x.js"`` and ``href="x.css"`` gets ``?v=<its content hash>``,
 and so do the scripts' own imports (``import("./cardmodel.js")``): a changed file is a new address. Only the Markdown that
 CHANGELOG.md uses is understood: ## and ### headings, "- " lists, **bold**, `code` and [links](url). A version dated
-"Upcoming" (or "Unreleased") is what's done but not released yet: on the page, hidden until "Show upcoming" is on. A
-sidebar lists every version to jump to.
+"Upcoming" (or "Unreleased") is what's done but not released yet: on the page first, marked upcoming, filled in as the
+work is done. One product's tab is always the one showing (the Main App's to start with): never all of them at once,
+never none. A sidebar lists every version to jump to.
 
 The shared-flight pages (localtc.tech/f/...) aren't the site's own: the account server writes them. It stamps
 the site's files they load from ``assets.json``: {file: its content hash}.
@@ -53,7 +54,6 @@ PAGE = """<!DOCTYPE html>
 <div class="cl-layout">
 <aside class="cl-side" aria-label="Versions">
   <p class="cl-side-h">Versions</p>
-{toggle}
 {versions}
 </aside>
 <main class="legal changelog">
@@ -81,23 +81,15 @@ PAGE = """<!DOCTYPE html>
       document.querySelectorAll(".cl-product").forEach((el) => {{ el.hidden = el.dataset.product !== product; }});
     }};
     tabs.forEach((t) => t.addEventListener("click", () => {{ pick(t.dataset.product); history.replaceState(null, "", "#" + t.dataset.product); }}));
-    // "Show upcoming": what's done but not released yet, off unless asked for (or linked to).
-    const box = document.getElementById("cl-upcoming");
-    const show = (on) => {{
-      if (box) box.checked = on;
-      document.querySelectorAll("[data-upcoming]").forEach((el) => {{ el.hidden = !on; }});
-    }};
-    box?.addEventListener("change", () => show(box.checked));
+    // Always one product showing: a link's, else the Main App's (no "all" and no "none").
     const linked = () => {{
       const id = decodeURIComponent(location.hash.slice(1));
       if (tabs.some((t) => t.dataset.product === id)) {{ pick(id); return; }}
       const el = id && document.getElementById(id);
       pick(el?.closest(".cl-product")?.dataset.product || "app");
-      if (el && el.closest("[data-upcoming]")) show(true);
       el?.scrollIntoView();
     }};
     window.addEventListener("hashchange", linked);
-    show(false);
     linked();
   }})();
   // The version in view is marked in the sidebar.
@@ -137,23 +129,22 @@ def releases(markdown: str) -> list[tuple[str, str, bool]]:
     return out
 
 
-def sidebar(markdown: str, prefix: str = "") -> tuple[str, str]:
-    """(the "Show upcoming" switch, or "" without an upcoming version; the links to each version). ``prefix`` keeps
-    one product's version anchors apart from another's ("companion-v0.4.0"; the Main App's are plain "v0.4.0")."""
-    links, toggle = [], ""
+def sidebar(markdown: str, prefix: str = "") -> str:
+    """The links to each version, the upcoming one first and marked. ``prefix`` keeps one product's version anchors
+    apart from another's ("companion-v0.4.0"; the Main App's are plain "v0.4.0")."""
+    links = []
     for version, date, upcoming in releases(markdown):
         v = html.escape(version)
         if upcoming:
-            toggle = ('  <label class="cl-toggle"><input type="checkbox" id="cl-upcoming"> Show upcoming</label>')
-            links.append(f'    <a href="#{prefix}v{v}" data-upcoming hidden>{v} <span class="cl-up">upcoming</span></a>')
+            links.append(f'    <a href="#{prefix}v{v}" data-upcoming>{v} <span class="cl-up">upcoming</span></a>')
         else:
             links.append(f'    <a href="#{prefix}v{v}">{v} <span class="cl-date">{html.escape(date)}</span></a>')
-    return toggle, "\n".join(links)
+    return "\n".join(links)
 
 
 def render(markdown: str, prefix: str = "") -> tuple[str, str]:
     """(latest released version, the releases as HTML). The file's own title and preamble are left out; an upcoming
-    version is in it, marked, hidden until shown."""
+    version is in it, first, marked as upcoming."""
     out: list[str] = []
     item: list[str] | None = None
     latest = ""
@@ -185,7 +176,7 @@ def render(markdown: str, prefix: str = "") -> tuple[str, str]:
             if not upcoming:
                 latest = latest or version
             if upcoming:
-                out.append(f'  <section class="release upcoming" id="{prefix}v{html.escape(version)}" data-upcoming hidden>')
+                out.append(f'  <section class="release upcoming" id="{prefix}v{html.escape(version)}" data-upcoming>')
                 out.append(f'  <h2>{html.escape(version)} <span class="date">Upcoming</span></h2>')
                 out.append('  <p class="cl-note">Done, not released yet: these come with the next version, and may '
                            'still change.</p>')
@@ -271,17 +262,18 @@ def sections(markdown: str) -> list[dict]:
 def page(texts: dict[str, str]) -> str:
     """The changelog page from each product's changelog ({id: its Markdown})."""
     latest = ""
-    bodies, navs, tabs, toggle = [], [], [], ""
-    for product, name, _file, prefix in PRODUCTS:
+    bodies, navs, tabs = [], [], []
+    for i, (product, name, _file, prefix) in enumerate(PRODUCTS):
         text = texts.get(product, "")
         last, body = render(text, prefix)
         latest = latest or last
-        up, versions = sidebar(text, prefix)
-        toggle = toggle or up
-        tabs.append(f'    <button type="button" role="tab" data-product="{product}" aria-selected="false">{name}</button>')
-        bodies.append(f'  <div class="cl-product" data-product="{product}">\n{body}\n  </div>')
-        navs.append(f'  <nav class="cl-versions cl-product" data-product="{product}">\n{versions}\n  </nav>')
-    return PAGE.format(latest=html.escape(latest), body="\n".join(bodies), toggle=toggle, versions="\n".join(navs),
+        versions = sidebar(text, prefix)
+        # The first product's tab selected and the others hidden as served: one showing even before the script runs.
+        shown, hidden = ("true", "") if i == 0 else ("false", " hidden")
+        tabs.append(f'    <button type="button" role="tab" data-product="{product}" aria-selected="{shown}">{name}</button>')
+        bodies.append(f'  <div class="cl-product" data-product="{product}"{hidden}>\n{body}\n  </div>')
+        navs.append(f'  <nav class="cl-versions cl-product" data-product="{product}"{hidden}>\n{versions}\n  </nav>')
+    return PAGE.format(latest=html.escape(latest), body="\n".join(bodies), versions="\n".join(navs),
                        tabs="\n".join(tabs))
 
 

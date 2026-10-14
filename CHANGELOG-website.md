@@ -12,6 +12,7 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   along the timeline in their places.
 
 ### Changed
+- **The changelog shows what's coming**: the upcoming version is on the page first, filled in as the work is done, and one product's tab is always the one showing.
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 
 ## [0.4.0] - 2026-09-28

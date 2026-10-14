@@ -69,9 +69,31 @@ BUILTIN: dict[str, dict[str, tuple[str, ...]]] = {
     "en-HK": {"F": ("Yan",), "M": ("Sam",)},
     "en-PH": {"F": ("Rosa",), "M": ("James",)},
 }
+# Where English isn't the first language, a controller speaks it with the region's own voice: Azure's multilingual
+# voices of that locale, told to speak English (``<lang>``). The ones known when Azure's list can't be read.
+MULTILINGUAL: dict[str, dict[str, tuple[str, ...]]] = {
+    "de-DE": {"F": ("Seraphina",), "M": ("Florian",)}, "fr-FR": {"F": ("Vivienne",), "M": ("Remy",)},
+    "it-IT": {"F": ("Isabella",), "M": ("Alessio", "Giuseppe", "Marcello")},
+    "es-ES": {"F": ("Arabella", "Isidora", "Ximena"), "M": ("Tristan",)}, "pt-BR": {"F": ("Thalita",), "M": ("Macerio",)},
+    "ja-JP": {"M": ("Masaru",)}, "ko-KR": {"M": ("Hyunsu",)}, "zh-CN": {"F": ("Xiaoxiao", "Xiaochen"), "M": ("Yunyi",)},
+}
 # A region with only one or two voices of a sex borrows from its nearest: a station of its own, and the rest near it.
 NEAREST = {"en-CA": "en-US", "en-PH": "en-US", "en-IE": "en-GB", "en-IN": "en-GB", "en-NZ": "en-AU",
-           "en-ZA": "en-GB", "en-SG": "en-GB", "en-HK": "en-GB", "en-AU": "en-GB", "en-GB": "en-GB", "en-US": "en-US"}
+           "en-ZA": "en-GB", "en-SG": "en-GB", "en-HK": "en-GB", "en-AU": "en-GB", "en-GB": "en-GB", "en-US": "en-US",
+           "en-KE": "en-GB", "en-NG": "en-GB", "en-TZ": "en-GB"}
+# The Americas speak American English (a multilingual voice there is told en-US); everywhere else British.
+AMERICAN = ("en-us", "en-ca", "en-ph", "es-mx", "es-us", "es-co", "es-ar", "es-cl", "es-pe", "es-ve", "es-ec", "es-cr",
+            "es-pa", "es-gt", "es-do", "es-cu", "es-bo", "es-uy", "es-py", "es-hn", "es-ni", "es-sv", "es-pr", "pt-br",
+            "fr-ca")
+
+
+def english_of(locale: str) -> str:
+    """The English a voice of ``locale`` speaks: its own where it's an English locale, else American in the Americas
+    and British elsewhere."""
+    low = locale.lower()
+    if low.startswith("en-"):
+        return locale
+    return "en-US" if low in AMERICAN else "en-GB"
 
 Transport = Callable[[str, str, bytes | None, dict[str, str], float], tuple[int, dict[str, str], bytes]]
 
@@ -185,8 +207,11 @@ class AudioCache:
 
 def ssml(text: str, voice: str, locale: str, *, rate: float = 1.0, pitch: int = 0, style: str = "") -> tuple[str, int]:
     """The SSML for one line, and its billable characters (all of it inside ``<voice>``: Azure doesn't bill the
-    ``<speak>`` and ``<voice>`` elements). The pace and pitch only when they change something."""
+    ``<speak>`` and ``<voice>`` elements). The pace and pitch only when they change something. A multilingual voice of
+    a locale that isn't English is told to speak English (``<lang>``): the words are English, the voice the region's."""
     body = escape(text)
+    if not locale.lower().startswith("en-") and "Multilingual" in voice:
+        body = f'<lang xml:lang="{english_of(locale)}">{body}</lang>'
     attrs = []
     percent = round((rate - 1.0) * 100)
     if percent:
@@ -233,7 +258,8 @@ class AzureVoices:
     # --- voices ------------------------------------------------------------------------------------------------
 
     def voices(self) -> dict[str, dict[str, tuple[str, ...]]]:
-        """The region's English voices by locale and sex (read once a session; Azure's list, else the built-in)."""
+        """The voices by locale and sex (read once a session; Azure's list, else the built-in): the English locales'
+        own, and the other locales' multilingual ones (to speak English with the region's voice)."""
         if self._voices is not None:
             return self._voices
         found: dict[str, dict[str, list[str]]] = {}
@@ -242,10 +268,14 @@ class AzureVoices:
             if status == 200:
                 for v in json.loads(body):
                     name, locale = str(v.get("ShortName", "")), str(v.get("Locale", ""))
-                    if not locale.startswith("en-") or v.get("VoiceType") != "Neural" or v.get("Status") not in (None, "GA"):
+                    if v.get("VoiceType") != "Neural" or v.get("Status") not in (None, "GA"):
                         continue
-                    if LEFT_OUT.search(name.split("-", 2)[-1]):
-                        continue
+                    own = name.split("-", 2)[-1]
+                    if locale.startswith("en-"):
+                        if LEFT_OUT.search(own):
+                            continue
+                    elif "Multilingual" not in own or re.search(r"Dragon|HD|Turbo|:", own):
+                        continue  # elsewhere only a voice that can speak English
                     sex = "F" if v.get("Gender") == "Female" else "M"
                     found.setdefault(locale, {}).setdefault(sex, []).append(name)
                     self._styles[name] = frozenset(v.get("StyleList") or ())
@@ -253,6 +283,8 @@ class AzureVoices:
             log.info("Azure's voice list unavailable (%s): the built-in list", exc)
         if not found:
             found = {loc: {sex: [f"{loc}-{n}Neural" for n in names] for sex, names in by.items()} for loc, by in BUILTIN.items()}
+            found.update({loc: {sex: [f"{loc}-{n}MultilingualNeural" for n in names] for sex, names in by.items()}
+                          for loc, by in MULTILINGUAL.items()})
         self._voices = {loc: {sex: tuple(names) for sex, names in by.items()} for loc, by in found.items()}
         return self._voices
 
@@ -260,8 +292,18 @@ class AzureVoices:
         """The locale and voices a persona is cast from: its region's English and sex; a region with few voices
         first, then its nearest's; no region in particular: American."""
         voices = self.voices()
-        locale = next((loc for loc in voices if loc.lower() == persona.locale.lower()), "en-US")
         sex = persona.sex if persona.sex in ("F", "M") else "M"
+        wanted = persona.locale
+        if wanted and not wanted.lower().startswith("en-"):
+            # Germany's controllers in a German voice, Japan's in a Japanese one: the region's multilingual voices
+            # (its own sex's, else the other's: still the region's voice), else the English nearest it.
+            own = next((loc for loc in voices if loc.lower() == wanted.lower()), None)
+            if own is not None:
+                pool = list(voices[own].get(sex, ())) or [v for s in ("F", "M") for v in voices[own].get(s, ())]
+                if pool:
+                    return own, pool
+            wanted = english_of(wanted)
+        locale = next((loc for loc in voices if loc.lower() == wanted.lower()), "en-US")
         pool = list(voices.get(locale, {}).get(sex, ()))
         near = NEAREST.get(locale, "en-US")
         if len(pool) < 4 and near != locale:

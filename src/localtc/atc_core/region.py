@@ -63,12 +63,33 @@ ACCENTS: dict[str, str] = {
     "K": "en-US", "PA": "en-US", "PH": "en-US", "PG": "en-US", "PF": "en-US", "PO": "en-US", "PP": "en-US",
     "TJ": "en-US", "C": "en-CA", "EG": "en-GB", "EI": "en-IE", "Y": "en-AU", "NZ": "en-NZ", "VA": "en-IN",
     "VE": "en-IN", "VI": "en-IN", "VO": "en-IN", "FA": "en-ZA", "WS": "en-SG", "VH": "en-HK", "RP": "en-PH",
+    "HK": "en-KE", "HU": "en-KE", "DN": "en-NG", "DG": "en-NG", "HT": "en-TZ", "LM": "en-GB", "LX": "en-GB",
+    "TX": "en-US", "MY": "en-US", "MK": "en-US", "TF": "fr-FR",
+    # Where English is the second language: the region's own voice speaking it (the voices that can).
+    "ED": "de-DE", "ET": "de-DE", "LO": "de-AT", "LS": "de-CH", "LF": "fr-FR", "EL": "fr-FR", "LN": "fr-FR",
+    "LI": "it-IT", "LE": "es-ES", "GC": "es-ES", "GE": "es-ES", "LP": "pt-PT", "EH": "nl-NL", "EB": "nl-BE",
+    "EK": "da-DK", "ES": "sv-SE", "EN": "nb-NO", "EF": "fi-FI", "BI": "is-IS", "EP": "pl-PL", "LK": "cs-CZ",
+    "LZ": "sk-SK", "LH": "hu-HU", "LR": "ro-RO", "LU": "ro-RO", "LB": "bg-BG", "LG": "el-GR", "LC": "el-GR",
+    "LT": "tr-TR", "LD": "hr-HR", "LJ": "sl-SI", "LY": "sr-RS", "LQ": "bs-BA", "LW": "mk-MK", "LA": "sq-AL",
+    "EY": "lt-LT", "EV": "lv-LV", "EE": "et-EE", "UK": "uk-UA", "U": "ru-RU", "UG": "ka-GE", "UD": "hy-AM",
+    "UB": "az-AZ", "UA": "kk-KZ", "UT": "uz-UZ", "LL": "he-IL", "OJ": "ar-JO", "OL": "ar-LB", "OS": "ar-SY",
+    "OR": "ar-IQ", "OI": "fa-IR", "OK": "ar-KW", "OB": "ar-BH", "OT": "ar-QA", "OM": "ar-AE", "OO": "ar-OM",
+    "OE": "ar-SA", "OY": "ar-YE", "HE": "ar-EG", "HL": "ar-LY", "DT": "ar-TN", "DA": "ar-DZ", "GM": "ar-MA",
+    "OP": "ur-PK", "VG": "bn-BD", "VN": "ne-NP", "VC": "si-LK", "VT": "th-TH", "VV": "vi-VN", "VD": "km-KH",
+    "WM": "ms-MY", "WB": "ms-MY", "WI": "id-ID", "WA": "id-ID", "WR": "id-ID", "RC": "zh-TW", "Z": "zh-CN",
+    "VM": "zh-HK", "RJ": "ja-JP", "RO": "ja-JP", "RK": "ko-KR", "MM": "es-MX", "MG": "es-GT", "MH": "es-HN",
+    "MN": "es-NI", "MR": "es-CR", "MP": "es-PA", "MS": "es-SV", "MU": "es-CU", "MD": "es-DO", "SK": "es-CO",
+    "SV": "es-VE", "SE": "es-EC", "SP": "es-PE", "SL": "es-BO", "SC": "es-CL", "SA": "es-AR", "SU": "es-UY",
+    "SG": "es-PY", "SB": "pt-BR", "SN": "pt-BR", "SD": "pt-BR", "SW": "pt-BR", "SS": "pt-BR", "GO": "fr-FR",
+    "DI": "fr-FR", "DF": "fr-FR", "DB": "fr-FR", "DR": "fr-FR", "GA": "fr-FR", "FK": "fr-FR", "FO": "fr-FR",
+    "FM": "fr-FR", "FI": "en-GB", "HA": "am-ET",
 }
 
 
 def accent(code: str | None) -> str:
-    """The English ATC speaks with at an airport or FIR ("en-GB" for EGLL), "" where it's nobody's first language
-    (a voice with no region in particular)."""
+    """The voice ATC speaks English with at an airport or FIR: its English ("en-GB" for EGLL), or where English
+    isn't the first language the region's own language ("de-DE" for EDDF: a German voice speaking English); "" not
+    known (a voice of no region in particular)."""
     code = (code or "").upper()
     for size in (2, 1):
         if code[:size] in ACCENTS:

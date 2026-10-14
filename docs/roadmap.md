@@ -6,7 +6,7 @@ LocalTC should become three connected systems:
 
 1. **ATC and traffic world**: controllers, traffic, procedures, weather, NOTAMs, terrain, and sequencing share one operational state.
 2. **Aircraft and turnaround crew**: cockpit crew, cabin crew, ramp/ground crew, GSX, checklists, announcements, and turnaround timing share the same flight state.
-3. **Flight operations companion**: EFB, charts, gates, scratchpad, missions, pilot profile, replay, statistics, and achievements work before, during, and after a flight.
+3. **Flight operations companion**: EFB, charts, gates, scratchpad, pilot profile, replay, statistics, and achievements work before, during, and after a flight.
 
 The LLM should provide natural interpretation, dialogue, and personality. Deterministic systems must remain authoritative for simulator state, safety-critical clearances, timing, data provenance, and replay.
 
@@ -378,41 +378,6 @@ Add an Airport Ops role that can handle:
 - airport-specific instructions
 
 This is the natural companion layer between ATC, GSX, cabin crew, and turnaround timing.
-
-# Phase 5: Missions, Profiles, and Progression
-
-## Mission and flight idea explorer
-
-Create a searchable mission catalog based on:
-
-- airports visited and not yet visited
-- routes flown
-- airlines and alliances
-- aircraft type and time
-- origin/destination
-- distance and duration
-- scenery/terrain
-- weather or season
-- VFR/IFR
-- historical or real-world routes
-- user goals
-
-Mission types can include:
-
-- scheduled airline leg
-- cargo
-- ferry
-- VIP transport
-- medevac
-- search and rescue
-- aerial firefighting
-- training
-- diversion/emergency practice
-- regional exploration
-
-Missions should create structured objectives, not just a text description. Objectives must be evaluable from flight events and replay.
-
-Should be included on all platforms.
 
 ## Achievements
 

@@ -8,6 +8,7 @@ struct MapTab: View {
     @State private var cameraHeading: Double = 0  // the map turned this far from north
     @State private var mapMode = MapMode()  // IFR or VFR: follows the flight's rules, switchable any time
     @AppStorage("mapZones") private var showZones = true  // the ATC zones, as on the desktop's Live Map
+    @AppStorage("mapWeather") private var showWeather = true  // SIGMETs, TFRs, restricted areas and NOTAMs
     @State private var legend = false
 
     var body: some View {
@@ -18,7 +19,8 @@ struct MapTab: View {
                 ZoneLayers(zones: zones, vfr: mapMode.kind == .vfr).content
             }
             if let efb = store.efb {
-                OpsLayers(efb: efb).content  // the hazards around, ATC's hold and route amendments (OpsLayers.swift)
+                // The hazards around and the NOTAMs (with their button), ATC's hold and route amendments (OpsLayers.swift)
+                OpsLayers(efb: efb, weather: showWeather, airports: store.zones?.airports ?? []).content
             }
             if let zones = store.zones {
                 ForEach(zones.airports) { airport in
@@ -122,6 +124,14 @@ struct MapTab: View {
                     }
                     .accessibilityLabel(showZones ? "Hide the ATC zones" : "Show the ATC zones")
                     .accessibilityIdentifier("mapZones")
+                    Button { showWeather.toggle() } label: {
+                        Image(systemName: showWeather ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                            .font(.title3)
+                            .padding(12)
+                            .background(.regularMaterial, in: Circle())
+                    }
+                    .accessibilityLabel(showWeather ? "Hide the weather, restricted areas and NOTAMs" : "Show the weather, restricted areas and NOTAMs")
+                    .accessibilityIdentifier("mapWeather")
                     if showZones && store.zones != nil {
                         Button { legend = true } label: {
                             Image(systemName: "info.circle")

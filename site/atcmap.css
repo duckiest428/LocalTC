@@ -71,3 +71,10 @@
 .sw-sigmet { background: rgba(226, 87, 76, 0.35); border: 1.5px solid #e2574c; }
 .sw-tfr { background: rgba(214, 93, 177, 0.25); border: 1.5px dashed #d65db1; }
 .zone-label.hold { color: #4fd1c5; font-weight: 700; white-space: nowrap; }
+.sw-notam { background: #ff3b30; height: 4px; margin-top: 3px; }
+.notam-badge { transform: translate(8px, 10px); white-space: nowrap; font: 700 10px/1.4 system-ui, sans-serif; padding: 0 5px;
+  border-radius: 6px; background: rgba(233, 211, 138, .92); color: #222; }
+.notam-badge.atc { background: rgba(255, 159, 28, .95); }
+.notam-tooltip { max-width: 360px; white-space: normal; }
+.notam-tip { font-size: 11px; margin-top: 3px; }
+.notam-tip.atc { border-left: 3px solid #ff9f1c; padding-left: 4px; }

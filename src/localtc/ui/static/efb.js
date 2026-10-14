@@ -26,6 +26,7 @@ const Efb = {
   update(state) {
     this.state = state || {};
     MapView.operations(this.state.atc);
+    MapView.drawNotams();
     const n = this.state.achievements?.new || [];
     if (n.length && n[n.length - 1].id !== this.lastNew) { this.lastNew = n[n.length - 1].id; toast(`Achievement: ${n[n.length - 1].title}`); }
     if (!$("#page-efb").classList.contains("active")) return;

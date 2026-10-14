@@ -7,6 +7,7 @@ is built from this file.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **A weather button on My Flight**: the SIGMETs, TFRs and restricted areas around and the airports' NOTAMs (a badge with the count, a closed runway red) show or hide together.
 - **The EFB** (a tab, in place of Airports, which is in it now): the copilot's checklist as it reads it, item by item,
   with Run, Checked, Skip, Hold and Resume; the briefing for the flight's airports (METAR, TAF, NOTAMs, the ATIS); the
   charts from ChartFox (on the PC's Wi-Fi, with your position on the georeferenced ones); the airports; the gate map

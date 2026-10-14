@@ -161,6 +161,7 @@ const AtcMap = (() => {
     </div>
     <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
     <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
+    <div class="lg-row lg-wx"><span class="sw sw-notam"></span>NOTAMs (a closed runway red)</div>
     <div class="lg-vfr">
       <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
       <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
@@ -255,6 +256,13 @@ const AtcMap = (() => {
     MTW: "#e7a33e", IFR: "#9aa3ad", "MTN OBSCN": "#9aa3ad" };
   const AREA = { tfr: ["#ff4d6d", "TFR"], restricted: ["#d65db1", "Restricted"], prohibited: ["#ff2e2e", "Prohibited"],
     danger: ["#ff9f1c", "Danger area"] };
+  const utc = (t) => new Date(t * 1000).toISOString().replace("T", " ").slice(5, 16) + "Z";
+  /** When an area is in force: "active until ...", or "from ... (not yet)" when it starts later. */
+  const when = (start, end) => {
+    const now = Date.now() / 1000;
+    if (start && start > now) return `<br><b>Not yet active</b>: from ${utc(start)}${end ? ` to ${utc(end)}` : ""}`;
+    return end ? `<br>Active until ${utc(end)}` : "";
+  };
   const levels = (lo, hi) => `${lo ? `${Math.round(lo / 100) * 100} ft` : "SFC"} – ${hi ? (hi >= 18000 ? `FL${Math.round(hi / 100)}` : `${hi} ft`) : "unl"}`;
   function hazards(layer, h) {
     for (const s of (h && h.sigmets) || []) {
@@ -262,13 +270,24 @@ const AtcMap = (() => {
       L.polygon(ring(s.polygon || []), { color: c, weight: 1.6, dashArray: s.kind === "airmet" ? "3 5" : null, fillColor: c,
         fillOpacity: s.kind === "airmet" ? 0.06 : 0.14 }).addTo(layer)
         .bindTooltip(`<b>${esc(String(s.kind || "").toUpperCase())} ${esc(s.hazard)}</b> ${esc(s.fir || "")}<br>${levels(s.base_ft, s.top_ft)}`
-          + `<br><span class="muted">until ${new Date((s.valid_to || 0) * 1000).toISOString().slice(11, 16)}Z · aviationweather.gov</span>`, { sticky: true });
+          + `<br><span class="muted">${s.valid_to ? `until ${new Date(s.valid_to * 1000).toISOString().slice(11, 16)}Z · ` : ""}aviationweather.gov</span>`, { sticky: true });
     }
     for (const a of (h && h.areas) || []) {
       const [c, what] = AREA[a.kind] || ["#d65db1", a.kind];
       L.polygon(ring(a.polygon || []), { color: c, weight: 1.8, dashArray: a.kind === "tfr" ? "6 4" : null, fillColor: c, fillOpacity: 0.1 })
-        .addTo(layer).bindTooltip(`<b>${esc(what)}</b> ${esc(a.name || "")}<br>${levels(a.floor_ft, a.ceiling_ft)}<br><span class="muted">${esc(a.source || "")}</span>`, { sticky: true });
+        .addTo(layer).bindTooltip(`<b>${esc(what)}</b> ${esc(a.name || "")}<br>${levels(a.floor_ft, a.ceiling_ft)}${when(a.start, a.end)}<br><span class="muted">${esc(a.source || "")}</span>`, { sticky: true });
     }
+  }
+
+  /** The EFB's hazards list (the app's, relayed: {kind, hazard, name, floor_ft, ceiling_ft, polygon}) as ``hazards``
+      takes it. */
+  function hazardsFromEfb(list) {
+    const sigmets = [], areas = [];
+    for (const h of list || []) {
+      if (h.kind === "sigmet" || h.kind === "airmet") sigmets.push({ ...h, base_ft: h.floor_ft, top_ft: h.ceiling_ft, fir: h.name });
+      else areas.push({ ...h, source: h.kind === "tfr" ? "FAA TFR" : "openAIP" });
+    }
+    return { sigmets, areas };
   }
 
   /* What ATC is working the flight to (the engine's AtcOperations): the hold's racetrack with its fix, place and EFC,
@@ -291,6 +310,32 @@ const AtcMap = (() => {
     }
   }
 
-  return { esc, route, straight, runways, zones, talk, track, traffic, hazards, operations, PLANE, LEGEND,
+  /* The flight's airports' NOTAMs (the EFB's briefings): a badge on each airport with how many are in force and how
+     many ATC works to, the list in its tooltip (ATC's first), and each runway a NOTAM closes drawn red over it.
+     ``airports``: the zones' airports ({icao, lat, lon, runways}). */
+  function notams(layer, briefings, airports) {
+    for (const a of airports || []) {
+      const items = ((briefings || {})[a.icao]?.notams?.items || []).filter((n) => n.in_force !== false);
+      if (!items.length || a.lat == null) continue;
+      const atc = items.filter((n) => (n.works_to || []).length);
+      const closed = new Set();
+      for (const n of atc) for (const [kind, subject] of n.works_to || []) if (kind === "runway_closed") closed.add(String(subject).replace(/\s/g, ""));
+      for (const r of a.runways || []) {
+        const name = String(r.name || "").replace(/\s/g, "");
+        if (r.lat == null || !r.length_m || ![...closed].some((c) => c === name || name.split("/").includes(c) || c.split("/").some((e) => name.split("/").includes(e)))) continue;
+        const half = r.length_m / 2, h = (r.heading_true * Math.PI) / 180, k = Math.cos((r.lat * Math.PI) / 180);
+        const dLat = (half * Math.cos(h)) / 111320, dLon = (half * Math.sin(h)) / (111320 * k), shift = near(r.lon) - r.lon;
+        L.polyline([[r.lat - dLat, r.lon - dLon + shift], [r.lat + dLat, r.lon + dLon + shift]], { color: "#ff3b30", weight: 6, opacity: 0.9, dashArray: "10 6" })
+          .addTo(layer).bindTooltip(`${esc(a.icao)} runway ${esc(r.name)} closed (NOTAM)`);
+      }
+      const list = [...atc, ...items.filter((n) => !(n.works_to || []).length)].slice(0, 12)
+        .map((n) => `<div class="notam-tip${(n.works_to || []).length ? " atc" : ""}"><b>${esc(n.id || "")}</b> ${esc(String(n.text || "").slice(0, 160))}</div>`).join("");
+      L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", iconSize: [0, 0],
+        html: `<div class="notam-badge${atc.length ? " atc" : ""}">NOTAM ${items.length}${atc.length ? ` · ${atc.length} ATC` : ""}</div>` }) })
+        .addTo(layer).bindTooltip(`<b>${esc(a.icao)} NOTAMs</b> (FAA)${list}${items.length > 12 ? `<div class="muted">and ${items.length - 12} more in the EFB</div>` : ""}`, { className: "notam-tooltip" });
+    }
+  }
+
+  return { esc, route, straight, runways, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

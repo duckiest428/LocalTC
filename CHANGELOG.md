@@ -7,6 +7,7 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **NOTAMs on the Live Map**: each of the flight's airports shows how many NOTAMs are in force and how many ATC works to, the list in its tooltip (ATC's first), and a runway a NOTAM closes drawn red over it. With the SIGMETs, the radar, TFRs and restricted areas under one button (Weather, areas & NOTAMs); an area that isn't active yet says when it will be.
 - **What's new**: after an update, the first time LocalTC opens, it shows the new version's notes, once (not on a new install: the welcome is shown then). The companion app does the same with its own notes.
 - **Other flights by their callsigns in the radio log** with LocalTC's traffic on: the real flights' calls and ATC's calls to them are no longer greyed out as "OTHER", but shown like any transmission, under the flight's callsign in its airline's colour (Ryanair blue, British Airways red, easyJet orange ...), each flight a shade of it.
 - **One version for everything, three changelogs**: the companion app carries LocalTC's version, and the website's changelog page has a tab each for the Main App, the Companion App and the Website, each with its versions and its upcoming one.

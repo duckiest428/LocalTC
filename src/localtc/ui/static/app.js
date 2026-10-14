@@ -1542,7 +1542,8 @@ const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path 
 const MapView = {
   map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
-  wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null,
+  wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null, notamLayer: null,
+  zoneAirports: [],
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
     if (!this.map) this.init();
@@ -1557,6 +1558,7 @@ const MapView = {
     this.wxLayer = L.layerGroup().addTo(this.map);  // the real-world hazards, under the ATC zones
     this.zoneLayer = L.layerGroup().addTo(this.map);  // under the route, the track and the aircraft
     this.opsLayer = L.layerGroup().addTo(this.map);  // ATC's hold and route amendments
+    this.notamLayer = L.layerGroup().addTo(this.map);  // the flight's airports' NOTAMs (with the weather toggle)
     try { this.wxOn = localStorage.getItem("map-wx") !== "off"; } catch { /* default on */ }
     $("#map-wx").onclick = () => this.setWx(!this.wxOn);
     this.setWx(this.wxOn);
@@ -1605,8 +1607,8 @@ const MapView = {
     $("#map-wx").setAttribute("aria-pressed", String(on));
     $$("#map-legend .lg-wx").forEach((r) => (r.hidden = !on));
     try { localStorage.setItem("map-wx", on ? "on" : "off"); } catch { /* not remembered */ }
-    if (!on) { this.wxLayer?.clearLayers(); if (this.radarLayer) { this.map.removeLayer(this.radarLayer); this.radarLayer = null; } }
-    else this.weather(true);
+    if (!on) { this.wxLayer?.clearLayers(); this.notamLayer?.clearLayers(); if (this.radarLayer) { this.map.removeLayer(this.radarLayer); this.radarLayer = null; } }
+    else { this.weather(true); this.drawNotams(); }
   },
   async weather(force = false) {
     if (!this.map || !this.wxOn) return;
@@ -1626,6 +1628,12 @@ const MapView = {
     }
     const why = [h.sigmets_meta, h.tfrs_meta, h.airspace_meta].filter((m) => m && !m.available && m.why).map((m) => m.why);
     $("#map-wx").title = why.length ? `Not shown: ${why.join("; ")}` : "Weather (SIGMETs, radar) and TFRs / restricted areas";
+  },
+  /** The flight's airports' NOTAMs (the EFB's briefings) on their airports, with the weather toggle. */
+  drawNotams() {
+    if (!this.notamLayer) return;
+    this.notamLayer.clearLayers();
+    if (this.wxOn) AtcMap.notams(this.notamLayer, Efb.state?.briefings, this.zoneAirports);
   },
   /** ATC's hold and route amendments (the "efb" message's ``atc``). */
   operations(ops) {
@@ -1753,6 +1761,8 @@ const MapView = {
     if (!this.zonesOn) return;
     this.zoneLayer.clearLayers();
     AtcMap.zones(this.zoneLayer, z, { vfr: this.mode === "vfr" });  // atcmap.js, shared with the website
+    this.zoneAirports = z.airports || [];
+    this.drawNotams();
     $("#map-legend .lg-talk").innerHTML = AtcMap.talk(z);
   },
 };

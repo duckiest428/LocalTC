@@ -72,6 +72,7 @@ const Tracker = {
       this.setRoute(data.route || null);
       this.setZones(data.zones || null);
       this.setOps(data.efb ? data.efb.atc : null);
+      this.setEfb(data.efb || null);
       if (data.trail) this.setTrail(data.trail);
       if (data.own) this.own(data.own);
       if (data.traffic) this.traffic(data.traffic);
@@ -83,7 +84,7 @@ const Tracker = {
     else if (type === "trail") this.setTrail(data);
     else if (type === "route") this.setRoute(data);
     else if (type === "zones") this.setZones(data);
-    else if (type === "efb") this.setOps(data ? data.atc : null);
+    else if (type === "efb") { this.setOps(data ? data.atc : null); this.setEfb(data || null); }
     else if (type === "traffic") this.traffic(data);
     else if (type === "radio") this.radio(data);
   },
@@ -133,6 +134,7 @@ const Tracker = {
     this.zoneLayer = L.layerGroup().addTo(this.map);
     this.runwayLayer = L.layerGroup().addTo(this.map);
     this.routeLayer = L.layerGroup().addTo(this.map);
+    this.wxLayer = L.layerGroup().addTo(this.map);  // the hazards and the NOTAMs, from the EFB the app relays
     this.opsLayer = L.layerGroup().addTo(this.map);  // ATC's hold and route amendments (atcmap.js operations)
     this.trail = L.polyline([], { className: "tr-trail", weight: 2.5 }).addTo(this.map);
     const controls = L.control({ position: "topright" });
@@ -141,6 +143,7 @@ const Tracker = {
       bar.innerHTML = `<span class="tr-seg" role="group" aria-label="Map type" title="IFR: who controls what. VFR: a light map and the airspace classes. Opens on the flight's rules.">
           <button type="button" data-mode="ifr" aria-pressed="true">IFR</button><button type="button" data-mode="vfr" aria-pressed="false">VFR</button></span>
         <button type="button" data-act="zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
+        <button type="button" data-act="wx" aria-pressed="true" title="SIGMETs, TFRs and restricted areas, and the airports' NOTAMs">Weather, areas &amp; NOTAMs</button>
         <button type="button" data-act="route" title="The whole flight plan route">Route</button>
         <button type="button" data-act="follow" aria-pressed="true">Follow</button>`;
       L.DomEvent.disableClickPropagation(bar);
@@ -149,6 +152,7 @@ const Tracker = {
         if (!b) return;
         if (b.dataset.mode) this.setMode(b.dataset.mode);
         else if (b.dataset.act === "zones") this.setZonesOn(!this.zonesOn);
+        else if (b.dataset.act === "wx") this.setWxOn(!this.wxOn);
         else if (b.dataset.act === "route") this.showRoute();
         else if (b.dataset.act === "follow") { this.setFollow(true); if (this.plane) this.map.panTo(this.plane.getLatLng()); }
       });
@@ -196,6 +200,24 @@ const Tracker = {
     document.querySelectorAll("#tr-map .tr-seg [data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === this.mode)));
     this.drawZones();
   },
+  /** The EFB the app relays: its hazards (SIGMETs, TFRs, restricted areas) and the airports' NOTAMs, drawn while
+      the "Weather, areas & NOTAMs" button is on. */
+  setEfb(efb) {
+    this.efb = efb;
+    this.drawWx();
+  },
+  setWxOn(on) {
+    this.wxOn = on;
+    $("#tr-map .tr-controls [data-act=wx]")?.setAttribute("aria-pressed", String(on));
+    this.drawWx();
+  },
+  drawWx() {
+    if (!this.wxLayer) return;
+    this.wxLayer.clearLayers();
+    if (this.wxOn === false || !this.efb) return;
+    AtcMap.hazards(this.wxLayer, AtcMap.hazardsFromEfb(this.efb.hazards));
+    AtcMap.notams(this.wxLayer, this.efb.briefings, (this.zones && this.zones.airports) || []);
+  },
   setZonesOn(on) {
     this.zonesOn = on;
     $("#tr-map .tr-controls [data-act=zones]")?.setAttribute("aria-pressed", String(on));
@@ -235,6 +257,7 @@ const Tracker = {
     for (const a of (z && z.airports) || []) AtcMap.runways(this.runwayLayer, a);
     this.straightRoute();
     this.drawZones();
+    this.drawWx();
   },
   drawZones() {
     if (!this.zoneLayer) return;

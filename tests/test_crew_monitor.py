@@ -15,11 +15,13 @@ from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
     AtcTransmission,
+    ChecklistState,
     CrewSpeech,
     IntercomHeard,
     OwnshipState,
     PhaseChanged,
     SendSimEvent,
+    SetSimVar,
 )
 
 PROFILES = load_all()
@@ -160,57 +162,58 @@ def test_not_configured_at_a_thousand_and_not_cleared_at_five_hundred():
     assert "We're not cleared to land!" in words
 
 
-@pytest.fixture
-def checklists_on(monkeypatch):
-    """The checklists are off until there are real ones (monitor.CHECKLISTS); their machinery is still tested."""
-    from localtc.crew import monitor
-
-    monkeypatch.setattr(monitor, "CHECKLISTS", True)
-
-
-def test_no_checklists_until_there_are_real_ones():
-    pm = crew()
+def test_an_aircraft_without_a_checklist_gets_none_made_up():
+    pm = PilotMonitoring(FakeEngine(), profiles=PROFILES)
+    pm.observe(AircraftIdentity(t=0.0, title="Cessna Skyhawk", atc_model="C172"))
     pm.observe(PhaseChanged(t=0.5, previous="TAXI_OUT", phase="RUNWAY_HOLD"))
-    pm.observe(systems(0.6))
     out = fly(pm, [own(1 + i) for i in range(40)])
     assert not [w for w in said(out) if "checklist" in w.lower()]  # none offered
-    words = said(pm.observe(IntercomHeard(t=50, text="before takeoff checklist")))
-    assert words == ["No checklists from me yet; I'll read them once we have the real ones for this aircraft."]
+    assert said(pm.observe(IntercomHeard(t=50, text="before takeoff checklist"))) ==         ["I don't have a checklist for this aircraft."]
 
 
-def test_the_before_takeoff_checklist_is_challenge_and_response(checklists_on):
-    """The captain's items are asked and answered; a wrong answer holds the checklist till the aircraft shows it
-    right; the copilot's own items it answers (and sets) itself."""
+def test_the_airbus_line_up_checklist_is_its_real_one_challenge_and_response():
+    """The A320's own normal checklist (the QRH's): its items read in order, the captain's asked and waited for, the
+    copilot's own (TCAS) answered and set by itself."""
     pm = crew(perf=PlanPerf(takeoff_flaps="1+F"))
     pm.observe(PhaseChanged(t=0.5, previous="TAXI_OUT", phase="RUNWAY_HOLD"))
-    pm.observe(systems(0.6, light_strobe=False, light_landing=False))
-    pm.observe(own(1, flaps_index=0))
-    out = pm.observe(IntercomHeard(t=2, text="before takeoff checklist"))
-    assert " ".join(said(out)) == "Before takeoff checklist. Flaps?"
-    assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "FLAPS_1"]  # the captain's side
-    out = pm.observe(IntercomHeard(t=3, text="one plus F, set"))  # said, but not so yet
-    assert said(out) == ["Flaps shows up, set them for takeoff, plan says 1 plus F. Holding the checklist till it's right."]
-    out, lit = [], False
-    for i in range(8):
-        out += pm.observe(own(4 + i, flaps_index=1))
-        out += pm.observe(systems(4.5 + i, light_strobe=lit, light_landing=lit))
-    text = " ".join(said(out))
-    assert text.startswith("Flaps, 1 plus F. Transponder?")
-    out = pm.observe(IntercomHeard(t=13, text="TA RA"))
-    lit = any(isinstance(o, SendSimEvent) and o.name == "STROBES_SET" for o in out)
-    text = " ".join(said(out))
-    assert text == "Strobes, on, set. Landing lights, on, set. Before takeoff checklist complete."
-    assert lit and {o.name for o in out if isinstance(o, SendSimEvent)} >= {"STROBES_SET", "LANDING_LIGHTS_SET"}
+    pm.observe(systems(0.6))
+    pm.observe(own(1, flaps_index=1, xpdr_mode="on"))
+    out = pm.observe(IntercomHeard(t=2, text="line up checklist"))
+    assert " ".join(said(out)) == "Line-up checklist. Takeoff runway?"
+    states = [o for o in out if isinstance(o, ChecklistState)]
+    assert states and states[0].status == "started" and "QRH" in states[0].source
+    out = pm.observe(IntercomHeard(t=3, text="one six right, both"))
+    words = " ".join(said(out))
+    assert words.startswith("TCAS, TA or TA/RA, set.") and words.endswith("Packs 1 and 2?")
+    assert [o for o in out if isinstance(o, SetSimVar) and o.name == "TRANSPONDER STATE:1"]  # TA/RA set by the copilot
+    out = pm.observe(IntercomHeard(t=4, text="on"))
+    assert said(out) == ["Line-up checklist complete."]
+    assert [o.status for o in out if isinstance(o, ChecklistState)][-1] == "completed"
 
 
-def test_an_unanswered_item_is_asked_once_more(checklists_on):
+def test_an_item_the_aircraft_shows_wrong_holds_the_checklist():
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PARKED"))
+    pm.observe(systems(0.6, light_beacon=False))
+    pm.observe(own(1, parking_brake=False))
+    assert said(pm.observe(IntercomHeard(t=2, text="before start checklist")))[0] == "Before start checklist. Parking brake?"
+    out = pm.observe(IntercomHeard(t=3, text="set"))
+    assert said(out) == ["Parking brake shows released. Holding the checklist till it's right."]
+    out = fly(pm, [own(4 + i, parking_brake=True) for i in range(6)])
+    assert " ".join(said(out)).startswith("Parking brake, set. Takeoff speeds and thrust?")
+    out = pm.observe(IntercomHeard(t=20, text="skip"))
+    assert " ".join(said(out)).startswith("Skipped.")
+
+
+def test_the_checklist_can_be_paused_and_resumed():
     pm = crew()
     pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PARKED"))
     pm.observe(systems(0.6))
     pm.observe(own(1, parking_brake=True))
-    assert said(pm.observe(IntercomHeard(t=2, text="before start checklist")))[0].startswith("Before start checklist. Parking brake?")
-    words = said(fly(pm, [own(3 + i, parking_brake=True) for i in range(30)]))
-    assert words.count("Parking brake?") == 1
+    pm.observe(IntercomHeard(t=2, text="before start checklist"))
+    assert said(pm.observe(IntercomHeard(t=3, text="hold the checklist"))) == ["Before start checklist on hold."]
+    assert said(pm.observe(IntercomHeard(t=9, text="resume the checklist")))[0].startswith("Before start checklist, continuing.")
+
 
 
 def test_a_handoff_leaves_the_pilots_radio_alone_and_reminds_only_when_late():

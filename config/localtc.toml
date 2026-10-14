@@ -158,6 +158,9 @@ llm = "full"                  # the language model on the intercom: off | questi
 verbosity = "standard"        # what it says by itself: quiet (safety only) | standard (callouts, relays, reminders) | chatty
 hands = "pm"                  # pm: it works its own side (radios, transponder, altimeter, lights, gear and flaps after takeoff) | calls: says only
 repeat_atc = false            # chatty only: the key part of each ATC instruction said back to you before your readback
+checklists = "offer"          # the checklists (the aircraft's own, else its family's normal one; none made up): "offer"
+                              # each when it's due, "run" it straight away, "off" only when you ask for one
+checklist_mode = "challenge"  # challenge (it asks, you answer) | read (it reads and checks) | auto (it also sets what it can)
 
 [recorder]
 enabled = true

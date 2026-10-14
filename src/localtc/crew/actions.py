@@ -439,6 +439,14 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                     already="Parking brake's already set." if on else "Parking brake's already off.", reads="parking_brake")
     if a == "autobrake":
         return _autobrake(cmd, c)
+    if a == "sim_event" and cmd.target:
+        # The action the aircraft's own checklist gives its copilot for an item (its Library.xml's EventID): sent as
+        # it's written; the checklist's own condition is the check.
+        try:
+            value = int(float(v or 0))
+        except ValueError:
+            value = 0
+        return Plan(a, v, (SendSimEvent(name=cmd.target, value=value),), lambda _c: None, "Done.")
     return f"Unable, I can't do {cmd} yet."
 
 

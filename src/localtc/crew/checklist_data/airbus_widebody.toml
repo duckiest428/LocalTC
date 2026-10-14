@@ -1,0 +1,130 @@
+# The Airbus widebodies' normal checklist (A330, A340, A350, A380: the QRH's, and the A350's and A380's ECL, carry the
+# same items in the "golden rules" format): the copilot reads it challenge and response. ___ is a value said as it's
+# set ({...}: filled from the flight). An aircraft whose own package has its checklists (the FlyByWire A380X, the
+# Headwind A339X) uses those instead.
+[set]
+name = "Airbus widebody"
+source = "Airbus A330/A340/A350/A380 normal checklist (QRH/ECL)"
+match = ["A330", "A332", "A333", "A338", "A339", "A340", "A342", "A343", "A345", "A346", "A350", "A359", "A35K", "A380", "A388"]
+
+[[list]]
+id = "cockpit_prep"
+name = "Cockpit preparation"
+phase = "cockpit_prep"
+items = [
+  ["GEAR PINS & COVERS", "REMOVED"],
+  ["FUEL QUANTITY", "{fuel}"],
+  ["SEAT BELTS", "ON"],
+  ["ADIRS", "NAV"],
+  ["BARO REF", "{altimeter} (BOTH)"],
+]
+
+[[list]]
+id = "before_start"
+name = "Before start"
+phase = "before_start"
+items = [
+  ["PARKING BRAKE", "SET"],
+  ["T.O SPEEDS & THRUST", "{speeds} (BOTH)"],
+  ["WINDOWS / DOORS", "CLOSED (BOTH)"],
+  ["BEACON", "ON"],
+]
+
+[[list]]
+id = "after_start"
+name = "After start"
+phase = "after_start"
+items = [
+  ["ANTI ICE", "___"],
+  ["ECAM STATUS", "CHECKED"],
+  ["PITCH TRIM", "___ %"],
+  ["RUDDER TRIM", "ZERO"],
+]
+
+[[list]]
+id = "taxi"
+name = "Taxi"
+phase = "taxi"
+items = [
+  ["FLIGHT CONTROLS", "CHECKED (BOTH)"],
+  ["FLAP SETTING", "CONF {flaps} (BOTH)"],
+  ["RADAR & PRED W/S", "ON & AUTO"],
+  ["ENG MODE SEL", "___"],
+  ["ECAM MEMO", "TO NO BLUE"],
+  ["- AUTO BRK", "MAX"],
+  ["- SIGNS", "ON"],
+  ["- CABIN", "READY"],
+  ["- GND SPLRS", "ARM"],
+  ["- FLAPS", "T.O"],
+  ["- T.O CONFIG", "NORMAL"],
+]
+
+[[list]]
+id = "line_up"
+name = "Line-up"
+phase = "line_up"
+items = [
+  ["T.O RWY", "{runway} (BOTH)"],
+  ["TCAS", "TA OR TA/RA"],
+  ["PACKS 1 & 2", "___"],
+]
+
+[[list]]
+id = "approach"
+name = "Approach"
+phase = "approach"
+items = [
+  ["BRIEFING", "CONFIRMED"],
+  ["ECAM STATUS", "CHECKED"],
+  ["SEAT BELTS", "ON"],
+  ["BARO REF", "{altimeter} (BOTH)"],
+  ["MINIMUM", "___ (BOTH)"],
+  ["AUTO BRAKE", "___"],
+  ["ENG MODE SEL", "___"],
+]
+
+[[list]]
+id = "landing"
+name = "Landing"
+phase = "landing"
+items = [
+  ["ECAM MEMO", "LDG NO BLUE"],
+  ["- LDG GEAR", "DN"],
+  ["- SIGNS", "ON"],
+  ["- CABIN", "READY"],
+  ["- SPLRS", "ARM"],
+  ["- FLAPS", "SET"],
+]
+
+[[list]]
+id = "after_landing"
+name = "After landing"
+phase = "after_landing"
+items = [
+  ["RADAR & PRED W/S", "OFF"],
+]
+
+[[list]]
+id = "parking"
+name = "Parking"
+phase = "parking"
+items = [
+  ["APU BLEED", "ON"],
+  ["ENGINES", "OFF"],
+  ["SEAT BELTS", "OFF"],
+  ["EXT LT", "___"],
+  ["FUEL PUMPS", "OFF"],
+  ["PARK BRK & CHOCKS", "___"],
+]
+
+[[list]]
+id = "securing"
+name = "Securing the aircraft"
+phase = "securing"
+items = [
+  ["OXYGEN", "OFF"],
+  ["EXT LT", "OFF"],
+  ["APU BLEED", "OFF"],
+  ["EFBs", "OFF"],
+  ["BAT", "OFF"],
+]

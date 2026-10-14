@@ -372,6 +372,12 @@ class CrewConfig(_Section):
     # Chatty only: the key part of each ATC instruction said back to you in the moment before the readback ("Descend
     # and maintain 8,000."), unless you read it back first.
     repeat_atc: bool = False
+    # The checklists (the aircraft's own, else its family's normal checklist; none for an aircraft without): "offer"
+    # each when it's due ("Before start checklist?"), "run" it straight away, or "off" only when asked for.
+    checklists: Literal["offer", "run", "off"] = "offer"
+    # How it reads them: "challenge" (challenge and response: it asks, you answer; its own side it answers itself),
+    # "read" (it reads each line and says what's wrong), "auto" (as read, and it sets what it can).
+    checklist_mode: Literal["challenge", "read", "auto"] = "challenge"
 
 
 class SessionConfig(_Section):

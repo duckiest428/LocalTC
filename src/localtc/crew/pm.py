@@ -131,14 +131,20 @@ class PilotMonitoring:
     def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None,
                  verbosity: str = "standard", hands: str = "pm", perf: PlanPerf | None = None, plan_source: str = "",
                  radio_mode=lambda: "off", alternate: str = "", repeat_atc: bool = False,
-                 deck: FlightDeck | None = None, voice_sex: str = "") -> None:
+                 deck: FlightDeck | None = None, voice_sex: str = "", checklists: Any = None,
+                 checklist_setting: str = "offer", checklist_mode: str = "challenge") -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
         self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
         self.deck = deck or FlightDeck()  # shared with the radio copilot
         self.radio_mode = radio_mode
         self._settings = dict(verbosity=verbosity, hands=hands, perf=perf, plan_source=plan_source,
-                              alternate=alternate, repeat_atc=repeat_atc)
+                              alternate=alternate, repeat_atc=repeat_atc, checklist_setting=checklist_setting,
+                              checklist_mode=checklist_mode)
+        # Where the checklists come from (crew.checklist_db.Library: the aircraft's own on this PC, else its family's);
+        # None: the family's only.
+        self.checklists = checklists
+        self._book = None
         self._generation = self.deck.generation
         self.voice_sex = voice_sex  # the copilot's voice ("male"/"female"): its name goes with it
         self._aircraft = ""
@@ -154,6 +160,9 @@ class PilotMonitoring:
         self.monitor = Monitor(self.picture, verbosity=s["verbosity"], hands=s["hands"], perf=s["perf"],
                                plan_source=s["plan_source"], radio_mode=self.radio_mode, seed=_seed(self.engine),
                                alternate=s["alternate"], repeat_atc=s["repeat_atc"])
+        self.monitor.checklist_setting = s["checklist_setting"]
+        self.monitor.checklist_mode = s["checklist_mode"]
+        self.monitor.set_checklists(getattr(self, "_book", None))
         self._waiting: list[_Waiting] = []
         self.intent: Intent | None = None
         self._intents = 0
@@ -254,9 +263,12 @@ class PilotMonitoring:
                 self.cockpit.profile = profile
                 self.cockpit.dead = set(profile.cannot)
                 self.cockpit.vars = {}
-            if profile.watch != self._watching:
-                self._watching = profile.watch
-                out.append(WatchVars(names=profile.watch))
+            self._book = self._checklists_for(ev.title, ev.atc_model)
+            self.monitor.set_checklists(self._book)
+            watch = tuple(dict.fromkeys(profile.watch + (self._book.variables() if self._book is not None else ())))
+            if watch != self._watching:
+                self._watching = watch
+                out.append(WatchVars(names=watch))
             self._aircraft = monitors._aircraft_name(ev.title or ev.atc_model)
             self._persona()
         elif isinstance(ev, AtcTransmission):
@@ -273,6 +285,9 @@ class PilotMonitoring:
         out += self._tick(ev.t)
         for call in self.monitor.due(ev.t):
             out += self._callout(call, ev.t)
+        if self.monitor.checklist_events:
+            out += self.monitor.checklist_events
+            self.monitor.checklist_events = []
         out += self._radio_due(ev.t)
         out += self._radio_news(ev.t)
         if self.monitor.requests:  # what the monitor wants from the sim: an arrival's restrictions, airports around
@@ -396,7 +411,7 @@ class PilotMonitoring:
                 self.monitor.declined(t)
             self._heard_by_model(text)
             return [self._say(t, "Copy.")]
-        if self.monitor.cr is not None and act in ("acknowledgement", "answer", "report", "command", "chat") \
+        if self.monitor.progress is not None and act in ("acknowledgement", "answer", "report", "command", "chat") \
                 and not any(c.action in speech_acts.CONTROL - {"yes", "no"} for c in reading.commands) \
                 and len(text.split()) <= 8:
             # An answer to a checklist item ("on", "set", "one plus F, checked") is taken as that, whatever the words.
@@ -552,12 +567,8 @@ class PilotMonitoring:
         if cmd.action in ("yes", "no"):
             return self._answer(t, cmd.action == "yes", uid)
         if cmd.action == "checklist":
-            if not monitors.CHECKLISTS:  # none to read yet
-                return [self._say(t, "No checklists from me yet; I'll read them once we have the real ones for this aircraft.")]
-            name = cmd.value or self._next_checklist()
-            if name is None:
-                return [self._say(t, "Which checklist?")]
-            self.monitor.checklist(name, t)
+            # The aircraft's own checklists, else its family's; none for it: said, never made up.
+            self.monitor.checklist(cmd.value, t)
             return self._now(t)
         if cmd.action == "brief":
             self.monitor.briefing(cmd.value, t)
@@ -728,14 +739,15 @@ class PilotMonitoring:
             out += self._callout(call, t)
         return out
 
-    def _next_checklist(self) -> str | None:
-        offer = self.monitor.offer
-        if offer is not None and offer.kind == "checklist":
-            return offer.value
-        phase = self.monitor.phase or "PARKED"
-        return {"PARKED": "before_start", "PUSHBACK": "after_start", "TAXI_OUT": "before_takeoff",
-                "RUNWAY_HOLD": "before_takeoff", "DEPARTURE": "after_takeoff", "CRUISE": "descent", "ARRIVAL": "descent",
-                "APPROACH": "landing", "LANDING": "landing", "TAXI_IN": "shutdown"}.get(phase)
+    def _checklists_for(self, title: str, model: str):
+        """The aircraft's checklists: its own (its package on this PC), else its family's; None without either."""
+        from localtc.crew.checklist_db import Library
+
+        library = self.checklists if self.checklists is not None else Library()
+        book = library.for_aircraft(title or "", model or "")
+        log.info("Copilot: checklists %s", f"from {book.source}" if book is not None else
+                 f"none for {title or model} (none of its own here, and no family's): it won't make any up")
+        return book
 
     # --- questions and answers --------------------------------------------------------------------------------------
 

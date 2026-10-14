@@ -204,6 +204,17 @@ def traffic_atc(engine) -> "AtcLink":
 
 
 _OPS = None
+_CHECKLISTS = None
+
+
+def checklist_library():
+    """Every checklist on this PC (the installed aircraft's own, the families' normal ones): looked for once."""
+    global _CHECKLISTS
+    if _CHECKLISTS is None:
+        from localtc.crew.checklist_db import Library, package_roots
+
+        _CHECKLISTS = Library(package_roots())
+    return _CHECKLISTS
 
 
 def ops_data(cfg: Config | None = None):
@@ -540,6 +551,8 @@ async def run_session(
                              else crew_backend.model, crew_model.mode.replace("_", " "))
                 service = atc_service
                 pm = PilotMonitoring(engine, profiles=load_all(data_dir() / "profiles"), model=crew_model,
+                                     checklists=checklist_library(), checklist_setting=cfg.crew.checklists,
+                                     checklist_mode=cfg.crew.checklist_mode,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
                                      plan_source=cfg.flight.plan_source, alternate=cfg.flight.alternate,
                                      repeat_atc=cfg.crew.repeat_atc, deck=deck, voice_sex=cfg.crew.voice_sex,

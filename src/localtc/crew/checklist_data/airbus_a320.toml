@@ -1,0 +1,128 @@
+# The Airbus A318/A319/A320/A321 (ceo and neo) normal checklist, as the QRH prints it (the "golden rules" format, from
+# 2016): the copilot reads it challenge and response. ___ is a value said as it's set ({...}: filled from the flight).
+[set]
+name = "Airbus A320 family"
+source = "Airbus A320 family normal checklist (QRH)"
+match = ["A318", "A319", "A320", "A321", "A19N", "A20N", "A21N", "Fenix", "FSLabs", "FSL A3"]
+
+[[list]]
+id = "cockpit_prep"
+name = "Cockpit preparation"
+phase = "cockpit_prep"
+items = [
+  ["GEAR PINS & COVERS", "REMOVED"],
+  ["FUEL QUANTITY", "{fuel}"],
+  ["SEAT BELTS", "ON"],
+  ["ADIRS", "NAV"],
+  ["BARO REF", "{altimeter} (BOTH)"],
+]
+
+[[list]]
+id = "before_start"
+name = "Before start"
+phase = "before_start"
+items = [
+  ["PARKING BRAKE", "SET"],
+  ["T.O SPEEDS & THRUST", "{speeds} (BOTH)"],
+  ["WINDOWS / DOORS", "CLOSED (BOTH)"],
+  ["BEACON", "ON"],
+]
+
+[[list]]
+id = "after_start"
+name = "After start"
+phase = "after_start"
+items = [
+  ["ANTI ICE", "___"],
+  ["ECAM STATUS", "CHECKED"],
+  ["PITCH TRIM", "___ %"],
+  ["RUDDER TRIM", "ZERO"],
+]
+
+[[list]]
+id = "taxi"
+name = "Taxi"
+phase = "taxi"
+items = [
+  ["FLIGHT CONTROLS", "CHECKED (BOTH)"],
+  ["FLAP SETTING", "CONF {flaps} (BOTH)"],
+  ["RADAR & PRED W/S", "ON & AUTO"],
+  ["ENG MODE SEL", "___"],
+  ["ECAM MEMO", "TO NO BLUE"],
+  ["- AUTO BRK", "MAX"],
+  ["- SIGNS", "ON"],
+  ["- CABIN", "READY"],
+  ["- SPLRS", "ARM"],
+  ["- FLAPS", "T.O"],
+  ["- T.O CONFIG", "NORMAL"],
+]
+
+[[list]]
+id = "line_up"
+name = "Line-up"
+phase = "line_up"
+items = [
+  ["T.O RWY", "{runway} (BOTH)"],
+  ["TCAS", "TA OR TA/RA"],
+  ["PACKS 1 & 2", "___"],
+]
+
+[[list]]
+id = "approach"
+name = "Approach"
+phase = "approach"
+items = [
+  ["BRIEFING", "CONFIRMED"],
+  ["ECAM STATUS", "CHECKED"],
+  ["SEAT BELTS", "ON"],
+  ["BARO REF", "{altimeter} (BOTH)"],
+  ["MINIMUM", "___ (BOTH)"],
+  ["AUTO BRAKE", "___"],
+  ["ENG MODE SEL", "___"],
+]
+
+[[list]]
+id = "landing"
+name = "Landing"
+phase = "landing"
+items = [
+  ["ECAM MEMO", "LDG NO BLUE"],
+  ["- LDG GEAR", "DN"],
+  ["- SIGNS", "ON"],
+  ["- CABIN", "READY"],
+  ["- SPLRS", "ARM"],
+  ["- FLAPS", "SET"],
+]
+
+[[list]]
+id = "after_landing"
+name = "After landing"
+phase = "after_landing"
+items = [
+  ["RADAR & PRED W/S", "OFF"],
+]
+
+[[list]]
+id = "parking"
+name = "Parking"
+phase = "parking"
+items = [
+  ["APU BLEED", "ON"],
+  ["ENGINES", "OFF"],
+  ["SEAT BELTS", "OFF"],
+  ["EXT LT", "___"],
+  ["FUEL PUMPS", "OFF"],
+  ["PARK BRK & CHOCKS", "___"],
+]
+
+[[list]]
+id = "securing"
+name = "Securing the aircraft"
+phase = "securing"
+items = [
+  ["OXYGEN", "OFF"],
+  ["EXT LT", "OFF"],
+  ["APU BLEED", "OFF"],
+  ["EFBs", "OFF"],
+  ["BAT", "OFF"],
+]

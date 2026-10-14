@@ -236,6 +236,19 @@ class OpsSnapshot(Event, tag="ops_snapshot"):
     data: str = ""
 
 
+class ChecklistState(Event, tag="checklist_state"):
+    """A checklist the copilot is reading: started, waiting for the captain's answer, held on an item the aircraft
+    shows wrong, an item skipped, paused, resumed, completed. ``data``: the whole checklist as it stands (JSON: each
+    line's challenge, response and result), for the app's and the companion's checklist view and the replay."""
+
+    checklist: str  # its id ("before_start")
+    name: str = ""
+    status: str = ""
+    index: int = 0
+    source: str = ""  # where the checklist is from ("Airbus A320 family normal checklist (QRH)")
+    data: str = ""
+
+
 class NearbyAirport(msgspec.Struct, frozen=True, kw_only=True):
     icao: str
     lat: float
@@ -541,7 +554,8 @@ RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived]
 AppEvent = Union[SessionNote]
-CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent]
+CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
+                  ChecklistState]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

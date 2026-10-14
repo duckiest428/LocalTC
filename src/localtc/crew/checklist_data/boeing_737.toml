@@ -1,0 +1,115 @@
+# The Boeing 737 (NG and MAX) normal checklist, as the QRH prints it: the copilot reads it challenge and response. ___ is a value said as it's set ({...}: filled from the flight).
+[set]
+name = "Boeing 737"
+source = "Boeing 737 NG/MAX normal checklist (QRH)"
+match = ["737", "B736", "B737", "B738", "B739", "B37M", "B38M", "B39M", "B3XM", "PMDG 737"]
+
+[[list]]
+id = "before_start"
+name = "Before start"
+phase = "before_start"
+items = [
+  ["FLIGHT DECK DOOR", "CLOSED AND LOCKED"],
+  ["FUEL", "{fuel}, PUMPS ON"],
+  ["PASSENGER SIGNS", "___"],
+  ["WINDOWS", "LOCKED"],
+  ["MCP", "V2 {v2}, HDG ___, ALT {altitude}"],
+  ["TAKEOFF SPEEDS", "{speeds}"],
+  ["CDU PREFLIGHT", "COMPLETED"],
+  ["RUDDER AND AILERON TRIM", "FREE AND 0"],
+  ["TAXI AND TAKEOFF BRIEFING", "COMPLETED"],
+  ["ANTI COLLISION LIGHT", "ON"],
+]
+
+[[list]]
+id = "before_taxi"
+name = "Before taxi"
+phase = "taxi"
+items = [
+  ["GENERATORS", "ON"],
+  ["PROBE HEAT", "ON"],
+  ["ANTI-ICE", "___"],
+  ["ISOLATION VALVE", "AUTO"],
+  ["ENGINE START SWITCHES", "CONT"],
+  ["RECALL", "CHECKED"],
+  ["AUTOBRAKE", "RTO"],
+  ["ENGINE START LEVERS", "IDLE DETENT"],
+  ["FLIGHT CONTROLS", "CHECKED"],
+  ["GROUND EQUIPMENT", "CLEAR"],
+]
+
+[[list]]
+id = "before_takeoff"
+name = "Before takeoff"
+phase = "line_up"
+items = [
+  ["FLAPS", "{flaps}, GREEN LIGHT"],
+  ["STABILIZER TRIM", "___ UNITS"],
+]
+
+[[list]]
+id = "after_takeoff"
+name = "After takeoff"
+phase = "after_takeoff"
+items = [
+  ["ENGINE BLEEDS", "ON"],
+  ["PACKS", "AUTO"],
+  ["LANDING GEAR", "UP AND OFF"],
+  ["FLAPS", "UP, NO LIGHTS"],
+]
+
+[[list]]
+id = "descent"
+name = "Descent"
+phase = "descent"
+items = [
+  ["PRESSURIZATION", "LAND ALT ___"],
+  ["RECALL", "CHECKED"],
+  ["AUTOBRAKE", "___"],
+  ["LANDING DATA", "VREF {vref}, MINIMUMS ___"],
+  ["APPROACH BRIEFING", "COMPLETED"],
+]
+
+[[list]]
+id = "approach"
+name = "Approach"
+phase = "approach"
+items = [
+  ["ALTIMETERS", "{altimeter}"],
+]
+
+[[list]]
+id = "landing"
+name = "Landing"
+phase = "landing"
+items = [
+  ["ENGINE START SWITCHES", "CONT"],
+  ["SPEED BRAKE", "ARMED"],
+  ["LANDING GEAR", "DOWN"],
+  ["FLAPS", "{flaps}, GREEN LIGHT"],
+]
+
+[[list]]
+id = "shutdown"
+name = "Shutdown"
+phase = "parking"
+items = [
+  ["FUEL PUMPS", "OFF"],
+  ["PROBE HEAT", "OFF"],
+  ["HYDRAULIC PANEL", "SET"],
+  ["FLAPS", "UP"],
+  ["PARKING BRAKE", "___"],
+  ["ENGINE START LEVERS", "CUTOFF"],
+  ["WEATHER RADAR", "OFF"],
+]
+
+[[list]]
+id = "secure"
+name = "Secure"
+phase = "securing"
+items = [
+  ["IRSs", "OFF"],
+  ["EMERGENCY EXIT LIGHTS", "OFF"],
+  ["WINDOW HEAT", "OFF"],
+  ["PACKS", "OFF"],
+]

@@ -24,6 +24,7 @@ touches: it notices when something there is missed and says so in a word ("Spoil
 Pure, like the rest of the copilot: ``observe`` every event, ``due(t)`` for what to say now.
 """
 
+import json
 import random
 import re
 from collections.abc import Callable
@@ -35,7 +36,9 @@ from localtc.atc_core.airport.approaches import MINIMA
 from localtc.atc_core.facilities import channel_khz
 from localtc.atc_core.phraseology import speech
 from localtc.config import PlanPerf
-from localtc.crew import checklists
+from localtc.crew import checklist_run as run
+from localtc.crew.checklist_db import Checklist, ChecklistSet
+from localtc.crew.checklist_run import Progress
 from localtc.crew.actions import Cockpit
 from localtc.crew.answers import LB_PER_KG, Picture, _hm
 from localtc.crew.commands import Command
@@ -46,6 +49,7 @@ from localtc.sim_api import (
     ArrivalData,
     AtcAlert,
     AtcTransmission,
+    ChecklistState,
     FlightArrived,
     IntercomPressed,
     IntercomReleased,
@@ -94,9 +98,6 @@ LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: sa
 PUSH_BRAKE_S = 150.0  # cleared to push and the parking brake still set this long: a word
 # The transition: seen this far below it (or above the level), then this far past it, climbing (or descending).
 TRANSITION_BAND_FT, TRANSITION_PAST_FT = 300.0, 100.0
-# Checklists aren't offered or read until there are real ones to read from (the aircraft's own); asked for, the
-# copilot says so. The challenge-and-response machinery below stays for then.
-CHECKLISTS = False
 SPEED_TREND_S = 10.0  # the speed's trend is taken over this long ...
 SPEED_GRACE_S = 60.0  # ... and an assigned speed not yet reached is reminded only after this long off it
 DECLINE_QUIET_S = 900.0  # "later", "not now": the copilot's own suggestions wait this long
@@ -137,18 +138,6 @@ class _Run:
     name: str
     index: int
     since: float
-
-
-@dataclass
-class _Challenge:
-    """A checklist read challenge and response: the copilot reads an item and waits for the captain's answer; its own
-    side it answers itself."""
-
-    name: str
-    index: int  # the item waiting for the captain
-    asked_t: float
-    repeats: int = 0
-    held: bool = False  # the answer didn't match the aircraft: waiting for it to
 
 
 CHALLENGE_REPEAT_S = 20.0  # no answer: the item asked again
@@ -209,7 +198,12 @@ class Monitor(WatchMixin):
         self._fuel_recent: list[tuple[float, float]] = []
         self.cleared_alt_t = 0.0  # when the cleared altitude was last given
         self.atis_said: dict[str, tuple] = {}  # airport: (runway, approach, setting) last told
-        self.cr: _Challenge | None = None  # a checklist read challenge and response
+        self.book: ChecklistSet | None = None  # the aircraft's checklists (None: it has none)
+        self.progress: Progress | None = None  # the checklist being read
+        self.paused_progress: Progress | None = None  # one put on hold, to resume
+        self.checklist_mode = "challenge"  # challenge, read, auto ([crew] checklist_mode)
+        self.checklist_setting = "offer"  # offer, run, off ([crew] checklists)
+        self.checklist_events: list = []  # ChecklistState, for the app and the replay
         self.handoff: tuple[float, Any] | None = None  # (when, the facility ATC sent the flight to)
         self.cleared_alt: int | None = None
         self.cleared_heading: tuple[int, float] | None = None
@@ -500,7 +494,13 @@ class Monitor(WatchMixin):
         st = self.engine.state if self.engine is not None else None
         with regions.speaking(self._region()):
             if phase == "RUNWAY_HOLD":
-                self._prompt_checklist("before_takeoff", t)
+                self._prompt_checklist("line_up", t=t)
+            elif phase == "PUSHBACK":
+                self._prompt_checklist("before_start", t=t)
+            elif phase == "TAXI_OUT":
+                self._prompt_checklist("after_start", "taxi", t=t + 5)
+            elif phase == "ARRIVAL" and previous == "CRUISE":
+                self._prompt_checklist("descent", t=t + 5)
             elif phase == "CRUISE":
                 level = (st.flight.cruise_ft if st is not None else None) or (round(self._altitude(self.c.own), -2) if self.c.own else None)
                 if level:
@@ -526,8 +526,10 @@ class Monitor(WatchMixin):
             v1 = self.perf.v1
             below = v1 and own.ias_kt < v1
             self._call("engine_failure_roll", SAFETY, t, "Engine failure! Below V1." if below else "Engine failure!")
+        if s.light_beacon and not was.light_beacon and own.on_ground and s.engines_running == 0                 and self.phase in (None, "PARKED") and self.f.landing_t is None:
+            self._prompt_checklist("before_start", t=t + 2)  # the beacon on: ready to push and start
         if s.engines_running > was.engines_running and own.on_ground and self.phase in (None, "PARKED", "PUSHBACK"):
-            self._prompt_checklist("after_start", t + 20.0)
+            self._prompt_checklist("after_start", t=t + 20.0)
             self.fuel_check_from = t  # checked once the fuel stops going up (a refuel still running isn't "under")
         if was.ap_master and not s.ap_master and not own.on_ground and t - self.commanded.get("autopilot", -1e9) > 10 \
                 and self.c.autopilot_known:
@@ -792,8 +794,8 @@ class Monitor(WatchMixin):
                     self._call(f"flaps_retract:{up}", ROUTINE, t, f"Speed checked, flaps {name}?")
             elif not vfe and agl > 3000 and own.ias_kt > 210:
                 self._call("flaps_still_out", ROUTINE, t, "Flaps are still out.")
-        if departing and not own.gear_down and flaps == 0 and agl > 1500 and "after_takeoff" not in self.f.checklists:
-            self._run("after_takeoff", t)
+        if departing and not own.gear_down and flaps == 0 and agl > 1500:
+            self._prompt_checklist("after_takeoff", t=t)
         # Climbing and descending: the cleared altitude.
         target = st.assignments.altitude_ft if st is not None else None
         if target != self.cleared_alt:
@@ -879,7 +881,7 @@ class Monitor(WatchMixin):
                            + (" set." if self.hands else "."), commands=(Command("altimeter", f"{q:.2f}"),))
             else:
                 self._call("transition_descent", ROUTINE, t, "Transition level, local altimeter.")
-            self._run("descent", t + 3)
+            self._prompt_checklist("approach", "descent", t=t + 3)
         limit = 250 if st is None or not st.assignments.speed_kt or st.assignments.speed_kt <= 250 else None
         if limit and alt < STERILE_FT - 300 and agl > 1500 and own.ias_kt > limit + 10:
             self.speed_high_since = self.speed_high_since or t
@@ -1002,7 +1004,7 @@ class Monitor(WatchMixin):
             if own.gear_down is False and prev_agl > 2000 >= agl:
                 self._call(f"gear_prompt:{n}", ROUTINE, t, "Two thousand. Gear down?")
             if own.gear_down and flaps is not None and flaps >= p.landing_index(positions) and agl < 3000:
-                self._run("landing", t, key=f"landing:{n}")
+                self._prompt_checklist("landing", t=t)
             if prev_agl > 1000 >= agl:
                 problems = self._unstable(own)
                 if not own.gear_down:
@@ -1051,7 +1053,7 @@ class Monitor(WatchMixin):
         if s is not None and s.spoilers_armed:  # the speedbrake lever is the pilot's side: a word, not a hand
             text += " Spoilers, your side."
         self._call("after_landing", ROUTINE, t, text, commands=tuple(cmds))
-        self.f.checklists.add("after_landing")
+        self._prompt_checklist("after_landing", t=t + 5)
 
     def _parked(self, t: float, *, arrived: bool = False) -> None:
         own, s = self.c.own, self.c.systems
@@ -1062,7 +1064,7 @@ class Monitor(WatchMixin):
         if s is not None and s.engines_running == 0 and not own.parking_brake:
             self._call("park_brake", ROUTINE, t, "Parking brake?")
         if s is not None and s.engines_running == 0:
-            self._prompt_checklist("shutdown", t + 2)
+            self._prompt_checklist("parking", t=t + 2)
 
     def _summary(self, own: OwnshipState) -> str:
         """What a first officer says at the gate: a word on the landing and the flight, not a score sheet (the
@@ -1125,123 +1127,239 @@ class Monitor(WatchMixin):
 
     # --- checklists, briefings, status ---------------------------------------------------------------------------
 
-    def _prompt_checklist(self, name: str, t: float) -> None:
-        if not CHECKLISTS or name in self.f.checklists:
-            return
-        if self._call(f"prompt:{name}", ROUTINE, t, [f"{checklists.NAMES[name]} checklist?",
-                                                      f"{checklists.NAMES[name]} checklist when you're ready."]):
-            self.offer = Offer("checklist", name, t + 45.0)
+    def set_checklists(self, book: "ChecklistSet | None") -> None:
+        """The aircraft's checklists (``checklist_db``): its own, or its family's; None: there are none."""
+        self.book = book
+        self.progress = None
 
-    def context(self) -> checklists.Context:
+    def values(self) -> dict[str, str]:
+        """What a checklist's {placeholders} are now: the clearance, the plan, the ATIS, the aircraft."""
         st = self.engine.state if self.engine is not None else None
         a = st.assignments if st is not None else None
-        icao = (st.flight.origin if self.f.takeoff_t is None else st.flight.destination) if st is not None else None
+        before_takeoff = self.f.takeoff_t is None
+        icao = (st.flight.origin if before_takeoff else st.flight.destination) if st is not None else None
         info = self._atis(icao)
-        above = self.c.own is not None and self._altitude(self.c.own) >= self._region().transition_ft
-        return checklists.Context(squawk=a.squawk if a else None,
-                                  altimeter_inhg=None if above or info is None else info.weather.altimeter_inhg,
-                                  takeoff_flaps=self.perf.takeoff_flaps, landing_flaps=self.perf.landing_flaps,
-                                  runway=a.departure_runway if a else None)
+        own = self.c.own
+        out: dict[str, str] = {}
+        above = own is not None and self._altitude(own) >= self._region().transition_ft - 1000 and not own.on_ground
+        if above:
+            out["altimeter"] = "STD"
+        elif info is not None and info.weather.altimeter_inhg:
+            q = info.weather.altimeter_inhg
+            out["altimeter"] = str(round(q * 33.8639)) if self._region().icao else f"{q:.2f}"
+        if a is not None:
+            if a.squawk:
+                out["squawk"] = a.squawk
+            if a.altitude_ft:
+                out["altitude"] = speech.altitude_display(a.altitude_ft)
+            runway = a.departure_runway if before_takeoff else a.arrival_runway
+            if runway:
+                out["runway"] = runway
+        perf = self.perf
+        flaps = perf.takeoff_flaps if before_takeoff else perf.landing_flaps
+        if flaps:
+            out["flaps"] = flaps
+        if perf.v1 and perf.vr and perf.v2:
+            out["speeds"] = f"V1 {perf.v1}, VR {perf.vr}, V2 {perf.v2}"
+            out["v2"] = str(perf.v2)
+        if perf.vref:
+            out["vref"] = str(perf.vref)
+        if own is not None and own.fuel_lb:
+            out["fuel"] = self._fuel(own.fuel_lb).upper()
+        return out
+
+    def _prompt_checklist(self, *phases: str, t: float) -> None:
+        """A checklist due now (the first of ``phases`` this aircraft has one for, not yet done): offered ("Before
+        start checklist?"), or read straight away when the pilot's set it so, or nothing without one."""
+        if self.book is None or self.checklist_setting == "off" or self.progress is not None:
+            return
+        for cl in (c for phase in phases for c in self.book.due(phase)):
+            if cl.id in self.f.checklists:
+                continue
+            if self.checklist_setting == "run":
+                self._start(cl, t)
+            elif self._call(f"prompt:{cl.id}", ROUTINE, t, [f"{cl.name} checklist?", f"{cl.name} checklist when you're ready."]):
+                self.offer = Offer("checklist", cl.id, t + 45.0)
+            return
 
     def checklist(self, name: str, t: float) -> None:
-        """Read ``name`` now (asked for by the pilot)."""
-        self.f.checklists.discard(name)
-        self.f.said.pop(f"run:{name}", None)
-        self._run(name, t, asked=True)
+        """Read ``name`` now (asked for: by its name or its phase), or the pilot's control of the one being read:
+        "pause", "resume", "skip"."""
+        if name in ("pause", "resume", "skip", "stop"):
+            self._control_checklist(name, t)
+            return
+        if self.book is None:
+            self._call(f"nochecklist:{t:.0f}", ROUTINE, t, "I don't have a checklist for this aircraft.")
+            return
+        cl = self.book.get(name) if name else self._next_due()
+        if cl is None:
+            self._call(f"nochecklist:{name}:{t:.0f}", ROUTINE, t, f"There's no {name.replace('_', ' ')} checklist for this aircraft."
+                       if name else "Which checklist?")
+            return
+        self.f.checklists.discard(cl.id)
+        self._start(cl, t)
 
-    def _run(self, name: str, t: float, *, key: str | None = None, asked: bool = False) -> None:
-        """Read ``name`` challenge and response: each item of the captain's asked and answered in turn, the copilot's
-        own answered (and set) by itself."""
-        if not CHECKLISTS or (name in self.f.checklists and not asked):
-            return
-        key = key or f"run:{name}"
-        if self._said(key):
-            return
-        self.f.checklists.add(name)
-        self.f.said[key] = t
-        self.cr = _Challenge(name, 0, t)
-        words, cmds = self._challenge_from(0, t, opener=f"{checklists.NAMES[name]} checklist.")
-        if words is None:
-            self.cr = None
-            if asked:
-                self._call(f"run:{name}:none:{t:.0f}", ROUTINE, t,
-                           f"Nothing I can check for the {checklists.NAMES[name].lower()} checklist here.")
-            return
-        self._call(f"run:{name}:0:{t:.0f}", ROUTINE, t, words, commands=cmds)
+    def _next_due(self) -> "Checklist | None":
+        """The first checklist not read yet of the phase the flight is in or just past."""
+        order = {"PARKED": ("cockpit_prep", "before_start", "parking", "securing"), "PUSHBACK": ("before_start", "after_start"),
+                 "TAXI_OUT": ("after_start", "taxi", "line_up"), "RUNWAY_HOLD": ("line_up",), "TAKEOFF": ("line_up",),
+                 "DEPARTURE": ("after_takeoff",), "CRUISE": ("cruise", "descent"), "ARRIVAL": ("descent", "approach"),
+                 "APPROACH": ("approach", "landing"), "LANDING": ("landing",), "TAXI_IN": ("after_landing", "parking")}
+        for phase in order.get(self.phase or "PARKED", ()):
+            for cl in self.book.due(phase):
+                if cl.id not in self.f.checklists:
+                    return cl
+        return None
 
-    def _challenge_from(self, start: int, t: float, *, opener: str = "") -> tuple[str | None, tuple[Command, ...]]:
-        """The words from item ``start`` on: the copilot's own items answered, up to the next of the captain's (asked,
-        then waited for) or the end. None: nothing on the checklist the copilot can see."""
-        assert self.cr is not None
-        items = checklists.ITEMS[self.cr.name]
-        ctx = self.context()
+    def _start(self, cl: "Checklist", t: float) -> None:
+        self.f.checklists.add(cl.id)
+        self.progress = Progress(cl, asked_t=t)
+        self._checklist_event(t, "started")
+        self._advance(t, opener=f"{cl.name} checklist.")
+
+    def _advance(self, t: float, opener: str = "") -> None:
+        """Read on from the line ``progress.index``: the copilot's own side answered (and set), what it sees checked;
+        in challenge and response it stops at the captain's next item and waits; it holds at one that's wrong."""
+        pr = self.progress
+        values = self.values()
         lines = [opener] if opener else []
         cmds: list[Command] = []
-        read = 0
+        mode = self.checklist_mode
         with regions.speaking(self._region()):
-            for i in range(start, len(items)):
-                item = items[i]
-                seen = item.state(self.c, ctx)
-                if seen is None:
+            while pr.index < len(pr.checklist.lines):
+                line = pr.checklist.lines[pr.index]
+                if line.note:
+                    lines.append(run.say(line, values).rstrip("?"))
+                    pr.results[pr.index] = "read"
+                    pr.index += 1
                     continue
-                read += 1
-                words, ok = seen
-                mine = item.fix is not None and self.hands
-                if mine:
-                    if not ok and (cmd := item.fix(self.c, ctx)) is not None:
-                        cmds.append(cmd)
-                        words = checklists._fixed_words(cmd)
-                    lines.append(f"{item.challenge}, {words}.")
+                shown = run.seen(line, self.c, values)
+                mine = run.side(line) == "copilot"
+                if shown is not None and shown[1] is False and (mine or mode != "challenge"):
+                    # (Challenge and response: the captain's item is asked all the same; the answer's checked.)
+                    fix = run.fix_for(line, self.c, values) if (mine or mode == "auto") and self.hands else None
+                    if fix is not None and mode != "read":
+                        cmds.append(fix)
+                        lines.append(run.done(line, values, "set"))
+                        pr.results[pr.index] = "ok"
+                        pr.index += 1
+                        continue
+                    if line.action is not None and mode == "auto" and self.hands:
+                        cmds.append(Command("sim_event", str(line.action[1]), line.action[0]))
+                        lines.append(run.done(line, values, "done"))
+                        pr.results[pr.index] = "ok"
+                        pr.index += 1
+                        continue
+                    if mode == "read":
+                        lines.append(f"{run._speakable(line.challenge)} shows {shown[0]}.")
+                        pr.results[pr.index] = "wrong"
+                        pr.index += 1
+                        continue
+                    # The captain's, and not right: said, and the checklist holds here till it is.
+                    lines.append(f"{run._speakable(line.challenge)} shows {shown[0]}. Holding the checklist till it's right.")
+                    pr.held, pr.asked_t = True, t
+                    self._checklist_event(t, "held")
+                    break
+                if mine or mode in ("read", "auto") or (shown is not None and shown[1] is True and mode != "challenge"):
+                    words = run.say(line, values)
+                    if shown is not None and "?" in words:
+                        words = f"{run._speakable(line.challenge)}, {shown[0]}."
+                    lines.append(words)
+                    pr.results[pr.index] = "ok" if shown is not None and shown[1] is not False else "read"
+                    pr.index += 1
                     continue
-                lines.append(f"{item.challenge}?")
-                self.cr.index, self.cr.asked_t, self.cr.repeats, self.cr.held = i, t, 0, False
-                return " ".join(lines), tuple(cmds)
-        if read == 0 and start == 0:
-            return None, ()
-        lines.append(f"{checklists.NAMES[self.cr.name]} checklist complete.")
-        self.cr = None
-        return " ".join(lines), tuple(cmds)
+                # Challenge and response: the captain's item asked, and waited for.
+                lines.append(f"{run._speakable(line.challenge)}?")
+                pr.asked_t, pr.repeats = t, 0
+                self._checklist_event(t, "waiting")
+                break
+            else:
+                lines.append(f"{pr.checklist.name} checklist complete.")
+                self._checklist_event(t, "completed")
+                self.progress = None
+        if lines:
+            self._call(f"run:{pr.checklist.id}:{pr.index}:{t:.2f}", ROUTINE, t, " ".join(lines), commands=tuple(cmds))
 
     def respond(self, text: str, t: float) -> bool:
-        """The captain's answer to the item asked; True when it was one (said back to, the next item asked)."""
-        if self.cr is None:
+        """The captain's answer to the item asked; True when it was one (the next read). One the aircraft shows
+        otherwise holds the checklist."""
+        pr = self.progress
+        if pr is None or pr.held or pr.paused or pr.index >= len(pr.checklist.lines):
             return False
-        item = checklists.ITEMS[self.cr.name][self.cr.index]
-        seen = item.state(self.c, self.context())
-        ok = seen is None or seen[1]
-        if not ok:
-            self.cr.held, self.cr.asked_t = True, t
-            with regions.speaking(self._region()):
-                self._call(f"run:{self.cr.name}:held:{t:.0f}", ROUTINE, t,
-                           f"{item.challenge} shows {seen[0]}. Holding the checklist till it's right.")
+        if re.search(r"\b(?:skip|next item|skip (?:it|that|this))\b", text.lower()):
+            self._control_checklist("skip", t)
             return True
-        name = self.cr.name
-        words, cmds = self._challenge_from(self.cr.index + 1, t)
-        self._call(f"run:{name}:{t:.0f}", ROUTINE, t, words or f"{checklists.NAMES[name]} checklist complete.",
-                   commands=cmds)
+        line = pr.checklist.lines[pr.index]
+        shown = run.seen(line, self.c, self.values())
+        if shown is not None and shown[1] is False:
+            pr.held, pr.asked_t = True, t
+            self._checklist_event(t, "held")
+            with regions.speaking(self._region()):
+                self._call(f"run:{pr.checklist.id}:held:{t:.0f}", ROUTINE, t,
+                           f"{run._speakable(line.challenge)} shows {shown[0]}. Holding the checklist till it's right.")
+            return True
+        pr.results[pr.index] = "ok" if shown is not None else "read"  # the captain's word for what it can't see
+        pr.index += 1
+        self._advance(t)
         return True
 
+    def _control_checklist(self, what: str, t: float) -> None:
+        pr = self.progress
+        if pr is None:
+            if what == "resume" and self.paused_progress is not None:
+                self.progress, self.paused_progress = self.paused_progress, None
+                self.progress.paused = False
+                self._checklist_event(t, "resumed")
+                self._advance(t, opener=f"{self.progress.checklist.name} checklist, continuing.")
+            else:
+                self._call(f"checklist:{what}:{t:.0f}", ROUTINE, t, "No checklist running.")
+            return
+        if what in ("pause", "stop"):
+            pr.paused = True
+            self.paused_progress, self.progress = pr, None
+            self._checklist_event(t, "paused")
+            self._call(f"checklist:pause:{t:.0f}", ROUTINE, t, f"{pr.checklist.name} checklist on hold.")
+        elif what == "skip" and pr.index < len(pr.checklist.lines):
+            pr.results[pr.index] = "skipped"
+            pr.skipped[pr.index] = "skipped by the captain"
+            pr.index += 1
+            pr.held = False
+            self._checklist_event(t, "skipped")
+            self._advance(t, opener="Skipped.")
+        elif what == "resume":
+            self._advance(t)
+
     def _checklist_tick(self, t: float) -> None:
-        """An item asked and not answered is asked once more, then the checklist waits; a held item goes on by itself
-        once the aircraft shows it right."""
-        cr = self.cr
-        if cr is None:
+        """A held item goes on by itself once the aircraft shows it right; an item asked and not answered is asked
+        once more, then the checklist is put on hold (said), to resume when asked."""
+        pr = self.progress
+        if pr is None or pr.index >= len(pr.checklist.lines):
             return
-        item = checklists.ITEMS[cr.name][cr.index]
-        if cr.held:
-            seen = item.state(self.c, self.context())
-            if seen is not None and seen[1] and t - cr.asked_t > 3:
-                name = cr.name
-                words, cmds = self._challenge_from(cr.index + 1, t, opener=f"{item.challenge}, {seen[0]}.")
-                self._call(f"run:{name}:{t:.0f}", ROUTINE, t, words or "", commands=cmds)
-            elif t - cr.asked_t > CHALLENGE_DROP_S * 2:
-                self.cr = None
+        line = pr.checklist.lines[pr.index]
+        if pr.held:
+            shown = run.seen(line, self.c, self.values())
+            if shown is not None and shown[1] is not False and t - pr.asked_t > 3:
+                pr.held = False
+                pr.results[pr.index] = "ok"
+                pr.index += 1
+                with regions.speaking(self._region()):
+                    self._advance(t, opener=f"{run._speakable(line.challenge)}, {shown[0]}.")
             return
-        if t - cr.asked_t > CHALLENGE_DROP_S:
-            self.cr = None
-        elif t - cr.asked_t > CHALLENGE_REPEAT_S * (cr.repeats + 1) and cr.repeats < 1:
-            cr.repeats += 1
-            self._call(f"run:{cr.name}:again:{t:.0f}", ROUTINE, t, f"{item.challenge}?")
+        if t - pr.asked_t > CHALLENGE_DROP_S:
+            self._control_checklist("pause", t)
+        elif t - pr.asked_t > CHALLENGE_REPEAT_S * (pr.repeats + 1) and pr.repeats < 1:
+            pr.repeats += 1
+            with regions.speaking(self._region()):
+                self._call(f"run:{pr.checklist.id}:again:{t:.0f}", ROUTINE, t, f"{run._speakable(line.challenge)}?")
+
+    def _checklist_event(self, t: float, status: str) -> None:
+        pr = self.progress or self.paused_progress
+        if pr is None:
+            return
+        self.checklist_events.append(ChecklistState(
+            t=t, checklist=pr.checklist.id, name=pr.checklist.name, status=status, index=pr.index,
+            source=self.book.source if self.book is not None else "",
+            data=json.dumps(pr.to_json(self.values()))))
 
     def briefing(self, which: str, t: float) -> None:
         """The departure or arrival briefing, from the clearance, the plan and the ATIS."""

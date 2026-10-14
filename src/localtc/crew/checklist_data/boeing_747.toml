@@ -1,0 +1,102 @@
+# The Boeing 747-400/-8 normal checklist, as the QRH prints it: the copilot reads it challenge and response. ___ is a value said as it's set ({...}: filled from the flight).
+[set]
+name = "Boeing 747"
+source = "Boeing 747 normal checklist (QRH)"
+match = ["747", "B744", "B748", "B74F"]
+
+[[list]]
+id = "before_start"
+name = "Before start"
+phase = "before_start"
+items = [
+  ["FLIGHT DECK DOOR", "CLOSED AND LOCKED"],
+  ["FUEL", "{fuel}"],
+  ["PASSENGER SIGNS", "___"],
+  ["MCP", "V2 {v2}, HDG/TRK ___, ALT {altitude}"],
+  ["TAKEOFF SPEEDS", "{speeds}"],
+  ["CDU PREFLIGHT", "COMPLETED"],
+  ["TRIM", "___ UNITS, 0, 0"],
+  ["TAXI AND TAKEOFF BRIEFING", "COMPLETED"],
+  ["BEACON", "ON"],
+]
+
+[[list]]
+id = "before_taxi"
+name = "Before taxi"
+phase = "taxi"
+items = [
+  ["ANTI-ICE", "___"],
+  ["RECALL", "CHECKED"],
+  ["AUTOBRAKE", "RTO"],
+  ["FLIGHT CONTROLS", "CHECKED"],
+  ["GROUND EQUIPMENT", "CLEAR"],
+]
+
+[[list]]
+id = "before_takeoff"
+name = "Before takeoff"
+phase = "line_up"
+items = [
+  ["FLAPS", "{flaps}"],
+]
+
+[[list]]
+id = "after_takeoff"
+name = "After takeoff"
+phase = "after_takeoff"
+items = [
+  ["LANDING GEAR", "UP"],
+  ["FLAPS", "UP"],
+]
+
+[[list]]
+id = "descent"
+name = "Descent"
+phase = "descent"
+items = [
+  ["RECALL", "CHECKED"],
+  ["AUTOBRAKE", "___"],
+  ["LANDING DATA", "VREF {vref}, MINIMUMS ___"],
+  ["APPROACH BRIEFING", "COMPLETED"],
+]
+
+[[list]]
+id = "approach"
+name = "Approach"
+phase = "approach"
+items = [
+  ["ALTIMETERS", "{altimeter}"],
+]
+
+[[list]]
+id = "landing"
+name = "Landing"
+phase = "landing"
+items = [
+  ["SPEEDBRAKE", "ARMED"],
+  ["LANDING GEAR", "DOWN"],
+  ["FLAPS", "{flaps}"],
+]
+
+[[list]]
+id = "shutdown"
+name = "Shutdown"
+phase = "parking"
+items = [
+  ["HYDRAULIC PANEL", "SET"],
+  ["FUEL PUMPS", "OFF"],
+  ["FLAPS", "UP"],
+  ["PARKING BRAKE", "___"],
+  ["FUEL CONTROL SWITCHES", "CUTOFF"],
+  ["WEATHER RADAR", "OFF"],
+]
+
+[[list]]
+id = "secure"
+name = "Secure"
+phase = "securing"
+items = [
+  ["IRSs", "OFF"],
+  ["EMERGENCY LIGHTS", "OFF"],
+  ["PACKS", "OFF"],
+]

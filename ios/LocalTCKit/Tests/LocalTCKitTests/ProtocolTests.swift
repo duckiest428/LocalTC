@@ -187,4 +187,43 @@ struct FlightStoreTests {
         store.apply(.status(FlightStatus(active: false)))
         #expect(store.zones == nil)
     }
+
+    @Test("The EFB comes through: the checklist, Airport Ops, ATC's hold, the notes and the briefings")
+    func efb() throws {
+        let store = FlightStore()
+        let json = #"""
+        {"type":"efb","data":{
+          "checklist":{"id":"before_start","name":"Before start","status":"waiting","index":1,"source":"Airbus A320 family",
+            "lines":[{"challenge":"Cockpit prep","response":"Completed","result":"read"},{"challenge":"Parking brake","response":"Set","result":""}]},
+          "ops":{"icao":"KSEA","role":"departure","gsx":false,"services":{"fuel":{"state":"in progress","source":"the sim's fuel"}},
+            "deice":{"required":true,"position":2,"wait_min":12,"why":"-2°C with snow","state":"queued"},
+            "messages":[{"t":1791983400.5,"kind":"service","text":"Fuelling in progress.","from":"Airport Ops"}],
+            "requests":[{"gate":"B25","icao":"KLAX","t":1,"state":"approved","why":"Gate B25 approved."}]},
+          "atc":{"hold":{"fix":"BLAKO","lat":47.8,"lon":-122.3,"inbound":160,"turn":"right","leg_min":1.0,"altitude_ft":8000,
+            "reason":"arrival traffic","efc":"1432","position":5,"delay_min":8,"entry":"direct","state":"holding","laps":1,
+            "racetrack":[[47.8,-122.3],[47.79,-122.28],[47.8,-122.3]]},
+            "routing":[{"kind":"reroute","fix":"BRAVO","heading":40,"reason":"restricted airspace R-6714","state":"active","line":[[46,-121.5],[46.5,-121],[47,-121.5]]}],
+            "conditions":[{"kind":"behind_landing","traffic":"the landing Airbus A320","runway":"16L","state":"active","value":null}],
+            "minimum_altitude_ft":4200},
+          "scratchpad":[{"id":"a1","text":"SQ 4521","kind":"squawk","t":100,"pinned":true,"picked":{"squawk":"4521"}}],
+          "achievements":{"earned":5,"total":18,"new":[{"id":"first_flight","title":"First flight","detail":"KSEA to KLAX"}]},
+          "chartfox":{"connected":false,"credit":{"text":"Chart data powered by ChartFox","url":"https://chartfox.org","privacy":"https://chartfox.org/privacy","disclaimer":"For flight simulation only."}},
+          "briefings":{"KSEA":{"icao":"KSEA","metar":"KSEA 141153Z 18007KT","taf":{"raw":"TAF KSEA","available":true},
+            "notams":{"items":[{"id":"A1/26","text":"RWY 16L/34R CLSD","works_to":[["runway_closed","16L/34R"]],"in_force":true}],"available":true}}},
+          "book":{"name":"Airbus A320 family","source":"QRH","checklists":[{"id":"before_start","name":"Before start","phase":"before_start"}]},
+          "hazards":[{"id":"T1","kind":"tfr","name":"Stadium","floor_ft":0,"ceiling_ft":3000,"polygon":[[47.5,-122.3],[47.5,-122.2],[47.6,-122.2]]}],
+          "someday":"a newer desktop's extra"}}
+        """#
+        store.apply(try #require(try LiveMessage.decodeEnvelope(json)))
+        let e = try #require(store.efb)
+        #expect(e.checklist?.lines?.count == 2 && e.checklist?.running == true)
+        #expect(e.ops?.deice?.waitMin == 12 && e.ops?.services?["fuel"]?.state == "in progress")
+        #expect(e.atc?.hold?.active == true && e.atc?.hold?.racetrack?.count == 3 && e.atc?.minimumAltitudeFt == 4200)
+        #expect(e.atc?.routing?.first?.kind == "reroute" && e.atc?.conditions?.first?.runway == "16L")
+        #expect(e.scratchpad?.first?.picked?["squawk"] == "4521")
+        #expect(e.briefings?["KSEA"]?.notams?.items?.first?.forAtc == true)
+        #expect(e.book?.checklists.first?.id == "before_start" && e.hazards?.first?.kind == "tfr")
+        #expect(EfbCommand.checklist(action: "run", id: "before_start").json["do"] as? String == "run")
+        #expect(EfbCommand.gates().relayable == false && EfbCommand.gate("B25").relayable)
+    }
 }

@@ -71,6 +71,7 @@ const Tracker = {
       this.clearMap();
       this.setRoute(data.route || null);
       this.setZones(data.zones || null);
+      this.setOps(data.efb ? data.efb.atc : null);
       if (data.trail) this.setTrail(data.trail);
       if (data.own) this.own(data.own);
       if (data.traffic) this.traffic(data.traffic);
@@ -82,6 +83,7 @@ const Tracker = {
     else if (type === "trail") this.setTrail(data);
     else if (type === "route") this.setRoute(data);
     else if (type === "zones") this.setZones(data);
+    else if (type === "efb") this.setOps(data ? data.atc : null);
     else if (type === "traffic") this.traffic(data);
     else if (type === "radio") this.radio(data);
   },
@@ -131,6 +133,7 @@ const Tracker = {
     this.zoneLayer = L.layerGroup().addTo(this.map);
     this.runwayLayer = L.layerGroup().addTo(this.map);
     this.routeLayer = L.layerGroup().addTo(this.map);
+    this.opsLayer = L.layerGroup().addTo(this.map);  // ATC's hold and route amendments (atcmap.js operations)
     this.trail = L.polyline([], { className: "tr-trail", weight: 2.5 }).addTo(this.map);
     const controls = L.control({ position: "topright" });
     controls.onAdd = () => {
@@ -216,6 +219,13 @@ const Tracker = {
     this.setFollow(false);
     const line = this.routeLine || (this.path.pts.length > 1 ? this.trail : null);
     if (line) this.map.fitBounds(line.getBounds(), { padding: [30, 30] });
+  },
+  /** ATC's hold and route amendments, from the EFB the app sends on (its "atc" part). */
+  setOps(ops) {
+    this.ops = ops;
+    if (!this.opsLayer) return;
+    this.opsLayer.clearLayers();
+    AtcMap.operations(this.opsLayer, ops);
   },
   // The Live Map's ATC layer, worked out by the app for the flight (ui/zones.py): redrawn when it changes.
   setZones(z) {

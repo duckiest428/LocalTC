@@ -22,6 +22,8 @@ public final class FlightStore {
     public private(set) var zones: AtcZones?
     public private(set) var radio: [RadioLine] = []
     public private(set) var airports: [FlightAirport] = []
+    /// The EFB (Efb.swift): the checklist, Airport Ops, ATC's hold and reroutes, the notes, the briefings.
+    public private(set) var efb: EfbState?
     /// Banners waiting to be shown, oldest first. The app removes each as it shows it.
     public var alerts: [FlightAlert] = []
     public private(set) var lastMessage: Date?
@@ -45,6 +47,7 @@ public final class FlightStore {
             zones = hello.zones
             if let lines = hello.radio { radio = Array(lines.suffix(Self.radioKeep)) }
             if let a = hello.airports { airports = a }
+            efb = hello.efb
         case .status(let s):
             if !s.active && status.active { trail = []; airports = []; zones = nil }  // the flight ended: the next one starts clean
             status = s
@@ -59,6 +62,7 @@ public final class FlightStore {
             append(lines.filter { !known.contains("\($0.t ?? -1)|\($0.text ?? "")") })
         case .alert(let a): alerts.append(a)
         case .airports(let a): airports = a
+        case .efb(let e): efb = e
         case .trail(let t):
             setTrail(t)
             if let o = own { setOwn(o) }
@@ -74,6 +78,7 @@ public final class FlightStore {
         zones = nil
         radio = []
         airports = []
+        efb = nil
         alerts = []
     }
 

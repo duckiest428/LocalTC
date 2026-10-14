@@ -6,6 +6,13 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The Flight Tracker shows ATC's hold and reroutes**: the racetrack with its fix and EFC, and a direct or vectors
+  around an area as a line, as the app's Live Map does.
+- **ChartFox sign-in for the app**: the account server holds ChartFox's client secret and does the sign-in's exchange,
+  so the app's EFB can show your ChartFox charts; the tokens wait a few minutes for the app to collect them once, and
+  nothing is kept after. No LocalTC account needed.
+- **The phone's EFB through the account**: its checklist commands, notes, gate requests and notes to Ops wait for the
+  app like a typed call, and the EFB as the app has it is passed on to the phone, held in memory only.
 - **One changelog for everything**: the changelog page has a section each for the Website, the Companion App and
   the Main App, each with its own versions and its upcoming one.
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases

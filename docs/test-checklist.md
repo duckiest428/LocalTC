@@ -127,10 +127,16 @@ pick your phone and your team, press Run). A free-account install stops working 
 - [ ] **My Flight**: the aircraft and traffic on the map, the IFR/VFR switch, and the card at the bottom opens the details.
 - [ ] **Comms**: the radio log, the COM1/COM2 filter, and typing a call (on the same Wi-Fi) makes ATC answer it on the PC.
 - [ ] **Frequencies**: the tuned and next stations light up in the airport lists.
-- [ ] **Airports**: the departure and arrival airports with runways, ILS and ATIS.
+- [ ] **EFB → Airports**: the departure and arrival airports with runways, ILS and ATIS.
+- [ ] **EFB → Checklists**: the copilot's checklist as it reads it (ticks, the item asked, held on a wrong one); Run, Checked, Skip, Hold and Resume work from the phone.
+- [ ] **EFB → Briefing**: the METAR, TAF and NOTAMs (ATC's ones marked) for the flight's airports.
+- [ ] **EFB → Gates** (same Wi-Fi): the destination's stands coloured free / occupied / yours / too small, "My airline" and "All gates"; asking for a free one is approved by Airport Ops and ground sends you there.
+- [ ] **EFB → Scratchpad**: a note added on the phone shows in the app's EFB and the other way round.
+- [ ] **EFB → Airport Ops**: the services, de-icing, the messages; a note to Ops is acknowledged.
+- [ ] **EFB → Charts** (same Wi-Fi, ChartFox connected in the app): the airport's charts, one opens, with the credit.
+- [ ] **My Flight**: a hold ATC gives shows as a racetrack with HOLD fix · EFC; TFRs and SIGMETs around are drawn.
 - [ ] **Logbook**: your synced flights; one with an uploaded replay plays (map, radio, scrubber).
 - [ ] **Logbook**: swipe a flight right → Share: the card draws, Share gives a link to send. The chart button opens **Wrapped**.
-- [ ] Settings → **EFB** is greyed out ("Coming soon").
 - [ ] Turn the phone's Wi-Fi off (use cellular): the badge changes to **Via server** and the map still moves.
 - [ ] Handoffs and clearances pop up as banners.
 

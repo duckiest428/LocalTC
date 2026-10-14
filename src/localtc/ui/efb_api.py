@@ -53,6 +53,7 @@ class EfbRoutes:
         self.facts: FlightFacts | None = None
         self.checklist: dict | None = None  # the copilot's checklist as it stands (``ChecklistState``)
         self.atc_ops: dict | None = None  # ATC's conditions, hold, routing (``AtcOperations``)
+        self.hazards: list[dict] = []  # the SIGMETs, TFRs and areas ATC routes around (``OpsSnapshot`` "hazards")
         self.new_achievements: list[dict] = []
         self._chartfox = None
         self._push_at = 0.0
@@ -144,7 +145,7 @@ class EfbRoutes:
 
     def observe(self, ev) -> None:
         """Every bus event: the flight's facts, Airport Ops, the checklist and ATC's operations."""
-        from localtc.sim_api import AtcOperations, ChecklistState
+        from localtc.sim_api import AtcOperations, ChecklistState, OpsSnapshot
 
         if self.facts is not None:
             self.facts.observe(ev)
@@ -156,6 +157,16 @@ class EfbRoutes:
                                   "source": ev.source, **(json.loads(ev.data) if ev.data else {})}
             except ValueError:
                 self.checklist = {"id": ev.checklist, "name": ev.name, "status": ev.status}
+            self.push()
+        elif isinstance(ev, OpsSnapshot) and ev.kind == "hazards":
+            try:
+                rows = json.loads(ev.data or "[]")
+            except ValueError:
+                return
+            # For the phone's map: each outline thinned to at most 60 points.
+            self.hazards = [{**{k: h.get(k) for k in ("id", "kind", "name", "hazard", "floor_ft", "ceiling_ft")},
+                             "polygon": h.get("polygon", [])[:: max(1, len(h.get("polygon", [])) // 60)]}
+                            for h in rows[:40] if isinstance(h, dict)]
             self.push()
         elif isinstance(ev, AtcOperations):
             try:
@@ -173,7 +184,17 @@ class EfbRoutes:
                              "new": self.new_achievements[-5:]},
             "chartfox": {"connected": self.chartfox.connected, "credit": self._credit()},
             "briefings": self.extras.get("briefings", {}), "charts": self.extras.get("charts", {}),
+            "book": self._book_summary(), "hazards": self.hazards,
         }
+
+    def _book_summary(self) -> dict | None:
+        """The aircraft's checklists (names only), for the phone's Run buttons."""
+        crew = getattr(self.live, "crew", None) if self.live is not None else None
+        book = getattr(crew, "_book", None) if crew is not None else None
+        if book is None:
+            return None
+        return {"name": book.name, "source": book.source,
+                "checklists": [{"id": c.id, "name": c.name, "phase": c.phase} for c in book.checklists]}
 
     async def _extras_loop(self) -> None:
         """The flight's airports' briefings and chart lists, kept fresh (every ``EXTRAS_EVERY_S``), so the phone has
@@ -321,7 +342,8 @@ class EfbRoutes:
         if plan is not None and (kind := perf.aircraft(plan.aircraft)) is not None:
             need_ft = 7000 if kind.mtow_kg > 150000 else 5000 if kind.mtow_kg < 30000 else 6000
             need_ft = 2500 if kind.piston else need_ft
-        index = [{**a, "longest_ft": round(a.get("runway_m", 0) * 3.28084)} for a in (await self.c._airport_index()).values()]
+        index = [{**a, "longest_ft": round(a.get("runway_m", 0) * 3.28084)} for a in (await self.c._airport_index()).values()
+                 if a.get("kind") != "heliport" and "seaplane" not in str(a.get("name", "")).lower()]  # no water runways
         return {"icao": icao, "min_runway_ft": need_ft, "alternates": perf.alternates(here, index, min_runway_ft=need_ft, exclude=icao)}
 
     async def api_simbrief_link(self, args: dict) -> dict:
@@ -547,7 +569,7 @@ class EfbRoutes:
             log.debug("Milestones not worked out", exc_info=True)
         return self.achievements.to_json()
 
-    # --- the data services' keys (Settings > Data) ----------------------------------------------------------
+    # --- the data services' keys (EFB > Data) ----------------------------------------------------------
 
     async def api_keys(self, args: dict) -> dict:
         from localtc.app import ops_data
@@ -569,8 +591,8 @@ class EfbRoutes:
 
     async def command(self, cmd: dict, source: str = "phone") -> dict:
         action = str(cmd.get("action", ""))
-        if action == "checklist":
-            return await self.api_checklist(cmd)
+        if action == "checklist":  # {"action": "checklist", "do": "run" | "pause" | ..., "id": ...}
+            return await self.api_checklist({**cmd, "action": str(cmd.get("do") or "run")})
         if action == "scratchpad":
             return await self.api_scratchpad_change(cmd, source=source)
         if action == "gate":
@@ -589,6 +611,10 @@ class EfbRoutes:
             return await self.api_perf(cmd)
         if action == "checklists":
             return await self.api_checklists(cmd)
+        if action == "achievements":
+            return await self.api_achievements({})
+        if action == "briefing_all":  # every airport of the flight at once (the phone's Briefing on the PC's Wi-Fi)
+            return {"briefings": self.extras.get("briefings", {})}
         raise HttpError(400, f"unknown EFB command {action!r}")
 
 

@@ -42,6 +42,7 @@
     <button class="tab active" data-tab="atc">ATC</button>
     <button class="tab" data-tab="settings">Quick Settings</button>
     <button class="tab" data-tab="map">Live Map</button>
+    <button class="tab" data-tab="efb">EFB</button>
     <button class="tab" data-tab="lookup">Airport Lookup</button>
     <button class="tab" data-tab="logbook">Logbook</button>
   </nav>
@@ -99,9 +100,19 @@
         <button class="btn small" id="map-follow" aria-pressed="true">Follow</button>
         <button class="btn small" id="map-route">Route</button>
         <button class="btn small" id="map-zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
+        <button class="btn small" id="map-wx" aria-pressed="true" title="Weather (SIGMETs, radar) and TFRs / restricted areas">Weather &amp; areas</button>
       </div>
       <div class="mapinfo" id="map-info"></div>
+      <div class="mapinfo mapmva" id="map-mva" title="ATC's minimum altitude where you are (from the terrain)"></div>
       <div class="maplegend" id="map-legend"></div>
+    </section>
+
+    <!-- EFB (efb.js): briefing, plan and fuel, airport and gates, charts, checklists, scratchpad, Ops, documents -->
+    <section class="page" id="page-efb">
+      <div class="efb">
+        <div class="efbnav" id="efb-nav" role="group" aria-label="EFB"></div>
+        <div id="efb-body"></div>
+      </div>
     </section>
 
     <!-- Airport Lookup -->
@@ -303,5 +314,6 @@
 <script src="/static/sharecard.js"></script>
 <script src="/static/wrapped.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/efb.js"></script>
 </body>
 </html>

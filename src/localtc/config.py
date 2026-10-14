@@ -280,7 +280,7 @@ class OpsConfig(_Section):
     are sent; nothing about the flight."""
 
     weather: bool = True  # TAFs, SIGMETs/AIRMETs, the weather radar on the map
-    notams: bool = True  # real NOTAMs (needs a free FAA NOTAM API key: Settings > Data): ATC works to them
+    notams: bool = True  # real NOTAMs (needs a free FAA NOTAM API key: EFB > Data): ATC works to them
     restrictions: bool = True  # TFRs (the US) and restricted, danger and prohibited areas (openAIP key)
     terrain: bool = True  # terrain tiles: ATC's vectors and altitudes above the ground, minimum safe altitudes
     max_age_h: float = 6.0  # data older than this isn't used for a live flight (shown as stale)

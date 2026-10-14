@@ -95,9 +95,14 @@ final class SignInFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Los Angeles Center"].exists || app.staticTexts["Tuned"].exists)
         attach(app, "5 frequencies")
 
-        app.tabBars.buttons["Airports"].tap()
+        // The EFB: its sections, and the airports (runways, ILS, ATIS) among them.
+        app.tabBars.buttons["EFB"].tap()
+        XCTAssertTrue(app.buttons["efb.checklists"].waitForExistence(timeout: 10))
+        attach(app, "6 efb")
+        app.buttons["efb.airports"].tap()
         XCTAssertTrue(app.staticTexts["KSAN"].waitForExistence(timeout: 10))
-        attach(app, "6 airports")
+        attach(app, "6a airports")
+        app.navigationBars.buttons.firstMatch.tap()
 
         // A fresh account has no flights yet: the logbook says so.
         app.tabBars.buttons["Logbook"].tap()
@@ -109,10 +114,6 @@ final class SignInFlowTests: XCTestCase {
         try XCTUnwrap(visible(app.buttons.matching(identifier: "settings"))).coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", email)).firstMatch.waitForExistence(timeout: 10))
         attach(app, "7 settings")
-        // The EFB preview, greyed, from Settings.
-        app.buttons["efb"].tap()
-        XCTAssertTrue(app.staticTexts["Coming soon"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons.firstMatch.tap()
         app.buttons["Sign out"].firstMatch.tap()
         XCTAssertTrue(app.textFields["email"].waitForExistence(timeout: 10))
     }

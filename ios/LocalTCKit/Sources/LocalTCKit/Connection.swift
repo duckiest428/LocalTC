@@ -139,6 +139,32 @@ public final class ConnectionManager {
         throw SayError.refused(message ?? "LocalTC said \(http.statusCode)")
     }
 
+    /// A command for the EFB: straight to the PC on the same Wi-Fi, with LocalTC's answer (JSON); otherwise, for the
+    /// ones that change something, through the account (no answer: the next "efb" message shows the outcome).
+    @discardableResult
+    public func efb(_ command: EfbCommand, session: URLSession = .shared) async throws -> Data? {
+        guard let (url, key) = local else {
+            guard state == .server else { throw SayError.notLocal }
+            guard command.relayable else { throw SayError.refused("On the same Wi-Fi as the PC only") }
+            do {
+                try await api.efb(command.json)
+            } catch let error as APIError {
+                throw SayError.refused(error.message)
+            }
+            return nil
+        }
+        var request = URLRequest(url: url.appending(path: "/companion/v1/efb"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: command.json)
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode != 200 else { return data }
+        let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+        throw SayError.refused(message ?? "LocalTC said \(http.statusCode)")
+    }
+
     /// A transmission's audio (an 8 kHz WAV) by its radio line's ``RadioLine/audio`` id: from the PC on this network,
     /// else from the account's relay, which holds the last few while the phone watches.
     public func clip(_ id: String, session: URLSession = .shared) async throws -> Data {

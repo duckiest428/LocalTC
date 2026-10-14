@@ -52,12 +52,6 @@ struct SettingsView: View {
                         ProgressView()
                     }
                 }
-                Section {
-                    NavigationLink { ComingSoonView() } label: {
-                        LabeledContent("EFB", value: "Coming soon")
-                    }
-                    .accessibilityIdentifier("efb")
-                }
                 Section("Appearance") {
                     ThemePicker()
                 }

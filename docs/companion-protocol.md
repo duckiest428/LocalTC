@@ -155,3 +155,52 @@ desktop app picks the waiting calls up from the `calls` list in the answer to it
 /v1/live`, `/frame`, `/map`, `POST /radio`, `PUT /airports`), or with `GET /v1/live/calls` every couple of seconds
 while somebody watches, and transmits each as if typed (each call says its `to`). A call it can't transmit comes back in the radio log as
 an `alert` line starting "Not transmitted".
+
+### `efb` (when the EFB changes: the checklist, Airport Ops, ATC's operations, the notes; every few minutes the briefings)
+```json
+{"checklist": {"id": "before_start", "name": "Before start", "status": "waiting", "index": 3, "source": "...",
+               "lines": [{"challenge": "Parking brake", "response": "Set", "result": "ok", "why": ""}]},
+ "book": {"name": "Airbus A320 family", "source": "...", "checklists": [{"id": "before_start", "name": "Before start", "phase": "before_start"}]},
+ "ops": {"icao": "KSEA", "role": "departure", "gsx": false, "services": {"fuel": {"state": "in progress", "source": "the sim's fuel"}},
+         "deice": {"required": true, "position": 2, "wait_min": 12, "why": "-2°C with snow", "state": "queued"},
+         "messages": [{"t": 1791983400.5, "kind": "service", "text": "Fuelling in progress.", "from": "Airport Ops"}],
+         "requests": [{"gate": "B25", "icao": "KLAX", "state": "approved", "why": "Gate B25 approved."}], "closures": [], "notes": []},
+ "atc": {"conditions": [{"kind": "behind_landing", "traffic": "the landing Airbus A320", "runway": "16L", "state": "active"}],
+         "hold": {"fix": "BLAKO", "lat": 47.8, "lon": -122.3, "inbound": 160, "turn": "right", "leg_min": 1.0, "altitude_ft": 8000,
+                  "reason": "arrival traffic", "efc": "1432", "position": 5, "delay_min": 8, "entry": "direct", "state": "holding",
+                  "laps": 1, "racetrack": [[47.8, -122.3], ...]},
+         "routing": [{"kind": "reroute", "fix": "BRAVO", "heading": 40, "reason": "restricted airspace R-6714", "state": "active",
+                      "line": [[46.0, -121.5], ...]}],
+         "hazards": [...], "minimum_altitude_ft": 4200},
+ "scratchpad": [{"id": "a1b2", "text": "SQ 4521", "kind": "squawk", "t": 1791983400, "pinned": false, "phase": "PARKED",
+                 "source": "phone", "picked": {"squawk": "4521"}}],
+ "achievements": {"earned": 5, "total": 18, "new": [{"id": "first_flight", "title": "First flight", "detail": "KSEA to KLAX"}]},
+ "chartfox": {"connected": true, "credit": {"text": "Chart data powered by ChartFox", "url": "https://chartfox.org",
+                                           "privacy": "https://chartfox.org/privacy", "disclaimer": "..."}},
+ "briefings": {"KSEA": {"icao": "KSEA", "metar": "...", "taf": {...}, "notams": {"items": [{"id": "A1/26", "text": "...",
+                                                                                            "works_to": [["runway_closed", "16L/34R"]], "in_force": true}]}}},
+ "charts": {"KSEA": {"Ground": [{"id": "...", "name": "AIRPORT DIAGRAM", "type": "Ground", "has_georef": true}]}},
+ "hazards": [{"id": "T1", "kind": "tfr", "name": "Stadium", "hazard": "", "floor_ft": 0, "ceiling_ft": 3000, "polygon": [[47.5, -122.3], ...]}]}
+```
+Every part is optional. The desktop sends it to the relay with `PUT /v1/live/map {"efb": ...}` (only these parts, 96 KB
+at most, held in memory like the rest of the map); the relay's `hello` carries the latest.
+
+## The EFB from the phone
+
+On the same Wi-Fi: `POST http://<pc>:47800/companion/v1/efb` with the companion key and a command, answered with
+LocalTC's JSON (`409 {"error": ...}` when it can't):
+
+- `{"action": "checklist", "do": "run" | "pause" | "resume" | "skip" | "stop" | "check", "id": "before_start"}`: said to the
+  copilot on the intercom as the pilot would ("Before start checklist", "hold the checklist", "checked").
+- `{"action": "scratchpad", "op": "add", "text": ..., "kind": "", "pinned": false}`, `"op": "edit"` (`id`, `pinned` or
+  `text`), `"op": "delete"` (`id`).
+- `{"action": "gate", "gate": "B25"}`: Airport Ops asks ATC for it (`{"ok": true, "why": "Gate B25 approved."}`).
+- `{"action": "ops_note", "text": ..., "kind": "maintenance" | "dispatch" | "other"}`.
+- Questions, on the same Wi-Fi only: `{"action": "gates", "icao": ""}` (the gate map: each stand's name, position,
+  occupied, fits, airline), `{"action": "chart", "id": ..., "height": 800}` (its viewing link, and `own`: where the
+  aircraft is on it in pixels at that height), `{"action": "achievements"}`, `{"action": "briefing", "icao": ...}`,
+  `{"action": "charts", "icao": ...}`, `{"action": "perf"}`, `{"action": "checklists"}`.
+
+Anywhere else, through the account: `POST /v1/live/say {"to": "efb", "command": {...}}` for the four that change something
+(`checklist`, `scratchpad`, `gate`, `ops_note`; 2,000 characters at most): held like a typed call, picked up by the desktop
+the same way; no answer, the next `efb` message shows the outcome.

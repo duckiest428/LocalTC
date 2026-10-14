@@ -17,6 +17,9 @@ struct MapTab: View {
             if showZones, let zones = store.zones {
                 ZoneLayers(zones: zones, vfr: mapMode.kind == .vfr).content
             }
+            if let efb = store.efb {
+                OpsLayers(efb: efb).content  // the hazards around, ATC's hold and route amendments (OpsLayers.swift)
+            }
             if let zones = store.zones {
                 ForEach(zones.airports) { airport in
                     ForEach(airport.runways, id: \.self) { runway in
@@ -221,6 +224,7 @@ enum Zone {
     static let trafficGround = Color(red: 0.55, green: 0.58, blue: 0.62)
     static let classB = Color(red: 0.17, green: 0.44, blue: 0.85)
     static let classC = Color(red: 0.70, green: 0.23, blue: 0.62)
+    static let hold = Color(red: 0.31, green: 0.82, blue: 0.77)
 
     static func badge(_ letter: String) -> Color {
         switch letter {

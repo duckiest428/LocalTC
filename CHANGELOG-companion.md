@@ -7,6 +7,16 @@ is built from this file.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The EFB** (a tab, in place of Airports, which is in it now): the copilot's checklist as it reads it, item by item,
+  with Run, Checked, Skip, Hold and Resume; the briefing for the flight's airports (METAR, TAF, NOTAMs, the ATIS); the
+  charts from ChartFox (on the PC's Wi-Fi, with your position on the georeferenced ones); the airports; the gate map
+  (your airline's gates or all of them, free, occupied, yours or too small: tap one to ask Airport Ops for it); Airport
+  Ops (the turnaround, de-icing, closures, messages, notes to Ops); the scratchpad, in step with the app's; and the
+  achievements. The checklists, notes, gate requests and notes to Ops work through the account too.
+- **My Flight shows ATC's hold and reroutes**: the racetrack with HOLD fix · EFC, a direct or vectors around an area as
+  a line, and the TFRs, restricted areas and SIGMETs around.
+- **Other flights by their callsigns** with LocalTC's traffic on: their calls and ATC's calls to them look like any
+  transmission, under the flight's callsign in its airline's colour, no longer greyed out as "Other".
 - **What's new**: after an update, the first time it opens, the companion shows the new version's notes, once.
 - **The same version as LocalTC**: the companion now carries LocalTC's version number (0.4.0 for this release
   line), so the app, the phone and the website's changelog all agree.
@@ -15,6 +25,7 @@ is built from this file.
 - **Wrapped's icon** is a gift box, no longer bars that looked like a phone's signal.
 
 ### Fixed
+- **Your aircraft points the right way when the map is turned**: its icon allowed for the map's own heading.
 - **The Live Map's follow button turns off.** Pressing it again stops following the aircraft (and zooming with its
   altitude), and so does moving the map: panning, pinching or turning it. Pressed again, it follows and zooms as
   before.

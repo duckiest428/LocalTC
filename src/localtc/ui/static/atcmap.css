@@ -65,3 +65,9 @@
 /* Tiles still loading show the map's own dark ground, never a white flash. */
 .leaflet-container { background: #1b2026; }
 .leaflet-tile { transition: none !important; }
+
+/* Hazards and ATC's operations (atcmap.js hazards, operations) */
+.sw-hold { background: #4fd1c5; }
+.sw-sigmet { background: rgba(226, 87, 76, 0.35); border: 1.5px solid #e2574c; }
+.sw-tfr { background: rgba(214, 93, 177, 0.25); border: 1.5px dashed #d65db1; }
+.zone-label.hold { color: #4fd1c5; font-weight: 700; white-space: nowrap; }

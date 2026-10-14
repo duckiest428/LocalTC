@@ -135,6 +135,12 @@ public final class APIClient: Sendable {
         try await call("POST", "/v1/live/say", ["text": text, "to": to.rawValue])
     }
 
+    /// A command from the phone's EFB for LocalTC on the PC (a checklist, a note, a gate request, a note to Ops),
+    /// through the account's relay: held there until LocalTC picks it up; its outcome comes back as the next "efb".
+    public func efb(_ command: [String: Any]) async throws {
+        _ = try await send("POST", "/v1/live/say", json: ["to": "efb", "command": command])
+    }
+
     /// A transmission's audio the desktop sent to the relay (``RadioLine/audio``).
     public func clip(_ id: String) async throws -> Data {
         try await send("GET", "/v1/live/clip/\(id)", raw: nil)

@@ -48,6 +48,7 @@ function connect() {
   on("cleared", clearFlight);
   on("ptt", (p) => $(p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
   on("thinking", thinking);
+  on("efb", (d) => Efb.update(d));  // efb.js: the checklist, Airport Ops, ATC's hold and conditions, the notes
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
@@ -383,6 +384,7 @@ function showTab(name) {
   $$(".page").forEach((p) => p.classList.toggle("active", p.id === `page-${name}`));
   if (name === "settings") Settings.load();
   if (name === "map") MapView.show();
+  if (name === "efb") Efb.show();
   if (name === "lookup") Lookup.show();
   if (name === "logbook") Logbook.load().then(() => (Logbook.player ? Logbook.player.fit() : Logbook.map?.fit()));
   else Logbook.player?.pause();
@@ -1528,6 +1530,7 @@ const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path 
 const MapView = {
   map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
+  wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null,
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
     if (!this.map) this.init();
@@ -1539,7 +1542,13 @@ const MapView = {
     $$("#map-mode [data-mode]").forEach((b) => (b.onclick = () => this.setMode(b.dataset.mode)));
     this.syncRules();
     this.tiles();
+    this.wxLayer = L.layerGroup().addTo(this.map);  // the real-world hazards, under the ATC zones
     this.zoneLayer = L.layerGroup().addTo(this.map);  // under the route, the track and the aircraft
+    this.opsLayer = L.layerGroup().addTo(this.map);  // ATC's hold and route amendments
+    try { this.wxOn = localStorage.getItem("map-wx") !== "off"; } catch { /* default on */ }
+    $("#map-wx").onclick = () => this.setWx(!this.wxOn);
+    this.setWx(this.wxOn);
+    this.operations(this.atcOps);
     try { this.zonesOn = localStorage.getItem("map-zones") !== "off"; } catch { /* storage unavailable: default on */ }
     this.setZones(this.zonesOn);
     $("#map-zones").onclick = () => this.setZones(!this.zonesOn);
@@ -1577,6 +1586,44 @@ const MapView = {
     this.tiles();
     this.zonesSoon(0);
   },
+  /* Real-world weather and restrictions (EFB → Data): SIGMETs, TFRs and restricted areas, and the radar, around
+     the aircraft (or the map's middle before a flight), fetched again every few minutes or after a long move. */
+  setWx(on) {
+    this.wxOn = on;
+    $("#map-wx").setAttribute("aria-pressed", String(on));
+    $$("#map-legend .lg-wx").forEach((r) => (r.hidden = !on));
+    try { localStorage.setItem("map-wx", on ? "on" : "off"); } catch { /* not remembered */ }
+    if (!on) { this.wxLayer?.clearLayers(); if (this.radarLayer) { this.map.removeLayer(this.radarLayer); this.radarLayer = null; } }
+    else this.weather(true);
+  },
+  async weather(force = false) {
+    if (!this.map || !this.wxOn) return;
+    const c = S.own ? [S.own.lat, S.own.lon] : [this.map.getCenter().lat, this.map.getCenter().lng];
+    const moved = !this.wxWhere || Math.abs(c[0] - this.wxWhere[0]) + Math.abs(c[1] - this.wxWhere[1]) > 1.5;
+    if (!force && !moved && Date.now() - this.wxAt < 300000) return;
+    this.wxAt = Date.now(); this.wxWhere = c;
+    let h;
+    try { h = await api(`ops/around?lat=${c[0].toFixed(3)}&lon=${c[1].toFixed(3)}`); } catch { return; }
+    if (!this.wxOn) return;
+    this.wxLayer.clearLayers();
+    AtcMap.hazards(this.wxLayer, h);
+    if (this.radarLayer) { this.map.removeLayer(this.radarLayer); this.radarLayer = null; }
+    if (h.radar && h.radar.url) {
+      this.radarLayer = L.tileLayer(h.radar.url, { opacity: 0.5, maxNativeZoom: h.radar.max_zoom || 7, maxZoom: 18,
+        attribution: h.radar.attribution || "RainViewer" }).addTo(this.map);
+    }
+    const why = [h.sigmets_meta, h.tfrs_meta, h.airspace_meta].filter((m) => m && !m.available && m.why).map((m) => m.why);
+    $("#map-wx").title = why.length ? `Not shown: ${why.join("; ")}` : "Weather (SIGMETs, radar) and TFRs / restricted areas";
+  },
+  /** ATC's hold and route amendments (the "efb" message's ``atc``). */
+  operations(ops) {
+    this.atcOps = ops;
+    if (!this.opsLayer) return;
+    this.opsLayer.clearLayers();
+    AtcMap.operations(this.opsLayer, ops);
+    const min = ops && ops.minimum_altitude_ft;
+    $("#map-mva").textContent = min ? `MIN ALT ${Number(min).toLocaleString()}` : "";
+  },
   setFollow(on) {
     this.follow = on;
     $("#map-follow").setAttribute("aria-pressed", String(on));
@@ -1604,6 +1651,7 @@ const MapView = {
     if (!this.ownMarker) { this.ownMarker = L.marker(at, { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, 11); }
     else { this.ownMarker.setLatLng(at); this.ownMarker.setIcon(icon); }
     if (this.follow) this.map.panTo(at, { animate: false });
+    this.weather();
     $("#map-info").textContent = `${o.alt.toLocaleString()} ft  ${o.gs} kt  HDG ${String(o.hdg_mag).padStart(3, "0")}  VS ${o.vs > 0 ? "+" : ""}${o.vs}`;
   },
   clear() {
@@ -1773,5 +1821,6 @@ $("#lookup-results").addEventListener("click", (e) => { const c = e.target.close
 /* ---------- start ---------- */
 
 api("state").then(setState).catch(fail);
+api("efb").then((d) => Efb.update(d)).catch(() => {});
 api("settings").then((s) => (S.settings = s)).catch(() => {});
 connect();

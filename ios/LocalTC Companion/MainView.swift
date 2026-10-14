@@ -11,8 +11,8 @@ struct MainView: View {
             Tab("My Flight", systemImage: "airplane") { screen { MapTab() } }
             Tab("Comms", systemImage: "headset") { screen { CommsTab() } }
             Tab("Frequencies", systemImage: "antenna.radiowaves.left.and.right") { screen { FrequenciesTab() } }
-            Tab("Airports", systemImage: "mappin.and.ellipse") { screen { AirportsTab() } }
-            // Five tabs fit on an iPhone before "More": the EFB preview is in Settings until it's real.
+            // Five tabs fit on an iPhone before "More": the airports are in the EFB (EFBTab.swift).
+            Tab("EFB", systemImage: "rectangle.stack") { screen { EFBTab() } }
             Tab("Logbook", systemImage: "book.pages") { screen { LogbookTab() } }
         }
         .overlay(alignment: .top) {

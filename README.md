@@ -50,7 +50,7 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 <tr>
 <td width="50%" valign="top">
 <h3>🗼 Real controllers</h3>
-<p>Clearance, ground, tower, departure, centre, approach. SIDs and STARs, vectors, approaches, sequencing and handoffs, in real FAA or ICAO phraseology, for IFR and VFR. Get a readback wrong and they'll catch it.</p>
+<p>Clearance, ground, tower, departure, centre, approach. SIDs and STARs, vectors kept clear of the terrain, approaches, holds with an expected further clearance time, conditional clearances ("behind the landing A320, line up and wait behind"), shortcuts and reroutes around weather and restricted airspace, sequencing and handoffs, in real FAA or ICAO phraseology, for IFR and VFR. Get a readback wrong and they'll catch it.</p>
 </td>
 <td width="50%" valign="top">
 <h3>🎙️ Just talk</h3>
@@ -87,7 +87,44 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 <p>Everything runs on your PC. A cloud language model or cloud voice is optional and uses your own key. Nothing goes through a LocalTC server.</p>
 </td>
 </tr>
+<tr>
+<td valign="top">
+<h3>📋 An EFB</h3>
+<p>The briefing (METAR, TAF, NOTAMs), the plan with its fuel and weights, the airport and its gates, charts from <a href="https://chartfox.org">ChartFox</a>, the copilot's checklists, a scratchpad, Airport Ops and achievements, in the app and on your phone.</p>
+</td>
+<td valign="top">
+<h3>🌦️ The real world, optional</h3>
+<p>SIGMETs, the weather radar, real NOTAMs, TFRs and restricted areas on the map and worked to by ATC, each with where it's from and how old it is. Free sources; some want a free key of your own.</p>
+</td>
+</tr>
 </table>
+
+## 🧑‍✈️ Aircraft the copilot knows
+
+The copilot gives its callouts and warnings in any aircraft. Its hands (the flaps, gear, lights, autopilot knobs,
+altimeters, transponder, seatbelt sign) and its checklists depend on the aircraft:
+
+| Aircraft | The copilot's hands | Checklists |
+|---|---|---|
+| Airbus A320neo (the sim's own), A319, A321 | ✅ the sim's controls | Airbus A320 family normal checklist |
+| Fenix A319 / A320 / A321 | ✅ its own cockpit controls | Airbus A320 family normal checklist |
+| FSLabs A319 / A320 / A321 | ✅ its own cockpit controls, step by step | Airbus A320 family normal checklist |
+| FlyByWire A32NX | ✅ the sim's controls | ✅ its own (from its EFB) where its version has them, else the A320 family's |
+| FlyByWire A380X | ✅ its own controls | ✅ its own (from its EFB) |
+| Headwind A330-900 | ✅ its own controls | ✅ its own (from its EFB) |
+| iniBuilds A330-200 / A330-300 | ✅ its own FCU knobs and switches | Airbus widebody normal checklist |
+| Airbus A350-900 / -1000 | ✅ the sim's controls (some knobs are yours: it says which) | Airbus widebody normal checklist |
+| Boeing 737 MAX (the sim's own) | ✅ the sim's controls | Boeing 737 normal checklist |
+| Boeing 737 (PMDG and others), 747, 777 | the sim's standard controls, where the aircraft follows them | Boeing 737 / 747 / 777 normal checklist |
+| Boeing 787 | the sim's standard controls | ✅ the sim's own 787 checklist |
+| Synaptic A220 | the sim's standard controls | ✅ its own |
+| Any aircraft with the sim's own checklists | the sim's standard controls | ✅ the sim's own |
+| Anything else (a Cessna, a business jet ...) | the sim's standard controls | none: the copilot doesn't make one up |
+
+"Its own" means the add-on's own checklists, read from where it's installed on your PC; a family's normal checklist is
+the manufacturer's published one, used when the add-on brings none. Ask the copilot for a checklist by name ("before
+start checklist"), or let it offer each when it's due.
+
 
 <p align="center">
   <img src="docs/images/map.jpg" alt="The Live Map in flight: the departure and centre airspace, the tower's zone, the route and the aircraft climbing out" width="100%">

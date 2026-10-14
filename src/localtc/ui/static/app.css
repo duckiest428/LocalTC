@@ -448,3 +448,70 @@ table.lb td { white-space: nowrap; }
 #wn-notes h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 14px 0 6px; }
 #wn-notes ul { margin: 0; padding-left: 18px; }
 #wn-notes li { margin: 0 0 8px; line-height: 1.45; }
+
+/* --- Live Map: the minimum altitude --- */
+.mapmva { bottom: 44px; color: #4fd1c5; }
+.mapmva:empty { display: none; }
+
+/* --- EFB (efb.js) --- */
+.efb { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.efbnav { display: flex; flex-wrap: wrap; gap: 4px; }
+.efbnav .btn[aria-pressed="true"], .efbpick .btn[aria-pressed="true"] { background: var(--teal); }
+.efbpick { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
+.efbicao { width: 70px; text-transform: uppercase; }
+.efbgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.efbcard { padding: 10px 12px; margin-bottom: 10px; }
+.efbcard.wide { grid-column: 1 / -1; }
+.efbcard h3 { margin: 0 0 6px; font-size: 14px; }
+.efbcard pre.raw { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; margin: 0; }
+.efbform { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.efbfield { display: flex; flex-direction: column; font-size: 12px; gap: 2px; }
+.efbfield.wide { grid-column: 1 / -1; }
+.efbtable { border-collapse: collapse; margin: 6px 0; font-size: 13px; }
+.efbtable td { padding: 2px 10px 2px 0; }
+.efbtable tr.total td { border-top: 1px solid var(--line); font-weight: 700; }
+.efbtable tr.bad td { color: #e2574c; }
+.tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--btn); border: 1px solid var(--btn-line); }
+.tag.ok, .tag.same, .tag.done { background: #24563b; }
+.tag.differs, .tag.not-available { background: #6b2f2b; }
+.tag.in-progress { background: #6b5a1e; }
+.notam { padding: 4px 0; border-bottom: 1px solid var(--line); }
+.notam.atc { border-left: 3px solid #e7a33e; padding-left: 6px; }
+.notam.later { opacity: .6; }
+.error { color: #e2574c; }
+.gatemap { height: 420px; margin-top: 6px; }
+.gk { display: inline-block; padding: 0 6px; margin-right: 6px; border-radius: 6px; font-size: 11px; }
+.gk.free { background: #2fb67c; } .gk.taken { background: #e2574c; } .gk.mine { background: #8a6cf0; } .gk.small { background: #7d858e; }
+.chartsplit { display: grid; grid-template-columns: 280px 1fr; gap: 10px; }
+.chartlist { padding: 8px; max-height: 760px; overflow: auto; }
+.chartgroup h4 { margin: 8px 0 4px; font-size: 12px; text-transform: uppercase; color: var(--muted); }
+.chartrow { padding: 3px 4px; cursor: pointer; font-size: 13px; border-radius: 2px; }
+.chartrow:hover { background: var(--panel-2, rgba(255,255,255,.06)); }
+.chartrow.first { border-left: 3px solid #4fd1c5; }
+.chartview { padding: 8px; overflow: auto; }
+.chartimg { position: relative; overflow: auto; background: #fff; }
+.chartimg iframe { width: 100%; height: 100%; border: 0; }
+.chartown { position: absolute; transform: translate(-50%, -50%); color: #e2574c; font-size: 22px; text-shadow: 0 0 3px #fff; }
+.chartcredit { margin-top: 6px; }
+.clline { display: grid; grid-template-columns: 20px 1fr 1fr auto; gap: 8px; padding: 3px 4px; font-size: 13px; }
+.clline.now { background: rgba(79, 209, 197, .15); }
+.clline.wrong .clmark { color: #e2574c; } .clline.ok .clmark { color: #2fb67c; }
+.clrow { padding: 3px 0; }
+.spnote { padding: 8px 10px; margin-bottom: 6px; }
+.spnote.pinned { border-left: 3px solid #e9d38a; }
+.sphead { display: flex; gap: 6px; align-items: center; }
+.sphead .muted { flex: 1; }
+.sptext { white-space: pre-wrap; margin: 4px 0; font-family: var(--mono); font-size: 13px; }
+.sppicked { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+#sp-text { width: 100%; box-sizing: border-box; }
+.opsrow { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.opsrow > span:first-child { min-width: 90px; text-transform: capitalize; }
+.opsmsg { padding: 2px 0; font-size: 13px; }
+.docrow { padding: 3px 0; }
+.achgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 8px 0; }
+.ach { border: 1px solid var(--line); padding: 8px; opacity: .55; }
+.ach.got { opacity: 1; border-color: #e9d38a; }
+.ach .bar { height: 4px; background: var(--line); margin-top: 4px; }
+.ach .bar i { display: block; height: 100%; background: #4fd1c5; }
+.keyrow { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.keyrow input { margin: 4px 6px 0 0; width: 260px; }

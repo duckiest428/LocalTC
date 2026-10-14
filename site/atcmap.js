@@ -157,7 +157,10 @@ const AtcMap = (() => {
       <div class="lg-row"><span class="sw sw-taxi"></span>Taxi route ground gave</div>
       <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
       <div class="lg-row"><span class="sw sw-route"></span>Flight plan route</div>
+      <div class="lg-row"><span class="sw sw-hold"></span>Hold ATC gave, and route amendments</div>
     </div>
+    <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
+    <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
     <div class="lg-vfr">
       <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
       <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
@@ -246,6 +249,48 @@ const AtcMap = (() => {
     return path.filter((_, i) => keep[i]);
   }
 
-  return { esc, route, straight, runways, zones, talk, track, traffic, PLANE, LEGEND,
+  /* Real-world hazards around the flight (localtc.ops: GET ops/around): SIGMETs and AIRMETs by hazard, TFRs and
+     restricted, prohibited and danger areas, each with its levels and its source in the tooltip. */
+  const HAZARD = { TS: "#e2574c", CONVECTIVE: "#e2574c", TC: "#e2574c", TURB: "#e7a33e", ICE: "#5aa9e6", VA: "#b07ae0",
+    MTW: "#e7a33e", IFR: "#9aa3ad", "MTN OBSCN": "#9aa3ad" };
+  const AREA = { tfr: ["#ff4d6d", "TFR"], restricted: ["#d65db1", "Restricted"], prohibited: ["#ff2e2e", "Prohibited"],
+    danger: ["#ff9f1c", "Danger area"] };
+  const levels = (lo, hi) => `${lo ? `${Math.round(lo / 100) * 100} ft` : "SFC"} – ${hi ? (hi >= 18000 ? `FL${Math.round(hi / 100)}` : `${hi} ft`) : "unl"}`;
+  function hazards(layer, h) {
+    for (const s of (h && h.sigmets) || []) {
+      const c = HAZARD[String(s.hazard || "").toUpperCase()] || "#e9d38a";
+      L.polygon(ring(s.polygon || []), { color: c, weight: 1.6, dashArray: s.kind === "airmet" ? "3 5" : null, fillColor: c,
+        fillOpacity: s.kind === "airmet" ? 0.06 : 0.14 }).addTo(layer)
+        .bindTooltip(`<b>${esc(String(s.kind || "").toUpperCase())} ${esc(s.hazard)}</b> ${esc(s.fir || "")}<br>${levels(s.base_ft, s.top_ft)}`
+          + `<br><span class="muted">until ${new Date((s.valid_to || 0) * 1000).toISOString().slice(11, 16)}Z · aviationweather.gov</span>`, { sticky: true });
+    }
+    for (const a of (h && h.areas) || []) {
+      const [c, what] = AREA[a.kind] || ["#d65db1", a.kind];
+      L.polygon(ring(a.polygon || []), { color: c, weight: 1.8, dashArray: a.kind === "tfr" ? "6 4" : null, fillColor: c, fillOpacity: 0.1 })
+        .addTo(layer).bindTooltip(`<b>${esc(what)}</b> ${esc(a.name || "")}<br>${levels(a.floor_ft, a.ceiling_ft)}<br><span class="muted">${esc(a.source || "")}</span>`, { sticky: true });
+    }
+  }
+
+  /* What ATC is working the flight to (the engine's AtcOperations): the hold's racetrack with its fix, place and EFC,
+     and each route amendment (a shortcut, vectors around an area, a deviation) as a line. */
+  function operations(layer, ops) {
+    if (!ops) return;
+    const h = ops.hold;
+    if (h && h.racetrack && ["cleared", "entering", "holding", "leaving"].includes(h.state)) {
+      L.polyline(chain(h.racetrack), { color: "#4fd1c5", weight: 2.5, opacity: 0.95 }).addTo(layer)
+        .bindTooltip(`<b>Hold at ${esc(h.fix)}</b>: inbound ${String(h.inbound).padStart(3, "0")}°, ${esc(h.turn)} turns, ${Number(h.altitude_ft).toLocaleString()} ft`
+          + `<br>${h.reason === "arrival traffic" ? `number ${h.position}, ` : ""}${esc(h.reason)}${h.efc ? `, EFC ${esc(h.efc)}Z` : ""} · entry: ${esc(h.entry)}`, { sticky: true });
+      L.marker(at(h.lat, h.lon), { icon: L.divIcon({ className: "", html: `<div class="zone-label hold">HOLD ${esc(h.fix)}${h.efc ? ` · EFC ${esc(h.efc)}` : ""}</div>`, iconSize: [0, 0] }),
+        interactive: false, keyboard: false }).addTo(layer);
+    }
+    for (const a of ops.routing || []) {
+      if (a.state !== "active" || !a.line || a.line.length < 2) continue;
+      const style = { shortcut: ["#e978d6", "6 6"], reroute: ["#ff9f1c", "8 5"], deviation: ["#e2574c", "2 6"] }[a.kind] || ["#e9d38a", "4 4"];
+      L.polyline(chain(a.line), { color: style[0], weight: 2.4, dashArray: style[1] }).addTo(layer)
+        .bindTooltip(`${a.kind === "shortcut" ? "Direct" : a.kind === "reroute" ? "Vectors around" : "Deviation"} ${esc(a.fix || "")}: ${esc(a.reason || "")}`, { sticky: true });
+    }
+  }
+
+  return { esc, route, straight, runways, zones, talk, track, traffic, hazards, operations, PLANE, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

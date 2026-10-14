@@ -163,7 +163,8 @@ const station = (s: Obj) => ({ station: text(s.station), controller: text(s.cont
 export interface LiveMap { route?: Obj | null; zones?: Obj | null; efb?: Obj | null }
 
 const MAX_EFB = 96 * 1024;
-const EFB_KEYS = ["checklist", "ops", "atc", "scratchpad", "achievements", "chartfox", "briefings", "charts"] as const;
+const EFB_KEYS = ["checklist", "ops", "atc", "scratchpad", "achievements", "chartfox", "briefings", "charts", "book",
+  "hazards"] as const;
 
 /** The EFB as the desktop has it for the flight (src/localtc/ui/efb_api.py ``state``): only its own parts, and not
  * too big. Held in memory like the rest of the map. */

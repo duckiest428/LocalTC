@@ -213,6 +213,8 @@ public struct Hello: Codable, Sendable, Equatable {
     public var trail: [[Double]]?
     /// The ATC zones the desktop's Live Map draws (Zones.swift). Older desktops leave it out.
     public var zones: AtcZones?
+    /// The EFB as it stands (Efb.swift). Older desktops leave it out.
+    public var efb: EfbState?
 }
 
 public enum LiveMessage: Sendable, Equatable {
@@ -227,6 +229,7 @@ public enum LiveMessage: Sendable, Equatable {
     case airports([FlightAirport])
     case trail([[Double]])
     case zones(AtcZones?)
+    case efb(EfbState?)
 
     static let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -251,6 +254,7 @@ public enum LiveMessage: Sendable, Equatable {
         case "airports": return .airports(try d.decode([FlightAirport].self, from: data))
         case "trail": return .trail(try d.decode([[Double]].self, from: data))
         case "zones": return .zones(try d.decode(AtcZones?.self, from: data))
+        case "efb": return .efb(try? d.decode(EfbState?.self, from: data))  // a part it can't read: left out, not fatal
         default: return nil
         }
     }

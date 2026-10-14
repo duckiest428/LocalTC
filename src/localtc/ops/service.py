@@ -72,7 +72,7 @@ class OpsData:
             "taf": {"raw": taf.raw if taf else "", "valid_to": taf.valid_to if taf else None, **meta(taf_got)},
             "notams": {"items": [{**n.to_json(), "works_to": [list(x) for x in notices_of(n)], "in_force": n.in_force(now)}
                                  for n in notams],
-                       **meta(notams_got, "" if self.notam_source.available else "no FAA NOTAM API key (Settings > Data)")},
+                       **meta(notams_got, "" if self.notam_source.available else "no FAA NOTAM API key (EFB > Data)")},
         }
 
     def around(self, lat: float, lon: float) -> dict:
@@ -84,7 +84,7 @@ class OpsData:
         shown = [a for a in [*tfrs, *areas] if _near(a.polygon, lat, lon)]
         return {"sigmets": [s.to_json() for s in near], "sigmets_meta": meta(sig_got),
                 "areas": [a.to_json() for a in shown], "tfrs_meta": meta(tfr_got),
-                "airspace_meta": meta(area_got, "" if self.keys.has("openaip") else "no openAIP key (Settings > Data)"),
+                "airspace_meta": meta(area_got, "" if self.keys.has("openaip") else "no openAIP key (EFB > Data)"),
                 "radar": self.weather.radar()}
 
     def hazards(self, places: list[tuple[float, float]], *, weather: bool = True, restrictions: bool = True) -> list[dict]:

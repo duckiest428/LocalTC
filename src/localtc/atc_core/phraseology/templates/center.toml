@@ -18,6 +18,21 @@ id = "center.checkin_level"
 controller = "center"
 text = ["{callsign}, {station}, radar contact, maintain {altitude}.", "{callsign}, {station}, roger, maintain {altitude}."]
 
+# Checking in level at what it's had from the last centre, now and then: the acknowledgement alone.
+[[template]]
+id = "center.checkin_ack"
+controller = "center"
+text = ["{callsign}, {station}, radar contact.", "{callsign}, radar contact.", "{callsign}, {station}, roger."]
+
+# Checking in level below what was assigned: the climb, given again.
+[[template]]
+id = "center.checkin_climb"
+controller = "center"
+text = ["{callsign}, {station}, radar contact, climb and maintain {altitude}.",
+        "{callsign}, {station}, roger, climb and maintain {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Climb and maintain {altitude}, {callsign_short}."
+
 # Checking in still on the way up to what was assigned: carry on, not "maintain" as if it were there.
 [[template]]
 id = "center.checkin_climbing"

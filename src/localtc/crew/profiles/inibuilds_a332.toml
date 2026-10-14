@@ -4,8 +4,10 @@
 # from the aircraft's own list of input events (2026-10-10); not yet tried against the sim: the altitude knob learns
 # from its first click whether it moves 100 or 1,000 ft. VFE from the A330's limitations.
 [aircraft]
-name = "iniBuilds A330-200"
-match = ["A330-200"]
+name = "iniBuilds A330"
+match = ["A330-200", "A330-300", "A332", "A333"]
+# Its seatbelt sign doesn't show in the sim's variable: never "already off" by it.
+unread = ["seatbelt"]
 flaps = "set"
 detents = ["up", "1", "2", "3", "full"]
 aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
@@ -35,11 +37,11 @@ input = "AIRLINER_MCU_ALT_PUSH"
 on = 1
 
 [actions.altimeter_std]
-input = "AIRLINER_FO_BARO_SET_PULL"
+input = "AIRLINER_CPT_BARO_SET_PULL, AIRLINER_FO_BARO_SET_PULL"
 on = 1
 
 [actions.altimeter_qnh]
-input = "AIRLINER_FO_BARO_SET_PUSH"
+input = "AIRLINER_CPT_BARO_SET_PUSH, AIRLINER_FO_BARO_SET_PUSH"
 on = 1
 
 [actions.vs]

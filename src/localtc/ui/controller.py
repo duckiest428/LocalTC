@@ -470,7 +470,9 @@ class AppController:
         if engine is None:
             return {}
         snap = engine.snapshot()
-        departing = snap.phase in DEPARTING or snap.phase is None
+        # At cruise the destination's frequencies and ATIS (and the centre the flight is with), not the departure's:
+        # they're what's next, well before the descent. Down at the destination, stopped, still its.
+        departing = (snap.phase in DEPARTING and snap.phase != "CRUISE" and not getattr(engine, "_arriving", False))             or snap.phase is None
         icao = (snap.origin if departing else snap.destination) or snap.origin or snap.destination
         airport = self.airports.get(icao or "") or (engine.geometry(icao).airport if engine.geometry(icao) else None)
         atis = engine.current_atis(icao)

@@ -585,11 +585,13 @@ def test_llm_exchanges_record_the_whole_flight(mode):
     exchanges = [o for o in outputs if isinstance(o, LlmExchange)]
     transcripts = [e for e in Recording(CYUL).events() if isinstance(e, Transcript)]
     read = {e.t for e in exchanges if e.purpose == "understand"}
+    decisions = [o for o in outputs if isinstance(o, AtcDecision)]
+    # A call on the old frequency after the handoff was read back is sent on again ("contact departure"), unread.
+    reminded = {d.t for d in decisions if d.decision == "common.contact" and d.used == "grammar"}
     if mode == "llm":
-        assert read == {t.t for t in transcripts}  # every transmission
+        assert read == {t.t for t in transcripts} - reminded  # every other transmission
     else:
         assert read < {t.t for t in transcripts}  # all but the routine calls the grammar is sure of
-    decisions = [o for o in outputs if isinstance(o, AtcDecision)]
     assert len(decisions) == len(transcripts) and all(d.mode == mode for d in decisions)
     assert [e.t for e in exchanges] == sorted(e.t for e in exchanges)
     assert all(e.outcome == "error" for e in exchanges)  # nothing scripted: every one fell back to the grammar

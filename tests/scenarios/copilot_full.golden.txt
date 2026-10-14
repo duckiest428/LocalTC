@@ -64,7 +64,7 @@
 [  1913.0] TUNE      COM1 120.6
 [  1918.0] PILOT     120.6: Boeing Tower, N172LT, 10 mile final runway 14R
 [  1920.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, continue, I'll call your clearance.
-[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, cleared to land, wind 130 at 8.
+[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, cleared to land, wind 130 at 3.
 [  2071.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
 [  2071.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)

@@ -80,7 +80,10 @@ EXAMPLES: tuple[tuple[str, str], ...] = (
 BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading", "contact", "squawk", "taxi", "approved",
           "proceed", "vectors", "expect", "line", "takeoff", "monitor", "identify", "pushback", "push", "vacate", "cross"}
 # Instructions in more than one word ("copy, hold short runway 25R, pushback tail left" to a clearance request).
-BANNED_PHRASES = re.compile(r"bhold(?:ing)? (?:short|position)b|btail (?:left|right)b|bgo aroundb|bgive wayb")
+BANNED_PHRASES = re.compile(r"\bhold(?:ing)? (?:short|position)\b|\btail (?:left|right)\b|\bgo around\b|\bgive way\b")
+# A pilot's words, or a chat show's, in a controller's instruction: "maintain 9,000 feet, copy that, thanks",
+# "good afternoon, welcome, copy that, thanks, maintain FL330".
+ATC_NEVER = re.compile(r"\bcopy(?: that)?\b|\bwelcome\b|\bappreciate\b|\bno worries\b|\bcheers\b|\bawesome\b")
 # The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
 INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
 NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
@@ -407,6 +410,8 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
         raise PhraseError("reply leaves out readback correct; keep it")
     if (twice := _repeats(text)) is not None and _repeats(scripted) is None:
         raise PhraseError(f'reply says "{twice}" twice; say each thing once')
+    if (never := ATC_NEVER.search(got)) and not ATC_NEVER.search(said):
+        raise PhraseError(f'reply adds "{never.group(0)}", which a controller doesn\'t say; keep to the instruction')
     return text
 
 

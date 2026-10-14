@@ -84,6 +84,13 @@ SAID_AS = {"go_around": "go around", "emergency": "declare an emergency"}
 CONTROL_WORDS = {"flaps?": "flaps", "gear": "gear", "lights?": "light", "auto ?pilot": "autopilot", "auto ?brakes?": "autobrake",
                  "spoilers?|speed ?brakes?": "spoilers", "parking brakes?": "parking_brake", "transponder|squawk": "squawk",
                  "altimeters?|qnh|baro": "altimeter", "go[ -]?around|going around": "go_around"}
+NOT_A_COMMAND = ("That isn't asking for any switch or setting you can work. Reply to it as the first officer, in a few "
+                 "words (kind reply), with no command.")
+# The pilot flying's own takeoff calls ("V1, rotate", "thrust set", "MAN FLEX 54, SRS, runway"): nothing for the
+# copilot to answer ("V1 Rotate." was answered "Say again?").
+PF_CALLOUT = re.compile(r"^(?:(?:v ?1|vee ?one|v one|v ?r|v ?2|vee ?two|rotate|rotating|(?:eighty|80|one hundred|100) knots|"
+                        r"thrust set|flex(?: set)?|toga(?: set)?|man(?:ual)? ?flex(?: \d+)?|srs|rwy|runway|green|engines? stabili[sz]ed|"
+                        r"stabili[sz]ed|takeoff thrust|take off thrust|and)[\s,.!]*)+$")
 FUEL_DOUBT = re.compile(r"\bfuel (?:prediction|projection|estimate|calc\w*|calls?|numbers?)s? (?:is|are|was|were|seems?)? ?"
                         r"(?:off|wrong|broken|bogus|not right)|\b(?:stop|enough|no more) (?:with )?(?:the )?fuel (?:calls?|warnings?|"
                         r"predictions?)")
@@ -371,6 +378,9 @@ class PilotMonitoring:
         act = reading.act
         if act == "unclear":
             return []  # noise, or speech-to-text going round in circles: nothing to answer
+        if PF_CALLOUT.match(text.lower().strip()) and not reading.commands:
+            self._heard_by_model(text)
+            return []  # the pilot flying's own call: heard
         if FUEL_DOUBT.search(text.lower()):
             # "Your fuel prediction is off, the MCDU says we have enough": the copilot's projections stop; the
             # aircraft's own are the ones to go by.
@@ -378,7 +388,8 @@ class PilotMonitoring:
             self.deck.memory.preferences["fuel calls"] = "none: the captain goes by the aircraft's own fuel prediction"
             self._heard_by_model(text)
             return [self._say(t, "Copy, I'll leave the fuel predictions to the box.")]
-        if act != "answer" and DECLINE.search(text.lower()) and self.intent is None:
+        if act != "answer" and not reading.commands and DECLINE.search(text.lower()) and self.intent is None:
+            # "Later" with nothing asked for: not now. ("Turn off the seatbelt sign, turn it back on later" is asked.)
             if HUSH.search(text.lower()):
                 self.monitor.hushed(t)
             else:
@@ -659,6 +670,11 @@ class PilotMonitoring:
             if cmd.action == "altimeter" and cmd.target == "hpa":
                 qnh = self._atis_qnh()
                 return qnh is not None and abs(int(v) - qnh) <= QNH_TOLERANCE_HPA
+            if cmd.action == "altimeter":
+                # Inches ("30.18"): the ATIS's setting, or standard; "Confirm altimeter 30.18?" asked of the ATIS's
+                # own number was a question for nothing.
+                qnh = self._atis_qnh()
+                return float(v) == 29.92 or (qnh is not None and abs(float(v) * 33.8639 - qnh) <= QNH_TOLERANCE_HPA)
         except (TypeError, ValueError):
             return False
         return False
@@ -860,6 +876,13 @@ class PilotMonitoring:
             if said is not None:
                 return [*exchanges, self._say(t, said)]
             why = exchanges[-1].detail if exchanges else ""
+            if why.startswith("the captain didn't name"):
+                # A command made of words that ask for none ("cabin pressure's low, deploy the oxygen masks" read as
+                # "seatbelt on"): asked once more for what to say, not "say again?" to words heard well.
+                again, more_exchanges = self.model.ask(t, text, known, more=more, note=NOT_A_COMMAND)
+                exchanges = [*exchanges, *more_exchanges]
+                if again is not None and again.command is None:
+                    return [*exchanges, self._say(t, again.reply)]
             remark = REMARK.match(text.lower().strip()) is not None
             if why.startswith(("claims", "reassures", "names a place")) or (remark and why):
                 # Its reply turned away (it said what isn't so, or made a command of a remark: "time to start up our

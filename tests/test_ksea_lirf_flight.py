@@ -77,7 +77,9 @@ def test_a_descent_far_from_the_destination_is_not_the_arrival():
 
 def test_the_flight_is_handed_from_one_centre_to_the_next(replay):
     centres = [line for line in replay if "Center" in line and "contact" in line]
-    assert len(centres) >= 3, centres
+    # The handoff said, and once more when it wasn't read back; never again after (ATC can't know the pilot didn't
+    # change frequency).
+    assert len(centres) >= 2, centres
 
 
 def test_departure_hands_the_climb_on_to_a_centre(replay):

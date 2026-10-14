@@ -198,14 +198,14 @@ class CrewModel:
     # --- asking -------------------------------------------------------------------------------------------------------
 
     def ask(self, t: float, text: str, facts: dict[str, str],
-            more: dict[str, str] | None = None) -> tuple[Reading | None, list[LlmExchange]]:
+            more: dict[str, str] | None = None, note: str = "") -> tuple[Reading | None, list[LlmExchange]]:
         """The model's answer to ``text`` (checked), and the exchange to record; None when it has nothing usable.
         ``more``: the rest of the flight, for a model that can take it (a cloud one); a reply may use it too."""
         if self.mode == "off" or self.backend is None:
             return None, []
         context = self._context_lines(t)
         prompt = ("Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items())
-                  + (f"\n\n{context}" if context else "") + f'\n\nCaptain: "{text}"')
+                  + (f"\n\n{context}" if context else "") + f'\n\nCaptain: "{text}"' + (f"\n\n{note}" if note else ""))
         messages = tuple(m for q, a in EXAMPLES for m in (("user", q), ("assistant", a))) + (("user", prompt),)
         request = LlmRequest("crew", system(self.beyond_facts, self.persona), messages, SCHEMA, max_tokens=120,
                              context="\n".join(f"- {k}: {v}" for k, v in (more or {}).items()))
@@ -425,7 +425,16 @@ def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
         return None, f"left out {', '.join(sorted(missing))}"
     if len(reply) > max(2 * len(original), len(original) + 60):
         return None, "too long"
+    # Nothing ATC or the captain says: "You're clear for takeoff when ready" in a greeting was the copilot handing out
+    # a clearance it doesn't have.
+    added = [w for w in REWORD_FORBIDDEN.findall(reply.lower()) if w not in original.lower()]
+    if added:
+        return None, f"adds {', '.join(sorted(set(added)))}"
     return reply, ""
+
+
+REWORD_FORBIDDEN = re.compile(r"\bclear(?:ed)?\b|\btake ?off\b|\blanding\b|\bline up\b|\bpush(?:back)?\b|\btaxi\b|"
+                              r"\bapproved\b|\bcontact\b|\bemergency\b|\bmayday\b")
 
 
 def _spoken_digits(text: str) -> set[str]:

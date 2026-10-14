@@ -82,7 +82,7 @@ const AtcMap = (() => {
     }
     if (z.final && !vfr) {
       L.polygon(ring(z.final.ring), { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
-        .bindTooltip(`Joining final for ${esc(z.final.runway)}: approach clears the approach here and sends you to tower`);
+        .bindTooltip(`Joining final for ${esc(z.final.approach || "runway " + z.final.runway)}: approach clears the approach here and sends you to tower`);
     }
     if (z.taxi && z.taxi.points && z.taxi.points.length > 1) {  // the route ground gave: to the runway, or in to the gate
       const via = z.taxi.taxiways && z.taxi.taxiways.length ? ` via ${z.taxi.taxiways.join(", ")}` : "";

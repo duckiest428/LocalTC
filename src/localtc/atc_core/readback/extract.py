@@ -257,12 +257,13 @@ def _dropped_digit(text: str, expected: Any) -> bool:
 
 
 def _with_to(text: str, expected: Any) -> bool:
-    """ "121.02" for 121.0: the frequency and the "to" after it ("121.0 to Montreal Ground") run together."""
+    """ "121.02" for 121.0: the frequency and the "to" after it ("121.0 to Montreal Ground") run together; "121.01"
+    the same with "one" or "on" ("121.0, on ground, ready")."""
     try:
         want = f"{float(expected):.3f}".rstrip("0")
     except (TypeError, ValueError):
         return False
-    return "." in text and text == (want if not want.endswith(".") else want + "0") + "2"
+    return "." in text and text in {(want if not want.endswith(".") else want + "0") + d for d in "12"}
 
 
 def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
@@ -332,6 +333,7 @@ ROUTE_FILLER = ("and", "then", "hold", "holding", "short", "point", "at", "to")
 
 def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ...]]:
     names = {str(n).lower() for n in expected} if expected else set()
+    names |= {n.split()[0] for n in names if " " in n}  # "link 54": "link" is a taxiway's word (Heathrow's links)
     found = [route for start in _find_phrase(tokens, ("via",)) if (route := _route_at(tokens, start, names)[0])]
     if not found and expected is not None:
         # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against, every
@@ -491,8 +493,8 @@ def taxi_route_matches(heard: Any, expected: Any) -> bool:
     has to be glued into DG, CH before it can be compared. The route is walked in order, taking as
     many letters as each assigned name needs.
     """
-    said = [str(n).upper() for n in heard]
-    want = [str(n).upper() for n in expected]
+    said = [str(n).upper().replace(" ", "") for n in heard]
+    want = [str(n).upper().replace(" ", "") for n in expected]  # "LINK 54" said is LINK54
     if said == want:
         return True
     # Leniency for speech-to-text on a long route: "Alpha November" heard as "off of November", a taxiway
@@ -717,9 +719,24 @@ def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
                            or spelled and all(w in rest or w in words for w in spelled)):
                 found.append(expected)
                 continue
+        if rest and isinstance(expected, str) and len(expected) >= 4 and " " not in expected.strip():
+            # A five-letter name as speech-to-text breaks it ("direct A&TEG" for ANTEG came back "A TEG"): the
+            # letters of the next word or two together, near enough the fix given and starting the same, are it.
+            for n in (1, 2):
+                joined = "".join(c for c in "".join(rest[:n]).upper() if c.isalpha())
+                if joined[:1] == expected[:1].upper() and \
+                        difflib.SequenceMatcher(None, joined, expected.upper()).ratio() >= FIX_LIKENESS:
+                    found.append(expected)
+                    break
+            else:
+                found.append(" ".join(rest[:2]).upper())
+            continue
         if rest:
             found.append(" ".join(rest[:2]).upper())
     return found
+
+
+FIX_LIKENESS = 0.8  # a fix's name as heard this like the one given (ANTEG, "A TEG": 0.89) is that one
 
 
 ELEMENTS: dict[str, Extractor] = {

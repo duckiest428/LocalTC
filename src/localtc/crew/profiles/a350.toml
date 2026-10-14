@@ -39,11 +39,11 @@ on = 1
 
 # The first officer's baro knob: pulled for STD, pushed back to QNH (the altimeter itself by KOHLSMAN_SET).
 [actions.altimeter_std]
-input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL"
+input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL, AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL"
 on = 1
 
 [actions.altimeter_qnh]
-input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH"
+input = "AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH, AIRLINER_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH"
 on = 1
 
 [actions.seatbelt]

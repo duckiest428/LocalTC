@@ -27,6 +27,7 @@ from localtc.atc_core.airport import (
     published,
     select_runway,
 )
+from localtc.atc_core.airport import aircraft_size
 from localtc.atc_core.airport import fixes as airport_fixes
 from localtc.atc_core.airport import gates as stands
 from localtc.atc_core.airport import real_gates
@@ -149,7 +150,6 @@ SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?"
 NUDGE_REPLY_S = 4.0  # after the pilot answers "how do you read", the instruction follows this soon
 STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
 MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
-NOT_SWITCHED_S = 45.0  # still on the old frequency this long after reading back a handoff: say it again
 TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 5.0, 1200.0, 300.0
 TRAFFIC_MIN_KT = 40.0  # slower than this and not on the ground: a sim glitch, not something flying
 TRAFFIC_FIELD_NM, TRAFFIC_FIELD_AGL_FT = 5.0, 1000.0  # this low this close to an airport: the tower's, no call
@@ -252,6 +252,9 @@ MODEL_LAST_ATC_S = 300.0
 MODEL_RECENT = 4  # exchanges on this frequency the model is shown
 MODEL_TRAFFIC_S = 180.0
 CHECKIN_ACK_S = 120.0  # an altitude report this soon after the controller spoke is only acknowledging it
+AIRBORNE_KT = 80.0  # another aircraft this fast is flying, whatever the sim says of it
+SURFACE_WIND_AGL_FT = 300.0  # above this, a tower's wind is the airport's, not the aircraft's own
+PUSH_READBACK_S = 90.0  # the push approved this recently: the pilot repeating it is its readback, not a request
 HANDOFF_ACK_WORDS = {"roger", "wilco", "switching", "over", "good", "day", "night", "bye", "goodbye", "cheers", "thanks",
                      "later", "long", "contact", "contacting"}  # "so long", "good day", "over to Toronto"
 TAXI_SETTLE_S = 20.0  # the first seconds of the taxi out of a pushback: heading still swinging
@@ -471,7 +474,6 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._last_traffic: tuple[float, str] | None = None  # (when, "2 o'clock, 3 miles, ...") of the last call
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
-        self._rehanded: set[tuple[str, str]] = set()  # handoffs already said a second time
         self._crossings: tuple[str, ...] = ()  # runways the taxi route goes across
         self._crossing_seen: dict[str, tuple[float, float]] = {}  # runway: (t, metres to its hold short line) lately
         self._crossed: set[str] = set()  # ... and the ones already cleared to cross (full names, "09/27")
@@ -520,6 +522,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         self._heading_off_since: float | None = None
         self._altitude_checked_t = -math.inf
         self._altitude_checks: dict[int, int] = {}  # "check altitude" calls made, by assigned altitude
+        self._aircraft_title = ""  # the sim's title for the aircraft ("A330-300 (RR)")
         self._checked_in: set[str] = set()  # stations the pilot has checked in with (or that called first)
         self._left_at: dict[str, float] = {}  # stations the pilot tuned away from (to another controller), and when
         self._checkin_t: dict[str, float] = {}  # when each station last heard a check-in
@@ -608,7 +611,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
             elif self.cfg.callsign and self.state.flight.callsign is not None:
                 # Keep the type for abbreviated callsigns ("Boeing 38B") even when the ident is overridden.
                 self.state.flight.callsign = replace(self.state.flight.callsign, type_name=clean_sim_name(event.atc_type))
-            self.state.flight.aircraft_type = clean_sim_name(event.atc_model)
+            self._aircraft_title = event.title
+            # The type from the sim's model, else from the title (the iniBuilds A330's model is blank: "A330-300 (RR)"
+            # is an A333), else what the flight plan said.
+            self.state.flight.aircraft_type = clean_sim_name(event.atc_model) or aircraft_size.designator(event.title)                 or self.state.flight.aircraft_type
         elif isinstance(event, SimLifecycle):
             self.tracker.handle(event)
         elif isinstance(event, NearbyAirports):
@@ -714,7 +720,9 @@ class AtcEngine(VfrMixin, DiversionMixin):
         geo = self._with_taxiway_names(geo)
         info = self.current_atis(geo.airport.icao)
         closed = info.operations.closed_taxiways if info is not None and info.operations is not None else frozenset()
-        return TaxiGraph(geo, closed=closed)
+        # The aircraft's size: taxiways too narrow for its wings are kept off its routes where there's another way.
+        span = aircraft_size.wingspan_m(self.state.flight.aircraft_type or self._aircraft_title)
+        return TaxiGraph(geo, closed=closed, wingspan_m=span)
 
     @staticmethod
     def _atis_broadcasts(geo: AirportGeometry) -> dict[str, float]:
@@ -1516,7 +1524,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
             return "landing" if near and trend != "climbing" else None
         if controller in ("departure", "approach"):
             near = geo is None or geo.distance_nm(target.lat, target.lon) <= 40.0
-            return trend if near and target.alt_ft < 18000 else None
+            # Flying, not an aircraft the sim calls airborne at its gate (AFR 24LD was sent to London Control from
+            # a stand): up off the field and at a flying speed.
+            flying = target.gs_kt >= AIRBORNE_KT and (geo is None or target.alt_ft - geo.airport.elev_ft >= 500)
+            return trend if near and flying and target.alt_ft < 18000 else None
         if controller == "center":
             return trend if target.alt_ft >= 10000 else None
         return None
@@ -1572,22 +1583,17 @@ class AtcEngine(VfrMixin, DiversionMixin):
             st.pending = None
             return [self._alert(t, "readback_unresolved", f"{pending.instruction_id}: never read back")]
         if self._last_handoff is not None and not own.on_ground:
-            handed_t, old, new = self._last_handoff
+            _, _, new = self._last_handoff
             tuned = st.comms.tuned
             if tuned == new and last_pilot < self._tuned_since and t - self._tuned_since >= MISSED_CHECKIN_S \
                     and new.controller in ("departure", "approach"):
                 self._last_handoff = None  # on frequency but quiet: the new controller calls first
                 st.comms.contacted.add(new.controller)
                 self._checkin(t, new, own)
-            elif tuned == old and st.pending is None and t - max(handed_t, last_pilot) >= NOT_SWITCHED_S:
-                self._last_handoff = None  # still on the old frequency: say it once more (once: then it's the pilot's call)
-                if (old.station, new.station) not in self._rehanded:
-                    self._rehanded.add((old.station, new.station))
-                    self._handoff_again(t, old, new)
+            # Still on the old frequency after reading the handoff back: nothing said. The controller can't know the
+            # pilot hasn't changed ("contact Montreal Centre" again, after it was read back, wasn't a thing ATC
+            # could have known to say); a handoff never read back is chased as any readback is, above.
         return []
-
-    def _handoff_again(self, t: float, old: Facility, new: Facility) -> None:
-        self._schedule(t, "common.contact", {"station": new.station, "frequency": new.mhz}, old, delay=False, handoff_to=new)
 
     def _traffic_advisory(self, own: OwnshipState) -> bool:
         """Real AI traffic nearby and converging: "traffic, two o'clock, four miles, opposite direction, 3,500"."""
@@ -2833,6 +2839,12 @@ class AtcEngine(VfrMixin, DiversionMixin):
             # "Can we get a tail right?" at the gate: the pushback, tail right (Seattle's gate A5: "unable" twice).
             interp = replace(interp, intent="request_pushback", values={**interp.values, "tail": tail})
             intent = "request_pushback"
+        if intent == "request_pushback" and "pushback" in st.clearances \
+                and (given := st.issued.get("ground.pushback")) is not None and t - given.t <= PUSH_READBACK_S \
+                and not re.search(r"\b(?:request\w*|ready|can we|could we|may we|like to)\b", (interp.text or "").lower()):
+            # "Push and start at discretion, tail right": the readback of the push just approved, not a new request
+            # (answered with the approval again).
+            return []
         if intent == "request_crossing":
             return self._crossing_request(interp, facility, t, own)
         if intent == "need_time":
@@ -3681,7 +3693,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         if topic in ("altimeter", "weather", "atis") and altimeter is not None:
             parts.append((f"{self._altimeter_word} {{altimeter}}", {"altimeter": altimeter}))
         if topic in ("wind", "weather") and own is not None:
-            parts.insert(0, ("wind {wind}", {"wind": self._wind(own)}))
+            parts.insert(0, ("wind {wind}", {"wind": self._surface_wind(own, airport or self._working_airport())}))
         arriving = self._arriving
         info = self.current_atis(st.flight.destination if arriving else st.flight.origin)
         if topic == "atis" and info is not None:
@@ -3995,6 +4007,10 @@ class AtcEngine(VfrMixin, DiversionMixin):
         (the terminal side)."""
         spots = list(getattr(geo.airport, "parking", ()) or ())
         a = self.state.assignments
+        if a.gate_index is None and (gate := self._gate(geo)) is not None:
+            # The stand is known before the turn off (as an airline's would be): the exit on its side ("vacate left"
+            # at Haneda away from the stand, then a crossing and a U-turn to get back).
+            self._assign(gate=gate.display, gate_index=gate.index)
         if a.gate_index is not None:
             spot = next((p for p in spots if getattr(p, "index", None) == a.gate_index), None)
             if spot is not None:
@@ -4041,6 +4057,15 @@ class AtcEngine(VfrMixin, DiversionMixin):
             plan = self._arrival_plan(own) if own is not None else None
             return plan["approach"].landing_runway if plan else None
         return st.assignments.departure_runway or self._departure_runway(own)
+
+    def _surface_wind(self, own: OwnshipState, icao: str | None) -> Wind:
+        """The wind a tower gives: the airport's, from its ATIS or report, once the aircraft is off the ground (the
+        aircraft's own is the wind where it is: "190 at 19" on a 2,000 ft final to a field reporting 140 at 5)."""
+        if own.on_ground or own.alt_agl_ft < SURFACE_WIND_AGL_FT or icao is None:
+            return self._wind(own)
+        info = self.current_atis(icao)
+        wind = info.weather.wind if info is not None else None
+        return wind if wind is not None else self._wind(own)
 
     @staticmethod
     def _wind(own: OwnshipState) -> Wind:
@@ -4258,6 +4283,15 @@ class AtcEngine(VfrMixin, DiversionMixin):
             elif assigned is not None and own is not None and own.alt_indicated_ft < assigned - 500 and own.vs_fpm > 300:
                 self._schedule(t, "center.checkin_climbing", {"station": facility.station, "altitude": assigned},
                                facility, expects_readback=False)  # on the way up to it: carry on
+            elif assigned is not None and own is not None and own.alt_indicated_ft < assigned - 500:
+                # Level below it (a SID's 6,000 with 9,000 given): the climb, not "maintain 9,000" to an aircraft at 6.
+                # It's what the flight was given and read back already: said again, no readback waited for.
+                self._schedule(t, "center.checkin_climb", {"station": facility.station, "altitude": assigned}, facility,
+                               expects_readback=False)
+            elif assigned is not None and own is not None and abs(own.alt_indicated_ft - assigned) < 300 \
+                    and any(c != facility.station for c in self._checked_in) and zlib.crc32(facility.station.encode()) % 5 < 2:
+                # Level at it, handed on from another centre: some controllers just acknowledge ("radar contact").
+                self._schedule(t, "center.checkin_ack", {"station": facility.station}, facility, expects_readback=False)
             elif assigned is not None:
                 self._schedule(t, "center.checkin_level", {"station": facility.station, "altitude": assigned},
                                facility, expects_readback=False)  # confirming what is already assigned
@@ -4275,6 +4309,14 @@ class AtcEngine(VfrMixin, DiversionMixin):
                     and on_star and not self._going_around:
                 # Checking in on the STAR it was cleared to descend via: it carries on down it, and the descent isn't
                 # said again ("how many times do I need to tell you"); nor is the approach, if the centre gave it.
+                if st.assignments.approach == plan["approach"].display and plan["approach"].kind.upper() == "VISUAL"                         and self.region.icao:
+                    # "For this visual I need vectors, there is no approach" (Haneda): said they're coming, at the
+                    # check-in. (In the US a STAR runs on to the visual; the approach isn't said again there.)
+                    self._schedule(t, "approach.checkin_vectors", {"station": facility.station, "approach": plan["approach"]},
+                                   facility, expects_readback=False,
+                                   note=self._atis_note(st.flight.destination, st.assignments.arrival_atis)
+                                   or self._altimeter_note(st.flight.destination))
+                    return
                 if st.assignments.approach == plan["approach"].display:
                     self._schedule(t, "approach.checkin_roger", {"station": facility.station}, facility,
                                    expects_readback=False,
@@ -4422,7 +4464,8 @@ class AtcEngine(VfrMixin, DiversionMixin):
                 self._schedule(t, "common.say_again", {}, facility)
             return
         landing = self._vfr_landing() if self._vfr else "tower.land"
-        self._schedule(t, landing, {"runway": runway, "wind": self._wind(own)}, facility, delay=delay, clearance="landing",
+        self._schedule(t, landing, {"runway": runway, "wind": self._surface_wind(own, st.flight.destination)}, facility,
+                       delay=delay, clearance="landing",
                        on_issue=lambda: self._assign(arrival_runway=runway), note=self._caution_note(st.flight.destination))
 
     def _gate_now_taken(self, own: OwnshipState) -> "stands.Gate | None":
@@ -4490,11 +4533,11 @@ class AtcEngine(VfrMixin, DiversionMixin):
         route = None
         if taxiways is None:
             graph = self._taxi_graph(geo) if geo is not None and own is not None else None
-            route = graph.parking_route(own.lat, own.lon, gate.index) if graph is not None and gate is not None else None
+            route = graph.parking_route(own.lat, own.lon, gate.index, heading=own.hdg_true)                 if graph is not None and gate is not None else None
             if route is None and graph is not None:
                 # No gate (GA, or none free): the nearest parking; for GA the scenery's GA ramp, not an airliner gate.
                 ga = not self._callsign().is_airline
-                gate, route = None, graph.parking_route(own.lat, own.lon, kind=GA_PARKING if ga else "")
+                gate, route = None, graph.parking_route(own.lat, own.lon, kind=GA_PARKING if ga else "", heading=own.hdg_true)
                 ramp = ga and route is not None and route.nodes and route.nodes[-1][0] == "parking" and any(
                     p.index == route.nodes[-1][1] and p.kind.startswith(GA_PARKING) for p in geo.airport.parking)
             taxiways = route.taxiways if route is not None else None
@@ -4546,7 +4589,7 @@ class AtcEngine(VfrMixin, DiversionMixin):
         return stands.assign(geo, airline=callsign.is_airline, aircraft_type=flight.aircraft_type or "",
                              traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}",
                              exclude=self._gates_taken, near=(near.spot.lat, near.spot.lon) if near is not None else None,
-                             real=self._real_gates(geo.icao),
+                             real=self._real_gates(geo.icao), operator=callsign.ident[:3] if callsign.is_airline else "",
                              international=real_gates.is_international(flight.origin, flight.destination))
 
     def _with_taxiway_names(self, geo: AirportGeometry) -> AirportGeometry:

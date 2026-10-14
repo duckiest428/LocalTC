@@ -38,7 +38,7 @@
 [  1780.0] ATC       Boeing Tower 120.6: Cessna 2LT, Boeing Tower, enter left downwind runway 14R, report midfield, information Bravo is current, altimeter 29.92.
 [  1782.0] PILOT     120.6: Enter left downwind runway one four right, Cessna two lima tango.
 [  1782.0] READBACK  vfr.enter_downwind correct
-[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, cleared to land, wind 130 at 8.
+[  2068.0] ATC       Boeing Tower 120.6: Cessna 2LT, runway 14R, cleared to land, wind 130 at 3.
 [  2070.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
 [  2070.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)

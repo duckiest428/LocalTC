@@ -17,6 +17,13 @@ id = "approach.checkin_roger"
 controller = "approach"
 text = ["{callsign}, {station}, roger.", "{callsign}, roger.", "{callsign}, {station}."]
 
+# A visual approach has nothing in the box to fly: the pilot is told the vectors are coming.
+[[template]]
+id = "approach.checkin_vectors"
+controller = "approach"
+text = ["{callsign}, {station}, roger, expect vectors for the {approach} approach.",
+        "{callsign}, {station}, expect vectors for the {approach} approach."]
+
 [[template]]
 id = "approach.maintain"
 controller = "approach"

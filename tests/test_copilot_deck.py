@@ -97,8 +97,14 @@ def test_a_command_heard_badly_is_asked_about_not_done():
 
 def test_a_command_heard_fairly_well_is_said_back_first():
     pm = started()
-    out = heard(pm, 1.0, "flaps one", confidence=0.65)
-    assert said(out) == ["Flaps 1?"] and not sent(out)
+    out = heard(pm, 1.0, "gear up", confidence=0.65)
+    assert said(out) == ["Gear up?"] and not sent(out)
+
+
+def test_flaps_heard_fairly_well_are_set_not_asked():
+    """ "Oh, flaps 1, please" at 0.64 was asked back ("Flaps 1?"): a clear flaps call is done."""
+    pm = started()
+    assert [w.name for w in sent(heard(pm, 1.0, "flaps one", confidence=0.65))] == ["FLAPS_1"]
 
 
 def test_a_low_risk_command_heard_fairly_well_is_done():
@@ -155,7 +161,7 @@ def test_several_commands_in_one_breath_are_each_handled():
     out = heard(pm, 1.0, "go ahead and put flaps 2 and set your QNH at 1013", confidence=0.9)
     assert [s.name for s in sent(out)] == ["FLAPS_2"]
     assert said(out) == ["Confirm QNH 1013?"]  # the QNH used to be dropped; a spoken number nothing backs: read back
-    assert [s.name for s in sent(heard(pm, 2.0, "yes"))] == ["KOHLSMAN_SET"]
+    assert [s.name for s in sent(heard(pm, 2.0, "yes"))] == ["KOHLSMAN_SET", "KOHLSMAN_SET"]  # both altimeters
 
 
 def test_a_spoken_number_atc_gave_is_set_one_it_didnt_is_read_back():
@@ -182,7 +188,7 @@ def test_a_yes_counts_only_for_the_question_just_asked():
 
 def test_a_correction_replaces_what_was_asked():
     pm = started()
-    assert said(heard(pm, 1.0, "flaps one", confidence=0.6)) == ["Flaps 1?"]
+    assert said(heard(pm, 1.0, "heading one two zero", confidence=0.6)) == ["Confirm heading 120?"]
     out = heard(pm, 2.0, "no, flaps two", confidence=0.9)
     assert sent(out) == [SendSimEvent(name="FLAPS_2")]
     assert not sent(heard(pm, 3.0, "yes"))  # nothing waiting any more: flaps 1 isn't done on it

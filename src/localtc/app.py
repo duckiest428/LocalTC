@@ -256,6 +256,10 @@ async def local_model(cfg: Config, source: SimSource, *, behind_cloud: bool = Fa
     if not status.has(llm.model):
         say("Ollama has no model %r: using the grammar only. Run: ollama pull %s", llm.model, llm.model)
         return None
+    if behind_cloud:
+        # Only a last resort behind the cloud: not loaded (a minute of the CPU and 2.4 GB) until a call needs it.
+        log.info("Local language model %s behind the cloud: loaded only if every cloud service fails", llm.model)
+        return backend
     # Loaded somewhere else than asked (CPU only switched on or off since): out, so it loads again where it should.
     placed = await asyncio.to_thread(backend.placement)
     if placed is not None and placed.gpu == llm.cpu_only and not _WARMING.locked():

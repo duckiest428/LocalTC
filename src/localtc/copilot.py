@@ -39,6 +39,7 @@ from localtc.sim_api import (
 
 CopilotMode = Literal["assist", "full"]
 QUIET_S = 4.0  # radio silence before the copilot starts a call of its own
+AFTER_PUSH_S = 45.0  # pushed back and stopped: this long (engines going) before "ready to taxi"
 MAX_REPEATS = 2  # the same words twice in a row; a third time won't go better
 REPEAT_WINDOW_S = 120.0  # the same words again after this long are a new call, not a repeat
 CORRECTING = ("common.negative", "common.read_back", "common.confirm")  # ATC named what was wrong
@@ -128,6 +129,8 @@ class Copilot:
         self._pilot_said_t = -1e9
         self._beacon = self._taxi_light = False  # the crew's own signs they're ready: push and start, then taxi
         self._lights_known = False  # no light switches from the sim (an older recording): ready when cleared
+        self._engines: int | None = None  # engines running (None: not reported)
+        self._pushed_t: float | None = None  # when the pushback ended (stopped after it)
         self._checked_in: tuple[float, Facility, int] | None = None  # a check-in waiting for ATC's word, and the tries
         self._last_tuned: Facility | None = None  # the frequency before the last handoff (to go back to)
         self._assigned: tuple[int | None, float] = (None, 0.0)  # the cleared altitude, and since when
@@ -153,6 +156,7 @@ class Copilot:
             self._assigned = (cleared, event.t)
         if isinstance(event, AircraftSystems):
             self._beacon, self._taxi_light, self._lights_known = event.light_beacon, event.light_taxi, True
+            self._engines = event.engines_running
         elif isinstance(event, ReadbackEvaluated):
             self._evaluated[event.instruction_id] = event
         elif isinstance(event, Transcript):
@@ -279,7 +283,12 @@ class Copilot:
             # intercom). It called "ready to taxi" straight after the clearance, at the gate, not pushed back.
             # Nothing to tell readiness by (no light switches from the sim), or pushed back already: ready.
             pushed = any(p == "PUSHBACK" for _, p in getattr(st, "phase_history", ()))
-            ready = not self._lights_known or pushed
+            if pushed and self._pushed_t is None:
+                self._pushed_t = t
+            # Pushed back: taxi once the engines are going and the crew has had a minute after the tug let go (the
+            # after-start flow), not while still being pushed.
+            started = self._engines is None or self._engines > 0
+            ready = not self._lights_known or (pushed and started and t - (self._pushed_t or t) >= AFTER_PUSH_S)
             if self._needs_pushback() and "pushback" not in st.clearances and not pushed:
                 if ready or self._beacon or self.deck.take_want("pushback", t):
                     self._call_once("pushback", engine.facility("ground"), t, self._pushback_request)
@@ -287,8 +296,10 @@ class Copilot:
                     self._beacon and ("pushback" in st.clearances or not self._needs_pushback())):
                 self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
                                 + self._with_atis(st.flight.origin))
-        elif phase in ("PUSHBACK", "TAXI_OUT") and self._cleared("ifr") and "taxi" not in st.clearances:
-            # Moving already without a taxi clearance (pushed on the captain's own word): the crew is ready.
+        elif (phase == "TAXI_OUT" or (phase == "PUSHBACK" and "pushback" not in st.clearances)) and self._cleared("ifr") \
+                and "taxi" not in st.clearances:
+            # Moving already without a taxi clearance (pushed on the captain's own word): the crew is ready. Being
+            # pushed with the push approved is no time to ask for taxi: after it.
             self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
                             + self._with_atis(st.flight.origin))
         elif phase == "RUNWAY_HOLD" and not ({"takeoff", "line_up"} & st.clearances.keys()):

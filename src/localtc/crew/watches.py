@@ -545,6 +545,13 @@ class WatchMixin:
         due, why = self.divert_due
         options_of = getattr(self.engine, "_diversion_options", None)
         options = options_of(own) if options_of is not None else []
+        if not options and not getattr(self, "divert_fetched", False) and hasattr(self.engine, "_fetch_diversions"):
+            # The layouts of the airports around are only fetched for an emergency: asked for now, and waited for
+            # ("No suitable airport within 150 miles" was said near Tokyo, with nothing fetched yet).
+            self.divert_fetched = True
+            self.engine._fetch_diversions()
+            self.divert_due = (max(due, t + 20.0), why)
+            return
         if not options and t < due:
             return
         self.divert_due = None

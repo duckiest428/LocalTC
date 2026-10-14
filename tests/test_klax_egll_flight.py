@@ -123,24 +123,13 @@ def test_cleared_to_land_is_taken_back_for_traffic_appearing_ahead(replay):
     assert any("cleared to land" in line for line in atc(replay, at(sequenced), at(sequenced) + 120))
 
 
-def test_the_taxi_in_holds_short_of_the_runway_it_crosses(replay):
-    """ "When we cross an active runway it should tell us to hold short of the runway first." """
+def test_the_taxi_in_is_to_a_stand_the_a350_fits(replay):
+    """Gate 403 (a 26 m stand) was given to this A350-1000 (65 m across): a stand its wings fit instead. (Gate 403
+    was across 09R: the hold short and the crossing timed as the runway is reached are kept by the KLAX tests' and
+    test_taxi_route's crossings.)"""
     taxi_in = next(line for line in replay if "ATC       Heathrow Ground" in line and "taxi to" in line)
-    assert "hold short runway 09R" in taxi_in, taxi_in
-
-
-def test_the_crossing_comes_as_the_runway_is_reached_not_at_the_exit(replay):
-    """Just off 27L, moving away from it, ground cleared the flight across 09R (the same runway, three minutes on)."""
-    taxi_in = next(line for line in replay if "ATC       Heathrow Ground" in line and "taxi to" in line)
-    crossing = next(line for line in replay if ("cross runway 09R" in line or "cross runway 27L" in line) and " ATC " in line)
-    assert at(crossing) - at(taxi_in) > 60, (taxi_in, crossing)
-
-
-def test_a_gate_taken_is_swapped_for_the_one_next_door_with_an_apology(replay):
-    """Gate 403 taken: ground gave Gate 236 across the airfield with "Gate 403 is occupied" on the end. The flight
-    parked at 402, next door."""
-    swapped = next(line for line in replay if "is occupied" in line)
-    assert "sorry, Gate 403 is occupied, taxi to" in swapped and "402" in swapped, swapped
+    assert "Gate 403" not in taxi_in and "Gate 534" in taxi_in, taxi_in
+    assert "hold short" not in taxi_in  # T5's stands: on this side of 27L, nothing to cross
 
 
 # --- the copilot on the radio (full) --------------------------------------------------------------------------------

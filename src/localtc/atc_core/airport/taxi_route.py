@@ -5,6 +5,7 @@ import itertools
 import math
 from dataclasses import dataclass
 
+from localtc.atc_core.airport.aircraft_size import taxiway_width_m
 from localtc.atc_core.airport.geometry import AirportGeometry, RunwayEndGeometry
 
 ROUTABLE = {"taxi", "path", "runway", "parking"}
@@ -37,11 +38,12 @@ class _Edge:
     runway: str
 
 
+TURN_AROUND_M = 1500.0  # what starting behind the aircraft costs: a long way round is better than a U-turn
 CLOSED_PENALTY = 100.0  # a closed taxiway (the ATIS's notice) is used only where there's no other way
 
 
 class TaxiGraph:
-    def __init__(self, geometry: AirportGeometry, *, closed: frozenset[str] = frozenset()) -> None:
+    def __init__(self, geometry: AirportGeometry, *, closed: frozenset[str] = frozenset(), wingspan_m: float = 0.0) -> None:
         self.geometry = geometry
         airport = geometry.airport
         self.positions: dict[Node, tuple[float, float]] = {
@@ -49,6 +51,7 @@ class TaxiGraph:
         }
         self.positions.update({("parking", s.index): geometry.xy(s.lat, s.lon) for s in airport.parking})
         self.edges: dict[Node, list[_Edge]] = {node: [] for node in self.positions}
+        need_m = taxiway_width_m(wingspan_m)  # the width its wings need (Haneda's lanes had an A350 hitting things)
         for path in airport.taxi_paths:
             if path.kind not in ROUTABLE:
                 continue
@@ -58,7 +61,7 @@ class TaxiGraph:
                 continue
             length = math.dist(self.positions[a], self.positions[b])
             cost = length * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0) * (
-                CLOSED_PENALTY if path.name and path.name in closed else 1.0)
+                CLOSED_PENALTY if path.name and path.name in closed else 1.0) * _narrow(path, need_m)
             runway = path.runway if path.kind == "runway" else ""
             self.edges[a].append(_Edge(b, cost, length, path.name, runway))
             self.edges[b].append(_Edge(a, cost, length, path.name, runway))
@@ -75,7 +78,10 @@ class TaxiGraph:
     def _on_runway(self, node: Node) -> bool:
         return any(r.contains(self.positions[node]) for r in self.geometry.runways)
 
-    def shortest_path(self, start: Node, goals: set[Node]) -> list[tuple[Node, _Edge | None]] | None:
+    def shortest_path(self, start: Node, goals: set[Node], *, heading: float | None = None
+                      ) -> list[tuple[Node, _Edge | None]] | None:
+        """``heading``: the way the aircraft faces at ``start``; the first stretch taken back the other way costs a
+        turn-around (Haneda's taxi in began on T9, behind the aircraft: a U-turn on a taxiway)."""
         dist: dict[Node, float] = {start: 0.0}
         prev: dict[Node, tuple[Node, _Edge]] = {}
         queue: list[tuple[float, int, Node]] = [(0.0, 0, start)]
@@ -93,6 +99,11 @@ class TaxiGraph:
                 continue
             for edge in self.edges.get(node, ()):
                 nd = d + edge.cost
+                if heading is not None and node == start:
+                    (ax, ay), (bx, by) = self.positions[node], self.positions[edge.to]
+                    bearing = math.degrees(math.atan2(bx - ax, by - ay)) % 360
+                    if abs((bearing - heading + 180) % 360 - 180) > 100:
+                        nd += TURN_AROUND_M
                 if nd < dist.get(edge.to, math.inf):
                     dist[edge.to] = nd
                     prev[edge.to] = (node, edge)
@@ -111,8 +122,9 @@ class TaxiGraph:
             points += [(ax + (bx - ax) * k / steps, ay + (by - ay) * k / steps) for k in range(steps + 1)]
         return points[1:-1]
 
-    def route(self, start: Node, goals: set[Node], *, hold_short: str | None = None) -> TaxiRoute | None:
-        path = self.shortest_path(start, goals)
+    def route(self, start: Node, goals: set[Node], *, hold_short: str | None = None,
+              heading: float | None = None) -> TaxiRoute | None:
+        path = self.shortest_path(start, goals, heading=heading)
         if path is None:
             return None
         edges = [edge for _, edge in path if edge is not None]
@@ -127,8 +139,12 @@ class TaxiGraph:
         crossed += [r for r in self.geometry.runways if r is not target
                     and any(r.contains(p) for p in self._along(path))]
         crossings: list[str] = []
+        points = [self.positions[node] for node, _ in path]
+        along_runways = {r.name for edge in edges if edge.runway for r in self.geometry.runways if edge.runway in r.runway.idents}
         for runway in crossed:
-            if runway is not None and runway is not target and runway.name not in crossings:
+            # A runway taxied along is in the way; one passed by (a hold line on the way, a corner clipped) only
+            # when the route goes to its far side.
+            if runway is not None and runway is not target and runway.name not in crossings                     and (runway.name in along_runways or _both_sides(runway, points)):
                 crossings.append(runway.name)
         # The runway being taxied to is crossed too when the route goes over it to reach a taxiway on the
         # far side: San Diego's B to C1 crosses 09/27 at B6/C6 before lining up on it. Passing over its
@@ -207,9 +223,11 @@ class TaxiGraph:
                 return on_side[1], on_side[2]
         return first[1], first[2]
 
-    def parking_route(self, lat: float, lon: float, spot: int | None = None, *, kind: str = "") -> TaxiRoute | None:
+    def parking_route(self, lat: float, lon: float, spot: int | None = None, *, kind: str = "",
+                      heading: float | None = None) -> TaxiRoute | None:
         """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned). ``kind``: only spots whose
-        kind starts with it ("ramp_ga": a GA flight's), when the airport has any."""
+        kind starts with it ("ramp_ga": a GA flight's), when the airport has any. ``heading``: the way the aircraft
+        faces, a route ahead of it preferred to one behind."""
         goals = {n for n in self.positions if n[0] == "parking" and (spot is None or n[1] == spot)}
         if kind and spot is None:
             kinds = {s.index: s.kind for s in self.geometry.airport.parking}
@@ -218,7 +236,27 @@ class TaxiGraph:
         start = self.nearest_node(lat, lon)
         if start is None or not goals:
             return None
-        return self.route(start, goals)
+        return self.route(start, goals, heading=heading)
+
+
+def _both_sides(runway, points: list[tuple[float, float]]) -> bool:
+    """The route goes from one side of ``runway`` to the other. One that starts beside it (just vacated) and only
+    clips its edge doesn't: "hold short 09L" to an aircraft that had just turned off 27R towards its stand, and
+    Haneda's "hold short runway 22" the same."""
+    across = [runway.along_across(p)[1] for p in points]
+    side = runway.half_width
+    return min(across) < -side and max(across) > side
+
+
+# A taxiway narrower than the aircraft needs: used only where there's no other way (lenient: the sim's widths are
+# rough, so a little under is a little dearer, well under a long way round).
+NARROW_PENALTY, TOO_NARROW_PENALTY, TOO_NARROW = 2.0, 30.0, 0.65
+
+
+def _narrow(path, need_m: float) -> float:
+    if need_m <= 0 or path.width_m <= 0 or path.kind in ("runway", "parking") or path.width_m >= need_m:
+        return 1.0
+    return TOO_NARROW_PENALTY if path.width_m < need_m * TOO_NARROW else NARROW_PENALTY
 
 
 STUB_M = 80.0  # a piece of another taxiway this short between two of the same is that taxiway (a link's stub)

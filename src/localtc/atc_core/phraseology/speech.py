@@ -4,6 +4,8 @@ Everything returns the spoken form as plain words for speech synthesis, e.g.
 ``runway("34L") == "three four left"``.
 """
 
+import re
+
 from localtc.atc_core.region import CURRENT
 from localtc.atc_core.values import Approach, Callsign, Wind
 
@@ -162,9 +164,13 @@ def letter(ch: str) -> str:
 
 
 def taxiway(name: str) -> str:
-    """ "A1" -> "alpha one", "C" -> "charlie", "TWY B" -> "bravo"."""
+    """ "A1" -> "alpha one", "C" -> "charlie", "TWY B" -> "bravo"; a name that's a word is said as one: "LINK 60" ->
+    "link six zero" (Heathrow's links were spelled "lima india november kilo six zero")."""
     name = name.upper().replace("TWY", "").strip()
-    return " ".join(PHONETIC[c] if c.isalpha() else DIGITS[int(c)] for c in name if c.isalnum())
+    out = []
+    for part in re.findall(r"[A-Z]{3,}|[A-Z]|\d", name):
+        out.append(part.lower() if len(part) >= 3 else PHONETIC[part] if part.isalpha() else DIGITS[int(part)])
+    return " ".join(out)
 
 
 def procedure(name: str) -> str:

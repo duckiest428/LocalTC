@@ -122,7 +122,8 @@ def test_values_go_to_the_sim_as_it_expects_them():
     c = cockpit()
     assert plan(Command("squawk", "7700"), c).writes == (SendSimEvent(name="XPNDR_SET", value=0x7700),)
     assert plan(Command("com_active", "121.9"), c).writes == (SetComFrequency(hz=121_900_000),)
-    assert plan(Command("altimeter", "1013", "hpa"), c).writes == (SendSimEvent(name="KOHLSMAN_SET", value=16208, index=2),)
+    assert plan(Command("altimeter", "1013", "hpa"), c).writes == (SendSimEvent(name="KOHLSMAN_SET", value=16208, index=1),
+                                                                    SendSimEvent(name="KOHLSMAN_SET", value=16208, index=2))
     assert plan(Command("vs", "-1500"), c).writes == (SendSimEvent(name="AP_VS_VAR_SET_ENGLISH", value=-1500),)
     p = plan(Command("altitude", "24000"), c)
     assert p.done == "FL240 set." and p.done_spoken == "flight level two four zero set"
@@ -341,7 +342,7 @@ def test_common_questions_are_answered_from_the_data():
     assert said(pm.observe(IntercomHeard(t=5.0, text="what did ATC say?"))) == \
         ["Zurich Approach said: EDW87, fly heading 150."]
     assert said(pm.observe(IntercomHeard(t=6.0, text="Go ahead and set the altimeter to 30.10"))) == \
-        ["Altimeter 30.10 set on my side."]  # a command, on the copilot's own altimeter
+        ["Altimeter 30.10 set, both sides."]  # a command: both altimeters
 
 
 class FakeBackend:
@@ -490,5 +491,5 @@ def test_the_a350s_altitude_knob_is_pushed_and_its_baro_pulled_for_standard():
                           xpdr_mode="alt", com1_mhz=118.0, com2_mhz=118.0)
     altitude = plan(Command("altitude", "23000"), Cockpit(own=flying, profile=profile))
     assert altitude.after == (SetInputEvent(name="AIRLINER_FCU_ALT_KNOB_PUSH", value=1.0),)
-    [std] = plan(Command("altimeter", "29.92"), Cockpit(own=flying, profile=profile)).writes
-    assert std.name.endswith("_RIGHT_PULL")
+    std = plan(Command("altimeter", "29.92"), Cockpit(own=flying, profile=profile)).writes
+    assert [w.name.rsplit("_", 2)[-2:] for w in std] == [["LEFT", "PULL"], ["RIGHT", "PULL"]]  # both sides

@@ -14,6 +14,7 @@ import zlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from localtc.atc_core.airport.aircraft_size import fits_stand, wingspan_m
 from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.real_gates import GateData, match
 from localtc.atc_core.readback.normalize import Token
@@ -24,6 +25,7 @@ HEAVY_TYPES = ("B74", "B77", "B78", "A33", "A34", "A35", "A38", "MD11", "DC10", 
                "A330", "A340", "A350", "A380", "BOEING 747", "BOEING 777", "BOEING 787", "AIRBUS A3")
 OCCUPIED_MIN_M = 15.0  # an aircraft this close to a spot's centre (or within its radius) has it
 PARKED_KT = 3.0
+OWN_TERMINAL_PICK = 6  # the airline's terminal: one of this many free stands nearest its own aircraft
 NEAR_SPOT_M = 60.0  # the departure gate: the spot the aircraft is parked on, if it is on one
 
 
@@ -95,20 +97,29 @@ def occupied(gate: Gate, geometry: AirportGeometry, traffic: Iterable[TrafficTar
 
 def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traffic: Iterable[TrafficTarget],
            seed: str, real: GateData | None = None, international: bool = False,
-           exclude: Iterable[int] = (), near: tuple[float, float] | None = None) -> Gate | None:
+           exclude: Iterable[int] = (), near: tuple[float, float] | None = None, operator: str = "") -> Gate | None:
     """A free stand for this aircraft, picked the same way every time the same flight replays. An airliner
     with no free gate of its size gets any free gate; if the whole field is full, nothing is assigned and
     ground just says "taxi to parking". With the real gates: a stand with a real gate's name over one the
     scenery numbered on its own, an international gate for an international flight, and a domestic one otherwise.
-    ``near``: (lat, lon) of a gate that turned out taken: the free one nearest to it instead."""
+    ``near``: (lat, lon) of a gate that turned out taken: the free one nearest to it instead. A stand the aircraft's
+    wings don't fit (the sim's radius against its wingspan) isn't given while one that fits is free (an A330 sent to
+    a stand too small for it). ``operator``: the airline's ICAO code ("BAW"): its own aircraft parked around say where
+    its terminal is, and a stand near them is picked."""
     traffic = list(traffic)
     heavy = airline and is_heavy(aircraft_type)
+    span = wingspan_m(aircraft_type)
     everything = gates(geometry, real)
     skip = set(exclude)  # a gate the pilot said is taken, whatever the sim's traffic shows
     free = [g for g in everything if not occupied(g, geometry, traffic) and g.index not in skip]
     choices = [g for g in free if suitable(g, airline=airline, heavy=heavy)]
     if not choices and airline:
         choices = [g for g in free if g.word == "gate"]
+    if span:
+        fitting = [g for g in choices if fits_stand(g.spot.radius_m, span)]
+        if not fitting and airline:
+            fitting = [g for g in free if g.word == "gate" and fits_stand(g.spot.radius_m, span)]
+        choices = fitting or choices
     if not choices:
         return None
     usual = [g for g in choices if not odd_number(g, everything)]
@@ -121,6 +132,15 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
     if near is not None:  # instead of one that was taken: the closest to it
         there = geometry.xy(*near)
         return min(choices, key=lambda g: (math.dist(there, geometry.xy(g.spot.lat, g.spot.lon)), g.index))
+    own = [geometry.xy(t.lat, t.lon) for t in traffic if operator and t.on_ground and t.gs_kt < PARKED_KT
+           and (t.atc_id or "").upper().startswith(operator.upper())]
+    if own:
+        # The airline's terminal: the stands nearest its own parked aircraft (British Airways at Haneda's third
+        # terminal, not the second's gate 58).
+        def apart(g: Gate) -> float:
+            xy = geometry.xy(g.spot.lat, g.spot.lon)
+            return min(math.dist(xy, o) for o in own)
+        choices = sorted(choices, key=apart)[:OWN_TERMINAL_PICK]
     return random.Random(zlib.crc32(f"gate{geometry.airport.icao}{seed}".encode())).choice(choices)
 
 

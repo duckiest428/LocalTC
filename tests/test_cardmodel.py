@@ -25,7 +25,7 @@ def run(script: str, data: object) -> object:
             f"const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));\n"
             f"console.log(JSON.stringify(await (async () => {{ {script} }})()));")
     out = subprocess.run([NODE, "--input-type=commonjs", "-e", f"(async () => {{ {code} }})()"], input=json.dumps(data),
-                         capture_output=True, text=True, timeout=30, check=True)
+                         capture_output=True, text=True, encoding="utf-8", timeout=30, check=True)
     return json.loads(out.stdout)
 
 

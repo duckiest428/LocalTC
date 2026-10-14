@@ -346,7 +346,8 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
         assert any(w.startswith((expected, expected.replace("Level at", "Top of climb, level"))) for w in words), expected
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting
-    assert max(words.count(w) for w in set(words)) <= 2  # nothing said over and over
+    # Nothing said over and over ("One thousand to go." is the same words before each level).
+    assert max(words.count(w) for w in set(words) if w != "One thousand to go.") <= 2
 
 
 def test_standard_is_set_at_the_transition_even_with_a_qnh_of_1013():

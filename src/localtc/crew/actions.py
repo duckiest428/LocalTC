@@ -303,11 +303,18 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                     reads=f"light_{cmd.target}")
     if a == "seatbelt":
         on = v == "on"
-        if c.systems is not None and c.systems.seatbelt == on:
+        if c.systems is not None and c.systems.seatbelt == on and "seatbelt" not in p.unread:
+            # Only from a reading that follows the switch (the iniBuilds A330's doesn't: "already off" with it on).
             return Plan(a, v, (), _sys("seatbelt", on), "", already=f"Seatbelt sign's already {v}.")
         event = SendSimEvent(name="CABIN_SEATBELTS_ALERT_SWITCH_TOGGLE")  # a toggle: only sent when it isn't so
         return Plan(a, v, (_write(p, "seatbelt", event, on=on),), _sys("seatbelt", on), f"Seatbelt sign {v}.",
                     reads="seatbelt")
+    if a == "transponder":  # the mode: "alt" (TA/RA in an airliner), "on", "standby"
+        state = {"standby": 1.0, "on": 3.0, "alt": 4.0}.get(v, 4.0)
+        name = {"alt": "TA/RA", "on": "on", "standby": "standby"}.get(v, v)
+        write = _write(p, f"transponder_{v}", SetSimVar(name="TRANSPONDER STATE:1", unit="Enum", value=state))
+        return Plan(a, v, (write,), _own(lambda o: o.xpdr_mode == v), f"Transponder {name}.",
+                    already=f"Transponder's already {name}.", reads="xpdr_mode")
     if a == "spoilers":
         if v in ("arm", "disarm"):
             arm = v == "arm"
@@ -401,19 +408,29 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         said = f"QNH {int(v)} set." if cmd.target == "hpa" else ("Standard set." if v == "29.92" else f"Altimeter {v} set.")
         spoken = (f"Q N H {speech.digits(v)} set" if cmd.target == "hpa" else "standard set" if v == "29.92"
                   else f"altimeter {speech.digits(v.replace('.', ''))} set")
-        # The first officer's own altimeter (index 2): the captain's is the captain's. The sim reports the captain's
-        # setting, so whether it took can't be seen: said as done.
+        # Both altimeters (KOHLSMAN_SET 1 and 2, or each side's baro knob): the captain asked for the copilot to set
+        # them, and the captain's is the one they look at. The sim reports the captain's setting only through the
+        # add-on's own displays, so whether it took can't always be seen: said as done.
         w = p.actions.get("altimeter")
         std = v == "29.92" and cmd.target != "hpa"
+        both = True
         if w is not None and w.clicks:
             writes = _baro(w, c, hpa, std=std)
+            both = False  # an add-on's first-officer knob
         elif std and (pull := p.actions.get("altimeter_std")) is not None and pull.input:
-            writes = (SetInputEvent(name=pull.input, value=float(pull.on)),)  # an Airbus's baro knob pulled: STD
+            writes = (SetInputEvent(name=pull.input, value=float(pull.on)),)  # an Airbus's baro knobs pulled: STD
+            both = "," in pull.input
         else:
+            custom = p.actions.get("altimeter")
             writes = (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=2), hpa),)
+            if custom is None:
+                writes = (SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=1), *writes)
+            else:
+                both = False
             if (push := p.actions.get("altimeter_qnh")) is not None and push.input:
                 writes = (SetInputEvent(name=push.input, value=float(push.on)), *writes)  # pushed out of STD first
-        return Plan(a, v, writes, lambda c2: None, said.replace(" set.", " set on my side."), spoken + " on my side")
+        side = (" both sides", ", both sides") if both else (" on my side", " on my side")
+        return Plan(a, v, writes, lambda c2: None, said.replace(" set.", f" set{side[1]}."), spoken + side[0])
     if a == "parking_brake":
         on = v == "on"
         event = SendSimEvent(name="PARKING_BRAKE_SET", value=int(on))

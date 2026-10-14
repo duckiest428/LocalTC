@@ -46,8 +46,9 @@ REPORT_END = re.compile(r"\b(?:three green|green|stabili[sz]ed|captured|alive|ch
 NEGATION = re.compile(r"\b(?:don't|do not|dont|never ?mind|cancel that|belay that|disregard|not yet|hold off|leave it|"
                       r"stop that|forget (?:it|that)|no,? no\b|negative,? don't)\b")
 CORRECTION = re.compile(r"^(?:no|negative|nope|correction|sorry|i said|i meant|i mean|actually|not)\b[,.\s]*")
-YES = re.compile(r"^(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|go ahead|go for it|please do|"
-                 r"sure|that's right|thats right|right|ok do it|okay do it)\b[\s,.!]*(?:please|thanks)?[\s.!]*$")
+YES = re.compile(r"^(?:(?:yes|yeah|yep|yup|sure|ok|okay)[,\s]+)?(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|"
+                 r"go ahead|go for it|please do|sure|that's right|thats right|right|ok do it|okay do it|do (?:them |it )?both|"
+                 r"both(?: please)?|do that|please)\b[\s,.!]*(?:please|thanks)?[\s.!]*$")
 NO = re.compile(r"^(?:no|nope|negative|no thanks|not now|don't|leave it|cancel|never ?mind)\b[\s,.!]*(?:thanks)?[\s.!]*$")
 ACK_ONLY = re.compile(r"^(?:(?:check(?:ed)?|copy(?: that)?|roger(?: that)?|ok(?:ay)?|yep|yup|yeah|got it|gotcha|alright|"
                       r"all right|noted|thanks|thank you|cool|good|sounds good|understood|right|nice|great)[\s,.!]*)+$")
@@ -57,7 +58,9 @@ NOISE = re.compile(r"^(?:thank you\.?|thanks for watching!?|you|bye\.?|\.+|uh+|u
 # What's at stake in each command: "low" done when heard well enough, "medium" read back first when the words are
 # unsure (or the number disagrees with ATC's), "high" always confirmed. The safety rules (crew.actions.safety) still
 # decide whether it's done at all.
-LOW = {"light", "com_standby", "verbosity", "checklist", "brief", "status", "check", "say_again", "altimeter"}
+# Flaps and the seatbelt sign: a clear "flaps one" is done, not asked back ("Flaps 1?"); the speed rules still apply.
+LOW = {"light", "com_standby", "verbosity", "checklist", "brief", "status", "check", "say_again", "altimeter", "flaps",
+       "seatbelt"}
 HIGH = {"go_around", "emergency"}
 NUMERIC = {"heading", "altitude", "speed", "vs", "squawk", "com_active", "com_standby", "altimeter"}
 CONTROL = {"verbosity", "checklist", "brief", "status", "check", "say_again", "yes", "no"}

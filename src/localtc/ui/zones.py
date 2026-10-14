@@ -186,6 +186,16 @@ def _final(engine: Any, found: Airport, plan: Any) -> dict[str, Any] | None:
     centreline, out to JOIN_FINAL_NM, for the runway the flight is expected to land on."""
     geo = engine.geometry(found.icao) if engine is not None else AirportGeometry(found)
     runway = engine.state.assignments.arrival_runway if engine is not None else None
+    approach = str(engine.state.assignments.approach or "") if engine is not None else ""
+    if not runway and engine is not None and engine.state.aircraft is not None:
+        # The runway ATC will use (the ATIS's, the wind's), not the one the plan filed: Haneda's 04 with 34L planned.
+        try:
+            expected = engine._arrival_plan(engine.state.aircraft)
+        except Exception:  # noqa: BLE001 - the map never stops on it
+            expected = None
+        if expected is not None:
+            runway = expected["approach"].landing_runway
+            approach = approach or expected["approach"].display
     runway = runway or (plan.arr_runway if plan is not None and getattr(plan, "arr_runway", "") else None)
     end = geo.end(runway) if geo is not None and runway else None
     if end is None:
@@ -199,7 +209,8 @@ def _final(engine: Any, found: Airport, plan: Any) -> dict[str, Any] | None:
 
     corners = [at(near_m, -side_m), at(near_m, side_m), at(out_m, side_m), at(out_m, -side_m)]
     ring = [list(geo.frame.to_latlon(x, y)) for x, y in corners]
-    return {"icao": found.icao, "runway": end.ident, "ring": [[round(a, 5), round(b, 5)] for a, b in ring]}
+    return {"icao": found.icao, "runway": end.ident, "approach": approach,
+            "ring": [[round(a, 5), round(b, 5)] for a, b in ring]}
 
 
 def _gate(engine: Any) -> dict[str, Any] | None:

@@ -131,7 +131,7 @@ def parse(text: str) -> list[Command]:
     i = 0
     while i < len(tokens):
         found, i = _at(tokens, i)
-        if found is not None:
+        if found is not None and (not out or out[-1] != found):  # "set QNH 30.18, the altimeter to 30.18": once
             out.append(found)
     return out
 
@@ -142,6 +142,13 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
     nxt = _word(tokens, i + 1)
     if w == "gear" and nxt in ("up", "down"):
         return Command("gear", nxt), i + 2
+    if w in ("put", "bring", "raise", "retract") and (nxt in ("flaps", "flap") or (nxt == "up" and _word(tokens, i + 2) in ("flaps", "flap"))
+                                                       or (w in ("raise", "retract") and nxt == "the" and _word(tokens, i + 2) in ("flaps", "flap"))):
+        # "put up flaps", "raise the flaps", "retract flaps": all the way up ("put flaps two" is read below)
+        j = i + (2 if nxt in ("flaps", "flap") else 3)
+        if w in ("raise", "retract") or nxt == "up" or _word(tokens, j) == "up":
+            return Command("flaps", "up"), j + (1 if _word(tokens, j) == "up" else 0)
+        return None, i + 1
     if w in ("flaps", "flap"):
         if nxt in ("up", "full", "zero"):
             return Command("flaps", "up" if nxt == "zero" else nxt), i + 2

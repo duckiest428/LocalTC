@@ -160,7 +160,12 @@ class Profile:
         """The handle index of a detent as the pilot says it ("2", "full", "one plus f", "up"), or None."""
         name = self.aliases.get(name.lower(), name.lower())
         if self.detents:
-            return self.detents.index(name) if name in self.detents else None
+            if name in self.detents:
+                return self.detents.index(name)
+            # "Flaps four" on an Airbus is full: the last detent by its number, when the detents are counted.
+            if name.isdigit() and int(name) == len(self.detents) - 1:
+                return len(self.detents) - 1
+            return None
         if name in ("up", "zero", "0"):
             return 0
         if name == "full":

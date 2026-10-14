@@ -420,7 +420,7 @@ table.lb td { white-space: nowrap; }
 /* Quick Settings: the intercom copilot's master switch; its options greyed out while it's off */
 .master-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; margin: 6px 0;
   border-top: 1px solid var(--line, rgba(127,127,127,.2)); border-bottom: 1px solid var(--line, rgba(127,127,127,.2)); }
-#crew-opts.off { opacity: .45; pointer-events: none; }
+#crew-opts.off, #traffic-opts.off { opacity: .45; pointer-events: none; }
 .toggle { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle span { position: absolute; inset: 0; border-radius: 999px; background: rgba(127,127,127,.35); transition: background .15s; cursor: pointer; }

@@ -1137,18 +1137,7 @@ const Settings = {
             airport codes are sent. Once you're at or near an airport, the weather the sim has there wins over any real-world
             report, so ATC never gives you conditions you aren't flying in; the ATIS says when the two differ. Each ATIS shows
             where it's from and how old it is. Takes effect on the next flight.</span></label></div>
-        <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
-        <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
-        <div class="master-row"><div><b>LocalTC's traffic</b> <span class="exp-badge">EXPERIMENTAL</span>
-          <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
-            airline's FSLTL model, the gates fill with the airlines that fly there, as busy as the airport is at that hour, and
-            ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground,
-            and the gate you're given kept clear. <b>Turn MSFS's own air traffic and parked aircraft off</b>
-            (Options &gt; General &gt; Traffic) or both are there. Off: MSFS's traffic as it is.
-            <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></div></div>
-          <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
-        </div>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
@@ -1183,6 +1172,25 @@ const Settings = {
             Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
             anything that fails the checks is said in the script's words.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
+      </div>
+
+      <div class="card">
+        <h3>Traffic</h3>
+        <div class="master-row"><div><b>LocalTC's traffic</b> <span class="exp-badge">EXPERIMENTAL</span>
+          <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
+            airline's FSLTL model, the gates fill with the airlines that fly there, as busy as the airport is at that hour, and
+            ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground,
+            and the gate you're given kept clear. <b>Turn MSFS's own air traffic and parked aircraft off</b>
+            (Options &gt; General &gt; Traffic) or both are there. Off: MSFS's traffic as it is.
+            <span id="traffic-status">${trafficStatus(S.state.traffic_control)}</span></div></div>
+          <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
+        </div>
+        <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
+          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data)</label>
+          <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
+        </div>
+        <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
+        <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
       </div>
 
       <div class="savebar"><span class="muted small" title="${esc(S.settings.path)}">Changes save as you make them.</span><span class="small green" id="saved-note"></span>
@@ -1334,7 +1342,9 @@ const Settings = {
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
-    on("#s-traffic", "change", (e) => this.save("traffic", "enabled", e.target.checked));
+    on("#s-traffic", "change", (e) => { this.save("traffic", "enabled", e.target.checked); $("#traffic-opts")?.classList.toggle("off", !e.target.checked); });
+    on("#s-traffic-scheduled", "change", (e) => this.save("traffic", "scheduled", e.target.checked));
+    on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));

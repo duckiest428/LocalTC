@@ -125,6 +125,9 @@ TURBOPROP_TYPES = ("C208", "PC12", "BE20", "TBM9", "C56X", "E55P")
 CARGO_TYPES = ("B744", "B77L", "MD11", "B763", "A306")
 CARGO_AIRLINES = ("FDX", "UPS", "DHK", "CLX", "GTI", "CKS", "ABX", "BOX", "CAO", "QTR", "ATN")
 HUB_GATES, REGIONAL_GATES = 40, 10  # an airport with this many gates is a hub; under the other, a small field
+# A large "GA" ramp spot at an airline airport is a remote airliner stand (Haneda's scenery calls its 157 remote stands
+# RAMP_GA_LARGE): it gets an airliner of its size, not a light aircraft.
+REMOTE_STAND_M = 18.0
 # Scheduled departures (ops.schedules): each at a gate this long before it's due off it, gone this long after (no
 # transponder by then: delayed past it, or cancelled), the controller's clearance this long before.
 SCHEDULED_BEFORE_S = 45 * 60.0
@@ -219,6 +222,13 @@ class Plane:
     @property
     def live(self) -> bool:
         return self.key.startswith("live:")
+
+
+def _light(title: str) -> bool:
+    """A light aircraft by its title (a Cessna 152/172/182, a Diamond DA20/40/42/62, a Piper): never on a hub's ramp."""
+    t = title.upper()
+    return any(w in t for w in ("C152", "C172", "C182", "DA20", "DA40", "DA42", "DA62", "DIAMOND", "PIPER",
+                                "PA28", "PA-28", "CUB", "SR22", "CIRRUS"))
 
 
 class TrafficManager:
@@ -807,12 +817,16 @@ class TrafficManager:
         models already drawn there when the airport has its few (``PARKED_MODELS``)."""
         used = {} if used is None else used
         gates = self._gates_here
-        if kind.startswith("ramp_ga"):
+        if kind.startswith("ramp_ga") and gates >= REGIONAL_GATES and radius_m >= REMOTE_STAND_M:
+            kind = "remote_stand"  # an airliner's stand by its size (below), the airport's airlines
+        elif kind.startswith("ramp_ga"):
             # What stands on a GA ramp there: business jets at a hub (no Cessnas at Heathrow), turboprops and jets
-            # at a mid-size airport, light aircraft at a small field.
+            # at a mid-size airport, light aircraft only at a small field. None installed of those: left empty, never
+            # a light aircraft in their place.
             types = BIZJET_TYPES if gates >= HUB_GATES else TURBOPROP_TYPES if gates >= REGIONAL_GATES else GA_TYPES
             return self._reuse(used, ("ramp_ga", ""), rng, lambda: next(
-                (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None), None))
+                (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None
+                 and (types is GA_TYPES or not _light(m[0]))), None))
         if kind.startswith("ramp_cargo"):
             def cargo() -> tuple[str, str] | None:  # a cargo airline's colours, else the type unpainted
                 for t in rng.sample(CARGO_TYPES, k=len(CARGO_TYPES)):

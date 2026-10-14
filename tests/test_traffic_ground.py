@@ -149,3 +149,18 @@ def test_a_hubs_ga_ramp_has_business_jets_not_cessnas():
     assert any(t in model[0] for t in BIZJET_TYPES)
     m._gates_here = 2
     assert any(t in m._parked_model("ramp_ga_small", 8.0, {}, random.Random(1))[0] for t in GA_TYPES)
+
+
+def test_a_large_ramp_at_an_airline_airport_is_a_remote_airliner_stand():
+    """Haneda's scenery calls its 157 remote stands RAMP_GA_LARGE: they got light aircraft. An airliner of the stand's
+    size, of the airport's airlines, now."""
+    from collections import Counter
+
+    from localtc.traffic.manager import TYPES_BY_SIZE
+
+    m = manager()
+    m._gates_here = 63
+    model = m._parked_model("ramp_ga_large", 32.0, Counter({"JAL": 5, "ANA": 5}), random.Random(3))
+    assert model is not None and any(t in model[0] for t in TYPES_BY_SIZE["heavy"]), model
+    small = m._parked_model("ramp_ga_small", 8.0, Counter(), random.Random(3))
+    assert small is None or not any(t in small[0] for t in ("C172", "DA62", "DA40", "PA28"))

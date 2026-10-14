@@ -1187,6 +1187,7 @@ const Settings = {
         </div>
         <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
           <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data)</label>
+          <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
         </div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
@@ -1345,6 +1346,7 @@ const Settings = {
     on("#s-traffic", "change", (e) => { this.save("traffic", "enabled", e.target.checked); $("#traffic-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-traffic-scheduled", "change", (e) => this.save("traffic", "scheduled", e.target.checked));
     on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));
+    on("#s-traffic-gates", "change", (e) => this.save("traffic", "fill_gates", e.target.checked));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));

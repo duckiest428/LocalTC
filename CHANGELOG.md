@@ -92,6 +92,7 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **Proper parked aircraft at big airports.** A large ramp spot at an airline airport is a remote airliner stand (Haneda's scenery calls its remote stands GA ramps): it gets an airliner of its size in one of the airport's airlines' colours, not a Cessna or a Diamond. A hub's GA ramps get business jets or stay empty, never light aircraft; those are for small fields. A new switch (Quick Settings → Traffic) fills the gates the departures don't take with parked airliners too.
 - **LocalTC's traffic pointing its nose at the ground on takeoff**: the sim's pitch and bank are the other way round; climbing aircraft now pitch up and bank into their turns.
 - **Taxiing traffic swinging left and right**, and turning round while pushed back: on the ground the nose follows its heading.
 - **Tower clearing other aircraft onto your runway** while you were cleared for takeoff (one at 140 knots into your roll), and LocalTC's aircraft left sitting on your runway ("stop immediately, traffic on the runway"). One on it as you get the runway is taken away.

@@ -100,6 +100,45 @@ def _fix(tokens: list[Token]) -> str | None:
     return None
 
 
+def _hold_at(tokens: list[Token]) -> str | None:
+    """Where a hold is asked for: "request holding at BLAKO" -> "BLAKO"; None: wherever ATC says."""
+    for start in (("hold", "at"), ("holding", "at"), ("hold", "over"), ("holding", "over")):
+        for i in _find_phrase(tokens, start):
+            words = []
+            for token in tokens[i:]:
+                if token.text in FIX_STOP and not words:
+                    continue
+                if token.kind != "word" or token.text in FIX_STOP or len(words) == 2:
+                    break
+                words.append(token.text)
+            if words:
+                return " ".join(words).upper() if len(words) == 1 and len(words[0]) <= 5 else " ".join(words).title()
+    return None
+
+
+NOT_A_HOLD = (("hold", "short"), ("holding", "short"), ("hold", "position"), ("holding", "position"),
+              ("holding", "point"), ("on", "hold"))
+HOLD_REQUESTS = (("request", "hold"), ("request", "holding"), ("requesting", "hold"), ("requesting", "holding"),
+                 ("like", "to", "hold"), ("hold", "as", "published"), ("can", "we", "hold"), ("need", "to", "hold"),
+                 ("holding", "instructions"), ("could", "we", "hold"), ("want", "to", "hold"))
+LEAVE_HOLD = (("leave", "the", "hold"), ("out", "of", "the", "hold"), ("exit", "the", "hold"), ("leaving", "the", "hold"),
+              ("ready", "to", "continue"), ("ready", "to", "proceed"), ("continue", "inbound"))
+BACK_ON_COURSE = (("back", "on", "course"), ("back", "on", "route"), ("back", "on", "track"), ("rejoining",),
+                  ("on", "course", "now"), ("resuming", "own", "navigation"), ("clear", "of", "the", "weather"),
+                  ("clear", "of", "weather"))
+
+
+def _deviation(tokens: list[Token]) -> dict[str, Any]:
+    """ "request 20 degrees left for weather": the side and the degrees (each None when not said)."""
+    side = "left" if _has_any(tokens, ("left",)) else "right" if _has_any(tokens, ("right",)) else None
+    degrees = None
+    for i, token in enumerate(tokens):
+        if token.kind == "number" and token.text.isdigit() and 5 <= int(token.text) <= 90 \
+                and i + 1 < len(tokens) and tokens[i + 1].text in ("degrees", "degree"):
+            degrees = int(token.text)
+    return {"side": side, "degrees": degrees}
+
+
 # A diversion: "request vectors to the nearest suitable airport", "we need to divert to Yuma".
 DIVERT_WORDS = (("divert",), ("diverting",), ("diversion",), ("nearest",), ("closest",), ("alternate",),
                 ("land", "as", "soon", "as", "possible"))
@@ -310,9 +349,24 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         # "Tower, holding short runway 06L" / "holding point Charlie 1" is a departure request; a taxi
         # readback names a route instead.
         add("ready_for_departure", runway=_any_runway(tokens))
-    if _has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"), ("inbound",),
-                ("on", "the", "approach"), ("on", "approach"), ("established",), ("for", "the", "visual"),
-                ("field", "in", "sight"), ("runway", "in", "sight")) or landing:
+    # (Strictly: "holding short" heard as "holding shore", with "we'd like to get the departure", is no hold.)
+    holding = _has_any(tokens, ("hold",), ("holding",)) and not _has_any(tokens, *NOT_A_HOLD, ("runway",))
+    if holding and _has_any(tokens, *LEAVE_HOLD) or _has_any(tokens, *LEAVE_HOLD[:4]):
+        add("request_hold", leave=True)  # "ready to continue" out of a hold asked for
+    elif holding and _has_any(tokens, *HOLD_REQUESTS):
+        add("request_hold", fix=_hold_at(tokens))
+    elif holding and _has_any(tokens, ("in", "the", "hold"), ("in", "holding"), ("established", "holding"),
+                              ("entering", "the", "hold"), ("entering", "hold"), ("in", "the", "holding")):
+        add("report_holding")
+    if _has_any(tokens, ("deviation",), ("deviate",), ("deviating",)) and not _has_any(tokens, ("altitude", "deviation"),
+                                                                                         ("heading", "deviation")):
+        add("request_deviation", **_deviation(tokens))
+    if _has_any(tokens, *BACK_ON_COURSE):
+        add("report_back_on_course")
+    if not holding and (_has_any(tokens, ("mile", "final"), ("miles", "final"), ("on", "final"), ("short", "final"),
+                                 ("inbound",), ("on", "the", "approach"), ("on", "approach"), ("established",),
+                                 ("for", "the", "visual"), ("field", "in", "sight"), ("runway", "in", "sight"))
+                        or landing):
         add("report_final", runway=_any_runway(tokens), option=option)  # also "are we cleared to land?"
     elif _has_any(tokens, *(PATTERN_LEGS if direction == "closed-traffic" else PATTERN_WORDS)) and not _instructed(tokens) \
             and not _has_any(tokens, ("enter",), ("join",), ("make",)):
@@ -417,6 +471,12 @@ COMPATIBLE = [
     {"ready_for_departure", "position_report"},  # "ready for departure, remaining in the pattern"
     {"position_report", "request_runway"},  # "midfield downwind 34, request touch and go"
     {"position_report", "request_turn"},
+    {"request_deviation", "request_direct"},  # "deviating left, then direct BLAKO": the deviation first
+    {"request_deviation", "request_turn"},
+    {"report_back_on_course", "request_direct"},
+    {"request_hold", "request_direct"},
+    {"request_hold", "checkin"},  # "ready to continue out of the hold" ("out of": a check-in's words)
+    {"report_holding", "checkin"},  # "established in the hold at BLAKO, level 120"
 ]
 
 

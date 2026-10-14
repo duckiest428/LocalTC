@@ -232,6 +232,36 @@ describe("radio calls from the phone and the website", () => {
       [["gear down", "crew"], ["radio check", "atc"], ["Ground, radio check", "com2"]]);
   });
 
+  it("takes the phone's EFB commands for the desktop, only the ones it knows", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    const gate = { action: "gate", gate: "B25" };
+    expect((await call("POST", "/v1/live/say", { to: "efb", command: gate }, bearer(token))).status).toBe(200);
+    expect((await call("POST", "/v1/live/say", { to: "efb", command: { action: "shutdown" } }, bearer(token))).status).toBe(400);
+    expect((await call("POST", "/v1/live/say", { to: "efb", command: { action: "scratchpad", text: "x".repeat(3000) } },
+      bearer(token))).status).toBe(413);
+    const answer = await data(await call("GET", "/v1/live/calls", undefined, bearer(token)));
+    expect(answer.calls.map((c: { text: string; to: string }) => [JSON.parse(c.text), c.to])).toEqual([[gate, "efb"]]);
+  });
+
+  it("passes the EFB on with the map, its own parts only, and forgets it", async () => {
+    const { token } = await signIn();
+    await call("PUT", "/v1/live", cruise, bearer(token));
+    const ws = await call("GET", "/v1/live/ws", undefined, { ...bearer(token), Upgrade: "websocket" });
+    const socket = ws.webSocket!;
+    const got: any[] = [];
+    socket.accept();
+    socket.addEventListener("message", (e) => got.push(JSON.parse(e.data as string)));
+    const efb = { checklist: { id: "before_start", status: "waiting" }, scratchpad: [{ id: "1", text: "SQ 4521" }], secret: "no" };
+    expect((await call("PUT", "/v1/live/map", { efb }, bearer(token))).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    const sent = got.find((m) => m.type === "efb").data;
+    expect(sent.checklist.id).toBe("before_start");
+    expect(sent).not.toHaveProperty("secret");
+    expect((await call("PUT", "/v1/live/map", { efb: { scratchpad: ["x".repeat(100 * 1024)] } }, bearer(token))).status).toBe(413);
+    socket.close();
+  });
+
   it("is refused when nothing is flying, or there's nothing to say", async () => {
     const { token } = await signIn();
     expect((await call("POST", "/v1/live/say", { text: "radio check" }, bearer(token))).status).toBe(409);

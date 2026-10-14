@@ -87,3 +87,32 @@ def fits_stand(radius_m: float, span_m: float) -> bool:
     """A parking spot of this radius takes the aircraft (a radius or span not known: it does). The sim's radius is
     half the largest span it takes, give or take a metre."""
     return radius_m <= 0 or span_m <= 0 or span_m / 2 <= radius_m + 1.0
+
+
+# ICAO wake turbulence categories (Doc 8643): J super, H heavy (136 t or more), M medium, L light (7 t or less).
+SUPER = {"A388", "A225"}
+HEAVY_FAMILIES = ("A30", "A31", "A33", "A34", "A35", "B74", "B76", "B77", "B78")
+HEAVY_TYPES = {"MD11", "DC10", "C17", "A400", "IL76", "A124", "C5", "C5M", "K35R", "KC10"}
+HEAVY_EXCEPT = {"A318", "A319", "A31N", "A19N"}  # A31x: the A310 is heavy, the A318/A319 aren't
+
+
+def wake_category(aircraft_type: str) -> str:
+    """The wake category, "J", "H", "M" or "L", of a type designator or a sim's title ("" when not known)."""
+    code = designator(aircraft_type) or (aircraft_type or "").strip().upper()
+    if not code:
+        return ""
+    if code in SUPER:
+        return "J"
+    if code in HEAVY_TYPES or (code not in HEAVY_EXCEPT and code.startswith(HEAVY_FAMILIES)):
+        return "H"
+    span = WINGSPAN_M.get(code, 0.0)
+    if span:
+        return "L" if span < 15.0 and code[:1] in ("C", "P", "S", "D", "B", "T", "E", "H", "L") and code not in (
+            "C25A", "C25B", "C56X", "C680", "C700", "CL30", "CL35", "CL60", "E55P", "BE20", "PC12") else "M"
+    return ""
+
+
+def heavier(leader: str, follower: str) -> bool:
+    """Whether ``leader``'s wake is one ``follower`` is separated from (a heavier category: J > H > M > L)."""
+    order = {"J": 3, "H": 2, "M": 1, "L": 0}
+    return leader in order and follower in order and order[leader] > order[follower] and order[leader] >= 2

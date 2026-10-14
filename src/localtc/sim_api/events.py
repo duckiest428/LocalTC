@@ -236,6 +236,29 @@ class OpsSnapshot(Event, tag="ops_snapshot"):
     data: str = ""
 
 
+class TerrainGrid(Event, tag="terrain_grid"):
+    """The highest ground in each square of a grid around a place (the app's terrain tiles), for the ATC's minimum
+    altitudes: ``ft`` row by row from the south-west corner (``lat0``, ``lon0``), each cell ``dlat`` by ``dlon``
+    degrees, -1 where it isn't known. Recorded, so a replay's ATC has the same ground."""
+
+    lat0: float
+    lon0: float
+    dlat: float
+    dlon: float
+    rows: int
+    cols: int
+    ft: tuple[int, ...] = ()
+    source: str = ""
+
+
+class AtcOperations(Event, tag="atc_operations"):
+    """What ATC is working the flight to beyond the clearances, as structured state for the app's and the
+    companion's maps and the replay (JSON in ``data``): the conditions on its clearances (``atc_core.conditions``),
+    a hold and the sequence (``atc_core.holds``), route amendments and deviations, the terrain minimum around it."""
+
+    data: str = ""
+
+
 class ChecklistState(Event, tag="checklist_state"):
     """A checklist the copilot is reading: started, waiting for the captain's answer, held on an item the aircraft
     shows wrong, an item skipped, paused, resumed, completed. ``data``: the whole checklist as it stands (JSON: each
@@ -549,10 +572,10 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
                  TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
-                 OpsSnapshot]
+                 OpsSnapshot, TerrainGrid]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
-                 AtcThinking, AtcDecision, FlightArrived]
+                 AtcThinking, AtcDecision, FlightArrived, AtcOperations]
 AppEvent = Union[SessionNote]
 CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
                   ChecklistState]

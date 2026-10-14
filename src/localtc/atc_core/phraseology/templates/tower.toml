@@ -141,3 +141,49 @@ pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
 id = "tower.stop_takeoff"
 controller = "tower"
 text = ["{callsign}, stop immediately, I say again, stop immediately, traffic on the runway."]
+
+# --- conditional clearances (atc_core/conditions.py) -----------------------------------------------------------
+
+# ICAO's conditional line-up: the condition first, and "behind" again at the end; it's read back with the condition.
+# (The FAA never conditions a line-up: the departure holds short.)
+[[template]]
+id = "tower.luaw_behind"
+controller = "tower"
+text = ["{callsign}, behind {message}, runway {runway}, line up and wait behind."]
+readback = { required = ["line_up_and_wait", "behind"], optional = ["runway"] }
+pilot_readback = "Behind the landing traffic, runway {runway}, line up and wait behind, {callsign_short}."
+
+# On the runway before the traffic it was to wait behind has passed.
+[[template]]
+id = "tower.hold_position_traffic"
+controller = "tower"
+text = ["{callsign}, hold position, {message}."]
+readback = { required = ["hold_position"] }
+pilot_readback = "Holding position, {callsign_short}."
+
+# "No delay" not kept to, with an arrival coming: the takeoff clearance taken back.
+[[template]]
+id = "tower.cancel_takeoff"
+controller = "tower"
+text = ["{callsign}, hold position, cancel takeoff clearance, {message}."]
+readback = { required = ["hold_position"] }
+pilot_readback = "Holding position, {callsign_short}."
+
+# Behind a heavy that just departed the same runway: the wake time first.
+[[template]]
+id = "tower.hold_wake"
+controller = "tower"
+text = ["{callsign}, hold for wake turbulence, {message}, about {minutes} minutes.",
+        "{callsign}, wake turbulence separation, {message}, expect departure in {minutes} minutes."]
+
+# Number two, closing on the one ahead.
+[[template]]
+id = "tower.follow_slow"
+controller = "tower"
+text = ["{callsign}, reduce to final approach speed, {message}."]
+
+# On final with the landing traffic still on the runway: the landing clearance comes once it's off.
+[[template]]
+id = "tower.continue_traffic"
+controller = "tower"
+text = ["{callsign}, continue, {message}.", "{callsign}, continue, expect late landing clearance, {message}."]

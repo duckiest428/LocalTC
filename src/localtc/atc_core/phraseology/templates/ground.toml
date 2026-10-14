@@ -155,3 +155,29 @@ text = ["{callsign}, hold position, give way to the {message}.", "{callsign}, gi
 id = "ground.follow"
 controller = "ground"
 text = ["{callsign}, give way to the {message}, then follow it.", "{callsign}, follow the {message}."]
+
+# --- runway crossings with landing traffic (atc_core/conditions.py) --------------------------------------------
+
+# ICAO: across behind the landing traffic, read back with the condition.
+[[template]]
+id = "ground.cross_behind"
+controller = "ground"
+text = ["{callsign}, behind {message}, cross runway {runway} behind."]
+readback = { required = ["behind", "runway"] }
+pilot_readback = "Behind the landing traffic, cross runway {runway} behind, {callsign_short}."
+
+# The FAA: held short for it, then crossed (ground.cross_runway).
+[[template]]
+id = "ground.hold_short_landing"
+controller = "ground"
+text = ["{callsign}, hold short runway {hold_short}, {message}."]
+readback = { required = ["hold_short"] }
+pilot_readback = "Holding short runway {hold_short}, {callsign_short}."
+
+# An arrival a few miles out: across quickly.
+[[template]]
+id = "ground.cross_expedite"
+controller = "ground"
+text = ["{callsign}, cross runway {runway}, expedite, {message}.", "{callsign}, cross runway {runway} without delay, {message}."]
+readback = { required = ["runway"] }
+pilot_readback = "Cross runway {runway}, expediting, {callsign_short}."

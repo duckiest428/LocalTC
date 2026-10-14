@@ -219,6 +219,9 @@ cleared_to_land = "cleared to land"
 hold_position = "hold position"
 descend_via = "descend via"
 fix = "direct {fix}"
+behind = "behind the landing traffic"
+hold = "hold"
+efc = "expect further clearance {efc}"
 
 [[template]]
 id = "common.radio_check"
@@ -285,3 +288,47 @@ controller = "any"
 text = ["{callsign}, turn {turn} heading {heading}, {destination} {distance} miles.", "{callsign}, turn {turn} heading {heading}, vectors to {destination}."]
 readback = { required = ["heading"] }
 pilot_readback = "Turn {turn} heading {heading}, {callsign_short}."
+
+# --- holds (atc_core/holds.py, holding.py) ---------------------------------------------------------------------
+
+[[template]]
+id = "common.hold"
+controller = "any"
+text = ["{callsign}, hold at {fix}, inbound course {heading}, {turn} turns, maintain {altitude}, expect further clearance {efc}, {message}.",
+        "{callsign}, hold at {fix} as depicted, inbound course {heading}, {turn} turns, maintain {altitude}, {message}, expect further clearance {efc}."]
+readback = { required = ["hold", "fix", "altitude"], optional = ["efc"] }
+pilot_readback = "Hold at {fix}, inbound {heading}, {turn} turns, maintain {altitude}, expect further clearance {efc}, {callsign_short}."
+
+# The sim's time of day not known: the EFC in minutes.
+[[template]]
+id = "common.hold_minutes"
+controller = "any"
+text = ["{callsign}, hold at {fix}, inbound course {heading}, {turn} turns, maintain {altitude}, expect further clearance in {minutes} minutes, {message}."]
+readback = { required = ["hold", "fix", "altitude"] }
+pilot_readback = "Hold at {fix}, inbound {heading}, {turn} turns, maintain {altitude}, {callsign_short}."
+
+# A new place in the sequence or a new EFC.
+[[template]]
+id = "common.hold_update"
+controller = "any"
+text = ["{callsign}, {message}, expect further clearance {efc}.", "{callsign}, now {message}, revised expect further clearance {efc}."]
+readback = { required = ["efc"] }
+pilot_readback = "Expect further clearance {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update_minutes"
+controller = "any"
+text = ["{callsign}, {message}, expect further clearance in {minutes} minutes."]
+
+[[template]]
+id = "common.leave_hold"
+controller = "any"
+text = ["{callsign}, leave the hold, proceed direct {fix}.", "{callsign}, cleared out of the hold, proceed direct {fix}."]
+readback = { required = ["fix"] }
+pilot_readback = "Leaving the hold, direct {fix}, {callsign_short}."
+
+# Below the minimum altitude where it is, off the final approach (the minimum safe altitude warning).
+[[template]]
+id = "common.low_altitude"
+controller = "any"
+text = ["{callsign}, low altitude alert, check your altitude immediately, the minimum altitude in your area is {altitude}."]

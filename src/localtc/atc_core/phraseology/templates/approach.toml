@@ -162,3 +162,11 @@ controller = "approach"
 text = ["{callsign}, cleared {approach} approach."]
 readback = { required = ["approach"] }
 pilot_readback = "Cleared {approach} approach, {callsign_short}."
+
+# A speed for the spacing on final, kept to until five miles out (atc_core/conditions.py).
+[[template]]
+id = "approach.speed_until"
+controller = "approach"
+text = ["{callsign}, maintain {speed} knots until five mile final.", "{callsign}, reduce speed to {speed} knots, maintain until five mile final."]
+readback = { required = ["speed"] }
+pilot_readback = "{speed} knots until five mile final, {callsign_short}."

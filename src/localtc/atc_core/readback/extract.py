@@ -693,11 +693,16 @@ def destination(tokens: list[Token], expected: Any = None) -> list[str]:
     return [expected] if significant and all(w in words for w in significant) else []
 
 
+# Where a fix's name follows: "direct BLAKO", "hold at BLAKO", "cross BLAKO at 10,000".
+FIX_STARTS = (("direct",), ("hold", "at"), ("holding", "at"), ("hold", "over"), ("holding", "over"), ("cross",),
+              ("crossing",))
+
+
 def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
-    """ "direct BLAKO": the words after "direct", compared loosely with the fix ATC gave."""
+    """ "direct BLAKO" (or "hold at", "cross"): the words after it, compared loosely with the fix ATC gave."""
     words = _words(tokens)
     found = []
-    for i in _find_phrase(tokens, ("direct",)):
+    for i in sorted({i for start in FIX_STARTS for i in _find_phrase(tokens, start)}):
         rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
         # Spelled out a letter at a time ("direct K, E, B, G, O"): the letters together.
         letters = []
@@ -739,6 +744,19 @@ def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
 FIX_LIKENESS = 0.8  # a fix's name as heard this like the one given (ANTEG, "A TEG": 0.89) is that one
 
 
+def efc_times(tokens: list[Token], expected: Any = None) -> list[str]:
+    """A hold's expected further clearance time: the four digits after "further clearance" (or "EFC")."""
+    found = []
+    for start in (("further", "clearance"), ("further", "clearance", "at"), ("efc",), ("clearance", "time")):
+        for i in _find_phrase(tokens, start):
+            for token in tokens[i:i + 3]:
+                digits = "".join(c for c in token.text if c.isdigit())
+                if token.kind == "number" and len(digits) in (3, 4):
+                    found.append(digits.zfill(4))
+                    break
+    return list(dict.fromkeys(found))
+
+
 ELEMENTS: dict[str, Extractor] = {
     "runway": runways,
     "hold_short": hold_short,
@@ -764,6 +782,9 @@ ELEMENTS: dict[str, Extractor] = {
                               ("great", "to", "land"), ("clean", "to", "land"), ("cleat", "to", "land"), ("clear", "land"),
                               ("cleared", "for", "landing"), ("clear", "for", "landing")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),
+    "behind": phrase(("behind",)),  # a conditional clearance is read back with its condition
+    "hold": phrase(("hold",), ("holding",)),
+    "efc": efc_times,
     "descend_via": phrase(("descend", "via"), ("descending", "via"), ("descent", "via"), ("down", "via"),
                           ("on", "via"), ("send", "via"), ("sent", "via")),  # "this on via", "the send via"
 }

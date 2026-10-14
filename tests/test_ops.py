@@ -171,3 +171,24 @@ def test_terrain_tiles_read_and_only_what_is_here(tmp_path):
 def test_areas_contain_points():
     a = Area(id="r1", kind="restricted", name="R-1", polygon=((0, 0), (0, 1), (1, 1), (1, 0)))
     assert a.contains(0.5, 0.5) and not a.contains(2, 2)
+
+
+def test_the_hazards_atc_routes_around_are_the_active_ones_near_the_flight(tmp_path):
+    from localtc.ops.restrictions import Area
+    from localtc.ops.service import OpsData
+    from localtc.ops.weather import Sigmet
+
+    data = OpsData(tmp_path, DataKeys(memory={}), clock=lambda: 1000.0)
+    ts = Sigmet("S1", "sigmet", "TS", "", ((47.0, -122.0), (47.0, -121.0), (48.0, -121.0)), None, 40000, 0.0, 5000.0,
+                "KZSE", "")
+    old = Sigmet("S2", "sigmet", "TURB", "", ((47.0, -122.0), (47.0, -121.0), (48.0, -121.0)), None, None, 0.0, 500.0,
+                 "KZSE", "")
+    far = Sigmet("S3", "sigmet", "TS", "", ((10.0, 10.0), (10.0, 11.0), (11.0, 11.0)), None, None, 0.0, 5000.0, "X", "")
+    data.weather.sigmets = lambda: ([ts, old, far], None)
+    tfr = Area("T1", "tfr", "Stadium", ((47.5, -122.3), (47.5, -122.2), (47.6, -122.2)), 0, 3000, None, 2000.0)
+    later = Area("T2", "tfr", "Later", ((47.5, -122.3), (47.5, -122.2), (47.6, -122.2)), 0, 3000, 5000.0, None)
+    data.restrictions.tfrs = lambda: ([tfr, later], None)
+    data.restrictions.airspace = lambda lat, lon: ([], None)
+    got = data.hazards([(47.4, -122.3)])
+    assert [h["id"] for h in got] == ["S1", "T1"]
+    assert data.hazards([(47.4, -122.3)], weather=False, restrictions=False) == []

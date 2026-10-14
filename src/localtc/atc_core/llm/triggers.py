@@ -45,7 +45,9 @@ OWNS_WORD = {"ready_to_taxi": {"request"}, "request_taxi_parking": {"request"}, 
              "request_direct": {"request", "requesting", "direct"}, "request_vectors": {"request", "requesting", "vectors"},
              "request_runway": {"request", "requesting"}, "request_return": {"request", "requesting", "return", "returning"},
              "request_diversion": {"request", "requesting", "divert", "diverting"}, "going_around": {"missed"},
-             "report_conditions": {"turbulence", "chop", "icing"}, "report_problem": {"problem", "failure"}}
+             "report_conditions": {"turbulence", "chop", "icing"}, "report_problem": {"problem", "failure"},
+             "request_deviation": {"request", "requesting", "deviation", "deviate", "deviating"},
+             "request_hold": {"request", "requesting", "delay"}}
 
 REASONS = ("emergency", "question", "parser_failure", "ambiguous", "readback_rejected", "compound", "self_correction",
            "hesitation", "callsign", "non_numeric", "out_of_phase", "out_of_grammar", "low_confidence", "digits_unsure")

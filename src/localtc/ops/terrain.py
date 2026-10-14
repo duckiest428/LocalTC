@@ -21,6 +21,7 @@ from localtc.ops.fetch import USER_AGENT
 log = logging.getLogger(__name__)
 
 TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+GRID_CELL_NM = 2.0  # the ATC's terrain: the highest ground in squares this size (TerrainGrid)
 ZOOM = 9  # ~300 m a pixel at the equator, 76 km a tile: fine enough for minimum altitudes, few tiles to fetch
 M_TO_FT = 3.28084
 
@@ -125,6 +126,41 @@ class Terrain:
             return None
         px, py = min(255, int((x % 1) * 256)), min(255, int((y % 1) * 256))
         return int(tile[py, px])
+
+    def grid(self, lat: float, lon: float, radius_nm: float, cell_nm: float = GRID_CELL_NM) -> dict | None:
+        """The highest ground in each ``cell_nm`` square around a point, for the ATC (``TerrainGrid``): {"lat0",
+        "lon0" (the south-west corner), "dlat", "dlon" (a cell), "rows", "cols", "ft" (row by row from the south,
+        -1 where it isn't known)}; None when none of it is known here."""
+        n = max(1, int(math.ceil(radius_nm / cell_nm)))
+        dlat = cell_nm / 60.0
+        dlon = cell_nm / 60.0 / max(0.1, math.cos(math.radians(lat)))
+        lat0, lon0 = lat - n * dlat, lon - n * dlon
+        rows = cols = 2 * n
+        out = np.full((rows, cols), -1, dtype=np.int32)
+        x0, y0 = tile_xy(lat0 + rows * dlat, lon0)
+        x1, y1 = tile_xy(lat0, lon0 + cols * dlon)
+        z = 2 ** ZOOM
+        known = False
+        for tx in range(int(x0), int(x1) + 1):
+            for ty in range(int(y0), int(y1) + 1):
+                tile = self._tile(ZOOM, tx, ty)
+                if tile is None:
+                    continue
+                known = True
+                px = tx + (np.arange(256) + 0.5) / 256
+                py = ty + (np.arange(256) + 0.5) / 256
+                plon = px / z * 360.0 - 180.0
+                plat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * py / z))))
+                col = np.floor((plon - lon0) / dlon).astype(np.int64)
+                row = np.floor((plat - lat0) / dlat).astype(np.int64)
+                cc, rr = np.meshgrid(col, row)
+                inside = (cc >= 0) & (cc < cols) & (rr >= 0) & (rr < rows)
+                if inside.any():
+                    np.maximum.at(out, (rr[inside], cc[inside]), tile[inside])
+        if not known:
+            return None
+        return {"lat0": round(lat0, 6), "lon0": round(lon0, 6), "dlat": dlat, "dlon": dlon, "rows": rows, "cols": cols,
+                "ft": [int(v) for v in out.ravel()]}
 
     def highest_ft(self, lat: float, lon: float, radius_nm: float) -> int | None:
         """The highest ground within ``radius_nm`` of a point (None: some of it isn't known here)."""

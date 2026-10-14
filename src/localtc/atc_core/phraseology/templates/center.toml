@@ -101,3 +101,27 @@ text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {stat
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 
+# --- dynamic routing (atc_core/routing.py) --------------------------------------------------------------------
+
+# The route ahead through an active restricted area or TFR: vectors around it, then direct the fix beyond it.
+[[template]]
+id = "center.reroute"
+controller = "center"
+text = ["{callsign}, turn {turn} heading {heading}, {message}, when able proceed direct {fix}."]
+readback = { required = ["heading"], optional = ["fix"] }
+pilot_readback = "Turn {turn} heading {heading}, then direct {fix}, {callsign_short}."
+
+# A deviation for weather going on a long time.
+[[template]]
+id = "center.advise_direct"
+controller = "center"
+text = ["{callsign}, advise when able to proceed direct {fix}."]
+
+# Without a STAR: the descent with the arrival's crossing restriction.
+[[template]]
+id = "center.descend_cross"
+controller = "center"
+text = ["{callsign}, cross {fix} at {altitude}, descend at pilot's discretion, expect {approach} approach.",
+        "{callsign}, descend at pilot's discretion, cross {fix} at {altitude}, expect {approach} approach."]
+readback = { required = ["fix", "altitude"] }
+pilot_readback = "Cross {fix} at {altitude}, pilot's discretion, {callsign_short}."

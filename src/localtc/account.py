@@ -283,7 +283,10 @@ class Account:
         for call in (data or {}).get("calls") or ():
             text = call.get("text") if isinstance(call, dict) else None
             if isinstance(text, str) and text.strip():
-                to = "crew" if call.get("to") == "crew" else "atc"
+                if call.get("to") == "efb":  # a command from the phone's EFB, as JSON
+                    self.calls.append((text.strip()[:2000], "efb"))
+                    continue
+                to = call.get("to") if call.get("to") in ("crew", "com2") else "atc"
                 self.calls.append((text.strip()[:300], to))
 
     def take_calls(self) -> list[tuple[str, str]]:
@@ -309,10 +312,11 @@ class Account:
         data = self._call("PUT", f"/v1/live/clip/{key}", wav)
         self._relayed(data)
 
-    def live_map(self, *, route: dict | None = None, zones: dict | None = None, clear: tuple[str, ...] = ()) -> None:
-        """The flight plan's route and the Live Map's ATC zones for a phone or the Flight Tracker watching
+    def live_map(self, *, route: dict | None = None, zones: dict | None = None, efb: dict | None = None,
+                 clear: tuple[str, ...] = ()) -> None:
+        """The flight plan's route, the Live Map's ATC zones and the EFB for a phone or the Flight Tracker watching
         through the server. Held in memory there, never stored; ``clear`` names the ones now gone."""
-        body: dict = {k: v for k, v in (("route", route), ("zones", zones)) if v is not None}
+        body: dict = {k: v for k, v in (("route", route), ("zones", zones), ("efb", efb)) if v is not None}
         body.update({k: None for k in clear})
         data = self._call("PUT", "/v1/live/map", body)
         self._relayed(data)

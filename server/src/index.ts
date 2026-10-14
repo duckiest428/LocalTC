@@ -6,6 +6,7 @@
  * chose to share. There are no passwords: signing in is a code or link sent by email. See README.md.
  */
 import * as auth from "./auth";
+import * as chartfox from "./chartfox";
 import type { Env } from "./env";
 import * as flights from "./flights";
 import { HttpError, cors, json } from "./http";
@@ -64,6 +65,11 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/live\/clip\/(\w+)$/, signedIn((env, req, a, _u, p) => live.getClip(env, req, a, p[0]))],
   ["PUT", /^\/v1\/live\/connect$/, signedIn((env, req, a) => live.putConnect(env, req, a))],
   ["GET", /^\/v1\/live\/connect$/, signedIn((env, _req, a) => live.getConnect(env, a))],
+  // ChartFox sign-in for the app: the client secret stays here (src/chartfox.ts). No account needed.
+  ["GET", /^\/v1\/chartfox\/authorize$/, (env, req, url) => chartfox.authorize(env, req, url)],
+  ["GET", /^\/v1\/chartfox\/callback$/, (env, req, url) => chartfox.callback(env, req, url)],
+  ["POST", /^\/v1\/chartfox\/token$/, (env, req) => chartfox.token(env, req)],
+  ["POST", /^\/v1\/chartfox\/refresh$/, (env, req) => chartfox.refresh(env, req)],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],
   ["DELETE", /^\/v1\/push-tokens\/(\w+)$/, signedIn((env, _req, a, _u, p) => live.removePushToken(env, a, p[0]))],
 ];
@@ -103,5 +109,6 @@ export default {
 
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     await auth.cleanup(env);
+    await chartfox.cleanup(env);
   },
 } satisfies ExportedHandler<Env>;

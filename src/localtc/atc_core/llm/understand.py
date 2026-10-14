@@ -104,6 +104,8 @@ runway or approach: ILS LOC RNAV VOR NDB VISUAL), request_return, request_divers
 missed approach), report_conditions (turbulence, icing, the ride: conditions), traffic_report (in sight, \
 looking, no contact), report_standard (altimeter standard, QNE, 29.92, 1013), request_flight_following, \
 request_class_b, radio_check, pleasantry (small talk), report_problem (a failure, not an emergency), \
+request_hold (holding asked for; fix), report_holding (established in the hold), request_deviation (for weather: \
+side, degrees), report_back_on_course, \
 say_again (asks ATC to repeat, even naming what), acknowledge (roger, wilco, thanks), emergency (mayday, pan-pan, smoke, fire, medical), other.
 topic: altimeter, wind (winds, gusts), weather, runway, squawk, altitude, frequency, atis, other."""
 
@@ -114,7 +116,8 @@ INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "reques
            "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
            "request_return", "request_diversion", "going_around", "report_conditions", "traffic_report",
            "report_standard", "request_flight_following", "request_class_b", "radio_check", "pleasantry",
-           "report_problem", "say_again", "acknowledge", "emergency", "other"]
+           "report_problem", "say_again", "acknowledge", "emergency", "request_hold", "report_holding",
+           "request_deviation", "report_back_on_course", "other"]
 TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "other"]
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
 VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "squawk", "heading", "approach")

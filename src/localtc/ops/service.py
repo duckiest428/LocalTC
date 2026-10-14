@@ -18,12 +18,13 @@ from localtc.ops.notams import Notams, notices_of
 from localtc.ops.restrictions import Area, Restrictions
 from localtc.ops.terrain import Terrain
 from localtc.ops.weather import Weather
-from localtc.sim_api import NoticeItem, NoticesReport, OpsSnapshot
+from localtc.sim_api import NoticeItem, NoticesReport, OpsSnapshot, TerrainGrid
 
 log = logging.getLogger(__name__)
 
 EVERY_S = 60.0  # how often the background loop looks (each source's cache keeps its own pace)
 TERRAIN_NM = 40.0  # the terrain fetched this far around the aircraft (and the airports)
+HAZARDS_NM = 300.0  # the SIGMETs, TFRs and areas ATC works to this far around the aircraft and the destination
 NEAR_NM = 250.0  # SIGMETs, TFRs and areas shown this far around the aircraft
 
 
@@ -86,6 +87,33 @@ class OpsData:
                 "airspace_meta": meta(area_got, "" if self.keys.has("openaip") else "no openAIP key (Settings > Data)"),
                 "radar": self.weather.radar()}
 
+    def hazards(self, places: list[tuple[float, float]], *, weather: bool = True, restrictions: bool = True) -> list[dict]:
+        """What ATC routes around, active now near ``places`` (the aircraft, the destination): the SIGMETs (and
+        AIRMETs), the TFRs, and the restricted, prohibited and danger areas, each with its outline and levels."""
+        now = self.clock()
+        out: list[dict] = []
+        sigmets, _ = self.weather.sigmets() if weather else ([], None)
+        for s in sigmets:
+            if s.valid_from <= now <= s.valid_to and any(_near(s.polygon, lat, lon, HAZARDS_NM) for lat, lon in places):
+                out.append({"id": s.id, "kind": s.kind, "name": s.fir, "hazard": s.hazard, "polygon": [list(p) for p in s.polygon],
+                            "floor_ft": s.base_ft, "ceiling_ft": s.top_ft})
+        areas, _ = self.restrictions.tfrs() if restrictions else ([], None)
+        for lat, lon in places[:1] if restrictions else ():
+            more, _ = self.restrictions.airspace(lat, lon)
+            areas = [*areas, *more]
+        seen = set()
+        for a in areas:
+            kind = a.kind.lower()
+            if a.id in seen or kind not in ("tfr", "restricted", "prohibited", "danger"):
+                continue
+            if (a.start is not None and a.start > now) or (a.end is not None and a.end < now):
+                continue
+            if any(_near(a.polygon, lat, lon, HAZARDS_NM) for lat, lon in places):
+                seen.add(a.id)
+                out.append({"id": a.id, "kind": kind, "name": a.name, "hazard": "", "polygon": [list(p) for p in a.polygon],
+                            "floor_ft": a.floor_ft, "ceiling_ft": a.ceiling_ft})
+        return out
+
     def notices_report(self, icao: str, t: float) -> NoticesReport | None:
         """An airport's real NOTAMs as ATC works to them, or None without them (no key, none known)."""
         notams, got = self.notam_source.for_airport(icao)
@@ -97,12 +125,12 @@ class OpsData:
         return NoticesReport(t=t, icao=icao.upper(), notices=items, source=got.source, count=len(notams))
 
 
-def _near(polygon, lat: float, lon: float) -> bool:
+def _near(polygon, lat: float, lon: float, within_nm: float = NEAR_NM) -> bool:
     import math
 
     for plat, plon in polygon:
         d = math.hypot(plat - lat, (plon - lon) * math.cos(math.radians(lat))) * 60
-        if d <= NEAR_NM:
+        if d <= within_nm:
             return True
     return False
 
@@ -115,6 +143,7 @@ class OpsService:
         self.data, self.bus, self.flight, self.cfg = data, bus, flight, cfg
         self._told: dict[str, tuple] = {}
         self._terrain_done: set = set()
+        self._hazards_told: str | None = None
 
     async def run(self) -> None:
         try:
@@ -149,6 +178,23 @@ class OpsService:
                     continue
                 self._terrain_done.add(key)
                 await asyncio.to_thread(self.data.terrain.fetch_around, lat, lon, TERRAIN_NM)
+                # To the ATC (and the recording): the highest ground in each 2-mile square around here.
+                grid = await asyncio.to_thread(self.data.terrain.grid, lat, lon, TERRAIN_NM)
+                if grid is not None:
+                    self.bus.publish(TerrainGrid(t=t, lat0=grid["lat0"], lon0=grid["lon0"], dlat=grid["dlat"],
+                                                 dlon=grid["dlon"], rows=grid["rows"], cols=grid["cols"],
+                                                 ft=tuple(grid["ft"]), source="Terrain Tiles (AWS Open Data)"))
+        if getattr(self.cfg, "restrictions", True) or getattr(self.cfg, "weather", True):
+            places = [(own.lat, own.lon)] if own is not None else []
+            places += list(f.get("places", ()))[-1:]  # the destination's
+            if places:
+                found = await asyncio.to_thread(self.data.hazards, places, weather=getattr(self.cfg, "weather", True),
+                                                restrictions=getattr(self.cfg, "restrictions", True))
+                data = json.dumps(found, sort_keys=True)
+                if data != self._hazards_told:
+                    self._hazards_told = data
+                    self.bus.publish(OpsSnapshot(t=t, kind="hazards", key="route", source="aviationweather.gov, FAA, openAIP",
+                                                 got=time.time(), data=data))
 
 
 def msgspec_dict(item) -> dict:

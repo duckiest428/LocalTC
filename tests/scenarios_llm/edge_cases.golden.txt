@@ -34,11 +34,7 @@
 [   845.0] PILOT     124.675: Pilot's discretion, descend and maintain three thousand, Cessna two lima tango.
 [   845.0] READBACK  center.descend_pd correct
 [   935.0] PILOT     124.675: Seattle Center, two lima tango, request a deviation twenty degrees left for weather
-[   935.0] LLM       understand invalid: {"kind": "request", "intent": "request_altitude", "altitude": "35000"} (request_altitude needs a word like altitude, climb, descend, descent, feet, and the pilot said none; pick the intent that matches the words, or other if none does)
-[   935.0] LLM       understand used: {"kind": "request", "intent": "other"}
-[   935.0] LLM       phrase invalid: {"reply":"deviation approved, proceed direct Boeing Field"} (reply gives an instruction (approved, proceed); only answer or say unable)
-[   935.0] LLM       phrase used: {"reply":"unable at this time, continue as filed"}
-[   938.0] ATC       Seattle Departure 124.675: Cessna 2LT, unable at this time, continue as filed.
+[   938.0] ATC       Seattle Departure 124.675: Cessna 2LT, deviation 20 degrees left approved, advise when back on course.
 [   975.0] PILOT     124.675: any chance of higher, six thousand?
 [   975.0] LLM       understand used: {"kind": "request", "intent": "request_altitude", "altitude": "6000"}
 [   977.0] ATC       Seattle Departure 124.675: Cessna 2LT, climb and maintain 6,000.

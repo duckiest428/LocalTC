@@ -160,7 +160,20 @@ function list<T>(v: unknown, max: number, each: (x: Obj) => T): T[] {
 }
 const station = (s: Obj) => ({ station: text(s.station), controller: text(s.controller, 20), mhz: num(s.mhz) });
 
-export interface LiveMap { route?: Obj | null; zones?: Obj | null }
+export interface LiveMap { route?: Obj | null; zones?: Obj | null; efb?: Obj | null }
+
+const MAX_EFB = 96 * 1024;
+const EFB_KEYS = ["checklist", "ops", "atc", "scratchpad", "achievements", "chartfox", "briefings", "charts"] as const;
+
+/** The EFB as the desktop has it for the flight (src/localtc/ui/efb_api.py ``state``): only its own parts, and not
+ * too big. Held in memory like the rest of the map. */
+export function cleanEfb(raw: unknown): Obj | null {
+  const e = obj(raw);
+  if (!e) return null;
+  const out = pick(e, EFB_KEYS) as Obj;
+  if (JSON.stringify(out).length > MAX_EFB) throw new HttpError(413, "The EFB is too big.");
+  return out;
+}
 
 /** The flight plan's route and the Live Map's ATC layer (the desktop's ui/zones.py), field by field. */
 export function cleanMap(raw: Obj): LiveMap {
@@ -201,7 +214,8 @@ export function cleanMap(raw: Obj): LiveMap {
       })),
     };
   }
-  if (JSON.stringify(out).length > MAX_MAP) throw new HttpError(413, "The map is too big.");
+  if ("efb" in raw) out.efb = cleanEfb(raw.efb);
+  if (JSON.stringify(out).length > MAX_MAP + MAX_EFB) throw new HttpError(413, "The map is too big.");
   return out;
 }
 
@@ -262,11 +276,21 @@ export function pushFor(before: Status | null, after: Status): { title: string; 
   return null;
 }
 
-/** Who a typed call is for: ATC on COM1 ("atc"), on COM2 ("com2"), or the copilot on the intercom ("crew"). */
-export type Listener = "atc" | "com2" | "crew";
+/** Who a typed call is for: ATC on COM1 ("atc"), on COM2 ("com2"), the copilot on the intercom ("crew"), or the
+ * EFB ("efb": a command from the phone's EFB, as JSON: a checklist, a note, a gate request, a note to Ops). */
+export type Listener = "atc" | "com2" | "crew" | "efb";
+const EFB_ACTIONS = ["checklist", "scratchpad", "gate", "ops_note"];
+const EFB_CALL_MAX = 2000;
 
 /** A typed call: its words, trimmed to one line, and who it's for. */
 export function cleanCall(raw: Record<string, unknown>): { text: string; to: Listener } {
+  if (raw.to === "efb") {
+    const command = obj(raw.command);
+    if (!command || !EFB_ACTIONS.includes(String(command.action))) throw new HttpError(400, "That isn't an EFB command.");
+    const text = JSON.stringify(command);
+    if (text.length > EFB_CALL_MAX) throw new HttpError(413, "That EFB command is too long.");
+    return { text, to: "efb" };
+  }
   const text = typeof raw.text === "string" ? raw.text.replace(/\s+/g, " ").trim() : "";
   if (!text) throw new HttpError(400, "Nothing to say.");
   return { text: text.slice(0, CALL_MAX), to: raw.to === "crew" || raw.to === "com2" ? raw.to : "atc" };
@@ -296,10 +320,12 @@ export class LiveRoom extends DurableObject<Env> {
   private trailGround = false;
   private route: Obj | null = null;
   private zones: Obj | null = null;
+  private efb: Obj | null = null;
   private clips = new Map<string, ArrayBuffer>(); // the last CLIPS_KEEP transmissions' audio, oldest first
 
   private forget(): void {
     this.own = null; this.traffic = []; this.radio = []; this.airports = []; this.trail = []; this.route = null; this.zones = null;
+    this.efb = null;
     this.calls = []; this.clips.clear();
   }
 
@@ -338,7 +364,7 @@ export class LiveRoom extends DurableObject<Env> {
         this.ctx.acceptWebSocket(pair[1]);
         pair[1].send(JSON.stringify({ type: "hello", data: { protocol: 1, status: await this.current(), own: this.own,
           traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail, route: this.route,
-          zones: this.zones } }));
+          zones: this.zones, efb: this.efb } }));
         return new Response(null, { status: 101, webSocket: pair[0] });
       }
       case "PUT /status": {
@@ -363,6 +389,7 @@ export class LiveRoom extends DurableObject<Env> {
         const map = (await request.json()) as LiveMap;
         if (map.route !== undefined) { this.route = map.route; this.broadcast("route", this.route); }
         if (map.zones !== undefined) { this.zones = map.zones; this.broadcast("zones", this.zones); }
+        if (map.efb !== undefined) { this.efb = map.efb; this.broadcast("efb", this.efb); }
         return json({ ok: true, watchers: watchers(), calls: this.take() });
       }
       case "POST /radio": {
@@ -389,7 +416,7 @@ export class LiveRoom extends DurableObject<Env> {
         if (!now.active) return json({ error: "LocalTC isn't flying right now." }, 409);
         if (to === "crew" && !now.crew) return json({ error: "The copilot isn't on in LocalTC." }, 409);
         this.calls = this.calls.filter((c) => Date.now() - c.at <= CALL_TTL_MS)
-          .concat([{ id: crypto.randomUUID(), text, to: to === "crew" || to === "com2" ? to : "atc", at: Date.now() }]).slice(-CALLS_KEEP);
+          .concat([{ id: crypto.randomUUID(), text, to: to === "crew" || to === "com2" || to === "efb" ? to : "atc", at: Date.now() }]).slice(-CALLS_KEEP);
         return json({ ok: true, waiting: this.calls.length });
       }
       case "GET /calls":  // the desktop's poll while somebody watches and nothing else is going up
@@ -405,7 +432,7 @@ export class LiveRoom extends DurableObject<Env> {
       }
       case "GET /memory":  // what's held in memory (tests use it to check nothing is persisted)
         return json({ own: this.own, traffic: this.traffic, radio: this.radio, airports: this.airports, trail: this.trail,
-          route: this.route, zones: this.zones, calls: this.calls, clips: [...this.clips.keys()],
+          route: this.route, zones: this.zones, efb: this.efb, calls: this.calls, clips: [...this.clips.keys()],
           stored: [...(await this.ctx.storage.list()).keys()] });
       case "GET /":
         return json({ ...(await this.current()), watchers: watchers() });
@@ -488,7 +515,7 @@ export async function alert(env: Env, request: Request, auth: Auth): Promise<Res
  * with its cookie, which a browser sends by itself: only the site's own pages may send one that way. */
 export async function say(env: Env, request: Request, auth: Auth): Promise<Response> {
   if (auth.viaCookie && !allowedOrigin(env, request.headers.get("Origin"))) throw new HttpError(403, "Not from this site.");
-  const call = cleanCall(await readJson(request, 4 * 1024));
+  const call = cleanCall(await readJson(request, 8 * 1024));
   await limit(env, `say:${auth.user.id}`, 120, 3600);
   return send(env, auth, "POST", "/say", call);
 }

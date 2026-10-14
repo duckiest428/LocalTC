@@ -133,6 +133,9 @@ class AppController:
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
         self.pilot.on_call = self._phone_say  # a call typed on the phone or the website, through the account
+        from localtc.ui.efb_api import EfbRoutes
+
+        self.efb = EfbRoutes(self)  # the EFB tab and the companion's (ui/efb_api.py)
         self._last_atc: AtcTransmission | None = None
         self._zones_who: tuple = ()
         self._zones_at = -COMPANION_ZONES_EVERY_S
@@ -189,6 +192,7 @@ class AppController:
             (post, "update/download"): self.api_update_download,
             (post, "update/install"): self.api_update_install,
             **self.pilot.routes(),
+            **self.efb.routes(),
         }
 
     def attach(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -206,7 +210,8 @@ class AppController:
         if not (c.companion and c.companion_lan) or not await asyncio.to_thread(lambda: self.pilot.account.signed_in):
             return
         if self.companion_server is None:
-            self.companion_server = CompanionServer(self.companion, zones=self.api_zones, say=self._phone_say)
+            self.companion_server = CompanionServer(self.companion, zones=self.api_zones, say=self._phone_say,
+                                                    efb=lambda cmd: self.efb.command(cmd))
             try:
                 port = await self.companion_server.start(c.companion_port)
                 log.info("Companion app: listening on the local network, port %d", port)
@@ -382,6 +387,11 @@ class AppController:
             asyncio.create_task(self.pilot.live({"active": False}, force=True))
             asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
             await self._count_flight()
+            try:
+                latest = await asyncio.to_thread(self.pilot.logbook.flights, 1)
+                self.efb.flight_ended(latest[0] if latest else None)  # the achievements it earned
+            except Exception:  # noqa: BLE001
+                log.debug("EFB end of flight failed", exc_info=True)
             self._clear_soon()
             self._set_status("idle")
         except asyncio.CancelledError:
@@ -438,6 +448,10 @@ class AppController:
             live.mute(True)
         self._set_status("running", f"{live.session.sim_product} {live.session.sim_version}".strip())
         self._ticker = asyncio.create_task(self._tick())
+        try:
+            self.efb.flight_started(live)
+        except Exception:  # noqa: BLE001
+            log.debug("EFB start failed", exc_info=True)
 
     async def stop(self) -> None:
         if self._stop is not None:
@@ -505,6 +519,10 @@ class AppController:
     # --- bus events -> the page --------------------------------------------------------------------------------
 
     def on_event(self, ev: BusEvent) -> None:  # noqa: C901
+        try:
+            self.efb.observe(ev)  # the EFB: Airport Ops, the checklist, ATC's operations, the flight's facts
+        except Exception:  # noqa: BLE001 - the EFB never stops the flight's events reaching the page
+            log.debug("EFB observe failed", exc_info=True)
         if isinstance(ev, OwnshipState):
             if ev.t - self._own_sent >= OWN_EVERY_S:
                 self._own_sent = ev.t
@@ -646,6 +664,16 @@ class AppController:
     def _phone_say(self, text: str, to: str = "atc") -> None:
         """A call typed on the companion app (on the local network or through the account) or the website's Flight
         Tracker: transmitted on COM1 like one typed here, or ``to`` "crew": said to the copilot on the intercom."""
+        if to == "efb":  # the phone's EFB, through the account: a command as JSON (ui/efb_api.py)
+            import json as _json
+
+            try:
+                cmd = _json.loads(text)
+            except ValueError:
+                raise RuntimeError("That isn't an EFB command") from None
+            if isinstance(cmd, dict):
+                asyncio.ensure_future(self._efb_quietly(cmd))
+            return
         try:
             live = self._need_live()
         except HttpError as exc:
@@ -656,6 +684,12 @@ class AppController:
             live.say_crew(text)
         else:
             live.say(text, radio=2 if to == "com2" else 1)
+
+    async def _efb_quietly(self, cmd: dict) -> None:
+        try:
+            await self.efb.command(cmd, source="phone")
+        except Exception as exc:  # noqa: BLE001 - the EFB push shows the outcome; a refusal is logged
+            log.info("The phone's EFB command %s didn't go: %s", cmd.get("action"), exc)
 
     # --- the page's calls ----------------------------------------------------------------------------------------
 

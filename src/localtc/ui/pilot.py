@@ -366,7 +366,7 @@ class PilotRoutes:
                     alerts.append(data)
                 elif kind == "airports":
                     airports = data
-                elif kind in ("route", "zones"):
+                elif kind in ("route", "zones", "efb"):
                     live_map[kind] = data
             # The path on its own: with the traffic around a big airport in the same request it went over the
             # server's size limit, and the whole frame (path included) was refused.

@@ -232,9 +232,7 @@ def start_ops(cfg: Config, engine, bus):
     """The flight's real-world data in the background: the airports' NOTAMs to ATC, the terrain ahead fetched."""
     from localtc.ops.service import OpsService
 
-    data = ops_data(cfg)
-    if engine is not None and cfg.ops.terrain:
-        engine.terrain = data.terrain.highest_ft  # read from what's here only: the ATC never reaches the network
+    data = ops_data(cfg)  # (the terrain and the hazards reach the ATC as events: TerrainGrid, OpsSnapshot "hazards")
 
     def flight() -> dict:
         if engine is None:
@@ -562,7 +560,7 @@ async def run_session(
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
             traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
             consumers.append(asyncio.create_task(traffic.run()))
-        if session.source_kind == "live" and (cfg.ops.notams or cfg.ops.terrain):
+        if session.source_kind == "live" and (cfg.ops.notams or cfg.ops.terrain or cfg.ops.restrictions or cfg.ops.weather):
             consumers.append(asyncio.create_task(start_ops(cfg, engine if cfg.atc.enabled else None, bus).run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:

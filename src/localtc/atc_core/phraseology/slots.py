@@ -47,6 +47,8 @@ def _minutes(v: int) -> str:
 
 
 MINUTES = SlotType("minutes", int, _minutes, _minutes)
+# A time of day, UTC ("1432"): a hold's expected further clearance; said digit by digit.
+CLOCK = SlotType("clock", str, _text, speech.digits)
 GATE = SlotType("gate", str, _text, speech.gate)
 MILES = SlotType("miles", int, lambda v: str(int(v)), speech.miles)
 LENGTH = SlotType("length", int, lambda v: f"{int(round(v / 100.0) * 100):,}", speech.feet)
@@ -84,6 +86,7 @@ SLOTS: dict[str, SlotType] = {
     "bearing": TEXT,  # where somewhere is from the aircraft: "southeast"
     "side": TEXT,  # which way off the runway: "left" or "right"
     "exit": TAXI_POINT,  # the taxiway it leaves by
+    "efc": CLOCK,  # a hold's expected further clearance time
 }
 
 # What a slot says when nothing better is known. "Expect FL350 one zero minutes after departure" is what a

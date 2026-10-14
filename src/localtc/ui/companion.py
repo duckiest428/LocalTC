@@ -123,6 +123,7 @@ class CompanionHub:
         self.trail: list[list[float]] = []  # [[lat, lon], ...], oldest first
         self.zones: dict | None = None  # the Live Map's ATC layer for this flight (ui/zones.py, compact_zones)
         self.airports: list[dict] = []  # origin and destination: frequencies, runways, ATIS (published data)
+        self.efb: dict | None = None  # the EFB as it stands (ui/efb_api.py ``state``)
         self.radio: deque[dict] = deque(maxlen=RADIO_BACKLOG)
         self.remote: Callable[[str, Any], None] | None = None  # to the relay; set while signed in
         self.remote_map = True
@@ -177,6 +178,16 @@ class CompanionHub:
         if self._remote_ok():
             self._send("zones", zones)
 
+    def set_efb(self, efb: dict | None) -> None:
+        """The EFB (the checklist, Airport Ops, ATC's operations, the scratchpad, the achievements): sent on when it
+        changes."""
+        if efb == self.efb:
+            return
+        self.efb = efb
+        self._local("efb", efb)
+        if self._remote_ok():
+            self._send("efb", efb)
+
     def set_airports(self, airports: list[dict]) -> None:
         if airports == self.airports:
             return
@@ -228,7 +239,7 @@ class CompanionHub:
     def snapshot(self) -> dict:
         return {"protocol": PROTOCOL, "version": __version__, "status": self.status, "own": self.own,
                 "traffic": self.traffic, "route": self.route, "radio": list(self.radio), "airports": self.airports,
-                "trail": self.trail, "zones": self.zones}
+                "trail": self.trail, "zones": self.zones, "efb": self.efb}
 
     def _extend_trail(self, own: dict) -> None:
         lat, lon = own.get("lat"), own.get("lon")
@@ -338,9 +349,10 @@ class CompanionServer:
     """The phone's direct line on the local network: an SSE stream and the ATC zones, behind the key."""
 
     def __init__(self, hub: CompanionHub, zones: Callable[[dict], Any] | None = None,
-                 say: Callable[[str, str], None] | None = None) -> None:
+                 say: Callable[[str, str], None] | None = None, efb: Callable[[dict], Any] | None = None) -> None:
         self.hub = hub
         self.zones = zones
+        self.efb = efb  # the phone's EFB commands and questions (ui/efb_api.py ``command``): its answer back
         self.say = say  # a call typed on the phone: (words, "atc", "com2" or "crew"), as if typed in the app
         self._server: asyncio.base_events.Server | None = None
         self._zeroconf: Any = None
@@ -423,6 +435,9 @@ class CompanionServer:
                     _write_response(writer, 404, "application/json", b'{"error":"that transmission isn\'t kept"}', keep_alive=False)
                 else:
                     _write_response(writer, 200, "audio/wav", wav, keep_alive=False)
+            elif method == "POST" and path == "/companion/v1/efb" and self.efb is not None:
+                status, answer = await self._efb(body)
+                _write_response(writer, status, "application/json", json.dumps(answer, default=str).encode(), keep_alive=False)
             elif method == "GET" and path == "/companion/v1/zones" and self.zones is not None:
                 body = json.dumps(await self.zones({}), default=str).encode()
                 _write_response(writer, 200, "application/json", body, keep_alive=False)
@@ -436,6 +451,19 @@ class CompanionServer:
         finally:
             writer.close()
             self._clients.discard(task)
+
+    async def _efb(self, body: bytes) -> tuple[int, dict]:
+        try:
+            cmd = json.loads(body or b"{}")
+            if not isinstance(cmd, dict):
+                raise ValueError
+        except ValueError:
+            return 400, {"error": "send {\"action\": ...}"}
+        try:
+            return 200, await self.efb(cmd)
+        except Exception as exc:  # noqa: BLE001 - the phone shows why
+            status = getattr(exc, "status", 409)
+            return status, {"error": getattr(exc, "message", None) or str(exc) or "That didn't work"}
 
     def _say(self, body: bytes) -> tuple[int, dict]:
         try:

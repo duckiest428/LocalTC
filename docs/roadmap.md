@@ -6,7 +6,7 @@ LocalTC should become three connected systems:
 
 1. **ATC and traffic world**: controllers, traffic, procedures, weather, NOTAMs, terrain, and sequencing share one operational state.
 2. **Aircraft and turnaround crew**: cockpit crew, cabin crew, ramp/ground crew, GSX, checklists, announcements, and turnaround timing share the same flight state.
-3. **Flight operations companion**: EFB, charts, gates, scratchpad, missions, pilot profile, replay, statistics, and achievements work before, during, and after a flight.
+3. **Flight operations companion**: EFB, charts, gates, scratchpad, pilot profile, replay, statistics, and achievements work before, during, and after a flight.
 
 The LLM should provide natural interpretation, dialogue, and personality. Deterministic systems must remain authoritative for simulator state, safety-critical clearances, timing, data provenance, and replay.
 
@@ -78,16 +78,6 @@ Give each station a stable profile containing:
 Pass this profile to LLM prompts. It should affect wording, greetings, corrections, handoffs, and small talk without changing clearance meaning, numbers, runways, frequencies, taxi routes, or readback requirements.
 
 Keep station behavior consistent within a flight and across replay. Use deterministic station/profile seeds plus limited controlled variation, not a new personality on every call.
-
-## ATIS and data-source controls
-
-Add a clear setting for:
-
-- simulator-derived ATIS only
-- real-world ATIS when available
-- hybrid mode: real-world data first, simulator fallback
-
-Show source and age to the user. Real-world ATIS must never silently override fresher simulator conditions when that would make the flight inconsistent.
 
 ## Real-world weather, NOTAM, TFR, and restriction provider
 
@@ -295,39 +285,6 @@ Use real operational triggers:
 
 ATC should tell the pilot why they are holding, where they sit in sequence, and when the expectation changes. Add visualization and readback support.
 
-## Traffic control and injection
-
-Treat this as a separate, experimental subsystem. Do not replace MSFS traffic logic.
-
-Preferred order:
-
-1. Continue observing native MSFS traffic.
-2. Add stable identity, intent, route, and lifecycle tracking.
-3. Build a synchronized control shadow for ATC sequencing.
-4. Only attempt object control/reinjection where SimConnect supports it safely.
-5. Preserve aircraft identity, model/livery, route, position, and continuity.
-
-Any traffic reinjection setting must be:
-
-- labeled EXPERIMENTAL
-- optional and off by default
-- capability-checked
-- isolated from ordinary flights
-- protected against duplicate objects and teleporting
-- reversible on disable, reconnect, replay, or shutdown
-
-Long-term traffic goals:
-
-- commercial IFR schedules
-- GA/VFR pattern traffic
-- AI aircraft with individual state and radio behavior
-- pushback and taxi sequencing
-- runway and arrival sequencing
-- gates matched to airline/aircraft
-- traffic that shares the same ATC rulebook as the pilot
-
-Use seasonal/real-world schedules only where licensing and data access permit. Provide an optional supplemental density mode for quiet airports rather than inventing traffic silently.
-
 # Phase 4: EFB and Companion Operations
 
 ## Predeparture filing and EFB
@@ -402,9 +359,7 @@ Only execute simulator actions that are supported and explicitly confirmed. Keep
 
 Provide a synchronized scratchpad available in:
 
-- desktop app
 - iOS companion
-- replay view where appropriate
 
 Support free text, structured quick notes, clearance extraction, pinning, timestamps, and flight-phase grouping. Do not treat scratchpad text as authoritative simulator state without confirmation.
 
@@ -423,57 +378,6 @@ Add an Airport Ops role that can handle:
 - airport-specific instructions
 
 This is the natural companion layer between ATC, GSX, cabin crew, and turnaround timing.
-
-# Phase 5: Missions, Profiles, and Progression
-
-## Mission and flight idea explorer
-
-Create a searchable mission catalog based on:
-
-- airports visited and not yet visited
-- routes flown
-- airlines and alliances
-- aircraft type and time
-- origin/destination
-- distance and duration
-- scenery/terrain
-- weather or season
-- VFR/IFR
-- historical or real-world routes
-- user goals
-
-Mission types can include:
-
-- scheduled airline leg
-- cargo
-- ferry
-- VIP transport
-- medevac
-- search and rescue
-- aerial firefighting
-- training
-- diversion/emergency practice
-- regional exploration
-
-Missions should create structured objectives, not just a text description. Objectives must be evaluable from flight events and replay.
-
-## Pilot profile
-
-Add a local-first pilot profile containing:
-
-- display name and callsign preferences
-- aircraft fleet
-- favorite airlines/regions
-- preferred ATC personality and crew
-- routes and airports
-- flight history
-- replays and share links
-- readback/communication trends
-- phase completion statistics
-- incident and diversion history
-- privacy and synchronization controls
-
-Use the existing logbook and server account model, but do not upload audio by default.
 
 ## Achievements
 
@@ -495,47 +399,6 @@ Build an idempotent achievement system evaluated from structured events, for exa
 - streaks and personal bests
 
 Achievements should explain exactly what was met, support replay evaluation where possible, and avoid rewarding unsafe behavior.
-
-# Phase 6: Voice and Language Expansion
-
-## Voice provider abstraction
-
-Keep Piper as the reliable local default, but add a provider abstraction for optional alternate TTS sources.
-
-Possible provider categories:
-
-- local Piper voices
-- additional local engines
-- cloud TTS providers
-- regional/accent voice libraries
-- user-provided compatible voices
-
-Requirements:
-
-- provider availability check
-- per-role/per-station voice mapping
-- cache generated audio where allowed
-- latency and quota reporting
-- offline fallback
-- privacy disclosure before sending text externally
-- no provider lock-in
-- stable replay audio references
-
-Add regional voice profiles for ATC, cabin, cockpit, and ground crew. Voice identity should match the persona's region and wording style without stereotyping or making accents cartoonish.
-
-## Audio behavior
-
-Add per-persona delivery settings:
-
-- pace
-- pause/rhythm
-- radio compression
-- static level
-- urgency
-- interruption/barge-in
-- headset/intercom/radio route
-
-Keep spoken-number and clearance formatting centralized so alternate TTS providers do not change aviation meaning.
 
 # Phase 7: Quality, Privacy, and Release Hardening
 

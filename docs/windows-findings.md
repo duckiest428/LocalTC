@@ -4,6 +4,25 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-10-14: CYUL to EGLL (iniBuilds A330-300) and EGLL to RJTT (stock A350-1000), the reports' marks
+- The iniBuilds profile matched the A330-200 only: the -300 got the stock one ("seatbelt already off" with no reading).
+  It matches both now; its seatbelt isn't read (``unread``), so nothing is said to be "already" so.
+- A pushback readback ("push and start approved, tail right") was taken as a new request and answered again; within
+  ``PUSH_READBACK_S`` of the approval it's a readback. ATC repeated "contact ..." after a right handoff readback: no more.
+- The transition on the A350 flight never fired: level near 6,000 ft oscillated across the 6,000 ft TA. Hysteresis
+  (``TRANSITION_BAND_FT``). STD/QNH now set both sides (CPT and FO knobs on the iniBuilds, the EFIS selectors on the A350).
+- Tower's landing wind was the wind aloft at the aircraft: now the airport's surface wind (``_surface_wind``).
+- Heathrow's "LINK 60" said letter by letter and read back as L, I, N, K60: link taxiways are words now, and match.
+- The taxi in crossed the runway just landed on, from a U-turn start: the route starts the way the aircraft points
+  and only holds short of a runway it really crosses. The A330 went to a stand too small (A20), BA at Haneda to T2:
+  stands fit the wingspan (``aircraft_size``), near the airline's own aircraft.
+- The local model loaded behind the cloud with the fallback off: not warmed now.
+- Checklists: FlyByWire A380X and Headwind A339 read their own EFB checklists (json5) from their packages; the
+  HorizonSim/Asobo 787 the sim's own (Library.xml); A350/A330-300 the Airbus widebody set; A220 Synaptic's; a Cessna none.
+- Open: the A350's seatbelt input (1/0 or three-way), the checklists' prompts over a whole flight, holds and
+  conditional clearances with LocalTC's traffic (arrival demand at a hub), ChartFox once the Worker has its client
+  (``CHARTFOX_CLIENT_ID``/``CHARTFOX_CLIENT_SECRET`` secrets and migration 0006), GSX's L:vars on the Airport Ops page.
+
 ## 2026-10-11: EGLL to RJTT, the stock A350-1000, LocalTC's traffic on (the sim crashed over Turkey)
 - The sim closed the connection 13 minutes after LocalTC's last log line, nothing unusual before it: not LocalTC's.
 - PLANE PITCH DEGREES and PLANE BANK DEGREES are positive nose down / left wing down: written as LocalTC computes

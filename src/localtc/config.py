@@ -263,6 +263,10 @@ class TrafficConfig(_Section):
     fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
     live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
+    # The departures due at the airport the user is on the ground at, at gates their wings fit 45 minutes before they
+    # push (needs a free OpenSky or AirLabs account: Settings > Traffic); handed over to the real one when its
+    # transponder comes on.
+    scheduled: bool = True
     # The experiment this replaced (shadowing and putting back MSFS's own): still read from old settings, not used.
     control: str = ""
     max_reinjected: int = 0

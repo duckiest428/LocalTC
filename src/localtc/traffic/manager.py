@@ -35,7 +35,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from localtc.atc_core.airport.aircraft_size import wingspan_m
 from localtc.atc_core.airport.geometry import AirportGeometry
+from localtc.atc_core.airport.taxi_route import TaxiGraph
 from localtc.sim_api import (
     AiLights,
     AiObjectAssigned,
@@ -51,6 +53,7 @@ from localtc.sim_api import (
 from localtc.sim_api.geo import advance, haversine_nm, unit
 from localtc.traffic import airlines as airline_data
 from localtc.traffic.feed import Flight
+from localtc.traffic.ground import Follower, free_stand, taxi_in_path
 from localtc.traffic.models import ModelPicker
 
 log = logging.getLogger(__name__)
@@ -116,7 +119,21 @@ NATIVE_PARKED = 6  # this many of the sim's own standing about: its parked aircr
 BY_HOUR = (0.92, 0.93, 0.93, 0.92, 0.9, 0.85, 0.75, 0.62, 0.58, 0.6, 0.62, 0.62, 0.6, 0.58, 0.6, 0.6, 0.58, 0.58,
            0.6, 0.65, 0.72, 0.8, 0.86, 0.9)
 GA_TYPES = ("C172", "PA28", "SR22", "C208", "TBM9", "C25C", "DA62")
+# A big airport's GA ramp is business jets (no Cessnas at an international airport), a mid-size one's turboprops too.
+BIZJET_TYPES = ("C56X", "CL60", "GLF5", "E55P", "C680", "GLEX", "FA7X", "C25A")
+TURBOPROP_TYPES = ("C208", "PC12", "BE20", "TBM9", "C56X", "E55P")
 CARGO_TYPES = ("B744", "B77L", "MD11", "B763", "A306")
+CARGO_AIRLINES = ("FDX", "UPS", "DHK", "CLX", "GTI", "CKS", "ABX", "BOX", "CAO", "QTR", "ATN")
+HUB_GATES, REGIONAL_GATES = 40, 10  # an airport with this many gates is a hub; under the other, a small field
+# Scheduled departures (ops.schedules): each at a gate this long before it's due off it, gone this long after (no
+# transponder by then: delayed past it, or cancelled), the controller's clearance this long before.
+SCHEDULED_BEFORE_S = 45 * 60.0
+SCHEDULED_LATE_S = 60 * 60.0
+SCHEDULED_CLEARANCE_S = 20 * 60.0
+SCHEDULED_MAX = 30
+SPOT_LEAVE_M = 20.0  # one on its stand leaves it (pushed back) only when the real one is this far off it and moving
+OVERLAP_M = 30.0  # a live one standing this close to another of LocalTC's isn't made (two on one stand)
+TAXI_TTL_S = 20 * 60.0  # one LocalTC taxies in itself, this long at most
 TYPES_BY_SIZE = {"heavy": ("B789", "B77W", "A359", "A333", "B763", "B788", "B772"),
                  "medium": ("A320", "B738", "A321", "A20N", "B739", "A319", "B38M", "A21N", "BCS3", "E190"),
                  "small": ("CRJ9", "E75L", "CRJ7", "E170", "DH8D", "AT76", "CRJ2")}
@@ -171,6 +188,7 @@ class Local:
     rotate_kt: float = 0.0  # lifts off at this speed
     started: float = 0.0
     runway: tuple[str, str] | None = None  # (airport, runway end) it's landing on
+    follow: Follower | None = None  # rolled out: off the runway and along the taxiways to a stand
 
 
 @dataclass
@@ -237,6 +255,10 @@ class TrafficManager:
         self._user_runway_t = 0.0  # when the user last had a runway
         self._released_t = -1e9  # the last held departure sent on its way
         self._call_t = -1e9  # the last time tower told one to hold short
+        # The departures due from an airport (ops.schedules, fetched by the service): by airport.
+        self.scheduled: dict[str, list] = {}
+        self._graphs: dict[str, TaxiGraph] = {}
+        self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
 
     # --- what happens ------------------------------------------------------------------------------------------
 
@@ -329,6 +351,7 @@ class TrafficManager:
         out += self._live(now)
         if self.s.parked:
             out += self._parked(now)
+        out += self._scheduled(now)
         out += self._clear_reserved()
         self.atc.managed({p.object_id for p in self.planes.values() if p.object_id is not None})
         if self.s.atc_control:
@@ -407,6 +430,11 @@ class TrafficManager:
                 continue
             if far or age > LOST_S or (key not in keep and age > STALE_S):
                 out += self._remove(plane)
+        # A scheduled departure's stand-in at the gate gives way to the real one once its transponder's on.
+        heard = {f.callsign for f in self.flights.values() if f.callsign}
+        for plane in [p for p in self.planes.values() if p.key.startswith("sched:") and p.callsign in heard]:
+            self._did(f"{plane.callsign}'s transponder is on: the real one from here")
+            out += self._remove(plane)
         # New ones.
         made = 0
         for d, f in wanted[: self.s.max_live]:
@@ -433,6 +461,8 @@ class TrafficManager:
             spot = self._spot_for(f) if f.on_ground and f.gs_kt < 3 else None
             if spot is not None and self._reserved_at(*self._spot_latlon(spot)):
                 continue  # the user's gate: not loaded there
+            if f.on_ground and f.gs_kt < 3 and spot is None and self._overlaps(f.lat, f.lon):
+                continue  # standing where another of LocalTC's is (two BAWs on one stand): not made on top of it
             made += 1
             out += self._create_live(f, spot, now)
         return out
@@ -461,7 +491,7 @@ class TrafficManager:
 
     def _where(self, plane: Plane, now: float) -> tuple[float, float, float, float]:
         """Where a live one is now: on its spot, or carried on from its last position to now."""
-        if plane.spot is not None and (plane.flight is None or plane.flight.gs_kt < 1):
+        if self._on_spot(plane):
             lat, lon = self._spot_latlon(plane.spot)
             return lat, lon, self._elev(lat, lon), self._spot_heading(plane.spot)
         f = plane.flight
@@ -496,8 +526,7 @@ class TrafficManager:
         if plane.object_id is None:
             return []
         f = plane.flight
-        standing = plane.mode == "parked" or (plane.mode == "live" and plane.spot is not None
-                                              and (f is None or f.gs_kt < 1))
+        standing = plane.mode == "parked" or (plane.mode == "live" and self._on_spot(plane))
         if standing:
             if plane.spot is not None:
                 lat, lon = self._spot_latlon(plane.spot)
@@ -553,10 +582,15 @@ class TrafficManager:
                      on_runway or not on_ground, True, self._night())
         if state == plane.lights or plane.object_id is None:
             return []
+        was = plane.lights
         plane.lights = state
         gear, landing, taxi, beacon, strobe, nav, logo = state
-        return [AiLights(object_id=plane.object_id, gear_down=gear, landing=landing, taxi=taxi, beacon=beacon,
-                         strobe=strobe, nav=nav, logo=logo)]
+        out: list[Any] = [AiLights(object_id=plane.object_id, gear_down=gear, landing=landing, taxi=taxi, beacon=beacon,
+                                   strobe=strobe, nav=nav, logo=logo)]
+        if not was or was[0] != gear:
+            # The gear handle too: the key event alone left arrivals landing with their wheels up.
+            out.append(SetAiVar(object_id=plane.object_id, name="GEAR HANDLE POSITION", unit="Bool", value=float(gear)))
+        return out
 
     # --- airports ----------------------------------------------------------------------------------------------
 
@@ -721,6 +755,7 @@ class TrafficManager:
         hour = int(self._local_hour(airport.lon))
         rng = random.Random(zlib.crc32(f"{icao}:{hour}:{self.seed}".encode()))
         airlines = self._airlines_at(icao)
+        self._gates_here = sum(1 for p in airport.parking if p.kind.startswith("gate"))
         taken = [self._spot_latlon(p.spot) for p in self.planes.values() if p.spot is not None and p.spot[0] == icao]
         spots = []
         for i, p in enumerate(airport.parking):
@@ -771,10 +806,21 @@ class TrafficManager:
         """A model for a parking spot of that kind and size: an airline's that flies here (by its share), one of the
         models already drawn there when the airport has its few (``PARKED_MODELS``)."""
         used = {} if used is None else used
-        for prefix, types in (("ramp_ga", GA_TYPES), ("ramp_cargo", CARGO_TYPES)):
-            if kind.startswith(prefix):
-                return self._reuse(used, (prefix, ""), rng, lambda: next(
-                    (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None), None))
+        gates = self._gates_here
+        if kind.startswith("ramp_ga"):
+            # What stands on a GA ramp there: business jets at a hub (no Cessnas at Heathrow), turboprops and jets
+            # at a mid-size airport, light aircraft at a small field.
+            types = BIZJET_TYPES if gates >= HUB_GATES else TURBOPROP_TYPES if gates >= REGIONAL_GATES else GA_TYPES
+            return self._reuse(used, ("ramp_ga", ""), rng, lambda: next(
+                (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None), None))
+        if kind.startswith("ramp_cargo"):
+            def cargo() -> tuple[str, str] | None:  # a cargo airline's colours, else the type unpainted
+                for t in rng.sample(CARGO_TYPES, k=len(CARGO_TYPES)):
+                    for airline in rng.sample(CARGO_AIRLINES, k=3):
+                        if (m := self.picker.pick(t, airline)) is not None and "ZZZ" not in m[0].upper():
+                            return m
+                return next((m for t in CARGO_TYPES if (m := self.picker.pick(t)) is not None), None)
+            return self._reuse(used, ("ramp_cargo", ""), rng, cargo)
         size = "heavy" if "heavy" in kind or radius_m >= 30 else "small" if "small" in kind or radius_m < 18 else "medium"
         names = list(airlines)
         weights = [airlines[n] for n in names]
@@ -1014,8 +1060,10 @@ class TrafficManager:
             loc.gs_kt = max(loc.target_kt, loc.gs_kt - 1.0)
             if before < -250 or loc.alt_ft <= elev + 5:
                 loc.on_ground, loc.vs_fpm, loc.alt_ft = True, 0.0, elev
-        else:
-            loc.gs_kt = max(20.0, loc.gs_kt - 4.0)  # braking to taxi speed, then rolling to the end
+        elif loc.follow is None:
+            loc.gs_kt = max(20.0, loc.gs_kt - 4.0)  # braking to taxi speed
+            if loc.gs_kt <= 60.0:
+                loc.follow = self._way_in(plane, geo, loc)
 
     def _local(self, now: float) -> list[Any]:
         """The flights LocalTC is flying itself, a second on (go-arounds, released departures, quiet arrivals)."""
@@ -1025,8 +1073,11 @@ class TrafficManager:
             if plane.mode not in ("go_around", "departing", "landing") or loc is None or plane.object_id is None:
                 continue
             if plane.mode == "landing":
+                if loc.follow is not None:
+                    out += self._taxi_in(plane, loc, now)
+                    continue
                 if now - loc.started > LOCAL_TTL_S / 2:
-                    out += self._remove(plane)  # never heard again (parked out of sight): gone
+                    out += self._remove(plane)  # never heard again, and nowhere to taxi it: gone
                     continue
                 self._fly_landing(plane, loc)
             if now - loc.started > LOCAL_TTL_S or self._dist_nm(loc.lat, loc.lon) > min(15.0, self.s.radius_nm):
@@ -1057,6 +1108,144 @@ class TrafficManager:
             agl = 0.0 if loc.on_ground else max(0.0, loc.alt_ft - self._elev(loc.lat, loc.lon))
             out += self._lights(plane, on_ground=loc.on_ground, gs=loc.gs_kt, agl=agl, lat=loc.lat, lon=loc.lon,
                                 climbing=loc.vs_fpm > 300)
+        return out
+
+    def _graph(self, icao: str) -> TaxiGraph | None:
+        geo = self._geo(icao)
+        if geo is None:
+            return None
+        if icao not in self._graphs:
+            self._graphs[icao] = TaxiGraph(geo)
+        return self._graphs[icao]
+
+    def _taken(self, icao: str) -> list[tuple[float, float]]:
+        """Where aircraft stand at ``icao``: LocalTC's on their stands, the live ones standing, the user's gate."""
+        out = [self._spot_latlon(p.spot) for p in self.planes.values() if p.spot is not None and p.spot[0] == icao]
+        out += [(f.lat, f.lon) for f in self.flights.values() if f.on_ground and f.gs_kt < 3]
+        out += list(self.atc.reserved()) + list(self.native_spots)
+        if self.own is not None and self.own.on_ground:
+            out.append((self.own.lat, self.own.lon))
+        return out
+
+    def _airline_near(self, airline: str, icao: str) -> list[tuple[float, float]]:
+        """Where the airline's own aircraft stand at ``icao`` (its terminal)."""
+        if not airline:
+            return []
+        out = [self._spot_latlon(p.spot) for p in self.planes.values()
+               if p.spot is not None and p.spot[0] == icao and (p.callsign or "").startswith(airline)]
+        out += [(f.lat, f.lon) for f in self.flights.values() if f.on_ground and f.gs_kt < 3 and f.airline == airline]
+        return out
+
+    def _way_in(self, plane: Plane, geo: AirportGeometry, loc: Local) -> Follower | None:
+        """Rolled out with no word from the real one: the way off the runway and in to a free stand its wings fit."""
+        graph = self._graph(geo.icao)
+        f = plane.flight
+        span = wingspan_m(f.type or self.types(f.hex)) if f is not None else 0.0
+        airline = f.airline if f is not None else ""
+        spot = free_stand(geo, self._taken(geo.icao), span, self._airline_near(airline, geo.icao),
+                          seed=f"{plane.callsign}{geo.icao}")
+        if graph is None or spot is None:
+            return None
+        got = taxi_in_path(geo, graph, loc.lat, loc.lon, loc.hdg, spot)
+        if got is None:
+            return None
+        points, exit_index = got
+        self._did(f"{plane.callsign or 'An arrival'} taxied in to {geo.airport.parking[spot].name.title()} by LocalTC")
+        plane.spot = (geo.icao, spot)  # kept for it: nobody else is put there meanwhile
+        return Follower(points, gs_kt=loc.gs_kt, exit_index=exit_index, spot=spot)
+
+    def _taxi_in(self, plane: Plane, loc: Local, now: float) -> list[Any]:
+        """A second along the way in; on the stand, parked there (and staying, as an arrival does)."""
+        if now - loc.started > TAXI_TTL_S:
+            return self._remove(plane)
+        follow = loc.follow
+        loc.lat, loc.lon, loc.hdg, loc.gs_kt = follow.step(loc.lat, loc.lon)
+        loc.on_ground, loc.vs_fpm = True, 0.0
+        loc.alt_ft = self._elev(loc.lat, loc.lon)
+        if follow.done:
+            plane.mode, plane.local, plane.parked_t = "parked", None, now
+            return self._track(plane, now, blend_s=6.0)
+        out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
+                                         hdg=loc.hdg, gs_kt=loc.gs_kt, on_ground=True, blend_s=1.5), now)]
+        return out + self._lights(plane, on_ground=True, gs=loc.gs_kt, agl=0.0, lat=loc.lat, lon=loc.lon)
+
+    def _on_spot(self, plane: Plane) -> bool:
+        """Standing on its stand: until the real one is moving and well off it (its pushback). The receivers' positions
+        at a gate wander a few metres and a knot or two: it was put from the stand to the taxi line and back, over
+        and over."""
+        if plane.spot is None:
+            return False
+        f = plane.flight
+        if f is None or f.gs_kt < 1:
+            return True
+        lat, lon = self._spot_latlon(plane.spot)
+        if f.gs_kt < 2 or haversine_nm(f.lat, f.lon, lat, lon) * M_PER_NM < SPOT_LEAVE_M:
+            return True
+        plane.spot = None  # pushed back: off its stand for good
+        return False
+
+    def _overlaps(self, lat: float, lon: float) -> bool:
+        for p in self.planes.values():
+            if p.spot is not None:
+                a, b = self._spot_latlon(p.spot)
+            elif p.sent is not None:
+                a, b = p.sent[0], p.sent[1]
+            else:
+                continue
+            if haversine_nm(lat, lon, a, b) * M_PER_NM < OVERLAP_M:
+                return True
+        return False
+
+    # --- the scheduled departures ------------------------------------------------------------------------------
+
+    def _scheduled(self, now: float) -> list[Any]:
+        """At the airport the user's on the ground at: each departure due within ``SCHEDULED_BEFORE_S`` at a gate
+        (one a second), its clearance given before it's due, and taken away once the real one's transponder is on
+        or it's well past its time."""
+        out: list[Any] = []
+        here = set(self._parked_airports())
+        for plane in [p for p in self.planes.values() if p.key.startswith("sched:")]:
+            due = plane.parked_t  # (its time off the gate)
+            icao = plane.spot[0] if plane.spot else ""
+            if icao not in here and icao not in self.parked_at or now > due + SCHEDULED_LATE_S:
+                out += self._remove(plane)
+                continue
+            if plane.object_id is not None and "clearance" not in plane.said and now >= due - SCHEDULED_CLEARANCE_S \
+                    and self.s.atc_control and now - self._calls_t.get(icao, -1e9) >= CALLS_GAP_S:
+                plane.said.add("clearance")
+                self._calls_t[icao] = now
+                out += self.atc.call(callsign=plane.callsign, kind="clearance", icao=icao, runway="",
+                                     destination=plane.note or "")
+        made = 0
+        heard = {f.callsign for f in self.flights.values() if f.callsign}
+        for icao in here:
+            geo = self._geo(icao)
+            if geo is None:
+                continue
+            count = sum(1 for p in self.planes.values() if p.key.startswith("sched:"))
+            for dep in sorted(self.scheduled.get(icao, ()), key=lambda d: d.off_t):
+                if made >= 1 or count >= SCHEDULED_MAX:
+                    break
+                key = f"sched:{dep.callsign}"
+                if key in self.planes or dep.callsign in heard or not dep.off_t - SCHEDULED_BEFORE_S <= now <= dep.off_t:
+                    continue
+                kind = dep.type or (self.types(dep.hex) if dep.hex else "") or "A320"
+                model = self.picker.pick(kind, dep.airline)
+                spot = free_stand(geo, self._taken(icao), wingspan_m(kind), self._airline_near(dep.airline, icao),
+                                  seed=dep.callsign)
+                if model is None or spot is None:
+                    continue
+                p = geo.airport.parking[spot]
+                plane = Plane(key, self._request(), model[0], model[1], callsign=dep.callsign, spot=(icao, spot),
+                              mode="parked", created_t=now, note=dep.destination)
+                plane.parked_t = dep.off_t
+                self._add(plane)
+                made += 1
+                count += 1
+                self._did(f"{dep.callsign} at {p.name.title()}, due off at {_hhmm(dep.off_t)}Z ({dep.source})")
+                out.append(SpawnAiAircraft(request_id=plane.request_id, kind="parked", title=plane.title,
+                                           livery=plane.livery, tail=dep.callsign[:9], lat=p.lat, lon=p.lon,
+                                           alt_ft=geo.airport.elev_ft, heading=p.heading_true, on_ground=True))
         return out
 
     # --- the controllers' calls to the real flights ------------------------------------------------------------
@@ -1141,6 +1330,10 @@ class TrafficManager:
 
 
 __all__ = ["AtcLink", "TrafficManager", "TrafficSettings"]
+
+
+def _hhmm(t: float) -> str:
+    return f"{int(t // 3600 % 24):02d}{int(t // 60 % 60):02d}"
 
 
 def _between(a: Flight, b: Flight, k: float, now: float) -> Flight:

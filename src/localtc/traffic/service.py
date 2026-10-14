@@ -26,11 +26,13 @@ log = logging.getLogger(__name__)
 FEED_EVERY_S = 6.0  # the live positions asked for this often (the free sources' fair use)
 FEED_SLOWER_S = 30.0  # ... and this often while none answers
 TICK_S = 1.0
+SCHEDULE_EVERY_S = 60.0
 
 
 class TrafficService:
     def __init__(self, manager: TrafficManager, bus: EventBus, source: SimSource | None, *,
-                 feed: LiveFeed | None = None, book: FlightBook | None = None, book_path: Path | None = None) -> None:
+                 feed: LiveFeed | None = None, book: FlightBook | None = None, book_path: Path | None = None,
+                 schedules=None) -> None:
         self.manager, self.bus, self.source = manager, bus, source
         self.feed = feed or LiveFeed()
         self.book = book or FlightBook(book_path)
@@ -39,6 +41,8 @@ class TrafficService:
         self._inputs = bus.subscribe(OwnshipState, TrafficSnapshot, AiObjectAssigned, ModelList, AirportData,
                                      ConnectionStatus)
         self._tasks: list[asyncio.Task] = []
+        self.schedules = schedules  # ops.schedules.Schedules: the departures due (None: not used)
+        self._schedules_t: dict[str, float] = {}
         self._connected = True
 
     async def _out(self, outputs: list) -> None:
@@ -52,7 +56,8 @@ class TrafficService:
     async def run(self) -> None:
         if self.source is not None:
             await self.source.send(EnumerateModels())
-        self._tasks = [asyncio.create_task(self._poll()), asyncio.create_task(self._tick())]
+        self._tasks = [asyncio.create_task(self._poll()), asyncio.create_task(self._tick()),
+                       asyncio.create_task(self._schedule())]
         try:
             async for ev in self._inputs:
                 try:
@@ -99,6 +104,25 @@ class TrafficService:
                 else:
                     wait = FEED_SLOWER_S
             await asyncio.sleep(wait)
+
+    async def _schedule(self) -> None:
+        """The departures due from the airport the user is on the ground at, fetched off the event loop (the
+        source's cache keeps it to one fetch per half hour)."""
+        while True:
+            await asyncio.sleep(SCHEDULE_EVERY_S)
+            if self.schedules is None or not self.schedules.available or self.manager.own is None or not self.manager.on:
+                continue
+            try:
+                for icao in self.manager._parked_airports():
+                    if time.time() - self._schedules_t.get(icao, 0.0) < SCHEDULE_EVERY_S * 5:
+                        continue
+                    self._schedules_t[icao] = time.time()
+                    lon = self.manager.airports[icao].lon
+                    found = await asyncio.to_thread(self.schedules.departures, icao, None, lon)
+                    self.manager.scheduled[icao] = found
+                    log.info("Traffic: %d departures due from %s over the next hours", len(found), icao)
+            except Exception:  # noqa: BLE001 - a schedule never stops the traffic
+                log.exception("Traffic schedules failed")
 
     async def _tick(self) -> None:
         while True:

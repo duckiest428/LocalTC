@@ -5,6 +5,7 @@ struct MapTab: View {
     @Environment(AppModel.self) private var model
     @State private var position: MapCameraPosition = .automatic
     @State private var follow = true
+    @State private var cameraHeading: Double = 0  // the map turned this far from north
     @State private var mapMode = MapMode()  // IFR or VFR: follows the flight's rules, switchable any time
     @AppStorage("mapZones") private var showZones = true  // the ATC zones, as on the desktop's Live Map
     @State private var legend = false
@@ -81,10 +82,11 @@ struct MapTab: View {
                   ? .hybrid(elevation: .realistic, pointsOfInterest: .including([.airport]))
                   : .standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { MapCompass(); MapScaleView() }
-        .onMapCameraChange(frequency: .continuous) { _ in
+        .onMapCameraChange(frequency: .continuous) { context in
             // The pilot panned, pinched or rotated the map: stop following (and zooming with the altitude) until the
             // button is pressed again. MapKit marks a camera the user moved; the ones set here aren't.
             if follow && position.positionedByUser { follow = false }
+            cameraHeading = context.camera.heading  // the aircraft drawn against the map, not the screen
         }
         .onChange(of: store.status.rules, initial: true) { _, rules in
             mapMode.follow(rules: rules)
@@ -191,7 +193,9 @@ struct MapTab: View {
         Image(systemName: "airplane")
             .font(.system(size: size, weight: .bold))
             .foregroundStyle(color)
-            .rotationEffect(.degrees(Double(heading ?? 0) - 90))
+            // The map turned (two fingers, or the compass's north not up): the aircraft turned back by as much, so it points
+            // the way it goes over the ground and not that much off ("the icon doesn't show the right heading").
+            .rotationEffect(.degrees(Double(heading ?? 0) - cameraHeading - 90))
     }
 
 }

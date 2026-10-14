@@ -104,8 +104,14 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
     public var level: String?
     public var radio: Int?  // 1 or 2: which COM, when the desktop knows
     public var audio: String?  // the id its audio is kept under, to play again (the desktop's "Play buttons" setting)
+    // Another flight on the frequency: its callsign, and ``live`` when it's a real flight of LocalTC's traffic (shown
+    // like any transmission, by its callsign in its airline's colour; otherwise dimmed, "Other").
+    public var callsign: String?
+    public var ident: String?
+    public var atc: Bool?
+    public var live: Bool?
 
-    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level, radio, audio }
+    enum CodingKeys: String, CodingKey { case kind, t, station, mhz, text, ok, level, radio, audio, callsign, ident, atc, live }
 
     public init(kind: String, text: String?, station: String? = nil, mhz: Double? = nil) {
         self.kind = kind
@@ -120,14 +126,14 @@ public struct RadioLine: Codable, Sendable, Equatable, Identifiable {
         switch kind {
         case "atc", "atis": .atc
         case "pilot", "copilot": .pilot
-        case "chatter": .other
+        case "chatter": live == true ? (atc == true ? .atc : .traffic) : .other
         case "crew": .crew
         case "intercom": .intercom
         default: .system
         }
     }
 
-    public enum Speaker: Sendable { case atc, pilot, other, crew, intercom, system }
+    public enum Speaker: Sendable { case atc, pilot, other, traffic, crew, intercom, system }
 }
 
 public struct FlightAlert: Codable, Sendable, Equatable, Identifiable {

@@ -164,7 +164,7 @@ function addLine(l) {
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
-      if (S.settings?.traffic?.enabled && l.callsign) {
+      if ((l.live || S.settings?.traffic?.enabled) && l.callsign) {
         // LocalTC's traffic (real flights): shown like a real transmission, by its callsign in its airline's colour.
         row.classList.add("live");
         const cs = `<span class="cs" style="color:${airlineColour(l.ident || l.callsign)}">${esc(l.callsign)}</span>`;

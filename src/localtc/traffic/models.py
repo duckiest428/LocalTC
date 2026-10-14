@@ -25,6 +25,13 @@ STOCK = (("A320", ("A320neo V2",)), ("A321", ("A321",)), ("B738", ("737 Max 8 Pa
          ("B777", ("777-300ER",)), ("B747", ("747-8i",)), ("A350", ("A350-900 (No Cabin)", "A350-900 (Default Cabin)")),
          ("A330", ("A330-300 (GE)",)), ("C172", ("Cessna 172 Skyhawk", "Cessna Skyhawk G1000 Asobo")))
 VENDORS = {"FSLTL", "FAIB", "TFS", "FSPXAI", "AIG", "GA"}
+# An airline flying in its parent's colours (or close to them) when FSLTL has none of its own: Air Canada Rouge was
+# drawn unpainted.
+PARENT = {"ROU": "ACA", "JZA": "ACA", "EDV": "DAL", "ENY": "AAL", "PDT": "AAL", "JIA": "AAL", "GJS": "UAL",
+          "ASH": "UAL", "AWI": "UAL", "QXE": "ASA", "CFE": "BAW", "SHT": "BAW", "EFW": "BAW", "CLH": "DLH",
+          "DLA": "DLH", "KLC": "KLM", "HOP": "AFR", "IBS": "IBE", "ANE": "IBE", "JTA": "JAL", "JAC": "JAL",
+          "AKX": "ANA", "QLK": "QFA", "QJE": "QFA", "NZM": "ANZ", "HDA": "CPA", "EZS": "EZY", "EJU": "EZY",
+          "BCS": "DHK", "TAM": "LAN", "LPE": "LAN"}
 TYPE = re.compile(r"[A-Z][A-Z0-9]{2,3}")
 
 
@@ -94,6 +101,8 @@ class ModelPicker:
     def _pick(self, code: str, airline: str) -> tuple[str, str] | None:
         if not code:
             return None
+        if airline in PARENT and not any(airline in m.airlines and family(m.type) == family(code) for m in self._fsltl):
+            airline = PARENT[airline]  # its parent's colours, not none
         best: tuple[float, Model] | None = None
         for m in self._fsltl:
             same, kin = m.type == code, family(m.type) == family(code)

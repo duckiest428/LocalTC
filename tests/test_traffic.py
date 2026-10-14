@@ -153,7 +153,8 @@ def test_a_real_flight_is_flown_in_the_sim_with_its_model_and_callsign():
     spawn = of(SpawnAiAircraft, out)[0]
     assert spawn.title == "FSLTL_FAIB_B738_UAL-United_NC" and not spawn.on_ground and spawn.kind == "parked"
     out = assign(m, out)
-    assert [c.text for c in of(SetAiVar, out)] == ["UAL123", "UAL", "123"]  # who it is, for ATC
+    assert [c.text for c in of(SetAiVar, out) if c.text] == ["UAL123", "UAL", "123"]  # who it is, for ATC
+    assert [(c.name, c.value) for c in of(SetAiVar, out) if not c.text] == [("GEAR HANDLE POSITION", 1.0)]  # its gear too (low, coming in)
     track = of(AiTrack, out)[0]
     assert not track.on_ground and track.gs_kt == 180 and abs(track.hdg - 180) < 1e-9
     assert of(AiLights, out)[0].gear_down and of(AiLights, out)[0].landing  # low, on the way in

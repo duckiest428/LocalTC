@@ -46,6 +46,15 @@ struct ProtocolTests {
         #expect(RadioLine(kind: "readback", text: "x").speaker == .system)
     }
 
+    @Test("Another flight is dimmed, unless it's a real one of LocalTC's traffic")
+    func traffic() throws {
+        let decode = { (json: String) in try JSONDecoder().decode(RadioLine.self, from: Data(json.utf8)) }
+        #expect(try decode(#"{"kind":"chatter","text":"x","callsign":"BAW 6RB"}"#).speaker == .other)
+        let pilot = try decode(#"{"kind":"chatter","text":"x","callsign":"BAW 6RB","ident":"BAW6RB","live":true}"#)
+        #expect(pilot.speaker == .traffic && pilot.callsign == "BAW 6RB")
+        #expect(try decode(#"{"kind":"chatter","text":"x","callsign":"BAW 6RB","atc":true,"live":true}"#).speaker == .atc)
+    }
+
     @Test("A line carries the id of its kept audio, and which COM it was on")
     func audio() throws {
         let line = try JSONDecoder().decode(RadioLine.self, from: Data(#"{"kind":"pilot","text":"hi","radio":2,"audio":"0123456789abcdef"}"#.utf8))

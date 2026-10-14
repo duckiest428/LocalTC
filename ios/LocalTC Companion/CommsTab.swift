@@ -189,6 +189,11 @@ struct RadioRow: View {
                 HStack(spacing: 6) {
                     if let id = line.audio { playButton(id) }
                     Text(header).font(.subheadline.weight(.semibold)).foregroundStyle(headerColor)
+                    if line.live == true, line.atc == true, let cs = line.callsign {
+                        // LocalTC's traffic: the controller to a real flight, by its callsign in its airline's colour.
+                        Text("to").font(.caption).foregroundStyle(.secondary)
+                        Text(cs).font(.subheadline.weight(.bold)).foregroundStyle(AirlineColour.of(line.ident ?? cs))
+                    }
                 }
                 Text(line.text ?? "")
                     .font(line.speaker == .other ? .footnote : .body)
@@ -223,6 +228,8 @@ struct RadioRow: View {
         case .pilot: line.kind == "copilot" ? "Copilot" : "You"
         case .crew: "Copilot"
         case .intercom: "You"
+        case .traffic: line.callsign ?? line.station ?? "Other"
+        case .other: line.station ?? "Other"
         default: line.station ?? "ATC"
         }
     }
@@ -233,6 +240,7 @@ struct RadioRow: View {
         case .pilot: line.kind == "copilot" ? .cyan : .green
         case .crew: .yellow
         case .intercom: .green
+        case .traffic: AirlineColour.of(line.ident ?? line.callsign ?? "")
         default: .secondary
         }
     }
@@ -249,5 +257,38 @@ struct RadioRow: View {
         case .other: Color.gray.opacity(0.1)
         default: Color.gray.opacity(0.18)
         }
+    }
+}
+
+/// Each airline in its own colour (its livery's, where known), each of its flights a shade of it: the same as the
+/// desktop app's radio log (app.js ``airlineColour``).
+enum AirlineColour {
+    static let hues: [String: Double] = [
+        "RYR": 215, "BAW": 355, "EZY": 28, "DLH": 45, "AFR": 225, "KLM": 200, "UAE": 0, "QTR": 330, "AAL": 210,
+        "DAL": 350, "UAL": 230, "SWA": 40, "JBU": 220, "ASA": 190, "ACA": 0, "WJA": 175, "IBE": 5, "VLG": 50,
+        "SAS": 220, "FIN": 210, "THY": 0, "AUA": 0, "SWR": 0, "EIN": 140, "WZZ": 300, "NKS": 55, "FFT": 130,
+        "VIR": 340, "QFA": 0, "ANA": 210, "JAL": 0, "CPA": 170, "SIA": 40, "ETD": 35,
+    ]
+
+    static func of(_ ident: String) -> Color {
+        let id = ident.uppercased().filter { !$0.isWhitespace }
+        let letters = id.prefix(3)
+        let airline = letters.count == 3 && letters.allSatisfy(\.isLetter) && id.dropFirst(3).first?.isNumber == true
+        var h = 0
+        for c in (airline ? String(letters) : String(id.prefix(3))).unicodeScalars { h = (h * 31 + Int(c.value)) % 360 }
+        let hue = hues[String(letters)] ?? Double(h)
+        var n = 0
+        for c in (airline ? String(id.dropFirst(3)) : id).unicodeScalars { n = (n * 17 + Int(c.value)) % 997 }
+        let light = 0.50 + Double(n % 5) * 0.06
+        return Color(hue: hue / 360, saturation: airline ? 0.75 : 0.25, lightness: light)
+    }
+}
+
+extension Color {
+    /// HSL, as the desktop app's colours are given.
+    init(hue: Double, saturation s: Double, lightness l: Double) {
+        let v = l + s * min(l, 1 - l)
+        let sv = v == 0 ? 0 : 2 * (1 - l / v)
+        self.init(hue: hue, saturation: sv, brightness: v)
     }
 }

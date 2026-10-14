@@ -530,6 +530,8 @@ class AppController:
         if line is not None:
             if CLIPS.enabled and self._has_audio(ev):
                 line["audio"] = clip_id(ev)  # its audio, to play again: the app, the phone and the website ask by this
+            if line["kind"] == "chatter" and self.cfg.traffic.enabled and line.get("callsign"):
+                line["live"] = True  # LocalTC's traffic: a real flight, shown like any transmission (the app, the phone)
             self._radio(line)
         if isinstance(ev, AtcAlert):
             self.companion.on_event(ev)

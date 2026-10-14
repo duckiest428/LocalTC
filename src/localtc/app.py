@@ -213,9 +213,18 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
                                atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
-    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, ATC %s)", t.radius_nm,
-             "on" if t.parked else "off", "on" if settings.atc_control else "off")
-    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json")
+    schedules = None
+    if t.scheduled:
+        from localtc.ops.fetch import Cache
+        from localtc.ops.keys import default_keys
+        from localtc.ops.schedules import Schedules
+
+        schedules = Schedules(default_keys(), Cache(data_dir() / "ops" / "schedules.json"))
+    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, scheduled departures %s, ATC %s)",
+             t.radius_nm, "on" if t.parked else "off",
+             "on" if schedules is not None and schedules.available else "off (no schedule source)" if t.scheduled else "off",
+             "on" if settings.atc_control else "off")
+    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json", schedules=schedules)
 
 
 def copilot_model(cfg: Config, backend):

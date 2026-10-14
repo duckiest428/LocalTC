@@ -225,7 +225,9 @@ struct BriefingView: View {
         .overlay {
             if airports.isEmpty {
                 ContentUnavailableView("No briefing yet", systemImage: "cloud.sun",
-                                       description: Text("The flight's airports' weather and NOTAMs appear once a flight starts in LocalTC."))
+                                       description: Text(model.store.efb == nil
+                                           ? "The flight's airports' weather and NOTAMs appear once a flight starts in LocalTC."
+                                           : "Fetching the weather and NOTAMs: they show once LocalTC knows the flight's airports (from the sim or the flight plan)."))
             }
         }
         .navigationTitle("Briefing")
@@ -458,7 +460,8 @@ struct OpsView: View {
                         Text("GSX isn't running: boarding, catering and cleaning aren't tracked.").font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("Starts with a flight in LocalTC.").foregroundStyle(.secondary)
+                    Text(efb == nil ? "Starts with a flight in LocalTC." : "No services reported yet: fuel shows once it's flowing, the rest with GSX.")
+                        .foregroundStyle(.secondary)
                 }
                 if let deice = ops?.deice, deice.required == true {
                     Label("De-icing: number \(deice.position ?? 1), about \(deice.waitMin ?? 0) min (\(deice.why ?? ""))", systemImage: "snowflake")

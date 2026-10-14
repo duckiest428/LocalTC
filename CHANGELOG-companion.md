@@ -26,6 +26,7 @@ is built from this file.
 - **Wrapped's icon** is a gift box, no longer bars that looked like a phone's signal.
 
 ### Fixed
+- **The EFB works during a flight.** It said no flight was running: the briefings never came from the PC, and one part of the EFB the app couldn't read emptied all of it. Each part, note, hazard and NOTAM is now read on its own, and one it can't read is left out, not the rest.
 - **Your aircraft points the right way when the map is turned**: its icon allowed for the map's own heading.
 - **The Live Map's follow button turns off.** Pressing it again stops following the aircraft (and zooming with its
   altitude), and so does moving the map: panning, pinching or turning it. Pressed again, it follows and zooms as

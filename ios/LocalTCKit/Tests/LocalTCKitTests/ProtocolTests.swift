@@ -226,4 +226,25 @@ struct FlightStoreTests {
         #expect(EfbCommand.checklist(action: "run", id: "before_start").json["do"] as? String == "run")
         #expect(EfbCommand.gates().relayable == false && EfbCommand.gate("B25").relayable)
     }
+
+    @Test("A part of the EFB the app can't read leaves the rest: the briefings still show")
+    func efbPartlyUnreadable() throws {
+        let store = FlightStore()
+        let json = #"""
+        {"type":"efb","data":{
+          "atc":{"hold":{"fix":"BLAKO","inbound":160.5},"minimum_altitude_ft":4200.7},
+          "hazards":[{"id":"S1","name":"no kind","polygon":[]},{"id":"T1","kind":"tfr","polygon":[[47.5,-122.3]]}],
+          "scratchpad":[{"text":"no id"},{"id":"a1","text":"SQ 4521"}],
+          "briefings":{"KSEA":{"icao":"KSEA","metar":"KSEA 141153Z 18007KT",
+            "notams":{"items":[{"id":12,"text":"ILS 16R U/S","works_to":[["ils_out",16]],"in_force":true},{"text":5}]}},
+            "KLAX":{"metar":{"odd":true}}}}}
+        """#
+        store.apply(try #require(try LiveMessage.decodeEnvelope(json)))
+        let e = try #require(store.efb)
+        #expect(e.atc == nil)
+        #expect(e.hazards?.map(\.kind) == ["tfr"] && e.scratchpad?.map(\.id) == ["a1"])
+        let notams = try #require(e.briefings?["KSEA"]?.notams?.items)
+        #expect(notams.first?.id == "12" && notams.first?.worksTo == [["ils_out", "16"]] && notams.first?.forAtc == true)
+        #expect(e.briefings?["KLAX"] == nil)
+    }
 }

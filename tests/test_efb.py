@@ -272,3 +272,63 @@ def test_an_efb_command_through_the_account():
     account._relayed({"watchers": 1, "calls": [{"text": json.dumps({"action": "gate", "gate": "B25"}), "to": "efb"},
                                                {"text": "Ground, radio check", "to": "com2"}]})
     assert account.calls == [('{"action": "gate", "gate": "B25"}', "efb"), ("Ground, radio check", "com2")]
+
+
+class _Controller:
+    """What EfbRoutes needs of the controller: the plan, the session, publishing, the companion."""
+
+    def __init__(self):
+        from localtc.ui.companion import CompanionHub
+
+        self.plan = None
+        self.live = None
+        self.published: list = []
+        self.companion = CompanionHub()
+
+    def publish(self, kind, data):
+        self.published.append((kind, data))
+
+
+def test_the_briefings_reach_the_phone_when_they_come_in():
+    from localtc.ui.efb_api import EfbRoutes
+
+    c = _Controller()
+    efb = EfbRoutes(c)
+    efb._chartfox = type("NoChartFox", (), {"connected": False})()
+    sent: list = []
+    c.companion._local = lambda kind, data: sent.append(json.loads(json.dumps(data)))  # what went to the phone
+    efb.push(force=True)
+    assert sent[-1]["briefings"] == {}
+    efb.extras["briefings"]["KSEA"] = {"icao": "KSEA", "metar": "KSEA 141153Z 18007KT"}  # filled in place
+    efb.push(force=True)
+    assert len(sent) == 2 and sent[-1]["briefings"]["KSEA"]["metar"].startswith("KSEA")
+
+
+def test_the_briefings_are_fetched_as_soon_as_the_flights_airports_are_known(monkeypatch):
+    from types import SimpleNamespace
+
+    from localtc.ui import efb_api
+
+    monkeypatch.setattr(efb_api, "EXTRAS_CHECK_S", 0.01)
+    c = _Controller()
+    efb = efb_api.EfbRoutes(c)
+    efb._chartfox = type("NoChartFox", (), {"connected": False})()
+    asked: list[str] = []
+
+    async def briefing(args):
+        asked.append(args["icao"])
+        return {"icao": args["icao"], "notams": {"items": []}}
+
+    efb.api_briefing = briefing
+
+    async def go():
+        task = asyncio.ensure_future(efb._extras_loop())
+        await asyncio.sleep(0.05)  # the flight started, its airports not known yet
+        assert asked == []
+        c.plan = SimpleNamespace(origin="KSEA", destination="KLAX", alternate="")
+        await asyncio.sleep(0.05)
+        task.cancel()
+
+    asyncio.run(go())
+    assert asked == ["KSEA", "KLAX"]  # once, not every few seconds
+    assert set(c.companion.efb["briefings"]) == {"KSEA", "KLAX"}

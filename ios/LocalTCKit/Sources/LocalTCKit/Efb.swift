@@ -18,6 +18,33 @@ public struct EfbState: Codable, Sendable, Equatable {
     public var hazards: [Hazard]?
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case checklist, ops, atc, scratchpad, achievements, chartfox, briefings, charts, book, hazards
+    }
+
+    /// Part by part: a part (or one note, hazard or airport's briefing) this app can't read is left out, never the
+    /// whole EFB. One unreadable field used to wipe it all, and the tab said no flight was running.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        checklist = try? c.decodeIfPresent(EfbChecklist.self, forKey: .checklist)
+        ops = try? c.decodeIfPresent(AirportOpsState.self, forKey: .ops)
+        atc = try? c.decodeIfPresent(AtcOperations.self, forKey: .atc)
+        scratchpad = (try? c.decodeIfPresent([Lossy<ScratchNote>].self, forKey: .scratchpad))?.compactMap(\.value)
+        achievements = try? c.decodeIfPresent(AchievementSummary.self, forKey: .achievements)
+        chartfox = try? c.decodeIfPresent(ChartFoxInfo.self, forKey: .chartfox)
+        briefings = (try? c.decodeIfPresent([String: Lossy<Briefing>].self, forKey: .briefings))?.compactMapValues(\.value)
+        charts = (try? c.decodeIfPresent([String: [String: [Lossy<ChartItem>]]].self, forKey: .charts))?
+            .mapValues { $0.mapValues { $0.compactMap(\.value) } }
+        book = try? c.decodeIfPresent(ChecklistBook.self, forKey: .book)
+        hazards = (try? c.decodeIfPresent([Lossy<Hazard>].self, forKey: .hazards))?.compactMap(\.value)
+    }
+}
+
+/// One element decoded if it can be, else nil (and the rest still are).
+struct Lossy<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }
 
 public struct EfbChecklist: Codable, Sendable, Equatable {
@@ -185,6 +212,15 @@ public struct Briefing: Codable, Sendable, Equatable {
         public var items: [Notam]?
         public var available: Bool?
         public var why: String?
+
+        enum CodingKeys: String, CodingKey { case items, available, why }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            items = (try? c.decodeIfPresent([Lossy<Notam>].self, forKey: .items))?.compactMap(\.value)
+            available = try? c.decodeIfPresent(Bool.self, forKey: .available)
+            why = try? c.decodeIfPresent(String.self, forKey: .why)
+        }
     }
 
     public struct Notam: Codable, Sendable, Equatable, Hashable {
@@ -192,6 +228,17 @@ public struct Briefing: Codable, Sendable, Equatable {
         public var text: String?
         public var worksTo: [[String]]?
         public var inForce: Bool?
+
+        enum CodingKeys: String, CodingKey { case id, text, worksTo, inForce }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = (try? c.decodeIfPresent(String.self, forKey: .id)) ?? (try? c.decodeIfPresent(Int.self, forKey: .id)).map(String.init)
+            text = try? c.decodeIfPresent(String.self, forKey: .text)
+            inForce = try? c.decodeIfPresent(Bool.self, forKey: .inForce)
+            // ["runway_closed", "09L"]: what ATC works to, each part as text whatever it came as.
+            worksTo = (try? c.decodeIfPresent([[JSONScalar]].self, forKey: .worksTo))?.map { $0.map(\.text) }
+        }
 
         /// ATC works to it (a runway or taxiway closed, an ILS out ...).
         public var forAtc: Bool { !(worksTo ?? []).isEmpty }
@@ -329,5 +376,18 @@ extension JSONDecoder {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d
+    }
+}
+
+/// A string, number or bool, as text ("09L", 2, true).
+struct JSONScalar: Decodable {
+    let text: String
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let s = try? c.decode(String.self) { text = s }
+        else if let i = try? c.decode(Int.self) { text = String(i) }
+        else if let d = try? c.decode(Double.self) { text = String(d) }
+        else if let b = try? c.decode(Bool.self) { text = String(b) }
+        else { text = "" }
     }
 }

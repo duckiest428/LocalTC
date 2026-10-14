@@ -10,6 +10,7 @@ Everything the EFB shows that changes during a flight goes out as one "efb" mess
 import asyncio
 import json
 import logging
+import math
 import time
 import urllib.parse
 from pathlib import Path
@@ -32,6 +33,7 @@ SIMBRIEF_DISPATCH = "https://dispatch.simbrief.com/options/custom"
 CHECKLIST_SAYS = {"pause": "hold the checklist", "resume": "resume the checklist", "skip": "skip", "stop": "stop the checklist",
                   "check": "checked"}
 EXTRAS_EVERY_S = 900.0
+EXTRAS_CHECK_S = 15.0  # how often the flight's airports are looked at: fetched as soon as they're known or change
 BRIEFING_NOTAMS = 40  # in the phone's copy of a briefing (the app asks for all of them)
 COMMANDS = ("checklist", "scratchpad", "gate", "ops_note", "briefing", "charts", "chart")
 
@@ -199,40 +201,48 @@ class EfbRoutes:
     async def _extras_loop(self) -> None:
         """The flight's airports' briefings and chart lists, kept fresh (every ``EXTRAS_EVERY_S``), so the phone has
         them through the account too, where it can't ask."""
+        fetched: list[str] = []
+        fetched_at = -math.inf
         while True:
             try:
                 plan = self.c.plan
                 engine = self.engine
+                # The flight starts before the sim (or the plan) has said where from and to: no airports yet then.
+                # Looked at again every few seconds, and fetched the moment they're known or change.
                 airports = [a for a in dict.fromkeys(
                     [getattr(plan, "origin", ""), getattr(plan, "destination", ""), getattr(plan, "alternate", "")]
                     + ([engine.state.flight.origin, engine.state.flight.destination] if engine is not None else []))
-                    if a]
-                for icao in airports[:3]:
-                    try:
-                        self.extras["briefings"][icao] = trim_briefing(await self.api_briefing({"icao": icao}))
-                    except Exception:  # noqa: BLE001 - one airport's briefing failing leaves the others
-                        log.debug("Briefing for %s failed", icao, exc_info=True)
-                    if self.chartfox.connected:
+                    if a][:3]
+                if airports and (airports != fetched or time.monotonic() - fetched_at >= EXTRAS_EVERY_S):
+                    for icao in airports:
                         try:
-                            charts = await self.api_charts({"icao": icao})
-                            self.extras["charts"][icao] = {k: [{f: c.get(f) for f in ("id", "name", "code", "type", "runways",
-                                                                                          "has_georef")} for c in v]
-                                                           for k, v in charts.get("groups", {}).items()}
-                        except Exception:  # noqa: BLE001
-                            log.debug("Charts for %s failed", icao, exc_info=True)
-                self.push(force=True)
+                            self.extras["briefings"][icao] = trim_briefing(await self.api_briefing({"icao": icao}))
+                        except Exception:  # noqa: BLE001 - one airport's briefing failing leaves the others
+                            log.info("EFB briefing for %s failed", icao, exc_info=True)
+                        if self.chartfox.connected:
+                            try:
+                                charts = await self.api_charts({"icao": icao})
+                                self.extras["charts"][icao] = {k: [{f: c.get(f) for f in ("id", "name", "code", "type", "runways",
+                                                                                              "has_georef")} for c in v]
+                                                               for k, v in charts.get("groups", {}).items()}
+                            except Exception:  # noqa: BLE001
+                                log.info("EFB charts for %s failed", icao, exc_info=True)
+                    fetched, fetched_at = airports, time.monotonic()
+                    self.push(force=True)
             except asyncio.CancelledError:
                 raise
             except Exception:  # noqa: BLE001
-                log.debug("EFB extras failed", exc_info=True)
-            await asyncio.sleep(EXTRAS_EVERY_S)
+                log.info("EFB extras failed", exc_info=True)
+            await asyncio.sleep(EXTRAS_CHECK_S)
 
     def push(self, *, force: bool = False) -> None:
         now = time.monotonic()
         if not force and now - self._push_at < 0.5:
             return
         self._push_at = now
-        data = self.state()
+        # A copy, not the live dicts: the briefings and charts (and Ops' de-icing) are filled in place, so the
+        # companion's "changed?" check compared the state with itself and the phone never got them.
+        data = json.loads(json.dumps(self.state(), default=str))
         try:
             self.c.publish("efb", data)
             self.c.companion.set_efb(data)

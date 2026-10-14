@@ -332,3 +332,12 @@ def test_the_briefings_are_fetched_as_soon_as_the_flights_airports_are_known(mon
     asyncio.run(go())
     assert asked == ["KSEA", "KLAX"]  # once, not every few seconds
     assert set(c.companion.efb["briefings"]) == {"KSEA", "KLAX"}
+
+
+def test_a_chart_is_shown_from_its_file_not_chartfoxs_page():
+    from localtc.ops.chartfox import one_chart
+
+    c = one_chart({"id": "a", "name": "AIRPORT DIAGRAM", "type": 3, "url": "https://aeronav.faa.gov/d-tpp/2610/00289AD.PDF",
+                   "view_url": "https://chartfox.org/KLGA#a"})
+    assert c["view_url"] == "https://aeronav.faa.gov/d-tpp/2610/00289AD.PDF"
+    assert one_chart({"id": "b", "type": 3, "view_url": "https://chartfox.org/KLGA#b"})["view_url"] == ""

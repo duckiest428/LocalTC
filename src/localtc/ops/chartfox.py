@@ -181,6 +181,8 @@ def grouped(data: dict) -> dict[str, list[dict]]:
 
 
 def one_chart(c: dict) -> dict:
+    """A chart as the EFB shows it. ``view_url`` is the chart itself (ChartFox's ``url``: an image or a PDF, only in a
+    chart's own answer); ChartFox's own ``view_url`` is its web page, which an image can't show."""
     kind = c.get("type")
     try:
         kind_name = TYPES.get(int(kind), str(kind))
@@ -193,7 +195,7 @@ def one_chart(c: dict) -> dict:
     if isinstance(georef, list):
         georef = georef[0] if georef else None
     return {"id": str(c.get("id", "")), "name": c.get("name", ""), "code": c.get("code", ""), "type": kind_name,
-            "runways": runways or [], "view_url": c.get("view_url") or c.get("url") or "",
+            "runways": runways or [], "view_url": c.get("url") or c.get("source_url") or "",
             "has_georef": bool(c.get("has_georeferences") or georef), "georef": georef}
 
 

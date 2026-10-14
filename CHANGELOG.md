@@ -94,6 +94,7 @@ a new minor version adds features, a patch fixes them.
 
 ### Fixed
 - **The EFB's briefings reach the phone.** The companion's EFB said no flight was running during one: the airports' weather and NOTAMs were fetched once at the start, before LocalTC knew the airports (then not for 15 minutes), and once fetched were never sent on, since the update was taken for no change. They're fetched the moment the airports are known or change, and sent.
+- **ChartFox charts load in the EFB** (and on the phone): a chart opens from its file (an image or the FAA's PDF), not ChartFox's web page, which left it blank.
 - **Proper parked aircraft at big airports.** A large ramp spot at an airline airport is a remote airliner stand (Haneda's scenery calls its remote stands GA ramps): it gets an airliner of its size in one of the airport's airlines' colours, not a Cessna or a Diamond. A hub's GA ramps get business jets or stay empty, never light aircraft; those are for small fields. A new switch (Quick Settings → Traffic) fills the gates the departures don't take with parked airliners too.
 - **LocalTC's traffic pointing its nose at the ground on takeoff**: the sim's pitch and bank are the other way round; climbing aircraft now pitch up and bank into their turns.
 - **Taxiing traffic swinging left and right**, and turning round while pushed back: on the ground the nose follows its heading.

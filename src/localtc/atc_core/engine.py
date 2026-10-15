@@ -314,6 +314,8 @@ ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
 REPEAT_WINDOW_S = 180.0
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
+AIRPORT_CONTROLLERS = ("ground", "tower", "clearance", "delivery", "ramp", "apron")  # one airport's own
+SEQUENCE_MIN_KT = 40.0  # slower than this, nothing is on final (an aircraft parked a few feet up isn't)
 LINED_UP_NM = 4.0  # this close on a runway's final, the pilot has chosen it
 LANDING_CLEARANCE_NM = 6.0  # tower clears a quiet pilot to land by this distance on final
 CONTINUE_EVERY_S = 120.0  # "continue, traffic vacating" no more often than this
@@ -362,6 +364,7 @@ CROSSING_CLOSING_M = 3.0  # ... and how much closer the second has to be: headin
 SECTOR_BACK_S = 1800.0  # back into the centre left less than this long ago ...
 SECTOR_BACK_DWELL_S = 600.0  # ... takes this long in there before it's handed back to
 AREA_RECHECK_S = 5.0  # how often the aircraft's position is checked against the airspace outlines
+HANDOFF_SPARE_NM = 15.0  # an arrival handed to approach with this much more than its descent needs
 APPROACH_CEILING_FT = 17000.0  # inside the destination's approach area and below this, approach takes the arrival
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
@@ -749,7 +752,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if not candidates:
             return None
         preferred = self.state.flight.destination if self._arriving else self.state.flight.origin
-        return next((f for f in candidates if f.airport == preferred), candidates[0])
+        here = next((f for f in candidates if f.airport == preferred), None)
+        if here is None and controller in AIRPORT_CONTROLLERS and preferred:
+            return None  # an airport without one: never the other end's (Eugene's tower sent the flight to Flagstaff Ground)
+        return here or candidates[0]
 
     def geometry(self, icao: str | None) -> AirportGeometry | None:
         return self.tracker.context_builder.airports.get(icao) if icao else None
@@ -1246,6 +1252,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif phase is P.DEPARTURE and own.alt_agl_ft > 500 and tuned == "tower" and not self._going_around \
                 and st.comms.tuned.airport in (None, st.flight.origin) and once("handoff_departure"):
             if (departure := self.facility("departure") or self._center()) is not None:
+                if departure.controller == "center":
+                    # Straight to a centre (no departure controller): the cruise's first sector, or no centre ever
+                    # handed it on (Albuquerque Center from Flagstaff all the way to Eugene).
+                    self._sector, self._sector_since = departure, t
+                    once("handoff_center")
                 self._handoff(t, "tower.handoff_departure", st.comms.tuned, departure)
         elif tuned == "departure" and self._leaving_departure(own, phase) and once("handoff_center"):
             center = self._center()
@@ -1323,7 +1334,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                                                 f"traffic {said}vacating the runway")},
                                st.comms.tuned, delay=False, expects_readback=False)
         elif phase is P.TAXI_IN and tuned == "tower" and once("exit_contact_ground"):
-            if (ground := self.facility("ground")) is not None:
+            if self.facility("ground") is None and st.pending is None:
+                self._taxi_in(t, st.comms.tuned, own)  # no ground controller here: tower gives the way in
+            elif (ground := self.facility("ground")) is not None:
                 geo = self.geometry(st.flight.destination)
                 way_off = None
                 if geo is not None and own.on_runway:  # still on it: which way off, by which taxiway
@@ -2290,6 +2303,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         for target in self._traffic.values():
             if target.on_ground or target.alt_ft - geo.airport.elev_ft > own.alt_msl_ft - geo.airport.elev_ft + SEQUENCE_ALT_FT:
                 continue
+            if target.gs_kt < SEQUENCE_MIN_KT:
+                continue  # standing still: parked a few feet up, not landing ahead
             their_final = geo.final_approach(target.lat, target.lon, target.hdg_true)
             if their_final is not None and their_final.end.ident == end.ident and their_final.distance_nm < ctx.final.distance_nm:
                 ahead.append((their_final.distance_nm, target.object_id, target))
@@ -2315,6 +2330,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         for target in self._traffic.values():
             if target.on_ground or abs(target.alt_ft - own.alt_msl_ft) > SEQUENCE_ALT_FT:
                 continue
+            if target.gs_kt < SEQUENCE_MIN_KT:
+                continue  # standing still is no arrival: a parked aircraft the sim calls airborne, a few feet up
             their_final = geo.final_approach(target.lat, target.lon, target.hdg_true)
             if their_final is not None and their_final.end.ident == end.ident \
                     and their_final.distance_nm < ctx.final.distance_nm:
@@ -4442,7 +4459,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """Where departure sends a flight it has on runway heading (no SID: "fly runway heading" from the tower): the
         first fix of its route still ahead, or its destination when the route has none. None when the flight isn't
         on runway heading. Nobody turned the flight on course: it flew runway heading until the pilot asked."""
-        if "tower.takeoff" not in self.state.issued or own is None:
+        if "tower.takeoff" not in self.state.issued or own is None or "on_course" in self.state.flags:
             return None
         flight = self.state.flight
         for fix in self.route.fixes:
@@ -4454,6 +4471,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         return self._airport_name(flight.destination) if flight.destination else None
 
     def _checkin(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
+        self._checkin_answer(t, facility, own)
+        st = self.state
+        if facility.controller == "center" and P(st.phase) is P.DEPARTURE \
+                and (fix := self._on_course_fix(own)) is not None:  # (departure's check-in says it itself)
+            # Off on runway heading with no SID, handed by tower straight to a centre (Flagstaff to Albuquerque Center,
+            # no departure controller): the centre turns it on course, as departure would, or it flies runway
+            # heading until the pilot asks.
+            self._schedule(t, "common.direct", {"fix": fix}, facility)
+        if facility.controller in ("departure", "center") and "tower.takeoff" in st.issued:
+            st.flags.add("on_course")
+
+    def _checkin_answer(self, t: float, facility: Facility, own: OwnshipState | None) -> None:
         st = self.state
         self._checked_in.add(facility.station)
         if self._vfr and self._vfr_checkin(t, facility, own):
@@ -5282,10 +5311,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """Centre hands an arrival to approach: inside the destination's approach area and down below its
         ceiling, or, where there is no area to go by, within DEPARTURE_ENDS_NM of the field."""
         area = self.terminal_area(self.state.flight.destination, "approach")
+        distance = self.tracker.context.destination_distance_nm
         if area is None:
-            distance = self.tracker.context.destination_distance_nm
             return distance is not None and distance <= DEPARTURE_ENDS_NM
-        return self._in_area(area, own) and own.alt_indicated_ft <= APPROACH_CEILING_FT
+        if self._in_area(area, own) and own.alt_indicated_ft <= APPROACH_CEILING_FT:
+            return True
+        # A small approach area and a fast arrival: handed over in time to get down, three miles a thousand feet
+        # and room to slow and turn. Eugene's took a jet at 11,000 ft and 300 kt 30 miles out.
+        geo = self.geometry(self.state.flight.destination)
+        above = own.alt_indicated_ft - (geo.airport.elev_ft if geo is not None else 0.0)
+        return distance is not None and own.alt_indicated_ft <= APPROACH_CEILING_FT \
+            and distance <= above / 1000 * 3 + HANDOFF_SPARE_NM
 
     def _sector_candidate(self, own: OwnshipState) -> Facility | None:
         """The enroute centre for where the aircraft is now, from the nearest airport big enough to name
@@ -5540,6 +5576,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         for key, value in values.items():
             if key == "heading" and value is not None:
                 self._heading_given = (self._t, value, 0)  # (when, heading, times checked)
+            if key == "altitude_ft" and value is not None:
+                # Given again, it's to be reached again: 11,000 reached on the climb, then given as the descent
+                # (at pilot's discretion), had "check altitude" said at the top of the descent.
+                self.state.flags.discard(f"reached:{value}")
+                self._deviation_since = None
             setattr(self.state.assignments, key, value)
 
     def _alert(self, t: float, kind: str, detail: str) -> AtcAlert:

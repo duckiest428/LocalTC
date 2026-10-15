@@ -35,8 +35,6 @@ PAGE = """<!DOCTYPE html>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4833147286335766"
-     crossorigin="anonymous"></script>
 </head>
 <body>
 

@@ -2,7 +2,7 @@
    the Flight Tracker (the flight in progress), the logbook synced from the app (sharing a flight's card:
    sharecard.js), Wrapped (wrapped.js), support, and the account. Leaflet draws the maps (vendor/leaflet, served from
    here; the tiles come from OpenStreetMap). The sign-in is an HttpOnly cookie on api.localtc.tech, which
-   this page can't read. The ads (ads.js) keep their settings (and Wrapped its reminder) in this browser's storage; nothing else is. */
+   this page can't read; nothing is kept in this browser's storage. */
 
 // API, $, esc and api() come from api.js; the Flight Tracker from tracker.js.
 

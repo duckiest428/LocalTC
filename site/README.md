@@ -48,15 +48,14 @@ Pages link to each other without `.html` (`dashboard`, `tracker#...`): GitHub Pa
 
 ## The rules it keeps
 
-- **Third-party requests: Google AdSense only.** Its script is in every page's `<head>`, and the
-  dashboard shows one ad on every other visit (`ads.js`: one per page, never on `tracker.html`,
-  turned off in Account → Ads). Nothing else is loaded from a CDN, an analytics service or a font
-  host, apart from the dashboard calling LocalTC's own account server, `api.localtc.tech` (`server/`).
-  The fonts are files in `fonts/` for this reason. Any other embed or script tag pointing somewhere
-  else makes the privacy and cookie pages untrue, so don't, or change them first.
-- **Cookies and browser storage.** Google's (consent asked through AdSense's own message where the
-  law requires it), one strictly necessary HttpOnly sign-in cookie on `api.localtc.tech`, and the
-  dashboard's few settings in local and session storage (listed in `cookies.html`).
+- **No third-party requests.** Nothing is loaded from a CDN, an analytics service or a font host.
+  The one exception is the logbook page calling LocalTC's own account server, `api.localtc.tech`
+  (`server/`), and only while someone uses it.
+  The fonts are files in `fonts/` for exactly this reason. Adding an embed or a script tag pointing
+  somewhere else makes the privacy and cookie pages untrue, so don't, or change them first.
+- **No cookies and no browser storage.** Same reason. There is no consent banner because there is
+  nothing to consent to. Signing in to the logbook sets one strictly necessary, HttpOnly cookie on
+  `api.localtc.tech`; the page itself stores nothing.
 - **Contrast.** Every text colour clears WCAG AA against the surface it sits on (4.5:1 for body,
   3:1 for large text). The three `--text*` tokens are the palette; new greys need checking.
 - **One radius scale** (`--r1`…`--r4`) and **elevation instead of borders**. If something needs

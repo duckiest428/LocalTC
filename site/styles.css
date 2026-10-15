@@ -772,15 +772,3 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 .cl-tabs button:hover { color: var(--text); }
 .cl-tabs button[aria-selected="true"] { background: rgba(95, 208, 104, .12); border-color: var(--green, #5fd068); color: var(--text); }
 .cl-product[hidden] { display: none !important; }
-
-/* The dashboard's one ad (ads.js), at the foot of the page showing. */
-.dash-ad { margin-top: 32px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .08); }
-.dash-ad-label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin: 0 0 8px; }
-.dash-ad-label a { color: inherit; }
-.dash label.ads-toggle { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 8px; font-size: 14.5px; cursor: pointer; text-align: left; }
-.dash .ads-toggle input[type=checkbox] { accent-color: var(--green, #5fd068); width: 16px; height: 16px; min-width: 0; flex: none; margin: 0; padding: 0; }
-.ads-notice { max-width: 520px; width: calc(100% - 32px); border: 1px solid rgba(255, 255, 255, .12); border-radius: var(--r3, 14px);
-  background: var(--bg-2, #12161b); color: var(--text); padding: 26px 28px; }
-.ads-notice::backdrop { background: rgba(0, 0, 0, .55); }
-.ads-notice h2 { margin-top: 0; font-size: 21px; }
-.ads-notice-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }

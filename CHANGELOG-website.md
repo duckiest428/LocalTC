@@ -6,6 +6,7 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ## [0.5.0] - Upcoming
 
 ### Added
+- **Ads on the dashboard**, from Google AdSense: one ad, on every other visit, at the foot of the page showing, never more than one per page and never on the full-screen Flight Tracker. Optional: Account → Ads turns them off, and a one-time notice says so. The privacy policy, cookie policy and terms say what Google receives and how consent is asked.
 - **Weather, areas & NOTAMs on the Flight Tracker**: a button shows the SIGMETs, TFRs and restricted areas around the flight and its airports' NOTAMs (a closed runway red), from what the app sends on.
 - **The Flight Tracker shows ATC's hold and reroutes**: the racetrack with its fix and EFC, and a direct or vectors
   around an area as a line, as the app's Live Map does.

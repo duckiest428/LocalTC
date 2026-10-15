@@ -50,13 +50,29 @@ def test_every_page_has_the_same_header_links():
     assert ">Dashboard</a>" in template and 'href="dashboard#support"' in template and ">Logbook</a>" not in template
 
 
-def test_the_site_loads_nothing_it_does_not_serve_itself_except_the_api_and_map_tiles():
+ADSENSE = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4833147286335766"
+
+
+def test_the_site_loads_nothing_it_does_not_serve_itself_except_google_ads():
     import re
 
     for page in [*PAGES, "tracker.html"]:
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
+        head = html[:html.index("</head>")]
+        assert head.count(ADSENSE) == 1, f"{page} has AdSense's script in its <head> once"
         for src in re.findall(r'<(?:script|link)(?![^>]*rel="canonical")[^>]+(?:src|href)="([^"]+)"', html):
-            assert not src.startswith(("http:", "https:", "//")), f"{page} loads {src} from elsewhere"
+            assert src == ADSENSE or not src.startswith(("http:", "https:", "//")), f"{page} loads {src} from elsewhere"
+    # The changelog page is built (tools/build_site.py): its template has it too.
+    assert ADSENSE in (ROOT / "tools" / "build_site.py").read_text(encoding="utf-8")
+
+
+def test_the_dashboards_ads_are_optional_and_never_on_the_full_screen_tracker():
+    dashboard = (ROOT / "site" / "dashboard.html").read_text(encoding="utf-8")
+    assert '<script src="ads.js"></script>' in dashboard and 'id="ads-on"' in dashboard and 'id="ads-notice"' in dashboard
+    assert "ads.js" not in (ROOT / "site" / "tracker.html").read_text(encoding="utf-8")
+    privacy = (ROOT / "site" / "privacy.html").read_text(encoding="utf-8")
+    cookies = (ROOT / "site" / "cookies.html").read_text(encoding="utf-8")
+    assert 'id="ads"' in privacy and 'id="ads"' in cookies and "localtc.ads.visits" in cookies
 
 
 def test_the_dashboard_is_a_sidebar_of_sections_behind_the_sign_in():

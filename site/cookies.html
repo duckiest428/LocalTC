@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cookies — LocalTC</title>
-<meta name="description" content="LocalTC's website sets no cookies and stores nothing in your browser, except one strictly necessary sign-in cookie if you use the optional dashboard.">
+<meta name="description" content="The cookies on LocalTC's website: Google AdSense's (advertising, asked for first where the law requires), the dashboard's sign-in cookie, and a few settings the dashboard keeps in your browser.">
 <meta name="robots" content="index, follow">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4833147286335766"
+     crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -28,26 +30,36 @@
 
 <main class="legal">
   <p class="kicker">Cookie policy</p>
-  <h1>There are no cookies.</h1>
-  <p class="updated">Unless you sign in to the dashboard. Last updated 22 September 2026.</p>
+  <h1>Cookies and ads.</h1>
+  <p class="updated">Last updated 15 October 2026.</p>
 
   <p>
-    This is the whole policy: <strong>this website does not set cookies.</strong> It also writes
-    nothing to local storage or session storage, uses no IndexedDB, no web beacons, no fingerprinting
-    and no device identifiers of any kind. When you close the tab, your browser is exactly as you
-    left it.
+    This website now carries <strong>Google AdSense</strong>, which pays towards developing LocalTC. Its
+    script is on every page, and Google may set or read cookies and similar identifiers on your device
+    through it. Apart from that, the site sets one sign-in cookie if you use the dashboard, and the
+    dashboard keeps a few small settings in your browser. This page lists all of it.
   </p>
 
   <div class="note">
     <p>
-      <strong>Why you are not being asked to consent.</strong> Consent is required for storing or
-      reading information on your device when that storage is not strictly necessary. This site
-      stores nothing at all, so there is nothing to ask you about. A banner here would be theatre —
-      and worse, it would train you to click "accept" on sites where it actually matters.
+      <strong>Your choice.</strong> Where the law requires it (the EEA, the UK and Switzerland, and some US
+      states), you're asked before Google stores or reads anything for advertising, through Google's own
+      consent message, and "no" is a real answer: you then get only non-personalised ads, or none. You can
+      also turn the dashboard's ads off altogether in <a href="dashboard#account">Account → Ads</a>.
     </p>
   </div>
 
-  <h2 id="signin">The one exception: signing in to the dashboard</h2>
+  <h2 id="ads">Google AdSense (advertising)</h2>
+  <ul>
+    <li><strong>Who:</strong> Google LLC / Google Ireland Ltd., from <code class="inline">pagead2.googlesyndication.com</code> and related Google domains.</li>
+    <li><strong>What:</strong> cookies and similar identifiers (for example <code class="inline">__gads</code>, <code class="inline">__gpi</code>, <code class="inline">IDE</code>, and the consent choice itself) used to show ads, limit how often you see one, measure them and fight fraud, and, if you allow it, to personalise them.</li>
+    <li><strong>Where the ads show:</strong> only on the dashboard: one ad, on every other visit, never more than one on a page, and never on the full-screen Flight Tracker. The script itself loads on every page of the site.</li>
+    <li><strong>Lifetime:</strong> set by Google; typically up to 13 months.</li>
+    <li><strong>Type:</strong> advertising, not strictly necessary: asked for first where the law requires consent.</li>
+    <li><strong>More:</strong> <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">how Google uses information from sites that use its services</a>, and <a href="https://adssettings.google.com" rel="noopener">your Google ad settings</a> (to turn personalised ads off everywhere).</li>
+  </ul>
+
+  <h2 id="signin">Signing in to the dashboard</h2>
   <p>
     If you sign in to the optional <a href="dashboard">dashboard</a>, the account server sets one
     cookie. Nothing is set until you do, and never if you don't have an account.
@@ -60,32 +72,32 @@
       <code class="inline">Secure</code> (HTTPS only) and <code class="inline">SameSite=Lax</code>. It's never used for
       tracking or shared with anyone.</li>
   </ul>
-  <p>
-    Because it's strictly necessary for something you asked for, it doesn't need a consent banner. The
-    dashboard stores nothing else: no local storage, no analytics.
-  </p>
 
-  <h2>What that means in practice</h2>
+  <h2 id="storage">The dashboard's settings in your browser</h2>
+  <p>The dashboard keeps a few small values in your browser's local and session storage, never sent anywhere:</p>
   <ul>
-    <li><strong>No analytics.</strong> No Google Analytics, Plausible, Fathom or anything else. Nobody counts you.</li>
-    <li><strong>No advertising or retargeting.</strong> There is nothing to sell and nobody to sell it to.</li>
-    <li><strong>No social or video embeds.</strong> Links to other sites are plain links, which load nothing until you click them.</li>
-    <li><strong>No third-party fonts or scripts.</strong> The two typefaces are served from this site, so no font CDN learns that you visited. Every script on the page is a file in the same repository as the page.</li>
+    <li><code class="inline">localtc.ads</code>: whether you've turned the ads off.</li>
+    <li><code class="inline">localtc.ads.visits</code>: a count of your visits, so the ad shows on every other one.</li>
+    <li><code class="inline">localtc.ads.noticeSeen</code>: that you've seen the notice about ads, so it shows once.</li>
+    <li><code class="inline">localtc.wrNudgeSeen</code>: which Wrapped reminder you've already seen or closed.</li>
+  </ul>
+  <p>Clearing your browser's site data removes them.</p>
+
+  <h2>What there still isn't</h2>
+  <ul>
+    <li><strong>No analytics.</strong> No Google Analytics, Plausible or anything else counting you.</li>
+    <li><strong>No social or video embeds.</strong> Links to other sites are plain links.</li>
+    <li><strong>No third-party fonts.</strong> The two typefaces are served from this site.</li>
     <li><strong>No A/B testing, no session replay, no heatmaps.</strong></li>
   </ul>
 
   <h2>Verify it yourself</h2>
   <p>
-    Nothing here should be taken on trust. Open your browser's developer tools
-    (<code class="inline">F12</code>, or Cmd&#8209;Option&#8209;I) and look:
-  </p>
-  <ul>
-    <li>The <strong>Application</strong> (or <strong>Storage</strong>) tab: cookies, local storage and session storage are all empty for this domain (and for <code class="inline">api.localtc.tech</code>, until you sign in to the dashboard).</li>
-    <li>The <strong>Network</strong> tab: every request goes to this domain. Nothing is fetched from anywhere else, except the dashboard's calls to <code class="inline">api.localtc.tech</code>, and the dashboard maps' tiles from <code class="inline">tile.openstreetmap.org</code> (which set no cookies).</li>
-  </ul>
-  <p>
-    The source of this page is public, so you can also just
-    <a href="https://github.com/duckiest428/LocalTC/tree/master/site" rel="noopener">read it</a>.
+    Open your browser's developer tools (<code class="inline">F12</code>, or Cmd&#8209;Option&#8209;I): the
+    <strong>Application</strong> (or <strong>Storage</strong>) tab shows the cookies and storage above, and the
+    <strong>Network</strong> tab shows every request: this domain, Google's ad servers, <code class="inline">api.localtc.tech</code>
+    for the dashboard, and the maps' tiles from <code class="inline">tile.openstreetmap.org</code>. The source of this
+    site is public, so you can also <a href="https://github.com/duckiest428/LocalTC/tree/master/site" rel="noopener">read it</a>.
   </p>
 
   <h2>Elsewhere</h2>
@@ -96,11 +108,10 @@
     <a href="privacy">the privacy policy</a> for what that involves.
   </p>
 
-  <h2>If this ever changes</h2>
+  <h2>Changes</h2>
   <p>
-    It is not planned to. If something on this site ever does need to store data on your device,
-    this page will say what and why before it happens, and anything non-essential will ask you
-    first — properly, with a real choice and a real "no".
+    If anything else is ever stored on your device, this page will say what and why first, and anything
+    non-essential will ask you, with a real choice and a real "no". Every edit is in the site's public history.
   </p>
 
   <nav class="legal-nav">

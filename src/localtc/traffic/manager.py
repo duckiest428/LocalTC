@@ -108,6 +108,9 @@ STAND_SLOW_KT = 20.0  # ... at taxi speed or less
 TAXI_IN_MPS = 2.5  # and rolls onto the stand's marker at a walking pace, stopping there
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
+GROUND_SNAP_M = 150.0  # on the ground, a correction bigger than this ...
+GROUND_SNAP_NM = 1.0  # ... is made at once this far from the user (out of sight), ...
+GROUND_BLEND_MAX_S = 60.0  # ... else eased out over this long
 NATIVE_NOTE = ("MSFS's own traffic is on as well: set its air traffic to off (Options > General > Traffic) so only "
                "LocalTC's flies, or two of each will be about.")
 NO_FEED_NOTE = "No live positions: no internet, or the free sources are busy. Trying again."
@@ -246,6 +249,9 @@ class TrafficManager:
         self.flights: dict[str, Flight] = {}  # by hex: the newest position of each
         self.history: dict[str, list[Flight]] = {}  # by hex: its positions over the last few minutes, oldest first
         self._calls_t: dict[str, float] = {}  # by airport: the last call to one of the real flights there
+        # The calls made to each real flight, kept when it's taken away and made again (out of the nearest few, back
+        # in): N711UW was cleared to taxi twice, the same long route four minutes apart.
+        self._said: dict[str, set[str]] = {}
         self.feed_t = 0.0
         self.source = ""
         self.feed_ok = True
@@ -285,6 +291,8 @@ class TrafficManager:
         fresh = {f.hex: f for f in flights if f.hex}
         for hex_, f in fresh.items():
             old = self.flights.get(hex_)
+            if old is not None and stuck(old, f):
+                continue  # the same spot again, moving: a stale record re-sent (held AAL1138 at 7,000 ft 11 minutes)
             if old is None or f.t > old.t:
                 self.flights[hex_] = f
                 seen = self.history.setdefault(hex_, [])
@@ -294,6 +302,7 @@ class TrafficManager:
         for hex_ in [h for h, f in self.flights.items() if now - f.t > LOST_S * 2]:
             del self.flights[hex_]
             self.history.pop(hex_, None)
+            self._said.pop(f"live:{hex_}", None)
 
     def _shown(self, hex_: str, now: float) -> Flight | None:
         """Where a live one is shown now: where it was ``LIVE_DELAY_S`` ago, between the two positions either side
@@ -305,9 +314,28 @@ class TrafficManager:
             return None
         for a, b in zip(seen, seen[1:]):
             if a.t <= at <= b.t:
-                return _between(a, b, (at - a.t) / (b.t - a.t) if b.t > a.t else 1.0, now)
+                k = (at - a.t) / (b.t - a.t) if b.t > a.t else 1.0
+                return self._lift(a, b, k, _between(a, b, k, now))
         last = seen[-1]
         return replace(last, t=now - (at - last.t))
+
+    def _lift(self, a: Flight, b: Flight, k: float, mid: Flight) -> Flight:
+        """Between a report on the ground and one in the air (or the other way): the altitude eased from the field's
+        to the reported one, off the ground once above it. Halfway it was on the runway, then 600 ft up at once."""
+        if a.on_ground == b.on_ground:
+            return mid
+        if a.on_ground:  # taking off
+            ground = self._pressure_alt(self._elev(a.lat, a.lon))
+            alt = ground + ((b.alt_ft if b.alt_ft is not None else ground) - ground) * k
+        else:  # landing
+            ground = self._pressure_alt(self._elev(b.lat, b.lon))
+            alt = (a.alt_ft if a.alt_ft is not None else ground) + (ground - (a.alt_ft if a.alt_ft is not None else ground)) * k
+        airborne = alt > ground + 20
+        return replace(mid, alt_ft=None if not airborne else alt, on_ground=not airborne)
+
+    def _pressure_alt(self, true_ft: float) -> float:
+        """The sim's altitude as a pressure altitude (``_true_alt`` the other way)."""
+        return true_ft - (self._true_alt(true_ft) - true_ft)
 
     def on_airport(self, airport: Airport) -> None:
         self.airports[airport.icao.upper()] = airport
@@ -488,7 +516,7 @@ class TrafficManager:
                 out += self._remove(other)  # the one parked there gives way to the real one
         key = f"live:{f.hex}"
         plane = Plane(key, self._request(), model[0], model[1], callsign=f.callsign or f.registration, flight=f,
-                      spot=spot, created_t=now)
+                      spot=spot, created_t=now, said=self._said.setdefault(key, set()))
         self._add(plane)
         lat, lon, alt, hdg = self._where(plane, now)
         gs = 0.0 if spot is not None and f.gs_kt < 3 else f.gs_kt
@@ -524,6 +552,10 @@ class TrafficManager:
         palt = s[2] + s[5] * dt / 60.0
         err = math.hypot(haversine_nm(lat, lon, plat, plon) * M_PER_NM, (alt - palt) * 0.3048 * 3)
         speed = max(gs_kt, s[4], 15.0) * M_PER_NM / 3600.0
+        if alt - self._elev(lat, lon) < 50 and err > GROUND_SNAP_M:
+            # On the ground, a long way off where it's shown: out of the user's sight it's put there; in sight it
+            # gets there slowly, never sliding across the apron at three times its speed.
+            return 0.5 if self._dist_nm(lat, lon) > GROUND_SNAP_NM else GROUND_BLEND_MAX_S
         return max(BLEND_MIN_S, min(BLEND_MAX_S, 1.5 * err / (CATCH_UP * speed)))
 
     def _send(self, plane: Plane, track: AiTrack, now: float) -> AiTrack:
@@ -828,12 +860,12 @@ class TrafficManager:
                 (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None
                  and (types is GA_TYPES or not _light(m[0]))), None))
         if kind.startswith("ramp_cargo"):
-            def cargo() -> tuple[str, str] | None:  # a cargo airline's colours, else the type unpainted
+            def cargo() -> tuple[str, str] | None:  # a cargo airline's colours, else any airline's: never unpainted
                 for t in rng.sample(CARGO_TYPES, k=len(CARGO_TYPES)):
                     for airline in rng.sample(CARGO_AIRLINES, k=3):
-                        if (m := self.picker.pick(t, airline)) is not None and "ZZZ" not in m[0].upper():
+                        if (m := self.picker.pick(t, airline)) is not None and _liveried(m):
                             return m
-                return next((m for t in CARGO_TYPES if (m := self.picker.pick(t)) is not None), None)
+                return next((m for t in CARGO_TYPES if (m := self.picker.painted(t, rng)) is not None), None)
             return self._reuse(used, ("ramp_cargo", ""), rng, cargo)
         size = "heavy" if "heavy" in kind or radius_m >= 30 else "small" if "small" in kind or radius_m < 18 else "medium"
         names = list(airlines)
@@ -844,9 +876,11 @@ class TrafficManager:
             for name in [airline] + [n for n in rng.choices(names, weights, k=3) if n != airline] if names else [""]:
                 for kind_code in rng.sample(TYPES_BY_SIZE[size], k=len(TYPES_BY_SIZE[size])):
                     model = self.picker.pick(kind_code, name)
-                    if model is not None and (not name or "ZZZ" not in model[0].upper()):
+                    if model is not None and _liveried(model):
                         return model
-            return self.picker.pick(TYPES_BY_SIZE[size][0])
+            # None of the airlines here installed in that size: another airline's colours, never a white one.
+            return next((m for t in rng.sample(TYPES_BY_SIZE[size], k=len(TYPES_BY_SIZE[size]))
+                         if (m := self.picker.painted(t, rng)) is not None), None)
 
         return self._reuse(used, (size, airline), rng, pick)
 
@@ -1348,6 +1382,17 @@ __all__ = ["AtcLink", "TrafficManager", "TrafficSettings"]
 
 def _hhmm(t: float) -> str:
     return f"{int(t // 3600 % 24):02d}{int(t // 60 % 60):02d}"
+
+
+def _liveried(model: tuple[str, str]) -> bool:
+    """In an airline's colours: not FSLTL's unpainted ("ZZZZ") one."""
+    return "ZZZ" not in f"{model[0]} {model[1]}".upper()
+
+
+def stuck(old: Flight, new: Flight) -> bool:
+    """A report of a moving aircraft at exactly the place of the last one: a source re-sending a stale record."""
+    return new.t > old.t and new.lat == old.lat and new.lon == old.lon and new.gs_kt >= 5 \
+        and (not new.on_ground or new.gs_kt >= 5)
 
 
 def _between(a: Flight, b: Flight, k: float, now: float) -> Flight:

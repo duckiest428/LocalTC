@@ -58,10 +58,9 @@ from localtc.sim_api import (
     PttPressed,
     PttReleased,
     ReadbackEvaluated,
-    TrafficSnapshot,
     Transcript,
 )
-from localtc.sim_api.geo import bearing_deg, haversine_nm
+from localtc.sim_api.geo import haversine_nm
 
 SAFETY, ROUTINE, CHATTER = 3, 2, 1
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
@@ -83,7 +82,6 @@ HANDOFF_LATE_S = 60.0
 READBACK_LATE_S = 18.0
 TAXI_SPEED_MARGIN_KT = 5.0  # a knot or two over the taxi limit isn't worth a word
 TAXI_RUNWAY_M = 60.0  # this close to a runway's edge, closing on it: hold short
-TRAFFIC_NM, TRAFFIC_FT = 2.0, 1000.0
 TOD_WARN_MIN = 10.0
 FUEL_WINDOW_S = 900.0  # the cruise burn: fuel used over this long
 FUEL_MIN_SPAN_S = 300.0  # ... at least this much of it
@@ -215,7 +213,6 @@ class Monitor(WatchMixin):
         self.commanded: dict[str, float] = {}  # what the pilot asked for, and when
         self.flap_step_t = -1e9
         self.atis_seen: dict[str, str] = {}
-        self.traffic_nm: dict[int, float] = {}
         self._init_watches(alternate, repeat_atc)
 
     # --- in ----------------------------------------------------------------------------------------------------
@@ -285,8 +282,6 @@ class Monitor(WatchMixin):
             self._watch_emergency(t, "emergency")
         elif isinstance(ev, ArrivalData):
             self._watch_arrival(ev)
-        elif isinstance(ev, TrafficSnapshot):
-            self._traffic(ev, t)
         elif isinstance(ev, AircraftSystems):
             self._systems(ev, t)
             self.prev_sys = ev
@@ -1103,27 +1098,7 @@ class Monitor(WatchMixin):
         # (No "they're waiting for a readback": ATC asks for it itself when it wants one, and the copilot telling the
         # captain to answer the radio isn't how a crew works.)
 
-    def _traffic(self, ev: TrafficSnapshot, t: float) -> None:
-        own = self.c.own
-        if own is None or own.on_ground or self._agl(own) < 500:
-            return
-        seen = {}
-        for x in ev.targets:
-            if x.on_ground:
-                continue
-            nm = haversine_nm(own.lat, own.lon, x.lat, x.lon)
-            seen[x.object_id] = nm
-            dalt = x.alt_ft - own.alt_msl_ft
-            was = self.traffic_nm.get(x.object_id)
-            if nm > TRAFFIC_NM or abs(dalt) > TRAFFIC_FT or was is None or nm >= was:
-                continue  # far, well above or below, or not closing
-            clock = round(((bearing_deg(own.lat, own.lon, x.lat, x.lon) - own.hdg_true) % 360) / 30) % 12 or 12
-            if clock in (5, 6, 7) and nm > 1.0:
-                continue  # behind: it's theirs to see us
-            level = "same level" if abs(dalt) < 300 else f"{abs(round(dalt, -2)):,.0f} {'above' if dalt > 0 else 'below'}"
-            self._call(f"traffic:{x.object_id}", ROUTINE, t, f"Traffic, {clock} o'clock, {max(nm, 0.5):.1f} miles, {level}.", again_s=180)
-            break
-        self.traffic_nm = seen
+    # (No traffic calls: telling the crew about other aircraft is ATC's job, not the pilot monitoring's.)
 
     # --- checklists, briefings, status ---------------------------------------------------------------------------
 

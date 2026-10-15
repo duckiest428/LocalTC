@@ -160,3 +160,22 @@ def test_the_captains_light_calls_get_one_check():
     pm.observe(AircraftIdentity(t=0.0, title="Airbus A320neo Asobo", atc_model="A20N"))
     pm.observe(own(0.2))
     assert said(pm.observe(IntercomHeard(t=1.0, text="Taxi lights on. Strobes and Beacon lights on."))) == ["Check."]
+
+
+def test_the_fslabs_fcu_is_pushed_and_pulled_and_its_seatbelt_sign_clicked():
+    """In the air, a new altitude is pushed (managed) and a heading pulled (flown) once they show; the seat belts sign
+    is the overhead's own switch, not the sim's toggle (which didn't move it)."""
+    from localtc.crew.actions import Cockpit, plan
+    from localtc.crew.commands import Command
+    from localtc.sim_api import ClickSequence, TurnKnob
+
+    fsl = for_aircraft(PROFILES, "FSLabs A321-271NX - United Airlines (#4501 | N44501)", "A21N")
+    c = Cockpit(own=own(1.0), profile=fsl)
+    alt = plan(Command("altitude", "28000"), c)
+    assert [w.codes for w in alt.after if isinstance(w, ClickSequence)] == [(71249, 71252)]
+    hdg = plan(Command("heading", "190"), c)
+    assert [w.codes for w in hdg.after if isinstance(w, ClickSequence)] == [(71229, 71232)]
+    belt = plan(Command("seatbelt", "on"), c)
+    knob = [w for w in belt.writes if isinstance(w, TurnKnob)][0]
+    assert knob.var == "L:VC_OVHD_SIGNS_SeatBelts_Switch" and knob.target == 20
+    assert not plan(Command("heading", "190"), Cockpit(own=own(1.0, on_ground=True), profile=fsl)).after

@@ -57,8 +57,8 @@
 [  1374.0] PILOT     119.2: Descend and maintain three thousand, expect R-NAV runway one four right, Cessna two lima tango.
 [  1374.0] READBACK  approach.descend correct
 [  1380.0] PILOT     119.2: Approach, Cessna two lima tango, request vectors.
-[  1382.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 160, vectors for the RNAV runway 14R approach.
-[  1384.0] PILOT     119.2: Heading one six zero, Cessna two lima tango.
+[  1382.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 157, vectors for the RNAV runway 14R approach.
+[  1384.0] PILOT     119.2: Heading one five seven, Cessna two lima tango.
 [  1384.0] READBACK  approach.vectors correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1899.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared RNAV runway 14R approach, contact Boeing Tower 120.6, bye.

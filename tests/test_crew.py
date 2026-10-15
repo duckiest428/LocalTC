@@ -289,19 +289,33 @@ def test_the_copilots_voice_by_sex():
     assert crew_speaker("female", 0, 1) is None  # a single-speaker voice has no choice
 
 
-def test_the_intercom_sounds_dry_and_waits_for_the_radio():
+def test_the_intercom_sounds_dry_and_talks_over_the_radio():
     t = np.arange(16000) / 16000
     audio = intercom_effect(np.sin(2 * np.pi * 440 * t).astype(np.float32), 16000)
     assert len(audio) == 16000 and 0.7 < np.max(np.abs(audio)) <= 0.81  # no squelch tail, no hiss added
 
-    player = AudioPlayer.__new__(AudioPlayer)  # the queue only; nothing played
-    import queue as q
-    player._queue, player._started = q.Queue(), True
-    player.start = lambda: None
+    player = AudioPlayer.__new__(AudioPlayer)  # the queues only; nothing played
+    from localtc.tts.player import _Lane
+    player.radio, player.intercom, player._started, player.volume = _Lane(player, "r"), _Lane(player, "i"), True, 1.0
     crew1, crew2, atc = (Clip(audio, 16000, "intercom"), Clip(audio, 16000, "intercom"), Clip(audio, 16000, "atc"))
     for clip in (crew1, crew2, atc):
         player.play(clip)
-    assert [player._queue.get_nowait() for _ in range(3)] == [atc, crew1, crew2]
+    assert player.radio.queue.get_nowait() is atc  # its own channel: the copilot doesn't wait for the radio
+    assert [player.intercom.queue.get_nowait() for _ in range(2)] == [crew1, crew2]
+
+
+def test_tuning_away_or_keying_the_mic_cuts_the_radio():
+    from localtc.tts.player import _Lane
+    player = AudioPlayer.__new__(AudioPlayer)
+    player.radio, player.intercom, player._started, player.volume = _Lane(player, "r"), _Lane(player, "i"), True, 1.0
+    audio = np.zeros(160, dtype=np.float32)
+    ground, tower, crew = Clip(audio, 16000, "atc", station="Seattle Ground"), Clip(audio, 16000, "atc", station="Seattle Tower"), Clip(audio, 16000, "intercom")
+    for clip in (ground, tower, crew):
+        player.play(clip)
+    player.tuned("Seattle Tower")  # ground's line still waiting is gone
+    assert ground.done.is_set() and not tower.done.is_set()
+    player.keyed()  # the pilot talks: the radio stops, the copilot doesn't
+    assert tower.done.is_set() and not crew.done.is_set()
 
 
 def test_the_intercom_key_goes_to_the_copilot_not_atc():

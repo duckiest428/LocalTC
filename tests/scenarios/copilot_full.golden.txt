@@ -54,9 +54,9 @@
 [  1383.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, expect ILS runway 14R approach, descend and maintain 3,000, Boeing altimeter 29.92.
 [  1387.0] PILOT     119.2: Descend and maintain three thousand, expect I L S runway one four right, Cessna two lima tango.
 [  1387.0] READBACK  approach.descend correct
-[  1395.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 160, vector for the ILS runway 14R approach.
-[  1398.0] PILOT     119.2: Heading one six zero, Cessna two lima tango.
-[  1398.0] READBACK  approach.turn correct
+[  1395.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 164, vectors ILS runway 14R approach.
+[  1398.0] PILOT     119.2: Heading one six four, Cessna two lima tango.
+[  1398.0] READBACK  approach.present_heading correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1899.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared ILS runway 14R approach, contact Boeing Tower 120.6.
 [  1902.0] PILOT     119.2: Cleared I L S runway one four right approach, Boeing Tower one two zero point six, Cessna two lima tango.

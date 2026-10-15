@@ -21,6 +21,7 @@ M_PER_DEG = 111_320.0
 HORIZON_S = 60.0  # carried on this long past its last update at most, then held where it got to (a few missed
 # reports must never stop one in mid-air)
 HORIZON_GROUND_S = 8.0  # on the ground: a few seconds at most (one driving on past its last report ran into a terminal)
+GROUND_WAIT_S = 8.0  # on the ground, shown ahead of the real one: slowed so it's caught up in about this long
 ROLL_DPS = 5.0  # how quickly it rolls into a turn and out (an airliner: a few degrees a second)
 MAX_BANK = 25.0
 YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 10.0  # the most its nose swings a second
@@ -117,6 +118,18 @@ class Track:
         if self.on_ground != new.on_ground:
             self.on_ground = new.on_ground
         lat, lon, alt, hdg = self.raw(now)
+        if self.on_ground and self.gs_kt > 0:
+            # Shown ahead of where it really is (the reports lag): eased backwards it reversed down the taxiway. It
+            # carries on from where it's shown, slower, or waits, until the real one has caught up.
+            u = math.radians(self.hdg)
+            ahead_m = (shown[0] - lat) * M_PER_DEG * math.cos(u) \
+                + (shown[1] - lon) * M_PER_DEG * math.cos(math.radians(lat)) * math.sin(u)
+            if ahead_m > 1.0:
+                self.lat += ahead_m * math.cos(u) / M_PER_DEG
+                self.lon += ahead_m * math.sin(u) / (M_PER_DEG * math.cos(math.radians(lat)))
+                speed = self.gs_kt * M_PER_NM / 3600.0
+                self.gs_kt = max(0.0, speed - ahead_m / max(self.blend_s, GROUND_WAIT_S)) * 3600.0 / M_PER_NM
+                lat, lon, alt, hdg = self.raw(now)
         alt_shown = shown[2] if not (new.on_ground and self.ground_ft is not None) else alt
         self.off = (shown[0] - lat, shown[1] - lon, alt_shown - alt, _wrap(shown[3] - hdg))
 

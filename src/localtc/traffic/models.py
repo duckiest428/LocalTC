@@ -98,6 +98,14 @@ class ModelPicker:
             self._cache[key] = self._pick(*key)
         return self._cache[key]
 
+    def painted(self, code: str, rng) -> tuple[str, str] | None:
+        """One of the type in an airline's colours, any airline's (a parked one never stands there unpainted)."""
+        kin = [m for m in self._fsltl if family(m.type) == family(code.upper()) and not m.generic and m.airlines]
+        if not kin:
+            return None
+        m = rng.choice(sorted(kin, key=lambda m: (m.title, m.livery)))
+        return m.title, m.livery
+
     def _pick(self, code: str, airline: str) -> tuple[str, str] | None:
         if not code:
             return None

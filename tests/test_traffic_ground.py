@@ -164,3 +164,14 @@ def test_a_large_ramp_at_an_airline_airport_is_a_remote_airliner_stand():
     assert model is not None and any(t in model[0] for t in TYPES_BY_SIZE["heavy"]), model
     small = m._parked_model("ramp_ga_small", 8.0, Counter(), random.Random(3))
     assert small is None or not any(t in small[0] for t in ("C172", "DA62", "DA40", "PA28"))
+
+
+def test_a_parked_airliner_is_always_in_an_airlines_colours():
+    """No airline of the airport's installed in that size: another airline's colours, never FSLTL's white one."""
+    from collections import Counter
+
+    m = manager()
+    m._gates_here = 63
+    for seed in range(10):
+        model = m._parked_model("gate_heavy", 32.0, Counter({"ANA": 5}), random.Random(seed))
+        assert model is not None and "ZZZ" not in model[0], model

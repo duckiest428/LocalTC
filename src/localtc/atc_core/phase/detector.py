@@ -50,6 +50,9 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     leave_hold_s: float = 2.0
     takeoff_gs_kt: float = 30.0
     takeoff_s: float = 1.0
+    # A takeoff after landing (a stop-and-go) must be well into the roll: rolling out fast to a far exit (an A321 at
+    # Orlando sped back up to 46 kt on 35R after slowing to 6) is still the taxi in.
+    taxi_in_takeoff_gs_kt: float = 70.0
     rejected_takeoff_kt: float = 15.0
     airborne_s: float = 2.0
     airborne_agl_ft: float = 20.0
@@ -229,10 +232,9 @@ class PhaseDetector:
         return any(haversine_nm(own.lat, own.lon, p.lat, p.lon) * METERS_PER_NM <= max(p.radius_m, 15.0) + self.th.stand_margin_m
                    for p in geo.airport.parking)
 
-    def _takeoff_roll(self, own: OwnshipState, ctx: PositionContext) -> bool:
-        return self._held(
-            "takeoff", own.on_ground and ctx.aligned_on_runway and own.gs_kt >= self.th.takeoff_gs_kt, own.t, self.th.takeoff_s
-        )
+    def _takeoff_roll(self, own: OwnshipState, ctx: PositionContext, min_kt: float | None = None) -> bool:
+        kt = self.th.takeoff_gs_kt if min_kt is None else min_kt
+        return self._held("takeoff", own.on_ground and ctx.aligned_on_runway and own.gs_kt >= kt, own.t, self.th.takeoff_s)
 
     def _arrival_due(self, own: OwnshipState, ctx: PositionContext) -> str | None:
         th = self.th
@@ -373,7 +375,7 @@ class PhaseDetector:
                 return FlightPhase.TAXI_IN, "exited the runway"
 
         elif phase is FlightPhase.TAXI_IN:
-            if self._takeoff_roll(own, ctx):
+            if self._takeoff_roll(own, ctx, th.taxi_in_takeoff_gs_kt):
                 return FlightPhase.TAKEOFF, "takeoff roll"
             # Parked is at a stand, or engines off. Brake set on a taxiway (waiting for a gate, or for traffic)
             # is still the taxi in, unless it goes on for a long time.

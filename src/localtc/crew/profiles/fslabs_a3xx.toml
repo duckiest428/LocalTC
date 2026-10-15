@@ -27,7 +27,7 @@ landing_detent = "3"
 reversers = true
 ceiling_ft = 39000
 short_runway_ft = 7000
-cannot = ["ap_mode"]   # the FCU's push and pull: not found to answer yet
+cannot = ["ap_mode"]   # the FCU's modes as such (its altitude and heading knobs are pushed and pulled below)
 
 # What the copilot sees by: the aircraft's own switch positions (0, 10, 20 a step; the flap lever 105 a detent).
 [reads]
@@ -40,6 +40,7 @@ light_logo = "L:VC_OVHD_EXTLT_NavLogo_Switch >= 5"
 flaps_index = "L:VC_PED_FLAP_LEVER / 105"
 flaps_positions = "4"                                   # (the sim counts 0-8)
 parking_brake = "L:VC_PED_PARK_BRAKE_Switch >= 50"
+seatbelt = "L:VC_OVHD_SIGNS_SeatBelts_Switch >= 5"
 ap_speed_sel = "L:FSL_FCU_SPD"
 ap_heading_sel = "L:FSL_FCU_HDG"
 ap_altitude_sel = "L:FSL_FCU_ALT"
@@ -88,18 +89,28 @@ click_down = 72486
 step = 10
 on = 10
 
-# The gear lever: 0 down, 100 up (up is +1, as every lever's step up is).
+# The seat belts sign (the overhead's SIGNS panel): up is ON, +1 a step up.
+[actions.seatbelt]
+var = "L:VC_OVHD_SIGNS_SeatBelts_Switch"
+click_up = 72547
+click_down = 72546
+step = 10
+on = 20
+off = 0
+
+# The gear lever: 0 down, 100 up. Its codes are the other way round in the two cockpit models (76001 up in one,
+# 76000 in the other): the copilot tries the other when the lever doesn't move (sim_bridge/knob.py).
 [actions.gear_up]
 var = "L:VC_GEAR_Lever"
-click_up = 76001
-click_down = 76000
+click_up = 76000
+click_down = 76001
 step = 100
 on = 100
 
 [actions.gear_down]
 var = "L:VC_GEAR_Lever"
-click_up = 76001
-click_down = 76000
+click_up = 76000
+click_down = 76001
 step = 100
 on = 0
 
@@ -165,6 +176,14 @@ learn = true            # 100 or 1,000 a click, as the 100/1000 switch is
 fine_var = "L:VC_GSLD_FCU_100_1000_Switch"   # 0 at 100, 10 at 1,000: an altitude between thousands wants 100
 fine_value = 0
 fine_codes = [71243]
+
+# The FCU's knobs pushed and pulled (a left click pushes, a right click pulls; each then released, +3 and +4): the
+# altitude pushed once a new one shows in the air (the climb or descent managed), the heading pulled (flown).
+[actions.altitude_push]
+press = [71249, 71252]
+
+[actions.heading_pull]
+press = [71229, 71232]
 
 # The first officer's baro knob (its own side; the captain's is the captain's): +5 up, +6 down, a hundredth of an
 # inch (or a hectopascal) a click; pulled for STD, pushed back for QNH (then released).

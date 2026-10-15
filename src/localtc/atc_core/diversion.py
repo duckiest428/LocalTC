@@ -295,7 +295,7 @@ class DiversionMixin:
         lat, lon = (geo.airport.lat, geo.airport.lon) if geo is not None else (own.lat, own.lon)
         true = bearing_deg(own.lat, own.lon, lat, lon)
         magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
-        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360
+        return int(round((true - magvar) % 360)) % 360 or 360
 
     def _diversion_altitude(self: Any, own: OwnshipState, geo: AirportGeometry | None) -> int:
         """Down towards a three degree path to the field, never below 3,000 ft above it (2,000 close in), and

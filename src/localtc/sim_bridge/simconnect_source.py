@@ -572,7 +572,7 @@ class SimConnectSource:
             log.warning("Copilot can't read %s to turn %s: %s", command.var, command.name, exc)
             return False
         turn = KnobTurn(command.name.upper(), command.target, command.step, command.wrap, learn=command.learn,
-                        div=command.div, mod=command.mod, burst=command.burst)
+                        div=command.div, mod=command.mod, burst=command.burst, flippable=bool(command.event))
         self._hand = (turn, define_id, command)
         log.info("Copilot: turning %s to %s", command.name, command.target)
         return True
@@ -619,7 +619,8 @@ class SimConnectSource:
             if what == "step":
                 step = turn.pending.pop()
                 if command.event:
-                    self._click(dll, handle, command.event, command.up if step > 0 else command.down)
+                    up, down = (command.down, command.up) if turn.flip else (command.up, command.down)
+                    self._click(dll, handle, command.event, up if step > 0 else down)
                 else:
                     dll.set_input_event(handle, self._input_events[turn.name], step)
             elif what == "read":

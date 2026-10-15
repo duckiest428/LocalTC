@@ -104,6 +104,10 @@ on = "approach.turn"
 say = "{readback}"
 
 [[pilot]]
+on = "approach.present_heading"
+say = "{readback}"
+
+[[pilot]]
 on = "approach.base"
 say = "{readback}"
 

@@ -8,6 +8,10 @@ speaks through the radio effect. The words are made speakable first (``aviation.
 synthesizer; the synthesizers (Piper, Kokoro, Azure) are tried in order by a ``providers.VoiceChain``, and when none
 can speak, the line stays text and ATC carries on. The ATIS repeats while its frequency is tuned, like the real
 thing, and stops when the pilot tunes away.
+
+The radio is the frequency tuned, the moment it's tuned: a new frequency cuts what's still being said (or waiting to
+be) on the old one, and a line from a frequency no longer tuned isn't said at all. Keying the microphone stops what's
+being said on the radio (the copilot's intercom carries on).
 """
 
 import asyncio
@@ -22,6 +26,7 @@ from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
     CrewSpeech,
+    PttPressed,
     RadioChatter,
     RadioTuned,
     Transcript,
@@ -69,6 +74,9 @@ class VoiceOut:
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
+        self._radio = bus.subscribe(RadioTuned, PttPressed)  # at once, not behind the lines being synthesized
+        self.tuned: str | None = None  # the station tuned now
+        self._tunes_seen = self._tunes_reached = 0  # changes of frequency: seen at once, and reached in the line order
 
     def persona(self, key: str, role: str, *, manner: str = "", locale: str = "") -> Persona:
         if role == "copilot":
@@ -76,7 +84,22 @@ class VoiceOut:
                                piper_speaker=self.crew_speaker)
         return persona_for(key, role, manner=manner, locale=locale if self.regional else "")
 
+    async def _watch_radio(self) -> None:
+        async for ev in self._radio:
+            if isinstance(ev, RadioTuned) and ev.radio == 1:
+                self.tuned, self._tunes_seen = ev.station, self._tunes_seen + 1
+                if hasattr(self.player, "tuned"):
+                    self.player.tuned(ev.station)
+            elif isinstance(ev, PttPressed) and hasattr(self.player, "keyed"):
+                self.player.keyed()
+
+    def on_air(self, station: str | None) -> bool:
+        """A line said by ``station`` is heard: one ATC said after the last change of frequency (ATC knew what was
+        tuned), or one from the station tuned now."""
+        return station is None or self._tunes_reached >= self._tunes_seen or station == self.tuned
+
     async def run(self) -> None:
+        watcher = asyncio.create_task(self._watch_radio())
         try:
             async for ev in self._events:
                 try:
@@ -84,20 +107,23 @@ class VoiceOut:
                 except Exception:  # noqa: BLE001 - a voice failing never stops ATC (nor the next line)
                     log.exception("Voice failed on %s; carrying on", type(ev).__name__)
         finally:
+            watcher.cancel()
             self._stop_atis()
 
     async def _speak(self, ev: Any) -> None:
         locale = getattr(ev, "locale", "")
         if isinstance(ev, AtcTransmission):
             await self.say(ev.spoken or ev.text, self.persona(shift_key(ev.station, self.shift), "atc",
-                           manner=ev.manner or ev.controller or "atc", locale=locale), "atc", keep=clip_id(ev))
+                           manner=ev.manner or ev.controller or "atc", locale=locale), "atc", keep=clip_id(ev),
+                           station=ev.station)
         elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
             if ev.speaker == "atc":
                 who = self.persona(shift_key(ev.station, self.shift), "atc", manner=ev.controller or "atc", locale=locale)
-                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev))
+                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), station=ev.station)
             else:  # the other crews: this PC's voices unless asked (each line a cloud voice was credits spent on noise)
                 who = self.persona(f"chatter {ev.callsign}", "chatter", locale=locale)
-                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), local=not self.chatter_cloud)
+                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), local=not self.chatter_cloud,
+                               station=ev.station)
         elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
             await self.say(ev.text, self.persona("", "copilot"), "pilot", keep=clip_id(ev))
         elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
@@ -105,16 +131,24 @@ class VoiceOut:
         elif isinstance(ev, AtisBroadcast) and self.atis:
             self._stop_atis()
             self._atis_task = asyncio.create_task(self._loop_atis(ev))
-        elif isinstance(ev, RadioTuned) and ev.controller != "atis":
-            self._stop_atis()
+        elif isinstance(ev, RadioTuned):
+            self._tunes_reached += 1  # the lines from here on were said knowing it
+            if ev.controller != "atis":
+                self._stop_atis()
 
     async def say(self, text: str, who: Persona | str, kind: str, *, manner: str | None = None, keep: str = "",
-                  local: bool = False) -> Clip | None:
+                  local: bool = False, station: str | None = None) -> Clip | None:
         """``who``: the person speaking (a voice key: a station). ``keep``: the id to keep the audio under, to be
-        played again (``dsp.clips``, when that's on). ``local``: only the voices on this PC."""
+        played again (``dsp.clips``, when that's on). ``local``: only the voices on this PC. ``station``: who says it
+        on the radio (not said once the pilot has tuned away from them)."""
         async with self._lock:
+            if not self.on_air(station):
+                return None  # tuned away while it waited its turn
             clip = await asyncio.to_thread(self.render, text, who, kind, manner, local)
+            if clip is not None and not self.on_air(station):
+                return None  # ... or while it was being synthesized
             if clip is not None:
+                clip.station = station
                 self.player.play(clip)
                 if keep and CLIPS.enabled:
                     await asyncio.to_thread(CLIPS.put, keep, clip.audio, clip.rate)

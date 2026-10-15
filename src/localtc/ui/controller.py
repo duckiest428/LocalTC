@@ -78,8 +78,13 @@ FLIGHT_EVERY_S = 1.0
 COMPANION_ZONES_EVERY_S = 30.0  # the phone's ATC zones: again after a handoff or a taxi clearance, else this often
 FREQ_LABELS = {"atis": "ATIS", "awos": "AWOS", "asos": "ASOS", "clearance": "CLR", "ground": "GND", "tower": "TWR",
                "departure": "DEP", "approach": "APP", "center": "CTR", "unicom": "UNICOM", "ctaf": "CTAF",
-               "multicom": "MULTICOM", "fss": "FSS"}
+               "multicom": "MULTICOM", "fss": "FSS", "clearance_pretaxi": "PRE-TAXI", "remote_clearance": "RCO CLR"}
 FREQ_ORDER = list(FREQ_LABELS)
+
+
+def freq_label(kind: str) -> str:
+    """A frequency's kind on the airport box: "GND", "PRE-TAXI" (never the sim's "CLEARANCE_PRETAXI")."""
+    return FREQ_LABELS.get(kind, kind.upper().replace("_", " "))
 DEPARTING = {"PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
 
 
@@ -1175,7 +1180,7 @@ def airport_summary(airport, engine=None) -> dict:
         freqs.setdefault(f.kind, [])
         if f.mhz not in freqs[f.kind]:
             freqs[f.kind].append(f.mhz)
-    rows = [{"label": FREQ_LABELS.get(kind, kind.upper()), "kind": kind, "mhz": mhzs[0], "others": mhzs[1:]}
+    rows = [{"label": freq_label(kind), "kind": kind, "mhz": mhzs[0], "others": mhzs[1:]}
             for kind, mhzs in sorted(freqs.items(), key=lambda kv: FREQ_ORDER.index(kv[0]) if kv[0] in FREQ_ORDER else 99)]
     if engine is not None:
         # The departure frequency ATC gives in the clearance, where the sim lists it as approach's (San Francisco's
@@ -1217,7 +1222,7 @@ def airport_detail(airport) -> dict:
         **airport_summary(airport), "lat": airport.lat, "lon": airport.lon, "elev_ft": round(airport.elev_ft),
         "magvar": airport.magvar, "runways": runways, "parking": len(airport.parking),
         "taxiways": sorted({p.name for p in airport.taxi_paths if p.kind == "taxi" and p.name}),
-        "all_frequencies": [{"kind": f.kind, "label": FREQ_LABELS.get(f.kind, f.kind.upper()), "mhz": f.mhz,
+        "all_frequencies": [{"kind": f.kind, "label": freq_label(f.kind), "mhz": f.mhz,
                              "name": f.name} for f in airport.frequencies],
     }
 

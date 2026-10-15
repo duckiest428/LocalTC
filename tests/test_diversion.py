@@ -176,14 +176,14 @@ def test_well_off_the_heading_to_the_diversion_gets_a_new_one():
     f.fetch()
     f.fly(30)
     assert "common.divert" in f.ids() and "common.emergency_nearest" not in f.ids()  # asked already: no offer
-    assert f.engine.state.assignments.heading == 90
+    assert f.engine.state.assignments.heading == 94  # to the degree, not rounded to tens
     f.say(f.readback())
-    f.fly(20, hdg_mag=90, hdg_true=101)
+    f.fly(20, hdg_mag=94, hdg_true=105)
     assert f.ids()[-1] == "common.divert"  # on the heading: nothing to add
     f.fly(70, hdg_mag=40, hdg_true=51)  # wandering off to the northeast
-    assert f.ids()[-1] == "common.divert_vector" and "turn right heading 090" in f.said[-1].text
+    assert f.ids()[-1] == "common.divert_vector" and "turn right heading 093" in f.said[-1].text
     count = len(f.said)
-    f.fly(90, hdg_mag=90, hdg_true=101)
+    f.fly(90, hdg_mag=93, hdg_true=104)
     assert len(f.said) == count  # back on it
 
 

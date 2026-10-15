@@ -115,3 +115,21 @@ def test_the_737s_landing_lights_are_a_switch_each_side_and_on_is_0():
     assert plan(Command("light", "on", "landing"), c).writes == (
         SetInputEvent(name="LIGHTING_LANDING_LIGHT_FIXED_L", value=0.0),
         SetInputEvent(name="LIGHTING_LANDING_LIGHT_FIXED_R", value=0.0))
+
+
+def test_a_lever_that_doesnt_move_is_tried_with_its_other_code():
+    """The FSLabs's gear lever: 76000 is down in one cockpit model, up in the other."""
+    turn = KnobTurn("GEAR_DOWN", 0, 100, flippable=True)
+    value, now = 100.0, 0.0
+    for _ in range(2000):
+        what = turn.due(now)
+        if what == "step":
+            step = turn.pending.pop()
+            if turn.flip:  # only the other code moves it
+                value = max(0.0, min(100.0, value + step * 100))
+        elif what == "read":
+            turn.on_value(value, now)
+        if turn.done:
+            break
+        now += 0.01
+    assert turn.flip and value == 0.0

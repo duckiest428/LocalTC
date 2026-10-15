@@ -622,3 +622,45 @@ def test_the_chatter_leaves_localtcs_own_aircraft_to_the_traffic():
     engine.managed_traffic = {42}
     facility = type("F", (), {"controller": "ground"})()
     assert engine._doing(target, None, facility) is None
+
+
+def test_a_taxiing_one_shown_ahead_of_the_real_one_waits_never_reverses():
+    """The reports lag: one shown 40 m further down the taxiway than the next report says slows down and lets the real
+    one catch up; eased back along the taxiway it drove backwards."""
+    t = Track(1, 0.0, 0.0, 100.0, 90.0, 15.0, 0.0, 0.0, True, 0.0, 0.0, t0=0.0, blend_s=0.0)
+    before = t.position(4.0)
+    new = Track(1, before[0], before[1] - 40 / 111_320, 100.0, 90.0, 15.0, 0.0, 0.0, True, 0.0, 0.0, t0=4.0, blend_s=5.0)
+    t.update(new, 4.0)
+    east = [t.position(4.0 + i * 0.5)[1] * 111_320 for i in range(30)]
+    assert all(b >= a - 0.01 for a, b in zip(east, east[1:]))  # never west, the way it came
+    assert t.gs_kt < 15.0
+
+
+def test_a_stale_record_resent_doesnt_hold_an_airliner_in_the_sky():
+    """A source sending a moving aircraft's last position again with a new time: not a report (it held AAL1138 at
+    7,000 ft for 11 minutes, then dived it to where the real one was)."""
+    m = manager()
+    m.on_feed([flight(t=NOW)], "adsb.fi", NOW)
+    m.on_feed([flight(t=NOW + 5)], "adsb.fi", NOW + 5)
+    assert m.flights["a1"].t == NOW
+    m.on_feed([flight(t=NOW + 10, lat=0.049)], "adsb.fi", NOW + 10)
+    assert m.flights["a1"].t == NOW + 10
+
+
+def test_taking_off_between_two_reports_climbs_from_the_runway():
+    m = manager()
+    a = flight(t=NOW, ground=True, gs=140.0)
+    b = flight(t=NOW + 10, alt=1200.0, gs=170.0, vs=2500.0)
+    early, late = m._lift(a, b, 0.01, a), m._lift(a, b, 0.6, b)
+    assert early.on_ground and not late.on_ground and late.alt_ft < 1000
+
+
+def test_a_flight_taken_away_and_made_again_isnt_cleared_twice():
+    m = manager()
+    m.on_feed([flight(t=NOW)], "adsb.lol", NOW)
+    m.tick(NOW)
+    plane = next(iter(m.planes.values()))
+    plane.said.add("taxi_out")
+    m._remove(plane)
+    m._create_live(flight(t=NOW + 5), None, NOW + 5)
+    assert "taxi_out" in m.planes["live:a1"].said

@@ -183,3 +183,12 @@ def test_ground_speed_with_the_parking_brake_set_is_not_a_taxi():
     det = PhaseDetector()
     ticks = [own(0)] + [own(t, gs_kt=3.8, parking_brake=True) for t in range(1, 40)]
     assert run(det, ticks) == [(0, FlightPhase.PARKED)]
+
+
+def test_speeding_back_up_on_the_rollout_to_a_far_exit_is_still_the_taxi_in():
+    """Orlando's 35R: slowed to 6 kt after landing, then back up to 46 kt to the exit; not a takeoff (which put the
+    flight back at O'Hare)."""
+    det = PhaseDetector()
+    det.phase = P.TAXI_IN
+    ticks = [own(i, gs_kt=gs, on_runway=True) for i, gs in enumerate([6, 12, 24, 36, 46, 46, 38, 30, 20, 10])]
+    assert run(det, ticks) == []

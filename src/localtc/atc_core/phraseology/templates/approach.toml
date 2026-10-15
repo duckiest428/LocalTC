@@ -88,6 +88,21 @@ text = ["{callsign}, turn {turn} heading {heading}.", "{callsign}, fly heading {
 readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
+# The first vector with the aircraft already pointing about right: the heading it's on, no turn.
+[[template]]
+id = "approach.present_heading"
+controller = "approach"
+text = ["{callsign}, fly heading {heading}, vectors {approach} approach.", "{callsign}, fly heading {heading}, vectors for runway {runway}."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.fly_heading"
+controller = "approach"
+text = ["{callsign}, fly heading {heading}."]
+readback = { required = ["heading"] }
+pilot_readback = "Heading {heading}, {callsign_short}."
+
 [[template]]
 id = "approach.turn_descend"
 controller = "approach"

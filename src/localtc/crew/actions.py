@@ -245,6 +245,19 @@ def _write(profile: Profile, key: str, default: SimCommand, value: float | None 
     return default
 
 
+def _knob_after(profile: Profile, key: str) -> tuple[SimCommand, ...]:
+    """An FCU knob pushed or pulled once what it set shows (``altitude_push``, ``heading_pull``): an input event, or
+    an add-on's clickspot pressed and released (the FSLabs's)."""
+    w = profile.actions.get(key)
+    if w is None:
+        return ()
+    if w.input:
+        return (SetInputEvent(name=w.input, value=float(w.on)),)
+    if w.press:
+        return (ClickSequence(name=key.replace("_", " "), codes=tuple(w.press), event=w.click_event),)
+    return ()
+
+
 def plan(cmd: Command, c: Cockpit) -> Plan | str:
     """What to send for ``cmd``, or why it can't be done on this aircraft ("unable ...")."""
     got = _plan(cmd, c)
@@ -348,9 +361,11 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                     f"{MODE_NAMES[mode].capitalize()}.", already=f"Already in {MODE_NAMES[mode]}.", reads="ap_modes")
     if a == "heading":
         deg = int(v)
+        # Flying, the knob is pulled once the heading shows: flown, not just set (an Airbus's selected heading).
+        after = _knob_after(p, "heading_pull") if c.own is not None and not c.own.on_ground else ()
         return Plan(a, v, (_write(p, "heading", SendSimEvent(name="HEADING_BUG_SET", value=deg), deg),),
                     _sys("ap_heading_sel", float(deg % 360)), f"Heading {deg:03d} set.",
-                    f"heading {speech.heading(deg)} set", reads="ap_heading_sel")
+                    f"heading {speech.heading(deg)} set", reads="ap_heading_sel", after=after)
     if a == "altitude":
         ft = int(v)
         first: tuple[SimCommand, ...] = ()
@@ -359,9 +374,7 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
             first = (ClickSequence(name="altitude 100s", codes=tuple(w.fine_codes), event=w.click_event),)
         # Flying, an Airbus's knob is pushed once the new altitude shows: the climb or descent managed (the
         # A350's sat in ALT with FL230 set).
-        push = p.actions.get("altitude_push")
-        after = (SetInputEvent(name=push.input, value=float(push.on)),) if push is not None and push.input \
-            and c.own is not None and not c.own.on_ground else ()
+        after = _knob_after(p, "altitude_push") if c.own is not None and not c.own.on_ground else ()
         return Plan(a, v, (*first, _write(p, "altitude", SendSimEvent(name="AP_ALT_VAR_SET_ENGLISH", value=ft), ft)),
                     _sys("ap_altitude_sel", float(ft)), f"{speech.altitude_display(ft)} set.",
                     f"{speech.altitude(ft)} set", reads="ap_altitude_sel", after=after)

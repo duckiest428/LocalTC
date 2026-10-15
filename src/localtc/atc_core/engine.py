@@ -286,6 +286,8 @@ RUNWAY_VACATING_KT = 15.0  # ... at this speed or more
 CROSSING_ARRIVAL_NM = 2.5  # traffic this close in on a runway that crosses the departure runway goes first
 ROLLING_KT = 20.0  # on the ground at this speed or more: rolling along a runway, not taxiing
 ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it isn't free
+FAR_LOCAL_NM = 80.0  # an airport's tower, ground or clearance this far off in the air: not the one on the frequency
+FAR_APPROACH_NM = 200.0  # ... its approach or departure
 STOP_KT = 80.0  # on the takeoff roll below this, tower stops it for an aircraft about to be on the runway ahead
 LANDING_BEHIND_M = 1500.0  # landed traffic ahead this far down the runway as this one crosses the threshold: spaced
 # (about 5,000 ft: between the FAA's 4,500 and 6,000 ft for jets landing behind each other; the positions are seconds old)
@@ -480,6 +482,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._stt_since: float | None = None  # set from push-to-talk release until its transcript arrives
         self._tx_mhz: float | None = None  # the frequency the pilot keyed the mic on
         self._radio_busy_until = -math.inf  # voice out: until ATC (or the copilot) has finished speaking
+        self._paused_at: float | None = None  # when the sim was paused (its pause is no silence on the frequency)
         self._departure_override: str | None = None  # a departure runway the pilot asked for
         self._approach_kind: Approach | None = None  # an approach the pilot asked for (and got)
         self._going_around = False
@@ -662,7 +665,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # is an A333), else what the flight plan said.
             self.state.flight.aircraft_type = clean_sim_name(event.atc_model) or aircraft_size.designator(event.title)                 or self.state.flight.aircraft_type
         elif isinstance(event, SimLifecycle):
+            was_paused = self.tracker.paused
             self.tracker.handle(event)
+            if self.tracker.paused and not was_paused:
+                self._paused_at = event.t
+            elif was_paused and not self.tracker.paused and self._paused_at is not None:
+                # The pause wasn't silence: "how do you read?" the moment the sim was unpaused, after a minute in the
+                # menu, was. ATC's quiet clocks start again where they stopped.
+                gap, self._paused_at = max(0.0, event.t - self._paused_at), None
+                comms = self.state.comms
+                if comms.last_atc_t is not None:
+                    comms.last_atc_t += gap
+                if comms.last_pilot_t is not None:
+                    comms.last_pilot_t += gap
         elif isinstance(event, NearbyAirports):
             self._on_nearby(event)
         elif isinstance(event, TrafficSnapshot):
@@ -1089,6 +1104,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(airborne)]
             self._going_around = False
         elif phase is P.DEPARTURE and change.previous == P.TAKEOFF.value:
+            self._landed = False  # off again (a touch and go, another leg): not before it's airborne
             # Off the ground: what was still to be said about the runway is over (a takeoff clearance said again,
             # after a "did you copy?", with the aircraft already climbing out).
             on_ground = ("tower.takeoff", "tower.luaw", "tower.hold_short", "tower.continue_hold_short", "tower.stop_takeoff",
@@ -1097,9 +1113,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 st.pending = None
             self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(on_ground)]
         elif phase is P.TAKEOFF:
-            self._landed = False  # off again (a touch and go, another leg)
-            # The taxi-out's runway crossings are behind: the destination's runway of the same name ("13/31") was
-            # "crossed" again just off it after landing, with no taxi-in given yet.
+            # (Still landed until it's off the ground: a "takeoff" from the rollout that went no further, at Orlando,
+            # put ground back at O'Hare.) The taxi-out's runway crossings are behind: the destination's runway of the
+            # same name ("13/31") was "crossed" again just off it after landing, with no taxi-in given yet.
             self._crossings, self._crossed = (), set()
             self._crossing_seen.clear()
         if change.previous is not None and P(change.previous) is P.PARKED and st.assignments.departure_gate is None:
@@ -1418,6 +1434,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         airport's controller of that kind, when it's the frequency tuned and nothing else is being said."""
         facility = self.state.comms.tuned
         want = TRAFFIC_CALLS.get(kind)
+        if self.tracker.paused or self._transmitting(t):
+            return []  # the sim paused (the world stands still), or the pilot talking: not over them
         if facility is None or want is None or facility.controller != want \
                 or (facility.airport or "").upper() != icao.upper():
             return []
@@ -3287,9 +3305,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         heading = self._magnetic(own, leg.heading_true)
         assigned = st.assignments.heading
         turn = self._turn_towards(own.hdg_mag, heading)
-        if assigned is None and turn is None:  # already pointing about right: it still gets a heading to fly
+        present = assigned is None and turn is None and leg.leg != "intercept"
+        if present:
+            # Already pointing about right: it still gets a heading to fly, the one it's on ("fly heading 186"),
+            # not a turn of four degrees to a rounder one.
+            heading = int(round(own.hdg_mag)) % 360 or 360
+        elif assigned is None and turn is None:
             turn = "right" if ((heading - own.hdg_mag) % 360) < 180 else "left"
-        new_heading = turn is not None and not (
+        new_heading = (turn is not None or present) and not (
             assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG)  # still turning onto it
         # Down with the miles left to fly, never a climb. On its own (no turn to go with it) only a real step.
         level = st.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
@@ -3330,6 +3353,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             instruction = {"downwind": "approach.downwind", "base": "approach.base"}.get(leg.leg, "approach.turn")
             if self._vectors_named and instruction != "approach.base":
                 instruction = "approach.heading"  # what the vectors are for was said with the first of them
+            if present:
+                instruction = "approach.present_heading" if not self._vectors_named else "approach.fly_heading"
             self._vectors_named = True
             self._schedule(t, instruction, {"heading": heading, "turn": turn, "approach": plan["approach"],
                                             "runway": runway}, tuned, delay=False,
@@ -3429,9 +3454,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     @staticmethod
     def _magnetic(own: OwnshipState, true: float) -> int:
-        """A true heading as a magnetic one to give on the radio, in tens."""
+        """A true heading as a magnetic one to give on the radio, to the degree: rounded to tens, a 30 degree cut onto
+        Orlando's 35R came out as 43."""
         magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
-        return int(round(((true - magvar) % 360) / 10) * 10) % 360 or 360
+        return int(round((true - magvar) % 360)) % 360 or 360
 
     def _intercept_altitude(self, own: OwnshipState, plan: dict[str, Any]) -> int:
         """Joining the final: at or under the glideslope from where the aircraft will meet it, in thousands."""
@@ -5332,7 +5358,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if current is not None and current.controller == "center" and current.matches(mhz) and current not in self.facilities \
                 and own is not None and not own.on_ground:
             return current  # and still that centre until the next handoff, not the airport's when the handoff's done
-        matches = [f for f in self.facilities if f.matches(mhz)]
+        matches = [f for f in self.facilities if f.matches(mhz) and not self._out_of_reach(f)]
         if not matches:
             if expected is not None and expected.matches(mhz):
                 # The frequency ATC just sent the pilot to: that controller's, even a moment before the flight is
@@ -5358,6 +5384,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         preferred_airport = self.state.flight.destination if arriving else self.state.flight.origin
         ranked = sorted(matches, key=lambda f: (f.airport != preferred_airport, f.controller == ("departure" if arriving else "approach")))
         return ranked[0]
+
+    def _out_of_reach(self, facility: Facility) -> bool:
+        """An airport's controller far out of radio range of the aircraft in the air: Atlanta Center's 133.5 over
+        Georgia isn't O'Hare Tower's 133.5, 500 miles behind."""
+        own = self.state.aircraft
+        airport = self.tracker.context_builder.airports.get(facility.airport) if facility.airport else None
+        if own is None or own.on_ground or airport is None:
+            return False
+        reach = FAR_APPROACH_NM if facility.controller in ("approach", "departure") else FAR_LOCAL_NM
+        return airport.distance_nm(own.lat, own.lon) > reach
 
     def _center_here(self, mhz: float) -> Facility | None:
         """The centre whose airspace the aircraft is in, if the pilot has tuned its frequency without being

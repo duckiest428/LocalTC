@@ -14,6 +14,7 @@ BURST = 20  # at most this many steps between reads (the speed-up builds after ~
 MAX_READS = 60
 READ_TIMEOUT_S = 2.0
 STALLED_READS = 3  # the reading didn't move for this many bursts: the knob doesn't drive it, give up
+FLIP_READS = 2  # a clickspot that hasn't moved at all after this many: its other code (see ``flip``)
 
 
 @dataclass
@@ -34,6 +35,11 @@ class KnobTurn:
     next_t: float = 0.0
     reading: bool = False  # a read is out
     done: bool = False
+    # A clickspot's two codes the other way round: the FSLabs's gear lever is 76000 up and 76001 down in one cockpit
+    # model and the reverse in the other. A control that hasn't moved at all is tried once with the other code.
+    flippable: bool = False
+    flip: bool = False
+    moved: bool = False
 
     def __post_init__(self) -> None:
         self.target = self.reading_of(self.target)
@@ -68,7 +74,10 @@ class KnobTurn:
             self.done = True
             return
         self.stalled = self.stalled + 1 if self.last is not None and value == self.last else 0
-        if self.stalled >= STALLED_READS:
+        self.moved = self.moved or (self.last is not None and value != self.last)
+        if self.flippable and not self.flip and not self.moved and self.stalled >= FLIP_READS:
+            self.flip, self.stalled = True, 0
+        elif self.stalled >= STALLED_READS:
             self.done = True
             return
         self.last = value

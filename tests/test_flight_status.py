@@ -1,5 +1,6 @@
 """The ATC tab's airport box en route: the flight's status (ui/controller.py)."""
 
+
 def test_en_route_the_airport_box_is_the_flights_status():
     """At cruise, hours from the destination, its frequencies were no use: the flight's status instead (the airline and
     its logo, the way along, the time left), back to the airport near either end."""

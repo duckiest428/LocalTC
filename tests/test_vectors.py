@@ -179,3 +179,4 @@ def test_the_field_in_sight_from_the_wrong_side_gets_vectors_not_a_visual_there_
     assert "approach.expect_visual" in arrival.ids() and "approach" not in arrival.engine.state.clearances, arrival.ids()
     arrival.fly(1500)
     assert "approach.intercept_visual" in arrival.ids(), arrival.ids()
+

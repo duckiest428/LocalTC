@@ -7,6 +7,11 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The flight's status en route**: between the departure's area and 150 miles from the destination, the ATC tab's airport box shows the flight instead of frequencies hours from being any use: the airline's logo (else its colour), the flight number and aircraft, a line from origin to destination with the aircraft along it, the miles flown and to go, the time left and ETA, altitude, speeds, heading, wind, outside temperature, fuel and the controller you're with.
+- **The APU on the way in**: taxiing in, about 500 m from the gate, the copilot starts the APU, puts its bleed on once it's running and says if it doesn't come up; "start the APU", "APU bleed on" ask for it any time (the FSLabs's own overhead buttons).
+- **Minimums from the chart**: "minimums 280" (or a decision altitude, "DA 380") sets the copilot's minimum for the approach; "hundred above" and "minimums" are called by the height above the runway's touchdown zone, not the radio height over the ground short of it.
+- **Seatbelt sign off at 10,000 ft** in the climb, when it's smooth: the copilot does it and says so.
+- **Taxi guidance** (arrows along the route ground gave) shown in Quick Settings as coming later; not built yet.
 - **NOTAMs on the Live Map**: each of the flight's airports shows how many NOTAMs are in force and how many ATC works to, the list in its tooltip (ATC's first), and a runway a NOTAM closes drawn red over it. With the SIGMETs, the radar, TFRs and restricted areas under one button (Weather, areas & NOTAMs); an area that isn't active yet says when it will be.
 - **What's new**: after an update, the first time LocalTC opens, it shows the new version's notes, once (not on a new install: the welcome is shown then). The companion app does the same with its own notes.
 - **Other flights by their callsigns in the radio log** with LocalTC's traffic on: the real flights' calls and ATC's calls to them are no longer greyed out as "OTHER", but shown like any transmission, under the flight's callsign in its airline's colour (Ryanair blue, British Airways red, easyJet orange ...), each flight a shade of it.
@@ -56,6 +61,12 @@ a new minor version adds features, a patch fixes them.
 - **Dynamic routing.** A quiet centre gives "proceed direct" a fix further down the route when it saves real miles; with a convective SIGMET along the route ahead it says so and approves deviations either side, with the fix to go direct to after it; the route through an active TFR or restricted, prohibited or danger area at your level gets vectors around it, then "proceed direct" once clear; "request deviation 20 degrees left for weather" is approved with where to go after; without a STAR, the descent comes with a crossing restriction ("cross BLAKO at 11,000"). Each amendment is drawn on the Live Map and the companion's.
 
 ### Changed
+- **The departure frequency is optional** in an IFR clearance readback: misheard or left out, it holds nothing up.
+- **ATC waits for your readback** before talking to the other flights (tower cleared another for takeoff over the pilot's readback of a handoff), and a call it couldn't make is made later instead of dropped.
+- **No "call for the clearance when you're ready"** from the copilot, and its reworded lines never start with "roger" or "copy" to nothing.
+- **"Field in sight" before the aircraft can fly the visual** (on the wrong side of the field, heading away) gets "expect the visual, vectors to final" and the vectors go on; the turn onto the final clears the visual. It was cleared there and then, handed to tower, and nobody turned it in.
+- **A GA arrival's parking spot fits it**: a business jet isn't sent to a light aircraft's tie-down.
+- **LocalTC's traffic** flies and taxies with its engines running (the aircraft were cold and dark, gliding about), with its nose along the way it's going on the ground.
 - **The radio is the frequency you're on**: changing frequency cuts what was still being said (or waiting to be) on the old one at once; keying your microphone stops what's being said on the radio; the copilot's intercom is its own channel and talks over the radio when it has to.
 - **Approach's headings to the degree** (a 30 degree cut onto the final is 037, not 040, and joins the final as it should), and the first vector to an aircraft already pointing about right is the heading it's on ("fly heading 186"), not a four degree turn.
 - **The copilot doesn't call traffic**: telling you about other aircraft is ATC's job.
@@ -99,6 +110,15 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The departure runway from a real ATIS that lists landing and departure runways apart**: Las Vegas lands 26L and 1L and departs 1R and 1L; 26L, the first landing runway, was given for the takeoff (with a crosswind caution) and the flight plan's 01R refused. The ATIS's departure runways now, the flight plan's first if it's one of them. "1L AT BRAVO", "1R FULL LENGTH" are read as runways too. "Request departure 01L" at the gate is a runway request.
+- **Vectors in the mountains**: vectored off an arrival it was descending via, the aircraft was taken as already cleared to the arrival's bottom altitude, and no step down ever came (12,000 ft all the way to the localizer). The "too high, out on a downwind" call flipped at its line, so the headings went base, downwind, base. "Maintain 180 until five mile final" came 30 miles from landing on a downwind abeam the field.
+- **Tower cleared a runway at another airfield** ("runway 18W", a seaplane base's) to an arrival that had flown on past the destination: only the destination's runways now.
+- **A balloon on short final was a go-around**: 700 fpm for six seconds, low and slow with the thrust up, had tower give missed approach instructions and the landing flagged as without a clearance. A go-around climbs hard or for a while.
+- **"Request I for to Orlando as filed"** (IFR, as speech-to-text writes it) is an IFR clearance request, not a question about the ATIS.
+- **The copilot's checklist**: answered with what the aircraft shows ("one plus F" with the plan's 2) it's the captain's call and goes on (held, the answer went unheard and it never moved again); "can we continue the checklist?" asks the held item again (the language model had said "complete").
+- **The copilot forgot an altitude**: the call that sets a new altitude waited for a quiet frequency and expired behind a busy centre's other traffic; one that sets something waits longer now, and not for the quiet gap.
+- **The FSLabs's squawk**: typed after CLR and slower (the keys didn't take at 0.15 s apart).
+- **LocalTC's traffic**: a source that keeps timing out is left alone a while (adsb.lol, 500 times in a flight); a feed that's down isn't every arrival out of the receivers' sight (each was "landed by LocalTC", then heard again, then landed again: a jump each time); one stopping for you doesn't stop and start every two seconds.
 - **A centre taking a flight straight from tower turns it on course**: off on runway heading with no SID and no departure controller, the centre now says "proceed direct" the route's first fix, as departure does; it was left flying runway heading.
 - **One centre all the way**: handed by tower straight to a centre, the flight was never passed on to the next one. Each centre now hands it to the next along the route.
 - **"Check altitude" straight after a descent at pilot's discretion**: an altitude reached once on the climb counted as reached when it was given again for the descent, so a flight still level at cruise was told to check its altitude. It's to be reached again now.

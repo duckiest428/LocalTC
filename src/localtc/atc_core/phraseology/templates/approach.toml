@@ -111,6 +111,13 @@ readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
 [[template]]
+id = "approach.heading_descend"
+controller = "approach"
+text = ["{callsign}, fly heading {heading}, descend and maintain {altitude}."]
+readback = { required = ["heading", "altitude"] }
+pilot_readback = "Heading {heading}, descend and maintain {altitude}, {callsign_short}."
+
+[[template]]
 id = "approach.turn_descend"
 controller = "approach"
 text = ["{callsign}, turn {turn} heading {heading}, descend and maintain {altitude}."]

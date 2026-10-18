@@ -224,7 +224,7 @@ class TaxiGraph:
         return first[1], first[2]
 
     def parking_route(self, lat: float, lon: float, spot: int | None = None, *, kind: str = "",
-                      heading: float | None = None) -> TaxiRoute | None:
+                      heading: float | None = None, span_m: float = 0.0) -> TaxiRoute | None:
         """To the nearest parking, or to parking spot ``spot`` (a gate ATC assigned). ``kind``: only spots whose
         kind starts with it ("ramp_ga": a GA flight's), when the airport has any. ``heading``: the way the aircraft
         faces, a route ahead of it preferred to one behind."""
@@ -233,6 +233,11 @@ class TaxiGraph:
             kinds = {s.index: s.kind for s in self.geometry.airport.parking}
             wanted = {n for n in goals if kinds.get(n[1], "").startswith(kind)}
             goals = wanted or goals
+        if span_m and spot is None:
+            # Big enough for it: a Citation Latitude's 22 m on a light aircraft's tie-down, the nearest GA spot, wasn't.
+            radius = {s.index: s.radius_m for s in self.geometry.airport.parking}
+            fits = {n for n in goals if radius.get(n[1], 0.0) * 2 >= span_m * FIT}
+            goals = fits or goals
         start = self.nearest_node(lat, lon)
         if start is None or not goals:
             return None
@@ -251,6 +256,7 @@ def _both_sides(runway, points: list[tuple[float, float]]) -> bool:
 # A taxiway narrower than the aircraft needs: used only where there's no other way (lenient: the sim's widths are
 # rough, so a little under is a little dearer, well under a long way round).
 NARROW_PENALTY, TOO_NARROW_PENALTY, TOO_NARROW = 2.0, 30.0, 0.65
+FIT = 0.9  # a parking spot this much of the wingspan across at least (the scenery's radii are generous)
 
 
 def _narrow(path, need_m: float) -> float:

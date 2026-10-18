@@ -290,3 +290,17 @@ def test_a_real_runway_with_a_tailwind_in_the_sims_wind_isnt_used():
     engine.handle(AtisReport(t=own.t, icao="KLAS", letter="W", text=LAS_ATIS.replace("00000KT", "08015KT"), zulu="1756"))
     info = las(engine, own)
     assert info.letter == "W" and info.runway != "26L"  # 15 knots from 080 is a tailwind on 26L
+
+
+def test_departing_las_vegas_its_departure_runways_not_the_landing_one():
+    """Las Vegas lands 26L and 1L and departs 1R and 1L (the wind 010 at 17): 26L, the first landing runway, was given
+    for the takeoff, with a crosswind caution. The departure runways, the flight plan's among them first."""
+    engine, own = atis_engine("real")
+    engine.state.flight.origin, engine.state.flight.destination = "KLAS", "KBZN"
+    engine.cfg.dep_runway = "01R"
+    text = ("LAS ATIS INFO A 1156Z. 01011G21KT 10SM CLR 20/01 A3032 (THREE ZERO THREE TWO). VISUAL APPROACHES IN USE. "
+            "LANDING RWYS 26L AND 1L. DEPG RWYS 1R FULL LENGTH AND 1L AT BRAVO.")
+    engine.handle(AtisReport(t=own.t, icao="KLAS", letter="A", text=text, zulu="1156"))
+    info = las(engine, own)
+    assert info.departing[:1] == ("01R",) and "01L" in info.departing
+    assert engine._runway_end("KLAS", own).ident == "01R"

@@ -55,6 +55,8 @@ def designator(text: str) -> str:
     word = (text or "").strip().upper()
     if word in WINGSPAN_M:
         return word
+    if (bare := re.sub(r"[^A-Z0-9]+$", "", word)) in WINGSPAN_M:
+        return bare  # the sim's "C680+" (the Latitude's model name)
     for pattern, code in TITLE_TYPES:
         if re.search(pattern, word):
             return code

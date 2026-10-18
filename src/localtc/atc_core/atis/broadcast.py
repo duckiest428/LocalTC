@@ -51,6 +51,7 @@ class AtisInfo:
     # Where it's from ([atc] atis_source): (label, when the sim observed it (session time) or None, the report's "HHMM"
     # or ""): ("real ATIS", None, "1756"), ("METAR", None, "1753"), ("simulator", 812.0, "").
     source: tuple = ("simulator", None, "")
+    departing: tuple[str, ...] = ()  # the real ATIS's departure runways where it names them apart (the wind allowing)
 
     @property
     def icao_style(self) -> bool:

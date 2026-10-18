@@ -86,3 +86,10 @@ def test_the_airlines_own_terminal(haneda):
     gate = stands.assign(haneda, airline=True, aircraft_type="A35K", traffic=(parked,), seed="BAW7", operator="BAW")
     apart = math.dist(haneda.xy(gate.spot.lat, gate.spot.lon), haneda.xy(theirs.spot.lat, theirs.spot.lon))
     assert apart < 600, (gate.display, apart)
+
+
+def test_the_sims_model_name_with_a_plus_is_its_type():
+    """The Citation Latitude's model is "C680+": its wingspan, to find it a GA spot it fits (not a light aircraft's)."""
+    from localtc.atc_core.airport import aircraft_size
+
+    assert aircraft_size.wingspan_m("C680+") == aircraft_size.wingspan_m("C680") > 15

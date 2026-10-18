@@ -300,7 +300,8 @@ def test_vectors_for_the_ils_is_said_once(copilot):
 
 def test_speeds_only_come_down(copilot):
     speeds = [int(m.group(1)) for line in atc(copilot.lines) if (m := re.search(r"(\d+) knots", line))]
-    assert speeds and speeds == sorted(speeds, reverse=True)
+    # (Vectored round a long pattern after the go-around, no "180 until five mile final" 25 miles out at all.)
+    assert speeds == sorted(speeds, reverse=True)
 
 
 # --- the copilot at a human pace --------------------------------------------------------------------------------

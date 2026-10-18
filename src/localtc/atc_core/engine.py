@@ -174,6 +174,9 @@ MAX_TAILWIND_REQUEST_KT = 10.0  # a pilot's runway request is granted up to this
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
 VECTOR_FROM_NM = 45.0  # approach starts vectoring within this of the field
+FAR_ROUND_NM = 25.0  # vectored this far round still to fly: the speeds go by that, not by how close the field is
+TOO_HIGH_ON_BASE_FT = 2000.0  # on base: back out to a downwind only this much more than too high
+TOO_HIGH_TURN_IN_FT = 800.0  # out on the downwind: turned in once this far under too high
 VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the next
 DESCEND_GAP_S = 120.0
 INTERCEPT_GAP_S = 15.0  # the intercept waits no longer than this after the last instruction
@@ -873,6 +876,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if self.current_atis(icao) is None and own is not None:
             self._atis_now(icao, geo, own)  # not heard yet: the runway still comes from the ATIS it will say
         info = self.current_atis(icao)
+        if info is not None and icao == self.state.flight.origin and not self._arriving and info.departing:
+            # Departing: its runways for departures (Las Vegas lands 26L and 1L, departs 1R and 1L: 26L, the first
+            # landing runway, was given for the takeoff), the flight plan's if it's one of them.
+            wanted = [r for r in info.departing if r == self.cfg.dep_runway] + list(info.departing)
+            if (end := next((e for r in wanted if (e := geo.end(r)) is not None and not self._closed(icao, r)), None)):
+                return end
         if info is not None and (end := geo.end(info.runway)) is not None:
             return end
         if own is not None and (own.on_ground or geo.distance_nm(own.lat, own.lon) <= NEARBY_NM
@@ -3037,6 +3046,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                        f"{MAX_READBACK_ATTEMPTS} tries")]
 
     def _on_request(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
+        st = self.state
+        words = (interp.text or "").lower()
+        if interp.intent in ("ready_for_departure", "other") and interp.values.get("runway") \
+                and st.phase is not None and P(st.phase) in (P.PARKED, P.PUSHBACK, P.TAXI_OUT) \
+                and facility.controller in ("clearance", "ground") and "taxi" not in words \
+                and re.search(r"\b(?:request(?:ing)?|like|want|prefer|could we (?:get|have))\b", words):
+            # "Request departure 01L" at the gate: a runway asked for, not ready to go ("unable, departure 26L").
+            interp = replace(interp, intent="request_runway")
         before = len(self._scheduled)
         out = self._request(interp, facility, t)
         if (topic := interp.values.get("asks")) and interp.intent != "question" \
@@ -3351,6 +3368,13 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG)  # still turning onto it
         # Down with the miles left to fly, never a climb. On its own (no turn to go with it) only a real step.
         level = st.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
+        if self._via_floor is not None and st.assignments.altitude_ft == self._via_floor:
+            # Vectored off the arrival it was descending via: that clearance is over, the altitude it's at is where it
+            # is (Bozeman: "descend via" to 7,000 made 12,000 look cleared down already, and no descent ever came).
+            level = int(round(own.alt_indicated_ft, -2))
+            if new_heading:
+                self._via_floor = None
+                self._assign(altitude_ft=level)  # what it's at, until the next step down
         step = self._step_altitude(own, plan) if plan else None
         gap = 1000 if new_heading else 2000
         if step is not None and (floor := self._terrain_floor(own, leg.heading_true)) is not None:
@@ -3382,7 +3406,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                           arrival_runway=plan["approach"].landing_runway),
                                              setattr(self, "_going_around", False)))
         elif new_heading and descend is not None:
-            self._schedule(t, "approach.turn_descend", {"heading": heading, "turn": turn, "altitude": descend}, tuned,
+            self._schedule(t, "approach.turn_descend" if turn else "approach.heading_descend",
+                           {"heading": heading, "turn": turn, "altitude": descend}, tuned,
                            delay=False, on_issue=lambda: self._assign(heading=heading, altitude_ft=descend))
         elif new_heading:
             instruction = {"downwind": "approach.downwind", "base": "approach.base"}.get(leg.leg, "approach.turn")
@@ -3423,6 +3448,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if own.ias_kt < SPEED_CONTROL_MIN_KT or ctx.destination_distance_nm is None:
             return False
         assigned = self.state.assignments.speed_kt
+        to_go = ctx.destination_distance_nm
+        runway = self.state.assignments.arrival_runway
+        if self._vector_leg in ("join", "downwind") and runway and (leg := self._vector(own, runway)) is not None                 and leg.track_nm > FAR_ROUND_NM:
+            to_go = max(to_go, leg.track_nm)  # vectored: the miles round the pattern, not abeam the field ("maintain
+            # 180 until five mile final" on a downwind 30 miles from landing)
         traffic = None
         for distance, speed, flag in SPEED_GATES:
             if assigned is not None and speed >= assigned:
@@ -3433,7 +3463,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 traffic = self._landing_ahead(own) if traffic is None else traffic
                 if not traffic:
                     continue
-            if ctx.destination_distance_nm <= distance and own.ias_kt > speed + 20 and flag not in self.state.flags:
+            if to_go <= distance and own.ias_kt > speed + 20 and flag not in self.state.flags:
                 self.state.flags.add(flag)
                 self._vector_t = t
                 if speed < 200:
@@ -3481,10 +3511,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return None
         leg = vectors.vector(geo, end, own.lat, own.lon, slow=own.gs_kt < vectors.SLOW_KT, after=self._vector_leg,
                              side=self._vector_side, heading_true=own.hdg_true)
+        # Too high to turn in: out on a downwind first. With some give either way, so it doesn't flip at the line (Bozeman:
+        # base, downwind, base, 100 ft either side of it): turned onto base already, it stays there unless well over
+        # (and is taken down on it); sent out on the downwind, it turns in once it's clearly low enough.
+        margin = TOO_HIGH_ON_BASE_FT if self._vector_leg == "base" else -TOO_HIGH_TURN_IN_FT \
+            if self._vector_leg == "downwind" else 0.0
         if leg.leg in ("straight_in", "base", "intercept") and self._vector_leg != "intercept" \
-                and vectors.too_high(leg, own.alt_indicated_ft, geo.airport.elev_ft, slow=own.gs_kt < vectors.SLOW_KT):
-            self._vector_side = None  # a new downwind, on the side it is on now
-            return vectors.extended(geo, end, own.lat, own.lon)
+                and vectors.too_high(leg, own.alt_indicated_ft, geo.airport.elev_ft, slow=own.gs_kt < vectors.SLOW_KT,
+                                     margin_ft=margin):
+            return vectors.extended(geo, end, own.lat, own.lon)  # (its own side: the one it's on now)
         return leg
 
     @staticmethod
@@ -4850,7 +4885,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if route is None and graph is not None:
                 # No gate (GA, or none free): the nearest parking; for GA the scenery's GA ramp, not an airliner gate.
                 ga = not self._callsign().is_airline
-                gate, route = None, graph.parking_route(own.lat, own.lon, kind=GA_PARKING if ga else "", heading=own.hdg_true)
+                span = aircraft_size.wingspan_m(self.state.flight.aircraft_type or self._aircraft_title) or 0.0
+                gate, route = None, graph.parking_route(own.lat, own.lon, kind=GA_PARKING if ga else "", heading=own.hdg_true,
+                                                        span_m=span)
                 ramp = ga and route is not None and route.nodes and route.nodes[-1][0] == "parking" and any(
                     p.index == route.nodes[-1][1] and p.kind.startswith(GA_PARKING) for p in geo.airport.parking)
             taxiways = route.taxiways if route is not None else None

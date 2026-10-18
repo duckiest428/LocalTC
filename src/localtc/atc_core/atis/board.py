@@ -124,6 +124,10 @@ class AtisBoard:
                 if e is not None and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT:
                     end = e
                     break
+        departing: tuple[str, ...] = ()
+        if real is not None and real.departing and kind != "arrival":
+            departing = tuple(e.ident for ident in real.departing if (e := geo.end(ident)) is not None
+                              and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT)
         if end is None:
             return None
         region = self.region or region_for(icao)
@@ -184,7 +188,7 @@ class AtisBoard:
             stamp = real.zulu
         primary = approaches[end.ident]
         info = AtisInfo(icao, name, letter, stamp, weather, end.ident, primary.kind, notes, ops, region, kind, slot,
-                        source=source)
+                        source=source, departing=departing)
         self.current[key] = info
         self._issued[key] = t
         return info

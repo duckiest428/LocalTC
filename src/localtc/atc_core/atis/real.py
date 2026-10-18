@@ -56,7 +56,8 @@ def parse(text: str, kind: str = "both") -> RealAtis | None:
 def _runways_after(upper: str, lead: str) -> tuple[str, ...]:
     """The runways named after ``lead``: "LANDING RWYS 26L AND 19R" -> ("26L", "19R")."""
     found: list[str] = []
-    item = rf"(?:{RUNWAY}\s*)?\d{{1,2}}[LRC]?\b"  # "26L", "RWY 16L", "RWY8"
+    # "26L", "RWY 16L", "RWY8"; and how it's used: "1R FULL LENGTH AND 1L AT BRAVO" (the second was lost)
+    item = rf"(?:{RUNWAY}\s*)?\d{{1,2}}[LRC]?\b(?:\s+(?:FULL\s+LENGTH|(?:AT|FROM|INTXN|INT)\s+[A-Z][A-Z0-9]*))?"
     for m in re.finditer(rf"\b{lead}\b[\s,]*(?:AND\s+)?((?:{item}(?:\s*(?:,|AND|OR|/|&)\s*)?)+)", upper):
         found += [_ident(r) for r in re.findall(r"\d{1,2}[LRC]?(?![0-9])", m.group(1))]
     return tuple(dict.fromkeys(r for r in found if 1 <= int(r[:2]) <= 36))

@@ -50,7 +50,7 @@ from localtc.sim_api import (
     TrafficControlStatus,
     TrafficSnapshot,
 )
-from localtc.sim_api.geo import advance, haversine_nm, unit
+from localtc.sim_api.geo import advance, bearing_deg, haversine_nm, unit
 from localtc.traffic import airlines as airline_data
 from localtc.traffic.feed import Flight
 from localtc.traffic.ground import Follower, free_stand, taxi_in_path
@@ -95,8 +95,11 @@ CALL_GAP_S = 60.0  # tower tells one held short this often at most (the departur
 GIVE_WAY_M = 90.0  # one taxiing that would come this close to the user on the ground stops and gives way ...
 GIVE_WAY_AHEAD_S = 20.0  # ... looking this far ahead
 GIVE_WAY_CLEAR_M = 150.0  # ... and goes on once the user is this far away (or behind it)
+GIVE_WAY_AGAIN_S = 45.0  # ... and isn't stopped again for this long after it goes on
 GIVE_WAY_MAX_S = 180.0  # ... or after this long at most
 LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this long at most, then taken away
+FEED_FRESH_S = 15.0  # the feed answered, with something new, this recently: it's working
+HEARD_AGAIN_M = 1500.0  # one LocalTC is landing, heard again this close to where LocalTC has it: the real one again
 QUIET_S = 20.0  # an arrival on final not heard from this long (low, out of the receivers' sight): LocalTC lands it
 FINAL_NM = 15.0
 GLIDE = math.tan(math.radians(3.0))
@@ -108,6 +111,7 @@ STAND_SLOW_KT = 20.0  # ... at taxi speed or less
 TAXI_IN_MPS = 2.5  # and rolls onto the stand's marker at a walking pace, stopping there
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
+PATH_MIN_M = 8.0  # on the ground, moved this far between two reports: its track is the way it went
 GROUND_SNAP_M = 150.0  # on the ground, a correction bigger than this ...
 GROUND_SNAP_NM = 1.0  # ... is made at once this far from the user (out of sight), ...
 GROUND_BLEND_MAX_S = 60.0  # ... else eased out over this long
@@ -218,6 +222,7 @@ class Plane:
     sent: tuple[float, ...] | None = None  # (lat, lon, alt, hdg, gs, vs, turn, when): the last state the bridge has
     runway: tuple[str, str] | None = None  # (airport, runway end) it was held short of
     give_way_t: float = 0.0  # when it stopped for the user
+    gave_way_t: float = -1e9  # when it went on again (not stopped again straight away)
     parked_t: float = 0.0  # when it stopped on its stand (an arrival there goes after PARKED_STAY_S)
     said: set[str] = field(default_factory=set)  # the calls the controllers have made to it
     airborne_seen: bool = False  # seen in the air: an arrival, once down
@@ -315,9 +320,10 @@ class TrafficManager:
         for a, b in zip(seen, seen[1:]):
             if a.t <= at <= b.t:
                 k = (at - a.t) / (b.t - a.t) if b.t > a.t else 1.0
-                return self._lift(a, b, k, _between(a, b, k, now))
+                return self._lift(a, b, k, _on_path(a, b, _between(a, b, k, now)))
         last = seen[-1]
-        return replace(last, t=now - (at - last.t))
+        carried = replace(last, t=now - (at - last.t))
+        return _on_path(seen[-2], last, carried) if len(seen) > 1 else carried
 
     def _lift(self, a: Flight, b: Flight, k: float, mid: Flight) -> Flight:
         """Between a report on the ground and one in the air (or the other way): the altitude eased from the field's
@@ -437,15 +443,18 @@ class TrafficManager:
         # Gone: out of the area, lost, or one too many.
         for key, plane in list(self.planes.items()):
             f = self.flights.get(key[5:]) if plane.live else None
-            if plane.mode == "landing" and f is not None and f.t > plane.used_t + 1:
-                plane.mode, plane.local, plane.flight = "live", None, f  # heard again: the real one from here
+            if plane.mode == "landing" and f is not None and f.t > plane.used_t + 1 and plane.local is not None \
+                    and haversine_nm(f.lat, f.lon, plane.local.lat, plane.local.lon) * M_PER_NM < HEARD_AGAIN_M:
+                # Heard again where LocalTC has it: the real one from here. Somewhere else (the reports late), LocalTC
+                # lands it: swapping back and forth was a jump each time.
+                plane.mode, plane.local, plane.flight = "live", None, f
                 out += self._track(plane, now, blend_s=8.0)
                 continue
             if not plane.live or plane.mode in ("go_around", "departing", "hold", "landing", "give_way"):
                 continue
             # Only one close enough to be flown down here (one further off was landed, taken away for the distance and
             # made again from the next report, every 2 s).
-            if f is not None and plane.mode == "live" and not f.on_ground and now - f.t > QUIET_S \
+            if f is not None and plane.mode == "live" and not f.on_ground and now - f.t > QUIET_S and self._feed_fresh(now) \
                     and plane.object_id is not None and self._dist_nm(f.lat, f.lon) <= min(15.0, self.s.radius_nm):
                 out += self._landing(plane, now)
                 if plane.mode == "landing":
@@ -526,6 +535,12 @@ class TrafficManager:
                                    tail=(f.registration or f.callsign)[:9], lat=lat, lon=lon, alt_ft=alt, heading=hdg,
                                    on_ground=f.on_ground, airspeed_kt=gs))
         return out
+
+    def _feed_fresh(self, now: float) -> bool:
+        """The sources answering, and other flights heard just now: one gone quiet is out of their sight, not the
+        feed down (an hour of adsb.lol timing out had every arrival "landed by LocalTC", then heard again, then ...)."""
+        newest = max((f.t for f in self.flights.values()), default=-1e9)
+        return self.feed_ok and now - self.feed_t < FEED_FRESH_S and now - newest < FEED_FRESH_S
 
     def _where(self, plane: Plane, now: float) -> tuple[float, float, float, float]:
         """Where a live one is now: on its spot, or carried on from its last position to now."""
@@ -628,7 +643,7 @@ class TrafficManager:
         plane.lights = state
         gear, landing, taxi, beacon, strobe, nav, logo = state
         out: list[Any] = [AiLights(object_id=plane.object_id, gear_down=gear, landing=landing, taxi=taxi, beacon=beacon,
-                                   strobe=strobe, nav=nav, logo=logo)]
+                                   strobe=strobe, nav=nav, logo=logo, engines=beacon)]
         if not was or was[0] != gear:
             # The gear handle too: the key event alone left arrivals landing with their wheels up.
             out.append(SetAiVar(object_id=plane.object_id, name="GEAR HANDLE POSITION", unit="Bool", value=float(gear)))
@@ -1004,12 +1019,14 @@ class TrafficManager:
                 behind = self._closing(lat, lon, plane.local.hdg, own) is None
                 if away > GIVE_WAY_CLEAR_M or (behind and away > GIVE_WAY_M) or now - plane.give_way_t > GIVE_WAY_MAX_S \
                         or not own.on_ground:
-                    plane.mode, plane.local = "live", None
+                    plane.mode, plane.local, plane.gave_way_t = "live", None, now
                     out += self._track(plane, now)
                 continue
             f = plane.flight
             if plane.mode != "live" or not f.on_ground or f.gs_kt < 3 or not own.on_ground:
                 continue
+            if now - plane.gave_way_t < GIVE_WAY_AGAIN_S:
+                continue  # just went on: stopping again at once was a stop-start every 2 s in front of the user
             lat, lon, alt, hdg = self._where(plane, now)
             closest = self._closing(lat, lon, hdg, own, f.gs_kt)
             if closest is not None and closest < GIVE_WAY_M:
@@ -1314,9 +1331,11 @@ class TrafficManager:
         if call is None:
             return []
         kind, runway, extra = call
-        plane.said.add(kind)
-        self._calls_t[icao] = now
-        return self.atc.call(callsign=plane.callsign, kind=kind, icao=geo.icao, runway=runway, **extra)
+        out = self.atc.call(callsign=plane.callsign, kind=kind, icao=geo.icao, runway=runway, **extra)
+        if out:  # not said (the frequency busy, the pilot owing a readback): tried again on the next tick
+            plane.said.add(kind)
+            self._calls_t[icao] = now
+        return out
 
     def _next_calls(self, plane: Plane, geo: AirportGeometry, shown: Flight, real: Flight) -> list[tuple[str, str, dict]]:
         """The calls that fit what the flight is doing now and about to do, in the order they're made."""
@@ -1393,6 +1412,14 @@ def stuck(old: Flight, new: Flight) -> bool:
     """A report of a moving aircraft at exactly the place of the last one: a source re-sending a stale record."""
     return new.t > old.t and new.lat == old.lat and new.lon == old.lon and new.gs_kt >= 5 \
         and (not new.on_ground or new.gs_kt >= 5)
+
+
+def _on_path(a: Flight, b: Flight, f: Flight) -> Flight:
+    """On the ground, its track the way it really went from one report to the next: at taxi speed the reported track
+    is often off by 50 degrees or more, and it slid along sideways with its nose that way."""
+    if not (a.on_ground and b.on_ground) or haversine_nm(a.lat, a.lon, b.lat, b.lon) * M_PER_NM < PATH_MIN_M:
+        return f
+    return replace(f, track=bearing_deg(a.lat, a.lon, b.lat, b.lon))
 
 
 def _between(a: Flight, b: Flight, k: float, now: float) -> Flight:

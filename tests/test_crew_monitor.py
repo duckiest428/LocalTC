@@ -372,3 +372,22 @@ def test_no_anti_ice_question_in_cloud():
     out = fly(pm, [own(1 + i, on_ground=False, alt_agl_ft=9000, alt_indicated_ft=9400, in_cloud=True,
                        temperature_c=1.0, ias_kt=250, gs_kt=250, gear_down=False, flaps_index=0) for i in range(5)])
     assert not any("anti-ice" in w for w in said(out))
+
+
+def test_a_held_item_answered_with_what_the_aircraft_shows_goes_on():
+    """Flaps 1+F with the plan's 2: "one plus F" is the captain's call, said once, and the checklist goes on (held, the
+    answer went unheard and the checklist never moved again). "Continue the checklist" asks the held item again."""
+    from localtc.crew.monitor import _says
+
+    assert _says("1 plus f.", "1+F") and _says("Yes, that's the same thing. I said one plus F", "1+F")
+    assert not _says("set", "released") and not _says("two", "1+F")
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PARKED"))
+    pm.observe(systems(0.6, light_beacon=False))
+    pm.observe(own(1, parking_brake=False))
+    pm.observe(IntercomHeard(t=2, text="before start checklist"))
+    pm.observe(IntercomHeard(t=3, text="set"))  # held: it shows released
+    out = pm.observe(IntercomHeard(t=5, text="can we continue the checklist?"))
+    assert said(out) == ["Parking brake?"]
+    out = pm.observe(IntercomHeard(t=7, text="released"))
+    assert " ".join(said(out)).startswith("Parking brake released.") and "complete" not in " ".join(said(out))

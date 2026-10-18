@@ -485,8 +485,9 @@ def test_the_a330s_fcu_and_seatbelt_sign_go_by_its_own_input_events():
 def test_the_copilots_reworded_numbers_may_be_words():
     from localtc.crew.model import check_reworded
 
-    said = '{"reply": "Roger, squawk four-seven-three-two, initial six thousand set."}'
+    said = '{"reply": "Okay, squawk four-seven-three-two, initial six thousand set."}'
     assert check_reworded(said, "Squawk 4732, initial 6,000 set.")[0]
+    assert check_reworded('{"reply": "Roger. Squawk four-seven-three-two."}', "Squawk 4732.")[0] is None  # an answer to nothing
     assert check_reworded('{"reply": "Bit firm. Six hours thirteen in the air."}', "Bit firm. 6 hours 13 minutes.")[0]
     assert check_reworded('{"reply": "That one is yours, six thousand."}', "6,000.")[0]
 

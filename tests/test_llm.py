@@ -569,7 +569,7 @@ def test_the_corpus_context_matches_the_engine():
     """``localtc llm eval`` builds the same pending readback the engine would."""
     case = next(c for c in CASES if c.instruction == "clearance.ifr")
     pending, context = setup(case, LIBRARY)
-    assert pending.required == ("altitude", "frequency", "squawk") and context.last_atc.startswith("DP69, cleared to Quebec")
+    assert pending.required == ("altitude", "squawk") and context.last_atc.startswith("DP69, cleared to Quebec")
 
 
 @pytest.mark.parametrize("mode", ["llm", "mostly_llm"])

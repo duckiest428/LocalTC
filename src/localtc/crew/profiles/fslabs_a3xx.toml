@@ -210,3 +210,5 @@ press = [77518, 77520]
 [actions.squawk]
 keys = { "0" = 78327, "1" = 78292, "2" = 78297, "3" = 78302, "4" = 78307, "5" = 78312, "6" = 78317, "7" = 78322 }
 release = 2
+clear = 78332   # CLR first: a code half typed before is gone
+gap_s = 0.4     # its keys take a moment (pressed 0.15 s apart, 1-6-2-1 didn't take)

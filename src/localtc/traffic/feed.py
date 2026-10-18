@@ -29,6 +29,7 @@ STALE_S = 30.0  # a position older than this isn't used
 USER_AGENT = "LocalTC (https://localtc.tech)"
 BUSY_S = 90.0  # a source that says it's busy (HTTP 429) is left alone this long
 CLOCK_SLACK_S = 120.0
+DOWN_S, DOWN_MAX_S = 30.0, 600.0  # a source that didn't answer is left alone this long, doubling, up to this
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,7 @@ class LiveFeed:
         self.failures = 0
         self._turn = 0
         self._busy_until: dict[str, float] = {}
+        self._down: dict[str, int] = {}  # a source's failures in a row (timing out): left alone longer each time
 
     def around(self, lat: float, lon: float, nm: float) -> list[Flight] | None:
         """The flights now, or None when no source answered (no internet, all busy)."""
@@ -124,11 +126,17 @@ class LiveFeed:
                     log.info("Traffic: %s didn't answer (%s)", name, exc)
                 continue
             except (OSError, ValueError, urllib.error.URLError) as exc:
-                log.info("Traffic: %s didn't answer (%s)", name, exc)
+                # Down (adsb.lol timing out 500 times in a flight, each a wait for nothing): the others meanwhile,
+                # this one again after 30 s, then a minute, two ... ten at most.
+                n = self._down[name] = self._down.get(name, 0) + 1
+                self._busy_until[name] = now + min(DOWN_MAX_S, DOWN_S * 2 ** (n - 1))
+                log.info("Traffic: %s didn't answer (%s); asking the others for %.0f s", name, exc,
+                         self._busy_until[name] - now)
                 continue
             if not self.source:
                 log.info("Traffic: live positions from %s", name)
             self.source, self.failures = name, 0
+            self._down.pop(name, None)
             return flights
         self.failures += 1
         return None

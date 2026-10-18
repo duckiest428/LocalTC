@@ -214,6 +214,7 @@ def test_readbacks_through_speech_to_text():
     via = pending("center.descend_via", procedure="MARNR8", approach=Approach("VISUAL", "34R"))
     assert heard("This on via the M.A.R.N.R. 8 arrival. Air Canada 8272.", via, "CRUISE").status == "correct"
     ground = pending("clearance.readback_correct_ground", station="Vancouver Ground", frequency=121.7)
-    assert heard("Contact Ground on 121771 Ready Air Canada 8272.", ground, "PARKED").status == "unclear"
+    # The frequency half heard: the pilot needn't read it back at all, so it holds nothing up.
+    assert heard("Contact Ground on 121771 Ready Air Canada 8272.", ground, "PARKED").status == "correct"
     assert heard("Seattle Centre, Air Canada 8272, cruising at 13,000 feet.", None, "CRUISE").intent == "checkin"
     assert heard("Continue approach for 3, 4, right, Air Canada 8272.", None, "APPROACH").intent == "acknowledge"

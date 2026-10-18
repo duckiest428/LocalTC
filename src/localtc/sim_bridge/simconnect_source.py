@@ -304,6 +304,7 @@ class SimConnectSource:
         self._watch_define = 0
         self._watch_count = 0
         self._ai_tracks: dict[int, Track] = {}  # LocalTC's traffic, as it's being moved (AiTrack)
+        self._ai_engines: dict[int, bool] = {}  # their engines as last started or shut down
         self._ai_spawned: dict[int, SpawnAiAircraft] = {}  # made, not there yet: held where it was made once it is
         self._ai_ground_next = 0.0
         for name, unit in (("PLANE LATITUDE", "degrees"), ("PLANE LONGITUDE", "degrees"), ("PLANE ALTITUDE", "feet"),
@@ -519,6 +520,7 @@ class SimConnectSource:
                 self._light_ai(dll, handle, command)
             elif isinstance(command, RemoveAiAircraft):
                 self._ai_tracks.pop(command.object_id, None)
+                self._ai_engines.pop(command.object_id, None)
                 try:
                     dll.ai_remove(handle, command.object_id, REQ_AI_REMOVE)
                 except (SimConnectError, AttributeError) as exc:
@@ -660,6 +662,16 @@ class SimConnectSource:
             for name, on in zip(AI_LIGHT_EVENTS, (c.landing, c.taxi, c.beacon, c.strobe, c.nav, c.logo)):
                 dll.transmit_client_event(handle, c.object_id, self._event_id(dll, handle, name), int(on),
                                           GROUP_PRIORITY_HIGHEST, EVENT_FLAG_GROUPID_IS_PRIORITY)
+            if self._ai_engines.get(c.object_id) != c.engines:
+                # Started (or shut down) as the beacon comes on (goes off): the aircraft's own start, and its
+                # combustion set too for a model that ignores the key event.
+                self._ai_engines[c.object_id] = c.engines
+                event = "ENGINE_AUTO_START" if c.engines else "ENGINE_AUTO_SHUTDOWN"
+                dll.transmit_client_event(handle, c.object_id, self._event_id(dll, handle, event), 0,
+                                          GROUP_PRIORITY_HIGHEST, EVENT_FLAG_GROUPID_IS_PRIORITY)
+                for n in range(1, 5):
+                    self._set_ai_var(dll, handle, SetAiVar(object_id=c.object_id, name=f"GENERAL ENG COMBUSTION:{n}",
+                                                           unit="Bool", value=float(c.engines)))
         except SimConnectError as exc:
             log.info("Traffic: couldn't set the lights of object %d: %s", c.object_id, exc)
 

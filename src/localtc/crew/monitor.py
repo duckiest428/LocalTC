@@ -575,15 +575,7 @@ class Monitor(WatchMixin):
                 if self.hands and w.altimeter_inhg and abs(own.altimeter_inhg - w.altimeter_inhg) > 0.015:
                     self._call(f"atis:{f.origin}:{info.letter}", ROUTINE, t, "",
                                commands=(Command("altimeter", f"{w.altimeter_inhg:.2f}"),))
-            tuned = st.comms.tuned
-            on_clearance = tuned is not None and tuned.controller in ("clearance", "ground")
-            if f.rules == "IFR" and self._said("greeting") and t - self.f.said["greeting"] > 150 and not self._cleared("ifr") \
-                    and self.radio_mode() != "full" and self.phase in (None, "PARKED") and not on_clearance \
-                    and t - self.last_pilot_radio_t > 120:
-                who = next((x for x in getattr(self.engine, "facilities", ()) if x.controller == "clearance"
-                            and getattr(x, "airport", None) == f.origin), None)
-                where = f": {who.station} on {speech.frequency_display(who.mhz)}" if who is not None else ""
-                self._call("clearance_prompt", ROUTINE, t, f"Call for the clearance when you're ready{where}.")
+            # (No "call for the clearance when you're ready": the captain calls when the captain's ready.)
             if self._cleared("pushback") and own.parking_brake and own.gs_kt < 0.5 and not self._said("push_brake") \
                     and self.phase in (None, "PARKED"):
                 when = self.f.said.get("pushback_seen") or self.f.said.setdefault("pushback_seen", t)
@@ -1259,13 +1251,25 @@ class Monitor(WatchMixin):
         """The captain's answer to the item asked; True when it was one (the next read). One the aircraft shows
         otherwise holds the checklist."""
         pr = self.progress
-        if pr is None or pr.held or pr.paused or pr.index >= len(pr.checklist.lines):
+        if pr is None or pr.paused or pr.index >= len(pr.checklist.lines):
             return False
         if re.search(r"\b(?:skip|next item|skip (?:it|that|this))\b", text.lower()):
             self._control_checklist("skip", t)
             return True
         line = pr.checklist.lines[pr.index]
-        shown = run.seen(line, self.c, self.values())
+        values = self.values()
+        shown = run.seen(line, self.c, values)
+        if shown is not None and shown[1] is False and _says(text, shown[0]):
+            # The captain's answer is what the aircraft shows ("one plus F", with the plan's 2): the captain's call.
+            # Said once, and on: held, the answer went unheard and the checklist never moved again.
+            pr.held = False
+            pr.results[pr.index] = "ok"
+            pr.index += 1
+            plan = values.get(run.sense_key(line.challenge) or "", "")
+            self._advance(t, opener=f"{run._speakable(line.challenge)} {shown[0]}" + (f", the plan had {plan}." if plan else "."))
+            return True
+        if pr.held:
+            return False
         if shown is not None and shown[1] is False:
             pr.held, pr.asked_t = True, t
             self._checklist_event(t, "held")
@@ -1302,6 +1306,7 @@ class Monitor(WatchMixin):
             self._checklist_event(t, "skipped")
             self._advance(t, opener="Skipped.")
         elif what == "resume":
+            pr.held = False  # held on an item: asked again, the captain's answer takes it on
             self._advance(t)
 
     def _checklist_tick(self, t: float) -> None:
@@ -1477,3 +1482,11 @@ def spoken(text: str, airports: tuple[str, ...] = ()) -> str:
         if icao:
             out = re.sub(rf"\b{re.escape(icao)}\b", speech.digits(icao), out)
     return "" if out == text else out
+
+
+def _says(answer: str, shown: str) -> bool:
+    """The captain's answer names the setting shown ("one plus F" for 1+F, "two" for 2)."""
+    words = {"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "full": "full", "plus": "+", "up": "0"}
+    said = re.sub(r"\s+", "", " ".join(words.get(w, w) for w in re.findall(r"[a-z0-9+]+", answer.lower())))
+    want = re.sub(r"\s+", "", shown.lower()).replace("up", "0")
+    return bool(want) and want in said

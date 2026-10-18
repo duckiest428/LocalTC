@@ -169,6 +169,9 @@ class AiLights(SimCommand, tag="ai_lights"):
     strobe: bool = False
     nav: bool = True
     logo: bool = False
+    # Its engines: running from the beacon on (pushback, taxi, flying), off parked. A non-ATC aircraft is made cold and
+    # dark: flown about with them off, the traffic looked like gliders.
+    engines: bool = False
 
 
 class SetSimVar(SimCommand, tag="set_sim_var"):

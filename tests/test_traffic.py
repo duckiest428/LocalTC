@@ -246,7 +246,7 @@ class Atc:
 
     def link(self) -> AtcLink:
         return AtcLink(user_runway=lambda: self.runway, say=lambda cs, kind, icao, rwy: self.said.append((cs, kind, rwy))
-                       or [])
+                       or ["said"])
 
 
 def test_an_arrival_on_short_final_goes_around_when_the_user_is_on_the_runway():
@@ -294,9 +294,10 @@ def test_an_arrival_gone_quiet_on_final_is_landed_and_handed_back_when_heard_aga
     m.on_feed([flight(lat=0.0, lon=thr_lon - 4 * 1852 / 111_320, alt=1400, track=90.0, gs=150)], "adsb.lol", NOW)
     assign(m, m.tick(NOW))
     out = []
-    for i in range(1, 140):
-        out += m.tick(NOW + i)  # nothing heard any more
-    plane = next(iter(m.planes.values()))
+    for i in range(1, 140):  # nothing heard from it any more (the others still are: the feed is working)
+        m.on_feed([flight(hex_="far", lat=0.6 + i * 0.001, lon=0.6, t=NOW + i)], "adsb.lol", NOW + i)
+        out += m.tick(NOW + i)
+    plane = m.planes["live:a1"]
     assert plane.mode == "landing" and plane.local.on_ground  # down on 09, not hanging in the air
     assert not of(RemoveAiAircraft, out)
     m.on_feed([flight(lat=0.0, lon=0.005, ground=True, gs=20, track=90.0, t=NOW + 141)], "adsb.lol", NOW + 141)
@@ -455,8 +456,8 @@ def test_tower_tells_the_real_flights_on_its_frequency():
     own_ = next(e for e in Recording(fixtures / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))
     tower = engine.facility("tower")
     engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz))
-    for kind in ("hold_short", "takeoff", "go_around"):
-        lines = engine.traffic_call("UAL531", kind, tower.airport, "16R", own_.t + 1)
+    for i, kind in enumerate(("hold_short", "takeoff", "go_around")):  # each once the last has been said
+        lines = engine.traffic_call("UAL531", kind, tower.airport, "16R", own_.t + 1 + 60 * i)
         assert [c.speaker for c in lines if isinstance(c, RadioChatter)][:1] == ["atc"], kind
 
 
@@ -530,7 +531,7 @@ def test_the_controllers_tell_a_real_departure_what_it_does_before_it_does_it():
     from localtc.traffic.feed import Route
 
     calls = []
-    link = AtcLink(call=lambda **kw: calls.append((kw["kind"], kw["runway"])) or [])
+    link = AtcLink(call=lambda **kw: calls.append((kw["kind"], kw["runway"])) or ["said"])
     m = TrafficManager(TrafficSettings(parked=False, live_delay_s=30.0), link, picker=ModelPicker(MODELS),
                        routes=lambda cs: Route("KTST", "RJTT", "Tokyo"))
     m.on_airport(APT)
@@ -607,8 +608,8 @@ def test_ground_and_delivery_talk_to_the_real_flights_and_hold_short_says_why():
     assert [c.speaker for c in lines] == ["atc", "pilot"] and "tail" in lines[0].text
     assert not engine.traffic_call("UAL531", "land", ground.airport, "16R", own_.t + 1)  # tower's, not ground's
     tower = engine.facility("tower")
-    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz, t=own_.t + 2))
-    [atc, _] = engine.traffic_call("UAL532", "hold_short", tower.airport, "16R", own_.t + 3)
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz, t=own_.t + 60))
+    [atc, _] = engine.traffic_call("UAL532", "hold_short", tower.airport, "16R", own_.t + 61)
     assert "traffic departing" in atc.text  # the user's on the ground: departing, not landing
 
 
@@ -664,3 +665,15 @@ def test_a_flight_taken_away_and_made_again_isnt_cleared_twice():
     m._remove(plane)
     m._create_live(flight(t=NOW + 5), None, NOW + 5)
     assert "taxi_out" in m.planes["live:a1"].said
+
+
+def test_the_feed_down_isnt_an_arrival_out_of_sight():
+    """No source answering: every flight goes quiet at once. None of them is "landed by LocalTC" for it."""
+    m = manager()
+    thr_lon = -1500 / 111_320
+    m.on_feed([flight(lat=0.0, lon=thr_lon - 4 * 1852 / 111_320, alt=1400, track=90.0, gs=150)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    for i in range(1, 40):
+        m.on_feed(None, "", NOW + i)
+        m.tick(NOW + i)
+    assert all(p.mode != "landing" for p in m.planes.values())

@@ -286,6 +286,7 @@ RUNWAY_VACATING_KT = 15.0  # ... at this speed or more
 CROSSING_ARRIVAL_NM = 2.5  # traffic this close in on a runway that crosses the departure runway goes first
 ROLLING_KT = 20.0  # on the ground at this speed or more: rolling along a runway, not taxiing
 ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it isn't free
+OWED_READBACK_S = 30.0  # the pilot's readback waited for this long before ATC talks to the other flights
 FAR_LOCAL_NM = 80.0  # an airport's tower, ground or clearance this far off in the air: not the one on the frequency
 FAR_APPROACH_NM = 200.0  # ... its approach or departure
 STOP_KT = 80.0  # on the takeoff roll below this, tower stops it for an aircraft about to be on the runway ahead
@@ -1447,8 +1448,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         airport's controller of that kind, when it's the frequency tuned and nothing else is being said."""
         facility = self.state.comms.tuned
         want = TRAFFIC_CALLS.get(kind)
-        if self.tracker.paused or self._transmitting(t):
-            return []  # the sim paused (the world stands still), or the pilot talking: not over them
+        if self.tracker.paused or self._transmitting(t) or t < self._radio_busy_until:
+            return []  # the sim paused (the world stands still), the pilot talking, or the radio busy: not now
+        pending = self.state.pending
+        if pending is not None and pending.required and t - pending.issued_t < OWED_READBACK_S:
+            return []  # the pilot owes a readback: ATC waits for it (tower cleared another for takeoff over it)
         if facility is None or want is None or facility.controller != want \
                 or (facility.airport or "").upper() != icao.upper():
             return []

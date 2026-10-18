@@ -296,7 +296,9 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     landing = _has_any(tokens, ("clear", "to", "land"), ("cleared", "to", "land"), ("clearance", "to", "land"),
                        ("landing", "clearance"), ("clear", "for", "landing"), ("cleared", "for", "landing"))
     if _has_any(tokens, ("clearance",), ("ifr", "to"), ("i", "f", "r", "to"), ("ready", "to", "copy"), ("request", "ifr"),
-                ("requesting", "ifr")) and not _has_any(
+                ("requesting", "ifr"), ("as", "filed"),
+                # speech-to-text: "request I for to Orlando", "request eye for", "request IF are"
+                ("request", "i", "for"), ("request", "eye", "for"), ("request", "if", "are"), ("i", "for", "to"))             and not _has_any(
         tokens, ("cleared",), ("taxi",),  # "Clearance, request taxi": the station's name, not an IFR request
         ("contact", "clearance"), ("contacting", "clearance"),  # reading back "contact Vancouver Clearance"
     ) and not landing and not b_in_flight:

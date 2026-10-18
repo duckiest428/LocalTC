@@ -85,8 +85,7 @@ mismatched = ["squawk"]
 instruction = "clearance.ifr"
 slots = "ifr"
 text = "Climb and maintain 5000, squawk 4521, 2 Lima Tango"
-status = "incomplete"
-missing = ["frequency"]
+status = "correct"  # the departure frequency is the pilot's to read back or not
 
 [[case]]
 instruction = "clearance.ifr"

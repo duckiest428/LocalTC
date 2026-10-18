@@ -434,7 +434,9 @@ def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
 
 
 REWORD_FORBIDDEN = re.compile(r"\bclear(?:ed)?\b|\btake ?off\b|\blanding\b|\bline up\b|\bpush(?:back)?\b|\btaxi\b|"
-                              r"\bapproved\b|\bcontact\b|\bemergency\b|\bmayday\b")
+                              r"\bapproved\b|\bcontact\b|\bemergency\b|\bmayday\b|"
+                              # An answer to nothing: "Roger. Call Seattle Clearance ..." with nobody having said a word.
+                              r"\broger\b|\bcopy\b|\bcopied\b|\bwilco\b|\baffirm(?:ative)?\b")
 
 
 def _spoken_digits(text: str) -> set[str]:

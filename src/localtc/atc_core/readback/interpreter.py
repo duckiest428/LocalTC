@@ -219,7 +219,9 @@ class GrammarInterpreter:
             if match is not None:
                 heard[element] = match
             elif close is not None:
-                unclear[element] = close
+                if element in pending.required:
+                    unclear[element] = close
+                # (An optional one only half heard -- the departure frequency as "129.2" -- holds nothing up.)
             else:
                 mismatched[element] = found[0]
         if "hold_short" in missing and _has_any(values_only, *CONTRARY_TO_HOLDING):

@@ -413,7 +413,7 @@ class PilotMonitoring:
             return [self._say(t, "Copy.")]
         if self.monitor.progress is not None and act in ("acknowledgement", "answer", "report", "command", "chat") \
                 and not any(c.action in speech_acts.CONTROL - {"yes", "no"} for c in reading.commands) \
-                and len(text.split()) <= 8:
+                and len(text.split()) <= 12:
             # An answer to a checklist item ("on", "set", "one plus F, checked") is taken as that, whatever the words.
             done: list[Any] = []
             for cmd in reading.commands:  # "flaps one" as the answer to "Flaps?": set too
@@ -439,6 +439,8 @@ class PilotMonitoring:
                 return self._ask_model(t, text, uid=uid)
             return [self._ask(t, Intent(0, "send", (), "That sounded like a radio call. I haven't sent it; want me to?",
                                         t, t + OFFER_S, self._context(()), uid, text=text), "confirm")]
+        if act == "question" and any(c.action == "checklist" for c in reading.commands):
+            act = "command"  # "can we continue the checklist?": done, not talked about (the model said "complete")
         if act in ("command", "correction"):
             if act == "correction":
                 self.deck.memory.correction = text

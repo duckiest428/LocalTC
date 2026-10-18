@@ -4,7 +4,7 @@ controller = "clearance"
 text = [
     "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
-readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise"] }
+readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "cruise"] }
 pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 
@@ -15,7 +15,7 @@ controller = "clearance"
 text = [
     "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
 ]
-readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination"] }
+readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination"] }
 pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 
@@ -31,7 +31,7 @@ controller = "clearance"
 text = [
     "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
-readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "cruise", "procedure"] }
+readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "cruise", "procedure"] }
 pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 
@@ -41,7 +41,7 @@ controller = "clearance"
 text = [
     "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
 ]
-readback = { required = ["altitude", "frequency", "squawk"], optional = ["destination", "procedure"] }
+readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "procedure"] }
 pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
 ack = "readback_correct"
 

@@ -4,6 +4,7 @@ to a stand; a stand not swapped for the taxi line and back as the real positions
 fitting the airport."""
 
 import math
+from dataclasses import replace
 import random
 from pathlib import Path
 
@@ -117,8 +118,11 @@ def test_the_manager_rolls_a_lost_arrival_in_to_a_stand():
     m.on_assigned(AiObjectAssigned(t=0.0, request_id=[c for c in out if isinstance(c, SpawnAiAircraft)][0].request_id,
                                    object_id=600), NOW)
     t = NOW
-    for _ in range(1500):  # the receivers lose it; LocalTC lands it, then taxies it in
+    other = Flight(hex="99", callsign="ANA1", registration="", type="B788", category="A5", lat=lat + 0.3, lon=lon,
+                   alt_ft=9000.0, on_ground=False, gs_kt=250.0, track=0.0, vs_fpm=0.0, squawk="", t=NOW)
+    for _ in range(1500):  # the receivers lose it (still hearing the others); LocalTC lands it, then taxies it in
         t += 1.0
+        m.on_feed([replace(other, t=t, lat=other.lat + (t - NOW) * 0.001)], "test", t)
         m.tick(t)
         plane = m.planes.get("live:85")
         if plane is None or plane.mode == "parked":

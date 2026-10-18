@@ -60,10 +60,10 @@ NOISE = re.compile(r"^(?:thank you\.?|thanks for watching!?|you|bye\.?|\.+|uh+|u
 # decide whether it's done at all.
 # Flaps and the seatbelt sign: a clear "flaps one" is done, not asked back ("Flaps 1?"); the speed rules still apply.
 LOW = {"light", "com_standby", "verbosity", "checklist", "brief", "status", "check", "say_again", "altimeter", "flaps",
-       "seatbelt"}
+       "seatbelt", "apu", "apu_bleed", "minimums"}
 HIGH = {"go_around", "emergency"}
 NUMERIC = {"heading", "altitude", "speed", "vs", "squawk", "com_active", "com_standby", "altimeter"}
-CONTROL = {"verbosity", "checklist", "brief", "status", "check", "say_again", "yes", "no"}
+CONTROL = {"verbosity", "checklist", "brief", "status", "check", "say_again", "yes", "no", "minimums"}
 
 
 @dataclass(frozen=True)

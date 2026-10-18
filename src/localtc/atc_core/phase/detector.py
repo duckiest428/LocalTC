@@ -77,7 +77,10 @@ class PhaseThresholds(msgspec.Struct, kw_only=True, forbid_unknown_fields=True):
     landing_dist_nm: float = 2.0
     landing_agl_ft: float = 700.0
     go_around_vs_fpm: float = 500.0
-    go_around_s: float = 3.0
+    go_around_s: float = 3.0  # climbing hard (``go_around_firm_fpm``) this long: going around ...
+    go_around_firm_fpm: float = 1000.0
+    go_around_slow_s: float = 10.0  # ... or climbing at all this long: a balloon on short final (700 fpm for 6 s,
+    # low and slow, thrust up, then down again and landed) isn't a go-around
     go_around_min_agl_ft: float = 300.0
     rollout_kt: float = 30.0
     rollout_s: float = 3.0
@@ -362,11 +365,13 @@ class PhaseDetector:
 
         elif phase is FlightPhase.LANDING:
             climbing = not own.on_ground and own.vs_fpm > th.go_around_vs_fpm
+            firm = not own.on_ground and own.vs_fpm > th.go_around_firm_fpm
             # Low, then climbing away; or sent around from higher up the final (LAX, told to go around at 400 ft a mile
             # out): climbing well above the lowest it got. Either way it isn't landing any more.
             gone_around = self._min_agl_in_phase < th.go_around_min_agl_ft or \
                 own.alt_agl_ft > self._min_agl_in_phase + th.go_around_min_agl_ft
-            if gone_around and self._held("go_around", climbing, t, th.go_around_s):
+            if gone_around and (self._held("go_around", firm, t, th.go_around_s)
+                                | self._held("go_around_slow", climbing, t, th.go_around_slow_s)):
                 return FlightPhase.DEPARTURE, "go-around"
             slow = own.on_ground and own.gs_kt < th.rollout_kt
             if self._held("rollout", slow, t, th.rollout_s):

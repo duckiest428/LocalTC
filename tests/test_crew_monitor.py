@@ -391,3 +391,25 @@ def test_a_held_item_answered_with_what_the_aircraft_shows_goes_on():
     assert said(out) == ["Parking brake?"]
     out = pm.observe(IntercomHeard(t=7, text="released"))
     assert " ".join(said(out)).startswith("Parking brake released.") and "complete" not in " ".join(said(out))
+
+
+def test_taxiing_in_the_apu_is_started_then_its_bleed_put_on():
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="LANDING", phase="TAXI_IN"))
+    pm.observe(systems(0.6, apu_pct=0.0))
+    out = fly(pm, [own(1 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(30)])  # no gate given
+    assert "Starting the APU." in said(out)
+    assert [o for o in out if getattr(o, "name", "") == "APU_STARTER"]
+    pm.observe(systems(160, apu_pct=1.0))
+    out = fly(pm, [own(161 + i, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(10)])
+    assert "APU's running. APU bleed on." in said(out)
+
+
+def test_minimums_are_called_above_the_touchdown_zone_and_can_be_the_captains():
+    from localtc.crew.commands import Command, parse
+
+    assert parse("minimums 280") == [Command("minimums", "280")]
+    pm = crew()
+    pm.monitor._touchdown_elev = lambda: 100.0
+    assert pm.monitor.set_minimums(380) == 280  # a decision altitude: the height above the touchdown zone
+    assert pm.monitor.set_minimums(250) == 250  # a height

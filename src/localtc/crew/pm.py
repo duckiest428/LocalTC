@@ -578,6 +578,9 @@ class PilotMonitoring:
         if cmd.action == "status":
             self.monitor.status(t)
             return self._now(t)
+        if cmd.action == "minimums":
+            height = self.monitor.set_minimums(int(cmd.value))
+            return [self._say(t, f"Minimums {int(cmd.value):,} set." if height is not None else "Copy.")]
         if cmd.action == "verbosity":
             self.monitor.verbosity = cmd.value
             return [self._say(t, {"quiet": "Copy, only what matters.", "chatty": "Copy, I'll keep you posted.",

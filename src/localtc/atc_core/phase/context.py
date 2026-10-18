@@ -28,6 +28,7 @@ class PositionContext:
     destination: AirportGeometry | None = None
     destination_distance_nm: float | None = None
     final: FinalApproach | None = None  # lined up to land (destination first, else the nearest airport)
+    final_airport: str | None = None  # whose runway that is
 
     @property
     def aligned_on_runway(self) -> bool:
@@ -79,11 +80,12 @@ class ContextBuilder:
         # Close to the destination, only its runways count. Airfields crowd together near a big airport, and
         # lining up with one of their runways on the way in is a coincidence, not the approach being flown.
         arriving = dest_nm is not None and dest_nm <= DESTINATION_ONLY_NM
-        final = None
+        final, final_airport = None, None
         for candidate in (destination, None if arriving else nearest):
             if candidate is not None and not own.on_ground:
                 final = candidate.final_approach(own.lat, own.lon, own.hdg_true)
                 if final is not None:
+                    final_airport = candidate.icao
                     break
 
         return PositionContext(
@@ -97,4 +99,5 @@ class ContextBuilder:
             destination=destination,
             destination_distance_nm=dest_nm,
             final=final,
+            final_airport=final_airport,
         )

@@ -149,7 +149,7 @@ def _readings(c: Cockpit) -> dict[str, object]:
                    ap_speed_sel=y.ap_speed_sel, ap_vs_sel=y.ap_vs_sel, ap_modes=(y.ap_heading, y.ap_nav, y.ap_approach,
                                                                                  y.ap_altitude, y.ap_vs, y.ap_flc),
                    athr=y.athr_armed, spoilers_armed=y.spoilers_armed, spoilers=round(y.spoilers_pct, -1),
-                   autobrake=y.autobrake, com1_standby=round(y.com1_standby_mhz, 3),
+                   autobrake=y.autobrake, com1_standby=round(y.com1_standby_mhz, 3), apu_pct=y.apu_pct >= APU_RUNNING,
                    **{f"light_{n}": getattr(y, f"light_{n}") for n in LIGHT_EVENTS})
     return out
 
@@ -189,6 +189,9 @@ def _sys(attr: str, want) -> Check:
     return check
 
 
+APU_RUNNING = 0.95  # the APU's speed up to this: running
+
+
 def _own(get: Callable[[OwnshipState], bool]) -> Check:
     return lambda c: None if c.own is None else get(c.own)
 
@@ -205,7 +208,8 @@ def _clicks(custom: Write, key: str, target: float) -> tuple[SimCommand, ...]:
                  div=float(k.get("div", 0.0)), mod=float(k.get("mod", 0.0)), burst=int(k.get("burst", 20)))
         for i, k in enumerate(knobs)]
     if custom.press:
-        out.append(ClickSequence(name=key, codes=tuple(custom.press), event=custom.click_event))
+        out.append(ClickSequence(name=key, codes=tuple(custom.press), event=custom.click_event,
+                                 **({"gap_s": custom.gap_s} if custom.gap_s else {})))
     return tuple(out)
 
 
@@ -323,6 +327,20 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         event = SendSimEvent(name="CABIN_SEATBELTS_ALERT_SWITCH_TOGGLE")  # a toggle: only sent when it isn't so
         return Plan(a, v, (_write(p, "seatbelt", event, on=on),), _sys("seatbelt", on), f"Seatbelt sign {v}.",
                     reads="seatbelt")
+    if a == "apu":
+        start = v != "stop"
+        running = c.systems is not None and c.systems.apu_pct >= APU_RUNNING
+        if start == running and "apu_pct" in c.moved:
+            return Plan(a, v, (), lambda _c: None, "", already="APU's already " + ("running." if running else "off."))
+        default = SendSimEvent(name="APU_STARTER") if start else SendSimEvent(name="APU_OFF_SWITCH")
+        # (Not checked here: it takes a minute to run up; the copilot watches it come up, monitor.py.)
+        return Plan(a, v, (_write(p, "apu_start" if start else "apu_stop", default, on=start),), lambda _c: None,
+                    "Starting the APU." if start else "APU off.")
+    if a == "apu_bleed":
+        on = v != "off"
+        default = SendSimEvent(name="APU_BLEED_AIR_SOURCE_SET", value=int(on))
+        return Plan(a, v, (_write(p, "apu_bleed_on" if on else "apu_bleed_off", default, on=on),), lambda _c: None,
+                    f"APU bleed {'on' if on else 'off'}.")
     if a == "transponder":  # the mode: "alt" (TA/RA in an airliner), "on", "standby"
         state = {"standby": 1.0, "on": 3.0, "alt": 4.0}.get(v, 4.0)
         name = {"alt": "TA/RA", "on": "on", "standby": "standby"}.get(v, v)

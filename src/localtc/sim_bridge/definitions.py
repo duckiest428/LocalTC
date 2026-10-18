@@ -147,6 +147,7 @@ AIRCRAFT_MORE: tuple[Datum, ...] = (
     Datum("engine_type", "ENGINE TYPE", "Enum", I32),
     Datum("ap_altitude_sel_3", "AUTOPILOT ALTITUDE LOCK VAR:3", "feet"),
     Datum("seatbelt", "CABIN SEATBELTS ALERT SWITCH", "Bool", I32),
+    Datum("apu_pct", "APU PCT RPM", "percent over 100"),
 )
 
 TRAFFIC: tuple[Datum, ...] = (
@@ -307,6 +308,7 @@ def _more(raw: dict[str, Any]) -> dict[str, Any]:
         "autobrake": int(raw["autobrake"]), "autobrake_active": bool(raw["autobrake_active"]),
         "reverser_pct": float(round(max(raw["rev1"], raw["rev2"], 0.0), -1)), "jet": int(raw["engine_type"]) == 1,
         "seatbelt": bool(raw.get("seatbelt", 0)),
+        "apu_pct": round(max(0.0, min(1.0, raw.get("apu_pct", 0.0))), 2),
     }
 
 

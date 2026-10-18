@@ -400,6 +400,17 @@ Build an idempotent achievement system evaluated from structured events, for exa
 
 Achievements should explain exactly what was met, support replay evaluation where possible, and avoid rewarding unsafe behavior.
 
+## Taxi guidance (arrows on the ground)
+
+Shown in Quick Settings as "Coming later" (greyed out, off by default); not built.
+
+- arrows (a "follow-the-greens" ribbon) drawn in the sim along the exact taxi route ATC gave, updated with each new
+  instruction (a hold short, a crossing, a re-route, "taxi to gate" on the way in)
+- stop bars at hold-short points until the crossing or the line-up is cleared
+- off by default; works with any airport LocalTC has the taxiways of, and never on a route ATC didn't give
+- open questions: drawing it in MSFS 2024 (SimObjects placed along the path, or a WASM/in-sim panel), keeping it
+  in step with the taxi graph's names, and the cost of the objects at a big airport
+
 # Phase 7: Quality, Privacy, and Release Hardening
 
 ## Integration test matrix

@@ -297,6 +297,7 @@ function setFlight(f) {
   else if (f.expected) next = `Contact ${f.expected.station} ${mhz(f.expected.mhz)}`;
   else if (f.tuned) next = `On ${f.tuned.station}`;
   $("#fl-next").textContent = next;
+  enRoute(f.status);
   const ap = f.airport;
   $("#ap-icao").textContent = ap?.icao || "----";
   $("#ap-name").textContent = ap?.name || (ap ? "" : "No airport yet");
@@ -317,6 +318,44 @@ function setFlight(f) {
     freqs.dataset.key = "";
   }
   markTuned();
+}
+
+/* En route (``flight.status``): the flight's status in place of the airport box, the airline's logo (else its
+   colour), the way along the route, and how it's going. */
+function enRoute(s) {
+  $("#airport-box").hidden = !!s;
+  $("#status-box").hidden = !s;
+  if (!s) return;
+  const logo = $("#er-logo"), badge = $("#er-badge");
+  if (logo.dataset.src !== s.logo) {
+    logo.dataset.src = s.logo || "";
+    logo.hidden = true;
+    if (s.logo) { logo.onload = () => { logo.hidden = false; badge.textContent = ""; }; logo.onerror = () => { logo.hidden = true; }; logo.src = s.logo; }
+  }
+  if (logo.hidden) {
+    badge.textContent = s.iata || s.airline_icao || "";
+    badge.style.background = airlineColour(s.callsign);
+  }
+  $("#er-flight").textContent = s.flight || s.callsign || "—";
+  $("#er-airline").textContent = [s.airline, s.callsign && s.callsign !== s.flight ? s.callsign : ""].filter(Boolean).join(" · ");
+  $("#er-aircraft").textContent = s.aircraft || s.type || "—";
+  $("#er-with").textContent = s.with ? `With ${s.with}` : s.phase || "";
+  $("#er-orig").textContent = s.origin || "----";
+  $("#er-orig-name").textContent = s.origin_name || "";
+  $("#er-dest").textContent = s.destination || "----";
+  $("#er-dest-name").textContent = s.destination_name || "";
+  const pct = Math.round((s.progress || 0) * 1000) / 10;
+  $("#er-fill").style.width = `${pct}%`;
+  $("#er-plane").style.left = `${pct}%`;
+  const hm = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`);
+  const facts = [
+    ["To go", `${Number(s.to_go_nm).toLocaleString()} nm`], ["Flown", `${Number(s.flown_nm).toLocaleString()} nm`],
+    ["Time left", hm(s.ete_min)], ["ETA", s.eta || "—"], ["Alt", s.altitude], ["GS", `${s.gs_kt} kt`],
+    ["IAS", `${s.ias_kt} kt`], ["V/S", `${s.vs_fpm > 0 ? "+" : ""}${s.vs_fpm} fpm`], ["Hdg", String(s.heading).padStart(3, "0")],
+    ["Wind", s.wind || "—"], ["OAT", s.temp_c != null ? `${s.temp_c} °C` : "—"],
+    ["Fuel", s.fuel_lb ? `${Number(s.fuel_lb).toLocaleString()} lb` : "—"],
+  ];
+  $("#er-facts").innerHTML = facts.map(([k, v]) => `<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join("");
 }
 
 function markTuned() {
@@ -1140,6 +1179,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
+        <label class="check-row soon" title="Not built yet: on the roadmap"><input type="checkbox" id="s-taxi-ribbon" disabled> Taxi guidance: arrows on the ground along the route ground gave you (off by default) <span class="soon-tag">Coming later</span></label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
         <div class="row"><label>Phraseology
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]

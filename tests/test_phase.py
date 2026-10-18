@@ -90,8 +90,19 @@ def test_go_around_from_landing():
     det.phase = P.LANDING
     det._min_agl_in_phase = 400
     ticks = [own(t, on_ground=False, alt_agl_ft=agl, vs_fpm=vs) for t, agl, vs in [
-        (0, 250, -400), (1, 200, 0), (2, 230, 900), (3, 270, 900), (4, 320, 900), (5, 360, 900)]]
+        (0, 250, -400), (1, 200, 0), (2, 230, 1500), (3, 270, 1500), (4, 320, 1500), (5, 360, 1500)]]
     assert run(det, ticks) == [(5, P.DEPARTURE)]
+
+
+def test_a_balloon_on_short_final_isnt_a_go_around():
+    """Low and slow at 300 ft, thrust up: 700 fpm for six seconds, then down again and landed."""
+    det = PhaseDetector()
+    det.phase = P.LANDING
+    det._min_agl_in_phase = 300
+    ticks = [own(t, on_ground=False, alt_agl_ft=agl, vs_fpm=vs) for t, agl, vs in [
+        (0, 300, -550), (1, 311, 240), (2, 330, 530), (3, 370, 670), (4, 400, 740), (5, 420, 730), (6, 440, 610),
+        (7, 446, 270), (8, 439, -160), (9, 420, -640), (10, 390, -1000)]]
+    assert run(det, ticks) == []
 
 
 def test_teleport_reclassifies():

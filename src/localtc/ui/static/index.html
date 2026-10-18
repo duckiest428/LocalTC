@@ -60,6 +60,20 @@
         </div>
         <div class="freqs" id="ap-freqs"><div class="muted small">Frequencies appear when the flight starts.</div></div>
       </div>
+      <!-- En route: the flight's status where the airport box is, until the destination's frequencies are any use -->
+      <div class="panel enroute" id="status-box" hidden>
+        <div class="er-top">
+          <div class="er-airline"><img id="er-logo" alt="" hidden><span id="er-badge" class="er-badge"></span>
+            <div><div class="er-flight" id="er-flight">—</div><div class="muted small" id="er-airline"></div></div></div>
+          <div class="er-aircraft"><div id="er-aircraft">—</div><div class="muted small" id="er-with"></div></div>
+        </div>
+        <div class="er-route">
+          <div class="er-end"><b id="er-orig">----</b><span class="muted small" id="er-orig-name"></span></div>
+          <div class="er-bar"><div class="er-fill" id="er-fill"></div><span class="er-plane" id="er-plane">&#9992;</span></div>
+          <div class="er-end right"><b id="er-dest">----</b><span class="muted small" id="er-dest-name"></span></div>
+        </div>
+        <div class="er-facts" id="er-facts"></div>
+      </div>
 
       <div class="panel flightrow" id="flight-box">
         <div class="kv"><span class="k">Dest</span><span class="v green" id="fl-dest">—</span></div>

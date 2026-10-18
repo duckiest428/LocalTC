@@ -168,3 +168,14 @@ def test_vectored_all_the_way_onto_the_final(bearing, nm, heading):
     assert 2500 <= assigned <= 5000 and f"maintain {assigned:,} until established" in cleared.text
     glideslope = 433 + out * 318
     assert arrival.own.alt_indicated_ft <= glideslope + 1000  # not left high above it
+
+
+def test_the_field_in_sight_from_the_wrong_side_gets_vectors_not_a_visual_there_and_then():
+    """East of the field, for 16L (its final is north): "field in sight" was cleared the visual and sent
+    to tower on the spot, and nobody turned it in. The vectors go on; the turn onto the final clears the visual."""
+    arrival = Arrival(110, 30, 290)
+    arrival.say("Seattle Approach, Delta 2543, field in sight")
+    arrival.fly(15)
+    assert "approach.expect_visual" in arrival.ids() and "approach" not in arrival.engine.state.clearances, arrival.ids()
+    arrival.fly(1500)
+    assert "approach.intercept_visual" in arrival.ids(), arrival.ids()

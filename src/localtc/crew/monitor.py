@@ -73,6 +73,7 @@ SPEECH_S_PER_CHAR = 0.065  # how long ATC's words take; the frequency is busy me
 AFTER_ATC_S = 1.5  # and a moment after, for the readback to start
 READBACK_GRACE_S = 7.0  # an instruction that wants a readback: the pilot's turn first
 STERILE_FT = 10000.0
+HANDS_WAIT_S = 300.0  # a call that sets something waits this much longer for its turn than one that only talks
 STATUS_EVERY_S = 1800.0
 GEAR_UP_WAIT_S = 1.0  # positive rate, then "gear up" (and the gear up) straight after
 FLAP_STEP_WAIT_S = 6.0
@@ -119,7 +120,10 @@ class Call:
 
     @property
     def expires(self) -> float:
-        return self.t + EXPIRES_S[self.priority] + (30.0 if self.priority == ROUTINE else 0.0)
+        # One that sets something (an altitude ATC gave) is done however long the radio is busy: expired behind a
+        # busy centre's other traffic, FL330 was never set.
+        hands = HANDS_WAIT_S if self.commands else 0.0
+        return self.t + EXPIRES_S[self.priority] + (30.0 if self.priority == ROUTINE else 0.0) + hands
 
 
 @dataclass
@@ -199,6 +203,8 @@ class Monitor(WatchMixin):
         self.book: ChecklistSet | None = None  # the aircraft's checklists (None: it has none)
         self.progress: Progress | None = None  # the checklist being read
         self.paused_progress: Progress | None = None  # one put on hold, to resume
+        self.minimums_ft: int | None = None  # the captain's minimum, above the touchdown zone
+        self._prev_above: float | None = None
         self.checklist_mode = "challenge"  # challenge, read, auto ([crew] checklist_mode)
         self.checklist_setting = "offer"  # offer, run, off ([crew] checklists)
         self.checklist_events: list = []  # ChecklistState, for the app and the replay
@@ -310,7 +316,8 @@ class Monitor(WatchMixin):
         ready.sort(key=lambda q: (-q.priority, q.t))
         top = ready[0]
         busy = self.ptt_down or t < self.busy_until or self._readback_due(t) \
-            or (top.priority < SAFETY and t - max(self.last_atc_t, self.last_pilot_radio_t) < QUIET_AFTER_RADIO_S)
+            or (top.priority < SAFETY and not top.commands
+                and t - max(self.last_atc_t, self.last_pilot_radio_t) < QUIET_AFTER_RADIO_S)
         if top.before_readback:  # the gap after ATC, before the readback: the only moment it's any use
             busy = self.ptt_down or t < self.busy_until - AFTER_ATC_S + 0.3
         if top.priority < SAFETY and not top.urgent and (busy or (t - self.last_said < GAP_S and not top.before_readback)):
@@ -790,7 +797,8 @@ class Monitor(WatchMixin):
             self.cleared_alt_t = t
             if target and self.hands and s is not None and abs(s.ap_altitude_sel - target) > 50 and self.f.takeoff_t is not None:
                 self._call(f"set_alt:{target}", ROUTINE, t, f"{speech.altitude_display(target)} set.",
-                           commands=(Command("altitude", str(target)),))
+                           commands=(Command("altitude", str(target)),),
+                           valid=lambda: st.assignments.altitude_ft == target)  # (another since: that one instead)
         if target and not self._on_approach():
             if (prev_alt < target - 1000 <= alt and own.vs_fpm > 500) or (prev_alt > target + 1000 >= alt and own.vs_fpm < -500):
                 self._call(f"1000_to_go:{target}:{round(t, -2)}", ROUTINE, t, "One thousand to go.")
@@ -837,7 +845,12 @@ class Monitor(WatchMixin):
         # Ten thousand, the transition, the speed limit.
         region = self._region()
         if prev_alt < STERILE_FT <= alt and own.vs_fpm > 0:
-            self._call("10k_climb", ROUTINE, t, "Ten thousand.")
+            # Smooth, the seatbelt sign goes off through ten thousand on the way up, as the cabin expects it to.
+            belts_on = s is None or s.seatbelt or "seatbelt" in p.unread
+            if self.hands and belts_on and "seatbelt" not in self.c.dead and "turb_called" not in self.f.said:
+                self._call("10k_climb", ROUTINE, t, "Ten thousand. Seatbelt sign off.", commands=(Command("seatbelt", "off"),))
+            else:
+                self._call("10k_climb", ROUTINE, t, "Ten thousand.")
         if prev_alt > STERILE_FT >= alt and own.vs_fpm < 0:
             belts = s is None or not s.seatbelt or "seatbelt" in p.unread
             if self.hands and belts and "seatbelt" not in self.c.dead:
@@ -1007,13 +1020,42 @@ class Monitor(WatchMixin):
                     self._call(f"no_landing_clearance:{n}", SAFETY, t, "We're not cleared to land!")
                 if self._unstable(own):
                     self._call(f"500:{n}", SAFETY, t, "Not stable. Go around.")
-            dh = _minimums(approach)
-            if dh and prev_agl > dh + 100 >= agl:
+            # Above the touchdown zone (the altimeter less the runway's elevation), as a decision altitude is: the
+            # radio height over the ground short of the runway (a valley, the sea) isn't it. The captain's minimum
+            # from the chart when given ("minimums 280"), else the approach's usual.
+            dh = self.minimums_ft if self.minimums_ft is not None and approach and "VISUAL" not in approach.upper() \
+                else _minimums(approach)
+            above = self._above_touchdown(own)
+            height, before = (above, self._prev_above) if above is not None and self._prev_above is not None \
+                else (agl, prev_agl)
+            self._prev_above = above
+            if dh and before > dh + 100 >= height:
                 self._call(f"100_above:{n}", ROUTINE, t, "Hundred above.")
-            if dh and prev_agl > dh >= agl:
+            if dh and before > dh >= height:
                 # The lights only when they could be there: out of cloud, the ceiling and visibility for it. Never in fog.
                 self._call(f"minimums:{n}", ROUTINE, t, "Minimums. Approach lights in sight." if self._lights_plausible(dh)
                            else "Minimums.")
+
+    def set_minimums(self, value: int) -> int | None:
+        """The captain's minimum: a decision altitude (above the sea: the field's elevation and more) or a height
+        above the touchdown zone. Kept as the height."""
+        tdz = self._touchdown_elev()
+        height = value - tdz if tdz is not None and tdz + 100 <= value <= tdz + 1500 and value > 300 else value
+        self.minimums_ft = int(height) if 50 <= height <= 1500 else None
+        return self.minimums_ft
+
+    def _touchdown_elev(self) -> float | None:
+        st = self.engine.state if self.engine is not None else None
+        geo = self.engine.geometry(st.flight.destination) if st is not None and hasattr(self.engine, "geometry") else None
+        if geo is None:
+            return None
+        runway = st.assignments.arrival_runway
+        end = geo.end(runway) if runway else None
+        return float(getattr(getattr(end, "runway", None), "runway", None) and end.runway.runway.elev_ft or geo.airport.elev_ft)
+
+    def _above_touchdown(self, own: OwnshipState) -> float | None:
+        tdz = self._touchdown_elev()
+        return own.alt_indicated_ft - tdz if tdz is not None else None
 
     def _unstable(self, own: OwnshipState) -> list[str]:
         p = self.c.profile

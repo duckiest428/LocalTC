@@ -22,17 +22,17 @@
 [   599.0] PILOT     120.2: Cleared touch and go runway three four left, Cessna two lima tango.
 [   599.0] READBACK  vfr.touch_and_go correct
 [   726.0] PHASE     APPROACH -> LANDING (short final runway 34L)
-[   820.0] PHASE     LANDING -> DEPARTURE (go-around)
-[   820.0] ATC       Paine Tower 120.2: Cessna 2LT, make left closed traffic runway 34L, report midfield downwind.
-[   822.0] PILOT     120.2: left closed traffic runway three four left, Cessna two lima tango.
-[   822.0] READBACK  vfr.closed_traffic correct
+[   827.0] PHASE     LANDING -> DEPARTURE (go-around)
+[   827.0] ATC       Paine Tower 120.2: Cessna 2LT, make left closed traffic runway 34L, report midfield downwind.
+[   829.0] PILOT     120.2: left closed traffic runway three four left, Cessna two lima tango.
+[   829.0] READBACK  vfr.closed_traffic correct
 [   933.0] PHASE     DEPARTURE -> CRUISE (level at 1600 ft)
 [   939.0] PHASE     CRUISE -> ARRIVAL (within 30 nm of KPAE)
 [   943.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
-[   970.0] PILOT     120.2: Paine Tower, Cessna two lima tango, midfield left downwind runway 34L, full stop.
-[   972.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, cleared to land, wind 310 at 8.
-[   974.0] PILOT     120.2: Cleared to land runway three four left, Cessna two lima tango.
-[   974.0] READBACK  tower.land correct
+[   977.0] PILOT     120.2: Paine Tower, Cessna two lima tango, midfield left downwind runway 34L, full stop.
+[   979.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, cleared to land, wind 310 at 8.
+[   981.0] PILOT     120.2: Cleared to land runway three four left, Cessna two lima tango.
+[   981.0] READBACK  tower.land correct
 [  1143.0] PHASE     APPROACH -> LANDING (short final runway 34L)
 [  1234.0] PHASE     LANDING -> TAXI_IN (rollout complete)
 [  1234.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Paine Ground on 121.8 when clear of the runway, good day.

@@ -149,6 +149,25 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .fq.tuned .fv { color: var(--green); }
 .fq.tuned .fl::after { content: " \25C2"; color: var(--green); }
 
+.enroute { padding: 10px 14px; flex: none; }
+.er-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.er-airline { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.er-airline img { height: 30px; max-width: 120px; object-fit: contain; background: #fff; border-radius: 3px; padding: 2px 4px; }
+.er-badge { display: inline-grid; place-items: center; min-width: 42px; height: 30px; border-radius: 3px; font-weight: 700;
+  color: #fff; font-size: 13px; padding: 0 6px; }
+.er-badge:empty { display: none; }
+.er-flight { font-size: 18px; font-weight: 700; color: var(--text-strong); }
+.er-aircraft { text-align: right; color: var(--text-2); }
+.er-route { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-top: 10px; }
+.er-end { display: flex; flex-direction: column; min-width: 0; max-width: 160px; }
+.er-end.right { text-align: right; }
+.er-end span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.er-bar { position: relative; height: 4px; background: var(--line-2); border-radius: 2px; }
+.er-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--green); border-radius: 2px; }
+.er-plane { position: absolute; top: 50%; left: 0; transform: translate(-50%, -54%); color: var(--green); font-size: 16px; }
+.er-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px 14px; margin-top: 10px; }
+.er-facts .kv .v { font-family: var(--mono); }
+
 .flightrow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 12px; padding: 10px 14px; flex: none; }
 .kv { display: flex; gap: 8px; align-items: baseline; min-width: 0; white-space: nowrap; }
 .kv.wide { grid-column: span 2; }
@@ -292,6 +311,8 @@ label input, label select, label textarea { color: var(--text); font-size: 14px;
 .keycap.listening { border-color: var(--amber); color: var(--amber); animation: blink 1s infinite; }
 .check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text); font-size: 14px; flex-direction: row; }
 .check-row input { width: 16px; height: 16px; accent-color: var(--green-dim); }
+.check-row.soon { color: var(--muted); cursor: not-allowed; }
+.soon-tag { font-size: 11px; border: 1px solid var(--line-2); border-radius: 8px; padding: 0 6px; color: var(--muted); }
 input[type=range] { accent-color: var(--green-dim); width: 100%; }
 .savebar { position: sticky; bottom: 0; display: flex; gap: 8px; align-items: center; background: var(--bg-2); border-top: 1px solid var(--line); padding: 10px 12px; margin: 0 -12px -12px; }
 .savebar .muted { margin-right: auto; }

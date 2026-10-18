@@ -287,6 +287,7 @@ CROSSING_ARRIVAL_NM = 2.5  # traffic this close in on a runway that crosses the 
 ROLLING_KT = 20.0  # on the ground at this speed or more: rolling along a runway, not taxiing
 ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it isn't free
 OWED_READBACK_S = 30.0  # the pilot's readback waited for this long before ATC talks to the other flights
+PLACED_HEADING_DEG = 90.0  # heading in towards the final within this of its course: placed for the approach
 FAR_LOCAL_NM = 80.0  # an airport's tower, ground or clearance this far off in the air: not the one on the frequency
 FAR_APPROACH_NM = 200.0  # ... its approach or departure
 STOP_KT = 80.0  # on the takeoff roll below this, tower stops it for an aircraft about to be on the runway ahead
@@ -1147,7 +1148,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     def _monitor(self, own: OwnshipState) -> list[BusEvent]:
         """Automatic ATC calls and alerts that don't wait for the pilot."""
-        st, ctx, t = self.state, self.tracker.context, own.t
+        st, ctx, t = self.state, self._dest_context(), own.t  # (a final at another airfield is not the approach)
         out: list[BusEvent] = []
         if own.squawk == "7700" and "squawk_7700" not in st.flags:
             st.flags.add("squawk_7700")
@@ -2179,12 +2180,20 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 return True
         return False
 
+    def _dest_context(self):
+        """The position context with only a final at the destination: lined up with another airfield's runway on the
+        way in (a seaplane base's 18W, south of Orlando) isn't the runway tower clears the flight to land on."""
+        ctx = self.tracker.context
+        if ctx.final is not None and ctx.final_airport not in (None, self.state.flight.destination):
+            return replace(ctx, final=None, final_airport=None)
+        return ctx
+
     def landing_runway(self, own: OwnshipState) -> str | None:
         """The runway the aircraft is landing on: the one it's lined up with, or was cleared for."""
         return self._landing_runway(own)
 
     def _landing_runway(self, own: OwnshipState) -> str | None:
-        ctx = self.tracker.context
+        ctx = self._dest_context()
         assigned = self.state.assignments.arrival_runway
         if ctx.final is not None and ctx.final.distance_nm <= LINED_UP_NM:
             ident = ctx.final.end.ident
@@ -3119,6 +3128,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return unscripted[intent](interp, facility, t, own) or []
         target = REQUEST_CONTROLLER.get(intent or "")
         if intent == "report_final" and facility.controller == "approach" and "approach" not in st.clearances and own is not None:
+            if not self._placed_for_final(own):
+                self._expect_visual(t, own, facility)  # "field in sight" on the downwind: the vectors go on
+                return []
             self._clear_approach(t, own, facility, delay=True)  # "cleared to land?" on approach: clear it, send to tower
             return []
         if target is not None and facility.controller != target:
@@ -3161,7 +3173,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                            and facility == st.comms.tuned and self._works_approach(own)):
             # "Established on the RNAV 01" to approach: ready for the approach clearance, whatever the
             # geometry says (a procedure with an RF leg or a course reversal joins the final late).
-            if "approach" not in st.clearances and own is not None:
+            if "approach" not in st.clearances and own is not None and not self._placed_for_final(own):
+                self._expect_visual(t, own, facility)
+            elif "approach" not in st.clearances and own is not None:
                 self._clear_approach(t, own, facility, delay=True)
             else:
                 self._schedule(t, "common.roger", {}, facility, expects_readback=False)
@@ -4616,6 +4630,32 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return
         self._schedule(t, "common.roger", {}, facility)
 
+    def _placed_for_final(self, own: OwnshipState) -> bool:
+        """Where an approach clearance can be flown from: on the final already, or out on its side of the field and
+        heading in. "Field in sight" north of Orlando on the way south to 35R was cleared the visual and handed to
+        tower there: nobody turned it in, and it flew 25 miles south."""
+        plan = self._arrival_plan(own)
+        geo = self.geometry(self.state.flight.destination)
+        end = geo.end(plan["final"]) if plan is not None and geo is not None else None
+        if end is None or self._joining_final(own) or self._dest_context().final is not None:
+            return True  # (lined up with one of the destination's runways: placed, whichever the plan had)
+        out, lateral = vectors.frame(geo, end, own.lat, own.lon)
+        inbound_off = abs(((own.hdg_true - end.heading_true) + 540) % 360 - 180)
+        return out > 2.0 and inbound_off <= PLACED_HEADING_DEG and abs(lateral) <= max(3.0, out * 0.6)
+
+    def _expect_visual(self, t: float, own: OwnshipState, facility: Facility) -> None:
+        """The field in sight, not yet placed for it: expect the visual, vectors on; the turn onto the final clears it."""
+        plan = self._arrival_plan(own)
+        if plan is None:
+            self._schedule(t, "common.roger", {}, facility, expects_readback=False)
+            return
+        plan["approach"] = Approach("VISUAL", plan["final"])  # the field in sight: the visual, at the turn in
+        self._schedule(t, "approach.expect_visual", {"approach": plan["approach"], "runway": plan["final"]}, facility,
+                       expects_readback=False,
+                       on_issue=lambda: self._assign(approach=plan["approach"].display,
+                                                     arrival_runway=plan["approach"].landing_runway))
+        self._vector_t = -math.inf  # the next heading now, not after the usual gap
+
     def _clear_approach(self, t: float, own: OwnshipState, facility: Facility, *, delay: bool) -> None:
         plan = self._arrival_plan(own)
         tower = self.facility("tower")
@@ -4707,7 +4747,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """An arrival calling tower. Cleared to land once on final with the runway seen empty; before then,
         "continue": a clearance given ten miles out promises a runway nobody has looked at yet. Tower
         clears it itself on the way in (_monitor), so the pilot needn't ask again."""
-        st, ctx = self.state, self.tracker.context
+        st, ctx = self.state, self._dest_context()
         on_final = ctx.final is not None and ctx.final.distance_nm <= LANDING_CLEARANCE_NM
         landing = runway or (self._landing_runway(own) if own is not None else None)
         if "emergency" in st.flags or (on_final and own is not None and (
@@ -4721,7 +4761,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._schedule(t, "tower.continue", {"runway": landing}, facility, expects_readback=False)
 
     def _clear_to_land(self, t: float, own: OwnshipState | None, facility: Facility, *, delay: bool, runway: str | None = None) -> None:
-        st, ctx = self.state, self.tracker.context
+        st, ctx = self.state, self._dest_context()
         geo = self.geometry(st.flight.destination)
         if runway is not None and geo is not None and geo.end(runway) is None:
             runway = None  # the pilot named a runway the airport doesn't have ("08 left" at KPHX): use the real one

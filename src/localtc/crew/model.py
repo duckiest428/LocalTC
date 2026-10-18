@@ -34,7 +34,8 @@ log = logging.getLogger(__name__)
 
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 ACTIONS = ("gear", "flaps", "light", "spoilers", "autopilot", "ap_mode", "autothrottle", "heading", "altitude",
-           "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake", "seatbelt")
+           "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake", "seatbelt",
+           "apu", "apu_bleed")
 SYSTEM = """You are the first officer, pilot monitoring, in an airliner cockpit, talking with the captain on the \
 intercom. Sound like a real, calm, experienced airline first officer: short, plain, accurate. A colleague, not an \
 assistant and not an actor.
@@ -62,7 +63,8 @@ value on|off), spoilers (value arm|disarm|extend|retract), autopilot (value on|o
 heading|nav|approach|altitude|vs|flc, value on), autothrottle (value on|off), heading (value degrees), altitude \
 (value feet), speed (value knots), vs (value feet per minute, negative down), squawk (value 4 digits), com_active or \
 com_standby (value MHz), com_swap, altimeter (value inches like 29.92, or target hpa and value like 1013; \
-"standard" or "STD" is 29.92), parking_brake (value on|off), seatbelt (the seatbelt sign, value on|off).
+"standard" or "STD" is 29.92), parking_brake (value on|off), seatbelt (the seatbelt sign, value on|off), apu \
+(value start|stop), apu_bleed (value on|off).
 Only those, and only when the captain names the thing (gear, flaps, lights...). Not on the list (the autobrake, the \
 flight director, the packs, anti-ice, the fuel pumps, the EFB): say it's the captain's, or that \
 you can't from your seat. Never pick another action instead, never claim you did something you didn't return as a \
@@ -290,7 +292,7 @@ ACTION_WORDS = {
     "com_active": r"frequency|\btune\b|\bcom\b|\bradio\b|\bpoint\b|decimal|\d{3}\.\d",
     "com_standby": r"standby|frequency|\btune\b|\bcom\b|\bpoint\b|decimal|\d{3}\.\d", "com_swap": r"\bswap\b|\bflip\b",
     "altimeter": r"altimeter|\bqnh\b|\bbaro|\bstandard\b|\bstd\b", "parking_brake": r"parking brake|park(?:ing)? brakes?",
-    "seatbelt": r"seat ?belts?",
+    "seatbelt": r"seat ?belts?", "apu": r"\bapu\b|\ba p u\b", "apu_bleed": r"\bapu\b.*\bbleed\b|\bbleed\b",
 }
 REPORT = re.compile(r"\b(?:i've|i have|i'm|i am|i just|i'll|i will|i deployed|i set|i put|we've|we just)\b")
 REQUEST = re.compile(r"\b(?:can you|could you|would you|please|go ahead and|give me|set|put|let's)\b")

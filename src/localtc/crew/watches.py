@@ -41,6 +41,10 @@ from localtc.atc_core.phraseology import speech
 from localtc.sim_api import ArrivalData, AtcTransmission, OwnshipState, RequestAirportData, RequestArrival
 from localtc.sim_api.geo import haversine_nm
 
+APU_GATE_M = 500.0  # taxiing in this close to the gate given: the APU started
+APU_NO_GATE_S = 90.0  # ... or, with no gate given, this long into the taxi in
+APU_START_S = 120.0  # not running this long after it was started: said
+
 SAFETY, ROUTINE, CHATTER = 3, 2, 1  # as crew.monitor
 
 TURB_WINDOW_S = 20.0
@@ -291,6 +295,7 @@ class WatchMixin:
         self._watch_sight(own, t, agl)
         self._watch_brakes(own, prev, t, agl)
         self._watch_taxi(own, t)
+        self._watch_apu(own, t)
         self._watch_diversion(own, t)
         self._watch_weather(t)
 
@@ -489,6 +494,36 @@ class WatchMixin:
         return round(end.runway.runway.length_m * 3.28084) if end is not None else 0
 
     # --- the taxi route --------------------------------------------------------------------------------------------
+
+    def _watch_apu(self: Any, own: OwnshipState, t: float) -> None:
+        """Taxiing in, near the gate: the APU started, then its bleed on once it's running (the cabin kept cool when
+        the engines go off at the stand). Watched: one that hasn't come up is said."""
+        from localtc.crew.actions import APU_RUNNING
+        from localtc.crew.commands import Command
+
+        if self.phase != "TAXI_IN" or not own.on_ground or not self.hands or "apu" in self.c.dead:
+            return
+        s = self.c.systems
+        running = s is not None and s.apu_pct >= APU_RUNNING
+        if not self._said("apu_start"):
+            where = getattr(self.engine, "assigned_gate_position", lambda: None)()
+            since = self.f.said.setdefault("taxi_in_t", t)
+            near = haversine_nm(own.lat, own.lon, where[0], where[1]) * 1852 <= APU_GATE_M if where is not None \
+                else t - since >= APU_NO_GATE_S  # no gate given: a little while into the taxi in
+            if not near:
+                return
+            if running:
+                self.f.said["apu_start"] = t  # running already (the captain's): its bleed next
+            else:
+                self._call("apu_start", ROUTINE, t, "Starting the APU.", commands=(Command("apu", "start"),))
+            return
+        if self._said("apu_bleed"):
+            return
+        if running:
+            self._call("apu_bleed", ROUTINE, t, "APU's running. APU bleed on.", commands=(Command("apu_bleed", "on"),))
+        elif t - self.f.said["apu_start"] > APU_START_S:
+            self.f.said["apu_bleed"] = t
+            self._call("apu_slow", ROUTINE, t, "APU hasn't come up. Check it, the bleed's off for now.")
 
     def _watch_taxi(self: Any, own: OwnshipState, t: float) -> None:
         self.hdg_hist.append((t, own.hdg_true))

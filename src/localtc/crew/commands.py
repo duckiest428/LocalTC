@@ -93,6 +93,8 @@ def parse(text: str) -> list[Command]:
     text = re.sub(r"\b(?:q|queue|cue)[\s.]*(?:and|n|en)[\s.]*h\b", "qnh", text, flags=re.IGNORECASE)
     text = re.sub(r"\bauto[\s-]?brakes?\b", "autobrake", text, flags=re.IGNORECASE)
     text = re.sub(r"\bseat[\s-]?belts?(?:\s+signs?)?\b", "seatbelt", text, flags=re.IGNORECASE)
+    # speech-to-text: "seapot signs off", "seat pelt sign"
+    text = re.sub(r"\b(?:sea\s?pot|seat\s?pelts?|seat\s?bolts?)(?:\s+signs?)?\b", "seatbelt", text, flags=re.IGNORECASE)
     text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
@@ -232,6 +234,17 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
                                      or {_word(tokens, i + 1), _word(tokens, i + 2), _word(tokens, i + 3)}
                                      & {"altimeter", "altimeters", "baro", "setting"}):
         return Command("altimeter", "29.92"), i + 1
+    if w in ("minimums", "minimum", "minima", "mins", "da", "dh", "mda") or (w == "decision" and nxt in ("altitude", "height")):
+        # "minimums 280", "set minimums to 650", "decision altitude 380": the chart's, for the call
+        for j in range(i + 1, min(len(tokens), i + 5)):
+            if (n := _number(tokens, j)) is not None and 50 <= n <= 15000:
+                return Command("minimums", str(int(n))), j + 1
+        return None, i + 1
+    if w == "apu":  # "start the APU", "APU bleed on", "APU off"
+        if nxt == "bleed":
+            return Command("apu_bleed", _on_off(tokens, i - 3, i + 4) or "on"), i + 2
+        stop = {_word(tokens, j) for j in range(max(0, i - 3), min(len(tokens), i + 3))} & {"stop", "shut", "shutdown", "off"}
+        return Command("apu", "stop" if stop else "start"), i + 1
     if w == "seatbelt":  # "seatbelt sign on", "turn on the seatbelts" (no on or off: on)
         return Command("seatbelt", _on_off(tokens, i - 3, i + 3) or "on"), i + 1
     if w == "parking" and nxt in ("brake", "brakes"):

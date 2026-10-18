@@ -88,6 +88,13 @@ text = ["{callsign}, turn {turn} heading {heading}.", "{callsign}, fly heading {
 readback = { required = ["heading"] }
 pilot_readback = "Heading {heading}, {callsign_short}."
 
+# The field in sight, but not yet where a visual can be flown from: the vectors go on, the turn in clears it.
+[[template]]
+id = "approach.expect_visual"
+controller = "approach"
+text = ["{callsign}, roger, expect the visual approach runway {runway}, vectors to final.",
+        "{callsign}, roger, I'll have a turn for you shortly, expect the visual runway {runway}."]
+
 # The first vector with the aircraft already pointing about right: the heading it's on, no turn.
 [[template]]
 id = "approach.present_heading"

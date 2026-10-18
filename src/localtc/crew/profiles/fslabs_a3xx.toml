@@ -206,6 +206,21 @@ var = "L:FSL_RMP1.VHF.STBY"
 knobs = [{ up = 77554, down = 77553, div = 1000 }, { up = 77561, down = 77560, mod = 1000, step = 5, learn = true, burst = 2 }]
 press = [77518, 77520]
 
+# The APU: MASTER SW, then START (overhead push buttons: pressed +0, released +2), and its bleed. Toggles: the copilot
+# only presses them when the APU's speed says they're needed.
+[actions.apu_start]
+press = [72516, 72518, 72520, 72522]
+gap_s = 1.5
+
+[actions.apu_stop]
+press = [72516, 72518]
+
+[actions.apu_bleed_on]
+press = [72418, 72420]
+
+[actions.apu_bleed_off]
+press = [72418, 72420]
+
 # The transponder's keypad: each digit pressed and released.
 [actions.squawk]
 keys = { "0" = 78327, "1" = 78292, "2" = 78297, "3" = 78302, "4" = 78307, "5" = 78312, "6" = 78317, "7" = 78322 }

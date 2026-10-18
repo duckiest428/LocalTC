@@ -86,6 +86,8 @@ def freq_label(kind: str) -> str:
     """A frequency's kind on the airport box: "GND", "PRE-TAXI" (never the sim's "CLEARANCE_PRETAXI")."""
     return FREQ_LABELS.get(kind, kind.upper().replace("_", " "))
 DEPARTING = {"PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
+STATUS_FROM_NM = 40.0  # the flight's status in the airport box this far from the departure ...
+STATUS_UNTIL_NM = 150.0  # ... until this close to the destination (then its frequencies and ATIS)
 
 
 CLEAR_AFTER_S = 600  # a flight's map, details and radio log stay this long after it ends, then the app is clean
@@ -519,6 +521,56 @@ class AppController:
             "pending": msgspec.to_builtins(snap.pending) if snap.pending else None,
             "ete": ete, "rules": getattr(engine.state.flight, "rules", "IFR"),
             "taxi": f"{taxi['to']} via {' '.join(taxi['taxiways'])}" if (taxi := engine.taxi_path()) else None,
+            "status": self._en_route(engine, snap),
+        }
+
+    def _en_route(self, engine, snap) -> dict | None:
+        """Between the departure's area and the destination's, the flight's status where the airport box is: the
+        destination's frequencies came up at cruise, hours before they were any use. None near either airport."""
+        from localtc.atc_core.airlines import TELEPHONY
+        from localtc.atc_core.phraseology import speech
+        from localtc.ops.schedules import IATA_TO_ICAO
+        from localtc.sim_api.geo import haversine_nm
+
+        own = engine.state.aircraft
+        origin, dest = engine.geometry(snap.origin), engine.geometry(snap.destination)
+        if own is None or own.on_ground or dest is None or snap.phase not in ("DEPARTURE", "CRUISE"):
+            return None
+        to_go = haversine_nm(own.lat, own.lon, dest.airport.lat, dest.airport.lon)
+        from_origin = haversine_nm(own.lat, own.lon, origin.airport.lat, origin.airport.lon) if origin is not None else 1e9
+        if to_go <= STATUS_UNTIL_NM or from_origin <= STATUS_FROM_NM:
+            return None
+        total = haversine_nm(origin.airport.lat, origin.airport.lon, dest.airport.lat, dest.airport.lon) \
+            if origin is not None else to_go
+        callsign = snap.callsign or ""
+        code = callsign[:3].upper() if len(callsign) > 3 and callsign[:3].isalpha() and callsign[3:4].isdigit() else ""
+        iata = next((k for k, v in IATA_TO_ICAO.items() if v == code), "") if code else ""
+        number = callsign[3:] if code else ""
+        kind = getattr(engine.state.flight, "aircraft_type", None) or ""
+        gs = max(own.gs_kt, 1.0)
+        ete_min = round(to_go / gs * 60)
+        eta = (own.zulu_s + ete_min * 60) % 86400 if own.zulu_s else None
+        tuned = snap.tuned
+        alt = own.alt_indicated_ft
+        name = lambda g: (self.airports.get(g.airport.icao).name if self.airports.get(g.airport.icao) else g.airport.name)  # noqa: E731
+        return {
+            "airline": TELEPHONY.get(code, "") if code else "", "airline_icao": code, "iata": iata,
+            "logo": f"https://pics.avs.io/200/60/{iata}.png" if iata else "",
+            "flight": f"{iata or code} {number}".strip() if code else callsign, "callsign": callsign,
+            "aircraft": speech.aircraft_type(kind)[0] or kind, "type": kind,
+            "origin": snap.origin, "origin_name": name(origin) if origin is not None else "",
+            "destination": snap.destination, "destination_name": name(dest),
+            "progress": round(max(0.0, min(1.0, 1 - to_go / total)), 3) if total > 0 else 0.0,
+            "to_go_nm": round(to_go), "flown_nm": round(max(0.0, total - to_go)), "ete_min": ete_min,
+            "eta": f"{int(eta // 3600):02d}{int(eta % 3600 // 60):02d}Z" if eta is not None else None,
+            "altitude": f"FL{round(alt / 100):03d}" if alt >= 18000 else f"{round(alt, -2):,.0f} ft",
+            "cruise_ft": snap.cruise_ft, "gs_kt": round(own.gs_kt), "ias_kt": round(own.ias_kt), "vs_fpm": round(own.vs_fpm, -2),
+            "heading": round(own.hdg_mag) % 360 or 360,
+            "wind": f"{round(own.wind_dir_true):03d}/{round(own.wind_kt)}" if own.wind_kt else None,
+            "temp_c": round(own.temperature_c) if own.temperature_c is not None else None,
+            "fuel_lb": round(own.fuel_lb, -2) if own.fuel_lb else None,
+            "with": f"{tuned.station} {tuned.mhz:.3f}".rstrip("0").rstrip(".") if tuned is not None else None,
+            "phase": PHASES.get(snap.phase or "", snap.phase or ""),
         }
 
     # --- bus events -> the page --------------------------------------------------------------------------------

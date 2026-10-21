@@ -1103,6 +1103,10 @@ body::after {
   .leg-card { background: rgba(10, 12, 15, .82); }
   .home .hero .window { background: linear-gradient(168deg, rgba(30, 35, 41, .9), rgba(12, 14, 17, .94)); }
   .band-photo .ld-box { background: rgba(20, 23, 27, .9); }
-  .hero-slides { will-change: auto; }
+  .hero-slides { will-change: auto; inset: 0; }
+  /* The hero holds its photo still (no slow push in) and only fades to the next; the radar sweep, blended over a
+     full-screen photo, goes. */
+  .hero-slides img.on, .hero-slides img.out { animation: none; }
+  .home .scope { display: none; }
   .reveal { filter: none; }
 }

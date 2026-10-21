@@ -19,10 +19,11 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases
   along the timeline in their places.
 
-- **Real flights on the home page**: screenshots from the developer's own MSFS 2024 flights, behind the hero (a
-  slideshow that slowly pushes in), as each feature's photo, and in a gallery of two drifting rows that open full size.
-- **A flight, station by station**: the eight controllers from clearance to the gate, each with a photo of that part of
-  the flight and its call typed out; it plays through by itself, or pick a leg.
+- **Real flights on the home page**: screenshots from the developer's own MSFS 2024 flights behind the hero (a
+  slideshow that slowly pushes in), beside each group of features, and behind the local, install and support bands.
+- **Gate to gate, station by station**: the eight controllers from clearance to the gate, each with a photo of that
+  part of a flight and its call typed out in the callsign of the airline in the photo; it plays through by itself, or
+  pick a leg.
 
 ### Changed
 - **More life on the home page**: the header turns to glass as you scroll, with a line for how far down you are; the
@@ -30,6 +31,12 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   catch a light under the pointer, sections arrive with a blur, the subscription sum counts up, and light drifts
   behind every page. All of it stands still with reduced motion.
 - **The pricing page's head** has a photo behind it.
+- **Why pay monthly, install and where it is, redone**: one spacing for every section, LocalTC beside a subscription
+  with a tick or a cross on each row, the subscription sum beside a photo with LocalTC's $0, the install steps joined by
+  a line, and what works today ticked off beside what's still on the way.
+- **The features in even pairs**: the copilot answers questions about the flight, and LocalTC flies on the grammar
+  alone without a model.
+- **No em dashes anywhere on the site.**
 - **The changelog shows what's coming**: the upcoming version is on the page first, filled in as the work is done, and one product's tab is always the one showing.
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 

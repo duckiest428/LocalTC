@@ -19,7 +19,7 @@ vendor/leaflet  Leaflet, for the maps (served from here; the tiles come from Ope
 changelog.html  built from CHANGELOG.md
 styles.css      the whole design system
 app.js          the home page's motion: reveals, the hero's slides, the typing radio log, the flight leg by leg,
-                the gallery's lightbox, the subscription sum, copy buttons (pricing uses it too)
+                the subscription sum, copy buttons (pricing uses it too)
 img/            screenshots from the developer's own MSFS 2024 flights, each full size and at 960 px (-960.jpg)
 fonts/          Inter and JetBrains Mono, served from here on purpose
 logo.svg        the mark (the same file the app serves)

@@ -1,6 +1,6 @@
 /* The home page's motion, no dependencies: the header and the photos as you scroll, the hero's slides and its
-   headline, the radio log typing itself, the flight leg by leg, the gallery and its lightbox, the subscription sum,
-   the copy buttons. Everything that moves stands still for prefers-reduced-motion. */
+   headline, the radio log typing itself, the flight leg by leg, the subscription sum, the copy
+   buttons. Everything that moves stands still for prefers-reduced-motion. */
 
 const quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const finePointer = window.matchMedia("(pointer: fine)").matches;
@@ -13,7 +13,7 @@ function reveals() {
   if (quiet || !("IntersectionObserver" in window)) return;
   const groups = ".section-title, .section-lede, .card, .compare, .calc, .fineprint, .step, .callout, .status-col," +
                  " .cta-center, .window, .tile, .chapter-photo, .chapter-kicker, .chapter-title, .chapter-lede," +
-                 " .legs-stage, .legs-rail, .ld-box, .plan, .faq details";
+                 " .legs-stage, .legs-rail, .ld-box, .plan, .faq details, .versus";
   const seen = new IntersectionObserver((entries, self) => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -23,7 +23,7 @@ function reveals() {
   }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
 
   for (const el of document.querySelectorAll(groups)) {
-    // Anything already on screen — the hero, or wherever a #link dropped you — is left alone. It
+    // Anything already on screen (the hero, or wherever a #link dropped you) is left alone. It
     // has nothing to arrive from, and hiding it first would only make the page flash.
     if (el.getBoundingClientRect().top < window.innerHeight) continue;
     el.classList.add("reveal");
@@ -280,50 +280,6 @@ function legs() {
   stage.addEventListener("pointerleave", () => { held = false; sync(); });
 }
 legs();
-
-// --- the gallery: an endless row (a copy of each row behind it), and the lightbox --------------------
-function gallery() {
-  const shots = [...document.querySelectorAll(".shot")];
-  if (!shots.length) return;
-  if (!quiet) {
-    for (const track of document.querySelectorAll(".marquee-track")) {
-      for (const shot of [...track.children]) {
-        const copy = shot.cloneNode(true);
-        copy.setAttribute("aria-hidden", "true");
-        copy.tabIndex = -1;
-        track.append(copy);
-      }
-    }
-  }
-  const box = document.getElementById("lightbox");
-  if (!box || !box.showModal) return;
-  const img = box.querySelector("img");
-  const cap = box.querySelector(".lb-cap");
-  let at = 0;
-  function open(n) {
-    at = (n + shots.length) % shots.length;
-    img.src = shots[at].dataset.full;
-    img.alt = shots[at].dataset.cap;
-    cap.textContent = shots[at].dataset.cap;
-    img.style.animation = "none";
-    void img.offsetWidth;
-    img.style.animation = "";
-    if (!box.open) box.showModal();
-  }
-  document.addEventListener("click", (e) => {
-    const shot = e.target.closest(".shot");
-    if (shot) open(shots.findIndex((s) => s.dataset.full === shot.dataset.full));
-  });
-  box.querySelector(".lb-prev").addEventListener("click", () => open(at - 1));
-  box.querySelector(".lb-next").addEventListener("click", () => open(at + 1));
-  box.querySelector(".lb-close").addEventListener("click", () => box.close());
-  box.addEventListener("click", (e) => { if (e.target === box) box.close(); });
-  box.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowLeft") open(at - 1);
-    if (e.key === "ArrowRight") open(at + 1);
-  });
-}
-gallery();
 
 // --- what the subscription costs -----------------------------------------------------------------
 const rate = document.getElementById("rate");

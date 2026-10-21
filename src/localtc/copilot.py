@@ -101,7 +101,66 @@ class _Queued:
     once: str = field(default="", compare=False)  # the one-shot call it makes ("taxi"), made again if it's dropped
 
 
-class Copilot:
+class CallWords:
+    """The words of the calls a crew makes on the ground (the pushback, the taxi, the clearance, ready for departure),
+    and who they go to: the radio copilot's, and the intercom copilot's when the captain asks it for one."""
+
+    CONTROLLERS = {"pushback": "ground", "taxi": "ground", "clearance": "clearance", "departure": "tower"}
+
+    def __init__(self, engine: AtcEngine) -> None:
+        self.engine = engine
+
+    def asked(self, call: str) -> tuple[Facility, str] | None:
+        """``call``'s station and words; None where there's nobody to make it to."""
+        engine = self.engine
+        f = engine.facility(self.CONTROLLERS.get(call, "")) or (engine.facility("ground") if call == "clearance" else None)
+        if f is None:
+            return None
+        if call == "pushback":
+            return f, self._pushback_request(f)
+        if call == "taxi":
+            return f, f"{f.station}, {self._callsign()}, ready to taxi" + self._with_atis(engine.state.flight.origin)
+        if call == "clearance":
+            return f, self._ifr_request(f)
+        if call == "departure":
+            return f, self._ready_for_departure(f)
+        return None
+
+    def _pushback_request(self, f: Facility) -> str:
+        st = self.engine.state
+        gate = st.assignments.departure_gate
+        own = st.aircraft
+        geo = self.engine.geometry(st.flight.origin) if st.flight.origin else None
+        if gate is None and own is not None and geo is not None:
+            parked = stands.parked_at(geo, own.lat, own.lon, self.engine._real_gates(geo.icao))
+            gate = parked.display if parked is not None else None
+        at = f", {gate}," if gate else ","
+        return f"{f.station}, {self._callsign()}{at} request push and start" + self._with_atis(st.flight.origin)
+
+    def _with_atis(self, icao: str | None) -> str:
+        """", with information Charlie": the copilot listens to the ATIS first."""
+        info = self.engine.current_atis(icao)
+        return f", with information {speech.letter(info.letter).capitalize()}" if info is not None else ""
+
+    def _ifr_request(self, f: Facility) -> str:
+        return f"{f.station}, {self._callsign()}, IFR to {self._destination()}, ready to copy"
+
+    def _ready_for_departure(self, f: Facility) -> str:
+        runway = self.engine.state.assignments.departure_runway
+        where = f"holding short runway {runway}" if runway else "holding short"
+        return f"{f.station}, {self._callsign()}, {where}, ready for departure"
+
+    def _callsign(self) -> str:
+        callsign = self.engine.state.flight.callsign
+        return speech.callsign_display(callsign) if callsign else "unknown"
+
+    def _destination(self) -> str:
+        dest = self.engine.state.flight.destination
+        geometry = self.engine.geometry(dest)
+        return speech.airport_name(geometry.airport.name, dest) if geometry and dest else (dest or "destination")
+
+
+class Copilot(CallWords):
     def __init__(self, engine: AtcEngine, *, mode: CopilotMode = "full", delay_s: tuple[float, float] = (2.0, 4.0),
                  seed: int = 1, deck: FlightDeck | None = None) -> None:
         self.engine = engine
@@ -345,17 +404,6 @@ class Copilot:
         gate = stands.parked_at(geo, own.lat, own.lon, engine._real_gates(geo.icao))
         return gate is not None and gate.word == "gate"
 
-    def _pushback_request(self, f: Facility) -> str:
-        st = self.engine.state
-        gate = st.assignments.departure_gate
-        own = st.aircraft
-        geo = self.engine.geometry(st.flight.origin) if st.flight.origin else None
-        if gate is None and own is not None and geo is not None:
-            parked = stands.parked_at(geo, own.lat, own.lon, self.engine._real_gates(geo.icao))
-            gate = parked.display if parked is not None else None
-        at = f", {gate}," if gate else ","
-        return f"{f.station}, {self._callsign()}{at} request push and start" + self._with_atis(st.flight.origin)
-
     def _unanswered(self, t: float) -> list[Action]:
         """A check-in nobody answered: once more after ``UNANSWERED_S``, then the captain is told (and in full mode
         the copilot goes back to the frequency it came from)."""
@@ -399,19 +447,6 @@ class Copilot:
         if tuned is None or tuned.controller != facility.controller or not tuned.matches(facility.mhz):
             after = self._push("tune", t, facility=facility).due + 1.0
         self._push("say", t, text=text(facility), facility=facility, after=after, once=key)
-
-    def _with_atis(self, icao: str | None) -> str:
-        """", with information Charlie": the copilot listens to the ATIS first."""
-        info = self.engine.current_atis(icao)
-        return f", with information {speech.letter(info.letter).capitalize()}" if info is not None else ""
-
-    def _ifr_request(self, f: Facility) -> str:
-        return f"{f.station}, {self._callsign()}, IFR to {self._destination()}, ready to copy"
-
-    def _ready_for_departure(self, f: Facility) -> str:
-        runway = self.engine.state.assignments.departure_runway
-        where = f"holding short runway {runway}" if runway else "holding short"
-        return f"{f.station}, {self._callsign()}, {where}, ready for departure"
 
     def _checkin_text(self, f: Facility, own: OwnshipState | None) -> str | None:
         st = self.engine.state
@@ -558,12 +593,3 @@ class Copilot:
     def _cleared(self, kind: str) -> bool:
         clearance = self.engine.state.clearances.get(kind)
         return clearance is not None and clearance.readback in ("correct", "none")
-
-    def _callsign(self) -> str:
-        callsign = self.engine.state.flight.callsign
-        return speech.callsign_display(callsign) if callsign else "unknown"
-
-    def _destination(self) -> str:
-        dest = self.engine.state.flight.destination
-        geometry = self.engine.geometry(dest)
-        return speech.airport_name(geometry.airport.name, dest) if geometry and dest else (dest or "destination")

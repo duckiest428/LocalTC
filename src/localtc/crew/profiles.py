@@ -56,7 +56,7 @@ class Write:
     press: tuple[int, ...] = ()
     keys: dict[str, int] = field(default_factory=dict)
     release: int = 0
-    clear: int = 0  # a keypad's key pressed first (CLR), the code typed after it
+    clear: int = 0  # a keypad's key that rubs out a digit (CLR): pressed once a digit first, the code typed after
     gap_s: float = 0.0  # between one click and the next (0: the usual): a slow keypad's
     # A switch to put somewhere first, when the value wants it ("fine" = an FCU altitude that isn't a whole thousand:
     # the 100/1,000 switch at 100): ``fine_var`` reads ``fine_value`` there, ``fine_codes`` put it there.

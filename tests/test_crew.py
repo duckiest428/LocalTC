@@ -118,6 +118,17 @@ def test_a_profile_can_send_an_action_another_way():
     assert p.writes == (SetSimVar(name="L:ADDON_LDG", unit="number", value=2.0),)
 
 
+def test_the_fslabs_transponder_is_rubbed_out_then_typed():
+    """Its CLR takes one digit off: pressed once, 1200 became 120_, "4" filled it (1204) and 7-0-1 went nowhere. Once a
+    digit, the window's empty for the code."""
+    fsl = for_aircraft(PROFILES, "FSLabs A321-211 - Air Canada (C-FJNX)", "A321")
+    writes = plan(Command("squawk", "4701"), cockpit(fsl)).writes
+    codes = [c for w in writes for c in w.codes]
+    clr, keys = 78332, fsl.actions["squawk"].keys
+    assert codes == [clr, clr + 2] * 4 + [n for ch in "4701" for n in (keys[ch], keys[ch] + 2)]
+    assert all(w.gap_s >= 0.4 for w in writes)
+
+
 def test_values_go_to_the_sim_as_it_expects_them():
     c = cockpit()
     assert plan(Command("squawk", "7700"), c).writes == (SendSimEvent(name="XPNDR_SET", value=0x7700),)

@@ -247,6 +247,15 @@ class CrewModel:
                                latency_ms=result.latency_ms)
         return words, [exchange]
 
+    def _named_before(self, action: str, heard: str) -> bool:
+        """The captain's line before named it ("set your altimeter to 30.39"), and this one says "it" or "that" ("no,
+        change it to 30.39")."""
+        if not re.search(r"\b(?:it|that|them|this one)\b", heard):
+            return False
+        before = next((words.lower() for who, words in reversed(self.history)
+                       if who == "Captain" and words.lower() != heard), "")
+        return bool(re.search(ACTION_WORDS[action], before))
+
     def _check(self, raw: str, said: str, facts: dict[str, str]) -> tuple[Reading | None, str]:
         try:
             data = json.loads(raw)
@@ -261,10 +270,13 @@ class CrewModel:
             if is_report(heard):  # "I've deployed the speed brakes": what he did, not a request
                 self.heard("You", "Check.")
                 return Reading("Check."), "a report of the captain's own, not a request: acknowledged"
-            if not re.search(ACTION_WORDS[action], heard):
+            if not re.search(ACTION_WORDS[action], heard) and not self._named_before(action, heard):
                 return None, f"the captain didn't name the {action.replace('_', ' ')}"
             standard = action == "altimeter" and value == "29.92" and re.search(r"\bstandard\b|\bstd\b", heard)
-            if value and value not in WORD_VALUES and not standard and not (set(re.findall(r"\d+", value)) <= numbers_in(said) | _spoken_digits(heard)):
+            # (Each number's digits too: "30.39" said is 30 and 39, the altimeter's "30.39" was "not said".)
+            spoken = numbers_in(said) | _spoken_digits(heard)
+            spoken |= {d for n in spoken for d in re.findall(r"\d+", n)}
+            if value and value not in WORD_VALUES and not standard and not set(re.findall(r"\d+", value)) <= spoken:
                 return None, f"the captain didn't say {value}"
             return Reading(reply or f"{action} {value}".strip(), Command(action, value, target)), ""
         if not reply:
@@ -292,7 +304,7 @@ ACTION_WORDS = {
     "com_active": r"frequency|\btune\b|\bcom\b|\bradio\b|\bpoint\b|decimal|\d{3}\.\d",
     "com_standby": r"standby|frequency|\btune\b|\bcom\b|\bpoint\b|decimal|\d{3}\.\d", "com_swap": r"\bswap\b|\bflip\b",
     "altimeter": r"altimeter|\bqnh\b|\bbaro|\bstandard\b|\bstd\b", "parking_brake": r"parking brake|park(?:ing)? brakes?",
-    "seatbelt": r"seat ?belts?", "apu": r"\bapu\b|\ba p u\b", "apu_bleed": r"\bapu\b.*\bbleed\b|\bbleed\b",
+    "seatbelt": r"seat ?belts?|sea ?pelts?|seat ?pelts?|sea ?pots?", "apu": r"\bapu\b|\ba p u\b", "apu_bleed": r"\bapu\b.*\bbleed\b|\bbleed\b",
 }
 REPORT = re.compile(r"\b(?:i've|i have|i'm|i am|i just|i'll|i will|i deployed|i set|i put|we've|we just)\b")
 REQUEST = re.compile(r"\b(?:can you|could you|would you|please|go ahead and|give me|set|put|let's)\b")

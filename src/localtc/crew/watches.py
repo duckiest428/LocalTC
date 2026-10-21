@@ -52,6 +52,10 @@ TURB_LEVELS = (("severe", 0.35, 1.0), ("moderate", 0.15, 0.5), ("light", 0.06, 0
 TURB_CALM_S = 120.0
 TURB_JOLT_G = 0.08  # a change in the load factor this big from one sample to the next is a jolt ...
 TURB_REVERSALS = 4  # ... and turbulence turns it back this many times in the window at least
+# The vertical speed over the last MANEUVER_RECENT_S this much different on average from the MANEUVER_BEFORE_S before
+# (a climb levelled, a TCAS resolution flown): the bumps are the hands on the stick, not turbulence ("severe
+# turbulence!" through a resolution advisory), until MANEUVER_HOLD_S after.
+MANEUVER_FPM, MANEUVER_RECENT_S, MANEUVER_BEFORE_S, MANEUVER_HOLD_S = 1000.0, 8.0, 20.0, 30.0
 TURB_AGAIN_S = 600.0  # "moderate turbulence" (and "smooth again") at most this often: not a running commentary
 SHEAR_WINDOW_S = 5.0
 SHEAR_KT = 15.0
@@ -215,6 +219,8 @@ class WatchMixin:
         self.taxi_joined: tuple[Any, ...] | None = None  # the route (as given) the aircraft got onto
         self.taxi_off_since: float | None = None
         self.hdg_hist: deque[tuple[float, float]] = deque()
+        self.vs_hist: deque[tuple[float, float]] = deque()  # the vertical speed lately (``_maneuvering``)
+        self.maneuver_t = -1e9  # when the aircraft was last flown off its climb or descent (a TCAS resolution)
         self.divert_due: tuple[float, str] | None = None  # (offer by then, why)
         self.divert_offered: list[Any] = []
         self.weather_said: dict[str, tuple[str, ...]] = {}
@@ -282,7 +288,9 @@ class WatchMixin:
         airborne = not own.on_ground
         agl = self._agl(own)
         departing = self.f.takeoff_t is not None and t - self.f.takeoff_t < 180
-        if airborne and agl > 1500 and s is not None:
+        if self._maneuvering(own, t):
+            self.turbulence.reset()
+        elif airborne and agl > 1500 and s is not None:
             self._watch_turbulence(t, s.g_force)
         elif own.on_ground:
             self.turbulence.reset()
@@ -298,6 +306,17 @@ class WatchMixin:
         self._watch_apu(own, t)
         self._watch_diversion(own, t)
         self._watch_weather(t)
+
+    def _maneuvering(self: Any, own: OwnshipState, t: float) -> bool:
+        """Flown off the way it was climbing or descending lately, or that was a moment ago."""
+        self.vs_hist.append((t, own.vs_fpm))
+        while self.vs_hist and t - self.vs_hist[0][0] > MANEUVER_RECENT_S + MANEUVER_BEFORE_S:
+            self.vs_hist.popleft()
+        recent = [vs for when, vs in self.vs_hist if t - when <= MANEUVER_RECENT_S]
+        before = [vs for when, vs in self.vs_hist if t - when > MANEUVER_RECENT_S]
+        if recent and before and abs(sum(recent) / len(recent) - sum(before) / len(before)) > MANEUVER_FPM:
+            self.maneuver_t = t
+        return t - self.maneuver_t < MANEUVER_HOLD_S
 
     def _watch_turbulence(self: Any, t: float, g: float) -> None:
         level = self.turbulence.add(t, g)

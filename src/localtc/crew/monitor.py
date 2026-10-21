@@ -93,6 +93,7 @@ FUEL_PLAN_MARGIN_LB = 1100.0  # a projection this far (or 15 percent) under the 
 FUEL_MATCH_LB = 1100.0  # on board against the plan's block: this close (or 3 percent) matches
 FUEL_STEADY_S = 20.0  # the fuel unchanged this long after engine start: loaded, and checked against the block
 FUEL_LAST_H = 1.0  # the projections to landing only this close to the destination: a long way out they're guesses
+SPEED_AGAIN_S = 45.0  # a flap or gear overspeed said again this often while it lasts
 LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
 PUSH_BRAKE_S = 150.0  # cleared to push and the parking brake still set this long: a word
 # The transition: seen this far below it (or above the level), then this far past it, climbing (or descending).
@@ -213,6 +214,7 @@ class Monitor(WatchMixin):
         self.cleared_heading: tuple[int, float] | None = None
         self.captured: int | None = None  # the cleared altitude once the aircraft got there
         self.off_since: float | None = None
+        self.level_t: float | None = None  # level (under 300 fpm up or down) since
         self.heading_off_since: float | None = None
         self.speed_high_since: float | None = None
         self.taxi_runway_d: dict[str, float] = {}
@@ -583,8 +585,10 @@ class Monitor(WatchMixin):
                     self._call(f"atis:{f.origin}:{info.letter}", ROUTINE, t, "",
                                commands=(Command("altimeter", f"{w.altimeter_inhg:.2f}"),))
             # (No "call for the clearance when you're ready": the captain calls when the captain's ready.)
+            if self.phase == "PUSHBACK":
+                self.f.said.setdefault("pushed", t)  # pushed back: the brake set after it is the end of the push
             if self._cleared("pushback") and own.parking_brake and own.gs_kt < 0.5 and not self._said("push_brake") \
-                    and self.phase in (None, "PARKED"):
+                    and self.phase in (None, "PARKED") and "pushed" not in self.f.said:
                 when = self.f.said.get("pushback_seen") or self.f.said.setdefault("pushback_seen", t)
                 if t - when > PUSH_BRAKE_S:  # a tug takes its time (GSX: minutes): not a nag 10 s after the approval
                     self._call("push_brake", ROUTINE, t, "We're cleared to push; parking brake's still set.")
@@ -606,9 +610,11 @@ class Monitor(WatchMixin):
             self._call("overspeed", SAFETY, t, "Overspeed!", again_s=15)
         flaps = self.c.flaps_index
         if airborne and flaps and (vfe := p.vfe_for(flaps)) and own.ias_kt > vfe + 5:
-            self._call("flap_speed", SAFETY, t, f"Flap speed! {own.ias_kt:.0f}, limit {vfe:.0f}.", again_s=15)
+            # Once, and again only every SPEED_AGAIN_S while it stays fast (five times in a minute on one approach).
+            self._call("flap_speed", SAFETY, t, f"Flap speed! {own.ias_kt:.0f}, limit {vfe:.0f}.", again_s=SPEED_AGAIN_S)
         if airborne and own.gear_down and p.gear_extended_kt and own.ias_kt > p.gear_extended_kt + 5:
-            self._call("gear_speed", SAFETY, t, f"Gear speed! {own.ias_kt:.0f}, limit {p.gear_extended_kt:.0f}.", again_s=15)
+            self._call("gear_speed", SAFETY, t, f"Gear speed! {own.ias_kt:.0f}, limit {p.gear_extended_kt:.0f}.",
+                       again_s=SPEED_AGAIN_S)
 
     def _fuel_steady(self, own: OwnshipState, t: float) -> None:
         """The block check, once the fuel has stopped changing for ``FUEL_STEADY_S`` (a refuel in progress at
@@ -799,18 +805,19 @@ class Monitor(WatchMixin):
                 self._call(f"set_alt:{target}", ROUTINE, t, f"{speech.altitude_display(target)} set.",
                            commands=(Command("altitude", str(target)),),
                            valid=lambda: st.assignments.altitude_ft == target)  # (another since: that one instead)
+        # (No "one thousand to go": the captain hears it before every level-off, and pilots found it noise.)
+        self.level_t = (self.level_t if self.level_t is not None else t) if abs(own.vs_fpm) < 300 else None
         if target and not self._on_approach():
-            if (prev_alt < target - 1000 <= alt and own.vs_fpm > 500) or (prev_alt > target + 1000 >= alt and own.vs_fpm < -500):
-                self._call(f"1000_to_go:{target}:{round(t, -2)}", ROUTINE, t, "One thousand to go.")
             if abs(alt - target) < 150:
                 self.captured = target
             via = self._via()
             # Not on the way up out of the departure, low down: a SID's level-offs ("6,000 at DET") are flown there.
             sid_climb = self.phase == "DEPARTURE" and alt < 10000 and alt < target
             if self.captured != target and abs(alt - target) >= 1000 and abs(own.vs_fpm) < 300 and not via and not sid_climb \
-                    and t - self.cleared_alt_t > LEVEL_BELOW_S and self.phase in ("DEPARTURE", "CRUISE", "ARRIVAL"):
+                    and t - self.cleared_alt_t > LEVEL_BELOW_S and t - self.level_t > LEVEL_BELOW_S                     and self.phase in ("DEPARTURE", "CRUISE", "ARRIVAL"):
                 # Cleared to FL370 and still level at 350 an hour later (the selected altitude never reached the
-                # aircraft): the pilot monitoring says so.
+                # aircraft): the pilot monitoring says so. Level for a while, not a moment's level-off in the climb
+                # (a TCAS resolution at 15,700 was "still level at 15,700" the second it levelled).
                 where = "below" if alt < target else "above"
                 self._nag(f"level_{where}:{target}", ROUTINE, t, f"We're cleared to {speech.altitude_display(target)}, "
                           f"still level at {speech.altitude_display(int(round(alt, -2)))}.", every_s=600,
@@ -1527,8 +1534,9 @@ def spoken(text: str, airports: tuple[str, ...] = ()) -> str:
 
 
 def _says(answer: str, shown: str) -> bool:
-    """The captain's answer names the setting shown ("one plus F" for 1+F, "two" for 2)."""
-    words = {"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "full": "full", "plus": "+", "up": "0"}
+    """The captain's answer names the setting shown ("one plus F" for 1+F, "two" for 2, "off" for released)."""
+    words = {"zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "full": "full", "plus": "+", "up": "0",
+             "released": "off", "release": "off", "set": "on", "engaged": "on"}
     said = re.sub(r"\s+", "", " ".join(words.get(w, w) for w in re.findall(r"[a-z0-9+]+", answer.lower())))
-    want = re.sub(r"\s+", "", shown.lower()).replace("up", "0")
+    want = re.sub(r"\s+", "", " ".join(words.get(w, w) for w in re.findall(r"[a-z0-9+]+", shown.lower())))
     return bool(want) and want in said

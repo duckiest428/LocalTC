@@ -32,6 +32,7 @@ from localtc.atc_core.airport import aircraft_size
 from localtc.atc_core.airport import fixes as airport_fixes
 from localtc.atc_core.airport import gates as stands
 from localtc.atc_core.airport import real_gates
+from localtc.atc_core.airport import taxi_guide
 from localtc.atc_core.airport.approaches import LOCALIZER as LOCALIZER_KINDS
 from localtc.atc_core.airport.approaches import (
     Aircraft,
@@ -198,6 +199,9 @@ GIVE_WAY_TURNING_DEG_S = 3.0  # turning faster than this on the ground: the nose
 GIVE_WAY_SURE_KT = 6.0  # taxiing at least this fast, square across: then the direction is said
 HANDOFF_LISTENING_S = 120.0  # the controller who handed a flight off still hears it on the old frequency this long
 AT_HOLD_M = 80.0  # this close to a runway's hold line is holding short of it
+# Ground hands a departure to tower this far from the end of its taxi route (the hold short), taxiing, with no
+# runway left to cross on the way: on the way to the runway, as ground does when it's quiet, not only at the line.
+TOWER_HANDOFF_M = 800.0
 AT_RUNWAY_END_M = 250.0  # ... or this close to its threshold
 FINAL_OWNED_NM = 10.0  # this flight on final this close: tower isn't sending anybody else onto that runway
 MOVING_KT = 2.0  # traffic seen going this fast has somebody flying it
@@ -1254,6 +1258,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif phase in (P.RUNWAY_HOLD, P.TAXI_OUT) and tuned == "tower" and self._takeoff_wait is not None \
                 and "takeoff" not in st.clearances and st.pending is None:
             self._release(t, st.comms.tuned, self._takeoff_wait, answering=False)
+        elif phase is P.TAXI_OUT and tuned == "ground" and not self._vfr and "taxi" in st.clearances \
+                and st.pending is None and own.gs_kt >= 3.0 and not [r for r in self._crossings if r not in self._crossed] \
+                and (left := self._taxi_left_m(own)) is not None and left <= TOWER_HANDOFF_M and once("handoff_tower"):
+            if (tower := self.facility("tower")) is not None:
+                self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
         elif phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances \
                 and self._at_departure_runway(st.assignments.departure_runway or "") and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
@@ -2900,8 +2909,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if frequencies(normalize(text), pending.expected["frequency"]):
             return None  # a frequency was read back: the grammar checks it
         tokens = normalize(text)
-        if match_intents(tokens):
-            return None  # asking for something ("holding short, ready for departure"), not taking the handoff
+        if match_intents(tokens) or question_topic(text) is not None:
+            # Asking for something ("holding short, ready for departure", "request frequency for tower": the
+            # handoff missed, its frequency asked for), not taking the handoff.
+            return None
         words = set(re.findall(r"[a-z']+", text.lower()))
         issued = self.state.issued.get(pending.instruction_id)
         old = set(re.findall(r"[a-z']+", issued.facility.station.lower())) if issued is not None else set()
@@ -3241,6 +3252,41 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._crossing = runway
         self._schedule(t, "ground.cross_runway", {"runway": asked or runway.split("/")[0]}, facility)
         return []
+
+    def _taxi_left_m(self, own: OwnshipState) -> float | None:
+        """Metres of the taxi route ground gave still ahead of the aircraft at the airport it's at; None with no route
+        there, or off it."""
+        icao = self.state.flight.origin if self.state.phase is None or P(self.state.phase) is not P.TAXI_IN \
+            else self.state.flight.destination
+        geo = self.geometry(icao) if icao else None
+        if self._taxi_path is None or geo is None or self._taxi_path[0] != geo.icao or len(self._taxi_path[1]) < 2:
+            return None
+        path = self._taxi_path[1]
+        along, off = taxi_guide.project(path, geo.xy(own.lat, own.lon), own.hdg_true)
+        return None if off > taxi_guide.ON_ROUTE_M else taxi_guide.length(path) - along
+
+    def taxi_guide(self) -> list[tuple[str, str, float, float, float]]:
+        """The taxi guidance to show now (``airport.taxi_guide``): (key, "arrow" or "stop", lat, lon, true heading) for
+        each mark along the route ground gave, a stop bar short of a runway it isn't cleared onto or across; [] in
+        the air, with no route given, or on the runway."""
+        st, own = self.state, self.state.aircraft
+        if own is None or not own.on_ground or own.on_runway or self._taxi_path is None or st.phase is None \
+                or P(st.phase) not in TAXI_MAP_PHASES or not ({"taxi", "taxi_in"} & set(st.clearances)):
+            return []
+        geo = self.geometry(self._taxi_path[0])
+        path = self._taxi_path[1]
+        if geo is None or len(path) < 2:
+            return []
+        hold = [r for r in geo.runways if r.name in self._crossings and r.name not in self._crossed]
+        stop_at = taxi_guide.stops(path, hold)
+        departing = "taxi_in" not in st.clearances and P(st.phase) is not P.TAXI_IN
+        if departing and not ({"takeoff", "line_up"} & set(st.clearances)):
+            stop_at.append(taxi_guide.length(path))  # the route ends at the hold short: the bar there
+        out = []
+        for m in taxi_guide.marks(path, geo.xy(own.lat, own.lon), own.hdg_true, stop_at):
+            lat, lon = geo.frame.to_latlon(m.x, m.y)
+            out.append((m.key, m.kind, lat, lon, m.hdg))
+        return out
 
     def _at_departure_runway(self, runway: str) -> bool:
         """At the departure runway: on it, holding short of it, or at its end. Not at another runway's hold line on

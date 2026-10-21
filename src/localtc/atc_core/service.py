@@ -29,6 +29,9 @@ from localtc.sim_api import (
 
 log = logging.getLogger(__name__)
 
+# The destination's real ATIS looked for this often once the flight is this close: the copilot reads it out on the
+# way in, and it was the one fetched an hour before.
+ATIS_NEAR_NM, ATIS_NEAR_S = 300.0, 60.0
 WEATHER_CHECK_S = 30.0  # the airports' METARs looked at this often (session time); fetched in the background
 
 
@@ -118,6 +121,11 @@ class AtcService:
             else:
                 log.warning("No airport data for %s", icao)
 
+    def _near(self, icao: str) -> bool:
+        """Within ``ATIS_NEAR_NM`` of ``icao``, the destination, in the air."""
+        own, geo = self.engine.state.aircraft, self.engine.geometry(icao)
+        return icao == self.engine.state.flight.destination and own is not None and not own.on_ground             and geo is not None and geo.distance_nm(own.lat, own.lon) <= ATIS_NEAR_NM
+
     def _fetch_weather(self, t: float) -> None:
         """A new METAR for the departure or the destination: published (recorded, and the engine takes it in)."""
         if (self.weather_source is None and self.atis_source is None) or t - self._weather_t < WEATHER_CHECK_S:
@@ -127,7 +135,7 @@ class AtcService:
         for icao in dict.fromkeys(a for a in (flight.origin, flight.destination) if a):
             try:
                 report = self.weather_source(icao) if self.weather_source is not None else None
-                atis = self.atis_source(icao) if self.atis_source is not None else None
+                atis = self.atis_source(icao, max_age_s=ATIS_NEAR_S) if self.atis_source is not None and self._near(icao)                     else self.atis_source(icao) if self.atis_source is not None else None
             except Exception:  # noqa: BLE001 - the weather is a nicety: never stops ATC
                 log.exception("METAR or ATIS for %s failed", icao)
                 continue

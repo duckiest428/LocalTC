@@ -12,14 +12,17 @@
 [    44.0] PILOT     121.8: Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.
 [    44.0] READBACK  ground.taxi_out_at correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
+[   220.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   222.0] PILOT     121.8: tower one two zero two, two lima tango
+[   222.0] READBACK  ground.handoff_tower correct
+[   228.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short three four left
+[   231.0] ATC       Paine Tower 120.2: N172LT, continue taxi, hold short runway 34L.
+[   233.0] PILOT     120.2: Hold short runway three four left, Cessna two lima tango.
+[   233.0] READBACK  tower.continue_hold_short correct
+[   311.0] ATC       Paine Tower 120.2: Cessna 2LT, fly runway heading, runway 34L, cleared for takeoff, wind 130 at 3.
+[   313.0] PILOT     120.2: clear for take off three four left, two lima tango
+[   313.0] READBACK  tower.takeoff correct
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
-[   356.0] PILOT     121.8: tower one two zero two, two lima tango
-[   356.0] READBACK  ground.handoff_tower correct
-[   362.0] PILOT     120.2: Paine Tower, Cessna two lima tango, holding short three four left
-[   365.0] ATC       Paine Tower 120.2: N172LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
-[   367.0] PILOT     120.2: clear for take off three four left, two lima tango
-[   367.0] READBACK  tower.takeoff correct
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   439.0] PHASE     TAKEOFF -> DEPARTURE (airborne)
 [   478.0] ATC       Paine Tower 120.2: Cessna 2LT, contact Seattle Departure 124.675, good day.
@@ -54,7 +57,7 @@
 [  1107.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, sick passenger. Say intentions.
 [  1108.0] ATC       Seattle Center 125.1: Cessna 2LT, roger, you are number one, cleared direct Boeing Field, descend at your discretion, emergency equipment is standing by.
 [  1362.0] PHASE     CRUISE -> ARRIVAL (sustained descent)
-[  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, contact Seattle Approach 119.2.
+[  1362.0] ATC       Seattle Center 125.1: Cessna 2LT, contact Seattle Approach 119.2, have a good flight.
 [  1364.0] PILOT     125.1: Seattle Approach one one niner point two, Cessna two lima tango.
 [  1364.0] READBACK  center.handoff_approach correct
 [  1370.0] PILOT     119.2: Seattle Approach, Cessna two lima tango, 4,600 descending 3,000.
@@ -75,7 +78,7 @@
 [  1794.0] ATC       Boeing Tower 120.6: Cessna 2LT, wind 130 at 3.
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway.
+[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway, good day.
 [  2343.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
 [  2343.0] READBACK  tower.exit_contact_ground correct
 [  2349.0] PILOT     121.9: Boeing Ground, Cessna two lima tango, clear at alpha, taxi to the ramp.

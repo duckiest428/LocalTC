@@ -1179,7 +1179,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
-        <label class="check-row soon" title="Not built yet: on the roadmap"><input type="checkbox" id="s-taxi-ribbon" disabled> Taxi guidance: arrows on the ground along the route ground gave you (off by default) <span class="soon-tag">Coming later</span></label>
+        <label class="check-row"><input type="checkbox" id="s-taxi-ribbon" ${st.atc.taxi_guide ? "checked" : ""}> Taxi guidance: green arrows on the ground along the route ground gave you, a red stop bar short of a runway you aren't cleared onto or across. LocalTC puts its arrows in the sim's Community folder when you turn this on; they show from the sim's next start</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
         <div class="row"><label>Phraseology
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
@@ -1226,7 +1226,7 @@ const Settings = {
           <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
         </div>
         <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
-          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data)</label>
+          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, only the real aircraft at the gates are shown)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
         </div>
@@ -1393,6 +1393,7 @@ const Settings = {
     on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
+    on("#s-taxi-ribbon", "change", (e) => this.save("atc", "taxi_guide", e.target.checked));
     on("#s-beyond-facts", "change", (e) => this.save("llm", "beyond_facts", e.target.checked));
     this.bindCloud();
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));
@@ -1879,6 +1880,50 @@ $("#lookup-q").addEventListener("input", (e) => { clearTimeout(searchTimer); sea
 $("#lookup-q").addEventListener("keydown", (e) => { if (e.key === "Enter") Lookup.open(e.target.value.trim().toUpperCase()); });
 $("#lookup-go").onclick = () => Lookup.open($("#lookup-q").value.trim().toUpperCase());
 $("#lookup-results").addEventListener("click", (e) => { const c = e.target.closest(".chip"); if (c) Lookup.open(c.dataset.icao); });
+
+/* ---------- the ATC tab's boxes, resized ---------- */
+
+const Split = {
+  key: "atc-sizes",
+  sizes() { try { return JSON.parse(localStorage.getItem(this.key) || "{}") || {}; } catch { return {}; } },
+  keep(sizes) { try { localStorage.setItem(this.key, JSON.stringify(sizes)); } catch { /* not remembered: fine */ } },
+  apply(ids, height) {
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.style.height = height ? `${height}px` : "";
+      el.classList.toggle("sized", !!height);
+    }
+  },
+  init() {
+    const saved = this.sizes();
+    $$(".splitter").forEach((bar) => {
+      const ids = bar.dataset.for.split(",");
+      this.apply(ids, saved[ids[0]]);
+      bar.addEventListener("dblclick", () => { const s = this.sizes(); delete s[ids[0]]; this.keep(s); this.apply(ids, 0); });
+      bar.addEventListener("pointerdown", (e) => {
+        const shown = ids.map((id) => document.getElementById(id)).find((el) => el && !el.hidden);
+        if (!shown) return;
+        e.preventDefault();
+        bar.setPointerCapture(e.pointerId);
+        bar.classList.add("dragging");
+        const y0 = e.clientY, h0 = shown.getBoundingClientRect().height;
+        const room = $("#page-atc").getBoundingClientRect().height - 200; // the radio log keeps some room
+        let h = h0;
+        const move = (ev) => { h = Math.round(Math.max(48, Math.min(room, h0 + ev.clientY - y0))); this.apply(ids, h); };
+        const up = () => {
+          bar.classList.remove("dragging");
+          bar.removeEventListener("pointermove", move);
+          const s = this.sizes(); s[ids[0]] = h; this.keep(s);
+        };
+        bar.addEventListener("pointermove", move);
+        bar.addEventListener("pointerup", up, { once: true });
+        bar.addEventListener("pointercancel", up, { once: true });
+      });
+    });
+  },
+};
+Split.init();
 
 /* ---------- start ---------- */
 

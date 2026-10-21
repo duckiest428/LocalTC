@@ -43,7 +43,8 @@ REPORT_START = re.compile(r"^(?:(?:ok|okay|alright|right|so|and|well|yeah|yep)[,
                           r"we'll|we'd|we were|we are|it's|its|that's|thats|looks like|there's|there is)\b")
 REPORT_END = re.compile(r"\b(?:three green|green|stabili[sz]ed|captured|alive|checked|check|set|is set|are set|on|"
                         r"armed|engaged|done|complete|completed)[\s.!]*$")
-NEGATION = re.compile(r"\b(?:don't|do not|dont|never ?mind|cancel that|belay that|disregard|not yet|hold off|leave it|"
+# "Don't forget to set the altimeter" asks for it: not a "don't" ("hands off the altimeter" was the answer).
+NEGATION = re.compile(r"\b(?:(?:don't|do not|dont)(?!\s+(?:forget|hesitate))|never ?mind|cancel that|belay that|disregard|not yet|hold off|leave it|"
                       r"stop that|forget (?:it|that)|no,? no\b|negative,? don't)\b")
 CORRECTION = re.compile(r"^(?:no|negative|nope|correction|sorry|i said|i meant|i mean|actually|not)\b[,.\s]*")
 YES = re.compile(r"^(?:(?:yes|yeah|yep|yup|sure|ok|okay)[,\s]+)?(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|"

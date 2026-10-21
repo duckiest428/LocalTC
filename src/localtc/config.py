@@ -190,6 +190,10 @@ class AtcConfig(_Section):
     # ATIS where it has one, else the simulator's), "hybrid" (the real ATIS, else the real METAR, else the
     # simulator: only where there's no real report at all, however old the real one is).
     atis_source: Literal["sim", "real", "hybrid"] = "hybrid"
+    # Arrows on the ground in the sim along the taxi route ground gave, a red stop bar short of a runway not cleared
+    # onto or across (LocalTC's own objects: a package it puts in the sim's Community folder, shown from the sim's
+    # next start).
+    taxi_guide: bool = False
 
 
 LlmMode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]

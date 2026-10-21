@@ -335,7 +335,7 @@ def test_small_talk_and_remarks_get_the_models_reply_where_it_words_atcs(mode, m
     first = atc(say(engine, own, coffee, mhz=121.0))
     second = atc(say(engine, msgspec.structs.replace(own, t=own.t + 30), doing, mhz=121.0))
     if model_replies:
-        assert first == ["DP69, appreciate it, maybe another time."]
+        assert first == ["DP69, maybe another time."]  # (its "appreciate it" taken out: no thank-yous from ATC)
         assert second == ["DP69, doing well, thanks for asking."]
     else:
         assert first == ["DP69, say again."] and second[0].startswith("DP69, ") and "thanks" in second[0]

@@ -84,6 +84,23 @@ BANNED_PHRASES = re.compile(r"\bhold(?:ing)? (?:short|position)\b|\btail (?:left
 # A pilot's words, or a chat show's, in a controller's instruction: "maintain 9,000 feet, copy that, thanks",
 # "good afternoon, welcome, copy that, thanks, maintain FL330".
 ATC_NEVER = re.compile(r"\bcopy(?: that)?\b|\bwelcome\b|\bappreciate\b|\bno worries\b|\bcheers\b|\bawesome\b")
+# "Thanks" the model tacks on ("start up approved, thanks, advise ready to taxi", "copy that, thanks"): taken out,
+# the rest kept. Pilots wanted ATC's thank-yous gone.
+THANKS = re.compile(r",?\s*\b(?:thanks(?: a lot| very much)?|thank you(?: very much)?|appreciate it)\b(?!\s+for\b)[.!]?",
+                    re.IGNORECASE)
+
+
+def without_thanks(text: str) -> str:
+    """``text`` with the thank-yous taken out ("taxi to runway 24R via F, thanks." -> "taxi to runway 24R via F."); as
+    it was when that's all there is ("Thank you.")."""
+    out = THANKS.sub("", text).strip()
+    out = re.sub(r"\s+([,.!?])", r"\1", out)
+    out = re.sub(r"^[,\s]+|,(?=[.!?]?$)", "", out).strip()
+    if not re.search(r"[a-z0-9]", out, re.IGNORECASE):
+        return text
+    return out if out[-1] in ".!?" or not text.rstrip().endswith((".", "!", "?")) else out + "."
+
+
 # The prompt's own words ("phase arrival in effect") and navaids it wasn't told about ("ILS not available").
 INTERNAL = {"phase", "facts", "fact", "decision", "effect"}
 NAVAIDS = {"ils", "rnav", "localizer", "glideslope", "vor", "ndb", "gps"}
@@ -188,7 +205,7 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
     "here and now"): a reply that gives other numbers than its own, or another runway, answers something else.
     ``beyond_facts``: what the facts don't cover may come from the model ([llm] beyond_facts); the safety checks (no
     instruction, short, the data's own answer when there is one) stay."""
-    text = _reply_text(raw, callsigns)
+    text = without_thanks(_reply_text(raw, callsigns))
     words = re.findall(r"[a-z]+", text.lower())
     if not words:
         raise PhraseError("reply has no words")
@@ -362,6 +379,8 @@ def digits_from_words(text: str) -> str:
 def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     """The model's words for the script's reply ``scripted``, or PhraseError: something of it lost, or added."""
     text = digits_from_words(_reply_text(raw, callsigns).replace("**", ""))
+    if not THANKS.search(scripted):
+        text = without_thanks(text)
     said, got = _plain(scripted), _plain(text)
     for phrase in KEPT_PHRASES:
         if phrase in said and phrase not in got:

@@ -44,6 +44,11 @@ tune = "handoff"
 delay_s = 8
 say = "Paine Tower, {callsign_short}, holding short runway {departure_runway}, ready for departure."
 
+# Handed to tower on the way to the runway: "continue taxi, hold short", read back.
+[[pilot]]
+on = "tower.continue_hold_short"
+say = "{readback}"
+
 [[pilot]]
 on = "tower.takeoff"
 say = "{readback}"

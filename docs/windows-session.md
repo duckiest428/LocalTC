@@ -110,6 +110,20 @@ factor 0.2-0.3); nobody has measured it beside MSFS.
    Voices, and the region): the same with Azure, and the characters it counted for the flight. On the Mac it took
    about 0.55 s a line and Whisper understood it best of the three (word error 0.10).
 
+## Task 4: the taxi guidance's arrows
+
+[taxi_guidance.py](../src/localtc/taxi_guidance.py) places LocalTC's own SimObjects ("LocalTC Taxi Arrow", "LocalTC
+Taxi Stop": [simpkg](../src/localtc/simpkg), made by tools/make_taxi_marks.py) along the route ground gave. Built
+2026-10-20 without the sim: the create packet matches the SDK DLL's byte for byte, nothing else is seen yet.
+
+1. Quick Settings → Taxi guidance on (the package goes in the Community folder), then restart the sim.
+2. A flight at an airport LocalTC has the taxiways of: after the taxi clearance, are there green chevrons from about
+   25 m ahead, 12 m apart, for 300 m, pointing the way to go (if backwards: the model's forward is -Z, turn the
+   heading 180° in `_ground_marks`)? Flat on the ground, seen from the cockpit by day and at night? The red bar at the
+   hold short, and short of a runway to cross until it's cleared?
+3. Passed arrows go, new ones appear ahead; a new route replaces them all; off, or the flight stopped, takes them away.
+   The sim's frame rate with them.
+
 ## Fixing and leaving a note
 
 - Fix in the code, add or adjust a unit test where the fix can be tested without the sim (tests/test_traffic_control.py,

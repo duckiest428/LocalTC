@@ -7,11 +7,13 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The copilot makes a radio call you ask for** with the radio yours ("can you do the call to ground?", "request pushback for us"): that one call, tuned to the station first if need be. "Do the call" alone is the next one due (the clearance, the pushback, the taxi, ready for departure).
+- **The ATC tab's boxes resize**: drag the line between the airport box (or the flight's status) and the flight row, or under the flight row, and the radio log takes the rest; double-click it for the usual size. Kept for next time.
 - **The flight's status en route**: between the departure's area and 150 miles from the destination, the ATC tab's airport box shows the flight instead of frequencies hours from being any use: the airline's logo (else its colour), the flight number and aircraft, a line from origin to destination with the aircraft along it, the miles flown and to go, the time left and ETA, altitude, speeds, heading, wind, outside temperature, fuel and the controller you're with.
 - **The APU on the way in**: taxiing in, about 500 m from the gate, the copilot starts the APU, puts its bleed on once it's running and says if it doesn't come up; "start the APU", "APU bleed on" ask for it any time (the FSLabs's own overhead buttons).
 - **Minimums from the chart**: "minimums 280" (or a decision altitude, "DA 380") sets the copilot's minimum for the approach; "hundred above" and "minimums" are called by the height above the runway's touchdown zone, not the radio height over the ground short of it.
 - **Seatbelt sign off at 10,000 ft** in the climb, when it's smooth: the copilot does it and says so.
-- **Taxi guidance** (arrows along the route ground gave) shown in Quick Settings as coming later; not built yet.
+- **Taxi guidance**: green arrows on the ground in the sim along the taxi route ground gave, from about 25 m ahead of the aircraft for 300 m, and a red stop bar short of a runway you aren't cleared onto or across (and at the hold short of the departure runway). On in Quick Settings; LocalTC puts its arrows (a small package of its own) in the sim's Community folder when it's turned on, and they show from the sim's next start.
 - **NOTAMs on the Live Map**: each of the flight's airports shows how many NOTAMs are in force and how many ATC works to, the list in its tooltip (ATC's first), and a runway a NOTAM closes drawn red over it. With the SIGMETs, the radar, TFRs and restricted areas under one button (Weather, areas & NOTAMs); an area that isn't active yet says when it will be.
 - **What's new**: after an update, the first time LocalTC opens, it shows the new version's notes, once (not on a new install: the welcome is shown then). The companion app does the same with its own notes.
 - **Other flights by their callsigns in the radio log** with LocalTC's traffic on: the real flights' calls and ATC's calls to them are no longer greyed out as "OTHER", but shown like any transmission, under the flight's callsign in its airline's colour (Ryanair blue, British Airways red, easyJet orange ...), each flight a shade of it.
@@ -61,6 +63,13 @@ a new minor version adds features, a patch fixes them.
 - **Dynamic routing.** A quiet centre gives "proceed direct" a fix further down the route when it saves real miles; with a convective SIGMET along the route ahead it says so and approves deviations either side, with the fix to go direct to after it; the route through an active TFR or restricted, prohibited or danger area at your level gets vectors around it, then "proceed direct" once clear; "request deviation 20 degrees left for weather" is approved with where to go after; without a STAR, the descent comes with a crossing restriction ("cross BLAKO at 11,000"). Each amendment is drawn on the Live Map and the companion's.
 
 ### Changed
+- **Ground hands you to tower on the way to the runway**, about 800 m from the end of the taxi route with no runway left to cross, not only at the hold line (IFR; VFR as before). Tower then says "continue taxi, hold short" until you're there.
+- **No "thanks" from ATC**: the controllers' acknowledgements and the model's wording leave it out ("start up approved, thanks", "taxi to runway 24R via F, B4, and B, thanks").
+- **No "one thousand to go"** from the copilot before each level-off.
+- **Flap and gear overspeed** said again every 45 s while it lasts, not every 15.
+- **Why the gates are empty**: the departures due at the gates (45 minutes before they push) need a free OpenSky or AirLabs account (EFB > Data); without one, the traffic's status says so instead of leaving the gates empty without a word.
+- **LocalTC's traffic moves smoothly further out**: written to the sim every frame or so to 15 miles (it was 3), and many times a second to 60; traffic five miles off in the cruise stepped along twice a second.
+- **The destination's real ATIS fetched every minute** within 300 miles of it, so the copilot reads out the latest one on the way in.
 - **The departure frequency is optional** in an IFR clearance readback: misheard or left out, it holds nothing up.
 - **ATC waits for your readback** before talking to the other flights (tower cleared another for takeoff over the pilot's readback of a handoff), and a call it couldn't make is made later instead of dropped.
 - **No "call for the clearance when you're ready"** from the copilot, and its reworded lines never start with "roger" or "copy" to nothing.
@@ -110,6 +119,14 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The FSLabs's squawk**: its CLR takes one digit off, so after one CLR, 1200 became 1204 and 4-7-0-1 went nowhere. It's pressed once a digit now, then the code typed.
+- **The copilot and "don't forget"**: "Don't forget to set your altimeter to 30.39" was taken as "don't touch the altimeter". "No, change it to 30.39" was turned away for not saying "altimeter", and the number 30.39 for not being said. A command the model read and couldn't check is asked ("Seatbelt sign on, confirm?"), not replied to as done ("Seatbelt sign on." with nothing done). "Seapelt signs" is the seatbelt sign.
+- **"We're cleared to push; parking brake's still set"** came as the push finished and the brake was set. The checklist's "parking brake" answered "off" during the push, as the aircraft showed it, held the checklist; it's the captain's answer now.
+- **Tower held a departure short of 24R for a 737 rolling out on 24L**: a final was taken as a mile wide right up to the threshold, so an aircraft 1,600 m to the side, on the parallel, was "landing" on this one. A final is narrower close in now.
+- **"Severe turbulence!" through a TCAS resolution**: the g from the aircraft being flown about isn't turbulence (the climb stopped and started again: not counted). "Still level at 15,700" came the second a climb levelled; level for two minutes now.
+- **"Request frequency for tower"** after a missed handoff was taken as its readback; it gets the frequency again.
+- **The taskbar called the app "Python"** (its menu, with Python's icon): the shortcuts now carry the app's id, so Windows names it LocalTC (from the next install).
+- **The FSLabs's APU** read from the aircraft's own variable: the sim's APU reading stayed at 0, and "APU hasn't come up" was said with it started.
 - **The departure runway from a real ATIS that lists landing and departure runways apart**: Las Vegas lands 26L and 1L and departs 1R and 1L; 26L, the first landing runway, was given for the takeoff (with a crosswind caution) and the flight plan's 01R refused. The ATIS's departure runways now, the flight plan's first if it's one of them. "1L AT BRAVO", "1R FULL LENGTH" are read as runways too. "Request departure 01L" at the gate is a runway request.
 - **Vectors in the mountains**: vectored off an arrival it was descending via, the aircraft was taken as already cleared to the arrival's bottom altitude, and no step down ever came (12,000 ft all the way to the localizer). The "too high, out on a downwind" call flipped at its line, so the headings went base, downwind, base. "Maintain 180 until five mile final" came 30 miles from landing on a downwind abeam the field.
 - **Tower cleared a runway at another airfield** ("runway 18W", a seaplane base's) to an arrival that had flown on past the destination: only the destination's runways now.

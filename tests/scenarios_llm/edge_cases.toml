@@ -52,6 +52,10 @@ delay_s = 8
 say = "Paine Tower, {callsign_short}, holding short three four left"
 
 [[pilot]]
+on = "tower.continue_hold_short"
+say = "{readback}"
+
+[[pilot]]
 on = "tower.takeoff"
 say = "clear for take off three four left, two lima tango"
 

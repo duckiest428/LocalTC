@@ -41,6 +41,7 @@ from localtc.sim_api import (
     AircraftVars,
     AiTrack,
     AiLights,
+    GroundMarks,
     SetAiVar,
     NudgeVar,
     SpawnAiAircraft,
@@ -104,6 +105,10 @@ AI_GROUND_EVERY_S = 2.0
 AI_LIGHT_EVENTS = ("LANDING_LIGHTS_SET", "TAXI_LIGHTS_SET", "BEACON_LIGHTS_SET", "STROBES_SET", "NAV_LIGHTS_SET",
                    "LOGO_LIGHTS_SET")
 AI_FREEZE = ("FREEZE_LATITUDE_LONGITUDE_SET", "FREEZE_ALTITUDE_SET", "FREEZE_ATTITUDE_SET")
+# The taxi guidance's objects (GroundMarks): the package LocalTC puts in the sim's Community folder
+# (localtc/sim_package), one object per mark, by title, from these request ids up.
+MARK_TITLES = {"arrow": "LocalTC Taxi Arrow", "stop": "LocalTC Taxi Stop"}
+FIRST_MARK_REQUEST = 0x40000000
 REQ_WATCH, FIRST_WATCH_DEFINITION = 13, 900  # the profile's own variables (WatchVars): a new definition each time
 TRAFFIC_IDENT_EVERY_S = 8.0  # EXPERIMENTAL traffic control: who the traffic is, this often
 FIRST_SIMVAR_DEFINITION = 50  # one data definition per variable the copilot writes (L:vars), from here up
@@ -307,6 +312,10 @@ class SimConnectSource:
         self._ai_engines: dict[int, bool] = {}  # their engines as last started or shut down
         self._ai_spawned: dict[int, SpawnAiAircraft] = {}  # made, not there yet: held where it was made once it is
         self._ai_ground_next = 0.0
+        self._marks: dict[str, int] = {}  # the taxi guidance's objects: key -> object id
+        self._marks_made: dict[int, str] = {}  # ... asked for, not there yet: request id -> key
+        self._marks_wanted: set[str] = set()
+        self._mark_request = FIRST_MARK_REQUEST
         for name, unit in (("PLANE LATITUDE", "degrees"), ("PLANE LONGITUDE", "degrees"), ("PLANE ALTITUDE", "feet"),
                            ("PLANE PITCH DEGREES", "degrees"), ("PLANE BANK DEGREES", "degrees"),
                            ("PLANE HEADING DEGREES TRUE", "degrees")):
@@ -454,6 +463,12 @@ class SimConnectSource:
             self._on_airport_list(msg)
         elif isinstance(msg, InputEventList) and msg.request_id == REQ_INPUT_EVENTS:
             self._on_input_events(msg)
+        elif isinstance(msg, AssignedObject) and msg.request_id >= FIRST_MARK_REQUEST:
+            key = self._marks_made.pop(msg.request_id, None)
+            if key is not None and key in self._marks_wanted:
+                self._marks[key] = msg.object_id
+            else:  # gone by the time the sim made it (passed, a new route): taken away again
+                self._commands.put(RemoveAiAircraft(object_id=msg.object_id))
         elif isinstance(msg, AssignedObject):
             if (spawned := self._ai_spawned.pop(msg.request_id, None)) is not None:
                 # Held where it was made, carried on at its speed, the moment it's there: left to the sim until the
@@ -525,6 +540,8 @@ class SimConnectSource:
                     dll.ai_remove(handle, command.object_id, REQ_AI_REMOVE)
                 except (SimConnectError, AttributeError) as exc:
                     log.info("Traffic control couldn't remove object %d: %s", command.object_id, exc)
+            elif isinstance(command, GroundMarks):
+                self._ground_marks(dll, handle, command)
             elif isinstance(command, EnumerateModels):
                 try:
                     self._models = []
@@ -533,6 +550,31 @@ class SimConnectSource:
                     log.info("No list of installed aircraft: %s", exc)
             else:
                 log.warning("unsupported command %r", command)
+
+    def _ground_marks(self, dll: SimConnectApi, handle: int, command: GroundMarks) -> None:
+        """The taxi guidance: the marks not shown yet made (on the ground where they go), the ones no longer wanted
+        taken away; the rest stay where they are."""
+        wanted = {m[0]: m for m in command.marks}
+        self._marks_wanted = set(wanted)
+        for key in [k for k in self._marks if k not in wanted]:
+            try:
+                dll.ai_remove(handle, self._marks.pop(key), REQ_AI_REMOVE)
+            except (SimConnectError, AttributeError) as exc:
+                log.info("Taxi guidance: couldn't remove a mark: %s", exc)
+        making = set(self._marks_made.values())
+        for key, kind, lat, lon, hdg in wanted.values():
+            if key in self._marks or key in making:
+                continue
+            self._mark_request += 1
+            try:
+                dll.ai_create_object(handle, self._mark_request, MARK_TITLES.get(kind, MARK_TITLES["arrow"]),
+                                     lat=lat, lon=lon, heading=hdg)
+            except (SimConnectError, AttributeError) as exc:
+                log.warning("Taxi guidance: couldn't make a mark: %s", exc)
+                return
+            self._marks_made[self._mark_request] = key
+            if len(self._marks_made) > 400:  # never answered (the package isn't in the sim): forgotten
+                self._marks_made.pop(next(iter(self._marks_made)))
 
     def _send_event(self, dll: SimConnectApi, handle: int, command: SendSimEvent) -> None:
         """A key event from the copilot ("GEAR_DOWN"), mapped to a client event the first time it's sent."""

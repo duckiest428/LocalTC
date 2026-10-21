@@ -61,6 +61,12 @@ RADIO_REQUESTS = (
     (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?(?:takeoff|take off|departure)(?: clearance)?\b|\btell tower (?:we're|we are) ready\b"),
      "departure"),
 )
+# "Can you do the call?", "make the call to ground": which call by the words around it, else the next one due.
+RADIO_ANY = re.compile(r"\b(?:do|make|give|handle|take) (?:the |a |them a |ground a |tower a )?(?:radio )?call\b|"
+                       r"\b(?:call|talk to|speak to) (?:ground|tower|clearance|delivery) (?:for (?:us|me)|please)\b")
+RADIO_WHICH = ((re.compile(r"\bpush"), "pushback"), (re.compile(r"\btaxi"), "taxi"),
+               (re.compile(r"\bclearance\b|\bifr\b|\bcleared\b"), "clearance"),
+               (re.compile(r"\btake ?off\b|\bdeparture\b|\bready\b"), "departure"))
 AUTOBRAKE_LEVELS = {"off": "off", "disarm": "off", "low": "low", "lo": "low", "medium": "medium", "med": "medium",
                     "high": "max", "hi": "max", "max": "max", "maximum": "max", "rto": "max", "on": "", "arm": "",
                     "armed": "", "set": "", "one": "1", "two": "2", "three": "3", "four": "4"}
@@ -94,7 +100,8 @@ def parse(text: str) -> list[Command]:
     text = re.sub(r"\bauto[\s-]?brakes?\b", "autobrake", text, flags=re.IGNORECASE)
     text = re.sub(r"\bseat[\s-]?belts?(?:\s+signs?)?\b", "seatbelt", text, flags=re.IGNORECASE)
     # speech-to-text: "seapot signs off", "seat pelt sign"
-    text = re.sub(r"\b(?:sea\s?pot|seat\s?pelts?|seat\s?bolts?)(?:\s+signs?)?\b", "seatbelt", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:sea\s?pots?|sea\s?pelts?|seat\s?pelts?|seat\s?bolts?)(?:\s+signs?)?\b", "seatbelt", text,
+                  flags=re.IGNORECASE)
     text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
     if any(phrase in lowered for phrase in CHECK):
@@ -104,6 +111,8 @@ def parse(text: str) -> list[Command]:
     for pattern, call in RADIO_REQUESTS:
         if pattern.search(lowered):
             return [Command("radio", call)]
+    if RADIO_ANY.search(lowered):
+        return [Command("radio", next((call for pattern, call in RADIO_WHICH if pattern.search(lowered)), "next"))]
     if re.search(r"\b(?:declare (?:an )?emergency|mayday|pan[ -]?pan)\b", lowered):
         return [Command("emergency", "pan" if re.search(r"\bpan[ -]?pan\b", lowered) else "mayday")]
     if re.search(r"\bgo[ -]?around\b|\bgoing around\b", lowered):

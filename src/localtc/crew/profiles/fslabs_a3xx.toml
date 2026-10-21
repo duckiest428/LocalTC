@@ -46,6 +46,9 @@ ap_heading_sel = "L:FSL_FCU_HDG"
 ap_altitude_sel = "L:FSL_FCU_ALT"
 ap_vs_sel = "L:FSL_FCU_VS"
 baro_std = "L:FSL_EFIS_FO_BARO_STD"   # (not a field: read for the altimeter)
+# Its APU's N1 (in its own systems: the sim's APU PCT RPM sat at 0 with the APU started), a percent. Not yet seen
+# against the sim: in the aircraft's list of variables.
+apu_pct = "L:INI_APU_N1 / 100"
 
 [actions.light_landing]
 knobs = [{ var = "L:VC_OVHD_EXTLT_Land_L_Switch", up = 72497, down = 72496, step = 10 },
@@ -225,5 +228,5 @@ press = [72418, 72420]
 [actions.squawk]
 keys = { "0" = 78327, "1" = 78292, "2" = 78297, "3" = 78302, "4" = 78307, "5" = 78312, "6" = 78317, "7" = 78322 }
 release = 2
-clear = 78332   # CLR first: a code half typed before is gone
-gap_s = 0.4     # its keys take a moment (pressed 0.15 s apart, 1-6-2-1 didn't take)
+clear = 78332   # CLR rubs out one digit: pressed once a digit first, so the code is typed into an empty window
+gap_s = 0.4     # its keys take a moment (pressed 0.15 s apart, 1-6-2-1 didn't take; CLR once, then 4-7-0-1, made 1204)

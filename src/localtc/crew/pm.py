@@ -42,6 +42,7 @@ from localtc.crew import speech_acts
 from localtc.crew.actions import PILOT_SIDE, Cockpit, Plan, as_read, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command
+from localtc.crew.model import ACTION_WORDS, ACTIONS
 from localtc.crew.monitor import SAFETY, Call, Monitor
 from localtc.crew.profiles import Profile, for_aircraft, load_all
 from localtc.flightdeck import FlightDeck
@@ -70,6 +71,7 @@ OFFER_S = 15.0  # "send it?" for a radio call said on the intercom
 OWN_HANDS_FAILED = 2  # the copilot's own switches not taking this many times, none ever taking: it can't reach them
 CONTROL_FAILED = 2  # one control not taking this many times, its reading never moving: left to the pilot
 PAUSE_SUMMARY_S = 120.0
+TUNE_WAIT_S = 3.0  # a call asked for on another frequency: made this long after tuning it
 REPEAT_HEARD_S = 3.0  # the same words on the intercom again this soon: one utterance, not two  # back from a pause this long: what's going on, in a sentence or two
 QNH_TOLERANCE_HPA = 1.5  # a QNH this far from the ATIS's is asked about
 STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure", "clearance", "delivery", "unicom",
@@ -180,6 +182,7 @@ class PilotMonitoring:
         self.utterances: deque[speech_acts.Reading | Any] = deque(maxlen=20)
         self._last_line: CrewSpeech | None = None  # for "say again"
         self._radio_queue: list[Any] = []  # the copilot's own radio calls (crew.monitor's), waiting for a free moment
+        self._radio_after: dict[int, float] = {}  # ... not before this (a frequency being tuned first)
         self.hands_off: set[str] = set()  # controls the pilot said not to touch
         if self.model is not None:
             self.model.history.clear()
@@ -342,7 +345,8 @@ class PilotMonitoring:
         for item in self._radio_queue:
             if item.done or item.cancelled:
                 continue
-            busy = self.monitor.ptt_down or t < self.monitor.busy_until or self.deck.queued("radio", ("readback",))
+            busy = self.monitor.ptt_down or t < self.monitor.busy_until or self.deck.queued("radio", ("readback",)) \
+                or t < self._radio_after.get(item.id, 0.0)
             if busy and t <= item.expires:
                 waiting.append(item)
                 continue
@@ -439,8 +443,10 @@ class PilotMonitoring:
                 return self._ask_model(t, text, uid=uid)
             return [self._ask(t, Intent(0, "send", (), "That sounded like a radio call. I haven't sent it; want me to?",
                                         t, t + OFFER_S, self._context(()), uid, text=text), "confirm")]
-        if act == "question" and any(c.action == "checklist" for c in reading.commands):
-            act = "command"  # "can we continue the checklist?": done, not talked about (the model said "complete")
+        if act == "question" and any(c.action in ("checklist", "radio") for c in reading.commands):
+            # "Can we continue the checklist?", "can you do the call?": done, not talked about (the model said
+            # "complete", and made up a radio call on the intercom).
+            act = "command"
         if act in ("command", "correction"):
             if act == "correction":
                 self.deck.memory.correction = text
@@ -719,13 +725,56 @@ class PilotMonitoring:
             question = f"Declare a {word}" + (" with " + self._station() if self._station() else "") + "?"
             return [self._ask(t, Intent(0, "do", (cmd,), question, t, t + CONFIRM_S, self._context((cmd,)), uid), "confirm")]
         # radio: pushback, taxi, clearance, departure
+        if cmd.value == "next":
+            if (call := self._next_call()) is None:
+                return [self._say(t, "Which call?")]
+            cmd = Command("radio", call)
         if mode == "off":
-            return [self._say(t, f"Your radios: {_radio_words(cmd.value, self._station(cmd.value))}.")]
+            # The radio's the captain's, but the captain asked: this one call, made as the radio copilot would.
+            if sure == "low":
+                return [self._ask(t, Intent(0, "do", (cmd,), f"Did you want me to {_radio_words(cmd.value, '').lower()}?",
+                                            t, t + CONFIRM_S, self._context((cmd,)), uid), "confirm")]
+            return self._one_call(t, cmd.value)
         if sure == "low":
             return [self._ask(t, Intent(0, "do", (cmd,), f"Did you want me to {_radio_words(cmd.value, '').lower()}?",
                                         t, t + CONFIRM_S, self._context((cmd,)), uid), "confirm")]
         self.deck.want(cmd.value, t)
         return [self._say(t, "Asking." if cmd.value != "departure" else "Telling tower.")]
+
+    def _next_call(self) -> str | None:
+        """The call due next on the ground, for "can you do the call?": the clearance, the pushback, the taxi, ready
+        for departure."""
+        st = self.engine.state if self.engine is not None else None
+        if st is None:
+            return None
+        cleared, phase = st.clearances, st.phase
+        if phase in (None, "PARKED"):
+            if "ifr" not in cleared and not getattr(self.engine, "_vfr", False):
+                return "clearance"
+            return "taxi" if "pushback" in cleared else "pushback"
+        if phase in ("PUSHBACK", "TAXI_OUT") and "taxi" not in cleared:
+            return "taxi"
+        if phase in ("TAXI_OUT", "RUNWAY_HOLD") and not ({"takeoff", "line_up"} & set(cleared)):
+            return "departure"
+        return None
+
+    def _one_call(self, t: float, call: str) -> list[Any]:
+        """A call the captain asked for with the radio the captain's: tuned to the station if it isn't, then made
+        once the frequency's free."""
+        from localtc.copilot import CallWords
+
+        got = CallWords(self.engine).asked(call) if self.engine is not None else None
+        if got is None:
+            return [self._say(t, f"Your radios: {_radio_words(call, self._station(call))}.")]
+        facility, words = got
+        out: list[Any] = []
+        tuned = self.engine.state.comms.tuned
+        item = self.deck.submit("crew", "request", f"asked:{call}", t, text=words)
+        if tuned is None or tuned.controller != facility.controller or not tuned.matches(facility.mhz):
+            out += self._do(t, Command("com_active", f"{facility.mhz:.3f}"))
+            self._radio_after[item.id] = t + TUNE_WAIT_S  # the call on the new frequency, not the old one
+        self._radio_queue.append(item)
+        return [*out, self._say(t, "Asking.")] + self._radio_due(t)
 
     def _go_around(self, t: float) -> list[Any]:
         """The captain's go-around: anything queued goes, and tower is told when the copilot has the radios."""
@@ -838,6 +887,8 @@ class PilotMonitoring:
             elif cmd.action == "emergency":
                 self.deck.want("pan" if cmd.value == "pan" else "mayday", t)
                 out.append(self._say(t, "Declaring it."))
+            elif cmd.action == "radio" and self.radio_mode() == "off":
+                out += self._one_call(t, cmd.value)
             elif cmd.action == "radio":
                 self.deck.want(cmd.value, t)
                 out.append(self._say(t, "Asking."))
@@ -899,6 +950,14 @@ class PilotMonitoring:
                 again, more_exchanges = self.model.ask(t, text, known, more=more, note=NOT_A_COMMAND)
                 exchanges = [*exchanges, *more_exchanges]
                 if again is not None and again.command is None:
+                    if (asked := _model_command(exchanges[0].response if exchanges else "")) is not None \
+                            and re.search(ACTION_WORDS[asked[0].action], again.reply.lower()):
+                        # It still says it did it ("Seatbelt sign on." to "seapelt signs please"): it did nothing,
+                        # so it asks instead, and does it on the captain's "yes".
+                        cmd, words = asked
+                        question = f"{(words or str(cmd)).rstrip('.!')}, confirm?"
+                        return [*exchanges, self._ask(t, Intent(0, "do", (cmd,), question, t, t + CONFIRM_S,
+                                                                self._context((cmd,)), uid), "confirm")]
                     return [*exchanges, self._say(t, again.reply)]
             remark = REMARK.match(text.lower().strip()) is not None
             if why.startswith(("claims", "reassures", "names a place")) or (remark and why):
@@ -1122,6 +1181,22 @@ def _said(cmd: Command) -> str:
     if a == "radio":
         return _radio_words(v, "").lower()
     return f"{a.replace('_', ' ')} {v}".strip()
+
+
+def _model_command(raw: str) -> tuple[Command, str] | None:
+    """The command in a reply of the model's (JSON), with the words it gave with it; None when it isn't one."""
+    import json
+
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict) or data.get("kind") != "command":
+        return None
+    action, value, target = (str(data.get(k, "")).strip().lower() for k in ("action", "value", "target"))
+    if action not in ACTIONS or action not in ACTION_WORDS:
+        return None
+    return Command(action, value, target), str(data.get("reply", "")).strip()
 
 
 def _radio_words(call: str, station: str) -> str:

@@ -66,10 +66,14 @@ say = "Paine Ground, two lima tango, holding short runway 34L, ready for departu
 
 [[pilot]]
 on = "common.contact"
-when = { phase = "RUNWAY_HOLD" }
+when = { phase = "TAXI_OUT" }
 tune = "handoff"
 delay_s = 4
 say = "Paine Tower, two lima tango, holding short runway 34L, ready for departure."
+
+[[pilot]]
+on = "tower.continue_hold_short"
+say = "{readback}"
 
 # Takeoff readback missing "cleared for takeoff" twice: "read back", then the fallback's "say again".
 [[pilot]]
@@ -78,10 +82,10 @@ say = "Runway three four left, two lima tango."
 
 [[pilot]]
 on = "common.read_back"
-when = { phase = "RUNWAY_HOLD" }
+when = { phase = "TAXI_OUT" }
 say = "Runway three four left, two lima tango."
 
 [[pilot]]
 on = "common.say_again"
-when = { phase = "RUNWAY_HOLD" }
+when = { phase = "TAXI_OUT", min_t = 250 }  # (the takeoff clearance's, not the one for the gibberish)
 say = "Cleared for takeoff runway three four left, two lima tango."

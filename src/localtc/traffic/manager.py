@@ -118,6 +118,8 @@ GROUND_BLEND_MAX_S = 60.0  # ... else eased out over this long
 NATIVE_NOTE = ("MSFS's own traffic is on as well: set its air traffic to off (Options > General > Traffic) so only "
                "LocalTC's flies, or two of each will be about.")
 NO_FEED_NOTE = "No live positions: no internet, or the free sources are busy. Trying again."
+NO_SCHEDULE_NOTE = ("The departures due at the gates need a free OpenSky or AirLabs account (EFB > Data): without one "
+                    "only the real aircraft there now are shown.")
 PARKED_NOTE = ("MSFS's own parked aircraft are on: set them to off as well (Options > General > Traffic, parked or "
                "static aircraft) so LocalTC fills the gates with the airlines that fly here.")
 NATIVE_PARKED = 6  # this many of the sim's own standing about: its parked aircraft are on
@@ -244,6 +246,7 @@ class TrafficManager:
                  picker: ModelPicker | None = None, routes: Callable[[str], Any] | None = None,
                  types: Callable[[str], str] | None = None, seed: int = 0) -> None:
         self.s = settings or TrafficSettings()
+        self.unscheduled = False  # the departures at the gates asked for, with no schedule to take them from
         self.atc = atc or AtcLink()
         self.picker = picker or ModelPicker()
         self.routes = routes or (lambda callsign: None)
@@ -410,7 +413,8 @@ class TrafficManager:
         live = sum(1 for p in self.planes.values() if p.live and p.object_id is not None and p.mode != "parked")
         parked = sum(1 for p in self.planes.values() if p.object_id is not None and p.mode == "parked")
         note = NATIVE_NOTE if self.native > 2 else PARKED_NOTE if len(self.native_spots) >= NATIVE_PARKED \
-            else NO_FEED_NOTE if not self.feed_ok else ""
+            else NO_FEED_NOTE if not self.feed_ok else NO_SCHEDULE_NOTE if self.unscheduled and self.own is not None \
+            and self.own.on_ground else ""
         return TrafficControlStatus(t=self.own.t if self.own else 0.0, mode="on" if self.on else "off", source=self.source,
                                     live=live, parked=parked, native=self.native, fsltl=self.picker.fsltl, note=note,
                                     recent=tuple(reversed(self.recent)))

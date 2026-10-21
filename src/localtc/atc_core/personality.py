@@ -5,7 +5,7 @@ Each station has a controller with a manner of their own: calm, formal, friendly
 conversational. It decides
 
 - how they open and close: "good evening" on the first call or nothing, "good day", "have a good one", "see ya";
-- how they acknowledge ("roger", "copy that", "roger, thanks") and ask for a repeat ("say again", "sorry, say again?");
+- how they acknowledge ("roger", "copy that") and ask for a repeat ("say again", "sorry, say again?");
 - how they correct, and how patient they are with the same mistake twice ("negative, I say again, ...");
 - the length and rhythm of their sentences, and their habits of speech, for the language model's wording;
 - how they sound: their pace and cadence on the voice (``tts.voices``, from ``manner``).
@@ -60,10 +60,12 @@ TRAITS: dict[str, Traits] = {
     "formal": Traits(("roger",), ("say again your last transmission", "say again"), ("good {when}",), ("good day",),
                      ("good day", "goodbye"), 0.75, 0.8, "medium", 0, "firm", 2, 0.98, -0.05, (),
                      "correct and by the book, standard phraseology and nothing else"),
-    "friendly": Traits(("roger, thanks", "copy that", "roger"), ("sorry, say again?", "say again"),
+    # (No "thanks": a controller tacking "thanks" onto every taxi clearance and acknowledgement was the first thing
+    # pilots asked to have gone.)
+    "friendly": Traits(("roger", "copy that"), ("sorry, say again?", "say again"),
                        ("good {when}", "hello"), ("have a good one", "have a good flight", "see ya"), ("good day", "bye bye"),
-                       0.85, 0.85, "medium", 2, "gentle", 3, 1.0, 0.05, ("thanks", "appreciate it", "no problem"),
-                       "warm and easy-going, a thank-you here and there"),
+                       0.85, 0.85, "medium", 2, "gentle", 3, 1.0, 0.05, ("no problem",),
+                       "warm and easy-going"),
     "strict": Traits(("roger",), ("say again",), ("good {when}",), ("good day",), ("good day",),
                      0.3, 0.5, "short", 0, "firm", 1, 1.03, -0.03, ("expect no delay",),
                      "brisk and exacting, expects a proper readback the first time"),
@@ -73,11 +75,10 @@ TRAITS: dict[str, Traits] = {
     "dry": Traits(("copy", "roger"), ("say again",), ("{when}",), ("good day",), ("good day",),
                   0.35, 0.55, "short", 1, "plain", 2, 1.01, -0.06, ("as filed",),
                   "laconic, matter-of-fact, a deadpan word or two"),
-    "conversational": Traits(("roger, thanks", "copy that, thanks", "roger"), ("sorry, you were cut out, say again?", "say again"),
+    "conversational": Traits(("roger", "copy that"), ("sorry, you were cut out, say again?", "say again"),
                              ("good {when}", "good {when}, welcome"), ("have a good one", "enjoy the flight", "good day"),
                              ("good day", "bye bye"), 0.9, 0.9, "long", 2, "gentle", 3, 0.97, 0.06,
-                             ("thanks", "appreciate it"),  # ("nice and easy": "what does that even mean?"; "appreciate the help":
-                             # "what help??")
+                             (),  # ("nice and easy": "what does that even mean?"; "appreciate the help": "what help??")
                              "chatty and personable, likes a word with the crews when it's quiet"),
 }
 
@@ -113,8 +114,8 @@ class Personality:
         return (f"The controller at {self.station} is {self.kind}: {t.manner}. They speak in {sentences}"
                 f"{' and use standard ICAO wording' if self.icao else ''}. They acknowledge with \"{self.ack}\"."
                 f"{habits}{busy} Their manner shapes the words, never the instruction: every value, runway, route, "
-                "frequency and readback stays exactly as decided. A thank-you only for something the pilot said or did; "
-                "no remarks about the pilot helping, the frequency or how quiet it is.")
+                "frequency and readback stays exactly as decided. No thank-yous, and no remarks about the pilot helping, "
+                "the frequency or how quiet it is.")
 
 
 def shift_key(station: str, shift: int = 0) -> str:
@@ -197,7 +198,7 @@ def sign_off(text: str, words: str) -> str:
 
 
 def acknowledge(text: str, callsign: str, ack: str) -> str:
-    """ "Delta 2543, roger." -> "Delta 2543, roger, thanks." in this controller's way (only the bare acknowledgement)."""
+    """ "Delta 2543, roger." -> "Delta 2543, copy that." in this controller's way (only the bare acknowledgement)."""
     head = f"{callsign}, "
     if not text.startswith(head):
         return text

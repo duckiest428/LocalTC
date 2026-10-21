@@ -27,9 +27,10 @@ MAX_BANK = 25.0
 YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 10.0  # the most its nose swings a second
 PITCH_DPS = 2.0
 LOOK_S = 1.0  # the way it's going: from where it is to where it is this much later
-# How often it's written to the sim, by its distance from the user: close by every frame or so, far away a few times
-# a minute is plenty.
-RATES = ((3.0, 1 / 30), (10.0, 1 / 10), (30.0, 1 / 2), (math.inf, 2.0))
+# How often it's written to the sim, by its distance from the user: every frame or so while it can be seen moving
+# (traffic called at five miles in the cruise stepped along twice a second, 100 m a step at the speeds up there),
+# far away once a second is plenty.
+RATES = ((15.0, 1 / 30), (30.0, 1 / 15), (60.0, 1 / 4), (math.inf, 1.0))
 
 
 def _wrap(a: float) -> float:

@@ -39,7 +39,8 @@ OPEN, MAP_CLIENT_EVENT, TRANSMIT_CLIENT_EVENT, SET_SYSTEM_EVENT_STATE, ADD_CLIEN
 SET_GROUP_PRIORITY, ADD_TO_DATA_DEFINITION, CLEAR_DATA_DEFINITION = 0x09, 0x0C, 0x0D
 REQUEST_DATA_ON_SIM_OBJECT, REQUEST_DATA_ON_SIM_OBJECT_TYPE, SET_DATA_ON_SIM_OBJECT = 0x0E, 0x0F, 0x10
 SUBSCRIBE_TO_SYSTEM_EVENT, UNSUBSCRIBE_FROM_SYSTEM_EVENT = 0x17, 0x18
-AI_CREATE_NON_ATC, AI_RELEASE_CONTROL, AI_REMOVE_OBJECT, AI_SET_FLIGHT_PLAN = 0x29, 0x2B, 0x2C, 0x2D
+AI_CREATE_NON_ATC, AI_CREATE_SIMULATED_OBJECT, AI_RELEASE_CONTROL, AI_REMOVE_OBJECT, AI_SET_FLIGHT_PLAN = \
+    0x29, 0x2A, 0x2B, 0x2C, 0x2D
 REQUEST_SYSTEM_STATE = 0x35
 TRANSMIT_CLIENT_EVENT_EX1, ADD_TO_FACILITY_DEFINITION, REQUEST_FACILITY_DATA = 0x44, 0x45, 0x46
 REQUEST_FACILITIES_LIST_EX1, ENUMERATE_INPUT_EVENTS, SET_INPUT_EVENT = 0x49, 0x4F, 0x51
@@ -309,6 +310,12 @@ class SimConnectWire:
         else:
             self._c(handle).send(AI_CREATE_NON_ATC_EX1, head + struct.pack(
                 "<6dIII", lat, lon, alt_ft, pitch, bank, heading, int(on_ground), int(airspeed_kt), request_id))
+
+    def ai_create_object(self, handle: int, request_id: int, title: str, *, lat: float, lon: float, alt_ft: float = 0.0,
+                         heading: float = 0.0, on_ground: bool = True) -> None:
+        """A simulated object that isn't an aircraft (the taxi guidance's arrows: ``StaticObject``), by its title."""
+        self._c(handle).send(AI_CREATE_SIMULATED_OBJECT, _s(title, 256) + struct.pack(
+            "<6dIII", lat, lon, alt_ft, 0.0, 0.0, heading, int(on_ground), 0, request_id))
 
     def ai_remove(self, handle: int, object_id: int, request_id: int) -> None:
         self._c(handle).send(AI_REMOVE_OBJECT, struct.pack("<II", object_id, request_id))

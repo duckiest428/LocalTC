@@ -107,6 +107,7 @@ class SimConnectDll:
             ("enroute", ("SimConnect_AICreateEnrouteATCAircraft",),
              [c_void_p, c_char_p, c_char_p, ctypes.c_int, c_char_p, ctypes.c_double, ctypes.c_int, c_uint32]),
             ("remove", ("SimConnect_AIRemoveObject",), [c_void_p, c_uint32, c_uint32]),
+            ("object", ("SimConnect_AICreateSimulatedObject",), [c_void_p, c_char_p, InitPosition, c_uint32]),
             ("models", ("SimConnect_EnumerateSimObjectsAndLiveries",), [c_void_p, c_uint32, ctypes.c_int]),
         ):
             try:
@@ -222,6 +223,14 @@ class SimConnectDll:
             else:
                 raise SimConnectError("this SimConnect can't create AI aircraft")
         _check(hr, f"AICreate {kind} {title}")
+
+    def ai_create_object(self, handle: int, request_id: int, title: str, *, lat: float, lon: float, alt_ft: float = 0.0,
+                         heading: float = 0.0, on_ground: bool = True) -> None:
+        """A simulated object that isn't an aircraft (the taxi guidance's arrows: ``StaticObject``), by its title."""
+        if "object" not in self._ai:
+            raise SimConnectError("this SimConnect can't create objects")
+        pos = InitPosition(lat, lon, alt_ft, 0.0, 0.0, heading, int(on_ground), 0)
+        _check(self._ai["object"](handle, title.encode(), pos, request_id), f"AICreateSimulatedObject {title}")
 
     def ai_remove(self, handle: int, object_id: int, request_id: int) -> None:
         if "remove" not in self._ai:

@@ -149,6 +149,20 @@ def test_runway_polygon_and_final_approach():
     assert geo.final_approach(*center, 140) is None  # past the threshold
 
 
+def test_on_the_parallel_is_not_on_this_ones_final():
+    """Montreal's 737 rolling out on 24L, 1,600 m to the side of 24R's threshold: "landing" on 24R, a departure held
+    short of it. Close in, a final is narrow; further out, as wide as an approach is flown."""
+    geo = AirportGeometry(kbfi())
+    end = geo.end("14R")
+    ux, uy = 0.6427876, -0.7660444  # along 140°
+    px, py = uy, -ux  # to the side
+    near = geo.frame.to_latlon(end.threshold[0] - ux * 180 + px * 1600, end.threshold[1] - uy * 180 + py * 1600)
+    assert geo.final_approach(*near, 140) is None
+    far = geo.frame.to_latlon(end.threshold[0] - ux * 8 * METERS_PER_NM + px * 1500,
+                              end.threshold[1] - uy * 8 * METERS_PER_NM + py * 1500)
+    assert geo.final_approach(*far, 140).end.ident == "14R"
+
+
 def test_taxi_routes():
     geo = AirportGeometry(kpae())
     graph = TaxiGraph(geo)

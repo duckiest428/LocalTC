@@ -937,6 +937,13 @@ class AppController:
                 crew.model.beyond_facts = cfg.crew.beyond_facts
         if cfg.traffic.enabled != self.cfg.traffic.enabled and self.live is not None:
             await self._traffic_on(cfg)
+        if cfg.atc.taxi_guide and not self.cfg.atc.taxi_guide:
+            from localtc import simpkg
+
+            if await asyncio.to_thread(simpkg.install):
+                self.system("Taxi guidance: its arrows are in the sim's Community folder; they show from the sim's next start")
+        if (guide := getattr(self.live, "guide", None) if self.live is not None else None) is not None:
+            await guide.set_enabled(cfg.atc.taxi_guide)
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()

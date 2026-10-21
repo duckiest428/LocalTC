@@ -69,6 +69,9 @@ def test_every_call_is_the_packet_the_dll_sends(monkeypatch):
                                                                "TAIL3", plan="KSEA")),
         ("AIReleaseControl", lambda: sc.ai_release_control(h, 0x0BADBEEF, 0x76)),
         ("ClearDataDefinition", lambda: sc.clear_data_definition(h, 0x12)),
+        # (The taxi guidance's arrows. Captured from the DLL with a listener standing in for the sim, 2026-10-20.)
+        ("AICreateSimulatedObject", lambda: sc.ai_create_object(h, 0x77, "LocalTC Taxi Arrow", lat=45.5, lon=-73.75,
+                                                                alt_ft=110.0, heading=42.5)),
     ]
     for name, call in calls:
         if call is not None:

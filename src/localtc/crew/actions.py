@@ -214,9 +214,10 @@ def _clicks(custom: Write, key: str, target: float) -> tuple[SimCommand, ...]:
 
 
 def _keys(custom: Write, key: str, text: str) -> tuple[SimCommand, ...]:
-    """Typed on the aircraft's keypad: each character's key, then its release."""
+    """Typed on the aircraft's keypad: each character's key, then its release; the window rubbed out first (CLR
+    once a digit: it takes one off, and a full window takes no more digits)."""
     codes: list[int] = []
-    for code in ([custom.clear] if custom.clear else []) + [custom.keys[ch] for ch in text]:
+    for code in [custom.clear] * (len(text) if custom.clear else 0) + [custom.keys[ch] for ch in text]:
         codes += [code, code + custom.release] if custom.release else [code]
     if custom.gap_s:
         return (ClickSequence(name=key, codes=tuple(codes), event=custom.click_event, gap_s=custom.gap_s),)

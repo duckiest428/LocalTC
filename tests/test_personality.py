@@ -129,3 +129,17 @@ def test_the_engine_uses_the_shift():
     ground = engine.facility("ground")
     who = engine._controller(ground)
     assert who == pers.profile(ground.station, "ground", icao=engine.region.icao, shift=5)
+
+
+def test_atc_says_no_thank_yous():
+    """"Start up approved, thanks, advise ready to taxi", "taxi to runway 24R via F, B4, and B, thanks": pilots asked
+    for the thanks to stop. The model's are taken out; the controllers' own acknowledgements have none."""
+    from localtc.atc_core.llm.phrase import check_reworded, without_thanks
+    from localtc.atc_core.personality import TRAITS
+
+    assert without_thanks("taxi to runway 24R via F, B4, and B, thanks.") == "taxi to runway 24R via F, B4, and B."
+    assert without_thanks("start up approved, thanks, advise ready to taxi") == "start up approved, advise ready to taxi"
+    assert without_thanks("copy that, thanks") == "copy that" and without_thanks("Thank you.") == "Thank you."
+    assert check_reworded('{"reply":"taxi to runway 24R via F, B4, and B, thanks."}',
+                          "taxi to runway 24R via F, B4, B", ("Air Canada 1709",)) == "taxi to runway 24R via F, B4, and B"
+    assert not [a for t in TRAITS.values() for a in (*t.acks, *t.habits) if "thank" in a]

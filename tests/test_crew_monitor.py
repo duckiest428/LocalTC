@@ -349,8 +349,8 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
         assert any(w.startswith((expected, expected.replace("Level at", "Top of climb, level"))) for w in words), expected
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting
-    # Nothing said over and over ("One thousand to go." is the same words before each level).
-    assert max(words.count(w) for w in set(words) if w != "One thousand to go.") <= 2
+    # Nothing said over and over, and no "one thousand to go" (pilots found it noise).
+    assert max(words.count(w) for w in set(words)) <= 2 and "One thousand to go." not in words
 
 
 def test_standard_is_set_at_the_transition_even_with_a_qnh_of_1013():
@@ -413,3 +413,71 @@ def test_minimums_are_called_above_the_touchdown_zone_and_can_be_the_captains():
     pm.monitor._touchdown_elev = lambda: 100.0
     assert pm.monitor.set_minimums(380) == 280  # a decision altitude: the height above the touchdown zone
     assert pm.monitor.set_minimums(250) == 250  # a height
+
+
+def test_level_a_moment_in_the_climb_is_not_still_level():
+    """A TCAS resolution levelled the climb at 15,700 for a few seconds: "we're cleared to 17,000, still level at
+    15,700" came the first second of it. Level for a while, it's said; and no "one thousand to go" on the way."""
+    engine = FakeEngine()
+    engine.state.assignments.altitude_ft = 17000
+    pm = crew(engine)
+    pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))
+    pm.monitor.f.takeoff_t = 0.0
+    climb = [own(1.0 + i, on_ground=False, alt_indicated_ft=12000 + 33 * i, alt_msl_ft=12000 + 33 * i, alt_agl_ft=11500,
+                 ias_kt=300, gs_kt=350, vs_fpm=2000) for i in range(130)]
+    paused = [own(131.0 + i, on_ground=False, alt_indicated_ft=15700, alt_msl_ft=15700, alt_agl_ft=15200, ias_kt=300,
+                  gs_kt=350, vs_fpm=0) for i in range(20)]
+    words = said(fly(pm, climb + paused))
+    assert not any("still level" in w for w in words) and "One thousand to go." not in words
+    held = [own(151.0 + i, on_ground=False, alt_indicated_ft=15700, alt_msl_ft=15700, alt_agl_ft=15200, ias_kt=300,
+                gs_kt=350, vs_fpm=0) for i in range(0, 140, 2)]
+    assert any("still level at 15,700" in w for w in said(fly(pm, held)))
+
+
+def test_no_turbulence_call_for_the_aircraft_being_flown_about():
+    """Hands on through a TCAS resolution (the climb stopped, then 4,000 fpm): the g all over the place, "severe
+    turbulence!" for it. The same bumps with the climb steady are turbulence still."""
+
+    def flown(vs_and_g):
+        pm = crew()
+        pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))
+        out, t = [], 1.0
+        up = dict(on_ground=False, alt_agl_ft=14000, alt_indicated_ft=14000, alt_msl_ft=14000, ias_kt=280, gs_kt=330,
+                  flaps_index=0, gear_down=False)
+        for _ in range(40):  # climbing steadily
+            pm.observe(systems(t, g_force=1.0, gear_pct=0.0))
+            out += pm.observe(own(t, vs_fpm=2000, **up))
+            t += 1.0
+        for vs, g in vs_and_g:
+            pm.observe(systems(t, g_force=g, gear_pct=0.0))
+            out += pm.observe(own(t, vs_fpm=vs, **up))
+            t += 2.0
+        for _ in range(30):
+            pm.observe(systems(t, g_force=1.0, gear_pct=0.0))
+            out += pm.observe(own(t, vs_fpm=2000, **up))
+            t += 1.0
+        return [w for w in said(out) if "turbulence" in w.lower()]
+
+    jolts = [1.35, 0.6, 1.2, 0.85, 1.25, 1.7, 0.9, 0.9] * 2
+    assert not flown(list(zip([-100, 900, -600, -450, 0, 3800, 3900, 2200] * 2, jolts)))
+    assert flown([(2000, g) for g in jolts])  # climbing on through them: the air
+
+
+def test_the_brake_set_after_the_push_isnt_the_push_forgotten():
+    """"We're cleared to push; parking brake's still set" came the moment the push was done and the brake set."""
+    engine = FakeEngine()
+    engine.clear("pushback")
+    pm = crew(engine)
+    pm.monitor.first_t = 0.0
+    pm.observe(PhaseChanged(t=0.5, previous="PARKED", phase="PUSHBACK"))
+    fly(pm, [own(1.0 + i, gs_kt=2.0, parking_brake=False) for i in range(30)])
+    pm.observe(PhaseChanged(t=40.0, previous="PUSHBACK", phase="PARKED"))
+    words = said(fly(pm, [own(41.0 + i * 5, parking_brake=True) for i in range(40)]))
+    assert not any("parking brake's still set" in w for w in words)
+
+
+def test_an_answer_of_off_is_the_brake_shown_released():
+    from localtc.crew.monitor import _says
+
+    assert _says("Off.", "released") and _says("set", "SET") and not _says("on", "released")
+    assert _says("one plus F", "1+F") and _says("up", "0")

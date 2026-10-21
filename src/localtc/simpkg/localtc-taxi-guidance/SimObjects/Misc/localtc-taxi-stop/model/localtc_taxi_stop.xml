@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModelInfo version="1.1" guid="{55fcfd59-05ba-5c59-bb52-368deef743b3}">
+	<LODS>
+		<LOD minSize="0" ModelFile="localtc_taxi_stop.gltf" />
+	</LODS>
+</ModelInfo>

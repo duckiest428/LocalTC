@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="home">
 
 <header class="topbar">
   <a class="brand" href="#top"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
@@ -32,17 +32,24 @@
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
   <a class="btn btn-ghost" href="dashboard">Dashboard</a>
+  <span class="progress" aria-hidden="true"></span>
 </header>
 
 <main id="top">
 
 <!-- ------------------------------------------------------------------ hero -->
 <section class="hero">
+  <div class="hero-slides" aria-hidden="true">
+    <img class="on" src="img/hero-runway.jpg" srcset="img/hero-runway-960.jpg 960w, img/hero-runway.jpg 1920w" sizes="100vw" alt="" fetchpriority="high">
+    <img data-src="img/hero-tail.jpg" data-srcset="img/hero-tail-960.jpg 960w, img/hero-tail.jpg 1920w" sizes="100vw" alt="">
+    <img data-src="img/hero-sunset.jpg" data-srcset="img/hero-sunset-960.jpg 960w, img/hero-sunset.jpg 1920w" sizes="100vw" alt="">
+  </div>
+  <div class="hero-shade" aria-hidden="true"></div>
   <div class="scope" aria-hidden="true"><span class="sweep"></span></div>
   <div class="hero-inner">
     <div class="hero-copy">
       <p class="eyebrow">Microsoft Flight Simulator 2024 &middot; Windows</p>
-      <h1>Air traffic control on your own computer.</h1>
+      <h1 class="split">Air traffic control on your own computer.</h1>
       <p class="lede">
         Talk to controllers from clearance delivery to the gate, with a first officer beside you on the
         intercom. Real phraseology, readbacks that are checked, a voice and a manner for every station.
@@ -83,9 +90,47 @@
         <div><i>Alt</i><b>FL350</b></div><div><i>Rwy</i><b>08R</b></div>
       </div>
       <ol class="log" id="log"></ol>
-      <div class="ptt"><span class="key">Right Ctrl</span> held — talking</div>
+      <div class="ptt"><span class="key">Right Ctrl</span> held — talking<span class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
     </div>
   </div>
+  <a class="scroll-cue" href="#legs" aria-label="Scroll to the flight"><span></span></a>
+</section>
+
+<!-- -------------------------------------------------------------------- legs -->
+<section id="legs" class="legs">
+  <div class="legs-head">
+    <p class="kicker">One flight, eight voices</p>
+    <h2 class="section-title">Gate to gate, station by station.</h2>
+    <p class="section-lede">Every controller from clearance to the gate, each on their own frequency, in the words real
+      controllers use. Pick a leg, or let it fly.</p>
+  </div>
+  <div class="legs-stage">
+    <figure class="leg-photo" aria-hidden="true">
+      <img class="on" src="img/leg-clearance-960.jpg" srcset="img/leg-clearance-960.jpg 960w, img/leg-clearance.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-ground-960.jpg" srcset="img/leg-ground-960.jpg 960w, img/leg-ground.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-tower-960.jpg" srcset="img/leg-tower-960.jpg 960w, img/leg-tower.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-departure-960.jpg" srcset="img/leg-departure-960.jpg 960w, img/leg-departure.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-centre-960.jpg" srcset="img/leg-centre-960.jpg 960w, img/leg-centre.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-approach-960.jpg" srcset="img/leg-approach-960.jpg 960w, img/leg-approach.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-final-960.jpg" srcset="img/leg-final-960.jpg 960w, img/leg-final.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-gate-960.jpg" srcset="img/leg-gate-960.jpg 960w, img/leg-gate.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+    </figure>
+    <div class="leg-card" aria-live="polite">
+      <p class="leg-phase" id="leg-phase">At the gate</p>
+      <p class="leg-station"><b id="leg-station">Vancouver Delivery</b> <span id="leg-freq">121.400</span></p>
+      <p class="leg-said" id="leg-said">Air Canada 216, cleared to Calgary as filed, climb and maintain 5,000, squawk 4512.</p>
+    </div>
+  </div>
+  <ol class="legs-rail" role="tablist" aria-label="A flight, station by station">
+    <li><button type="button" role="tab" aria-selected="true" data-leg="0" data-station="Vancouver Delivery" data-freq="121.400" data-phase="At the gate" data-said="Air Canada 216, cleared to Calgary as filed, climb and maintain 5,000, squawk 4512."><span class="leg-n">01</span>Clearance<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="1" data-station="Vancouver Ground" data-freq="121.700" data-phase="Taxi" data-said="Air Canada 216, runway 08R, taxi via Golf, Charlie, hold short runway 13."><span class="leg-n">02</span>Ground<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="2" data-station="Vancouver Tower" data-freq="118.700" data-phase="Takeoff" data-said="Air Canada 216, wind 090 at 8, runway 08R, cleared for takeoff."><span class="leg-n">03</span>Tower<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="3" data-station="Vancouver Departure" data-freq="126.125" data-phase="Climb" data-said="Air Canada 216, radar contact, climb and maintain flight level 350."><span class="leg-n">04</span>Departure<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="4" data-station="Edmonton Center" data-freq="124.525" data-phase="Cruise" data-said="Air Canada 216, Edmonton Center, maintain flight level 350, direct Calgary when able."><span class="leg-n">05</span>Centre<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="5" data-station="Calgary Arrival" data-freq="125.900" data-phase="Descent" data-said="Air Canada 216, descend and maintain 7,000, expect the ILS runway 35L."><span class="leg-n">06</span>Approach<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="6" data-station="Calgary Tower" data-freq="118.400" data-phase="Final" data-said="Air Canada 216, wind 340 at 6, runway 35L, cleared to land."><span class="leg-n">07</span>Tower<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="7" data-station="Calgary Ground" data-freq="121.900" data-phase="To the gate" data-said="Air Canada 216, welcome to Calgary, taxi to the gate via Alpha, Bravo."><span class="leg-n">08</span>Ground<i class="leg-bar"></i></button></li>
+  </ol>
 </section>
 
 <!-- --------------------------------------------------------------- features -->
@@ -93,12 +138,16 @@
   <h2 class="section-title">What it does</h2>
   <p class="section-lede">Everything here is in LocalTC today, and free.</p>
 
-  <ol class="flight-strip" aria-label="A flight, station by station">
-    <li>Clearance</li><li>Ground</li><li>Tower</li><li>Departure</li><li>Centre</li><li>Approach</li><li>Tower</li><li>Ground</li>
-  </ol>
-
-  <h3 class="tile-group" id="feat-atc">The controllers</h3>
-  <div class="tiles">
+  <div class="chapter">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-controllers-960.jpg" srcset="img/ch-controllers-960.jpg 960w, img/ch-controllers.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+      <figcaption>Dusk on the apron</figcaption>
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">ATC</p>
+      <h3 class="chapter-title" id="feat-atc">The controllers</h3>
+      <p class="chapter-lede">Clearance to the gate, with a person behind every frequency.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="26" y="6" width="12" height="22" rx="6"/><path d="M18 22a14 14 0 0 0 28 0M32 36v6M24 42h16"/></svg>
         <h3>You talk, it listens</h3><p>Push-to-talk, and Whisper on your PC hears your callsign, runways and taxiways.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="22" height="14" rx="5"/><path d="M12 22l-2 6 7-6"/><rect x="36" y="16" width="22" height="14" rx="5"/><path d="M52 30l2 6-7-6"/><circle cx="17" cy="15" r="1.5" class="f"/><circle cx="47" cy="23" r="1.5" class="f"/></svg>
@@ -116,9 +165,19 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M32 8l24 34H8z"/><path d="M32 20v10M32 35v.5"/></svg>
         <h3>When it goes wrong</h3><p>Mayday and pan-pan, the nearest suitable airport, ATC starting things itself.</p></article>
   </div>
+    </div>
+  </div>
 
-  <h3 class="tile-group" id="feat-copilot">Your first officer</h3>
-  <div class="tiles">
+  <div class="chapter flip">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-copilot-960.jpg" srcset="img/ch-copilot-960.jpg 960w, img/ch-copilot.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+      <figcaption>Above the cloud tops</figcaption>
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The copilot</p>
+      <h3 class="chapter-title" id="feat-copilot">Your first officer</h3>
+      <p class="chapter-lede">Someone in the right seat who talks, watches and helps.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M14 30v-6a18 18 0 0 1 36 0v6"/><rect x="10" y="28" width="8" height="12" rx="3"/><rect x="46" y="28" width="8" height="12" rx="3"/><path d="M50 40c0 4-6 6-12 6"/></svg>
         <h3>On the intercom</h3><p>Its own key and voice. Talk to it like a person; it remembers the conversation.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 38a22 22 0 1 1 44 0"/><path d="M32 38l10-14"/><circle cx="32" cy="38" r="2.5" class="f"/></svg>
@@ -130,9 +189,19 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="16" width="48" height="24" rx="5"/><path d="M14 16l24-8"/><circle cx="20" cy="28" r="5"/><path d="M34 24h16M34 31h12"/></svg>
         <h3>The radio, if you like</h3><p>Readbacks only, or every call. Switch it mid-flight.</p></article>
   </div>
+    </div>
+  </div>
 
-  <h3 class="tile-group" id="feat-models">Smart, and kept on a leash</h3>
-  <div class="tiles">
+  <div class="chapter">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-local-960.jpg" srcset="img/ch-local-960.jpg 960w, img/ch-local.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+      <figcaption>The view from row 40</figcaption>
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The models</p>
+      <h3 class="chapter-title" id="feat-models">Smart, and kept on a leash</h3>
+      <p class="chapter-lede">Clever where it helps, checked everywhere it counts.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="18" y="12" width="28" height="24" rx="4"/><path d="M24 6v6M32 6v6M40 6v6M24 36v6M32 36v6M40 36v6M12 18h6M12 30h6M46 18h6M46 30h6"/></svg>
         <h3>Local by default</h3><p>Whisper, Piper and a local model on your PC. Flights work offline.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="20" cy="24" r="9"/><path d="M29 24h26M48 24v7M54 24v5"/><path d="M40 8c6 0 10 4 10 8" stroke-dasharray="2 3"/></svg>
@@ -140,9 +209,19 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="20" height="28" rx="4"/><path d="M14 18h8M14 24h8M14 30h5"/><path d="M28 24h10"/><path d="M38 16l8 8-8 8" /><path d="M48 18l4 4 6-8"/></svg>
         <h3>Checked, always</h3><p>Every number, runway, route and readback is checked against the script.</p></article>
   </div>
+    </div>
+  </div>
 
-  <h3 class="tile-group" id="feat-apps">Everywhere you look</h3>
-  <div class="tiles">
+  <div class="chapter flip">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-apps-960.jpg" srcset="img/ch-apps-960.jpg 960w, img/ch-apps.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+      <figcaption>Sunrise over the panel</figcaption>
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The apps</p>
+      <h3 class="chapter-title" id="feat-apps">Everywhere you look</h3>
+      <p class="chapter-lede">On your screen, your phone and the web, all at once.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="52" height="30" rx="4"/><path d="M24 44h16M32 38v6"/><path d="M14 30l8-8 6 4 10-10 10 6" class="o"/></svg>
         <h3>The app</h3><p>Radios, a live map with ATC zones and traffic, airport lookup, SimBrief.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="20" y="4" width="24" height="40" rx="5"/><path d="M28 9h8"/><path d="M25 22h14M25 28h9M25 34h12"/></svg>
@@ -152,10 +231,48 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="48" height="28" rx="4"/><path d="M28 18l10 6-10 6z" class="f"/><path d="M8 44h48"/><circle cx="20" cy="44" r="2" class="f"/></svg>
         <h3>Logbook and replays</h3><p>Rewatch any flight, share it, and Wrapped: your year in flying.</p></article>
   </div>
+    </div>
+  </div>
+
 </section>
 
+<!-- ---------------------------------------------------------------- gallery -->
+<section id="gallery" class="gallery">
+  <div class="gallery-head">
+    <h2 class="section-title">From the flight deck</h2>
+    <p class="section-lede">Real screenshots from the developer's own flights in Microsoft Flight Simulator 2024. Click
+      one to see it full size.</p>
+  </div>
+  <div class="marquee" data-dir="left">
+    <div class="marquee-track">
+      <button type="button" class="shot" data-full="img/g-alps.jpg" data-cap="Over the Alps"><img src="img/g-alps-960.jpg" alt="Over the Alps" loading="lazy"><span>Over the Alps</span></button>
+      <button type="button" class="shot" data-full="img/g-cruise.jpg" data-cap="Cruise"><img src="img/g-cruise-960.jpg" alt="Cruise" loading="lazy"><span>Cruise</span></button>
+      <button type="button" class="shot" data-full="img/g-rouge.jpg" data-cap="Above the cloud deck"><img src="img/g-rouge-960.jpg" alt="Above the cloud deck" loading="lazy"><span>Above the cloud deck</span></button>
+      <button type="button" class="shot" data-full="img/g-engine.jpg" data-cap="Golden hour"><img src="img/g-engine-960.jpg" alt="Golden hour" loading="lazy"><span>Golden hour</span></button>
+      <button type="button" class="shot" data-full="img/g-tail.jpg" data-cap="A night at the gate"><img src="img/g-tail-960.jpg" alt="A night at the gate" loading="lazy"><span>A night at the gate</span></button>
+    </div>
+  </div>
+  <div class="marquee" data-dir="right">
+    <div class="marquee-track">
+      <button type="button" class="shot" data-full="img/g-clouds.jpg" data-cap="Climbing out"><img src="img/g-clouds-960.jpg" alt="Climbing out" loading="lazy"><span>Climbing out</span></button>
+      <button type="button" class="shot" data-full="img/g-gate.jpg" data-cap="Turnaround"><img src="img/g-gate-960.jpg" alt="Turnaround" loading="lazy"><span>Turnaround</span></button>
+      <button type="button" class="shot" data-full="img/g-dusk.jpg" data-cap="Dusk at altitude"><img src="img/g-dusk-960.jpg" alt="Dusk at altitude" loading="lazy"><span>Dusk at altitude</span></button>
+      <button type="button" class="shot" data-full="img/g-sun.jpg" data-cap="Into the sun"><img src="img/g-sun-960.jpg" alt="Into the sun" loading="lazy"><span>Into the sun</span></button>
+    </div>
+  </div>
+</section>
+
+<dialog class="lightbox" id="lightbox" aria-label="Screenshot">
+  <img alt="">
+  <p class="lb-cap"></p>
+  <button type="button" class="lb-prev" aria-label="Previous">‹</button>
+  <button type="button" class="lb-next" aria-label="Next">›</button>
+  <button type="button" class="lb-close" aria-label="Close">×</button>
+</dialog>
+
 <!-- ------------------------------------------------------------------ local -->
-<section id="local" class="band band-deep">
+<section id="local" class="band band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="img/bg-island-960.jpg" srcset="img/bg-island-960.jpg 960w, img/bg-island.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.18"></div>
   <h2 class="section-title">Local by default. Your key if you want more.</h2>
   <p class="section-lede">
     The ATC, the copilot, your voice and the model all run on your PC. A cloud model is yours to add, with your own
@@ -249,7 +366,7 @@
     CUDA if you have an NVIDIA card, and the models sized for your machine. No git, no admin rights.
   </p>
 
-  <div class="steps">
+  <div class="steps" id="steps">
     <div class="step">
       <span class="num">1</span>
       <h3>Download the installer</h3>
@@ -328,7 +445,8 @@
 </section>
 
 <!-- ---------------------------------------------------------------- support -->
-<section class="band support">
+<section class="band support band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="img/bg-sunset-960.jpg" srcset="img/bg-sunset-960.jpg 960w, img/bg-sunset.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.18"></div>
   <h2 class="section-title">Free, and staying free</h2>
   <p class="section-lede">
     LocalTC is built in spare time and given away. There's no tip jar in the app, no nag screen and
@@ -369,7 +487,8 @@
     </p>
     <p class="fineprint">
       Not affiliated with Microsoft or Asobo. Microsoft Flight Simulator is a trademark of Microsoft
-      Corporation. LocalTC is for simulated flight only and is not for real-world navigation.
+      Corporation. The screenshots are the developer's own, taken in the sim; airline names and liveries belong to
+      their owners, and none of them is affiliated with LocalTC. LocalTC is for simulated flight only and is not for real-world navigation.
     </p>
   </div>
 </footer>

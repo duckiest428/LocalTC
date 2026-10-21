@@ -19,7 +19,17 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **A shared flight's whole replay** shows the map, the aircraft pointing the way it flies, and the calls and phases
   along the timeline in their places.
 
+- **Real flights on the home page**: screenshots from the developer's own MSFS 2024 flights, behind the hero (a
+  slideshow that slowly pushes in), as each feature's photo, and in a gallery of two drifting rows that open full size.
+- **A flight, station by station**: the eight controllers from clearance to the gate, each with a photo of that part of
+  the flight and its call typed out; it plays through by itself, or pick a leg.
+
 ### Changed
+- **More life on the home page**: the header turns to glass as you scroll, with a line for how far down you are; the
+  headline arrives word by word, the radio log leans toward the pointer, the photos move slower than the page, cards
+  catch a light under the pointer, sections arrive with a blur, the subscription sum counts up, and light drifts
+  behind every page. All of it stands still with reduced motion.
+- **The pricing page's head** has a photo behind it.
 - **The changelog shows what's coming**: the upcoming version is on the page first, filled in as the work is done, and one product's tab is always the one showing.
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 

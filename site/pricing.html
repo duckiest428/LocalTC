@@ -28,7 +28,8 @@
 </header>
 
 <main class="pricing">
-  <section class="band pricing-head">
+  <section class="band pricing-head band-photo">
+    <div class="band-bg" aria-hidden="true"><img src="img/g-clouds-960.jpg" srcset="img/g-clouds-960.jpg 960w, img/g-clouds.jpg 1920w" sizes="100vw" alt="" data-parallax="0.15"></div>
     <p class="kicker">Pricing</p>
     <h1 class="section-title">Find the plan that's right for you.</h1>
     <p class="section-lede">
@@ -169,5 +170,6 @@
     document.querySelectorAll(".plan .per").forEach((p) => (p.textContent = per));
   }));
 </script>
+<script src="app.js"></script>
 </body>
 </html>

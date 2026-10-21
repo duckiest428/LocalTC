@@ -289,3 +289,23 @@ def test_atis_and_atc_give_the_same_approach():
     info = engine.current_atis("KBFI") or engine.current_atis("KPAE")
     runway = info.runway
     assert engine._approach_for(runway, has_ils=True) == info.approach_for(runway) or info.approach_for(runway).kind == "VISUAL"
+
+
+def test_the_destinations_atis_is_fetched_fresh_on_the_way_in(monkeypatch):
+    """"It should start fetching the real-life ATIS when this prompt comes in": the copilot read out the ATIS fetched
+    up to five minutes before. Asked for fresher (near the destination), it's fetched again sooner."""
+    from localtc import metar_data
+
+    fetched = []
+    from localtc.sim_api import AtisReport
+
+    report = [AtisReport(t=0.0, icao="KLAS", letter="I", text="LAS ATIS INFO I", kind="both", zulu="0156")]
+    store = metar_data.AtisStore(fetcher=lambda icao: fetched.append(icao) or report, background=False)
+    clock = [1000.0]
+    monkeypatch.setattr(metar_data.time, "monotonic", lambda: clock[0])
+    store.get("KLAS")
+    clock[0] += 90.0
+    store.get("KLAS")
+    assert fetched == ["KLAS"]  # the usual: held for five minutes
+    store.get("KLAS", max_age_s=60.0)
+    assert fetched == ["KLAS", "KLAS"]

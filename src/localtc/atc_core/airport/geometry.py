@@ -11,6 +11,12 @@ from localtc.sim_api import Airport, Runway, TaxiPoint
 from localtc.sim_api.geo import METERS_PER_NM, LocalFrame, angle_diff, haversine_nm, unit
 
 
+# How far off a final's centreline an aircraft can be and still be on it: this much at the threshold, opening out
+# along the approach (Montreal's 737 rolling out on 24L, 1,600 m off 24R's centreline at its threshold, held a
+# departure short of 24R as "landing").
+LATERAL_AT_THRESHOLD_M, LATERAL_SPLAY = 250.0, 0.15
+
+
 @dataclass(frozen=True)
 class RunwayEndGeometry:
     """One usable direction of a runway, e.g. 34L: departures roll along ``heading_true`` from the threshold."""
@@ -179,7 +185,9 @@ class AirportGeometry:
         max_lateral_m: float = METERS_PER_NM,
         heading_tolerance: float = 30.0,
     ) -> FinalApproach | None:
-        """The runway end the aircraft is lined up to land on, if any."""
+        """The runway end the aircraft is lined up to land on, if any. Off to the side by ``max_lateral_m`` at most,
+        less close in (``LATERAL_AT_THRESHOLD_M``, splaying out ``LATERAL_SPLAY`` a metre along): one over the
+        threshold of the parallel 1,600 m away isn't on this one's final."""
         xy = self.xy(lat, lon)
         best: FinalApproach | None = None
         for end in self.ends:
@@ -190,7 +198,7 @@ class AirportGeometry:
             before = -(dx * ux + dy * uy)  # meters before the threshold, along the approach
             lateral = dx * uy - dy * ux
             distance_nm = before / METERS_PER_NM
-            if abs(lateral) > max_lateral_m or not (0.0 <= distance_nm <= max_distance_nm):
+            if abs(lateral) > min(max_lateral_m, LATERAL_AT_THRESHOLD_M + before * LATERAL_SPLAY)                     or not (0.0 <= distance_nm <= max_distance_nm):
                 continue
             candidate = FinalApproach(end=end, distance_nm=distance_nm, lateral_m=lateral)
             if best is None or abs(candidate.lateral_m) < abs(best.lateral_m):

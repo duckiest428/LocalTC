@@ -21,18 +21,21 @@
 [   124.0] PILOT     121.8: uh blah blah the thing with the stuff
 [   127.0] ATC       Paine Ground 121.8: Cessna 2LT, say again.
 [   129.0] PILOT     121.8: Paine Ground, two lima tango, disregard.
+[   220.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   222.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
+[   224.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   228.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
+[   231.0] ATC       Paine Tower 120.2: N172LT, roger, taxi to and hold short runway 34L.
+[   233.0] PILOT     120.2: Hold short runway three four left, Cessna two lima tango.
+[   233.0] READBACK  tower.continue_hold_short correct
+[   311.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
+[   313.0] PILOT     120.2: Runway three four left, two lima tango.
+[   313.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
+[   315.0] ATC       Paine Tower 120.2: Cessna 2LT, I still need the readback of cleared for takeoff.
+[   317.0] PILOT     120.2: Runway three four left, two lima tango.
+[   319.0] ATC       Paine Tower 120.2: Cessna 2LT, say again.
+[   321.0] PILOT     120.2: Cleared for takeoff runway three four left, two lima tango.
+[   321.0] READBACK  tower.takeoff correct
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   354.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
-[   356.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
-[   358.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
-[   362.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
-[   365.0] ATC       Paine Tower 120.2: N172LT, fly runway heading, runway 34L, cleared for takeoff, wind 130 at 3.
-[   367.0] PILOT     120.2: Runway three four left, two lima tango.
-[   367.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
-[   369.0] ATC       Paine Tower 120.2: Cessna 2LT, I still need the readback of cleared for takeoff.
-[   371.0] PILOT     120.2: Runway three four left, two lima tango.
-[   373.0] ATC       Paine Tower 120.2: Cessna 2LT, say again.
-[   375.0] PILOT     120.2: Cleared for takeoff runway three four left, two lima tango.
-[   375.0] READBACK  tower.takeoff correct
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   439.0] PHASE     TAKEOFF -> DEPARTURE (airborne)

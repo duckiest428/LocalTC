@@ -251,10 +251,6 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
     from localtc.traffic.service import TrafficService
 
     t = cfg.traffic
-    settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
-                               atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
-                               live_delay_s=t.live_delay_s)
-    manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
     schedules = None
     if t.scheduled:
         from localtc.ops.fetch import Cache
@@ -262,9 +258,17 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
         from localtc.ops.schedules import Schedules
 
         schedules = Schedules(default_keys(), Cache(data_dir() / "ops" / "schedules.json"))
+    # The departures due at the gates need a schedule (a free OpenSky or AirLabs account). Without one the gates were
+    # empty all the way to the runway at Montreal: then they're filled with the airport's airlines instead.
+    unscheduled = t.scheduled and (schedules is None or not schedules.available)
+    settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
+                               atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates or unscheduled,
+                               live_delay_s=t.live_delay_s)
+    manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
     log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, scheduled departures %s, ATC %s)",
              t.radius_nm, "on" if t.parked else "off",
-             "on" if schedules is not None and schedules.available else "off (no schedule source)" if t.scheduled else "off",
+             "on" if schedules is not None and schedules.available
+             else "off (no schedule source: the gates filled instead)" if t.scheduled else "off",
              "on" if settings.atc_control else "off")
     return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json", schedules=schedules)
 
@@ -473,6 +477,7 @@ async def run_session(
     typed_task: asyncio.Task | None = None
     voice = speaker = None
     traffic = None
+    guide = None
     engine = atc_service = None
     pm = None
     flight_log = None
@@ -560,6 +565,15 @@ async def run_session(
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
             traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
             consumers.append(asyncio.create_task(traffic.run()))
+        if cfg.atc.enabled and session.source_kind == "live":
+            from localtc.taxi_guidance import TaxiGuidance
+
+            guide = TaxiGuidance(engine, source, bus, enabled=cfg.atc.taxi_guide)
+            consumers.append(asyncio.create_task(guide.run()))
+            if cfg.atc.taxi_guide:
+                from localtc import simpkg
+
+                await asyncio.to_thread(simpkg.install)
         if session.source_kind == "live" and (cfg.ops.notams or cfg.ops.terrain or cfg.ops.restrictions or cfg.ops.weather):
             consumers.append(asyncio.create_task(start_ops(cfg, engine if cfg.atc.enabled else None, bus).run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
@@ -581,7 +595,7 @@ async def run_session(
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
                                  voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None,
-                                 crew=pm, traffic=traffic))
+                                 crew=pm, traffic=traffic, guide=guide))
         waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
         await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
         for task in waits:
@@ -590,6 +604,9 @@ async def run_session(
         if traffic is not None:
             with suppress(Exception):
                 await asyncio.wait_for(traffic.close(), timeout=2.0)  # LocalTC's copies out before the sim goes
+        if guide is not None:
+            with suppress(Exception):
+                await asyncio.wait_for(guide.close(), timeout=2.0)
         if backend is not None and hasattr(backend, "stop_keeping"):
             # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
             threading.Thread(target=backend.stop_keeping, args=(cfg.llm.keep_alive,), name="llm-release", daemon=True).start()
@@ -654,6 +671,7 @@ class LiveSession:
     recording: Path | None = None
     crew: object | None = None  # crew.pm.PilotMonitoring
     traffic: object | None = None  # traffic.service.TrafficService (None when off)
+    guide: object | None = None  # taxi_guidance.TaxiGuidance
 
     def now(self) -> float:
         return self.source.clock.now()

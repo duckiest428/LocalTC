@@ -88,14 +88,16 @@ class MetarStore:
         self._lock = threading.Lock()
         self.refresh_s = REFRESH_S
 
-    def get(self, icao: str):  # -> WeatherReport | list[AtisReport] | None
+    def get(self, icao: str, max_age_s: float | None = None):  # -> WeatherReport | list[AtisReport] | None
+        """The report held for ``icao`` at once; fetched again in the background when it's older than ``refresh_s``
+        (or ``max_age_s``, sooner: the ATIS about to be read out)."""
         icao = icao.upper()
         if not icao.isalnum():
             return None
         now = time.monotonic()
         with self._lock:
             held = self._reports.get(icao)
-            fresh = held is not None and now - held[0] < self.refresh_s
+            fresh = held is not None and now - held[0] < min(self.refresh_s, max_age_s or self.refresh_s)
             if fresh or icao in self._fetching or now - self._failed.get(icao, -RETRY_S) < RETRY_S:
                 return held[1] if held else None
             self._fetching.add(icao)

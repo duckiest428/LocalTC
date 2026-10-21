@@ -183,6 +183,14 @@ class SetSimVar(SimCommand, tag="set_sim_var"):
     value: float = 0.0
 
 
+class GroundMarks(SimCommand, tag="ground_marks"):
+    """The taxi guidance's marks on the ground, all of them as they should be now (the bridge makes the new ones,
+    takes away the ones gone, and leaves the rest where they are): (key, "arrow" or "stop", lat, lon, true heading)
+    each. Empty: none."""
+
+    marks: tuple[tuple[str, str, float, float, float], ...] = ()
+
+
 AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
                       ClickSequence, WatchVars, AiTrack, AiLights,
-                      SpawnAiAircraft, RemoveAiAircraft, EnumerateModels]
+                      SpawnAiAircraft, RemoveAiAircraft, EnumerateModels, GroundMarks]

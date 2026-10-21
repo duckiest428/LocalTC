@@ -258,17 +258,16 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
         from localtc.ops.schedules import Schedules
 
         schedules = Schedules(default_keys(), Cache(data_dir() / "ops" / "schedules.json"))
-    # The departures due at the gates need a schedule (a free OpenSky or AirLabs account). Without one the gates were
-    # empty all the way to the runway at Montreal: then they're filled with the airport's airlines instead.
-    unscheduled = t.scheduled and (schedules is None or not schedules.available)
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
-                               atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates or unscheduled,
+                               atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
+    # The departures due at the gates need a schedule: a free OpenSky or AirLabs account. Without one the gates stay
+    # empty (no made-up aircraft there), and the app says why.
+    manager.unscheduled = t.scheduled and (schedules is None or not schedules.available)
     log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, scheduled departures %s, ATC %s)",
              t.radius_nm, "on" if t.parked else "off",
-             "on" if schedules is not None and schedules.available
-             else "off (no schedule source: the gates filled instead)" if t.scheduled else "off",
+             "on" if schedules is not None and schedules.available else "off (no schedule source)" if t.scheduled else "off",
              "on" if settings.atc_control else "off")
     return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json", schedules=schedules)
 

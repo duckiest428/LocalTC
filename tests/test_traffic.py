@@ -677,3 +677,19 @@ def test_the_feed_down_isnt_an_arrival_out_of_sight():
         m.on_feed(None, "", NOW + i)
         m.tick(NOW + i)
     assert all(p.mode != "landing" for p in m.planes.values())
+
+
+def test_the_gates_empty_for_want_of_a_schedule_is_said():
+    """No aircraft at the gates 45 minutes before their departures: those need a schedule (a free OpenSky or AirLabs
+    account). Nothing made up there instead (the pilot's wish): the status says why."""
+    from localtc.traffic.manager import NO_SCHEDULE_NOTE, TrafficManager
+
+    from localtc.sim_api import OwnshipState
+
+    m = TrafficManager()
+    m.unscheduled, m.feed_ok = True, True
+    m.own = OwnshipState(t=1.0, lat=45.45, lon=-73.75, alt_msl_ft=110, alt_indicated_ft=110, alt_agl_ft=0,
+                         altimeter_inhg=30.0, hdg_mag=0, hdg_true=0, ias_kt=0, gs_kt=0, vs_fpm=0, on_ground=True,
+                         squawk="1200", xpdr_mode="standby", com1_mhz=121.0, com2_mhz=121.0)
+    assert m.status(1.0).note == NO_SCHEDULE_NOTE
+    assert not m.s.fill_gates

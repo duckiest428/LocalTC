@@ -1226,7 +1226,7 @@ const Settings = {
           <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
         </div>
         <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
-          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, the gates are filled with the airport's airlines instead)</label>
+          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, only the real aircraft at the gates are shown)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
         </div>

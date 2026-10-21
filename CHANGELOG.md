@@ -67,7 +67,7 @@ a new minor version adds features, a patch fixes them.
 - **No "thanks" from ATC**: the controllers' acknowledgements and the model's wording leave it out ("start up approved, thanks", "taxi to runway 24R via F, B4, and B, thanks").
 - **No "one thousand to go"** from the copilot before each level-off.
 - **Flap and gear overspeed** said again every 45 s while it lasts, not every 15.
-- **The gates filled when there's no schedule to fill them from**: the departures due at the gates need a free OpenSky or AirLabs account (EFB > Data); without one, the gates were empty, now they're filled with the airport's own airlines as busy as it is at that hour.
+- **Why the gates are empty**: the departures due at the gates (45 minutes before they push) need a free OpenSky or AirLabs account (EFB > Data); without one, the traffic's status says so instead of leaving the gates empty without a word.
 - **LocalTC's traffic moves smoothly further out**: written to the sim every frame or so to 15 miles (it was 3), and many times a second to 60; traffic five miles off in the cruise stepped along twice a second.
 - **The destination's real ATIS fetched every minute** within 300 miles of it, so the copilot reads out the latest one on the way in.
 - **The departure frequency is optional** in an IFR clearance readback: misheard or left out, it holds nothing up.

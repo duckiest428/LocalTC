@@ -1091,3 +1091,18 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .status-col h3.ok .status-dot { animation: none; }
 }
+
+/* ---- touch screens: nothing repainted under the finger ----
+   The drifting light is held still, the frosted glass becomes plain tinted glass, and the photos don't move with
+   the scroll (app.js): each of those repaints large areas every frame, which a phone can't keep up with. */
+@media (pointer: coarse) {
+  body::after { animation: none; inset: 0; }
+  .home .topbar.scrolled { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(14, 16, 19, .94); }
+  .leg-card, .home .hero .window, .home .hero-facts li, .band-photo .ld-box {
+    backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .leg-card { background: rgba(10, 12, 15, .82); }
+  .home .hero .window { background: linear-gradient(168deg, rgba(30, 35, 41, .9), rgba(12, 14, 17, .94)); }
+  .band-photo .ld-box { background: rgba(20, 23, 27, .9); }
+  .hero-slides { will-change: auto; }
+  .reveal { filter: none; }
+}

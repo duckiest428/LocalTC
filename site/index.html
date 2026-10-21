@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LocalTC — free ATC for Microsoft Flight Simulator 2024</title>
+<title>LocalTC: free ATC for Microsoft Flight Simulator 2024</title>
 <meta name="description" content="Free, open-source air traffic control and a copilot for MSFS 2024. Local by default: speech recognition, voices and the language model run on your PC. Bring your own key for a cloud model if you want it. No subscription, ever.">
-<meta property="og:title" content="LocalTC — free ATC for MSFS 2024">
+<meta property="og:title" content="LocalTC: free ATC for MSFS 2024">
 <meta property="og:description" content="Real ATC and a copilot, on your own machine. Free forever, local by default, bring your own key if you want a cloud model.">
 <link rel="canonical" href="https://localtc.tech/">
 <meta property="og:type" content="website">
@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="home">
 
 <header class="topbar">
   <a class="brand" href="#top"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
@@ -32,17 +32,26 @@
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
   <a class="btn btn-ghost" href="dashboard">Dashboard</a>
+  <span class="progress" aria-hidden="true"></span>
 </header>
 
 <main id="top">
 
 <!-- ------------------------------------------------------------------ hero -->
 <section class="hero">
+  <div class="hero-slides" aria-hidden="true">
+    <img class="on" src="img/hero-runway.jpg" srcset="img/hero-runway-960.jpg 960w, img/hero-runway.jpg 1920w" sizes="100vw" alt="" fetchpriority="high">
+    <img data-src="img/hero-tail.jpg" data-srcset="img/hero-tail-960.jpg 960w, img/hero-tail.jpg 1920w" sizes="100vw" alt="">
+    <img data-src="img/hero-sunset.jpg" data-srcset="img/hero-sunset-960.jpg 960w, img/hero-sunset.jpg 1920w" sizes="100vw" alt="">
+    <img data-src="img/hero-rouge.jpg" data-srcset="img/hero-rouge-960.jpg 960w, img/hero-rouge.jpg 1920w" sizes="100vw" alt="">
+    <img data-src="img/hero-dusk.jpg" data-srcset="img/hero-dusk-960.jpg 960w, img/hero-dusk.jpg 1920w" sizes="100vw" alt="">
+  </div>
+  <div class="hero-shade" aria-hidden="true"></div>
   <div class="scope" aria-hidden="true"><span class="sweep"></span></div>
   <div class="hero-inner">
     <div class="hero-copy">
       <p class="eyebrow">Microsoft Flight Simulator 2024 &middot; Windows</p>
-      <h1>Air traffic control on your own computer.</h1>
+      <h1 class="split">Air traffic control on your own computer.</h1>
       <p class="lede">
         Talk to controllers from clearance delivery to the gate, with a first officer beside you on the
         intercom. Real phraseology, readbacks that are checked, a voice and a manner for every station.
@@ -83,9 +92,46 @@
         <div><i>Alt</i><b>FL350</b></div><div><i>Rwy</i><b>08R</b></div>
       </div>
       <ol class="log" id="log"></ol>
-      <div class="ptt"><span class="key">Right Ctrl</span> held — talking</div>
+      <div class="ptt"><span class="key">Right Ctrl</span> held, talking<span class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
     </div>
   </div>
+  <a class="scroll-cue" href="#legs" aria-label="Scroll to the flight"><span></span></a>
+</section>
+
+<!-- -------------------------------------------------------------------- legs -->
+<section id="legs" class="legs">
+  <div class="legs-head">
+    <h2 class="section-title">Gate to gate, station by station.</h2>
+    <p class="section-lede">Every controller from clearance to the gate, each on their own frequency, in the words real
+      controllers use. Pick a leg, or let it play.</p>
+  </div>
+  <div class="legs-stage">
+    <figure class="leg-photo" aria-hidden="true">
+      <img class="on" src="img/leg-clearance-960.jpg" srcset="img/leg-clearance-960.jpg 960w, img/leg-clearance.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-ground-960.jpg" srcset="img/leg-ground-960.jpg 960w, img/leg-ground.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-tower-960.jpg" srcset="img/leg-tower-960.jpg 960w, img/leg-tower.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-departure-960.jpg" srcset="img/leg-departure-960.jpg 960w, img/leg-departure.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-centre-960.jpg" srcset="img/leg-centre-960.jpg 960w, img/leg-centre.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-approach-960.jpg" srcset="img/leg-approach-960.jpg 960w, img/leg-approach.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-final-960.jpg" srcset="img/leg-final-960.jpg 960w, img/leg-final.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+      <img src="img/leg-gate-960.jpg" srcset="img/leg-gate-960.jpg 960w, img/leg-gate.jpg 1920w" sizes="(max-width: 900px) 100vw, 70vw" alt="" loading="lazy">
+    </figure>
+    <div class="leg-card" aria-live="polite">
+      <p class="leg-phase" id="leg-phase">At the gate</p>
+      <p class="leg-station"><b id="leg-station">Zurich Delivery</b> <span id="leg-freq">121.930</span></p>
+      <p class="leg-said" id="leg-said">Edelweiss 22, cleared to Palma via the filed departure, climb flight level 80, squawk 1000.</p>
+    </div>
+  </div>
+  <ol class="legs-rail" role="tablist" aria-label="A flight, station by station">
+    <li><button type="button" role="tab" aria-selected="true" data-leg="0" data-station="Zurich Delivery" data-freq="121.930" data-phase="At the gate" data-said="Edelweiss 22, cleared to Palma via the filed departure, climb flight level 80, squawk 1000."><span class="leg-n">01</span>Clearance<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="1" data-station="San Francisco Ground" data-freq="121.800" data-phase="Taxi" data-said="United 862, runway 1L, taxi via Alpha, Echo, hold short of runway 28L."><span class="leg-n">02</span>Ground<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="2" data-station="De Gaulle Tower" data-freq="119.250" data-phase="Takeoff" data-said="Air France 1015, wind 270 at 10, runway 27L, cleared for takeoff."><span class="leg-n">03</span>Tower<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="3" data-station="Vancouver Departure" data-freq="126.125" data-phase="Climb" data-said="Air Canada 216, radar contact, climb and maintain flight level 350."><span class="leg-n">04</span>Departure<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="4" data-station="Zurich Radar" data-freq="134.580" data-phase="Cruise" data-said="Swiss 14, identified, maintain flight level 370, direct to the boundary when able."><span class="leg-n">05</span>Centre<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="5" data-station="Denver Approach" data-freq="120.350" data-phase="Descent" data-said="Frontier Flight 1215, descend and maintain 11,000, expect the ILS runway 16R."><span class="leg-n">06</span>Approach<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="6" data-station="Roma Tower" data-freq="118.700" data-phase="Final" data-said="Itarrow 610, wind 250 at 9, runway 16L, cleared to land."><span class="leg-n">07</span>Tower<i class="leg-bar"></i></button></li>
+    <li><button type="button" role="tab" aria-selected="false" data-leg="7" data-station="Denver Ground" data-freq="121.850" data-phase="To the gate" data-said="United 1544, welcome to Denver, taxi to gate B45 via Alpha, Bravo."><span class="leg-n">08</span>Ground<i class="leg-bar"></i></button></li>
+  </ol>
 </section>
 
 <!-- --------------------------------------------------------------- features -->
@@ -93,12 +139,15 @@
   <h2 class="section-title">What it does</h2>
   <p class="section-lede">Everything here is in LocalTC today, and free.</p>
 
-  <ol class="flight-strip" aria-label="A flight, station by station">
-    <li>Clearance</li><li>Ground</li><li>Tower</li><li>Departure</li><li>Centre</li><li>Approach</li><li>Tower</li><li>Ground</li>
-  </ol>
-
-  <h3 class="tile-group" id="feat-atc">The controllers</h3>
-  <div class="tiles">
+  <div class="chapter">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-controllers-960.jpg" srcset="img/ch-controllers-960.jpg 960w, img/ch-controllers.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">ATC</p>
+      <h3 class="chapter-title" id="feat-atc">The controllers</h3>
+      <p class="chapter-lede">Clearance to the gate, with a person behind every frequency.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="26" y="6" width="12" height="22" rx="6"/><path d="M18 22a14 14 0 0 0 28 0M32 36v6M24 42h16"/></svg>
         <h3>You talk, it listens</h3><p>Push-to-talk, and Whisper on your PC hears your callsign, runways and taxiways.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="22" height="14" rx="5"/><path d="M12 22l-2 6 7-6"/><rect x="36" y="16" width="22" height="14" rx="5"/><path d="M52 30l2 6-7-6"/><circle cx="17" cy="15" r="1.5" class="f"/><circle cx="47" cy="23" r="1.5" class="f"/></svg>
@@ -116,9 +165,18 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M32 8l24 34H8z"/><path d="M32 20v10M32 35v.5"/></svg>
         <h3>When it goes wrong</h3><p>Mayday and pan-pan, the nearest suitable airport, ATC starting things itself.</p></article>
   </div>
+    </div>
+  </div>
 
-  <h3 class="tile-group" id="feat-copilot">Your first officer</h3>
-  <div class="tiles">
+  <div class="chapter flip">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-copilot-960.jpg" srcset="img/ch-copilot-960.jpg 960w, img/ch-copilot.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The copilot</p>
+      <h3 class="chapter-title" id="feat-copilot">Your first officer</h3>
+      <p class="chapter-lede">Someone in the right seat who talks, watches and helps.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M14 30v-6a18 18 0 0 1 36 0v6"/><rect x="10" y="28" width="8" height="12" rx="3"/><rect x="46" y="28" width="8" height="12" rx="3"/><path d="M50 40c0 4-6 6-12 6"/></svg>
         <h3>On the intercom</h3><p>Its own key and voice. Talk to it like a person; it remembers the conversation.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 38a22 22 0 1 1 44 0"/><path d="M32 38l10-14"/><circle cx="32" cy="38" r="2.5" class="f"/></svg>
@@ -129,20 +187,42 @@
         <h3>Its own hands</h3><p>Lights, gear and flaps on schedule, its altimeter, the after-landing flow.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="16" width="48" height="24" rx="5"/><path d="M14 16l24-8"/><circle cx="20" cy="28" r="5"/><path d="M34 24h16M34 31h12"/></svg>
         <h3>The radio, if you like</h3><p>Readbacks only, or every call. Switch it mid-flight.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="38" height="24" rx="7"/><path d="M14 32l-3 8 9-8"/><path d="M14 17h22M14 24h14"/><circle cx="50" cy="30" r="8"/><path d="M50 26v4l3 2"/></svg>
+        <h3>Ask it anything</h3><p>Fuel, distance to go, the weather ahead, what ATC just said: answered from the flight itself.</p></article>
+  </div>
+    </div>
   </div>
 
-  <h3 class="tile-group" id="feat-models">Smart, and kept on a leash</h3>
-  <div class="tiles">
+  <div class="chapter">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-local-960.jpg" srcset="img/ch-local-960.jpg 960w, img/ch-local.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The models</p>
+      <h3 class="chapter-title" id="feat-models">Smart, and kept on a leash</h3>
+      <p class="chapter-lede">Clever where it helps, checked everywhere it counts.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="18" y="12" width="28" height="24" rx="4"/><path d="M24 6v6M32 6v6M40 6v6M24 36v6M32 36v6M40 36v6M12 18h6M12 30h6M46 18h6M46 30h6"/></svg>
         <h3>Local by default</h3><p>Whisper, Piper and a local model on your PC. Flights work offline.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="20" cy="24" r="9"/><path d="M29 24h26M48 24v7M54 24v5"/><path d="M40 8c6 0 10 4 10 8" stroke-dasharray="2 3"/></svg>
         <h3>Bring your own key</h3><p>Want sharper words? Add a free key for a cloud model. Recommended for quality.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="20" height="28" rx="4"/><path d="M14 18h8M14 24h8M14 30h5"/><path d="M28 24h10"/><path d="M38 16l8 8-8 8" /><path d="M48 18l4 4 6-8"/></svg>
         <h3>Checked, always</h3><p>Every number, runway, route and readback is checked against the script.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="48" height="28" rx="5"/><path d="M16 20h10M16 28h18M38 20h10"/><path d="M42 30l3 3 6-7"/></svg>
+        <h3>No model? Still flies</h3><p>Without one it runs on the grammar alone: every call understood, every readback checked.</p></article>
+  </div>
+    </div>
   </div>
 
-  <h3 class="tile-group" id="feat-apps">Everywhere you look</h3>
-  <div class="tiles">
+  <div class="chapter flip">
+    <figure class="chapter-photo reveal-img">
+      <img src="img/ch-apps-960.jpg" srcset="img/ch-apps-960.jpg 960w, img/ch-apps.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
+    </figure>
+    <div class="chapter-body">
+      <p class="chapter-kicker">The apps</p>
+      <h3 class="chapter-title" id="feat-apps">Everywhere you look</h3>
+      <p class="chapter-lede">On your screen, your phone and the web, all at once.</p>
+<div class="tiles">
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="52" height="30" rx="4"/><path d="M24 44h16M32 38v6"/><path d="M14 30l8-8 6 4 10-10 10 6" class="o"/></svg>
         <h3>The app</h3><p>Radios, a live map with ATC zones and traffic, airport lookup, SimBrief.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="20" y="4" width="24" height="40" rx="5"/><path d="M28 9h8"/><path d="M25 22h14M25 28h9M25 34h12"/></svg>
@@ -152,10 +232,14 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="48" height="28" rx="4"/><path d="M28 18l10 6-10 6z" class="f"/><path d="M8 44h48"/><circle cx="20" cy="44" r="2" class="f"/></svg>
         <h3>Logbook and replays</h3><p>Rewatch any flight, share it, and Wrapped: your year in flying.</p></article>
   </div>
+    </div>
+  </div>
+
 </section>
 
 <!-- ------------------------------------------------------------------ local -->
-<section id="local" class="band band-deep">
+<section id="local" class="band band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="img/bg-island-960.jpg" srcset="img/bg-island-960.jpg 960w, img/bg-island.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.18"></div>
   <h2 class="section-title">Local by default. Your key if you want more.</h2>
   <p class="section-lede">
     The ATC, the copilot, your voice and the model all run on your PC. A cloud model is yours to add, with your own
@@ -180,7 +264,7 @@
 </section>
 
 <!-- -------------------------------------------------------------------- why -->
-<section id="why" class="band band-alt">
+<section id="why" class="band">
   <h2 class="section-title">Why pay monthly for this?</h2>
   <p class="section-lede">
     The good paid ATC add-ons are genuinely good. They also bill you every month, need a live
@@ -188,84 +272,79 @@
     a one-time install.
   </p>
 
-  <div class="compare">
-    <table>
-      <thead>
-        <tr><th>&nbsp;</th><th class="us">LocalTC</th><th>A typical ATC subscription</th></tr>
-      </thead>
+  <div class="versus">
+    <table class="vs-table">
+      <caption class="sr-only">LocalTC beside a typical ATC subscription</caption>
+      <thead><tr><th><span class="sr-only">What</span></th><th class="us"><img src="logo.svg" alt="" width="22" height="22">LocalTC</th><th>A typical ATC subscription</th></tr></thead>
       <tbody>
-        <tr><td>Price</td><td class="us"><b>$0</b>, forever</td><td>Usually $10–$20 a month</td></tr>
-        <tr><td>Works without internet</td><td class="us yes">Yes — that's the point</td><td class="no">No, it's a cloud service</td></tr>
-        <tr><td>Where your voice goes</td><td class="us yes">Your CPU or GPU</td><td class="no">Uploaded and processed remotely</td></tr>
-        <tr><td>The AI model</td><td class="us yes">On your PC, or the provider you pick, with your own key</td><td>Theirs, on their terms</td></tr>
-        <tr><td>Account, login, DRM</td><td class="us yes">None needed</td><td class="no">Required</td></tr>
-        <tr><td>If the company folds</td><td class="us yes">Still on your disk, still flies</td><td class="no">It stops working</td></tr>
-        <tr><td>Change the phraseology</td><td class="us yes">Edit a text file</td><td class="no">File a feature request</td></tr>
-        <tr><td>Read the code</td><td class="us yes">All of it, on GitHub</td><td class="no">Closed</td></tr>
-        <tr><td>Usage limits</td><td class="us yes">None — it's your hardware</td><td>Often tiered by hours</td></tr>
+        <tr><th scope="row">Price</th><td class="us"><b>$0</b>, forever</td><td>Usually $10 to $20 a month</td></tr>
+        <tr><th scope="row">Works without internet</th><td class="us yes">Yes, that's the point</td><td class="no">No, it's a cloud service</td></tr>
+        <tr><th scope="row">Where your voice goes</th><td class="us yes">Your CPU or GPU</td><td class="no">Uploaded and processed remotely</td></tr>
+        <tr><th scope="row">The AI model</th><td class="us yes">On your PC, or the provider you pick, with your own key</td><td class="no">Theirs, on their terms</td></tr>
+        <tr><th scope="row">Account, login, DRM</th><td class="us yes">None needed</td><td class="no">Required</td></tr>
+        <tr><th scope="row">If the company folds</th><td class="us yes">Still on your disk, still flies</td><td class="no">It stops working</td></tr>
+        <tr><th scope="row">Change the phraseology</th><td class="us yes">Edit a text file</td><td class="no">File a feature request</td></tr>
+        <tr><th scope="row">Read the code</th><td class="us yes">All of it, on GitHub</td><td class="no">Closed</td></tr>
+        <tr><th scope="row">Usage limits</th><td class="us yes">None, it's your hardware</td><td class="no">Often tiered by hours</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="calc" id="calc">
-    <h3>What a subscription costs you while you fly</h3>
-    <div class="calc-row">
-      <label for="rate">Monthly price</label>
-      <input type="range" id="rate" min="5" max="25" step="1" value="15">
-      <output id="rate-out">$15</output>
-    </div>
-    <div class="calc-row">
-      <label for="years">You keep simming for</label>
-      <input type="range" id="years" min="1" max="10" step="1" value="3">
-      <output id="years-out">3 years</output>
-    </div>
-    <div class="calc-result">
-      <div class="calc-side">
-        <span class="calc-label">Subscription</span>
+    <figure class="calc-photo" aria-hidden="true">
+      <img src="img/calc-engine-960.jpg" srcset="img/calc-engine-960.jpg 960w, img/calc-engine.jpg 1920w" sizes="(max-width: 900px) 100vw, 40vw" alt="" loading="lazy" data-parallax="0.06">
+      <div class="calc-ours"><span>LocalTC</span><b>$0</b><span>for as long as you fly</span></div>
+    </figure>
+    <div class="calc-body">
+      <h3>What a subscription costs you while you fly</h3>
+      <div class="calc-row">
+        <label for="rate">Monthly price</label>
+        <input type="range" id="rate" min="5" max="25" step="1" value="15">
+        <output id="rate-out">$15</output>
+      </div>
+      <div class="calc-row">
+        <label for="years">You keep simming for</label>
+        <input type="range" id="years" min="1" max="10" step="1" value="3">
+        <output id="years-out">3 years</output>
+      </div>
+      <div class="calc-total">
+        <span class="calc-label">The subscription</span>
         <span class="calc-big" id="sub-total">$540</span>
       </div>
-      <div class="calc-side win">
-        <span class="calc-label">LocalTC</span>
-        <span class="calc-big">$0</span>
-      </div>
+      <p class="calc-note">
+        If LocalTC saves you that, and you want to say thanks,
+        <a href="https://buymeacoffee.com/petey1" rel="noopener">a coffee</a> is plenty.
+      </p>
     </div>
-    <p class="calc-note">
-      If LocalTC saves you that, and you want to say thanks,
-      <a href="https://buymeacoffee.com/petey1" rel="noopener">a coffee</a> is plenty.
-    </p>
   </div>
-
-  <p class="fineprint">
-    Honest caveat: a subscription buys you a team, a support desk and a roadmap. LocalTC is one
-    person and an open repo. If a bug annoys you, you can file it — or fix it.
-  </p>
 </section>
 
 <!-- ---------------------------------------------------------------- install -->
-<section id="install" class="band">
+<section id="install" class="band band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="img/bg-cruise-960.jpg" srcset="img/bg-cruise-960.jpg 960w, img/bg-cruise.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.15"></div>
   <h2 class="section-title">Install</h2>
   <p class="section-lede">
     Windows, with MSFS 2024. One installer does the lot: Python, LocalTC, Whisper, Piper, Ollama,
     CUDA if you have an NVIDIA card, and the models sized for your machine. No git, no admin rights.
   </p>
 
-  <div class="steps">
-    <div class="step">
+  <ol class="steps" id="steps">
+    <li class="step">
       <span class="num">1</span>
       <h3>Download the installer</h3>
       <p>A small setup that fetches the latest release from GitHub and checks it before installing.</p>
       <p><a class="btn btn-primary" href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a></p>
       <p class="hint"><a href="changelog">What's new</a> · <a href="https://github.com/duckiest428/LocalTC/releases/latest">Release and checksums</a></p>
-    </div>
-    <div class="step">
+    </li>
+    <li class="step">
       <span class="num">2</span>
       <h3>Run it</h3>
       <p>It installs to your user folder and sets up everything, picking the <i>light</i>, <i>balanced</i> or
       <i>quality</i> models from your RAM and graphics card. After this, flights work offline.</p>
       <p class="hint">The installer isn't code-signed yet, so Windows may say it's from an unknown publisher:
       <b>More info → Run anyway</b>. LocalTC then updates itself, when you say so, and never mid-flight.</p>
-    </div>
-    <div class="step">
+    </li>
+    <li class="step">
       <span class="num">3</span>
       <h3>Fly</h3>
       <p>
@@ -273,34 +352,37 @@
         press <b>Start</b>, and call for your clearance. Mute the sim's own ATC first:
         Sound → Character voices → 0.
       </p>
+    </li>
+  </ol>
+
+  <div class="callouts">
+    <div class="callout">
+      <h3>From source</h3>
+      <p>
+        Prefer git? Clone the repository and double-click <code class="inline">Install LocalTC.cmd</code>
+        (or run <code class="inline">install\install.ps1</code>); update with <code class="inline">git pull</code>.
+      </p>
     </div>
-  </div>
-
-  <div class="callout">
-    <h3>From source</h3>
-    <p>
-      Prefer git? Clone the repository and double-click <code class="inline">Install LocalTC.cmd</code>
-      (or run <code class="inline">install\install.ps1</code>); update with <code class="inline">git pull</code>.
-    </p>
-  </div>
-
-  <div class="callout">
-    <h3>No NVIDIA card?</h3>
-    <p>
-      It runs on the CPU. Whisper's <code class="inline">base.en</code> transcribes a transmission in
-      about 0.4 s on a laptop CPU, and ATC's voice takes about 0.3 s to synthesise. Pass
-      <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code> to run on
-      the grammar alone.
-    </p>
+    <div class="callout">
+      <h3>No NVIDIA card?</h3>
+      <p>
+        It runs on the CPU. Whisper's <code class="inline">base.en</code> transcribes a transmission in
+        about 0.4 s on a laptop CPU, and ATC's voice takes about 0.3 s to synthesise. Pass
+        <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code> to run on
+        the grammar alone.
+      </p>
+    </div>
   </div>
 </section>
 
 <!-- ----------------------------------------------------------------- status -->
-<section id="status" class="band band-alt">
+<section id="status" class="band">
   <h2 class="section-title">Where it is</h2>
+  <p class="section-lede">What works today, and what's still on the way. Nothing here is hidden behind a paywall or a
+    "pro" tier: when it's built, it ships.</p>
   <div class="status-cols">
     <div class="status-col">
-      <h3 class="ok">Working today</h3>
+      <h3 class="ok"><span class="status-dot"></span>Working today</h3>
       <ul>
         <li>IFR and VFR, clearance delivery to the gate, FAA and ICAO phraseology</li>
         <li>SIDs, STARs, vectors, approaches, holds, go-arounds</li>
@@ -311,7 +393,7 @@
       </ul>
     </div>
     <div class="status-col">
-      <h3 class="todo">Not there yet</h3>
+      <h3 class="todo"><span class="status-dot"></span>Not there yet</h3>
       <ul>
         <li>Ground services: GSX and the like (pushback crews, catering, fuel trucks you talk to)</li>
         <li>A proper cabin crew: announcements, a purser at the door, the cabin ready call</li>
@@ -320,19 +402,17 @@
         <li>Shared ATC in multiplayer</li>
         <li>Other sims, and macOS or Linux at the controls (they're for development)</li>
       </ul>
-      <p class="hint">
-        Nothing here is hidden behind a paywall or a "pro" tier. When it's built, it ships.
-      </p>
     </div>
   </div>
 </section>
 
 <!-- ---------------------------------------------------------------- support -->
-<section class="band support">
+<section class="band support band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="img/bg-sunset-960.jpg" srcset="img/bg-sunset-960.jpg 960w, img/bg-sunset.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.18"></div>
   <h2 class="section-title">Free, and staying free</h2>
   <p class="section-lede">
     LocalTC is built in spare time and given away. There's no tip jar in the app, no nag screen and
-    no locked feature. If it made a flight better, that's the whole reward — and if you'd like to
+    no locked feature. If it made a flight better, that's the whole reward. And if you'd like to
     buy the coffee that wrote the next feature, the door's open.
   </p>
   <div class="cta cta-center">
@@ -362,14 +442,10 @@
       <a href="cookies">Cookies</a>
     </nav>
     <p class="fineprint">
-      This site sets no cookies, runs no analytics and collects nothing about you — there is no
+      This site sets no cookies, runs no analytics and collects nothing about you. There is no
       banner because there is nothing to consent to. The optional dashboard sets one sign-in cookie,
       and only once you sign in. LocalTC is free software under the
       <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener">GNU AGPL&nbsp;v3</a>.
-    </p>
-    <p class="fineprint">
-      Not affiliated with Microsoft or Asobo. Microsoft Flight Simulator is a trademark of Microsoft
-      Corporation. LocalTC is for simulated flight only and is not for real-world navigation.
     </p>
   </div>
 </footer>

@@ -30,7 +30,7 @@ PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Changelog — LocalTC</title>
+<title>Changelog | LocalTC</title>
 <meta name="description" content="Every LocalTC release and what changed in it.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">

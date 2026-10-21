@@ -90,8 +90,9 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .q { color: var(--cyan); }
 
 /* ---------------------------------------------------------------- the reveal */
-.reveal { opacity: 0; transform: translateY(22px); }
-.reveal.in { opacity: 1; transform: none; transition: opacity .7s var(--ease), transform .7s var(--ease);
+.reveal { opacity: 0; transform: translateY(28px) scale(.985); filter: blur(6px); }
+.reveal.in { opacity: 1; transform: none; filter: none;
+  transition: opacity .8s var(--ease), transform .8s var(--ease), filter .8s var(--ease);
   transition-delay: var(--delay, 0ms); }
 
 /* -------------------------------------------------------------------- header */
@@ -731,14 +732,8 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 .ld-box .chip { font: 600 12px/1 var(--mono, ui-monospace, monospace); padding: 7px 10px; border-radius: 999px; background: var(--bg-3); color: var(--text-1, #e8eaed); }
 .ld-pc .chip { color: var(--green); }
 .ld-box .hint { font-size: 12.5px; color: var(--text-3, #8b9198); line-height: 1.5; }
-.ld-arrow { position: relative; width: 120px; height: 2px; border-top: 2px dashed rgba(255, 255, 255, .25); }
-.ld-arrow::after { content: ""; position: absolute; right: -2px; top: -7px; border: 6px solid transparent; border-left: 9px solid rgba(255, 255, 255, .35); }
-.ld-arrow span { position: absolute; top: 10px; left: 0; right: 0; text-align: center; font-size: 11.5px; color: var(--text-3, #8b9198); }
 @media (max-width: 760px) {
   .local-diagram { grid-template-columns: 1fr; }
-  .ld-arrow { width: 2px; height: 46px; border-top: 0; border-left: 2px dashed rgba(255, 255, 255, .25); margin: 0 auto; }
-  .ld-arrow::after { right: -8px; top: auto; bottom: -6px; border: 6px solid transparent; border-top: 9px solid rgba(255, 255, 255, .35); }
-  .ld-arrow span { top: 14px; left: 14px; right: auto; white-space: nowrap; text-align: left; }
 }
 
 /* ---- the pricing page (every plan $0) ----------------------------------------------------------------- */
@@ -772,3 +767,327 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 .cl-tabs button:hover { color: var(--text); }
 .cl-tabs button[aria-selected="true"] { background: rgba(95, 208, 104, .12); border-color: var(--green, #5fd068); color: var(--text); }
 .cl-product[hidden] { display: none !important; }
+
+/* ==========================================================================================================
+   Photographs and motion. The screenshots are the developer's own flights in MSFS 2024 (site/img: each one
+   full size and at 960 px). Everything that moves stops for prefers-reduced-motion, at the end of this part.
+   ========================================================================================================== */
+
+/* Light that drifts behind every page, so the near-black is never one flat colour. */
+body::after {
+  content: ""; position: fixed; inset: -20vmax; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(38vmax 28vmax at 14% 12%, rgba(95, 208, 104, .075), transparent 62%),
+    radial-gradient(44vmax 32vmax at 86% 30%, rgba(108, 201, 232, .06), transparent 62%),
+    radial-gradient(40vmax 30vmax at 48% 96%, rgba(240, 140, 70, .065), transparent 62%);
+  animation: drift 38s ease-in-out infinite alternate;
+}
+@keyframes drift { to { transform: translate3d(4vmax, -3vmax, 0) rotate(5deg); } }
+
+.kicker-line, .legs .kicker, .chapter-kicker {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--green); margin: 0 0 14px;
+}
+
+/* ---- the header on the home page: see-through over the photo, glass once you scroll, a line for how far ---- */
+.home .topbar { position: fixed; left: 0; right: 0; background: transparent; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  transition: background .4s, box-shadow .4s, padding .4s var(--ease), backdrop-filter .4s; }
+.home .topbar .nav a { color: rgba(255, 255, 255, .78); }
+.home .topbar .nav a:hover { color: #fff; }
+.home .topbar.scrolled { background: rgba(14, 16, 19, .72); backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .06);
+  padding-top: 10px; padding-bottom: 10px; }
+.home .topbar.scrolled .nav a { color: var(--text-3); }
+.home .topbar.scrolled .nav a:hover { color: var(--text); }
+.progress { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; pointer-events: none;
+  transform-origin: 0 50%; transform: scaleX(var(--p, 0));
+  background: linear-gradient(90deg, var(--green), var(--cyan)); box-shadow: 0 0 10px rgba(95, 208, 104, .6); }
+
+/* ---- buttons catch the light ---- */
+.btn-primary, .btn-coffee { position: relative; overflow: hidden; isolation: isolate; }
+.btn-primary::after, .btn-coffee::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .5) 50%, transparent 70%);
+  transform: translateX(-130%); }
+.btn-primary:hover::after, .btn-coffee:hover::after { transform: translateX(130%); transition: transform .8s var(--ease); }
+
+/* ---- the hero: the photo, a slow push in, the next one fading over it ---- */
+.home .hero { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; isolation: isolate;
+  padding: clamp(110px, 14vh, 150px) 0 clamp(96px, 12vh, 130px); background: #07090b; }
+.home .hero-inner { width: 100%; }
+.hero-slides { position: absolute; inset: 0 0 -10%; z-index: -2; overflow: hidden; will-change: transform; }
+.hero-slides img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0;
+  transition: opacity 1.8s ease; }
+.hero-slides img.on, .hero-slides img.out { animation: kenburns 12s linear forwards; }
+.hero-slides img.on { opacity: 1; }
+@keyframes kenburns { from { transform: scale(1.16) translate3d(1.5%, 1.2%, 0); } to { transform: scale(1.02); } }
+.hero-shade { position: absolute; inset: 0; z-index: -1; pointer-events: none; background:
+  linear-gradient(90deg, rgba(7, 9, 11, .9) 0%, rgba(7, 9, 11, .7) 36%, rgba(7, 9, 11, .2) 68%, rgba(7, 9, 11, .42) 100%),
+  linear-gradient(180deg, rgba(7, 9, 11, .6) 0%, rgba(7, 9, 11, 0) 22%, rgba(7, 9, 11, 0) 66%, var(--bg-0) 100%); }
+.home .scope { z-index: -1; opacity: .35; mix-blend-mode: screen; }
+.home .hero .eyebrow { color: rgba(255, 255, 255, .7); }
+.home .hero .lede { color: rgba(232, 236, 241, .86); text-shadow: 0 1px 18px rgba(0, 0, 0, .5); }
+.home .hero-facts li { background: rgba(10, 12, 15, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+/* The headline arrives a word at a time (app.js wraps the words). */
+.hero h1.split { background: none; color: #fff; -webkit-text-fill-color: currentColor; text-shadow: 0 2px 30px rgba(0, 0, 0, .35); }
+.split .w { display: inline-block; opacity: 0; transform: translateY(.45em) rotate(2deg); filter: blur(8px);
+  animation: word-in .9s var(--ease) forwards; animation-delay: calc(var(--i) * 70ms + 150ms); }
+@keyframes word-in { to { opacity: 1; transform: none; filter: none; } }
+.home .hero-copy > :not(h1) { animation: rise-in .9s var(--ease) both; }
+.home .hero-copy > .eyebrow { animation-delay: .05s; }
+.home .hero-copy > .lede { animation-delay: .55s; }
+.home .hero-copy > .lede-strong { animation-delay: .68s; }
+.home .hero-copy > .cta { animation-delay: .8s; }
+.home .hero-copy > .hero-facts { animation-delay: .95s; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(18px); } }
+
+/* The radio log floats in glass over the photo and leans toward the pointer. */
+.home .hero .window { background: linear-gradient(168deg, rgba(30, 35, 41, .62), rgba(12, 14, 17, .78));
+  transform: perspective(1400px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform .5s var(--ease); animation: window-in 1.1s var(--ease) .4s backwards; }
+@keyframes window-in { from { opacity: 0; transform: perspective(1400px) translateY(40px) rotateX(10deg); } }
+.meter { display: inline-flex; align-items: flex-end; gap: 2px; height: 11px; margin-left: 10px; vertical-align: -1px; }
+.meter i { width: 3px; height: 3px; border-radius: 1px; background: var(--green); animation: level .8s ease-in-out infinite; }
+.meter i:nth-child(2) { animation-delay: -.3s; } .meter i:nth-child(3) { animation-delay: -.55s; }
+.meter i:nth-child(4) { animation-delay: -.15s; } .meter i:nth-child(5) { animation-delay: -.45s; }
+@keyframes level { 50% { height: 11px; } }
+
+.scroll-cue { position: absolute; left: 50%; bottom: 26px; width: 24px; height: 38px; margin-left: -12px;
+  border-radius: 14px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .45); }
+.scroll-cue span { position: absolute; left: 50%; top: 8px; width: 4px; height: 8px; margin-left: -2px; border-radius: 2px;
+  background: #fff; animation: cue 1.8s var(--ease) infinite; }
+@keyframes cue { 0% { opacity: 0; transform: translateY(-3px); } 30% { opacity: 1; } 80% { opacity: 0; transform: translateY(12px); } 100% { opacity: 0; } }
+
+/* ---- a flight, station by station ---- */
+.legs { padding: clamp(80px, 10vw, 150px) max(22px, calc((100vw - var(--wrap)) / 2)) clamp(40px, 6vw, 80px); }
+.legs .section-lede { margin-bottom: clamp(30px, 4vw, 48px); }
+.legs-stage { position: relative; border-radius: var(--r4); overflow: hidden; height: clamp(380px, 60vh, 640px);
+  background: #07090b; box-shadow: var(--e3), var(--ring); }
+.leg-photo { position: absolute; inset: 0; margin: 0; }
+.leg-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.08);
+  transition: opacity 1s ease, transform 7s cubic-bezier(.2, .6, .3, 1); }
+.leg-photo img.on { opacity: 1; transform: scale(1); }
+.legs-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(20deg, rgba(7, 9, 11, .82) 0%, rgba(7, 9, 11, .35) 38%, rgba(7, 9, 11, 0) 62%); }
+.leg-card { position: absolute; z-index: 1; left: clamp(14px, 3vw, 36px); right: clamp(14px, 3vw, 36px); bottom: clamp(14px, 3vw, 36px);
+  max-width: 580px; padding: 20px 24px 18px; border-radius: var(--r3);
+  background: rgba(10, 12, 15, .58); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--ring), var(--e2), inset 0 1px 0 rgba(255, 255, 255, .08); }
+.leg-phase { font: 500 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--amber); margin: 0 0 6px; }
+.leg-station { margin: 0 0 8px; font-size: 15px; }
+.leg-station b { color: var(--cyan); font-weight: 650; }
+.leg-station span { font-family: var(--mono); font-size: 13px; color: var(--green); margin-left: 6px;
+  text-shadow: 0 0 12px rgba(95, 208, 104, .45); }
+.leg-said { margin: 0; min-height: 3.1em; font-family: var(--mono); font-size: clamp(13px, 1.25vw, 15px); line-height: 1.55; color: var(--text); }
+.legs-rail { list-style: none; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 0; margin: 14px 0 0; }
+.legs-rail button { position: relative; width: 100%; overflow: hidden; text-align: left; cursor: pointer; border: 0;
+  padding: 11px 12px 13px; border-radius: 12px; font: 600 13.5px/1.2 var(--sans); color: var(--text-3);
+  background: var(--bg-2); box-shadow: var(--hair); transition: color .25s, background .25s, transform .25s var(--ease); }
+.legs-rail button:hover { color: var(--text); transform: translateY(-2px); }
+.legs-rail button[aria-selected=true] { color: var(--text); background: var(--bg-3); }
+.leg-n { display: block; margin-bottom: 3px; font: 500 10.5px var(--mono); letter-spacing: .08em; color: var(--text-3); }
+.legs-rail button[aria-selected=true] .leg-n { color: var(--green); }
+.leg-bar { position: absolute; left: 0; bottom: 0; width: 100%; height: 3px; background: var(--green);
+  transform: scaleX(0); transform-origin: 0 50%; box-shadow: 0 0 10px rgba(95, 208, 104, .7); }
+.legs-rail button.done .leg-bar { transform: scaleX(1); opacity: .3; box-shadow: none; }
+.legs-rail button[aria-selected=true] .leg-bar { animation: leg-fill 6.5s linear forwards; }
+.legs.paused .legs-rail button[aria-selected=true] .leg-bar { animation-play-state: paused; }
+@keyframes leg-fill { to { transform: scaleX(1); } }
+
+/* ---- the features: a chapter each, its photo held in place while the tiles go by ---- */
+.chapter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: clamp(28px, 4.5vw, 72px);
+  align-items: start; margin-top: clamp(56px, 7vw, 120px); }
+.chapter.flip .chapter-photo { order: 2; }
+.chapter-photo { position: sticky; top: 96px; margin: 0; height: min(76vh, 640px); border-radius: var(--r4); overflow: hidden;
+  background: #07090b; box-shadow: var(--e3), var(--ring); }
+.chapter-photo img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; object-fit: cover;
+  transform: translate3d(0, var(--py, 0px), 0); }
+.chapter-photo::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(7, 9, 11, 0) 60%, rgba(7, 9, 11, .55) 100%); }
+.chapter-title { font-size: clamp(26px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; margin: 0 0 .3em; scroll-margin-top: 90px; }
+.chapter-lede { color: var(--text-2); font-size: 16.5px; margin: 0 0 26px; max-width: 42ch; }
+.chapter .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 520px) { .chapter .tiles { grid-template-columns: minmax(0, 1fr); } }
+.chapter .tile { position: relative; overflow: hidden; isolation: isolate; }
+.chapter .tile::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 0%), rgba(95, 208, 104, .14), transparent 65%); }
+.chapter .tile:hover::before { opacity: 1; }
+.chapter .tile:hover .tile-art { transform: translateY(-2px) scale(1.06); }
+.tile-art { transition: transform .35s var(--ease); }
+
+/* A photo arrives by opening up, not by fading. */
+.reveal-img.reveal { opacity: 1; filter: none; transform: none; clip-path: inset(10% 8% 10% 8% round var(--r4)); }
+.reveal-img.reveal img { transform: translate3d(0, var(--py, 0px), 0) scale(1.18); }
+.reveal-img.reveal.in { clip-path: inset(0 0 0 0 round var(--r4)); transition: clip-path 1.3s var(--ease); }
+.reveal-img.reveal.in img { transform: translate3d(0, var(--py, 0px), 0); transition: transform 1.6s var(--ease); }
+
+/* ---- bands with a photo behind them ---- */
+.band-photo { position: relative; overflow: hidden; isolation: isolate; }
+.band-bg { position: absolute; inset: 0; z-index: -1; }
+.band-bg img { position: absolute; left: 0; top: -15%; width: 100%; height: 130%; object-fit: cover;
+  transform: translate3d(0, var(--py, 0px), 0); }
+.band-bg::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, var(--bg-0) 0%, rgba(14, 16, 19, .8) 20%, rgba(14, 16, 19, .76) 80%, var(--bg-0) 100%); }
+.support .band-bg::after { background: linear-gradient(180deg, var(--bg-0) 0%, rgba(14, 16, 19, .5) 28%, rgba(14, 16, 19, .42) 72%, var(--bg-0) 100%); }
+.support .section-title, .support .section-lede { text-shadow: 0 2px 24px rgba(0, 0, 0, .6); }
+.support .section-lede { color: rgba(232, 236, 241, .9); }
+.band-photo .ld-box { background: rgba(20, 23, 27, .66); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); }
+.band-photo .section-lede, .band-photo .fineprint { text-shadow: 0 1px 16px rgba(0, 0, 0, .6); }
+
+/* The line from your PC to the provider: dashes moving along it, the head on the end of it. */
+.ld-arrow { position: relative; width: 130px; height: 12px; }
+.ld-arrow::before { content: ""; position: absolute; left: 0; right: 11px; top: 5px; height: 2px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .5) 0 7px, transparent 7px 14px);
+  background-size: 28px 2px; animation: dash-x 1.1s linear infinite; }
+.ld-arrow::after { content: ""; position: absolute; right: 0; top: 0; border-style: solid; border-width: 6px 0 6px 11px;
+  border-color: transparent transparent transparent rgba(255, 255, 255, .6); }
+.ld-arrow span { position: absolute; top: 20px; left: -10px; right: -10px; text-align: center; font-size: 11.5px;
+  color: var(--text-3); white-space: nowrap; }
+@keyframes dash-x { to { background-position: 28px 0; } }
+@keyframes dash-y { to { background-position: 0 28px; } }
+.ld-pc { animation: glow 3.6s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: var(--hair), 0 0 0 1px rgba(95, 208, 104, .55), 0 0 60px rgba(95, 208, 104, .16); } }
+.ld-box .chip { transition: transform .25s var(--ease), background .25s; }
+.ld-box .chip:hover { transform: translateY(-2px); background: #2a3038; }
+
+/* the steps, the plans and the compare table come alive under the pointer too */
+.step, .plan { position: relative; overflow: hidden; isolation: isolate; transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+.step::before, .plan::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 0%), rgba(95, 208, 104, .1), transparent 65%); }
+.step:hover::before, .plan:hover::before { opacity: 1; }
+.step:hover, .plan:hover { transform: translateY(-4px); }
+.step .num { transition: background .3s, color .3s, box-shadow .3s; }
+.step:hover .num { background: var(--green); color: var(--on-green); box-shadow: 0 0 0 6px rgba(95, 208, 104, .15); }
+.compare tbody tr { transition: background .2s; }
+.compare tbody tr:hover td:not(.us) { background: rgba(255, 255, 255, .025); }
+
+/* ---- the pricing page's head, over a photo ---- */
+.pricing .pricing-head.band-photo .band-bg::after { background: linear-gradient(180deg, rgba(14, 16, 19, .64) 0%, rgba(14, 16, 19, .76) 60%, var(--bg-1) 100%); }
+
+/* ---- narrower ---- */
+@media (max-width: 940px) {
+  .hero-shade { background: linear-gradient(180deg, rgba(7, 9, 11, .62) 0%, rgba(7, 9, 11, .42) 40%, rgba(7, 9, 11, .74) 75%, var(--bg-0) 100%); }
+  .chapter { grid-template-columns: minmax(0, 1fr); }
+  .chapter.flip .chapter-photo { order: 0; }
+  .chapter-photo { position: relative; top: 0; height: auto; aspect-ratio: 16 / 10; }
+  .legs-stage { height: min(70vh, 560px); min-height: 440px; }
+  .legs-rail { display: flex; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory; padding-bottom: 2px; }
+  .legs-rail::-webkit-scrollbar { display: none; }
+  .legs-rail li { flex: 0 0 116px; scroll-snap-align: start; }
+  .scroll-cue { display: none; }
+}
+@media (max-width: 760px) {
+  .ld-arrow { width: 12px; height: 56px; margin: 0 auto; }
+  .ld-arrow::before { left: 5px; right: auto; top: 0; bottom: 11px; width: 2px; height: auto;
+    background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .5) 0 7px, transparent 7px 14px);
+    background-size: 2px 28px; animation-name: dash-y; }
+  .ld-arrow::after { right: auto; left: 0; top: auto; bottom: 0; border-width: 11px 6px 0 6px;
+    border-color: rgba(255, 255, 255, .6) transparent transparent transparent; }
+  .ld-arrow span { top: 18px; left: 24px; right: auto; text-align: left; }
+}
+
+/* ---- no motion, please: still photos, a gallery you scroll yourself ---- */
+@media (prefers-reduced-motion: reduce) {
+  body::after, .hero-slides img.on, .hero-slides img.out, .meter i, .scroll-cue span, .ld-arrow, .ld-pc,
+  .home .hero-copy > *, .home .hero .window, .split .w { animation: none !important; }
+  .split .w { opacity: 1; transform: none; filter: none; }
+  .legs-rail button[aria-selected=true] .leg-bar { animation: none; transform: scaleX(1); }
+  .reveal { filter: none; }
+  .reveal-img.reveal { clip-path: none; }
+  .step:hover, .plan:hover, .legs-rail button:hover { transform: none; }
+}
+
+/* ==========================================================================================================
+   One rhythm for the home page's bands: the same room above and below every section, the same gap from a
+   title to its lede and from the lede to what follows, and 20 px between the blocks inside.
+   ========================================================================================================== */
+.home .band, .home .legs { padding-top: clamp(72px, 8vw, 116px); padding-bottom: clamp(72px, 8vw, 116px); }
+.home .section-title { margin-bottom: 14px; }
+.home .section-lede { margin-bottom: clamp(32px, 4vw, 48px); }
+.home .chapter:first-of-type { margin-top: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- LocalTC beside a subscription ---- */
+.versus { padding: 10px; overflow-x: auto; border-radius: var(--r4);
+  background: linear-gradient(168deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01) 45%, rgba(255, 255, 255, 0)), var(--bg-2);
+  box-shadow: var(--e2), var(--ring), var(--hair); }
+.vs-table { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; font-size: 15px; }
+.vs-table th, .vs-table td { padding: 15px 20px; text-align: left; vertical-align: middle; }
+.vs-table thead th { padding: 20px 20px 16px; font-size: 13px; font-weight: 600; color: var(--text-3); }
+.vs-table thead .us { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -.01em;
+  border-radius: var(--r3) var(--r3) 0 0; background: rgba(95, 208, 104, .13); box-shadow: inset 0 2px 0 var(--green); }
+.vs-table thead .us img { vertical-align: -5px; margin-right: 10px; border-radius: 6px; box-shadow: var(--ring); }
+.vs-table tbody th { width: 26%; font-size: 14.5px; font-weight: 500; color: var(--text-3); }
+.vs-table tbody tr + tr > * { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
+.vs-table .us { background: rgba(95, 208, 104, .075); color: var(--text); font-weight: 550; }
+.vs-table tbody tr:last-child .us { border-radius: 0 0 var(--r3) var(--r3); }
+.vs-table td:last-child { color: var(--text-3); }
+.vs-table .yes, .vs-table .no { position: relative; padding-left: 52px; }
+.vs-table .yes::before, .vs-table .no::before { position: absolute; left: 20px; top: 50%; margin-top: -10px; display: grid;
+  place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 800; }
+.vs-table .yes::before { content: "✓"; color: var(--on-green); background: var(--green); }
+.vs-table .no::before { content: "✕"; color: var(--red); background: rgba(240, 115, 106, .14); }
+.vs-table tbody tr { transition: background .2s; }
+.vs-table tbody tr:hover { background: rgba(255, 255, 255, .025); }
+
+/* ---- the sum: a photo with our side of it, the sliders with theirs ---- */
+.home .calc { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); margin-top: 20px; padding: 0;
+  overflow: hidden; border-radius: var(--r4); }
+.calc-photo { position: relative; margin: 0; min-height: 340px; overflow: hidden; background: #07090b; }
+.calc-photo img { position: absolute; left: 0; top: -8%; width: 100%; height: 116%; object-fit: cover;
+  transform: translate3d(0, var(--py, 0px), 0); }
+.calc-photo::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(7, 9, 11, 0) 30%, rgba(7, 9, 11, .78) 100%); }
+.calc-ours { position: absolute; z-index: 1; left: clamp(22px, 3vw, 34px); bottom: clamp(20px, 3vw, 30px); display: flex; flex-direction: column; }
+.calc-ours span:first-child { font: 600 11.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--green); }
+.calc-ours b { font: 650 clamp(60px, 7vw, 92px)/1.05 var(--mono); letter-spacing: -.04em; color: #fff;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, .5); }
+.calc-ours span:last-child { font-size: 14.5px; color: rgba(255, 255, 255, .82); }
+.calc-body { padding: clamp(26px, 3.2vw, 42px); }
+.calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 26px; padding: 18px 22px;
+  border-radius: var(--r2); background: rgba(231, 178, 74, .08); box-shadow: inset 0 0 0 1px rgba(231, 178, 74, .22); }
+.calc-total .calc-big { margin: 0; }
+
+/* ---- install: three steps joined by a line, the two notes side by side ---- */
+.steps { position: relative; isolation: isolate; list-style: none; margin: 0; padding: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.steps::before { content: ""; position: absolute; z-index: -1; left: 40px; right: 40px; top: 53px; height: 2px;
+  background: linear-gradient(90deg, var(--green), rgba(95, 208, 104, .2)); }
+.steps .step { display: flex; flex-direction: column; }
+.steps .step .num { width: 44px; height: 44px; font-size: 15px; color: var(--green); background: rgba(95, 208, 104, .12);
+  box-shadow: inset 0 0 0 1px rgba(95, 208, 104, .45), 0 0 0 6px var(--bg-2); }
+.steps .step p:last-child { margin-bottom: 0; }
+.callouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 20px; }
+.callouts .callout { margin: 0; }
+
+/* ---- where it is: what works, ticked; what's next, a ring still to close ---- */
+.status-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.status-col { position: relative; overflow: hidden; }
+.status-col::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 120px; pointer-events: none;
+  background: radial-gradient(420px 120px at 20% 0%, rgba(95, 208, 104, .12), transparent 70%); }
+.status-col:has(.todo)::before { background: radial-gradient(420px 120px at 20% 0%, rgba(231, 178, 74, .11), transparent 70%); }
+.status-col h3 { display: flex; align-items: center; gap: 10px; font-size: 12.5px; margin-bottom: 14px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(95, 208, 104, .18); }
+.status-col h3.ok .status-dot { animation: pulse 1.8s ease-in-out infinite; }
+.status-col h3.todo .status-dot { box-shadow: 0 0 0 4px rgba(231, 178, 74, .16); }
+.status-col ul { margin: 0; }
+.status-col li { margin: 0; padding: 12px 0 12px 34px; box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05); }
+.status-col li:last-child { box-shadow: none; padding-bottom: 0; }
+.status-col li::before { left: 0; top: 13px; width: 20px; height: 20px; opacity: 1; }
+.status-col h3.ok + ul li::before { content: "✓"; display: grid; place-items: center; font-size: 11px; font-weight: 800;
+  color: var(--on-green); background: var(--green); opacity: 1; }
+.status-col h3.todo + ul li::before { background: none; box-shadow: inset 0 0 0 2px rgba(231, 178, 74, .55);
+  border: 0; }
+
+@media (max-width: 900px) {
+  .home .calc { grid-template-columns: minmax(0, 1fr); }
+  .calc-photo { min-height: 240px; }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .steps::before { left: 47px; right: auto; top: 40px; bottom: 40px; width: 2px; height: auto;
+    background: linear-gradient(180deg, var(--green), rgba(95, 208, 104, .2)); }
+  .callouts, .status-cols { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-col h3.ok .status-dot { animation: none; }
+}

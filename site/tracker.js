@@ -103,7 +103,7 @@ const Tracker = {
       if (was) this.clearMap();
       return;
     }
-    const st = (x) => (x && x.station ? `${esc(x.station)} <span class="mono">${x.mhz ? Number(x.mhz).toFixed(3) : ""}</span>` : "—");
+    const st = (x) => (x && x.station ? `${esc(x.station)} <span class="mono">${x.mhz ? Number(x.mhz).toFixed(3) : ""}</span>` : "–");
     $("#tr-status").innerHTML = `<div class="tr-head"><span class="live-dot"></span><b>${esc(s.callsign || "Flying")}</b>
       <span class="mono">${esc(s.origin || "?")} → ${esc(s.destination || "?")}</span>
       <span class="tr-phase">${esc(s.phase_label || s.phase || "")}</span>
@@ -112,10 +112,10 @@ const Tracker = {
     const fact = (k, v) => `<div><dt>${k}</dt><dd>${v}</dd></div>`;
     $("#tr-facts").innerHTML = [
       fact("On", st(s.tuned)), fact("Next", st(s.next)),
-      fact("Squawk", `<span class="mono">${esc(s.squawk || "—")}</span>`),
-      fact("Assigned", s.altitude_ft ? `<span class="mono">${Number(s.altitude_ft).toLocaleString()} ft</span>` : "—"),
-      fact("Runway", esc(s.runway || "—")),
-      fact("To go", s.ete ? `<span class="mono">${esc(s.ete.nm)} nm · ${esc(s.ete.min)} min</span>` : "—"),
+      fact("Squawk", `<span class="mono">${esc(s.squawk || "–")}</span>`),
+      fact("Assigned", s.altitude_ft ? `<span class="mono">${Number(s.altitude_ft).toLocaleString()} ft</span>` : "–"),
+      fact("Runway", esc(s.runway || "–")),
+      fact("To go", s.ete ? `<span class="mono">${esc(s.ete.nm)} nm · ${esc(s.ete.min)} min</span>` : "–"),
       ...(s.gate ? [fact("Gate", esc(s.gate))] : []),
     ].join("");
     this.ensureMap();
@@ -308,7 +308,7 @@ const Tracker = {
     if (!this.plane) { this.plane = L.marker(at, { icon: this.icon(o.hdg, "own", 30), zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, o.ground ? 13 : 9); }
     else { this.plane.setLatLng(at); this.plane.setIcon(this.icon(o.hdg, "own", 30)); }
     if (this.follow) this.map.panTo(at, { animate: false });
-    this.plane.bindTooltip(`${Number(o.alt || 0).toLocaleString()} ft · ${o.gs ?? "—"} kt · ${String(o.hdg ?? 0).padStart(3, "0")}°`);
+    this.plane.bindTooltip(`${Number(o.alt || 0).toLocaleString()} ft · ${o.gs ?? "–"} kt · ${String(o.hdg ?? 0).padStart(3, "0")}°`);
   },
   // The traffic around, labelled as on the app's Live Map (atcmap.js).
   traffic(list) {

@@ -23,7 +23,7 @@ function say(text, error = false) {
 
 function show(which) {
   for (const id of ["auth", "dash"]) $(`#${id}`).hidden = id !== which;
-  if (which === "auth") { Tracker.stop(); page = null; document.title = "Dashboard — LocalTC"; }
+  if (which === "auth") { Tracker.stop(); page = null; document.title = "Dashboard | LocalTC"; }
 }
 
 // --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
@@ -45,7 +45,7 @@ function go(name, { push = false } = {}) {
   });
   if (name === "replay") Replay.open(decodeURIComponent(id)); else Replay.close();
   if (name === "wrapped") Wrapped.open(id);
-  document.title = `${$(`#${name}-h`).textContent} — LocalTC`;
+  document.title = `${$(`#${name}-h`).textContent} | LocalTC`;
   // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
   if (name === "tracker") Tracker.start(); else Tracker.stop();
   if (name === "logbook" && flightsMap) setTimeout(() => flightsMap.fit(), 0);  // Leaflet measures a shown map
@@ -140,7 +140,7 @@ async function load() {
 }
 
 function hm(min) {
-  if (min == null) return "—";
+  if (min == null) return "–";
   return `${Math.floor(min / 60)}:${String(Math.round(min % 60)).padStart(2, "0")}`;
 }
 
@@ -149,8 +149,8 @@ function tiles(s) {
   $("#tiles").innerHTML = [
     tile(s.flights, "flights"), tile(s.air_hours, "hours flown"), tile(s.airports.length, "airports"),
     tile(s.distance_nm.toLocaleString(), "nm flown"), tile(s.landings, "landings"),
-    tile(s.average_landing_fpm == null ? "—" : `${s.average_landing_fpm} fpm`, "average landing"),
-    tile(s.readback_accuracy == null ? "—" : `${Math.round(s.readback_accuracy * 100)}%`, "readbacks right"),
+    tile(s.average_landing_fpm == null ? "–" : `${s.average_landing_fpm} fpm`, "average landing"),
+    tile(s.readback_accuracy == null ? "–" : `${Math.round(s.readback_accuracy * 100)}%`, "readbacks right"),
   ].join("");
   $(".flights-h").textContent = s.flights ? `Flights (${s.flights})` : "Flights";
 }
@@ -160,14 +160,14 @@ function rows(page) {
   const html = page.flights.map((f) => `
     <tr data-id="${esc(f.id)}" data-route="${esc(`${f.origin}>${f.destination}`)}">
       <td>${esc(day(f.started_at))}</td>
-      <td class="mono">${esc(f.callsign || "—")}</td>
+      <td class="mono">${esc(f.callsign || "–")}</td>
       <td class="mono">${esc(f.origin || "?")} → ${esc(f.destination || "?")}${f.arrival_gate ? ` <span class="sub">${esc(f.arrival_gate)}</span>` : ""}</td>
       <td>${esc(f.aircraft || "")}</td>
       <td class="mono">${hm(f.air_min)}</td>
       <td class="mono">${hm(f.block_min)}</td>
-      <td class="mono">${f.landing_vs_fpm == null ? "—" : `${esc(f.landing_vs_fpm)} fpm`}</td>
+      <td class="mono">${f.landing_vs_fpm == null ? "–" : `${esc(f.landing_vs_fpm)} fpm`}</td>
       <td>${f.has_replay ? `<a class="btn btn-ghost btn-sm" href="#replay/${encodeURIComponent(f.id)}" title="Watch the flight again: the map and the radio, in step">&#9654; Replay</a>`
-        : '<span class="sub" title="Upload it from the Logbook in the LocalTC app to replay it here">—</span>'}</td>
+        : '<span class="sub" title="Upload it from the Logbook in the LocalTC app to replay it here">–</span>'}</td>
       <td><button class="btn btn-ghost btn-sm share" type="button" title="${f.share ? "Shared: anyone with the link sees its card" : "Make a public link to this flight's card"}">${f.share ? "Shared ✓" : "Share flight"}</button></td>
       <td><button class="linklike del" type="button" title="Delete this flight from the account">Delete</button></td>
     </tr>`).join("");
@@ -314,7 +314,7 @@ const Replay = {
       if (this.id !== id) return;  // gone somewhere else meanwhile
       this.player = new ReplayPlayer($("#replay-player"), r, { tiles: true });
       $("#replay-h").textContent = `Replay: ${r.flight.origin || "?"} → ${r.flight.destination || "?"}`;
-      document.title = `${$("#replay-h").textContent} — LocalTC`;
+      document.title = `${$("#replay-h").textContent} | LocalTC`;
       msg.textContent = "Space plays and pauses, J and K go to the previous and next call, the arrows skip 10 seconds.";
       setTimeout(() => this.player?.fit(), 0);
     } catch (err) {

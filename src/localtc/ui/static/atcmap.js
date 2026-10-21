@@ -77,7 +77,7 @@ const AtcMap = (() => {
     for (const a of vfr ? [] : z.terminals || []) {
       L.polygon((a.rings || []).map(ring), { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
         fillOpacity: a.working ? 0.22 : 0.12 }).addTo(layer)
-        .bindTooltip(`${esc(a.name)} — ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
+        .bindTooltip(`${esc(a.name)}: ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
       if (a.label) label(a.label, a.name, "terminal");
     }
     if (z.final && !vfr) {

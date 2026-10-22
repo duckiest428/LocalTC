@@ -215,7 +215,7 @@ def _final(engine: Any, found: Airport, plan: Any) -> dict[str, Any] | None:
 
 def _gate(engine: Any) -> dict[str, Any] | None:
     """The stand ground assigned at the destination, once it has."""
-    a = engine.state.assignments if engine is not None else None
+    a = engine.state.assignments if engine is not None and engine.gate_given() else None
     geo = engine.geometry(engine.state.flight.destination) if a is not None and a.gate_index is not None else None
     spot = next((s for s in geo.airport.parking if s.index == a.gate_index), None) if geo is not None else None
     if spot is None:

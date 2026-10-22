@@ -22,7 +22,7 @@ class GateRequestsMixin:
         span = wingspan_m(st.flight.aircraft_type or self._aircraft_title)
         traffic = list(self._traffic.values())
         arriving = icao == st.flight.destination
-        assigned = st.assignments.gate_index if arriving else None
+        assigned = st.assignments.gate_index if arriving and self.gate_given() else None
         out = []
         for g in stands.gates(geo, real):
             near = min(((t, abs(t.lat - g.spot.lat) + abs(t.lon - g.spot.lon)) for t in traffic if t.on_ground),
@@ -34,7 +34,7 @@ class GateRequestsMixin:
                         "occupied": stands.occupied(g, geo, traffic), "taken": g.index in self._gates_taken,
                         "fits": fits_stand(g.spot.radius_m, span),
                         "airline": (parked.atc_id or "")[:3].upper() if parked is not None and parked.atc_id else ""})
-        return {"icao": geo.icao, "assigned": assigned, "assigned_name": st.assignments.gate if arriving else
+        return {"icao": geo.icao, "assigned": assigned, "assigned_name": self.gate_given() if arriving else
                 st.assignments.departure_gate, "span_m": span, "stands": out,
                 "operator": self._callsign().ident[:3] if self._callsign().is_airline else ""}
 
@@ -57,8 +57,9 @@ class GateRequestsMixin:
         span = wingspan_m(st.flight.aircraft_type or self._aircraft_title)
         if not fits_stand(gate.spot.radius_m, span):
             return False, f"{gate.display} is too small for your aircraft."
-        if st.assignments.gate_index == gate.index:
+        if st.assignments.gate_index == gate.index and self.gate_given():
             return True, f"{gate.display} is already yours."
+        self._gate_asked = True
         self._assign(gate=gate.display, gate_index=gate.index)
         if "taxi_in" in st.clearances:
             self._gate_changed = True  # ground gives the new route (``_monitor``)

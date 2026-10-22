@@ -2,7 +2,7 @@
 id = "clearance.ifr"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport as filed{runway_note}, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "cruise"] }
 pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
@@ -13,7 +13,7 @@ ack = "readback_correct"
 id = "clearance.ifr_at_cruise"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport as filed, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport as filed{runway_note}, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination"] }
 pilot_readback = "Cleared to {destination} as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
@@ -29,7 +29,7 @@ text = ["{callsign}, say destination and requested altitude."]
 id = "clearance.ifr_sid"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed{runway_note}, climb and maintain {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "cruise", "procedure"] }
 pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
@@ -39,7 +39,7 @@ ack = "readback_correct"
 id = "clearance.ifr_sid_at_cruise"
 controller = "clearance"
 text = [
-    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
+    "{callsign}, cleared to {destination} airport via the {procedure} departure, then as filed{runway_note}, climb and maintain {altitude}, departure frequency {frequency}, squawk {squawk}.",
 ]
 readback = { required = ["altitude", "squawk"], optional = ["frequency", "destination", "procedure"] }
 pilot_readback = "Cleared to {destination} via the {procedure} departure, then as filed, climb and maintain {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."

@@ -68,3 +68,64 @@ def test_the_logbook_keeps_totals_and_sync_state(tmp_path, ksan_kphx):
 
 def test_totals_of_nothing():
     assert totals([])["flights"] == 0 and totals([])["readback_accuracy"] is None
+
+
+def _recordings(tmp_path) -> Path:
+    """The San Diego to Phoenix recording where the app keeps its recordings, as a live one."""
+    import shutil
+
+    folder = tmp_path / "recordings" / "20260920-212600_live"
+    shutil.copytree(FLIGHT, folder)
+    return folder.parent
+
+
+def test_a_flight_whose_line_was_never_written_is_made_from_its_recording(tmp_path):
+    """The app closed (or the flight's end was cut off) before the line was written: from 14 October no flight
+    reached the logbook. The next start makes it from the recording, once; a line deleted isn't brought back."""
+    recordings = _recordings(tmp_path)
+    book = Logbook(tmp_path / "logbook.db")
+    [line] = book.recover(recordings)
+    assert (line.callsign, line.origin, line.destination) == ("FFT2084", "KSAN", "KPHX")
+    assert line.landed and 50 < line.air_min < 70 and line.block_min > line.air_min and line.max_alt_ft > 30000
+    assert line.recording == str((recordings / "20260920-212600_live").resolve())
+    assert abs(line.origin_lat - 32.73) < 0.05 and abs(line.destination_lon + 112.01) < 0.05
+    assert book.recover(recordings) == [] and len(book.flights()) == 1
+    book.delete(line.id)
+    assert book.recover(recordings) == []
+
+
+def test_a_recording_already_in_the_logbook_isnt_made_again(tmp_path, ksan_kphx):
+    from dataclasses import replace
+
+    recordings = _recordings(tmp_path)
+    book = Logbook(tmp_path / "logbook.db")
+    book.add(replace(ksan_kphx, recording=str((recordings / "20260920-212600_live").resolve())))
+    assert book.recover(recordings) == []
+
+
+def test_the_first_look_leaves_recordings_older_than_the_newest_line(tmp_path, ksan_kphx):
+    """Before LocalTC kept the list of recordings it had looked at: one older than the newest line had its line
+    written (or deleted by the pilot)."""
+    from dataclasses import replace
+
+    recordings = _recordings(tmp_path)
+    book = Logbook(tmp_path / "logbook.db")
+    book.add(replace(ksan_kphx, id="later", started_at="2026-09-21T10:00:00Z"))
+    assert book.recover(recordings) == []
+
+
+def test_a_recording_still_being_written_is_left(tmp_path):
+    recordings = _recordings(tmp_path)
+    book = Logbook(tmp_path / "logbook.db")
+    assert book.recover(recordings, skip=(str((recordings / "20260920-212600_live").resolve()),)) == []
+
+
+def test_the_line_written_as_the_flight_goes_is_the_same_line(tmp_path):
+    flight_log = FlightLog()
+    for t in range(20):
+        flight_log.feed(own(float(t), gs_kt=10.0))
+    book = Logbook(tmp_path / "logbook.db")
+    book.add(flight_log.finish())
+    flight_log.feed(own(60.0, gs_kt=0.0))
+    book.add(flight_log.finish())
+    assert [f.id for f in book.flights()] == [flight_log.id]

@@ -6,22 +6,22 @@
 
 [[template]]
 id = "clearance.ifr"
-text = ["{callsign}, cleared to {destination}, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
+text = ["{callsign}, cleared to {destination}, flight planned route{runway_note}, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
 pilot_readback = "Cleared to {destination}, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 
 [[template]]
 id = "clearance.ifr_at_cruise"
-text = ["{callsign}, cleared to {destination}, flight planned route, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
+text = ["{callsign}, cleared to {destination}, flight planned route{runway_note}, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
 pilot_readback = "Cleared to {destination}, flight planned route, climb to {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
 
 [[template]]
 id = "clearance.ifr_sid"
-text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
+text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route{runway_note}, climb to {altitude}, expect {cruise} {minutes} minutes after departure, departure frequency {frequency}, squawk {squawk}."]
 pilot_readback = "Cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, expect {cruise} {minutes} minutes after, departure {frequency}, squawk {squawk}, {callsign_short}."
 
 [[template]]
 id = "clearance.ifr_sid_at_cruise"
-text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
+text = ["{callsign}, cleared to {destination} via the {procedure} departure, flight planned route{runway_note}, climb to {altitude}, departure frequency {frequency}, squawk {squawk}."]
 pilot_readback = "Cleared to {destination} via the {procedure} departure, flight planned route, climb to {altitude}, departure {frequency}, squawk {squawk}, {callsign_short}."
 
 [[template]]

@@ -106,10 +106,23 @@ REMARK = re.compile(r"^(?:(?:alright|all right|ok|okay|so|well|right|and)[,.\s]+
 
 
 @dataclass
+class _Held:
+    """A call's words held until the switches it sets are seen to move: "Ten thousand. Seatbelt sign off." was said
+    as the switch was sent, then "can't see it, check it" when it didn't move."""
+
+    text: str
+    spoken: str
+    kind: str
+    left: int  # its switches not yet seen to move (or not)
+    failed: list[Plan] = field(default_factory=list)
+
+
+@dataclass
 class _Waiting:
     deadline: float
     plan: Plan
-    quiet: bool = False  # the copilot's own action, already said: only a failure is reported
+    quiet: bool = False  # the copilot's own action: only a failure is reported
+    held: _Held | None = None  # the call it's part of, said once it's known
 
 
 @dataclass
@@ -302,6 +315,7 @@ class PilotMonitoring:
         """One of the monitor's calls: the copilot's own hands first (each checked, as a command is), then the words."""
         out: list[Any] = []
         skipped = False
+        waits: list[_Waiting] = []
         for cmd in call.commands:
             if cmd.action in self.hands_off or cmd.action in self.cockpit.dead:
                 skipped = True  # the pilot said not to, or it never reaches this aircraft
@@ -315,7 +329,8 @@ class PilotMonitoring:
                                           detail=f"{call.key}: " + "; ".join(_describe(w) for w in p.writes))]
             self.deck.memory.did(t, f"set {p.value} ({p.action})" if p.action != "light" else f"{p.value}")
             if cmd.action != "altimeter":  # an airliner's own STD and QNH buttons often leave the sim's setting alone
-                self._waiting.append(_Waiting(t + (p.check_s or CHECK_S), p, quiet=True))
+                waits.append(_Waiting(t + (p.check_s or CHECK_S), p, quiet=True))
+                self._waiting.append(waits[-1])
         kind = "alert" if call.priority >= SAFETY else "callout"
         text, spoken = call.text, call.spoken
         if skipped and text.endswith(" set."):
@@ -331,9 +346,16 @@ class PilotMonitoring:
             out += exchanges
             if words:
                 text, spoken = words, ""
-        if self.model is not None:
-            self.model.heard("You", text)
-        out.append(self._line(CrewSpeech(t=t, text=text, spoken=spoken, kind=kind)))
+        if waits and kind != "alert" and not call.key.startswith("run:"):
+            # Said once its switches are seen to move, or the pilot asked if not (a checklist's line goes on at once:
+            # its next challenge is in it, and the checklist checks its own items).
+            held = _Held(text, spoken, kind, len(waits))
+            for w in waits:
+                w.held = held
+        else:
+            if self.model is not None:
+                self.model.heard("You", text)
+            out.append(self._line(CrewSpeech(t=t, text=text, spoken=spoken, kind=kind)))
         if call.radio:  # then on the radio: the copilot asking ATC, when the frequency's free
             self._radio_queue.append(self.deck.submit("crew", "request", call.key, t, text=call.radio))
         return out
@@ -1024,8 +1046,10 @@ class PilotMonitoring:
                 self._failures.pop(w.plan.action, None)
                 out += list(w.plan.after)
                 out.append(CrewAction(t=t, action=w.plan.action, value=w.plan.value, outcome="done"))
+                out += self._settled(t, w, None)
             elif t >= w.deadline:
                 out += self._didnt_take(t, w)
+                out += self._settled(t, w, w.plan)
             else:
                 still.append(w)
         self._waiting = still
@@ -1053,13 +1077,33 @@ class PilotMonitoring:
             self.deck.memory.preferences.setdefault("not reaching", "")
             out.append(self._say(t, f"My {_said(Command(p.action, p.value)).split()[0]} inputs aren't reaching this "
                                     "aircraft. I'll call them; you set them.", "alert"))
-        elif p.action not in self._failed_said and not self.monitor.hands_dead:
+        elif w.held is None and p.action not in self._failed_said and not self.monitor.hands_dead:
             self._failed_said.add(p.action)  # once for each control: then it's known
-            if self.cockpit.believes(p.reads):
-                out.append(self._say(t, f"{what} didn't take, check it.", "alert"))
-            else:
-                out.append(self._say(t, f"{what} sent, but I can't see it on this aircraft. Check it.", "alert"))
+            out.append(self._say(t, _ask_pilot(p, what), "alert"))
         return out
+
+    def _settled(self, t: float, w: _Waiting, failed: Plan | None) -> list[Any]:
+        """One of a held call's switches known: once all are, the call's said, and the pilot asked for any of them
+        that didn't move ("Ten thousand." and "I couldn't get the seatbelt sign off from here. Can you do it?")."""
+        held = w.held
+        if held is None:
+            return []
+        held.left -= 1
+        if failed is not None:
+            held.failed.append(failed)
+        if held.left > 0:
+            return []
+        text, spoken = held.text, held.spoken
+        for p in held.failed:
+            text = text.replace(p.done, "").replace(p.done.rstrip("."), "").strip(" ,.")
+            text = f"{text}." if text and text[-1] not in ".!?" else text
+            spoken = ""
+        asks = [_ask_pilot(p, p.done.rstrip(".").replace(" set", "")) for p in held.failed
+                if not self.monitor.hands_dead and p.action not in self.cockpit.dead]
+        text = " ".join(part for part in (text, *asks) if part)
+        if not text:
+            return []
+        return [self._say(t, text, "alert" if asks else held.kind, spoken)]
 
     def _back_from_pause(self, t: float) -> list[Any]:
         """Back after a long pause: where things stand, in a sentence or two (what ATC said meanwhile, what's waiting)."""
@@ -1159,6 +1203,15 @@ class PilotMonitoring:
 
 
 REWORDED = ("greeting", "summary", "brief:", "status", "tod", "fuel_check", "divert", "step:", "clear")  # its own talk
+
+
+def _ask_pilot(p: Plan, what: str) -> str:
+    """A switch that didn't move when the copilot sent it: the pilot asked to do it, not told to "check it"."""
+    word = what.split(" ", 1)[0]
+    what = what if word.isupper() or any(ch.isdigit() for ch in word) else what[:1].lower() + what[1:]  # FL280, QNH
+    if p.done.endswith(" set."):
+        return f"I couldn't set {what}. Can you set it?"
+    return f"I couldn't get {what} from here. Can you do it?"
 
 
 def _said(cmd: Command) -> str:

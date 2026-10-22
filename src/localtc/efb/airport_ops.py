@@ -194,7 +194,7 @@ class AirportOps:
             self._say(f"Good day from {self.s.icao} Ops" + (f", {gate}" if gate else "") + ". Tell us when you need anything.",
                       "welcome", key=f"welcome:{self.s.icao}:dep")
         else:
-            gate = st.assignments.gate
+            gate = engine.gate_given()
             self._say(f"Welcome to {self.s.icao}" + (f": {gate} is yours" if gate else "") + ".", "welcome",
                       key=f"welcome:{self.s.icao}:arr")
 

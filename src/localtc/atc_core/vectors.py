@@ -39,6 +39,11 @@ class Pattern:
 JET = Pattern(gate_nm=9.0, base_nm=17.0, offset_nm=6.0)
 SLOW = Pattern(gate_nm=5.0, base_nm=10.0, offset_nm=3.5, lead_nm=1.0)
 SLOW_KT = 160.0  # flying slower than this, the tighter pattern
+# A visual approach's last vector is the final itself ("turn left heading 170, cleared visual approach runway 16L"),
+# not a 30 degree cut (heading 203 for Denver's 16L, "that isn't the runway's heading"): given as the turn onto the
+# final has to start, a standard rate turn's radius ahead of the centreline (by the angle still to turn), and this
+# much more for the call and the pilot.
+VISUAL_LEAD_NM = 0.3
 
 
 @dataclass(frozen=True)
@@ -79,7 +84,8 @@ ORDER = {"join": 0, "downwind": 1, "straight_in": 2, "base": 2, "intercept": 3}
 
 
 def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float, *, slow: bool = False,
-           after: str | None = None, side: float | None = None, heading_true: float | None = None) -> Vector:
+           after: str | None = None, side: float | None = None, heading_true: float | None = None,
+           visual: bool = False, speed_kt: float = 0.0) -> Vector:
     """The next leg onto the final. ``after`` is the leg the aircraft was last given and ``side`` the side of
     the final its pattern is on: the pattern only moves on (join, downwind, base, intercept), and stays on its
     side, so an aircraft drifting over a boundary, or across the centreline, isn't turned back."""
@@ -99,6 +105,15 @@ def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float,
         return Vector((inbound - 30 * cut) % 360, "intercept", 2 * abs(lateral) + join, cut, join)
 
     outbound_now = heading_true is not None and abs(((heading_true - inbound + 540) % 360) - 180) > 100
+    if visual and (after == "intercept" or (abs(lateral) <= 3.5 and out >= p.gate_nm - 2 and not outbound_now)):
+        cut = 1.0 if lateral >= 0 else -1.0
+        to_turn = abs((((heading_true if heading_true is not None else inbound - 90 * cut) - inbound + 540) % 360) - 180)
+        radius = max(speed_kt, 120.0) / 188.5  # a standard rate turn's, in nm
+        if after == "intercept" or abs(lateral) <= radius * (1 - math.cos(math.radians(min(to_turn, 90.0)))) + VISUAL_LEAD_NM:
+            return Vector(inbound, "intercept", out + abs(lateral), cut, out)
+        if after == "base" and to_turn >= 60:  # on the base: on it until the turn onto the final
+            return Vector((inbound - 90 * cut) % 360, "base", abs(lateral) + out, cut)
+        return Vector((inbound - 30 * cut) % 360, "base", 2 * abs(lateral) + out, cut)  # closing in, the final to come
     if after == "intercept" or (abs(lateral) <= 3.5 and out >= p.gate_nm - 2 and not outbound_now):
         return intercept()  # close to the centreline and far enough out: cut in at 30 degrees
     if abs(lateral) <= 3.5 and out >= p.gate_nm - 2:  # flying away from the runway: a base turn first

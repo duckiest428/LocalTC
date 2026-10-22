@@ -180,3 +180,16 @@ def test_the_field_in_sight_from_the_wrong_side_gets_vectors_not_a_visual_there_
     arrival.fly(1500)
     assert "approach.intercept_visual" in arrival.ids(), arrival.ids()
 
+
+
+def test_a_visual_approachs_last_vector_is_the_final_itself():
+    """Denver's 16L: "turn left heading 203, cleared visual approach" ("203 isn't the runway's heading"). The turn onto
+    the final is the runway's heading, given as the turn has to start, and it rolls out on the centreline."""
+    arrival = Arrival(110, 30, 290)
+    arrival.say("Seattle Approach, Delta 2543, field in sight")
+    arrival.fly(1500)
+    cleared = next(o for o in arrival.said if o.instruction_id == "approach.intercept_visual")
+    geo = AirportGeometry(KSEA)
+    final = round((geo.end("16L").heading_true - MAGVAR) % 360)
+    assert arrival.engine.state.assignments.heading in (final - 1, final, final + 1), cleared.text
+    assert arrival.captured  # within 0.7 nm of the centreline, heading down it

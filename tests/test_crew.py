@@ -201,7 +201,7 @@ def test_it_says_when_a_command_didnt_take():
     pm.observe(IntercomHeard(t=1.0, text="squawk four five two one"))
     assert said(pm.observe(own(2.0))) == []
     out = pm.observe(own(1.0 + CHECK_S + 0.1))
-    assert said(out) == ["Squawk 4521 didn't take, check it."]
+    assert said(out) == ["I couldn't set squawk 4521. Can you set it?"]  # asked, not "check it"
     assert any(isinstance(a, CrewAction) and a.outcome == "failed" for a in out)
 
 
@@ -519,3 +519,17 @@ def test_the_a350s_altitude_knob_is_pushed_and_its_baro_pulled_for_standard():
     assert altitude.after == (SetInputEvent(name="AIRLINER_FCU_ALT_KNOB_PUSH", value=1.0),)
     std = plan(Command("altimeter", "29.92"), Cockpit(own=flying, profile=profile)).writes
     assert [w.name.rsplit("_", 2)[-2:] for w in std] == [["LEFT", "PULL"], ["RIGHT", "PULL"]]  # both sides
+
+
+def test_the_pmdg_777_has_boeings_flaps_and_leaves_its_mcp_to_the_pilot():
+    """A PMDG 777: "flaps 5" read back as "flaps shows 2", "flaps shows up"; "initial 8,000 set" with its MCP never
+    moved (it ignores the sim's events). Boeing's detents; the MCP, lights, signs and transponder are the pilot's."""
+    from localtc.crew.profiles import load_all
+
+    profiles = load_all()
+    p = max(profiles, key=lambda p: p.match_length("777-200ER PW", "B772"))
+    assert p.name == "PMDG 777"
+    assert [p.detent_name(i, 6) for i in range(7)] == ["up", "1", "5", "15", "20", "25", "30"]
+    assert p.detent_index("5", 6) == 2 and p.detent_index("30", 6) == 6
+    assert {"altitude", "heading", "seatbelt", "squawk"} <= set(p.cannot)
+    assert max(profiles, key=lambda p: p.match_length("737 MAX 8", "B38M")).name != "PMDG 777"

@@ -167,8 +167,16 @@ class VoiceService:
             hints = VocabularyHints(style=CREW_STYLE)
         prompt = build_prompt(hints) if self.vocabulary else ""
         speech = trim_silence(audio)
-        result = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt=prompt, hotwords=hotwords(hints))
+        words = hotwords(hints)
+        result = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt=prompt, hotwords=words)
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
+        if text and made_up(text, audio_s) and (prompt or words):
+            # Caught in a loop on the airport's names it was given ("United 318, A15, A15, A15, ..." for a 22 s
+            # clearance readback, dropped, and ATC asked "how do you read?"): heard again without them.
+            log.info("Heard %r, the same few over and over: once more without the airport's words", text[:80])
+            again = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt="", hotwords="")
+            if again.no_speech < NO_SPEECH and (redone := fixup(again.text)) and not made_up(redone, audio_s):
+                result, text = again, redone
         if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:
             log.info("Dropped %r: confidence %.2f on %.1f s of audio, made up from noise", text, result.confidence, audio_s)
             text = ""

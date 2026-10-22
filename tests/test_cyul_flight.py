@@ -50,7 +50,8 @@ def test_stand_by_from_the_pilot_needs_no_answer(replay):
 
 def test_no_expect_clause_when_cruise_is_the_initial_altitude(replay):
     clearance = next(line for line in atc(replay) if "cleared to Montreal" in line)
-    assert "climb and maintain 3,500, departure frequency 125.15" in clearance and "expect" not in clearance
+    assert "climb and maintain 3,500, departure frequency 125.15" in clearance and "minutes after" not in clearance
+    assert "as filed, expect runway 06L, climb" in clearance  # the runway to plan for, though
 
 
 def test_a_readback_with_digits_said_one_by_one(replay):

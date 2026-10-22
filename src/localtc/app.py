@@ -199,8 +199,14 @@ def traffic_atc(engine) -> "AtcLink":
     def managed(ids: set[int]) -> None:
         engine.managed_traffic = ids
 
+    def runway_in_use(icao: str) -> str | None:
+        own = engine.state.aircraft
+        end = engine.runway_in_use(icao, own) if own is not None else None
+        return end.ident if end is not None else None
+
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
-                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed)
+                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed,
+                   runway_in_use=runway_in_use)
 
 
 _OPS = None
@@ -503,6 +509,9 @@ async def run_session(
 
             flight_log = FlightLog()
             consumers.append(asyncio.create_task(_dispatch(bus.subscribe(), flight_log.feed)))
+            # The line written as the flight goes, so the app closed (or killed) mid-flight still leaves it.
+            consumers.append(asyncio.create_task(_keep_saving(
+                bus, lambda: _save_flight(flight_log, engine, recorder.session_dir if recorder else None, quiet=True))))
         if cfg.atc.enabled:
             from localtc.airports import load_airport_dir
             from localtc.atc_core.service import AtcService
@@ -600,33 +609,61 @@ async def run_session(
         for task in waits:
             task.cancel()
     finally:
-        if traffic is not None:
-            with suppress(Exception):
-                await asyncio.wait_for(traffic.close(), timeout=2.0)  # LocalTC's copies out before the sim goes
-        if guide is not None:
-            with suppress(Exception):
-                await asyncio.wait_for(guide.close(), timeout=2.0)
-        if backend is not None and hasattr(backend, "stop_keeping"):
-            # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
-            threading.Thread(target=backend.stop_keeping, args=(cfg.llm.keep_alive,), name="llm-release", daemon=True).start()
-        await source.stop()
-        if pump_task is not None and not pump_task.done():
-            with suppress(asyncio.CancelledError, TimeoutError):
-                await asyncio.wait_for(pump_task, timeout=2.0)
-        if typed_task is not None:
-            typed_task.cancel()  # its thread may sit in readline(); don't wait for another Enter
-        if voice is not None:
-            voice.close()
-        if speaker is not None:
-            speaker.close()
-        bus.close()
-        await asyncio.gather(*consumers, return_exceptions=True)
-        if recorder is not None:
-            await recorder.close()
-            log.info("Recording saved to %s", recorder.session_dir)
-        if flight_log is not None:
-            _save_flight(flight_log, engine, recorder.session_dir if recorder else None)
+        try:
+            if traffic is not None:
+                with suppress(Exception):
+                    await asyncio.wait_for(traffic.close(), timeout=2.0)  # LocalTC's copies out before the sim goes
+            if guide is not None:
+                with suppress(Exception):
+                    await asyncio.wait_for(guide.close(), timeout=2.0)
+            if backend is not None and hasattr(backend, "stop_keeping"):
+                # The flight's over: the model stays loaded as long as the pilot's setting says, not ours.
+                threading.Thread(target=backend.stop_keeping, args=(cfg.llm.keep_alive,), name="llm-release", daemon=True).start()
+            await source.stop()
+            if pump_task is not None and not pump_task.done():
+                with suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(pump_task, timeout=2.0)
+            if typed_task is not None:
+                typed_task.cancel()  # its thread may sit in readline(); don't wait for another Enter
+            if voice is not None:
+                voice.close()
+            if speaker is not None:
+                speaker.close()
+            bus.close()
+            await _ended(consumers)
+            if recorder is not None:
+                await recorder.close()
+                log.info("Recording saved to %s", recorder.session_dir)
+        finally:  # whatever happened above (the app gave up waiting and cancelled it): the flight's in the logbook
+            if flight_log is not None:
+                _save_flight(flight_log, engine, recorder.session_dir if recorder else None)
     return recorder.session_dir if recorder else None
+
+
+CONSUMERS_END_S = 5.0  # after the bus closes, each part of the session has this long to finish its work
+SAVE_EVERY_S = 60.0  # the flight's logbook line written this often as it goes
+
+
+async def _ended(tasks: list[asyncio.Task]) -> None:
+    """The session's parts ended (the bus is closed, so each finishes); one still going after ``CONSUMERS_END_S`` is
+    cancelled, so the end of the flight never waits on it."""
+    if not tasks:
+        return
+    _, pending = await asyncio.wait(tasks, timeout=CONSUMERS_END_S)
+    for task in pending:
+        log.warning("%s didn't end with the flight: stopped", getattr(task.get_coro(), "__qualname__", task.get_name()))
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _keep_saving(bus: EventBus, save: Callable[[], None]) -> None:
+    """``save`` every ``SAVE_EVERY_S`` (wall time) until the bus closes."""
+    due = time.monotonic() + SAVE_EVERY_S
+    while not bus.closed:
+        await asyncio.sleep(1.0)
+        if not bus.closed and time.monotonic() >= due:
+            due = time.monotonic() + SAVE_EVERY_S
+            save()
 
 
 async def _stop_at_gate(events: Subscription, arrived: asyncio.Event, delay_s: float) -> None:
@@ -641,8 +678,9 @@ async def _stop_at_gate(events: Subscription, arrived: asyncio.Event, delay_s: f
             return
 
 
-def _save_flight(flight_log, engine: object | None, recording: Path | None = None) -> None:
-    """The flight's line in the logbook, if it went anywhere. A failure here must not lose the session."""
+def _save_flight(flight_log, engine: object | None, recording: Path | None = None, *, quiet: bool = False) -> None:
+    """The flight's line in the logbook, if it went anywhere (``quiet``: the line so far, written again later). A
+    failure here must not lose the session."""
     from localtc.logbook import Logbook
 
     try:
@@ -650,7 +688,8 @@ def _save_flight(flight_log, engine: object | None, recording: Path | None = Non
         if record is not None:
             record.recording = str(recording.resolve()) if recording is not None else ""
             Logbook().add(record)
-            log.info("Logbook: %s %s -> %s", record.callsign, record.origin or "?", record.destination or "?")
+            if not quiet:
+                log.info("Logbook: %s %s -> %s", record.callsign, record.origin or "?", record.destination or "?")
     except Exception:
         log.exception("Couldn't write the logbook")
 

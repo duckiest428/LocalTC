@@ -146,13 +146,18 @@ class OpsService:
         self._hazards_told: str | None = None
 
     async def run(self) -> None:
+        """Until the flight's over (the bus closed). It ended only when cancelled: the flight's end waited on it, the
+        app gave up waiting, and the flight's logbook line was never written."""
         try:
-            while True:
+            while not self.bus.closed:
                 try:
                     await self._step()
                 except Exception:  # noqa: BLE001 - real-world data never stops the flight
                     log.exception("Real-world data failed")
-                await asyncio.sleep(EVERY_S)
+                for _ in range(int(EVERY_S)):
+                    if self.bus.closed:
+                        break
+                    await asyncio.sleep(1.0)
         finally:
             await asyncio.to_thread(self.data.cache.save)
 

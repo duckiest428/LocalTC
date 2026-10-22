@@ -1486,6 +1486,8 @@ def _aircraft_name(title: str) -> str:
     if m is None:
         return ""
     name = m.group(1)
+    if name in ("777", "B777"):
+        return "triple seven"  # as pilots call it (the model made it "the seven-seven-seven")
     return name + ("neo" if re.search(r"neo", title, re.I) and name.startswith("A3") else "")
 
 

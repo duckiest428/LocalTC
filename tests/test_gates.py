@@ -116,6 +116,8 @@ def test_the_live_map_pins_the_assigned_gate():
             break
     assert zones(engine, None, lambda icao: None, None)["gate"] is None
     engine._taxi_in(4520.0, engine.facility("ground"), engine.state.aircraft)
+    assert zones(engine, None, lambda icao: None, None)["gate"] is None  # not until ground has said it
+    engine._flush(4530.0)
     pin = zones(engine, None, lambda icao: None, None)["gate"]
     assert pin["icao"] == "KPHX" and pin["name"] == engine.state.assignments.gate
 
@@ -160,3 +162,15 @@ def test_a_gate_taken_on_the_way_in_is_swapped_for_a_free_one():
     engine._taxi_in(4600.0, engine.facility("ground"), own, note=None)
     call = engine._scheduled[-1]
     assert call.instruction_id == "ground.taxi_to_gate" and call.slots["gate"] != gate.display
+
+
+def test_the_stand_atc_picks_for_itself_isnt_shown_until_ground_gives_it():
+    """Denver: "Gate A25" on the app before the pilot had asked ground for anything. ATC picks the stand early (the
+    runway exit on its side), but it's the pilot's only once ground says it, or the gate map's request is approved."""
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+
+    engine = AtcEngine(EngineConfig(destination="KBFI", callsign="N172LT"))
+    engine.state.assignments.gate, engine.state.assignments.gate_index = "Gate A25", 3
+    assert engine.gate_given() is None
+    engine.state.issued["ground.taxi_to_gate"] = object()
+    assert engine.gate_given() == "Gate A25"

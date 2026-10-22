@@ -260,3 +260,40 @@ def _own(engine: AtcEngine, t: float, *, lat: float | None = None, lon: float | 
                         gs_kt=0.0 if on_ground else 250.0, ias_kt=0.0 if on_ground else 250.0, vs_fpm=0.0,
                         on_ground=on_ground, squawk="1200", com1_mhz=0.0, com2_mhz=0.0, altimeter_inhg=29.92,
                         zulu_s=zulu_s, xpdr_mode="alt")
+
+
+def test_a_shortcut_is_never_to_the_destination_or_into_the_filed_star():
+    """Denver Center: "cleared direct KDEN" in the cruise, with the LAWGR3 filed. SimBrief's route ends with the airport,
+    as the STAR's last fix: it was a fix further down the route. The STAR's start is as far as a shortcut goes."""
+    from localtc.atc_core.route import RouteFix
+
+    engine = engine_at_kbfi()
+    engine.state.flight.destination = "KBFI"
+    engine.cfg.star = "STAR1"
+    engine.route = type(engine.route)((
+        RouteFix("ALPHA", 45.0, -122.0, via="DCT"), RouteFix("BRAVO", 45.6, -119.5, via="DCT"),
+        RouteFix("CHRLY", 46.2, -122.0, via="DCT"), RouteFix("DELTA", 46.8, -122.2, via="STAR1"),
+        RouteFix("ECHOO", 47.2, -122.3, via="STAR1"), RouteFix("KBFI", 47.53, -122.3, via="STAR1")))
+    engine.state.phase = "CRUISE"
+    own = _own(engine, 50.0, lat=44.8, lon=-122.0, hdg_true=10.0, on_ground=False, alt=36000.0)
+    engine.state.aircraft = own
+    assert engine._shortcut(own, CENTER)
+    fix = engine._scheduled[-1].slots["fix"]
+    assert fix in ("CHRLY", "DELTA") and engine._scheduled[-1].instruction_id == "common.direct"
+
+
+def test_approachs_speeds_go_by_the_stars_published_ones():
+    """Speeds were given on every approach. Not while flying the STAR (its own speeds), and on vectors never faster
+    than the STAR's last published speed (the sim's navdata)."""
+    from localtc.sim_api import ArrivalData, ArrivalLeg
+
+    engine = engine_at_kbfi()
+    engine.cfg.star = "HAWKZ7"
+    engine.state.flight.destination = "KPAE"
+    engine.handle(ArrivalData(t=0.0, airport="KPAE", name="HAWKZ7", legs=(
+        ArrivalLeg(fix="ONE", speed_kt=250), ArrivalLeg(fix="TWO", speed_kt=210), ArrivalLeg(fix="RW34", speed_kt=180,
+                                                                                               transition="RW16R"))))
+    engine.state.assignments.arrival_runway = "34L"
+    assert engine._star_speed() == 210  # the common part's last; the other runway's transition isn't flown
+    engine.state.assignments.arrival_runway = "16R"
+    assert engine._star_speed() == 180

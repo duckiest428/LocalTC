@@ -12,8 +12,9 @@ from localtc.airports import load_airport
 from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.taxi_route import TaxiGraph
 from localtc.ops.schedules import Departure, icao_callsign, local_offset_s
-from localtc.sim_api import AiObjectAssigned, OwnshipState, RemoveAiAircraft, SpawnAiAircraft
-from localtc.traffic.feed import Flight
+from localtc.sim_api import AiObjectAssigned, AiTrack, OwnshipState, RemoveAiAircraft, SpawnAiAircraft
+from localtc.sim_api.geo import advance
+from localtc.traffic.feed import Flight, Route
 from localtc.traffic.ground import Follower, free_stand, taxi_in_path
 from localtc.traffic.manager import BIZJET_TYPES, GA_TYPES, AtcLink, TrafficManager, TrafficSettings
 from localtc.traffic.models import ModelPicker
@@ -57,7 +58,10 @@ def test_a_departure_due_waits_at_a_gate_its_wings_fit_then_gives_way_to_the_rea
                   lon=spot.lon, alt_ft=None, on_ground=True, gs_kt=0.0, track=0.0, vs_fpm=0.0, squawk="", t=NOW + 12 * 60)
     m.on_feed([real], "test", NOW + 12 * 60)
     out = m.tick(NOW + 12 * 60)
-    assert RemoveAiAircraft(object_id=500) in out and "sched:JAL5" not in m.planes
+    # The same aircraft on the same stand is the real one from here (taken away and made again, it was elsewhere).
+    assert RemoveAiAircraft(object_id=500) not in out and "sched:JAL5" not in m.planes
+    plane = m.planes["live:8401"]
+    assert plane.object_id == 500 and RJTT.parking[plane.spot[1]] is spot and plane.mode == "parked"
 
 
 def test_a_departure_never_heard_goes_an_hour_after_its_time():
@@ -179,3 +183,145 @@ def test_a_parked_airliner_is_always_in_an_airlines_colours():
     for seed in range(10):
         model = m._parked_model("gate_heavy", 32.0, Counter({"ANA": 5}), random.Random(seed))
         assert model is not None and "ZZZ" not in model[0], model
+
+
+# --- the ground is LocalTC's: the live data only says when -------------------------------------------------------------
+
+
+def real(hex_: str, callsign: str, lat: float, lon: float, *, gs: float = 0.0, track: float = 0.0, t: float = NOW,
+         ground: bool = True, alt: float | None = None) -> Flight:
+    return Flight(hex=hex_, callsign=callsign, registration="", type="A320", category="A3", lat=lat, lon=lon,
+                  alt_ft=None if ground else alt, on_ground=ground, gs_kt=gs, track=track,
+                  vs_fpm=0.0 if ground else -700.0, squawk="", t=t)
+
+
+def made_at(out) -> list[tuple[float, float]]:
+    return [(round(c.lat, 6), round(c.lon, 6)) for c in out if isinstance(c, SpawnAiAircraft)]
+
+
+def test_a_real_one_on_the_ground_is_made_on_a_stand_never_where_its_reported():
+    """O'Hare: a SkyWest made where it was reported, rolling on the user's runway, and tower stopped the user's takeoff
+    for it; departures jumped about the apron. On the ground LocalTC picks: a stand, never the reported spot."""
+    m = manager()
+    m.routes = lambda cs: Route("RJTT", "RJCC") if cs == "ANA1" else None
+    geo = AirportGeometry(RJTT)
+    end = geo.end("34R")
+    on_runway = geo.frame.to_latlon(*end.threshold)
+    gates = [p for p in RJTT.parking if p.kind.startswith("gate")]
+    feed = [real("01", "JAL9", *on_runway, gs=40.0, track=end.heading_true),  # rolling on 34R
+            real("02", "ANA2", gates[0].lat + 0.0007, gates[0].lon),  # standing 80 m off a stand
+            real("03", "ANA1", gates[5].lat - 0.001, gates[5].lon, gs=12.0)]  # taxiing out (bound for Sapporo)
+    out = []
+    for k in range(3):
+        m.on_feed([replace(f, t=NOW + k) for f in feed], "test", NOW + k)
+        out += m.tick(NOW + k)
+    stands = {(round(p.lat, 6), round(p.lon, 6)) for p in RJTT.parking}
+    assert "live:01" not in m.planes  # rolling on a runway: never made there
+    assert len(made_at(out)) == 2 and set(made_at(out)) <= stands
+    assert m.planes["live:03"].push_due and m.planes["live:02"].mode == "parked"
+
+
+def test_a_departures_push_and_taxi_are_localtcs_and_it_goes_once_the_real_one_has():
+    calls: list = []
+    m = manager(calls)
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.atc.call = lambda **kw: calls.append(kw) or ["said"]  # (said: the frequency was free)
+    said: list = []
+    m.atc.say = lambda cs, kind, icao, rwy: said.append((kind, rwy)) or ["said"]
+    m.routes = lambda cs: Route("RJTT", "RJCC", "Sapporo")
+    m.on_own(own_at(35.58, 139.80))  # the user off on the north side, out of the way
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    t = NOW
+    m.on_feed([real("05", "ANA5", gate.lat, gate.lon, t=t)], "test", t)
+    for c in [c for c in m.tick(t) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=700), t)
+    plane = m.planes["live:05"]
+    m.tick(t + 0.5)
+    assert plane.mode == "parked" and [c["kind"] for c in calls] == ["clearance"]
+    pushing, stages = [], set()
+    for k in range(1, 2500):  # the real one pushes, taxies out, and is still on the ground
+        t = NOW + k
+        m.on_feed([real("05", "ANA5", gate.lat - 0.0002, gate.lon, gs=4.0, t=t)], "test", t)
+        out = m.tick(t)
+        if plane.mode == "taxi_out":
+            stages.add(plane.local.stage)
+            if plane.local.stage == "push":
+                pushing += [c for c in out if isinstance(c, AiTrack)]
+            if plane.local.stage == "hold_short":
+                break
+    assert {"push", "start", "taxi", "hold_short"} <= stages
+    assert pushing and all(c.gs_kt < 0 for c in pushing)  # pushed: backwards, the nose the other way
+    assert [c["kind"] for c in calls] == ["clearance", "pushback", "taxi_out"] and calls[-1]["runway"] == "34R"
+    for k in range(5):  # at the hold short, the real one still on the ground: it waits
+        t += 1
+        m.on_feed([real("05", "ANA5", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
+        m.tick(t)
+    assert plane.local.stage == "hold_short"
+    m.atc.user_runway = lambda: ("RJTT", "34R", "landing")  # the user cleared to land on it
+    for k in range(5):
+        t += 1
+        m.on_feed([real("05", "ANA5", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)
+        m.tick(t)
+    assert plane.local.stage == "hold_short"  # the real one's gone, but the user has the runway
+    m.atc.user_runway = lambda: None
+    for k in range(40):
+        t += 1
+        m.on_feed([real("05", "ANA5", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)
+        m.tick(t)
+    assert plane.mode == "departing" and said[-1] == ("takeoff", "34R")
+
+
+def test_taxiing_out_it_waits_for_the_user_in_its_way():
+    m = manager()
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.routes = lambda cs: Route("RJTT", "RJCC")
+    m.on_own(own_at(35.58, 139.80))
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    m.on_feed([real("06", "ANA6", gate.lat, gate.lon)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=701), NOW)
+    plane = m.planes["live:06"]
+    t = NOW
+    while plane.mode != "taxi_out" or plane.local.stage != "taxi" or plane.local.follow.gs_kt < 10:
+        t += 1
+        m.on_feed([real("06", "ANA6", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
+        m.tick(t)
+        assert t < NOW + 600
+    loc = plane.local
+    ahead = advance(loc.lat, loc.lon, loc.hdg, 15.0, 0.0, 12.0)  # the user stopped 90 m ahead of it
+    m.on_own(own_at(ahead[0], ahead[1]))
+    before = (loc.lat, loc.lon)
+    m.tick(t + 1)
+    assert (loc.lat, loc.lon) == before and loc.follow.gs_kt == 0.0
+
+
+def test_an_arrival_low_on_final_is_landed_and_taxied_in_by_localtc():
+    m = manager()
+    geo = AirportGeometry(RJTT)
+    end = geo.end("04")
+    u = (math.sin(math.radians(end.heading_true)), math.cos(math.radians(end.heading_true)))
+
+    def on_final(nm: float, t: float) -> Flight:
+        lat, lon = geo.frame.to_latlon(end.threshold[0] - u[0] * nm * 1852, end.threshold[1] - u[1] * nm * 1852)
+        return real("07", "JAL7", lat, lon, ground=False, alt=30 + nm * 318, track=end.heading_true, t=t)
+
+    t = NOW
+    m.on_feed([on_final(6.0, t)], "test", t)
+    for c in [c for c in m.tick(t) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=702), t)
+    plane = m.planes["live:07"]
+    for k in range(1, 200):
+        t = NOW + k
+        m.on_feed([on_final(max(0.0, 6.0 - k * 140 / 3600), t)], "test", t)
+        m.tick(t)
+        if plane.mode == "landing":
+            break
+    assert plane.mode == "landing" and plane.local.owned  # low on final: LocalTC's from here
+    for k in range(1, 1500):  # the real one heard again rolling out and taxiing: LocalTC's own way all the same
+        t += 1
+        m.on_feed([real("07", "JAL7", 35.548, 139.79, gs=15.0, t=t)], "test", t)
+        m.tick(t)
+        if plane.mode == "parked":
+            break
+    assert plane.mode == "parked" and plane.spot is not None
+    assert RJTT.parking[plane.spot[1]].kind.startswith("gate")

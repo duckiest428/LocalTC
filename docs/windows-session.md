@@ -77,7 +77,12 @@ Many MSFS 2024 aircraft ignore the old key events for cockpit switches; they mov
    `autopilot_on/off`, the flap detents (A350: up, 1, 2, 3, full; VFE 255/212/195/186) and `autobrake_*`
    (`autobrake_low`, `autobrake_medium`, `autobrake_max`, `autobrake_off`), and `reads_flaps` / `reads_autopilot =
    false` if no variable follows them.
-6. Run `hands` again until it's clean, then fly a short test with the copilot's hands on (Quick Settings → Copilot →
+6. **The PMDG 777** (`crew/profiles/pmdg_777.toml`, 2026-10-21): its MCP, lights, signs, transponder and EFIS ignore the
+   sim's events (the copilot said "initial 8,000 set" with the MCP never moved), so the profile leaves them to the pilot.
+   PMDG's own controls go through its SDK (`Documentation/SDK/PMDG_777X_SDK.h` in the aircraft's package: `#69632 + n`
+   events, a position below 8192 or a mouse flag), which requires showing PMDG's SDK licence and the pilot accepting it
+   first. Not used until the user decides; then: `debug hands` against those events, and the profile's `cannot` cut down.
+7. Run `hands` again until it's clean, then fly a short test with the copilot's hands on (Quick Settings → Copilot →
    Its hands) and check it does them in the flight. Repeat for the other aircraft the user flies (a new profile in
    `crew/profiles/`, matched by title or model).
 
@@ -94,7 +99,10 @@ out of KLAX 2026-10-10 (windows-findings.md: frames, spawns sliding, the holds).
    lights right), the gates (nobody on yours; none on top of another), ATC's go-arounds and holds when you have the
    runway, and that everything goes when it's turned off. Since 2026-10-10: a new aircraft appears where it stays
    (no slide), the frame rate with 40 parked, departures held for you going one at a time, and one taxiing at you
-   stopping until you're clear.
+   stopping until you're clear. Since 2026-10-22 the ground is LocalTC's (the live data only times it): check the
+   pushbacks (backwards, nose the other way), the taxi out along real taxiways to the runway in use, the hold short
+   and takeoff after the real one has gone, the takeover of an arrival about 3 nm out (no jump), its turn off and
+   taxi to a gate.
 
 ## Task 3: the voices with the sim running
 

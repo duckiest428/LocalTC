@@ -40,6 +40,7 @@ PRECISION = ("ILS", "LOC", "LDA", "RNAV", "RNP")  # (the old rule: in good weath
 VISUAL = "VISUAL"
 VISUAL_SM = 5.0  # visibility for a visual approach to be what's expected
 VISUAL_CEILING_FT = 3000  # ... and a ceiling (above the field) comfortably over the vectoring altitudes, when it's known
+WINDY_KT = 25  # ... and the wind (or its gusts) under this: a windy day is flown on the ILS, stable all the way down
 RNAV_LINES = ("LPV", "LNAV/VNAV", "LP", "LNAV")
 
 
@@ -244,6 +245,8 @@ def choose_approach(
     visual_first: bool = False,
     precip: str = "",
     outages: Outages = NO_OUTAGES,
+    wind_kt: float = 0.0,
+    gust_kt: float | None = None,
 ) -> Approach:
     """The approach to expect for landing on ``runway``."""
     aircraft = Aircraft(aircraft_type, airline)
@@ -283,7 +286,7 @@ def choose_approach(
     if not visual_weather:
         return best
     if visual_first and not precip and visibility_sm is not None and visibility_sm >= VISUAL_SM \
-            and (ceiling_ft is None or ceiling_ft >= VISUAL_CEILING_FT):
+            and (ceiling_ft is None or ceiling_ft >= VISUAL_CEILING_FT) and max(wind_kt, gust_kt or 0) < WINDY_KT:
         return Approach(VISUAL, runway)  # the US and Canada in good weather: "expect the visual", the ILS if asked for
     # Good weather and nothing better than a non-precision approach: the visual is simpler for everyone.
     return best if best.kind in PRECISION else Approach(VISUAL, runway)

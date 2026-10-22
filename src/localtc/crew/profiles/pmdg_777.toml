@@ -1,0 +1,23 @@
+# The PMDG 777 (-200ER, -300ER, F; MSFS 2024 has no 777 of its own). Its cockpit runs on PMDG's own systems: the MCP,
+# the overhead's lights and signs, the transponder and the EFIS baro ignore the sim's events (a 2026-10-21 flight:
+# "initial 8,000 set" with the MCP never moved, the seatbelt sign never off). PMDG's own controls go through its SDK,
+# which needs the pilot to accept PMDG's SDK licence first: not used yet. Until then those are the pilot's, said so
+# from the start. Flaps by Boeing's detents; the handle reads as the sim's flaps index (flaps 5 read as 2).
+[aircraft]
+name = "PMDG 777"
+match = ["777-200", "777-300", "777F", "PMDG 777", "B772", "B77W", "B77L", "B77F"]
+flaps = "set"
+detents = ["up", "1", "5", "15", "20", "25", "30"]
+aliases = { "zero" = "up", "0" = "up", "flaps up" = "up" }
+vfe = [0, 255, 235, 215, 195, 185, 170]
+speed_check_kt = 80
+rollout_call_kt = 60
+spoilers = true
+landing_detent = "25"
+reversers = true
+gear_extend_kt = 270
+gear_retract_kt = 270
+gear_extended_kt = 320
+ceiling_ft = 43100
+cannot = ["altitude", "heading", "speed", "vs", "autopilot", "autothrottle", "ap_mode", "seatbelt", "light", "squawk",
+          "transponder", "altimeter", "autobrake", "apu", "apu_bleed"]

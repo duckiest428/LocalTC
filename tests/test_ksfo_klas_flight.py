@@ -240,7 +240,7 @@ def atis_engine(mode: str) -> tuple[AtcEngine, OwnshipState]:
     engine.state.flight.origin, engine.state.flight.destination = "KSFO", "KLAS"
     for icao in ("KSFO", "KLAS"):
         engine.handle(AirportData(t=0.0, airport=airport(icao)))
-    own = ownship(4500.0)  # the cruise, far from Las Vegas
+    own = msgspec.structs.replace(ownship(4500.0), zulu_s=18 * 3600 + 10 * 60)  # the cruise, far from Las Vegas, 1810Z
     engine.state.aircraft = own
     engine.weather.update(ownship(10.0), engine.tracker.context_builder.airports)  # San Francisco's sampled
     return engine, own
@@ -257,6 +257,14 @@ def test_real_atis_its_letter_runway_and_source():
     info = las(engine, own)
     assert info.letter == "W" and info.runway == "26L" and info.source[0] == "real ATIS"
     assert engine.atis_source_text(info, own).startswith("real ATIS 1756Z, ")
+
+
+def test_a_stale_real_atis_isnt_the_airports():
+    """The ATIS is issued at least hourly: one two hours old (the feed stuck on it) is set aside for the weather."""
+    engine, own = atis_engine("real")
+    engine.handle(AtisReport(t=own.t, icao="KLAS", letter="W", text=LAS_ATIS.replace("1756Z", "1556Z"), zulu="1556"))
+    info = las(engine, own)
+    assert info is None or info.letter != "W"
 
 
 def test_simulator_only_ignores_the_real_atis_and_metar():
@@ -300,7 +308,46 @@ def test_departing_las_vegas_its_departure_runways_not_the_landing_one():
     engine.cfg.dep_runway = "01R"
     text = ("LAS ATIS INFO A 1156Z. 01011G21KT 10SM CLR 20/01 A3032 (THREE ZERO THREE TWO). VISUAL APPROACHES IN USE. "
             "LANDING RWYS 26L AND 1L. DEPG RWYS 1R FULL LENGTH AND 1L AT BRAVO.")
+    own = engine.state.aircraft = msgspec.structs.replace(own, zulu_s=12 * 3600 + 10 * 60)  # (its ATIS is 1156Z)
     engine.handle(AtisReport(t=own.t, icao="KLAS", letter="A", text=text, zulu="1156"))
     info = las(engine, own)
     assert info.departing[:1] == ("01R",) and "01L" in info.departing
     assert engine._runway_end("KLAS", own).ident == "01R"
+
+
+def test_the_approach_is_the_one_the_real_atis_gives_each_runway():
+    """The real ATIS's approaches were read but never used: LocalTC's own ATIS chose the visual in US good weather
+    whatever the airport said. Its approach for each runway is the real one's now, and ATC works to it."""
+    engine, own = atis_engine("real")
+    text = ("LAS ATIS INFO X 1756Z. 00000KT 10SM SCT120 BKN180 29/03 A2987 (TWO NINER EIGHT SEVEN). ILS RWY 26L APCH, "
+            "RNAV RWY 19R APCH IN USE. DEPG RWYS 26R, 19R AND 19L. ...ADVS YOU HAVE INFO X.")
+    engine.handle(AtisReport(t=own.t, icao="KLAS", letter="X", text=text, zulu="1756"))
+    info = las(engine, own)
+    assert info.letter == "X" and info.operations.approaches["26L"].kind == "ILS"
+    assert info.operations.approaches["19R"].kind == "RNAV"
+    assert engine._approach_for("26L", has_ils=True).kind == "ILS"  # what ATC tells the arrival to expect
+
+
+def test_the_real_atis_approaches_by_runway():
+    from localtc.atc_core.atis.real import approach_for, parse
+
+    den = parse("DEN ARR INFO O 2353Z. 15010KT 10SM BKN130 OVC180 21/02 A3022. EXPC ILS, RNAV, OR VISUAL APCH, SIMUL APCHS "
+                "IN USE, RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L. NOTICE TO AIRMEN. RWY 1 6 RIGHT 3 4 LEFT CLOSED.",
+                "arrival")
+    assert set(den.landing) == {"07", "17R", "16L"} and den.offered == ("ILS", "RNAV", "VISUAL")
+    assert approach_for(den, "16L", visual_weather=True) == "VISUAL" and approach_for(den, "17R", visual_weather=False) == "ILS"
+    ord_ = parse("ORD ATIS INFO P 2251Z. 22003KT 10SM FEW090 20/06 A3020. ARR EXP VECTORS ILS RWY 27C APCH, ILS RWY 27R "
+                 "APCH, VISUAL APCH RWY 28C. SIMUL APCHS IN USE. DEPS EXP RWYS 22L 28R FROM NOVEMBER 5 9750 FT AVL.")
+    assert ord_.approaches == {"27C": "ILS", "27R": "ILS", "28C": "VISUAL"} and ord_.departing == ("22L", "28R")
+
+
+def test_a_windy_day_is_the_ils_not_the_visual():
+    """LocalTC's own ATIS (no real one): good weather in the US is the visual, but not with the wind gusting 30."""
+    from localtc.atc_core.airport.approaches import choose_approach
+
+    las_ = airport("KLAS")
+    calm = choose_approach(las_, "26L", has_ils=True, visibility_sm=10.0, aircraft_type="A320", airline=True,
+                           visual_first=True, wind_kt=8)
+    windy = choose_approach(las_, "26L", has_ils=True, visibility_sm=10.0, aircraft_type="A320", airline=True,
+                            visual_first=True, wind_kt=18, gust_kt=30)
+    assert calm.kind == "VISUAL" and windy.kind == "ILS"

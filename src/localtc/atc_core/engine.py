@@ -116,6 +116,7 @@ from localtc.sim_api import (
     TerrainGrid,
     Airport,
     AirportData,
+    ArrivalData,
     AtisReport,
     WeatherReport,
     AtcAlert,
@@ -203,7 +204,7 @@ AT_HOLD_M = 80.0  # this close to a runway's hold line is holding short of it
 # runway left to cross on the way: nearly at the runway, without having to stop at the line first (at 800 m it came
 # with most of O'Hare's taxi still to go).
 TOWER_HANDOFF_M = 300.0
-INSTRUMENT_SHARE = 0.5  # of arrivals in good weather in the US and Canada, the share expecting the ILS (or RNAV), not the visual
+REAL_ATIS_MAX_AGE_MIN = 90  # a real ATIS older than this (the feed stuck on an old one) isn't the airport's any more
 AT_RUNWAY_END_M = 250.0  # ... or this close to its threshold
 FINAL_OWNED_NM = 10.0  # this flight on final this close: tower isn't sending anybody else onto that runway
 MOVING_KT = 2.0  # traffic seen going this fast has somebody flying it
@@ -591,6 +592,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._continued_t = -math.inf  # when tower last said "continue" for traffic on the runway
         self._gate_changed = False  # a gate asked for (Airport Ops) after the taxi in was given: a new route
         self._gate_asked = False  # a gate the pilot asked for and got (the gate map): theirs, shown
+        self._star_legs: dict[str, tuple] = {}  # the destination's arrivals (the sim's navdata) by name
         self._rejoin: tuple | None = None  # the taxi arrows' way back onto the route: (from node, route, path)
         self._checked_in: set[str] = set()  # stations the pilot has checked in with (or that called first)
         self._left_at: dict[str, float] = {}  # stations the pilot tuned away from (to another controller), and when
@@ -673,6 +675,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif isinstance(event, NoticesReport):
             # The airport's real NOTAMs: what the ATIS announces and ATC works to there, from the next ATIS on.
             self.atis.real[event.icao] = tuple(Notice(n.kind, n.subject, real=n.id or "NOTAM") for n in event.notices)
+        elif isinstance(event, ArrivalData):
+            if event.airport.upper() == (self.state.flight.destination or "").upper():
+                self._star_legs[event.name.upper()] = event.legs  # its published speeds: approach's work to them
         elif isinstance(event, AtisReport):
             if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(event.text, event.kind)) is not None:
                 self._real_atis[(event.icao, event.kind)] = parsed
@@ -894,6 +899,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                              source=self.atis_source_text(current, own)))
         return out
 
+    def runway_in_use(self, icao: str | None, own: OwnshipState):
+        """The runway end ATC gives at an airport (LocalTC's traffic taxies out to it)."""
+        return self._runway_end(icao, own)
+
     def _runway_end(self, icao: str | None, own: OwnshipState):
         """The runway ATC gives at an airport. One the pilot asked for; with "enforce FPLN runway assignments"
         on, the flight plan's (if the airport has it); otherwise the runway in use: its ATIS runway, or the
@@ -950,6 +959,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
             wanted = (kind,) if kind != "both" else ("both", "arrival" if arriving else "departure")
             real = next((self._real_atis[(icao, k)] for k in wanted if (icao, k) in self._real_atis), None)
+            age = real_atis.age_minutes(real.zulu, own.zulu_s) if real is not None else None
+            if age is not None and age > REAL_ATIS_MAX_AGE_MIN:
+                real = None  # stale: the METAR's or the sim's weather instead (an ATIS is issued at least hourly)
         if real is not None and real.weather is not None:
             weather = with_magvar(real.weather, geo.airport.magvar)
             weather = replace(weather, t=own.t, elevation_ft=geo.airport.elev_ft,
@@ -3492,8 +3504,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                  setattr(self, "_going_around", False)))
                 return True
             if joins or left_nm > STAR_END_NM:
-                return self._speed_control(own, t, tuned) if ctx.destination_distance_nm is not None \
-                    and ctx.destination_distance_nm <= VECTOR_FROM_NM else False
+                return False  # flying the STAR: its own published speeds, not ATC's (they're for vectors)
         # All the way in: the downwind, base and intercept happen inside 20 miles. The intercept heading carries
         # the approach clearance; until then there is always a heading being flown.
         distance = ctx.destination_distance_nm
@@ -3616,12 +3627,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             to_go = max(to_go, leg.track_nm)  # vectored: the miles round the pattern, not abeam the field ("maintain
             # 180 until five mile final" on a downwind 30 miles from landing)
         traffic = None
+        star_kt = self._star_speed()
+        vectored = self._vector_leg in ("join", "downwind", "base", "intercept")
         for distance, speed, flag in SPEED_GATES:
             if assigned is not None and speed >= assigned:
                 continue  # slowed down already: never sped up again (210, then "maintain 250", then 180)
+            if star_kt and speed > star_kt:
+                continue  # off the STAR at its published 210: never faster than it (its speed, or slower)
             if speed == 250 and own.alt_indicated_ft >= SPEED_LIMIT_BELOW_FT:
                 continue
-            if speed < 250:
+            if speed == 210 and vectored:
+                pass  # on vectors (downwind, base): the vectoring speed, as approach gives it
+            elif speed < 250:
                 traffic = self._landing_ahead(own) if traffic is None else traffic
                 if not traffic:
                     continue
@@ -3637,6 +3654,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                on_issue=lambda s=speed: self._assign(speed_kt=s))
                 return True
         return False
+
+    def _star_speed(self) -> int:
+        """The last published speed on the filed STAR (the sim's navdata: its common part and the runway's
+        transition), knots; 0 for none known."""
+        legs = self._star_legs.get((self.cfg.star or "").upper(), ())
+        runway = (self.state.assignments.arrival_runway or "").upper()
+        on = [leg for leg in legs if not leg.transition or leg.transition.upper() in (f"RW{runway}", f"RW{runway[:2]}B")]
+        return next((leg.speed_kt for leg in reversed(on) if leg.speed_kt), 0)
 
     def _landing_ahead(self, own: OwnshipState) -> bool:
         """Another aircraft on its way down to the destination ahead of this one: airborne, low, and nearer it."""
@@ -5157,11 +5182,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             and own.alt_indicated_ft - geo.airport.elev_ft <= 5000
         in_cloud = bool(own.in_cloud and low) if own is not None else False
         advertised = info.approach_for(runway) if info is not None else None
-        # Good weather in the US and Canada: the visual, or this flight's draw of the ILS where there's one ("ILS
-        # runway 16L and visual approaches in use"; always the visual, five flights running, looked broken).
-        instrument = self._instrument_arrival(dest)
         if requested is None and self.cfg.approach == "auto" and advertised is not None and (
-                (advertised.kind == "VISUAL" and not in_cloud and not instrument) or advertised.circling or advertised.kind in {
+                (advertised.kind == "VISUAL" and not in_cloud) or advertised.circling or advertised.kind in {
                     o.approach.kind for o in approach_options(geo.airport if geo is not None else None, runway,
                                                               Aircraft(st.flight.aircraft_type, airline), info.outages)}):
             # The one the ATIS advertises, if this aircraft can fly it (an RNP one isn't for a Cessna).
@@ -5173,16 +5195,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             in_cloud=in_cloud,
             ceiling_ft=weather.ceiling_ft if weather is not None else None,
             aircraft_type=st.flight.aircraft_type, airline=airline, requested=requested,
-            override=self.cfg.approach, visual_first=not regions.region_for(dest).icao and not instrument,
+            override=self.cfg.approach, visual_first=not regions.region_for(dest).icao,
             precip=weather.precip if weather is not None else "",
             outages=info.outages if info is not None else Outages(),
+            wind_kt=weather.wind.speed_kt if weather is not None else 0.0,
+            gust_kt=weather.gust_kt if weather is not None else None,
         )
-
-    def _instrument_arrival(self, dest: str | None) -> bool:
-        """This flight's draw at its destination: expect the instrument approach in good weather, not the visual.
-        Seeded by the flight, so a replay draws the same."""
-        key = f"{self.cfg.seed}:{self.cfg.callsign}:{dest}"
-        return random.Random(key).random() < INSTRUMENT_SHARE
 
     def approaches_at(self, icao: str | None, runway: str) -> tuple[str, ...]:
         """What the airport publishes for a runway (the app and tests show this)."""

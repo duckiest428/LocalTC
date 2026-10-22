@@ -199,8 +199,14 @@ def traffic_atc(engine) -> "AtcLink":
     def managed(ids: set[int]) -> None:
         engine.managed_traffic = ids
 
+    def runway_in_use(icao: str) -> str | None:
+        own = engine.state.aircraft
+        end = engine.runway_in_use(icao, own) if own is not None else None
+        return end.ident if end is not None else None
+
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
-                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed)
+                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed,
+                   runway_in_use=runway_in_use)
 
 
 _OPS = None

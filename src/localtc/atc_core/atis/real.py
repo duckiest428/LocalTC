@@ -25,7 +25,11 @@ class RealAtis:
     kind: str  # both, arrival, departure
     landing: tuple[str, ...] = ()  # "26L", "19R"
     departing: tuple[str, ...] = ()
-    approach: str = ""  # ILS, RNAV, VISUAL ... when it names one
+    approach: str = ""  # ILS, RNAV, VISUAL ... when it names one (the first: ``approaches`` has them by runway)
+    # The approach it gives each runway ("ILS RWY 27C APCH, VISUAL APCH RWY 27R", "EXPECT VISUAL APCH RWY 16L"), and
+    # the ones it offers for the rest ("EXPC ILS, RNAV, OR VISUAL APCH ... RWY 7, RWY 17R"), in its order.
+    approaches: dict[str, str] | None = None
+    offered: tuple[str, ...] = ()
     weather: Weather | None = None  # from the observation in it (wind magnetic as ATIS gives it)
     text: str = ""
 
@@ -38,19 +42,47 @@ def parse(text: str, kind: str = "both") -> RealAtis | None:
         return None
     letter, zulu = m.group(1), m.group(2) or ""
     landing = _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARRIVALS?|ARR)")
-    departing = _runways_after(upper, r"(?:DEPARTING|DEPG|DEPARTURES?|DEP|DEPS)")
+    departing = _runways_after(upper, r"(?:DEPARTING|DEPG|DEPARTURES?|DEP|DEPS)(?:\s+(?:EXPC?|EXPECT))?")  # "DEPS EXP RWYS 22L 28R"
     approach = ""
-    approaches = re.findall(r"\b(ILS|RNAV|GPS|LOC|VOR|VISUAL)\b(?:\s+(?:APCHS?|APPROACHES|APPROACH))?(?:\s+(?:Y|Z)\b)?"
-                            rf"(?:\s+{RUNWAY}\s+(\d{{1,2}}[LRC]?))?", upper)
+    approaches = re.findall(r"\b(ILS|RNAV|GPS|LOC|VOR|VISUAL)\b(?:\s+(?:Y|Z)\b)?(?:\s+(?:APCHS?|APPROACHES|APPROACH))?"
+                            rf"(?:\s+(?:TO\s+)?{RUNWAY}\s*(\d{{1,2}}[LRC]?))?", upper)
+    by_runway: dict[str, str] = {}
+    offered: list[str] = []
     for kind_word, runway in approaches:
-        approach = approach or ("RNAV" if kind_word == "GPS" else kind_word)
-        if runway and not landing:
-            landing = tuple(dict.fromkeys(_ident(r) for _, r in approaches if r))
+        kind_name = "RNAV" if kind_word == "GPS" else kind_word
+        approach = approach or kind_name
+        if runway:
+            by_runway[_ident(runway)] = kind_name  # (a later "EXPECT VISUAL APCH RWY 16L" is the one for 16L)
+        elif kind_name not in offered:
+            offered.append(kind_name)
+    named = not landing  # no "LANDING RWYS ...": the approaches' runways are the ones landed on
     if not landing and not departing:
         both = _runways_after(upper, r"(?:IN USE|USING|ACTIVE)")
         landing = departing = both
+    if named:  # "EXPC ILS, RNAV, OR VISUAL APCH, SIMUL APCHS IN USE, RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L"
+        listed = _runways_after(upper, r"(?:APCHS?|APPROACH(?:ES)?)(?:\s*,?\s*SIMUL\s+APCHS\s+IN\s+USE)?") if offered else ()
+        landing = tuple(dict.fromkeys((*listed, *by_runway)))
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
-                    weather=_weather(upper), text=" ".join(text.split()))
+                    approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()))
+
+
+def approach_for(real: RealAtis, runway: str, visual_weather: bool) -> str:
+    """The approach the real ATIS gives ``runway``: the one it names for it, else of the ones it offers the visual in
+    visual weather (what an ATIS's "ILS, RNAV, or visual" comes to in good weather), else the first; "" for none."""
+    if real.approaches and runway in real.approaches:
+        return real.approaches[runway]
+    if not real.offered:
+        return ""
+    if visual_weather and "VISUAL" in real.offered:
+        return "VISUAL"
+    return next((k for k in real.offered if k != "VISUAL"), real.offered[0])
+
+
+def age_minutes(zulu: str, now_zulu_s: float | None) -> int | None:
+    """How old an ATIS stamped ``zulu`` ("2253") is at ``now_zulu_s`` (seconds into the UTC day), or None."""
+    if not zulu.isdigit() or len(zulu) != 4 or now_zulu_s is None:
+        return None
+    return int((now_zulu_s // 60 - (int(zulu[:2]) * 60 + int(zulu[2:]))) % 1440)
 
 
 def _runways_after(upper: str, lead: str) -> tuple[str, ...]:
@@ -58,7 +90,10 @@ def _runways_after(upper: str, lead: str) -> tuple[str, ...]:
     found: list[str] = []
     # "26L", "RWY 16L", "RWY8"; and how it's used: "1R FULL LENGTH AND 1L AT BRAVO" (the second was lost)
     item = rf"(?:{RUNWAY}\s*)?\d{{1,2}}[LRC]?\b(?:\s+(?:FULL\s+LENGTH|(?:AT|FROM|INTXN|INT)\s+[A-Z][A-Z0-9]*))?"
-    for m in re.finditer(rf"\b{lead}\b[\s,]*(?:AND\s+)?((?:{item}(?:\s*(?:,|AND|OR|/|&)\s*)?)+)", upper):
+    # (Two runways with only a space between them, "DEPS EXP RWYS 22L 28R": the next a full ident, so "28R FROM
+    # NOVEMBER 5" isn't a runway 05.)
+    sep = rf"(?:\s*(?:,|AND|OR|/|&)\s*|\s+(?=(?:{RUNWAY}\s*)?\d{{2}}[LRC]?\b(?!\s*(?:FT|THSD))))"
+    for m in re.finditer(rf"\b{lead}\b[\s,]*(?:AND\s+)?((?:{item}(?:{sep})?)+)", upper):
         found += [_ident(r) for r in re.findall(r"\d{1,2}[LRC]?(?![0-9])", m.group(1))]
     return tuple(dict.fromkeys(r for r in found if 1 <= int(r[:2]) <= 36))
 

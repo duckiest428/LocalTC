@@ -21,6 +21,7 @@ import zlib
 
 from localtc.atc_core.airport import AirportGeometry, select_runway
 from localtc.atc_core.airport.approaches import Aircraft, choose_approach, options
+from localtc.atc_core.atis.real import approach_for as real_approach_for
 from localtc.atc_core.airport.geometry import RunwayEndGeometry
 from localtc.atc_core.atis.broadcast import AtisInfo
 from localtc.atc_core.atis.observation import Weather
@@ -135,16 +136,27 @@ class AtisBoard:
             self._runway_changed[key] = t
         landing = [end]
         simultaneous = False
-        if end.has_ils and end.ident not in out.localizer:
+        if real is not None and kind != "departure" and real.landing:
+            # The real ATIS's landing runways, each as it gives it ("RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L").
+            landing += [e for ident in real.landing if (e := geo.end(ident)) is not None and e is not end
+                        and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT]
+            simultaneous = len(landing) > 1
+        elif end.has_ils and end.ident not in out.localizer:
             wide = [(o, d) for o, d in parallels(geo, end, closed) if o.has_ils and o.ident not in out.localizer
                     and d >= SIMULTANEOUS_M and o.runway.runway.length_m >= 0.6 * end.runway.runway.length_m]
             if wide:
                 landing.append(min(wide, key=lambda od: od[1])[0])
                 simultaneous = True
+        visual_weather = not weather.in_cloud and (weather.visibility_sm is None or weather.visibility_sm >= 3.0) \
+            and (weather.ceiling_ft is None or weather.ceiling_ft >= 1000)
+        # The real ATIS's approach for each runway when it has one (ATC then works to it); else one the weather calls
+        # for: the wind and the gusts as well as the cloud and the visibility.
         approaches = {e.ident: choose_approach(
             geo.airport, e.ident, has_ils=e.has_ils, visibility_sm=weather.visibility_sm, ceiling_ft=weather.ceiling_ft,
             in_cloud=weather.in_cloud, aircraft_type=TYPICAL.type, airline=TYPICAL.airline,
-            visual_first=not region.icao, precip=weather.precip, outages=out) for e in landing}
+            override=(real_approach_for(real, e.ident, visual_weather) or "auto") if real is not None else "auto",
+            visual_first=not region.icao, precip=weather.precip, outages=out, wind_kt=weather.wind.speed_kt,
+            gust_kt=weather.gust_kt) for e in landing}
         instrument = {}
         for e in landing:
             if approaches[e.ident].kind == "VISUAL":

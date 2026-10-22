@@ -659,7 +659,7 @@ class AppController:
 
     def _gate(self) -> str | None:
         engine = self.live.engine if self.live else None
-        return engine.state.assignments.gate if engine is not None else None
+        return engine.gate_given() if engine is not None else None
 
     def companion_view(self) -> dict:
         """What the companion app shows: the flight's phase, who to talk to, and ATC's last words. No position."""

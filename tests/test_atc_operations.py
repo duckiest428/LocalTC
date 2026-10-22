@@ -260,3 +260,23 @@ def _own(engine: AtcEngine, t: float, *, lat: float | None = None, lon: float | 
                         gs_kt=0.0 if on_ground else 250.0, ias_kt=0.0 if on_ground else 250.0, vs_fpm=0.0,
                         on_ground=on_ground, squawk="1200", com1_mhz=0.0, com2_mhz=0.0, altimeter_inhg=29.92,
                         zulu_s=zulu_s, xpdr_mode="alt")
+
+
+def test_a_shortcut_is_never_to_the_destination_or_into_the_filed_star():
+    """Denver Center: "cleared direct KDEN" in the cruise, with the LAWGR3 filed. SimBrief's route ends with the airport,
+    as the STAR's last fix: it was a fix further down the route. The STAR's start is as far as a shortcut goes."""
+    from localtc.atc_core.route import RouteFix
+
+    engine = engine_at_kbfi()
+    engine.state.flight.destination = "KBFI"
+    engine.cfg.star = "STAR1"
+    engine.route = type(engine.route)((
+        RouteFix("ALPHA", 45.0, -122.0, via="DCT"), RouteFix("BRAVO", 45.6, -119.5, via="DCT"),
+        RouteFix("CHRLY", 46.2, -122.0, via="DCT"), RouteFix("DELTA", 46.8, -122.2, via="STAR1"),
+        RouteFix("ECHOO", 47.2, -122.3, via="STAR1"), RouteFix("KBFI", 47.53, -122.3, via="STAR1")))
+    engine.state.phase = "CRUISE"
+    own = _own(engine, 50.0, lat=44.8, lon=-122.0, hdg_true=10.0, on_ground=False, alt=36000.0)
+    engine.state.aircraft = own
+    assert engine._shortcut(own, CENTER)
+    fix = engine._scheduled[-1].slots["fix"]
+    assert fix in ("CHRLY", "DELTA") and engine._scheduled[-1].instruction_id == "common.direct"

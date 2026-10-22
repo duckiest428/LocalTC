@@ -1229,6 +1229,10 @@ const Settings = {
           <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, only the real aircraft at the gates are shown)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
+          <div class="row"><label>Parked aircraft on the ramps<select id="s-traffic-parked">${[[0, "None"], [10, "A few (10)"], [20, "Some (20)"], [40, "Busy (40)"], [60, "Packed (60)"]].map(([n, label]) => {
+            const cur = st.traffic?.parked === false ? 0 : (st.traffic?.max_parked ?? 40);
+            return `<option value="${n}" ${n === cur ? "selected" : ""}>${label}</option>`;
+          }).join("")}</select></label><span class="hint">Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.</span></div>
         </div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
@@ -1387,6 +1391,10 @@ const Settings = {
     on("#s-traffic-scheduled", "change", (e) => this.save("traffic", "scheduled", e.target.checked));
     on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));
     on("#s-traffic-gates", "change", (e) => this.save("traffic", "fill_gates", e.target.checked));
+    on("#s-traffic-parked", "change", (e) => {
+      const n = Number(e.target.value);
+      this.save("traffic", "parked", n > 0).then(() => (n > 0 ? this.save("traffic", "max_parked", n) : null));
+    });
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));

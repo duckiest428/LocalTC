@@ -177,8 +177,13 @@ class RoutingMixin:
             return False
         level = st.assignments.altitude_ft or own.alt_indicated_ft
         best = None
-        for j in range(i + SHORTCUT_MIN_FIXES, len(points) - 1):  # (never the destination itself)
+        # Never the destination itself (SimBrief's route ends with it, as the STAR's last fix: "cleared direct KDEN"
+        # with the LAWGR3 filed), nor the top of climb or descent.
+        not_fixes = {st.flight.origin, st.flight.destination, "TOC", "TOD"}
+        for j in range(i + SHORTCUT_MIN_FIXES, len(points) - 1):
             ident, lat, lon = points[j]
+            if ident.upper() in not_fixes:
+                continue
             direct = _nm(own.lat, own.lon, lat, lon)
             if direct > SHORTCUT_MAX_NM:
                 break
@@ -203,7 +208,8 @@ class RoutingMixin:
         if not self.cfg.star:
             return True
         star = [f.ident for f in self.route.procedure(self.cfg.star, "DSC")]
-        return ident not in star[1:]
+        filed = [f.ident for f in self.route.fixes if (f.via or "").upper() == self.cfg.star.upper()]  # the plan's
+        return ident not in star[1:] and ident not in filed[1:]
 
     # --- hazards ahead -----------------------------------------------------------------------------------------
 

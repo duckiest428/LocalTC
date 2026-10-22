@@ -3,7 +3,7 @@
 [     9.0] ATC       Paine Ground 121.8: N172LT, contact Paine Clearance 127.25, good day.
 [    11.0] PILOT     127.25: Paine Clearance, november one seven two lima tango, IFR to Boeing Field, ready to copy.
 [    13.0] ATC       Paine Clearance 127.25: N172LT, stand by for your clearance.
-[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field as filed, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
+[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field as filed, expect runway 34L, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    31.0] PILOT     127.25: Cleared to Boeing Field, climb and maintain five thousand, departure one two four point six seven five, squawk one two three four, two lima tango.
 [    31.0] READBACK  clearance.ifr_at_cruise incorrect heard=squawk:1234
 [    33.0] ATC       Paine Clearance 127.25: Cessna 2LT, negative, squawk 3260.
@@ -21,21 +21,21 @@
 [   124.0] PILOT     121.8: uh blah blah the thing with the stuff
 [   127.0] ATC       Paine Ground 121.8: Cessna 2LT, say again.
 [   129.0] PILOT     121.8: Paine Ground, two lima tango, disregard.
-[   220.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
-[   222.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
-[   224.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
-[   228.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
-[   231.0] ATC       Paine Tower 120.2: N172LT, roger, taxi to and hold short runway 34L.
-[   233.0] PILOT     120.2: Hold short runway three four left, Cessna two lima tango.
-[   233.0] READBACK  tower.continue_hold_short correct
-[   311.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
-[   313.0] PILOT     120.2: Runway three four left, two lima tango.
-[   313.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
-[   315.0] ATC       Paine Tower 120.2: Cessna 2LT, I still need the readback of cleared for takeoff.
-[   317.0] PILOT     120.2: Runway three four left, two lima tango.
-[   319.0] ATC       Paine Tower 120.2: Cessna 2LT, say again.
-[   321.0] PILOT     120.2: Cleared for takeoff runway three four left, two lima tango.
-[   321.0] READBACK  tower.takeoff correct
+[   301.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   303.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
+[   305.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   309.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
+[   312.0] ATC       Paine Tower 120.2: N172LT, roger, taxi to and hold short runway 34L.
+[   314.0] PILOT     120.2: Hold short runway three four left, Cessna two lima tango.
+[   314.0] READBACK  tower.continue_hold_short correct
+[   322.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.
+[   324.0] PILOT     120.2: Runway three four left, two lima tango.
+[   324.0] READBACK  tower.takeoff incomplete missing=cleared_for_takeoff
+[   326.0] ATC       Paine Tower 120.2: Cessna 2LT, I still need the readback of cleared for takeoff.
+[   328.0] PILOT     120.2: Runway three four left, two lima tango.
+[   330.0] ATC       Paine Tower 120.2: Cessna 2LT, say again.
+[   332.0] PILOT     120.2: Cleared for takeoff runway three four left, two lima tango.
+[   332.0] READBACK  tower.takeoff correct
 [   354.0] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
 [   426.0] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   439.0] PHASE     TAKEOFF -> DEPARTURE (airborne)

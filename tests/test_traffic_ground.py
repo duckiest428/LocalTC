@@ -13,7 +13,7 @@ from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.taxi_route import TaxiGraph
 from localtc.ops.schedules import Departure, icao_callsign, local_offset_s
 from localtc.sim_api import AiObjectAssigned, OwnshipState, RemoveAiAircraft, SpawnAiAircraft
-from localtc.traffic.feed import Flight
+from localtc.traffic.feed import Flight, Route
 from localtc.traffic.ground import Follower, free_stand, taxi_in_path
 from localtc.traffic.manager import BIZJET_TYPES, GA_TYPES, AtcLink, TrafficManager, TrafficSettings
 from localtc.traffic.models import ModelPicker
@@ -179,3 +179,37 @@ def test_a_parked_airliner_is_always_in_an_airlines_colours():
     for seed in range(10):
         model = m._parked_model("gate_heavy", 32.0, Counter({"ANA": 5}), random.Random(seed))
         assert model is not None and "ZZZ" not in model[0], model
+
+
+def test_a_departure_taxiing_slowly_past_free_stands_isnt_put_on_one():
+    """Chicago: departures taxiing out at walking pace past free gates were put on one ("on its stand"), let go as
+    they moved on, put on the next: a 787 jumping about the apron, into the user's path and back. Only an arrival
+    turns onto its stand."""
+    m = manager()
+    m.routes = lambda callsign: Route("RJTT", "RJCC")  # out of Haneda, bound for Sapporo
+    stand = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    m.on_own(own_at(stand.lat + 0.01, stand.lon))
+    t = NOW
+    lat = stand.lat - 0.0008  # 90 m short of the stand, heading for it
+    for i in range(60):
+        t += 1.0
+        f = Flight(hex="77", callsign="UAL1", registration="", type="B788", category="A5", lat=lat + i * 0.00001,
+                   lon=stand.lon, alt_ft=None, on_ground=True, gs_kt=5.0, track=0.0, vs_fpm=0.0, squawk="", t=t)
+        m.on_feed([f], "test", t)
+        out = m.tick(t)
+        for c in out:
+            if isinstance(c, SpawnAiAircraft):
+                m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=601), t)
+    plane = m.planes["live:77"]
+    assert plane.object_id == 601 and plane.spot is None and plane.mode == "live"
+    m.routes = lambda callsign: None  # no route known: one that pushed back off a stand is a departure all the same
+    plane.left_stand = True
+    t += 1.0
+    m.on_feed([replace(f, t=t)], "test", t)
+    m.tick(t)
+    assert plane.spot is None
+    plane.left_stand, plane.airborne_seen = False, True  # the same, having landed: onto the stand
+    t += 1.0
+    m.on_feed([replace(f, t=t)], "test", t)
+    m.tick(t)
+    assert plane.spot is not None and plane.mode == "parked"

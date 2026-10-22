@@ -385,7 +385,7 @@ def test_a_switch_that_never_moves_on_this_aircraft_is_left_to_the_pilot():
         t = 1.0 + 10 * n
         words += said(heard(pm, t, f"altitude {alt}"))
         words += said(pm.observe(own(t + 4, on_ground=False, alt_agl_ft=9000, alt_indicated_ft=9000)))
-    assert "Altitude 10,000 sent, but I can't see it on this aircraft. Check it." in words or any("sent, but" in w for w in words)
+    assert "I couldn't set 10,000. Can you set it?" in words  # the pilot asked, not told to "check it"
     assert any("inputs aren't reaching this aircraft" in w for w in words)
     assert "altitude" in pm.cockpit.dead and not sent(heard(pm, 40.0, "altitude 13000"))
 

@@ -178,6 +178,24 @@ def test_push_to_talk_to_transcript():
     assert "Paine Ground" in prompt and "N172LT" in hotwords
 
 
+class LoopingOnHints(FakeTranscriber):
+    """Whisper with O'Hare's taxiways in its prompt, on a 22 s clearance readback: "United 318, A15, A15, A15, ..."."""
+
+    def transcribe(self, audio, *, prompt="", hotwords=""):
+        self.calls.append((len(audio), prompt, hotwords))
+        if prompt or hotwords:
+            return Result("United 318, " + ", ".join(["A15"] * 14))
+        return Result("Cleared to Denver as filed, climb and maintain 8,000, squawk 6547, United 318", audio_s=22.0)
+
+
+def test_a_transcription_caught_in_a_loop_is_heard_again_without_the_airports_words():
+    transcriber = LoopingOnHints()
+    hints = lambda: VocabularyHints(callsign="UAL318", taxiways=("A15", "B"))  # noqa: E731
+    [transcript] = talk(FakeCapture(22.0), transcriber, hints=hints)
+    assert transcript.text.startswith("Cleared to Denver as filed")
+    assert len(transcriber.calls) == 2 and transcriber.calls[1][1:] == ("", "")
+
+
 @pytest.mark.parametrize("capture", [FakeCapture(0.1), FakeCapture(2.0, level=0.0)], ids=["click", "silence"])
 def test_no_speech_gives_an_empty_transcript(capture):
     transcriber = FakeTranscriber()
@@ -339,7 +357,10 @@ def test_spoken_transmissions_take_time():
     typed = run(load_scenario(HAPPY), HAPPY.parent).outputs
     fed = []
     spoken = run(load_scenario(HAPPY), HAPPY.parent, voice=ScriptVoice(), on_input=fed.append).outputs
-    readbacks = lambda outs: [(o.instruction_id, o.status) for o in outs if type(o).__name__ == "ReadbackEvaluated"]  # noqa: E731
+    # (Handed to tower 300 m from the hold short: spoken, the check-in comes as the aircraft reaches the line, and
+    # tower clears it at once rather than "continue taxi, hold short".)
+    readbacks = lambda outs: [(o.instruction_id, o.status) for o in outs if type(o).__name__ == "ReadbackEvaluated"  # noqa: E731
+                              and o.instruction_id != "tower.continue_hold_short"]
     assert readbacks(spoken) == readbacks(typed) and all(s == "correct" for _, s in readbacks(spoken))
     ptt = [e for e in fed if isinstance(e, (PttPressed, PttReleased, Transcript))]
     first = ptt[:3]

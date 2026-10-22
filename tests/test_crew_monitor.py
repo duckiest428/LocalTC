@@ -16,6 +16,7 @@ from localtc.sim_api import (
     AircraftSystems,
     AtcTransmission,
     ChecklistState,
+    CrewAction,
     CrewSpeech,
     IntercomHeard,
     OwnshipState,
@@ -102,7 +103,26 @@ def test_positive_rate_then_the_copilot_raises_the_gear_itself():
                      ias_kt=155, gs_kt=155) for i in range(14)])
     assert "Positive rate." in said(out)
     assert any(isinstance(o, SendSimEvent) and o.name == "GEAR_UP" for o in out)
-    assert "Gear up." in said(out)
+    assert "Gear up." not in said(out)  # said once the gear's seen coming up, not as the lever's sent
+    assert said(pm.observe(systems(16.5, gear_pct=0.6))) == ["Gear up."]
+
+
+def test_a_switch_that_doesnt_move_is_asked_of_the_pilot_not_said_as_done():
+    """"Ten thousand. Seatbelt sign off." was said as the switch was sent, then "Seatbelt sign off sent, but I can't
+    see it on this aircraft. Check it." The call waits for the switch; the pilot's asked for one that didn't move."""
+    from localtc.crew.pm import CHECK_S
+
+    pm = crew()
+    pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))
+    pm.observe(systems(0.6, seatbelt=True))
+    out = fly(pm, [own(1 + i, on_ground=False, alt_agl_ft=9000 + 200 * i, alt_indicated_ft=9500 + 200 * i,
+                       alt_msl_ft=9500 + 200 * i, vs_fpm=2000, ias_kt=250, gs_kt=250, flaps_index=0, gear_down=False)
+                   for i in range(6)])
+    assert any(isinstance(o, CrewAction) and o.action == "seatbelt" and o.outcome == "sent" for o in out)
+    assert not any("Seatbelt" in w for w in said(out))
+    late = said(pm.observe(own(7 + CHECK_S, on_ground=False, alt_agl_ft=11000, alt_indicated_ft=11500, alt_msl_ft=11500,
+                               vs_fpm=2000, ias_kt=250, gs_kt=250, flaps_index=0, gear_down=False)))
+    assert late == ["Ten thousand. I couldn't get seatbelt sign off from here. Can you do it?"]
 
 
 def test_the_pilots_own_gear_call_comes_first():
@@ -481,3 +501,10 @@ def test_an_answer_of_off_is_the_brake_shown_released():
 
     assert _says("Off.", "released") and _says("set", "SET") and not _says("on", "released")
     assert _says("one plus F", "1+F") and _says("up", "0")
+
+
+def test_the_777_is_the_triple_seven():
+    from localtc.crew.monitor import _aircraft_name
+
+    assert _aircraft_name("777-200ER PW") == "triple seven"
+    assert _aircraft_name("FSLabs A321-211 - Air Canada") == "A321" and _aircraft_name("A320neo V2") == "A320neo"

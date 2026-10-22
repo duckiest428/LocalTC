@@ -1,4 +1,4 @@
-"""Make the taxi guidance's models: a green arrow and a piece of red stop bar, flat on the ground, each a SimObject
+"""Make the taxi guidance's models: an amber arrow and a piece of red stop bar, flat on the ground, each a SimObject
 (``StaticObject``) the bridge places by its title (``sim_bridge.simconnect_source.MARK_TITLES``).
 
 The files go in ``src/localtc/simpkg/localtc-taxi-guidance`` (the package ``localtc.simpkg`` copies into the sim's
@@ -15,6 +15,10 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "localtc" / "simpkg" / "localtc-taxi-guidance"
 LIFT_M = 0.06  # above the ground (the sim's ground is flat at the spot it's made on)
+# How hard they glow: the sim's emissive is the colour times this (its exporter's "emissive multiplier"), by day and
+# by night (ASOBO_material_emissive). Green at 1x was lost at night among the taxiway's own green centreline lights.
+GLOW = 3.0
+DAY_GLOW, NIGHT_GLOW = 1.0, 1.0
 
 # Each model: its title, folder, colour, and its outline as quads in metres, x right, z ahead (the way it points).
 ARROW = [  # a chevron 4 m across, pointing ahead
@@ -23,7 +27,7 @@ ARROW = [  # a chevron 4 m across, pointing ahead
 ]
 STOP = [[(-2.3, 0.45), (2.3, 0.45), (2.3, -0.45), (-2.3, -0.45)]]  # 4.6 m of a bar across the way
 MODELS = (
-    ("LocalTC Taxi Arrow", "localtc-taxi-arrow", (0.08, 1.0, 0.22), ARROW),
+    ("LocalTC Taxi Arrow", "localtc-taxi-arrow", (1.0, 0.72, 0.04), ARROW),  # amber: not the lights' green
     ("LocalTC Taxi Stop", "localtc-taxi-stop", (1.0, 0.05, 0.03), STOP),
 )
 
@@ -64,7 +68,8 @@ def gltf(name: str, colour: tuple[float, float, float], quads: list) -> tuple[di
             "ASOBO_asset_optimized": {"BoundingBoxMax": hi, "BoundingBoxMin": lo, "MajorVersion": 4, "MinorVersion": 3,
                                       "UseCheckerboardMaterialForMissingTextures": True},
             "ASOBO_normal_map_convention": {"tangent_space_convention": "DirectX"}}},
-        "extensionsUsed": ["ASOBO_normal_map_convention", "ASOBO_unique_id", "ASOBO_asset_optimized"],
+        "extensionsUsed": ["ASOBO_normal_map_convention", "ASOBO_unique_id", "ASOBO_asset_optimized",
+                           "ASOBO_material_emissive"],
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"mesh": 0, "name": name, "extensions": {"ASOBO_unique_id": {"id": name}}}],
@@ -72,7 +77,9 @@ def gltf(name: str, colour: tuple[float, float, float], quads: list) -> tuple[di
             "attributes": {"POSITION": 0, "TANGENT": 1, "NORMAL": 2, "TEXCOORD_0": 3, "TEXCOORD_1": 4, "COLOR_0": 5},
             "indices": 6, "material": 0, "mode": 4,
             "extras": {"ASOBO_primitive": {"PrimitiveCount": len(indices) // 3, "VertexType": "VTX", "VertexVersion": 2}}}]}],
-        "materials": [{"name": name, "doubleSided": True, "emissiveFactor": list(colour),
+        "materials": [{"name": name, "doubleSided": True, "emissiveFactor": [c * GLOW for c in colour],
+                       "extensions": {"ASOBO_material_emissive": {"emissiveDayMultiplier": DAY_GLOW,
+                                                                  "emissiveNightMultiplier": NIGHT_GLOW}},
                        "pbrMetallicRoughness": {"baseColorFactor": [*colour, 1.0], "metallicFactor": 0.0,
                                                 "roughnessFactor": 0.7}}],
         "accessors": accessors,

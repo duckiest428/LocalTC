@@ -563,6 +563,11 @@ def test_one_on_the_users_runway_is_taken_away():
     atc.runway = ("KTST", "09", "takeoff")
     out = m.tick(NOW + 1)
     assert of(RemoveAiAircraft, out) and not m.planes
+    # Still there in the next reports: not made again (O'Hare: made and taken away every 2 s, and tower, seeing it on
+    # the runway each time, stopped the user's takeoff roll).
+    for k in range(2, 30, 2):
+        m.on_feed([flight(lat=0.0, lon=0.003, ground=True, gs=5.0, track=90.0, t=NOW + k)], "adsb.lol", NOW + k)
+        assert not of(SpawnAiAircraft, m.tick(NOW + k)) and not m.planes
 
 
 def test_an_arrival_stays_on_its_stand_three_quarters_of_an_hour():
@@ -605,11 +610,17 @@ def test_ground_and_delivery_talk_to_the_real_flights_and_hold_short_says_why():
     ground = engine.facility("ground")
     engine.handle(msgspec.structs.replace(own_, com1_mhz=ground.mhz))
     lines = engine.traffic_call("UAL531", "pushback", ground.airport, "", own_.t + 1)
-    assert [c.speaker for c in lines] == ["atc", "pilot"] and "tail" in lines[0].text
+    exchange = lines + engine._later  # each said in its turn: the rest come as the one before is heard
+    assert [c.speaker for c in exchange] == ["pilot", "atc", "pilot"]  # they ask first, most of the time
+    assert exchange[0].text == "Boeing Ground, United 531, request pushback." and "tail" in exchange[1].text
+    assert lines == exchange[:1] and all(b.t > a.t for a, b in zip(exchange, exchange[1:]))
+    released = engine.handle(msgspec.structs.replace(own_, com1_mhz=ground.mhz, t=exchange[1].t))
+    assert [e.text for e in released if isinstance(e, RadioChatter)] == [exchange[1].text]
+    engine._later.clear()
     assert not engine.traffic_call("UAL531", "land", ground.airport, "16R", own_.t + 1)  # tower's, not ground's
     tower = engine.facility("tower")
     engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz, t=own_.t + 60))
-    [atc, _] = engine.traffic_call("UAL532", "hold_short", tower.airport, "16R", own_.t + 61)
+    atc = engine.traffic_call("UAL532", "hold_short", tower.airport, "16R", own_.t + 61)[0]  # (its readback to come)
     assert "traffic departing" in atc.text  # the user's on the ground: departing, not landing
 
 
@@ -693,3 +704,32 @@ def test_the_gates_empty_for_want_of_a_schedule_is_said():
                          squawk="1200", xpdr_mode="standby", com1_mhz=121.0, com2_mhz=121.0)
     assert m.status(1.0).note == NO_SCHEDULE_NOTE
     assert not m.s.fill_gates
+
+
+def test_the_traffic_waits_while_atc_is_answering_the_pilot_or_owed_a_readback():
+    """O'Hare: "request taxi" heard, and while the model worded the answer another flight was given its taxi; ATC's
+    taxi to the pilot, then two other flights' before the pilot's readback. Not now (a go-around can't wait)."""
+    from pathlib import Path
+
+    import msgspec
+
+    from localtc.airports import load_airport_dir
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.readback.interpreter import PendingReadback
+    from localtc.replay import Recording
+    from localtc.sim_api import AirportData
+
+    fixtures = Path(__file__).parent / "fixtures"
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, unscripted=False))
+    for airport in load_airport_dir(fixtures / "airports"):
+        engine.handle(AirportData(t=0.0, airport=airport))
+    own_ = next(e for e in Recording(fixtures / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))
+    tower = engine.facility("tower")
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz))
+    t = own_.t + 100
+    engine.state.comms.last_pilot_t = t - 3  # the pilot just spoke: being answered
+    assert not engine.traffic_call("UAL531", "takeoff", tower.airport, "16R", t)
+    engine.state.comms.last_pilot_t = t - 60
+    engine.state.pending = PendingReadback("ground.taxi_to_gate", "tower", {}, (), ("taxi_route",), issued_t=t - 40)
+    assert not engine.traffic_call("UAL531", "takeoff", tower.airport, "16R", t)  # the pilot's readback first
+    assert engine.traffic_call("UAL532", "go_around", tower.airport, "16R", t)

@@ -138,3 +138,34 @@ def test_the_models_are_what_the_bridge_asks_for():
         size = doc["buffers"][0]["byteLength"]
         assert (gltf.parent / doc["buffers"][0]["uri"]).stat().st_size == size
         assert doc["bufferViews"][0]["byteStride"] == 36  # the sim's own compiled layout
+
+
+def test_off_the_route_the_arrows_lead_back_onto_it():
+    """Denver, taxiing in: off the route ground gave, the arrows still pointed along it from its nearest point ("guides
+    should guide the user from its current position back on track"). They lead along the taxiways back onto it; the
+    route ground gave (the Live Map's line) is left as it was."""
+    from helpers.airports import kpae
+
+    from localtc.atc_core.airport import AirportGeometry, TaxiGraph
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.sim_api import AirportData
+
+    engine = AtcEngine(EngineConfig(callsign="N172LT", destination="KBFI"))
+    engine.handle(AirportData(t=0.0, airport=kpae()))
+    geo = engine.geometry("KPAE")
+    graph = TaxiGraph(geo)
+    spot = kpae().parking[0]
+    route = graph.departure_route(spot.lat, spot.lon, geo.end("34L"))
+    path = [graph.positions[n] for n in route.nodes if n in graph.positions]
+    on = taxi_guide.point_at(path, taxi_guide.length(path) * 0.3)
+    side = (on[0] + 60 * math.cos(math.radians(on[2])), on[1] - 60 * math.sin(math.radians(on[2])))  # 60 m to the right
+    lat, lon = geo.frame.to_latlon(*side)
+    own = OwnshipState(t=1.0, lat=lat, lon=lon, alt_msl_ft=600, alt_indicated_ft=600, alt_agl_ft=0, altimeter_inhg=29.92,
+                       hdg_mag=on[2] - 15, hdg_true=on[2], ias_kt=10, gs_kt=10, vs_fpm=0, on_ground=True, squawk="1200",
+                       xpdr_mode="alt", com1_mhz=121.8, com2_mhz=121.5)
+    assert engine._back_on_route(AirportGeometry(kpae()), path, replace(own, lat=geo.frame.to_latlon(*on[:2])[0],
+                                                                         lon=geo.frame.to_latlon(*on[:2])[1])) is path
+    back = engine._back_on_route(geo, path, own)
+    assert back is not path and back[-1] == path[-1]  # on to the same hold short
+    assert back[0] == graph.positions[graph.nearest_node(lat, lon)]  # from where the aircraft is
+    assert engine._back_on_route(geo, path, own) is back  # the same while the nearest node is: no new objects

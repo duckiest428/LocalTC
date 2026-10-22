@@ -40,7 +40,13 @@ def scenario(**meta) -> Scenario:
 
 @pytest.fixture(scope="module")
 def recorded():
-    return run(scenario(), FLIGHT, recording=FLIGHT, recorded_pilot=True, recorded_copilot=True).lines
+    from localtc.atc_core import engine
+
+    share, engine.INSTRUMENT_SHARE = engine.INSTRUMENT_SHARE, 0.0  # this flight drew the visual, as it was flown
+    try:
+        return run(scenario(), FLIGHT, recording=FLIGHT, recorded_pilot=True, recorded_copilot=True).lines
+    finally:
+        engine.INSTRUMENT_SHARE = share
 
 
 def atc(lines: list[str]) -> list[str]:
@@ -114,7 +120,8 @@ def test_no_takeoff_clearance_before_the_runway(recorded):
 def test_good_weather_in_the_us_is_the_visual(recorded):
     expected = [line for line in atc(recorded) if "expect" in line and "approach" in line]
     assert expected and all("expect visual approach runway 34R" in line for line in expected), expected
-    assert "cleared visual approach runway 34R" in "".join(atc(recorded))
+    # (The recorded pilot went to tower before the turn onto the final, which clears a visual now: the vectors were for it.)
+    assert "vectors visual approach runway 34R" in "".join(atc(recorded))
     assert not [line for line in atc(recorded) if "visual" in line and "localizer" in line]
 
 
@@ -218,3 +225,16 @@ def test_readbacks_through_speech_to_text():
     assert heard("Contact Ground on 121771 Ready Air Canada 8272.", ground, "PARKED").status == "correct"
     assert heard("Seattle Centre, Air Canada 8272, cruising at 13,000 feet.", None, "CRUISE").intent == "checkin"
     assert heard("Continue approach for 3, 4, right, Air Canada 8272.", None, "APPROACH").intent == "acknowledge"
+
+
+def test_some_flights_expect_the_ils_in_good_weather():
+    """Always the visual in good weather in the US, five flights running, looked broken: each flight draws, seeded by
+    the flight (a replay draws the same), the ILS half the time where the runway has one."""
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+
+    draws = {AtcEngine(EngineConfig(callsign=f"UAL{n}", destination="KDEN", seed=1))._instrument_arrival("KDEN")
+             for n in range(40)}
+    assert draws == {True, False}
+    again = AtcEngine(EngineConfig(callsign="UAL318", destination="KDEN", seed=1))
+    assert again._instrument_arrival("KDEN") == AtcEngine(EngineConfig(callsign="UAL318", destination="KDEN",
+                                                                        seed=1))._instrument_arrival("KDEN")

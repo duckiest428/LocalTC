@@ -62,6 +62,7 @@ SLOTS: dict[str, SlotType] = {
     "missing": PHRASE,  # pre-rendered fragments ("read back {missing}")
     "correction": PHRASE,
     "message": PHRASE,  # free wording: an answer or a declined request
+    "runway_note": PHRASE,  # a clearance's ", expect runway 27C" ("" when the runway isn't known yet)
     "runway": RUNWAY,
     "hold_short": RUNWAY,
     "frequency": FREQUENCY,
@@ -91,4 +92,4 @@ SLOTS: dict[str, SlotType] = {
 
 # What a slot says when nothing better is known. "Expect FL350 one zero minutes after departure" is what a
 # real clearance says without a flight plan's climb to go on; the engine always works out its own.
-SLOT_DEFAULTS: dict[str, Any] = {"minutes": 10}
+SLOT_DEFAULTS: dict[str, Any] = {"minutes": 10, "runway_note": Phrase("", "")}

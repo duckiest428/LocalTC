@@ -143,6 +143,7 @@ SCHEDULED_BEFORE_S = 45 * 60.0
 SCHEDULED_LATE_S = 60 * 60.0
 SCHEDULED_CLEARANCE_S = 20 * 60.0
 SCHEDULED_MAX = 30
+KEPT_OFF_S = 180.0  # a live flight taken off the user's runway isn't made again for this long (it's moved on by then)
 SPOT_LEAVE_M = 20.0  # one on its stand leaves it (pushed back) only when the real one is this far off it and moving
 OVERLAP_M = 30.0  # a live one standing this close to another of LocalTC's isn't made (two on one stand)
 TAXI_TTL_S = 20 * 60.0  # one LocalTC taxies in itself, this long at most
@@ -228,6 +229,7 @@ class Plane:
     parked_t: float = 0.0  # when it stopped on its stand (an arrival there goes after PARKED_STAY_S)
     said: set[str] = field(default_factory=set)  # the calls the controllers have made to it
     airborne_seen: bool = False  # seen in the air: an arrival, once down
+    left_stand: bool = False  # pushed back off a stand: a departure, never put on one again
 
     @property
     def live(self) -> bool:
@@ -247,6 +249,7 @@ class TrafficManager:
                  types: Callable[[str], str] | None = None, seed: int = 0) -> None:
         self.s = settings or TrafficSettings()
         self.unscheduled = False  # the departures at the gates asked for, with no schedule to take them from
+        self._kept_off: dict[str, float] = {}  # live flights taken off the user's runway: not made again until then
         self.atc = atc or AtcLink()
         self.picker = picker or ModelPicker()
         self.routes = routes or (lambda callsign: None)
@@ -466,7 +469,7 @@ class TrafficManager:
             if plane.mode == "parked":  # on its stand (an arrival, or one switched off at its gate): there a while
                 if f is not None and f.t > plane.parked_t + 1 and f.gs_kt >= 1 and (shown := self._shown(f.hex, now)) \
                         is not None and shown.gs_kt >= 1:
-                    plane.mode, plane.flight = "live", shown  # moving again: pushed back for its next flight
+                    plane.mode, plane.flight, plane.left_stand = "live", shown, True  # moving again: pushed back for its next flight
                     continue
                 lat, lon = self._spot_latlon(plane.spot) if plane.spot is not None else \
                     (plane.sent[0], plane.sent[1]) if plane.sent is not None else (self.own.lat, self.own.lon)
@@ -496,14 +499,15 @@ class TrafficManager:
                 if plane.mode == "live" and shown is not None and plane.object_id is not None:
                     plane.flight = shown
                     plane.airborne_seen = plane.airborne_seen or not shown.on_ground
-                    if plane.spot is None and (spot := self._stand_ahead(shown)) is not None:
+                    if plane.spot is None and self._arriving(plane, shown) and (spot := self._stand_ahead(shown)) is not None:
                         out += self._onto_stand(plane, spot, now)
                     else:
                         out += self._track(plane, now)
                     out += self._calls(plane, f, now)
                 continue
-            if made >= LIVE_PER_TICK or now - f.t > STALE_S or shown is None:
-                continue
+            if made >= LIVE_PER_TICK or now - f.t > STALE_S or shown is None or self._kept_off.get(key, 0.0) > now:
+                continue  # (one taken off the user's runway was made again from its next report, every 2 s: tower
+                # saw it there each time and stopped the user's takeoff roll)
             f = shown
             if not f.on_ground and now - self._first_t > FIRST_LOT_S and d < POP_IN_NM:
                 continue  # would appear out of nowhere in front of the user: it comes in from further out instead
@@ -706,6 +710,17 @@ class TrafficManager:
             if best is None or d < best[0]:
                 best = (d, (icao, i))
         return best[1] if best is not None else None
+
+    def _arriving(self, plane: Plane, f: Flight) -> bool:
+        """Taxiing in (a stand ahead is where it's going), not out: seen landing, or bound here, and never pushed back
+        off a stand. Departures taxiing out slowly past free stands were put on one ("on its stand"), let go as they
+        moved on, put on the next: a 787 jumping about O'Hare's apron, into the user's path and back."""
+        if plane.airborne_seen:
+            return True
+        if plane.left_stand:
+            return False
+        route = self.routes(plane.callsign)
+        return route is None or route.destination == self._near_airport(f.lat, f.lon)
 
     def _onto_stand(self, plane: Plane, spot: tuple[str, int], now: float) -> list[Any]:
         """Turned onto its stand and stopped on the marker, facing the terminal as the stand has it: the real one
@@ -970,6 +985,7 @@ class TrafficManager:
                     # be stopped there, and the user's roll was called off for it. Taken away; it comes back from the
                     # live data once it's gone.
                     self._did(f"{plane.callsign} taken off your runway {end.ident}")
+                    self._kept_off[plane.key] = now + KEPT_OFF_S
                     out += self._remove(plane)
                 elif 0 < runway.distance_to(xy) <= RUNWAY_NEAR_M and self._heading_onto(runway, xy, hdg, f.gs_kt):
                     # Short of it and heading onto it (to line up or to cross): held there.
@@ -977,6 +993,7 @@ class TrafficManager:
         for plane in [p for p in self.planes.values() if p.mode == "hold" and p.local is not None]:
             if runway.contains(geo.xy(plane.local.lat, plane.local.lon), 5.0):
                 self._did(f"{plane.callsign} taken off your runway {end.ident}")
+                self._kept_off[plane.key] = now + KEPT_OFF_S
                 out += self._remove(plane)
         return out
 
@@ -1250,7 +1267,7 @@ class TrafficManager:
         lat, lon = self._spot_latlon(plane.spot)
         if f.gs_kt < 2 or haversine_nm(f.lat, f.lon, lat, lon) * M_PER_NM < SPOT_LEAVE_M:
             return True
-        plane.spot = None  # pushed back: off its stand for good
+        plane.spot, plane.left_stand = None, True  # pushed back: off its stand for good
         return False
 
     def _overlaps(self, lat: float, lon: float) -> bool:

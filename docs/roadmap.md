@@ -411,6 +411,15 @@ Shown in Quick Settings as "Coming later" (greyed out, off by default); not buil
 - open questions: drawing it in MSFS 2024 (SimObjects placed along the path, or a WASM/in-sim panel), keeping it
   in step with the taxi graph's names, and the cost of the objects at a big airport
 
+## Multiple languages
+
+Requested by users (first: Chinese). After the English radio is solid.
+
+- ATC and the copilot in the pilot's language (Chinese first): the phraseology per country (ICAO Chinese R/T)
+- speech recognition in that language (Whisper is multilingual; the grammar and readback checks are English-only)
+- a voice for it (Piper has zh_CN voices) and the app's text translated
+- optional: English radio with the pilot's language as subtitles, the easier first step
+
 # Phase 7: Quality, Privacy, and Release Hardening
 
 ## Integration test matrix

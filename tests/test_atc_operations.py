@@ -280,3 +280,20 @@ def test_a_shortcut_is_never_to_the_destination_or_into_the_filed_star():
     assert engine._shortcut(own, CENTER)
     fix = engine._scheduled[-1].slots["fix"]
     assert fix in ("CHRLY", "DELTA") and engine._scheduled[-1].instruction_id == "common.direct"
+
+
+def test_approachs_speeds_go_by_the_stars_published_ones():
+    """Speeds were given on every approach. Not while flying the STAR (its own speeds), and on vectors never faster
+    than the STAR's last published speed (the sim's navdata)."""
+    from localtc.sim_api import ArrivalData, ArrivalLeg
+
+    engine = engine_at_kbfi()
+    engine.cfg.star = "HAWKZ7"
+    engine.state.flight.destination = "KPAE"
+    engine.handle(ArrivalData(t=0.0, airport="KPAE", name="HAWKZ7", legs=(
+        ArrivalLeg(fix="ONE", speed_kt=250), ArrivalLeg(fix="TWO", speed_kt=210), ArrivalLeg(fix="RW34", speed_kt=180,
+                                                                                               transition="RW16R"))))
+    engine.state.assignments.arrival_runway = "34L"
+    assert engine._star_speed() == 210  # the common part's last; the other runway's transition isn't flown
+    engine.state.assignments.arrival_runway = "16R"
+    assert engine._star_speed() == 180

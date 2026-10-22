@@ -99,7 +99,10 @@ out of KLAX 2026-10-10 (windows-findings.md: frames, spawns sliding, the holds).
    lights right), the gates (nobody on yours; none on top of another), ATC's go-arounds and holds when you have the
    runway, and that everything goes when it's turned off. Since 2026-10-10: a new aircraft appears where it stays
    (no slide), the frame rate with 40 parked, departures held for you going one at a time, and one taxiing at you
-   stopping until you're clear.
+   stopping until you're clear. Since 2026-10-22 the ground is LocalTC's (the live data only times it): check the
+   pushbacks (backwards, nose the other way), the taxi out along real taxiways to the runway in use, the hold short
+   and takeoff after the real one has gone, the takeover of an arrival about 3 nm out (no jump), its turn off and
+   taxi to a gate.
 
 ## Task 3: the voices with the sim running
 

@@ -207,8 +207,14 @@ class AppController:
         self._log_handler = _UiLogHandler(self, loop)
         logging.getLogger().addHandler(self._log_handler)
         loop.create_task(self._companion_on())
+        loop.call_later(3.0, lambda: asyncio.ensure_future(self.pilot.recover(self._recording_now())))
         if self.cfg.ui.updates != "off":
             loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
+
+    def _recording_now(self) -> tuple[str, ...]:
+        """The recording a flight running now is writing (not one to make a logbook line from)."""
+        live = self.live
+        return (str(live.recording.resolve()),) if live is not None and live.recording is not None else ()
 
     async def _companion_on(self) -> None:
         """The phone's direct line on this network: only for a signed-in account, with the companion on."""

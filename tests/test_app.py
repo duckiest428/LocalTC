@@ -89,3 +89,56 @@ def _empty_config(tmp_path: Path) -> Path:
     path = tmp_path / "empty.toml"
     path.write_text("", encoding="utf-8")
     return path
+
+
+def test_a_part_of_the_session_that_doesnt_end_is_stopped(monkeypatch):
+    """The real-world data's loop never ended: the flight's end waited on it, the app gave up after 15 s and
+    cancelled the flight, and its logbook line was never written."""
+    from localtc import app
+
+    monkeypatch.setattr(app, "CONSUMERS_END_S", 0.1)
+
+    async def main():
+        stuck = asyncio.create_task(asyncio.sleep(60))
+        done = asyncio.create_task(asyncio.sleep(0))
+        await asyncio.wait_for(app._ended([stuck, done]), 2)
+        return stuck.cancelled()
+
+    assert asyncio.run(main())
+
+
+def test_the_real_world_data_ends_with_the_flight():
+    from types import SimpleNamespace
+
+    from localtc.bus import EventBus
+    from localtc.config import OpsConfig
+    from localtc.ops.service import OpsService
+
+    async def main():
+        bus = EventBus()
+        ops = OpsService(SimpleNamespace(cache=SimpleNamespace(save=lambda: None)), bus, flight=dict,
+                         cfg=OpsConfig(weather=False, notams=False, restrictions=False, terrain=False))
+        task = asyncio.create_task(ops.run())
+        await asyncio.sleep(0.1)
+        bus.close()
+        await asyncio.wait_for(task, 3)
+
+    asyncio.run(main())
+
+
+def test_the_logbook_line_is_written_as_the_flight_goes(monkeypatch):
+    from localtc import app
+    from localtc.bus import EventBus
+
+    monkeypatch.setattr(app, "SAVE_EVERY_S", 0.0)
+    saved = []
+
+    async def main():
+        bus = EventBus()
+        task = asyncio.create_task(app._keep_saving(bus, lambda: saved.append(1)))
+        await asyncio.sleep(1.2)
+        bus.close()
+        await asyncio.wait_for(task, 3)
+
+    asyncio.run(main())
+    assert saved

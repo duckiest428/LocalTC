@@ -73,6 +73,10 @@ class EventBus:
         for sub in tuple(self._subscriptions):
             sub.offer(event)
 
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
     def close(self) -> None:
         self._closed = True
         for sub in tuple(self._subscriptions):

@@ -91,6 +91,22 @@ class PilotRoutes:
 
         return {"flights": [_row(f) for f in flights], "totals": totals(flights)}
 
+    async def recover(self, skip: tuple[str, ...] = ()) -> None:
+        """The flights that never got their line (the app closed, or the flight's end was cut off) given one from
+        their recordings, then synced like any new flight. When the app starts; ``skip``: a recording still going."""
+        try:
+            folder = Path(self.cfg().recorder.dir).resolve()
+            await asyncio.to_thread(self.logbook.link_recordings, folder)
+            added = await asyncio.to_thread(self.logbook.recover, folder, skip=skip)
+        except Exception:  # noqa: BLE001 - never in the way of the app starting
+            log.exception("Couldn't look for flights missing from the logbook")
+            return
+        if added:
+            log.info("Logbook: %d flight%s added from %s recording%s (%s)", len(added), "s" * (len(added) != 1),
+                     "their" if len(added) != 1 else "its", "s" * (len(added) != 1),
+                     ", ".join(f"{r.callsign or '?'} {r.origin or '?'}-{r.destination or '?'}" for r in added))
+            await self.after_flight()
+
     # --- replays ------------------------------------------------------------------------------------------------
 
     def _replay(self, flight_id: str) -> tuple[FlightRecord, bytes]:

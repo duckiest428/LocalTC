@@ -21,7 +21,9 @@ from localtc.atc_core.values import clean_sim_name
 from localtc.config import data_dir
 from localtc.sim_api import (
     AircraftIdentity,
+    AirportData,
     AtcAlert,
+    FlightArrived,
     OwnshipState,
     PhaseChanged,
     ReadbackEvaluated,
@@ -73,6 +75,7 @@ class FlightLog:
     """Sums up one flight from its events. ``finish`` gives the record, or None if nothing happened."""
 
     def __init__(self, started: datetime | None = None) -> None:
+        self.id = str(uuid.uuid4())  # the same line each time it's written: as the flight goes, and at its end
         self.started = started or datetime.now(UTC)
         self.t0: float | None = None
         self.last_t = 0.0
@@ -138,7 +141,7 @@ class FlightLog:
             return round((stop - start) / 60.0, 1) if start is not None and stop is not None else None
 
         return FlightRecord(
-            id=str(uuid.uuid4()),
+            id=self.id,
             started_at=_iso(self.started),
             ended_at=_iso(self.started + timedelta(seconds=self.last_t - self.t0)),
             callsign=(callsign.ident if callsign is not None else "") or "",
@@ -189,6 +192,9 @@ class Logbook:
             columns = ", ".join(f"{c} {_TYPES.get(c, 'TEXT')}{' PRIMARY KEY' if c == 'id' else ''}" for c in _COLUMNS)
             db.execute(f"CREATE TABLE IF NOT EXISTS flights ({columns})")
             db.execute("CREATE INDEX IF NOT EXISTS flights_started ON flights (started_at)")
+            # The recordings already made into a line (or looked at and not a flight): one whose line was deleted
+            # isn't brought back by ``recover``.
+            db.execute("CREATE TABLE IF NOT EXISTS recordings (path TEXT PRIMARY KEY)")
             have = {row[1] for row in db.execute("PRAGMA table_info(flights)")}
             for c in _COLUMNS:  # a logbook from an older LocalTC gains the newer columns
                 if c not in have:
@@ -204,6 +210,43 @@ class Logbook:
         with closing(self._connect()) as db, db:
             db.execute(f"INSERT OR REPLACE INTO flights ({', '.join(_COLUMNS)}) VALUES ({', '.join('?' * len(_COLUMNS))})",
                        [values[c] for c in _COLUMNS])
+            if record.recording:
+                db.execute("INSERT OR IGNORE INTO recordings (path) VALUES (?)", (record.recording,))
+
+    def recover(self, recordings: Path, *, skip: tuple[str, ...] = ()) -> list[FlightRecord]:
+        """Lines for the flights whose session never wrote one (the app closed or stopped before it could), made
+        from their recordings. Each recording is looked at once; the first time, those older than the newest line
+        are taken as done. ``skip``: recordings still being written. Returns the lines added."""
+        if not recordings.is_dir():
+            return []
+        with closing(self._connect()) as db:
+            seen = {row[0] for row in db.execute("SELECT path FROM recordings")}
+            linked = {row[0] for row in db.execute("SELECT recording FROM flights WHERE recording != ''")}
+            newest = db.execute("SELECT MAX(started_at) FROM flights").fetchone()[0]
+        first = not seen
+        folders = []
+        for folder in sorted(recordings.iterdir()):
+            path = str(folder.resolve())
+            if not folder.name.endswith("_live") or not folder.is_dir() or path in seen or path in linked or path in skip:
+                continue
+            try:
+                began = _created(folder)
+            except (OSError, ValueError):
+                continue  # not a recording, or one with no header yet
+            if first and newest is not None and _iso(began) <= newest:
+                seen.add(path)  # from before LocalTC kept this list: its line was written, or deleted
+                continue
+            folders.append((folder, path))
+        added = []
+        for folder, path in folders:
+            record = from_recording(folder)
+            if record is not None:
+                self.add(record)
+                added.append(record)
+            seen.add(path)
+        with closing(self._connect()) as db, db:
+            db.executemany("INSERT OR IGNORE INTO recordings (path) VALUES (?)", [(p,) for p in seen | linked])
+        return added
 
     def flights(self, limit: int = 500) -> list[FlightRecord]:
         with closing(self._connect()) as db:
@@ -319,6 +362,46 @@ class Logbook:
 # Everything in a recording but the aircraft's identity, for reading only that.
 _NOT_IDENTITY = ("ownship_state", "traffic_snapshot", "llm_exchange", "atc_decision", "nearby_airports", "airport_data", "atc_transmission",
                  "transcript", "ptt_pressed", "ptt_released", "readback_evaluated", "phase_changed", "session_note")
+
+
+# What a recording's line is made from: everything else is left undecoded.
+_NOT_FOR_LINE = ("traffic_snapshot", "llm_exchange", "atc_decision", "nearby_airports", "atc_transmission", "transcript",
+                 "ptt_pressed", "ptt_released", "session_note", "traffic_control_status", "ai_object_assigned",
+                 "atc_operations", "radio_chatter", "terrain_grid", "aircraft_systems", "crew_speech", "crew_action",
+                 "copilot_event", "intercom_heard", "checklist_state", "atis_report", "ops_snapshot")
+
+
+def from_recording(folder: Path) -> FlightRecord | None:
+    """A flight's line made from its recording alone (the flight's plan from the recording's header, the arrival
+    gate from ATC's "arrived"), or None if it never moved. A recording cut off mid-line (the app killed) is read
+    up to there."""
+    from localtc.replay import Recording
+
+    try:
+        recording = Recording(folder)
+        log = FlightLog(started=_created(folder))
+    except (OSError, ValueError):
+        return None
+    plan = (recording.header.config or {}).get("flight") or {}
+    origin, destination = str(plan.get("origin") or "").upper(), str(plan.get("destination") or "").upper()
+    gate, points = "", {}
+    try:
+        for event in recording.events(skip=_NOT_FOR_LINE):
+            if isinstance(event, AirportData):
+                if event.airport.icao in (origin, destination):
+                    prefix = "origin" if event.airport.icao == origin else "destination"
+                    points[f"{prefix}_lat"], points[f"{prefix}_lon"] = round(event.airport.lat, 4), round(event.airport.lon, 4)
+                continue
+            if isinstance(event, FlightArrived):
+                gate = event.gate
+            log.feed(event)
+    except (OSError, EOFError, ValueError):
+        pass  # cut off: what was read is the flight
+    record = log.finish(None)
+    if record is None:
+        return None
+    return replace(record, callsign=str(plan.get("callsign") or ""), origin=origin, destination=destination,
+                   arrival_gate=gate if gate != "parking" else "", recording=str(folder.resolve()), **points)
 
 
 def aircraft_name(identity: AircraftIdentity) -> str:

@@ -4,6 +4,8 @@
 
 const quiet = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const finePointer = window.matchMedia("(pointer: fine)").matches;
+// On a touch screen the photos stay put as you scroll: moving them every frame is what makes a phone stutter.
+const touch = window.matchMedia("(pointer: coarse)").matches;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // --- sections arrive ------------------------------------------------------------------------------
@@ -56,7 +58,7 @@ function onScroll() {
   const room = document.documentElement.scrollHeight - window.innerHeight;
   topbar?.classList.toggle("scrolled", y > 40);
   progress?.style.setProperty("--p", room > 0 ? (y / room).toFixed(4) : "0");
-  if (quiet) return;
+  if (quiet || touch) return;
   if (heroSlides && y < window.innerHeight * 1.2) heroSlides.style.transform = `translate3d(0, ${(y * 0.35).toFixed(1)}px, 0)`;
   for (const img of drifting) {
     const box = img.parentElement.getBoundingClientRect();

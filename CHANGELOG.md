@@ -119,6 +119,7 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The logbook map**: a route that goes the long way round the map (London to Tokyo with flights across the Pacific too) is drawn from its own airport, not loose from the map's edge, and the busiest airports' dots no longer grow so large.
 - **The FSLabs's squawk**: its CLR takes one digit off, so after one CLR, 1200 became 1204 and 4-7-0-1 went nowhere. It's pressed once a digit now, then the code typed.
 - **The copilot and "don't forget"**: "Don't forget to set your altimeter to 30.39" was taken as "don't touch the altimeter". "No, change it to 30.39" was turned away for not saying "altimeter", and the number 30.39 for not being said. A command the model read and couldn't check is asked ("Seatbelt sign on, confirm?"), not replied to as done ("Seatbelt sign on." with nothing done). "Seapelt signs" is the seatbelt sign.
 - **"We're cleared to push; parking brake's still set"** came as the push finished and the brake was set. The checklist's "parking brake" answered "off" during the push, as the aircraft showed it, held the checklist; it's the captain's answer now.

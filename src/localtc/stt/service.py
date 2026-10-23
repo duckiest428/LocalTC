@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 MIN_CLIP_S = 0.3  # shorter: a click on the switch, not speech
 SILENCE_RMS = 0.003  # below this the mic heard nothing
+DEAD_CHECK_S = 0.5  # after reopening it, this long for its first audio
 STALLED_S = 1.0  # the microphone sent nothing for this long: it has stopped, reopen it before a press
 NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignored
 # Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
@@ -134,6 +135,16 @@ class VoiceService:
             await asyncio.to_thread(self.capture.refresh)
         except Exception as exc:  # a missing device: keep going, the next press tries again
             log.warning("Could not reopen the microphone: %s", exc)
+            return
+        asyncio.get_running_loop().create_task(self._still_dead())  # the press goes on meanwhile
+
+    async def _still_dead(self) -> None:
+        """Reopened and still nothing: Windows isn't giving the microphone any audio, to any program (a USB
+        microphone's stream stuck). "Too short for speech" on every press said nothing of that."""
+        await asyncio.sleep(DEAD_CHECK_S)
+        if self.capture.idle_s >= DEAD_CHECK_S * 0.8:
+            log.warning("%s isn't sending any audio to Windows at all: unplug it and plug it back in (or pick another "
+                        "in Quick Settings > Push-to-talk), then press again", getattr(self.capture, "name", "The microphone"))
 
     async def _silent_microphone(self, audio_s: float) -> None:
         """The microphone sent silence. Reopen it: if the system default input was changed (Windows

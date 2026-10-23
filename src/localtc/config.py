@@ -377,6 +377,10 @@ class CrewConfig(_Section):
     """The copilot as Pilot Monitoring, on the intercom: takes spoken commands and works the aircraft."""
 
     enabled: bool = True  # with voice input on: the intercom key talks to the copilot
+    # Who's in the right seat (crew/personalities.py): "neutral" (as it always was, its voice the two settings below),
+    # or marcus, priya, jake, elena, oliver, sofia, dale, maya, tom, hannah, each with a voice and a manner of their
+    # own. Only the routine and conversational lines change: the safety calls keep their standard words.
+    personality: str = "neutral"
     voice_sex: Literal["female", "male", "any"] = "any"  # the copilot's voice
     voice_pick: int = 0  # which of that sex's voices (0-7); the copilot uses it on the radio too
     # The language model on the intercom (needs [llm]): "off" the fixed commands and common questions only;

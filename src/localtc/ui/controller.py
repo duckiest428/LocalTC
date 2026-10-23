@@ -844,10 +844,14 @@ class AppController:
         return {}
 
     async def api_crew_preview(self, args: dict) -> dict:
-        """The copilot's voice ([crew] voice_sex and voice_pick, or the ones given), on the intercom."""
-        sex = str(args.get("sex") or self.cfg.crew.voice_sex)
-        pick = int(args.get("pick", self.cfg.crew.voice_pick))
-        seconds = await asyncio.to_thread(_crew_preview, self.cfg, sex, pick)
+        """The copilot's voice on the intercom: a personality's (``personality``, saying its line), or neutral's with
+        [crew] voice_sex and voice_pick (or the ones given)."""
+        from localtc.crew.personalities import get
+
+        who = get(str(args.get("personality") or self.cfg.crew.personality))
+        sex = who.voice_sex(str(args.get("sex") or self.cfg.crew.voice_sex))
+        pick = who.voice_pick(int(args.get("pick", self.cfg.crew.voice_pick)))
+        seconds = await asyncio.to_thread(_crew_preview, self.cfg, sex, pick, who)
         return {"seconds": seconds}
 
     async def api_ptt(self, args: dict) -> dict:
@@ -903,8 +907,12 @@ class AppController:
             self.publish("traffic_control", self.traffic_control)
 
     async def api_settings(self, args: dict) -> dict:
+        from localtc.crew.personalities import PERSONALITIES
+
         return {"settings": msgspec.to_builtins(self.cfg), "path": str(settings_path() or ""),
-                "catalog": models.catalog()}
+                "catalog": models.catalog(),
+                "personalities": [{"id": p.id, "name": p.name, "sex": p.sex, "style": p.style, "sample": p.sample}
+                                  for p in PERSONALITIES]}
 
     async def api_save_settings(self, args: dict) -> dict:
         changes = args.get("settings")
@@ -940,6 +948,12 @@ class AppController:
             crew.monitor.verbosity = cfg.crew.verbosity  # what the copilot says by itself, from now
             crew.monitor.hands_setting = cfg.crew.hands == "pm"
             crew.monitor.repeat_atc = cfg.crew.repeat_atc
+            if cfg.crew.personality != self.cfg.crew.personality:  # who's in the right seat, from their next line
+                from localtc.crew.personalities import get
+
+                crew.personality = crew.monitor.personality = get(cfg.crew.personality)
+                crew._persona()
+                self._copilot_voice(cfg)
             if crew.model is not None:  # the copilot's model: its use and its checks from the next question
                 crew.model.mode = "off" if cfg.crew.llm == "off" else cfg.crew.mode
                 crew.model.beyond_facts = cfg.crew.beyond_facts
@@ -963,6 +977,23 @@ class AppController:
         self._apply_mixer(cfg)
         self._push_state()
         return {"saved": str(path), "restart": live_now}
+
+    def _copilot_voice(self, cfg: Config) -> None:
+        """The copilot's voice for its personality, on the flight's voice from its next line."""
+        from localtc.crew.personalities import get
+        from localtc.tts.voices import crew_speaker
+
+        speaker = getattr(self.live.speaker, "service", None) if self.live is not None and self.live.speaker else None
+        if speaker is None:
+            return
+        who = get(cfg.crew.personality)
+        sex = who.voice_sex(cfg.crew.voice_sex)
+        speaker.crew_sex = {"female": "F", "male": "M"}.get(sex, "")
+        speaker.crew_pick, speaker.crew_pace = who.voice_pick(cfg.crew.voice_pick), 1 / who.length
+        speaker.crew_expressive, speaker.crew_locale = (None if who.neutral else who.expressive), who.locale
+        piper = next((p.synth for p in getattr(speaker.voices, "providers", ()) if p.id == "piper"), None)
+        if piper is not None:
+            speaker.crew_speaker = crew_speaker(sex, speaker.crew_pick, piper.speakers, cfg.tts.voice)
 
     def _apply_mixer(self, cfg: Config) -> None:
         """The mixer's volumes and the microphone's gain on the flight's voice and microphone, at once."""
@@ -1476,7 +1507,7 @@ def _tts_test(cfg: Config, voice_chain, wanted: str) -> list[dict]:
     return out
 
 
-def _crew_preview(cfg: Config, sex: str, pick: int) -> float:
+def _crew_preview(cfg: Config, sex: str, pick: int, who=None) -> float:
     from localtc.dsp.radio import intercom_effect
     from localtc.tts.player import AudioPlayer, Clip
     from localtc.tts.synth import PiperSynth
@@ -1484,8 +1515,12 @@ def _crew_preview(cfg: Config, sex: str, pick: int) -> float:
 
     voice_file = download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None)
     synth = PiperSynth(voice_file, rate=cfg.tts.rate)
-    speech = synth.synthesize("Flaps two. Gear down, three green. Landing checklist complete.",
-                              crew_speaker(sex, pick, synth.speakers, cfg.tts.voice))
+    neutral = who is None or who.neutral
+    line = "Flaps two. Gear down, three green. Landing checklist complete." if neutral else who.sample
+    speech = synth.synthesize(line, crew_speaker(sex, pick, synth.speakers, cfg.tts.voice),
+                              rate=None if neutral else cfg.tts.rate / who.length,
+                              noise_scale=None if neutral else 0.25 + 0.75 * who.expressive,
+                              noise_w=None if neutral else 0.5 + 0.5 * who.expressive)
     player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume, mix=cfg.mixer.gains())
     player.play(Clip(intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")).done.wait(timeout=30)
     player.close()

@@ -38,7 +38,7 @@ from msgspec.structs import replace
 from localtc.atc_core import region as regions
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
-from localtc.crew import speech_acts
+from localtc.crew import personalities, speech_acts
 from localtc.crew.actions import PILOT_SIDE, Cockpit, Plan, as_read, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import Command
@@ -147,7 +147,7 @@ class PilotMonitoring:
                  verbosity: str = "standard", hands: str = "pm", perf: PlanPerf | None = None, plan_source: str = "",
                  radio_mode=lambda: "off", alternate: str = "", repeat_atc: bool = False,
                  deck: FlightDeck | None = None, voice_sex: str = "", checklists: Any = None,
-                 checklist_setting: str = "offer", checklist_mode: str = "challenge") -> None:
+                 checklist_setting: str = "offer", checklist_mode: str = "challenge", personality: str = "neutral") -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
         self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
@@ -162,6 +162,7 @@ class PilotMonitoring:
         self._book = None
         self._generation = self.deck.generation
         self.voice_sex = voice_sex  # the copilot's voice ("male"/"female"): its name goes with it
+        self.personality = personalities.get(personality)  # who's in the right seat ([crew] personality)
         self._aircraft = ""
         self._start()
 
@@ -176,6 +177,7 @@ class PilotMonitoring:
                                plan_source=s["plan_source"], radio_mode=self.radio_mode, seed=_seed(self.engine),
                                alternate=s["alternate"], repeat_atc=s["repeat_atc"])
         self.monitor.checklist_setting = s["checklist_setting"]
+        self.monitor.personality = self.personality
         self.monitor.checklist_mode = s["checklist_mode"]
         self.monitor.set_checklists(getattr(self, "_book", None))
         self._waiting: list[_Waiting] = []
@@ -208,6 +210,10 @@ class PilotMonitoring:
             return
         from localtc.crew.model import persona
 
+        if not self.personality.neutral:  # one of the personalities: who they are, and how they talk
+            p = self.personality
+            self.model.persona = f"{p.story} {p.style} Talk the way they would; the facts and rules above come first."
+            return
         st = getattr(self.engine, "state", None)
         base = ""
         if st is not None:
@@ -338,6 +344,12 @@ class PilotMonitoring:
             text, spoken = text[:-len(" set.")] + ", yours to set.", ""
         if not text:  # a hand only (the altimeter to the ATIS): nothing said
             return out
+        # The personality's way of saying it: routine and conversational calls only, never a safety call's words.
+        worded, changed = personalities.word(self.personality, call.key, text, priority=call.priority, safety=SAFETY,
+                                             rng=self.monitor.rng, sterile=self.monitor.sterile,
+                                             talk_scale=TALK_SCALE.get(self.monitor.verbosity, 1.0))
+        if changed:
+            text, spoken = worded, monitors.spoken(worded, self._airports())
         # Only the copilot's talk is put in its own words; a callout or a warning keeps its words (reworded,
         # "moderate turbulence" became "turbulence ahead" and a heading reminder "heading's set").
         if self.model is not None and call.priority < SAFETY and not call.urgent and not call.before_readback \
@@ -882,6 +894,9 @@ class PilotMonitoring:
                 return self._now(t)
             if offer.kind == "squawk":
                 return self._command(t, Command("squawk", offer.value))
+            if offer.kind == "weather":  # the destination's weather, offered on a long cruise
+                return [self._say(t, answer("what's the weather at the destination?", self.picture)
+                                  or "No ATIS for the destination yet.")]
             if offer.kind in ("step", "divert", "sight"):
                 return self._ask_atc(t, offer.kind, offer.value)
         intent, self.intent = self.intent, None
@@ -1161,7 +1176,15 @@ class PilotMonitoring:
         telephony = getattr(callsign, "telephony", "") or ""
         return bool(telephony) and lowered.startswith(telephony.lower())
 
+    def _airports(self) -> tuple[str, ...]:
+        st = getattr(self.engine, "state", None)
+        return (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
+
     def _say(self, t: float, text: str, kind: str = "reply", spoken: str = "") -> CrewSpeech:
+        if not self.personality.neutral and kind == "reply":  # their "check", and their own way of talking
+            said = personalities.ack(self.personality, self.monitor.rng) if text in ("Check.", "Copy.") else                 personalities.chat(self.personality, text, self.monitor.rng)
+            if said != text:
+                text, spoken = said, ""
         if self.model is not None and kind != "reply":  # its replies the model remembers itself
             self.model.heard("You", text)
         return self._line(CrewSpeech(t=t, text=text, spoken=spoken, kind=kind))
@@ -1202,6 +1225,7 @@ class PilotMonitoring:
             self._note(s.t, "autopilot on" if s.ap_master else "autopilot off")
 
 
+TALK_SCALE = {"quiet": 0.0, "standard": 0.6, "chatty": 1.0}  # how much of a personality's own talk, by verbosity
 REWORDED = ("greeting", "summary", "brief:", "status", "tod", "fuel_check", "divert", "step:", "clear")  # its own talk
 
 

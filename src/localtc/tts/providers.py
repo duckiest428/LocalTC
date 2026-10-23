@@ -289,10 +289,13 @@ class PiperVoices:
     def synthesize(self, text: str, persona: Persona) -> Speech:
         speaker = self.speaker(persona)
         how = delivery_for(persona.key, persona.manner)
+        noise_scale, noise_w = how.noise_scale, how.noise_w
+        if persona.expressive is not None:  # the copilot's personality: flat and even to lively
+            noise_scale, noise_w = 0.25 + 0.75 * persona.expressive, 0.5 + 0.5 * persona.expressive
         rate = getattr(self.synth, "rate", None)
         try:
-            speech = self.synth.synthesize(text, speaker, rate=rate * how.pace if rate else None,
-                                           noise_scale=how.noise_scale, noise_w=how.noise_w)
+            speech = self.synth.synthesize(text, speaker, rate=rate * persona.pace if rate else None,
+                                           noise_scale=noise_scale, noise_w=noise_w)
         except TypeError:  # a synthesizer without the knobs (tests' fakes): its own manner
             speech = self.synth.synthesize(text, speaker)
         voice_file = getattr(self.synth, "voice_file", None)

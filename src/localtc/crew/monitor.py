@@ -37,6 +37,7 @@ from localtc.atc_core.facilities import channel_khz
 from localtc.atc_core.phraseology import speech
 from localtc.config import PlanPerf
 from localtc.crew import checklist_run as run
+from localtc.crew import personalities
 from localtc.crew.checklist_db import Checklist, ChecklistSet
 from localtc.crew.checklist_run import Progress
 from localtc.crew.actions import Cockpit
@@ -73,6 +74,7 @@ SPEECH_S_PER_CHAR = 0.065  # how long ATC's words take; the frequency is busy me
 AFTER_ATC_S = 1.5  # and a moment after, for the readback to start
 READBACK_GRACE_S = 7.0  # an instruction that wants a readback: the pilot's turn first
 STERILE_FT = 10000.0
+LONG_CRUISE_MIN = 40.0  # a cruise this long before the descent: time for a chatty copilot's offer
 HANDS_WAIT_S = 300.0  # a call that sets something waits this much longer for its turn than one that only talks
 STATUS_EVERY_S = 1800.0
 GEAR_UP_WAIT_S = 1.0  # positive rate, then "gear up" (and the gear up) straight after
@@ -181,6 +183,8 @@ class Monitor(WatchMixin):
         self.plan_source = plan_source
         self.radio_mode = radio_mode  # the radio copilot's mode: "off", "assist" or "full"
         self.rng = random.Random(seed)
+        self.personality = personalities.NEUTRAL  # who's in the right seat (crew.personalities; the PM sets it)
+        self.last_radio_source = ""  # who spoke last on the radio from this aircraft: the pilot, or "copilot"
         self.f = _Flight()
         self.queue: list[Call] = []
         self.offer: Offer | None = None
@@ -273,6 +277,7 @@ class Monitor(WatchMixin):
             self.ptt_down = False
             self.busy_until = max(self.busy_until, t + 2.0)
         elif isinstance(ev, Transcript) and ev.radio != 0 and ev.text:
+            self.last_radio_source = ev.source  # "copilot" when the radio copilot read back, else the pilot
             self.pilot_since_atc = True
             self.last_pilot_radio_t = t
             self.queue = [q for q in self.queue if not q.before_readback]  # read back already: nothing to repeat
@@ -280,6 +285,7 @@ class Monitor(WatchMixin):
         elif isinstance(ev, ReadbackEvaluated):
             self.f.readbacks += 1
             self.f.readbacks_right += ev.status == "correct"
+            self._coach(ev, t)
         elif isinstance(ev, PhaseChanged):
             self._on_phase(ev.previous, ev.phase, t)
         elif isinstance(ev, AircraftIdentity):
@@ -298,6 +304,17 @@ class Monitor(WatchMixin):
             self.prev = ev
         elif isinstance(ev, FlightArrived):
             self._parked(t, arrived=True)
+
+    def _coach(self, ev: ReadbackEvaluated, t: float) -> None:
+        """An instructor's word on the pilot's own readback (a coaching personality, outside the sterile cockpit):
+        now and then "good readback", and what to include next time when something was missing."""
+        if not self.personality.coach or self.last_radio_source == "copilot" or self.sterile                 or self.verbosity == "quiet":
+            return
+        missing = [m.replace("_", " ") for m in ev.missing if m]
+        if ev.status == "correct" and self.rng.random() < 0.3:
+            self._call(f"coach:{t:.0f}", ROUTINE, t + 1, ["Good readback.", "Nice readback."])
+        elif ev.status in ("incomplete", "incorrect") and missing:
+            self._call(f"coach:{t:.0f}", ROUTINE, t + 6, f"Next time, include the {missing[0]} in the readback.")
 
     # --- out ---------------------------------------------------------------------------------------------------
 
@@ -933,6 +950,8 @@ class Monitor(WatchMixin):
             self._call("tod_soon", ROUTINE, t, "Top of descent in about ten minutes.")
         if self.phase == "CRUISE" and minutes <= 0 and to_go > 20:
             self._call("tod", ROUTINE, t, "That's top of descent." + ("" if descending else " No descent clearance yet."))
+        if self.personality.offers_weather and self.phase == "CRUISE" and minutes > LONG_CRUISE_MIN                 and t - self.f.said.get("toc", t) > 600 and self.offer is None and self.verbosity != "quiet"                 and self._call("offer_wx", ROUTINE, t, "We've got a while. Want the weather at the destination?"):
+            self.offer = Offer("weather", st.flight.destination or "", t + 45.0)  # a chatty companion's question
         # Fuel against the plan and the reserve: only from a steady cruise burn, measured over minutes. The burn in
         # the climb is twice the cruise one, and projecting it called "below final reserve" just after takeoff.
         # The samples are of level cruise only: a climb or descent starts them again (a climb's burn leaking into the

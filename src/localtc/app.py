@@ -550,6 +550,7 @@ async def run_session(
                 from localtc.crew.service import CrewService
 
                 from localtc.crew.model import CrewModel
+                from localtc.crew.personalities import get as copilot_personality
 
                 crew_backend = copilot_model(cfg, backend)
                 crew_wait = max(cfg.crew.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0),
@@ -567,7 +568,8 @@ async def run_session(
                                      checklist_mode=cfg.crew.checklist_mode,
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
                                      plan_source=cfg.flight.plan_source, alternate=cfg.flight.alternate,
-                                     repeat_atc=cfg.crew.repeat_atc, deck=deck, voice_sex=cfg.crew.voice_sex,
+                                     repeat_atc=cfg.crew.repeat_atc, deck=deck, personality=cfg.crew.personality,
+                                     voice_sex=copilot_personality(cfg.crew.personality).voice_sex(cfg.crew.voice_sex),
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)
                 consumers.append(asyncio.create_task(crew.run()))
@@ -922,12 +924,16 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
         if row["order"] == 0 and not row["ready"]:
             log.info("%s can't speak (%s): the next voice will", row["name"], row["why"], extra=CONSOLE)
     log.info("ATC voice: %s through %s", " > ".join(p.name for p in chain.providers), player.name, extra=CONSOLE)
+    from localtc.crew.personalities import get as copilot_personality
     from localtc.tts.voices import crew_speaker
 
-    copilot_voice = crew_speaker(cfg.crew.voice_sex, cfg.crew.voice_pick, synth.speakers, t.voice) if synth else None
-    sex = {"female": "F", "male": "M"}.get(cfg.crew.voice_sex, "")
+    who = copilot_personality(cfg.crew.personality)  # the copilot's voice: its personality's, or the setting's
+    voice_sex, voice_pick = who.voice_sex(cfg.crew.voice_sex), who.voice_pick(cfg.crew.voice_pick)
+    copilot_voice = crew_speaker(voice_sex, voice_pick, synth.speakers, t.voice) if synth else None
+    sex = {"female": "F", "male": "M"}.get(voice_sex, "")
     service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
-                       crew_speaker=copilot_voice, crew_sex=sex, crew_pick=cfg.crew.voice_pick,
+                       crew_speaker=copilot_voice, crew_sex=sex, crew_pick=voice_pick, crew_pace=1 / who.length,
+                       crew_expressive=None if who.neutral else who.expressive, crew_locale=who.locale,
                        shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional,
                        chatter_cloud=t.chatter_cloud)
     return VoiceOutput(service, player)

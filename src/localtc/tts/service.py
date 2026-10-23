@@ -72,6 +72,9 @@ class VoiceOut:
         crew_speaker: int | None = None,  # the copilot's Piper voice (``[crew] voice``); None: one picked for "pilot"
         crew_sex: str = "",  # the copilot's sex for the other providers ("F"/"M"; "" from its Piper voice)
         crew_pick: int | None = None,  # and which of their voices of that sex
+        crew_pace: float = 1.0,  # the copilot's personality: its pace (over 1 quicker)
+        crew_expressive: float | None = None,  # ... how lively (0-1; None: the usual)
+        crew_locale: str = "",  # ... and its English ("en-GB")
         shift: int = 0,  # ATC's shift ([atc] shift): each station's voice is the person on shift's
         regional: bool = True,  # each station in its region's English, where a provider has it
         chatter_cloud: bool = False,  # the other flights' pilots in a cloud voice too (off: this PC's, no credits)
@@ -80,6 +83,7 @@ class VoiceOut:
         self.voices = synth if isinstance(synth, VoiceChain) else VoiceChain([PiperVoices(synth, speakers=speakers)])
         self.effect, self.static, self.atis, self.copilot, self.speakers = effect, static, atis, copilot, speakers
         self.crew_speaker, self.crew_sex, self.crew_pick = crew_speaker, crew_sex, crew_pick
+        self.crew_pace, self.crew_expressive, self.crew_locale = crew_pace, crew_expressive, crew_locale
         self.shift, self.regional, self.chatter_cloud = shift, regional, chatter_cloud
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
@@ -92,7 +96,8 @@ class VoiceOut:
     def persona(self, key: str, role: str, *, manner: str = "", locale: str = "") -> Persona:
         if role == "copilot":
             return persona_for(PILOT_SPEAKER_SALT, "copilot", sex=self.crew_sex, pick=self.crew_pick,
-                               piper_speaker=self.crew_speaker)
+                               piper_speaker=self.crew_speaker, pace=self.crew_pace, expressive=self.crew_expressive,
+                               locale=self.crew_locale if self.regional else "")
         return persona_for(key, role, manner=manner, locale=locale if self.regional else "")
 
     async def _watch_radio(self) -> None:

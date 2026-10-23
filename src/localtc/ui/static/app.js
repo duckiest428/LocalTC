@@ -886,6 +886,19 @@ function trafficStatus(s) {
     `${recent.length ? `<br><span class="muted">${recent.map(esc).join("<br>")}</span>` : ""}`;
 }
 
+/** The copilot's personality: a select of them (crew/personalities.py), with the chosen one's manner and a line. */
+function personalityRow(list, current, idPrefix = "s-crew") {
+  const cur = current || "neutral";
+  return `<div class="row"><label>Copilot's personality<select id="${idPrefix}-personality">${(list || []).map((p) =>
+    `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${p.sex === "F" ? "she" : "he"})` : ""}</option>`).join("")}</select>
+    <span class="hint" id="${idPrefix}-persona-hint">${personalityHint(list, cur)}</span></label>
+    <div><button type="button" class="btn small" id="${idPrefix}-preview">&#9654; Preview</button></div></div>`;
+}
+function personalityHint(list, id) {
+  const p = (list || []).find((x) => x.id === id);
+  return p ? `${esc(p.style)} <i>&ldquo;${esc(p.sample)}&rdquo;</i>` : "";
+}
+
 const Settings = {
   seenJobs: new Set(),
   async load() {
@@ -1215,12 +1228,12 @@ const Settings = {
         </div>
         <div class="row"><label>Or a yoke or joystick button<input id="s-ic-joy" value="${esc(st.voice.intercom_joystick)}" placeholder="joystick:0:button:4"></label>
           ${this.joyPicker("ic")}</div>
-        <div class="row">
+        ${personalityRow(S.settings.personalities, st.crew.personality)}
+        <div class="row" id="crew-voice-row" ${(st.crew.personality || "neutral") === "neutral" ? "" : "hidden"}>
           <label>Copilot's voice<select id="s-crew-sex">${["female", "male", "any"].map((s) => `<option value="${s}" ${st.crew.voice_sex === s ? "selected" : ""}>${{ female: "Female", male: "Male", any: "Either" }[s]}</option>`).join("")}</select></label>
           <label style="flex:0 1 120px">Voice<select id="s-crew-pick">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<option value="${i}" ${st.crew.voice_pick === i ? "selected" : ""}>${i + 1}</option>`).join("")}</select></label>
-          <div><button class="btn small" id="s-crew-preview">&#9654; Preview</button></div>
         </div>
-        <span class="hint">The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS).</span>
+        <span class="hint">The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS). A personality changes only the routine and conversational lines: the safety calls (stall, overspeed, wind shear, minimums, "not cleared to land") keep their standard words for every one.</span>
         <div class="row"><label>What it says by itself<select id="s-crew-verbosity">
           <option value="quiet" ${st.crew.verbosity === "quiet" ? "selected" : ""}>Quiet: only what's safety (config, gear, not cleared to land, speed)</option>
           <option value="standard" ${st.crew.verbosity === "standard" ? "selected" : ""}>Standard: callouts, ATC relays and reminders</option>
@@ -1463,8 +1476,14 @@ const Settings = {
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
     on("#s-crew-preview", "click", async (e) => {
       e.target.disabled = true;
-      try { await api("voice/crew_preview", { sex: val("#s-crew-sex"), pick: Number(val("#s-crew-pick")) }); } catch (err) { fail(err); }
+      try { await api("voice/crew_preview", { personality: val("#s-crew-personality"), sex: val("#s-crew-sex"), pick: Number(val("#s-crew-pick")) }); } catch (err) { fail(err); }
       e.target.disabled = false;
+    });
+    on("#s-crew-personality", "change", () => {
+      const id = val("#s-crew-personality");
+      $("#crew-voice-row").hidden = id !== "neutral";
+      $("#s-crew-persona-hint").innerHTML = personalityHint(S.settings.personalities, id);
+      this.save("crew", "personality", id);
     });
     on("#s-mic", "change", () => this.save("voice", "input_device", val("#s-mic")));
     on("#s-out", "change", () => this.save("tts", "output_device", val("#s-out")));

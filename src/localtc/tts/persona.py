@@ -35,6 +35,7 @@ class Persona:
     style: str = ""  # a speaking style where a voice has one ("calm", "friendly", "serious")
     pick: int | None = None  # the pilot's own choice among a provider's voices of that sex (the copilot's voice)
     piper_speaker: int | None = None  # the Piper speaker chosen for it (the copilot's, from the settings)
+    expressive: float | None = None  # 0 flat to 1 lively where a provider can (a copilot's personality); None: the role's
 
     @property
     def crew(self) -> bool:
@@ -64,7 +65,8 @@ def sex_for(key: str, role: str = "atc", locale: str = "") -> str:
 
 
 def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = "", sex: str = "",
-                pick: int | None = None, piper_speaker: int | None = None) -> Persona:
+                pick: int | None = None, piper_speaker: int | None = None, pace: float | None = None,
+                expressive: float | None = None) -> Persona:
     """The person speaking as ``key`` in ``role``. ``manner``: the transmission's ("tower:hurried:busy"); ``locale``:
     the region's English ("" none); ``sex`` "F"/"M" to choose (the copilot's setting), else decided from the key."""
     if role not in ROLES:
@@ -75,12 +77,12 @@ def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = 
         want = sex_of(piper_speaker)
     kind = "pilot" if role in ("copilot", "cabin", "ground_crew") else "atis" if role == "atis" else \
         "chatter" if role == "chatter" else manner or "atc"
-    pace = delivery_for(key, kind).pace
+    pace = delivery_for(key, kind).pace if pace is None else pace
     _, _, rest = manner.partition(":")
     style = "" if role in ("atis", "copilot") else STYLES.get(rest.partition(":")[0], "")
     pitch = 0 if role in ("atis", "copilot") else _hash("pitch" + key) % (2 * PITCH_SPAN + 1) - PITCH_SPAN
     return Persona(key=key, role=role, manner=kind, sex=want or sex_for(key, role, locale), locale=locale, pace=pace, pitch=pitch,
-                   style=style, pick=pick, piper_speaker=piper_speaker)
+                   style=style, pick=pick, piper_speaker=piper_speaker, expressive=expressive)
 
 
 class Casting:

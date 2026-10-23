@@ -20,7 +20,7 @@ from typing import Any
 
 import msgspec
 
-from localtc.atc_core import chatter, personality, procedures, radio_range, vectors
+from localtc.atc_core import chatter, disfluency, personality, procedures, radio_range, vectors
 from localtc.atc_core import region as regions
 from localtc.atc_core.airport import (
     AirportGeometry,
@@ -416,6 +416,8 @@ class EngineConfig:
     # Each station a controller of their own (personality.py): their greetings, acknowledgements, corrections, their
     # manner in the model's words and their pace on the voice. Off: the plain greetings and sign-offs only.
     personalities: bool = True
+    # People, not scripts: now and then an "uh" in the spoken words (disfluency.py); the app turns it on.
+    humanize: bool = False
     shift: int = 0  # which shift is on ([atc] shift): other controllers at every station after a 5-hour break
     seed: int = 0  # 0 = derived from the callsign
     thresholds: PhaseThresholds = field(default_factory=PhaseThresholds)
@@ -756,9 +758,23 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     def _paced(self, lines: list[RadioChatter]) -> list[RadioChatter]:
         """The first line now, the rest at their times (``_release_later``); all at once without a voice to wait for."""
+        if self.cfg.humanize:  # the other flights' pilots and the controller, as people say it
+            lines = [self._as_said(e) for e in lines]
         now = [e for e in lines if not lines or e.t <= lines[0].t]
         self._later += [e for e in lines if e not in now]
         return now
+
+    def _as_said(self, line: RadioChatter) -> RadioChatter:
+        """Another flight's exchange with an "uh" now and then (disfluency.py): its pilot's, or its controller's."""
+        if not line.spoken:
+            return line
+        key = f"{line.t:.1f}"
+        if line.speaker == "pilot":
+            said = disfluency.pilot(line.spoken, key=key)
+        else:
+            who = personality.profile(line.station, line.controller, icao=self.region.icao, shift=self.cfg.shift)
+            said = disfluency.atc(line.spoken, who.kind, key=key)
+        return msgspec.structs.replace(line, spoken=said)
 
     def snapshot(self) -> SessionSnapshot:
         return snapshot(self.state, self._t)
@@ -5339,6 +5355,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 rendered = replace(rendered, text=head + item.lead.display + ", " + rendered.text[len(head):],
                                    spoken=spoken_head + item.lead.spoken + ", " + rendered.spoken[len(spoken_head):])
         rendered = self._personalize(rendered, item, facility, callsign)
+        if self.cfg.humanize:  # an "uh" now and then, in the voice only (never in anything urgent)
+            who = self._controller(facility) if self.cfg.personalities else \
+                personality.profile(facility.station, icao=self.region.icao)
+            rendered = replace(rendered, spoken=disfluency.atc(
+                rendered.spoken, who.kind, busy=self._workload(facility, t) == "busy", key=f"{t:.1f}",
+                instruction_id=item.instruction_id))
         self._said_on.append((t, facility.station))
         st.comms.contacted.add(facility.controller)
         self._radio_busy_until = t + self._speech_s(rendered.spoken)

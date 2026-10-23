@@ -168,6 +168,9 @@ class AtcConfig(_Section):
     # their greetings, acknowledgements, corrections and pace, and how the language model words their replies. The
     # same controller every time at a station. Off: plain greetings and sign-offs only.
     personalities: bool = True
+    # Controllers and the other pilots sound like people: now and then an "uh" in what's said (never in the radio
+    # log's words, inside a number, or in anything urgent).
+    humanize: bool = True
     # Which shift is on: the app moves it on when a flight starts 5 hours or more after the last one ended, so the
     # controllers (and their voices) are new people then and the same through a flight and its replay. 0: the first.
     shift: int = 0

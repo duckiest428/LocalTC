@@ -1275,6 +1275,7 @@ const Settings = {
             where it's from and how old it is. Takes effect on the next flight.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
         <label class="check-row"><input type="checkbox" id="s-personalities" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities: each station has its own controller (calm, formal, friendly, strict, hurried, dry or conversational), the same through a flight (a new shift after a break of 5 hours or more), in their greetings, acknowledgements, corrections, pace, and the language model's wording. Never in the instructions themselves</label>
+        <label class="check-row"><input type="checkbox" id="s-humanize" ${st.atc.humanize !== false ? "checked" : ""}> Natural speech: controllers and the other pilots now and then say "uh" as people do (more from a conversational controller, hardly any from a strict one or on a busy frequency). Only in what's said, never inside a number or in anything urgent</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-taxi-ribbon" ${st.atc.taxi_guide ? "checked" : ""}> Taxi guidance: green arrows on the ground along the route ground gave you, a red stop bar short of a runway you aren't cleared onto or across. LocalTC puts its arrows in the sim's Community folder when you turn this on; they show from the sim's next start</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
@@ -1485,6 +1486,7 @@ const Settings = {
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));
     on("#s-callsign-check", "change", (e) => this.save("atc", "callsign_check", e.target.checked));
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
+    on("#s-humanize", "change", (e) => this.save("atc", "humanize", e.target.checked));
     on("#s-traffic", "change", (e) => { this.save("traffic", "enabled", e.target.checked); $("#traffic-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-traffic-scheduled", "change", (e) => this.save("traffic", "scheduled", e.target.checked));
     on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));

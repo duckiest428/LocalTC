@@ -110,6 +110,7 @@ def _click(rng: np.random.Generator, rate: int, *, loud: float = 1.0) -> np.ndar
 
 # The channel: a VHF AM airband receiver's audio, narrower than a telephone, boxy around 1.4 kHz.
 LOW_HZ, HIGH_HZ, BOX_HZ = 320.0, 2800.0, 1400.0
+LIMIT = 2.2  # the receiver's limiting: a transmission's loudness close to its peak, as on a real radio
 
 
 def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: int = 0, squelch: bool = True,
@@ -152,6 +153,8 @@ def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: in
     hiss = _noise(rng, len(voice), rate)
     hiss /= np.max(np.abs(hiss)) or 1.0
     out = voice * 0.85 + hiss * static * (0.05 + 0.25 * (1 - strength))
+    # The receiver's audio stage, limited hard as a radio's is: as loud as a real transmission, not just its peaks.
+    out = np.tanh(LIMIT * out / (np.max(np.abs(out)) or 1.0)) / np.tanh(LIMIT)
     if squelch and static > 0:
         tail = int(rng.uniform(0.12, 0.2) * rate)
         burst = _noise(rng, tail, rate)

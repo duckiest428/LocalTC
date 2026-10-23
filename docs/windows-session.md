@@ -132,6 +132,24 @@ Taxi Stop": [simpkg](../src/localtc/simpkg), made by tools/make_taxi_marks.py) a
 3. Passed arrows go, new ones appear ahead; a new route replaces them all; off, or the flight stopped, takes them away.
    The sim's frame rate with them.
 
+## Task 5: the mixer, the radio's sound, the copilot's personalities (2026-10-23)
+
+Built without the sim or a headset in use; the user heard sample clips only.
+
+1. The mixer (the sliders at the top of the window) mid-flight: each slider heard at once on its own channel (ATC, the
+   ATIS, other flights, the copilot on the intercom and on the radio, the clicks), mute holding, the master over all.
+   The microphone test (records 4 s, plays it back through the radio) and its verdict against how Whisper does.
+2. With a headset, the sidetone at about 40 %: how far behind the voice it is (PortAudio's "low" latency on the
+   default output), any crackle, and the sim's frame rate with it on. The push-to-talk's click and release rush with
+   a joystick button, and nothing from the intercom key.
+3. The radio on a busy frequency: ATC as loud as before, the other flights each sounding a little different (near,
+   far, a noisy flight deck), the squelch tail. Natural speech's "uh": how often, and whether any lands somewhere odd.
+4. A copilot personality for a whole flight (Elena or Maya: their thousand-foot call is easy to hear), its voice and
+   pace on Piper, Kokoro and Azure, and that the safety calls stay standard. Tom's readback tips; Hannah's weather
+   offer on a cruise over 40 minutes.
+5. The Live Map at an airport, zoomed in: the taxiways, names and gates over the sim's scenery, and the frame rate of
+   the app's window at a big airport (KORD: about 4,500 taxiway pieces on one canvas).
+
 ## Fixing and leaving a note
 
 - Fix in the code, add or adjust a unit test where the fix can be tested without the sim (tests/test_traffic_control.py,

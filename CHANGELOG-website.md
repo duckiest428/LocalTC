@@ -42,6 +42,9 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **The changelog shows what's coming**: the upcoming version is on the page first, filled in as the work is done, and one product's tab is always the one showing.
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 
+### Fixed
+- **The logbook map**: a route that goes the long way round the map (London to Tokyo with flights across the Pacific too) is drawn from its own airport, not loose from the map's edge, and the busiest airports' dots no longer grow so large.
+
 ## [0.4.0] - 2026-09-28
 
 ### Added

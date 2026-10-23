@@ -22,8 +22,8 @@ class FlightsMap {
     this.map.on("zoomend moveend resize", () => this.declutter());
   }
 
-  /** Where to cut the world for these airports: in the middle of the widest stretch of longitude with none of them
-   * (an ocean, usually), so no airport sits on the far side of the date line from its routes. */
+  /** Where to cut the world: in the middle of the widest stretch of longitude with no airport and no route over it
+   * (an ocean, usually). ``places`` are airports and the points along every route. */
   static cut(places) {
     if (places.length < 2) return -180;
     const lons = places.map((a) => ((a.lon + 540) % 360) - 180).sort((x, y) => x - y);
@@ -106,12 +106,25 @@ class FlightsMap {
     return moved;
   }
 
+  /** A route as drawn: when routes go all the way round and it still crosses the cut, both halves, one leaving a
+   * and one arriving at b, so neither end floats loose. */
+  static drawn(a, b) {
+    const pts = FlightsMap.placed(a, b);
+    if (Math.abs(pts[0][1] - a.lon) < 1e-6 && Math.abs(pts[pts.length - 1][1] - b.lon) < 1e-6) return pts;
+    const turn = pts[0][1] - a.lon;
+    return [pts, pts.map(([lat, lon]) => [lat, lon - turn])];
+  }
+
   /** Draw {airports: [{icao, lat, lon, visits}], routes: [{origin, destination, flights}]}. */
   show({ airports, routes }) {
     this.layer.clearLayers();
     this.focusLayer.clearLayers();
     const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    const cut = FlightsMap.cut(airports.filter((a) => a.lat != null && a.lon != null));
+    const known = airports.filter((a) => a.lat != null && a.lon != null);
+    const at = Object.fromEntries(known.map((a) => [a.icao, a]));
+    const along = routes.filter((r) => at[r.origin] && at[r.destination])
+      .flatMap((r) => FlightsMap.arc(at[r.origin], at[r.destination], 24).map(([lat, lon]) => ({ lat, lon })));
+    const cut = FlightsMap.cut([...known, ...along]);
     // Every airport within the same 360 degrees, starting at the cut: a route to Tokyo from New York and Tokyo's
     // dot on the same side of the date line.
     const places = airports.filter((a) => a.lat != null && a.lon != null)
@@ -122,13 +135,13 @@ class FlightsMap {
     for (const r of routes) {
       const a = this.where[r.origin], b = this.where[r.destination];
       if (!a || !b) continue;
-      const line = L.polyline(FlightsMap.placed(a, b), { className: "fm-route", weight: 1.6 + 3 * (r.flights / most), opacity: 0.85 })
+      const line = L.polyline(FlightsMap.drawn(a, b), { className: "fm-route", weight: 1.6 + 3 * (r.flights / most), opacity: 0.85 })
         .bindTooltip(`${esc(r.origin)} → ${esc(r.destination)}<br>${r.flights} flight${r.flights === 1 ? "" : "s"}`, { sticky: true })
         .addTo(this.layer);
       line.on("click", () => { this.focus(r.origin, r.destination); if (this.onRoute) this.onRoute(r.origin, r.destination); });
     }
     for (const a of places) {
-      L.circleMarker([a.lat, a.lon], { className: "fm-airport", radius: 3.5 + Math.min(a.visits, 10) * 0.6, weight: 1.5, fillOpacity: 0.9 })
+      L.circleMarker([a.lat, a.lon], { className: "fm-airport", radius: 3 + Math.min(Math.sqrt(a.visits), 4) * 0.8, weight: 1.5, fillOpacity: 0.9 })
         .bindTooltip(`<b>${esc(a.icao)}</b><br>${a.visits} visit${a.visits === 1 ? "" : "s"}`)
         .addTo(this.layer);
       const label = L.marker([a.lat, a.lon], { interactive: false, keyboard: false,
@@ -151,9 +164,9 @@ class FlightsMap {
     this.focusLayer.clearLayers();
     const a = this.where?.[origin], b = this.where?.[destination];
     if (!a || !b) return;
-    const pts = FlightsMap.placed(a, b);
+    const pts = FlightsMap.drawn(a, b);
     L.polyline(pts, { className: "fm-focus", weight: 4, opacity: 1, interactive: false }).addTo(this.focusLayer);
-    this.map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 8 });
+    this.map.fitBounds(L.latLngBounds(Array.isArray(pts[0][0]) ? pts[1] : pts).pad(0.3), { maxZoom: 8 });
   }
 }
 

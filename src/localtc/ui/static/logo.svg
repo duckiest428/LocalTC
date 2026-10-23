@@ -1,31 +1,22 @@
 <svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
   <rect width="256" height="256" rx="56" fill="#0a0e0c"/>
-  <!-- A320-style top-down aircraft silhouette -->
-  <g transform="translate(128,128)">
-    <path d="M0 -70
-             C5 -70 8 -64 8 -56
-             L8 -22
-             L74 8
-             L74 18
-             L8 2
-             L8 28
-             L26 40
-             L26 48
-             L4 42
-             L4 54
-             C4 60 2 64 0 66
-             C-2 64 -4 60 -4 54
-             L-4 42
-             L-26 48
-             L-26 40
-             L-8 28
-             L-8 2
-             L-74 18
-             L-74 8
-             L-8 -22
-             L-8 -56
-             C-8 -64 -5 -70 0 -70
-             Z"
-          fill="#f5f7f6"/>
+  <!-- A control tower: antenna and beacon, cap, roof, flared cab, shaft and base -->
+  <g transform="translate(0,10)" fill="#f5f7f6">
+    <path d="M126.2 58 L127.4 30 H128.6 L129.8 58 Z"/>
+    <circle cx="128" cy="27" r="3.5"/>
+    <path d="M100 68 L108 56 H148 L156 68 Z"/>
+    <rect x="84" y="68" width="88" height="8" rx="2"/>
+    <path d="M90 76 H166 L150 108 H106 Z"/>
+    <path d="M120 108 H136 L139 204 H117 Z"/>
+    <rect x="100" y="204" width="56" height="8" rx="2"/>
+  </g>
+  <!-- The cab's windows, with mullions -->
+  <g transform="translate(0,10)" fill="#0a0e0c">
+    <path d="M95 80 H161 L153.5 95 H102.5 Z"/>
+  </g>
+  <g transform="translate(0,10)" fill="#f5f7f6">
+    <rect x="110" y="80" width="2.5" height="15"/>
+    <rect x="126.75" y="80" width="2.5" height="15"/>
+    <rect x="143.5" y="80" width="2.5" height="15"/>
   </g>
 </svg>

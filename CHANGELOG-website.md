@@ -6,6 +6,7 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ## [0.5.0] - Upcoming
 
 ### Added
+- **A new logo**: a control tower, across the site, its icon and the link preview.
 - **Weather, areas & NOTAMs on the Flight Tracker**: a button shows the SIGMETs, TFRs and restricted areas around the flight and its airports' NOTAMs (a closed runway red), from what the app sends on.
 - **The Flight Tracker shows ATC's hold and reroutes**: the racetrack with its fix and EFC, and a direct or vectors
   around an area as a line, as the app's Live Map does.

@@ -248,12 +248,16 @@
 <filter id="sc-glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="7"/></filter>
 </defs>`;
 
-  // The LocalTC logo's aircraft (logo.svg), centred on 0,0 in a 256 box.
-  const PLANE = "M0 -70C5 -70 8 -64 8 -56L8 -22L74 8L74 18L8 2L8 28L26 40L26 48L4 42L4 54C4 60 2 64 0 66C-2 64 -4 60 -4 54L-4 42L-26 48L-26 40L-8 28L-8 2L-74 18L-74 8L-8 -22L-8 -56C-8 -64 -5 -70 0 -70Z";
+  // The LocalTC logo's tower (logo.svg, its 256 box; drawn over the dark tile).
+  const TOWER = `<g transform="translate(0 10)" fill="#f5f7f6"><path d="M126.2 58L127.4 30H128.6L129.8 58Z"/><circle cx="128" cy="27" r="3.5"/>
+<path d="M100 68L108 56H148L156 68Z"/><rect x="84" y="68" width="88" height="8" rx="2"/><path d="M90 76H166L150 108H106Z"/>
+<path d="M120 108H136L139 204H117Z"/><rect x="100" y="204" width="56" height="8" rx="2"/>
+<path fill="#0a0e0c" d="M95 80H161L153.5 95H102.5Z"/><rect x="110" y="80" width="2.5" height="15"/><rect x="126.75" y="80" width="2.5" height="15"/>
+<rect x="143.5" y="80" width="2.5" height="15"/></g>`;
 
   function brand(x, y, label) {
     return `<g transform="translate(${x} ${y})">
-<rect width="30" height="30" rx="6.6" fill="#0a0e0c" stroke="rgba(255,255,255,0.14)"/><path transform="translate(15 15) scale(0.1172)" fill="#f5f7f6" d="${PLANE}"/>
+<rect width="30" height="30" rx="6.6" fill="#0a0e0c" stroke="rgba(255,255,255,0.14)"/><g transform="scale(0.1172)">${TOWER}</g>
 <text x="42" y="21" font-family="${SANS}" font-weight="700" font-size="19" fill="${C.text}">LocalTC</text>
 <text x="128" y="21" font-family="${MONO}" font-weight="500" font-size="13" letter-spacing="2.5" fill="${C.cyan}">${esc(label)}</text>
 </g>`;

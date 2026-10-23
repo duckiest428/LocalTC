@@ -7,6 +7,7 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **A new logo**: a control tower, on the app's window and taskbar, the desktop shortcut and the flight cards you share.
 - **"Expect runway ___" in the IFR clearance**: "cleared to Denver airport as filed, expect runway 27C, climb and maintain 8,000, ...", when the runway in use is known.
 - **A setting for how many parked aircraft LocalTC's traffic puts out** (Quick Settings > ATC > Traffic): none, a few, some, busy or packed, for the frame rate.
 - **The PMDG 777** (-200ER, -300ER, F) gets its own copilot profile: Boeing's flap detents (up, 1, 5, 15, 20, 25, 30, with their speeds), and the MCP, lights, signs, transponder and altimeter left to the pilot, said so ("8,000, yours to set"), since PMDG's cockpit ignores the sim's events for them.

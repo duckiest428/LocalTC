@@ -289,6 +289,9 @@ class AppController:
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
             "welcome": not self.cfg.ui.welcome_seen,
+            # A new install: the setup guide (in place of the welcome notes, which it holds). Never on an install
+            # that has seen the welcome already.
+            "setup": not self.cfg.ui.setup_done and not self.cfg.ui.welcome_seen,
             "whats_new": self._whats_new(),
         }
 

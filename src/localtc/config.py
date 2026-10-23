@@ -446,6 +446,7 @@ class UiConfig(_Section):
     last_flight_end: float = 0.0  # when the last flight ended (Unix time), for ATC's shifts ([atc] shift)
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
     welcome_seen: bool = False  # the welcome notes were shown (once, on the first start: existing installs too)
+    setup_done: bool = False  # the setup guide was shown (a new install's first start; Settings > Developer mode again)
     notes_seen: str = ""  # the version whose "what's new" was shown (once after each update)
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"

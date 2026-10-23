@@ -312,3 +312,31 @@ def test_a_new_plan_or_flight_in_the_meantime_is_not_cleared(tmp_path, monkeypat
 
     asyncio.run(run())
     assert controller.plan is new
+
+
+def test_the_setup_guide_is_for_a_new_install_only(tmp_path, monkeypatch):
+    """A first start opens the setup guide (in place of the welcome notes); an install that has seen the welcome
+    never gets it by itself, and once it's been closed it isn't shown again."""
+    from localtc.ui.controller import AppController
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    new = AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
+    assert new.state()["setup"]
+    existing = Config()
+    existing.ui.welcome_seen = True
+    assert not AppController(existing, plan_path=tmp_path / "flightplan.json", cache=None).state()["setup"]
+    import asyncio
+
+    asyncio.run(new.api_save_settings({"settings": {"ui": {"setup_done": True, "welcome_seen": True}}}))
+    assert not new.state()["setup"] and not new.state()["welcome"]
+
+
+def test_the_personalities_are_offered_with_the_settings(tmp_path, monkeypatch):
+    import asyncio
+
+    from localtc.ui.controller import AppController
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    got = asyncio.run(AppController(Config(), plan_path=tmp_path / "f.json", cache=None).api_settings({}))
+    ids = [p["id"] for p in got["personalities"]]
+    assert ids[0] == "neutral" and len(ids) == 11 and "hannah" in ids

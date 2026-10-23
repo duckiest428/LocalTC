@@ -558,3 +558,39 @@ table.lb td { white-space: nowrap; }
 .mixtest { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 6px 0 2px; }
 .mixtest .ok, .wizard .ok { color: var(--green); } .mixtest .warn, .wizard .warn { color: var(--amber); } .mixtest .bad, .wizard .bad { color: var(--red); }
 @media (max-width: 480px) { .mixrow { grid-template-columns: 1fr 42px 32px; } .mixrow .mixlabel { grid-column: 1 / -1; } }
+
+/* The setup guide (app.js Setup): a step at a time, the dots for where you are, the choices as cards. */
+.wizard { width: min(720px, calc(100vw - 32px)); height: min(640px, calc(100vh - 32px)); }
+.wizard .dlg { height: 100%; max-height: none; }
+.wizhead { align-items: flex-end; gap: 12px; }
+.wizhead h2 { margin-top: 2px; }
+.wsteps { display: flex; gap: 6px; padding-bottom: 4px; }
+.wdot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.wdot.done { background: var(--green-dim); }
+.wdot.now { background: var(--green); box-shadow: 0 0 0 3px rgba(95, 208, 104, .2); }
+.wizbody { padding: 14px 18px; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.wizbody > p { margin: 0; line-height: 1.5; }
+.wizbody .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.wizbody .row label { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.wizfoot .spacer { flex: 1; }
+.whero { text-align: center; padding: 14px 10px 4px; }
+.whero img { border-radius: 16px; }
+.whero h2 { margin: 10px 0 8px; font-size: 22px; color: var(--text-strong); }
+.whero p { max-width: 540px; margin: 0 auto 8px; line-height: 1.55; }
+.wbox { background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; font-size: 13px; }
+.wbox p { margin: 4px 0 8px; }
+.wbox ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
+.wbox input[type=password] { flex: 1 1 240px; }
+.wchoice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wpeople { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.wcard { position: relative; display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--field);
+  border: 1px solid var(--line); border-radius: 3px; padding: 9px 11px; cursor: pointer; color: var(--text); font: inherit; }
+.wcard:hover { border-color: var(--line-2); }
+.wcard.current { border-color: var(--green-dim); box-shadow: inset 0 0 0 1px var(--green-dim); }
+.wcard b { color: var(--text-strong); font-size: 13.5px; }
+.wcard i { color: var(--text-2); }
+.wcard.person { padding-right: 34px; }
+.wplay { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line-2);
+  background: var(--panel-2); color: var(--text-2); font-size: 10px; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.wplay:hover { color: var(--green); border-color: var(--green-dim); }
+@media (max-width: 560px) { .wchoice { grid-template-columns: 1fr; } .wizbody { padding: 12px; } }

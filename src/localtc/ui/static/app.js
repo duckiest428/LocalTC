@@ -49,7 +49,7 @@ function connect() {
   on("ptt", (p) => $(p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
   on("thinking", thinking);
   on("efb", (d) => Efb.update(d));  // efb.js: the checklist, Airport Ops, ATC's hold and conditions, the notes
-  on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); });
+  on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); Setup.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
   on("dev", (d) => Dev.event(d));
@@ -81,15 +81,18 @@ function setState(st) {
   $("#btn-coffee").hidden = !!st.coffee_clicked;
   const dlg = $("#dlg-account");
   const welcome = $("#dlg-welcome");
-  if (st.welcome && welcome && !welcome.open && !S.welcomed) {
+  if (st.setup && !S.welcomed) {  // a new install: the setup guide, which holds the welcome notes too
+    S.welcomed = true;
+    Setup.open();
+  } else if (st.welcome && welcome && !welcome.open && !S.welcomed && !$("#dlg-setup").open) {
     S.welcomed = true;  // once a session; saved as seen when it's closed
     welcome.showModal();
-  } else if (st.whats_new && !S.whatsNew && !welcome?.open) {
+  } else if (st.whats_new && !S.whatsNew && !welcome?.open && !$("#dlg-setup").open) {
     S.whatsNew = true;  // once a session; saved as seen when it's closed
     $("#wn-version").textContent = st.whats_new.version;
     $("#wn-notes").innerHTML = notesHtml(st.whats_new.notes);
     $("#dlg-whatsnew").showModal();
-  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open && !$("#dlg-whatsnew").open) dlg.showModal();
+  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open && !$("#dlg-whatsnew").open && !$("#dlg-setup").open) dlg.showModal();
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -596,6 +599,288 @@ const Mixer = {
   },
 };
 $("#btn-mixer").onclick = () => Mixer.open();
+
+/* ---------- Setup: the guide a new install opens with (and Settings > Developer mode shows again) ---------- */
+
+const Setup = {
+  STEPS: [
+    ["welcome", "Welcome"], ["computer", "Your computer"], ["talk", "Talking to ATC"], ["hear", "Hearing"],
+    ["copilot", "Your copilot"], ["atc", "ATC"], ["flight", "Your flights"], ["done", "Ready"],
+  ],
+  step: 0,
+  async open() {
+    const dlg = $("#dlg-setup");
+    $("#setup-body").innerHTML = '<div class="muted pad">Loading ...</div>';
+    if (!dlg.open) dlg.showModal();
+    try {
+      const [s, m, d, c] = await Promise.all([api("settings"), api("models"), api("devices"), api("cloud").catch(() => null)]);
+      S.settings = s; S.models = m; S.devices = d; S.cloud = c;
+    } catch (e) { fail(e); dlg.close(); return; }
+    this.step = 0;
+    this.render();
+  },
+  go(delta) {
+    this.step = Math.max(0, Math.min(this.STEPS.length - 1, this.step + delta));
+    this.render();
+    $("#setup-body").scrollTop = 0;
+  },
+  save(section, key, value) { return Settings.save(section, key, value); },
+  render() {
+    this.shown = true;
+    const [id, title] = this.STEPS[this.step];
+    $("#setup-steps").innerHTML = this.STEPS.map(([, t], i) =>
+      `<span class="wdot ${i < this.step ? "done" : ""} ${i === this.step ? "now" : ""}" title="${esc(t)}"></span>`).join("");
+    $("#setup-title").textContent = title;
+    $("#setup-count").textContent = `Step ${this.step + 1} of ${this.STEPS.length}`;
+    $("#setup-body").innerHTML = this[id]();
+    $("#setup-back").hidden = this.step === 0;
+    $("#setup-skip").hidden = this.step === this.STEPS.length - 1;
+    $("#setup-next").textContent = this.step === 0 ? "Let's set it up" : this.step === this.STEPS.length - 1 ? "Let's fly" : "Next";
+    this["wire_" + id]?.();
+  },
+  finish() { $("#dlg-setup").close(); },
+  devices(list, cur) {
+    return `<option value="" ${!cur ? "selected" : ""}>System default</option>` + list.map((d) =>
+      `<option value="${esc(d.name)}" ${cur && d.name.toLowerCase().includes(String(cur).toLowerCase()) ? "selected" : ""}>${esc(d.name)}</option>`).join("");
+  },
+
+  welcome() {
+    return `<div class="whero"><img src="/static/logo.svg" alt="" width="72" height="72">
+      <h2>Welcome to LocalTC</h2>
+      <p>ATC and a first officer for MSFS 2024, running on this computer. A couple of minutes here sets up the
+        things worth choosing before your first flight: your computer's models, your microphone and push-to-talk,
+        what you hear, your copilot and how ATC talks.</p>
+      <p class="muted small">Everything here saves as you go, and all of it can be changed later in Quick Settings and the gear.</p></div>`;
+  },
+
+  computer() {
+    const m = S.models, hw = m.hardware, st = S.settings.settings;
+    const cur = m.catalog.profiles.find((p) => p.llm === st.llm.model && (p.whisper === st.voice.model ||
+      (st.voice.model === "auto" && p.whisper === m.whisper_model)) && p.voice === st.tts.voice);
+    const missing = m.status.filter((s) => !s.installed);
+    const gpu = hw.gpu ? `${esc(hw.gpu)} (${hw.gpu_vram_gb} GB)` : "no NVIDIA graphics card";
+    return `<p>LocalTC understands you with speech recognition and a language model, and speaks with voices, all on this
+      computer beside the sim. Pick how much of the computer they may use.</p>
+      <div class="hw">This computer: ${hw.cpu_cores} CPU threads, ${hw.ram_gb} GB RAM, ${gpu}.</div>
+      <div class="profiles">${m.catalog.profiles.map((p) => `<button type="button" class="profile ${cur?.id === p.id ? "current" : ""}" data-wprofile="${p.id}">
+        <b>${esc(p.label)}</b>${p.id === m.recommended ? '<span class="rec">recommended</span>' : ""}<div class="small muted">${esc(p.description)}</div></button>`).join("")}</div>
+      <div class="wbox">${missing.length
+        ? `<b>${missing.length} download${missing.length > 1 ? "s" : ""} still to do</b>: once, and flights then work offline.
+           <div class="row"><button type="button" class="btn primary small" id="w-install">Download now</button><span class="muted small" id="w-jobs"></span></div>`
+        : '<span class="ok">&#10003; Everything for this profile is downloaded.</span>'}</div>`;
+  },
+  wire_computer() {
+    $$("[data-wprofile]").forEach((b) => (b.onclick = async () => {
+      try {
+        await api("models/profile", { profile: b.dataset.wprofile });
+        S.settings = await api("settings"); S.models = await api("models");
+        this.render();
+      } catch (e) { fail(e); }
+    }));
+    const install = $("#w-install");
+    if (install) install.onclick = () => api("models/install", { kinds: S.models.status.filter((s) => !s.installed).map((s) => s.kind) })
+      .then(() => ($("#w-jobs").textContent = "Downloading: carry on meanwhile.")).catch(fail);
+  },
+  jobs(jobs) {
+    const el = $("#w-jobs");
+    if (!el) return;
+    const running = Object.entries(jobs || {}).filter(([, j]) => j.state === "running");
+    el.textContent = running.length ? `Downloading ${running.map(([k]) => k).join(", ")} ...` : "Done.";
+  },
+
+  talk() {
+    const v = S.settings.settings.voice, mix = S.settings.settings.mixer;
+    return `<p>Talk to ATC as on a real radio: hold your push-to-talk, say the call, let go. Typing a call works too.</p>
+      <label class="check-row"><input type="checkbox" id="w-voice" ${v.enabled ? "checked" : ""}> Talk to ATC with a microphone</label>
+      <div class="row"><label>Microphone<select id="w-mic">${this.devices(S.devices.inputs || [], v.input_device)}</select></label></div>
+      <div class="row"><label>Push-to-talk<select id="w-ptt">
+        <option value="keyboard" ${v.ptt === "keyboard" ? "selected" : ""}>A keyboard key (works while the sim has focus)</option>
+        <option value="joystick" ${v.ptt === "joystick" ? "selected" : ""}>A yoke or joystick button</option>
+        <option value="enter" ${v.ptt === "enter" ? "selected" : ""}>Only the headset button in this window</option></select></label></div>
+      <div class="row" ${v.ptt === "keyboard" ? "" : "hidden"}><span>Transmit key</span><span class="keycap" id="w-key">${esc(keyLabel(v.ptt_key))}</span>
+        <button type="button" class="btn small" id="w-key-set">Change</button><span class="muted small" id="w-key-hint"></span></div>
+      <div class="row" ${v.ptt === "joystick" ? "" : "hidden"}><label>Transmit button<input id="w-joy" value="${esc(v.ptt_joystick)}" placeholder="joystick:0:button:3"></label>
+        ${Settings.joyPicker("wptt")}</div>
+      <div class="row"><span>Intercom key (talk to the copilot)</span><span class="keycap" id="w-ic-key">${esc(keyLabel(v.intercom_key))}</span>
+        <button type="button" class="btn small" id="w-ic-key-set">Change</button><span class="muted small" id="w-ic-key-hint"></span></div>
+      <div class="row"><label>Or an intercom button<input id="w-ic-joy" value="${esc(v.intercom_joystick)}" placeholder="joystick:0:button:4"></label>
+        ${Settings.joyPicker("wic")}</div>
+      <div class="wbox"><b>Check your microphone</b>
+        <div class="row"><label>Gain <input type="range" id="w-gain" min="0" max="3" step="0.05" value="${mix.mic_gain}"></label>
+          <button type="button" class="btn small" id="w-mic-test">&#127908; Test</button></div>
+        <span class="muted small" id="w-mic-note">Press Test and say a call: you'll hear yourself as ATC does, and whether the level is right.</span></div>`;
+  },
+  wire_talk() {
+    const val = (id) => $(id).value;
+    $("#w-voice").onchange = (e) => this.save("voice", "enabled", e.target.checked);
+    $("#w-mic").onchange = () => this.save("voice", "input_device", val("#w-mic"));
+    $("#w-ptt").onchange = async () => { await this.save("voice", "ptt", val("#w-ptt")); this.render(); };
+    $("#w-key-set").onclick = () => Settings.captureKey("ptt_key", "#w-key", "#w-key-hint");
+    $("#w-ic-key-set").onclick = () => Settings.captureKey("intercom_key", "#w-ic-key", "#w-ic-key-hint");
+    $("#w-joy").onchange = () => this.save("voice", "ptt_joystick", val("#w-joy").trim());
+    $("#w-ic-joy").onchange = () => this.save("voice", "intercom_joystick", val("#w-ic-joy").trim());
+    Settings.bindJoy("wptt", "#w-joy", "ptt_joystick");
+    Settings.bindJoy("wic", "#w-ic-joy", "intercom_joystick");
+    $("#w-gain").onchange = () => api("mixer", { settings: { mixer: { mic_gain: Number(val("#w-gain")) } }, save: true })
+      .then(() => (S.settings.settings.mixer.mic_gain = Number(val("#w-gain")))).catch(fail);
+    $("#w-mic-test").onclick = async (e) => {
+      const b = e.target, note = $("#w-mic-note");
+      b.disabled = true;
+      note.textContent = "Listening for 4 seconds ... say a call.";
+      try {
+        const r = await api("voice/mic_test", { seconds: 4 });
+        note.innerHTML = {
+          silent: "<b class=\"bad\">Nothing heard.</b> Pick the microphone you talk into above, and check it isn't muted.",
+          quiet: "<b class=\"warn\">Quiet.</b> Raise the gain a little, or speak closer to the microphone.",
+          loud: "<b class=\"warn\">Too loud: it clips.</b> Lower the gain a little.",
+          good: "<b class=\"ok\">Good level.</b> That's how ATC hears you.",
+        }[r.verdict] || "";
+      } catch (err) { note.textContent = err.message; }
+      b.disabled = false;
+    };
+  },
+
+  hear() {
+    const st = S.settings.settings, t = st.tts, headset = st.mixer.sidetone > 0;
+    return `<p>ATC, the other flights and your copilot come through a radio, as in a real aircraft.</p>
+      <div class="row"><label>Speakers or headset<select id="w-out">${this.devices(S.devices.outputs || [], t.output_device)}</select></label></div>
+      <div class="wchoice">
+        <button type="button" class="wcard ${headset ? "current" : ""}" data-wear="headset"><b>&#127911; A headset</b>
+          <span class="muted small">You'll hear yourself on the radio while you hold the key, as in a real cockpit.</span></button>
+        <button type="button" class="wcard ${headset ? "" : "current"}" data-wear="speakers"><b>&#128266; Speakers</b>
+          <span class="muted small">No sidetone: the microphone would hear it.</span></button>
+      </div>
+      <div class="row"><label>Voices<select id="w-provider">
+        <option value="piper" ${t.provider === "piper" ? "selected" : ""}>Piper: on this PC, quick, always there</option>
+        <option value="kokoro" ${t.provider === "kokoro" ? "selected" : ""}>Kokoro: on this PC, more natural, a little slower (a 340 MB download)</option>
+        <option value="azure" ${t.provider === "azure" ? "selected" : ""}>Azure AI Speech: the most natural, each region's accent (your own free key, in Quick Settings)</option></select></label></div>
+      <div class="row"><button type="button" class="btn small" id="w-hear">&#9654; Hear ATC</button>
+        <span class="muted small">The mixer (the sliders at the top of the window) sets the volume of each.</span></div>`;
+  },
+  wire_hear() {
+    $("#w-out").onchange = () => this.save("tts", "output_device", $("#w-out").value);
+    $$("[data-wear]").forEach((b) => (b.onclick = async () => {
+      const sidetone = b.dataset.wear === "headset" ? 0.4 : 0;
+      await api("mixer", { settings: { mixer: { sidetone } }, save: true }).catch(fail);
+      S.settings.settings.mixer.sidetone = sidetone;
+      this.render();
+    }));
+    $("#w-provider").onchange = () => this.save("tts", "provider", $("#w-provider").value);
+    $("#w-hear").onclick = async (e) => {
+      e.target.disabled = true;
+      try { await api("voice/preview", {}); } catch (err) { fail(err); }
+      e.target.disabled = false;
+    };
+  },
+
+  copilot() {
+    const st = S.settings.settings, cur = st.crew.personality || "neutral";
+    const verbosity = [["quiet", "Quiet: only what's safety"], ["standard", "Standard: callouts, ATC relays and reminders"],
+      ["chatty", "Chatty: also status updates and small talk"]];
+    return `<p>A first officer beside you: it works the radio with you if you like, makes the callouts, runs the checklists
+      and works its side of the cockpit. Choose who it is. The safety calls are the standard ones whoever you pick.</p>
+      <div class="wpeople">${(S.settings.personalities || []).map((p) => `<div class="wcard person ${p.id === cur ? "current" : ""}" data-person="${esc(p.id)}" role="button" tabindex="0">
+        <b>${esc(p.name)}</b><span class="muted small">${esc(p.style)}</span><i class="small">&ldquo;${esc(p.sample)}&rdquo;</i>
+        <button type="button" class="wplay" data-hear="${esc(p.id)}" title="Hear ${esc(p.name)}">&#9654;</button></div>`).join("")}</div>
+      <div class="row"><label>When the Copilot switch is on, it
+        <select id="w-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
+        <option value="assist" ${st.ui.copilot === "assist" ? "selected" : ""}>reads back and changes frequencies; you make the calls</option></select></label></div>
+      <div class="row"><label>What it says by itself<select id="w-verbosity">${verbosity.map(([v, l]) =>
+        `<option value="${v}" ${st.crew.verbosity === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`;
+  },
+  wire_copilot() {
+    $$("[data-hear]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      api("voice/crew_preview", { personality: b.dataset.hear }).catch(fail);
+    }));
+    $$("[data-person]").forEach((card) => {
+      const pick = async () => {
+        await this.save("crew", "personality", card.dataset.person);
+        $$("[data-person]").forEach((x) => x.classList.toggle("current", x === card));
+      };
+      card.onclick = pick;
+      card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
+    });
+    $("#w-copilot").onchange = () => this.save("ui", "copilot", $("#w-copilot").value);
+    $("#w-verbosity").onchange = () => this.save("crew", "verbosity", $("#w-verbosity").value);
+  },
+
+  atc() {
+    const st = S.settings.settings, mistral = (S.cloud?.providers || []).find((p) => p.id === "mistral");
+    const phrase = [["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]];
+    const link = mistral?.signup ? `<a href="${esc(mistral.signup)}" target="_blank" rel="noopener">get one here</a>` : "from mistral.ai";
+    return `<p>How ATC works with you.</p>
+      <div class="row"><label>Phraseology<select id="w-phrase">${phrase.map(([v, l]) =>
+        `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
+      <label class="check-row"><input type="checkbox" id="w-humanize" ${st.atc.humanize !== false ? "checked" : ""}> Natural speech: controllers and other pilots say "uh" now and then, as people do</label>
+      <label class="check-row"><input type="checkbox" id="w-chatter" ${st.atc.chatter ? "checked" : ""}> Other flights on the frequency</label>
+      <label class="check-row"><input type="checkbox" id="w-personal" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities of their own</label>
+      ${mistral ? `<div class="wbox"><b>Recommended: a free cloud language model</b>
+        <p class="muted small">It understands far more of what you say than the model on your PC, and words ATC's replies
+          naturally. Mistral is free with your own key (${link}); it's kept in Windows' credential store, never in a file.
+          Without one everything works offline, just more strictly.</p>
+        <div class="row"><input type="password" id="w-mistral" placeholder="${mistral.has_key ? "A key is saved" : "Paste your Mistral key"}" autocomplete="off">
+          <button type="button" class="btn small" id="w-mistral-save">Save and use it</button></div>
+        <span class="muted small" id="w-mistral-note">${mistral.has_key && st.cloud?.enabled ? "<span class=\"ok\">&#10003; The cloud model is on.</span>" : ""}</span></div>` : ""}`;
+  },
+  wire_atc() {
+    $("#w-phrase").onchange = () => this.save("atc", "phraseology", $("#w-phrase").value);
+    $("#w-humanize").onchange = (e) => this.save("atc", "humanize", e.target.checked);
+    $("#w-chatter").onchange = (e) => this.save("atc", "chatter", e.target.checked);
+    $("#w-personal").onchange = (e) => this.save("atc", "personalities", e.target.checked);
+    const save = $("#w-mistral-save");
+    if (save) save.onclick = async () => {
+      const key = $("#w-mistral").value.trim();
+      if (!key) return;
+      try {
+        S.cloud = await api("cloud/key", { provider: "mistral", key });
+        await this.save("cloud", "enabled", true);
+        $("#w-mistral").value = "";
+        $("#w-mistral-note").innerHTML = "<span class=\"ok\">&#10003; Saved. The cloud model is on from the next flight.</span>";
+      } catch (e) { fail(e); }
+    };
+  },
+
+  flight() {
+    const ui = S.settings.settings.ui;
+    return `<p>LocalTC clears you as filed: put in your SimBrief username and <b>New Flight</b> imports your latest plan, with
+      your callsign, route and runways. You can type a plan in instead, or just press Start and fly.</p>
+      <div class="row"><label>SimBrief username or Pilot ID<input id="w-simbrief" value="${esc(ui.simbrief_user)}" autocomplete="off" spellcheck="false"></label></div>
+      <div class="wbox"><b>Each flight</b><ol class="small">
+        <li>Load your aircraft in MSFS 2024, at a gate, cold and dark or ready to go.</li>
+        <li><b>New Flight</b> imports your plan; then <b>Start</b>. The light turns green when the sim's connected.</li>
+        <li>Tune COM1 and call clearance: "Request IFR to Denver". Read back what ATC gives you, and check in after each handoff.</li>
+      </ol></div>`;
+  },
+  wire_flight() {
+    $("#w-simbrief").onchange = () => this.save("ui", "simbrief_user", $("#w-simbrief").value.trim());
+  },
+
+  done() {
+    const st = S.settings.settings, v = st.voice;
+    const who = (S.settings.personalities || []).find((p) => p.id === (st.crew.personality || "neutral"));
+    const copilot = who && who.sex ? who.name : "your copilot";
+    const ptt = v.ptt === "keyboard" ? keyLabel(v.ptt_key) : v.ptt === "joystick" ? "your yoke or joystick button" : "the headset button";
+    const talk = v.enabled ? `Hold <b>${esc(ptt)}</b> to talk to ATC` : "Type your calls to ATC";
+    const intercom = st.crew.enabled && v.intercom_key ? `, and <b>${esc(keyLabel(v.intercom_key))}</b> to talk to ${esc(copilot)}` : "";
+    return `<div class="whero"><img src="/static/logo.svg" alt="" width="56" height="56"><h2>You're set</h2><p>${talk}${intercom}.</p></div>
+      <ul class="benefits small">
+        <li><b>Talk like on a real radio.</b> Hold the key a moment before you speak and until you've finished, say your callsign, and read back what ATC gives you.</li>
+        <li><b>ATC and the copilot aren't perfect.</b> When something goes wrong, send it in (the gear &rarr; Support &amp; feedback): each report makes them better.</li>
+        <li><b>The mixer</b> (the sliders at the top) sets the volume of ATC, the other flights, the copilot and your microphone.</li>
+        <li><b>Quick Settings</b> has all of this and more: the voices, the copilot's hands, checklists, LocalTC's traffic, the taxi guidance.</li>
+      </ul>`;
+  },
+};
+$("#setup-next").onclick = () => (Setup.step === Setup.STEPS.length - 1 ? Setup.finish() : Setup.go(1));
+$("#setup-back").onclick = () => Setup.go(-1);
+$("#setup-skip").onclick = () => Setup.finish();
+// However it's closed (finished, skipped, Esc), it's done: never shown by itself again, nor the welcome notes it holds.
+$("#dlg-setup").addEventListener("close", () => {
+  if (!Setup.shown) return;  // it never loaded: shown again next time
+  if (S.state) { S.state.setup = false; S.state.welcome = false; S.state.whats_new = null; }
+  api("settings", { settings: { ui: { setup_done: true, welcome_seen: true, notes_seen: S.state?.version || "" } } }).catch(() => {});
+});
 
 /* ---------- New Flight ---------- */
 
@@ -1405,6 +1690,8 @@ const Settings = {
         <div class="row"><button class="btn small" data-open="recordings">Open recordings</button><button class="btn small" data-open="logs">Open logs</button>
           <button class="btn small" data-open="data">Open data folder</button></div>
         <div id="s-sessions"></div>
+        ${st.ui.dev_mode ? `<div class="row"><button class="btn small" id="s-setup-again">Show the setup guide</button>
+          <span class="muted small">As a new install opens with it. Your settings are what it shows, and change only as you change them in it.</span></div>` : ""}
       </div>
       <div class="savebar"><span class="muted small">Changes save as you make them.</span></div>`;
     this.wire();
@@ -1555,6 +1842,7 @@ const Settings = {
     on("#s-sc-builtin", "change", (e) => this.save("live", "connection", e.target.checked ? "builtin" : "dll"));
     on("#s-tiles", "change", async (e) => { await this.save("ui", "map_tiles", e.target.checked); S.state.map_tiles = e.target.checked; MapView.tiles(); });
     on("#s-dev", "change", async (e) => { await this.save("ui", "dev_mode", e.target.checked); this.render(); });
+    on("#s-setup-again", "click", () => { $("#dlg-settings").close(); Setup.open(); });
     $$("[data-open]").forEach((b) => (b.onclick = () => api("open", { what: b.dataset.open }).catch(fail)));
     on("#s-restart", "click", async () => {
       try { await api("flight/stop", {}); await api("flight/start", {}); $("#restart-bar").hidden = true; showTab("atc"); } catch (e) { fail(e); }

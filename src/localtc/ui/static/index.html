@@ -316,6 +316,21 @@
   </form>
 </dialog>
 
+<!-- Setup: the guide a new install opens with (app.js Setup) -->
+<dialog id="dlg-setup" class="dialog wizard" aria-label="Set up LocalTC">
+  <div class="dlg">
+    <div class="dlghead wizhead"><div><span class="muted small" id="setup-count"></span><h2 id="setup-title">Welcome</h2></div>
+      <div class="wsteps" id="setup-steps"></div></div>
+    <div class="wizbody" id="setup-body"></div>
+    <div class="dlgfoot wizfoot">
+      <button type="button" class="btn" id="setup-skip">Skip setup</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="setup-back">Back</button>
+      <button type="button" class="btn primary" id="setup-next">Next</button>
+    </div>
+  </div>
+</dialog>
+
 <!-- The mixer: each thing LocalTC plays at its own volume, and the microphone (app.js Mixer) -->
 <dialog id="dlg-mixer" class="dialog mixer-dialog" aria-label="Mixer">
   <form method="dialog" class="dlg">

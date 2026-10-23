@@ -552,7 +552,7 @@ def test_a_voice_crashing_never_stops_the_next_line():
 def test_the_service_survives_a_bug_of_its_own(monkeypatch):
     calls = []
 
-    def render(self, text, who, kind, manner=None, local=False):
+    def render(self, text, who, kind, manner=None, local=False, **radio):
         calls.append(text)
         if len(calls) == 1:
             raise ValueError("bug")

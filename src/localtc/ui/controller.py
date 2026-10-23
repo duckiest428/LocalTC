@@ -186,6 +186,8 @@ class AppController:
             (get, "joystick"): self.api_joystick,
             (post, "joystick/detect"): self.api_joystick_detect,
             (post, "voice/preview"): self.api_preview,
+            (post, "mixer"): self.api_mixer,
+            (post, "voice/mic_test"): self.api_mic_test,
             (get, "airport"): self.api_airport,
             (get, "zones"): self.api_zones,
             (get, "clip"): self.api_clip,
@@ -958,10 +960,44 @@ class AppController:
         self.apply_on_top()
         if self.live is not None and self.live.speaker is not None:
             self.live.speaker.chatter_cloud = cfg.tts.chatter_cloud  # the next line of chatter
-        if self.live is not None and self.live.speaker is not None and not self.muted:
-            self.live.speaker.player.volume = cfg.tts.volume
+        self._apply_mixer(cfg)
         self._push_state()
         return {"saved": str(path), "restart": live_now}
+
+    def _apply_mixer(self, cfg: Config) -> None:
+        """The mixer's volumes and the microphone's gain on the flight's voice and microphone, at once."""
+        live = self.live
+        if live is not None and live.speaker is not None:
+            live.speaker.player.mix = cfg.mixer.gains()
+            if not self.muted:
+                live.speaker.player.volume = cfg.tts.volume
+        if live is not None and live.voice is not None:
+            live.voice.capture.gain = cfg.mixer.mic_gain
+
+    async def api_mixer(self, args: dict) -> dict:
+        """The mixer moved: ``settings`` ({"mixer": {...}, "tts": {"volume": ...}}) heard at once; kept with ``save``
+        (a slider let go), only heard while it's dragged."""
+        changes = args.get("settings")
+        if not isinstance(changes, dict) or set(changes) - {"mixer", "tts"} or set(changes.get("tts") or {}) - {"volume"}:
+            raise HttpError(400, "send {settings: {mixer: {...}, tts: {volume}}}")
+        if args.get("save"):
+            return await self.api_save_settings({"settings": changes})
+        from localtc.config import merge
+
+        try:
+            cfg = msgspec.convert(merge(msgspec.to_builtins(self.cfg), changes), Config)
+        except msgspec.ValidationError as exc:
+            raise HttpError(400, f"setting not valid: {exc}") from None
+        self._apply_mixer(cfg)
+        return {}
+
+    async def api_mic_test(self, args: dict) -> dict:
+        """A few seconds of the microphone, played back as ATC hears you (through the radio), and how loud it was:
+        "silent", "quiet", "good" or "loud"."""
+        seconds = min(8.0, max(1.0, float(args.get("seconds") or 4.0)))
+        if self.live is not None and self.live.voice is not None and self.live.voice.service._held is not None:
+            raise HttpError(409, "you're transmitting: try again when the key is up")
+        return await asyncio.to_thread(_mic_test, self.cfg, seconds)
 
     async def api_cloud(self, args: dict) -> dict:
         """The cloud services: which there are, which have a key (never the key itself), and how each is doing in
@@ -1390,7 +1426,7 @@ def _preview(cfg: Config, voice: str, station: str, text: str) -> float:
     synth = PiperSynth(voice_file, rate=cfg.tts.rate)
     speech = synth.synthesize(radio_words(text), speaker_for(station, synth.speakers))
     audio = radio_effect(speech.audio, speech.rate, static=cfg.tts.static) if cfg.tts.radio_effect else clean(speech.audio)
-    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume)
+    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume, mix=cfg.mixer.gains())
     player.play(Clip(audio, speech.rate)).done.wait(timeout=30)
     player.close()
     return round(speech.seconds, 1)
@@ -1450,10 +1486,50 @@ def _crew_preview(cfg: Config, sex: str, pick: int) -> float:
     synth = PiperSynth(voice_file, rate=cfg.tts.rate)
     speech = synth.synthesize("Flaps two. Gear down, three green. Landing checklist complete.",
                               crew_speaker(sex, pick, synth.speakers, cfg.tts.voice))
-    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume)
+    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume, mix=cfg.mixer.gains())
     player.play(Clip(intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")).done.wait(timeout=30)
     player.close()
     return round(speech.seconds, 1)
+
+
+MIC_SILENT, MIC_QUIET, MIC_LOUD = 0.004, 0.03, 0.45  # the loud parts' level (RMS) of a test recording
+
+
+def mic_verdict(audio) -> dict:
+    """How a test recording sounds for speech-to-text: the level of its loudest parts and whether it clips."""
+    import numpy as np
+
+    frame = 320
+    usable = len(audio) - len(audio) % frame
+    levels = np.sqrt(np.mean(np.square(audio[:usable].reshape(-1, frame)), axis=1)) if usable else np.zeros(1)
+    loud = float(np.percentile(levels, 90)) if len(levels) else 0.0
+    peak = float(np.max(np.abs(audio))) if len(audio) else 0.0
+    verdict = "silent" if loud < MIC_SILENT else "quiet" if loud < MIC_QUIET else         "loud" if loud > MIC_LOUD or peak >= 0.99 else "good"
+    return {"level": round(loud, 4), "peak": round(peak, 3), "verdict": verdict}
+
+
+def _mic_test(cfg: Config, seconds: float) -> dict:
+    """Record ``seconds`` of the microphone ([voice] input_device, at the mixer's gain), then play it through the
+    radio as ATC would hear it."""
+    from localtc.dsp.radio import radio_effect
+    from localtc.stt.audio import SAMPLE_RATE, AudioCapture
+    from localtc.tts.player import AudioPlayer, Clip
+
+    capture = AudioCapture(cfg.voice.input_device or None, gain=cfg.mixer.mic_gain)
+    try:
+        capture.start()
+        capture.begin()
+        time.sleep(seconds)
+        audio = capture.end()
+    finally:
+        capture.close()
+    out = mic_verdict(audio) | {"microphone": capture.name}
+    if out["verdict"] != "silent":
+        player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume, mix=cfg.mixer.gains())
+        heard = radio_effect(audio, SAMPLE_RATE, static=max(cfg.tts.static, 0.2), seed=7) if cfg.tts.radio_effect else audio
+        player.play(Clip(heard, SAMPLE_RATE, "atc")).done.wait(timeout=seconds + 10)
+        player.close()
+    return out
 
 
 def _recent_sessions(root: Path, limit: int = 15) -> list[dict]:

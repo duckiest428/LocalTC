@@ -99,12 +99,15 @@ def find_device(spec: str | int | None) -> int | None:
 
 
 class AudioCapture:
-    def __init__(self, device: str | int | None = None, *, pre_roll_s: float = 0.3, max_clip_s: float = 30.0) -> None:
+    def __init__(self, device: str | int | None = None, *, pre_roll_s: float = 0.3, max_clip_s: float = 30.0,
+                 gain: float = 1.0) -> None:
         self.spec = device  # None/"": whatever the system's default input is
         self.device = find_device(device)
         self.pre_roll_s = pre_roll_s
         self.max_clip_s = max_clip_s
         self.rate = SAMPLE_RATE
+        self.gain = gain  # the mixer's microphone gain: a quiet microphone brought up for Whisper (and the sidetone)
+        self.on_block = None  # the sidetone: called with each block and its rate (gain applied) while the key is held
         self._lock = threading.Lock()
         self._pre: deque[np.ndarray] = deque()
         self._pre_len = 0
@@ -180,12 +183,15 @@ class AudioCapture:
         with self._lock:
             blocks, self._clip = self._clip or [], None
         audio = np.concatenate(blocks) if blocks else np.zeros(0, dtype=np.float32)
+        if self.gain != 1.0:
+            audio = np.clip(audio * self.gain, -1.0, 1.0)
         return resample(audio, self.rate)
 
     def _callback(self, indata, frames, time_info, status) -> None:
         block = indata[:, 0].copy()
         self._last_block = time.monotonic()
         with self._lock:
+            taking = self._clip is not None
             if self._clip is not None and self._clip_len < self.max_clip_s * self.rate:
                 self._clip.append(block)
                 self._clip_len += len(block)
@@ -193,3 +199,8 @@ class AudioCapture:
             self._pre_len += len(block)
             while self._pre and self._pre_len - len(self._pre[0]) >= self.pre_roll_s * self.rate:
                 self._pre_len -= len(self._pre.popleft())
+        if taking and self.on_block is not None:
+            try:
+                self.on_block(np.clip(block * self.gain, -1.0, 1.0), self.rate)
+            except Exception:  # noqa: BLE001 - the sidetone failing never loses the transmission
+                self.on_block = None

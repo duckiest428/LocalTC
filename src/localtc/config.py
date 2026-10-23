@@ -342,6 +342,28 @@ class TtsConfig(_Section):
     chatter_cloud: bool = False  # the other flights' pilots in a cloud voice too; off: the voices on this PC (no credits)
 
 
+class MixerConfig(_Section):
+    """The mixer: each thing LocalTC plays at its own volume (0-1.5, times [tts] volume, the master), and the
+    microphone's gain."""
+
+    atc: float = 1.0  # the controllers talking to you
+    atis: float = 0.8  # the ATIS recording
+    chatter: float = 0.8  # other flights and ATC's calls to them
+    copilot_radio: float = 1.0  # the copilot's own calls on the radio
+    copilot: float = 1.0  # the copilot beside you, on the intercom
+    effects: float = 0.6  # the radio's sounds: your push-to-talk's click and the squelch
+    # You on the radio in your headset while you talk, as in a real aircraft. 0 off: with speakers the microphone
+    # would hear it.
+    sidetone: float = 0.0
+    mic_gain: float = 1.0  # the microphone brought up (or down) before speech-to-text hears it
+    muted: list[str] = []  # channels muted (their volume kept for when they're back)
+
+    def gains(self) -> dict[str, float]:
+        """Each channel's volume as played: 0 when muted."""
+        names = ("atc", "atis", "chatter", "copilot_radio", "copilot", "effects", "sidetone")
+        return {name: 0.0 if name in self.muted else float(getattr(self, name)) for name in names}
+
+
 class CopilotConfig(_Section):
     mode: Literal["off", "assist", "full"] = "off"  # assist: readbacks + frequency changes; full: every call
     delay_min_s: float = 2.0  # pilot reaction time before speaking
@@ -441,6 +463,7 @@ class Config(_Section):
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
+    mixer: MixerConfig = msgspec.field(default_factory=MixerConfig)
     live: LiveConfig = msgspec.field(default_factory=LiveConfig)
     replay: ReplayConfig = msgspec.field(default_factory=ReplayConfig)
     recorder: RecorderConfig = msgspec.field(default_factory=RecorderConfig)

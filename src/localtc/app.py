@@ -591,6 +591,11 @@ async def run_session(
         if cfg.voice.enabled:
             voice = await start_voice(cfg, bus, source, recorder, engine if cfg.atc.enabled else None)
             consumers.append(asyncio.create_task(voice.service.run()))
+            if speaker is not None:  # you on the radio in your headset while you talk (at the mixer's sidetone volume)
+                from localtc.tts.player import Sidetone
+
+                speaker.service.sidetone = Sidetone(speaker.player)
+                voice.capture.on_block = speaker.service.sidetone.feed
         enter_ptt = voice.service if voice is not None and cfg.voice.ptt == "enter" else None
         typed_task = (asyncio.create_task(_typed_transmissions(bus, source, ptt=enter_ptt))
                       if (typed_input or enter_ptt) else None)
@@ -808,6 +813,8 @@ class VoiceOutput:
     player: object
 
     def close(self) -> None:
+        if getattr(self.service, "sidetone", None) is not None:
+            self.service.sidetone.close()
         self.player.close()
 
 
@@ -905,7 +912,7 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
         log.warning("ATC voice unavailable: text only")
         return None
     try:
-        player = AudioPlayer(t.output_device or None, volume=t.volume)
+        player = AudioPlayer(t.output_device or None, volume=t.volume, mix=cfg.mixer.gains())
     except Exception as exc:  # a bad device name
         log.warning("ATC voice unavailable (%s): text only", exc)
         return None
@@ -952,7 +959,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await asyncio.to_thread(transcriber.warm_up)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
-    capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000)
+    capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000, gain=cfg.mixer.mic_gain)
     capture.start()
     log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)", extra=CONSOLE)
     hints = None

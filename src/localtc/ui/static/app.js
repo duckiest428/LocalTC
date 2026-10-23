@@ -500,6 +500,103 @@ document.addEventListener("click", (e) => {
   api("open", { what: "url", url: a.href }).catch(fail);
 });
 
+/* ---------- the Mixer: everything you hear at its own volume, and the microphone ---------- */
+
+const SPEAKER_ON = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>';
+const SPEAKER_OFF = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 9v6h4l5 5V4L7 9zm18.6 3-2.3-2.3-1.4 1.4 2.3 2.3-2.3 2.3 1.4 1.4 2.3-2.3 2.3 2.3 1.4-1.4-2.3-2.3 2.3-2.3-1.4-1.4z" transform="translate(-2 0)"/></svg>';
+
+const Mixer = {
+  // [section, key, label, hint, max]: each row's setting. The microphone's gain is its own (no mute).
+  GROUPS: [
+    ["You", [
+      ["mixer", "mic_gain", "Microphone gain", "How loud your microphone reaches speech-to-text. Test it: you'll hear yourself as ATC does.", 3],
+      ["mixer", "sidetone", "Hear yourself on the radio", "Your voice in your headset while you hold the key, as in a real aircraft. Headsets only: with speakers the microphone hears it.", 1],
+    ]],
+    ["Master", [["tts", "volume", "Everything", "", 1]]],
+    ["Radio", [
+      ["mixer", "atc", "ATC", "The controllers talking to you.", 1.5],
+      ["mixer", "atis", "ATIS", "The recording while its frequency is tuned.", 1.5],
+      ["mixer", "chatter", "Other flights", "Other aircraft on the frequency and ATC's calls to them.", 1.5],
+    ]],
+    ["Copilot", [
+      ["mixer", "copilot", "On the intercom", "The copilot beside you.", 1.5],
+      ["mixer", "copilot_radio", "On the radio", "Its readbacks and calls to ATC.", 1.5],
+    ]],
+    ["Radio sounds", [["mixer", "effects", "Clicks and squelch", "Your push-to-talk's click and the receiver's rush when you let go.", 1.5]]],
+  ],
+  async open() {
+    try { S.settings = await api("settings"); } catch (e) { fail(e); return; }
+    this.render();
+    const dlg = $("#dlg-mixer");
+    if (!dlg.open) dlg.showModal();
+  },
+  value(section, key) { return Number(S.settings.settings[section][key]); },
+  muted(key) { return (S.settings.settings.mixer.muted || []).includes(key); },
+  render() {
+    const st = S.settings.settings;
+    const pct = (v) => `${Math.round(v * 100)}%`;
+    const row = ([section, key, label, hint, max]) => {
+      const v = this.value(section, key), mutable = key !== "mic_gain" && section === "mixer", off = mutable && this.muted(key);
+      return `<div class="mixrow ${off ? "muted-row" : ""}" data-row="${key}">
+        <div class="mixlabel"><b>${esc(label)}</b>${hint ? `<span class="muted small">${esc(hint)}</span>` : ""}</div>
+        <input type="range" min="0" max="${max}" step="0.05" value="${v}" data-mix="${section}.${key}" aria-label="${esc(label)}">
+        <span class="mixval" id="mixval-${key}">${pct(v)}</span>
+        ${mutable ? `<button type="button" class="iconbtn mixmute" data-mute="${key}" title="${off ? "Unmute" : "Mute"}" aria-pressed="${off}">${off ? SPEAKER_OFF : SPEAKER_ON}</button>` : '<span class="mixmute"></span>'}
+      </div>`;
+    };
+    $("#mixer-body").innerHTML = this.GROUPS.map(([title, rows]) => `<div class="mixgroup"><div class="mixhead">${esc(title)}</div>
+      ${rows.map(row).join("")}
+      ${title === "You" ? `<div class="mixtest"><button type="button" class="btn small" id="mix-test">&#127908; Test my microphone</button>
+        <span class="muted small" id="mix-test-note">Speaks for 4 seconds, then plays you back through the radio.</span></div>` : ""}
+      </div>`).join("") +
+      `<div class="mixgroup"><div class="mixhead">The radio's sound</div>
+        <div class="mixrow"><div class="mixlabel"><b>Static</b><span class="muted small">The receiver's hiss and squelch under the voices (from the next line).</span></div>
+          <input type="range" min="0" max="1" step="0.05" value="${st.tts.static}" data-static aria-label="Static"><span class="mixval" id="mixval-static">${pct(st.tts.static)}</span><span class="mixmute"></span></div>
+        <label class="check-row"><input type="checkbox" id="mix-effect" ${st.tts.radio_effect ? "checked" : ""}> Radio effect: the voices as over a real aircraft radio (off: clean)</label>
+      </div>`;
+    let timer = null;
+    $$("[data-mix]").forEach((input) => {
+      const [section, key] = input.dataset.mix.split(".");
+      const send = (save) => {
+        const value = Number(input.value);
+        S.settings.settings[section][key] = value;
+        $(`#mixval-${key}`).textContent = pct(value);
+        return api("mixer", { settings: { [section]: { [key]: value } }, save }).catch(fail);
+      };
+      input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => send(false), 60); });  // heard while dragged
+      input.addEventListener("change", () => { clearTimeout(timer); send(true); });  // kept once let go
+    });
+    $$("[data-mute]").forEach((b) => (b.onclick = async () => {
+      const key = b.dataset.mute, muted = new Set(st.mixer.muted || []);
+      if (muted.has(key)) muted.delete(key); else muted.add(key);
+      st.mixer.muted = [...muted];
+      await api("mixer", { settings: { mixer: { muted: st.mixer.muted } }, save: true }).catch(fail);
+      this.render();
+    }));
+    const stat = $("[data-static]");
+    stat.addEventListener("input", () => ($("#mixval-static").textContent = pct(Number(stat.value))));
+    stat.addEventListener("change", () => Settings.save("tts", "static", Number(stat.value)));
+    $("#mix-effect").onchange = (e) => Settings.save("tts", "radio_effect", e.target.checked);
+    $("#mix-test").onclick = () => this.test();
+  },
+  async test() {
+    const b = $("#mix-test"), note = $("#mix-test-note");
+    b.disabled = true;
+    note.textContent = "Listening ... say a call, as to ATC.";
+    try {
+      const r = await api("voice/mic_test", { seconds: 4 });
+      note.innerHTML = {
+        silent: `<b class="bad">Nothing heard</b> from ${esc(r.microphone)}. Check it's the microphone you talk into (Quick Settings &gt; Push-to-talk) and that it isn't muted.`,
+        quiet: `<b class="warn">Quiet</b> (${esc(r.microphone)}): raise the gain, or speak closer to the microphone.`,
+        loud: `<b class="warn">Too loud</b>, it clips (${esc(r.microphone)}): lower the gain a little.`,
+        good: `<b class="ok">Good level</b> (${esc(r.microphone)}). That's how ATC hears you.`,
+      }[r.verdict] || "";
+    } catch (e) { note.textContent = e.message; }
+    b.disabled = false;
+  },
+};
+$("#btn-mixer").onclick = () => Mixer.open();
+
 /* ---------- New Flight ---------- */
 
 const Flight = {
@@ -1090,7 +1187,7 @@ const Settings = {
         <h3>ATC voice</h3>
         <div class="row"><label>Speakers or headset<select id="s-out">${devOpts(S.devices.outputs || [], st.tts.output_device)}</select></label></div>
         <div class="row">
-          <label>Volume <input type="range" id="s-volume" min="0" max="1" step="0.05" value="${st.tts.volume}"></label>
+          <div><button type="button" class="btn small" id="s-open-mixer" title="The volume of ATC, the ATIS, other flights, the copilot and the radio's clicks, and your microphone">Mixer &hellip;</button></div>
           <label>Speed <input type="range" id="s-rate" min="0.8" max="1.5" step="0.05" value="${st.tts.rate}"></label>
           <label>Static <input type="range" id="s-static" min="0" max="1" step="0.05" value="${st.tts.static}"></label>
         </div>
@@ -1370,7 +1467,8 @@ const Settings = {
     });
     on("#s-mic", "change", () => this.save("voice", "input_device", val("#s-mic")));
     on("#s-out", "change", () => this.save("tts", "output_device", val("#s-out")));
-    for (const [id, key] of [["#s-volume", "volume"], ["#s-rate", "rate"], ["#s-static", "static"]])
+    on("#s-open-mixer", "click", () => Mixer.open());
+    for (const [id, key] of [["#s-rate", "rate"], ["#s-static", "static"]])
       on(id, "change", () => this.save("tts", key, Number(val(id))));
     on("#s-effect", "change", (e) => this.save("tts", "radio_effect", e.target.checked));
     on("#s-atis", "change", (e) => this.save("tts", "atis", e.target.checked));

@@ -190,6 +190,7 @@ class AppController:
             (post, "voice/mic_test"): self.api_mic_test,
             (get, "airport"): self.api_airport,
             (get, "zones"): self.api_zones,
+            (get, "airport/layout"): self.api_layout,
             (get, "clip"): self.api_clip,
             (get, "airports/search"): self.api_search,
             (post, "dev/note"): self.api_note,
@@ -1214,6 +1215,25 @@ class AppController:
             hint = "" if self.live else " Start a flight to look it up in the sim."
             raise HttpError(404, f"No data for {icao} yet.{hint}")
         return airport_detail(airport)
+
+    async def api_layout(self, args: dict) -> dict:
+        """An airport's ground for the Live Map close in (ui/airport_layout.py): runways, taxiways and their names,
+        hold-short lines, and the gates by ATC's names (the flight's: which are taken and which is yours)."""
+        from localtc.ui.airport_layout import layout
+
+        icao = str(args.get("icao", "")).strip().upper()
+        engine = self.live.engine if self.live is not None else None
+        geo = engine.geometry(icao) if engine is not None and icao else None
+        airport = geo.airport if geo is not None else (self.airports.get(icao) or await asyncio.to_thread(self.cache.get, icao))
+        if airport is None:
+            raise HttpError(404, f"No data for {icao} yet.")
+        gate_map = None
+        if geo is not None and hasattr(engine, "gate_map"):
+            try:
+                gate_map = engine.gate_map(icao)
+            except Exception:  # noqa: BLE001 - the gates by the scenery's names instead
+                log.debug("No gate map for %s", icao, exc_info=True)
+        return await asyncio.to_thread(layout, airport, gate_map)
 
     async def api_zones(self, args: dict) -> dict:
         """The Live Map's ATC layer: who works which airspace, and who the flight is talking to."""

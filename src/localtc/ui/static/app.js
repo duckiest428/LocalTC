@@ -2000,13 +2000,17 @@ const MapView = {
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
   wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null, notamLayer: null,
   zoneAirports: [],
+  grounds: new Map(), groundRenderer: null, gateSeen: "",  // each airport's ground close in (AtcMap.ground), by ICAO
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
     if (!this.map) this.init();
     setTimeout(() => this.map.invalidateSize(), 0);
   },
   init() {
-    this.map = L.map("map", { zoomControl: true, attributionControl: true }).setView([47.9, -122.28], 9);
+    this.map = L.map("map", { zoomControl: true, attributionControl: true, maxZoom: 19 }).setView([47.9, -122.28], 9);
+    this.map.createPane("ground").style.zIndex = 390;  // under the routes, the zones and the aircraft (400 and up)
+    this.groundRenderer = L.canvas({ padding: 0.5, pane: "ground" });
+    this.map.on("zoomend", () => this.groundZoom());
     $("#map-legend").innerHTML = AtcMap.LEGEND;  // atcmap.js: the same legend as the website's Flight Tracker
     $$("#map-mode [data-mode]").forEach((b) => (b.onclick = () => this.setMode(b.dataset.mode)));
     this.syncRules();
@@ -2041,7 +2045,7 @@ const MapView = {
     this.tileLayer = (vfr
       ? L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", { maxZoom: 17, subdomains: "abc",
         attribution: `${osm}, SRTM | style &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)` })
-      : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: osm })).addTo(this.map);
+      : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, maxNativeZoom: 18, attribution: osm })).addTo(this.map);
   },
   /* IFR or VFR. The map opens on the flight's rules and follows them when a new plan changes them; the
      switch works any time, and the pick holds until the rules change again. */
@@ -2169,6 +2173,30 @@ const MapView = {
     if (!this.map || this.airports.has(a.icao)) return;
     this.airports.add(a.icao);
     AtcMap.runways(this.map, a);
+    this.layout(a.icao);
+  },
+  /* An airport's ground, close in: taxiways and runways from zoom 13, their names from 15, the gates' names from 16
+     (the map stays quick further out, and readable). Drawn again when ground gives a gate (yours, and who's where). */
+  async layout(icao, again = false) {
+    if (!this.map || (this.grounds.has(icao) && !again)) return;
+    let a;
+    try { a = await api(`airport/layout?icao=${encodeURIComponent(icao)}`); } catch { return; /* not known yet */ }
+    const old = this.grounds.get(icao);
+    if (old) Object.values(old).forEach((l) => l.remove?.());
+    const g = { base: L.layerGroup(), labels: L.layerGroup(), gates: L.layerGroup(), gateLabels: L.layerGroup() };
+    AtcMap.ground({ ...g, renderer: this.groundRenderer }, a);
+    this.grounds.set(icao, g);
+    this.groundZoom();
+  },
+  groundZoom() {
+    const z = this.map.getZoom();
+    for (const g of this.grounds.values()) {
+      for (const [layer, from] of [[g.base, 13], [g.gates, 14], [g.labels, 15], [g.gateLabels, 16]]) {
+        const on = z >= from;
+        if (on && !this.map.hasLayer(layer)) layer.addTo(this.map);
+        else if (!on && this.map.hasLayer(layer)) layer.remove();
+      }
+    }
   },
   focus(a) {
     showTab("map");
@@ -2218,6 +2246,11 @@ const MapView = {
     this.zoneLayer.clearLayers();
     AtcMap.zones(this.zoneLayer, z, { vfr: this.mode === "vfr" });  // atcmap.js, shared with the website
     this.zoneAirports = z.airports || [];
+    const gate = z.gate ? `${z.gate.icao}:${z.gate.name}` : "";
+    if (gate !== this.gateSeen) {  // ground gave a gate: the gates drawn again, yours among them
+      this.gateSeen = gate;
+      if (z.gate) this.layout(z.gate.icao, true);
+    }
     this.drawNotams();
     $("#map-legend .lg-talk").innerHTML = AtcMap.talk(z);
   },

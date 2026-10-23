@@ -6,7 +6,16 @@
   --z-font: var(--font, var(--sans, system-ui, -apple-system, "Segoe UI", sans-serif));
   --z-mono: var(--mono, ui-monospace, Menlo, Consolas, monospace);
 }
-.tfc-label { color: #d7dce1; font: 11px/1.1 var(--z-mono); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.tfc-label { color: #e4e8ec; font: 600 10.5px/1.2 var(--z-mono); white-space: nowrap; background: rgba(14, 17, 20, .82);
+  border: 1px solid rgba(255, 255, 255, .14); border-radius: 3px; padding: 1px 4px; display: inline-block; }
+/* An airport's ground close in (AtcMap.ground): runway numbers, taxiway names, the gates by name. */
+.rwy-num { width: max-content; color: #fff; font: 700 13px var(--z-mono); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.twy-label { width: max-content; color: #16120a; background: #e9b949; font: 700 10px/1.25 var(--z-mono); padding: 0 3px; border-radius: 2px;
+  white-space: nowrap; box-shadow: 0 0 0 1px #16120a; }
+.gate-label { width: max-content; color: #cfe9f3; font: 600 10px var(--z-mono); white-space: nowrap; transform: translate(6px, -50%);
+  text-shadow: 0 0 2px #000, 0 0 3px #000; }
+.gate-label.taken { color: #9aa3ab; }
+.gate-label.yours { color: #e2d3ff; font-size: 12px; font-weight: 700; }
 .fix-label { color: #e9d38a; font: 10px var(--z-mono); text-shadow: 0 0 3px #000; white-space: nowrap; }
 .maplegend { position: absolute; right: 10px; bottom: 28px; z-index: 500; background: rgba(20, 23, 27, .9); border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 3px; padding: 8px 10px; font: 11.5px/1.5 var(--z-font); max-width: 300px; }
@@ -26,7 +35,7 @@
 .sw-center { border: 1.5px solid var(--z-center); }
 .sw-terminal { background: rgba(47, 182, 124, .35); border: 1.5px solid var(--z-terminal); }
 .sw-final { background: rgba(231, 178, 74, .25); border: 1.5px dashed var(--z-final); }
-.sw-taxi { border: 0; border-top: 3px dashed #f2c94c; height: 0; margin-top: 6px; }
+.sw-taxi { border: 0; height: 4px; margin-top: 4px; background: #46f08a; box-shadow: 0 0 0 2px #04140a; border-radius: 2px; }
 .sw-route { border: 0; border-top: 2px solid #e978d6; height: 0; margin-top: 6px; }
 .sw-tower { border: 1.5px dashed var(--z-tower); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }
 .sw-b { border: 2px solid var(--z-b); border-radius: 50%; width: 12px; height: 12px; margin: 0 3px; }

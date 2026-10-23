@@ -64,6 +64,44 @@ const AtcMap = (() => {
       interactive: false, keyboard: false }).addTo(layer);
   }
 
+  /** An airport's ground close in (the app's ui/airport_layout.py): the taxiways outlined as on a chart with their
+      names along them, the runways at their width with their numbers, the hold-short lines, and the gates by ATC's
+      names (yours, and the taken ones). ``g``: {base, labels, gates, gateLabels} layer groups (shown by zoom) and a
+      canvas ``renderer``: thousands of taxiway pieces drawn as two lines, not thousands of elements. */
+  function ground(g, a) {
+    const r = g.renderer, quiet = { renderer: r, interactive: false };
+    const segs = (a.taxiways || []).map((s) => chain([s.a, s.b]));
+    if (segs.length) {
+      L.polyline(segs, { ...quiet, color: "#16120a", weight: 10, opacity: 0.85, lineCap: "round" }).addTo(g.base);
+      L.polyline(segs, { ...quiet, color: "#e9b949", weight: 3, opacity: 0.95, lineCap: "round" }).addTo(g.base);
+    }
+    for (const rw of a.runways || []) {
+      L.polygon(ring(rw.outline), { ...quiet, color: "#eef1f4", weight: 1.4, fillColor: "#2f343a", fillOpacity: 0.97 }).addTo(g.base);
+      const [p, q] = rw.ends.map((e) => at(e.at[0], e.at[1]));
+      L.polyline([p, q], { ...quiet, color: "#eef1f4", weight: 1.2, opacity: 0.8, dashArray: "10 10" }).addTo(g.base);
+      for (const e of rw.ends) {
+        L.marker(at(e.at[0], e.at[1]), { icon: L.divIcon({ className: "", iconSize: [0, 0],
+          html: `<div class="rwy-num" style="transform:translate(-50%,-50%)">${esc(e.ident)}</div>` }),  // upright: read at a glance
+          interactive: false, keyboard: false }).addTo(g.labels);
+      }
+    }
+    if ((a.holds || []).length) L.polyline(a.holds.map((h) => chain([h.a, h.b])), { ...quiet, color: "#ff4d4d", weight: 3, opacity: 0.95 }).addTo(g.base);
+    for (const t of a.taxiway_labels || []) {
+      L.marker(at(t.at[0], t.at[1]), { icon: L.divIcon({ className: "", iconSize: [0, 0],
+        html: `<div class="twy-label" style="transform:translate(-50%,-50%) rotate(${t.heading - 90}deg)">${esc(t.name)}</div>` }),
+        interactive: false, keyboard: false }).addTo(g.labels);
+    }
+    for (const s of a.gates || []) {
+      const cls = s.yours ? "yours" : s.occupied ? "taken" : "free";
+      const colour = { yours: "#b892ff", taken: "#8d959e", free: "#62c7e6" }[cls];
+      L.circleMarker(at(s.lat, s.lon), { renderer: r, radius: s.yours ? 6 : 3.5, color: s.yours ? "#fff" : "#0b0d0f", weight: s.yours ? 2 : 1,
+        fillColor: colour, fillOpacity: 1 }).addTo(g.gates)
+        .bindTooltip(`${esc(s.word === "gate" ? "Gate" : "Stand")} ${esc(s.label)}${s.yours ? ": yours" : s.occupied ? ": taken" : ""}`);
+      L.marker(at(s.lat, s.lon), { icon: L.divIcon({ className: "", iconSize: [0, 0], html: `<div class="gate-label ${cls}">${esc(s.label)}</div>` }),
+        interactive: false, keyboard: false }).addTo(g.gateLabels);
+    }
+  }
+
   /** The ATC zones (ui/zones.py's answer) into ``layer``, IFR or VFR. */
   function zones(layer, z, { vfr = false } = {}) {
     const label = (p, text, cls) => L.marker(at(p[0], p[1]), { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
@@ -86,11 +124,13 @@ const AtcMap = (() => {
     }
     if (z.taxi && z.taxi.points && z.taxi.points.length > 1) {  // the route ground gave: to the runway, or in to the gate
       const via = z.taxi.taxiways && z.taxi.taxiways.length ? ` via ${z.taxi.taxiways.join(", ")}` : "";
-      const pts = chain(z.taxi.points);
-      L.polyline(pts, { color: "#111", weight: 7, opacity: 0.5, interactive: false }).addTo(layer);
-      L.polyline(pts, { color: "#f2c94c", weight: 3.5, opacity: 0.95, dashArray: "8 6" }).addTo(layer)
+      const pts = chain(z.taxi.points);  // outlined and glowing, over the taxiways' yellow
+      L.polyline(pts, { color: "#04140a", weight: 13, opacity: 0.75, lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
+      L.polyline(pts, { color: "#3ee07a", weight: 7, opacity: 0.35, lineCap: "round", lineJoin: "round", interactive: false }).addTo(layer);
+      L.polyline(pts, { color: "#46f08a", weight: 4, opacity: 1, lineCap: "round", lineJoin: "round" }).addTo(layer)
         .bindTooltip(`Taxi to ${esc(z.taxi.to)}${esc(via)}`, { sticky: true });
-      L.circleMarker(pts[pts.length - 1], { radius: 4, color: "#f2c94c", weight: 2, fillColor: "#111", fillOpacity: 1, interactive: false }).addTo(layer);
+      L.polyline(pts, { color: "#eafff1", weight: 1.5, opacity: 0.9, dashArray: "2 12", interactive: false }).addTo(layer);
+      L.circleMarker(pts[pts.length - 1], { radius: 6, color: "#46f08a", weight: 3, fillColor: "#04140a", fillOpacity: 1, interactive: false }).addTo(layer);
     }
     if (z.gate && z.gate.lat != null) {
       L.circleMarker(at(z.gate.lat, z.gate.lon), { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)
@@ -336,6 +376,6 @@ const AtcMap = (() => {
     }
   }
 
-  return { esc, route, straight, runways, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, LEGEND,
+  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

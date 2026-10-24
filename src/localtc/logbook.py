@@ -4,11 +4,17 @@
 ends: where from and to, which gates and runways, block and air time, distance, the landing, how the
 readbacks went. ``Logbook`` keeps those lines in SQLite at ``<data dir>/logbook.db``.
 
+With ``[account] stats`` on, a line also carries a few more numbers from the flight for the dashboard's Stats page
+(``metrics``: the path's northernmost and southernmost points, equator and date-line crossings, fuel burned, top
+ground speed, night takeoffs and landings, time in cloud, the coldest air and the strongest wind). Off, they aren't
+worked out at all.
+
 Only these summaries exist here, with the path of each flight's recording, which is what the Logbook's
 Replay plays (``localtc.replay.rewatch``). An account (``localtc.account``) syncs the summaries; a flight's
 replay (its track and radio transcript) goes to it only when the pilot uploads it. Never audio.
 """
 
+import json
 import sqlite3
 import uuid
 from contextlib import closing
@@ -66,6 +72,7 @@ class FlightRecord:
     recording: str = ""  # the flight's recording directory on this computer, for its replay ("" = none)
     replay_uploaded_at: str | None = None  # when its replay went to the account; None = not uploaded
     share_url: str | None = None  # its public card's link (localtc.tech/f/...), while it's shared
+    metrics: str = ""  # with [account] stats on: FlightLog's metrics as JSON ("" = not collected)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -74,8 +81,9 @@ class FlightRecord:
 class FlightLog:
     """Sums up one flight from its events. ``finish`` gives the record, or None if nothing happened."""
 
-    def __init__(self, started: datetime | None = None) -> None:
-        self.id = str(uuid.uuid4())  # the same line each time it's written: as the flight goes, and at its end
+    def __init__(self, started: datetime | None = None, *, metrics: bool = False) -> None:
+        self.id = str(uuid.uuid4())
+        self.metrics = _Metrics() if metrics else None  # only with [account] stats on  # the same line each time it's written: as the flight goes, and at its end
         self.started = started or datetime.now(UTC)
         self.t0: float | None = None
         self.last_t = 0.0
@@ -112,6 +120,8 @@ class FlightLog:
     def _own(self, own: OwnshipState) -> None:
         prev = self._prev
         self._prev = own
+        if self.metrics is not None:
+            self.metrics.feed(prev, own)
         if own.on_ground and own.gs_kt > MOVING_KT and self.block_start is None:
             self.block_start = own.t
         if prev is None:
@@ -161,9 +171,77 @@ class FlightLog:
             readbacks_correct=self.readbacks_correct,
             alerts=self.alerts,
             landed=self.landing_t is not None,
+            metrics=self.metrics.json() if self.metrics is not None else "",
             **_airport_points(engine, f.origin if f is not None else None, "origin"),
             **_airport_points(engine, f.destination if f is not None else None, "destination"),
         )
+
+
+class _Metrics:
+    """The Stats page's numbers from a flight's own-ship samples. Only made with [account] stats on."""
+
+    def __init__(self) -> None:
+        self.north: float | None = None
+        self.south: float | None = None
+        self.equator = self.dateline = 0
+        self.max_gs = 0.0
+        self.fuel_start: float | None = None
+        self.fuel_low: float | None = None
+        self.cloud_s = 0.0
+        self.coldest: float | None = None
+        self.max_wind = 0.0
+        self.night_takeoff: bool | None = None
+        self.night_landing: bool | None = None
+
+    def feed(self, prev: OwnshipState | None, own: OwnshipState) -> None:
+        if own.fuel_lb is not None:
+            if self.fuel_start is None or (own.on_ground and own.fuel_lb > self.fuel_start):
+                self.fuel_start = own.fuel_lb  # fuelled up before departure: from the most
+                self.fuel_low = own.fuel_lb
+            self.fuel_low = min(self.fuel_low if self.fuel_low is not None else own.fuel_lb, own.fuel_lb)
+        if prev is None:
+            return
+        airborne = not own.on_ground
+        if airborne:
+            self.north = own.lat if self.north is None else max(self.north, own.lat)
+            self.south = own.lat if self.south is None else min(self.south, own.lat)
+            self.max_gs = max(self.max_gs, own.gs_kt)
+            self.max_wind = max(self.max_wind, own.wind_kt)
+            if own.temperature_c is not None:
+                self.coldest = own.temperature_c if self.coldest is None else min(self.coldest, own.temperature_c)
+            if own.in_cloud:
+                self.cloud_s += max(0.0, min(own.t - prev.t, 10.0))
+            if haversine_nm(prev.lat, prev.lon, own.lat, own.lon) < MAX_JUMP_NM:
+                if (prev.lat < 0) != (own.lat < 0):
+                    self.equator += 1
+                if abs(prev.lon - own.lon) > 180:
+                    self.dateline += 1
+        if prev.on_ground and airborne and self.night_takeoff is None:
+            self.night_takeoff = _night(own)
+        elif not prev.on_ground and own.on_ground:
+            self.night_landing = _night(own)
+
+    def json(self) -> str:
+        used = self.fuel_start - self.fuel_low if self.fuel_start is not None and self.fuel_low is not None else None
+        m = {"north_lat": _r(self.north, 2), "south_lat": _r(self.south, 2), "equator_crossings": self.equator,
+             "dateline_crossings": self.dateline, "max_gs_kt": round(self.max_gs),
+             "fuel_used_lb": round(used) if used is not None and used > 0 else None, "cloud_min": round(self.cloud_s / 60, 1),
+             "coldest_c": _r(self.coldest, 1), "max_wind_kt": round(self.max_wind),
+             "night_takeoff": self.night_takeoff, "night_landing": self.night_landing}
+        return json.dumps({k: v for k, v in m.items() if v is not None}, separators=(",", ":"))
+
+
+def _r(x: float | None, digits: int) -> float | None:
+    return round(x, digits) if x is not None else None
+
+
+def _night(own: OwnshipState) -> bool | None:
+    """Dark at the aircraft: the local solar time (the sim's UTC and the longitude) between 19:00 and 06:00. Rough on
+    purpose: no season or latitude."""
+    if own.zulu_s is None:
+        return None
+    hour = (own.zulu_s / 3600.0 + own.lon / 15.0) % 24.0
+    return hour >= 19.0 or hour < 6.0
 
 
 def _airport_points(engine: Any, icao: str | None, prefix: str) -> dict[str, float]:

@@ -35,13 +35,14 @@ def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
     assert site == app, f"copy site/{name} over src/localtc/ui/static/{name} (or the other way)"
 
 
-PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html"]
+PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html", "blog.html"]
 
 
 def test_every_page_has_the_same_header_links():
     for page in PAGES:
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
         header = html[html.index('<header class="topbar">'):html.index("</header>")]
+        assert '<a href="blog"' in header, page
         assert 'href="dashboard#support"' in header, page  # support is a dashboard section: it needs the account
         assert 'href="https://github.com/duckiest428/LocalTC">GitHub</a>' in header, page
         assert 'class="btn btn-ghost" href="dashboard"' in header and ">Dashboard</a>" in header, page
@@ -64,9 +65,10 @@ def test_the_dashboard_is_a_sidebar_of_sections_behind_the_sign_in():
     side = html[html.index('<nav class="side-nav"'):html.index("</nav>", html.index('<nav class="side-nav"'))]
     import re
 
-    assert re.findall(r'data-page="(\w+)"', side) == ["tracker", "logbook", "wrapped", "support", "account"]
+    pages = ["tracker", "logbook", "stats", "wrapped", "download", "support", "account"]
+    assert re.findall(r'data-page="(\w+)"', side) == pages
     app = html[html.index('<div class="dash-app" id="dash" hidden>'):]
-    for page in ("tracker", "logbook", "wrapped", "support", "account"):
+    for page in pages:
         assert f'<section class="dash-page" id="{page}"' in app  # all inside the signed-in part, hidden until then
     signed_out = html[html.index('id="auth"'):html.index('id="dash"')]
     assert "lb-map" not in signed_out and "support-form" not in signed_out
@@ -115,7 +117,7 @@ def test_the_sitemap_lists_the_public_pages_without_html():
     xml = (ROOT / "site" / "sitemap.xml").read_text(encoding="utf-8")
     urls = re.findall(r"<loc>([^<]+)</loc>", xml)
     assert urls[0] == "https://localtc.tech/" and all(".html" not in u for u in urls)
-    for name in ("pricing", "changelog", "privacy", "terms", "cookies"):
+    for name in ("pricing", "changelog", "blog", "privacy", "terms", "cookies"):
         assert f"https://localtc.tech/{name}" in urls
     assert "Sitemap: https://localtc.tech/sitemap.xml" in (ROOT / "site" / "robots.txt").read_text(encoding="utf-8")
 

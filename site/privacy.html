@@ -20,6 +20,7 @@
     <a href="./#why">Why not a subscription</a>
     <a href="./#install">Install</a>
     <a href="./#status">Status</a>
+    <a href="blog">Blog</a>
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
@@ -29,7 +30,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 7 October 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 24 October 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -57,8 +58,8 @@
     than from a font CDN, so loading the page does not tell anyone else that you did. There are no
     cookies and nothing in local or session storage, with one exception: if you sign in to the
     <a href="dashboard">dashboard</a>, the account server sets one sign-in cookie (see
-    <a href="cookies">the cookie policy</a>). Only the dashboard talks to that server, and only when you
-    use it. The dashboard's two maps (your flights, and the Flight Tracker) load map
+    <a href="cookies">the cookie policy</a>). Only the dashboard and the blog talk to that server, and only when you
+    use them. The dashboard's two maps (your flights, and the Flight Tracker) load map
     tiles from <a href="https://wiki.osmfoundation.org/wiki/Privacy_Policy" rel="noopener">OpenStreetMap</a>,
     which sees your IP address and which part of the map you're looking at.
   </p>
@@ -73,6 +74,14 @@
     that 3rd party entities comply with the handling of your Support email, nor can we guarantee that physical handling
     of my devices leads to exposure of your email address or contents (ie someone steals my device and goes through my emails). 
     The server keeps a short-lived counter per IP address and account to stop spam, deleted within a day. Legal basis: answering you (legitimate interest, GDPR Art. 6(1)(f)).
+  </p>
+
+  <h3 id="blog">The blog</h3>
+  <p>
+    The <a href="blog">blog</a>'s posts and their pictures come from the account server, which, like any server, sees
+    your IP address when it sends them; it doesn't log or keep it. If you're signed in to the dashboard in the same
+    browser, the blog also asks the server, with your sign-in cookie, whether your account may write posts, so it can
+    show the editor to the blog's authors. Nothing about your reading is stored.
   </p>
 
   <h3>Hosting</h3>
@@ -183,6 +192,12 @@
       the departure and arrival airports and their published coordinates, gates and runways, block and air
       time, distance flown, highest altitude, the vertical speed at touchdown, and how many readbacks
       were right and alerts were raised.</li>
+    <li><strong>Only with Stats and metrics on</strong> (the app's Settings (the gear) → Account; off until you turn it
+      on): a few more numbers with each flight's summary, for the dashboard's Stats page: the northernmost and
+      southernmost latitudes flown, how many times the flight crossed the equator and the date line, the fuel burned,
+      the top ground speed, whether the takeoff and landing were at night, minutes in cloud, the coldest outside air
+      and the strongest wind. Never a position or a track. Turning it off deletes them from the account, and the
+      app stops working them out.</li>
     <li><strong>While you fly, if the companion is on</strong>: the phase of flight, the frequency you're
       tuned to and the next one, and ATC's last transmission. Only the latest status is kept, and a new one
       replaces it.</li>

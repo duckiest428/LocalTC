@@ -1144,6 +1144,7 @@ Object.assign(Logbook, {
         base: "/static/",
         load: (r) => api(`wrapped?${q(r)}`),
         share: (r) => api("wrapped/share", Object.fromEntries(q(r))),
+        timeline: (period, tz) => api(`wrapped/timeline?${new URLSearchParams({ period, tz })}`),
         putImage: async (slug, blob) => api("share/image", { slug, png: await toDataUrl(blob) }),
       });
       this.wrappedView.open("month", -1);
@@ -1925,6 +1926,7 @@ const Settings = {
       <label class="check-row"><input type="checkbox" id="a-lan" ${a.companion_lan ? "checked" : ""} ${a.companion ? "" : "disabled"}> On the same Wi-Fi, the phone connects to this PC directly (map, traffic, radio log; nothing goes online)</label>
       <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)</label>
       <label class="check-row"><input type="checkbox" id="a-replays" ${a.upload_replays ? "checked" : ""}> Also upload each flight's replay (its track and radio transcript, never audio), so it plays on localtc.tech and the phone. Off: only the ones you upload from the Logbook</label>
+      <label class="check-row"><input type="checkbox" id="a-stats" ${a.stats ? "checked" : ""} ${a.sync ? "" : "disabled"}> Stats and metrics: collect a few more numbers from each flight (the northernmost and southernmost points, equator and date-line crossings, fuel burned, top speed, night landings, time in cloud) and show the Stats page on localtc.tech. Off: none of it is collected, and the account's copy is deleted</label>
       <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
         <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
       <div class="row"><button class="btn small" id="a-logout">Sign out</button>
@@ -1934,6 +1936,8 @@ const Settings = {
     $("#a-lan").onchange = (e) => this.save("account", "companion_lan", e.target.checked).then(() => { a.companion_lan = e.target.checked; $("#restart-bar").hidden = false; });
     $("#a-remote").onchange = (e) => this.save("account", "companion_remote_map", e.target.checked).then(() => (a.companion_remote_map = e.target.checked));
     $("#a-replays").onchange = (e) => this.save("account", "upload_replays", e.target.checked).then(() => (a.upload_replays = e.target.checked));
+    $("#a-stats").onchange = (e) => this.save("account", "stats", e.target.checked).then(() => { a.stats = e.target.checked; return api("account/sync", {}); })
+      .then((v) => { if (v) { S.account = v; this.account(); } }).catch(fail);
     $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
     $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
     $("#a-delete").onclick = () => {

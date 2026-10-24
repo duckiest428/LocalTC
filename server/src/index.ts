@@ -6,6 +6,7 @@
  * chose to share. There are no passwords: signing in is a code or link sent by email. See README.md.
  */
 import * as auth from "./auth";
+import * as blog from "./blog";
 import * as chartfox from "./chartfox";
 import type { Env } from "./env";
 import * as flights from "./flights";
@@ -30,6 +31,14 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["POST", /^\/v1\/auth\/finish$/, (env, req) => auth.finish(env, req)],
   ["POST", /^\/v1\/auth\/logout$/, signedIn((env, _req, a) => auth.logout(env, a))],
   ["GET", /^\/v1\/me$/, signedIn((env, _req, a) => auth.me(env, a))],
+  // The blog: published posts and their pictures for anyone; writing for its authors (src/blog.ts).
+  ["GET", /^\/v1\/blog$/, (env) => blog.list(env)],
+  ["GET", /^\/v1\/blog\/posts\/([a-z0-9-]+)$/, (env, _req, _u, p) => blog.get(env, p[0])],
+  ["GET", /^\/v1\/blog\/drafts$/, signedIn((env, _req, a) => blog.all(env, a))],
+  ["POST", /^\/v1\/blog\/posts$/, signedIn((env, req, a) => blog.save(env, req, a))],
+  ["DELETE", /^\/v1\/blog\/posts\/([a-z0-9-]+)$/, signedIn((env, _req, a, _u, p) => blog.remove(env, a, p[0]))],
+  ["PUT", /^\/v1\/blog\/images$/, signedIn((env, req, a, url) => blog.putImage(env, req, a, url))],
+  ["GET", /^\/v1\/blog\/images\/([a-f0-9]{32})$/, (env, _req, _u, p) => blog.image(env, p[0])],
   ["DELETE", /^\/v1\/me$/, signedIn((env, req, a) => auth.deleteMe(env, req, a))],
   ["PATCH", /^\/v1\/me$/, signedIn((env, req, a) => auth.updateMe(env, req, a))],
   ["DELETE", /^\/v1\/sessions\/([\w-]+)$/, signedIn((env, _req, a, _u, p) => auth.revokeSession(env, a, p[0]))],
@@ -44,11 +53,13 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["POST", /^\/v1\/shares$/, signedIn((env, req, a) => shares.create(env, req, a))],
   ["PUT", /^\/v1\/shares\/(\w+)\/image$/, signedIn((env, req, a, _u, p) => shares.putImage(env, req, a, p[0]))],
   ["DELETE", /^\/v1\/shares\/(\w+)$/, signedIn((env, _req, a, _u, p) => shares.remove(env, a, p[0]))],
+  ["GET", /^\/v1\/wrapped\/timeline$/, signedIn((env, _req, a, url) => wrapped.timeline(env, url, a))],
   ["GET", /^\/v1\/wrapped$/, signedIn((env, _req, a, url) => wrapped.get(env, url, a))],
   // The public pages of what's shared: localtc.tech/f/<slug> and /w/<slug> are routed to this Worker.
   ["GET", /^\/f\/(\w+)\/replay\.json$/, (env, _req, _u, p) => shares.replay(env, p[0])],
   ["GET", /^\/f\/(\w+?)(\.png)?$/, (env, _req, _u, p) => shares.view(env, "flight", p[0], !!p[1])],
   ["GET", /^\/w\/(\w+?)(\.png)?$/, (env, _req, _u, p) => shares.view(env, "wrapped", p[0], !!p[1])],
+  ["GET", /^\/v1\/stats\/details$/, signedIn((env, _req, a) => flights.details(env, a))],
   ["GET", /^\/v1\/stats$/, signedIn((env, _req, a) => flights.stats(env, a))],
   ["GET", /^\/v1\/export$/, signedIn((env, _req, a) => flights.exportAll(env, a))],
   ["PUT", /^\/v1\/live$/, signedIn((env, req, a) => live.put(env, req, a))],

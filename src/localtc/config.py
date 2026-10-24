@@ -97,6 +97,11 @@ class AccountConfig(_Section):
     # After each flight, also upload its replay (the track and the radio transcript, never audio) so it plays on
     # localtc.tech and the phone. Off: only the flights the pilot uploads from the Logbook.
     upload_replays: bool = False
+    # Stats and metrics: each flight's line also gets a few numbers for the dashboard's Stats page (the path's
+    # northernmost and southernmost points, equator and date-line crossings, fuel burned, top ground speed, night
+    # takeoffs and landings, time in cloud, the coldest air, the strongest wind), and the page is on. Off: they
+    # aren't collected, and the account's copy is deleted.
+    stats: bool = False
 
 
 class RouteFix(msgspec.Struct, frozen=True, kw_only=True):

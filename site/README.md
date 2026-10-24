@@ -9,9 +9,12 @@ privacy.html    what we know about you (nothing, without an account)
 terms.html      the AGPL, the no-warranty, the "not for real flight", the optional account
 cookies.html    there are none, except the dashboard's sign-in cookie, and how to check
 dashboard.html  (/dashboard) the optional account (dashboard.js): sign in, then a sidebar of sections, one at a time
-                (#tracker, #logbook, #support, #account): the Flight Tracker (the flight in progress, live), the
-                logbook (stats, the flights map, the flights), support (emailed to the developer by the
-                account server), devices, export, delete
+                (#tracker, #logbook, #stats, #wrapped, #download, #support, #account): the Flight Tracker (the
+                flight in progress, live), the logbook (totals, the flights map, the flights), Stats (stats.js,
+                only with Stats and metrics on in the app), Wrapped (wrapped.js), the installer, support
+                (emailed to the developer by the account server), devices, export, delete
+blog.html       (/blog) the blog (blog.js): the posts from blog-posts.json (written in the repository) and the
+                account server's (written on the page by the blog's authors, who get an editor there)
 tracker.html    (/tracker) the Flight Tracker full screen (tracker.js): the map, the traffic, and the radio and the
                 intercom on COM1 / COM2 / INT, as on the phone, with a line to type and play buttons
 flightsmap.js   the flights map, also used by the app's Logbook tab (the same file: a test checks)

@@ -1,5 +1,7 @@
 """The optional account's client, against a fake server: sign in, sync the logbook, sign out, delete."""
 
+from dataclasses import replace
+
 import pytest
 
 from localtc.account import LOCAL_ONLY, Account, AccountError, TokenStore
@@ -36,7 +38,8 @@ class FakeServer:
             return 401, {"error": "Sign in again."}
         if path == "/v1/flights" and method == "POST":
             for f in body["flights"]:
-                assert set(f) == set(FlightRecord.__dataclass_fields__) - set(LOCAL_ONLY)  # summaries, nothing else
+                # summaries, nothing else; the metrics only with Stats and metrics on
+                assert set(f) == set(FlightRecord.__dataclass_fields__) - set(LOCAL_ONLY) - ({"metrics"} if not body["stats"] else set())
                 self.flights[f["id"]] = f
             return 200, {"accepted": [f["id"] for f in body["flights"]]}
         if path == "/v1/auth/logout":
@@ -133,6 +136,19 @@ def test_sign_in_and_sync_uploads_each_flight_once(setup):
     book.add(record(4))
     assert account.sync().uploaded == 1
     assert account.sync().uploaded == 0
+
+
+def test_metrics_go_only_with_stats_on_and_the_server_is_told_either_way(setup):
+    account, server, book = setup
+    book.add(replace(record(1), metrics='{"north_lat":54.5}'))
+    sign_in(account)
+    account.sync()
+    assert "metrics" not in server.flights["f1"] and server.requests[-1][2]["stats"] is False
+    book.add(replace(record(2), metrics='{"north_lat":12.0}'))
+    account.sync(stats=True)
+    assert server.flights["f2"]["metrics"] == '{"north_lat":12.0}'
+    account.sync()  # nothing new: the server still hears that it's off
+    assert server.requests[-1][2] == {"flights": [], "stats": False}
 
 
 def test_a_token_revoked_on_the_website_signs_out_here(setup):

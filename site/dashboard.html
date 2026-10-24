@@ -24,6 +24,7 @@
     <a href="pricing">Pricing</a>
     <a href="./#install">Install</a>
     <a href="changelog">Changelog</a>
+    <a href="blog">Blog</a>
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
@@ -74,7 +75,9 @@
       <nav class="side-nav" aria-label="Dashboard">
         <a href="#tracker" data-page="tracker"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7a5 5 0 1 0 5 5"/><path d="M12 12 20 4"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span>Flight Tracker</span><i class="side-live" id="side-live" hidden></i></a>
         <a href="#logbook" data-page="logbook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6"/></svg><span>Logbook</span></a>
+        <a href="#stats" data-page="stats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Stats</span></a>
         <a href="#wrapped" data-page="wrapped"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-2-4-6-4-6-1.5S10 8 12 8zm0 0c2-4 6-4 6-1.5S14 8 12 8z"/></svg><span>Wrapped</span></a>
+        <a href="#download" data-page="download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg><span>Download</span></a>
         <a href="#support" data-page="support"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>Support</span></a>
         <a href="#account" data-page="account" class="side-account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Account</span></a>
       </nav>
@@ -138,6 +141,78 @@
         <p class="hint">Your flying, told as a story: a week, a month or a year. Tap a slide or use the arrow keys; save any
           slide as an image, or share the summary as a link.</p>
         <div class="panel"><div id="wrapped-view"></div></div>
+      </section>
+
+      <section class="dash-page" id="stats" aria-labelledby="stats-h" hidden>
+        <div class="page-head"><h1 id="stats-h">Stats</h1></div>
+        <p class="hint">Your logbook in numbers. Only with Stats and metrics on in the app: Settings (the gear) → Account.</p>
+        <div id="stats-view"><p class="hint">Counting ...</p></div>
+      </section>
+
+      <section class="dash-page" id="download" aria-labelledby="download-h" hidden>
+        <div class="page-head"><h1 id="download-h">Download</h1></div>
+        <div class="panel dl-hero">
+          <img src="logo.svg" alt="" width="88" height="88">
+          <div class="dl-what">
+            <h2>LocalTC for Windows</h2>
+            <p class="hint">Air traffic control and a copilot for Microsoft Flight Simulator 2024, running on your own PC. Free, with
+              no subscription. <span class="dl-ver" id="dl-ver"></span></p>
+          </div>
+          <div class="dl-actions">
+            <a class="btn btn-primary" href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a>
+            <span class="hint"><a href="changelog">What's new</a> · <a href="https://github.com/duckiest428/LocalTC/releases/latest">Release and checksums</a></span>
+          </div>
+        </div>
+        <div class="panel-row">
+          <div class="panel">
+            <h3>Installing</h3>
+            <ol class="dl-steps">
+              <li><span><b>Run LocalTC-Setup.exe.</b> It fetches the latest release from GitHub, checks it, and installs to your
+                user folder: no admin rights.</span></li>
+              <li><span><b>Windows may say it's from an unknown publisher</b>, because the installer isn't code-signed yet:
+                <b>More info → Run anyway</b>.</span></li>
+              <li><span><b>Let it set up the rest.</b> Python, Whisper (speech recognition), Piper (the voices), Ollama (the
+                language model) and CUDA if you have an NVIDIA card, with the <i>light</i>, <i>balanced</i> or
+                <i>quality</i> models picked for your RAM and graphics card. About 3 GB, downloaded once.</span></li>
+              <li><span><b>Fly.</b> Open LocalTC from the desktop shortcut, import your SimBrief plan, press <b>Start</b> and
+                call for your clearance. Mute the sim's own ATC first: Sound → Character voices → 0.</span></li>
+            </ol>
+          </div>
+          <div class="panel">
+            <h3>What you need</h3>
+            <table class="dl-req">
+              <tr><th>System</th><td>Windows 10 or 11, with Microsoft Flight Simulator 2024</td></tr>
+              <tr><th>Audio</th><td>A microphone, and speakers or a headset</td></tr>
+              <tr><th>Disk</th><td>About 3 GB for the speech and language models</td></tr>
+              <tr><th>Hardware</th><td>Any PC that runs MSFS. An NVIDIA card makes speech recognition faster and more accurate;
+                without one it runs on the CPU.</td></tr>
+              <tr><th>Internet</th><td>For the install and updates. After that, flights work offline.</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="panel-row">
+          <div class="panel">
+            <h3>Updates</h3>
+            <ul class="dl-list">
+              <li>LocalTC checks for a new version once a day and installs it with one click, when you say so, and never
+                during a flight (Settings → Updates).</li>
+              <li>Each release's notes are on the <a href="changelog">changelog</a>, and shown once in the app after it updates.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>More ways to use it</h3>
+            <ul class="dl-list">
+              <li><b>From source:</b> clone <a href="https://github.com/duckiest428/LocalTC">the repository</a> and double-click
+                <code class="inline">Install LocalTC.cmd</code>; update with <code class="inline">git pull</code>.</li>
+              <li><b>No NVIDIA card:</b> pass <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code>
+                to run on the grammar alone.</li>
+              <li><b>On your phone:</b> the companion app follows the flight: the map, the radio and ATC's calls. Sign in with
+                this account.</li>
+              <li><b>Uninstall:</b> Windows Settings → Apps → LocalTC. The logbook stays in
+                <code class="inline">%LOCALAPPDATA%\LocalTC</code> until you delete it.</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       <section class="dash-page" id="support" aria-labelledby="support-h" hidden>
@@ -220,6 +295,7 @@
 <script src="replayplayer.js"></script>
 <script src="sharecard.js"></script>
 <script src="wrapped.js"></script>
+<script src="stats.js"></script>
 <script src="api.js"></script>
 <script src="tracker.js"></script>
 <script src="dashboard.js"></script>

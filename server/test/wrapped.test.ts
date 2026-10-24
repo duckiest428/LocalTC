@@ -107,17 +107,26 @@ describe("ATC Wrapped", () => {
     expect(html).not.toContain("sep3"); // no flight in detail
   });
 
-  it("keeps the period still going locked, and offers only the last one", async () => {
+  it("keeps the period still going locked, and offers every one before it", async () => {
     const { token } = await pilot([day(3), day(4)]);
     const october = "period=month&from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z&label=October%202026";
     const locked = await call("GET", `/v1/wrapped?${october}`, undefined, bearer(token));
     expect(locked.status).toBe(403);
     expect((await data(locked)).error).toMatch(/isn't over yet/);
     const august = "period=month&from=2026-08-01T00:00:00Z&to=2026-09-01T00:00:00Z&label=August%202026";
-    expect((await call("GET", `/v1/wrapped?${august}`, undefined, bearer(token))).status).toBe(403);
+    expect((await call("GET", `/v1/wrapped?${august}`, undefined, bearer(token))).status).toBe(200);
     expect((await call("POST", "/v1/shares", { kind: "wrapped", period: "month", from: "2026-10-01T00:00:00Z", to: "2026-11-01T00:00:00Z" },
       bearer(token))).status).toBe(403);
     expect((await call("GET", `/v1/wrapped?${SEPT}`, undefined, bearer(token))).status).toBe(200);
+  });
+
+  it("counts the flights in every period, for the chart to pick one from", async () => {
+    const { token } = await pilot([day(3), day(4)]);
+    const months = await data(await call("GET", "/v1/wrapped/timeline?period=month&tz=0", undefined, bearer(token)));
+    expect(months.periods).toEqual([expect.objectContaining({ start: "2026-09", flights: 2 })]);
+    const weeks = await data(await call("GET", "/v1/wrapped/timeline?period=week&tz=0", undefined, bearer(token)));
+    expect(weeks.periods.reduce((t: number, p: { flights: number }) => t + p.flights, 0)).toBe(2);
+    expect(weeks.periods.every((p: { start: string }) => new Date(`${p.start}T00:00:00Z`).getUTCDay() === 1)).toBe(true);
   });
 
   it("refuses a period that isn't one", async () => {

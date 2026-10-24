@@ -6,9 +6,9 @@
  * comes from the moments kept with uploaded replays. The period's bounds come from the pilot's app, in its
  * own time zone ("this month" starts at local midnight), with the offset for counting days.
  *
- * Only the last finished period can be seen: last week, last month, last year. The one still going is
- * locked until it ends (the apps count down to it), and older ones aren't offered: a recap is for looking
- * back at what just ended.
+ * Any finished period can be seen, back to the account's first flight. The one still going is locked until
+ * it ends (the apps count down to it). GET /v1/wrapped/timeline counts the flights in every period, for the
+ * apps' chart of them to pick one from.
  *
  * Every client draws the same slides from this: the dashboard, the desktop app and the phone. A slide that
  * would say nothing (a "top airport" visited once) is left out; a month with a single flight is shown as a
@@ -17,6 +17,7 @@
 import type { Auth } from "./auth";
 import { distanceFraming, hoursFraming } from "./cardmodel";
 import type { Env } from "./env";
+import { visitTally } from "./flights";
 import { HttpError, json } from "./http";
 
 export type Period = "week" | "month" | "year";
@@ -25,7 +26,6 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const MAX_SPAN_DAYS = 370;
 const GREASER_FPM = -150; // a landing softer than this is a greaser
 const MIN_FLIGHTS: Record<Period, number> = { week: 1, month: 2, year: 5 }; // fewer, and it's shown as the tier below
-const LONGEST_DAYS: Record<Period, number> = { week: 7, month: 31, year: 366 };
 const TZ_SLACK_MS = 14 * 3600_000; // local midnight is up to 14 hours either side of UTC's
 
 export type Range = { period: Period; from: string; to: string; tz: number; label: string; ref: string };
@@ -49,7 +49,6 @@ export function range(q: Obj): Range {
   if (Date.parse(to) - Date.parse(from) > MAX_SPAN_DAYS * 86400_000) throw new HttpError(400, "That period is too long.");
   const now = Date.now();
   if (Date.parse(to) > now + TZ_SLACK_MS) throw new HttpError(403, `This ${period} isn't over yet: its Wrapped unlocks when it ends.`);
-  if (now - Date.parse(to) > (LONGEST_DAYS[period] + 1) * 86400_000) throw new HttpError(403, `Only the last ${period} can be looked back on.`);
   const tz = Math.max(-840, Math.min(840, Math.round(Number(q.tz ?? 0) || 0)));
   const label = typeof q.label === "string" && /^[\w ,.-]{1,24}$/.test(q.label) ? q.label : from.slice(0, 10);
   return { period, from, to, tz, label, ref: `${period}:${label}` };
@@ -152,7 +151,7 @@ export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
     if (f.origin) coords.set(f.origin, [f.origin_lat, f.origin_lon]);
     if (f.destination) coords.set(f.destination, [f.destination_lat, f.destination_lon]);
   }
-  const visits = tally(flights.flatMap((f) => [f.origin, f.destination]), (x) => x);
+  const visits = visitTally(flights);
   const airports = visits.map(([icao, v]) => ({ icao, visits: v, lat: coords.get(icao)?.[0] ?? null, lon: coords.get(icao)?.[1] ?? null, name: names[icao] ?? "" }));
   const routeTally = tally(flights.filter((f) => f.origin && f.destination), (f) => `${f.origin}>${f.destination}`);
   const routes = routeTally.slice(0, 60).map(([k, c]) => { const [o, d] = k.split(">"); return { origin: o, destination: d, flights: c }; });
@@ -219,6 +218,35 @@ export async function compute(env: Env, auth: Auth, r: Range): Promise<Recap> {
 export async function get(env: Env, url: URL, auth: Auth): Promise<Response> {
   const recap = await compute(env, auth, range(Object.fromEntries(url.searchParams)));
   return json({ ...recap, card: recap.flights ? card(recap) : null }); // the summary card, as a share would show it
+}
+
+/** The start of the period (local time, tz minutes east of UTC) that a flight's start falls in: "2026-10-05" for
+ * a week (its Monday), "2026-10" for a month, "2026" for a year. */
+export function bucket(period: Period, iso: string, tz: number): string {
+  const d = localDay(iso, tz);
+  if (period === "year") return d.slice(0, 4);
+  if (period === "month") return d.slice(0, 7);
+  const t = new Date(`${d}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
+  return t.toISOString().slice(0, 10);
+}
+
+/** GET /v1/wrapped/timeline?period=&tz=: the flights in each period with any, oldest first. */
+export async function timeline(env: Env, url: URL, auth: Auth): Promise<Response> {
+  const period = url.searchParams.get("period") as Period;
+  if (!PERIODS.includes(period)) throw new HttpError(400, "The period is week, month or year.");
+  const tz = Math.max(-840, Math.min(840, Math.round(Number(url.searchParams.get("tz") ?? 0) || 0)));
+  const { results } = await env.DB.prepare("SELECT started_at, air_min FROM flights WHERE user_id = ?1 ORDER BY started_at")
+    .bind(auth.user.id).all<{ started_at: string; air_min: number | null }>();
+  const out = new Map<string, { start: string; flights: number; hours: number }>();
+  for (const f of results) {
+    const k = bucket(period, f.started_at, tz);
+    const b = out.get(k) ?? { start: k, flights: 0, hours: 0 };
+    b.flights += 1;
+    b.hours = round1(b.hours + (f.air_min ?? 0) / 60);
+    out.set(k, b);
+  }
+  return json({ period, periods: [...out.values()] });
 }
 
 /** The public snapshot of a recap, for a shared summary card: the totals and the map, no flight in detail. */

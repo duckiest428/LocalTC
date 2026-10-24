@@ -1,5 +1,6 @@
 """The logbook: a flight summed up from its events, kept in SQLite, and totalled."""
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -42,6 +43,17 @@ def test_the_flight_is_summed_up(ksan_kphx):
     assert r.readbacks > 10 and 0 < r.readbacks_correct <= r.readbacks
     assert r.departure_gate  # it pushed back from a gate at San Diego
     assert abs(r.origin_lat - 32.73) < 0.05 and abs(r.destination_lon + 112.01) < 0.05
+
+
+def test_the_metrics_only_with_stats_on(ksan_kphx):
+    assert ksan_kphx.metrics == ""  # off: not worked out at all
+    flight_log = FlightLog(metrics=True)
+    for event in Recording(FLIGHT).events():
+        flight_log.feed(event)
+    m = json.loads(flight_log.finish().metrics)
+    assert 32.5 < m["south_lat"] < m["north_lat"] < 34.5  # between San Diego and Phoenix
+    assert m["equator_crossings"] == 0 and m["dateline_crossings"] == 0
+    assert 300 < m["max_gs_kt"] < 650
 
 
 def test_nothing_is_logged_for_a_session_that_never_moved():

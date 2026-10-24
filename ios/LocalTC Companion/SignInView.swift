@@ -16,7 +16,8 @@ struct SignInView: View {
             Form {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Image(systemName: "airplane.circle.fill").font(.system(size: 44)).foregroundStyle(.green)
+                        Image("Logo").resizable().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .accessibilityHidden(true)
                         Text("LocalTC Companion").font(.title2.bold())
                         Text("Follow your flight from LocalTC on your PC: the map, the radio, and ATC's calls.")
                             .foregroundStyle(.secondary)

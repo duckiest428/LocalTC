@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blog | LocalTC</title>
+<meta name="description" content="News from LocalTC: new versions, what's coming, and how free ATC and a copilot for MSFS 2024 are made.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://localtc.tech/blog">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="blog-page">
+
+<header class="topbar">
+  <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="./#features">Features</a>
+    <a href="pricing">Pricing</a>
+    <a href="./#install">Install</a>
+    <a href="changelog">Changelog</a>
+    <a href="blog" aria-current="page">Blog</a>
+    <a href="dashboard#support">Support</a>
+    <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
+  </nav>
+  <a class="btn btn-ghost" href="dashboard">Dashboard</a>
+</header>
+
+<main class="blog">
+  <section class="band blog-head band-photo">
+    <div class="band-bg" aria-hidden="true"><img src="img/bg-sunset-960.jpg" srcset="img/bg-sunset-960.jpg 960w, img/bg-sunset.jpg 1920w" sizes="100vw" alt="" data-parallax="0.15"></div>
+    <p class="kicker">Blog</p>
+    <h1 class="section-title">News from the tower.</h1>
+    <p class="section-lede">New versions, what's coming next, and how LocalTC is made.</p>
+    <div class="blog-tools" id="blog-tools" hidden>
+      <button type="button" class="btn btn-primary" id="blog-new">New post</button>
+      <button type="button" class="btn btn-ghost" id="blog-drafts">Drafts</button>
+    </div>
+  </section>
+
+  <section class="band blog-body">
+    <p class="blog-msg" id="blog-msg" role="status" aria-live="polite" hidden></p>
+    <div class="blog-list" id="blog-list"><p class="hint">Loading the posts ...</p></div>
+    <article class="post" id="post" hidden></article>
+
+    <!-- The editor: only for the blog's authors (the server checks it too) -->
+    <form class="editor" id="editor" hidden novalidate>
+      <div class="ed-top">
+        <h2 id="ed-h">New post</h2>
+        <span class="ed-state" id="ed-state"></span>
+      </div>
+      <label class="ed-field">Title <input id="ed-title" type="text" maxlength="140" required placeholder="What's it about?"></label>
+      <label class="ed-field">Summary <input id="ed-summary" type="text" maxlength="400" placeholder="A sentence for the list of posts"></label>
+      <div class="ed-cover">
+        <div class="ed-cover-img" id="ed-cover-img"><span>No cover picture</span></div>
+        <div class="ed-cover-acts">
+          <button type="button" class="btn btn-ghost btn-sm" id="ed-cover-pick">Choose a cover picture</button>
+          <button type="button" class="linklike" id="ed-cover-clear" hidden>Remove it</button>
+          <p class="hint">Shown on the list and at the top of the post.</p>
+        </div>
+      </div>
+      <div class="ed-panes">
+        <div class="ed-write">
+          <div class="ed-bar" role="toolbar" aria-label="Formatting">
+            <button type="button" data-md="h2" title="Heading">H</button>
+            <button type="button" data-md="b" title="Bold (Ctrl+B)"><b>B</b></button>
+            <button type="button" data-md="i" title="Italic (Ctrl+I)"><i>I</i></button>
+            <button type="button" data-md="link" title="Link (Ctrl+K)">Link</button>
+            <button type="button" data-md="ul" title="List">• List</button>
+            <button type="button" data-md="quote" title="Quote">“ Quote</button>
+            <button type="button" data-md="hr" title="A line across">―</button>
+            <button type="button" data-md="img" class="ed-img" title="Add a picture">&#128247; Picture</button>
+          </div>
+          <textarea id="ed-body" rows="18" spellcheck="true" placeholder="Write here. Drop or paste pictures straight in.
+
+## A heading
+Some **bold** and *italic* text, and [a link](https://localtc.tech).
+- a list"></textarea>
+          <p class="hint ed-drop">Drag pictures in, paste them, or use <b>Picture</b>. They're made smaller before they're uploaded.</p>
+        </div>
+        <div class="ed-preview">
+          <p class="ed-label">Preview</p>
+          <div class="post-body" id="ed-preview"></div>
+        </div>
+      </div>
+      <div class="ed-actions">
+        <button type="submit" class="btn btn-primary" id="ed-publish">Publish</button>
+        <button type="button" class="btn btn-ghost" id="ed-draft">Save as draft</button>
+        <button type="button" class="btn btn-ghost" id="ed-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="ed-delete" hidden>Delete</button>
+      </div>
+      <input type="file" id="ed-file" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+      <input type="file" id="ed-cover-file" accept="image/jpeg,image/png,image/webp" hidden>
+    </form>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <a class="footer-brand" href="./"><img class="footer-logo" src="logo.svg" alt="" width="40" height="40"><span class="brand-mark">LocalTC</span></a>
+    <nav>
+      <a href="https://github.com/duckiest428/LocalTC">Source</a>
+      <a href="changelog">Changelog</a>
+      <a href="blog">Blog</a>
+      <a href="dashboard">Dashboard</a>
+      <a href="privacy">Privacy</a>
+      <a href="terms">Terms</a>
+      <a href="cookies">Cookies</a>
+    </nav>
+    <p class="fineprint">LocalTC is free software under the
+      <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener">GNU AGPL&nbsp;v3</a>.</p>
+  </div>
+</footer>
+
+<script src="api.js"></script>
+<script src="blog.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
+import { visitTally } from "../src/flights";
 import { bearer, call, data, flight, signIn } from "./helpers";
 
 describe("the logbook", () => {
@@ -72,5 +73,26 @@ describe("the logbook", () => {
     }
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM flights WHERE id = 'gone'").first<{ n: number }>())!.n).toBe(0);
     expect((await call("GET", "/v1/me", undefined, bearer(token))).status).toBe(401);
+  });
+
+  it("keeps the metrics and shows the Stats page only with Stats and metrics on, and deletes them when it's off", async () => {
+    const { token } = await signIn();
+    const metrics = JSON.stringify({ north_lat: 54.5, equator_crossings: 1, night_landing: true, secret: "no", max_gs_kt: 99999 });
+    await call("POST", "/v1/flights", { flights: [flight("x", { metrics })] }, bearer(token));
+    expect(await data(await call("GET", "/v1/stats/details", undefined, bearer(token)))).toEqual({ enabled: false });
+    await call("POST", "/v1/flights", { flights: [flight("x", { metrics })], stats: true }, bearer(token));
+    const on = await data(await call("GET", "/v1/stats/details", undefined, bearer(token)));
+    expect(on.enabled).toBe(true);
+    expect(on.flights[0].metrics).toEqual({ north_lat: 54.5, equator_crossings: 1, night_landing: true });  // checked, nothing else
+    expect((await data(await call("GET", "/v1/me", undefined, bearer(token)))).stats).toBe(true);
+    await call("POST", "/v1/flights", { flights: [], stats: false }, bearer(token));
+    expect(await data(await call("GET", "/v1/stats/details", undefined, bearer(token)))).toEqual({ enabled: false });
+    const row = await env.DB.prepare("SELECT metrics FROM flights WHERE id = 'x'").first<{ metrics: string | null }>();
+    expect(row?.metrics).toBeNull();
+  });
+
+  it("counts flying in and out again as one visit", () => {
+    expect(visitTally([{ origin: "KLAX", destination: "KJFK" }, { origin: "KJFK", destination: "EGLL" }, { origin: "EGLL", destination: "KJFK" }]))
+      .toEqual([["KJFK", 2], ["EGLL", 1], ["KLAX", 1]]);
   });
 });

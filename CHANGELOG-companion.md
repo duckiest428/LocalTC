@@ -25,6 +25,7 @@ is built from this file.
 
 ### Changed
 - **Wrapped's icon** is a gift box, no longer bars that looked like a phone's signal.
+- **The sign-in screen** shows the control tower logo.
 
 ### Fixed
 - **The EFB works during a flight.** It said no flight was running: the briefings never came from the PC, and one part of the EFB the app couldn't read emptied all of it. Each part, note, hazard and NOTAM is now read on its own, and one it can't read is left out, not the rest.
@@ -32,6 +33,8 @@ is built from this file.
 - **The Live Map's follow button turns off.** Pressing it again stops following the aircraft (and zooming with its
   altitude), and so does moving the map: panning, pinching or turning it. Pressed again, it follows and zooms as
   before.
+- **Wrapped goes back** to any week, month or year since the first flight: the arrows no longer stop at "Only the
+  last week can be looked back on".
 
 ## [0.4.0] - 2026-09-28
 

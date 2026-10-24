@@ -1,0 +1,14 @@
+{
+  "_about": "The site's own blog posts, written in the repository (blog.js shows them with the ones written on the blog page). Newest anywhere in the list; each: slug, title, summary, published_at (ISO, UTC), author, cover (optional: a picture under site/, e.g. img/x.jpg), body (Markdown, see blog.js).",
+  "posts": [
+    {
+      "slug": "welcome-to-the-blog",
+      "title": "Welcome to the LocalTC blog",
+      "summary": "Where the news goes: new versions, what's being worked on, and how it's made.",
+      "published_at": "2026-10-24T12:00:00Z",
+      "author": "The LocalTC team",
+      "cover": "img/hero-dusk.jpg",
+      "body": "LocalTC has grown a lot since its first version: controllers that answer you, a copilot that runs checklists and works the radios, a logbook with replays, Wrapped, and a phone app that follows the flight. The changelog says what changed, version by version. This blog is for the rest: why something changed, what's coming next, and the odd story from the frequency.\n\n## What you'll find here\n- **New versions**, with the highlights and a few pictures, when they come out.\n- **What's being worked on**, before it's ready, so you can say what you think.\n- **How it's made**: how ATC understands a readback, how the copilot decides what to say, and why it all runs on your own PC.\n\n## Your logbook, in numbers\nThe dashboard has a new **Stats** page: equator and date-line crossings, the countries you've flown to with a passport stamp for each, your airlines and aircraft, the days you flew, and from the sim itself the fuel burned, night landings and the coldest air outside. It's off until you turn it on in the app (Settings, then Account, then **Stats and metrics**), and turning it off again deletes those numbers from your account.\n\nWrapped now goes back as far as your first flight, too: every week, month and year, with a chart of them all to pick from.\n\n## Say hello\nIdeas, questions or a flight that went wrong: write from the [dashboard's Support page](dashboard#support), or [open an issue on GitHub](https://github.com/duckiest428/LocalTC/issues). Happy flying."
+    }
+  ]
+}

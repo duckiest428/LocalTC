@@ -28,7 +28,7 @@ function show(which) {
 
 // --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
 
-const PAGES = ["tracker", "logbook", "replay", "wrapped", "support", "account"];
+const PAGES = ["tracker", "logbook", "stats", "replay", "wrapped", "download", "support", "account"];
 let page = null;
 
 function go(name, { push = false } = {}) {
@@ -45,6 +45,8 @@ function go(name, { push = false } = {}) {
   });
   if (name === "replay") Replay.open(decodeURIComponent(id)); else Replay.close();
   if (name === "wrapped") Wrapped.open(id);
+  if (name === "stats") Stats.open();
+  if (name === "download") Download.open();
   document.title = `${$(`#${name}-h`).textContent} | LocalTC`;
   // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
   if (name === "tracker") Tracker.start(); else Tracker.stop();
@@ -360,6 +362,33 @@ const Share = {
   },
 };
 
+// --- Stats: the logbook in numbers (stats.js), only with Stats and metrics on in the app ----------------------------
+
+const Stats = {
+  view: null,
+  async open() {
+    if (!this.view) this.view = new StatsView($("#stats-view"));
+    try {
+      this.view.show(await api("GET", "/v1/stats/details"));
+    } catch (err) {
+      $("#stats-view").innerHTML = `<p class="hint error">${esc(err.message)}</p>`;
+    }
+  },
+};
+
+// --- Download: the installer, and the version it gets -------------------------------------------------------------
+
+const Download = {
+  async open() {
+    if ($("#dl-ver").textContent) return;
+    try {
+      const notes = await (await fetch("changelog.json")).json();
+      const latest = (notes.app || []).find((v) => !v.upcoming);
+      if (latest) $("#dl-ver").textContent = `Version ${latest.version}, ${latest.date}.`;
+    } catch { /* the button works without it */ }
+  },
+};
+
 // --- Wrapped: a week, a month or a year, as slides (wrapped.js, shared with the app) --------------------------
 
 const Wrapped = {
@@ -370,6 +399,7 @@ const Wrapped = {
         base: "",
         load: (r) => api("GET", `/v1/wrapped?${new URLSearchParams({ period: r.period, from: r.from, to: r.to, tz: r.tz, label: r.label })}`),
         share: (r) => api("POST", "/v1/shares", { kind: "wrapped", period: r.period, from: r.from, to: r.to, tz: r.tz, label: r.label }),
+        timeline: (period, tz) => api("GET", `/v1/wrapped/timeline?${new URLSearchParams({ period, tz })}`),
         putImage: (s, blob) => upload("PUT", `/v1/shares/${s}/image`, blob, "image/png"),
       });
     }

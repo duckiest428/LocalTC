@@ -5,6 +5,7 @@ never contacts the server.
 """
 
 import asyncio
+import functools
 import logging
 import platform
 import time
@@ -71,6 +72,7 @@ class PilotRoutes:
             (post, "share/remove"): self.api_share_remove,
             (get, "wrapped"): self.api_wrapped,
             (post, "wrapped/share"): self.api_wrapped_share,
+            (get, "wrapped/timeline"): self.api_wrapped_timeline,
             (get, "account"): self.api_account,
             (post, "account/start"): self.api_start,
             (post, "account/finish"): self.api_finish,
@@ -215,6 +217,14 @@ class PilotRoutes:
                 log.info("Couldn't sync before Wrapped: %s", exc)
         return await self._do(self.account.wrapped, _period(args))
 
+    async def api_wrapped_timeline(self, args: dict) -> dict:
+        self._signed_in()
+        try:
+            tz = int(args.get("tz", 0))
+        except (TypeError, ValueError):
+            tz = 0
+        return await self._do(self.account.wrapped_timeline, str(args.get("period", "month")), tz)
+
     async def api_wrapped_share(self, args: dict) -> dict:
         self._signed_in()
         return await self._do(self.account.share, {"kind": "wrapped", **_period(args)})
@@ -242,7 +252,7 @@ class PilotRoutes:
         a, c = self.account, self.cfg().account  # reads the credential store; no network
         return {"signed_in": a.signed_in, "email": a.email, "api_url": c.api_url, "dashboard": c.dashboard_url,
                 "sync": c.sync, "companion": c.companion, "companion_lan": c.companion_lan,
-                "companion_remote_map": c.companion_remote_map, "upload_replays": c.upload_replays,
+                "companion_remote_map": c.companion_remote_map, "upload_replays": c.upload_replays, "stats": c.stats,
                 "last_sync": self.sync_state}
 
     async def _do(self, fn: Callable, *args: Any) -> Any:
@@ -294,7 +304,7 @@ class PilotRoutes:
         if not self.account.signed_in:
             return
         try:
-            result = await self._do(self.account.sync)
+            result = await self._do(functools.partial(self.account.sync, stats=self.cfg().account.stats))
             self.sync_state = f"Synced {result.uploaded} new flight{'s' if result.uploaded != 1 else ''}."
         except HttpError as exc:
             self.sync_state = f"Sync failed: {exc}"

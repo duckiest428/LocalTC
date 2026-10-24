@@ -45,6 +45,7 @@ PAGE = """<!DOCTYPE html>
     <a href="pricing">Pricing</a>
     <a href="./#install">Install</a>
     <a href="changelog" aria-current="page">Changelog</a>
+    <a href="blog">Blog</a>
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>

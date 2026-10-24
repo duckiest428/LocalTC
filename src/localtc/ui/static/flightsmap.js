@@ -22,16 +22,22 @@ class FlightsMap {
     this.map.on("zoomend moveend resize", () => this.declutter());
   }
 
-  /** Where to cut the world: in the middle of the widest stretch of longitude with no airport and no route over it
-   * (an ocean, usually). ``places`` are airports and the points along every route. */
-  static cut(places) {
-    if (places.length < 2) return -180;
-    const lons = places.map((a) => ((a.lon + 540) % 360) - 180).sort((x, y) => x - y);
-    let gap = 360 - (lons[lons.length - 1] - lons[0]), at = lons[lons.length - 1] + gap / 2;
-    for (let i = 1; i < lons.length; i++) {
-      if (lons[i] - lons[i - 1] > gap) { gap = lons[i] - lons[i - 1]; at = (lons[i] + lons[i - 1]) / 2; }
+  /** Where to cut the world: the longitude the fewest flights' routes cross (weighed by how many flew them), as far
+   * from any airport as it can be. ``places``: the airports; ``arcs``: [points, flights] for each route. */
+  static cut(places, arcs = []) {
+    const lons = places.map((p) => p.lon);
+    const spans = arcs.map(([pts, n]) => { const l = pts.map((p) => p[1]); return [Math.min(...l), Math.max(...l), n]; });
+    let best = -180, score = Infinity;
+    for (let c = -180; c < 180; c += 1) {
+      let crossed = 0;
+      for (const [lo, hi, n] of spans) {
+        for (let k = -2; k <= 2; k++) if (c + 360 * k > lo && c + 360 * k < hi) { crossed += n; break; }
+      }
+      const near = lons.length ? Math.min(...lons.map((l) => Math.abs(((l - c + 540) % 360) - 180))) : 180;
+      const s = crossed * 1000 - near;
+      if (s < score) { score = s; best = c; }
     }
-    return ((at + 540) % 360) - 180;
+    return best;
   }
 
   /** The airport labels that fit, the busiest first: one that would sit on another is left out until zoomed in. */
@@ -51,15 +57,19 @@ class FlightsMap {
   /** Airports and routes from a list of logbook flights (each with origin/destination and their lat/lon). */
   static summarize(flights) {
     const airports = new Map(), routes = new Map();
-    const visit = (icao, lat, lon) => {
+    const visit = (icao, lat, lon, counts) => {
       if (!icao || lat == null || lon == null) return;
       const a = airports.get(icao) || { icao, lat, lon, visits: 0 };
-      a.visits += 1;
+      if (counts) a.visits += 1;
       airports.set(icao, a);
     };
-    for (const f of flights) {
-      visit(f.origin, f.origin_lat, f.origin_lon);
-      visit(f.destination, f.destination_lat, f.destination_lon);
+    // Landing somewhere is a visit, and so is leaving from somewhere the flight before didn't land; flying out
+    // again after landing is the same visit.
+    let at = "";
+    for (const f of [...flights].sort((x, y) => String(x.started_at || "").localeCompare(String(y.started_at || "")))) {
+      visit(f.origin, f.origin_lat, f.origin_lon, f.origin !== at);
+      visit(f.destination, f.destination_lat, f.destination_lon, true);
+      at = f.destination || "";
       if (f.origin && f.destination && f.origin !== f.destination) {
         const key = `${f.origin}>${f.destination}`;
         const r = routes.get(key) || { origin: f.origin, destination: f.destination, flights: 0 };
@@ -92,27 +102,12 @@ class FlightsMap {
     return pts;
   }
 
-  /** The great circle from a to b, moved by whole turns so it starts at a where a is drawn; if it reaches b's other
-   * copy (the short way crosses the cut), it's drawn ending at b instead. */
+  /** The great circle from a to b, moved by whole turns so it starts at a where a is drawn. It may end at a copy
+   * of b a turn away (the short way crosses the cut): one unbroken line, b's copy drawn at its end. */
   static placed(a, b) {
     const pts = FlightsMap.arc(a, b);
     const shift = a.lon - pts[0][1];
-    const moved = pts.map(([lat, lon]) => [lat, lon + shift]);
-    const end = moved[moved.length - 1][1];
-    if (Math.abs(end - b.lon) > 180) {
-      const back = b.lon - end;
-      return moved.map(([lat, lon]) => [lat, lon + back]);
-    }
-    return moved;
-  }
-
-  /** A route as drawn: when routes go all the way round and it still crosses the cut, both halves, one leaving a
-   * and one arriving at b, so neither end floats loose. */
-  static drawn(a, b) {
-    const pts = FlightsMap.placed(a, b);
-    if (Math.abs(pts[0][1] - a.lon) < 1e-6 && Math.abs(pts[pts.length - 1][1] - b.lon) < 1e-6) return pts;
-    const turn = pts[0][1] - a.lon;
-    return [pts, pts.map(([lat, lon]) => [lat, lon - turn])];
+    return pts.map(([lat, lon]) => [lat, lon + shift]);
   }
 
   /** Draw {airports: [{icao, lat, lon, visits}], routes: [{origin, destination, flights}]}. */
@@ -122,9 +117,9 @@ class FlightsMap {
     const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const known = airports.filter((a) => a.lat != null && a.lon != null);
     const at = Object.fromEntries(known.map((a) => [a.icao, a]));
-    const along = routes.filter((r) => at[r.origin] && at[r.destination])
-      .flatMap((r) => FlightsMap.arc(at[r.origin], at[r.destination], 24).map(([lat, lon]) => ({ lat, lon })));
-    const cut = FlightsMap.cut([...known, ...along]);
+    const arcs = routes.filter((r) => at[r.origin] && at[r.destination])
+      .map((r) => [FlightsMap.arc(at[r.origin], at[r.destination], 24), r.flights]);
+    const cut = FlightsMap.cut(known, arcs);
     // Every airport within the same 360 degrees, starting at the cut: a route to Tokyo from New York and Tokyo's
     // dot on the same side of the date line.
     const places = airports.filter((a) => a.lat != null && a.lon != null)
@@ -132,15 +127,22 @@ class FlightsMap {
     this.where = Object.fromEntries(places.map((a) => [a.icao, a]));
     this.labels = [];
     const most = Math.max(1, ...routes.map((r) => r.flights));
+    const ghosts = [];  // airports a route reaches round the back of the map: drawn again where it ends
     for (const r of routes) {
       const a = this.where[r.origin], b = this.where[r.destination];
       if (!a || !b) continue;
-      const line = L.polyline(FlightsMap.drawn(a, b), { className: "fm-route", weight: 1.6 + 3 * (r.flights / most), opacity: 0.85 })
+      const pts = FlightsMap.placed(a, b), end = pts[pts.length - 1];
+      if (Math.abs(end[1] - b.lon) > 180) ghosts.push({ ...b, lon: b.lon + 360 * Math.round((end[1] - b.lon) / 360) });
+      const line = L.polyline(pts, { className: "fm-route", weight: 1.6 + 3 * (r.flights / most), opacity: 0.85 })
         .bindTooltip(`${esc(r.origin)} → ${esc(r.destination)}<br>${r.flights} flight${r.flights === 1 ? "" : "s"}`, { sticky: true })
         .addTo(this.layer);
       line.on("click", () => { this.focus(r.origin, r.destination); if (this.onRoute) this.onRoute(r.origin, r.destination); });
     }
-    for (const a of places) {
+    const drawn = new Set();
+    for (const a of [...places, ...ghosts]) {
+      const key = `${a.icao}@${Math.round(a.lon)}`;
+      if (drawn.has(key)) continue;
+      drawn.add(key);
       L.circleMarker([a.lat, a.lon], { className: "fm-airport", radius: 3 + Math.min(Math.sqrt(a.visits), 4) * 0.8, weight: 1.5, fillOpacity: 0.9 })
         .bindTooltip(`<b>${esc(a.icao)}</b><br>${a.visits} visit${a.visits === 1 ? "" : "s"}`)
         .addTo(this.layer);
@@ -148,7 +150,7 @@ class FlightsMap {
         icon: L.divIcon({ className: "", html: `<div class="fm-label">${esc(a.icao)}</div>`, iconSize: [0, 0] }) }).addTo(this.layer);
       this.labels.push({ marker: label, visits: a.visits });
     }
-    this.bounds = places.length ? L.latLngBounds(places.map((a) => [a.lat, a.lon])) : null;
+    this.bounds = places.length ? L.latLngBounds([...places, ...ghosts].map((a) => [a.lat, a.lon])) : null;
     this.fit();
     this.declutter();
     return places.length;
@@ -164,9 +166,9 @@ class FlightsMap {
     this.focusLayer.clearLayers();
     const a = this.where?.[origin], b = this.where?.[destination];
     if (!a || !b) return;
-    const pts = FlightsMap.drawn(a, b);
+    const pts = FlightsMap.placed(a, b);
     L.polyline(pts, { className: "fm-focus", weight: 4, opacity: 1, interactive: false }).addTo(this.focusLayer);
-    this.map.fitBounds(L.latLngBounds(Array.isArray(pts[0][0]) ? pts[1] : pts).pad(0.3), { maxZoom: 8 });
+    this.map.fitBounds(L.latLngBounds(pts).pad(0.3), { maxZoom: 8 });
   }
 }
 

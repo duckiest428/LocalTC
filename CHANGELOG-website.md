@@ -26,6 +26,21 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **Gate to gate, station by station**: the eight controllers from clearance to the gate, each with a photo of that
   part of a flight and its call typed out in the callsign of the airline in the photo; it plays through by itself, or
   pick a leg.
+- **The blog** (localtc.tech/blog): news about LocalTC, newest first, a post at a time. Its author writes on the page
+  itself, signed in: a title, a summary, a cover picture and the post, with buttons for headings, bold, links, lists
+  and quotes, a live preview, and pictures dropped, pasted or picked (made smaller first, then kept by the account
+  server). Only the blog's author's account can write; anyone can read what's published. Posts can also be written in
+  the repository (blog-posts.json).
+- **Stats on the dashboard**: the logbook in numbers. Equator and date-line crossings, the farthest north and south,
+  time since the last flight, the longest gap and streak, the countries flown to (out of 197) with a passport stamp
+  each by continent, the top airlines and aircraft, short, medium and long flights, flights per year, a year of days
+  flown, a carbon estimate, and from the sim the softest landing, the fuel burned, the top speed, night landings,
+  time in cloud, the coldest air and the strongest wind. Only with Stats and metrics on in the app; off, the page says
+  how to turn it on and the account holds none of it.
+- **Download on the dashboard**: the installer, the version it gets, what it needs and does, updating, and the other
+  ways to run it.
+- **Every Wrapped**: any week, month or year can be opened back to the first flight, not only the last one, and
+  "All weeks" (or months, years) charts the flights in each to pick one from.
 
 ### Changed
 - **More life on the home page**: the header turns to glass as you scroll, with a line for how far down you are; the
@@ -43,7 +58,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 
 ### Fixed
-- **The logbook map**: a route that goes the long way round the map (London to Tokyo with flights across the Pacific too) is drawn from its own airport, not loose from the map's edge, and the busiest airports' dots no longer grow so large.
+- **The logbook map**: every route is one unbroken line from its airport. Where the routes go all the way round the world, the map is cut where the fewest of them cross, and a route over the cut runs on to its airport drawn again there. The busiest airports' dots no longer grow so large, and an airport's visits count landing there (or a first departure), not flying in and out again as two.
+- **The pricing page's "Most popular" ribbon** shows whole again, over the card's top edge.
 
 ## [0.4.0] - 2026-09-28
 

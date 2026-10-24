@@ -508,7 +508,7 @@ async def run_session(
         if session.source_kind == "live" and cfg.logbook.enabled:
             from localtc.logbook import FlightLog
 
-            flight_log = FlightLog()
+            flight_log = FlightLog(metrics=cfg.account.stats)
             consumers.append(asyncio.create_task(_dispatch(bus.subscribe(), flight_log.feed)))
             # The line written as the flight goes, so the app closed (or killed) mid-flight still leaves it.
             consumers.append(asyncio.create_task(_keep_saving(

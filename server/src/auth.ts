@@ -1,3 +1,4 @@
+import { isAuthor } from "./blog";
 import { randomCode, randomToken, sameHash, sha256 } from "./crypto";
 import { send } from "./email";
 import type { Env } from "./env";
@@ -17,6 +18,7 @@ export interface User {
   verified_at: string | null;
   created_at: string;
   display_name?: string;
+  stats?: number; // Stats and metrics on (the app's [account] stats)
 }
 
 export interface Auth {
@@ -149,7 +151,8 @@ export async function me(env: Env, auth: Auth): Promise<Response> {
     "SELECT id, kind, device, created_at, last_used_at FROM sessions WHERE user_id = ?1 ORDER BY last_used_at DESC",
   ).bind(auth.user.id).all<{ id: string }>();
   return json({
-    email: auth.user.email, created_at: auth.user.created_at, display_name: auth.user.display_name ?? "",
+    email: auth.user.email, created_at: auth.user.created_at, display_name: auth.user.display_name ?? "", stats: !!auth.user.stats,
+    blog_author: isAuthor(env, auth),
     sessions: results.map((s) => ({ ...s, current: s.id === auth.sessionId })),
   });
 }

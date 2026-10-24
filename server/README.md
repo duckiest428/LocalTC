@@ -47,7 +47,7 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `GET /v1/me`, `DELETE /v1/me` `{email}` | the account and its devices; delete it all (the address typed to confirm) |
 | `PATCH /v1/me` `{display_name}` | the name on what the pilot shares ("Flown by ..."): up to 32 letters, digits, spaces and . _ ' -; "" for none |
 | `DELETE /v1/sessions/:id` | sign out a device |
-| `POST /v1/flights` `{flights: [...]}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}` |
+| `POST /v1/flights` `{flights: [...], stats?}` (up to 100) | upsert by the app's flight id; `{accepted: [ids]}`. `stats`: the app's Stats and metrics setting; on, each line's `metrics` (checked number by number) is kept; turned off, every flight's metrics are deleted |
 | `GET /v1/flights?limit=&before=` | newest first; `next` pages on |
 | `DELETE /v1/flights/:id`, `GET /v1/stats`, `GET /v1/export` | deleting a flight deletes its replay; the export includes the replays |
 | `PUT /v1/flights/:id/replay` (body: the replay, gzipped JSON) | the flight must be in the account; rebuilt field by field, 50 a day |
@@ -55,7 +55,11 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `GET /v1/flights/:id/moments` | the uploaded replay's lines worth quoting on a card, and its airports' names (kept with the replay, `replays.moments`) |
 | `POST /v1/shares` `{kind: "flight", ref, quote?, names?, replay?}` or `{kind: "wrapped", period, from, to, tz, label}` | `{slug, url, card}`: the snapshot is built here, from the account's own data; the quote must be ATC talking to that flight. Sharing again keeps the link (and clears the picture). `replay: true` puts the flight's mini replay on the page, if its replay is uploaded; the answer's `replay` says whether it did |
 | `PUT /v1/shares/:slug/image` (body: a PNG, at most 1 MB), `DELETE /v1/shares/:slug`, `GET /v1/shares` | the card's picture (drawn by the app: the free plan hasn't the CPU to draw it here), unsharing, the list; the flights list's `share` is the link |
-| `GET /v1/wrapped?period=week\|month\|year&from=&to=&tz=&label=` | ATC Wrapped: the slides for that period, worked out when asked, never stored |
+| `GET /v1/wrapped?period=week\|month\|year&from=&to=&tz=&label=` | ATC Wrapped: the slides for that period (any finished one), worked out when asked, never stored |
+| `GET /v1/wrapped/timeline?period=&tz=` | the flights and hours in every period with any, for the chart to pick one from |
+| `GET /v1/stats/details` | the Stats page's lines and their metrics, only with Stats and metrics on (`{enabled: false}` otherwise) |
+| `GET /v1/blog`, `GET /v1/blog/posts/:slug`, `GET /v1/blog/images/:id` (**no sign-in**) | the blog's published posts (newest first), one post whole, a picture |
+| `GET /v1/blog/drafts`, `POST /v1/blog/posts` `{slug?, title, summary, body, cover, published}`, `DELETE /v1/blog/posts/:slug`, `PUT /v1/blog/images` (body: a JPEG, PNG, WebP or GIF, up to 1.5 MB) | writing the blog: only the accounts in `BLOG_AUTHORS` (wrangler.toml), confirmed; `GET /v1/me`'s `blog_author` says whether this one may |
 | `GET /f/:slug`, `/f/:slug.png`, `/w/:slug`, `/w/:slug.png` (**no sign-in**) | the public page, with its own title and picture for chat apps (`noindex`, a strict CSP), and the picture. The Worker is routed `localtc.tech/f/*` and `/w/*` on the site's zone for these |
 | `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message (the website's Flight Tracker opens it with its cookie, from `ALLOWED_ORIGINS` only) |
 | `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |

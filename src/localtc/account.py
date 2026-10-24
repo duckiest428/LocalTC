@@ -218,16 +218,20 @@ class Account:
         self._call("DELETE", "/v1/me", {"email": confirm_email})
         self._forget()
 
-    def sync(self) -> SyncResult:
-        """Upload the flights the server doesn't have yet, a batch at a time."""
+    def sync(self, *, stats: bool = False) -> SyncResult:
+        """Upload the flights the server doesn't have yet, a batch at a time. ``stats``: [account] stats, which the
+        server is told each time (off, it deletes the metrics it has); only then do the lines carry their metrics."""
         if not self.signed_in:
             raise AccountError("Not signed in.")
         pending = self.logbook.unsynced()
         uploaded = 0
+        drop = LOCAL_ONLY if stats else (*LOCAL_ONLY, "metrics")
+        if not pending:
+            self._call("POST", "/v1/flights", {"flights": [], "stats": stats})
         for i in range(0, len(pending), BATCH):
             batch = pending[i:i + BATCH]
-            payload = [{k: v for k, v in f.to_dict().items() if k not in LOCAL_ONLY} for f in batch]
-            data = self._call("POST", "/v1/flights", {"flights": payload})
+            payload = [{k: v for k, v in f.to_dict().items() if k not in drop} for f in batch]
+            data = self._call("POST", "/v1/flights", {"flights": payload, "stats": stats})
             accepted = list((data or {}).get("accepted", []))
             self.logbook.mark_synced(accepted)
             uploaded += len(accepted)
@@ -256,6 +260,10 @@ class Account:
     def wrapped(self, query: dict) -> dict:
         """ATC Wrapped for a period, from the synced logbook: {period, from, to, tz, label}."""
         return self._call("GET", f"/v1/wrapped?{urllib.parse.urlencode(query)}")
+
+    def wrapped_timeline(self, period: str, tz: int) -> dict:
+        """The flights in every week, month or year with any: {period, periods: [{start, flights, hours}]}."""
+        return self._call("GET", f"/v1/wrapped/timeline?{urllib.parse.urlencode({'period': period, 'tz': tz})}")
 
     def delete_replay(self, flight_id: str) -> None:
         """The replay off the account; the flight's logbook line stays."""

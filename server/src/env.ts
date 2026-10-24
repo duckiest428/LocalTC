@@ -15,4 +15,5 @@ export interface Env {
   APNS_PRIVATE_KEY?: string; // the .p8 key's PEM
   CHARTFOX_CLIENT_ID?: string; // ChartFox's OAuth client (src/chartfox.ts); without both, ChartFox sign-in is off
   CHARTFOX_CLIENT_SECRET?: string;
+  BLOG_AUTHORS?: string; // comma-separated addresses that may write the blog (src/blog.ts); its default otherwise
 }

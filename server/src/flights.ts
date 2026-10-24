@@ -24,6 +24,27 @@ const NUMBERS: Record<string, [number, number, boolean]> = {
   destination_lon: [-180, 180, true],
 };
 const COLUMNS = ["id", "started_at", "ended_at", ...TEXT, ...Object.keys(NUMBERS), "landed"];
+// Stats and metrics, only with the pilot's [account] stats on: field -> [min, max]; true/false for the night ones.
+const METRICS: Record<string, [number, number]> = {
+  north_lat: [-90, 90], south_lat: [-90, 90], equator_crossings: [0, 1000], dateline_crossings: [0, 1000],
+  max_gs_kt: [0, 3000], fuel_used_lb: [0, 2_000_000], cloud_min: [0, 7 * 24 * 60], coldest_c: [-120, 70], max_wind_kt: [0, 500],
+};
+const FLAGS = ["night_takeoff", "night_landing"];
+
+/** A line's metrics (a JSON string from the app), checked: the known numbers in range, nothing else; null if none. */
+export function cleanMetrics(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw || raw.length > 2000) return null;
+  let m: Record<string, unknown>;
+  try { m = JSON.parse(raw); } catch { return null; }
+  if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+  const out: Record<string, number | boolean> = {};
+  for (const [k, [min, max]] of Object.entries(METRICS)) {
+    const v = m[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= min && v <= max) out[k] = v;
+  }
+  for (const k of FLAGS) if (typeof m[k] === "boolean") out[k] = m[k] as boolean;
+  return Object.keys(out).length ? JSON.stringify(out) : null;
+}
 
 type Flight = Record<string, string | number | null>;
 
@@ -57,18 +78,29 @@ export function clean(raw: unknown): Flight {
 }
 
 export async function upload(env: Env, request: Request, auth: Auth): Promise<Response> {
-  const body = await readJson<{ flights?: unknown }>(request, 512 * 1024);
+  const body = await readJson<{ flights?: unknown; stats?: unknown }>(request, 512 * 1024);
   if (!Array.isArray(body.flights) || body.flights.length > BATCH) {
     throw new HttpError(400, `Send up to ${BATCH} flights at a time.`);
   }
   const flights = body.flights.map(clean);
+  // Stats and metrics, as the app has it now (an older app doesn't say: left as it is). Off: the metrics go.
+  let stats = !!auth.user.stats;
+  if (typeof body.stats === "boolean" && body.stats !== stats) {
+    stats = body.stats;
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET stats = ?1 WHERE id = ?2").bind(stats ? 1 : 0, auth.user.id),
+      ...(stats ? [] : [env.DB.prepare("UPDATE flights SET metrics = NULL WHERE user_id = ?1").bind(auth.user.id)]),
+    ]);
+  }
+  const metrics = (body.flights as Record<string, unknown>[]).map((f) => (stats ? cleanMetrics(f.metrics) : null));
   const received = now();
   const placeholders = COLUMNS.map((_, i) => `?${i + 3}`).join(", ");
   const updates = COLUMNS.filter((c) => c !== "id").map((c) => `${c} = excluded.${c}`).join(", ");
-  const sql = `INSERT INTO flights (user_id, received_at, ${COLUMNS.join(", ")}) VALUES (?1, ?2, ${placeholders})
-               ON CONFLICT(user_id, id) DO UPDATE SET ${updates}`;
+  const m = COLUMNS.length + 3;
+  const sql = `INSERT INTO flights (user_id, received_at, ${COLUMNS.join(", ")}, metrics) VALUES (?1, ?2, ${placeholders}, ?${m})
+               ON CONFLICT(user_id, id) DO UPDATE SET ${updates}, metrics = excluded.metrics`;
   if (flights.length) {
-    await env.DB.batch(flights.map((f) => env.DB.prepare(sql).bind(auth.user.id, received, ...COLUMNS.map((c) => f[c]))));
+    await env.DB.batch(flights.map((f, i) => env.DB.prepare(sql).bind(auth.user.id, received, ...COLUMNS.map((c) => f[c]), metrics[i])));
   }
   return json({ accepted: flights.map((f) => f.id) });
 }
@@ -96,6 +128,21 @@ export async function remove(env: Env, auth: Auth, id: string): Promise<Response
   return json({ ok: true });
 }
 
+/** Visits to each airport from flights in time order: landing somewhere is a visit, and so is a flight leaving
+ * from somewhere the one before didn't land (the first flight, or a jump); flying out again after landing there is
+ * the same visit. Busiest first. */
+export function visitTally(flights: { origin: string; destination: string }[]): [string, number][] {
+  const counts = new Map<string, number>();
+  const add = (icao: string) => { if (icao) counts.set(icao, (counts.get(icao) ?? 0) + 1); };
+  let at = "";
+  for (const f of flights) {
+    if (f.origin && f.origin !== at) add(f.origin);
+    add(f.destination);
+    at = f.destination || "";
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
 /** The same totals as the app's logbook.totals. */
 export async function stats(env: Env, auth: Auth): Promise<Response> {
   const t = await env.DB.prepare(
@@ -104,12 +151,17 @@ export async function stats(env: Env, auth: Auth): Promise<Response> {
             AVG(landing_vs_fpm) AS avg_landing, SUM(readbacks) AS readbacks, SUM(readbacks_correct) AS correct
      FROM flights WHERE user_id = ?1`,
   ).bind(auth.user.id).first<Record<string, number | null>>();
-  const { results: airports } = await env.DB.prepare(
-    `SELECT icao, COUNT(*) AS visits, MAX(lat) AS lat, MAX(lon) AS lon FROM (
-       SELECT origin AS icao, origin_lat AS lat, origin_lon AS lon FROM flights WHERE user_id = ?1 AND origin != ''
-       UNION ALL SELECT destination, destination_lat, destination_lon FROM flights WHERE user_id = ?1 AND destination != '')
-     GROUP BY icao ORDER BY visits DESC, icao`,
-  ).bind(auth.user.id).all<{ icao: string; visits: number; lat: number | null; lon: number | null }>();
+  const { results: legs } = await env.DB.prepare(
+    `SELECT origin, destination, origin_lat, origin_lon, destination_lat, destination_lon FROM flights
+     WHERE user_id = ?1 ORDER BY started_at`,
+  ).bind(auth.user.id).all<{ origin: string; destination: string; origin_lat: number | null; origin_lon: number | null;
+    destination_lat: number | null; destination_lon: number | null }>();
+  const where = new Map<string, [number | null, number | null]>();
+  for (const f of legs) {
+    if (f.origin && f.origin_lat != null) where.set(f.origin, [f.origin_lat, f.origin_lon]);
+    if (f.destination && f.destination_lat != null) where.set(f.destination, [f.destination_lat, f.destination_lon]);
+  }
+  const airports = visitTally(legs).map(([icao, visits]) => ({ icao, visits, lat: where.get(icao)?.[0] ?? null, lon: where.get(icao)?.[1] ?? null }));
   const { results: routes } = await env.DB.prepare(
     `SELECT origin, destination, COUNT(*) AS flights FROM flights
      WHERE user_id = ?1 AND origin != '' AND destination != '' GROUP BY origin, destination ORDER BY flights DESC LIMIT 200`,
@@ -128,9 +180,21 @@ export async function stats(env: Env, auth: Auth): Promise<Response> {
   });
 }
 
+/** GET /v1/stats/details: what the dashboard's Stats page works its numbers out from, only with Stats and metrics
+ * on: every flight's line (no gates, runways or readbacks) with its metrics, oldest first. Off: {enabled: false}. */
+export async function details(env: Env, auth: Auth): Promise<Response> {
+  if (!auth.user.stats) return json({ enabled: false });
+  const { results } = await env.DB.prepare(
+    `SELECT id, started_at, ended_at, callsign, aircraft, origin, destination, block_min, air_min, distance_nm, max_alt_ft,
+            landing_vs_fpm, landed, origin_lat, origin_lon, destination_lat, destination_lon, metrics
+     FROM flights WHERE user_id = ?1 ORDER BY started_at`,
+  ).bind(auth.user.id).all<Flight>();
+  return json({ enabled: true, flights: results.map((f) => ({ ...f, landed: !!f.landed, metrics: f.metrics ? JSON.parse(String(f.metrics)) : null })) });
+}
+
 /** Everything the account holds, as one JSON file (GDPR access and portability). */
 export async function exportAll(env: Env, auth: Auth): Promise<Response> {
-  const { results } = await env.DB.prepare(`SELECT ${COLUMNS.join(", ")}, received_at FROM flights WHERE user_id = ?1 ORDER BY started_at`)
+  const { results } = await env.DB.prepare(`SELECT ${COLUMNS.join(", ")}, metrics, received_at FROM flights WHERE user_id = ?1 ORDER BY started_at`)
     .bind(auth.user.id).all<Flight>();
   const { results: sessions } = await env.DB.prepare("SELECT kind, device, created_at, last_used_at FROM sessions WHERE user_id = ?1")
     .bind(auth.user.id).all();

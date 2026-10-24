@@ -6,10 +6,11 @@
  * image" button saves), and plays them like a story: tap or the arrow keys to move, a few seconds each.
  * A week is one card. Only the summary can become a public link.
  *
- * Only the last finished week, month or year can be seen (the server says the same). The one still going
- * is locked, with a countdown to when it ends and its recap unlocks.
+ * Every finished week, month or year can be seen, back to the first flight; the "All" button charts the flights in
+ * each, to pick one from. The one still going is locked, with a countdown to when it ends and its recap unlocks.
  *
- *   new WrappedView(el, {base, load(range) -> recap, share(range) -> {slug, url, card}, putImage(slug, blob)})
+ *   new WrappedView(el, {base, load(range) -> recap, share(range) -> {slug, url, card}, putImage(slug, blob),
+ *                        timeline(period, tz) -> {periods: [{start, flights, hours}]}})
  */
 (function () {
   "use strict";
@@ -98,10 +99,14 @@
   <div class="wr-tabs" role="tablist" aria-label="Period">
     <button type="button" role="tab" data-period="week">Week</button><button type="button" role="tab" data-period="month">Month</button><button type="button" role="tab" data-period="year">Year</button>
   </div>
+  <button type="button" class="btn btn-ghost btn-sm wr-all" aria-expanded="false" hidden><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 14V9M6 14V4M10 14V7M14 14V2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span></span></button>
   <div class="wr-nav"><button type="button" class="wr-prev" aria-label="The period before">‹</button><b class="wr-label"></b><button type="button" class="wr-next" aria-label="The period after">›</button></div>
 </div>
+<div class="wr-timeline" hidden></div>
 <div class="wr-stage"></div>`;
-      el.querySelector(".wr-tabs").onclick = (e) => { const b = e.target.closest("button[data-period]"); if (b) { this.period = b.dataset.period; this.step = -1; this.load(); } };
+      el.querySelector(".wr-tabs").onclick = (e) => { const b = e.target.closest("button[data-period]"); if (b) { this.period = b.dataset.period; this.step = -1; this.load(); this.chart(); } };
+      el.querySelector(".wr-all").hidden = !opts.timeline;
+      el.querySelector(".wr-all").onclick = () => this.toggleChart();
       el.querySelector(".wr-prev").onclick = () => { if (this.canGoBack()) { this.step -= 1; this.load(); } };
       el.querySelector(".wr-next").onclick = () => { if (this.step < 0) { this.step += 1; this.load(); } };
       this.onKey = (e) => {
@@ -133,6 +138,8 @@
       this.range = range;
       this.el.querySelectorAll(".wr-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.period === this.period)));
       this.el.querySelector(".wr-label").textContent = range.label;
+      this.el.querySelector(".wr-all span").textContent = `All ${this.period}s`;
+      this.el.querySelectorAll(".wr-timeline .wr-bar-col").forEach((b) => b.classList.toggle("on", Number(b.dataset.step) === this.step));
       this.el.querySelector(".wr-prev").disabled = !this.canGoBack();
       this.el.querySelector(".wr-next").disabled = this.step === 0;
       const stage = this.el.querySelector(".wr-stage");
@@ -172,6 +179,64 @@
         try { await navigator.clipboard.writeText(input.value); this.status("Link copied."); } catch (_) { input.select(); }
       };
       this.show(0);
+    }
+
+    toggleChart() {
+      const panel = this.el.querySelector(".wr-timeline");
+      panel.hidden = !panel.hidden;
+      this.el.querySelector(".wr-all").setAttribute("aria-expanded", String(!panel.hidden));
+      if (!panel.hidden) this.chart();
+    }
+
+    /** Every week, month or year from the first flight to the last finished one, a bar for its flights: click
+     *  one to see it. */
+    async chart() {
+      const panel = this.el.querySelector(".wr-timeline");
+      if (panel.hidden || !this.opts.timeline) return;
+      const period = this.period;
+      panel.innerHTML = `<p class="wr-hint">Counting ...</p>`;
+      let data;
+      try {
+        data = await this.opts.timeline(period, -new Date().getTimezoneOffset());
+      } catch (err) {
+        panel.innerHTML = `<p class="wr-hint error">${esc(err.message)}</p>`;
+        return;
+      }
+      if (period !== this.period) return;
+      const counts = new Map((data.periods || []).map((p) => [p.start, p]));
+      const keyOf = (r) => {
+        const d = r.start, ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        return period === "year" ? ymd.slice(0, 4) : period === "month" ? ymd.slice(0, 7) : ymd;
+      };
+      const firstKey = [...counts.keys()].sort()[0];
+      if (!firstKey) { panel.innerHTML = `<p class="wr-hint">No flights yet.</p>`; return; }
+      const cols = [];
+      for (let step = -1; ; step--) {
+        const r = periodOf(period, Date.now(), step);
+        const k = keyOf(r);
+        cols.push({ step, r, p: counts.get(k) });
+        if (k <= firstKey || cols.length > 2000) break;
+      }
+      cols.reverse();
+      const most = Math.max(1, ...cols.map((c) => c.p?.flights || 0));
+      const tick = (r, i) => {
+        const d = r.start;
+        if (period === "year") return String(d.getFullYear());
+        if (period === "month") return d.getMonth() === 0 || i === 0 ? String(d.getFullYear()) : "";
+        return d.getDate() <= 7 ? MONTHS[d.getMonth()].slice(0, 3) + (d.getMonth() === 0 || i === 0 ? ` ${d.getFullYear()}` : "") : "";
+      };
+      panel.innerHTML = `<div class="wr-chart" role="list">${cols.map((c, i) => {
+        const n = c.p?.flights || 0;
+        const tip = `${c.r.label}: ${n} flight${n === 1 ? "" : "s"}${n ? `, ${hours(c.p.hours)} h` : ""}`;
+        return `<button type="button" role="listitem" class="wr-bar-col${n ? "" : " none"}${c.step === this.step ? " on" : ""}" data-step="${c.step}" title="${esc(tip)}" aria-label="${esc(tip)}">`
+          + `<i style="height:${n ? Math.max(8, Math.round((100 * n) / most)) : 0}%"></i><small>${esc(tick(c.r, i))}</small></button>`;
+      }).join("")}</div>`;
+      panel.querySelector(".wr-chart").onclick = (e) => {
+        const b = e.target.closest(".wr-bar-col");
+        if (b) { this.step = Number(b.dataset.step); this.load(); }
+      };
+      const chart = panel.querySelector(".wr-chart"), on = chart.querySelector(".wr-bar-col.on");
+      chart.scrollLeft = on ? on.offsetLeft - chart.clientWidth / 2 : chart.scrollWidth;
     }
 
     /** The period still going: locked, counting down to when it ends. */

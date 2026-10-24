@@ -325,3 +325,40 @@ def test_an_arrival_low_on_final_is_landed_and_taxied_in_by_localtc():
             break
     assert plane.mode == "parked" and plane.spot is not None
     assert RJTT.parking[plane.spot[1]].kind.startswith("gate")
+
+
+def test_taxiing_out_it_lines_up_behind_the_one_ahead():
+    """ "The aircraft ahead of me are all bundled up together, they should be lined up instead": each of LocalTC's
+    departures gave way to the user only, so they all ran onto the same hold short. Now one waits behind another."""
+    from localtc.traffic.manager import QUEUE_M, Local, Plane
+
+    m = manager()
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.routes = lambda cs: Route("RJTT", "RJCC")
+    m.on_own(own_at(35.58, 139.80))
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    m.on_feed([real("07", "ANA7", gate.lat, gate.lon)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=702), NOW)
+    plane = m.planes["live:07"]
+    t = NOW
+    while plane.mode != "taxi_out" or plane.local.stage != "taxi" or plane.local.follow.gs_kt < 10:
+        t += 1
+        m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
+        m.tick(t)
+        assert t < NOW + 600
+    loc = plane.local
+    lat, lon, _ = advance(loc.lat, loc.lon, loc.hdg, (QUEUE_M - 20) / 0.5144, 0.0, 1.0)  # stopped just ahead of it
+    ahead = Plane("live:99", 9, "FSLTL_A320_ZZZZ", "", callsign="ANA9", object_id=703, mode="taxi_out",
+                  local=Local(lat, lon, 20.0, loc.hdg, 0.0, 0.0, True, started=t, runway=("RJTT", "34R"),
+                              stage="hold_short"))
+    m.planes[ahead.key] = ahead
+    m._released_t = t + 1e6  # held there (another just went)
+    before = (loc.lat, loc.lon)
+    m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + 1)], "test", t + 1)
+    m.tick(t + 1)
+    assert (loc.lat, loc.lon) == before and loc.follow.gs_kt == 0.0
+    ahead.local.hdg = (loc.hdg + 180) % 360  # one coming the other way isn't one to queue behind
+    m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + 2)], "test", t + 2)
+    m.tick(t + 2)
+    assert (loc.lat, loc.lon) != before

@@ -297,3 +297,42 @@ def test_approachs_speeds_go_by_the_stars_published_ones():
     assert engine._star_speed() == 210  # the common part's last; the other runway's transition isn't flown
     engine.state.assignments.arrival_runway = "16R"
     assert engine._star_speed() == 180
+
+
+def test_done_with_the_hold_takes_the_flight_out_of_it():
+    """ "No, wait, we don't need the holding pattern anymore" got "copy that" and the hold stayed; "we're back on
+    track, can we continue the course" got the hold said again."""
+    from localtc.atc_core.readback import Interpretation
+    from localtc.atc_core.route import RouteFix
+
+    for said, intent in (("No, wait, we don't need the holding pattern anymore.", "report_holding"),
+                         ("Alright, we're back on track if we can continue the course.", "other")):
+        engine = engine_at_kbfi()
+        engine.state.flight.destination = "KBFI"
+        engine.route = type(engine.route)((RouteFix("BLAKO", 47.80, -122.31), RouteFix("SEA", 47.43, -122.31)))
+        own = _own(engine, 100.0, lat=47.9, lon=-122.31, hdg_true=180.0, on_ground=False, alt=8000.0, zulu_s=14 * 3600.0)
+        engine.state.aircraft = own
+        engine._hold_request(Interpretation(kind="request", intent="request_hold", values={"fix": "BLAKO"},
+                                            text="request holding at BLAKO"), CENTER, 100.0, own)
+        engine._scheduled.clear()
+        engine._request(Interpretation(kind="request", intent=intent, text=said), CENTER, 400.0)
+        assert engine._scheduled[-1].instruction_id == "common.leave_hold", said
+
+
+def test_a_heading_asked_for_in_the_air_is_given():
+    """ "Request a left turn heading 020, we're way above the profile": request_turn was only for the ground, thrown
+    back, re-read as a hold request, and centre gave a hold."""
+    from localtc.atc_core.llm.understand import LlmInterpreter
+    from localtc.atc_core.llm.understand import Answer
+    from localtc.atc_core.readback import Interpretation, InterpretContext
+
+    turned = LlmInterpreter._check_phase(Answer(kind="request", intent="request_turn"),
+                                         InterpretContext(phase="ARRIVAL", station_role="center"))
+    assert turned.intent == "request_vectors"
+    engine = engine_at_kbfi()
+    own = _own(engine, 100.0, lat=47.9, lon=-122.31, hdg_true=110.0, on_ground=False, alt=13000.0, zulu_s=14 * 3600.0)
+    engine.state.aircraft = own
+    engine._vectors(Interpretation(kind="request", intent="request_vectors", values={"heading": 20},
+                                   text="request a left turn heading 020"), CENTER, 100.0, own)
+    item = engine._scheduled[-1]
+    assert item.instruction_id == "approach.heading" and item.slots["heading"] == 20 and item.slots["turn"] == "left"

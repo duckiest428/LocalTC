@@ -749,3 +749,10 @@ def test_abbreviations_are_said_as_letters_not_the_phonetic_alphabet():
     assert speakable("Transition level, Q N H one zero one five set.") == "Transition level, QNH one zero one five set."
     assert speakable("expect I L S runway two seven left") == "expect ILS runway two seven left"
     assert speakable("taxi via A, B") == "taxi via alpha, bravo"
+
+
+def test_no_whispering_kokoro_voice():
+    """af_nicole whispers: a pilot on the radio with it sounded awful."""
+    from localtc.tts.kokoro import POOLS
+
+    assert not any("af_nicole" in voice for pool in POOLS.values() for voice in pool)

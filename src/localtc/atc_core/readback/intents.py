@@ -86,8 +86,16 @@ APPROACH_WORDS = {"ils": "ILS", "localizer": "LOC", "loc": "LOC", "rnav": "RNAV"
 
 
 def _fix(tokens: list[Token]) -> str | None:
-    """What follows "direct": "request direct BLAKO" -> "BLAKO", "direct to the airport" -> "airport"."""
+    """What follows "direct": "request direct BLAKO" -> "BLAKO", "direct to the airport" -> "airport", spelled out
+    ("direct V-A-L-L-I", "direct victor alpha lima lima india") -> "VALLI", never the first letter alone."""
     for i in _find_phrase(tokens, ("direct",)):
+        spelled = ""
+        for token in tokens[i:]:
+            if len(token.text) != 1 or not token.text.isalpha() or token.kind not in ("word", "letter"):
+                break
+            spelled += token.text
+        if len(spelled) > 1:
+            return spelled.upper()
         words = []
         for token in tokens[i:]:
             if token.text in FIX_STOP and not words:

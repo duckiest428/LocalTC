@@ -232,8 +232,8 @@ def test_prompt_is_narrow():
 
     open_request = build_request("what's the altimeter", None, context, load_examples())
     assert list(open_request.schema["properties"]) == [
-        "kind", "intent", "topic", "runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls",
-        "fuel"]
+        "kind", "intent", "topic", "runway", "atis", "altitude", "heading", "fix", "approach", "conditions", "emergency",
+        "souls", "fuel"]
     assert open_request.prompt.endswith("Readback expected: none\nPilot: \"what's the altimeter\"")
 
 
@@ -679,3 +679,14 @@ def test_a_cloud_model_gets_the_whole_flight_and_may_use_it():
     engine.interpreter.mode = "semi"
     say(engine, own, route, mhz=121.0)
     assert not engine.rich_model and lean.requests[-1].context == ""
+
+
+def test_a_fix_spelled_out_is_the_fix():
+    """ "Can we get a direct V-A-L-L-I now?": the model read VALLI, the check didn't see it in the letters, and ATC
+    cleared the flight "direct V"."""
+    from localtc.atc_core.readback.intents import _fix
+
+    for said in ("Can we get a direct V-A-L-L-I now?", "request direct victor alpha lima lima india"):
+        tokens = normalize(said)
+        answer = parse_answer(json.dumps({"kind": "request", "intent": "request_direct", "fix": "VALLI"}), None, tokens)
+        assert answer.values.get("fix") == "VALLI" and _fix(tokens) == "VALLI"

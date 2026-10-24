@@ -44,6 +44,7 @@ SLOW_KT = 160.0  # flying slower than this, the tighter pattern
 # final has to start, a standard rate turn's radius ahead of the centreline (by the angle still to turn), and this
 # much more for the call and the pilot.
 VISUAL_LEAD_NM = 0.3
+OUTBOUND_DEG = 135  # further than this off the final's direction, an aircraft is flying away from the runway
 
 
 @dataclass(frozen=True)
@@ -104,12 +105,19 @@ def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float,
         join = out - abs(lateral) * math.sqrt(3)  # a 30 degree cut meets the final here
         return Vector((inbound - 30 * cut) % 360, "intercept", 2 * abs(lateral) + join, cut, join)
 
-    outbound_now = heading_true is not None and abs(((heading_true - inbound + 540) % 360) - 180) > 100
+    # Flying away from the runway: nearer its reciprocal than a base is. (At 100 degrees, a base on approach's own
+    # heading, 108 degrees off the final, counted as flying away: the turn in never came, the flight went through the
+    # centreline and was sent back the other way on a base, "turn left heading 306".)
+    outbound_now = heading_true is not None and abs(((heading_true - inbound + 540) % 360) - 180) > OUTBOUND_DEG
+    crossed = after == "base" and side is not None and lateral * side < 0  # through the final on its base
+    if crossed:
+        return intercept()  # back to it from the side it's on now, not a base turned round the other way
     if visual and (after == "intercept" or (abs(lateral) <= 3.5 and out >= p.gate_nm - 2 and not outbound_now)):
         cut = 1.0 if lateral >= 0 else -1.0
         to_turn = abs((((heading_true if heading_true is not None else inbound - 90 * cut) - inbound + 540) % 360) - 180)
         radius = max(speed_kt, 120.0) / 188.5  # a standard rate turn's, in nm
-        if after == "intercept" or abs(lateral) <= radius * (1 - math.cos(math.radians(min(to_turn, 90.0)))) + VISUAL_LEAD_NM:
+        # (The whole turn: from a base on 108 degrees off the final, more than a right angle's worth of room.)
+        if after == "intercept" or abs(lateral) <= radius * (1 - math.cos(math.radians(to_turn))) + VISUAL_LEAD_NM:
             return Vector(inbound, "intercept", out + abs(lateral), cut, out)
         if after == "base" and to_turn >= 60:  # on the base: on it until the turn onto the final
             return Vector((inbound - 90 * cut) % 360, "base", abs(lateral) + out, cut)

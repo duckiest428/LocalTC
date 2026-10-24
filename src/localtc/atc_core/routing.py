@@ -263,7 +263,7 @@ class RoutingMixin:
         n = max(5, int(round(miles / 5.0)) * 5)
         display = f"convective SIGMET along your route, about {n} miles ahead, deviations left or right of course approved" + \
             (f", when able proceed direct {fix}" if fix else "")
-        spoken = f"convective sigmet along your route, about {speech.number_words(n)} miles ahead, deviations left or right " \
+        spoken = f"convective sigmet along your route, about {speech.miles(n)} miles ahead, deviations left or right " \
                  f"of course approved" + (f", when able proceed direct {fix}" if fix else "")
         self.amendments.append(Amendment("deviation", t, fix=fix, side="either", reason="convective SIGMET",
                                          hazard=h.id, line=[(own.lat, own.lon)] + ([(beyond[1], beyond[2])] if beyond else [])))

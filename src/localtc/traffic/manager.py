@@ -104,6 +104,11 @@ GIVE_WAY_AHEAD_S = 20.0  # ... looking this far ahead
 GIVE_WAY_CLEAR_M = 150.0  # ... and goes on once the user is this far away (or behind it)
 GIVE_WAY_AGAIN_S = 45.0  # ... and isn't stopped again for this long after it goes on
 GIVE_WAY_MAX_S = 180.0  # ... or after this long at most
+# Taxiing, it stops this far (nose to nose) behind another of LocalTC's ahead going the same way: a line to the hold
+# short, not all of them piled onto it ("the aircraft ahead of me are all bundled up together").
+QUEUE_M = 75.0
+QUEUE_CONE_DEG = 40.0  # ahead: within this either side of its nose
+QUEUE_SAME_WAY_DEG = 90.0  # going the same way (one coming the other way isn't queued behind: they'd both wait)
 LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this long at most, then taken away
 FEED_FRESH_S = 15.0  # the feed answered, with something new, this recently: it's working
 HEARD_AGAIN_M = 1500.0  # one LocalTC is landing, heard again this close to where LocalTC has it: the real one again
@@ -1152,6 +1157,22 @@ class TrafficManager:
                                                      on_ground=True, blend_s=5.0), now))
         return out
 
+    def _queued(self, plane: Plane) -> bool:
+        """Another of LocalTC's on the ground just ahead of ``plane``, going the same way: it waits behind it."""
+        loc = plane.local
+        for other in self.planes.values():
+            there = other.local
+            if other is plane or there is None or not there.on_ground or other.object_id is None:
+                continue
+            if abs(((there.hdg - loc.hdg + 540) % 360) - 180) > QUEUE_SAME_WAY_DEG:
+                continue
+            if haversine_nm(loc.lat, loc.lon, there.lat, there.lon) * M_PER_NM > QUEUE_M:
+                continue
+            bearing = bearing_deg(loc.lat, loc.lon, there.lat, there.lon)
+            if abs(((bearing - loc.hdg + 540) % 360) - 180) <= QUEUE_CONE_DEG:
+                return True
+        return False
+
     @staticmethod
     def _closing(lat: float, lon: float, hdg: float, own: OwnshipState, gs_kt: float = 15.0) -> float | None:
         """How close one at ``lat, lon`` heading ``hdg`` comes to the user over the next ``GIVE_WAY_AHEAD_S`` (both
@@ -1408,6 +1429,8 @@ class TrafficManager:
                 loc.follow.gs_kt = 0.0  # the user ahead: it waits
             elif self._users_runway_at(geo, *ahead[:2], now):
                 loc.follow.gs_kt = 0.0  # not across the runway the user has
+            elif self._queued(plane):
+                loc.follow.gs_kt = 0.0  # behind the one ahead, in line
             else:
                 loc.lat, loc.lon, loc.hdg, gs = loc.follow.step(loc.lat, loc.lon)
                 if loc.follow.done:

@@ -7,6 +7,11 @@ a traffic alert, a correction): those are said straight. How often goes by the c
 conversational one more, a strict or formal one hardly at all) and halves on a busy frequency. Rare enough to sound
 like a person, never so often it sounds unprofessional. Decided by the words and a key (the time), so a replay says
 it the same way.
+
+Only where people really hesitate: a controller after the callsign, as they find the next thing to say; a pilot after
+the station they're calling, or before their callsign at the end of a readback. Not to start a transmission ("Um,
+Runway three four right, ...") nor in the middle of a short readback ("Push and start, uh, tail right"): both
+sounded made up.
 """
 
 import random
@@ -14,13 +19,17 @@ import re
 import zlib
 
 # How often a controller of each kind (personality.KINDS) hesitates in a transmission; a busy frequency halves it.
-ATC_RATE = {"calm": 0.14, "formal": 0.05, "friendly": 0.2, "strict": 0.04, "hurried": 0.06, "dry": 0.1,
-            "conversational": 0.25}
-PILOT_RATE = 0.3  # the other flights' pilots: they hesitate more than the controllers do
-TWICE = 0.12  # ... and now and then twice in one call
-ATC_FILLERS = ("uh",) * 7 + ("um",)
-PILOT_FILLERS = ("uh",) * 6 + ("um", "ah")
+ATC_RATE = {"calm": 0.07, "formal": 0.02, "friendly": 0.1, "strict": 0.02, "hurried": 0.03, "dry": 0.05,
+            "conversational": 0.12}
+PILOT_RATE = 0.15  # the other flights' pilots: they hesitate more than the controllers do
+AFTER_CALLSIGN = 0.85  # a controller's, mostly right after the callsign; else between two parts of the clearance
+ATC_FILLERS = ("uh",)
+PILOT_FILLERS = ("uh",) * 4 + ("ah",)
 FILLERS = {"uh", "um", "ah"}
+# A pilot's first clause naming one of these is a call to a station ("Seattle Ground, Delta 533, ready to taxi"),
+# else it's a readback ending in their callsign.
+STATIONS = re.compile(r"\b(ground|tower|approach|departure|center|centre|clearance|delivery|radio|control|director|"
+                      r"apron|ramp|unicom|traffic)\b", re.IGNORECASE)
 MIN_WORDS = 6  # shorter calls are said straight ("roger", "cleared to land three four left")
 # Nothing urgent gets one: these are said straight, whoever says them.
 URGENT = re.compile(r"\b(immediately|go(ing)? around|stop|cancel|caution|traffic alert|low altitude|alert|expedite|"
@@ -87,26 +96,23 @@ def atc(spoken: str, kind: str = "calm", *, busy: bool = False, key: str = "", i
     if not places:
         return spoken
     # Mostly right after the callsign (the first comma), as they find the next thing to say; else between parts.
-    at = places[0] if rng.random() < 0.65 or len(places) == 1 else rng.choice(places[1:])
+    at = places[0] if rng.random() < AFTER_CALLSIGN or len(places) == 1 else rng.choice(places[1:])
     return _insert(spoken, at, rng.choice(ATC_FILLERS))
 
 
 def pilot(spoken: str, *, key: str = "", rate: float = PILOT_RATE) -> str:
-    """Another flight's pilot: "uh" before the call, after the station they call, or before their callsign at the
-    end of a readback; once in a while twice."""
+    """Another flight's pilot: "uh" after the station they call ("Seattle Ground, uh, Delta 533, ready to taxi"), or
+    before their callsign at the end of a readback ("runway three four right, taxi via bravo, uh, Delta 533")."""
     if not spoken or len(spoken.split()) < MIN_WORDS - 1 or _urgent(spoken, ""):
         return spoken
     rng = _rng(spoken, key)
     if rng.random() >= rate:
         return spoken
-    out = spoken
-    for turn in range(2):
-        if turn and rng.random() >= TWICE:
-            break
-        places = _boundaries(out)
-        filler = rng.choice(PILOT_FILLERS)
-        if rng.random() < 0.3 and not out.lower().startswith(PILOT_FILLERS):
-            out = f"{filler.capitalize() if out[:1].isupper() else filler}, {out}"
-        elif places:
-            out = _insert(out, rng.choice(places), filler)
-    return out
+    head, _, rest = spoken.partition(", ")
+    filler = rng.choice(PILOT_FILLERS)
+    if rest and STATIONS.search(head):
+        return f"{head}, {filler}, {rest}"
+    last = spoken.rfind(", ")
+    if last <= 0:
+        return spoken
+    return _insert(spoken, last + 2, filler)

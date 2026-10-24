@@ -116,3 +116,34 @@ def test_other_flights_checking_in_with_a_centre_are_answered_like_the_pilot():
     replies = {line.text for _ in range(12) for line in chatter.exchange(scene) if line.speaker == "atc"}
     assert all("FL370" in r or "FL390" in r for r in replies)
     assert not any(r.endswith(", roger.") for r in replies)
+
+
+def test_a_hundred_or_more_said_in_words():
+    """A convective SIGMET 120 miles ahead stopped the ATC engine: number_words only went to 99."""
+    assert speech.number_words(120) == "one hundred twenty"
+    assert speech.number_words(47) == "forty-seven"
+
+
+def test_arrivals_on_approach_are_worked_like_the_pilot():
+    """ "We have to make sure that other aircraft get told what we get told": approach only ever said "descend and
+    maintain" to the others. Now they check in, get vectors, the approach clearance, and tower."""
+    from localtc.atc_core.chatter import Chatter, Other, Scene
+
+    chatter = Chatter(TemplateLibrary.load(), seed=5)
+    cs = Callsign("DAL1529", telephony="Delta", flight_number="1529")
+    ils = Approach.parse("ILS RWY 21L")
+
+    def said(other: Other) -> list[str]:
+        scene = Scene(controller="approach", station="Detroit Approach", runway="21L", others=[other], approach=ils,
+                      approach_alt=3000, atis="B", handoff=("Metro Tower", 127.05))
+        return [f"{line.speaker}: {line.text}" for _ in range(30) for line in chatter.exchange(scene)]
+
+    high = said(Other(1, cs, "descending", 11000, leg="base", heading=306, turn="left"))
+    assert any("Detroit Approach, Delta 1529, 11,000, information B" in line for line in high)
+    assert any("expect ILS runway 21L approach" in line for line in high)
+    assert any("turn left heading 306" in line for line in high)
+    cutting_in = said(Other(1, cs, "descending", 4000, leg="intercept", heading=240, turn="right"))
+    assert all("turn right heading 240, maintain" in line or line.startswith("pilot") for line in cutting_in)
+    assert any("cleared ILS runway 21L approach" in line for line in cutting_in)
+    final = said(Other(1, cs, "descending", 3000, leg="final", final_nm=8.0))
+    assert final and all("Metro Tower" in line for line in final)

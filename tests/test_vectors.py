@@ -193,3 +193,29 @@ def test_a_visual_approachs_last_vector_is_the_final_itself():
     final = round((geo.end("16L").heading_true - MAGVAR) % 360)
     assert arrival.engine.state.assignments.heading in (final - 1, final, final + 1), cleared.text
     assert arrival.captured  # within 0.7 nm of the centreline, heading down it
+
+
+def at(geo: AirportGeometry, runway: str, out: float, side: float) -> tuple[float, float]:
+    """The point ``out`` miles out along ``runway``'s extended centreline, ``side`` miles off it (right of landing +)."""
+    end = geo.end(runway)
+    c = math.radians(end.heading_true)
+    x = end.threshold[0] - out * vectors.NM_M * math.sin(c) + side * vectors.NM_M * math.cos(c)
+    y = end.threshold[1] - out * vectors.NM_M * math.cos(c) - side * vectors.NM_M * math.sin(c)
+    return geo.frame.to_latlon(x, y)
+
+
+@pytest.mark.parametrize("visual", [True, False])
+def test_a_base_more_than_square_to_the_final_still_gets_the_turn_in(visual):
+    """Detroit's 21L: a base on approach's own heading, 108 degrees off the final, counted as flying away from the
+    runway. No turn in came, the flight went through the centreline and was sent back on a base the other way
+    ("turn left heading 306")."""
+    geo = AirportGeometry(KSEA)
+    end = geo.end("16L")
+    base = (end.heading_true - 108) % 360  # from the right of the final, a little past square to it
+    near = vectors.vector(geo, end, *at(geo, "16L", 18, 1.2), after="base", side=1.0, heading_true=base, visual=visual,
+                          speed_kt=250)
+    assert near.leg == "intercept"
+    across = vectors.vector(geo, end, *at(geo, "16L", 19, -1.0), after="base", side=1.0, heading_true=base,
+                            visual=visual, speed_kt=250)
+    assert across.leg == "intercept"  # back to the final from the side it's on, never a base turned round
+    assert abs(((across.heading_true - (end.heading_true + 30)) + 540) % 360 - 180) < 1

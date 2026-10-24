@@ -50,6 +50,12 @@ class Other:
     doing: str  # one of DOINGS
     level_ft: int = 0  # its altitude, to the nearest thousand (airborne)
     runway: str = ""  # landing: the runway it's lined up with (not the one in use: Heathrow's A321 was on 27L)
+    # Arriving, on approach's frequency: the next vector the pilot's own flight would get from where it is
+    # (vectors.vector): the leg, the magnetic heading, which way to turn to it. Empty: not an arrival here.
+    leg: str = ""
+    heading: int = 0
+    turn: str = ""
+    final_nm: float | None = None  # on the final already, this far out
 
 
 @dataclass
@@ -66,6 +72,9 @@ class Scene:
     level_ft: int = 35000  # around where the pilot's own flight is: centres work flights near its level
     exclude: str = ""  # the pilot's own callsign: never borrowed
     others: list[Other] = field(default_factory=list)  # the sim's aircraft this controller is working
+    approach: Any = None  # approach's arrivals: the approach in use (an Approach), as the pilot's own flight gets it
+    approach_alt: int = 3000  # where the final is joined
+    atis: str = ""  # the arrival ATIS letter the arrivals check in with
 
 
 class Chatter:
@@ -99,7 +108,19 @@ class Chatter:
             spoken = f"{scene.station}, {speech.callsign(cs)}, flight level {_digit_words(level)}"
             lines.append(Line("pilot", shown, text, spoken))
             lines.append(Line("atc", shown, atc.text, atc.spoken))
-            return lines
+            return [replace(line, ident=cs.ident) for line in lines]
+        if kind == "arrival_checkin":  # "Detroit Approach, Delta 1529, one one thousand, information Bravo"
+            level = other.level_ft
+            atis = f", information {scene.atis}" if scene.atis else ""
+            said = f", information {speech.letter(scene.atis)}" if scene.atis else ""
+            text = f"{scene.station}, {shown}, {speech.altitude_display(level)}{atis}"
+            spoken = f"{scene.station}, {speech.callsign(cs)}, {speech.altitude(level)}{said}"
+            lines.append(Line("pilot", shown, text, spoken))
+            lines.append(Line("atc", shown, atc.text, atc.spoken))
+            if self.library.get(iid).pilot_readback:
+                said = self.library.pilot_readback(iid, slots)
+                lines.append(Line("pilot", shown, _sentence(said), said))
+            return [replace(line, ident=cs.ident) for line in lines]
         lines.append(Line("atc", shown, atc.text, atc.spoken))
         readback = self.library.get(iid).pilot_readback
         if iid == "ground.pushback":  # the template has no readback: crews say it anyway
@@ -130,6 +151,8 @@ class Chatter:
                 out.append(("atc", "tower.luaw", {"runway": runway}))
             elif doing == "landing" and wind is not None:
                 out.append(("atc", "tower.land", {"runway": other.runway or runway, "wind": wind}))
+        elif c == "approach" and other.leg and scene.approach is not None and doing in ("descending", "level"):
+            out += self._arrival(scene, other)
         elif c in ("departure", "approach") and doing in ("climbing", "descending", "level"):
             if doing == "climbing":
                 out.append(("atc", "common.climb", {"altitude": min(17000, other.level_ft + rng.choice((2000, 4000, 6000)))}))
@@ -154,6 +177,34 @@ class Chatter:
                 station, mhz = scene.handoff
                 out.append(("atc", "common.contact", {"station": station, "frequency": mhz}))
         return [(kind, iid, slots) for kind, iid, slots in out if "altitude" not in slots or slots["altitude"] >= 1000]
+
+    def _arrival(self, scene: Scene, other: Other) -> list[tuple[str, str, dict[str, Any]]]:
+        """An arrival on approach's frequency, worked the way the pilot's own flight is: checked in with the approach to
+        expect, vectored (the heading the vectors give from where it is), cleared for the approach, sent to tower.
+        Before, approach only ever told the others "descend and maintain", and they didn't feel there."""
+        approach, floor, level = scene.approach, scene.approach_alt, other.level_ft
+        lower = max(floor, level - self.rng.choice((1000, 2000, 3000)))
+        if other.final_nm is not None:  # on the final: tower's now
+            if scene.handoff is not None:
+                station, mhz = scene.handoff
+                return [("atc", "approach.handoff_tower", {"station": station, "frequency": mhz})]
+            return []
+        out: list[tuple[str, str, dict[str, Any]]] = []
+        heading = {"heading": other.heading, "turn": other.turn or "left"}
+        if other.leg == "intercept":
+            kind = getattr(approach, "kind", "")
+            iid = "approach.intercept_visual" if kind == "VISUAL" else \
+                "approach.intercept_cleared" if kind in ("ILS", "LOC", "LDA", "SDF") else "approach.intercept_course"
+            out.append(("atc", iid, {**heading, "altitude": max(floor, min(level, floor + 1000)), "approach": approach}))
+            return out
+        if level >= floor + 4000:
+            out.append(("arrival_checkin", "approach.descend", {"altitude": lower, "approach": approach,
+                                                                "station": scene.station}))
+        if lower < level:
+            out.append(("atc", "approach.turn_descend", {**heading, "altitude": lower}))
+        out.append(("atc", "approach.heading" if other.leg in ("base", "downwind") else "approach.turn",
+                    {**heading, "approach": approach}))
+        return out
 
 
 def _digit_words(n: int) -> str:

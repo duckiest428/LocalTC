@@ -160,6 +160,10 @@ PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
 NM_M = 1852.0
 AIRBORNE_PHASES = {P.DEPARTURE, P.CRUISE, P.ARRIVAL, P.APPROACH}
 TAXI_MAP_PHASES = {P.PARKED, P.PUSHBACK, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAXI_IN}  # the taxi route is on the map
+# Done with a hold: what a pilot says to be let out of it.
+DONE_HOLDING = re.compile(r"\b(do(n'?t| not) need (the |this |a |to )?hold|no longer need|(cancel|out of|leave|exit) "
+                          r"(the |this )?hold|back on (track|course|route)|continue (the |our |on )?(course|route)|"
+                          r"ready to (continue|proceed)|resume (the |our )?(route|navigation))", re.IGNORECASE)
 SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?", then once more, then give up
 NUDGE_REPLY_S = 4.0  # after the pilot answers "how do you read", the instruction follows this soon
 STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
@@ -1727,6 +1731,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif facility.controller == "approach":
             nxt = self.facility("tower")
         handoff = (nxt.station, nxt.mhz) if nxt is not None and nxt.station != facility.station else None
+        # Approach at the flight's destination: the arrivals worked as this flight is (vectors, the approach in use).
+        plan = self._arrival_plan(own) if facility.controller == "approach" and geo is not None \
+            and facility.airport == self.state.flight.destination else None
         others = []
         for oid, target in self._traffic.items():
             if (callsign := self._traffic_callsign(target)) is None:
@@ -1741,10 +1748,31 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     if theirs is None:
                         continue  # can't tell which runway it's landing on: not cleared for a made-up one
                     lined_up = theirs.end.ident
-                others.append(chatter.Other(oid, callsign, doing, int(round(target.alt_ft / 1000) * 1000), lined_up))
+                other = chatter.Other(oid, callsign, doing, int(round(target.alt_ft / 1000) * 1000), lined_up)
+                if plan is not None and doing in ("descending", "level"):
+                    other = self._other_arrival(other, target, geo, plan, own)
+                others.append(other)
         return chatter.Scene(facility.controller, facility.station, runway=runway, wind=wind, routes=routes,
                              handoff=handoff, icao_region=self.region.icao, exclude=self._callsign().ident,
-                             level_ft=int(round(own.alt_indicated_ft / 1000) * 1000), others=others)
+                             level_ft=int(round(own.alt_indicated_ft / 1000) * 1000), others=others,
+                             approach=plan["approach"] if plan is not None else None,
+                             approach_alt=plan["approach_alt"] if plan is not None else 3000,
+                             atis=atis.letter if plan is not None and (atis := self.current_atis(facility.airport)) else "")
+
+    def _other_arrival(self, other: chatter.Other, target: TrafficTarget, geo: AirportGeometry, plan: dict[str, Any],
+                  own: OwnshipState) -> chatter.Other:
+        """Another flight coming in to approach's airport: the vector it'd get from where it is, as this one would
+        ("turn left heading 250", the intercept with the approach clearance), or that it's on the final already."""
+        end = geo.end(plan["final"])
+        if end is None or geo.distance_nm(target.lat, target.lon) > 30.0 or target.alt_ft - geo.airport.elev_ft < 1000:
+            return other
+        if (theirs := geo.final_approach(target.lat, target.lon, target.hdg_true)) is not None:
+            return replace(other, leg="final", final_nm=theirs.distance_nm)  # lined up already (any runway: a parallel)
+        leg = vectors.vector(geo, end, target.lat, target.lon, slow=target.gs_kt < vectors.SLOW_KT,
+                             heading_true=target.hdg_true, visual=plan["approach"].kind == "VISUAL",
+                             speed_kt=target.gs_kt)
+        turn = "right" if ((leg.heading_true - target.hdg_true) % 360) < 180 else "left"
+        return replace(other, leg=leg.leg, heading=self._magnetic(own, leg.heading_true), turn=turn)
 
     def _watch_runway_flow(self, t: float) -> None:
         """Which way the sim's own traffic is taking off and landing at the flight's airports: the ATIS takes its
@@ -3245,6 +3273,13 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if intent == "request_altitude":
             self._altitude_request(interp, facility, t, own)
             return []
+        if intent in ("other", "report_holding", "report_back_on_course", "request_hold") and own is not None \
+                and self.hold is not None and self.hold.state not in ("done", "cancelled", "leaving") \
+                and DONE_HOLDING.search(interp.text or ""):
+            # "No, wait, we don't need the holding pattern anymore": out of it, on along the route. It got "copy
+            # that" and the hold stayed; "we're back on track, can we continue the course" got the hold said again.
+            self._leave_hold(own, facility, answering=True)
+            return []
         if intent == "other":
             return self._decline(interp, facility, t)
         if self._vfr and self._vfr_request(interp, facility, t, own):
@@ -3478,6 +3513,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if self._set_arrival(interp.values.get("runway"), interp.values.get("approach"), own) is None:
                 self._schedule(t, "common.unable", {}, facility)
                 return
+        asked = interp.values.get("heading")
+        if asked is not None and own is not None:
+            # "Request a left turn, heading 020, we're high": the heading asked for, the way asked.
+            heading = int(asked) % 360 or 360
+            words = set(re.findall(r"[a-z]+", (interp.text or "").lower()))
+            turn = "left" if "left" in words else "right" if "right" in words else \
+                "right" if ((heading - own.hdg_mag) % 360) < 180 else "left"
+            self._schedule(t, "approach.heading", {"heading": heading, "turn": turn}, facility,
+                           on_issue=lambda: self._assign(heading=heading))
+            return
         plan = self._arrival_plan(own)
         leg = self._vector(own, plan["final"]) if plan else None
         if plan is None or leg is None:

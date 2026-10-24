@@ -122,7 +122,7 @@ TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequ
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
 VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "squawk", "heading", "approach")
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)
-REQUEST_FIELDS = ("runway", "atis", "altitude", "fix", "approach", "conditions", "emergency", "souls", "fuel")
+REQUEST_FIELDS = ("runway", "atis", "altitude", "heading", "fix", "approach", "conditions", "emergency", "souls", "fuel")
 APPROACH_KINDS = ("ILS", "LOC", "RNAV", "GPS", "VOR", "NDB", "LDA", "SDF", "VISUAL")
 # The requests an instruction answers ({controller: {first word of its name: intents}}): read back, it's no
 # follow-up request ("taxi to gate 46 via B9" is the readback of the taxi, not a request for one).
@@ -394,6 +394,16 @@ def parse_value(element: str, raw: Any) -> Any:
 def _said_words(value: str, tokens: list[Token]) -> bool:
     words = {t.text for t in tokens}
     words |= {name for t in tokens if t.kind == "letter" for name, letter in PHONETIC.items() if letter == t.text}  # "Quebec"
+    # A fix spelled out, "V-A-L-L-I" or "victor alpha lima lima india": its letters run together. The model read
+    # VALLI, the check didn't see it, and ATC cleared the flight "direct V".
+    run = ""
+    for t in [*tokens, None]:
+        if t is not None and len(t.text) == 1 and t.text.isalpha() and t.kind in ("letter", "word"):
+            run += t.text
+            continue
+        if len(run) > 2:
+            words.add(run)
+        run = ""
     wanted = [w for w in re.findall(r"[a-z]+", value.lower()) if len(w) > 2]
     return bool(wanted) and any(w in words for w in wanted)
 
@@ -689,7 +699,13 @@ class LlmInterpreter:
         """The schema already limits the intents to this controller and phase; a model that ignores the
         schema (or a recorded answer from before) is held to it here. A question filed as an impossible request
         is still the question."""
-        if answer.kind == "request" and answer.intent not in allowed_intents(context):
+        allowed = allowed_intents(context)
+        if answer.kind == "request" and answer.intent == "request_turn" and answer.intent not in allowed \
+                and "request_vectors" in allowed:
+            # "Request a left turn, a heading of our choice, we're way above the profile": in the air a turn is a
+            # heading, vectors. Thrown back as impossible, it came back as a hold request, and centre gave a hold.
+            return replace(answer, intent="request_vectors")
+        if answer.kind == "request" and answer.intent not in allowed:
             problem = f"{answer.intent} is not possible in phase {context.phase}"
             if asked:
                 return Answer(kind="question", topic=answer.topic or "other", note=f"read as a question ({problem})")

@@ -394,6 +394,15 @@ class AppController:
                         "(Quick Settings > Sim to change)", "warn")
         else:
             self.system("Connecting to MSFS 2024 ...")
+            if cfg.atc.taxi_guide:
+                # A new version of the arrows' package, put in with the sim running: the sim still has the old one,
+                # its files gone, and shows no arrows at all until it's restarted (a whole flight without them, the
+                # only word of it in the log).
+                from localtc import simpkg
+
+                if await asyncio.to_thread(simpkg.install):
+                    self.system("Taxi guidance: LocalTC's arrows were updated in the sim's Community folder. Restart "
+                                "the sim to see them: until then it shows none", "warn")
         self._task = asyncio.create_task(self._run(cfg, record))
 
     async def _run(self, cfg: Config, record: bool) -> None:
@@ -967,7 +976,8 @@ class AppController:
             from localtc import simpkg
 
             if await asyncio.to_thread(simpkg.install):
-                self.system("Taxi guidance: its arrows are in the sim's Community folder; they show from the sim's next start")
+                self.system("Taxi guidance: its arrows are in the sim's Community folder. Restart the sim to see them",
+                            "warn")
         if (guide := getattr(self.live, "guide", None) if self.live is not None else None) is not None:
             await guide.set_enabled(cfg.atc.taxi_guide)
         CLIPS.enabled = cfg.ui.replay_audio

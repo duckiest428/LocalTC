@@ -40,9 +40,10 @@ SAMPLE_RATE = 24000
 USER_AGENT = "LocalTC (+https://localtc.tech)"
 
 # The pools, best first (Kokoro's VOICES.md grades; D and below left out, but for a blend). "a+b" is a blend: 60 % a.
+# Never af_nicole: it whispers (made for headphones), and a pilot whispering on the radio sounded awful.
 POOLS: dict[tuple[str, str], tuple[str, ...]] = {
-    ("en-us", "F"): ("af_heart", "af_bella", "af_nicole", "af_aoede", "af_kore", "af_sarah", "af_nova", "af_alloy",
-                     "af_heart+af_nicole", "af_bella+af_kore"),
+    ("en-us", "F"): ("af_heart", "af_bella", "af_aoede", "af_kore", "af_sarah", "af_nova", "af_alloy",
+                     "af_heart+af_sarah", "af_bella+af_kore"),
     ("en-us", "M"): ("am_michael", "am_fenrir", "am_puck", "am_michael+am_fenrir", "am_puck+am_michael",
                      "am_fenrir+am_puck", "am_michael+am_echo", "am_fenrir+am_onyx", "am_puck+am_eric",
                      "am_michael+am_liam"),

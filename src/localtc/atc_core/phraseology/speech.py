@@ -36,7 +36,9 @@ def digits(text: str) -> str:
 
 
 def number_words(n: int) -> str:
-    """0-99 as words ("twenty-three")."""
+    """0-99 as words ("twenty-three"); 100 and more as ``miles`` says them (a SIGMET 120 miles ahead crashed ATC)."""
+    if n >= 100:
+        return miles(n)
     if n < 10:
         return ONES[n]
     if n < 20:

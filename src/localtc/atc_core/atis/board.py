@@ -42,6 +42,9 @@ from localtc.sim_api.geo import angle_diff
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 FLOW_DEG = 45.0  # a runway end this close to the traffic's heading is going the same way
 MAX_TAILWIND_KT = 5.0  # the runway in use changes once the tailwind on it is stronger than this
+# ... but with the traffic going one way, that way up to this: the real world's traffic (the live feed's) lands with
+# its real wind, and Dubai's sim wind of 7 knots behind 30L sent the A380 head-on at a 777 landing there
+FLOW_TAILWIND_KT = 10.0
 CROSSWIND_CAUTION_KT = 12.0
 MIN_UPDATE_S = 1800.0  # a special between the hourly observations at most this often (session time) ...
 RUNWAY_UPDATE_S = 300.0  # ... or this often when the runway in use changes
@@ -232,7 +235,7 @@ class AtisBoard:
         if flow is not None:
             against = frozenset(e.ident for e in geo.ends if angle_diff(e.heading_true, flow) > FLOW_DEG)
             with_flow = [e for e in geo.ends if e.ident not in closed | against
-                         and components(e, weather)[0] >= -MAX_TAILWIND_KT]
+                         and components(e, weather)[0] >= -FLOW_TAILWIND_KT]
             if with_flow:
                 closed = closed | against  # the rest of the choice as below, among the runways that way
         open_ends = [e for e in geo.ends if e.ident not in closed]

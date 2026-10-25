@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from test_crew_monitor import FakeEngine, crew, fly, own, said, systems
 
+from localtc.crew.personalities import ways_of
 from localtc.atc_core.diversion import Diversion
 from localtc.atc_core.readback.interpreter import PendingReadback
 from localtc.crew.watches import Turbulence, WindShear, _instruction
@@ -77,7 +78,7 @@ def test_moderate_turbulence_is_said_once_and_smooth_again_later():
         out += pm.observe(air(i + 0.2))
     words = said(out)
     assert sum("turbulence" in w for w in words) == 1
-    assert any(w in ("Smooth again.", "That's smoothed out.") for w in words)
+    assert any(w in ("Smooth again.", *ways_of("That's smoothed out.")) for w in words)
 
 
 def test_wind_shear_on_approach_but_not_thrust():

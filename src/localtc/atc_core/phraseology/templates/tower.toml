@@ -71,6 +71,16 @@ text = ["{callsign}, vacate {side} onto {exit}, contact {station} {frequency}.",
 readback = { required = ["frequency"] }
 pilot_readback = "Vacate {side} {exit}, {station} {frequency}, {callsign_short}."
 
+# The same at the end of the flight, with a welcome.
+[[template]]
+id = "tower.exit_vacate_welcome"
+controller = "tower"
+text = ["{callsign}, welcome to {city}, vacate {side} {exit}, contact {station} {frequency}.",
+        "{callsign}, welcome to {city}, turn {side} onto {exit} when able, contact {station} on {frequency}.",
+        "{callsign}, vacate {side} onto {exit}, contact {station} {frequency}, welcome to {city}."]
+readback = { required = ["frequency"] }
+pilot_readback = "Vacate {side} {exit}, {station} {frequency}, {callsign_short}."
+
 [[template]]
 id = "tower.exit_contact_ground"
 controller = "tower"

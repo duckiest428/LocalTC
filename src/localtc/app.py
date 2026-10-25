@@ -272,6 +272,7 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
 
         schedules = Schedules(default_keys(), Cache(data_dir() / "ops" / "schedules.json"))
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
+                               parked_fill=t.parked_fill,
                                atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
@@ -545,9 +546,8 @@ async def run_session(
                 from localtc.metar_data import AtisStore, MetarStore
 
                 # The departure's and destination's real METARs and ATIS, as [atc] atis_source uses them.
-                if cfg.atc.atis_source == "hybrid":
-                    atc_service.weather_source = MetarStore().get
                 if cfg.atc.atis_source in ("real", "hybrid"):
+                    atc_service.weather_source = MetarStore().get
                     atc_service.atis_source = AtisStore().get
             consumers.append(asyncio.create_task(atc_service.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft

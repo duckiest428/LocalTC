@@ -28,6 +28,10 @@ NEAR_STAND_M = 80.0
 TURN_RADIUS_M = 35.0
 ARC_STEP_DEG = 10.0
 ACCEL_KT_S, BRAKE_KT_S = 0.8, 2.0  # an airliner on the taxiway: gently up to speed, firmly but not abruptly down
+# Rolling out: braked to reach the exit at this speed, not down to a crawl at once and then 2 km of runway at 8 knots
+# (a 777 that landed the other way sat on Dubai's runway two minutes, with the user on final)
+EXIT_KT = 18.0
+ROLLOUT_DECEL_MS2 = 1.2
 
 
 @dataclass
@@ -58,7 +62,11 @@ class Follower:
         rest = ahead + sum(_metres(*a, *b) for a, b in zip(self.points[self.index:], self.points[self.index + 1:]))
         want = TAXI_KT
         if self.index <= self.exit_index:
-            want = max(TURN_KT, self.gs_kt - 3.0)  # still braking on the runway, then the turn off
+            # Still on the runway: braking to make the exit at its speed (v^2 = v_exit^2 + 2ad), then the turn off
+            to_exit = ahead + sum(_metres(*a, *b) for a, b in zip(self.points[self.index:self.exit_index],
+                                                                  self.points[self.index + 1:self.exit_index + 1]))
+            fits = math.sqrt((EXIT_KT * 0.5144) ** 2 + 2 * ROLLOUT_DECEL_MS2 * to_exit) / 0.5144
+            want = max(TURN_KT, min(self.gs_kt, fits))
         elif self._turning_ahead((lat, lon)) > TURN_DEG:
             want = TURN_KT
         if rest < NEAR_STAND_M:

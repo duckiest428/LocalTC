@@ -18,6 +18,10 @@ NOISE_WORDS = {
     "CLEARANCE", "DELIVERY", "DEL", "CTR", "CENTER", "CENTRE", "ATIS", "MEM", "MEMORIAL", "EXEC", "EXECUTIVE",
     "MIL", "AB", "AFB", "BASE",
 }
+# A sector of the facility, not its callsign ("DUBAI ARRIVALS NORTH" is Dubai Approach), after the name's first word
+# (North Las Vegas is a name)
+SECTOR_WORDS = {"NORTH", "SOUTH", "EAST", "WEST", "VFR", "IFR", "ARRIVAL", "ARRIVALS", "DEPARTURES", "FINAL", "DIRECTOR",
+                "LOW", "HIGH", "SECTOR", "POSITION"}
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,7 @@ def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
     suffix = SUFFIXES[controller]
     first = re.split(r"[-/(]", freq.name.upper())[0]
     words = [w for w in first.split() if w not in NOISE_WORDS and w != airport.icao.upper()]
+    words = words[:1] + [w for w in words[1:] if w not in SECTOR_WORDS]
     if words and words[0] in speech.FACILITY_CODES:  # "HCF": Honolulu Control Facility, "Honolulu Approach" on the radio
         words = [*speech.FACILITY_CODES[words[0]].split(), *words[1:]]
     if not words:
@@ -74,9 +79,22 @@ def _unabbreviate(words: list[str], airport: Airport) -> list[str]:
     return out
 
 
+def _named_first(freqs: list[Frequency], airport: Airport) -> list[Frequency]:
+    """The airport's own frequencies first: named after it, not a sector of it ("DUBAI" before "AIR NORTH", the
+    tower's north position) nor a neighbour's listed with it ("DUBAI ARRIVALS" before "MINHAD", the air base's)."""
+    own = {w for w in re.split(r"[-/(]", airport.name.upper())[0].split() if w not in NOISE_WORDS}
+
+    def rank(f: Frequency) -> tuple[bool, bool]:
+        words = set(re.split(r"[-/(]", f.name.upper())[0].split())
+        named = bool(words & own) or airport.icao.upper() in words or not (words - NOISE_WORDS)
+        return not named, bool(words & SECTOR_WORDS)
+
+    return sorted(freqs, key=rank)
+
+
 def _facility(airport: Airport, controller: str, kinds: tuple[str, ...]) -> Facility | None:
     for kind in kinds:  # first kind that exists wins; all its frequencies belong to the facility
-        freqs = [f for f in airport.frequencies if f.kind == kind]
+        freqs = _named_first([f for f in airport.frequencies if f.kind == kind], airport)
         if freqs:
             return Facility(
                 controller=controller,

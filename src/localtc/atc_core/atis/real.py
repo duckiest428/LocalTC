@@ -6,6 +6,10 @@ the time, the runways in use for landing and departing, the approach, and the we
 
 LocalTC then speaks it in its own ATIS's words (``broadcast``), with the real letter and runways: the published text
 is all abbreviations ("DEPG RWYS", "SIMUL CLSLY SPCD DPNDNT ILS RY 28R"), made for reading, not for a voice.
+
+Outside the US it's a VATSIM controller's ATIS (``source`` "vatsim"), in the words of Europe's and Asia's ATIS: "RWY IN
+USE FOR ARRIVALS 24 LEFT", "DEP AND ARR RWY 10", "ARRIVAL RUNWAY 23R", "RWY 27R 27L". The network's own notes ("submit
+your TOBT at vats.im") aren't the airport's and aren't read out.
 """
 
 import re
@@ -37,21 +41,26 @@ class RealAtis:
     # BACK ALL CONTROL INSTRUCTIONS"): LocalTC's ATIS reads them out in words, as the recording does.
     remarks: tuple[str, ...] = ()
     notices: tuple[tuple[str, str, str], ...] = ()  # what ATC works to in them (``operations.read_notices``)
+    source: str = ""  # "": the FAA's digital ATIS; "vatsim": a VATSIM controller's
 
 
-def parse(text: str, kind: str = "both") -> RealAtis | None:
-    """``text`` as published; None when it has no letter."""
+def parse(text: str, kind: str = "both", *, source: str = "", zulu: str = "") -> RealAtis | None:
+    """``text`` as published; None when it has no letter. ``zulu``: its time when the text has none."""
     upper = " ".join(text.upper().split())
-    m = re.search(r"\b(?:INFO(?:RMATION)?|ATIS)\s+([A-Z])\b(?:\s+(\d{4})Z?)?", upper)
+    # "24 LEFT" (a voice's words typed out): 24L
+    upper = re.sub(r"\b(\d{1,2}) (LEFT|RIGHT|CENTER|CENTRE)\b", lambda m: m.group(1) + m.group(2)[0], upper)
+    # "INFO K 0553Z", "ATIS INFORMATION J. 2150Z", "ATIS EDDV B"
+    m = re.search(r"\b(?:INFO(?:RMATION)?|ATIS)\s+(?:[A-Z]{4}\s+)?([A-Z])\b(?:\.?\s+(\d{4})Z?)?", upper)
     if m is None:
         return None
-    letter, zulu = m.group(1), m.group(2) or ""
-    # "LNDG/DEPG RWYS 4/8" (Honolulu), "LDG AND DEPG RWY 27": the same runways both ways
-    both_ways = _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARR)\s*(?:/|AND|&)\s*(?:DEPARTING|DEPG|DEP)")
+    letter, zulu = m.group(1), m.group(2) or zulu
+    # "LNDG/DEPG RWYS 4/8" (Honolulu), "LDG AND DEPG RWY 27", "DEP AND ARR RWY 10": the same runways both ways
+    both_ways = _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARR)\s*(?:/|AND|&)\s*(?:DEPARTING|DEPG|DEP)") \
+        or _runways_after(upper, r"(?:DEPARTING|DEPG|DEP)\s*(?:/|AND|&)\s*(?:LANDING|LDG|LNDG|ARR)")
     landing = both_ways or _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARRIVALS?|ARR)")
     departing = both_ways or _runways_after(upper, r"(?:DEPARTING|DEPG|DEPARTURES?|DEP|DEPS)(?:\s+(?:EXPC?|EXPECT))?")  # "DEPS EXP RWYS 22L 28R"
     approach = ""
-    approaches = re.findall(r"\b(ILS|RNAV|GPS|LOC|VOR|VISUAL)\b(?:\s+(?:Y|Z)\b)?(?:\s+(?:APCHS?|APPROACHES|APPROACH))?"
+    approaches = re.findall(r"\b(ILS|RNAV|GPS|LOC|VOR|VISUAL)\b(?:\s+(?:Y|Z)\b)?(?:\s+(?:APCHS?|APPROACHES|APPROACH|APP))?"
                             rf"(?:\s+(?:TO\s+)?{RUNWAY}\s*(\d{{1,2}}[LRC]?))?", upper)
     by_runway: dict[str, str] = {}
     offered: list[str] = []
@@ -63,22 +72,44 @@ def parse(text: str, kind: str = "both") -> RealAtis | None:
         elif kind_name not in offered:
             offered.append(kind_name)
     named = not landing  # no "LANDING RWYS ...": the approaches' runways are the ones landed on
+    in_use = _runways_after(upper, r"(?:IN USE|USING|ACTIVE)")
     if not landing and not departing:
-        both = _runways_after(upper, r"(?:IN USE|USING|ACTIVE)")
-        landing = departing = both
+        landing = departing = in_use or _first_runways(upper)
     if named:  # "EXPC ILS, RNAV, OR VISUAL APCH, SIMUL APCHS IN USE, RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L"
         listed = _runways_after(upper, r"(?:APCHS?|APPROACH(?:ES)?)(?:\s*,?\s*SIMUL\s+APCHS\s+IN\s+USE)?") if offered else ()
-        landing = tuple(dict.fromkeys((*listed, *by_runway)))
+        # (Only when it names them: Gatwick's "RWY IN USE 26L. ILS APPROACH TO BE EXPECTED" lands on 26L.)
+        landing = tuple(dict.fromkeys((*listed, *by_runway))) or landing or in_use
+    departing = departing or (in_use if kind != "arrival" else ())
     found = _remarks(upper)
     notices = tuple(dict.fromkeys(n for r in found for n in read_notices(r)))
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
                     approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()),
-                    remarks=found, notices=notices)
+                    remarks=found, notices=notices, source=source)
+
+
+def _first_runways(upper: str) -> tuple[str, ...]:
+    """Where it only lists them, "ATIS EDDV B METAR 252150 RWY 27R 27L DEPENDENT PARALLEL APPROACHES": the first runways
+    named (not in a notice: "RWY 16C CLSD")."""
+    for m in re.finditer(rf"\b{RUNWAY}\s*\d{{1,2}}[LRC]?\b", upper):
+        rest = upper[m.start():m.start() + 40]
+        if not re.search(r"\b(?:CLSD|CLOSED|U/S|WIP|SHORTENED)\b", rest):
+            return _runways_after(upper[m.start():], RUNWAY)
+    return ()
 
 
 # What starts a sentence LocalTC's ATIS already says its own way: the runways and approaches in use
 OWN_WORDS = re.compile(r"^(?:SIMUL|EXP|EXPC|EXPECT|LNDG|LDG|LANDING|DEPG|DEPARTING|DEPS?|ARR(?:IVALS?)?|ILS|RNAV|GPS|"
-                       r"VISUAL|VIS|APCHS?|RWYS? IN USE|RY|INST)\b")
+                       r"VISUAL|VIS|APCHS?|RWYS? IN USE|RY|INST|"
+                       # ... and the weather, the transition level and the runways in Europe's words (the observation
+                       # spelled out, "WIND 330/08KT. VISIBILITY MORE THAN 10 KILOMETERS. QNH 1023")
+                       r"(?:SURFACE )?WIND|VISIBILITY|CAVOK|CLOUDS?|TEMPERATURE|TEMP|DEW ?POINT|QNH|QFE|METAR|AUTO|TREND|"
+                       r"NOSIG|TEMPO|BECMG|TRANSITION|TRL|TL|"
+                       # (a runway's notice is the airport's news: "RWY 16C CLSD" is read out)
+                       r"(?:RWY|RUNWAY)S?(?!.*\b(?:CLSD|CLOSED|U/S|WIP|SHORTENED|AVBL|AVAILABLE|WET|CONTAMINATED)\b)|ARRIVAL|DEPARTURE|SINGLE "
+                       r"RUNWAY|DEPENDENT|INDEPENDENT|PARALLEL)\b")
+# The network's notes on a VATSIM controller's ATIS: not the airport's ("submit their TOBT at vats.im/vdgs")
+NETWORK = re.compile(r"VATS|DISCORD|HTTPS?\b|WWW\.|\.(?:COM|NET|ORG|IM)\b|\bTOBT\b|\bVDGS\b|\bCPDLC\b|\bHOPPIE\b|"
+                     r"\bDATALINK\b|\bPDC\b|\bCHARTS?\b|\bCONTROLLER\b|\bONLINE\b")
 
 
 def _remarks(upper: str) -> tuple[str, ...]:
@@ -87,8 +118,8 @@ def _remarks(upper: str) -> tuple[str, ...]:
     out = []
     for sentence in re.split(r"(?<=[A-Z0-9)])\.\s+|\.\.\.+\s*", upper):
         s = sentence.strip(" .")
-        if not s or re.search(r"\b(?:ATIS|INFO(?:RMATION)?)\s+[A-Z]\b", s) or re.search(r"\b\d{5}(?:G\d{2})?KT\b", s) \
-                or re.search(r"\bA\d{4}\b|\bQ\d{4}\b|\bRMK\b", s) or OWN_WORDS.match(s):
+        if not s or re.fullmatch(r"\d{4}Z", s) or re.search(r"\b(?:ATIS|INFO(?:RMATION)?)\s+(?:[A-Z]{4}\s+)?[A-Z]\b", s) or re.search(r"\b\d{5}(?:G\d{2})?KT\b", s) \
+                or re.search(r"\bA\d{4}\b|\bQ\d{4}\b|\bRMK\b", s) or OWN_WORDS.match(s) or NETWORK.search(s):
             continue
         out.append(s)
     return tuple(out)

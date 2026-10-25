@@ -155,7 +155,9 @@ PHONETIC_LETTERS = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "de
 FREQUENCY_CHANGE = re.compile(r"\b(?:request(?:ing)?|can we|could we|like|want|ready)\b.*\b(?:frequency change|switch(?:ing)?|"
                               r"change|radio|frequency|over|go|contact)\b(?: over)? to (?:the )?"
                               r"(tower|ground|approach|departure|center)\b", re.I)
-WEATHER_WORDS = {"weather", "wind", "winds", "metar", "conditions", "visibility", "altimeter", "temperature"}
+WEATHER_WORDS = {"weather", "wind", "winds", "metar", "conditions", "visibility", "altimeter", "temperature",
+                 "crosswind", "crosswinds", "headwind", "tailwind", "gusts", "gusting", "gusty"}
+CROSSWIND_WORDS = {"crosswind", "crosswinds", "headwind", "tailwind"}
 ON_COURSE_MIN_NM = 5.0  # a route fix closer than this is behind or abeam already: departure sends it to the next
 RESERVED_SQUAWKS = {"1200", "1202", "1255", "1276", "1277", "2000", "4000", "0000"}
 PTT_TIMEOUT_S = 30.0  # a PttPressed without a release can't silence ATC forever
@@ -213,7 +215,11 @@ TOWER_HANDOFF_M = 300.0
 REAL_ATIS_MAX_AGE_MIN = 90  # a real ATIS older than this (the feed stuck on an old one) isn't the airport's any more
 AT_RUNWAY_END_M = 250.0  # ... or this close to its threshold
 FINAL_OWNED_NM = 10.0  # this flight on final this close: tower isn't sending anybody else onto that runway
-EXIT_CALL_KT = 75.0  # landed and slowing through this: tower says which way off the runway
+EXIT_CALL_KT = 100.0  # landed and slowing through this: tower says which way off the runway (at 75 an A380 had
+# turned off before it was said)
+WELCOME_SHARE = 0.5  # how often tower's way off the runway starts "welcome to ..."
+EXIT_STOP_S = 8.0  # ... an exit at least this many seconds of the speed ahead (the room to slow down for it), ...
+EXIT_STOP_MAX_M = 900.0  # ... or this far, whichever is less
 RUNWAY_LOAD_S = 1200.0  # the flights given a runway in the last 20 minutes count against it when spreading them out
 MOVING_KT = 2.0  # traffic seen going this fast has somebody flying it
 AIRLINE_CALLSIGN = re.compile(r"[A-Z]{3}\d{1,4}[A-Z]{0,2}")  # "SKW5775": an AI flight, even before it moves
@@ -360,6 +366,7 @@ HEADING_OFF_S = 20.0  # ... for this long: "check heading"
 HEADING_CHECKS = 2  # said this often for one heading, then left
 ALTITUDE_CHECKS = 2  # "check altitude" this many times for one assigned altitude, then something else
 MAX_OFFERED_FT = 41000  # the highest level ATC gives a flight asking for higher
+RUNWAY_CHANGE_MIN_NM = 25.0  # the destination's runway in use changed: said to an arrival further out than this
 RUNWAY_CHANGE_TAILWIND_KT = 3.0  # a new runway in use while taxiing out: a new route if the old one has this
 DEPARTURE_LOW_FT = 5000  # below this and within DEPARTURE_LOW_NM departure keeps the flight, whatever its outline
 DEPARTURE_LOW_NM = 15.0
@@ -381,6 +388,10 @@ NO_GREETING = ("say_again", "how_read", "read_back", "negative", "confirm", "tra
 TOWER_SWITCH_S = 60.0  # a flight sent to tower that read it back has this long to switch before being sent around
 ESTABLISHED_M = 600.0  # this close to a final's centreline, pointing down it, is established on it
 SIDESTEP_NM = 2.0  # lined up on a parallel runway closer in than this: that's the runway it's landing on
+# Starting down without a clearance this long or more before the top of descent: not the arrival begun early but
+# an aircraft leaving its level ("check altitude"); an A380 gliding down with its engines out, 270 nm from Dubai,
+# was told "descend via the VUTE3D"
+EARLY_DESCENT_MIN = 20.0
 DESCENT_ASK_MIN = 15.0  # a pilot asking for the descent this long before the top of it gets the descent clearance
 SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre for where the flight is
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
@@ -517,6 +528,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._paused_at: float | None = None  # when the sim was paused (its pause is no silence on the frequency)
         self._departure_override: str | None = None  # a departure runway the pilot asked for
         self._closed_pieces: dict[tuple, frozenset[int]] = {}  # (airport, closed segments): the taxi paths they close
+        self._arrival_landing: tuple[str, ...] | None = None  # the destination ATIS's landing runways, last seen
         self._own_runway: dict[tuple[str, bool], str] = {}  # (airport, departing): the runway worked out for this flight
         # (airport, callsign, landing): the runway another flight was given and when (``runway_for``)
         self._others_runway: dict[tuple[str, str, bool], tuple[str, float]] = {}
@@ -694,10 +706,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if event.airport.upper() == (self.state.flight.destination or "").upper():
                 self._star_legs[event.name.upper()] = event.legs  # its published speeds: approach's work to them
         elif isinstance(event, AtisReport):
-            if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(event.text, event.kind)) is not None:
+            if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(
+                    event.text, event.kind, source=event.source, zulu=event.zulu)) is not None:
                 self._real_atis[(event.icao, event.kind)] = parsed
-        elif isinstance(event, WeatherReport) and self.cfg.atis_source != "hybrid":
-            pass  # the METAR is used in hybrid only ([atc] atis_source)
+        elif isinstance(event, WeatherReport) and self.cfg.atis_source not in ("real", "hybrid"):
+            pass  # the METAR is the real world's: not with the simulator's ATIS ([atc] atis_source)
         elif isinstance(event, WeatherReport):
             geo = self.geometry(event.icao)
             self.weather.report(event.icao, from_report(event, geo.airport.magvar if geo is not None else 0.0, event.t))
@@ -1003,8 +1016,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if own is not None and (own.on_ground or geo.distance_nm(own.lat, own.lon) <= NEARBY_NM
                                 or not self.cfg.destination_weather):
             return select_runway(geo, own.wind_dir_true, own.wind_kt)
-        # Far from it, with no weather for it: the calm-wind runway (an ILS, the longest), never the wind where the
-        # aircraft is. Joplin's runway was chosen from the wind at FL300 ("expect RNAV runway 31").
+        # Far from it, with no weather for it: the way its traffic is landing and taking off, else the calm-wind runway
+        # (an ILS, the longest), never the wind where the aircraft is. Joplin's runway was chosen from the wind at
+        # FL300 ("expect RNAV runway 31"); Dubai's calm-wind 12R had the live traffic landing on 30L head-on.
+        if (flow := self.atis.flows.get(icao or "")) is not None:
+            return select_runway(geo, flow, 10.0)
         return select_runway(geo, 0.0, 0.0)
 
     def runway_for(self, icao: str, *, landing: bool, aircraft_type: str = "", lat: float | None = None,
@@ -1050,8 +1066,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         from). None: nothing known of it.
 
         - "sim": the simulator's weather, as LocalTC observes it.
-        - "real": the airport's real ATIS (its letter, runways and weather) where it has one; else the simulator's.
-        - "hybrid": the real ATIS, else LocalTC's own from the real METAR, else from the simulator.
+        - "real" (and "hybrid", the same): the airport's real ATIS (its letter, runways and weather; outside the US a
+          VATSIM controller's, with the real METAR's weather), else LocalTC's own from the real METAR, else from the
+          simulator. ("real" once fell back on the sim's weather straight away: Dubai's runway came from a wind
+          sampled 270 miles out, and the A380 landed on 12R with a tailwind against the real traffic on 30L.)
 
         A real report wins over the sim's weather however old it is: the sim's only where there's no real one at all
         (Montreal's ATIS was the sim's, its dew point not the METAR's, because the sim had been seen there lately)."""
@@ -1065,12 +1083,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             age = real_atis.age_minutes(real.zulu, own.zulu_s) if real is not None else None
             if age is not None and age > REAL_ATIS_MAX_AGE_MIN:
                 real = None  # stale: the METAR's or the sim's weather instead (an ATIS is issued at least hourly)
+        if real is not None and (real.weather is None or real.source == "vatsim") and icao in self.weather.reports:
+            # A VATSIM controller's ATIS (or one with no observation in it): its runways, the real METAR's weather
+            label = f"{'VATSIM' if real.source == 'vatsim' else 'real'} ATIS"
+            return self.weather.surface(icao, airports, report_first=True), real, (label, None, real.zulu)
         if real is not None and real.weather is not None:
             weather = with_magvar(real.weather, geo.airport.magvar)
             weather = replace(weather, t=own.t, elevation_ft=geo.airport.elev_ft,
                               altimeter_inhg=weather.altimeter_inhg or self.weather.altimeter_at(icao))
-            return weather, real, ("real ATIS", None, real.zulu)
-        if mode == "hybrid" and icao in self.weather.reports:
+            return weather, real, (f"{'VATSIM' if real.source == 'vatsim' else 'real'} ATIS", None, real.zulu)
+        if mode in ("real", "hybrid") and icao in self.weather.reports:
             report = self._reports.get(icao)
             return self.weather.surface(icao, airports, report_first=True), None, \
                 ("METAR", None, (report.observed if report else "").rstrip("Z"))
@@ -1390,6 +1412,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._taxi_in_route = None
             st.clearances.pop("taxi_in", None)
             self._taxi_in(t, st.comms.tuned, own, busy=taken)
+        elif phase in (P.CRUISE, P.ARRIVAL) and tuned in ("center", "approach") and st.pending is None \
+                and st.assignments.approach and st.assignments.arrival_runway and "approach" not in st.clearances \
+                and not self._vectors_named and not self._going_around \
+                and (geo := self.geometry(st.flight.destination)) is not None \
+                and geo.distance_nm(own.lat, own.lon) > RUNWAY_CHANGE_MIN_NM \
+                and (now_end := self._arrival_runway_changed(own)) is not None \
+                and once(f"arrival_runway_change:{now_end.ident}"):
+            # The destination's runway in use changed (a new ATIS, the traffic turned round) before the approach
+            # clearance: the new one, said. Dubai's ATIS went from 30L to 12R and back with the A380 kept on 12R, to a
+            # tailwind and a go-around for the traffic landing the other way.
+            if (approach := self._set_arrival(now_end.ident, None, own)) is not None:
+                self._schedule(t, "common.runway_change", {"approach": approach}, st.comms.tuned)
         elif phase is P.TAXI_OUT and tuned == "ground" and "taxi" in st.clearances and "takeoff" not in st.clearances \
                 and st.pending is None and not self._departure_override \
                 and (info := self.current_atis(st.flight.origin)) is not None \
@@ -1451,7 +1485,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure") and self._holding():
             pass  # in the hold: the descent and approach come after it
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
-            if "descend" not in st.flags and (plan := self._arrival_plan(own)) is not None:
+            if "descend" not in st.flags and self._descent_due(own, lead_min=EARLY_DESCENT_MIN) \
+                    and (plan := self._arrival_plan(own)) is not None:
                 self._clear_descent(t, own, st.comms.tuned, plan, late=True)  # started down (or arrived) before being cleared
             elif (
                 self._arriving_in_area(own)
@@ -1529,13 +1564,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if geo is not None and own.on_runway:  # still on it: which way off, by which taxiway
             landed = geo.end(st.assignments.arrival_runway) if st.assignments.arrival_runway else None
             heading = landed.heading_true if landed is not None else own.hdg_true  # (not mid-turn off it)
-            # (Still rolling at 70 knots: an exit it has the room to slow down for, about 300 m on)
+            # (Still rolling at 100 knots: an exit it has the room to slow down for, 800 m on)
             way_off = self._taxi_graph(geo).runway_exit(own.lat, own.lon, heading, toward=self._where_to_park(geo),
-                                                        min_ahead_m=min(400.0, own.gs_kt * 4.0))
+                                                        min_ahead_m=min(EXIT_STOP_MAX_M, own.gs_kt * EXIT_STOP_S))
         if way_off is not None:
-            self._schedule(t, "tower.exit_vacate", {"side": way_off[0], "exit": way_off[1],
-                                                    "station": ground.station, "frequency": ground.mhz},
-                           st.comms.tuned, handoff_to=ground)
+            # "Welcome to Dubai" now and then, at the end of the flight: the city as its stations are named
+            city = ground.station.rsplit(" ", 1)[0] if " " in ground.station else ground.station
+            welcome = st.flight.destination == geo.icao and self._random().random() < WELCOME_SHARE
+            self._schedule(t, "tower.exit_vacate_welcome" if welcome else "tower.exit_vacate",
+                           {"side": way_off[0], "exit": way_off[1], "station": ground.station, "frequency": ground.mhz,
+                            "city": city}, st.comms.tuned, handoff_to=ground)
         else:
             self._handoff(t, "tower.exit_contact_ground", st.comms.tuned, ground)
 
@@ -1998,6 +2036,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         last_pilot = st.comms.last_pilot_t if st.comms.last_pilot_t is not None else -math.inf
         last_atc = st.comms.last_atc_t if st.comms.last_atc_t is not None else -math.inf
         pending = st.pending
+        if pending is not None and own.on_ground and pending.instruction_id.startswith(("tower.go_around", "tower.land")):
+            # Down already: a go-around isn't asked after or said again on the rollout (Dubai's tower repeated "go
+            # around" to an A380 touching down; the rollout's end, where it's dropped anyway, was 28 seconds on)
+            st.pending = None
+            return []
         if pending is not None and last_pilot < pending.issued_t and t - last_atc >= SILENT_PILOT_S \
                 and pending.required:
             # (Nothing required, as "readback correct, contact ground when ready": no "did you copy?" for it.)
@@ -2147,7 +2190,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                         self._stopped_in_the_way(own, target, geo):
                     self._cautioned.add(oid)
                     self._gave_way_t = t
-                    kind = self._aircraft(target) or Phrase("an aircraft", "an aircraft")
+                    kind = self._aircraft(target)
+                    kind = Phrase(_article(kind.display), _article(kind.spoken)) if kind is not None \
+                        else Phrase("an aircraft", "an aircraft")
                     self._schedule(t, "ground.stopped_ahead", {"message": kind}, tuned, delay=False,
                                    expects_readback=False)
                     return True
@@ -2636,7 +2681,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return False
         if self._via_floor is not None and assigned == self._via_floor:
             return False  # descending via the arrival: its own restrictions set the altitudes, not one number
-        if P(st.phase) is P.ARRIVAL and "descend" not in st.flags:
+        if P(st.phase) is P.ARRIVAL and "descend" not in st.flags and self._descent_due(own, lead_min=EARLY_DESCENT_MIN):
             return False  # starting down with the descent still to come: the answer is the descent, not "check"
         off = abs(own.alt_indicated_ft - assigned)
         if off <= 200:
@@ -2954,6 +2999,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             st.pending = None
             st.clearances.pop("taxi_in", None)
             self._taxi_in(t, facility, own, requested=gate)
+            return out
+        if pending is not None and pending.instruction_id.startswith(TAXI_IN_IDS) and st.pending is pending \
+                and stands.requested(normalize(ev.text)) is None \
+                and (area := stands.requested_area(normalize(ev.text))) is not None:
+            # "Can we get a Bravo, an Alpha or a Hotel gate, not the Sierra gates": a gate there, not "negative" and
+            # the same route again (it was taken for a wrong readback of the taxi to S5).
+            st.pending = None
+            st.clearances.pop("taxi_in", None)
+            self._taxi_in(t, facility, own, area=area)
             return out
         if pending is not None and interp.kind == "request" and interp.intent not in (None, "acknowledge", "say_again",
                                                                                    "question", "emergency") \
@@ -3466,7 +3520,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # a readback the copilot had given a few seconds before, then "how do you read?".
             self._schedule(t, again.instruction_id, again.slots, facility, expects_readback=False)
         elif intent in ("request_taxi_parking", "clear_of_runway"):
-            self._taxi_in(t, facility, own, requested=stands.requested(normalize(interp.text or "")))
+            self._taxi_in(t, facility, own, requested=stands.requested(normalize(interp.text or "")),
+                          area=stands.requested_area(normalize(interp.text or "")))
         elif intent == "say_again":
             last = st.last_issued
             if last is not None and last.facility.controller == facility.controller:
@@ -3936,6 +3991,22 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         approved = self._random().random() < 0.85
         self._schedule(t, "tower.turn_approved" if approved else "tower.turn_unable", {"turn": turn}, facility,
                        expects_readback=False)
+
+    def _arrival_runway_changed(self, own: OwnshipState):
+        """The runway to give now, when the destination's ATIS has changed its landing runways since the arrival's was
+        given (or there was none then: the runway was a guess) and that one isn't among them any more; else None. Not
+        just a runway other than the ATIS's: a STAR down a final of its own (Indianapolis's GIIBS4 to 32, with 05L in
+        use) is flown to its runway."""
+        st = self.state
+        info = self.current_atis(st.flight.destination)
+        if info is None or info.operations is None:
+            return None
+        landing = tuple(info.operations.landing)
+        seen, self._arrival_landing = self._arrival_landing, landing
+        if seen == landing or st.assignments.arrival_runway in landing:
+            return None
+        end = self._runway_end(st.flight.destination, own)
+        return end if end is not None and end.ident != st.assignments.arrival_runway else None
 
     def _tailwind_on(self, icao: str | None, runway: str) -> bool:
         """More than a breath of tailwind on that runway now: a change of runway in use worth a new taxi route (with
@@ -4616,6 +4687,13 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # The destination's (or the airport asked about): its METAR, or the sim's own sampled there. Without it
             # the model had only the wind where the aircraft was, and said "information not available".
             facts["weather there"] = report.display
+            weather = self.weather.surface(elsewhere, self.tracker.context_builder.airports)
+            end = self._runway_end(elsewhere, own) if words & CROSSWIND_WORDS and own is not None else None
+            if end is not None and weather is not None:
+                # "How much crosswind is in Dubai right now?" over Kuwait: the runway expected there, worked out
+                head, across = components(end, weather)
+                facts[f"wind on runway {end.ident} there"] = (f"{round(across)} knots crosswind, "
+                                                               f"{round(abs(head))} knots {'head' if head >= 0 else 'tail'}wind")
         info = self.current_atis(st.flight.destination if arriving else st.flight.origin)
         if info is not None and (near or arriving):
             facts["ATIS"] = f"information {info.letter}"
@@ -5193,16 +5271,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         return gate if stands.occupied(gate, geo, self._traffic.values()) else None
 
     def _taxi_in(self, t: float, facility: Facility, own: OwnshipState | None, *, requested: str | None = None,
-                 note: Phrase | None = None, busy: "stands.Gate | None" = None) -> None:
+                 note: Phrase | None = None, busy: "stands.Gate | None" = None,
+                 area: tuple[frozenset[str], frozenset[str]] | None = None) -> None:
         """The taxi to the gate. ``requested``: the gate the pilot asked for ("we'd like gate Echo 9"): theirs if the
-        scenery has it; if it doesn't, parking, never a gate number made up in its place (Las Vegas's "Gate 88")."""
+        scenery has it; if it doesn't, parking, never a gate number made up in its place (Las Vegas's "Gate 88").
+        ``area``: the gates' letters asked for, and not wanted (``stands.requested_area``)."""
         ctx = self.tracker.context
         geo = ctx.airport
         a = self.state.assignments
         # Asked again, ATC repeats the route it gave, it doesn't invent a new one: the search starts from
         # where the aircraft is, so a few metres of rollout would otherwise pick different exits each time. Only
         # the route in: the one out was at the other airport (Zurich was given Montreal's "A, F, B4, B").
-        taxiways = self._taxi_in_route if "taxi_in" in self.state.clearances and requested is None else None
+        taxiways = self._taxi_in_route if "taxi_in" in self.state.clearances and requested is None and area is None \
+            else None
         if geo is not None:
             geo = self._with_taxiway_names(geo)
         gate = None
@@ -5227,7 +5308,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # A gate always: the one asked for if it's there and free, else the one already given (still free), else
             # one ATC picks.
             given = None
-            if geo is not None and a.gate_index is not None and requested is None and a.gate_index not in self._gates_taken:
+            if geo is not None and a.gate_index is not None and requested is None and a.gate_index not in self._gates_taken \
+                    and not (area is not None and self._gate_outside(geo, a.gate_index, area)):
                 given = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
                 if given is not None and stands.occupied(given, geo, self._traffic.values()):
                     busy = given
@@ -5236,7 +5318,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # A gate given and now taken: the free one nearest to it (the same terminal, a short way further), with
             # an apology first. Gate 236 across the airfield, "Gate 403 is occupied" tacked on the end, sent the
             # flight back the way it came when 402 was free next door.
-            gate = given or self._gate(geo, near=busy)
+            gate = given or self._gate(geo, near=busy, area=area)
             if busy is not None:
                 lead = Phrase(f"sorry, {busy.display} is occupied", f"sorry, {busy.display} is occupied")
         ramp = False  # to the GA ramp
@@ -5291,7 +5373,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         else:
             self._schedule(t, "ground.taxi_in_no_route", {}, facility, clearance="taxi_in")
 
-    def _gate(self, geo: AirportGeometry | None, near: "stands.Gate | None" = None) -> "stands.Gate | None":
+    def _gate_outside(self, geo: AirportGeometry, index: int, area: tuple[frozenset[str], frozenset[str]]) -> bool:
+        """The gate given isn't in the area asked for (or is in the one not wanted)."""
+        gate = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == index), None)
+        letter = "".join(c for c in gate.label if c.isalpha())[:1].upper() if gate is not None else ""
+        wanted, unwanted = area
+        return letter in unwanted or bool(wanted and letter not in wanted)
+
+    def _gate(self, geo: AirportGeometry | None, near: "stands.Gate | None" = None,
+              area: tuple[frozenset[str], frozenset[str]] | None = None) -> "stands.Gate | None":
         """A free gate at the destination for an airline flight. GA is sent to parking, not a numbered stand:
         "taxi to parking" is what a GA pilot hears, and the nearest ramp is where they go."""
         callsign = self._callsign()
@@ -5302,7 +5392,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                              traffic=self._traffic.values(), seed=f"{callsign.ident}{self.cfg.seed}",
                              exclude=self._gates_taken, near=(near.spot.lat, near.spot.lon) if near is not None else None,
                              real=self._real_gates(geo.icao), operator=callsign.ident[:3] if callsign.is_airline else "",
-                             international=real_gates.is_international(flight.origin, flight.destination))
+                             international=real_gates.is_international(flight.origin, flight.destination), area=area)
 
     def _with_taxiway_names(self, geo: AirportGeometry) -> AirportGeometry:
         """The airport with names for its taxiways where the scenery has none (Zurich's: "taxi to the apron" was all
@@ -5547,8 +5637,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if item.on_issue is not None:
             item.on_issue()
         return AtcTransmission(
-            t=t, station=facility.station, frequency_mhz=facility.mhz, text=rendered.text, controller=facility.controller,
-            instruction_id=item.instruction_id, spoken=rendered.spoken,
+            t=t, station=facility.station, frequency_mhz=facility.mhz, text=_stops(rendered.text),
+            controller=facility.controller, instruction_id=item.instruction_id, spoken=_stops(rendered.spoken),
             worded_by="model" if item.worded_by == "model" else "template",
             manner=self._manner(facility), locale=self._locale(facility),
         )
@@ -6027,6 +6117,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         for key, value in values.items():
             if key == "heading" and value is not None:
                 self._heading_given = (self._t, value, 0)  # (when, heading, times checked)
+            if key == "arrival_runway" and value != self.state.assignments.arrival_runway:
+                # What the destination's ATIS was landing on when it was given (() none: the runway was a guess)
+                info = self.current_atis(self.state.flight.destination)
+                self._arrival_landing = tuple(info.operations.landing) if info is not None and info.operations else ()
             if key == "altitude_ft" and value is not None:
                 # Given again, it's to be reached again: 11,000 reached on the climb, then given as the descent
                 # (at pilot's discretion), had "check altitude" said at the top of the descent.
@@ -6135,3 +6229,13 @@ def _runways_cross(a, b) -> bool:
 
     return side(ax, ay, bx, by, cx, cy) * side(ax, ay, bx, by, dx, dy) < 0 \
         and side(cx, cy, dx, dy, ax, ay) * side(cx, cy, dx, dy, bx, by) < 0
+
+
+def _stops(text: str) -> str:
+    """One full stop at the end, never after a question ("radar contact, how do you read?." from the model's words)."""
+    return re.sub(r"([?!])\.+$", r"\1", re.sub(r"\.{2,}$", ".", text)) if text else text
+
+
+def _article(kind: str) -> str:
+    """"a Boeing 777", "an Airbus A320", "an Embraer 170" ("there's Boeing 777 stopped ahead")."""
+    return f"{'an' if kind[:1].upper() in 'AEIOU' else 'a'} {kind}" if kind else kind

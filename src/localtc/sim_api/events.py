@@ -193,14 +193,16 @@ class WeatherReport(Event, tag="weather_report"):
 
 
 class AtisReport(Event, tag="atis_report"):
-    """An airport's real ATIS, as published (the FAA's digital ATIS, from atis.info): used with ``[atc] atis_source``
-    "real" or "hybrid". Recorded, so a replay hears the ATIS the flight had."""
+    """An airport's real ATIS, as published (the FAA's digital ATIS, from atis.info; elsewhere a VATSIM controller's,
+    when one is on): used with ``[atc] atis_source`` "real" or "hybrid". Recorded, so a replay hears the ATIS the
+    flight had."""
 
     icao: str
     letter: str
     text: str  # as published
     kind: str = "both"  # both, arrival, departure
     zulu: str = ""  # "1756"
+    source: str = ""  # "": the FAA's digital ATIS; "vatsim": a VATSIM controller's
 
 
 class NoticeItem(msgspec.Struct, frozen=True, kw_only=True):

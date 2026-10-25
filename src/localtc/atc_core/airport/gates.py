@@ -97,7 +97,8 @@ def occupied(gate: Gate, geometry: AirportGeometry, traffic: Iterable[TrafficTar
 
 def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traffic: Iterable[TrafficTarget],
            seed: str, real: GateData | None = None, international: bool = False,
-           exclude: Iterable[int] = (), near: tuple[float, float] | None = None, operator: str = "") -> Gate | None:
+           exclude: Iterable[int] = (), near: tuple[float, float] | None = None, operator: str = "",
+           area: tuple[frozenset[str], frozenset[str]] | None = None) -> Gate | None:
     """A free stand for this aircraft, picked the same way every time the same flight replays. An airliner
     with no free gate of its size gets any free gate; if the whole field is full, nothing is assigned and
     ground just says "taxi to parking". With the real gates: a stand with a real gate's name over one the
@@ -105,7 +106,8 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
     ``near``: (lat, lon) of a gate that turned out taken: the free one nearest to it instead. A stand the aircraft's
     wings don't fit (the sim's radius against its wingspan) isn't given while one that fits is free (an A330 sent to
     a stand too small for it). ``operator``: the airline's ICAO code ("BAW"): its own aircraft parked around say where
-    its terminal is, and a stand near them is picked."""
+    its terminal is, and a stand near them is picked. ``area``: the gates' letters the pilot asked for and the ones
+    they didn't want ("a Bravo or an Alpha gate, not the Sierra gates"): one of those when one's free."""
     traffic = list(traffic)
     heavy = airline and is_heavy(aircraft_type)
     span = wingspan_m(aircraft_type)
@@ -117,11 +119,24 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
         choices = [g for g in free if g.word == "gate"]
     if span:
         fitting = [g for g in choices if fits_stand(g.spot.radius_m, span)]
+        if not fitting and choices and heavy:
+            # No heavy gate fits by the scenery's radius (all Dubai's say 32 m, its A380 gates among them): the biggest
+            # of them, not a remote stand on a cargo ramp that does (an A380 of Emirates was sent to S5).
+            top = max(g.spot.radius_m for g in choices)
+            fitting = [g for g in choices if g.spot.radius_m >= top - 2.0]
         if not fitting and airline:
             fitting = [g for g in free if g.word == "gate" and fits_stand(g.spot.radius_m, span)]
         choices = fitting or choices
     if not choices:
         return None
+    if area is not None:
+        wanted, unwanted = area
+        asked = [g for g in choices if _letter(g) not in unwanted and (not wanted or _letter(g) in wanted)]
+        if not asked and wanted:  # none of them fits the scenery's radius: the biggest free gates there
+            asked = [g for g in free if g.word == "gate" and _letter(g) in wanted]
+            top = max((g.spot.radius_m for g in asked), default=0.0)
+            asked = [g for g in asked if g.spot.radius_m >= top - 2.0]
+        choices = asked or choices
     usual = [g for g in choices if not odd_number(g, everything)]
     choices = usual or choices
     if airline:  # a real gate (E9), not a stand the real gates didn't name (the scenery's "88")
@@ -133,7 +148,7 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
         there = geometry.xy(*near)
         return min(choices, key=lambda g: (math.dist(there, geometry.xy(g.spot.lat, g.spot.lon)), g.index))
     own = [geometry.xy(t.lat, t.lon) for t in traffic if operator and t.on_ground and t.gs_kt < PARKED_KT
-           and (t.atc_id or "").upper().startswith(operator.upper())]
+           and ((t.atc_id or "").upper().startswith(operator.upper()) or (t.airline or "").upper() == operator.upper())]
     if own:
         # The airline's terminal: the stands nearest its own parked aircraft (British Airways at Haneda's third
         # terminal, not the second's gate 58).
@@ -142,6 +157,29 @@ def assign(geometry: AirportGeometry, *, airline: bool, aircraft_type: str, traf
             return min(math.dist(xy, o) for o in own)
         choices = sorted(choices, key=apart)[:OWN_TERMINAL_PICK]
     return random.Random(zlib.crc32(f"gate{geometry.airport.icao}{seed}".encode())).choice(choices)
+
+
+def _letter(gate: Gate) -> str:
+    return "".join(c for c in gate.label if c.isalpha())[:1].upper()
+
+
+def requested_area(tokens: list[Token]) -> tuple[frozenset[str], frozenset[str]] | None:
+    """The gates' letters asked for ("can we get a Bravo gate, an Alpha gate or a Hotel gate, but not the Sierra
+    gates", "a gate in the B concourse"), and the ones not wanted: (wanted, unwanted); None when it names none.
+    "a gate" is the article: a letter A is one only after "an", "the" or "in" ("an Alpha gate")."""
+    wanted: set[str] = set()
+    unwanted: set[str] = set()
+    for i, token in enumerate(tokens):
+        if token.text not in ("gate", "gates", "concourse", "pier", "terminal") or i == 0:
+            continue
+        letter = tokens[i - 1].text
+        if len(letter) != 1 or not letter.isalpha():
+            continue
+        if letter == "a" and (i < 2 or tokens[i - 2].text not in ("an", "the", "in")):
+            continue
+        before = {t.text for t in tokens[max(0, i - 4):i - 1]}
+        (unwanted if before & {"not", "no", "avoid", "except"} else wanted).add(letter.upper())
+    return (frozenset(wanted), frozenset(unwanted)) if wanted or unwanted else None
 
 
 def odd_number(gate: Gate, everything: list[Gate]) -> bool:

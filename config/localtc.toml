@@ -37,9 +37,10 @@ strict_callsign = false       # true: a readback without the callsign is incompl
 transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?"
 notams = true                 # notices on the ATIS (a taxiway closed, an ILS out, birds ...); ATC works to them
-atis_source = "hybrid"        # the ATIS: "hybrid" (real ATIS, else real METAR, else the sim), "real" (real ATIS where
-                              # there is one, else the sim), "sim" (the sim's weather only). The sim's weather only
-                              # where there's no real report at all, however old the real one is
+atis_source = "hybrid"        # the ATIS: "hybrid" (or "real", the same: the real ATIS, the FAA's in the US and a VATSIM
+                              # controller's elsewhere when one is on; else LocalTC's from the real METAR; else the
+                              # sim), "sim" (the sim's weather only). The sim's weather only where there's no real
+                              # report at all, however old the real one is
 chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)
 enforce_fpln_runways = false  # true: ATC gives the flight plan's runways; false: the runways in use (ATIS, else wind)
 real_gates = true             # gates by their real names (E9), international flights to international gates: from OpenStreetMap, cached
@@ -91,7 +92,9 @@ enabled = false               # on: set MSFS's own air traffic and parked aircra
 radius_nm = 40.0              # the real flights within this of you
 max_live = 30                 # never more of them at once (the nearest)
 parked = true                 # aircraft parked on the cargo and GA ramps of the airport you're on the ground at
-max_parked = 40               # more costs frames (each model loads its textures)
+max_parked = 60               # more costs frames (each model loads its textures)
+parked_fill = "realistic"     # "realistic": as full as the airport is at that hour (its size, the local time, how
+                              # busy the live traffic shows it), up to max_parked; "fixed": max_parked of them
 fill_gates = false            # true: the gates filled with made-up aircraft too (false: only the real ones)
 live_delay_s = 30.0           # each real flight shown this far behind, so it always moves between known positions
 atc_control = true            # real flights sent around, held short or stopped to give way when they'd be in your way

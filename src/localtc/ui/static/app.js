@@ -1177,7 +1177,7 @@ function trafficStatus(s) {
 function personalityRow(list, current, idPrefix = "s-crew") {
   const cur = current || "neutral";
   return `<div class="row"><label>Copilot's personality<select id="${idPrefix}-personality">${(list || []).map((p) =>
-    `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${p.sex === "F" ? "she" : "he"})` : ""}</option>`).join("")}</select>
+    `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${p.sex === "F" ? "she" : "he"})` : ""}${p.brief ? ` · ${esc(p.brief)}` : ""}</option>`).join("")}</select>
     <span class="hint" id="${idPrefix}-persona-hint">${personalityHint(list, cur)}</span></label>
     <div><button type="button" class="btn small" id="${idPrefix}-preview">&#9654; Preview</button></div></div>`;
 }
@@ -1565,12 +1565,12 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-fpln-rwy" ${st.atc.enforce_fpln_runways ? "checked" : ""}> Enforce FPLN runway assignments: ATC gives the flight plan's departure and arrival runways. Off: the runways in use, from the ATIS</label>
         <label class="check-row"><input type="checkbox" id="s-real-gates" ${st.atc.real_gates !== false ? "checked" : ""}> Real gate names: gates as the airport numbers them (E9, not the scenery's 88), and international flights to international gates. Downloaded from OpenStreetMap and kept; off: the scenery's names</label>
         <div class="row"><label>ATIS source<select id="s-atis-source">${[
-            ["hybrid", "Hybrid: real-world first (the airport's real ATIS, else its real METAR), the simulator's otherwise (recommended)"],
-            ["real", "Real-world ATIS when the airport has one (US airports); the simulator's otherwise"],
+            ["hybrid", "Real world: the airport's real ATIS, else LocalTC's from its real METAR, the simulator's only where there's neither (recommended)"],
             ["sim", "Simulator only: LocalTC's ATIS from the sim's weather, nothing downloaded"],
-          ].map(([v, t]) => `<option value="${v}" ${(st.atc.atis_source || "hybrid") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">The real ATIS is the FAA's digital ATIS (atis.info) and the METAR is aviationweather.gov's; only the
-            airport codes are sent. Once you're at or near an airport, the weather the sim has there wins over any real-world
+          ].map(([v, t]) => `<option value="${v}" ${({real: "hybrid"}[st.atc.atis_source] || st.atc.atis_source || "hybrid") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">The real ATIS is the FAA's digital ATIS (atis.info) in the US; elsewhere it's the ATIS of a VATSIM
+            controller on at the airport, when there is one (its runways and approaches; the weather is the real METAR's).
+            The METAR is aviationweather.gov's; only the airport codes are sent. Once you're at or near an airport, the weather the sim has there wins over any real-world
             report, so ATC never gives you conditions you aren't flying in; the ATIS says when the two differ. Each ATIS shows
             where it's from and how old it is. Takes effect on the next flight.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-range" ${st.atc.radio_range ? "checked" : ""}> Radio range: an airport's frequencies work only near it (tower 20-60 nm, ground a few miles)</label>
@@ -1627,10 +1627,13 @@ const Settings = {
           <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, only the real aircraft at the gates are shown)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
-          <div class="row"><label>Parked aircraft on the ramps<select id="s-traffic-parked">${[[0, "None"], [10, "A few (10)"], [20, "Some (20)"], [40, "Busy (40)"], [60, "Packed (60)"]].map(([n, label]) => {
-            const cur = st.traffic?.parked === false ? 0 : (st.traffic?.max_parked ?? 40);
+          <div class="row"><label>Parked aircraft on the ramps<select id="s-traffic-parked">${[[-1, "Realistic: as busy as the airport is at that hour (up to 60)"], [0, "None"], [10, "A few (10)"], [20, "Some (20)"], [40, "Busy (40)"], [60, "Packed (60)"]].map(([n, label]) => {
+            const t = st.traffic || {};
+            const cur = t.parked === false ? 0 : (t.parked_fill || "realistic") === "realistic" ? -1 : (t.max_parked ?? 60);
             return `<option value="${n}" ${n === cur ? "selected" : ""}>${label}</option>`;
-          }).join("")}</select></label><span class="hint">Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.</span></div>
+          }).join("")}</select></label><span class="hint">Realistic goes by the airport's size, the local time there (busy
+            mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim
+            draws: fewer if the frame rate suffers. From the next flight.</span></div>
         </div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
@@ -1801,7 +1804,9 @@ const Settings = {
     on("#s-traffic-gates", "change", (e) => this.save("traffic", "fill_gates", e.target.checked));
     on("#s-traffic-parked", "change", (e) => {
       const n = Number(e.target.value);
-      this.save("traffic", "parked", n > 0).then(() => (n > 0 ? this.save("traffic", "max_parked", n) : null));
+      this.save("traffic", "parked", n !== 0)
+        .then(() => (n !== 0 ? this.save("traffic", "parked_fill", n < 0 ? "realistic" : "fixed") : null))
+        .then(() => (n !== 0 ? this.save("traffic", "max_parked", n < 0 ? 60 : n) : null));
     });
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
@@ -2154,14 +2159,19 @@ const MapView = {
   },
   plan(p) {
     if (!this.map) return;
-    const key = p ? `${p.origin}-${p.destination}-${p.simbrief_id}-${p.fixes?.length}` : "";
+    const key = p ? `${p.origin}-${p.destination}-${p.simbrief_id}-${p.fixes?.length}-${this.arrivalKey || ""}` : "";
     if (key === this.planKey) return;
     this.planKey = key;
     if (this.routeLayer) { this.map.removeLayer(this.routeLayer); this.routeLayer = null; }
     this.route = null;
     if (!p) return;
     this.routeLayer = L.layerGroup().addTo(this.map);
-    this.route = AtcMap.route(this.routeLayer, p);
+    // ATC's runway, not the plan's: the route as planned up to the airport, then in to the final of the runway given
+    const arr = this.arrival, fixes = p.fixes || [];
+    const shown = arr && fixes.length > 1 ? { ...p, fixes: [...fixes.filter((x, i) => !(i === fixes.length - 1 && x.kind === "apt")),
+      { ident: `${arr.runway} final`, lat: arr.final[0], lon: arr.final[1], kind: "wpt" },
+      { ident: p.destination, lat: arr.threshold[0], lon: arr.threshold[1], kind: "apt" }] } : p;
+    this.route = AtcMap.route(this.routeLayer, shown);
     this.zonesSoon();
     Promise.all([p.origin, p.destination].map((icao) => (icao ? this.airport(icao) : null))).then(([from, to]) => {
       if (!this.route && from && to && this.planKey === key)  // a typed plan: no fixes, a straight line
@@ -2234,6 +2244,12 @@ const MapView = {
   },
   flightChanged(f) {
     this.syncRules();
+    const arr = f?.final && f.final.runway !== f.final.planned ? f.final : null;
+    if ((arr?.runway || "") !== (this.arrivalKey || "")) {  // a runway other than the plan's: the route redrawn to it
+      this.arrival = arr;
+      this.arrivalKey = arr?.runway || "";
+      this.plan(S.state?.plan);
+    }
     // A handoff changes who is highlighted, a taxi clearance the route drawn; otherwise the zones only need an
     // occasional refresh.
     const who = `${f?.tuned?.station || ""}|${f?.expected?.station || ""}|${f?.taxi || ""}`;

@@ -493,9 +493,9 @@ class WatchMixin:
         reversers = p.reversers if p.reversers is not None else s.jet
         if reversers and 3.0 <= since <= 12.0 and own.gs_kt > 60:
             if s.reverser_pct >= 50:
-                self._call(f"reversers:{n}", ROUTINE, t, "Reversers.")
+                self._call(f"reversers:{n}", ROUTINE, t, "Reversers.", moment=True)
             elif since >= 6.0:
-                self._call(f"reversers:{n}", ROUTINE, t, "No reversers.")
+                self._call(f"reversers:{n}", ROUTINE, t, "No reversers.", moment=True)
         if name and name != "off" and own.gs_kt > 30:
             if s.autobrake_active and since >= 2.0:
                 self.autobrake_seen = True

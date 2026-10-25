@@ -85,6 +85,9 @@ LIVE_DELAY_S = 30.0
 HISTORY_S = 240.0
 PARKED_STAY_S = 45 * 60.0  # an arrival on its stand stays this long (turning round), then goes
 CALLS_GAP_S = 20.0  # the controllers' calls to the real flights at one airport this far apart at least
+# ... and each said within this long of when it was due, or not at all: saved up while the user was on another
+# frequency, four "ready to taxi" came in a row the moment ground was tuned, then nothing for five minutes
+CALL_WINDOW_S = 45.0
 FINAL_CALL_NM = 6.0  # an arrival is cleared to land this far out
 PARKED_AROUND_NM = 5.0
 PARKED_SLOW_KT = 40.0  # ... once off the landing roll
@@ -180,7 +183,8 @@ class TrafficSettings:
     radius_nm: float = 40.0
     max_live: int = 30
     parked: bool = True
-    max_parked: int = 40
+    max_parked: int = 60
+    parked_fill: str = "realistic"  # or "fixed": max_parked of them, whatever the hour
     atc_control: bool = True
     # Made-up aircraft only on the cargo and GA ramps: the gates have the real ones (at a gate with its transponder
     # on, or an arrival on its stand), not a full terminal of guesses at six in the morning.
@@ -261,6 +265,7 @@ class Plane:
     gave_way_t: float = -1e9  # when it went on again (not stopped again straight away)
     parked_t: float = 0.0  # when it stopped on its stand (an arrival there goes after PARKED_STAY_S)
     said: set[str] = field(default_factory=set)  # the calls the controllers have made to it
+    call_due: dict[str, float] = field(default_factory=dict)  # when each call to it first could have been said
     airborne_seen: bool = False  # seen in the air: an arrival, once down
     left_stand: bool = False  # pushed back off a stand: a departure, never put on one again
     stood_t: float = 0.0  # on its stand, when the real one was last seen standing still (its next move is its push)
@@ -958,7 +963,8 @@ class TrafficManager:
                 continue
             spots.append(i)
         rng.shuffle(spots)
-        count = min(int(round(len(spots) * share)), self.s.max_parked - sum(1 for p in self.planes.values() if not p.live))
+        wanted = len(spots) if self.s.parked_fill == "fixed" else int(round(len(spots) * share))
+        count = min(wanted, self.s.max_parked - sum(1 for p in self.planes.values() if not p.live))
         # Nearest the user first (what's seen from the gate), and drawn with a few models over and over.
         if self.own is not None:
             spots.sort(key=lambda i: haversine_nm(self.own.lat, self.own.lon, airport.parking[i].lat, airport.parking[i].lon))
@@ -1483,8 +1489,12 @@ class TrafficManager:
     def _try_call(self, plane: Plane, kind: str, icao: str, runway: str, now: float, **extra: Any) -> list[Any]:
         """A controller's call to one LocalTC moves on the ground, once, when the frequency's free (spaced at an
         airport); not said if it never is."""
-        if not self.s.atc_control or not plane.callsign or kind in plane.said \
-                or now - self._calls_t.get(icao, -1e9) < CALLS_GAP_S:
+        if not self.s.atc_control or not plane.callsign or kind in plane.said:
+            return []
+        if now - plane.call_due.setdefault(kind, now) > CALL_WINDOW_S:
+            plane.said.add(kind)  # its moment went by: nobody heard it, as on a real frequency
+            return []
+        if now - self._calls_t.get(icao, -1e9) < CALLS_GAP_S:
             return []
         out = self.atc.call(callsign=plane.callsign, kind=kind, icao=icao, runway=runway, **extra)
         if out:

@@ -75,6 +75,7 @@ log = logging.getLogger(__name__)
 RADIO_HISTORY = 400
 OWN_EVERY_S = 0.25
 FLIGHT_EVERY_S = 1.0
+FINAL_NM = 10.0  # the arrival runway's final on the Live Map: from this far out
 COMPANION_ZONES_EVERY_S = 30.0  # the phone's ATC zones: again after a handoff or a taxi clearance, else this often
 FREQ_LABELS = {"atis": "ATIS", "awos": "AWOS", "asos": "ASOS", "clearance": "CLR", "ground": "GND", "tower": "TWR",
                "departure": "DEP", "approach": "APP", "center": "CTR", "unicom": "UNICOM", "ctaf": "CTAF",
@@ -541,9 +542,24 @@ class AppController:
             "expected": msgspec.to_builtins(snap.expected_contact) if snap.expected_contact else None,
             "pending": msgspec.to_builtins(snap.pending) if snap.pending else None,
             "ete": ete, "rules": getattr(engine.state.flight, "rules", "IFR"),
+            "final": None if departing else self._final(dest_geo, a.get("arrival_runway")),
             "taxi": f"{taxi['to']} via {' '.join(taxi['taxiways'])}" if (taxi := engine.taxi_path()) else None,
             "status": self._en_route(engine, snap),
         }
+
+    def _final(self, geo, runway: str | None) -> dict | None:
+        """The arrival runway ATC gave and its final (``FINAL_NM`` out on the centreline), with the flight plan's:
+        the Live Map's route turns in to it. Dubai's STAR for 30L stayed drawn with the A380 cleared for 12R."""
+        end = geo.end(runway) if geo is not None and runway else None
+        if end is None:
+            return None
+        import math
+
+        tx, ty = end.threshold
+        h, d = math.radians(end.heading_true), FINAL_NM * 1852.0
+        return {"runway": end.ident, "threshold": list(geo.frame.to_latlon(tx, ty)),
+                "final": list(geo.frame.to_latlon(tx - math.sin(h) * d, ty - math.cos(h) * d)),
+                "planned": (self.plan.arr_runway or None) if self.plan is not None else None}
 
     def _en_route(self, engine, snap) -> dict | None:
         """Between the departure's area and the destination's, the flight's status where the airport box is: the
@@ -924,7 +940,7 @@ class AppController:
 
         return {"settings": msgspec.to_builtins(self.cfg), "path": str(settings_path() or ""),
                 "catalog": models.catalog(),
-                "personalities": [{"id": p.id, "name": p.name, "sex": p.sex, "style": p.style, "sample": p.sample}
+                "personalities": [{"id": p.id, "name": p.name, "sex": p.sex, "brief": p.brief, "style": p.style, "sample": p.sample}
                                   for p in PERSONALITIES]}
 
     async def api_save_settings(self, args: dict) -> dict:

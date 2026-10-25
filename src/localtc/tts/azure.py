@@ -50,7 +50,7 @@ STOP_AT = 0.98  # of the monthly allowance: LocalTC's count is an estimate
 SIGNUP = "https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices"
 REGION = re.compile(r"^[a-z0-9]{3,40}$")
 # Voices that aren't adults, or aren't for a radio.
-LEFT_OUT = re.compile(r"Maisie|^AnaNeural|Multilingual|Dragon|HD|Turbo|:")
+LEFT_OUT = re.compile(r"Maisie|^AnaNeural|Multilingual|Dragon|HD|Turbo|AIGenerate|:")
 
 # The voices to cast from when the region's list can't be read: Azure's GA English neural voices, by locale and sex.
 BUILTIN: dict[str, dict[str, tuple[str, ...]]] = {
@@ -81,6 +81,11 @@ MULTILINGUAL: dict[str, dict[str, tuple[str, ...]]] = {
 NEAREST = {"en-CA": "en-US", "en-PH": "en-US", "en-IE": "en-GB", "en-IN": "en-GB", "en-NZ": "en-AU",
            "en-ZA": "en-GB", "en-SG": "en-GB", "en-HK": "en-GB", "en-AU": "en-GB", "en-GB": "en-GB", "en-US": "en-US",
            "en-KE": "en-GB", "en-NG": "en-GB", "en-TZ": "en-GB"}
+# Where Azure has no voice of the region's own (no Arabic voice speaks English): the Englishes heard there. The Gulf's
+# controllers come from all over (British, Irish, South African, Australian, Indian ...): Dubai, Doha, Kuwait and
+# Bahrain were all British, every one of them.
+BLEND_EACH = 2
+BLENDS = {"ar": ("en-GB", "en-IE", "en-ZA", "en-AU", "en-IN"), "fa": ("en-GB", "en-IN"), "ur": ("en-IN", "en-GB")}
 # The Americas speak American English (a multilingual voice there is told en-US); everywhere else British.
 AMERICAN = ("en-us", "en-ca", "en-ph", "es-mx", "es-us", "es-co", "es-ar", "es-cl", "es-pe", "es-ve", "es-ec", "es-cr",
             "es-pa", "es-gt", "es-do", "es-cu", "es-bo", "es-uy", "es-py", "es-hn", "es-ni", "es-sv", "es-pr", "pt-br",
@@ -302,6 +307,12 @@ class AzureVoices:
                 pool = list(voices[own].get(sex, ())) or [v for s in ("F", "M") for v in voices[own].get(s, ())]
                 if pool:
                     return own, pool
+            blend = BLENDS.get(wanted.split("-")[0].lower())
+            if blend:
+                pool = [v for loc in blend for match in voices if match.lower() == loc.lower()
+                        for v in voices[match].get(sex, ())[:BLEND_EACH]]  # (as many of each: a mix)
+                if pool:
+                    return blend[0], pool
             wanted = english_of(wanted)
         locale = next((loc for loc in voices if loc.lower() == wanted.lower()), "en-US")
         pool = list(voices.get(locale, {}).get(sex, ()))
@@ -314,7 +325,10 @@ class AzureVoices:
 
     def voice_for(self, persona: Persona) -> tuple[str, str]:
         locale, pool = self.pool_for(persona)
-        return locale, self.casting.cast(persona, pool)
+        voice = self.casting.cast(persona, pool)
+        if voice.lower().startswith("en-"):  # (one of a blend's: in its own English)
+            locale = "-".join(voice.split("-")[:2])
+        return locale, voice
 
     # --- speaking ----------------------------------------------------------------------------------------------
 

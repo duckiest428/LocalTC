@@ -14,6 +14,7 @@ clipped) and how much it varies (0 flat and even, 1 lively). ``talk`` is how oft
 """
 
 import random
+import re
 from dataclasses import dataclass, field
 
 # Never in a personality's words, whatever its priority: the calls that must sound the same in every cockpit.
@@ -29,11 +30,59 @@ EXTRAS_AFTER_STANDARD = {"lined_up", "positive_rate"}
 AFTER_STERILE = {"after_landing", "summary", "park_brake", "1000"}
 
 
+# The routine calls in more than one wording, for everyone (Neutral too), where a personality has none of its own:
+# the same meaning, the value kept ({1}: what the call carries; {l1}: the same, lower case first). "Before start
+# checklist when you're ready" word for word, every flight, in the same order, was a recording, not a person.
+VARIANTS: tuple[tuple[re.Pattern, tuple[str, ...]], ...] = tuple((re.compile(p), ways) for p, ways in (
+    (r"^(.+) checklist when you're ready\.$",
+     ("{1} checklist when you're ready.", "Ready for the {l1} checklist when you are.", "{1} checklist, whenever suits.",
+      "Shall we do the {l1} checklist?", "{1} checklist when you've got a moment.")),
+    (r"^(.+), yours to set\.$", ("{1}, yours to set.", "{1} for you to set.", "Your side: {1}.", "{1}, over to you to set.")),
+    (r"^Ten thousand\.$", ("Ten thousand.", "Passing ten thousand.", "Through ten thousand.")),
+    (r"^Top of climb, level (.+)\.$", ("Top of climb, level {1}.", "Level {1}, top of climb.", "Top of climb. {1}.",
+                                       "That's us level at {1}.")),
+    (r"^Transition, standard set\.$", ("Transition, standard set.", "Passing transition, standard set.",
+                                        "Transition. Standard set.")),
+    (r"^Transition level, (.+)\.$", ("Transition level, {1}.", "Passing transition level, {1}.")),
+    (r"^Clear of the runway\.$", ("Clear of the runway.", "We're clear of the runway.", "And we're clear.")),
+    (r"^Starting the APU\.$", ("Starting the APU.", "APU's coming on.", "Getting the APU going.")),
+    (r"^Top of descent in about ten minutes\.$", ("Top of descent in about ten minutes.",
+                                                   "About ten minutes to top of descent.", "Ten minutes or so to the descent.")),
+    (r"^That's top of descent\.(.*)$", ("That's top of descent.{1}", "We're at top of descent.{1}", "Top of descent.{1}")),
+    (r"^Transponder TA/RA\.$", ("Transponder TA/RA.", "TA/RA.", "Transponder's on, TA/RA.")),
+    (r"^Heading (\d+) set\.$", ("Heading {1} set.", "{1} set on the heading.", "Heading {1}, set.")),
+    (r"^Speed, two fifty below ten thousand\.$", ("Speed, two fifty below ten thousand.", "Two fifty below ten, watch the speed.",
+                                                   "Speed: two fifty below ten thousand.")),
+    (r"^Parking brake\?$", ("Parking brake?", "Parking brake on?", "Brakes set?")),
+    (r"^Moderate turbulence\.$", ("Moderate turbulence.", "Bit of moderate turbulence.", "Moderate turbulence here.")),
+    (r"^That's smoothed out\.$", ("That's smoothed out.", "Smoother now.", "That's better, smooth again.")),
+))
+
+
+def ways_of(text: str) -> tuple[str, ...]:
+    """Every wording of ``text`` (``VARIANTS``), itself first."""
+    for pattern, ways in VARIANTS:
+        if (m := pattern.match(text)) is not None:
+            value = m.group(1) if m.groups() else ""
+            return (text, *(w.replace("{l1}", value[:1].lower() + value[1:]).replace("{1}", value) for w in ways))
+    return (text,)
+
+
+def varied(text: str, rng: random.Random) -> str:
+    """``text`` in one of its wordings (``VARIANTS``), or as it is."""
+    for pattern, ways in VARIANTS:
+        if (m := pattern.match(text)) is not None:
+            value = m.group(1) if m.groups() else ""
+            return rng.choice(ways).replace("{l1}", value[:1].lower() + value[1:]).replace("{1}", value)
+    return text
+
+
 @dataclass(frozen=True)
 class Personality:
     id: str
     name: str
     sex: str  # "F" or "M"; "" for neutral (the voice setting decides)
+    brief: str  # three or four words, for the settings' list ("veteran, dry humour")
     style: str  # one line, for the settings and the language model
     sample: str  # a line of theirs, for the settings
     length: float = 1.0
@@ -61,13 +110,13 @@ class Personality:
         return setting if self.neutral else self.pick
 
 
-NEUTRAL = Personality("neutral", "Neutral", "", "The copilot as it is: calm, plain and by the book. Its voice is "
-                      "yours to choose.", "One thousand, stable.")
+NEUTRAL = Personality("neutral", "Neutral", "", "calm, plain, by the book", "The copilot as it is: calm, plain and by "
+                      "the book. Its voice is yours to choose.", "One thousand, stable.")
 
 PERSONALITIES: tuple[Personality, ...] = (
     NEUTRAL,
     Personality(
-        "marcus", "Marcus Hale", "M", "Veteran airline first officer: calm, with a dry sense of humour.",
+        "marcus", "Marcus Hale", "M", "veteran, dry humour", "Veteran airline first officer: calm, with a dry sense of humour.",
         "Smooth air. Don't get used to it.", 1.0, 0.5, 0.5, pick=0,
         story="you're Marcus Hale, a first officer with over twenty years on the line: calm, unflappable, a dry sense "
               "of humour used sparingly.",
@@ -79,7 +128,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Copy."),
     ),
     Personality(
-        "priya", "Priya Nair", "F", "By the book and precise, and warm with it.",
+        "priya", "Priya Nair", "F", "by the book, warm", "By the book and precise, and warm with it.",
         "Checklist complete. Flaps set, trim set, we're good.", 0.95, 0.4, 0.4, pick=0,
         story="you're Priya Nair, a precise first officer who does everything by the book, warm and encouraging.",
         wordings={"1000": ("One thousand, stable. Continue.",), "smooth": ("Smooth again.",)},
@@ -88,7 +137,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Checked."),
     ),
     Personality(
-        "jake", "Jake Mulligan", "M", "Laid-back general aviation pilot, easy-going.",
+        "jake", "Jake Mulligan", "M", "laid-back GA pilot", "Laid-back general aviation pilot, easy-going.",
         "Alright, runway's yours.", 1.05, 0.9, 0.7, pick=1,
         story="you're Jake Mulligan, a laid-back pilot who learned to fly in small planes: easy-going, friendly, "
               "never flustered.",
@@ -100,7 +149,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Yep.", "Got it."), fillers=0.25,
     ),
     Personality(
-        "elena", "Elena Vargas", "F", "Ex-military: crisp and clipped.",
+        "elena", "Elena Vargas", "F", "ex-military, crisp", "Ex-military: crisp and clipped.",
         "Stable at one thousand. Continue.", 0.9, 0.3, 0.2, pick=1,
         story="you're Elena Vargas, a first officer who flew in the air force before the airline: crisp, clipped, "
               "exact, no small talk.",
@@ -110,7 +159,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Copy."),
     ),
     Personality(
-        "oliver", "Oliver Bennett", "M", "British, polite and understated.",
+        "oliver", "Oliver Bennett", "M", "British, understated", "British, polite and understated.",
         "Rather bumpy, I'd say. Seatbelt sign's on.", 1.0, 0.6, 0.5, pick=2, locale="en-GB",
         story="you're Oliver Bennett, a British first officer: polite, understated, gently wry.",
         wordings={"turb": ("Rather bumpy, I'd say. Moderate turbulence.",), "smooth": ("That's settled down nicely.",),
@@ -120,7 +169,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Righto."),
     ),
     Personality(
-        "sofia", "Sofia Lindqvist", "F", "A minimalist: very few words.",
+        "sofia", "Sofia Lindqvist", "F", "minimalist, few words", "A minimalist: very few words.",
         "Descend ten thousand. Set.", 0.95, 0.3, 0.1, pick=2,
         story="you're Sofia Lindqvist, a first officer of very few words: you say what's needed and nothing else.",
         wordings={"1000": ("Thousand. Stable.",), "turb": ("Moderate turbulence.",), "smooth": ("Smooth.",),
@@ -128,7 +177,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.",),
     ),
     Personality(
-        "dale", "Dale Peterson", "M", "A grizzled grumbler who's seen it all.",
+        "dale", "Dale Peterson", "M", "grizzled grumbler", "A grizzled grumbler who's seen it all.",
         "Thirty years and they still give me this approach.", 1.1, 0.7, 0.6, pick=3,
         story="you're Dale Peterson, a grizzled first officer with thirty years of flying: grumbles about ATC, the "
               "coffee and the schedule, but sharp and reliable when it counts.",
@@ -139,7 +188,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.", "Yeah, yeah, check."), fillers=0.15,
     ),
     Personality(
-        "maya", "Maya Chen", "F", "Eager newer first officer, enthusiastic.",
+        "maya", "Maya Chen", "F", "eager, enthusiastic", "Eager newer first officer, enthusiastic.",
         "Okay, stable at a thousand!", 0.95, 0.8, 0.7, pick=3,
         story="you're Maya Chen, a newer first officer, enthusiastic and keen to learn, still loving every flight.",
         wordings={"1000": ("Okay, stable at a thousand!",), "smooth": ("Oh good, smooth again.",),
@@ -149,7 +198,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check!", "Got it."), fillers=0.2,
     ),
     Personality(
-        "tom", "Tom Whitaker", "M", "An instructor and mentor: explains why.",
+        "tom", "Tom Whitaker", "M", "instructor, explains why", "An instructor and mentor: explains why.",
         "Good readback. Next time, include the runway.", 1.0, 0.5, 0.5, pick=4, coach=True,
         story="you're Tom Whitaker, a training captain flying as first officer today: patient, a mentor, likes to "
               "explain the why behind things briefly.",
@@ -160,7 +209,7 @@ PERSONALITIES: tuple[Personality, ...] = (
         acks=("Check.",),
     ),
     Personality(
-        "hannah", "Hannah Brooks", "F", "A chatty long-haul companion.",
+        "hannah", "Hannah Brooks", "F", "chatty long-haul company", "A chatty long-haul companion.",
         "We've got a while. Want the weather at destination?", 1.0, 0.8, 0.8, pick=4, offers_weather=True,
         story="you're Hannah Brooks, a long-haul first officer: chatty, good company on a long night, interested in "
               "the places you fly to.",
@@ -193,8 +242,9 @@ def word(p: Personality, key: str, text: str, *, priority: int, safety: int, rng
          sterile: bool, talk_scale: float = 1.0) -> tuple[str, bool]:
     """The call ``text`` (under ``key``, at ``priority``) as ``p`` says it; True when it's no longer the standard
     words (so its spoken form is made from it again). Safety calls and the standard ones come back as they are,
-    apart from a word of their own after one of the few that may have it."""
-    if p.neutral or not text or priority >= safety:
+    apart from a word of their own after one of the few that may have it. The routine calls are said in one of
+    their wordings (``VARIANTS``) by everyone, where a personality has none of its own."""
+    if not text or priority >= safety:
         return text, False
     m = moment(key, text)
     out = text
@@ -203,6 +253,10 @@ def word(p: Personality, key: str, text: str, *, priority: int, safety: int, rng
         ways = tuple(w for w in ways if "{value}" not in w)
     if ways:
         out = rng.choice(ways).replace("{std}", text).replace("{value}", text.removesuffix(" set."))
+    elif m not in STANDARD and not key.startswith("run:"):  # (a checklist's lines are the checklist's)
+        out = varied(text, rng)
+    if p.neutral:
+        return out, out != text
     if m in STANDARD and m not in EXTRAS_AFTER_STANDARD:
         return out, out != text
     extra = p.extras.get(m)

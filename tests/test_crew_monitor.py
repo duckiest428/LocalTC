@@ -9,6 +9,7 @@ from localtc.atc_core.readback.interpreter import PendingReadback
 from localtc.atc_core.session import Assignments, Clearance, CommsState
 from localtc.config import PlanPerf
 from localtc.crew.monitor import spoken
+from localtc.crew.personalities import ways_of
 from localtc.crew.pm import PilotMonitoring
 from localtc.crew.profiles import load_all
 from localtc.sim_api import (
@@ -265,7 +266,7 @@ def test_the_parking_brake_and_the_lights_are_the_captains_the_copilot_only_says
     pm.observe(own(13, parking_brake=False))
     out = pm.observe(systems(20, engines_running=0, light_beacon=True))
     out += fly(pm, [own(21 + i, parking_brake=False) for i in range(30)])
-    assert "Parking brake?" in said(out)
+    assert any(s in ("Parking brake?", "Parking brake on?", "Brakes set?") for s in said(out))  # (in one of its wordings)
     assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "PARKING_BRAKE_SET"]
     assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "BEACON_LIGHTS_SET"]  # the captain's too
 
@@ -276,7 +277,8 @@ def test_each_call_once():
     out = fly(pm, [PhaseChanged(t=0.5, previous="DEPARTURE", phase="CRUISE"), own(1, **cruise),
                    PhaseChanged(t=5.5, previous="DEPARTURE", phase="CRUISE")]
               + [own(6 + i, **cruise) for i in range(20)])
-    assert said(out).count("Level at FL350.") + said(out).count("Top of climb, level FL350.") == 1
+    level = (*ways_of("Level at FL350."), *ways_of("Top of climb, level FL350."))  # (in one of its wordings)
+    assert sum(said(out).count(w) for w in set(level)) == 1
 
 
 def test_the_fuel_is_checked_against_the_plan_once_the_engines_start():
@@ -369,7 +371,8 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     # Replayed, nothing the copilot sends ever shows in the recording: after two, it stops reaching (said once).
     assert words.count("My switches aren't reaching this aircraft. I'll leave them to you and call.") == 1
     for expected in ("Positive rate.", "Ten thousand.", "Level at FL350.", "Seventy knots."):
-        assert any(w.startswith((expected, expected.replace("Level at", "Top of climb, level"))) for w in words), expected
+        ways = (*ways_of(expected), *ways_of(expected.replace("Level at", "Top of climb, level")))
+        assert any(w.startswith(ways) for w in words), expected
     greeting = next(w for w in words if w.startswith(("Hi,", "Hey.", "Morning.")))  # once settled, not at once
     assert "San Diego" in greeting
     # Nothing said over and over, and no "one thousand to go" (pilots found it noise).
@@ -411,7 +414,7 @@ def test_a_held_item_answered_with_what_the_aircraft_shows_goes_on():
     pm.observe(IntercomHeard(t=2, text="before start checklist"))
     pm.observe(IntercomHeard(t=3, text="set"))  # held: it shows released
     out = pm.observe(IntercomHeard(t=5, text="can we continue the checklist?"))
-    assert said(out) == ["Parking brake?"]
+    assert said(out) in (["Parking brake?"], ["Parking brake on?"], ["Brakes set?"])
     out = pm.observe(IntercomHeard(t=7, text="released"))
     assert " ".join(said(out)).startswith("Parking brake released.") and "complete" not in " ".join(said(out))
 
@@ -424,10 +427,10 @@ def test_taxiing_in_the_apu_is_started_then_its_bleed_put_on():
     pm.observe(PhaseChanged(t=0.5, previous="LANDING", phase="TAXI_IN"))
     pm.observe(systems(0.6, apu_pct=0.0))
     out = fly(pm, [own(1 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(30)])  # no gate given
-    assert "Starting the APU." not in said(out)
+    assert not set(ways_of("Starting the APU.")) & set(said(out))
     engine.assigned_gate_position = lambda: (47.0, -121.996)  # 300 m ahead
     out = fly(pm, [own(200 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(3)])
-    assert "Starting the APU." in said(out)
+    assert set(ways_of("Starting the APU.")) & set(said(out))
     assert [o for o in out if getattr(o, "name", "") == "APU_STARTER"]
     pm.observe(systems(260, apu_pct=1.0))
     out = fly(pm, [own(261 + i, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(10)])

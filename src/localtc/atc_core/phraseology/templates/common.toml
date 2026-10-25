@@ -131,6 +131,16 @@ text = ["{callsign}, roger, expect {approach} approach."]
 readback = { required = ["approach"] }
 pilot_readback = "Expect {approach}, {callsign_short}."
 
+# The runway in use at the destination changed before the approach clearance (a new ATIS): the new one to expect.
+[[template]]
+id = "common.runway_change"
+controller = "any"
+text = ["{callsign}, runway change, expect {approach} approach.",
+        "{callsign}, the runway's changed, now expect {approach} approach.",
+        "{callsign}, change of runway, expect {approach} approach."]
+readback = { required = ["approach"] }
+pilot_readback = "Expect {approach}, {callsign_short}."
+
 [[template]]
 id = "common.unable_runway"
 controller = "any"

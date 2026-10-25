@@ -1,11 +1,14 @@
 # The FlyByWire A380X (MSFS 2024). Its lights take the sim's events; its FCU takes FlyByWire's own (A32NX.FCU_*_SET,
 # which the sim's autopilot variables follow); its flap lever takes FLAPS_1 ... FLAPS_DOWN, but the sim's flap handle
 # index doesn't follow it (L:A32NX_FLAPS_HANDLE_INDEX does); its parking brake is L:A32NX_PARK_BRAKE_LEVER_POS.
-# Tried against the sim 2026-10-08. VFE from the A380's limitations.
+# Tried against the sim 2026-10-08. VFE from the A380's limitations. The FCU's altitude shows in AUTOPILOT ALTITUDE
+# LOCK VAR:3 (VAR:1 stayed at 5,000 a whole flight: "couldn't set 8,000"), and its APU starts by FlyByWire's own
+# master and start buttons (L:A32NX_OVHD_APU_*: the package's own start-up procedure), not by APU_STARTER.
 [aircraft]
 name = "FlyByWire A380"
 match = ["A380X", "FlyByWire A380"]
 reads_flaps = false
+altitude_index = 3
 flaps = "detents"
 detents = ["up", "1", "2", "3", "full"]
 aliases = { "one plus f" = "1", "1 plus f" = "1", "1+f" = "1", "config full" = "full", "zero" = "up", "0" = "up" }
@@ -57,3 +60,15 @@ lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"
 
 [actions.parking_brake_off]
 lvar = "L:A32NX_PARK_BRAKE_LEVER_POS"
+
+[actions.apu_start]
+lvar = "L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON, L:A32NX_OVHD_APU_START_PB_IS_ON"
+
+[actions.apu_stop]
+lvar = "L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON"
+
+[actions.apu_bleed_on]
+lvar = "L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON"
+
+[actions.apu_bleed_off]
+lvar = "L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON"

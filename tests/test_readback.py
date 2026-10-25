@@ -128,6 +128,7 @@ def random_slots(rng: random.Random) -> dict:
     return {
         "callsign": rng.choice([CALLSIGN, Callsign("N5512K", type_name="Cherokee"), Callsign("ASA123", telephony="Alaska", flight_number="123")]),
         "destination": rng.choice(["Boeing Field", "Paine Field", "Renton Municipal"]),
+        "city": rng.choice(["Seattle", "Everett", "Renton"]),
         "station": rng.choice(["Seattle Departure", "Paine Tower", "Boeing Ground", "Seattle Center"]),
         "runway": runway(),
         "hold_short": runway(),

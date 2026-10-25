@@ -75,6 +75,8 @@ AFTER_ATC_S = 1.5  # and a moment after, for the readback to start
 READBACK_GRACE_S = 7.0  # an instruction that wants a readback: the pilot's turn first
 STERILE_FT = 10000.0
 LONG_CRUISE_MIN = 40.0  # a cruise this long before the descent: time for a chatty copilot's offer
+MOMENT_S = 4.0  # a callout of the moment ("seventy knots", "minimums"): said within this, over the radio if need
+# be, or not at all (38 seconds late behind a go-around call, "seventy knots" was worse than nothing)
 HANDS_WAIT_S = 300.0  # a call that sets something waits this much longer for its turn than one that only talks
 STATUS_EVERY_S = 1800.0
 GEAR_UP_WAIT_S = 1.0  # positive rate, then "gear up" (and the gear up) straight after
@@ -96,6 +98,9 @@ FUEL_PLAN_MARGIN_LB = 1100.0  # a projection this far (or 15 percent) under the 
 FUEL_MATCH_LB = 1100.0  # on board against the plan's block: this close (or 3 percent) matches
 FUEL_STEADY_S = 20.0  # the fuel unchanged this long after engine start: loaded, and checked against the block
 FUEL_LAST_H = 1.0  # the projections to landing only this close to the destination: a long way out they're guesses
+# ... unless the shortfall is past any guess: short by more than this share of the fuel still to burn (an A380 that
+# left Seattle without the fuel for Dubai heard of it with 10,000 pounds left, an hour from running dry)
+FUEL_FAR_DOUBT = 0.08
 SPEED_AGAIN_S = 45.0  # a flap or gear overspeed said again this often while it lasts
 LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
 PUSH_BRAKE_S = 150.0  # cleared to push and the parking brake still set this long: a word
@@ -121,9 +126,12 @@ class Call:
     radio: str = ""  # then said on the radio by the copilot (asking ATC for a step climb, a diversion)
     before_readback: bool = False  # ATC's instruction repeated: in the moment before the readback, or not at all
     valid: Callable[[], bool] | None = None  # still worth saying when its turn comes (None: always)
+    moment: bool = False  # a callout of the moment: at once, even over the frequency, or not at all
 
     @property
     def expires(self) -> float:
+        if self.moment:
+            return self.t + MOMENT_S
         # One that sets something (an altitude ATC gave) is done however long the radio is busy: expired behind a
         # busy centre's other traffic, FL330 was never set.
         hands = HANDS_WAIT_S if self.commands else 0.0
@@ -216,6 +224,7 @@ class Monitor(WatchMixin):
         self.checklist_events: list = []  # ChecklistState, for the app and the replay
         self.handoff: tuple[float, Any] | None = None  # (when, the facility ATC sent the flight to)
         self.cleared_alt: int | None = None
+        self._final_side: float | None = None  # which side of the final the aircraft was, cleared for the approach
         self.cleared_heading: tuple[int, float] | None = None
         self.captured: int | None = None  # the cleared altitude once the aircraft got there
         self.off_since: float | None = None
@@ -340,7 +349,7 @@ class Monitor(WatchMixin):
                 and t - max(self.last_atc_t, self.last_pilot_radio_t) < QUIET_AFTER_RADIO_S)
         if top.before_readback:  # the gap after ATC, before the readback: the only moment it's any use
             busy = self.ptt_down or t < self.busy_until - AFTER_ATC_S + 0.3
-        if top.priority < SAFETY and not top.urgent and (busy or (t - self.last_said < GAP_S and not top.before_readback)):
+        if top.priority < SAFETY and not top.urgent and not top.moment and (busy or (t - self.last_said < GAP_S and not top.before_readback)):
             return []
         if top.priority == CHATTER and len(ready) > 1 and not top.before_readback:
             self.queue.remove(top)  # something more useful is waiting
@@ -370,9 +379,10 @@ class Monitor(WatchMixin):
 
     def _call(self, key: str, priority: int, t: float, text: str | list[str], *, commands: tuple[Command, ...] = (),
               again_s: float | None = None, urgent: bool = False, radio: str = "", before_readback: bool = False,
-              valid: Callable[[], bool] | None = None) -> bool:
+              valid: Callable[[], bool] | None = None, moment: bool = False) -> bool:
         """Queue ``text`` (one of the wordings, picked) under ``key``, once (or again after ``again_s``). ``valid``:
-        checked again when its turn comes (a heading reminder after ATC gave a new one isn't said)."""
+        checked again when its turn comes (a heading reminder after ATC gave a new one isn't said). ``moment``: a
+        callout of the moment, said at once or not at all."""
         if self._said(key, again_s, t) or any(q.key == key for q in self.queue):
             return False
         if key.startswith(PROMPTS) and t - self.declined_t < DECLINE_QUIET_S and priority < SAFETY:
@@ -388,7 +398,7 @@ class Monitor(WatchMixin):
         airports = (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
         self.queue.append(Call(key, words, max(priority, VERBOSITY[self.verbosity]) if commands else priority, t,
                                spoken=spoken(words, airports), commands=commands if self.hands else (), urgent=urgent,
-                               radio=radio, before_readback=before_readback, valid=valid))
+                               radio=radio, before_readback=before_readback, valid=valid, moment=moment))
         return True
 
     def _readback_due(self, t: float) -> bool:
@@ -707,9 +717,11 @@ class Monitor(WatchMixin):
         if self.f.touchdown_t is not None and t - self.f.touchdown_t >= 2.0 and self.c.systems is not None \
                 and (p.spoilers or (self.prev_sys is not None and self.prev_sys.spoilers_armed)):
             out = self.c.systems.spoilers_pct > 40
-            self._call(f"spoilers:{self.f.approaches}", ROUTINE if out else SAFETY, t, "Spoilers." if out else "No spoilers!")
+            self._call(f"spoilers:{self.f.approaches}", ROUTINE if out else SAFETY, t, "Spoilers." if out else "No spoilers!",
+                       moment=True)
         if self.f.touchdown_t is not None and prev.ias_kt > p.rollout_call_kt >= own.ias_kt and own.gs_kt > 20:
-            self._call(f"rollout:{self.f.approaches}", ROUTINE, t, f"{speech.miles(p.rollout_call_kt).capitalize()} knots.")
+            self._call(f"rollout:{self.f.approaches}", ROUTINE, t, f"{speech.miles(p.rollout_call_kt).capitalize()} knots.",
+                       moment=True)
         if self.phase == "TAXI_IN" and "rolled_out" in self.f.said and not own.on_runway and not self._said("after_landing"):
             self._after_landing(t)
         # Taxiing.
@@ -741,7 +753,7 @@ class Monitor(WatchMixin):
         if own.on_runway and self.f.touchdown_t is None and self.phase in ("TAKEOFF", "RUNWAY_HOLD", "TAXI_OUT"):
             check = p.speed_check_kt
             if prev.ias_kt < check <= own.ias_kt:
-                self._call("speed_check", ROUTINE, t, f"{speech.miles(check).capitalize()} knots.")
+                self._call("speed_check", ROUTINE, t, f"{speech.miles(check).capitalize()} knots.", moment=True)
             # No "V1" or "rotate": the pilot flying calls the speeds the aircraft's own voice doesn't (the
             # copilot calling them sounded as if it were flying).
         # Parked at the destination.
@@ -798,7 +810,7 @@ class Monitor(WatchMixin):
         # Positive rate, gear, flaps.
         if departing and own.vs_fpm > 300 and agl > 30 and own.gear_down and self.f.positive_rate_t is None:
             self.f.positive_rate_t = t
-            self._call("positive_rate", ROUTINE, t, "Positive rate.")
+            self._call("positive_rate", ROUTINE, t, "Positive rate.", moment=True)
         if self.f.positive_rate_t is not None and own.gear_down and t - self.f.positive_rate_t >= GEAR_UP_WAIT_S \
                 and t - self.commanded.get("gear", -1e9) > 10 and departing:
             still_down = lambda: self.c.own is not None and self.c.own.gear_down and t - self.commanded.get("gear", -1e9) > 10  # noqa: E731
@@ -853,7 +865,13 @@ class Monitor(WatchMixin):
                 self.off_since = self.off_since or t
                 if t - self.off_since > 5:
                     off = round(abs(alt - target), -2)
-                    self._nag(f"altitude_dev:{target}", SAFETY, t, f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}.",
+                    # Twice for each thousand feet off, and again as it gets worse: "1,200 low" and then nothing, all
+                    # the way from FL330 to 8,000 with the captain asleep, was no pilot monitoring.
+                    band = int(abs(alt - target) // 1000)
+                    self._nag(f"altitude_dev:{target}:{band}", SAFETY, t,
+                              f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}." if band < 2 else
+                              f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}, we're cleared "
+                              f"{speech.altitude_display(target)}.",
                               every_s=45, valid=lambda: st.assignments.altitude_ft == target and not self._on_approach())
             else:
                 self.off_since = None
@@ -975,16 +993,17 @@ class Monitor(WatchMixin):
         if burn:
             self.p.burn_pph = burn
         last_hour = to_go / own.gs_kt <= FUEL_LAST_H  # the pilot: "only an hour away, then it's a real concern"
-        if burn and own.fuel_lb and last_hour and not self.p.fuel_doubted:
-            at_landing = own.fuel_lb - landing_burn(burn, to_go, tod_nm, own.gs_kt)
+        if burn and own.fuel_lb and not self.p.fuel_doubted:
+            to_burn = landing_burn(burn, to_go, tod_nm, own.gs_kt)
+            at_landing = own.fuel_lb - to_burn
             reserve = self.perf.reserve_fuel_lb or burn * FINAL_RESERVE_H
-            if at_landing < reserve:
+            if at_landing < reserve and (last_hour or at_landing + FUEL_FAR_DOUBT * to_burn < reserve):
                 landing, final = self._fuel(max(at_landing, 0)), self._fuel(reserve)
                 where = "right at" if landing == final else "under"  # "2,500 kilos, under the final reserve of 2,500"
                 self._call("fuel_reserve", SAFETY, t, f"Fuel: at this burn we'd land with about {landing}, "
                            f"{where} the final reserve of {final}.", again_s=1800)
                 self._watch_emergency(t, "fuel")
-            elif self.perf.landing_fuel_lb and self.perf.landing_fuel_lb - at_landing > max(
+            elif last_hour and self.perf.landing_fuel_lb and self.perf.landing_fuel_lb - at_landing > max(
                     0.15 * self.perf.landing_fuel_lb, FUEL_PLAN_MARGIN_LB):
                 short = self.perf.landing_fuel_lb - at_landing
                 self._call("fuel_plan", ROUTINE, t, f"We're tracking about {self._fuel(short)} under the planned landing fuel.", again_s=2700)
@@ -1002,6 +1021,25 @@ class Monitor(WatchMixin):
                         f"runway {info.runway}, "
                         f"wind {speech.wind_display(w.wind)}{q}, expect {info.approach or 'the'} approach.")
             self._call(f"atis:{st.flight.destination}:{info.letter}", ROUTINE, t, text.replace("expect the approach", "expect vectors"))
+
+    def _through_final(self, own: OwnshipState, st: Any, t: float, n: int) -> None:
+        """Cleared for the approach and gone straight through the final, not turning onto it: said, from where the
+        runway's centreline is (the A380 shows the sim no localizer: it flew through 12R's at Dubai on its 30-degree
+        intercept heading, and nobody said a word)."""
+        if st is None or "approach" not in st.clearances or not st.assignments.arrival_runway:
+            self._final_side = None
+            return
+        geo = self.engine.geometry(st.flight.destination)
+        end = geo.end(st.assignments.arrival_runway) if geo is not None else None
+        if end is None:
+            return
+        from localtc.atc_core.vectors import frame
+
+        out, side = frame(geo, end, own.lat, own.lon)
+        was, self._final_side = self._final_side, side
+        off_course = abs(((own.hdg_true - end.heading_true) + 180) % 360 - 180)
+        if was is not None and 3.0 < out < 40.0 and (was > 0) != (side > 0) and abs(was) < 2.0 and off_course > 25:
+            self._call(f"through_final:{n}", SAFETY, t, "We've gone through the localizer!", again_s=120)
 
     def _cruise_burn_pph(self, own: OwnshipState, t: float) -> float | None:
         """The fuel burn in pounds an hour, from the fuel used over the last minutes of level cruise; None until
@@ -1022,6 +1060,7 @@ class Monitor(WatchMixin):
         prev_agl = self._agl(prev)
         approach = st.assignments.approach if st is not None else None
         ils = bool(approach and approach.upper().startswith("ILS"))
+        self._through_final(own, st, t, n)
         if s is not None:
             if s.loc_received and abs(s.loc_deviation) < 120 and (self.prev_sys is None or abs(self.prev_sys.loc_deviation) >= 120 or not self.prev_sys.loc_received):
                 self._call(f"loc_alive:{n}", ROUTINE, t, "Localizer alive.")
@@ -1066,11 +1105,11 @@ class Monitor(WatchMixin):
                 else (agl, prev_agl)
             self._prev_above = above
             if dh and before > dh + 100 >= height:
-                self._call(f"100_above:{n}", ROUTINE, t, "Hundred above.")
+                self._call(f"100_above:{n}", ROUTINE, t, "Hundred above.", moment=True)
             if dh and before > dh >= height:
                 # The lights only when they could be there: out of cloud, the ceiling and visibility for it. Never in fog.
                 self._call(f"minimums:{n}", ROUTINE, t, "Minimums. Approach lights in sight." if self._lights_plausible(dh)
-                           else "Minimums.")
+                           else "Minimums.", moment=True)
 
     def set_minimums(self, value: int) -> int | None:
         """The captain's minimum: a decision altitude (above the sea: the field's elevation and more) or a height

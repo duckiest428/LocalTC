@@ -1285,9 +1285,12 @@ def _radio_words(call: str, station: str) -> str:
 
 
 def _seed(engine: Any) -> int:
-    """The copilot's wording varies, the same way each time for the same flight (replays, tests)."""
-    callsign = getattr(getattr(getattr(engine, "state", None), "flight", None), "callsign", None)
-    return sum(map(ord, str(callsign))) if callsign else 0
+    """The copilot's wording varies, the same way each time for the same flight (replays, tests), and from one flight
+    to the next: by the callsign and the airports (the same callsign every day was the same words in the same order)."""
+    flight = getattr(getattr(engine, "state", None), "flight", None)
+    callsign = getattr(flight, "callsign", None)
+    where = f"{getattr(flight, 'origin', '') or ''}{getattr(flight, 'destination', '') or ''}"
+    return sum(map(ord, str(callsign))) + sum(i * ord(c) for i, c in enumerate(where, 1)) if callsign else 0
 
 
 YOURS = ("Your side.", "That's yours.", "Yours.")

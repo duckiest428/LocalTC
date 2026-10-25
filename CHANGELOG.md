@@ -7,6 +7,24 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The real ATIS worldwide**: outside the US, an airport's ATIS is now the one a VATSIM controller there is
+  broadcasting, when one is on (from VATSIM's public data feed, only the airport codes sent): its letter, runways in
+  use and approaches, in LocalTC's words, with the real METAR's weather. Europe's and Asia's wording is read too ("RWY
+  IN USE FOR ARRIVALS 24 LEFT", "DEP AND ARR RWY 10", "ARRIVAL RUNWAY 23R"), and the network's own notes ("submit your
+  TOBT ...") are left out. Each ATIS says where it's from: "VATSIM ATIS 2150Z, 12 min old".
+- **A runway change for arrivals**: when the destination's ATIS changes its landing runways before your approach
+  clearance, ATC says so ("runway change, expect ILS runway 30L approach") and the approach follows it.
+- **Ask for a gate area**: "can we get an Alpha or a Bravo gate, not the Sierra gates" on the way in gets a free gate
+  there and the route to it, not "negative" and the same route again. A gate by name ("gate Alpha 3") works as before.
+- **"Welcome to ..."** now and then in tower's way off the runway at the end of a flight.
+- **Parked aircraft, realistically**: the ramps' parked aircraft can be "Realistic" (the new default): as busy as the
+  airport is at that hour, by its size, the local time there and how busy the live traffic shows it today, up to 60.
+  The fixed counts are still there, and now mean that many.
+- **The copilot calls a missed localizer**: cleared for the approach and gone straight through the final without
+  turning onto it, "We've gone through the localizer!" (worked out from the runway, so it works in aircraft that don't
+  show the sim their localizer).
+- **Each copilot personality has a short description** in the settings' list ("veteran, dry humour", "minimalist,
+  few words").
 - **The real ATIS, read whole**: where an airport's digital ATIS is known, LocalTC's broadcast carries everything it
   says, in words: its approaches ("expect ILS, RNAV, or visual approach"), its notices and cautions ("taxiway foxtrot
   between taxiway bravo and taxiway charlie closed", "increased bird strike hazard all runways", "runway two seven
@@ -101,6 +119,34 @@ a new minor version adds features, a patch fixes them.
   months, years) charts the flights in each to pick one from.
 
 ### Changed
+- **Callouts in their moment**: "hundred above", "minimums", "spoilers", "reversers", "seventy knots", "100 knots"
+  and "positive rate" are said at once, over the radio if need be, or not at all. They used to wait for a quiet
+  frequency, and behind tower's calls came up to 40 seconds late.
+- **The copilot's routine calls in more than one wording**: checklist prompts, "yours to set", ten thousand, top of
+  climb and descent, the transition, the APU, clear of the runway and others are said a few different ways, by every
+  personality and by Neutral, and differently from one flight to the next. The calls you act on keep their standard
+  words.
+- **"Real" ATIS uses the real METAR too**: "real" and "hybrid" are now the same, the real ATIS, else LocalTC's from the
+  real METAR, else the sim's weather. "Real" used to go straight to the sim's weather outside the US, so a far
+  destination's runway came from a wind sampled hundreds of miles away.
+- **Runways follow the traffic**: with the traffic all going one way, the ATIS takes its runway that way with up to 10
+  knots of tailwind (5 before), so you aren't sent head-on into the live arrivals.
+- **Tower gives the way off the runway at 100 knots** (75 before), with an exit you can still slow down for.
+- **An airport's own stations first**: where the sim lists a sector or a neighbour first ("AIR NORTH" for a tower's
+  north position, an air base's approach), ATC is now the airport's own ("<city> Tower", "<city> Approach"), and
+  sector words (North, Arrivals, VFR) are left out of the callsign.
+- **Middle Eastern controllers in a mix of Englishes**: Azure has no voice that speaks English with an Arabic accent,
+  so where Arabic is spoken the stations are now cast from British, Irish, South African, Australian and Indian voices,
+  as the region's international controllers sound, not British every one. Azure's experimental "AIGenerate" voices
+  are left out.
+- **The altitude call keeps coming**: "Altitude! 1,200 low" was said twice and then never again, all the way down. It's
+  now said again for each further thousand feet, with the altitude you're cleared to.
+- **A fuel shortfall is said early when it's past doubt**: the fuel projection waited for the last hour before landing
+  (a long way out it's a guess). Now one that's short by more than any guess is said as soon as the cruise burn is
+  known.
+- **A big airliner gets a real gate**: where none of the scenery's gates is big enough by its own numbers, the biggest
+  gates are given, not a remote stand on a cargo ramp. The airline's own parked aircraft are matched by their airline
+  too, not only by their callsign.
 - **The copilot flies a new altitude open on vectors**: given a heading by ATC (off the flight plan's path), the FSLabs
   Airbus's altitude knob is pulled (open climb or descent) once the new altitude is set, not pushed: managed descent
   needs NAV, and the aircraft stayed level.
@@ -188,6 +234,26 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **The FlyByWire A380X's altitude and APU**: the copilot's altitude was set but read back from the wrong variable
+  ("I couldn't set 8,000", then "my altitude inputs aren't reaching this aircraft"), and its APU start used the sim's
+  event, which the A380X ignores. Both now go through FlyByWire's own (the APU's master and start buttons, its bleed).
+- **Traffic calls saved up for when you tuned in**: the controllers' calls to LocalTC's traffic waited until you were
+  on that frequency, so tuning ground brought four "ready to taxi" in a row and then silence. Each is now said within
+  45 seconds of when it happens, or not at all, as on a real frequency.
+- **A landed airliner crawled down the runway**: LocalTC's traffic braked to 8 knots straight after landing and rolled
+  two kilometres to its exit that slowly, with you on final behind it. It now brakes to reach its exit at turn-off
+  speed.
+- **"Go around" said again on the rollout**: a go-around you didn't take was repeated after touchdown. Once you're on
+  the ground it's dropped.
+- **A descent far from the destination was taken for the arrival**: starting down without a clearance 20 minutes or
+  more before the top of descent now gets "check altitude", not "descend via the arrival".
+- **The Live Map's route ended on the planned runway**: with ATC's runway another, the route now turns in to its final.
+- **Crosswind at the destination**: "how much crosswind is there at ...?" now gets the wind there and the crosswind on
+  the runway expected, not "information not available".
+- **Small slips in ATC's words**: "there's Boeing 777 stopped ahead" now has its "a", and a question no longer ends
+  "?." ("how do you read?.").
+- **The ATIS fetch's log** said "METAR ... not fetched" for an ATIS; it says ATIS now, and US-only sources are no
+  longer asked about airports elsewhere.
 - **A seaplane runway was the runway in use**: an airport's water runway (the sim names some just "08/26") was chosen
   for an airliner: "expect visual approach runway 08", in the water. Water runways are never ATC's runways for a
   landplane now, and the Live Map leaves them out.

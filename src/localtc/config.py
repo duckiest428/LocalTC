@@ -194,9 +194,10 @@ class AtcConfig(_Section):
     # A far destination's runway from its weather (its METAR), or the calm-wind runway when nothing is known of it.
     # Recordings made before took it from the wind where the aircraft was, and replay with that.
     destination_weather: bool = True
-    # Where each airport's ATIS comes from: "sim" (LocalTC's, from the simulator's weather), "real" (the airport's real
-    # ATIS where it has one, else the simulator's), "hybrid" (the real ATIS, else the real METAR, else the
-    # simulator: only where there's no real report at all, however old the real one is).
+    # Where each airport's ATIS comes from: "sim" (LocalTC's, from the simulator's weather), "hybrid" or "real" (the
+    # same: the airport's real ATIS, the FAA's in the US and a VATSIM controller's elsewhere when one is on; else
+    # LocalTC's from the real METAR; else the simulator: only where there's no real report at all, however old the
+    # real one is).
     atis_source: Literal["sim", "real", "hybrid"] = "hybrid"
     # Arrows on the ground in the sim along the taxi route ground gave, a red stop bar short of a runway not cleared
     # onto or across (LocalTC's own objects: a package it puts in the sim's Community folder, shown from the sim's
@@ -271,7 +272,10 @@ class TrafficConfig(_Section):
     radius_nm: float = 40.0  # the real flights within this of the user
     max_live: int = 30  # never more of them at once (the nearest)
     parked: bool = True  # aircraft parked on the ramps of the airport the user is on the ground at
-    max_parked: int = 40  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
+    max_parked: int = 60  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
+    # How many: "realistic" (as full as the airport is at that hour: its size, the hour there, and how busy the live
+    # traffic shows it today, up to ``max_parked``), or "fixed" (``max_parked`` of them, the hour aside)
+    parked_fill: Literal["realistic", "fixed"] = "realistic"
     fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
     live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user

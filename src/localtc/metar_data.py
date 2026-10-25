@@ -1,5 +1,6 @@
 """Airports' real weather reports (METARs, from aviationweather.gov) and real ATIS (the FAA's digital ATIS, from
-atis.info), both free public APIs, for ATC (``[atc] atis_source``).
+atis.info, for US airports; elsewhere the ATIS of a VATSIM controller on there, from VATSIM's public data feed), all
+free public APIs, for ATC (``[atc] atis_source``).
 
 MSFS gives add-ons only the weather where the aircraft is, so the destination's weather was unknown until the
 aircraft got there: "the weather at the destination?" got "information not available", and its runway was chosen from
@@ -15,6 +16,7 @@ import logging
 import re
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -23,7 +25,12 @@ from localtc.sim_api import AtisReport, WeatherReport
 log = logging.getLogger(__name__)
 
 URL = "https://aviationweather.gov/api/data/metar"
-ATIS_URL = "https://atis.info/api/{icao}"  # US airports' digital ATIS; "No results found" elsewhere
+ATIS_URL = "https://atis.info/api/{icao}"  # US airports' digital ATIS; "No results found" (a 404) elsewhere
+# Everyone on VATSIM, its controllers' ATIS among them: worldwide, but only where a controller is on. Their runways and
+# approaches follow the real airport's (the network's controllers work to the real wind and procedures).
+VATSIM_URL = "https://data.vatsim.net/v3/vatsim-data.json"
+VATSIM_KEEP_S = 120.0  # the feed (a few MB, new every 15 s) fetched at most this often for all airports together
+FAA_PREFIXES = ("K", "P", "TJ", "TI")  # the airports atis.info has: the US's (Hawaii, Alaska, Guam, Puerto Rico ...)
 REFRESH_S = 1800.0  # a new METAR comes hourly (and specials between): looked for every half hour
 ATIS_REFRESH_S = 300.0  # a real ATIS looked for this often (a new letter comes hourly, specials between: caught soon)
 RETRY_S = 600.0  # a failed fetch (offline, the service busy) is tried again after this long
@@ -65,7 +72,24 @@ def parse(row: dict) -> WeatherReport:
 
 
 def fetch_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] | None:
-    """The airport's real ATIS (one, or an arrival and a departure one); None where there's none."""
+    """The airport's real ATIS (one, or an arrival and a departure one): the FAA's digital ATIS in the US, else (or
+    when it has none) a VATSIM controller's; None where there's neither. Dubai asked atis.info every ten minutes of a
+    fifteen-hour flight and got a 404 each time."""
+    icao = icao.upper()
+    if icao.startswith(FAA_PREFIXES):
+        try:
+            found = fetch_faa_atis(icao, timeout_s=timeout_s)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise
+            found = None
+        if found:
+            return found
+    return fetch_vatsim_atis(icao, timeout_s=timeout_s)
+
+
+def fetch_faa_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] | None:
+    """The FAA's digital ATIS (atis.info); None where it has none."""
     request = urllib.request.Request(ATIS_URL.format(icao=icao.upper()), headers={"User-Agent": "LocalTC"})
     with urllib.request.urlopen(request, timeout=timeout_s) as response:
         rows = json.loads(response.read() or b"[]")
@@ -78,7 +102,46 @@ def fetch_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] |
     return out or None
 
 
+_vatsim: tuple[float, list] = (-1e9, [])  # (when fetched, monotonic; the feed's ATIS list)
+_vatsim_lock = threading.Lock()
+
+
+def _vatsim_atis_list(timeout_s: float) -> list:
+    global _vatsim
+    with _vatsim_lock:
+        if time.monotonic() - _vatsim[0] < VATSIM_KEEP_S:
+            return _vatsim[1]
+        request = urllib.request.Request(VATSIM_URL, headers={"User-Agent": "LocalTC"})
+        with urllib.request.urlopen(request, timeout=timeout_s) as response:
+            feed = json.loads(response.read() or b"{}")
+        _vatsim = (time.monotonic(), [a for a in feed.get("atis") or () if isinstance(a, dict)])
+        return _vatsim[1]
+
+
+def fetch_vatsim_atis(icao: str, *, timeout_s: float = TIMEOUT_S, rows: list | None = None,
+                      now_zulu: str = "") -> list[AtisReport] | None:
+    """The ATIS of a VATSIM controller on at ``icao`` (OMDB_ATIS; LEPA_A_ATIS and LEPA_D_ATIS, an arrival's and a
+    departure's), from the network's public data feed; None when nobody's on there. Its time is now's (it's on the
+    air now; ``now_zulu``: the tests'). ``rows``: the feed's ATIS list (the tests')."""
+    icao = icao.upper()
+    out = []
+    for row in rows if rows is not None else _vatsim_atis_list(timeout_s):
+        callsign = str(row.get("callsign") or "").upper()
+        parts = callsign.split("_")
+        lines = row.get("text_atis") or ()
+        if parts[0] != icao or parts[-1] != "ATIS" or not lines or not row.get("atis_code"):
+            continue
+        middle = parts[1] if len(parts) == 3 else ""
+        kind = {"A": "arrival", "ARR": "arrival", "D": "departure", "DEP": "departure"}.get(middle, "both")
+        out.append(AtisReport(t=0.0, icao=icao, letter=str(row["atis_code"]).upper()[:1],
+                              text=" ".join(str(x) for x in lines), kind=kind,
+                              zulu=now_zulu or time.strftime("%H%M", time.gmtime()), source="vatsim"))
+    return out or None
+
+
 class MetarStore:
+    what = "METAR"
+
     def __init__(self, *, fetcher=fetch, background: bool = True) -> None:
         self.fetcher = fetcher
         self.background = background
@@ -113,7 +176,7 @@ class MetarStore:
         try:
             report = self.fetcher(icao)
         except Exception as exc:  # noqa: BLE001 - offline or the service busy: no report for now
-            log.info("METAR for %s not fetched: %s", icao, exc)
+            log.info("%s for %s not fetched: %s", self.what, icao, exc)
             with self._lock:
                 self._failed[icao] = time.monotonic()
                 self._fetching.discard(icao)
@@ -122,15 +185,20 @@ class MetarStore:
             self._fetching.discard(icao)
             if report is None:
                 self._failed[icao] = time.monotonic()  # no METAR station there: asked again later
+                if self.what == "ATIS":
+                    self._reports.pop(icao, None)  # the VATSIM controller went off, and their ATIS with them
                 return
             self._reports[icao] = (time.monotonic(), report)
         log.info("%s for %s: %s", "METAR" if isinstance(report, WeatherReport) else "ATIS", icao,
-                 report.raw if isinstance(report, WeatherReport) else " / ".join(f"{a.kind} {a.letter}" for a in report))
+                 report.raw if isinstance(report, WeatherReport)
+                 else " / ".join(f"{a.kind} {a.letter}{' (VATSIM)' if a.source == 'vatsim' else ''}" for a in report))
 
 
 class AtisStore(MetarStore):
     """The airports' real ATIS (``fetch_atis``), the same way: at once from memory, fetched in the background. The
     ATIS changes at least hourly; it's looked for every ``ATIS_REFRESH_S``."""
+
+    what = "ATIS"
 
     def __init__(self, *, fetcher=fetch_atis, background: bool = True) -> None:
         super().__init__(fetcher=fetcher, background=background)

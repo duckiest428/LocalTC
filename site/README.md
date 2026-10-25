@@ -25,7 +25,7 @@ app.js          the home page's motion: reveals, the hero's slides, the typing r
                 the subscription sum, copy buttons (pricing uses it too)
 img/            screenshots from the developer's own MSFS 2024 flights, each full size and at 960 px (-960.jpg)
 fonts/          Inter and JetBrains Mono, served from here on purpose
-logo.svg        the mark (the same file the app serves)
+logo.svg        the mark (the same file the app serves); favicon.ico the same as the app's icon (browsers ask for it)
 icon-180.png    apple-touch-icon
 og.png          the link preview card
 ```

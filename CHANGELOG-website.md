@@ -58,6 +58,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **Wrapped's icon** on the Dashboard is a gift box, no longer bars that looked like a phone's signal.
 
 ### Fixed
+- **The browser tab's icon is the new logo**: browsers kept the old one, so the icon has a new address, and
+  `favicon.ico` (which browsers ask for on their own) is the tower too.
 - **The logbook map**: every route is one unbroken line from its airport. Where the routes go all the way round the world, the map is cut where the fewest of them cross, and a route over the cut runs on to its airport drawn again there. The busiest airports' dots no longer grow so large, and an airport's visits count landing there (or a first departure), not flying in and out again as two.
 - **The pricing page's "Most popular" ribbon** shows whole again, over the card's top edge.
 

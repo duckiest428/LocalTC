@@ -200,7 +200,8 @@ function page(env: Env, kind: string, slug: string, card: Obj | null, hasImage: 
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(description)}">
 <meta name="twitter:image" content="${esc(image)}">
-<link rel="icon" href="${site}/logo.svg">
+<link rel="icon" href="${site}/favicon.ico?v=2" sizes="any">
+<link rel="icon" href="${site}/logo.svg?v=2" type="image/svg+xml">
 <link rel="stylesheet" href="${asset("styles.css")}">
 <link rel="stylesheet" href="${asset("sharecard.css")}">
 </head>

@@ -32,7 +32,8 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog | LocalTC</title>
 <meta name="description" content="Every LocalTC release and what changed in it.">
-<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico?v=2" sizes="any">
+<link rel="icon" href="logo.svg?v=2" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="styles.css">
 </head>

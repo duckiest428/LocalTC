@@ -8,6 +8,9 @@ at, and cached as JSON per ICAO.
 import msgspec
 
 FEET_PER_METER = 3.28084
+# The sim's surfaces that are water (SimConnect's facility runway surface: WATER_FSX, then OCEAN to WASTE_WATER):
+# a seaplane runway, as Honolulu's 08W/26W in Keehi Lagoon (whose ends the sim may name plain "08" and "26").
+WATER_SURFACES = frozenset({2, 26, 27, 28, 29, 30, 31})
 
 
 class RunwayEnd(msgspec.Struct, frozen=True, kw_only=True):
@@ -30,6 +33,11 @@ class Runway(msgspec.Struct, frozen=True, kw_only=True):
     primary: RunwayEnd
     secondary: RunwayEnd
     surface: int = 0
+
+    @property
+    def water(self) -> bool:
+        """A seaplane runway: never one for a landplane, nor what ATC gives."""
+        return self.surface in WATER_SURFACES or "W" in (self.primary.designator, self.secondary.designator)
 
     @property
     def idents(self) -> tuple[str, str]:

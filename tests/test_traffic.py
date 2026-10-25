@@ -617,3 +617,23 @@ def test_the_traffic_waits_while_atc_is_answering_the_pilot_or_owed_a_readback()
     engine.state.pending = PendingReadback("ground.taxi_to_gate", "tower", {}, (), ("taxi_route",), issued_t=t - 40)
     assert not engine.traffic_call("UAL531", "takeoff", tower.airport, "16R", t)  # the pilot's readback first
     assert engine.traffic_call("UAL532", "go_around", tower.airport, "16R", t)
+
+
+def test_the_same_aircraft_is_never_shown_twice_the_one_flying_kept():
+    """Real aircraft at the gates came without an account (the receivers hear them on the ground in the US): one of
+    them is also a flight in the air, or heard under two codes. The one flying stays, the one on the ground goes."""
+    m = manager()
+    m.on_feed([flight(hex_="a1", alt=2000.0), flight(hex_="b2", ground=True, gs=0.0, lat=0.006, lon=-0.004)],
+              "adsb.lol", NOW)
+    out = m.tick(NOW)
+    removed = of(RemoveAiAircraft, assign(m, out) + m.tick(NOW + 1))
+    assert len(removed) == 1 and set(m.planes) == {"live:a1"}  # the one flying; the other taken away once made
+    # Both on the ground: the first one shown stays
+    m = manager()
+    m.on_feed([flight(hex_="c3", ground=True, gs=0.0, lat=0.006, lon=-0.002)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    m.on_feed([flight(hex_="c3", ground=True, gs=0.0, lat=0.006, lon=-0.002),
+               flight(hex_="d4", ground=True, gs=0.0, lat=0.006, lon=0.002)], "adsb.lol", NOW + 2)
+    assign(m, m.tick(NOW + 2), NOW + 2)
+    m.tick(NOW + 3)
+    assert set(m.planes) == {"live:c3"}

@@ -43,8 +43,20 @@ SLOW_KT = 160.0  # flying slower than this, the tighter pattern
 # not a 30 degree cut (heading 203 for Denver's 16L, "that isn't the runway's heading"): given as the turn onto the
 # final has to start, a standard rate turn's radius ahead of the centreline (by the angle still to turn), and this
 # much more for the call and the pilot.
-VISUAL_LEAD_NM = 0.3
+VISUAL_LEAD_NM = 0.2
+# The call and the turn starting take this long (ATC's words, the readback, the heading knob), the aircraft still
+# closing on the centreline meanwhile: the turn onto 08L given on a base at 210 knots came with it already through.
+VISUAL_LEAD_S = 10.0
+AIRLINER_BANK_DEG = 25.0  # the autopilot's bank in a heading turn: the turn's radius at speed is wider than rate one
 OUTBOUND_DEG = 135  # further than this off the final's direction, an aircraft is flying away from the runway
+
+
+def turn_radius_nm(speed_kt: float) -> float:
+    """The radius of a turn at ``speed_kt``: rate one where that's a gentle bank, an airliner's 25 degrees above
+    (1.4 nm at 210 knots, not rate one's 1.1)."""
+    rate_one = speed_kt / 188.5
+    banked = speed_kt ** 2 / (11.26 * math.tan(math.radians(AIRLINER_BANK_DEG))) / 6076.1
+    return max(rate_one, banked)
 
 
 @dataclass(frozen=True)
@@ -115,9 +127,12 @@ def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float,
     if visual and (after == "intercept" or (abs(lateral) <= 3.5 and out >= p.gate_nm - 2 and not outbound_now)):
         cut = 1.0 if lateral >= 0 else -1.0
         to_turn = abs((((heading_true if heading_true is not None else inbound - 90 * cut) - inbound + 540) % 360) - 180)
-        radius = max(speed_kt, 120.0) / 188.5  # a standard rate turn's, in nm
-        # (The whole turn: from a base on 108 degrees off the final, more than a right angle's worth of room.)
-        if after == "intercept" or abs(lateral) <= radius * (1 - math.cos(math.radians(to_turn))) + VISUAL_LEAD_NM:
+        speed = max(speed_kt, 120.0)
+        # (The whole turn: from a base on 108 degrees off the final, more than a right angle's worth of room; and the
+        # call, the readback and the hand on the knob first, closing on the centreline all the while.)
+        closing = speed * math.sin(math.radians(min(to_turn, 90.0))) * VISUAL_LEAD_S / 3600.0
+        lead = turn_radius_nm(speed) * (1 - math.cos(math.radians(to_turn))) + closing + VISUAL_LEAD_NM
+        if after == "intercept" or abs(lateral) <= lead:
             return Vector(inbound, "intercept", out + abs(lateral), cut, out)
         if after == "base" and to_turn >= 60:  # on the base: on it until the turn onto the final
             return Vector((inbound - 90 * cut) % 360, "base", abs(lateral) + out, cut)

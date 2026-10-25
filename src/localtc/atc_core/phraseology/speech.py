@@ -288,9 +288,22 @@ def _capitalized(word: str) -> str:
     return "-".join(part.capitalize() for part in word.split("-"))
 
 
+# Approach facilities a scenery names by their code ("HCF APPROACH"), and what they're called on the radio
+FACILITY_CODES = {
+    "HCF": "Honolulu", "NCT": "NorCal", "SCT": "SoCal", "PCT": "Potomac", "N90": "New York", "A80": "Atlanta",
+    "C90": "Chicago", "D10": "Regional", "I90": "Houston", "D01": "Denver", "S46": "Seattle", "P50": "Phoenix",
+    "L30": "Las Vegas", "M98": "Minneapolis", "D21": "Detroit", "A90": "Boston", "F11": "Orlando", "P80": "Portland",
+    "T75": "St. Louis", "U90": "Tucson", "R90": "Omaha", "K90": "Cape", "Y90": "Yankee",
+}
+
+
 def station_name(name: str) -> str:
-    """Frequency names like "PAINE TOWER" -> "Paine Tower"."""
-    return " ".join(ABBREVIATIONS.get(w.upper(), w.capitalize()) for w in name.split())
+    """Frequency names like "PAINE TOWER" -> "Paine Tower"; "HCF APPROACH" -> "Honolulu Approach" (said "Hcf
+    Approach" on the radio)."""
+    words = name.split()
+    if len(words) > 1 and words[0].upper() in FACILITY_CODES:
+        words = [FACILITY_CODES[words[0].upper()], *words[1:]]
+    return " ".join(ABBREVIATIONS.get(w.upper(), w if w in FACILITY_CODES.values() else w.capitalize()) for w in words)
 
 
 def model_number(n: int) -> str:

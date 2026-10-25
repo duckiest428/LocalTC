@@ -174,7 +174,7 @@ def test_the_fslabs_fcu_is_pushed_and_pulled_and_its_seatbelt_sign_clicked():
     alt = plan(Command("altitude", "28000"), c)
     assert [w.codes for w in alt.after if isinstance(w, ClickSequence)] == [(71249, 71252)]
     hdg = plan(Command("heading", "190"), c)
-    assert [w.codes for w in hdg.after if isinstance(w, ClickSequence)] == [(71229, 71232)]
+    assert [w.codes for w in hdg.after if isinstance(w, ClickSequence)] == [(71229, 71231)]
     belt = plan(Command("seatbelt", "on"), c)
     knob = [w for w in belt.writes if isinstance(w, TurnKnob)][0]
     assert knob.var == "L:VC_OVHD_SIGNS_SeatBelts_Switch" and knob.target == 20

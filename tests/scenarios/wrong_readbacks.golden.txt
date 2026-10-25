@@ -2,7 +2,7 @@
 [     7.0] PILOT     121.8: Paine Ground, november one seven two lima tango, IFR to Boeing Field, ready to copy.
 [     9.0] ATC       Paine Ground 121.8: N172LT, contact Paine Clearance 127.25, good day.
 [    11.0] PILOT     127.25: Paine Clearance, november one seven two lima tango, IFR to Boeing Field, ready to copy.
-[    13.0] ATC       Paine Clearance 127.25: N172LT, stand by for your clearance.
+[    13.0] ATC       Paine Clearance 127.25: N172LT, clearance on request, stand by.
 [    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field as filed, expect runway 34L, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    31.0] PILOT     127.25: Cleared to Boeing Field, climb and maintain five thousand, departure one two four point six seven five, squawk one two three four, two lima tango.
 [    31.0] READBACK  clearance.ifr_at_cruise incorrect heard=squawk:1234
@@ -21,11 +21,11 @@
 [   124.0] PILOT     121.8: uh blah blah the thing with the stuff
 [   127.0] ATC       Paine Ground 121.8: Cessna 2LT, say again.
 [   129.0] PILOT     121.8: Paine Ground, two lima tango, disregard.
-[   301.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   301.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower on 120.2, good day.
 [   303.0] PILOT     121.8: Paine Ground, two lima tango, holding short runway 34L, ready for departure.
-[   305.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   305.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, so long.
 [   309.0] PILOT     120.2: Paine Tower, two lima tango, holding short runway 34L, ready for departure.
-[   312.0] ATC       Paine Tower 120.2: N172LT, roger, taxi to and hold short runway 34L.
+[   312.0] ATC       Paine Tower 120.2: N172LT, continue taxi, hold short runway 34L.
 [   314.0] PILOT     120.2: Hold short runway three four left, Cessna two lima tango.
 [   314.0] READBACK  tower.continue_hold_short correct
 [   322.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, fly runway heading, cleared for takeoff, wind 130 at 3.

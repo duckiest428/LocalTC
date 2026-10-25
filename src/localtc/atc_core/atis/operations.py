@@ -19,6 +19,7 @@ change in progress.
 """
 
 import random
+import re
 import zlib
 from dataclasses import dataclass, field
 
@@ -35,12 +36,21 @@ PARALLEL_DEG = 10.0
 @dataclass(frozen=True)
 class Notice:
     kind: str  # runway_closed, taxiway_closed, construction, ils_out, glideslope_out, approach_lights_out,
-    #            edge_lights_out, navaid_out, birds
+    #            edge_lights_out, navaid_out, birds, runway_shortened
     subject: str = ""  # "16L/34R", "B", "34R", "VOR"
-    real: str = ""  # a real NOTAM's number ("A1234/26"): from the FAA's NOTAMs, not drawn by LocalTC
+    real: str = ""  # a real NOTAM's number ("A1234/26"), or "ATIS": the real world's, not drawn by LocalTC
+    # A taxiway closed only between two points ("A/B", "RWY 04R/A": from the one to the other along it); the length
+    # left of a shortened runway, in feet ("7000").
+    detail: str = ""
 
     def text(self, icao_style: bool) -> str:
         s = self.subject
+        if self.kind == "taxiway_closed" and "/" in self.detail:
+            a, b = (_place(x) for x in self.detail.split("/", 1))
+            return f"taxiway {s} closed between {a} and {b}"
+        if self.kind == "runway_shortened":
+            return f"runway {s} shortened, {int(self.detail):,} feet available" if self.detail.isdigit() \
+                else f"runway {s} shortened"
         if icao_style:
             return {
                 "runway_closed": f"runway {s} closed", "taxiway_closed": f"taxiway {s} closed",
@@ -83,7 +93,8 @@ class Operations:
     notices: tuple[Notice, ...] = ()
     outages: Outages = NO_OUTAGES
     closed_runways: frozenset[str] = frozenset()  # ends
-    closed_taxiways: frozenset[str] = frozenset()
+    closed_taxiways: frozenset[str] = frozenset()  # closed along their length
+    closed_segments: tuple[tuple[str, str, str], ...] = ()  # (taxiway, from, to): closed between two points
     low_visibility: bool = False
     wind_shear: bool = False
     condition: RunwayCondition | None = None
@@ -97,6 +108,62 @@ class Operations:
                 self.notices, self.low_visibility, self.wind_shear, self.condition, self.deicing)
 
 
+def _place(ref: str) -> str:
+    """"RWY 04R" -> "runway 04R", "A" -> "A"."""
+    return f"runway {ref[4:]}" if ref.startswith("RWY ") else ref
+
+
+NOTAM_RUNWAY = r"(\d{1,2}[LRC]?)"
+TAXIWAY_NAME = r"[A-Z]{1,2}\d{0,3}[A-Z]?"
+
+
+def read_notices(text: str) -> list[tuple[str, str, str]]:
+    """What ATC can work to in a NOTAM's or an ATIS's words, as (kind, subject, detail) of ``Notice``: [] when it's
+    nothing of the kind (most are: obstacles, a stand, the fuel farm). A real ATIS writes them its own way: "TWY, E
+    BTN TWY, A AND TWY B CLSD, TWY, K BTN RWY, 4R AND TWY A CLSD, TWY T CLSD TWY H CLSD" (Honolulu), each a closure."""
+    t = " ".join(text.upper().split())
+    t = re.sub(r"\b(TWYS?|RWYS?),\s*", r"\1 ", t)  # "TWY, E" -> "TWY E"
+    out: list[tuple[str, str, str]] = []
+    if m := re.search(rf"\bRWY {NOTAM_RUNWAY}/{NOTAM_RUNWAY}\b[^.]*?\bCLSD\b", t):
+        if not re.search(r"\b(?:EXC|EXCEPT|BTN|BETWEEN|TWY|TAXIING)\b", t[:m.start()]) and "CLSD TO" not in t:
+            out.append(("runway_closed", f"{_rwy(m.group(1))}/{_rwy(m.group(2))}", ""))
+    for m in re.finditer(r"\bTWYS? (.+?)\bCLSD\b", t):
+        if "RWY" in t[max(0, m.start() - 12):m.start()]:
+            continue  # "RWY 22 TWY ... CLSD": a runway's
+        words = m.group(1).strip()
+        if seg := re.fullmatch(rf"({TAXIWAY_NAME}) (?:BTN|BETWEEN) (?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME}) AND "
+                               rf"(?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME})", words):
+            ref = lambda kind, name: f"RWY {_rwy(name)}" if kind == "RWY" else name
+            out.append(("taxiway_closed", seg.group(1), f"{ref(seg.group(2), seg.group(3))}/{ref(seg.group(5), seg.group(6))}"))
+            continue
+        for word in re.split(r",\s*|\s+", words):
+            if word in ("AND", "&"):
+                continue
+            if not re.fullmatch(TAXIWAY_NAME, word) or word in ("BTN", "DUE", "TO", "FM", "ON", "AT"):
+                break
+            out.append(("taxiway_closed", word, ""))
+    if m := re.search(rf"\b(?:ILS|LOC)\b[^.]*?\bRWY {NOTAM_RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE|NOT AVBL)\b", t):
+        kind = "glideslope_out" if re.search(r"\b(?:GP|GS|GLIDE ?PATH|GLIDESLOPE)\b", t) else "ils_out"
+        out.append((kind, _rwy(m.group(1)), ""))
+    elif m := re.search(rf"\b(?:GP|GS|GLIDE ?PATH|GLIDESLOPE)\b[^.]*?\bRWY {NOTAM_RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
+        out.append(("glideslope_out", _rwy(m.group(1)), ""))
+    if m := re.search(rf"\b(?:ALS|APCH LGT|APPROACH LIGHT\w*|ALSF-?\d|MALSR?)\b[^.]*?\bRWY {NOTAM_RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
+        out.append(("approach_lights_out", _rwy(m.group(1)), ""))
+    if m := re.search(r"\b(VOR(?:/DME)?|VORTAC|NDB|DME)\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
+        out.append(("navaid_out", m.group(1).split("/")[0], ""))
+    if m := re.search(rf"\bRWY {NOTAM_RUNWAY} (?:IS )?SHORTENED\b(?:[^.]*?(\d{{3,5}}) ?FT)?", t):
+        out.append(("runway_shortened", _rwy(m.group(1)), m.group(2) or ""))
+    if re.search(r"\bBIRD", t):
+        out.append(("birds", "", ""))
+    return out
+
+
+def _rwy(ident: str) -> str:
+    """"4R" -> "04R"."""
+    m = re.fullmatch(r"(\d{1,2})([LRC]?)", ident)
+    return f"{int(m.group(1)):02d}{m.group(2)}" if m else ident
+
+
 def notices_for(geo: AirportGeometry, seed: int | str) -> tuple[Notice, ...]:
     """The session's notices for an airport: a handful of ordinary ones, the same every time for the same seed."""
     rng = random.Random(zlib.crc32(f"{geo.airport.icao}:{seed}".encode()))
@@ -108,7 +175,7 @@ def notices_for(geo: AirportGeometry, seed: int | str) -> tuple[Notice, ...]:
         found.append(Notice("taxiway_closed", rng.choice(taxiways)))
     if taxiways and rng.random() < 0.10:
         found.append(Notice("construction", rng.choice(taxiways)))
-    runways = sorted(airport.runways, key=lambda r: -r.length_m)
+    runways = sorted((r for r in airport.runways if not r.water), key=lambda r: -r.length_m)
     if len(runways) >= 2 and rng.random() < 0.08:
         found.append(Notice("runway_closed", rng.choice(runways[1:]).name))
     ils_ends = sorted(e.ident for e in geo.ends if e.has_ils)

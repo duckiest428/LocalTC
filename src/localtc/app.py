@@ -205,9 +205,15 @@ def traffic_atc(engine) -> "AtcLink":
         end = engine.runway_in_use(icao, own) if own is not None else None
         return end.ident if end is not None else None
 
+    def runway_for(icao: str, **kw) -> str | None:
+        return engine.runway_for(icao, **kw)
+
+    def closed(icao: str) -> tuple[frozenset[str], frozenset[int]]:
+        return engine.closed_taxiways(icao)
+
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
                    destination=lambda: engine.state.flight.destination or "", call=call, managed=managed,
-                   runway_in_use=runway_in_use)
+                   runway_in_use=runway_in_use, runway_for=runway_for, closed=closed)
 
 
 _OPS = None

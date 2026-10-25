@@ -76,6 +76,9 @@ class Cockpit:
     dead: set[str] = field(default_factory=set)
     # The aircraft's own variables its profile reads (AircraftVars): the FSLabs's switch positions and windows.
     vars: dict[str, float] = field(default_factory=dict)
+    # On ATC's vectors (a heading given, not on a "descend via"): off the flight plan's path, so a new altitude is flown
+    # open (the knob pulled: OP CLB / OP DES), not managed (pushed: DES needs NAV, and the A321 sat level in ALT)
+    vectored: bool = False
 
     def watch(self) -> None:
         """Note which readings changed since the last look (``own`` and ``systems`` just replaced)."""
@@ -328,6 +331,16 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         event = SendSimEvent(name="CABIN_SEATBELTS_ALERT_SWITCH_TOGGLE")  # a toggle: only sent when it isn't so
         return Plan(a, v, (_write(p, "seatbelt", event, on=on),), _sys("seatbelt", on), f"Seatbelt sign {v}.",
                     reads="seatbelt")
+    if a == "knob":  # an FCU knob pushed (managed) or pulled (selected, open)
+        writes = _knob_after(p, f"{cmd.target}_{v}")
+        if not writes:
+            return f"I can't {v} the {cmd.target} knob in this one."
+        up = c.own is not None and c.systems is not None and c.systems.ap_altitude_sel > c.own.alt_indicated_ft + 200
+        what = {("speed", "push"): "Speed managed.", ("speed", "pull"): "Speed selected.",
+                ("altitude", "push"): "Altitude pushed, managed.",
+                ("altitude", "pull"): "Open climb." if up else "Open descent.",
+                ("heading", "pull"): "Heading selected.", ("heading", "push"): "Managed nav."}[(cmd.target, v)]
+        return Plan(a, v, writes, lambda _c: None, what)
     if a == "apu":
         start = v != "stop"
         running = c.systems is not None and c.systems.apu_pct >= APU_RUNNING
@@ -394,7 +407,8 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
             first = (ClickSequence(name="altitude 100s", codes=tuple(w.fine_codes), event=w.click_event),)
         # Flying, an Airbus's knob is pushed once the new altitude shows: the climb or descent managed (the
         # A350's sat in ALT with FL230 set).
-        after = _knob_after(p, "altitude_push") if c.own is not None and not c.own.on_ground else ()
+        knob = "altitude_pull" if c.vectored and "altitude_pull" in p.actions else "altitude_push"
+        after = _knob_after(p, knob) if c.own is not None and not c.own.on_ground else ()
         return Plan(a, v, (*first, _write(p, "altitude", SendSimEvent(name="AP_ALT_VAR_SET_ENGLISH", value=ft), ft)),
                     _sys("ap_altitude_sel", float(ft)), f"{speech.altitude_display(ft)} set.",
                     f"{speech.altitude(ft)} set", reads="ap_altitude_sel", after=after)

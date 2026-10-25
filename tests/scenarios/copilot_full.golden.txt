@@ -1,20 +1,20 @@
 [     0.0] PHASE     - -> PARKED (initial state)
 [     1.0] TUNE      COM1 127.25
 [     5.0] PILOT     127.25: Paine Clearance, N172LT, IFR to Boeing Field, ready to copy
-[     7.0] ATC       Paine Clearance 127.25: N172LT, stand by for your clearance.
+[     7.0] ATC       Paine Clearance 127.25: N172LT, clearance on request, stand by.
 [    22.0] ATC       Paine Clearance 127.25: Cessna 2LT, cleared to Boeing Field as filed, expect runway 34L, climb and maintain 5,000, departure frequency 124.675, squawk 3260.
 [    26.0] PILOT     127.25: Cleared to Boeing Field as filed, climb and maintain five thousand, departure one two four point six seven five, squawk three two six zero, Cessna two lima tango.
 [    26.0] READBACK  clearance.ifr_at_cruise correct
-[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct. When ready for push and start, contact Paine Ground on 121.8.
+[    29.0] ATC       Paine Clearance 127.25: Cessna 2LT, readback correct. When ready for push and start, contact Paine Ground on 121.8, good day.
 [    33.0] PILOT     127.25: Paine Ground one two one point eight, Cessna two lima tango.
 [    33.0] READBACK  clearance.readback_correct_ground correct
 [    41.0] TUNE      COM1 121.8
 [    48.0] PILOT     121.8: Paine Ground, N172LT, ready to taxi, with information Oscar
-[    50.0] ATC       Paine Ground 121.8: N172LT, runway 34L at A1, taxi via C, A, A1.
+[    50.0] ATC       Paine Ground 121.8: N172LT, taxi to runway 34L at A1 via C, A, A1.
 [    53.0] PILOT     121.8: Runway three four left at alpha one, taxi via charlie, alpha, alpha one, Cessna two lima tango.
 [    53.0] READBACK  ground.taxi_out_at correct
 [    92.0] PHASE     PARKED -> TAXI_OUT (started moving)
-[   301.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2, good day.
+[   301.0] ATC       Paine Ground 121.8: Cessna 2LT, contact Paine Tower 120.2.
 [   305.0] PILOT     121.8: Paine Tower one two zero point two, Cessna two lima tango.
 [   305.0] READBACK  ground.handoff_tower correct
 [   314.0] TUNE      COM1 120.2
@@ -54,8 +54,8 @@
 [  1383.0] ATC       Seattle Approach 119.2: N172LT, Seattle Approach, expect ILS runway 14R approach, descend and maintain 3,000, Boeing altimeter 29.92.
 [  1387.0] PILOT     119.2: Descend and maintain three thousand, expect I L S runway one four right, Cessna two lima tango.
 [  1387.0] READBACK  approach.descend correct
-[  1395.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly heading 164, vectors ILS runway 14R approach.
-[  1398.0] PILOT     119.2: Heading one six four, Cessna two lima tango.
+[  1395.0] ATC       Seattle Approach 119.2: Cessna 2LT, fly present heading, vectors ILS runway 14R approach.
+[  1398.0] PILOT     119.2: Present heading, Cessna two lima tango.
 [  1398.0] READBACK  approach.present_heading correct
 [  1770.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [  1899.0] ATC       Seattle Approach 119.2: Cessna 2LT, cleared ILS runway 14R approach, contact Boeing Tower 120.6.
@@ -68,13 +68,13 @@
 [  2071.0] PILOT     120.6: Cleared to land runway one four right, Cessna two lima tango.
 [  2071.0] READBACK  tower.land correct
 [  2241.0] PHASE     APPROACH -> LANDING (short final runway 14R)
+[  2330.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground 121.9, good day.
+[  2333.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
+[  2333.0] READBACK  tower.exit_contact_ground correct
 [  2341.0] PHASE     LANDING -> TAXI_IN (rollout complete)
-[  2341.0] ATC       Boeing Tower 120.6: Cessna 2LT, contact Boeing Ground on 121.9 when clear of the runway, good day.
-[  2344.0] PILOT     120.6: Boeing Ground one two one point niner, Cessna two lima tango.
-[  2344.0] READBACK  tower.exit_contact_ground correct
-[  2353.0] TUNE      COM1 121.9
-[  2359.0] PILOT     121.9: Boeing Ground, N172LT, clear of runway 14R, taxi to parking
-[  2362.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to the general aviation ramp via A, C.
-[  2365.0] PILOT     121.9: Taxi to the GA ramp via alpha, charlie, Cessna two lima tango.
-[  2365.0] READBACK  ground.taxi_in_ramp correct
+[  2342.0] TUNE      COM1 121.9
+[  2348.0] PILOT     121.9: Boeing Ground, N172LT, clear of runway 14R, taxi to parking
+[  2351.0] ATC       Boeing Ground 121.9: Cessna 2LT, taxi to the general aviation ramp via A, C.
+[  2354.0] PILOT     121.9: Taxi to the GA ramp via alpha, charlie, Cessna two lima tango.
+[  2354.0] READBACK  ground.taxi_in_ramp correct
 [  2751.0] PHASE     TAXI_IN -> PARKED (stopped at the stand)

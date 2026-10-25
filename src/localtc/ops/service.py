@@ -120,8 +120,8 @@ class OpsData:
         if got is None or got.data is None:
             return None
         now = self.clock()
-        items = tuple(NoticeItem(kind=k, subject=s, id=n.id, text=n.text[:200]) for n in notams if n.in_force(now)
-                      for k, s in notices_of(n))
+        items = tuple(NoticeItem(kind=k, subject=s, detail=d, id=n.id, text=n.text[:200]) for n in notams
+                      if n.in_force(now) for k, s, d in notices_of(n))
         return NoticesReport(t=t, icao=icao.upper(), notices=items, source=got.source, count=len(notams))
 
 

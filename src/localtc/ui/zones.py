@@ -95,6 +95,9 @@ def zones(engine: Any, plan: Any, airport: Callable[[str], Airport | None],
         if expected is not None and expected != tuned else None,
         "center": here.name if here is not None else None,
         "rules": _rules(engine, plan),
+        # Each end airport's ATIS letter: the map draws its ground again when it changes (the runways in use, closures)
+        "atis": {icao: info.letter for icao in (origin, destination) if icao and engine is not None
+                 and (info := engine.current_atis(icao)) is not None},
         "classes": vfr_classes(known or [], bounds, [a["icao"] for a in airports]),
     }
 

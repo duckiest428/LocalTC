@@ -99,9 +99,11 @@ text = ["{callsign}, roger, expect the visual approach runway {runway}, vectors 
 [[template]]
 id = "approach.present_heading"
 controller = "approach"
-text = ["{callsign}, fly heading {heading}, vectors {approach} approach.", "{callsign}, fly heading {heading}, vectors for runway {runway}."]
-readback = { required = ["heading"] }
-pilot_readback = "Heading {heading}, {callsign_short}."
+# Already pointing the right way: "fly present heading", not its number read out as if it were a turn
+text = ["{callsign}, fly present heading, vectors {approach} approach.",
+        "{callsign}, continue present heading, vectors {approach} approach."]
+readback = { optional = ["heading"] }
+pilot_readback = "Present heading, {callsign_short}."
 
 [[template]]
 id = "approach.fly_heading"

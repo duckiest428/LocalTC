@@ -44,11 +44,26 @@ CREW_STYLE = (
 
 
 
-def made_up(text: str, audio_s: float) -> bool:
-    """Words Whisper made up: more than anyone says in that long (a fast call is 4 words a second), or a few words
-    over and over ("A7, B7, A7, A9, B2, A7, ..." from 0.8 s of noise)."""
+# What Whisper says when it hears nothing much: the credits and captions of the videos it learned from. "NASA Jet
+# Propulsion Laboratory, California Institute of Technology" came out of 1.1 s of a key pressed by mistake, and
+# Ground answered it ("say again") when the pilot hadn't said a word.
+CAPTIONS = re.compile(
+    r"\b(?:jet propulsion laboratory|california institute of technology|thanks? (?:you )?for watching|"
+    r"subscribe to (?:my|the|our) channel|please subscribe|like and subscribe|subtitles? by|captions? by|"
+    r"transcribed by|amara\.org|translated by|www\.|copyright|all rights reserved|see you in the next video)", re.I)
+QUICK_WORDS_PER_S = 5.0  # this fast from a short, doubtful clip: made up too
+DOUBTFUL_CONFIDENCE, SHORT_CLIP_S = 0.5, 2.0
+
+
+def made_up(text: str, audio_s: float, confidence: float | None = None) -> bool:
+    """Words Whisper made up: more than anyone says in that long (a fast call is 4 words a second), a few words
+    over and over ("A7, B7, A7, A9, B2, A7, ..." from 0.8 s of noise), a video's credits, or a whole sentence out of a
+    second of doubtful sound."""
     words = re.findall(r"[a-z0-9]+", text.lower())
-    if len(words) > WORDS_PER_S * audio_s + 6:
+    if len(words) > WORDS_PER_S * audio_s + 6 or CAPTIONS.search(text):
+        return True
+    if confidence is not None and confidence < DOUBTFUL_CONFIDENCE and audio_s <= SHORT_CLIP_S \
+            and len(words) > QUICK_WORDS_PER_S * audio_s:
         return True
     return len(words) >= 16 and len(set(words)) < len(words) / 4
 
@@ -191,7 +206,7 @@ class VoiceService:
         if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:
             log.info("Dropped %r: confidence %.2f on %.1f s of audio, made up from noise", text, result.confidence, audio_s)
             text = ""
-        elif text and made_up(text, audio_s):
+        elif text and made_up(text, audio_s, result.confidence):
             log.info("Dropped %r: more words than %.1f s of audio holds, or the same few over and over", text[:80], audio_s)
             text = ""
         log.info("Heard %r in %.1f s of audio (%.1f s with speech, %.0f ms, confidence %.2f)", text, audio_s,

@@ -4,7 +4,8 @@
 [[template]]
 id = "common.contact"
 controller = "any"
-text = ["{callsign}, contact {station} {frequency}."]
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} on {frequency}, good day.",
+        "{callsign}, contact {station} {frequency}, so long."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 
@@ -156,7 +157,7 @@ text = ["{callsign}, roger, thanks for the report.", "{callsign}, thank you, I'l
 [[template]]
 id = "common.traffic"
 controller = "any"
-text = ["{callsign}, traffic, {message}."]
+text = ["{callsign}, traffic, {message}.", "{callsign}, traffic {message}."]
 
 [[template]]
 id = "common.check_altitude"

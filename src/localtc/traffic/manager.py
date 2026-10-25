@@ -124,6 +124,8 @@ TAXI_IN_MPS = 2.5  # and rolls onto the stand's marker at a walking pace, stoppi
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
 PATH_MIN_M = 8.0  # on the ground, moved this far between two reports: its track is the way it went
+# A real one taxiing, as shown: its speed changed at most this much a second, and never faster than this off a runway
+GROUND_ACCEL_KT_S, GROUND_BRAKE_KT_S, TAXI_MAX_KT = 1.0, 2.5, 30.0
 GROUND_SNAP_M = 150.0  # on the ground, a correction bigger than this ...
 GROUND_SNAP_NM = 1.0  # ... is made at once this far from the user (out of sight), ...
 GROUND_BLEND_MAX_S = 60.0  # ... else eased out over this long
@@ -203,6 +205,11 @@ class AtcLink:
     call: Callable[..., list[Any]] = lambda **kw: []
     managed: Callable[[set[int]], None] = lambda ids: None  # the object ids that are LocalTC's, each second
     runway_in_use: Callable[[str], str | None] = lambda icao: None  # the departure runway at an airport, by ATC
+    # The runway ATC gives one flight there: (icao, landing=, aircraft_type=, lat=, lon=, key=callsign) -> its ident,
+    # one of the runways in use for its way, spread over them by its size and where it is.
+    runway_for: Callable[..., str | None] = lambda icao, **kw: None
+    # The taxiways closed at an airport: (names closed along their length, taxi path indexes closed between two points)
+    closed: Callable[[str], tuple[frozenset[str], frozenset[int]]] = lambda icao: (frozenset(), frozenset())
 
 
 @dataclass
@@ -312,7 +319,7 @@ class TrafficManager:
         self._call_t = -1e9  # the last time tower told one to hold short
         # The departures due from an airport (ops.schedules, fetched by the service): by airport.
         self.scheduled: dict[str, list] = {}
-        self._graphs: dict[str, TaxiGraph] = {}
+        self._graphs: dict[str, tuple[tuple, TaxiGraph]] = {}  # airport: (its closures, the graph around them)
         self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
 
     # --- what happens ------------------------------------------------------------------------------------------
@@ -430,6 +437,7 @@ class TrafficManager:
         if self.s.parked:
             out += self._parked(now)
         out += self._scheduled(now)
+        out += self._dedupe()
         out += self._clear_reserved()
         self.atc.managed({p.object_id for p in self.planes.values() if p.object_id is not None})
         if self.s.atc_control:
@@ -714,6 +722,12 @@ class TrafficManager:
         plane.turn_dps = turn if not f.on_ground else 0.0
         plane.used_t = f.t
         gs, airborne = f.gs_kt, not f.on_ground
+        if not airborne and plane.sent is not None and plane.sent[4] >= 0 and not self._on_a_runway(lat, lon):
+            # Taxiing: an airliner's pace, picked up and lost gently. The receivers' ground speeds jump from one report
+            # to the next ("the Delta Connection went really fast, accelerated, very inconsistent").
+            dt = max(0.5, now - plane.sent[7])
+            gs = max(plane.sent[4] - GROUND_BRAKE_KT_S * dt, min(plane.sent[4] + GROUND_ACCEL_KT_S * dt, gs))
+            gs = min(gs, TAXI_MAX_KT)
         if not airborne and gs < 8 and plane.sent is not None \
                 and abs(((f.track - plane.sent[3]) + 180) % 360 - 180) > 120:
             # Going the way its tail points (pushed back): the nose stays where it was, the speed backwards (it was
@@ -1254,7 +1268,9 @@ class TrafficManager:
         before = -(dx * u[0] + dy * u[1])
         right = dx * u[1] - dy * u[0]  # metres right of the centreline: steered back onto it
         loc.hdg = (end.heading_true - max(-15.0, min(15.0, right / 40.0))) % 360
-        elev = geo.airport.elev_ft
+        # The runway's own height, not the airport's: Phoenix's 26 lies lower than its field elevation, and the Delta
+        # landed on it floated down it above the pavement until the sim was asked where the ground was.
+        elev = end.runway.runway.elev_ft or geo.airport.elev_ft
         if not loc.on_ground:
             path = elev + 50 + max(0.0, before) / 0.3048 * GLIDE  # 50 ft over the threshold, 3 degrees
             loc.vs_fpm = max(-1500.0, min(0.0, (path - loc.alt_ft) * 6 - loc.gs_kt * KT_TO_FPM * GLIDE))
@@ -1367,7 +1383,13 @@ class TrafficManager:
             runway = geo.runway_at(real.lat, real.lon, 10.0)
             if runway is not None and (end := runway.end_for_heading(real.track, 60)) is not None:
                 return end
-        if (ident := self.atc.runway_in_use(geo.icao)) and (end := geo.end(ident)) is not None:
+        f = plane.flight
+        spots = geo.airport.parking
+        stand = spots[plane.spot[1]] if plane.spot is not None and plane.spot[1] < len(spots) else None
+        kind = (f.type or self.types(f.hex)) if f is not None else ""
+        ident = self.atc.runway_for(geo.icao, landing=False, aircraft_type=kind, lat=stand.lat if stand else None,
+                                    lon=stand.lon if stand else None, key=plane.callsign or plane.key)
+        if (ident or (ident := self.atc.runway_in_use(geo.icao))) and (end := geo.end(ident)) is not None:
             return end
         return max(geo.ends, key=lambda e: e.runway.runway.length_m, default=None)
 
@@ -1474,9 +1496,11 @@ class TrafficManager:
         geo = self._geo(icao)
         if geo is None:
             return None
-        if icao not in self._graphs:
-            self._graphs[icao] = TaxiGraph(geo)
-        return self._graphs[icao]
+        closed, pieces = self.atc.closed(icao)
+        if icao not in self._graphs or self._graphs[icao][0] != (closed, pieces):
+            # Around the taxiways the airport's ATIS has closed, as ATC routes the user
+            self._graphs[icao] = ((closed, pieces), TaxiGraph(geo, closed=closed, closed_paths=pieces))
+        return self._graphs[icao][1]
 
     def _taken(self, icao: str) -> list[tuple[float, float]]:
         """Where aircraft stand at ``icao``: LocalTC's on their stands, the live ones standing, the user's gate."""
@@ -1688,9 +1712,39 @@ class TrafficManager:
         self.planes[plane.key] = plane
         self.by_request[plane.request_id] = plane
 
+    def _dedupe(self) -> list[Any]:
+        """Each aircraft shown once. The same flight (its callsign, or its registration) twice, as a stand-in at the
+        gate and the real one in the receivers' sight, or under two transponder codes: the one flying is kept and the
+        one on the ground taken away; both on the ground, the real one over a stand-in, else the one shown longest.
+        Two on the same stand: likewise."""
+        groups: dict[str, list[Plane]] = {}
+        for plane in self.planes.values():
+            ident = (plane.callsign or "").upper().replace(" ", "")
+            if ident:
+                groups.setdefault(ident, []).append(plane)
+            reg = (plane.flight.registration if plane.flight is not None else "").upper().replace("-", "")
+            if reg and reg != ident:
+                groups.setdefault(f"reg:{reg}", []).append(plane)
+            if plane.spot is not None and plane.mode in ("parked", "live"):
+                groups.setdefault(f"spot:{plane.spot[0]}:{plane.spot[1]}", []).append(plane)
+        out: list[Any] = []
+        for planes in groups.values():
+            planes = [p for p in planes if p.key in self.planes]
+            if len(planes) < 2:
+                continue
+            keep = max(planes, key=_keep_first)
+            for plane in planes:
+                if plane is not keep:
+                    self._did(f"{plane.callsign or 'An aircraft'} shown twice: the one "
+                              f"{'flying' if _flying(keep) else 'from the live data' if keep.live else 'there first'} kept")
+                    out += self._remove(plane)
+        return out
+
     def _remove(self, plane: Plane) -> list[Any]:
         self.planes.pop(plane.key, None)
-        self.by_request.pop(plane.request_id, None)
+        if plane.object_id is not None or plane.request_id == 0:
+            # (Still being made: its request is kept, so the object is taken away as soon as the sim makes it)
+            self.by_request.pop(plane.request_id, None)
         if plane.object_id is not None:
             self.by_object.pop(plane.object_id, None)
             return [RemoveAiAircraft(object_id=plane.object_id)]
@@ -1702,6 +1756,18 @@ class TrafficManager:
 
 
 __all__ = ["AtcLink", "TrafficManager", "TrafficSettings"]
+
+
+def _flying(plane: Plane) -> bool:
+    if plane.local is not None:
+        return not plane.local.on_ground
+    return plane.flight is not None and not plane.flight.on_ground and plane.mode != "parked"
+
+
+def _keep_first(plane: Plane) -> tuple:
+    """Which of two of the same aircraft stays: the one flying, then the real one (the live data), then the one shown
+    first."""
+    return _flying(plane), plane.live, plane.object_id is not None, -plane.created_t
 
 
 def _hhmm(t: float) -> str:

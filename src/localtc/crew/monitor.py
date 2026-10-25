@@ -81,7 +81,8 @@ GEAR_UP_WAIT_S = 1.0  # positive rate, then "gear up" (and the gear up) straight
 FLAP_STEP_WAIT_S = 6.0
 RETRACT_MARGIN_KT = 15.0  # a notch up this far below the current detent's placard speed
 RETRACT_MIN_AGL = 1000.0
-HANDOFF_LATE_S = 60.0
+APPROACH_CHECKLIST_AGL_FT = 2000.0  # the approach checklist offered with the approach begun, while there's time
+HANDOFF_LATE_S = 180.0  # not on the new frequency this long after a handoff: said (after a minute, it nagged)
 READBACK_LATE_S = 18.0
 TAXI_SPEED_MARGIN_KT = 5.0  # a knot or two over the taxi limit isn't worth a word
 TAXI_RUNWAY_M = 60.0  # this close to a runway's edge, closing on it: hold short
@@ -507,6 +508,14 @@ class Monitor(WatchMixin):
                                commands=(Command("transponder", "alt"),) if self.hands else ())
             elif iid.startswith("approach.cleared") or iid == "approach.intercept_cleared":
                 self.f.said.setdefault("approach_cleared_t", t)
+            if iid == "clearance.readback_correct_ground" or iid.startswith("ground.pushback") \
+                    or iid == "ground.startup":
+                # Cleared, or the push approved: the before start checklist now, before the push and the start
+                # (it came as the aircraft was already being pushed back)
+                own, sys_ = self.c.own, self.c.systems
+                if own is not None and own.on_ground and self.f.landing_t is None \
+                        and (sys_ is None or sys_.engines_running == 0):
+                    self._prompt_checklist("before_start", t=t + (20.0 if iid.startswith("clearance") else 4.0))
 
     # --- phases ------------------------------------------------------------------------------------------------
 
@@ -516,8 +525,6 @@ class Monitor(WatchMixin):
         with regions.speaking(self._region()):
             if phase == "RUNWAY_HOLD":
                 self._prompt_checklist("line_up", t=t)
-            elif phase == "PUSHBACK":
-                self._prompt_checklist("before_start", t=t)
             elif phase == "TAXI_OUT":
                 self._prompt_checklist("after_start", "taxi", t=t + 5)
             elif phase == "ARRIVAL" and previous == "CRUISE":
@@ -529,6 +536,9 @@ class Monitor(WatchMixin):
                                                    f"Top of climb, level {speech.altitude_display(int(level))}."])
             elif phase == "APPROACH":
                 self.f.approaches += 1
+                own = self.c.own
+                if own is not None and own.alt_agl_ft > APPROACH_CHECKLIST_AGL_FT:
+                    self._prompt_checklist("approach", t=t + 3)  # on the approach, not back at the transition level
             elif phase == "TAXI_IN" and previous == "LANDING":
                 self.f.said["rolled_out"] = t  # the after-landing calls once off the runway (``_ground``)
 
@@ -905,7 +915,7 @@ class Monitor(WatchMixin):
                            + (" set." if self.hands else "."), commands=(Command("altimeter", f"{q:.2f}"),))
             else:
                 self._call("transition_descent", ROUTINE, t, "Transition level, local altimeter.")
-            self._prompt_checklist("approach", "descent", t=t + 3)
+            self._prompt_checklist("descent", t=t + 3)
         limit = 250 if st is None or not st.assignments.speed_kt or st.assignments.speed_kt <= 250 else None
         if limit and alt < STERILE_FT - 300 and agl > 1500 and own.ias_kt > limit + 10:
             self.speed_high_since = self.speed_high_since or t

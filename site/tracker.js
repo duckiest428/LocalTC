@@ -292,7 +292,9 @@ const Tracker = {
     if (!this.plane && this.follow) this.map.fitBounds(this.trail.getBounds(), { padding: [30, 30], maxZoom: 11 });
   },
   icon(hdg, cls, size) {
-    const svg = `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
+    // Drawn as what's being flown (a Cessna as a Cessna, not an airliner)
+    const d = AtcMap.shape(AtcMap.kindOf(this.status.aircraft || ""));
+    const svg = `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path d="${d}"/></svg>`;
     return L.divIcon({ className: `tr-plane ${cls}`, html: `<div style="transform:rotate(${Number(hdg) || 0}deg)">${svg}</div>`,
       iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
   },

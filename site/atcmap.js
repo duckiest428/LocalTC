@@ -75,13 +75,20 @@ const AtcMap = (() => {
       L.polyline(segs, { ...quiet, color: "#16120a", weight: 10, opacity: 0.85, lineCap: "round" }).addTo(g.base);
       L.polyline(segs, { ...quiet, color: "#e9b949", weight: 3, opacity: 0.95, lineCap: "round" }).addTo(g.base);
     }
+    // The taxiways the airport's ATIS has closed (all of one, or a stretch of it): red, crossed by dashes
+    const shut = (a.taxiways || []).filter((s) => s.closed).map((s) => chain([s.a, s.b]));
+    if (shut.length) {
+      L.polyline(shut, { ...quiet, color: "#ff4d4d", weight: 6, opacity: 0.9, lineCap: "butt", dashArray: "6 5" }).addTo(g.base);
+    }
     for (const rw of a.runways || []) {
       L.polygon(ring(rw.outline), { ...quiet, color: "#eef1f4", weight: 1.4, fillColor: "#2f343a", fillOpacity: 0.97 }).addTo(g.base);
       const [p, q] = rw.ends.map((e) => at(e.at[0], e.at[1]));
       L.polyline([p, q], { ...quiet, color: "#eef1f4", weight: 1.2, opacity: 0.8, dashArray: "10 10" }).addTo(g.base);
       for (const e of rw.ends) {
+        // upright: read at a glance; the ATIS's runways in use marked ARR, DEP or ARR/DEP under the number
+        const use = { arr: "ARR", dep: "DEP", both: "ARR/DEP" }[e.use] || "";
         L.marker(at(e.at[0], e.at[1]), { icon: L.divIcon({ className: "", iconSize: [0, 0],
-          html: `<div class="rwy-num" style="transform:translate(-50%,-50%)">${esc(e.ident)}</div>` }),  // upright: read at a glance
+          html: `<div class="rwy-num${use ? " in-use " + e.use : ""}" style="transform:translate(-50%,-50%)">${esc(e.ident)}${use ? `<span class="rwy-use">${use}</span>` : ""}</div>` }),
           interactive: false, keyboard: false }).addTo(g.labels);
       }
     }
@@ -202,6 +209,7 @@ const AtcMap = (() => {
     <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
     <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
     <div class="lg-row lg-wx"><span class="sw sw-notam"></span>NOTAMs (a closed runway red)</div>
+    <div class="lg-row"><span class="sw sw-twy-closed"></span>Taxiway closed (the ATIS's notices)</div>
     <div class="lg-vfr">
       <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
       <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
@@ -243,14 +251,47 @@ const AtcMap = (() => {
   }
 
   /* Traffic, as the app's Live Map shows it: each aircraft pointing its way, airborne cyan and on the ground grey,
-     labelled with its callsign, its altitude in hundreds of feet (or GND) and its type. */
-  const PLANE = (color, size) => `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path fill="${color}" stroke="#000" stroke-width="1" d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
+     labelled with its callsign, its altitude in hundreds of feet (or GND) and its type, drawn as what it is: an
+     airliner, a widebody, a regional or business jet, a turboprop, a light aircraft or a helicopter (a Cessna was
+     drawn as an airliner). */
+  const SHAPES = {
+    jet: "M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z",
+    heavy: "M16 .8c1.4 0 2.3 1.6 2.3 3.5v6.9l12.9 7.2v3.3l-12.9-3.6v6.6l3.6 2.4v2.5l-5.9-1.6-5.9 1.6v-2.5l3.6-2.4v-6.6L.8 21.7v-3.3l12.9-7.2V4.3C13.7 2.4 14.6.8 16 .8zM7.6 16.2h2.2v3.6H7.6zM22.2 16.2h2.2v3.6h-2.2zM11.5 14h2v3.2h-2zM18.5 14h2v3.2h-2z",
+    regional: "M16 4c.9 0 1.5 1.2 1.5 2.6v7.6l8.5 4.2v2.3l-8.5-2.3v4.4l.9.3v-3.4h2.1v4.1l1.2.4v2.1l-4.4-1.1-.7 1.6h-1.2l-.7-1.6-4.4 1.1v-2.1l1.2-.4v-4.1h2.1v3.4l.9-.3v-4.4L6 20.4v-2.3l8.5-4.2V6.6C14.5 5.2 15.1 4 16 4z",
+    turboprop: "M15 3.5c0-.8.4-1.5 1-1.5s1 .7 1 1.5V11h11.5v3H17v9.5h4.5V26h-11v-2.5H15V14H3.5v-3H15zM8.4 8.5h2.2v6.8H8.4zM21.4 8.5h2.2v6.8h-2.2z",
+    light: "M15.1 5.2c0-.9.4-1.7.9-1.7s.9.8.9 1.7v6.6h12.4v2.8H16.9v8.2h3.8v2.4h-9.4v-2.4h3.8v-8.2H2.7v-2.8h12.4zM12.6 2.6h6.8v1.2h-6.8z",
+    heli: "M16 9.5c2.5 0 4.3 2.4 4.3 5.4s-1.8 5.4-4.3 5.4-4.3-2.4-4.3-5.4 1.8-5.4 4.3-5.4zM15.3 19.5h1.4v8.8h-1.4zM12.8 27.4h6.4v1.4h-6.4zM2.5 14.3h27v1.3h-27zM15.35 1.5h1.3v27h-1.3z",
+  };
+  const HEAVY = /^(A30|A31[0-7]|A33|A34|A35|A38|B74|B76|B77|B78|MD1|DC10|IL76|A124|C17|C5|KC10|K35R|A400|B52)/;
+  const HELI = /^(H\d|EC\d|AS3|AS5|AS6|R22|R44|R66|B06|B40|B41|B42|B43|S76|S92|A10[9]|A119|A1[3-8]9|AW\d|BK17|MI8|UH|CH4|EH10|NH90)/;
+  const LIGHT = /^(C1\d\d|C2[0-1][0-79]|C3\d\d|C4\d\d|PA\d|P28|P32|P46|SR2|DA\d|BE3|BE5|M20|TB\d|RV\d|AA5|DV2|GLID|J3|C42|EV97|PC6|TBM|KODI|M600|GA8|PIVI|ULAC)/;
+  const TURBOPROP = /^(AT4|AT7|ATR|DH8|DHC|SF34|SB20|E120|B190|BE20|BE30|BE9|BE99|JS3|JS4|SW4|D328|F50|PC12|C208|L410|C130|AN2|AN3|Y12|MA60|BN2|C212|CN35|P180)/;
+  const SMALL_JET = /^(CRJ|E1[34]5|E35|E17|E19|E75|E29|F70|F100|B712|C25|C5\d|C56|C68|C700|C750|CL30|CL35|CL60|GLF|GL5|GL7|GLEX|FA\d|F2TH|F900|LJ|E55P|E50P|PC24|HDJT|BE40|H25|SF50)/;
+  /** What an aircraft is drawn as, from its ICAO type ("C172", "A359"), else its ADS-B category ("A1" light). */
+  function kindOf(type, category) {
+    const t = String(type || "").toUpperCase();
+    if (t) {
+      if (HELI.test(t)) return "heli";
+      if (LIGHT.test(t)) return "light";
+      if (TURBOPROP.test(t)) return "turboprop";
+      if (SMALL_JET.test(t)) return "regional";
+      if (HEAVY.test(t) && !/^A31[89]/.test(t)) return "heavy";
+      return "jet";
+    }
+    return { A1: "light", A2: "turboprop", A5: "heavy", A7: "heli" }[String(category || "").toUpperCase()] || "jet";
+  }
+  const PLANE = (color, size, kind = "jet") => {
+    const outline = kind === "heli" ? 0.8 : 1;
+    return `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path fill="${color}" stroke="#000" stroke-width="${outline}" d="${SHAPES[kind] || SHAPES.jet}"/></svg>`;
+  };
   function trafficIcon(t) {
     const color = t.ground ? "#8d959e" : "#62c7e6";
     const alt = t.ground ? "GND" : `${Math.round((t.alt || 0) / 100).toString().padStart(3, "0")}`;
-    return L.divIcon({ className: "", html: `<div style="transform:rotate(${Number(t.hdg) || 0}deg);width:20px;height:20px">${PLANE(color, 20)}</div>
-      <div class="tfc-label" style="margin-left:18px;margin-top:-18px">${esc(t.callsign || "")}<br>${alt} ${esc(t.type || "")}</div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10] });
+    const kind = kindOf(t.type, t.category);
+    const size = { heavy: 24, light: 16, heli: 16, regional: 18, turboprop: 18 }[kind] || 20;
+    return L.divIcon({ className: "", html: `<div style="transform:rotate(${Number(t.hdg) || 0}deg);width:${size}px;height:${size}px">${PLANE(color, size, kind)}</div>
+      <div class="tfc-label" style="margin-left:${size - 2}px;margin-top:-${size - 2}px">${esc(t.callsign || "")}<br>${alt} ${esc(t.type || "")}</div>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
   }
   /** The traffic ``list`` on ``map``, its markers kept in ``markers`` (a Map by id) from one update to the next. */
   function traffic(map, markers, list) {
@@ -376,6 +417,6 @@ const AtcMap = (() => {
     }
   }
 
-  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, LEGEND,
+  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, kindOf, shape: (kind) => SHAPES[kind] || SHAPES.jet, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

@@ -1153,6 +1153,7 @@ class PilotMonitoring:
         a = self.engine.state.assignments
         self.cockpit.cleared_altitude_ft = a.altitude_ft
         self.cockpit.assigned_squawk = a.squawk
+        self.cockpit.vectored = a.heading is not None and getattr(self.engine, "_via_floor", None) is None
 
     def _station(self, call: str = "") -> str:
         """Who a call goes to: ground for the pushback and taxi, clearance, tower; else whoever's tuned."""

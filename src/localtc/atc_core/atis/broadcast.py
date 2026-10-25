@@ -22,9 +22,11 @@ little each time round, as a person recording it would.
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 
 from localtc.atc_core.airport.approaches import Outages
+from localtc.atc_core.atis import notes
 from localtc.atc_core.atis.observation import M_PER_SM, Layer, Phenomenon, Weather
 from localtc.atc_core.atis.operations import Operations
 from localtc.atc_core.phraseology import speech
@@ -51,7 +53,9 @@ class AtisInfo:
     # Where it's from ([atc] atis_source): (label, when the sim observed it (session time) or None, the report's "HHMM"
     # or ""): ("real ATIS", None, "1756"), ("METAR", None, "1753"), ("simulator", 812.0, "").
     source: tuple = ("simulator", None, "")
-    departing: tuple[str, ...] = ()  # the real ATIS's departure runways where it names them apart (the wind allowing)
+    departing: tuple[str, ...] = ()  # the runways departures are given (``operations.departing``)
+    real_remarks: tuple[str, ...] = ()  # the real ATIS's own remarks, as published (read out by ``notes``)
+    offered: tuple[str, ...] = ()  # the real ATIS's "EXP ILS, RNAV, OR VISUAL APCH": its approaches, no runway named
 
     @property
     def icao_style(self) -> bool:
@@ -140,8 +144,10 @@ def _faa(info: AtisInfo, say: _Say, v: int) -> str:
     if info.kind != "departure":
         say.add(*_faa_approaches(info))
     say.add(*_runways(info, icao=False))
+    for remark in info.real_remarks:  # the real ATIS's notices and cautions, in words: they are its notices
+        say.add(*notes.say(remark))
     if ops is not None:
-        notices = [n.text(False) for n in ops.notices]
+        notices = [n.text(False) for n in ops.notices] if not info.real_remarks else []
         if notices:
             head = ("Notices to Air Missions", "NOTAMs", "Notices to Air Missions")[v % 3]
             say.add(f"{head}: " + ". ".join(n[0].upper() + n[1:] for n in notices),
@@ -165,7 +171,7 @@ def _faa(info: AtisInfo, say: _Say, v: int) -> str:
     for remark in info.remarks:
         if remark not in ("caution gusty winds", "caution wet runway", "caution snow on the runway", "caution low visibility"):
             say.add(remark)
-    if info.kind != "arrival":
+    if info.kind != "arrival" and not any(re.search(r"\bREAD ?BACK\b", r) for r in info.real_remarks):
         say.add(("Read back all runway hold short instructions", "Read back all runway hold short instructions",
                  "Readback all runway hold short instructions")[v % 3])
     closing = (f"Advise on initial contact you have information {letter}",
@@ -273,6 +279,11 @@ def _approach_words(a: Approach, spoken: bool) -> str:
 
 def _faa_approaches(info: AtisInfo) -> tuple[str, str]:
     ops = info.operations
+    if len(info.offered) > 1:  # Honolulu's "EXP ILS, RNAV, OR VISUAL APCH": the runways follow
+        kinds = [k.lower() if k == "VISUAL" else k for k in info.offered]
+        said = [k if k == "visual" else speech.APPROACH_SPOKEN.get(k, k) for k in kinds]
+        listed = lambda ks: ", ".join(ks[:-1]) + f", or {ks[-1]}"
+        return f"Expect {listed(kinds)} approach", f"expect {listed(said)} approach"
     approaches = [ops.approaches[r] for r in ops.landing if r in ops.approaches] if ops else []
     if not approaches:
         approach = Approach(info.approach, info.runway)

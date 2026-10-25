@@ -180,13 +180,24 @@ fine_var = "L:VC_GSLD_FCU_100_1000_Switch"   # 0 at 100, 10 at 1,000: an altitud
 fine_value = 0
 fine_codes = [71243]
 
-# The FCU's knobs pushed and pulled (a left click pushes, a right click pulls; each then released, +3 and +4): the
-# altitude pushed once a new one shows in the air (the climb or descent managed), the heading pulled (flown).
+# The FCU's knobs pushed and pulled: each knob's switch is its id less 7, a click on its lower half +0 pushes, on its
+# upper half +1 pulls, and the release is +3 (FSL_FCU_Knob_Template, ModelBehaviorDefs). The altitude pushed once a
+# new one shows in the air (the climb or descent managed), or pulled on vectors (open); the heading pulled (flown);
+# the speed pushed (managed) or pulled (selected).
 [actions.altitude_push]
 press = [71249, 71252]
 
+[actions.altitude_pull]
+press = [71250, 71252]
+
 [actions.heading_pull]
-press = [71229, 71232]
+press = [71229, 71231]
+
+[actions.speed_push]
+press = [71214, 71217]
+
+[actions.speed_pull]
+press = [71215, 71217]
 
 # The first officer's baro knob (its own side; the captain's is the captain's): +5 up, +6 down, a hundredth of an
 # inch (or a hectopascal) a click; pulled for STD, pushed back for QNH (then released).

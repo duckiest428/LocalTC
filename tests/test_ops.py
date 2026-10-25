@@ -76,14 +76,15 @@ def notam(text: str) -> Notam:
 
 
 def test_notams_read_into_what_atc_works_to():
-    assert notices_of(notam("RWY 09L/27R CLSD DUE TO WIP")) == [("runway_closed", "09L/27R")]
-    assert notices_of(notam("TWY A10E, B CLSD")) == [("taxiway_closed", "A10E"), ("taxiway_closed", "B")]
-    assert notices_of(notam("ILS RWY 27L U/S")) == [("ils_out", "27L")]
-    assert notices_of(notam("ILS RWY 27L GP U/S")) == [("glideslope_out", "27L")]
-    assert notices_of(notam("ALS RWY 09R U/S")) == [("approach_lights_out", "09R")]
-    assert notices_of(notam("BIG VOR/DME U/S")) == [("navaid_out", "VOR")]
+    assert notices_of(notam("RWY 09L/27R CLSD DUE TO WIP")) == [("runway_closed", "09L/27R", "")]
+    assert notices_of(notam("TWY A10E, B CLSD")) == [("taxiway_closed", "A10E", ""), ("taxiway_closed", "B", "")]
+    assert notices_of(notam("ILS RWY 27L U/S")) == [("ils_out", "27L", "")]
+    assert notices_of(notam("ILS RWY 27L GP U/S")) == [("glideslope_out", "27L", "")]
+    assert notices_of(notam("ALS RWY 09R U/S")) == [("approach_lights_out", "09R", "")]
+    assert notices_of(notam("BIG VOR/DME U/S")) == [("navaid_out", "VOR", "")]
     assert notices_of(notam("CRANE ERECTED 512341N 0002812W 230FT AMSL")) == []  # nothing ATC works to
-    assert notices_of(notam("TWY K BTN TWY J AND RWY 22 CLSD")) == [("taxiway_closed", "K")]
+    # Closed between two points: only that stretch
+    assert notices_of(notam("TWY K BTN TWY J AND RWY 22 CLSD")) == [("taxiway_closed", "K", "J/RWY 22")]
 
 
 def test_notams_need_the_faa_key_and_say_so():

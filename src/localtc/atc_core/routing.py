@@ -157,6 +157,17 @@ class RoutingMixin:
                 best, best_d = i, d
         return best
 
+    def _fix_passed(self, own: OwnshipState, fix: str) -> bool:
+        """The route's ``fix`` is behind the aircraft now (or it's over it)."""
+        points = self._route_points()
+        index = next((i for i, p in enumerate(points) if p[0] == fix), None)
+        if index is None:
+            return False
+        if _nm(own.lat, own.lon, points[index][1], points[index][2]) < 3.0:
+            return True
+        ahead = self._next_fix(own, points)
+        return ahead is not None and ahead > index
+
     def _hazards_on(self, a: tuple[float, float], b: tuple[float, float], altitude_ft: float,
                     kinds: tuple[str, ...] | None = None) -> list[Hazard]:
         return [h for h in self.hazards if (kinds is None or h.kind in kinds) and h.at_level(altitude_ft) and h.crosses(a, b)]
@@ -322,6 +333,11 @@ class RoutingMixin:
                         self._schedule(t, "common.direct", {"fix": a.fix}, facility, delay=False,
                                        on_issue=lambda: self._assign(heading=None))
                         return True
+            elif a.kind == "deviation" and a.fix and self._fix_passed(own, a.fix):
+                # Flown past the fix it was to go direct to (it went through, or round and back on course): over.
+                # "Advise when able to proceed direct HRRBR" came with HRRBR 60 miles behind.
+                a.state = "done"
+                self._ops_changed = True
             elif a.kind == "deviation" and not a.reminded and t - a.issued_t > DEVIATION_REMIND_S and a.fix \
                     and facility is not None and facility.controller in ("center", "approach"):
                 a.reminded = True

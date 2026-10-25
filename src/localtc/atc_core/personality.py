@@ -151,7 +151,7 @@ def workload(transmissions_5min: int, traffic_nearby: int) -> str:
     return "busy" if score >= 8 else "quiet" if score <= 2 else "normal"
 
 
-STYLE_DRIFT = 0.12  # how often a controller says it another (equally correct) way than usual
+STYLE_DRIFT = 0.35  # how often a controller says it another (equally correct) way than usual: a habit, not a script
 
 
 def wording(station: str, instruction_id: str, n: int, rng) -> int:

@@ -248,12 +248,14 @@ def test_chatter_is_other_aircraft_in_the_airports_own_words():
     scene = chatter.Scene("tower", "Montreal Tower", runway="06L", wind=Wind(60, 6), exclude="ACA779", others=others)
     for _ in range(20):
         lines = c.exchange(scene)
-        assert lines and lines[0].speaker == "atc" and "06L" in lines[0].text
-        assert lines[0].callsign in ("Westjet 452", "Delta 88")
-        if "Westjet" in lines[0].callsign:
-            assert "cleared to land" in lines[0].text  # the one on final lands; the one holding goes
-        if len(lines) > 1:
-            assert lines[1].speaker == "pilot" and "six left" in lines[1].spoken
+        atc = next(line for line in lines if line.speaker == "atc")
+        assert "06L" in atc.text and atc.callsign in ("Westjet 452", "Delta 88")
+        if "Westjet" in atc.callsign:
+            assert "cleared to land" in atc.text  # the one on final lands
+        else:
+            # The one holding goes, once it has said it's ready: the crew calls first.
+            assert lines[0].speaker == "pilot" and "Tower, Delta 88" in lines[0].text
+        assert lines[-1].speaker == "pilot" and lines[-1].spoken != lines[0].spoken
     # Nobody around in the sim: nobody made up.
     assert c.exchange(chatter.Scene("tower", "Montreal Tower", runway="06L", wind=Wind(60, 6), exclude="ACA779")) == []
 
@@ -277,7 +279,7 @@ def test_each_station_keeps_its_own_wording():
     rng = random.Random(1)
     usual = personality.wording("Montreal Ground", "ground.taxi_out", 2, None)
     drifted = [personality.wording("Montreal Ground", "ground.taxi_out", 2, rng) for _ in range(200)]
-    assert 0.8 < drifted.count(usual) / 200 < 1.0  # now and then another way of saying it
+    assert 0.6 < drifted.count(usual) / 200 < 0.9  # often another way of saying it: a habit, not a script
 
 
 def test_the_voices_have_a_manner():

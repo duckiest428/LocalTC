@@ -30,7 +30,7 @@
 [   939.0] PHASE     CRUISE -> ARRIVAL (within 30 nm of KPAE)
 [   943.0] PHASE     ARRIVAL -> APPROACH (within 15 nm below 4000 AGL)
 [   977.0] PILOT     120.2: Paine Tower, Cessna two lima tango, downwind runway 34L, full stop.
-[   979.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, wind 310 degrees 8 knots, cleared to land.
+[   979.0] ATC       Paine Tower 120.2: Cessna 2LT, runway 34L, cleared to land, wind 310 degrees 8 knots.
 [   981.0] PILOT     120.2: Cleared to land runway three four left, Cessna two lima tango.
 [   981.0] READBACK  tower.land correct
 [  1143.0] PHASE     APPROACH -> LANDING (short final runway 34L)

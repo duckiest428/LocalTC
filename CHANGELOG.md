@@ -7,6 +7,25 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The real ATIS, read whole**: where an airport's digital ATIS is known, LocalTC's broadcast carries everything it
+  says, in words: its approaches ("expect ILS, RNAV, or visual approach"), its notices and cautions ("taxiway foxtrot
+  between taxiway bravo and taxiway charlie closed", "increased bird strike hazard all runways", "runway two seven
+  left shortened, seven thousand feet available"), its own readback line, not just the letter, the weather and a runway.
+- **A runway for each flight**: an airport with several runways in use gives each flight its own. Where the ATIS lands
+  and departs on the same parallels, the ones with an ILS land and their neighbours depart; a heavy is never given a
+  runway too short for it; a departure gets the runway nearest its gate and an arrival the final it reaches soonest;
+  and the flights are spread over the runways in use, so one runway doesn't carry everyone's arrivals and departures.
+  A runway once given is kept. LocalTC's traffic and the other flights on the frequency are given theirs the same way.
+- **The ATIS's closures are worked to**: a taxiway closed only between two points ("TWY F BTN TWY B AND TWY C CLSD",
+  "TWY K BTN RWY 9L AND TWY A CLSD") closes just that stretch, and ground's routes and LocalTC's traffic go round it.
+  The Live Map shows the closed stretches red and dashed, and each runway end in use marked ARR, DEP or ARR/DEP.
+- **Aircraft drawn as what they are**: on the Live Map, the website's Flight Tracker and the companion app, an
+  airliner, a widebody, a regional or business jet, a turboprop, a light aircraft or a helicopter, from its type (a
+  Cessna was drawn as an airliner). Your own aircraft too.
+- **Tower says which way off the runway**: slowing through about 70 knots on the rollout, "turn right at Alpha 3,
+  contact ground", an exit you still have the room to make, on the side of where you're parking.
+- **"Speed managed", "open descent"**: ask the copilot to push or pull the FCU's speed, altitude or heading knob
+  ("set the speed managed", "pull the altitude", "managed descent") in the FSLabs Airbus.
 - **The airport on the Live Map, close in**: zoomed in on an airport, its taxiways as on a chart (yellow, outlined) with their names along them, the runways at their real width with their numbers at each end, the red hold-short lines, and every gate and stand by the name ATC uses (the airport's real gate names when they're known): yours highlighted, the taken ones greyed. The taxi route ground gave you is a bold green line, outlined and glowing, over the taxiways, and the other aircraft's callsigns, altitudes and types sit in boxes that read over anything.
 - **A setup guide on the first start**: a new install opens with a few steps through what's worth choosing before the first flight: the models for your computer (and their downloads), your microphone, push-to-talk and intercom keys or buttons with a microphone test, your speakers or headset (the sidetone with a headset), the voices, your copilot's personality (each one's voice heard with a click), the copilot's radio work and how much it says, ATC's phraseology and manner, a free cloud language model's key, and your SimBrief username; the welcome notes are its last page. Everything saves as you go; skip it at any point. Installs that have seen the welcome don't get it (Settings > Developer mode shows it again).
 - **Copilot personalities** (Quick Settings > Copilot > Copilot's personality, with a preview): Neutral (the copilot as it was, its voice yours to choose) or one of ten people, each with a voice, pace and liveliness of their own: Marcus Hale (a calm veteran, dry humour), Priya Nair (by the book, warm), Jake Mulligan (a laid-back GA pilot), Elena Vargas (ex-military, crisp), Oliver Bennett (British, understated), Sofia Lindqvist (very few words), Dale Peterson (a grizzled grumbler), Maya Chen (an eager newer first officer), Tom Whitaker (an instructor: he tells you what to include in your readback next time) and Hannah Brooks (a chatty long-haul companion, who offers the destination's weather on a long cruise). They say the routine calls their way ("Stable at one thousand. Continue."), add a word of their own now and then outside the sterile cockpit, and the language model talks as they would. The safety calls (stall, overspeed, wind shear, minimums, "not cleared to land", config, the gear) keep their standard words for every one, and no personality changes a number.
@@ -19,7 +38,7 @@ a new minor version adds features, a patch fixes them.
 - **The copilot makes a radio call you ask for** with the radio yours ("can you do the call to ground?", "request pushback for us"): that one call, tuned to the station first if need be. "Do the call" alone is the next one due (the clearance, the pushback, the taxi, ready for departure).
 - **The ATC tab's boxes resize**: drag the line between the airport box (or the flight's status) and the flight row, or under the flight row, and the radio log takes the rest; double-click it for the usual size. Kept for next time.
 - **The flight's status en route**: between the departure's area and 150 miles from the destination, the ATC tab's airport box shows the flight instead of frequencies hours from being any use: the airline's logo (else its colour), the flight number and aircraft, a line from origin to destination with the aircraft along it, the miles flown and to go, the time left and ETA, altitude, speeds, heading, wind, outside temperature, fuel and the controller you're with.
-- **The APU on the way in**: taxiing in, about 500 m from the gate, the copilot starts the APU, puts its bleed on once it's running and says if it doesn't come up; "start the APU", "APU bleed on" ask for it any time (the FSLabs's own overhead buttons).
+- **The APU on the way in**: taxiing in, about 500 m from the gate (or near the stands without one), the copilot starts the APU, puts its bleed on once it's running and says if it doesn't come up; "start the APU", "APU bleed on" ask for it any time (the FSLabs's own overhead buttons).
 - **Minimums from the chart**: "minimums 280" (or a decision altitude, "DA 380") sets the copilot's minimum for the approach; "hundred above" and "minimums" are called by the height above the runway's touchdown zone, not the radio height over the ground short of it.
 - **Seatbelt sign off at 10,000 ft** in the climb, when it's smooth: the copilot does it and says so.
 - **Taxi guidance**: amber arrows on the ground in the sim, glowing (green was lost at night among the taxiway's own green lights), along the taxi route ground gave (off it, back onto it from where you are), from about 25 m ahead of the aircraft for 300 m, and a red stop bar short of a runway you aren't cleared onto or across (and at the hold short of the departure runway). On in Quick Settings; LocalTC puts its arrows (a small package of its own) in the sim's Community folder when it's turned on, and they show from the sim's next start.
@@ -82,6 +101,29 @@ a new minor version adds features, a patch fixes them.
   months, years) charts the flights in each to pick one from.
 
 ### Changed
+- **The copilot flies a new altitude open on vectors**: given a heading by ATC (off the flight plan's path), the FSLabs
+  Airbus's altitude knob is pulled (open climb or descent) once the new altitude is set, not pushed: managed descent
+  needs NAV, and the aircraft stayed level.
+- **The before start checklist comes before the start**: offered once the clearance is read back, or the push is
+  approved, not as the aircraft is already being pushed back. The approach checklist is offered on the approach, not
+  at the transition level.
+- **The APU is started coming up to the gate**: close to the gate ground gave, or near the stands without one; never on
+  a timer from the landing. An aircraft that doesn't show its APU's state isn't told "the APU hasn't come up".
+- **"We should be with ... by now" after three minutes**, not one.
+- **The copilot talks like a person when it's quiet**: small talk and questions in the cruise get a friendly sentence,
+  never just "Copy."
+- **Less of the same words**: controllers say things their own way more often (now and then another equally correct
+  wording), other crews read back in their own words ("two six via charlie", "down to one one thousand", "over to
+  tower"), and a centre answers a flight checking in level with "roger" or "radar contact", not "maintain flight
+  level 320" each time.
+- **"Fly present heading"**: already pointing the way approach wants, an arrival is told to keep it, not given its
+  own heading's number as if it were a turn.
+- **The turn onto a visual final comes in time**: given a turn radius ahead at an airliner's 25 degrees of bank, and the
+  seconds the call and the readback take, so the turn rolls out on the centreline instead of through it.
+- **LocalTC's traffic turns on the taxiways as a curve**, at taxi speed, not on the spot at each node; and a real
+  aircraft taxiing picks up and loses speed at an airliner's pace, never faster than 30 knots off a runway.
+- **The other flights on ground**: an aircraft already taxiing is handed to tower, not cleared to taxi out of the
+  blue; one at the gate asks for its push first.
 - **Controllers and the other pilots sound like people**: now and then an "uh" as they find the next thing to say ("United 318, uh, turn left heading 270"), the other flights' pilots a little more often, only where pilots really pause: after the station they call ("Seattle Approach, uh, Alaska 12, with you") or before their callsign at the end of a readback, never to start a call or in the middle of one. How often goes by the controller: a conversational one more, a strict or formal one hardly ever, and less on a busy frequency. Only in what's said (the radio log keeps the clean words), never inside a number, runway, heading or frequency, and never in anything urgent (a go-around, "stop", a traffic alert). Quick Settings > ATC > Natural speech turns it off.
 - **The radio sounds like an aircraft's radio**, built the way the real one is: the speaker's boom microphone with the room or flight deck behind them, swelling between the words as the transmitter's level control lifts it; the AM transmitter's lopsided clip on the peaks; the narrow airband channel, boxy in the middle; the carrier's fading and the receiver's hiss, more of both for a distant aircraft (each of the other flights comes through a little differently, from its own flight deck); a click and a moment of carrier before the first word, and the squelch's tail when it drops. Your push-to-talk clicks when pressed, and the receiver rushes when you let it go.
 - **Approach's speeds only on vectors**: none while you fly a STAR (its published speeds are the ones), 210 on the downwind and base, 180 only for traffic landing ahead, and never faster than the STAR's last published speed (the sim's navdata).
@@ -146,6 +188,27 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **A seaplane runway was the runway in use**: an airport's water runway (the sim names some just "08/26") was chosen
+  for an airliner: "expect visual approach runway 08", in the water. Water runways are never ATC's runways for a
+  landplane now, and the Live Map leaves them out.
+- **A real ATIS's runways without their sides**: "LNDG/DEPG RWYS 9/27" read no landing runways, and "9" found none of an
+  airport's 9L and 9R. Both are read now.
+- **Drawn notices against a real ATIS**: LocalTC's own made-up notices closed a runway the real ATIS was departing on.
+  With a real ATIS, only real notices count. The weather in its remarks isn't the weather either: "SHRA DSNT"
+  (showers in the distance) was read as rain on the field.
+- **"Advise when able to proceed direct" a fix behind**: a deviation's fix already flown past ends it, not a question.
+- **Words nobody said**: Whisper's captions out of a second of noise ("NASA Jet Propulsion Laboratory, California
+  Institute of Technology") were heard as a call, and ATC answered.
+- **An approach facility named by its code**: a scenery's "NCT APPROACH" was "Nct Approach"; the US TRACONs it names
+  by their codes are called by their names now ("NorCal Approach").
+- **"Read back" shown for clearance's "contact ground when ready"**, which needs no readback: the next step is shown
+  instead.
+- **LocalTC's traffic landed above the runway**: it flew down to the airport's elevation, not the runway's, and floated
+  along it.
+- **The same aircraft twice**: a real aircraft at the gate and its flight in the air, or one heard under two codes, were
+  both shown. The one flying is kept and the one on the ground taken away; otherwise the real one, or the one shown
+  first. An aircraft taken away while the sim was still making it is removed once it appears.
+- **The copilot's "FL three-four-zero"** was turned away as leaving the flight level out.
 - **Vectors onto the final**: on a base a little more than square to the final (approach's own heading, 108 degrees off it), the turn onto the final never came, and the flight went through the centreline and was sent back the other way ("turn left heading 306"). The turn in now comes in time for the whole turn, and a flight through the final is turned back onto it from the side it's on.
 - **Taxi guidance after an update showed no arrows all flight**: the arrows' new package was put in the sim's Community folder with the sim running, so the sim had the old one with its files gone. LocalTC now says so when the flight starts: restart the sim.
 - **LocalTC's departures queued nose to tail**: each gave way only to you, so they all ran onto the same hold short; now one stops behind the one ahead.

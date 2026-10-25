@@ -49,7 +49,9 @@ class Other:
     callsign: Callsign
     doing: str  # one of DOINGS
     level_ft: int = 0  # its altitude, to the nearest thousand (airborne)
-    runway: str = ""  # landing: the runway it's lined up with (not the one in use: Heathrow's A321 was on 27L)
+    # Landing: the runway it's lined up with (not the one in use: Heathrow's A321 was on 27L); departing: the one ATC
+    # gave it (``AtcEngine.runway_for``)
+    runway: str = ""
     # Arriving, on approach's frequency: the next vector the pilot's own flight would get from where it is
     # (vectors.vector): the leg, the magnetic heading, which way to turn to it. Empty: not an arrival here.
     leg: str = ""
@@ -67,6 +69,7 @@ class Scene:
     runway: str | None = None
     wind: Wind | None = None
     routes: list[tuple[str, ...]] = field(default_factory=list)  # real taxi routes from gates to the runway in use
+    routes_by_runway: dict[str, list[tuple[str, ...]]] = field(default_factory=dict)  # ... to each departure runway
     handoff: tuple[str, float] | None = None  # (station, MHz) the next controller, for "contact ..."
     icao_region: bool = False
     level_ft: int = 35000  # around where the pilot's own flight is: centres work flights near its level
@@ -121,34 +124,70 @@ class Chatter:
                 said = self.library.pilot_readback(iid, slots)
                 lines.append(Line("pilot", shown, _sentence(said), said))
             return [replace(line, ident=cs.ident) for line in lines]
+        if kind == "request":  # the pilot asks first: "Phoenix Ground, United 709, gate B22, request pushback"
+            text, spoken = self._request(scene, other, iid, slots, shown)
+            lines.append(Line("pilot", shown, text, spoken))
         lines.append(Line("atc", shown, atc.text, atc.spoken))
-        readback = self.library.get(iid).pilot_readback
-        if iid == "ground.pushback":  # the template has no readback: crews say it anyway
-            spoken = f"Push and start, tail {slots['turn']}, {speech.callsign(cs)}"
-            lines.append(Line("pilot", shown, f"Push and start, tail {slots['turn']}, {shown}", spoken))
-        elif readback:
+        if (said := readback_words(iid, slots, cs, shown, self._habit(cs))) is not None:
+            lines.append(Line("pilot", shown, *said))
+        elif self.library.get(iid).pilot_readback:
             spoken = self.library.pilot_readback(iid, slots)
             lines.append(Line("pilot", shown, _sentence(spoken), spoken))
         return [replace(line, ident=cs.ident) for line in lines]
+
+    def _habit(self, cs: Callsign) -> random.Random:
+        """How this crew reads back: each its own way of putting it most of the time (seeded by its callsign), and now
+        and then another, so no two crews sound alike and none sounds the same every time."""
+        seed = zlib.crc32(cs.ident.encode()) if self.rng.random() < 0.7 else self.rng.randrange(1 << 30)
+        return random.Random(seed)
+
+    def _request(self, scene: Scene, other: Other, iid: str, slots: dict[str, Any], shown: str) -> tuple[str, str]:
+        """The pilot's call before the instruction it gets: (text, spoken)."""
+        cs, rng = other.callsign, self.rng
+        station = scene.station if rng.random() < 0.8 else scene.station.split()[-1]  # "Phoenix Ground", "Ground"
+        if iid.startswith("ground.pushback"):
+            ask = rng.choice(("request pushback", "ready to push", "request push and start", "ready for pushback"))
+        elif iid.startswith("ground.taxi_in"):
+            ask = rng.choice(("clear of the runway", "clear of the runway, taxi to the gate", "with you, clear of the runway"))
+        elif iid.startswith("tower."):
+            r = slots.get("runway", "")
+            asks = (f"holding short runway {r}, ready", "ready for departure", f"ready, runway {r}",
+                    f"holding short {r}, ready to go")
+            text_ask = rng.choice(asks)
+            spoken_ask = text_ask.replace(f"runway {r}", f"runway {speech.runway(r)}").replace(f"short {r}",
+                                                                                              f"short {speech.runway(r)}")
+            spoken_ask = spoken_ask.replace(f"ready, runway {r}", f"ready, runway {speech.runway(r)}")
+            return f"{station}, {shown}, {text_ask}", f"{station}, {speech.callsign(cs)}, {spoken_ask}"
+        else:
+            ask = rng.choice(("ready to taxi", "ready to taxi with the numbers", "request taxi"))
+        return f"{station}, {shown}, {ask}", f"{station}, {speech.callsign(cs)}, {ask}"
 
     def _options(self, scene: Scene, other: Other) -> list[tuple[str, str, dict[str, Any]]]:
         """What this controller would say to ``other``, given what it's doing."""
         rng = self.rng
         c, doing = scene.controller, other.doing
         out: list[tuple[str, str, dict[str, Any]]] = []
-        runway, wind = scene.runway, scene.wind
-        route = rng.choice(scene.routes) if scene.routes else ()
+        # Its own runway where ATC has given it one (several in use: not everybody's the pilot's)
+        runway, wind = (other.runway if other.doing != "landing" else "") or scene.runway, scene.wind
+        routes = scene.routes_by_runway.get(runway) or scene.routes
+        route = rng.choice(routes) if routes else ()
         if c == "ground":
+            # A crew calls ground before it moves: pushed back once it asks, taxied once it says it's ready. One
+            # already rolling had its taxi clearance before it moved: what's left to tell it is the hold short, or
+            # the tower (a taxi clearance given to one already half way out, unasked, was nothing like a frequency).
             if doing == "at_gate":
-                out.append(("atc", "ground.pushback", {"turn": rng.choice(("left", "right"))}))
+                out.append(("request", "ground.pushback", {"turn": rng.choice(("left", "right"))}))
+            elif doing == "taxiing_out" and scene.handoff is not None:
+                station, mhz = scene.handoff
+                out.append(("atc", "ground.handoff_tower", {"station": station, "frequency": mhz}))
             elif doing == "taxiing_out" and runway and route:
-                out.append(("atc", "ground.taxi_out", {"runway": runway, "taxi_route": route}))
+                out.append(("request", "ground.taxi_out", {"runway": runway, "taxi_route": route}))
             elif doing == "taxiing_in" and route:
-                out.append(("atc", "ground.taxi_in", {"taxi_route": tuple(reversed(route))}))  # the way back in
+                out.append(("request", "ground.taxi_in", {"taxi_route": tuple(reversed(route))}))  # the way back in
         elif c == "tower" and runway:
             if doing == "holding":
-                out.append(("atc", "tower.takeoff", {"runway": runway}))
-                out.append(("atc", "tower.luaw", {"runway": runway}))
+                out.append(("request", "tower.takeoff", {"runway": runway}))
+                out.append(("request", "tower.luaw", {"runway": runway}))
             elif doing == "landing" and wind is not None:
                 out.append(("atc", "tower.land", {"runway": other.runway or runway, "wind": wind}))
         elif c == "approach" and other.leg and scene.approach is not None and doing in ("descending", "level"):
@@ -164,9 +203,10 @@ class Chatter:
         elif c == "center" and other.level_ft >= 10000:
             level = max(11000, min(41000, other.level_ft))
             if doing == "level":
-                # Answered the way the pilot's own check-in is ("radar contact, maintain FL350"), not "roger" every time,
-                # and now and then a step climb.
-                out.append(("checkin", "center.checkin_level", {"level": level, "station": scene.station, "altitude": level}))
+                # Answered the way the pilot's own check-in is: mostly "roger" (its level known from the last
+                # controller), now and then "maintain FL350", and now and then a step climb.
+                checkin = "center.checkin_level" if rng.random() < 0.25 else "center.checkin_ack"
+                out.append(("checkin", checkin, {"level": level, "station": scene.station, "altitude": level}))
                 if level <= 39000 and rng.random() < 0.4:
                     out.append(("atc", "common.climb", {"altitude": level + 2000}))
             elif doing == "climbing":
@@ -205,6 +245,95 @@ class Chatter:
         out.append(("atc", "approach.heading" if other.leg in ("base", "downwind") else "approach.turn",
                     {**heading, "approach": approach}))
         return out
+
+
+def readback_words(iid: str, slots: dict[str, Any], cs: Callsign, shown: str, rng: random.Random
+                   ) -> tuple[str, str] | None:
+    """A crew's readback of ``iid`` in one of the ways crews really say it, (text, spoken): "Runway two six, taxi via
+    charlie", "Two six via charlie", "Taxi two six, charlie, bravo"; "Down to one one thousand", "Descend and
+    maintain one one thousand". None: the template's own. Every readback in the same order and the same words was
+    what made the frequency sound made up."""
+    family = iid.split(".", 1)[1] if "." in iid else iid
+    said_cs = speech.callsign(cs)
+    forms: list[tuple[str, str]] = []  # with {cs} for the callsign
+
+    def both(text: str, spoken: str) -> None:
+        forms.append((text, spoken))
+
+    if iid in ("ground.taxi_out", "ground.taxi_out_at") and slots.get("taxi_route"):
+        r, route = slots["runway"], tuple(slots["taxi_route"])
+        rs, ts = speech.runway(r), speech.taxi_route(route)
+        rt = ", ".join(route)
+        both(f"Runway {r}, taxi via {rt}, {{cs}}", f"Runway {rs}, taxi via {ts}, {{cs}}")
+        both(f"Taxi {r} via {rt}, {{cs}}", f"Taxi {rs} via {ts}, {{cs}}")
+        both(f"{r} via {rt}, {{cs}}", f"{rs} via {ts}, {{cs}}")
+        both(f"Via {rt} to {r}, {{cs}}", f"Via {ts} to {rs}, {{cs}}")
+        both(f"{{cs}}, runway {r} via {rt}", f"{{cs}}, runway {rs} via {ts}")
+    elif iid == "ground.taxi_in" and slots.get("taxi_route"):
+        route = tuple(slots["taxi_route"])
+        rt, ts = ", ".join(route), speech.taxi_route(route)
+        both(f"Taxi to parking via {rt}, {{cs}}", f"Taxi to parking via {ts}, {{cs}}")
+        both(f"{rt} to the gate, {{cs}}", f"{ts} to the gate, {{cs}}")
+        both(f"Via {rt}, {{cs}}", f"Via {ts}, {{cs}}")
+        both(f"In via {rt}, {{cs}}", f"In via {ts}, {{cs}}")
+    elif iid.startswith("ground.pushback") and "turn" in slots:
+        t = slots["turn"]
+        for text in (f"Push and start, tail {t}, {{cs}}", f"Push approved, tail {t}, {{cs}}",
+                     f"Pushing back, tail {t}, {{cs}}", f"Tail {t}, {{cs}}", f"Push and start approved, {{cs}}"):
+            both(text, text)
+    elif iid == "ground.handoff_tower" or family in ("contact", "handoff_tower", "handoff_departure", "handoff_center"):
+        station, mhz = str(slots.get("station", "")), slots.get("frequency")
+        if not mhz:
+            return None
+        f, fs = speech.frequency_display(mhz), speech.frequency(mhz)
+        last = station.split()[-1] if station else ""
+        both(f"{station} {f}, {{cs}}", f"{station} {fs}, {{cs}}")
+        both(f"Over to {last.lower()} {f}, {{cs}}", f"Over to {last.lower()} {fs}, {{cs}}")
+        both(f"{f}, good day, {{cs}}", f"{fs}, good day, {{cs}}")
+        both(f"Switching to {last.lower()}, {{cs}}", f"Switching to {last.lower()}, {{cs}}")
+        both(f"{f}, {{cs}}, see ya", f"{fs}, {{cs}}, see ya")
+    elif iid in ("common.climb", "common.descend") and "altitude" in slots:
+        a = int(slots["altitude"])
+        ad, as_ = speech.altitude_display(a), speech.altitude(a)
+        up = iid == "common.climb"
+        verb, short, ing = ("Climb", "Up to", "Climbing") if up else ("Descend", "Down to", "Descending")
+        both(f"{verb} and maintain {ad}, {{cs}}", f"{verb} and maintain {as_}, {{cs}}")
+        both(f"{short} {ad}, {{cs}}", f"{short} {as_}, {{cs}}")
+        both(f"{ing} {ad}, {{cs}}", f"{ing} {as_}, {{cs}}")
+        both(f"{ad}, {{cs}}", f"{as_}, {{cs}}")
+        both(f"{verb} {ad}, {{cs}}", f"{verb} {as_}, {{cs}}")
+    elif iid in ("approach.heading", "approach.turn") and "heading" in slots:
+        h, turn = int(slots["heading"]), slots.get("turn", "")
+        hd, hs = f"{h:03d}", speech.heading(h)
+        both(f"Heading {hd}, {{cs}}", f"Heading {hs}, {{cs}}")
+        if turn:
+            both(f"{turn.capitalize()} {hd}, {{cs}}", f"{turn.capitalize()} {hs}, {{cs}}")
+            both(f"Turn {turn} heading {hd}, {{cs}}", f"Turn {turn} heading {hs}, {{cs}}")
+            both(f"{turn.capitalize()} heading {hd}, {{cs}}", f"{turn.capitalize()} heading {hs}, {{cs}}")
+    elif iid == "tower.takeoff" and "runway" in slots:
+        r = slots["runway"]
+        rs = speech.runway(r)
+        both(f"Cleared for takeoff runway {r}, {{cs}}", f"Cleared for takeoff runway {rs}, {{cs}}")
+        both(f"Runway heading, cleared for takeoff {r}, {{cs}}", f"Runway heading, cleared for takeoff {rs}, {{cs}}")
+        both(f"Cleared to go, {r}, {{cs}}", f"Cleared to go, {rs}, {{cs}}")
+        both(f"Runway {r}, cleared for takeoff, {{cs}}", f"Runway {rs}, cleared for takeoff, {{cs}}")
+    elif iid == "tower.land" and "runway" in slots:
+        r = slots["runway"]
+        rs = speech.runway(r)
+        both(f"Cleared to land runway {r}, {{cs}}", f"Cleared to land runway {rs}, {{cs}}")
+        both(f"Cleared to land {r}, {{cs}}", f"Cleared to land {rs}, {{cs}}")
+        both("Cleared to land, {cs}", "Cleared to land, {cs}")
+        both(f"{{cs}}, cleared to land {r}", f"{{cs}}, cleared to land {rs}")
+    elif iid == "tower.luaw" and "runway" in slots:
+        r = slots["runway"]
+        rs = speech.runway(r)
+        both(f"Line up and wait {r}, {{cs}}", f"Line up and wait {rs}, {{cs}}")
+        both(f"Runway {r}, line up and wait, {{cs}}", f"Runway {rs}, line up and wait, {{cs}}")
+        both(f"Lining up {r}, {{cs}}", f"Lining up {rs}, {{cs}}")
+    if not forms:
+        return None
+    text, spoken = rng.choice(forms)
+    return text.replace("{cs}", shown), spoken.replace("{cs}", said_cs)
 
 
 def _digit_words(n: int) -> str:

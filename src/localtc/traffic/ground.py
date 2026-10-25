@@ -20,8 +20,14 @@ EXIT_MAX_M = 3500.0
 TAXI_KT = 15.0
 TURN_KT = 8.0
 STAND_KT = 4.0
-TURN_DEG = 40.0  # a turn this sharp is taken slowly
+TURN_DEG = 35.0  # turning this much over the next ``TURN_LOOK_M``: taken slowly
+TURN_LOOK_M = 60.0
 NEAR_STAND_M = 80.0
+# Each corner of the taxiways' path is flown as a curve of about this radius (a nosewheel's, at taxi speed), not a
+# turn on the spot at the node: "airplanes on the ground turn quite unnaturally"
+TURN_RADIUS_M = 35.0
+ARC_STEP_DEG = 10.0
+ACCEL_KT_S, BRAKE_KT_S = 0.8, 2.0  # an airliner on the taxiway: gently up to speed, firmly but not abruptly down
 
 
 @dataclass
@@ -35,6 +41,12 @@ class Follower:
     done: bool = False
     spot: int | None = None  # the stand at the end
     headings: list[float] = field(default_factory=list)
+    smooth: bool = True  # its corners rounded (``rounded``); a push back isn't
+
+    def __post_init__(self) -> None:
+        if self.smooth and len(self.points) > 2:
+            keep = max(self.exit_index, 0) + 1  # up to where it leaves the runway, as it was given
+            self.points = self.points[:keep] + rounded(self.points[keep - 1:], TURN_RADIUS_M)[1:]
 
     def step(self, lat: float, lon: float, dt: float = 1.0) -> tuple[float, float, float, float]:
         """A second on: (lat, lon, heading, speed)."""
@@ -44,15 +56,15 @@ class Follower:
         target = self.points[self.index]
         ahead = _metres(lat, lon, *target)
         rest = ahead + sum(_metres(*a, *b) for a, b in zip(self.points[self.index:], self.points[self.index + 1:]))
-        turn = self._turn_at(self.index)
         want = TAXI_KT
         if self.index <= self.exit_index:
             want = max(TURN_KT, self.gs_kt - 3.0)  # still braking on the runway, then the turn off
-        elif turn > TURN_DEG and ahead < 60:
+        elif self._turning_ahead((lat, lon)) > TURN_DEG:
             want = TURN_KT
         if rest < NEAR_STAND_M:
             want = STAND_KT
-        self.gs_kt += max(-3.0, min(1.0, want - self.gs_kt))
+        braking = 3.0 if self.index <= self.exit_index else BRAKE_KT_S
+        self.gs_kt += max(-braking * dt, min(ACCEL_KT_S * dt, want - self.gs_kt))
         move = self.gs_kt * 0.5144 * dt
         hdg = _bearing((lat, lon), target)
         while move >= ahead and self.index < len(self.points):
@@ -69,11 +81,65 @@ class Follower:
         lat, lon = lat + (target[0] - lat) * k, lon + (target[1] - lon) * k
         return lat, lon, hdg, self.gs_kt
 
+    def _turning_ahead(self, here: tuple[float, float]) -> float:
+        """How much the path turns in the next ``TURN_LOOK_M``, degrees."""
+        total, gone, prev = 0.0, 0.0, None
+        a = here
+        for b in self.points[self.index:]:
+            leg = _metres(*a, *b)
+            if leg > 0.5:
+                hdg = _bearing(a, b)
+                if prev is not None:
+                    total += abs((hdg - prev + 180) % 360 - 180)
+                prev = hdg
+            gone += leg
+            if gone > TURN_LOOK_M:
+                break
+            a = b
+        return total
+
     def _turn_at(self, i: int) -> float:
         if i <= 0 or i + 1 >= len(self.points):
             return 0.0
         a, b = _bearing(self.points[i - 1], self.points[i]), _bearing(self.points[i], self.points[i + 1])
         return abs((b - a + 180) % 360 - 180)
+
+
+def rounded(points: list[tuple[float, float]], radius_m: float) -> list[tuple[float, float]]:
+    """The path with each corner turned as a curve of ``radius_m`` (less where the legs either side are too short for
+    it), a point every ``ARC_STEP_DEG`` of the turn. The ends stay where they are."""
+    if len(points) < 3:
+        return list(points)
+    out = [points[0]]
+    for i in range(1, len(points) - 1):
+        a, b, c = out[-1], points[i], points[i + 1]
+        h1, h2 = _bearing(a, b), _bearing(b, c)
+        turn = (h2 - h1 + 180) % 360 - 180
+        la, lc = _metres(*a, *b), _metres(*b, *c)
+        if abs(turn) < 5.0 or la < 1.0 or lc < 1.0:
+            out.append(b)
+            continue
+        half = math.radians(abs(turn) / 2)
+        cut = min(radius_m * math.tan(half), la * 0.5, lc * 0.5)  # how far before and after the node the curve runs
+        r = cut / math.tan(half)
+        start = _toward(b, h1 + 180, cut)
+        out.append(start)
+        steps = max(1, int(abs(turn) // ARC_STEP_DEG))
+        side = 1.0 if turn > 0 else -1.0
+        centre = _toward(start, h1 + 90 * side, r)
+        for k in range(1, steps):
+            hdg = h1 + turn * k / steps
+            out.append(_toward(centre, hdg - 90 * side, r))
+        out.append(_toward(b, h2, cut))
+    out.append(points[-1])
+    return out
+
+
+def _toward(p: tuple[float, float], bearing: float, metres: float) -> tuple[float, float]:
+    b = math.radians(bearing)
+    lat = p[0] + metres * math.cos(b) / 111_320.0
+    lon = p[1] + metres * math.sin(b) / (111_320.0 * math.cos(math.radians(p[0])))
+    return lat, lon
 
 
 def free_stand(geo: AirportGeometry, taken: Iterable[tuple[float, float]], span_m: float, near: list[tuple[float, float]],

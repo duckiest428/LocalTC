@@ -23,7 +23,8 @@ class Command:
     action: str  # gear, flaps, light, spoilers, autopilot, ap_mode, autothrottle, heading, altitude, speed, vs,
     #              squawk, com_active, com_standby, com_swap, altimeter, parking_brake, autobrake, yes, no, check,
     #              seatbelt (the sign), checklist, brief, status, verbosity, say_again, radio (a call to make: pushback, taxi,
-    #              clearance, departure), go_around, emergency (mayday, pan)
+    #              clearance, departure), go_around, emergency (mayday, pan), knob (an FCU knob pushed or pulled:
+    #              value "push" / "pull", target "speed", "altitude", "heading")
     value: str = ""  # "down", "2", "on", "270", "10000", "-1500", "4553", "121.9", "29.92"
     target: str = ""  # which light, which autopilot mode; "hpa" for an altimeter setting in hectopascals
 
@@ -70,6 +71,27 @@ RADIO_WHICH = ((re.compile(r"\bpush"), "pushback"), (re.compile(r"\btaxi"), "tax
 AUTOBRAKE_LEVELS = {"off": "off", "disarm": "off", "low": "low", "lo": "low", "medium": "medium", "med": "medium",
                     "high": "max", "hi": "max", "max": "max", "maximum": "max", "rto": "max", "on": "", "arm": "",
                     "armed": "", "set": "", "one": "1", "two": "2", "three": "3", "four": "4"}
+
+
+KNOB_TARGETS = {"speed": "speed", "altitude": "altitude", "descent": "altitude", "climb": "altitude", "des": "altitude",
+                "clb": "altitude", "heading": "heading", "nav": "heading"}
+
+
+def _knob(tokens, i: int):
+    """An FCU knob pushed or pulled, the way it's asked for: "speed managed", "managed speed please", "set the speed as
+    managed", "selected speed", "pull the speed"; "open descent", "op des", "pull the altitude", "managed descent",
+    "push the altitude"; "pull heading". (Command, the next token) or None."""
+    w = _word(tokens, i)
+    if w not in ("managed", "selected", "push", "pull", "open", "op"):
+        return None
+    near = [_word(tokens, j) for j in range(max(0, i - 4), i + 4)]
+    target = next((KNOB_TARGETS[x] for x in near if x in KNOB_TARGETS), None)
+    if target is None:
+        return None
+    if w in ("open", "op") and target != "altitude":
+        return None
+    value = "push" if w in ("managed", "push") else "pull"
+    return Command("knob", value, target), i + 1
 
 
 def _number(tokens: list[Token], i: int) -> float | None:
@@ -173,6 +195,8 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
         named = 2 if nxt in ("light", "lights") else 1
         state = _on_off(tokens, i - 2, i + named + 2)
         return (Command("light", state, LIGHTS[w]) if state else None), i + named
+    if (knob := _knob(tokens, i)) is not None:
+        return knob
     if w in ("spoilers", "spoiler", "speedbrakes", "speedbrake", "speed") and (w != "speed" or nxt in ("brake", "brakes")):
         j = i + (2 if w == "speed" else 1)
         near = [t.text for t in tokens[max(0, i - 2):j + 2]]

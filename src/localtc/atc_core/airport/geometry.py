@@ -132,7 +132,10 @@ class AirportGeometry:
                 msgspec.structs.replace(p, name=taxiway_name(p.name)) if p.name else p for p in airport.taxi_paths))
         self.airport = airport
         self.frame = LocalFrame(airport.lat, airport.lon)
-        self.runways = tuple(RunwayGeometry(r, self.frame) for r in airport.runways)
+        # The runways ATC uses: a seaplane base's water ones only where it has nothing else. (Honolulu's in the
+        # lagoon, which the sim names "08/26", was the runway in use: "expect visual approach runway 08", in the water.)
+        land = [r for r in airport.runways if not r.water] or list(airport.runways)
+        self.runways = tuple(RunwayGeometry(r, self.frame) for r in land)
         self.hold_taxiways: dict[str, str] = {}  # runway end -> the taxiway its holding point is on (airport_fixes.toml)
 
     @property

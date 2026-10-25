@@ -296,7 +296,8 @@ function setFlight(f) {
   if (f.ete) phase += `  ·  ${f.ete.nm} nm, ${f.ete.min} min`;
   $("#fl-phase").textContent = phase;
   let next = "—";
-  if (f.pending) next = `Read back: ${Object.values(f.pending.expected).join(", ")}`;
+  // (Nothing required, as clearance's "readback correct, contact ground when ready": not a readback, a call to make)
+  if (f.pending && (f.pending.required || []).length) next = `Read back: ${Object.values(f.pending.expected).join(", ")}`;
   else if (f.expected) next = `Contact ${f.expected.station} ${mhz(f.expected.mhz)}`;
   else if (f.tuned) next = `On ${f.tuned.station}`;
   $("#fl-next").textContent = next;
@@ -1997,7 +1998,6 @@ const Settings = {
 
 /* ---------- Live Map ---------- */
 
-const PLANE = (color) => `<svg viewBox="0 0 32 32" width="30" height="30"><path fill="${color}" stroke="#000" stroke-width="1" d="M16 2c1.2 0 2 1.4 2 3v7l11 6v3l-11-3v6l3 2v2.5l-5-1.5-5 1.5V26l3-2v-6L3 21v-3l11-6V5c0-1.6.8-3 2-3z"/></svg>`;
 
 const MapView = {
   map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
@@ -2131,7 +2131,9 @@ const MapView = {
     AtcMap.setRef(at[1]);
     if (this.drawnRef != null && Math.abs(at[1] - this.drawnRef) > 90) { this.planKey = null; this.plan(S.state.plan); this.zonesSoon(0); }
     if (this.drawnRef == null || Math.abs(at[1] - this.drawnRef) > 90) this.drawnRef = at[1];
-    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${PLANE("#5fd068")}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    // Drawn as what's being flown (a Cessna as a Cessna), from the flight's aircraft type
+    const kind = AtcMap.kindOf(S.flight?.aircraft || S.state.plan?.aircraft || "");
+    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${AtcMap.PLANE("#5fd068", 30, kind)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
     if (!this.ownMarker) { this.ownMarker = L.marker(at, { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, 11); }
     else { this.ownMarker.setLatLng(at); this.ownMarker.setIcon(icon); }
     if (this.follow) this.map.panTo(at, { animate: false });
@@ -2254,6 +2256,11 @@ const MapView = {
     if (gate !== this.gateSeen) {  // ground gave a gate: the gates drawn again, yours among them
       this.gateSeen = gate;
       if (z.gate) this.layout(z.gate.icao, true);
+    }
+    this.atisSeen = this.atisSeen || {};
+    for (const [icao, letter] of Object.entries(z.atis || {})) {  // a new ATIS: the runways in use and closures again
+      if (this.atisSeen[icao] && this.atisSeen[icao] !== letter && this.grounds.has(icao)) this.layout(icao, true);
+      this.atisSeen[icao] = letter;
     }
     this.drawNotams();
     $("#map-legend .lg-talk").innerHTML = AtcMap.talk(z);

@@ -211,6 +211,7 @@ class NoticeItem(msgspec.Struct, frozen=True, kw_only=True):
     subject: str = ""
     id: str = ""  # "A1234/26"
     text: str = ""
+    detail: str = ""  # a taxiway closed between two points ("A/B"), a shortened runway's feet left ("7000")
 
 
 class NoticesReport(Event, tag="notices_report"):

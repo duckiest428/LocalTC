@@ -7,6 +7,8 @@ is built from this file.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **Aircraft drawn as what they are** on My Flight: an airliner, a widebody, a regional or business jet, a turboprop, a
+  light aircraft or a helicopter, from its type (a Cessna was drawn as an airliner). Your own aircraft too.
 - **A new app icon**: a control tower.
 - **A weather button on My Flight**: the SIGMETs, TFRs and restricted areas around and the airports' NOTAMs (a badge with the count, a closed runway red) show or hide together.
 - **The EFB** (a tab, in place of Airports, which is in it now): the copilot's checklist as it reads it, item by item,

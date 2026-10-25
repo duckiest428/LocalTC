@@ -250,6 +250,9 @@ def test_a_handoff_leaves_the_pilots_radio_alone_and_reminds_only_when_late():
     assert not [o for o in out if isinstance(o, SendSimEvent)] and not said(out)  # the radios are the pilot's
     out = fly(pm, [own(70 + i, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250,
                        flaps_index=0, gear_down=False) for i in range(10)])
+    assert not said(out)  # a minute isn't late: the pilot may be busy (it nagged after one)
+    out = fly(pm, [own(190 + i, on_ground=False, alt_indicated_ft=8000, alt_agl_ft=7500, ias_kt=250, gs_kt=250,
+                       flaps_index=0, gear_down=False) for i in range(10)])
     assert "We should be with Seattle Center on 128.5 by now." in said(out)
 
 
@@ -414,14 +417,20 @@ def test_a_held_item_answered_with_what_the_aircraft_shows_goes_on():
 
 
 def test_taxiing_in_the_apu_is_started_then_its_bleed_put_on():
-    pm = crew()
+    """Started coming up to the gate, not on a timer from the landing (a minute and a half after touchdown, nowhere
+    near the gate)."""
+    engine = FakeEngine()
+    pm = crew(engine)
     pm.observe(PhaseChanged(t=0.5, previous="LANDING", phase="TAXI_IN"))
     pm.observe(systems(0.6, apu_pct=0.0))
     out = fly(pm, [own(1 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(30)])  # no gate given
+    assert "Starting the APU." not in said(out)
+    engine.assigned_gate_position = lambda: (47.0, -121.996)  # 300 m ahead
+    out = fly(pm, [own(200 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(3)])
     assert "Starting the APU." in said(out)
     assert [o for o in out if getattr(o, "name", "") == "APU_STARTER"]
-    pm.observe(systems(160, apu_pct=1.0))
-    out = fly(pm, [own(161 + i, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(10)])
+    pm.observe(systems(260, apu_pct=1.0))
+    out = fly(pm, [own(261 + i, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(10)])
     assert "APU's running. APU bleed on." in said(out)
 
 

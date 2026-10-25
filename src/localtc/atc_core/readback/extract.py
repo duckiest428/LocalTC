@@ -321,6 +321,8 @@ def headings(tokens: list[Token], expected: Any = None) -> list[int]:
             num = num[:-1]  # "heading 3500": speech-to-text's "three fifty zero" for 350
         if num and num.isdigit() and 0 <= int(num) <= 360:
             found.append(int(num) % 360 or 360)
+    if not found and expected is not None and _find_phrase(tokens, ("present", "heading")):
+        found.append(int(expected))  # "present heading": the one given was the one it's on
     return found
 
 

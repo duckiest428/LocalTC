@@ -1237,13 +1237,21 @@ class AppController:
         airport = geo.airport if geo is not None else (self.airports.get(icao) or await asyncio.to_thread(self.cache.get, icao))
         if airport is None:
             raise HttpError(404, f"No data for {icao} yet.")
+        use, closed = None, None
+        if geo is not None:
+            from localtc.ui.airport_layout import runway_use
+
+            info = engine.current_atis(icao)
+            if info is not None and info.operations is not None:  # the runways in use and the closed taxiways
+                use = runway_use(info.operations.landing, info.operations.departing)
+                closed = engine.closed_taxiways(icao)
         gate_map = None
         if geo is not None and hasattr(engine, "gate_map"):
             try:
                 gate_map = engine.gate_map(icao)
             except Exception:  # noqa: BLE001 - the gates by the scenery's names instead
                 log.debug("No gate map for %s", icao, exc_info=True)
-        return await asyncio.to_thread(layout, airport, gate_map)
+        return await asyncio.to_thread(layout, airport, gate_map, use=use, closed=closed)
 
     async def api_zones(self, args: dict) -> dict:
         """The Live Map's ATC layer: who works which airspace, and who the flight is talking to."""

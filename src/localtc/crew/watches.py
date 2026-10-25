@@ -42,7 +42,7 @@ from localtc.sim_api import ArrivalData, AtcTransmission, OwnshipState, RequestA
 from localtc.sim_api.geo import haversine_nm
 
 APU_GATE_M = 500.0  # taxiing in this close to the gate given: the APU started
-APU_NO_GATE_S = 90.0  # ... or, with no gate given, this long into the taxi in
+APU_STAND_M = 150.0  # ... or, with no gate given, this close to a stand
 APU_START_S = 120.0  # not running this long after it was started: said
 
 SAFETY, ROUTINE, CHATTER = 3, 2, 1  # as crew.monitor
@@ -520,15 +520,21 @@ class WatchMixin:
         from localtc.crew.actions import APU_RUNNING
         from localtc.crew.commands import Command
 
+        s = self.c.systems
+        if s is not None and s.apu_pct > 0:
+            self.f.said["apu_seen"] = t  # the aircraft shows its APU (the FSLabs A321's reads 0 whatever it's doing)
         if self.phase != "TAXI_IN" or not own.on_ground or not self.hands or "apu" in self.c.dead:
             return
-        s = self.c.systems
         running = s is not None and s.apu_pct >= APU_RUNNING
         if not self._said("apu_start"):
+            # Coming up to the gate: with one given, as it's close; without, as the aircraft nears the stands. Never
+            # on a timer from the landing (it started a minute and a half after touchdown, nowhere near the gate).
             where = getattr(self.engine, "assigned_gate_position", lambda: None)()
-            since = self.f.said.setdefault("taxi_in_t", t)
-            near = haversine_nm(own.lat, own.lon, where[0], where[1]) * 1852 <= APU_GATE_M if where is not None \
-                else t - since >= APU_NO_GATE_S  # no gate given: a little while into the taxi in
+            if where is None:
+                where = self._nearest_stand(own)
+                near = where is not None and haversine_nm(own.lat, own.lon, *where) * 1852 <= APU_STAND_M
+            else:
+                near = haversine_nm(own.lat, own.lon, where[0], where[1]) * 1852 <= APU_GATE_M
             if not near:
                 return
             if running:
@@ -540,9 +546,20 @@ class WatchMixin:
             return
         if running:
             self._call("apu_bleed", ROUTINE, t, "APU's running. APU bleed on.", commands=(Command("apu_bleed", "on"),))
+        elif t - self.f.said["apu_start"] > APU_START_S and not self._said("apu_seen"):
+            # An aircraft that never shows its APU: up by now, as far as anyone can tell from here ("APU hasn't come
+            # up" was said with it running)
+            self._call("apu_bleed", ROUTINE, t, "APU should be up. APU bleed on.", commands=(Command("apu_bleed", "on"),))
         elif t - self.f.said["apu_start"] > APU_START_S:
             self.f.said["apu_bleed"] = t
             self._call("apu_slow", ROUTINE, t, "APU hasn't come up. Check it, the bleed's off for now.")
+
+    def _nearest_stand(self: Any, own: OwnshipState) -> tuple[float, float] | None:
+        st = self.engine.state if self.engine is not None else None
+        geo = self.engine.geometry(st.flight.destination) if st is not None else None
+        stands = geo.airport.parking if geo is not None else ()
+        best = min(stands, key=lambda p: haversine_nm(own.lat, own.lon, p.lat, p.lon), default=None)
+        return (best.lat, best.lon) if best is not None else None
 
     def _watch_taxi(self: Any, own: OwnshipState, t: float) -> None:
         self.hdg_hist.append((t, own.hdg_true))

@@ -86,8 +86,12 @@ def test_step_down_altitudes():
 
 # --- flown through the engine ----------------------------------------------------------------------------------
 
+REACTION_S = 6.0  # a heading given, the turn starts this long after (the readback, the knob)
+
+
 class Arrival:
-    """An aircraft that does exactly what approach says, one second at a time."""
+    """An aircraft that does exactly what approach says, one second at a time: a few seconds after it's said, at rate
+    one or an airliner's 25 degrees of bank, whichever is gentler."""
 
     def __init__(self, bearing: float, nm: float, heading: float, altitude: float = 15000) -> None:
         self.engine = AtcEngine(EngineConfig(destination="KSEA", cruise_ft=38000, callsign="DAL2543", seed=3))
@@ -104,6 +108,8 @@ class Arrival:
         self.engine.state.flags.add("descend")
         self.said: list[AtcTransmission] = []
         self.captured = False
+        self.target: float | None = None
+        self.target_t = 0.0
         self.say(f"Seattle Approach, Delta 2543, {int(altitude):,} descending")
 
     def say(self, text: str) -> None:
@@ -127,9 +133,12 @@ class Arrival:
             if "approach" in self.engine.state.clearances and abs(side) < 0.7 and out > 1:
                 self.captured = True  # the localizer
             target = (end.heading_true - MAGVAR) if self.captured else a.heading
-            if target is not None:
+            if target != self.target:  # a new heading: the readback and the hand on the knob first
+                self.target, self.target_t = target, self.own.t
+            if target is not None and self.own.t - self.target_t >= REACTION_S:
                 turn = ((target - hdg + 540) % 360) - 180
-                hdg = (hdg + max(-3.0, min(3.0, turn))) % 360
+                rate = min(3.0, 1091 * math.tan(math.radians(25)) / self.own.gs_kt)  # rate one, 25 degrees of bank at most
+                hdg = (hdg + max(-rate, min(rate, turn))) % 360
             alt = self.own.alt_indicated_ft
             if a.altitude_ft is not None and alt > a.altitude_ft:
                 alt = max(a.altitude_ft, alt - 30)  # 1,800 fpm

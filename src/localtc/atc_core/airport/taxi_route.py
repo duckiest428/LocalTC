@@ -43,7 +43,10 @@ CLOSED_PENALTY = 100.0  # a closed taxiway (the ATIS's notice) is used only wher
 
 
 class TaxiGraph:
-    def __init__(self, geometry: AirportGeometry, *, closed: frozenset[str] = frozenset(), wingspan_m: float = 0.0) -> None:
+    def __init__(self, geometry: AirportGeometry, *, closed: frozenset[str] = frozenset(), wingspan_m: float = 0.0,
+                 closed_paths: frozenset[int] = frozenset()) -> None:
+        """``closed``: taxiways closed along their length; ``closed_paths``: the pieces of one closed between two
+        points (``closures.closed_paths``)."""
         self.geometry = geometry
         airport = geometry.airport
         self.positions: dict[Node, tuple[float, float]] = {
@@ -52,7 +55,7 @@ class TaxiGraph:
         self.positions.update({("parking", s.index): geometry.xy(s.lat, s.lon) for s in airport.parking})
         self.edges: dict[Node, list[_Edge]] = {node: [] for node in self.positions}
         need_m = taxiway_width_m(wingspan_m)  # the width its wings need (Haneda's lanes had an A350 hitting things)
-        for path in airport.taxi_paths:
+        for index, path in enumerate(airport.taxi_paths):
             if path.kind not in ROUTABLE:
                 continue
             a: Node = ("point", path.start)
@@ -61,7 +64,7 @@ class TaxiGraph:
                 continue
             length = math.dist(self.positions[a], self.positions[b])
             cost = length * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0) * (
-                CLOSED_PENALTY if path.name and path.name in closed else 1.0) * _narrow(path, need_m)
+                CLOSED_PENALTY if path.name and path.name in closed or index in closed_paths else 1.0) * _narrow(path, need_m)
             runway = path.runway if path.kind == "runway" else ""
             self.edges[a].append(_Edge(b, cost, length, path.name, runway))
             self.edges[b].append(_Edge(a, cost, length, path.name, runway))
@@ -189,12 +192,13 @@ class TaxiGraph:
         return best
 
     def runway_exit(self, lat: float, lon: float, heading_true: float, *, ahead_m: float = 2500.0,
-                    toward: tuple[float, float] | None = None, extra_m: float = 1200.0) -> tuple[str, str] | None:
+                    toward: tuple[float, float] | None = None, extra_m: float = 1200.0,
+                    min_ahead_m: float = 0.0) -> tuple[str, str] | None:
         """The next taxiway off the runway ahead of an aircraft rolling out: (side, taxiway), "left"/"right" as the
         pilot sees it ("vacate left onto E4"), or None when none is named ahead. ``toward`` (lat, lon): where the
         aircraft goes next (its gate, the terminal): an exit on that side is taken over the very next one, when it's
         not much further down the runway (``extra_m``). Vacating left with every gate to the right only made a long
-        taxi back across."""
+        taxi back across. ``min_ahead_m``: still rolling, not one it can't slow down for."""
         here = self.geometry.xy(lat, lon)
         hx, hy = math.sin(math.radians(heading_true)), math.cos(math.radians(heading_true))
         found: list[tuple[float, str, str]] = []
@@ -203,7 +207,7 @@ class TaxiGraph:
                 continue
             nx, ny = self.positions[node]
             along = (nx - here[0]) * hx + (ny - here[1]) * hy
-            if not 0.0 <= along <= ahead_m or abs((nx - here[0]) * hy - (ny - here[1]) * hx) > 60.0:
+            if not min_ahead_m <= along <= ahead_m or abs((nx - here[0]) * hy - (ny - here[1]) * hx) > 60.0:
                 continue  # behind, too far on, or not on this runway (beside the aircraft's line)
             for edge in edges:
                 if edge.runway or not edge.name or self._on_runway(edge.to):

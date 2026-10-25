@@ -21,6 +21,7 @@ import zlib
 
 from localtc.atc_core.airport import AirportGeometry, select_runway
 from localtc.atc_core.airport.approaches import Aircraft, choose_approach, options
+from localtc.atc_core.atis import runway_use
 from localtc.atc_core.atis.real import approach_for as real_approach_for
 from localtc.atc_core.airport.geometry import RunwayEndGeometry
 from localtc.atc_core.atis.broadcast import AtisInfo
@@ -46,6 +47,7 @@ MIN_UPDATE_S = 1800.0  # a special between the hourly observations at most this 
 RUNWAY_UPDATE_S = 300.0  # ... or this often when the runway in use changes
 RUNWAY_CHANGE_S = 900.0  # "runway change in progress" this long after one
 OBSERVED_AT_MIN = 53  # routine observations: hourly at 53 minutes past
+DEPARTURE_PARALLEL_M = 1500.0  # a parallel this long takes departures too (4,900 ft: not a short GA strip)
 TYPICAL = Aircraft(airline=True)  # what an ATIS advertises approaches for: the airliners that fly them
 
 
@@ -94,9 +96,13 @@ class AtisBoard:
         self._notices: dict[str, tuple[Notice, ...]] = {}
         self.real: dict[str, tuple[Notice, ...]] = {}  # an airport's real NOTAMs, as ATC works to them (the app's)
 
-    def notices(self, icao: str, geo: AirportGeometry) -> tuple[Notice, ...]:
-        if icao in self.real:
-            return self.real[icao]  # the real ones: never mixed with drawn ones
+    def notices(self, icao: str, geo: AirportGeometry, real=None) -> tuple[Notice, ...]:
+        """The notices ATC works to there: the real ones (its NOTAMs, and what its real ATIS says), else drawn ones.
+        Never both: Phoenix's drawn "runway 07L/25R closed" took away the runway its real ATIS was departing on."""
+        if icao in self.real or real is not None:
+            from_atis = tuple(Notice(k, s, real="ATIS", detail=d) for k, s, d in (real.notices if real is not None else ()))
+            known = self.real.get(icao, ())
+            return known + tuple(n for n in from_atis if not any((n.kind, n.subject) == (k.kind, k.subject) for k in known))
         if not self.notams:
             return ()
         if icao not in self._notices:
@@ -113,40 +119,49 @@ class AtisBoard:
         new_real = real is not None and (old is None or old.letter != real.letter)
         if old is not None and since < RUNWAY_UPDATE_S and not new_real and old.source[0] == source[0]:
             return None
-        notices = self.notices(icao, geo)
+        notices = self.notices(icao, geo, real)
         closed = closed_ends(geo, notices)
         out = outages(notices)
         end = self._runway(geo, weather, old.runway if old else None, closed, out, flow=self.flows.get(icao))
-        if real is not None:
-            # The real ATIS's runway, while the wind here allows it (never one with a tailwind in the sim's weather).
-            wanted = real.departing if kind == "departure" else real.landing or real.departing
-            for ident in wanted:
-                e = geo.end(ident)
-                if e is not None and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT:
-                    end = e
-                    break
-        departing: tuple[str, ...] = ()
-        if real is not None and real.departing and kind != "arrival":
-            departing = tuple(e.ident for ident in real.departing if (e := geo.end(ident)) is not None
-                              and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT)
         if end is None:
             return None
+        allowed = lambda e: components(e, weather)[0] >= -MAX_TAILWIND_KT  # (never one with a tailwind in the sim's wind)
+        real_landing = [e for e in runway_use.expand(geo, real.landing, closed) if allowed(e)] if real is not None else []
+        real_departing = [e for e in runway_use.expand(geo, real.departing, closed) if allowed(e)] \
+            if real is not None else []
+        if real is not None:
+            # The real ATIS's runway, while the wind here allows it ("RWYS 4/8": Honolulu's 4L, 4R, 8L and 8R).
+            wanted = real_departing if kind == "departure" else real_landing or real_departing
+            end = wanted[0] if wanted else end
         region = self.region or region_for(icao)
+        simultaneous = False
+        if real_landing and kind != "departure":
+            landing = list(dict.fromkeys([end, *real_landing])) if end in real_landing else real_landing
+            simultaneous = len(landing) > 1
+        else:
+            landing = [end]
+            if end.has_ils and end.ident not in out.localizer:
+                wide = [(o, d) for o, d in parallels(geo, end, closed) if o.has_ils and o.ident not in out.localizer
+                        and d >= SIMULTANEOUS_M and o.runway.runway.length_m >= 0.6 * end.runway.runway.length_m]
+                if wide:
+                    landing.append(min(wide, key=lambda od: od[1])[0])
+                    simultaneous = True
+        if real_departing and kind != "arrival":
+            departing = real_departing
+        else:
+            # The runway in use and its parallels long enough for an airliner: departures spread over them.
+            departing = [end] + [o for o, _ in parallels(geo, end, closed)
+                                 if o.runway.runway.length_m >= DEPARTURE_PARALLEL_M and allowed(o)]
+        if real_landing and set(real_landing) == set(real_departing):
+            # A real ATIS's "LNDG/DEPG RWYS 4/8": arrivals and departures apart, as the airport works them (one naming
+            # them apart is followed as it says; the sim's own weather: mixed, departures spread over the parallels).
+            landing, departing = runway_use.segregate(landing, departing, runway_use.terminal_xy(geo))
+        if kind == "departure":
+            end = departing[0]
+        elif end not in landing:
+            end = landing[0]
         if old is not None and old.runway != end.ident:
             self._runway_changed[key] = t
-        landing = [end]
-        simultaneous = False
-        if real is not None and kind != "departure" and real.landing:
-            # The real ATIS's landing runways, each as it gives it ("RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L").
-            landing += [e for ident in real.landing if (e := geo.end(ident)) is not None and e is not end
-                        and e.ident not in closed and components(e, weather)[0] >= -MAX_TAILWIND_KT]
-            simultaneous = len(landing) > 1
-        elif end.has_ils and end.ident not in out.localizer:
-            wide = [(o, d) for o, d in parallels(geo, end, closed) if o.has_ils and o.ident not in out.localizer
-                    and d >= SIMULTANEOUS_M and o.runway.runway.length_m >= 0.6 * end.runway.runway.length_m]
-            if wide:
-                landing.append(min(wide, key=lambda od: od[1])[0])
-                simultaneous = True
         visual_weather = not weather.in_cloud and (weather.visibility_sm is None or weather.visibility_sm >= 3.0) \
             and (weather.ceiling_ft is None or weather.ceiling_ft >= 1000)
         # The real ATIS's approach for each runway when it has one (ATC then works to it); else one the weather calls
@@ -167,11 +182,14 @@ class AtisBoard:
                 if published.kind != "VISUAL" and not published.circle_to:
                     instrument[e.ident] = published
         extra = advisories(weather, end.ident)
-        taxiways = frozenset(n.subject for n in notices if n.kind == "taxiway_closed")
+        taxiways = frozenset(n.subject for n in notices if n.kind == "taxiway_closed" and "/" not in n.detail)
+        segments = tuple((n.subject, *n.detail.split("/", 1)) for n in notices if n.kind == "taxiway_closed"
+                         and "/" in n.detail)
         ops = Operations(
-            landing=tuple(e.ident for e in landing), departing=(end.ident,), approaches=approaches, instrument=instrument,
+            landing=tuple(e.ident for e in landing), departing=tuple(e.ident for e in departing), approaches=approaches,
+            instrument=instrument,
             simultaneous=simultaneous and all(a.kind != "VISUAL" for a in approaches.values()), notices=notices,
-            outages=out, closed_runways=closed, closed_taxiways=taxiways,
+            outages=out, closed_runways=closed, closed_taxiways=taxiways, closed_segments=segments,
             runway_change=t - self._runway_changed.get(key, -math.inf) < RUNWAY_CHANGE_S, **extra)
         notes = remarks(geo, end, weather)
         slot = observation_slot(zulu_s)
@@ -198,9 +216,10 @@ class AtisBoard:
         stamp = _zulu(((slot * 3600) + OBSERVED_AT_MIN * 60) if routine and zulu_s is not None else now)
         if real is not None and real.zulu:
             stamp = real.zulu
-        primary = approaches[end.ident]
+        primary = approaches.get(end.ident) or next(iter(approaches.values()))
         info = AtisInfo(icao, name, letter, stamp, weather, end.ident, primary.kind, notes, ops, region, kind, slot,
-                        source=source, departing=departing)
+                        source=source, departing=ops.departing, real_remarks=real.remarks if real is not None else (),
+                        offered=real.offered if real is not None and not real.approaches else ())
         self.current[key] = info
         self._issued[key] = t
         return info

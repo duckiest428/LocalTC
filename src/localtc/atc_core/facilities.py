@@ -48,6 +48,8 @@ def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
     suffix = SUFFIXES[controller]
     first = re.split(r"[-/(]", freq.name.upper())[0]
     words = [w for w in first.split() if w not in NOISE_WORDS and w != airport.icao.upper()]
+    if words and words[0] in speech.FACILITY_CODES:  # "HCF": Honolulu Control Facility, "Honolulu Approach" on the radio
+        words = [*speech.FACILITY_CODES[words[0]].split(), *words[1:]]
     if not words:
         words = speech.airport_name(airport.name, airport.icao).split()
         words = [w for w in words if w.upper() not in NOISE_WORDS] or words

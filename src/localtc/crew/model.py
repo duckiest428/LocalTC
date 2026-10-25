@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 MODES = ("off", "scripted", "semi", "mostly_llm", "llm")
 ACTIONS = ("gear", "flaps", "light", "spoilers", "autopilot", "ap_mode", "autothrottle", "heading", "altitude",
            "speed", "vs", "squawk", "com_active", "com_standby", "com_swap", "altimeter", "parking_brake", "seatbelt",
-           "apu", "apu_bleed")
+           "apu", "apu_bleed", "knob")
 SYSTEM = """You are the first officer, pilot monitoring, in an airliner cockpit, talking with the captain on the \
 intercom. Sound like a real, calm, experienced airline first officer: short, plain, accurate. A colleague, not an \
 assistant and not an actor.
@@ -44,8 +44,11 @@ How you talk:
 - One short sentence, two at most. Spoken words, no lists. Don't put "Captain" in every line.
 - Answer what was asked, nothing more. Never prompt the captain to do the next thing ("ground's next", "ready when \
 you are", "let's brief"), never suggest calling ATC, never volunteer the cockpit state.
-- A remark or a check ("engine two started", "beautiful sunset", "flaps one, check"): a word or two ("Check.", \
-"Copy.", "Yeah, nice."). Don't repeat facts back.
+- A check, or a remark in a busy phase ("engine two started", "flaps one, check"): a word or two ("Check.", \
+"Copy."). Don't repeat facts back.
+- In the cruise, or wherever it's quiet, the captain chatting or asking you something as a person ("how about you?", \
+"beautiful sunset", "they must be glitching") gets a person's answer: a friendly sentence, a little humour is fine \
+("Same here. A week on the beach sounds about right."). Never "Copy." or "Check." to a question or to small talk.
 - The captain telling you what HE did or is doing ("I've deployed the speedbrakes", "I'm going to slow down", \
 "applying takeoff thrust") is not a request: acknowledge it ("Check."), never act on it.
 - {facts_rule}
@@ -64,7 +67,9 @@ heading|nav|approach|altitude|vs|flc, value on), autothrottle (value on|off), he
 (value feet), speed (value knots), vs (value feet per minute, negative down), squawk (value 4 digits), com_active or \
 com_standby (value MHz), com_swap, altimeter (value inches like 29.92, or target hpa and value like 1013; \
 "standard" or "STD" is 29.92), parking_brake (value on|off), seatbelt (the seatbelt sign, value on|off), apu \
-(value start|stop), apu_bleed (value on|off).
+(value start|stop), apu_bleed (value on|off), knob (an FCU knob, target speed|altitude|heading, value push|pull: \
+pushed is managed, pulled is selected or open: "speed managed" is knob speed push, "open descent" or "pull altitude" \
+is knob altitude pull).
 Only those, and only when the captain names the thing (gear, flaps, lights...). Not on the list (the autobrake, the \
 flight director, the packs, anti-ice, the fuel pumps, the EFB): say it's the captain's, or that \
 you can't from your seat. Never pick another action instead, never claim you did something you didn't return as a \
@@ -305,6 +310,7 @@ ACTION_WORDS = {
     "com_standby": r"standby|frequency|\btune\b|\bcom\b|\bpoint\b|decimal|\d{3}\.\d", "com_swap": r"\bswap\b|\bflip\b",
     "altimeter": r"altimeter|\bqnh\b|\bbaro|\bstandard\b|\bstd\b", "parking_brake": r"parking brake|park(?:ing)? brakes?",
     "seatbelt": r"seat ?belts?|sea ?pelts?|seat ?pelts?|sea ?pots?", "apu": r"\bapu\b|\ba p u\b", "apu_bleed": r"\bapu\b.*\bbleed\b|\bbleed\b",
+    "knob": r"\bmanaged\b|\bselected\b|\bpush\b|\bpull\b|\bopen (?:climb|descent)\b|\bop (?:des|clb)\b",
 }
 REPORT = re.compile(r"\b(?:i've|i have|i'm|i am|i just|i'll|i will|i deployed|i set|i put|we've|we just)\b")
 REQUEST = re.compile(r"\b(?:can you|could you|would you|please|go ahead and|give me|set|put|let's)\b")
@@ -434,7 +440,9 @@ def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
     said = numbers_in(number_words(reply))
     if said != numbers_in(original):
         return None, f"numbers changed: {sorted(numbers_in(original))} -> {sorted(said)}"
-    missing = {n for n in NAMED.findall(original)} - {n for n in NAMED.findall(reply)}
+    # ("FL three-four-zero" is FL340: turned away as leaving it out)
+    as_numbers = re.sub(r"\bFL\s+(\d)", r"FL\1", number_words(reply))
+    missing = {n for n in NAMED.findall(original)} - {n for n in NAMED.findall(reply)} - set(NAMED.findall(as_numbers))
     if missing:
         return None, f"left out {', '.join(sorted(missing))}"
     if len(reply) > max(2 * len(original), len(original) + 60):

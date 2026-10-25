@@ -113,9 +113,10 @@ def test_other_flights_checking_in_with_a_centre_are_answered_like_the_pilot():
     chatter = Chatter(TemplateLibrary.load(), seed=3)
     cs = Callsign("EZY18AB", telephony="Easy", flight_number="18AB")
     scene = Scene(controller="center", station="Shanwick Oceanic", others=[Other(1, cs, "level", 37000)])
-    replies = {line.text for _ in range(12) for line in chatter.exchange(scene) if line.speaker == "atc"}
-    assert all("FL370" in r or "FL390" in r for r in replies)
-    assert not any(r.endswith(", roger.") for r in replies)
+    replies = {line.text for _ in range(30) for line in chatter.exchange(scene) if line.speaker == "atc"}
+    # Mostly the acknowledgement (its level known from the last controller), now and then the level, or a climb
+    assert all("FL370" in r or "FL390" in r for r in replies if "maintain" in r)
+    assert any("roger" in r or "radar contact." in r for r in replies)
 
 
 def test_a_hundred_or_more_said_in_words():
@@ -146,4 +147,4 @@ def test_arrivals_on_approach_are_worked_like_the_pilot():
     assert all("turn right heading 240, maintain" in line or line.startswith("pilot") for line in cutting_in)
     assert any("cleared ILS runway 21L approach" in line for line in cutting_in)
     final = said(Other(1, cs, "descending", 3000, leg="final", final_nm=8.0))
-    assert final and all("Metro Tower" in line for line in final)
+    assert final and all("Metro Tower" in line for line in final if line.startswith("atc"))

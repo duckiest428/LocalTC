@@ -6,6 +6,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ## [0.5.0] - Upcoming
 
 ### Added
+- **The Flight Tracker draws aircraft as what they are**: an airliner, a widebody, a regional or business jet, a
+  turboprop, a light aircraft or a helicopter, the traffic and your own aircraft (a Cessna was an airliner).
 - **The Flight Tracker's taxi route** is a bold green line, outlined, and the other aircraft's labels sit in boxes that read over the map.
 - **A new logo**: a control tower, across the site, its icon and the link preview.
 - **Weather, areas & NOTAMs on the Flight Tracker**: a button shows the SIGMETs, TFRs and restricted areas around the flight and its airports' NOTAMs (a closed runway red), from what the app sends on.

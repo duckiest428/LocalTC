@@ -97,7 +97,8 @@ pilot_readback = "{station} {frequency}, {callsign_short}."
 [[template]]
 id = "center.handoff_center"
 controller = "center"
-text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} on {frequency}, good day."]
+text = ["{callsign}, contact {station} {frequency}.", "{callsign}, contact {station} on {frequency}, good day.",
+        "{callsign}, contact {station} {frequency}, have a good one."]
 readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 

@@ -8,6 +8,7 @@ aircraft well down the runway; and the copilot's "say again?" to "time to start 
 
 import gzip
 import json
+import re
 from pathlib import Path
 
 import msgspec
@@ -36,7 +37,10 @@ LAS_ATIS = ("LAS ATIS INFO W 1756Z. 00000KT 10SM SCT120 BKN180 29/03 A2987 (TWO 
 @pytest.fixture(scope="module")
 def flight() -> list[str]:
     cfg = with_recorded(load_config(), Recording(FLIGHT).header.config)
-    scenario = Scenario(scenario=ScenarioMeta(recording=str(FLIGHT)), flight=cfg.flight, atc=cfg.atc)
+    # Flown from 01R across 01L (its plan said 01L, which ATC now gives when it's one of the runways in use: the
+    # crossing is what these tests are about, so the plan here is the runway it flew).
+    flight = msgspec.structs.replace(cfg.flight, dep_runway="01R")
+    scenario = Scenario(scenario=ScenarioMeta(recording=str(FLIGHT)), flight=flight, atc=cfg.atc)
     return run(scenario, FLIGHT, recording=FLIGHT, recorded_pilot=True).lines
 
 
@@ -114,7 +118,7 @@ def test_runways_that_cross_and_parallels_that_dont():
 def test_no_takeoff_with_an_arrival_landing_across_the_runway(flight):
     """ "There was a plane on the runway ahead of me during the takeoff": 737s landing on 28R rolled out across 01R."""
     first = atc(flight, 2660.0, 2680.0)
-    assert first and "hold short of runway 01R" in first[0] and "final" in first[0], first
+    assert first and re.search(r"hold short (?:of )?runway 01R", first[0]) and "final" in first[0], first
 
 
 def test_the_takeoff_roll_is_stopped_for_an_aircraft_about_to_cross_it(flight):

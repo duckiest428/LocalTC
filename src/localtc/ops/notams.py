@@ -12,12 +12,12 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from localtc.atc_core.atis.operations import read_notices
 from localtc.ops.fetch import Cache, Fetched, http_json
 from localtc.ops.keys import DataKeys
 
 FAA_URL = "https://external-api.faa.gov/notamapi/v1/notams"
 NOTAM_TTL_S = 30 * 60.0
-RUNWAY = r"(\d{2}[LRC]?)"
 
 
 @dataclass(frozen=True)
@@ -36,34 +36,10 @@ class Notam:
         return {"id": self.id, "icao": self.icao, "text": self.text, "start": self.start, "end": self.end}
 
 
-def notices_of(notam: Notam) -> list[tuple[str, str]]:
-    """What ATC can work to in a NOTAM, as (kind, subject) of ``Notice``: [] when it's nothing of the kind (most are:
-    obstacles, a stand, the fuel farm)."""
-    t = " ".join(notam.text.upper().split())
-    out: list[tuple[str, str]] = []
-    if m := re.search(rf"\bRWY {RUNWAY}/{RUNWAY}\b[^.]*?\bCLSD\b", t):
-        if not re.search(r"\b(?:EXC|EXCEPT|BTN|BETWEEN|TWY|TAXIING)\b", t[:m.start()]) and "CLSD TO" not in t:
-            out.append(("runway_closed", f"{m.group(1)}/{m.group(2)}"))
-    if (m := re.search(r"\bTWYS? (.+?)\bCLSD\b", t)) and "RWY" not in t[:m.start()]:
-        # "TWY A10E, B CLSD"; "TWY K BTN TWY J AND RWY 22 CLSD" (K, closed between two points: closed there all the same)
-        for word in re.split(r",\s*|\s+", m.group(1).strip()):
-            if word in ("AND", "&"):
-                continue
-            if not re.fullmatch(r"[A-Z]{1,2}\d{0,3}[A-Z]?", word) or word in ("BTN", "DUE", "TO", "FM", "ON", "AT"):
-                break
-            out.append(("taxiway_closed", word))
-    if m := re.search(rf"\b(?:ILS|LOC)\b[^.]*?\bRWY {RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE|NOT AVBL)\b", t):
-        kind = "glideslope_out" if re.search(r"\b(?:GP|GS|GLIDE ?PATH|GLIDESLOPE)\b", t) else "ils_out"
-        out.append((kind, m.group(1)))
-    elif m := re.search(rf"\b(?:GP|GS|GLIDE ?PATH|GLIDESLOPE)\b[^.]*?\bRWY {RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
-        out.append(("glideslope_out", m.group(1)))
-    if m := re.search(rf"\b(?:ALS|APCH LGT|APPROACH LIGHT\w*|ALSF-?\d|MALSR?|ALS)\b[^.]*?\bRWY {RUNWAY}\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
-        out.append(("approach_lights_out", m.group(1)))
-    if m := re.search(r"\b(VOR(?:/DME)?|VORTAC|NDB|DME)\b[^.]*?\b(?:U/S|OTS|UNSERVICEABLE)\b", t):
-        out.append(("navaid_out", m.group(1).split("/")[0]))
-    if re.search(r"\bBIRD", t):
-        out.append(("birds", ""))
-    return out
+def notices_of(notam: Notam) -> list[tuple[str, str, str]]:
+    """What ATC can work to in a NOTAM, as (kind, subject, detail) of ``Notice`` (``read_notices``): [] when it's
+    nothing of the kind (most are: obstacles, a stand, the fuel farm)."""
+    return read_notices(notam.text)
 
 
 class Notams:

@@ -10,6 +10,10 @@
   border: 1px solid rgba(255, 255, 255, .14); border-radius: 3px; padding: 1px 4px; display: inline-block; }
 /* An airport's ground close in (AtcMap.ground): runway numbers, taxiway names, the gates by name. */
 .rwy-num { width: max-content; color: #fff; font: 700 13px var(--z-mono); white-space: nowrap; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.rwy-num.in-use { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+.rwy-use { font: 700 9px var(--z-mono); padding: 0 3px; border-radius: 2px; margin-top: 1px; color: #0b0d0f; background: #62c7e6; text-shadow: none; }
+.rwy-num.arr .rwy-use { background: #2fb67c; }
+.rwy-num.both .rwy-use { background: #e7b24a; }
 .twy-label { width: max-content; color: #16120a; background: #e9b949; font: 700 10px/1.25 var(--z-mono); padding: 0 3px; border-radius: 2px;
   white-space: nowrap; box-shadow: 0 0 0 1px #16120a; }
 .gate-label { width: max-content; color: #cfe9f3; font: 600 10px var(--z-mono); white-space: nowrap; transform: translate(6px, -50%);
@@ -87,3 +91,4 @@
 .notam-tooltip { max-width: 360px; white-space: normal; }
 .notam-tip { font-size: 11px; margin-top: 3px; }
 .notam-tip.atc { border-left: 3px solid #ff9f1c; padding-left: 4px; }
+.sw-twy-closed { background: repeating-linear-gradient(90deg, #ff4d4d 0 6px, transparent 6px 10px); height: 4px; margin-top: 3px; }

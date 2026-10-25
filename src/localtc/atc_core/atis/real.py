@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 
 from localtc.atc_core.atis.observation import Layer, Weather
+from localtc.atc_core.atis.operations import read_notices
 from localtc.atc_core.values import Wind
 
 COVERS = ("FEW", "SCT", "BKN", "OVC", "VV")
@@ -32,6 +33,10 @@ class RealAtis:
     offered: tuple[str, ...] = ()
     weather: Weather | None = None  # from the observation in it (wind magnetic as ATIS gives it)
     text: str = ""
+    # Everything else it says, sentence by sentence as published ("TWY T CLSD", "INCR BIRD STRIKE HAZ ALL RWYS", "READ
+    # BACK ALL CONTROL INSTRUCTIONS"): LocalTC's ATIS reads them out in words, as the recording does.
+    remarks: tuple[str, ...] = ()
+    notices: tuple[tuple[str, str, str], ...] = ()  # what ATC works to in them (``operations.read_notices``)
 
 
 def parse(text: str, kind: str = "both") -> RealAtis | None:
@@ -41,8 +46,10 @@ def parse(text: str, kind: str = "both") -> RealAtis | None:
     if m is None:
         return None
     letter, zulu = m.group(1), m.group(2) or ""
-    landing = _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARRIVALS?|ARR)")
-    departing = _runways_after(upper, r"(?:DEPARTING|DEPG|DEPARTURES?|DEP|DEPS)(?:\s+(?:EXPC?|EXPECT))?")  # "DEPS EXP RWYS 22L 28R"
+    # "LNDG/DEPG RWYS 4/8" (Honolulu), "LDG AND DEPG RWY 27": the same runways both ways
+    both_ways = _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARR)\s*(?:/|AND|&)\s*(?:DEPARTING|DEPG|DEP)")
+    landing = both_ways or _runways_after(upper, r"(?:LANDING|LDG|LNDG|ARRIVALS?|ARR)")
+    departing = both_ways or _runways_after(upper, r"(?:DEPARTING|DEPG|DEPARTURES?|DEP|DEPS)(?:\s+(?:EXPC?|EXPECT))?")  # "DEPS EXP RWYS 22L 28R"
     approach = ""
     approaches = re.findall(r"\b(ILS|RNAV|GPS|LOC|VOR|VISUAL)\b(?:\s+(?:Y|Z)\b)?(?:\s+(?:APCHS?|APPROACHES|APPROACH))?"
                             rf"(?:\s+(?:TO\s+)?{RUNWAY}\s*(\d{{1,2}}[LRC]?))?", upper)
@@ -62,8 +69,29 @@ def parse(text: str, kind: str = "both") -> RealAtis | None:
     if named:  # "EXPC ILS, RNAV, OR VISUAL APCH, SIMUL APCHS IN USE, RWY 7, RWY 17R, EXPECT VISUAL APCH RWY 16L"
         listed = _runways_after(upper, r"(?:APCHS?|APPROACH(?:ES)?)(?:\s*,?\s*SIMUL\s+APCHS\s+IN\s+USE)?") if offered else ()
         landing = tuple(dict.fromkeys((*listed, *by_runway)))
+    found = _remarks(upper)
+    notices = tuple(dict.fromkeys(n for r in found for n in read_notices(r)))
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
-                    approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()))
+                    approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()),
+                    remarks=found, notices=notices)
+
+
+# What starts a sentence LocalTC's ATIS already says its own way: the runways and approaches in use
+OWN_WORDS = re.compile(r"^(?:SIMUL|EXP|EXPC|EXPECT|LNDG|LDG|LANDING|DEPG|DEPARTING|DEPS?|ARR(?:IVALS?)?|ILS|RNAV|GPS|"
+                       r"VISUAL|VIS|APCHS?|RWYS? IN USE|RY|INST)\b")
+
+
+def _remarks(upper: str) -> tuple[str, ...]:
+    """The sentences after the observation, the runways and the approaches: notices, cautions, the readback line
+    ("...ADVS YOU HAVE INFO K" left out: LocalTC closes with its own)."""
+    out = []
+    for sentence in re.split(r"(?<=[A-Z0-9)])\.\s+|\.\.\.+\s*", upper):
+        s = sentence.strip(" .")
+        if not s or re.search(r"\b(?:ATIS|INFO(?:RMATION)?)\s+[A-Z]\b", s) or re.search(r"\b\d{5}(?:G\d{2})?KT\b", s) \
+                or re.search(r"\bA\d{4}\b|\bQ\d{4}\b|\bRMK\b", s) or OWN_WORDS.match(s):
+            continue
+        out.append(s)
+    return tuple(out)
 
 
 def approach_for(real: RealAtis, runway: str, visual_weather: bool) -> str:
@@ -105,7 +133,9 @@ def _ident(runway: str) -> str:
 
 
 def _weather(upper: str) -> Weather | None:
-    """The observation in it: "09005G15KT 10SM FEW006 BKN020 18/13 A2981" (or Q1013)."""
+    """The observation in it: "09005G15KT 10SM FEW006 BKN020 18/13 A2981" (or Q1013). Its remarks aren't the weather
+    here: Phoenix's "RMK AO2 SLP111 SHRA DSNT N" (showers in the distance) was read as rain on the field."""
+    upper = re.split(r"\bRMK\b", upper)[0]
     wind = re.search(r"\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b", upper)
     if wind is None:
         return None

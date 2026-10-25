@@ -37,11 +37,13 @@ def _round(p: tuple[float, float]) -> list[float]:
     return [round(p[0], 6), round(p[1], 6)]
 
 
-def runways(airport: Airport) -> list[dict[str, Any]]:
-    """Each runway's outline (four corners) and its two numbers at their thresholds."""
+def runways(airport: Airport, use: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """Each runway's outline (four corners) and its two numbers at their thresholds; ``use``: each end in use, "arr",
+    "dep" or "both" (the ATIS's), shown on its number."""
+    use = use or {}
     out = []
     for rw in airport.runways:
-        if not rw.length_m:
+        if not rw.length_m or rw.water:  # a seaplane runway: open water, nothing painted
             continue
         half, width = rw.length_m / 2, max(rw.width_m, 23.0) / 2
         start = _offset(rw.lat, rw.lon, rw.heading_true + 180, half)  # the primary end's threshold: landing on it
@@ -51,24 +53,28 @@ def runways(airport: Airport) -> list[dict[str, Any]]:
         inset = min(120.0, half * 0.25)  # the number painted a little in from the threshold
         out.append({"name": f"{rw.primary.ident}/{rw.secondary.ident}", "outline": [_round(c) for c in corners],
                     "ends": [{"ident": rw.primary.ident, "at": _round(_offset(*start, rw.heading_true, inset)),
-                              "heading": round(rw.heading_true)},
+                              "heading": round(rw.heading_true), "use": use.get(rw.primary.ident, "")},
                              {"ident": rw.secondary.ident, "at": _round(_offset(*end, rw.heading_true + 180, inset)),
-                              "heading": round((rw.heading_true + 180) % 360)}]})
+                              "heading": round((rw.heading_true + 180) % 360), "use": use.get(rw.secondary.ident, "")}]})
     return out
 
 
-def taxiways(airport: Airport) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    """The taxiways as segments ({name, a, b, width}), where each name is labelled ({name, at, heading}), and the
-    hold-short bars ({a, b}) across them."""
+def taxiways(airport: Airport, closed: tuple[frozenset[str], frozenset[int]] | None = None
+             ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """The taxiways as segments ({name, a, b, width, closed}), where each name is labelled ({name, at, heading}), and
+    the hold-short bars ({a, b}) across them. ``closed``: the ATIS's closures (names closed along their length, the
+    taxi paths closed between two points)."""
+    names, pieces = closed or (frozenset(), frozenset())
     points = {p.index: p for p in airport.taxi_points}
     segments, by_name = [], {}
     touching: dict[int, list[tuple[float, float]]] = {}
-    for path in airport.taxi_paths:
+    for index, path in enumerate(airport.taxi_paths):
         if path.kind not in TAXI_KINDS or path.start not in points or path.end not in points:
             continue
         a, b = points[path.start], points[path.end]
         pa, pb = (a.lat, a.lon), (b.lat, b.lon)
-        segments.append({"name": path.name, "a": _round(pa), "b": _round(pb), "width": round(path.width_m or 0.0, 1)})
+        segments.append({"name": path.name, "a": _round(pa), "b": _round(pb), "width": round(path.width_m or 0.0, 1),
+                         "closed": bool(path.name and path.name in names or index in pieces)})
         if path.name:
             by_name.setdefault(path.name, []).append((pa, pb))
         touching.setdefault(path.start, []).append(pb)
@@ -112,7 +118,15 @@ def gates(airport: Airport, gate_map: dict | None = None) -> list[dict[str, Any]
     return out
 
 
-def layout(airport: Airport, gate_map: dict | None = None) -> dict[str, Any]:
-    segments, labels, holds = taxiways(airport)
-    return {"icao": airport.icao, "runways": runways(airport), "taxiways": segments, "taxiway_labels": labels,
+def layout(airport: Airport, gate_map: dict | None = None, *, use: dict[str, str] | None = None,
+           closed: tuple[frozenset[str], frozenset[int]] | None = None) -> dict[str, Any]:
+    """``use``: the runway ends in use (``runways``); ``closed``: the closed taxiways (``taxiways``)."""
+    segments, labels, holds = taxiways(airport, closed)
+    return {"icao": airport.icao, "runways": runways(airport, use), "taxiways": segments, "taxiway_labels": labels,
             "holds": holds, "gates": gates(airport, gate_map)}
+
+
+def runway_use(landing: tuple[str, ...], departing: tuple[str, ...]) -> dict[str, str]:
+    """Each runway end in use: "arr", "dep" or "both"."""
+    return {ident: "both" if ident in landing and ident in departing else "arr" if ident in landing else "dep"
+            for ident in (*landing, *departing)}

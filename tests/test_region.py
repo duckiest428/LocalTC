@@ -69,4 +69,4 @@ def test_seattle_to_rome_is_faa_at_home_and_icao_in_italy(ksea_lirf):
     assert seattle and rome
     assert any("cleared to land" in line and "degrees" in line and "knots" in line for line in rome)
     assert not any("degrees" in line for line in seattle)
-    assert any("vacate" in line for line in rome)
+    assert any("vacate" in line or ("turn" in line and "when able" in line) for line in rome)

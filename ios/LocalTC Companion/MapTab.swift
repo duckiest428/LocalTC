@@ -63,7 +63,8 @@ struct MapTab: View {
             ForEach(Array(store.traffic.values)) { target in
                 Annotation("", coordinate: CLLocationCoordinate2D(latitude: target.lat, longitude: target.lon), anchor: .center) {
                     HStack(alignment: .top, spacing: 2) {
-                        plane(heading: target.hdg, size: 14, color: target.ground == true ? Zone.trafficGround : Zone.traffic)
+                        plane(heading: target.hdg, size: 14, color: target.ground == true ? Zone.trafficGround : Zone.traffic,
+                              kind: AircraftKind.of(type: target.type))
                         VStack(alignment: .leading, spacing: 0) {
                             Text(target.callsign ?? "")
                             Text(trafficLevel(target))
@@ -77,7 +78,7 @@ struct MapTab: View {
             }
             if let own = store.own {
                 Annotation(store.status.callsign ?? "You", coordinate: CLLocationCoordinate2D(latitude: own.lat, longitude: own.lon)) {
-                    plane(heading: own.hdg, size: 26, color: .green)
+                    plane(heading: own.hdg, size: 26, color: .green, kind: AircraftKind.of(type: store.status.aircraft))
                         .shadow(color: .black.opacity(0.4), radius: 2)
                 }
             }
@@ -201,14 +202,16 @@ struct MapTab: View {
         return [level, t.type ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
-    /// SF Symbols' aeroplane points east; a heading counts from north.
-    private func plane(heading: Int?, size: CGFloat, color: Color) -> some View {
-        Image(systemName: "airplane")
-            .font(.system(size: size, weight: .bold))
-            .foregroundStyle(color)
+    /// Drawn as what it is (a Cessna as a Cessna, not an airliner), nose up; a heading counts from north.
+    private func plane(heading: Int?, size: CGFloat, color: Color, kind: AircraftKind = .jet) -> some View {
+        let side = CGFloat(kind.scaled(Double(size) * 1.3))
+        return AircraftShape(kind: kind)
+            .fill(color)
+            .overlay(AircraftShape(kind: kind).stroke(.black.opacity(0.85), lineWidth: 0.8))
+            .frame(width: side, height: side)
             // The map turned (two fingers, or the compass's north not up): the aircraft turned back by as much, so it points
             // the way it goes over the ground and not that much off ("the icon doesn't show the right heading").
-            .rotationEffect(.degrees(Double(heading ?? 0) - cameraHeading - 90))
+            .rotationEffect(.degrees(Double(heading ?? 0) - cameraHeading))
     }
 
 }
@@ -261,6 +264,26 @@ enum Zone {
 /// is in highlighted), the departure and approach areas, the stretch of final, each tower's control zone, the
 /// taxi route and the gate, and each airport's controllers as badges. On the VFR map, the airspace classes.
 @MainActor
+/// An aircraft's outline (``AircraftKind.outline``), nose up in its frame; a helicopter's rotor across it.
+struct AircraftShape: Shape {
+    let kind: AircraftKind
+
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 32
+        let point = { (p: (Double, Double)) in CGPoint(x: rect.minX + CGFloat(p.0) * scale, y: rect.minY + CGFloat(p.1) * scale) }
+        var path = Path()
+        path.addLines(kind.outline.map(point))
+        path.closeSubpath()
+        for (from, to) in kind.rotor {
+            let a = point(from), b = point(to)
+            let half = 0.65 * scale
+            path.addRect(CGRect(x: min(a.x, b.x) - half, y: min(a.y, b.y) - half,
+                                width: abs(b.x - a.x) + 2 * half, height: abs(b.y - a.y) + 2 * half))
+        }
+        return path
+    }
+}
+
 struct ZoneLayers {
     let zones: AtcZones
     let vfr: Bool

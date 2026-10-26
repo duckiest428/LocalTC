@@ -59,13 +59,15 @@ anything with the cookie must carry `X-LocalTC: 1` (CSRF), and CORS admits only 
 | `GET /v1/wrapped/timeline?period=&tz=` | the flights and hours in every period with any, for the chart to pick one from |
 | `GET /v1/stats/details` | the Stats page's lines and their metrics, only with Stats and metrics on (`{enabled: false}` otherwise) |
 | `GET /v1/blog`, `GET /v1/blog/posts/:slug`, `GET /v1/blog/images/:id` (**no sign-in**) | the blog's published posts (newest first), one post whole, a picture |
+| `POST /v1/blog/posts/:slug/read`, `POST /v1/blog/posts/:slug/react` `{kind: like\|love\|takeoff\|clap, on}` (**no sign-in**) | a reader counted once, a reaction given or taken back: `{reactions, mine}`. A reader is a salted hash of the IP address and user agent; the authors see the counts in `GET /v1/blog/drafts` |
+| `GET\|PUT\|DELETE /v1/blog/follow`, `GET\|POST /v1/blog/unfollow/:token` (no sign-in) | following the blog by email; a new post goes to the followers once (Resend's batch, from `MARKETING_FROM`), each with its unfollow link |
 | `GET /v1/blog/drafts`, `POST /v1/blog/posts` `{slug?, title, summary, body, cover, published}`, `DELETE /v1/blog/posts/:slug`, `PUT /v1/blog/images` (body: a JPEG, PNG, WebP or GIF, up to 1.5 MB) | writing the blog: only the accounts in `BLOG_AUTHORS` (wrangler.toml), confirmed; `GET /v1/me`'s `blog_author` says whether this one may |
 | `GET /f/:slug`, `/f/:slug.png`, `/w/:slug`, `/w/:slug.png` (**no sign-in**) | the public page, with its own title and picture for chat apps (`noindex`, a strict CSP), and the picture. The Worker is routed `localtc.tech/f/*` and `/w/*` on the site's zone for these |
 | `PUT /v1/live` (desktop), `GET /v1/live`, `GET /v1/live/ws` | the status; each answer to the desktop has `watchers`; the WebSocket gets every message (the website's Flight Tracker opens it with its cookie, from `ALLOWED_ORIGINS` only) |
 | `PUT /v1/live/frame` `{own, traffic}`, `POST /v1/live/radio` `{lines}`, `POST /v1/live/alert`, `PUT /v1/live/airports` `{airports}` | desktop → phone or tracker, in memory only |
 | `PUT /v1/live/connect` `{lan, key}`, `GET /v1/live/connect` | where the phone finds the PC on its network (private addresses only) |
 | `POST /v1/push-tokens` `{token}`, `DELETE /v1/push-tokens/:token` | APNs, for the iOS app |
-| `POST /v1/support` `{kind: bug\|support\|feedback, message, version?, platform?, source?}` | signed in; emailed to `SUPPORT_EMAIL` with the account's address as Reply-To, stored nowhere; 5 an hour per IP, 10 a day per account |
+| `POST /v1/support` `{kind: bug\|support\|feedback, message, version?, platform?, source?, attachments?: [{name, data}]}` (up to 5 files, 25 MB, base64) | signed in; emailed to `SUPPORT_EMAIL` with the account's address as Reply-To, stored nowhere; 5 an hour per IP, 10 a day per account |
 
 ## Setting it up
 

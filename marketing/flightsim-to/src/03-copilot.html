@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.shade { background: linear-gradient(90deg, rgba(11,14,17,.35), rgba(11,14,17,.8) 48%, rgba(11,14,17,.96) 70%), linear-gradient(0deg, rgba(11,14,17,.85), transparent 35%); }
+.head { position: absolute; right: 110px; top: 72px; width: 760px; display: flex; flex-direction: column; gap: 24px; }
+h1 { font-size: 74px; }
+.lede { font-size: 23px; }
+.grid { position: absolute; right: 110px; top: 418px; width: 760px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.card { padding: 18px 22px; }
+.card h4 { margin: 0 0 12px; font: 600 15px var(--mono); letter-spacing: .14em; color: var(--text3); text-transform: uppercase; }
+.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 19px; }
+.check li { display: flex; justify-content: space-between; gap: 10px; color: var(--text2); }
+.check li b { color: var(--green); font: 600 16px var(--mono); }
+.check li.now { color: var(--text); } .check li.now b { color: var(--amber); }
+.radio { font-size: 19px; } .radio .row { padding: 8px 0; } .radio .who { font-size: 13.5px; }
+.wide { grid-column: 1 / -1; }
+.callouts { display: flex; flex-wrap: wrap; gap: 10px; }
+.callouts span { padding: 7px 13px; border-radius: 999px; font: 600 15.5px var(--mono); color: var(--pink); background: rgba(233,120,214,.1); box-shadow: inset 0 0 0 1px rgba(233,120,214,.3); }
+</style></head><body>
+<div class="photo" style="background-image:url('../../../site/img/ch-copilot.jpg'); background-position: 30% center"></div><div class="shade"></div>
+<div class="head">
+  <span class="kicker">The copilot</span>
+  <h1>A first officer<br>on the intercom.</h1>
+  <p class="lede">Talk to your copilot on its own key. It runs the checklists with you, makes the callouts, sets what you ask for, and takes the radios when you say "your radios".</p>
+</div>
+<div class="grid">
+  <div class="card"><h4>Before takeoff</h4><ul class="check">
+    <li>Flaps <b>1+F ✓</b></li><li>Trim <b>SET ✓</b></li><li>Transponder <b>TA/RA ✓</b></li><li class="now">Landing lights <b>ON?</b></li></ul></div>
+  <div class="card radio"><h4>Intercom</h4>
+    <div class="row you"><span class="who">YOU</span><span class="said">Flaps one, gear up.</span></div>
+    <div class="row crew"><span class="who">COPILOT</span><span class="said">Flaps one set. Gear up.</span></div></div>
+  <div class="card radio wide"><h4>Your radios</h4>
+    <div class="row crew"><span class="who">COPILOT <em>ON COM1</em></span><span class="said">Turn left heading zero two zero, maintain two thousand five hundred until established, cleared ILS runway three four right approach, Air Canada eighty-two seventy-two.</span></div></div>
+  <div class="card wide"><h4>Callouts</h4><div class="callouts"><span>V1</span><span>Rotate</span><span>Positive rate</span><span>Localizer alive</span><span>Minimums</span><span>Sixty knots</span></div></div>
+</div>
+<div class="foot"><span><b>LocalTC</b> · Free voice ATC and a copilot for MSFS 2024</span><span>localtc.tech</span></div>
+</body></html>

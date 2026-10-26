@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+body { background: radial-gradient(ellipse at 15% 0%, rgba(95,208,104,.10), transparent 55%), var(--bg); }
+.head { position: absolute; left: 110px; top: 92px; width: 760px; display: flex; flex-direction: column; gap: 26px; }
+h1 { font-size: 86px; }
+.feats { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+.feats li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; font-size: 23px; line-height: 1.4; color: var(--text2); }
+.feats li b { color: var(--text); font-weight: 650; display: block; }
+.feats svg { width: 30px; height: 30px; margin-top: 2px; fill: none; stroke: var(--green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.log { position: absolute; right: 110px; top: 92px; width: 860px; padding: 18px 34px; }
+.log h3 { margin: 6px 0 4px; font: 600 15px var(--mono); letter-spacing: .14em; color: var(--text3); }
+.legs { position: absolute; left: 110px; right: 110px; bottom: 112px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 12px; }
+.leg { position: relative; height: 128px; border-radius: 16px; overflow: hidden; background-size: cover; background-position: center;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
+.leg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,0,0,.85), rgba(0,0,0,.05) 70%); }
+.leg span { position: absolute; left: 14px; bottom: 11px; z-index: 1; font-weight: 700; font-size: 18px; }
+.leg small { display: block; font: 500 13px var(--mono); color: var(--green); }
+</style></head><body>
+<div class="head">
+  <span class="kicker">The radio</span>
+  <h1>Say it.<br>ATC answers.</h1>
+  <ul class="feats">
+    <li><svg viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><span><b>Talk like a real pilot</b>Hold your push-to-talk and speak. Speech recognition runs on your PC, tuned to aviation.</span></li>
+    <li><svg viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></svg><span><b>Readbacks are checked</b>Miss the squawk or the hold short, and the controller tells you, like the real one would.</span></li>
+    <li><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span><b>A voice and a manner for every station</b>Clearance, ground, tower, departure, centre and approach, on the real frequencies.</span></li>
+    <li><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span><b>The whole flight</b>SIDs, STARs, vectors, holds, traffic calls, the ATIS and real gates, in ICAO or FAA phraseology.</span></li>
+  </ul>
+</div>
+<div class="log card radio">
+  <h3>FRONTIER 2084 · KSAN → KPHX</h3>
+  <div class="row atc"><span class="who">LINDBERGH CLEARANCE <em>125.900</em></span><span class="said">Frontier 2084, cleared to Phoenix Sky Harbor International airport via the ZZOOO4 departure, then as filed, climb and maintain 5,000, expect FL350 one zero minutes after departure, departure frequency 119.6, squawk 4157.</span></div>
+  <div class="row you"><span class="who">YOU <span class="ok">✓ READBACK CORRECT</span></span><span class="said">Cleared to Phoenix via the ZZOOO4, then as filed, 5,000, expect 350 in ten, 119.6, squawk 4157, Frontier 2084.</span></div>
+  <div class="row atc"><span class="who">LINDBERGH GROUND <em>123.900</em></span><span class="said">Frontier 2084, runway 27 at C1, taxi via B, B6, C6, C, C1, information Yankee is current, altimeter 29.92.</span></div>
+  <div class="row you"><span class="who">YOU</span><span class="said">Runway 27 at C1 via B, B6, C6, C, C1, we have Yankee, Frontier 2084.</span></div>
+  <div class="row atc"><span class="who">LINDBERGH GROUND</span><span class="said">Frontier 2084, hold position, B737 crossing left to right.</span></div>
+  <div class="row atc"><span class="who">LINDBERGH TOWER <em>118.300</em></span><span class="said">Frontier 2084, runway 27, fly runway heading, cleared for takeoff, wind 270 at 8.</span></div>
+</div>
+<div class="legs">
+  <div class="leg" style="background-image:url('../../../site/img/leg-clearance-960.jpg')"><span><small>121.930</small>Clearance</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-ground-960.jpg')"><span><small>121.800</small>Ground</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-tower-960.jpg')"><span><small>119.250</small>Tower</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-departure-960.jpg')"><span><small>126.125</small>Departure</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-centre-960.jpg')"><span><small>134.580</small>Centre</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-approach-960.jpg')"><span><small>120.350</small>Approach</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-final-960.jpg')"><span><small>118.700</small>Final</span></div>
+  <div class="leg" style="background-image:url('../../../site/img/leg-gate-960.jpg')"><span><small>121.850</small>To the gate</span></div>
+</div>
+<div class="foot"><span><b>LocalTC</b> · Free voice ATC for MSFS 2024</span><span>localtc.tech</span></div>
+</body></html>

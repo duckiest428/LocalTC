@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+body { background: radial-gradient(ellipse at 85% 0%, rgba(108,201,232,.10), transparent 55%), var(--bg); }
+.head { position: absolute; left: 110px; top: 150px; width: 640px; display: flex; flex-direction: column; gap: 24px; }
+h1 { font-size: 86px; }
+.map { position: absolute; right: 110px; top: 150px; width: 1010px; height: 568px; overflow: hidden; background: url("shots/logbook-map.png") 42% 42% / 118%; }
+.tiles { position: absolute; right: 110px; top: 748px; width: 1010px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.tile { padding: 20px 22px; }
+.tile b { display: block; font: 600 40px var(--mono); letter-spacing: -.02em; }
+.tile span { font-size: 18px; color: var(--text3); }
+.feats { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 18px; }
+.feats li { font-size: 22px; line-height: 1.4; color: var(--text2); padding-left: 26px; position: relative; }
+.feats li::before { content: ""; position: absolute; left: 0; top: 11px; width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); }
+.feats b { color: var(--text); font-weight: 650; }
+.cta { position: absolute; left: 110px; top: 698px; display: flex; gap: 14px; }
+</style></head><body>
+<div class="head">
+  <span class="kicker" style="color:var(--cyan)">After the flight</span>
+  <h1>Every flight,<br>kept.</h1>
+  <ul class="feats">
+    <li><b>A logbook</b> of every flight, with a map of your routes</li>
+    <li><b>Replays</b> with the whole radio, in step with the map</li>
+    <li><b>Wrapped:</b> your week, month or year, as a story</li>
+    <li><b>Stats:</b> countries, airlines, landings and more</li>
+    <li><b>Follow along</b> on the web or the iPhone companion app</li>
+  </ul>
+</div>
+<div class="map card"><small style="position:absolute;right:12px;bottom:8px;font-size:13px;color:var(--text3);background:rgba(0,0,0,.55);padding:2px 7px;border-radius:4px">© OpenStreetMap contributors</small></div>
+<div class="tiles">
+  <div class="tile card"><b>37</b><span>flights</span></div>
+  <div class="tile card"><b>182.4</b><span>hours in the air</span></div>
+  <div class="tile card"><b>-96</b><span>fpm, softest landing</span></div>
+  <div class="tile card"><b>94%</b><span>readbacks right</span></div>
+</div>
+<div class="cta"><span class="pill"><i></i>Free, no subscription</span><span class="pill"><i></i>Your logbook stays on your PC</span></div>
+<div class="foot"><span><b>LocalTC</b> · Free voice ATC for MSFS 2024</span><span>localtc.tech</span></div>
+</body></html>

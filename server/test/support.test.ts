@@ -18,6 +18,20 @@ describe("support messages", () => {
     expect(sent.text).toContain("LocalTC 0.3.0 Windows");
   });
 
+  it("carries attached files, made safe, and refuses too many or too much", async () => {
+    (env as any).SUPPORT_EMAIL = "maintainer@example.com";
+    const { token } = await signIn();
+    const data64 = btoa("a session export");
+    const res = await call("POST", "/v1/support", { ...message, attachments: [{ name: "../session 1.zip", data: data64 }] }, bearer(token));
+    expect(res.status).toBe(200);
+    const sent = [...outbox].reverse().find((e) => e.to === "maintainer@example.com")!;
+    expect(sent.attachments).toEqual([{ filename: "_session 1.zip", content: data64 }]);
+    expect(sent.text).toContain("Attached: _session 1.zip");
+    const six = Array.from({ length: 6 }, (_, i) => ({ name: `f${i}.txt`, data: data64 }));
+    expect((await call("POST", "/v1/support", { ...message, attachments: six }, bearer(token))).status).toBe(400);
+    expect((await call("POST", "/v1/support", { ...message, attachments: [{ name: "x", data: "not base64!" }] }, bearer(token))).status).toBe(400);
+  });
+
   it("needs an account", async () => {
     const res = await call("POST", "/v1/support", message);
     expect(res.status).toBe(401);

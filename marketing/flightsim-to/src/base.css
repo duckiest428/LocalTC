@@ -1,0 +1,33 @@
+/* The flightsim.to images: 1920 x 1080 each, rendered by ../render.sh. The site's fonts, colours and photos. */
+@font-face { font-family: "Inter"; src: url("../../../site/fonts/inter-latin-var.woff2") format("woff2"); font-weight: 300 800; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../site/fonts/jetbrains-mono-latin-var.woff2") format("woff2"); font-weight: 400 600; }
+:root { --bg: #0b0e11; --panel: #15191e; --panel2: #1c2127; --text: #f2f5f3; --text2: #b3bcc6; --text3: #7f8994; --green: #5fd068;
+  --cyan: #6cc9e8; --amber: #e7b24a; --pink: #e978d6; --mono: "JetBrains Mono", monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--text); font-family: "Inter", sans-serif; }
+.photo { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.shade { position: absolute; inset: 0; }
+.brand { display: flex; align-items: center; gap: 18px; font-weight: 800; font-size: 44px; letter-spacing: -.03em; }
+.brand img { width: 68px; height: 68px; border-radius: 17px; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 12px 40px rgba(0,0,0,.5); }
+.brand span b { color: var(--green); font-weight: 800; }
+.kicker { font: 600 18px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--green); }
+h1 { margin: 0; font-weight: 800; letter-spacing: -.045em; line-height: .98; }
+.lede { color: var(--text2); font-size: 27px; line-height: 1.45; margin: 0; }
+.pills { display: flex; flex-wrap: wrap; gap: 12px; }
+.pill { display: inline-flex; align-items: center; gap: 10px; padding: 11px 20px; border-radius: 999px; font-size: 20px; font-weight: 600; color: var(--text);
+  background: rgba(255,255,255,.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); backdrop-filter: blur(8px); }
+.pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+.card { border-radius: 26px; background: linear-gradient(168deg, rgba(255,255,255,.06), rgba(255,255,255,.015)), var(--panel);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 30px 80px -20px rgba(0,0,0,.7); }
+/* the radio log, as the app draws it */
+.radio { font-size: 21px; line-height: 1.45; }
+.radio .row { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 13px 0; }
+.radio .row + .row { box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+.radio .who { font: 600 16px var(--mono); letter-spacing: .02em; display: flex; gap: 12px; align-items: baseline; }
+.radio .who em { font-style: normal; color: var(--text3); font-weight: 450; }
+.radio .atc .who { color: var(--cyan); } .radio .you .who { color: var(--amber); } .radio .crew .who { color: var(--pink); }
+.radio .said { color: var(--text); }
+.radio .ok { color: var(--green); font: 600 15px var(--mono); }
+.foot { position: absolute; left: 110px; right: 110px; bottom: 54px; display: flex; justify-content: space-between; align-items: center;
+  font-size: 19px; color: var(--text3); }
+.foot b { color: var(--text2); font-weight: 600; }

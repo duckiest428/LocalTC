@@ -117,6 +117,9 @@ a new minor version adds features, a patch fixes them.
   is deleted.
 - **Every Wrapped**: the Wrapped tab opens any week, month or year back to the first flight, and "All weeks" (or
   months, years) charts the flights in each to pick one from.
+- **The LocalTC Discord**: a button at the top of the window and in Support & feedback.
+- **Attach anything to a support message** (Settings (the gear) → Support & feedback): a session export, logs or
+  screenshots, up to 5 files and 25 MB, sent with the message.
 
 ### Changed
 - **The traffic moves like aircraft on the ground**: each turn is taken no faster than its radius allows and slowed

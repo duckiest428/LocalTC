@@ -183,3 +183,19 @@ def test_the_changelog_page_has_a_tab_for_each_product():
     assert page.count('id="v0.4.0"') == 1  # the Main App's anchors stay as they were
     notes = build_site.sections(texts["companion"])
     assert notes[0]["upcoming"] and notes[1]["version"] == "0.4.0" and "### Added" in notes[1]["notes"]
+
+
+def test_the_404_page_works_at_any_depth():
+    """GitHub Pages serves 404.html at whatever address had no page: everything it loads or links is from the root."""
+    import re
+
+    html = (ROOT / "site" / "404.html").read_text(encoding="utf-8")
+    for url in re.findall(r'(?:src|href|srcset)="([^"]+)"', html):
+        for part in url.split(", "):
+            u = part.split(" ")[0]
+            assert u.startswith(("/", "https://", "#")), f"404.html uses {u}, which breaks at /a/b/c"
+
+
+def test_every_page_links_the_discord():
+    for page in [*PAGES, "404.html"]:
+        assert "https://discord.gg/6vbD2T9zHE" in (ROOT / "site" / page).read_text(encoding="utf-8"), page

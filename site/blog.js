@@ -7,12 +7,18 @@
 
    A post is Markdown, a small part of it: ## headings, **bold**, *italic*, `code`, [links](https://...),
    ![pictures](address), - lists, 1. lists, > quotes and --- lines. It's escaped first and built up from there,
-   so nothing in a post can run. Pictures only from the server's blog store or this site. */
+   so nothing in a post can run. Pictures only from the server's blog store or this site.
+
+   Under a post, its reactions; reading it counts it once per reader (the server knows a reader by a salted hash of
+   their address and browser: nothing is kept in this browser). The authors see each post's readers. Follow emails new posts to the
+   signed-in account; signed out, it offers the sign-in and comes back to follow. */
 (function () {
   "use strict";
 
   const MAX_SIDE = 1800;  // a picture's longest side once made smaller
-  const state = { posts: [], author: false, drafts: null, editing: null, cover: null };
+  const state = { posts: [], author: false, drafts: null, editing: null, cover: null, audience: null, following: null };
+  const REACTIONS = [["like", "👍", "Like"], ["love", "❤️", "Love"], ["takeoff", "🛫", "Cleared for takeoff"], ["clap", "👏", "Applause"]];
+
 
   // --- Markdown, the safe little part of it --------------------------------------------------------------------
 
@@ -86,7 +92,7 @@
     const cover = p.cover && imageOk(p.cover) ? `<img src="${esc(p.cover)}" alt="" loading="lazy">` : `<span class="pc-mark" aria-hidden="true"><img src="logo.svg" alt="" width="56" height="56"></span>`;
     return `<a class="post-card${big ? " big" : ""}${p.published_at ? "" : " draft"}" href="#${esc(p.slug)}" data-slug="${esc(p.slug)}">
   <div class="pc-cover">${cover}</div>
-  <div class="pc-text"><span class="pc-date">${esc(when(p.published_at))}${p.published_at ? "" : " · not published"}</span>
+  <div class="pc-text"><span class="pc-date">${esc(when(p.published_at))}${p.published_at ? "" : " · not published"}${audienceLine(p.slug)}</span>
     <h2>${esc(p.title)}</h2>${p.summary ? `<p>${esc(p.summary)}</p>` : ""}</div></a>`;
   }
 
@@ -125,11 +131,79 @@ ${p.cover && imageOk(p.cover) ? `<img class="post-cover" src="${esc(p.cover)}" a
 <header class="post-head"><p class="pc-date">${esc(when(p.published_at))} · ${minutes(p.body)} min read${p.author ? ` · ${esc(p.author)}` : ""}</p>
 <h1>${esc(p.title)}</h1>${p.summary ? `<p class="post-lede">${esc(p.summary)}</p>` : ""}
 ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">Edit this post</button>` : ""}</header>
-<div class="post-body">${markdown(p.body)}</div>`;
+<div class="post-body">${markdown(p.body)}</div>
+<div class="post-react" aria-label="Reactions">${REACTIONS.map(([k, e, label]) => `<button type="button" data-kind="${k}" title="${label}" aria-label="${label}" aria-pressed="false"><span>${e}</span><b></b></button>`).join("")}</div>`;
+    reactions(art, p.slug);
     art.querySelector(".post-back").onclick = (e) => { e.preventDefault(); location.hash = ""; };
     if (editable) $("#post-edit").onclick = () => edit(p);
     document.title = `${p.title} | LocalTC`;
     window.scrollTo(0, art.getBoundingClientRect().top + window.scrollY - 90);
+  }
+
+  /** For the authors: "· 12 readers · 5 reactions" on a post's card. */
+  function audienceLine(slug) {
+    const a = state.audience;
+    if (!a) return "";
+    const reads = a.reads[slug] || 0, reacts = Object.values(a.reactions[slug] || {}).reduce((t, n) => t + n, 0);
+    return ` · ${reads} ${reads === 1 ? "reader" : "readers"} · ${reacts} ${reacts === 1 ? "reaction" : "reactions"}`;
+  }
+
+  /** The post read (counted once for this browser), and its reactions to give or take back. */
+  async function reactions(art, slug) {
+    const bar = art.querySelector(".post-react");
+    const paint = (r) => {
+      bar.querySelectorAll("button").forEach((b) => {
+        const n = r.reactions[b.dataset.kind] || 0;
+        b.querySelector("b").textContent = n ? n : "";
+        b.setAttribute("aria-pressed", String(r.mine.includes(b.dataset.kind)));
+      });
+    };
+    try { paint(await api("POST", `/v1/blog/posts/${encodeURIComponent(slug)}/read`, {})); } catch { bar.hidden = true; return; }
+    if (state.author) {
+      const a = state.audience, reads = a?.reads[slug] || 0;
+      art.querySelector(".post-head").insertAdjacentHTML("beforeend", `<p class="post-audience">${reads} ${reads === 1 ? "reader" : "readers"} so far (seen by the authors only)</p>`);
+    }
+    bar.onclick = async (e) => {
+      const b = e.target.closest("button[data-kind]");
+      if (!b) return;
+      const on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", String(on));
+      try { paint(await api("POST", `/v1/blog/posts/${encodeURIComponent(slug)}/react`, { kind: b.dataset.kind, on })); }
+      catch (err) { b.setAttribute("aria-pressed", String(!on)); say(err.message, true); }
+    };
+  }
+
+  // --- following: new posts by email ------------------------------------------------------------------------------
+
+  function paintFollow() {
+    const b = $("#blog-follow");
+    b.setAttribute("aria-pressed", String(!!state.following));
+    b.querySelector("span").textContent = state.following ? "Following" : "Follow";
+    b.title = state.following ? "New posts come to your email. Click to stop." : "Get new posts by email";
+  }
+
+  async function setFollow(on) {
+    const note = $("#blog-follow-note");
+    try {
+      const r = await api(on ? "PUT" : "DELETE", "/v1/blog/follow");
+      state.following = r.following;
+      paintFollow();
+      note.textContent = r.following ? `New posts will be emailed to ${r.email}.` : "You won't get emails about new posts.";
+    } catch (err) {
+      if (err.status === 401) {
+        try { localStorage.setItem("localtc.afterSignIn", JSON.stringify({ to: "blog?follow=1", at: Date.now() })); } catch { /* storage off */ }
+        note.innerHTML = `Following needs a LocalTC account: <a href="dashboard">sign in</a> and you'll be brought back here.`;
+      } else note.textContent = err.message;
+    }
+  }
+
+  function wireFollow() {
+    $("#blog-follow").onclick = () => setFollow(!state.following);
+    paintFollow();
+    if (new URLSearchParams(location.search).get("follow") === "1") {  // back from signing in to follow
+      history.replaceState(null, "", location.pathname + location.hash);
+      if (!state.following) setFollow(true);
+    }
   }
 
   function route() {
@@ -251,9 +325,12 @@ ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">
 
   async function loadDrafts() {
     if (!state.author) return;
-    const all = (await api("GET", "/v1/blog/drafts")).posts;
+    const got = await api("GET", "/v1/blog/drafts");
+    const all = got.posts;
     if (state.drafts) state.drafts = all;
     state.all = all;
+    state.audience = { reads: got.reads || {}, reactions: got.reactions || {}, followers: got.followers || 0 };
+    $("#blog-drafts").textContent = `Drafts · ${state.audience.followers} ${state.audience.followers === 1 ? "follower" : "followers"}`;
   }
 
   function wireEditor() {
@@ -320,7 +397,9 @@ ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">
     try {
       const me = await api("GET", "/v1/me");  // signed in to the dashboard: an author gets the editor
       state.author = !!me.blog_author;
+      state.following = (await api("GET", "/v1/blog/follow")).following;
     } catch { /* not signed in: reading only */ }
+    wireFollow();
     if (state.author) { wireEditor(); await loadDrafts().catch(() => {}); }
     route();
     window.addEventListener("hashchange", route);

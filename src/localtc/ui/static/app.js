@@ -1678,14 +1678,17 @@ const Settings = {
 
       <div class="card" id="s-support-card">
         <h3>Support &amp; feedback</h3>
+        <div class="row"><a class="btn small discord-btn" href="https://discord.gg/6vbD2T9zHE" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19.3 5.4A16.6 16.6 0 0 0 15.2 4l-.5 1a15.4 15.4 0 0 0-5.4 0l-.5-1a16.6 16.6 0 0 0-4.1 1.4C2.1 9.3 1.4 13.1 1.7 16.8a16.7 16.7 0 0 0 5 2.6l1.1-1.7a10.8 10.8 0 0 1-1.7-.8l.4-.3a11.9 11.9 0 0 0 11 0l.4.3c-.5.3-1.1.6-1.7.8l1.1 1.7a16.6 16.6 0 0 0 5-2.6c.4-4.3-.7-8-3-11.4ZM8.5 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg> Join the Discord</a>
+          <span class="muted small">Ask other pilots, share flights, hear about new versions first.</span></div>
         <p class="muted small" id="sup-who">Sent to support@localtc.tech. Needs the account (above): the answer goes to its address.</p>
         <div class="row">
           <label>About <select id="sup-kind"><option value="feedback">Feedback or an idea</option><option value="bug">Something went wrong</option>
             <option value="support">Help setting it up</option></select></label>
         </div>
         <textarea id="sup-msg" rows="4" maxlength="8000" placeholder="What happened (the airport, what ATC said), or what would make LocalTC better?"></textarea>
+        <label class="sup-files">Attach anything: a session export, logs, screenshots (up to 5 files, 25 MB) <input type="file" id="sup-files" multiple></label>
         <div class="row" style="margin-top:8px"><button class="btn small primary" id="sup-send">Send</button><span class="small" id="sup-note"></span></div>
-        <p class="muted small">For a problem in a flight, turn on Developer mode below and fly it again: Export session makes a zip that shows exactly what happened. Mention it, and the reply says where to send it.</p>
+        <p class="muted small">For a problem in a flight, turn on Developer mode below and fly it again: Export session makes a zip that shows exactly what happened. Attach it here.</p>
       </div>
 
       <div class="card">
@@ -1711,9 +1714,21 @@ const Settings = {
       if (!body.message) { note.className = "small error"; note.textContent = "Write a message first."; return; }
       button.disabled = true;
       try {
+        // The files picked, as the server takes them: [{name, data (base64)}], 25 MB together.
+        const files = [...$("#sup-files").files];
+        if (files.length > 5) throw new Error("Attach up to 5 files.");
+        if (files.reduce((t, f) => t + f.size, 0) > 25 * 1024 * 1024) throw new Error("The files are too big together: up to 25 MB.");
+        body.attachments = await Promise.all(files.map((f) => new Promise((ok, fail) => {
+          const r = new FileReader();
+          r.onload = () => ok({ name: f.name, data: String(r.result).split(",", 2)[1] || "" });
+          r.onerror = () => fail(new Error(`Couldn't read ${f.name}.`));
+          r.readAsDataURL(f);
+        })));
+        if (files.length) { note.className = "small"; note.textContent = "Sending ..."; }
         const r = await api("support", body);
         note.className = "small green"; note.textContent = r.message;
         $("#sup-msg").value = "";
+        $("#sup-files").value = "";
       } catch (e) { note.className = "small error"; note.textContent = e.message; }
       finally { button.disabled = false; }
     };

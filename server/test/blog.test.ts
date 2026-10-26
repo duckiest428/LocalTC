@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { API, bearer, call, data, signIn } from "./helpers";
 import { env } from "cloudflare:test";
 import worker from "../src/index";
+import { outbox } from "../src/email";
 
 const AUTHOR = "duckiesty@gmail.com";
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ...new Array(80).fill(0)]);
@@ -46,5 +47,42 @@ describe("the blog", () => {
     const me = await signIn(AUTHOR);
     expect((await put(me.token, new TextEncoder().encode("<svg onload=alert(1)></svg>".padEnd(64)))).status).toBe(400);
     expect((await call("POST", "/v1/blog/posts", { title: "x", cover: "https://tracker.example/pixel.gif" }, bearer(me.token))).status).toBe(400);
+  });
+
+  it("counts readers and reactions once per browser, for anyone", async () => {
+    const me1 = { "CF-Connecting-IP": "203.0.113.7", "User-Agent": "Reader" };
+    const r1 = await data(await call("POST", "/v1/blog/posts/welcome-to-the-blog/read", {}, me1));
+    expect(r1).toEqual({ reactions: {}, mine: [] });
+    await call("POST", "/v1/blog/posts/welcome-to-the-blog/read", {}, me1);  // again: still one reader
+    await call("POST", "/v1/blog/posts/welcome-to-the-blog/read", {}, { "CF-Connecting-IP": "203.0.113.8" });
+    let r = await data(await call("POST", "/v1/blog/posts/welcome-to-the-blog/react", { kind: "love" }, me1));
+    await call("POST", "/v1/blog/posts/welcome-to-the-blog/react", { kind: "love" }, me1);
+    expect(r).toEqual({ reactions: { love: 1 }, mine: ["love"] });
+    expect((await call("POST", "/v1/blog/posts/welcome-to-the-blog/react", { kind: "angry" }, me1)).status).toBe(400);
+    const stored = await env.DB.prepare("SELECT viewer FROM blog_reads").all<{ viewer: string }>();
+    expect(stored.results.every((x) => /^[a-f0-9]{64}$/.test(x.viewer) && !x.viewer.includes("203"))).toBe(true);
+    const me = await signIn(AUTHOR);
+    const drafts = await data(await call("GET", "/v1/blog/drafts", undefined, bearer(me.token)));
+    expect(drafts.reads["welcome-to-the-blog"]).toBe(2);
+    expect(drafts.reactions["welcome-to-the-blog"]).toEqual({ love: 1 });
+    r = await data(await call("POST", "/v1/blog/posts/welcome-to-the-blog/react", { kind: "love", on: false }, me1));
+    expect(r).toEqual({ reactions: {}, mine: [] });
+  });
+
+  it("emails a new post to its followers once, and unfollows from the email's link", async () => {
+    const reader = await signIn();
+    expect((await call("GET", "/v1/blog/follow")).status).toBe(401);
+    expect((await data(await call("PUT", "/v1/blog/follow", undefined, bearer(reader.token)))).following).toBe(true);
+    const me = await signIn(AUTHOR);
+    const before = outbox.length;
+    await call("POST", "/v1/blog/posts", { title: "Followers hear first", summary: "News.", published: true }, bearer(me.token));
+    const mail = outbox.slice(before).find((e) => e.to === reader.email)!;
+    expect(mail.subject).toBe("New on the LocalTC blog: Followers hear first");
+    expect(mail.from).toContain("marketing@localtc.tech");
+    await call("POST", "/v1/blog/posts", { slug: "followers-hear-first", title: "Followers hear first", body: "edited", published: true }, bearer(me.token));
+    expect(outbox.slice(before).filter((e) => e.to === reader.email)).toHaveLength(1);  // an edit isn't news
+    const link = mail.text.match(/\/v1\/blog\/unfollow\/[a-f0-9]{48}/)![0];
+    expect((await call("GET", link)).status).toBe(200);
+    expect((await data(await call("GET", "/v1/blog/follow", undefined, bearer(reader.token)))).following).toBe(false);
   });
 });

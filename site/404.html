@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found | LocalTC</title>
+<meta name="robots" content="noindex">
+<!-- GitHub Pages serves this at any address that has no page, so everything here is from the site's root. -->
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body class="lost-page">
+
+<header class="topbar">
+  <a class="brand" href="/"><img class="brand-logo" src="/logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="/#features">Features</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/#install">Install</a>
+    <a href="/changelog">Changelog</a>
+    <a href="/blog">Blog</a>
+    <a href="/dashboard#support">Support</a>
+    <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
+  </nav>
+  <a class="nav-discord" href="https://discord.gg/6vbD2T9zHE" rel="noopener" title="Join the LocalTC Discord" aria-label="Join the LocalTC Discord"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.3 5.4A16.6 16.6 0 0 0 15.2 4l-.5 1a15.4 15.4 0 0 0-5.4 0l-.5-1a16.6 16.6 0 0 0-4.1 1.4C2.1 9.3 1.4 13.1 1.7 16.8a16.7 16.7 0 0 0 5 2.6l1.1-1.7a10.8 10.8 0 0 1-1.7-.8l.4-.3a11.9 11.9 0 0 0 11 0l.4.3c-.5.3-1.1.6-1.7.8l1.1 1.7a16.6 16.6 0 0 0 5-2.6c.4-4.3-.7-8-3-11.4ZM8.5 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg></a>
+  <a class="btn btn-ghost" href="/dashboard">Dashboard</a>
+</header>
+
+<main class="lost band-photo">
+  <div class="band-bg" aria-hidden="true"><img src="/img/hero-dusk-960.jpg" srcset="/img/hero-dusk-960.jpg 960w, /img/hero-dusk.jpg 1920w" sizes="100vw" alt=""></div>
+  <div class="lost-inner">
+    <p class="lost-code" aria-hidden="true">404</p>
+    <h1>Say again?</h1>
+    <p class="lost-lede">That page isn't on our frequency. It may have moved, or the address has a typo.</p>
+    <div class="lost-radio" aria-label="The radio">
+      <p class="you"><span class="who">YOU</span><span class="said" id="lost-path">LocalTC, request <i>/this-page</i></span></p>
+      <p class="atc"><span class="who">ATC</span><span class="said">Station calling, unable, no such page. Turn left heading home, contact the blog on the next frequency.</span></p>
+    </div>
+    <div class="lost-acts">
+      <a class="btn btn-primary" href="/">Back to LocalTC</a>
+      <a class="btn btn-ghost" href="/blog">The blog</a>
+      <a class="btn btn-ghost" href="/dashboard">Dashboard</a>
+    </div>
+  </div>
+</main>
+
+<script>
+  // The address that wasn't found, read back like a pilot's request.
+  document.getElementById("lost-path").innerHTML = "LocalTC, request <i></i>";
+  document.querySelector("#lost-path i").textContent = decodeURIComponent(location.pathname).slice(0, 60) || "/";
+</script>
+</body>
+</html>

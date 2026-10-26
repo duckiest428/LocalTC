@@ -128,6 +128,12 @@ async function load() {
     return;
   }
   show("dash");
+  // Sent here to sign in from another page (the blog's Follow): back to it, within the sign-in's 15 minutes.
+  try {
+    const after = JSON.parse(localStorage.getItem("localtc.afterSignIn") || "null");
+    localStorage.removeItem("localtc.afterSignIn");
+    if (after && Date.now() - after.at < 20 * 60_000 && /^blog(\?follow=1)?$/.test(after.to)) { location.href = after.to; return; }
+  } catch { /* storage off */ }
   document.querySelectorAll(".who-email").forEach((el) => { el.textContent = me.email; });
   $("#display-name").value = me.display_name || "";
   $("#s-from").textContent = me.email;
@@ -267,6 +273,19 @@ function note(text, error = false) {
   m.classList.toggle("error", error);
 }
 
+/** Files picked to go with a support message, as the server takes them: [{name, data (base64)}]. 25 MB together. */
+async function attachedFiles(input) {
+  const files = [...(input.files || [])];
+  if (files.length > 5) throw new Error("Attach up to 5 files.");
+  if (files.reduce((t, f) => t + f.size, 0) > 25 * 1024 * 1024) throw new Error("The files are too big together: up to 25 MB. Zip them, or put a link in the message.");
+  return Promise.all(files.map((f) => new Promise((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok({ name: f.name, data: String(r.result).split(",", 2)[1] || "" });
+    r.onerror = () => fail(new Error(`Couldn't read ${f.name}.`));
+    r.readAsDataURL(f);
+  })));
+}
+
 $("#support-form").onsubmit = async (e) => {
   e.preventDefault();
   const message = $("#s-message").value.trim();
@@ -274,9 +293,12 @@ $("#support-form").onsubmit = async (e) => {
   const button = $("#s-send");
   button.disabled = true;
   try {
-    const r = await api("POST", "/v1/support", { kind: document.querySelector("input[name=kind]:checked").value, message, source: "web" });
+    const attachments = await attachedFiles($("#s-files"));
+    if (attachments.length) note(`Sending ${attachments.length === 1 ? "the file" : `${attachments.length} files`} ...`);
+    const r = await api("POST", "/v1/support", { kind: document.querySelector("input[name=kind]:checked").value, message, source: "web", attachments });
     note(r.message || "Sent. Thanks!");
     $("#s-message").value = "";
+    $("#s-files").value = "";
   } catch (err) {
     if (err.status === 401) { show("auth"); say("Your sign-in has expired. Sign in again to send it.", true); return; }
     note(err.message === "Failed to fetch" ? "Can't reach the LocalTC server right now. Try again in a bit, or open a GitHub issue." : err.message, true);

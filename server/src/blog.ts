@@ -6,12 +6,22 @@
  * signed-in account's own address (which signing in proves: there are no passwords, a code is emailed). Anyone
  * else, signed in or not, gets the published posts and nothing more. A post is Markdown; its pictures are uploaded
  * here (JPEG, PNG, WebP or GIF, up to 1.5 MB: the page shrinks a photo before it sends it) and served from
- * /v1/blog/images/<id>. Posts written in the repository (site/blog-posts.json) are the site's own, not here.
+ * /v1/blog/images/<id>.
+ *
+ * Readers can react to a post (like, love, takeoff, clap) and each post counts its readers: one reaction of a kind
+ * and one read per reader, no account needed. A reader is known by a hash of a secret salt, their IP address and
+ * their browser's user agent: nothing is stored on their device (the site keeps its promise of no cookies and no
+ * storage), and the hash doesn't say who. Accounts can follow the blog: each post, the first time it's published, is
+ * emailed to them from MARKETING_FROM, with a link that unfollows without signing in.
+ *
+ * Posts written in the repository (site/blog-posts.json) are the site's own, not here.
  */
 import type { Auth } from "./auth";
 import type { Env } from "./env";
+import { sha256 } from "./crypto";
+import { sendMany } from "./email";
 import { HttpError, json, now, readJson } from "./http";
-import { limit } from "./rate";
+import { clientIp, limit } from "./rate";
 
 const DEFAULT_AUTHORS = "duckiesty@gmail.com";
 const MAX_IMAGE = 1_500_000;
@@ -22,7 +32,8 @@ const TYPES: [string, number[]][] = [
 ];
 
 type Post = { slug: string; title: string; summary: string; body: string; cover: string | null; author_name: string;
-  published_at: string | null; created_at: string; updated_at: string };
+  published_at: string | null; created_at: string; updated_at: string; notified_at?: string | null };
+export const REACTIONS = ["like", "love", "takeoff", "clap"];
 
 /** Whether this account may write the blog: its address is one of BLOG_AUTHORS, and it's been confirmed. */
 export function isAuthor(env: Env, auth: Auth): boolean {
@@ -55,7 +66,19 @@ export async function get(env: Env, slug: string): Promise<Response> {
 export async function all(env: Env, auth: Auth): Promise<Response> {
   author(env, auth);
   const { results } = await env.DB.prepare("SELECT * FROM blog_posts ORDER BY COALESCE(published_at, updated_at) DESC").all<Post>();
-  return json({ posts: results.map((p) => ({ ...card(p), body: p.body })) });
+  return json({ posts: results.map((p) => ({ ...card(p), body: p.body })), ...(await audience(env)) });
+}
+
+/** For the authors: each post's readers and reactions (the repository's posts too), and how many follow the blog. */
+async function audience(env: Env): Promise<{ reads: Record<string, number>; reactions: Record<string, Record<string, number>>; followers: number }> {
+  const [reads, reacts, followers] = await Promise.all([
+    env.DB.prepare("SELECT slug, COUNT(*) AS n FROM blog_reads GROUP BY slug").all<{ slug: string; n: number }>(),
+    env.DB.prepare("SELECT slug, kind, COUNT(*) AS n FROM blog_reactions GROUP BY slug, kind").all<{ slug: string; kind: string; n: number }>(),
+    env.DB.prepare("SELECT COUNT(*) AS n FROM blog_followers").first<{ n: number }>(),
+  ]);
+  const reactions: Record<string, Record<string, number>> = {};
+  for (const r of reacts.results) (reactions[r.slug] ??= {})[r.kind] = r.n;
+  return { reads: Object.fromEntries(reads.results.map((r) => [r.slug, r.n])), reactions, followers: followers?.n ?? 0 };
 }
 
 /** A picture's address on this server, or a page of the site's own ("/blog/img/x.jpg", "img/x.jpg"); else null. */
@@ -97,7 +120,91 @@ export async function save(env: Env, request: Request, auth: Auth): Promise<Resp
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
      ON CONFLICT(slug) DO UPDATE SET title = ?2, summary = ?3, body = ?4, cover = ?5, published_at = ?8, updated_at = ?9`,
   ).bind(slug, title, summary, body, cover, auth.user.id, name, published, at).run();
+  if (published && !existing?.notified_at) await notify(env, { slug, title, summary });
   return json({ slug, published_at: published, updated_at: at });
+}
+
+/** The post to everyone following the blog, once: the first time it's published. */
+async function notify(env: Env, p: { slug: string; title: string; summary: string }): Promise<void> {
+  await env.DB.prepare("UPDATE blog_posts SET notified_at = ?1 WHERE slug = ?2").bind(now(), p.slug).run();
+  const { results } = await env.DB.prepare(
+    "SELECT u.email, f.token FROM blog_followers f JOIN users u ON u.id = f.user_id").all<{ email: string; token: string }>();
+  if (!results.length) return;
+  const link = `${env.SITE_URL}/blog#${p.slug}`;
+  const api = env.SITE_URL.startsWith("http://localhost") ? "http://localhost:8787" : "https://api.localtc.tech";
+  await sendMany(env, results.map((f) => {
+    const off = `${api}/v1/blog/unfollow/${f.token}`;
+    return {
+      to: f.email, from: env.MARKETING_FROM ?? "LocalTC <marketing@localtc.tech>",
+      subject: `New on the LocalTC blog: ${p.title}`,
+      text: [p.title, "", ...(p.summary ? [p.summary, ""] : []), `Read it: ${link}`, "", "--",
+        "You get this because you follow the LocalTC blog. Stop these emails (no sign-in needed):", off].join("\n"),
+      headers: { "List-Unsubscribe": `<${off}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    };
+  }));
+}
+
+/** A post's reaction counts, and which this browser gave. */
+async function reactionsOf(env: Env, slug: string, viewer: string): Promise<{ reactions: Record<string, number>; mine: string[] }> {
+  const { results } = await env.DB.prepare("SELECT kind, COUNT(*) AS n, SUM(viewer = ?2) AS me FROM blog_reactions WHERE slug = ?1 GROUP BY kind")
+    .bind(slug, viewer).all<{ kind: string; n: number; me: number }>();
+  return { reactions: Object.fromEntries(results.map((r) => [r.kind, r.n])), mine: results.filter((r) => r.me).map((r) => r.kind) };
+}
+
+/** Who's reading, as stored: the salted hash of their IP address and user agent. */
+async function viewerOf(env: Env, request: Request): Promise<string> {
+  let row = await env.DB.prepare("SELECT salt FROM blog_salt WHERE id = 1").first<{ salt: string }>();
+  if (!row) {
+    const salt = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    await env.DB.prepare("INSERT OR IGNORE INTO blog_salt (id, salt) VALUES (1, ?1)").bind(salt).run();
+    row = await env.DB.prepare("SELECT salt FROM blog_salt WHERE id = 1").first<{ salt: string }>();
+  }
+  return sha256(`${row!.salt}|${clientIp(request)}|${request.headers.get("User-Agent") ?? ""}`);
+}
+
+/** POST /v1/blog/posts/<slug>/read: counted once per reader; the post's reactions. */
+export async function read(env: Env, request: Request, slug: string): Promise<Response> {
+  const viewer = await viewerOf(env, request);
+  await limit(env, `blog-read:${clientIp(request)}`, 300, 3600);
+  await env.DB.prepare("INSERT OR IGNORE INTO blog_reads (slug, viewer, read_at) VALUES (?1, ?2, ?3)").bind(slug, viewer, now()).run();
+  return json(await reactionsOf(env, slug, viewer));
+}
+
+/** POST /v1/blog/posts/<slug>/react {kind, on}: a reaction given or taken back; the post's reactions. */
+export async function react(env: Env, request: Request, slug: string): Promise<Response> {
+  const b = await readJson(request, 1024);
+  const viewer = await viewerOf(env, request);
+  const kind = String(b.kind);
+  if (!REACTIONS.includes(kind)) throw new HttpError(400, "That isn't a reaction.");
+  await limit(env, `blog-react:${clientIp(request)}`, 120, 3600);
+  if (b.on === false) {
+    await env.DB.prepare("DELETE FROM blog_reactions WHERE slug = ?1 AND kind = ?2 AND viewer = ?3").bind(slug, kind, viewer).run();
+  } else {
+    await env.DB.prepare("INSERT OR IGNORE INTO blog_reactions (slug, kind, viewer, created_at) VALUES (?1, ?2, ?3, ?4)").bind(slug, kind, viewer, now()).run();
+  }
+  return json(await reactionsOf(env, slug, viewer));
+}
+
+/** GET/PUT/DELETE /v1/blog/follow: whether this account gets new posts by email; follow; stop. */
+export async function follow(env: Env, request: Request, auth: Auth): Promise<Response> {
+  if (request.method === "PUT") {
+    const token = [...crypto.getRandomValues(new Uint8Array(24))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    await env.DB.prepare("INSERT OR IGNORE INTO blog_followers (user_id, token, created_at) VALUES (?1, ?2, ?3)").bind(auth.user.id, token, now()).run();
+  } else if (request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM blog_followers WHERE user_id = ?1").bind(auth.user.id).run();
+  }
+  const row = await env.DB.prepare("SELECT 1 FROM blog_followers WHERE user_id = ?1").bind(auth.user.id).first();
+  return json({ following: !!row, email: auth.user.email });
+}
+
+/** GET (or POST: one-click from the mail app) /v1/blog/unfollow/<token>: the link in each email, no sign-in. */
+export async function unfollow(env: Env, token: string): Promise<Response> {
+  await env.DB.prepare("DELETE FROM blog_followers WHERE token = ?1").bind(token).run();
+  return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unfollowed | LocalTC</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0e1013;color:#e8ecf1;font:16px/1.6 system-ui,sans-serif">
+<main style="max-width:440px;padding:24px;text-align:center"><h1 style="font-size:24px">You're no longer following the blog.</h1>
+<p style="color:#8a939d">No more emails about new posts. Follow it again any time on <a style="color:#6cc9e8" href="${env.SITE_URL}/blog">the blog</a>.</p></main>`,
+  { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" } });
 }
 
 /** DELETE /v1/blog/posts/<slug> (authors only). Its pictures stay: another post may show them. */

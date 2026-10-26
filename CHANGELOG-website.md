@@ -43,6 +43,18 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   ways to run it.
 - **Every Wrapped**: any week, month or year can be opened back to the first flight, not only the last one, and
   "All weeks" (or months, years) charts the flights in each to pick one from.
+- **Reactions and readers on the blog**: under each post, like, love, cleared for takeoff and applause, one of each per
+  reader and no account needed; each post counts its readers, which its author sees on the blog. Nothing is kept on
+  the reader's device: the server knows a reader only by a salted hash.
+- **Follow the blog**: a small Follow button emails each new post to your account's address, from
+  marketing@localtc.tech, once, the first time it's published; every email has a link that stops them, no sign-in
+  needed. Signed out, it offers the sign-in and brings you back to follow.
+- **A page for addresses that don't exist**: "Say again?", the address read back like a radio call, and the way home,
+  in place of GitHub's.
+- **The LocalTC Discord**: a button in every page's header, on the home page and on the Dashboard's Support page.
+- **Attach anything to a support message** on the Dashboard: a session export, logs or screenshots, up to 5 files and
+  25 MB.
+- **A world map on Stats**: the countries flown to, shaded by visits.
 
 ### Changed
 - **More life on the home page**: the header turns to glass as you scroll, with a line for how far down you are; the

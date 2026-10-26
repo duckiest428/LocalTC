@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.shade { background: linear-gradient(90deg, rgba(11,14,17,.97) 0%, rgba(11,14,17,.9) 36%, rgba(11,14,17,.45) 70%, rgba(11,14,17,.75) 100%),
+  linear-gradient(0deg, rgba(11,14,17,.9), transparent 40%); }
+.left { position: absolute; left: 110px; top: 118px; width: 780px; display: flex; flex-direction: column; gap: 34px; }
+h1 { font-size: 112px; }
+h1 em { font-style: normal; color: var(--green); }
+.window { position: absolute; right: 90px; top: 150px; width: 920px; padding: 0; overflow: hidden; transform: perspective(2400px) rotateY(-9deg) rotateX(2deg); transform-origin: right center; }
+.bar { display: flex; align-items: center; gap: 14px; padding: 16px 22px; font: 600 17px var(--mono); color: var(--text2); background: rgba(255,255,255,.03);
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.07); }
+.bar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); }
+.bar .com { margin-left: auto; color: var(--green); }
+.body { display: grid; grid-template-columns: 1fr 1fr; height: 700px; }
+.map { position: relative; background: url("shots/replay-map.png") left 60% / cover; }
+.map small { position: absolute; right: 8px; bottom: 6px; font-size: 12px; color: var(--text3); background: rgba(0,0,0,.55); padding: 2px 6px; border-radius: 4px; }
+.log { padding: 10px 24px; overflow: hidden; }
+.log .radio { font-size: 18.5px; }
+.log .radio .who { font-size: 14px; }
+</style></head><body>
+<div class="photo" style="background-image:url('../../../site/img/hero-dusk.jpg')"></div><div class="shade"></div>
+<div class="left">
+  <div class="brand"><img src="../../../site/logo.svg" alt=""><span>Local<b>TC</b></span></div>
+  <h1>Real ATC.<br>Your voice.<br><em>Your PC.</em></h1>
+  <p class="lede">Voice air traffic control and a first officer for Microsoft Flight Simulator 2024. Press to talk, and every
+    station answers, from clearance delivery to the gate.</p>
+  <div class="pills"><span class="pill"><i></i>Free, forever</span><span class="pill"><i></i>Runs on your PC</span><span class="pill"><i></i>Copilot on the intercom</span></div>
+</div>
+<div class="window card">
+  <div class="bar"><span class="dot"></span>ACA8272 &nbsp;CYVR → KSEA<span class="com">COM1 119.200</span></div>
+  <div class="body">
+    <div class="map"><small>© OpenStreetMap contributors</small></div>
+    <div class="log radio">
+      <div class="row atc"><span class="who">SEATTLE APPROACH <em>119.200</em></span><span class="said">Air Canada 8272, turn left heading 020, maintain 2,500 until established on the localizer, cleared ILS runway 34R approach.</span></div>
+      <div class="row you"><span class="who">YOU <span class="ok">✓ READBACK CORRECT</span></span><span class="said">Left heading 020, 2,500 until established, cleared ILS 34R, Air Canada 8272.</span></div>
+      <div class="row atc"><span class="who">SEATTLE APPROACH</span><span class="said">Air Canada 8272, traffic, 1 o'clock, 4 miles, opposite direction, 3,700, A321.</span></div>
+      <div class="row you"><span class="who">YOU</span><span class="said">Looking, Air Canada 8272.</span></div>
+      <div class="row atc"><span class="who">SEATTLE APPROACH</span><span class="said">Air Canada 8272, contact Seattle Tower 119.9, see ya.</span></div>
+    </div>
+  </div>
+</div>
+<div class="foot"><span><b>Microsoft Flight Simulator 2024</b> · Windows 10 and 11</span><span>localtc.tech</span></div>
+</body></html>

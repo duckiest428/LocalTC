@@ -52,6 +52,33 @@
   }
   const countryOfAny = (icao) => countryOf(icao) || (/^K[A-Z0-9]{3}$/.test(String(icao || "").toUpperCase()) ? "US" : null);
 
+  // ISO numeric (the world map's country ids) -> ISO letters.
+  const NUMERIC = {};
+  ("AF004 AL008 DZ012 AD020 AO024 AG028 AR032 AM051 AU036 AT040 AZ031 BS044 BH048 BD050 BB052 BY112 BE056 BZ084 BJ204 BT064 BO068 BA070 BW072 BR076 BN096 BG100 BF854 BI108 KH116 CM120 CA124 CV132 CF140 TD148 CL152 CN156 CO170 KM174 CG178 CD180 CR188 CI384 HR191 CU192 CY196 CZ203 DK208 DJ262 DM212 DO214 EC218 EG818 SV222 GQ226 ER232 EE233 SZ748 ET231 FJ242 FI246 FR250 GA266 GM270 GE268 DE276 GH288 GR300 GD308 GT320 GN324 GW624 GY328 HT332 HN340 HU348 IS352 IN356 ID360 IR364 IQ368 IE372 IL376 IT380 JM388 JP392 JO400 KZ398 KE404 KI296 KP408 KR410 KW414 KG417 LA418 LV428 LB422 LS426 LR430 LY434 LI438 LT440 LU442 MG450 MW454 MY458 MV462 ML466 MT470 MH584 MR478 MU480 MX484 FM583 MD498 MC492 MN496 ME499 MA504 MZ508 MM104 NA516 NR520 NP524 NL528 NZ554 NI558 NE562 NG566 MK807 NO578 OM512 PK586 PW585 PS275 PA591 PG598 PY600 PE604 PH608 PL616 PT620 QA634 RO642 RU643 RW646 KN659 LC662 VC670 WS882 SM674 ST678 SA682 SN686 RS688 SC690 SL694 SG702 SK703 SI705 SB090 SO706 ZA710 SS728 ES724 LK144 SD729 SR740 SE752 CH756 SY760 TW158 TJ762 TZ834 TH764 TL626 TG768 TO776 TT780 TN788 TR792 TM795 TV798 UG800 UA804 AE784 GB826 US840 UY858 UZ860 VU548 VA336 VE862 VN704 YE887 ZM894 ZW716")
+    .split(" ").forEach((e) => { NUMERIC[e.slice(2)] = e.slice(0, 2); });
+  const NAMED = { Kosovo: "XK", "N. Cyprus": "CY", Somaliland: "SO" };
+
+  /** The world's countries from vendor/world/countries-110m.json (TopoJSON, world-atlas), as SVG paths in an
+   *  equirectangular box 360 x 143 (85°N to 58°S): [{iso, d}]. Loaded once. */
+  let worldShapes = null;
+  async function world() {
+    if (worldShapes) return worldShapes;
+    const topo = await (await fetch("vendor/world/countries-110m.json")).json();
+    const [sx, sy] = topo.transform.scale, [tx, ty] = topo.transform.translate;
+    const arcs = topo.arcs.map((arc) => { let x = 0, y = 0; return arc.map(([dx, dy]) => { x += dx; y += dy; return [x * sx + tx, y * sy + ty]; }); });
+    const ring = (ids) => {
+      const pts = [];
+      for (const i of ids) { const a = i < 0 ? [...arcs[~i]].reverse() : arcs[i]; pts.push(...(pts.length ? a.slice(1) : a)); }
+      // A ring over the date line (Russia, Fiji) is broken there, not drawn back across the whole map.
+      return pts.map(([lon, lat], i) => `${i && Math.abs(lon - pts[i - 1][0]) < 180 ? "L" : "M"}${(lon + 180).toFixed(2)},${(85 - lat).toFixed(2)}`).join("") + "Z";
+    };
+    worldShapes = topo.objects.countries.geometries.filter((g) => g.properties?.name !== "Antarctica").map((g) => {
+      const polys = g.type === "Polygon" ? [g.arcs] : g.type === "MultiPolygon" ? g.arcs : [];
+      return { iso: NUMERIC[g.id] || NAMED[g.properties?.name] || null, name: g.properties?.name || "", d: polys.map((p) => p.map(ring).join("")).join("") };
+    });
+    return worldShapes;
+  }
+
   const flag = (iso) => (iso && /^[A-Z]{2}$/.test(iso) ? String.fromCodePoint(...[...iso].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : "");
 
   // Airline ICAO code -> the company's name (the callsign's first three letters).
@@ -306,6 +333,7 @@ ${card("star", "amber", "First flight logged", dateText(s.first.date), route(s.f
       parts.push(section("blue", "Countries"), `<div class="panel st-panel">
   <div class="st-head"><div><h4>Where the flights have gone</h4><span class="hint">From the airports' codes</span></div>
     <span class="st-pill">${countryCount} of 197 · ${Math.round((100 * countryCount) / 197)}%</span></div>
+  <div class="st-world" aria-label="A map of the countries flown to"></div>
   <div class="st-continents">${conts.map((c) => `<div><b>${c.n}</b><span>${esc(CONTINENTS[c.k])}</span><i style="--w:${(100 * c.n) / c.all.length}%"></i></div>`).join("")}</div>
   <h5>Most visited</h5>
   <ul class="st-bars">${bars(most.map(([iso, n]) => [C[iso][0], n, `<em class="st-flag">${flag(iso)}</em>`]), most[0]?.[1] || 1)}</ul>
@@ -378,9 +406,24 @@ ${card("globe", "cyan", "Strongest wind", sim.windy?.metrics.max_wind_kt ? `${nu
 ${sim ? `<p class="hint">Measured by the app on ${sim.n} of your ${s.flights} flights: the ones flown with Stats and metrics on.</p>` : `<p class="hint">The fuel, speed, night and weather numbers come from flights flown with Stats and metrics on: none yet.</p>`}`);
 
       this.el.innerHTML = parts.join("\n");
+      this.drawWorld(visited);
       this.el.querySelector(".st-chips").onclick = (e) => { const b = e.target.closest("button[data-cont]"); if (b) { this.continent = b.dataset.cont; this.render(); } };
       this.el.querySelector(".st-all").onclick = () => { this.showAll = !this.showAll; this.render(); };
       this.el.querySelector(".st-year").onchange = (e) => { this.year = Number(e.target.value); this.render(); };
+    }
+
+    /** The countries flown to, shaded by visits, on the world map (when its file loads). */
+    async drawWorld(visited) {
+      const box = this.el.querySelector(".st-world");
+      let shapes;
+      try { shapes = await world(); } catch { box.remove(); return; }
+      if (!box.isConnected) return;
+      const most = Math.max(1, ...visited.values());
+      box.innerHTML = `<svg viewBox="0 0 360 143" role="img">${shapes.map((c) => {
+        const n = c.iso ? visited.get(c.iso) || 0 : 0;
+        const tip = `${c.iso && C[c.iso] ? C[c.iso][0] : c.name}${n ? `: ${n} ${n === 1 ? "visit" : "visits"}` : ""}`;
+        return `<path d="${c.d}"${n ? ` class="on" style="--k:${(0.45 + 0.55 * (n / most)).toFixed(2)}"` : ""}><title>${esc(tip)}</title></path>`;
+      }).join("")}</svg><div class="st-world-key hint">Fewer <i></i> More flights</div>`;
     }
 
     /** A year of days, a column a week (Monday first), shaded by the flights on each. */

@@ -19,7 +19,7 @@ from typing import Any, NamedTuple
 log = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
-MAX_BODY = 2_000_000  # a shared card's picture, as a data URL, is the biggest thing a page sends
+MAX_BODY = 36_000_000  # files attached to a support message (25 MB, as base64) are the biggest thing a page sends
 # Types that mustn't come from the machine's own table: Windows registries map .js to text/plain now and then,
 # and a browser won't run a module ("import('./cardmodel.js')") served as that.
 TYPES = {".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".woff2": "font/woff2", ".svg": "image/svg+xml"}

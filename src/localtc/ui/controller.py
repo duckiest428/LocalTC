@@ -861,6 +861,9 @@ class AppController:
 
         message = {k: str(args.get(k, "")).strip() for k in ("kind", "message")}
         message.update(version=__version__, platform=_platform_name(), source="app")
+        files = args.get("attachments")  # [{name, data (base64)}], checked by the server
+        if isinstance(files, list) and files:
+            message["attachments"] = [{"name": str(f.get("name", "")), "data": str(f.get("data", ""))} for f in files[:5] if isinstance(f, dict)]
         try:
             answer = await asyncio.to_thread(self.pilot.account.support, message)
         except AccountError as exc:

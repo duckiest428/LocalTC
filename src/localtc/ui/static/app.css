@@ -399,6 +399,11 @@ table.lb tr.picked td { background: rgba(233, 120, 214, .12); }
 #s-support-card textarea { display: block; width: 100%; box-sizing: border-box; resize: vertical; }
 
 /* Buy me a coffee: a small, polite button that goes away for good once clicked */
+.sup-files { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: 12px; opacity: .85; }
+.sup-files input { font: inherit; font-size: 12px; }
+.iconbtn.discord { display: inline-grid; place-items: center; color: inherit; text-decoration: none; }
+.iconbtn.discord:hover { color: #fff; background: #5865f2; }
+.discord-btn { display: inline-flex; align-items: center; gap: 6px; background: #5865f2 !important; color: #fff !important; text-decoration: none; }
 .coffee { margin-left: auto; margin-right: 8px; padding: 4px 10px; border-radius: 12px; background: #ffdd00; color: #1b1b1b;
   font-weight: 600; font-size: 12px; text-decoration: none; white-space: nowrap; }
 .coffee:hover { background: #ffe433; }

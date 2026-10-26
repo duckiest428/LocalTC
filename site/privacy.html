@@ -25,6 +25,7 @@
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
   </nav>
+  <a class="nav-discord" href="https://discord.gg/6vbD2T9zHE" rel="noopener" title="Join the LocalTC Discord" aria-label="Join the LocalTC Discord"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.3 5.4A16.6 16.6 0 0 0 15.2 4l-.5 1a15.4 15.4 0 0 0-5.4 0l-.5-1a16.6 16.6 0 0 0-4.1 1.4C2.1 9.3 1.4 13.1 1.7 16.8a16.7 16.7 0 0 0 5 2.6l1.1-1.7a10.8 10.8 0 0 1-1.7-.8l.4-.3a11.9 11.9 0 0 0 11 0l.4.3c-.5.3-1.1.6-1.7.8l1.1 1.7a16.6 16.6 0 0 0 5-2.6c.4-4.3-.7-8-3-11.4ZM8.5 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg></a>
   <a class="btn btn-ghost" href="dashboard">Dashboard</a>
 </header>
 
@@ -80,7 +81,13 @@
   <h3 id="blog">The blog</h3>
   <p>
     The <a href="blog">blog</a>'s posts and their pictures come from the account server, which, like any server, sees
-    your IP address when it sends them; it doesn't log or keep it. If you're signed in to the dashboard in the same
+    your IP address when it sends them. Each post counts its readers, and you can react to it: to count each reader
+    once, the server keeps a hash of a secret salt, your IP address and your browser's name for each post you read or
+    react to, never the address itself and nothing on your device, and nothing that ties it to you or an account. Legal
+    basis: knowing whether the posts are read (legitimate interest, GDPR Art. 6(1)(f)).
+    <strong>Following the blog</strong> (with an account) keeps that you follow it, and each new post is emailed to the
+    account's address from marketing@localtc.tech, through Resend; every email has a link that stops them at once, and
+    so does the Follow button. Legal basis: your consent, given by following. If you're signed in to the dashboard in the same
     browser, the blog also asks the server, with your sign-in cookie, whether your account may write posts, so it can
     show the editor to the blog's authors. Nothing about your reading is stored.
   </p>

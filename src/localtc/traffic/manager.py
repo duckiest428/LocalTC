@@ -171,6 +171,10 @@ HANDBACK_AGL = 1500.0
 HANDBACK_NM = 3.0
 KEPT_OFF_S = 180.0  # a live flight taken off the user's runway isn't made again for this long (it's moved on by then)
 SPOT_LEAVE_M = 20.0  # one on its stand leaves it (pushed back) only when the real one is this far off it and moving
+# An arrival stays on its stand this long whatever the real one does: still taxiing in behind LocalTC's (it was parked
+# first), stopping and going again on the way, its position wandering at the gate. Every one of them was a pushback.
+TURNAROUND_S = 1500.0
+MOVING_OFF_KT = 5.0  # first heard on the ground this fast (not the receivers' knot or two at a gate): it's taxiing
 OVERLAP_M = 30.0  # a live one standing this close to another of LocalTC's isn't made (two on one stand)
 TAXI_TTL_S = 20 * 60.0  # one LocalTC taxies in itself, this long at most
 TYPES_BY_SIZE = {"heavy": ("B789", "B77W", "A359", "A333", "B763", "B788", "B772"),
@@ -267,6 +271,8 @@ class Plane:
     said: set[str] = field(default_factory=set)  # the calls the controllers have made to it
     call_due: dict[str, float] = field(default_factory=dict)  # when each call to it first could have been said
     airborne_seen: bool = False  # seen in the air: an arrival, once down
+    arrived: bool = False  # came in here (landed, taxied in, or its route ends here): it stays at its gate a turnaround
+    stood_at: tuple[float, float] | None = None  # where the real one stood still at its gate
     left_stand: bool = False  # pushed back off a stand: a departure, never put on one again
     stood_t: float = 0.0  # on its stand, when the real one was last seen standing still (its next move is its push)
     push_due: bool = False  # first heard taxiing out: pushed back as soon as it's made
@@ -512,14 +518,13 @@ class TrafficManager:
             if plane.mode == "parked":  # on its stand (an arrival, or one switched off at its gate): there a while
                 if f is not None and f.on_ground and f.gs_kt < 1:
                     plane.stood_t = now  # standing at its gate (an arrival LocalTC parked first: the real one's in too)
+                    plane.stood_at = (f.lat, f.lon)
                     route = self.routes(plane.callsign)
                     if plane.spot is not None and route is not None and route.destination and route.origin == plane.spot[0]:
                         out += self._try_call(plane, "clearance", plane.spot[0], "", now,
                                               destination=route.destination_name or route.destination)
                 shown = self._shown(f.hex, now) if f is not None else None
-                if plane.object_id is not None and plane.spot is not None and (plane.push_due or (
-                        plane.stood_t and f is not None and f.t > plane.stood_t and f.gs_kt >= 2
-                        and shown is not None and shown.gs_kt >= 2)):
+                if plane.object_id is not None and plane.spot is not None and self._pushing(plane, f, shown, now):
                     out += self._start_taxi_out(plane, now)  # the real one's pushing: so does LocalTC's, its own way
                     continue
                 lat, lon = self._spot_latlon(plane.spot) if plane.spot is not None else \
@@ -549,7 +554,8 @@ class TrafficManager:
             self._did(f"{plane.callsign}'s transponder is on: the real one from here")
             del self.planes[plane.key]
             plane.key, plane.flight, plane.stood_t = key, f, (now if f.gs_kt < 1 else 0.0)
-            plane.push_due = f.gs_kt >= 2
+            plane.stood_at = (f.lat, f.lon) if f.gs_kt < 1 else None
+            plane.push_due = f.gs_kt >= MOVING_OFF_KT
             plane.said = self._said.setdefault(key, plane.said)
             self.planes[key] = plane
         # New ones.
@@ -626,8 +632,9 @@ class TrafficManager:
         if geo is None:
             return []
         route = self.routes(f.callsign)
-        standing = f.gs_kt < 3
-        departing = route is not None and route.origin == icao
+        standing = f.gs_kt < MOVING_OFF_KT
+        arriving = route is not None and route.destination == icao and route.origin != icao
+        departing = route is not None and route.origin == icao and not arriving
         if not standing and not departing:
             return []
         spot = self._spot_for(f) if standing else None
@@ -648,6 +655,7 @@ class TrafficManager:
         plane = Plane(key, self._request(), model[0], model[1], callsign=f.callsign or f.registration, flight=f,
                       spot=spot, mode="parked", created_t=now, said=self._said.setdefault(key, set()))
         plane.parked_t, plane.stood_t, plane.push_due = now, (now if standing else 0.0), not standing
+        plane.stood_at, plane.arrived = ((f.lat, f.lon) if standing else None), arriving
         self._add(plane)
         p = geo.airport.parking[spot[1]]
         plane.sent = (p.lat, p.lon, geo.airport.elev_ft, p.heading_true, 0.0, 0.0, 0.0, now)
@@ -847,7 +855,7 @@ class TrafficManager:
         out: list[Any] = []
         for other in [p for p in self.planes.values() if p.spot == spot and p is not plane]:
             out += self._remove(other)  # one parked there gives way to the real one coming in
-        plane.spot, plane.mode, plane.parked_t = spot, "parked", now
+        plane.spot, plane.mode, plane.parked_t, plane.arrived = spot, "parked", now, True
         lat, lon = self._spot_latlon(spot)
         f = plane.flight
         metres = haversine_nm(f.lat, f.lon, lat, lon) * M_PER_NM if f is not None else 0.0
@@ -1399,6 +1407,23 @@ class TrafficManager:
             return end
         return max(geo.ends, key=lambda e: e.runway.runway.length_m, default=None)
 
+    def _pushing(self, plane: Plane, f: Flight | None, shown: Flight | None, now: float) -> bool:
+        """The real one is pushing back from its gate: first heard taxiing out, or seen standing at its gate and now
+        moving and well off where it stood (the receivers' positions wander a few metres and a knot or two at a gate:
+        just after spawning in, half the airport pushed back). Not an arrival before its turnaround: one LocalTC put
+        on its stand first is still taxiing in for real, and stops and goes on the way."""
+        if plane.push_due:
+            return True
+        if not plane.stood_t or f is None or shown is None or f.t <= plane.stood_t or plane.stood_at is None:
+            return False
+        if f.gs_kt < 2 or shown.gs_kt < 2 or haversine_nm(f.lat, f.lon, *plane.stood_at) * M_PER_NM < SPOT_LEAVE_M:
+            return False
+        if plane.arrived and now - plane.parked_t < TURNAROUND_S:
+            return False
+        route = self.routes(plane.callsign)
+        here = plane.spot[0] if plane.spot is not None else ""
+        return route is None or route.origin == here or route.destination != here
+
     def _start_taxi_out(self, plane: Plane, now: float) -> list[Any]:
         """The real one's pushing back: LocalTC's is pushed off its stand onto the taxiway, starts, and taxies its
         own route to the runway."""
@@ -1568,6 +1593,7 @@ class TrafficManager:
         loc.alt_ft = self._elev(loc.lat, loc.lon)
         if follow.done:
             plane.mode, plane.local, plane.parked_t, plane.stood_t = "parked", None, now, 0.0
+            plane.arrived = True
             return out_call + self._track(plane, now, blend_s=6.0)
         out = out_call + [self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
                                                     hdg=loc.hdg, gs_kt=loc.gs_kt, on_ground=True, blend_s=1.5), now)]

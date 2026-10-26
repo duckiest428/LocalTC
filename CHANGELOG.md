@@ -119,6 +119,10 @@ a new minor version adds features, a patch fixes them.
   months, years) charts the flights in each to pick one from.
 
 ### Changed
+- **The traffic moves like aircraft on the ground**: each turn is taken no faster than its radius allows and slowed
+  for in good time ahead (a gentle sideways pull, a passenger's), then accelerated out of; the nose swings round
+  instead of snapping to the next taxiway; and the last stretch to a stand eases in rather than crawling the final
+  80 metres. Worked over the next 150 metres of each one's path only: light on the PC.
 - **Callouts in their moment**: "hundred above", "minimums", "spoilers", "reversers", "seventy knots", "100 knots"
   and "positive rate" are said at once, over the radio if need be, or not at all. They used to wait for a quiet
   frequency, and behind tower's calls came up to 40 seconds late.
@@ -234,6 +238,11 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **Live aircraft pushed back from their gates for no reason**: one standing at its gate was pushed back as soon as the
+  receivers showed it at 2 knots, which their positions do at a gate; and an arrival LocalTC had parked was pushed
+  back when the real one, still taxiing in, moved on. Spawning at an airport, half its gates pushed back. Now a live
+  aircraft pushes back only when the real one is first heard taxiing out from here, or is seen moving well off its
+  stand (20 metres) on a departure; one that arrived stays at its gate for its turnaround.
 - **The FlyByWire A380X's altitude and APU**: the copilot's altitude was set but read back from the wrong variable
   ("I couldn't set 8,000", then "my altitude inputs aren't reaching this aircraft"), and its APU start used the sim's
   event, which the A380X ignores. Both now go through FlyByWire's own (the APU's master and start buttons, its bleed).

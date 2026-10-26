@@ -284,7 +284,7 @@ def test_taxiing_out_it_waits_for_the_user_in_its_way():
     t = NOW
     while plane.mode != "taxi_out" or plane.local.stage != "taxi" or plane.local.follow.gs_kt < 10:
         t += 1
-        m.on_feed([real("06", "ANA6", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
+        m.on_feed([real("06", "ANA6", gate.lat - 0.0003, gate.lon, gs=4.0, t=t)], "test", t)
         m.tick(t)
         assert t < NOW + 600
     loc = plane.local
@@ -344,7 +344,7 @@ def test_taxiing_out_it_lines_up_behind_the_one_ahead():
     t = NOW
     while plane.mode != "taxi_out" or plane.local.stage != "taxi" or plane.local.follow.gs_kt < 10:
         t += 1
-        m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
+        m.on_feed([real("07", "ANA7", gate.lat - 0.0003, gate.lon, gs=4.0, t=t)], "test", t)
         m.tick(t)
         assert t < NOW + 600
     loc = plane.local
@@ -362,3 +362,44 @@ def test_taxiing_out_it_lines_up_behind_the_one_ahead():
     m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + 2)], "test", t + 2)
     m.tick(t + 2)
     assert (loc.lat, loc.lon) != before
+
+
+def _parked_at_gate(hex_: str, callsign: str, route: Route):
+    m = manager()
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.routes = lambda cs: route
+    m.on_own(own_at(35.58, 139.80))
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    m.on_feed([real(hex_, callsign, gate.lat, gate.lon)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=710), NOW)
+    return m, gate, m.planes[f"live:{hex_}"]
+
+
+def test_a_position_wandering_at_the_gate_is_not_a_pushback():
+    m, gate, plane = _parked_at_gate("08", "ANA8", Route("RJTT", "RJCC"))
+    for k in range(1, 120):  # the receivers' few metres and a knot or two at a gate
+        m.on_feed([real("08", "ANA8", gate.lat + 0.00004 * (k % 2), gate.lon, gs=3.0, t=NOW + k)], "test", NOW + k)
+        m.tick(NOW + k)
+    assert plane.mode == "parked"
+
+
+def test_an_arrival_still_moving_in_isnt_pushed_back():
+    m, gate, plane = _parked_at_gate("09", "ANA9", Route("RJCC", "RJTT"))  # it came in here
+    for k in range(1, 120):
+        m.on_feed([real("09", "ANA9", gate.lat - 0.000005 * k, gate.lon, gs=5.0, t=NOW + k)], "test", NOW + k)
+        m.tick(NOW + k)
+    assert plane.mode == "parked"
+
+
+def test_a_turn_is_taken_slower_than_the_straight():
+    from localtc.traffic.ground import Follower, _toward
+
+    a = (47.45, -122.30)
+    b = _toward(a, 0, 400)
+    follower = Follower([a, b, _toward(b, 90, 300), _toward(_toward(b, 90, 300), 90, 10)], gs_kt=15.0, exit_index=-1)
+    lat, lon, speeds = *a, []
+    while not follower.done and len(speeds) < 300:
+        lat, lon, _, gs = follower.step(lat, lon)
+        speeds.append(gs)
+    assert max(speeds[:20]) >= 14 and min(speeds[20:60]) <= 12  # slowed for the corner, in good time

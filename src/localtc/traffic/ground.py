@@ -28,6 +28,15 @@ NEAR_STAND_M = 80.0
 TURN_RADIUS_M = 35.0
 ARC_STEP_DEG = 10.0
 ACCEL_KT_S, BRAKE_KT_S = 0.8, 2.0  # an airliner on the taxiway: gently up to speed, firmly but not abruptly down
+# Turning: no faster than the turn's radius allows (v = sqrt(a * r), a sideways pull a passenger barely notices), and
+# slowed down for it in good time ahead (v^2 = v_turn^2 + 2 * a * d). One speed through every corner, and a corner
+# taken at full taxi speed, wasn't how an airliner moves. Looked at over the next ``LOOK_AHEAD_M`` only: a few points
+# a second per aircraft.
+LATERAL_MS2 = 1.2
+TAXI_DECEL_MS2 = 0.7
+LOOK_AHEAD_M = 150.0
+MIN_TURN_KT = 5.0
+MAX_YAW_DEG_S = 12.0  # the nose swings round no faster than this (a nosewheel's steering)
 # Rolling out: braked to reach the exit at this speed, not down to a crawl at once and then 2 km of runway at 8 knots
 # (a 777 that landed the other way sat on Dubai's runway two minutes, with the user on final)
 EXIT_KT = 18.0
@@ -46,6 +55,7 @@ class Follower:
     spot: int | None = None  # the stand at the end
     headings: list[float] = field(default_factory=list)
     smooth: bool = True  # its corners rounded (``rounded``); a push back isn't
+    last_hdg: float | None = None  # the way its nose pointed a second ago
 
     def __post_init__(self) -> None:
         if self.smooth and len(self.points) > 2:
@@ -67,10 +77,10 @@ class Follower:
                                                                   self.points[self.index + 1:self.exit_index + 1]))
             fits = math.sqrt((EXIT_KT * 0.5144) ** 2 + 2 * ROLLOUT_DECEL_MS2 * to_exit) / 0.5144
             want = max(TURN_KT, min(self.gs_kt, fits))
-        elif self._turning_ahead((lat, lon)) > TURN_DEG:
-            want = TURN_KT
-        if rest < NEAR_STAND_M:
-            want = STAND_KT
+        else:
+            want = min(want, self._turn_limit_kt((lat, lon)))
+        if rest < NEAR_STAND_M * 3:  # easing in to the end of the line: slowing all the way, not a crawl from 80 m
+            want = min(want, math.sqrt((STAND_KT * 0.5144) ** 2 + 2 * 0.4 * max(rest - 10.0, 0.0)) / 0.5144)
         braking = 3.0 if self.index <= self.exit_index else BRAKE_KT_S
         self.gs_kt += max(-braking * dt, min(ACCEL_KT_S * dt, want - self.gs_kt))
         move = self.gs_kt * 0.5144 * dt
@@ -87,7 +97,32 @@ class Follower:
             hdg = _bearing((lat, lon), target)
         k = move / ahead if ahead > 0 else 1.0
         lat, lon = lat + (target[0] - lat) * k, lon + (target[1] - lon) * k
+        if self.last_hdg is not None and self.gs_kt > 0:  # the nose swings round, it doesn't snap to the next leg
+            turn = (hdg - self.last_hdg + 180) % 360 - 180
+            hdg = (self.last_hdg + max(-MAX_YAW_DEG_S * dt, min(MAX_YAW_DEG_S * dt, turn))) % 360
+        self.last_hdg = hdg
         return lat, lon, hdg, self.gs_kt
+
+    def _turn_limit_kt(self, here: tuple[float, float]) -> float:
+        """The fastest it can go now and still make every turn in the next ``LOOK_AHEAD_M`` at the speed its radius
+        allows, braking at ``TAXI_DECEL_MS2``."""
+        pts = [here, *self.points[self.index:]]
+        best = TAXI_KT * 0.5144
+        gone = 0.0
+        for i in range(1, len(pts) - 1):
+            leg_in, leg_out = _metres(*pts[i - 1], *pts[i]), _metres(*pts[i], *pts[i + 1])
+            gone += leg_in
+            if gone > LOOK_AHEAD_M:
+                break
+            if leg_in < 0.5 or leg_out < 0.5:
+                continue
+            angle = math.radians(abs((_bearing(pts[i], pts[i + 1]) - _bearing(pts[i - 1], pts[i]) + 180) % 360 - 180))
+            if angle < math.radians(3):
+                continue
+            radius = min(leg_in, leg_out) / angle  # a corner of the rounded path: its arc's radius
+            v_turn = max(MIN_TURN_KT * 0.5144, math.sqrt(LATERAL_MS2 * radius))
+            best = min(best, math.sqrt(v_turn ** 2 + 2 * TAXI_DECEL_MS2 * max(gone - leg_in, 0.0)))
+        return best / 0.5144
 
     def _turning_ahead(self, here: tuple[float, float]) -> float:
         """How much the path turns in the next ``TURN_LOOK_M``, degrees."""

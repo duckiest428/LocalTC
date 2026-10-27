@@ -248,6 +248,8 @@ ARRIVED_S = 5.0  # stopped at a gate at the destination this long: the flight is
 DESTINATION_NM = 3.0  # this close to the destination airport's reference point is at it
 PLACE_WORDS = {"at", "in", "near", "around", "over"}  # "... at <a place>": here only if the place is
 REFUSED = re.compile(r"\W*(?:no|negative|nope)\b", re.IGNORECASE)  # a call that starts by saying no to ATC
+# ... or asks for something else: "we want Echo 9 as our gate, please" (taken for a wrong readback of the taxi to D52)
+ASKS_FOR = re.compile(r"\b(?:can we|could we|may we|we(?:'d| would) like|we want|we need|request(?:ing)?)\b", re.IGNORECASE)
 CANCEL_WORDS = {"disregard", "cancel", "scratch", "abort", "withdraw", "belay"}  # "disregard the request for the descent"
 CANCEL_FILLER = {"this", "that", "transmission", "last", "call", "my", "the", "sorry", "current", "previous", "one", "it"}
 CANCEL_WINDOW_S = 180.0  # an altitude change given for the pilot's request can be taken back this long after
@@ -963,6 +965,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                              source=self.atis_source_text(current, own)))
         return out
 
+    def file_plan(self, plan: EngineConfig) -> None:
+        """A flight plan filed with the flight under way (started without one): its destination, cruise, callsign,
+        route and procedures from here on. A clearance already given stands; the next one is to the plan."""
+        for name in ("destination", "cruise_ft", "callsign", "rules", "sid", "star", "dep_runway", "arr_runway", "route",
+                     "approach"):
+            setattr(self.cfg, name, getattr(plan, name))
+        self.route = Route(self.cfg.route)
+        flight = self.state.flight
+        flight.rules = self.cfg.rules
+        flight.destination = self.cfg.destination.upper() if self.cfg.destination else None
+        flight.cruise_ft = self.cfg.cruise_ft
+        if self.cfg.callsign:
+            flight.callsign = Callsign.named(self.cfg.callsign)
+        self.tracker.context_builder.destination = flight.destination
+        self.tracker.detector.cruise_ft = flight.cruise_ft
+        self._own_runway.clear()
+        self._rebuild_facilities()
+
     def runway_in_use(self, icao: str | None, own: OwnshipState):
         """The runway end ATC gives at an airport (LocalTC's traffic taxies out to it)."""
         return self._runway_end(icao, own)
@@ -1002,7 +1022,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 if ident and (end := next((e for e in ends if e.ident == ident), None)) is not None:
                     self._own_runway[(icao, departing)] = end.ident
                     return end
-            # The first of them long enough for it, in the ATIS's order (the main one first); the rest go to the others
+            # The first of them long enough for it, in the ATIS's order (the main one first); the rest go to the others.
+            # One the other way doesn't use first: Las Vegas lands 26L and 19R and departs 19R too, and the arrival
+            # was put on 19R with the departures.
+            other = set(ops.landing if departing else ops.departing)
+            ends = sorted(ends, key=lambda e: e.ident in other)
             kind = self.state.flight.aircraft_type or ""
             need = runway_use.needed_m(kind, landing=not departing)
             end = next((e for e in ends if e.runway.runway.length_m >= need), None) or runway_use.pick(
@@ -1629,6 +1653,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return False
         if ctx.final is not None and ctx.final.distance_nm <= LOW_ALTITUDE_FINAL_NM:
             return False  # on the final approach: the procedure's own clearance from the ground
+        if "approach" in st.clearances and "VISUAL" in (st.assignments.approach or "").upper():
+            return False  # cleared for a visual: the pilot's own clearance from the ground (Las Vegas warned, at 7,000)
+        assigned = st.assignments.altitude_ft
+        if assigned is not None and own.alt_indicated_ft >= assigned - LOW_ALTITUDE_MARGIN_FT:
+            return False  # where ATC put it: ATC's own altitude isn't the pilot's to be warned about
         geo = self.geometry(st.flight.destination)
         airport_nm = geo.distance_nm(own.lat, own.lon) if geo is not None else None
         minimum = self.terrain.mva_ft(own.lat, own.lon, airport_nm)
@@ -2993,7 +3022,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if interp.kind == "unknown" or (interp.kind != "readback" and interp.intent in (
                     None, "other", "question", "report_problem", "acknowledge")):
                 return out  # the problem was the message: acknowledged, nothing to decline or ask again
-        if pending is not None and pending.instruction_id.startswith(TAXI_IN_IDS) and REFUSED.match(ev.text) \
+        if pending is not None and pending.instruction_id.startswith(TAXI_IN_IDS) \
+                and (REFUSED.match(ev.text) or ASKS_FOR.search(ev.text)) \
                 and (gate := stands.requested(normalize(ev.text))) is not None and st.pending is pending:
             # "Negative, we'd like to taxi to Echo 9": the gate the pilot wants, not a wrong readback of the one given.
             st.pending = None
@@ -3315,7 +3345,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     and pending.instruction_id.startswith(("clearance.ifr", "vfr.class_b_departure")):
                 # Delivery done: "readback correct, contact Denver Ground 120.15 when ready".
                 self._schedule(t, "clearance.readback_correct_ground", {"station": ground.station, "frequency": ground.mhz},
-                               facility, handoff_to=ground)
+                               facility, handoff_to=ground, expects_readback=False)  # ("when ready": nothing to read back)
             elif self.library.get(pending.instruction_id).ack == "readback_correct":
                 self._schedule(t, "common.readback_correct", {}, facility)
             return out
@@ -5299,7 +5329,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 busy = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
         if requested is not None and geo is not None:
             gate = stands.named(geo, requested, self._real_gates(geo.icao))
-            if gate is not None and (gate.index in self._gates_taken or stands.occupied(gate, geo, self._traffic.values())):
+            if gate is None and (near := stands.nearest_named(geo, requested, self._real_gates(geo.icao),
+                                                              self._gates_taken, self._traffic.values())) is not None:
+                # Not one the scenery has (Las Vegas has E8 and E10, no E9): the nearest of that letter, and said so,
+                # not D52 across the airport without a word.
+                busy_note = Phrase(f"{requested} isn't available", f"{speech.gate_spoken(requested)} isn't available") \
+                    if hasattr(speech, "gate_spoken") else Phrase(f"{requested} isn't available", f"{requested} isn't available")
+                gate = near
+            elif gate is not None and (gate.index in self._gates_taken or stands.occupied(gate, geo, self._traffic.values())):
                 busy_note = Phrase(f"{gate.display} is occupied", f"{gate.display} is occupied")
                 self._gates_taken.add(gate.index)
                 gate, taxiways = None, None

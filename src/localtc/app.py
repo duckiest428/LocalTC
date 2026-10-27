@@ -733,6 +733,20 @@ class LiveSession:
         if text.strip():
             self.bus.publish(Transcript(t=self.now(), text=text.strip(), radio=2 if radio == 2 else 1, source="typed"))
 
+    def file_plan(self, plan) -> None:
+        """A flight plan filed with the flight under way: ATC clears the flight with it from now on (a clearance
+        already given stands), and the copilot has its numbers."""
+        from localtc.flightplan import apply_plan
+
+        flight = msgspec.convert(msgspec.to_builtins(self.cfg.flight), FlightConfig)
+        apply_plan(plan, flight)
+        self.cfg.flight = flight
+        if self.engine is not None:
+            self.engine.file_plan(engine_config(flight, self.cfg.atc))
+        if self.crew is not None:
+            self.crew.file_plan(flight.perf, flight.plan_source, flight.alternate)
+        self.note(f"Flight plan filed: {plan.summary()}")
+
     def say_crew(self, text: str) -> None:
         """Typed to the copilot, as if said on the intercom."""
         if text.strip():

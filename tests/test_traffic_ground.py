@@ -13,7 +13,7 @@ from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.taxi_route import TaxiGraph
 from localtc.ops.schedules import Departure, icao_callsign, local_offset_s
 from localtc.sim_api import AiObjectAssigned, AiTrack, OwnshipState, RemoveAiAircraft, SpawnAiAircraft
-from localtc.sim_api.geo import advance
+from localtc.sim_api.geo import advance, haversine_nm
 from localtc.traffic.feed import Flight, Route
 from localtc.traffic.ground import Follower, free_stand, taxi_in_path
 from localtc.traffic.manager import BIZJET_TYPES, GA_TYPES, AtcLink, TrafficManager, TrafficSettings
@@ -290,9 +290,13 @@ def test_taxiing_out_it_waits_for_the_user_in_its_way():
     loc = plane.local
     ahead = advance(loc.lat, loc.lon, loc.hdg, 15.0, 0.0, 12.0)  # the user stopped 90 m ahead of it
     m.on_own(own_at(ahead[0], ahead[1]))
-    before = (loc.lat, loc.lon)
-    m.tick(t + 1)
-    assert (loc.lat, loc.lon) == before and loc.follow.gs_kt == 0.0
+    speeds = []
+    for k in range(1, 20):
+        m.tick(t + k)
+        speeds.append(loc.follow.gs_kt)
+    # Braked to a stop, not stopped dead ("this plane in front of me stopping so suddenly"), and short of the user.
+    assert speeds[0] > 0 and speeds[-1] == 0.0 and all(b <= a for a, b in zip(speeds, speeds[1:]))
+    assert haversine_nm(loc.lat, loc.lon, ahead[0], ahead[1]) * 1852 > 30
 
 
 def test_an_arrival_low_on_final_is_landed_and_taxied_in_by_localtc():
@@ -330,7 +334,7 @@ def test_an_arrival_low_on_final_is_landed_and_taxied_in_by_localtc():
 def test_taxiing_out_it_lines_up_behind_the_one_ahead():
     """ "The aircraft ahead of me are all bundled up together, they should be lined up instead": each of LocalTC's
     departures gave way to the user only, so they all ran onto the same hold short. Now one waits behind another."""
-    from localtc.traffic.manager import QUEUE_M, Local, Plane
+    from localtc.traffic.manager import QUEUE_GAP_M, QUEUE_M, Local, Plane
 
     m = manager()
     m.atc.runway_in_use = lambda icao: "34R"
@@ -348,19 +352,23 @@ def test_taxiing_out_it_lines_up_behind_the_one_ahead():
         m.tick(t)
         assert t < NOW + 600
     loc = plane.local
-    lat, lon, _ = advance(loc.lat, loc.lon, loc.hdg, (QUEUE_M - 20) / 0.5144, 0.0, 1.0)  # stopped just ahead of it
+    lat, lon, _ = advance(loc.lat, loc.lon, loc.hdg, (QUEUE_M - 5) / 0.5144, 0.0, 1.0)  # stopped just ahead of it
     ahead = Plane("live:99", 9, "FSLTL_A320_ZZZZ", "", callsign="ANA9", object_id=703, mode="taxi_out",
                   local=Local(lat, lon, 20.0, loc.hdg, 0.0, 0.0, True, started=t, runway=("RJTT", "34R"),
                               stage="hold_short"))
     m.planes[ahead.key] = ahead
     m._released_t = t + 1e6  # held there (another just went)
+    for k in range(1, 20):
+        m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + k)], "test", t + k)
+        m.tick(t + k)
+    gap = haversine_nm(loc.lat, loc.lon, lat, lon) * 1852
+    assert loc.follow.gs_kt == 0.0 and QUEUE_GAP_M - 10 <= gap < QUEUE_M  # stopped in line, a gap behind it
     before = (loc.lat, loc.lon)
-    m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + 1)], "test", t + 1)
-    m.tick(t + 1)
-    assert (loc.lat, loc.lon) == before and loc.follow.gs_kt == 0.0
+    t += 20
     ahead.local.hdg = (loc.hdg + 180) % 360  # one coming the other way isn't one to queue behind
-    m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + 2)], "test", t + 2)
-    m.tick(t + 2)
+    for k in range(2):
+        m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + k)], "test", t + k)
+        m.tick(t + k)
     assert (loc.lat, loc.lon) != before
 
 
@@ -403,3 +411,42 @@ def test_a_turn_is_taken_slower_than_the_straight():
         lat, lon, _, gs = follower.step(lat, lon)
         speeds.append(gs)
     assert max(speeds[:20]) >= 14 and min(speeds[20:60]) <= 12  # slowed for the corner, in good time
+
+
+def test_at_the_holding_point_it_goes_in_its_turn_when_the_real_one_is_slow():
+    """Each waited there for its real one to take off: one whose real one was slow held the line behind it (the user
+    ten minutes in it). It waits a while, then goes, and the real one isn't made again on the runway after it."""
+    from localtc.traffic.manager import HOLD_SHORT_MAX_S, Local, Plane
+
+    m = manager()
+    geo = AirportGeometry(RJTT)
+    end = geo.end("34R")
+    lat, lon = geo.frame.to_latlon(*end.threshold)
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    plane = Plane("live:08", 8, "FSLTL_A320_ZZZZ", "", callsign="ANA8", object_id=704, mode="taxi_out",
+                  local=Local(lat, lon, 20.0, end.heading_true, 0.0, 0.0, True, started=NOW, runway=("RJTT", "34R"),
+                              stage="hold_short", stage_t=NOW), runway=("RJTT", "34R"))
+    m.planes[plane.key] = plane
+    m._released_t = 0.0
+    m.on_feed([real("08", "ANA8", gate.lat, gate.lon, t=NOW)], "test", NOW)  # the real one still at its gate
+    m.tick(NOW + 5)
+    assert plane.mode == "taxi_out"  # waits for it a while
+    t = NOW + HOLD_SHORT_MAX_S + 1
+    m.on_feed([real("08", "ANA8", gate.lat, gate.lon, t=t)], "test", t)
+    m.tick(t)
+    assert plane.mode == "departing" and m._kept_off.get("live:08", 0.0) > t
+
+
+def test_one_hanging_in_the_air_is_taken_away():
+    """Handed back to the live data at 4,100 ft south of Seattle, its reports stopped, and it stood there eight
+    minutes."""
+    from localtc.traffic.manager import FROZEN_AIR_S
+
+    m = manager()
+    m.on_feed([real("09", "ANA9", 35.40, 139.80, ground=False, alt=4000.0, track=340.0, t=NOW)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=705), NOW)
+    plane = m.planes["live:09"]
+    plane.moved_t, plane.sent_air = NOW, True  # (as the live data left it: the same place every second since)
+    out = m.tick(NOW + FROZEN_AIR_S + 5)
+    assert "live:09" not in m.planes and any(isinstance(c, RemoveAiAircraft) for c in out)

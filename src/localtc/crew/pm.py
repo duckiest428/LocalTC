@@ -31,17 +31,19 @@ import logging
 import re
 from collections import deque
 from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from typing import Any
 
 from msgspec.structs import replace
 
 from localtc.atc_core import region as regions
+from localtc.atc_core.phraseology import speech
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
 from localtc.crew import personalities, speech_acts
 from localtc.crew.actions import PILOT_SIDE, Cockpit, Plan, as_read, plan, safety
 from localtc.crew.answers import Picture, answer, facts
-from localtc.crew.commands import Command
+from localtc.crew.commands import ASK_ATC, Command
 from localtc.crew.model import ACTION_WORDS, ACTIONS
 from localtc.crew.monitor import SAFETY, Call, Monitor
 from localtc.crew.profiles import Profile, for_aircraft, load_all
@@ -77,10 +79,12 @@ QNH_TOLERANCE_HPA = 1.5  # a QNH this far from the ATIS's is asked about
 STATION_WORDS = ("tower", "ground", "approach", "center", "centre", "departure", "clearance", "delivery", "unicom",
                  "radio", "traffic")
 # The copilot's suggestions the pilot can put off ("later", "not now"): the monitor's DECLINE.
-DECLINE = re.compile(r"\b(?:later|not (?:yet|now|right now)|stop (?:talking|it)|shut up|be quiet|enough|"
+# ("enough" alone, not "fair enough" or "enough fuel"; and only said as that, ``_declines``.)
+ENOUGH = r"(?<!fair )(?<!good )(?<!close )(?<!sure )(?<!long )(?<!big )(?<!funny )enough(?! (?:fuel|time|room|of|for|to|space))"
+DECLINE = re.compile(r"\b(?:later|not (?:yet|now|right now)|stop (?:talking|it)|shut up|be quiet|" + ENOUGH + r"|"
                      r"i didn'?t ask|chill(?: out)?|relax|cut it out|i know|we know|knock it off|give it a rest)\b")
 # ... and of them, the ones that quiet the routine calls too, not just the suggestions.
-HUSH = re.compile(r"\b(?:stop talking|shut up|be quiet|enough|chill(?: out)?|relax|cut it out|i know|we know|knock it off|"
+HUSH = re.compile(r"\b(?:stop talking|shut up|be quiet|" + ENOUGH + r"|chill(?: out)?|relax|cut it out|i know|we know|knock it off|"
                   r"give it a rest|stop it)\b")
 SAID_AS = {"go_around": "go around", "emergency": "declare an emergency"}
 CONTROL_WORDS = {"flaps?": "flaps", "gear": "gear", "lights?": "light", "auto ?pilot": "autopilot", "auto ?brakes?": "autobrake",
@@ -100,6 +104,19 @@ FUEL_DOUBT = re.compile(r"\bfuel (?:prediction|projection|estimate|calc\w*|calls
 
 # What the captain is about to do, or what's happening, said aloud: "time to start up our engines", "let's get
 # rolling", "alright, boarding's complete". Nothing for the copilot to do.
+FILLER = re.compile(r"^(?:(?:ok|okay|alright|all right|no|yeah|yes|man|dude|hey|look)[,.!\s]+)*")
+
+
+def _declines(text: str, act: str) -> bool:
+    """ "Later", "not now", "shut up": said as that, not a word of it in a sentence. "Fair enough, thank you a lot" and
+    "...I mean I know it's a hub, but..." each quieted the copilot for 15 minutes, the checklist asked for and the
+    takeoff callouts with it."""
+    lowered = text.lower().strip()
+    if act == "question" or "?" in lowered or not DECLINE.search(lowered):
+        return False
+    return len(re.findall(r"[a-z']+", lowered)) <= 6 or bool(DECLINE.match(FILLER.sub("", lowered)))
+
+
 REMARK = re.compile(r"^(?:(?:alright|all right|ok|okay|so|well|right|and)[,.\s]+)*(?:time to|let's|lets|we're going to|"
                     r"we are going to|we're gonna|gonna|going to|i'm going to|i'll|we'll|here we go|boarding|"
                     r"spooling|starting|engines?\b)")
@@ -166,12 +183,18 @@ class PilotMonitoring:
         self._aircraft = ""
         self._start()
 
+    def file_plan(self, perf: PlanPerf, plan_source: str, alternate: str) -> None:
+        """A flight plan filed with the flight under way: its speeds, fuel and alternate from now on."""
+        self._settings.update(perf=perf, plan_source=plan_source, alternate=alternate)
+        self.monitor.perf, self.monitor.plan_source = perf, plan_source
+        self.picture.perf = perf
+
     def _start(self) -> None:
         """Everything that belongs to one flight, new."""
         profile = getattr(getattr(self, "cockpit", None), "profile", None) or for_aircraft(self.profiles, "", "")
         self.cockpit = Cockpit(profile=profile)
-        self.picture = Picture(self.cockpit, self.engine)
         s = self._settings
+        self.picture = Picture(self.cockpit, self.engine, perf=s["perf"])
         # The copilot speaking first: callouts, reminders, relays, its own side of the cockpit (crew.monitor).
         self.monitor = Monitor(self.picture, verbosity=s["verbosity"], hands=s["hands"], perf=s["perf"],
                                plan_source=s["plan_source"], radio_mode=self.radio_mode, seed=_seed(self.engine),
@@ -419,6 +442,12 @@ class PilotMonitoring:
         self._last_heard = (t, text.strip().lower())
         self._heard_n += 1
         reading = speech_acts.read(text, ev.confidence, radio_call=self._radio_call(text))
+        own = self.cockpit.own
+        if own is not None and own.on_ground and any(c.action == "go_around" for c in reading.commands):
+            # "...just going around on different airlines": on the ground there's nothing to go around from ("Going
+            # around." was said at the gate).
+            rest = tuple(c for c in reading.commands if c.action != "go_around")
+            reading = dc_replace(reading, commands=rest, act=reading.act if rest else "chat")
         utterance = self.deck.said(t, "pilot", "intercom", text, confidence=ev.confidence, audio_ref=ev.audio_ref,
                                    act=reading.act, extra=(("input", ev.source),))
         uid = utterance.id
@@ -441,7 +470,7 @@ class PilotMonitoring:
             self.deck.memory.preferences["fuel calls"] = "none: the captain goes by the aircraft's own fuel prediction"
             self._heard_by_model(text)
             return [self._say(t, "Copy, I'll leave the fuel predictions to the box.")]
-        if act != "answer" and not reading.commands and DECLINE.search(text.lower()) and self.intent is None:
+        if act != "answer" and not reading.commands and _declines(text, act) and self.intent is None:
             # "Later" with nothing asked for: not now. ("Turn off the seatbelt sign, turn it back on later" is asked.)
             if HUSH.search(text.lower()):
                 self.monitor.hushed(t)
@@ -455,7 +484,7 @@ class PilotMonitoring:
             # An answer to a checklist item ("on", "set", "one plus F, checked") is taken as that, whatever the words.
             done: list[Any] = []
             for cmd in reading.commands:  # "flaps one" as the answer to "Flaps?": set too
-                if cmd.action not in ("yes", "no", "check"):
+                if cmd.action not in ("yes", "no", "check") and act != "report":  # ("they're armed": already so)
                     done += self._command(t, cmd, reading, uid)
             if self.monitor.respond(text, t):
                 return done + self._now(t)
@@ -758,6 +787,8 @@ class PilotMonitoring:
             word = "pan-pan" if cmd.value == "pan" else "mayday"
             question = f"Declare a {word}" + (" with " + self._station() if self._station() else "") + "?"
             return [self._ask(t, Intent(0, "do", (cmd,), question, t, t + CONFIRM_S, self._context((cmd,)), uid), "confirm")]
+        if cmd.value == "ask":
+            return self._ask_on_radio(t, cmd.target)
         # radio: pushback, taxi, clearance, departure
         if cmd.value == "next":
             if (call := self._next_call()) is None:
@@ -774,6 +805,21 @@ class PilotMonitoring:
                                         t, t + CONFIRM_S, self._context((cmd,)), uid), "confirm")]
         self.deck.want(cmd.value, t)
         return [self._say(t, "Asking." if cmd.value != "departure" else "Telling tower.")]
+
+    def _ask_on_radio(self, t: float, what: str) -> list[Any]:
+        """ "Ask clearance for a radio check", "ask ATC what the temperature is": asked on the radio, by the copilot,
+        once the frequency's free ("Say again?" and "Loud and clear" on the intercom were all it did)."""
+        st = self.engine.state if self.engine is not None else None
+        station = self._station()
+        if st is None or not station or not what:
+            return [self._say(t, "Who do you want me to ask?" if not station else "Ask them what?")]
+        callsign = speech.callsign_display(st.flight.callsign) if st.flight.callsign else ""
+        what = re.sub(r"^(?:for |about )?(?:a |an |the )?", "", what.strip(" ?.!,")).strip()
+        asking = re.match(r"(?:what|how|when|where|if|whether|which|who)\b", what)
+        words = f"could you tell us {what}?" if asking else f"request {what}."
+        text = ", ".join(x for x in (station, callsign, words) if x)
+        self._radio_queue.append(self.deck.submit("crew", "request", f"ask:{t:.0f}", t, text=text[:1].upper() + text[1:]))
+        return [self._say(t, "Asking.")]
 
     def _next_call(self) -> str | None:
         """The call due next on the ground, for "can you do the call?": the clearance, the pushback, the taxi, ready
@@ -1165,8 +1211,11 @@ class PilotMonitoring:
         return (facility or tuned).station if (facility or tuned) is not None else ""
 
     def _radio_call(self, text: str) -> bool:
-        """Words that are a radio call, not a word to the copilot: a station's name, or the callsign first."""
+        """Words that are a radio call, not a word to the copilot: a station's name, or the callsign first. ("Can you
+        ask clearance for a radio check?" names one, and is the copilot's to ask.)"""
         lowered = text.lower()
+        if ASK_ATC.search(" ".join(lowered.split())):
+            return False
         stations = [f.station.lower() for f in getattr(self.engine, "facilities", [])] if self.engine is not None else []
         if any(s and s in lowered for s in stations):
             return True

@@ -191,7 +191,7 @@
 <!-- New Flight -->
 <dialog id="dlg-flight" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>New Flight</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2 id="plan-title">New Flight</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="subtabs">
       <button type="button" class="subtab active" data-sub="simbrief">SimBrief</button>
       <button type="button" class="subtab" data-sub="manual">Manual</button>
@@ -227,7 +227,7 @@
 <!-- Getting Started -->
 <dialog id="dlg-help" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>Getting Started</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2>Getting Started</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="help">
       <ol>
         <li><b>Models.</b> In <b>Quick Settings</b>, pick a profile that suits your computer and press <b>Download</b> for anything not yet installed. Everything runs on this computer; after the downloads, flights work offline.</li>
@@ -253,7 +253,7 @@
 <!-- The one-time account suggestion, after the third flight -->
 <dialog id="dlg-welcome" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><span></span><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><span></span><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="help welcome">
       <h2>Welcome to LocalTC!</h2>
       <p>A couple of notes and recommendations before your first flight:</p>
@@ -287,7 +287,7 @@
 
 <dialog id="dlg-whatsnew" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>What's new in LocalTC <span id="wn-version"></span></h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2>What's new in LocalTC <span id="wn-version"></span></h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="help whatsnew">
       <div id="wn-notes"></div>
       <p class="muted small">Every version's notes, the companion app's and the website's too: <a href="https://localtc.tech/changelog" target="_blank" rel="noopener">localtc.tech/changelog</a>.</p>
@@ -298,7 +298,7 @@
 
 <dialog id="dlg-account" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>Three flights in: want an account?</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2>Three flights in: want an account?</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="help">
       <p>LocalTC keeps working exactly as it does without one. A free account adds:</p>
       <ul class="benefits">
@@ -312,7 +312,7 @@
       <p class="muted small">Just an email address and a code, no password. It sends flight summaries and, while you fly, the
         phase and frequencies: never your voice or recordings unless you upload one. We'll only ask this once.</p>
       <div class="row"><button class="btn primary" value="yes" id="acct-yes">Create an account</button>
-        <button class="btn" value="cancel">Not now</button></div>
+        <button class="btn" value="cancel" formnovalidate>Not now</button></div>
     </div>
   </form>
 </dialog>
@@ -335,7 +335,7 @@
 <!-- The mixer: each thing LocalTC plays at its own volume, and the microphone (app.js Mixer) -->
 <dialog id="dlg-mixer" class="dialog mixer-dialog" aria-label="Mixer">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>Mixer</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2>Mixer</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div class="mixer" id="mixer-body"></div>
   </form>
 </dialog>
@@ -343,7 +343,7 @@
 <!-- Alerts -->
 <dialog id="dlg-alerts" class="dialog">
   <form method="dialog" class="dlg">
-    <div class="dlghead"><h2>Alerts</h2><button class="iconbtn" value="cancel" title="Close">&#10005;</button></div>
+    <div class="dlghead"><h2>Alerts</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
     <div id="alerts-list" class="alerts"><p class="muted">None this flight.</p></div>
   </form>
 </dialog>

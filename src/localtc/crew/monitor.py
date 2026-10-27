@@ -84,6 +84,9 @@ FLAP_STEP_WAIT_S = 6.0
 RETRACT_MARGIN_KT = 15.0  # a notch up this far below the current detent's placard speed
 RETRACT_MIN_AGL = 1000.0
 APPROACH_CHECKLIST_AGL_FT = 2000.0  # the approach checklist offered with the approach begun, while there's time
+# An altimeter setting in ATC's words: "altimeter 29.99" / "altimeter two niner niner niner" is in the display text
+# as figures; "QNH 1013".
+ALTIMETER_SAID = re.compile(r"\baltimeter (\d{2})\.?(\d{2})\b|\bQNH (\d{3,4})\b", re.IGNORECASE)
 HANDOFF_LATE_S = 180.0  # not on the new frequency this long after a handoff: said (after a minute, it nagged)
 READBACK_LATE_S = 18.0
 TAXI_SPEED_MARGIN_KT = 5.0  # a knot or two over the taxi limit isn't worth a word
@@ -101,6 +104,7 @@ FUEL_LAST_H = 1.0  # the projections to landing only this close to the destinati
 # ... unless the shortfall is past any guess: short by more than this share of the fuel still to burn (an A380 that
 # left Seattle without the fuel for Dubai heard of it with 10,000 pounds left, an hour from running dry)
 FUEL_FAR_DOUBT = 0.08
+STALL_BELIEF = 1.15  # the sim's stall warning taken for one below this many times the design stall speed
 SPEED_AGAIN_S = 45.0  # a flap or gear overspeed said again this often while it lasts
 LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
 PUSH_BRAKE_S = 150.0  # cleared to push and the parking brake still set this long: a word
@@ -109,6 +113,8 @@ TRANSITION_BAND_FT, TRANSITION_PAST_FT = 300.0, 100.0
 SPEED_TREND_S = 10.0  # the speed's trend is taken over this long ...
 SPEED_GRACE_S = 60.0  # ... and an assigned speed not yet reached is reminded only after this long off it
 DECLINE_QUIET_S = 900.0  # "later", "not now": the copilot's own suggestions wait this long
+# What the pilot asked for (a checklist, its items): said however quiet the copilot's been told to be.
+ASKED = ("run:", "checklist:", "nochecklist")
 # The copilot's suggestions (not callouts, not warnings): what "later" quiets.
 PROMPTS = ("clearance_prompt", "brief", "prompt:", "flaps_for_takeoff", "tod_soon", "step:", "divert:", "sight",
            "app_mode", "lights:", "push_brake", "seatbelt", "turb:belts")
@@ -154,6 +160,8 @@ class _Run:
     since: float
 
 
+INSIST = re.compile(r"\b(?:they are|they're|it is|it's|is armed|are armed|checked|confirmed|continue|carry on|move on|"
+                    r"go on|it's fine|they're fine)\b")
 CHALLENGE_REPEAT_S = 20.0  # no answer: the item asked again
 CHALLENGE_DROP_S = 90.0  # no answer still: the checklist waits until it's asked for again
 
@@ -326,6 +334,27 @@ class Monitor(WatchMixin):
         elif ev.status in ("incomplete", "incorrect") and missing:
             self._call(f"coach:{t:.0f}", ROUTINE, t + 6, f"Next time, include the {missing[0]} in the readback.")
 
+    def _atc_altimeter(self, ev: AtcTransmission, t: float) -> None:
+        """An altimeter ATC gave ("..., altimeter 29.99"): set, below the transition (the pilots asked: it was left at
+        the old one after the taxi clearance gave a new one)."""
+        own = self.c.own
+        found = ALTIMETER_SAID.search(ev.text)
+        if found is None or own is None or not self.hands:
+            return
+        if not own.on_ground and self._altitude(own) > self._region().transition_ft - 500:
+            return  # up in the flight levels: standard, until the transition (``transition_descent``)
+        if found.group(1):
+            value, cmd = f"{found.group(1)}.{found.group(2)}", Command("altimeter", f"{found.group(1)}.{found.group(2)}")
+            inhg = float(value)
+        else:
+            value, cmd = found.group(3), Command("altimeter", found.group(3), "hpa")
+            inhg = int(value) / 33.8639
+        setting = own.altimeter_setting_inhg if getattr(own, "altimeter_setting_inhg", 0) else own.altimeter_inhg
+        if abs(setting - inhg) < 0.005:
+            return
+        word = "QNH" if cmd.target == "hpa" else "Altimeter"
+        self._call(f"atc_altimeter:{value}", ROUTINE, t + 1, f"{word} {value} set.", commands=(cmd,))
+
     # --- out ---------------------------------------------------------------------------------------------------
 
     def due(self, t: float) -> list[Call]:
@@ -387,8 +416,10 @@ class Monitor(WatchMixin):
             return False
         if key.startswith(PROMPTS) and t - self.declined_t < DECLINE_QUIET_S and priority < SAFETY:
             return False  # "later": not now
-        if t - self.hushed_t < DECLINE_QUIET_S and priority < SAFETY and not urgent:
-            return False  # "shut up", "chill out": only what matters for a while
+        if t - self.hushed_t < DECLINE_QUIET_S and priority < SAFETY and not urgent and not moment \
+                and not key.startswith(ASKED):
+            return False  # "shut up", "chill out": only what matters for a while (the callouts and a checklist asked for
+            # still are: "fair enough" once took the takeoff's with it)
         if priority < VERBOSITY[self.verbosity] and not commands:
             self.f.said[key] = t  # not said at this verbosity, and not later either
             return False
@@ -487,6 +518,7 @@ class Monitor(WatchMixin):
         st = self.engine.state if self.engine is not None else None
         if st is None:
             return
+        self._atc_altimeter(ev, t)
         with regions.speaking(self._region()):
             if ".handoff_" in iid or iid in ("common.contact", "tower.exit_contact_ground", "clearance.contact_ground"):
                 expected = st.comms.expected
@@ -613,14 +645,10 @@ class Monitor(WatchMixin):
                 if not self.c.profile.hands and self.hands_setting:
                     lines.append("I can't reach this aircraft's switches from here, so they're yours; I'll call.")
                 self._call("greeting", ROUTINE, t, " ".join(lines))
-            # The ATIS: the copilot's side of the altimeter set to it, quietly. Read out only when asked ("weather").
+            # (Not the altimeter to the ATIS by itself at the gate: the pilot's, until ATC gives one (``_on_atc``).)
             info = self._atis(f.origin)
             if info is not None and self.atis_seen.get(f.origin or "") != info.letter:
                 self.atis_seen[f.origin or ""] = info.letter
-                w = info.weather
-                if self.hands and w.altimeter_inhg and abs(own.altimeter_inhg - w.altimeter_inhg) > 0.015:
-                    self._call(f"atis:{f.origin}:{info.letter}", ROUTINE, t, "",
-                               commands=(Command("altimeter", f"{w.altimeter_inhg:.2f}"),))
             # (No "call for the clearance when you're ready": the captain calls when the captain's ready.)
             if self.phase == "PUSHBACK":
                 self.f.said.setdefault("pushed", t)  # pushed back: the brake set after it is the end of the push
@@ -638,7 +666,7 @@ class Monitor(WatchMixin):
         s, p = self.c.systems, self.c.profile
         airborne = not own.on_ground
         if airborne and self._agl(own) > 50:
-            stall = s is not None and s.stall_warning
+            stall = s is not None and s.stall_warning and self._near_stall(own, s)
             if s is not None and not stall:
                 stall = self._below_stall(own, s)
             if stall:
@@ -680,6 +708,12 @@ class Monitor(WatchMixin):
             return
         self._call("fuel_check", ROUTINE, t, f"Fuel's {self._fuel(own.fuel_lb)}, {self._fuel(abs(diff))} "
                    f"{'over' if diff > 0 else 'under'} the plan's block.")
+
+    def _near_stall(self, own: OwnshipState, s: AircraftSystems) -> bool:
+        """The sim's stall warning believed: near a stall speed. The stock A320neo's came on at 151 knots with flaps 2
+        and the gear down on final ("speed, speed" three times)."""
+        ref = s.vs0_kt if (self.c.flaps_index or 0) > 0 or own.gear_down else s.vs1_kt
+        return not 30 < ref < 220 or own.ias_kt < ref * STALL_BELIEF
 
     def _below_stall(self, own: OwnshipState, s: AircraftSystems) -> bool:
         """The sim's stall warning is the call; this only backs it up where the aircraft has none. The design stall
@@ -754,8 +788,13 @@ class Monitor(WatchMixin):
             check = p.speed_check_kt
             if prev.ias_kt < check <= own.ias_kt:
                 self._call("speed_check", ROUTINE, t, f"{speech.miles(check).capitalize()} knots.", moment=True)
-            # No "V1" or "rotate": the pilot flying calls the speeds the aircraft's own voice doesn't (the
-            # copilot calling them sounded as if it were flying).
+            # V1 and rotate, from the plan's speeds (the pilots asked for them; "one hundred knots" alone sounded as if
+            # nobody was watching the speed). One call when they're the same.
+            v1, vr = self.perf.v1, self.perf.vr
+            if v1 and vr and prev.ias_kt < min(v1, vr) <= own.ias_kt:
+                self._call("v1", ROUTINE, t, "V1, rotate." if abs(v1 - vr) <= 2 else "V1.", moment=True)
+            elif vr and abs(v1 - vr) > 2 and prev.ias_kt < vr <= own.ias_kt:
+                self._call("rotate", ROUTINE, t, "Rotate.", moment=True)
         # Parked at the destination.
         if self.f.landing_t is not None and own.gs_kt < 0.5 and own.parking_brake and self.phase == "TAXI_IN":
             stopped = self.f.said.setdefault("stopped_t", t)
@@ -1281,6 +1320,7 @@ class Monitor(WatchMixin):
                        if name else "Which checklist?")
             return
         self.f.checklists.discard(cl.id)
+        self.hushed_t = -1e9  # a checklist asked for: talking wanted again
         self._start(cl, t)
 
     def _next_due(self) -> "Checklist | None":
@@ -1384,6 +1424,14 @@ class Monitor(WatchMixin):
             pr.index += 1
             plan = values.get(run.sense_key(line.challenge) or "", "")
             self._advance(t, opener=f"{run._speakable(line.challenge)} {shown[0]}" + (f", the plan had {plan}." if plan else "."))
+            return True
+        if pr.held and INSIST.search(text.lower()):
+            # "No, they are, please continue": the captain's word over what the aircraft shows (the stock A320neo's
+            # spoilers never read armed, and the checklist held on them until it was skipped by hand).
+            pr.held = False
+            pr.results[pr.index] = "ok"
+            pr.index += 1
+            self._advance(t, opener="Copy.")
             return True
         if pr.held:
             return False

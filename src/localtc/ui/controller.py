@@ -288,6 +288,7 @@ class AppController:
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
+            "require_plan": self.cfg.ui.require_plan,
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
             "welcome": not self.cfg.ui.welcome_seen,
@@ -412,6 +413,10 @@ class AppController:
                                           on_ready=self._on_ready)
             self._last_recording = recording or self._last_recording
             self.system(f"Flight ended. Recording: {recording}" if recording else "Flight ended.")
+            if not self.cfg.ui.require_plan and self.plan is not None:
+                # A filed plan is that flight's: the next one starts without one until it's filed.
+                self.plan = None
+                self.plan_path.unlink(missing_ok=True)
             self.companion.set_status({"active": False})
             asyncio.create_task(self.pilot.live({"active": False}, force=True))
             asyncio.create_task(self.pilot.after_flight())  # the logbook's new line, to the account if signed in
@@ -828,12 +833,17 @@ class AppController:
         self.plan = plan
         self.companion.set_route(route_view(plan))
         await asyncio.to_thread(save_plan, plan, self.plan_path)
-        if args.get("start"):
+        filed = False
+        if args.get("file") and self.live is not None and self._task is not None and not self._task.done():
+            # Filed with the flight under way ([ui] require_plan off): ATC has it from now on, nothing restarted.
+            self.live.file_plan(plan)
+            filed = True
+        elif args.get("start"):
             if self._task is not None and not self._task.done():
                 await self.stop()
             await self.start()
         self._push_state()
-        return {"plan": msgspec.to_builtins(plan), "summary": plan.summary()}
+        return {"plan": msgspec.to_builtins(plan), "summary": plan.summary(), "filed": filed}
 
     async def api_simbrief(self, args: dict) -> dict:
         user = str(args.get("user") or self.cfg.ui.simbrief_user).strip()

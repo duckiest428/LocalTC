@@ -474,7 +474,10 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                 writes = (SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=1), *writes)
             else:
                 both = False
-            if (push := p.actions.get("altimeter_qnh")) is not None and push.input:
+            own = c.own
+            setting = (own.altimeter_setting_inhg or own.altimeter_inhg) if own is not None else 0.0
+            at_std = own is None or abs(setting - 29.92) < 0.005  # (a knob that's on QNH already isn't pushed again)
+            if (push := p.actions.get("altimeter_qnh")) is not None and push.input and at_std:
                 writes = (SetInputEvent(name=push.input, value=float(push.on)), *writes)  # pushed out of STD first
         side = (" both sides", ", both sides") if both else (" on my side", " on my side")
         return Plan(a, v, writes, lambda c2: None, said.replace(" set.", f" set{side[1]}."), spoken + side[0])

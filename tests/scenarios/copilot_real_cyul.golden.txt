@@ -6,33 +6,33 @@
 [    25.1] PILOT     125.6: Cleared to Quebec as filed, climb and maintain six thousand, expect one two thousand one two minutes after, departure one two zero point four two, squawk three two six zero, delta papa six niner.
 [    25.1] READBACK  clearance.ifr correct
 [    27.6] ATC       Montreal Clearance 125.6: DP69, readback correct, contact Montreal Ground 121.0 when ready, have a good one.
-[    31.3] PILOT     125.6: Montreal Ground one two one point zero, delta papa six niner.
-[    31.3] READBACK  clearance.readback_correct_ground correct
-[    38.9] TUNE      COM1 121.0
-[    46.4] PILOT     121.0: Montreal Ground, DP69, ready to taxi, with information Romeo
-[    48.1] ATC       Montreal Ground 121.0: DP69, taxi to runway 06L at C via G, C.
-[    51.1] PILOT     121.0: Runway six left at charlie, taxi via golf, charlie, delta papa six niner.
-[    51.1] READBACK  ground.taxi_out_at correct
+[    33.1] TUNE      COM1 121.0
+[    37.6] PILOT     121.0: Montreal Ground, DP69, Gate W5, request push and start, with information Romeo
+[    39.4] ATC       Montreal Ground 121.0: DP69, push and start at your discretion, tail left.
+[    46.1] PILOT     121.0: Montreal Ground, DP69, ready to taxi, with information Romeo
+[    48.6] ATC       Montreal Ground 121.0: DP69, runway 06L at C, taxi via G, C.
+[    51.6] PILOT     121.0: Runway six left at charlie, taxi via golf, charlie, delta papa six niner.
+[    51.6] READBACK  ground.taxi_out_at correct
 [   290.6] PHASE     PARKED -> TAXI_OUT (started moving)
 [   323.9] PHASE     TAXI_OUT -> RUNWAY_HOLD (holding short)
-[   323.9] ATC       Montreal Ground 121.0: DP69, contact Montreal Tower 119.3.
-[   327.4] PILOT     121.0: Montreal Tower one one niner point three, delta papa six niner.
-[   327.4] READBACK  ground.handoff_tower correct
-[   336.9] TUNE      COM1 119.3
-[   342.1] PILOT     119.3: Montreal Tower, DP69, holding short runway 06L, ready for departure
-[   344.6] ATC       Montreal Tower 119.3: DP69, runway 06L, fly runway heading, cleared for takeoff, wind calm.
-[   346.8] PILOT     119.3: Runway heading, runway six left, cleared for takeoff, delta papa six niner.
-[   346.8] READBACK  tower.takeoff correct
+[   323.9] ATC       Montreal Ground 121.0: DP69, contact Montreal Tower 119.3, good day.
+[   326.8] PILOT     121.0: Montreal Tower one one niner point three, delta papa six niner.
+[   326.8] READBACK  ground.handoff_tower correct
+[   335.9] TUNE      COM1 119.3
+[   344.9] PILOT     119.3: Montreal Tower, DP69, holding short runway 06L, ready for departure
+[   347.1] ATC       Montreal Tower 119.3: DP69, fly runway heading, runway 06L, cleared for takeoff, wind calm.
+[   349.4] PILOT     119.3: Runway heading, runway six left, cleared for takeoff, delta papa six niner.
+[   349.4] READBACK  tower.takeoff correct
 [   527.6] PHASE     RUNWAY_HOLD -> TAKEOFF (takeoff roll)
 [   550.4] PHASE     TAKEOFF -> DEPARTURE (airborne)
-[   558.6] ATC       Montreal Tower 119.3: DP69, contact Montreal Departure 120.42, have a good one.
-[   562.4] PILOT     119.3: Montreal Departure one two zero point four two, delta papa six niner.
-[   562.4] READBACK  tower.handoff_departure correct
-[   571.1] TUNE      COM1 120.425
-[   580.1] PILOT     120.425: Montreal Departure, DP69, 1,700 climbing 6,000
-[   582.3] ATC       Montreal Departure 120.42: DP69, radar contact, turn on course, proceed direct Quebec.
-[   584.4] PILOT     120.425: Direct Quebec, delta papa six niner.
-[   584.4] READBACK  departure.radar_contact_only_direct correct
+[   558.6] ATC       Montreal Tower 119.3: DP69, contact Montreal Departure 120.42, see ya.
+[   560.8] PILOT     119.3: Montreal Departure one two zero point four two, delta papa six niner.
+[   560.8] READBACK  tower.handoff_departure correct
+[   570.9] TUNE      COM1 120.425
+[   578.1] PILOT     120.425: Montreal Departure, DP69, 1,600 climbing 6,000
+[   579.8] ATC       Montreal Departure 120.42: DP69, Montreal Departure, radar contact, proceed direct Quebec.
+[   583.6] PILOT     120.425: Direct Quebec, delta papa six niner.
+[   583.6] READBACK  departure.radar_contact_only_direct correct
 [   614.9] ATC       Montreal Departure 120.42: DP69, climb and maintain 12,000.
-[   617.8] PILOT     120.425: Climb and maintain one two thousand, delta papa six niner.
-[   617.8] READBACK  common.climb correct
+[   617.1] PILOT     120.425: Climb and maintain one two thousand, delta papa six niner.
+[   617.1] READBACK  common.climb correct

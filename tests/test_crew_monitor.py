@@ -84,15 +84,15 @@ def fly(pm: PilotMonitoring, states) -> list:
     return out
 
 
-def test_the_takeoff_speed_call_but_no_v1_or_rotate():
-    """The copilot isn't flying: no "V1" and "rotate" from it (they sounded as if it were)."""
+def test_the_takeoff_speed_calls_v1_and_rotate():
+    """One hundred knots, V1 and rotate from the plan's speeds (the pilots asked for them)."""
     pm = crew(perf=PlanPerf(v1=140, vr=145, v2=150), plan_source="simbrief")
     pm.observe(PhaseChanged(t=0.5, previous="RUNWAY_HOLD", phase="TAKEOFF"))
     pm.observe(systems(0.6))
     out = fly(pm, [own(1 + i, on_runway=True, ias_kt=ias, gs_kt=ias) for i, ias in enumerate(range(20, 160, 10))])
     words = said(out)
     assert "One hundred knots." in words and "Eighty knots." not in words  # Airbus: 100 knots
-    assert "V1." not in words and "Rotate." not in words
+    assert any(w.startswith(ways_of("V1.")) for w in words) and any(w.startswith(ways_of("Rotate.")) for w in words)
 
 
 def test_positive_rate_then_the_copilot_raises_the_gear_itself():
@@ -388,7 +388,8 @@ def test_standard_is_set_at_the_transition_even_with_a_qnh_of_1013():
                        alt_msl_ft=17500 + 300 * i, vs_fpm=2000, ias_kt=280, gs_kt=280, gear_down=False, flaps_index=0)
                    for i in range(5)])
     assert "Transition, standard set." in said(out)
-    assert any(isinstance(o, SendSimEvent) and o.name == "KOHLSMAN_SET" for o in out)
+    # (The A320neo's baro knobs pulled: KOHLSMAN_SET at 29.92 left them on QNH 1013.)
+    assert any(getattr(o, "name", "") in ("KOHLSMAN_SET", "INSTRUMENT_QNH_CPT_PULL") for o in out)
 
 
 def test_no_anti_ice_question_in_cloud():
@@ -431,7 +432,7 @@ def test_taxiing_in_the_apu_is_started_then_its_bleed_put_on():
     engine.assigned_gate_position = lambda: (47.0, -121.996)  # 300 m ahead
     out = fly(pm, [own(200 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(3)])
     assert set(ways_of("Starting the APU.")) & set(said(out))
-    assert [o for o in out if getattr(o, "name", "") == "APU_STARTER"]
+    assert [o for o in out if getattr(o, "name", "") in ("APU_STARTER", "AIRLINER_APU_START")]
     pm.observe(systems(260, apu_pct=1.0))
     out = fly(pm, [own(261 + i, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(10)])
     assert "APU's running. APU bleed on." in said(out)

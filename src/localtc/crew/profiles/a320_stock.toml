@@ -22,6 +22,9 @@ autobrake = ["off", "low", "medium", "max"]
 reversers = true
 ceiling_ft = 39000              # the A320's certified ceiling (39,800 ft)
 short_runway_ft = 7000
+# SPOILERS ARMED stays false in the A320neo V2 with the lever armed (a whole flight of "spoilers shows not armed"): the
+# checklist takes the captain's word for it.
+unread = ["spoilers_armed"]
 
 # Any action can be sent another way for this aircraft: a key event other than the standard one, or an L:var.
 # [actions.seatbelt_sign]
@@ -41,3 +44,48 @@ knob = "INSTRUMENT_FCU_SPD_KNOB"
 [actions.altitude]
 knob = "INSTRUMENT_FCU_ALT_KNOB"
 step = 1000
+
+# Flying, the knob pushed once the new altitude shows: the climb or descent managed (FL260 set, and the aircraft sat in
+# ALT). Pulled on vectors: open climb or descent. The heading knob pulled once a vector's heading shows: flown.
+[actions.altitude_push]
+input = "INSTRUMENT_FCU_ALT_PUSH"
+on = 1
+
+[actions.altitude_pull]
+input = "INSTRUMENT_FCU_ALT_PULL"
+on = 1
+
+[actions.heading_pull]
+input = "INSTRUMENT_FCU_HDG_PULL"
+on = 1
+
+# Both baro knobs pulled for STD, pushed back to QNH (KOHLSMAN_SET at 29.92 left them on QNH 1013: "standard set", and
+# it wasn't).
+[actions.altimeter_std]
+input = "INSTRUMENT_QNH_CPT_PULL, INSTRUMENT_QNH_FO_PULL"
+on = 1
+
+[actions.altimeter_qnh]
+input = "INSTRUMENT_QNH_CPT_PUSH, INSTRUMENT_QNH_FO_PUSH"
+on = 1
+
+# The APU: master on, then start (APU_STARTER didn't start it). Input events from the aircraft's own list (2026-10-26);
+# not yet seen working in the sim.
+[actions.apu_start]
+input = "AIRLINER_APU_MASTER, AIRLINER_APU_START"
+on = 1
+
+[actions.apu_stop]
+input = "AIRLINER_APU_MASTER"
+on = 1
+off = 0
+
+[actions.apu_bleed_on]
+input = "AIRLINER_APU_BLEED"
+on = 1
+off = 0
+
+[actions.apu_bleed_off]
+input = "AIRLINER_APU_BLEED"
+on = 1
+off = 0

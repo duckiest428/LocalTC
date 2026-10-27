@@ -539,6 +539,12 @@ class Copilot(CallWords):
             self.deck.expect_tune(item.facility.mhz, t)
             if item.item is not None:
                 self.deck.done(item.item, t)
+            late = t - item.due  # tuned later than planned (the frequency busy): the check-in listens as long after it
+            if late > 0:
+                for q in self._queue:
+                    if q.kind == "checkin" and q.facility is item.facility:
+                        q.due += late
+                self._queue.sort()
             return [Tune(t, item.facility.mhz)]
         text = item.text
         if item.answers is not None and (st.pending is None or st.pending.instruction_id != item.answers or (

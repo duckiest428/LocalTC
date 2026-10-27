@@ -397,8 +397,8 @@ class ConditionsMixin:
             self.conditions.end(c, "satisfied", own.t, "at the five mile final")
             self._assign(speed_kt=None)
             return False
-        if abs(own.ias_kt - c.value) <= SPEED_OFF_KT:
-            c.off_since = None
+        if own.ias_kt - c.value <= SPEED_OFF_KT:
+            c.off_since = None  # (slower is the pilot configuring to land: "reduce speed to 180" at 151 on final)
             return False
         c.off_since = c.off_since if c.off_since is not None else own.t
         tuned = self.state.comms.tuned

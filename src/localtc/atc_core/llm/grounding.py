@@ -124,6 +124,9 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
 def missing_cue(intent: str, tokens: list[Token]) -> str | None:
     """None if the words fit the intent; otherwise what's missing, for the retry message."""
     words = {t.text for t in tokens if t.kind == "word"}
+    if intent == "ready_for_departure" and "position" in words and not words & {"ready", "departure", "takeoff"}:
+        # "Hold position, Frontier 4204": the readback of a hold, not ready (ground handed the flight to tower for it)
+        return "ready_for_departure needs ready, departure or takeoff: \"hold position\" is a readback"
     for cues in INTENT_CUES.get(intent, ()):
         if not words & cues:
             return f"{intent} needs a word like {', '.join(sorted(cues)[:5])}, and the pilot said none"

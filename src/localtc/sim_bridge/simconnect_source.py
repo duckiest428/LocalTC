@@ -101,7 +101,7 @@ REQ_INPUT_EVENTS = 8
 REQ_TRAFFIC_IDENT, REQ_TRAFFIC_LIVERY, REQ_MODELS, REQ_AI_REMOVE = 9, 10, 11, 12
 DEF_TRAFFIC_IDENT, DEF_TRAFFIC_LIVERY = 12, 13
 DEF_AI_MOVE, DEF_AI_GROUND, REQ_AI_GROUND = 14, 15, 15  # LocalTC's traffic: moved, and the ground under it
-AI_GROUND_EVERY_S = 2.0
+AI_GROUND_EVERY_S = 1.0
 AI_LIGHT_EVENTS = ("LANDING_LIGHTS_SET", "TAXI_LIGHTS_SET", "BEACON_LIGHTS_SET", "STROBES_SET", "NAV_LIGHTS_SET",
                    "LOGO_LIGHTS_SET")
 AI_FREEZE = ("FREEZE_LATITUDE_LONGITUDE_SET", "FREEZE_ALTITUDE_SET", "FREEZE_ATTITUDE_SET")
@@ -694,7 +694,13 @@ class SimConnectSource:
             except SimConnectError as exc:
                 log.info("Traffic: couldn't take hold of object %d: %s", c.object_id, exc)
         else:
+            landed = c.on_ground and not track.on_ground
             track.update(new, now)
+            if landed:  # just down: the ground under it at once, not the runway's height from the airport's data
+                try:
+                    dll.request_data_on_sim_object(handle, REQ_AI_GROUND, DEF_AI_GROUND, c.object_id, Period.ONCE)
+                except SimConnectError:
+                    pass
 
     def _light_ai(self, dll: SimConnectApi, handle: int, c: AiLights) -> None:
         try:

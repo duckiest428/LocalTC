@@ -96,6 +96,8 @@ def seen(line: Line, c: Cockpit, values: dict[str, str]) -> tuple[str, bool | No
     if key == "gear":
         return ("down" if own.gear_down else "up"), (None if want is None else own.gear_down == want)
     if key == "spoilers":
+        if "spoilers_armed" in p.unread:
+            return None  # an aircraft that never shows them armed: the captain's word
         return None if s is None else (("armed" if s.spoilers_armed else "not armed"),
                                        None if want is None else s.spoilers_armed == want)
     if key == "transponder":

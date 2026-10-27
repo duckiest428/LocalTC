@@ -128,9 +128,13 @@ class AtisBoard:
         end = self._runway(geo, weather, old.runway if old else None, closed, out, flow=self.flows.get(icao))
         if end is None:
             return None
-        allowed = lambda e: components(e, weather)[0] >= -MAX_TAILWIND_KT  # (never one with a tailwind in the sim's wind)
-        real_landing = [e for e in runway_use.expand(geo, real.landing, closed) if allowed(e)] if real is not None else []
-        real_departing = [e for e in runway_use.expand(geo, real.departing, closed) if allowed(e)] \
+        # (Never one with a tailwind in the wind here; a real ATIS's runways up to the tailwind airports really work
+        # with: Las Vegas landing 26L with 8 knots behind was taken away, and the arrival put on 19R with the
+        # departures.)
+        allowed = lambda e: components(e, weather)[0] >= -MAX_TAILWIND_KT
+        real_ok = lambda e: components(e, weather)[0] >= -FLOW_TAILWIND_KT
+        real_landing = [e for e in runway_use.expand(geo, real.landing, closed) if real_ok(e)] if real is not None else []
+        real_departing = [e for e in runway_use.expand(geo, real.departing, closed) if real_ok(e)] \
             if real is not None else []
         if real is not None:
             # The real ATIS's runway, while the wind here allows it ("RWYS 4/8": Honolulu's 4L, 4R, 8L and 8R).

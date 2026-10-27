@@ -14,6 +14,7 @@ hold the key.
 import logging
 import queue
 import threading
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -22,6 +23,9 @@ from localtc.dsp.radio import resample
 
 log = logging.getLogger(__name__)
 BLOCK_S = 0.05
+# The copilot waits for ATC to finish talking to the flight (another flight's chatter it talks over, as a real one
+# does), this long at most; a warning ("speed!") never waits.
+INTERCOM_WAIT_S = 15.0
 
 # The mixer's channels: who is heard, each with its own volume ([mixer]).
 CHANNELS = ("atc", "atis", "chatter", "copilot_radio", "copilot", "effects", "sidetone")
@@ -37,6 +41,7 @@ class Clip:
     done: threading.Event = field(default_factory=threading.Event)
     station: str | None = None  # who's on the radio saying it: cut when the pilot tunes away from them
     channel: str = ""  # the mixer's channel (CHANNELS); "" by its kind (another flight's exchange is "chatter")
+    urgent: bool = False  # the copilot's warning: said over anything
 
     @property
     def mixer_channel(self) -> str:
@@ -99,6 +104,11 @@ class _Lane:
         while (clip := self.queue.get()) is not None:
             if clip.done.is_set():
                 continue  # dropped while it waited
+            if self is self.player.intercom and not clip.urgent:
+                waited = 0.0
+                while waited < INTERCOM_WAIT_S and self.player.atc_to_us() and not clip.done.is_set():
+                    time.sleep(BLOCK_S)
+                    waited += BLOCK_S
             self.playing, audio = clip, resample(clip.audio, clip.rate, rate)
             self.cut_now.clear()
             try:
@@ -156,6 +166,11 @@ class AudioPlayer:
         self.start()
         (self.intercom if clip.kind == "intercom" else self.effects if clip.kind == "effect" else self.radio).queue.put(clip)
         return clip
+
+    def atc_to_us(self) -> bool:
+        """ATC (or the copilot on the radio) talking to this flight now, not another flight's exchange."""
+        p = self.radio.playing
+        return p is not None and p.kind in RADIO and p.channel != "chatter"
 
     @property
     def busy(self) -> bool:

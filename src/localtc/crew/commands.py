@@ -62,6 +62,12 @@ RADIO_REQUESTS = (
     (re.compile(rf"\b{RADIO_ASK} (?:a |the |our )?(?:takeoff|take off|departure)(?: clearance)?\b|\btell tower (?:we're|we are) ready\b"),
      "departure"),
 )
+WITH_CHECKLIST_NOT = ("checklist", "yes", "no", "check", "say_again", "verbosity", "status", "brief", "radio")
+# "Ask clearance for a radio check", "go on the radio and ask ATC for a temperature update": asked on the radio.
+ASK_ATC = re.compile(r"\b(?:ask|check with|request from) (?:the )?(?:atc|air traffic control|controller|clearance|delivery|"
+                     r"ground|tower|approach|departure|cent(?:er|re)|them)\b(?: (?:on the radio|please))?"
+                     r"(?: (?=for |what |how |when |where |if |whether |which |about )| to (?:give us |tell us |say )?)"
+                     r"(?P<what>.+)")
 # "Can you do the call?", "make the call to ground": which call by the words around it, else the next one due.
 RADIO_ANY = re.compile(r"\b(?:do|make|give|handle|take) (?:the |a |them a |ground a |tower a )?(?:radio )?call\b|"
                        r"\b(?:call|talk to|speak to) (?:ground|tower|clearance|delivery) (?:for (?:us|me)|please)\b")
@@ -126,6 +132,9 @@ def parse(text: str) -> list[Command]:
                   flags=re.IGNORECASE)
     text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
+    if (asked := ASK_ATC.search(lowered)) is not None and asked.group("what").strip(" ?.!,"):
+        # "Can you ask clearance for a radio check?": the copilot asks on the radio (not an intercom check).
+        return [Command("radio", "ask", asked.group("what").strip(" ?.!,"))]
     if any(phrase in lowered for phrase in CHECK):
         return [Command("check")]
     if SAY_AGAIN.search(lowered.strip(" ?!.")) and len(lowered.split()) <= 5:
@@ -147,7 +156,12 @@ def parse(text: str) -> list[Command]:
     if "checklist" in lowered or "check list" in lowered:
         from localtc.crew.checklists import named  # checklists builds on this module
 
-        return [Command("checklist", named(lowered) or "")]
+        # "Put down flaps 3 and let's do the approach checklist": what's asked for with it too, first (only the
+        # checklist was run).
+        controls = [c for part in re.split(r"\b(?:and|then)\b|[,.;]", lowered)
+                    if part.strip() and "checklist" not in part and "check list" not in part
+                    for c in parse(part) if c.action not in WITH_CHECKLIST_NOT]
+        return [*controls, Command("checklist", named(lowered) or "")]
     if re.search(r"\bbrief(?:ing)?\b", lowered):
         which = "departure" if re.search(r"departure|takeoff|take off", lowered) else \
             "approach" if re.search(r"approach|arrival|landing", lowered) else ""

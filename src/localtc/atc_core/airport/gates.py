@@ -202,7 +202,8 @@ def parked_at(geometry: AirportGeometry, lat: float, lon: float, real: GateData 
 
 
 def requested(tokens: list[Token]) -> str | None:
-    """The gate a pilot asks for ("gate Echo 9", "taxi to B 25", "stand 46"): "E9", "B25", "46"; None."""
+    """The gate a pilot asks for ("gate Echo 9", "taxi to B 25", "stand 46", "can we get Echo 9 as our gate"): "E9",
+    "B25", "46"; None."""
     for i, token in enumerate(tokens):
         if token.text not in ("gate", "stand", "to"):
             continue
@@ -211,7 +212,32 @@ def requested(tokens: list[Token]) -> str | None:
             return rest[0].text.upper() + rest[1].text
         if token.text in ("gate", "stand") and rest and rest[0].text.isdigit():
             return rest[0].text
+    for i, token in enumerate(tokens):  # the gate named before the word: "Echo 9 as our gate"
+        if token.text not in ("gate", "stand"):
+            continue
+        before = tokens[max(0, i - 5):i]
+        for a, b in zip(before, before[1:]):
+            if len(a.text) == 1 and a.text.isalpha() and a.text != "a" and b.text.isdigit():
+                return a.text.upper() + b.text
     return None
+
+
+def nearest_named(geometry: AirportGeometry, label: str, real: GateData | None, taken: set[int],
+                  traffic) -> Gate | None:
+    """A gate asked for that the scenery hasn't (Las Vegas's E9, between E8 and E10): the free one of its letter
+    numbered nearest to it; None without a letter and a number, or none of that letter free."""
+    want = label.upper().replace(" ", "")
+    letter, digits = want[:1], want[1:]
+    if not letter.isalpha() or not digits.isdigit():
+        return None
+    same = []
+    for g in gates(geometry, real):
+        name = g.label.upper().replace(" ", "")
+        number = "".join(c for c in name[1:] if c.isdigit())
+        if g.word != "gate" or name[:1] != letter or not number or g.index in taken or occupied(g, geometry, traffic):
+            continue
+        same.append((abs(int(number) - int(digits)), int(number), g))
+    return min(same, key=lambda x: (x[0], x[1]))[2] if same else None
 
 
 def named(geometry: AirportGeometry, label: str, real: GateData | None = None) -> Gate | None:

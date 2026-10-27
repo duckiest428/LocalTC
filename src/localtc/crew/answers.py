@@ -29,6 +29,7 @@ class Picture:
     metric: bool = False  # fuel in kilograms (outside North America)
     burn_pph: float | None = None  # the cruise burn measured from the fuel used (the monitor's), pounds an hour
     fuel_doubted: bool = False  # the pilot said the fuel projections are off: none until told otherwise
+    perf: Any = None  # the plan's (config.PlanPerf): its speeds and fuel, and its scheduled times
 
     @property
     def destination(self) -> str | None:
@@ -79,6 +80,14 @@ def _components(engine: Any, icao: str, runway: str | None, w: Any) -> tuple[str
     knots = lambda n: f"{n} knot{'' if n == 1 else 's'}"  # noqa: E731
     along = f"{knots(abs(round(head)))} {'headwind' if head >= 0 else 'tailwind'}"
     return end.ident, f"{along}, {knots(round(cross))} crosswind from the {side}"
+
+
+def _scheduled(epoch_s: int, zulu_s: float) -> str:
+    """A planned time as said, and how far off it is now: "2300 Zulu, in 7 minutes"."""
+    of_day = epoch_s % 86400
+    minutes = round(((of_day - zulu_s + 43200) % 86400 - 43200) / 60)
+    when = "now" if minutes == 0 else f"in {_hm(minutes)}" if minutes > 0 else f"{_hm(-minutes)} ago"
+    return f"{of_day // 3600:02d}{of_day % 3600 // 60:02d} Zulu, {when}"
 
 
 def _hm(minutes: float) -> str:
@@ -154,6 +163,14 @@ def facts(p: Picture) -> dict[str, str]:
             out["wind here"] = f"{round(own.wind_dir_true - own.magvar) % 360 or 360:03d} at {own.wind_kt:.0f} knots"
         if own.zulu_s is not None:
             out["time"] = f"{int(own.zulu_s // 3600) % 24:02d}{int(own.zulu_s % 3600 // 60):02d} Zulu"
+            perf = p.perf
+            if perf is not None and own.on_ground and (st is None or st.phase in (None, "PARKED", "PUSHBACK", "TAXI_OUT")):
+                # The plan's times, worked out: "when do we leave?" was "Ground hasn't given us a slot", and 2253 to
+                # 2300 came out as 47 minutes.
+                if getattr(perf, "sched_out_s", 0):
+                    out["scheduled off-block (the plan)"] = _scheduled(perf.sched_out_s, own.zulu_s)
+                if getattr(perf, "sched_off_s", 0):
+                    out["scheduled takeoff (the plan)"] = _scheduled(perf.sched_off_s, own.zulu_s)
     if st is not None and own is not None and not any(k.startswith("wind on runway") for k in out) \
             and st.assignments.arrival_runway and own.wind_kt >= 1 and (p.to_go() or (999.0,))[0] <= 60:
         # No ATIS for it: the wind where the aircraft is, on the runway it's landing on.

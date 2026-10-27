@@ -7,6 +7,21 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.0] - Upcoming
 
 ### Added
+- **Fly first, file later**: a new setting (Settings, beside your SimBrief account, and in the setup guide) to not
+  require a flight plan to start a flight. Off, you press **Start** and fly, and the **New Flight** button becomes
+  **File Plan**: your SimBrief plan or one typed in goes to ATC whenever you have it, without restarting the flight (a
+  clearance already given stands; the next one is to the plan). A filed plan is that flight's only. On (the default),
+  it's as before.
+- **The copilot asks ATC for you**: "can you ask clearance for a radio check?", "ask ATC what the temperature is"
+  are asked on the radio by the copilot, not answered "loud and clear" on the intercom.
+- **V1 and rotate**: the copilot calls them on the takeoff roll from your SimBrief speeds, after "one hundred knots"
+  ("V1, rotate" when they're the same).
+- **Two things at once**: "put down flaps 3 and let's do the approach checklist" sets the flaps and runs the
+  checklist (only the checklist was run).
+- **The plan's times for the copilot**: "when do we leave?" is answered from SimBrief's scheduled off-block and
+  takeoff, worked out from the time now.
+- **ATC's altimeter set**: when ATC gives an altimeter (with the taxi clearance, on approach), the copilot sets it,
+  below the transition. It no longer sets the altimeter by itself at the gate.
 - **The real ATIS worldwide**: outside the US, an airport's ATIS is now the one a VATSIM controller there is
   broadcasting, when one is on (from VATSIM's public data feed, only the airport codes sent): its letter, runways in
   use and approaches, in LocalTC's words, with the real METAR's weather. Europe's and Asia's wording is read too ("RWY
@@ -122,6 +137,17 @@ a new minor version adds features, a patch fixes them.
   screenshots, up to 5 files and 25 MB, sent with the message.
 
 ### Changed
+- **The departure line moves**: LocalTC's departures wait at the holding point for their real flight to take off a
+  little over a minute at most, then go in their turn, a minute apart. Each waited for its real one, and one whose
+  real flight was slow held the whole line (and you in it) for ten minutes.
+- **Smooth stops in the queue**: an aircraft in line brakes to stop a gap behind the one ahead, and for you, instead of
+  stopping dead from taxi speed.
+- **Traffic on the ground follows the ground smoothly**: its height eases to the sim's ground instead of snapping to
+  it every couple of seconds (aircraft twitching up and down, landed ones not sticking to the runway).
+- **The copilot waits for ATC**: it doesn't talk over ATC talking to you (it still talks over other aircraft's chatter,
+  and a warning is said at once).
+- **Las Vegas-style runways**: a real ATIS's runway is kept with a tailwind up to 10 knots, as the airport works it,
+  and your arrival runway is one departures don't use when there's one (26L, not 19R shared with departures).
 - **The traffic moves like aircraft on the ground**: each turn is taken no faster than its radius allows and slowed
   for in good time ahead (a gentle sideways pull, a passenger's), then accelerated out of; the nose swings round
   instead of snapping to the next taxiway; and the last stretch to a stand eases in rather than crawling the final
@@ -241,6 +267,30 @@ a new minor version adds features, a patch fixes them.
 - **Replays follow without the map going grey**: Follow moves the map only when the aircraft nears the edge and zooms in animated half steps, so the map's tiles stay loaded (a new zoom every frame had them reloading endlessly, worst on a phone); and it keeps your own zoom when you zoom in or out while following (the mouse wheel zooms on the aircraft then).
 
 ### Fixed
+- **"Fair enough" and "I know" quieted the copilot** for 15 minutes when said in a sentence: the cockpit preparation
+  checklist asked for was never read out, and the takeoff had no callouts. Now only "shut up", "not now" and the like
+  on their own quiet it, and a checklist asked for or a takeoff callout is said regardless.
+- **"Going around" in conversation** at the gate was taken as a go-around call.
+- **The stock A320neo V2**: the copilot's APU start, STD at the transition (both baro knobs pulled, not "standard set"
+  with QNH 1013 still in) and the managed climb (the altitude knob pushed after setting it) now use the aircraft's
+  own controls; its spoilers, which never read armed, are the captain's word on the checklist ("they are armed,
+  continue" goes on past an item held); its false stall warning at 151 knots on final no longer brings "speed, speed".
+- **"Hold position" read back** was taken for "ready for departure", and ground sent the flight to tower.
+- **"Contact tower" in the queue**: stopped near a runway's ILS critical-area line, ATC took it for the holding point.
+- **"Reduce speed to 180"** was said to an aircraft already slower, on final.
+- **The low altitude alert** went off at the altitude ATC had given, and on a visual approach.
+- **"Contact ground when ready"** after the clearance no longer waits for a readback.
+- **A gate asked for** ("can we get Echo 9 as our gate?") was taken for a wrong readback; one the scenery doesn't have
+  now gets the nearest of its letter, said so, instead of a gate across the airport.
+- **Another aircraft heard while you transmit**: a line of chatter finished just as you keyed the microphone was played
+  over you.
+- **A landing aircraft looping back up the runway**: taken over on its rollout, it went back to where the late live
+  reports had it and round through an exit behind it. It now carries on from where it's shown.
+- **An aircraft hanging in the air**: one whose live reports stopped stood still at 4,100 ft for eight minutes. One
+  shown standing still in the air is now taken away.
+- **Departures to a closed runway**: an aircraft crossing a runway was taken for one lined up on it (Seattle's closed
+  16C was given to departures).
+- **The New Flight window's X** didn't close it (the empty destination field stopped it).
 - **Live aircraft pushed back from their gates for no reason**: one standing at its gate was pushed back as soon as the
   receivers showed it at 2 knots, which their positions do at a gate; and an arrival LocalTC had parked was pushed
   back when the real one, still taxiing in, moved on. Spawning at an airport, half its gates pushed back. Now a live

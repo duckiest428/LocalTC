@@ -79,6 +79,7 @@ function setState(st) {
   $("#sw-atc").classList.toggle("on", !st.muted);
   $("#devbar").hidden = !st.dev_mode;
   $("#btn-coffee").hidden = !!st.coffee_clicked;
+  Flight.label();
   const dlg = $("#dlg-account");
   const welcome = $("#dlg-welcome");
   if (st.setup && !S.welcomed) {  // a new install: the setup guide, which holds the welcome notes too
@@ -847,6 +848,8 @@ const Setup = {
     return `<p>LocalTC clears you as filed: put in your SimBrief username and <b>New Flight</b> imports your latest plan, with
       your callsign, route and runways. You can type a plan in instead, or just press Start and fly.</p>
       <div class="row"><label>SimBrief username or Pilot ID<input id="w-simbrief" value="${esc(ui.simbrief_user)}" autocomplete="off" spellcheck="false"></label></div>
+      <label class="check-row"><input type="checkbox" id="w-require-plan" ${ui.require_plan !== false ? "checked" : ""}> Require a flight
+        plan to start a flight. Off: press <b>Start</b> and fly, and <b>File Plan</b> gives ATC your plan whenever you have it.</label>
       <div class="wbox"><b>Each flight</b><ol class="small">
         <li>Load your aircraft in MSFS 2024, at a gate, cold and dark or ready to go.</li>
         <li><b>New Flight</b> imports your plan; then <b>Start</b>. The light turns green when the sim's connected.</li>
@@ -855,6 +858,7 @@ const Setup = {
   },
   wire_flight() {
     $("#w-simbrief").onchange = () => this.save("ui", "simbrief_user", $("#w-simbrief").value.trim());
+    $("#w-require-plan").onchange = (e) => requirePlan(e.target.checked);
   },
 
   done() {
@@ -887,15 +891,29 @@ $("#dlg-setup").addEventListener("close", () => {
 
 const Flight = {
   fetched: null,
+  /** Without a plan required ([ui] require_plan off), the plan is filed with ATC whenever it's ready: the flight
+   * starts without one and goes on. */
+  get filing() { return S.state?.require_plan === false; },
+  label() {
+    $("#btn-newflight").textContent = this.filing ? "File Plan" : "New Flight";
+    $("#btn-newflight").title = this.filing ? "Give ATC your flight plan (SimBrief or typed in): the flight goes on" : "";
+  },
   open() {
     const plan = S.state.plan;
     $("#plan-error").hidden = true;
+    const running = S.state.status === "running" || S.state.status === "starting";
+    $("#plan-title").textContent = this.filing ? "File Flight Plan" : "New Flight";
+    $("#plan-start").hidden = this.filing;
+    $("#plan-save").textContent = this.filing ? "File plan" : "Save plan";
+    $("#plan-save").classList.toggle("primary", this.filing);
     $("#sb-user").value = S.state.simbrief_user || S.settings?.settings?.ui?.simbrief_user || localStorage.getItem("sbUser") || "";
     if (plan && plan.source === "manual") this.fill(plan);
     this.fetched = null;
     $("#sb-result").hidden = true;
     this.sub(plan?.source === "manual" ? "manual" : "simbrief");
-    $("#plan-note").textContent = S.state.status === "running" ? "Starting a new flight ends the current one." : "";
+    $("#plan-note").textContent = this.filing
+      ? (running ? "ATC has it at once; a clearance already given stands." : "ATC has it when you start the flight.")
+      : (S.state.status === "running" ? "Starting a new flight ends the current one." : "");
     $("#dlg-flight").showModal();
   },
   fill(p) {
@@ -938,14 +956,21 @@ const Flight = {
       body = Object.fromEntries(["callsign", "aircraft", "origin", "destination", "alternate", "route", "cruise", "rules"].map((k) => [k, $(`#mp-${k}`).value]));
     }
     body.start = start;
+    body.file = this.filing;
     try {
       const r = await api("flight/plan", body);
       $("#dlg-flight").close();
-      toast(start ? `Starting ${r.summary}` : `Plan saved: ${r.summary}`);
+      toast(start ? `Starting ${r.summary}` : r.filed ? `Plan filed with ATC: ${r.summary}` : `Plan saved: ${r.summary}`);
     } catch (e) { $("#plan-error").textContent = e.message; $("#plan-error").hidden = false; }
   },
 };
 $("#btn-newflight").onclick = () => Flight.open();
+/** [ui] require_plan, from Settings or the setup guide: saved, and the button renamed at once. */
+function requirePlan(on) {
+  if (S.state) S.state.require_plan = on;
+  Flight.label();
+  return Settings.save("ui", "require_plan", on);
+}
 $$(".subtab").forEach((b) => (b.onclick = () => Flight.sub(b.dataset.sub)));
 $("#sb-fetch").onclick = () => Flight.fetch();
 $("#sb-user").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); Flight.fetch(); } });
@@ -1650,6 +1675,9 @@ const Settings = {
           placeholder="e.g. 1207576" autocomplete="off" spellcheck="false"></label>
           <div><button class="btn small" id="s-simbrief-fetch">Import latest plan</button></div></div>
         <span class="hint">Your Pilot ID is on the SimBrief Account Settings page. <b>New Flight</b> uses this too.</span>
+        <label class="check-row"><input type="checkbox" id="s-require-plan" ${st.ui.require_plan !== false ? "checked" : ""}> Require a
+          flight plan to start a flight (<b>New Flight</b>: the plan, then the flight). Off: <b>Start</b> flies without one, and
+          <b>File Plan</b> gives ATC your plan whenever you have it, the flight going on.</label>
       </div>
 
       <div class="card">
@@ -1842,6 +1870,7 @@ const Settings = {
         this.save("llm", key, value);
       });
     on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
+    on("#s-require-plan", "change", (e) => requirePlan(e.target.checked));
     on("#s-simbrief-fetch", "click", async (e) => {
       const user = val("#s-simbrief").trim();
       if (!user) { toast("Enter your SimBrief username or Pilot ID first", true); return; }

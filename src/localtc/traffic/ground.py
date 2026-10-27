@@ -62,8 +62,9 @@ class Follower:
             keep = max(self.exit_index, 0) + 1  # up to where it leaves the runway, as it was given
             self.points = self.points[:keep] + rounded(self.points[keep - 1:], TURN_RADIUS_M)[1:]
 
-    def step(self, lat: float, lon: float, dt: float = 1.0) -> tuple[float, float, float, float]:
-        """A second on: (lat, lon, heading, speed)."""
+    def step(self, lat: float, lon: float, dt: float = 1.0, *, limit_kt: float | None = None) -> tuple[float, float, float, float]:
+        """A second on: (lat, lon, heading, speed). ``limit_kt``: no faster than this (one ahead in line, the user in
+        the way: 0 to stop), braked down to it."""
         if self.index >= len(self.points):
             self.done = True
             return lat, lon, _bearing(self.points[-2], self.points[-1]) if len(self.points) > 1 else 0.0, 0.0
@@ -81,6 +82,8 @@ class Follower:
             want = min(want, self._turn_limit_kt((lat, lon)))
         if rest < NEAR_STAND_M * 3:  # easing in to the end of the line: slowing all the way, not a crawl from 80 m
             want = min(want, math.sqrt((STAND_KT * 0.5144) ** 2 + 2 * 0.4 * max(rest - 10.0, 0.0)) / 0.5144)
+        if limit_kt is not None:
+            want = min(want, max(0.0, limit_kt))
         braking = 3.0 if self.index <= self.exit_index else BRAKE_KT_S
         self.gs_kt += max(-braking * dt, min(ACCEL_KT_S * dt, want - self.gs_kt))
         move = self.gs_kt * 0.5144 * dt

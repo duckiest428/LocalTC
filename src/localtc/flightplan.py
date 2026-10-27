@@ -221,6 +221,7 @@ def _perf(data: dict[str, Any]) -> PlanPerf:
     rwy = next((r for r in runways if str(r.get("identifier")) == plan_rwy), runways[0] if runways else {})
     dry = landing.get("distance_dry") if isinstance(landing, dict) else None
     dry = dry if isinstance(dry, dict) else {}
+    times = data.get("times") if isinstance(data.get("times"), dict) else {}
     return PlanPerf(
         units="kgs" if to_lb != 1.0 else "lbs" if units else "",
         block_fuel_lb=lb(fuel, "plan_ramp"), takeoff_fuel_lb=lb(fuel, "plan_takeoff"),
@@ -228,6 +229,7 @@ def _perf(data: dict[str, Any]) -> PlanPerf:
         v1=_int(rwy.get("speeds_v1")), vr=_int(rwy.get("speeds_vr")), v2=_int(rwy.get("speeds_v2")),
         takeoff_flaps=str(rwy.get("flap_setting") or ""), vref=_int(dry.get("speeds_vref")),
         landing_flaps=str(dry.get("flap_setting") or ""),
+        sched_out_s=_int(times.get("sched_out")), sched_off_s=_int(times.get("sched_off")),
     )
 
 

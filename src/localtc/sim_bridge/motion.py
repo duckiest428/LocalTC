@@ -26,6 +26,10 @@ ROLL_DPS = 5.0  # how quickly it rolls into a turn and out (an airliner: a few d
 MAX_BANK = 25.0
 YAW_DPS_AIR, YAW_DPS_GROUND = 4.0, 10.0  # the most its nose swings a second
 PITCH_DPS = 2.0
+# On the ground, its height follows the ground under it no quicker than this: the sim's ground is asked every second
+# or two, and each answer snapped it up or down a few feet ("the traffic twitches up and down", landed ones "have a
+# tough time sticking to the ground").
+GROUND_FT_S = 4.0
 LOOK_S = 1.0  # the way it's going: from where it is to where it is this much later
 # How often it's written to the sim, by its distance from the user: every frame or so while it can be seen moving
 # (traffic called at five miles in the cruise stepped along twice a second, 100 m a step at the speeds up there),
@@ -62,6 +66,7 @@ class Track:
     lights: tuple = field(default_factory=tuple)
     # What's being shown (the nose, the wings, the pitch), changed gently from one write to the next.
     shown: tuple[float, float, float, float] | None = None  # (when, heading, bank, pitch)
+    ground_shown: tuple[float, float] | None = None  # (when, the height shown on the ground)
 
     def raw(self, now: float) -> tuple[float, float, float, float]:
         """Lat, lon, altitude and heading on its own reckoning, without the easing."""
@@ -85,6 +90,14 @@ class Track:
         """Lat, lon, altitude, heading, pitch and bank to show now: the nose the way it's going, the wings rolled
         into the turn it's making."""
         lat, lon, alt, hdg = self.position(now)
+        if self.on_ground and self.ground_ft is not None:
+            g = self.ground_shown
+            if g is not None and 0 < now - g[0] < 5:
+                step = GROUND_FT_S * (now - g[0])
+                alt = g[1] + max(-step, min(step, alt - g[1]))
+            self.ground_shown = (now, alt)
+        else:
+            self.ground_shown = None
         ahead = self.position(now + LOOK_S)
         moved = math.hypot((ahead[0] - lat) * M_PER_DEG, (ahead[1] - lon) * M_PER_DEG * math.cos(math.radians(lat)))
         if moved > 1.5 * LOOK_S and not self.on_ground:  # flying: the nose along the path

@@ -150,7 +150,11 @@ def read(text: str, confidence: float | None = None, *, radio_call: bool = False
         return _spoken(Reading("command", (Command("say_again"),), sure, "say again"), spoken)
     control = [c for c in actions if c.action in CONTROL]
     if control and not asked:
-        return _spoken(Reading("command", tuple(control), sure, "a request to the copilot itself"), spoken)
+        # "Put down flaps 3 and let's do the approach checklist": both (only the checklist was run).
+        others = [c for c in actions if c.action not in CONTROL]
+        both = bool(others) and not _reported(lowered, others)
+        return _spoken(Reading("command", tuple(actions if both else control), sure, "a request to the copilot itself"),
+                       spoken)
     if asked and not POLITE.search(lowered):
         return _spoken(Reading("question", tuple(actions), sure, "a question"), spoken)
     if CORRECTION.match(bare) and actions:
@@ -173,7 +177,8 @@ def _reported(lowered: str, actions: list[Command]) -> bool:
     if re.match(r"^(?:(?:ok|okay|alright|right|so|and|well|yeah|yep)[,\s]+)*(?:i|i'll|i've|i'm|we've|we're|we'll)\b", lowered):
         return True
     last = re.findall(r"[a-z']+", lowered)[-1:] or [""]
-    return last[0] in ACK_WORDS or bool(re.search(r"\bthree green\b|\bis (?:set|down|up|on|off|armed)\b", lowered))
+    return last[0] in ACK_WORDS or bool(re.search(r"\bthree green\b|\b(?:is|are|'s|'re) (?:set|down|up|on|off|armed|"
+                                                  r"extended|retracted|in|out)\b", lowered))
 
 
 def _spoken(reading: Reading, spoken: bool) -> Reading:

@@ -175,7 +175,10 @@ class AirportGeometry:
         if not self.hold_shorts:
             return None
         xy = self.xy(lat, lon)
-        best = min(self.hold_shorts, key=lambda h: math.dist(h.xy, xy))
+        # The runway's own hold lines: not the ILS critical area's further back (stopped in the queue there, Seattle's
+        # ground took it for the holding point and said "contact tower").
+        lines = [h for h in self.hold_shorts if not h.point.kind.startswith("ils")] or self.hold_shorts
+        best = min(lines, key=lambda h: math.dist(h.xy, xy))
         return best, math.dist(best.xy, xy)
 
     def final_approach(

@@ -132,6 +132,8 @@ class PlanPerf(msgspec.Struct, frozen=True, kw_only=True):
     takeoff_flaps: str = ""  # "1+F", "5"
     vref: int = 0
     landing_flaps: str = ""
+    sched_out_s: int = 0  # the scheduled off-block time (Unix seconds; 0: not planned)
+    sched_off_s: int = 0  # the scheduled takeoff
 
 
 class FlightConfig(_Section):
@@ -440,6 +442,9 @@ class UiConfig(_Section):
     port: int = 0  # 0 = any free port on 127.0.0.1
     window: bool = True  # a window of its own (pywebview); false = the default browser
     simbrief_user: str = ""  # SimBrief username or pilot ID, remembered for "New flight"
+    # A flight starts with its plan ("New Flight": the plan, then the flight). Off: Start flies without one, and "File
+    # Plan" gives ATC the plan whenever the pilot has it, the flight going on (the plan is that flight's only).
+    require_plan: bool = True
     copilot: Literal["assist", "full"] = "full"  # what the app's copilot switch turns on
     # What the app connects to. Its own setting, never [source] kind: that is the command line's development
     # default (a recording), and the app must always fly the sim unless the pilot asks for a replay here.

@@ -26,6 +26,7 @@ from localtc.sim_api import (
     OwnshipState,
     SendSimEvent,
     SetComFrequency,
+    SetInputEvent,
     SetSimVar,
     Transcript,
 )
@@ -130,11 +131,16 @@ def test_the_fslabs_transponder_is_rubbed_out_then_typed():
 
 
 def test_values_go_to_the_sim_as_it_expects_them():
-    c = cockpit()
+    c = cockpit(altimeter_setting_inhg=30.01)
     assert plan(Command("squawk", "7700"), c).writes == (SendSimEvent(name="XPNDR_SET", value=0x7700),)
     assert plan(Command("com_active", "121.9"), c).writes == (SetComFrequency(hz=121_900_000),)
     assert plan(Command("altimeter", "1013", "hpa"), c).writes == (SendSimEvent(name="KOHLSMAN_SET", value=16208, index=1),
                                                                     SendSimEvent(name="KOHLSMAN_SET", value=16208, index=2))
+    # On STD, the A320neo's baro knobs pushed back to QNH first; pulled for STD (KOHLSMAN_SET 29.92 left them on QNH).
+    std = cockpit(altimeter_setting_inhg=29.92)
+    assert plan(Command("altimeter", "29.98"), std).writes[0] == SetInputEvent(name="INSTRUMENT_QNH_CPT_PUSH", value=1.0)
+    assert plan(Command("altimeter", "29.92"), c).writes == (SetInputEvent(name="INSTRUMENT_QNH_CPT_PULL", value=1.0),
+                                                            SetInputEvent(name="INSTRUMENT_QNH_FO_PULL", value=1.0))
     assert plan(Command("vs", "-1500"), c).writes == (SendSimEvent(name="AP_VS_VAR_SET_ENGLISH", value=-1500),)
     p = plan(Command("altitude", "24000"), c)
     assert p.done == "FL240 set." and p.done_spoken == "flight level two four zero set"

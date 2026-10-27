@@ -4,9 +4,37 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
-## [0.5.0] - Upcoming
+## [0.5.5] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.0] - 2026-10-26
+
+### Highlights
+- **A copilot beside you**: a first officer on its own intercom key that makes the callouts, runs real checklists
+  against the aircraft, works its side of the cockpit (flaps, gear, lights, the autopilot's settings) when you ask,
+  and can take the radio. Choose who it is: each copilot has a voice and a personality of its own.
+- **The real world's ATC**: the real ATIS worldwide, read whole, with its runways, approaches and closures worked to;
+  each flight's runway from the live traffic; controllers who work in shifts and sound like where they are.
+- **LocalTC's traffic (EXPERIMENTAL)**: the real flights around you, taxiing, departing and landing alongside you,
+  and parked aircraft as busy as the airport really is.
+- **The EFB, charts and taxi guidance**: an electronic flight bag with ChartFox charts, Airport Ops and the
+  copilot's checklists, and arrows to your gate.
+- **A setup guide on the first start** that downloads what this computer needs, sets up the microphone and
+  push-to-talk, and lets you pick your copilot. A new setup that installs LocalTC without a console window.
+- **Fly first, file later**, the mixer, more natural voices (optional), Stats and every Wrapped on the dashboard, and
+  the LocalTC Discord.
 
 ### Added
+- **A new setup**: LocalTC-Setup.exe now carries everything LocalTC needs to start (LocalTC, a Python of its own and
+  every package) and installs it in its own window, with no console window and nothing downloaded, then starts
+  LocalTC from its last page. What used to come after, in a PowerShell window, is now in the app: its setup guide
+  (and Quick Settings → Performance) installs Ollama with the language model, Whisper on an NVIDIA graphics card (the
+  CUDA libraries) and, if Windows lacks it, the app's window (WebView2), each with its progress shown. Installers
+  only run once Windows has checked their signature. Run over an older LocalTC, the setup keeps its settings,
+  logbook, models and GPU libraries.
+- **Ollama started when it isn't running**: installed but not started (after a restart without its tray app), LocalTC
+  starts it for the flight.
 - **Fly first, file later**: a new setting (Settings, beside your SimBrief account, and in the setup guide) to not
   require a flight plan to start a flight. Off, you press **Start** and fly, and the **New Flight** button becomes
   **File Plan**: your SimBrief plan or one typed in goes to ATC whenever you have it, without restarting the flight (a

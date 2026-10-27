@@ -335,15 +335,15 @@
     <li class="step">
       <span class="num">1</span>
       <h3>Download the installer</h3>
-      <p>A small setup that fetches the latest release from GitHub and checks it before installing.</p>
+      <p>One setup with everything LocalTC needs to start. No admin rights, nothing else to download first.</p>
       <p><a class="btn btn-primary" href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe">Download LocalTC-Setup.exe</a></p>
       <p class="hint"><a href="changelog">What's new</a> · <a href="https://github.com/duckiest428/LocalTC/releases/latest">Release and checksums</a></p>
     </li>
     <li class="step">
       <span class="num">2</span>
       <h3>Run it</h3>
-      <p>It installs to your user folder and sets up everything, picking the <i>light</i>, <i>balanced</i> or
-      <i>quality</i> models from your RAM and graphics card. After this, flights work offline.</p>
+      <p>It installs to your user folder. When LocalTC opens, its setup guide downloads the models once, picking the
+      <i>light</i>, <i>balanced</i> or <i>quality</i> set from your RAM and graphics card. After that, flights work offline.</p>
       <p class="hint">The installer isn't code-signed yet, so Windows may say it's from an unknown publisher:
       <b>More info → Run anyway</b>. LocalTC then updates itself, when you say so, and never mid-flight.</p>
     </li>
@@ -370,9 +370,8 @@
       <h3>No NVIDIA card?</h3>
       <p>
         It runs on the CPU. Whisper's <code class="inline">base.en</code> transcribes a transmission in
-        about 0.4 s on a laptop CPU, and ATC's voice takes about 0.3 s to synthesise. Pass
-        <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code> to run on
-        the grammar alone.
+        about 0.4 s on a laptop CPU, and ATC's voice takes about 0.3 s to synthesise. Without the
+        language model, LocalTC understands you with its grammar alone.
       </p>
     </div>
   </div>

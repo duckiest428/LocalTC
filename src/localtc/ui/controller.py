@@ -21,7 +21,7 @@ from typing import Any
 
 import msgspec
 
-from localtc import __version__, models
+from localtc import __version__, components, models
 from localtc.airports import AirportCache, load_airport
 from localtc.app import LiveSession, run_session
 from localtc.config import (
@@ -73,6 +73,7 @@ from localtc.ui.updates import Updates
 log = logging.getLogger(__name__)
 
 RADIO_HISTORY = 400
+COMPONENTS = ("ollama", "gpu", "webview2")  # installed from the app (localtc.components), as the models are
 OWN_EVERY_S = 0.25
 FLIGHT_EVERY_S = 1.0
 FINAL_NM = 10.0  # the arrival runway's final on the Live Map: from this far out
@@ -1161,9 +1162,10 @@ class AppController:
         hw = await asyncio.to_thread(models.detect_hardware)
         status = await asyncio.to_thread(models.status, self.cfg)
         ollama = await asyncio.to_thread(_ollama_models, self.cfg)
+        parts = await asyncio.to_thread(components.status, gpu=hw.gpu)
         return {"hardware": hw.to_dict(), "recommended": models.recommend(hw).id, "catalog": models.catalog(),
                 "status": [s.__dict__ for s in status], "ollama": ollama, "jobs": self.jobs,
-                "whisper_model": models.whisper_model(self.cfg)}
+                "whisper_model": models.whisper_model(self.cfg), "components": components.to_dicts(parts)}
 
     async def api_profile(self, args: dict) -> dict:
         try:
@@ -1178,7 +1180,7 @@ class AppController:
     async def api_install(self, args: dict) -> dict:
         kinds = args.get("kinds") or [args.get("kind")]
         for kind in kinds:
-            if kind not in ("llm", "whisper", "voice", "kokoro"):
+            if kind not in ("llm", "whisper", "voice", "kokoro", *COMPONENTS):
                 raise HttpError(400, f"unknown model kind {kind!r}")
             if self.jobs.get(kind, {}).get("state") == "running":
                 continue
@@ -1199,7 +1201,10 @@ class AppController:
             loop.call_soon_threadsafe(self._job, kind, "running", message, fraction)
 
         try:
-            ok = await asyncio.to_thread(models.install, self.cfg, kind, progress)
+            if kind in COMPONENTS:
+                ok = await asyncio.to_thread(components.install, kind, progress)
+            else:
+                ok = await asyncio.to_thread(models.install, self.cfg, kind, progress)
             self._job(kind, "done" if ok else "failed", self.jobs[kind]["message"] if not ok else "Ready", 1.0 if ok else None)
         except Exception as exc:
             log.warning("Download of %s failed: %s", kind, exc)

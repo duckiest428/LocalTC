@@ -3,8 +3,9 @@
 A release carries ``LocalTC-X.Y.Z.zip`` (the source tree the installer set up, see ``.gitattributes``) and
 ``SHA256SUMS``. The check runs at most once a day and says nothing when offline. An update is downloaded
 to ``<data dir>/updates/X.Y.Z``, its hash checked against ``SHA256SUMS``, and applied by a small PowerShell
-script that waits for the app to close, mirrors the new files over the install (keeping ``.venv``, the
-recordings and SimConnect.dll), reinstalls the package into the same environment and starts the app again.
+script that waits for the app to close, mirrors the new files over the install (keeping ``.venv``, the setup's
+Python, the recordings and SimConnect.dll), reinstalls the package into the same environment and starts the app
+again.
 
 Only an install made by the installer is updated this way. A git checkout updates with ``git pull``; the
 app just says a new version is out.
@@ -33,9 +34,9 @@ log = logging.getLogger(__name__)
 REPO = "duckiest428/LocalTC"
 LATEST_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 CHECK_EVERY_S = 24 * 3600
-# Never touched by an update: the Python environment, the pilot's recordings, the SDK's DLL if it was copied
-# in, the launcher the installer wrote, and the uninstaller.
-KEEP_DIRS = (".venv", "recordings")
+# Never touched by an update: the Python environment and the Python it runs on (the setup's runtime\), the pilot's
+# recordings, the SDK's DLL if it was copied in, the launcher the installer wrote, and the uninstaller.
+KEEP_DIRS = (".venv", "runtime", "recordings")
 KEEP_FILES = ("SimConnect.dll", "LocalTC.cmd", "unins*.*")
 
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$")

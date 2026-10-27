@@ -25,3 +25,6 @@ config/localtc.toml
 # Built by tools/build_site.py when the site is published
 /site/changelog.html
 /site/changelog.json
+
+# Built by tools/build_installer.py (too big for git: it goes on the GitHub release)
+/installer/*.exe

@@ -3,7 +3,8 @@ name: Release
 # Push a tag to release:  git tag v0.2.0 && git push origin v0.2.0
 # The tag must match pyproject.toml, localtc.__version__ and a "## [0.2.0]" section in CHANGELOG.md.
 # Publishes LocalTC-X.Y.Z.zip (what installs and updates use), LocalTC-Setup.exe and SHA256SUMS.
-# A tag with a suffix (v0.3.0-rc1) is a pre-release: the app's updater and the setup ignore it.
+# A tag with a suffix (v0.3.0-rc1) is a pre-release: the app's updater ignores it.
+# The setup carries LocalTC, its Python and its packages (tools/build_installer.py): it downloads nothing.
 
 on:
   push:
@@ -49,6 +50,7 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis --no-progress -y
+          pip install uv
           python tools/build_installer.py --out dist/LocalTC-Setup.exe
           if ($LASTEXITCODE -ne 0) { throw "Building the setup failed" }
       - name: Checksums

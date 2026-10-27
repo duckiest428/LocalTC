@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import struct
+import sys
 import threading
 import time
 from collections import Counter
@@ -87,6 +88,11 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
                              via=f.via) for f in flight.fixes),
     )
+
+
+def _local_ollama(base_url: str) -> bool:
+    """Ollama on this Windows PC at its usual address (not a server elsewhere): one LocalTC may start."""
+    return sys.platform == "win32" and any(f"://{host}:11434" in base_url for host in ("127.0.0.1", "localhost"))
 
 
 def ollama_backend(llm: LlmConfig):
@@ -317,6 +323,12 @@ async def local_model(cfg: Config, source: SimSource, *, behind_cloud: bool = Fa
         return recorded
     backend = ollama_backend(llm)
     status = await asyncio.to_thread(backend.status)
+    if not status.reachable and _local_ollama(llm.base_url):
+        from localtc import components
+
+        # Installed but not running (its tray app wasn't started): LocalTC starts its server.
+        if await asyncio.to_thread(components.start_ollama, wait_s=15):
+            status = await asyncio.to_thread(backend.status)
     if not status.reachable:
         say("Ollama isn't running at %s (%s): using the grammar only. Start Ollama, or set [llm] enabled = false.",
                     llm.base_url, status.error)

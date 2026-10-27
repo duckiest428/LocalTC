@@ -602,6 +602,24 @@ const Mixer = {
 };
 $("#btn-mixer").onclick = () => Mixer.open();
 
+/* ---------- Components: Ollama, Whisper on the GPU and WebView2, installed from the app (the setup leaves them) ---------- */
+
+const COMPONENT_KINDS = ["ollama", "gpu", "webview2"];
+const COMPONENT_NAMES = { ollama: "Ollama", gpu: "Graphics card", webview2: "WebView2" };
+/** The components worth showing here (`only`: these ids), each with its state and an Install button. */
+function componentsPart(m, only = COMPONENT_KINDS) {
+  const jobs = S.state?.jobs || {};
+  const parts = (m.components || []).filter((c) => only.includes(c.id) && c.supported && (c.needed || c.installed));
+  if (!parts.length) return "";
+  return `<div class="components">${parts.map((c) => {
+    const running = jobs[c.id]?.state === "running";
+    const state = c.installed ? '<span class="mstatus ok">&#10003; installed</span>'
+      : `<button type="button" class="btn small" data-install="${c.id}" ${running ? "disabled" : ""}>${running ? "Installing ..." : `Install (${esc(c.size)})`}</button>`;
+    return `<div class="row comp"><div><b>${esc(c.label)}</b>${c.detail ? `<div class="muted small">${esc(c.detail)}</div>` : ""}</div><div>${state}</div></div>
+      <div class="progress" id="p-${c.id}" hidden><div></div></div>`;
+  }).join("")}</div>`;
+}
+
 /* ---------- Setup: the guide a new install opens with (and Settings > Developer mode shows again) ---------- */
 
 const Setup = {
@@ -668,8 +686,10 @@ const Setup = {
         <b>${esc(p.label)}</b>${p.id === m.recommended ? '<span class="rec">recommended</span>' : ""}<div class="small muted">${esc(p.description)}</div></button>`).join("")}</div>
       <div class="wbox">${missing.length
         ? `<b>${missing.length} download${missing.length > 1 ? "s" : ""} still to do</b>: once, and flights then work offline.
+           ${missing.some((s) => s.kind === "llm") && !m.ollama.running ? '<span class="muted small">The language model comes with Ollama, its engine, installed first.</span>' : ""}
            <div class="row"><button type="button" class="btn primary small" id="w-install">Download now</button><span class="muted small" id="w-jobs"></span></div>`
-        : '<span class="ok">&#10003; Everything for this profile is downloaded.</span>'}</div>`;
+        : '<span class="ok">&#10003; Everything for this profile is downloaded.</span>'}</div>
+      ${componentsPart(m, ["gpu", "webview2"])}`;
   },
   wire_computer() {
     $$("[data-wprofile]").forEach((b) => (b.onclick = async () => {
@@ -679,15 +699,28 @@ const Setup = {
         this.render();
       } catch (e) { fail(e); }
     }));
+    $$("#setup-body [data-install]").forEach((b) => (b.onclick = () => api("models/install", { kinds: [b.dataset.install] })
+      .then(() => { b.disabled = true; b.textContent = "Installing ..."; }).catch(fail)));
     const install = $("#w-install");
     if (install) install.onclick = () => api("models/install", { kinds: S.models.status.filter((s) => !s.installed).map((s) => s.kind) })
       .then(() => ($("#w-jobs").textContent = "Downloading: carry on meanwhile.")).catch(fail);
   },
   jobs(jobs) {
-    const el = $("#w-jobs");
-    if (!el) return;
+    if (!$("#dlg-setup").open || this.STEPS[this.step][0] !== "computer") return;
     const running = Object.entries(jobs || {}).filter(([, j]) => j.state === "running");
-    el.textContent = running.length ? `Downloading ${running.map(([k]) => k).join(", ")} ...` : "Done.";
+    const names = { llm: "the language model", whisper: "Whisper", voice: "the voice", kokoro: "Kokoro", ...COMPONENT_NAMES };
+    const el = $("#w-jobs");
+    if (el) el.textContent = running.length ? running.map(([k, j]) => `${names[k] || k}: ${j.message}`).join(" · ") : "Done.";
+    for (const kind of COMPONENT_KINDS) {
+      const bar = $(`#p-${kind}`), j = jobs?.[kind];
+      if (bar) bar.hidden = !j || j.state !== "running";
+      if (bar && j?.state === "running") bar.firstElementChild.style.width = j.fraction == null ? "" : `${Math.round(j.fraction * 100)}%`;
+    }
+    const key = Object.entries(jobs || {}).map(([k, j]) => `${k}:${j.state}`).join(",");
+    if (!running.length && key !== this.doneJobs) {  // all finished: show what's installed now
+      this.doneJobs = key;
+      api("models").then((m) => { S.models = m; if (this.STEPS[this.step][0] === "computer") this.render(); }).catch(() => {});
+    }
   },
 
   talk() {
@@ -1460,6 +1493,7 @@ const Settings = {
         <div class="hw">This computer: ${hw.cpu_cores} CPU threads, ${hw.ram_gb} GB RAM, ${gpu}. Recommended: <b>${esc(m.recommended)}</b>.</div>
         <div class="profiles">${cat.profiles.map((p) => `<button class="profile ${profileCur?.id === p.id ? "current" : ""}" data-profile="${p.id}">
           <b>${esc(p.label)}</b>${p.id === m.recommended ? '<span class="rec">recommended</span>' : ""}<div class="small muted">${esc(p.description)}</div></button>`).join("")}</div>
+        ${componentsPart(m)}
       </div>
 
       <div class="card">
@@ -2015,7 +2049,7 @@ const Settings = {
   jobs(jobs) {
     if (!$("#settings-body .card")) return;
     let msg = [];
-    for (const kind of ["llm", "whisper", "voice", "kokoro"]) {
+    for (const kind of ["llm", "whisper", "voice", "kokoro", ...COMPONENT_KINDS]) {
       const bar = $(`#p-${kind}`), j = jobs[kind];
       if (!bar) continue;
       bar.hidden = !j || j.state !== "running";
@@ -2023,7 +2057,7 @@ const Settings = {
         bar.classList.toggle("busy", j.fraction == null);
         bar.firstElementChild.style.width = j.fraction == null ? "" : `${Math.round(j.fraction * 100)}%`;
       }
-      if (j) msg.push(`${{ llm: "Language model", whisper: "Whisper", voice: "Voice", kokoro: "Kokoro" }[kind]}: ${j.message}`);
+      if (j) msg.push(`${{ llm: "Language model", whisper: "Whisper", voice: "Voice", kokoro: "Kokoro", ...COMPONENT_NAMES }[kind]}: ${j.message}`);
       const key = j ? `${kind}:${j.state}:${j.message}` : "";
       if (j && j.state !== "running" && !this.seenJobs.has(key)) {
         this.seenJobs.add(key);

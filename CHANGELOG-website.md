@@ -3,9 +3,16 @@
 Every version of localtc.tech, newest first. It carries the same version as LocalTC; the website's changelog page
 (Website) is built from this file.
 
-## [0.5.0] - Upcoming
+## [0.5.5] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.0] - 2026-10-26
 
 ### Added
+- **The new setup on the download pages**: the home page's install steps and the dashboard's Download tab say what
+  LocalTC-Setup.exe does now (everything LocalTC needs to start, nothing downloaded) and that the app's setup guide
+  downloads the models, the language model's engine and GPU support.
 - **The Flight Tracker draws aircraft as what they are**: an airliner, a widebody, a regional or business jet, a
   turboprop, a light aircraft or a helicopter, the traffic and your own aircraft (a Cessna was an airliner).
 - **The Flight Tracker's taxi route** is a bold green line, outlined, and the other aircraft's labels sit in boxes that read over the map.

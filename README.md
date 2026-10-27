@@ -144,8 +144,9 @@ script: every number, runway and route.
 1. **[Download LocalTC-Setup.exe](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)**
    and run it. It needs no admin rights. Windows may warn about an unknown publisher (the installer isn't
    code-signed): choose **More info → Run anyway**.
-2. **Let it set up.** It picks the right speech and language models for your PC and downloads them once. After
-   that, flights work offline.
+2. **Let it set up.** The setup installs LocalTC with everything it needs to start, without downloading anything.
+   When LocalTC opens, its setup guide picks the right speech and language models for your PC and downloads
+   them once. After that, flights work offline.
 3. **Open LocalTC** from the desktop, press **New Flight** to import your **SimBrief** plan (or type one in), load
    up in MSFS 2024, and press **Start**. Hold **Right Ctrl** and call clearance.
 
@@ -269,10 +270,16 @@ and Linux against recorded sessions. Where to start: [docs/architecture.md](docs
 ## Installing, in detail
 
 Download **[LocalTC-Setup.exe](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)**
-and run it. It needs no administrator rights and no git: it fetches the latest release from GitHub, checks
-it against the release's `SHA256SUMS`, installs it to `%LOCALAPPDATA%\Programs\LocalTC`, and runs the setup
-below. Windows may warn that the installer is from an unknown publisher (it isn't code-signed): choose
-**More info → Run anyway**.
+and run it. It needs no administrator rights and no git, and downloads nothing: it carries LocalTC, a Python of
+its own and every package LocalTC needs, and installs them to `%LOCALAPPDATA%\Programs\LocalTC` (LocalTC in
+`src\`, the Python in `runtime\`, the environment in `.venv\`) with the desktop and Start menu shortcuts. Windows
+may warn that the installer is from an unknown publisher (it isn't code-signed): choose **More info → Run anyway**.
+
+The rest is installed from the app, when it first opens (its setup guide) or any time in Quick Settings →
+Performance: the models picked for this computer (Whisper, the voice, the language model), Ollama (the language
+model's engine, installed with it), Whisper on an NVIDIA graphics card (the CUDA libraries, about 1 GB) and, if
+Windows lacks it, Microsoft Edge WebView2 for the app's window. Each comes from its maker over HTTPS, and an
+installer only runs once Windows has checked its signature (`src/localtc/components.py`).
 
 **Updates:** the app checks GitHub once a day (Settings, the gear → Updates) and says when a new version is
 out. Install it with one click, let it install itself when LocalTC closes, or turn the check off. It never
@@ -283,7 +290,7 @@ is in [CHANGELOG.md](CHANGELOG.md).
 **`Install LocalTC.cmd`** in its folder, or run `powershell -ExecutionPolicy Bypass -File install\install.ps1`.
 Update a clone with `git pull`, then run it again.
 
-It installs everything a flight needs and can be run again safely:
+It installs everything a flight needs, in one go, and can be run again safely:
 - Python 3.12, via winget if you don't have Python yet.
 - LocalTC, with Whisper, Piper and push-to-talk support, and the app window (Edge WebView2).
 - CUDA support for Whisper if there's an NVIDIA card.
@@ -795,14 +802,19 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
    to `CHANGELOG.md` (the release notes, and what the app shows under "What's new").
 2. Commit, then tag and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
-`.github/workflows/release.yml` checks that the three versions agree, runs the tests, and publishes
+`.github/workflows/release.yml` checks that the versions agree, runs the tests, and publishes
 `LocalTC-X.Y.Z.zip` (the source tree, minus what `.gitattributes` marks `export-ignore`),
 `LocalTC-Setup.exe` (NSIS, `installer/localtc.nsi`, built by `tools/build_installer.py`) and `SHA256SUMS` as a GitHub release. A tag with a
-suffix (`v0.3.0-rc1`) is a pre-release, which neither the installer nor the updater picks up.
+suffix (`v0.3.0-rc1`) is a pre-release, which the updater doesn't pick up.
 
-To try the installer before a release exists, `python tools/build_installer.py --offline` builds
-`installer/LocalTC-Setup.exe` carrying the committed source (git `HEAD`) instead of downloading a release.
-It needs NSIS: `brew install makensis` on a Mac, `winget install NSIS.NSIS` on Windows.
+The app's updater needs those exact names: a release tagged `vX.Y.Z` (or `X.Y.Z`), marked latest, with
+`LocalTC-X.Y.Z.zip` and a `SHA256SUMS` that lists it. To make the release by hand instead,
+`python tools/build_installer.py --release` builds all of it in `dist/`: the setup, the zip, `SHA256SUMS` and
+`notes.md` (this version's CHANGELOG section).
+
+The setup carries the committed source (git `HEAD`: commit first), Python 3.12 (python.org's NuGet package) and
+every package as a Windows wheel, resolved for Windows with uv from any system (about 140 MB). Building it needs
+NSIS and uv: `brew install makensis` and `pip install uv` on a Mac, `winget install NSIS.NSIS` on Windows.
 
 ## Licence
 

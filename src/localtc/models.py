@@ -222,10 +222,17 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         say("Kokoro ready", 1.0)
         return kokoro.installed(voices_dir, cfg.tts.kokoro_model)
     if kind == "llm":
+        from localtc import components
+
         backend = _ollama(cfg)
         state = backend.status()
+        if not state.reachable and sys.platform == "win32":
+            # Ollama first: installed if it isn't (the setup leaves it to the app), started if it is.
+            if not components.install_ollama(say):
+                return False
+            state = backend.status()
         if not state.reachable:
-            say("Ollama isn't running: install it from ollama.com (the installer does this) and start it", None)
+            say("Ollama isn't running: install it from ollama.com and start it", None)
             return False
         if state.has(cfg.llm.model):
             say(f"{cfg.llm.model} is installed", 1.0)

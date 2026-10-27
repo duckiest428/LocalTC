@@ -306,6 +306,10 @@ label input, label select, label textarea { color: var(--text); font-size: 14px;
 .profile b { display: block; color: var(--text-strong); }
 .profile .rec { color: var(--green); font-size: 11px; }
 .hw { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.components { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+.components .comp { justify-content: space-between; align-items: center; gap: 12px; flex-wrap: nowrap; }
+.components .comp > div:first-child { font-size: 13px; min-width: 0; }
+.components .comp > div:last-child { flex: none; }
 .mstatus { font-size: 12px; white-space: nowrap; }
 .mstatus.ok { color: var(--green); }
 .mstatus.missing { color: var(--amber); }

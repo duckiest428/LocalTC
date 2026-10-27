@@ -4,7 +4,11 @@ Every version of LocalTC Companion for iPhone, newest first. It carries the same
 a version's section once, the first time it opens after the update, and the website's changelog page (Companion App)
 is built from this file.
 
-## [0.5.0] - Upcoming
+## [0.5.5] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.0] - 2026-10-26
 
 ### Added
 - **Aircraft drawn as what they are** on My Flight: an airliner, a widebody, a regional or business jet, a turboprop, a
@@ -22,8 +26,7 @@ is built from this file.
 - **Other flights by their callsigns** with LocalTC's traffic on: their calls and ATC's calls to them look like any
   transmission, under the flight's callsign in its airline's colour, no longer greyed out as "Other".
 - **What's new**: after an update, the first time it opens, the companion shows the new version's notes, once.
-- **The same version as LocalTC**: the companion now carries LocalTC's version number (0.4.0 for this release
-  line), so the app, the phone and the website's changelog all agree.
+- **The same version as LocalTC**: the companion now carries LocalTC's version number (0.5.0), so the app, the phone and the website's changelog all agree.
 
 ### Changed
 - **Wrapped's icon** is a gift box, no longer bars that looked like a phone's signal.

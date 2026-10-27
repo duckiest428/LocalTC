@@ -169,13 +169,14 @@
           <div class="panel">
             <h3>Installing</h3>
             <ol class="dl-steps">
-              <li><span><b>Run LocalTC-Setup.exe.</b> It fetches the latest release from GitHub, checks it, and installs to your
-                user folder: no admin rights.</span></li>
+              <li><span><b>Run LocalTC-Setup.exe.</b> It installs LocalTC with everything it needs to start, to your user
+                folder: no admin rights, nothing downloaded.</span></li>
               <li><span><b>Windows may say it's from an unknown publisher</b>, because the installer isn't code-signed yet:
                 <b>More info → Run anyway</b>.</span></li>
-              <li><span><b>Let it set up the rest.</b> Python, Whisper (speech recognition), Piper (the voices), Ollama (the
-                language model) and CUDA if you have an NVIDIA card, with the <i>light</i>, <i>balanced</i> or
-                <i>quality</i> models picked for your RAM and graphics card. About 3 GB, downloaded once.</span></li>
+              <li><span><b>Let LocalTC set up the rest.</b> When it opens, its setup guide downloads Whisper (speech
+                recognition), the voice and the language model with Ollama, its engine, picking the <i>light</i>,
+                <i>balanced</i> or <i>quality</i> models for your RAM and graphics card, and GPU support if you have an
+                NVIDIA card. About 3 GB, downloaded once.</span></li>
               <li><span><b>Fly.</b> Open LocalTC from the desktop shortcut, import your SimBrief plan, press <b>Start</b> and
                 call for your clearance. Mute the sim's own ATC first: Sound → Character voices → 0.</span></li>
             </ol>
@@ -206,8 +207,8 @@
             <ul class="dl-list">
               <li><b>From source:</b> clone <a href="https://github.com/duckiest428/LocalTC">the repository</a> and double-click
                 <code class="inline">Install LocalTC.cmd</code>; update with <code class="inline">git pull</code>.</li>
-              <li><b>No NVIDIA card:</b> pass <code class="inline">-Cpu</code> to the installer, or <code class="inline">-NoOllama</code>
-                to run on the grammar alone.</li>
+              <li><b>No NVIDIA card:</b> Whisper runs on the CPU. Without Ollama, LocalTC understands you with its grammar
+                alone, or with a free cloud model (Quick Settings).</li>
               <li><b>On your phone:</b> the companion app follows the flight: the map, the radio and ATC's calls. Sign in with
                 this account.</li>
               <li><b>Uninstall:</b> Windows Settings → Apps → LocalTC. The logbook stays in

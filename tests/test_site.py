@@ -179,10 +179,10 @@ def test_the_changelog_page_has_a_tab_for_each_product():
     page = build_site.page(texts)
     for product, name, _file, prefix in build_site.PRODUCTS:
         assert f'data-product="{product}"' in page and f">{name}</button>" in page
-        assert f'id="{prefix}v0.4.0"' in page
-    assert page.count('id="v0.4.0"') == 1  # the Main App's anchors stay as they were
+        assert f'id="{prefix}v0.5.0"' in page
+    assert page.count('id="v0.5.0"') == 1  # the Main App's anchors stay as they were
     notes = build_site.sections(texts["companion"])
-    assert notes[0]["upcoming"] and notes[1]["version"] == "0.4.0" and "### Added" in notes[1]["notes"]
+    assert notes[0]["upcoming"] and notes[1]["version"] == "0.5.0" and "### Added" in notes[1]["notes"]
 
 
 def test_the_404_page_works_at_any_depth():

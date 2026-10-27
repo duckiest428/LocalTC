@@ -10,13 +10,15 @@ zip in Downloads. The zip is the most useful thing you can send back.
 
 ## 1. Install and update (Windows)
 
-- [ ] `installer\LocalTC-Setup.exe` (in the LocalTC folder after pulling; a test build carrying the code itself, so it
-      needs no GitHub release) installs without admin rights into `%LOCALAPPDATA%\Programs\LocalTC`, and the
-      Start menu shortcut opens the app. Windows SmartScreen warns (it isn't code-signed): More info → Run anyway.
+- [ ] `LocalTC-Setup.exe` (from the release, or `dist\` after `python tools/build_installer.py`) installs without admin
+      rights into `%LOCALAPPDATA%\Programs\LocalTC` with no console window and no downloads, and **Start LocalTC**
+      on its last page and the Start menu shortcut open the app. Windows SmartScreen warns (it isn't code-signed): More info → Run anyway.
       Settings → Apps lists LocalTC, and uninstalling it from there works.
       *If not:* a screenshot, plus `%LOCALAPPDATA%\LocalTC\logs\`.
 - [ ] The app window opens; all five tabs load (ATC, Quick Settings, Live Map, Airport Lookup, Logbook).
-- [ ] Quick Settings → Performance: the models download (language model, Whisper, voice) and **Preview** speaks.
+- [ ] The setup guide's **Your computer**: **Download now** installs Ollama first, then the models (language model,
+      Whisper, voice); with an NVIDIA card, **Install** under *Whisper on your graphics card* adds the CUDA libraries.
+      Quick Settings → Performance shows the same, and **Preview** speaks.
 - [ ] Windows asks once about the firewall for LocalTC (that's the companion app's port, 47800). Allow it on private networks.
 - [ ] The **Buy me a coffee** button in the header opens the page in your browser and then disappears for good,
       including after restarting the app.

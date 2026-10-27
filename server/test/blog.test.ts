@@ -43,6 +43,32 @@ describe("the blog", () => {
     expect((await call("DELETE", `/v1/blog/posts/${second.slug}`, undefined, bearer(me.token))).status).toBe(200);
   });
 
+  it("lets the authors change and delete the site's own posts, without emailing anyone", async () => {
+    const me = await signIn(AUTHOR);
+    const fan = await signIn();
+    await call("PUT", "/v1/blog/follow", {}, bearer(fan.token));
+    outbox.length = 0;
+    // A change to a post written in the repository: saved here under its slug, shown in its place, no email.
+    const changed = await data(await call("POST", "/v1/blog/posts", { slug: "localtc-0-5-0-is-out", title: "LocalTC 0.5.0 is out!",
+      body: "Edited.", cover: "img/hero-runway.jpg", published: true, quiet: true, published_at: "2026-10-27T12:00:00Z" }, bearer(me.token)));
+    expect(changed.slug).toBe("localtc-0-5-0-is-out");
+    expect(changed.published_at).toBe("2026-10-27T12:00:00Z");  // its own date, not the edit's
+    let blog = await data(await call("GET", "/v1/blog"));
+    expect(blog.posts.map((p: any) => p.slug)).toContain("localtc-0-5-0-is-out");
+    expect(blog.hidden).not.toContain("localtc-0-5-0-is-out");
+    expect(outbox.length).toBe(0);
+    // Deleted: gone from here and hidden, so the repository's copy doesn't come back; the same for one never changed.
+    expect((await call("DELETE", "/v1/blog/posts/localtc-0-5-0-is-out", undefined, bearer(me.token))).status).toBe(200);
+    expect((await call("DELETE", "/v1/blog/posts/welcome-to-the-blog", undefined, bearer(me.token))).status).toBe(200);
+    expect((await call("DELETE", "/v1/blog/posts/welcome-to-the-blog", undefined, bearer(fan.token))).status).toBe(403);
+    blog = await data(await call("GET", "/v1/blog"));
+    expect(blog.posts.map((p: any) => p.slug)).not.toContain("localtc-0-5-0-is-out");
+    expect(blog.hidden).toEqual(expect.arrayContaining(["localtc-0-5-0-is-out", "welcome-to-the-blog"]));
+    // Written again: shown again.
+    await call("POST", "/v1/blog/posts", { slug: "welcome-to-the-blog", title: "Welcome back", published: true, quiet: true }, bearer(me.token));
+    expect((await data(await call("GET", "/v1/blog"))).hidden).not.toContain("welcome-to-the-blog");
+  });
+
   it("refuses what isn't a picture, and a cover from elsewhere", async () => {
     const me = await signIn(AUTHOR);
     expect((await put(me.token, new TextEncoder().encode("<svg onload=alert(1)></svg>".padEnd(64)))).status).toBe(400);

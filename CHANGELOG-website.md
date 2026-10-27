@@ -5,7 +5,14 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.5] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **A blog post for LocalTC 0.5.0**: what's new, and how to get it.
+- **The blog's authors can edit and delete every post**, the site's own too (the ones written in the repository): an
+  edit keeps the post's date and isn't emailed to the followers as a new post, and a deleted post stays gone.
+
+### Fixed
+- **A change on the blog shows at once**: after an edit or a deletion, the list could show the old posts for up to a
+  minute.
 
 ## [0.5.0] - 2026-10-26
 

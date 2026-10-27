@@ -14,7 +14,9 @@
  * storage), and the hash doesn't say who. Accounts can follow the blog: each post, the first time it's published, is
  * emailed to them from MARKETING_FROM, with a link that unfollows without signing in.
  *
- * Posts written in the repository (site/blog-posts.json) are the site's own, not here.
+ * Posts written in the repository (site/blog-posts.json) are the site's own, not here, but the authors can still
+ * change and delete them: a change is saved here as a post with the same slug, which the page shows in its place (no
+ * email: it isn't new), and a deletion or an unpublished change is kept in blog_hidden, which the page leaves out.
  */
 import type { Auth } from "./auth";
 import type { Env } from "./env";
@@ -50,9 +52,13 @@ const card = (p: Post) => ({ slug: p.slug, title: p.title, summary: p.summary, c
 
 /** GET /v1/blog: the published posts, newest first (no bodies). */
 export async function list(env: Env): Promise<Response> {
-  const { results } = await env.DB.prepare(
-    "SELECT * FROM blog_posts WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 200").all<Post>();
-  return json({ posts: results.map(card) }, 200, { "Cache-Control": "public, max-age=60" });
+  const [posts, hidden] = await Promise.all([
+    env.DB.prepare("SELECT * FROM blog_posts WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 200").all<Post>(),
+    // The site's own posts not to show: deleted, or changed here and not published.
+    env.DB.prepare("SELECT slug FROM blog_hidden UNION SELECT slug FROM blog_posts WHERE published_at IS NULL").all<{ slug: string }>(),
+  ]);
+  return json({ posts: posts.results.map(card), hidden: hidden.results.map((h) => h.slug) }, 200,
+    { "Cache-Control": "public, max-age=60" });
 }
 
 /** GET /v1/blog/posts/<slug>: one published post, whole. */
@@ -94,7 +100,9 @@ function slugOf(title: string): string {
   return title.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "post";
 }
 
-/** POST /v1/blog/posts: a new post or a change to one ({slug?, title, summary, body, cover, published}). */
+/** POST /v1/blog/posts: a new post or a change to one ({slug?, title, summary, body, cover, published, quiet?}).
+ * ``quiet``: no email to the followers (a change to one of the site's own posts, which isn't news), and with it
+ * ``published_at``: that post's own date, kept. */
 export async function save(env: Env, request: Request, auth: Auth): Promise<Response> {
   author(env, auth);
   const b = await readJson(request, 400 * 1024);
@@ -113,14 +121,18 @@ export async function save(env: Env, request: Request, auth: Auth): Promise<Resp
     slug = base;
     for (let i = 2; await env.DB.prepare("SELECT 1 FROM blog_posts WHERE slug = ?1").bind(slug).first(); i++) slug = `${base}-${i}`;
   }
-  const published = b.published ? existing?.published_at ?? at : null;
+  const since = b.quiet && typeof b.published_at === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(b.published_at) ? b.published_at : null;
+  const published = b.published ? existing?.published_at ?? since ?? at : null;
   const name = (auth.user.display_name || "").trim() || "The LocalTC team";
   await env.DB.prepare(
     `INSERT INTO blog_posts (slug, title, summary, body, cover, author_id, author_name, published_at, created_at, updated_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
      ON CONFLICT(slug) DO UPDATE SET title = ?2, summary = ?3, body = ?4, cover = ?5, published_at = ?8, updated_at = ?9`,
   ).bind(slug, title, summary, body, cover, auth.user.id, name, published, at).run();
-  if (published && !existing?.notified_at) await notify(env, { slug, title, summary });
+  await env.DB.prepare("DELETE FROM blog_hidden WHERE slug = ?1").bind(slug).run();
+  if (published && b.quiet && !existing?.notified_at) {
+    await env.DB.prepare("UPDATE blog_posts SET notified_at = ?1 WHERE slug = ?2").bind(at, slug).run();
+  } else if (published && !existing?.notified_at) await notify(env, { slug, title, summary });
   return json({ slug, published_at: published, updated_at: at });
 }
 
@@ -207,11 +219,14 @@ export async function unfollow(env: Env, token: string): Promise<Response> {
   { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'" } });
 }
 
-/** DELETE /v1/blog/posts/<slug> (authors only). Its pictures stay: another post may show them. */
+/** DELETE /v1/blog/posts/<slug> (authors only): a post written here, or one of the site's own (then hidden, as is a
+ * site post changed here and deleted). Its pictures stay: another post may show them. */
 export async function remove(env: Env, auth: Auth, slug: string): Promise<Response> {
   author(env, auth);
-  const res = await env.DB.prepare("DELETE FROM blog_posts WHERE slug = ?1").bind(slug).run();
-  if (!res.meta.changes) throw new HttpError(404, "No such post.");
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM blog_posts WHERE slug = ?1").bind(slug),
+    env.DB.prepare("INSERT OR REPLACE INTO blog_hidden (slug, hidden_at) VALUES (?1, ?2)").bind(slug, now()),
+  ]);
   return json({ ok: true });
 }
 

@@ -3,7 +3,9 @@
    Two kinds of post, shown together: the site's own, written in the repository (blog-posts.json), and the ones
    written here, kept by the account server (GET /v1/blog). The second kind is written on this page by the blog's
    authors: signed in to the dashboard with an author's account (the server decides who: BLOG_AUTHORS), "New post"
-   opens the editor. Pictures are dropped, pasted or picked, made smaller here, and uploaded to the server.
+   opens the editor. Pictures are dropped, pasted or picked, made smaller here, and uploaded to the server. The
+   authors can edit and delete the site's own posts too: the edit is saved on the server under the same slug and shown
+   in place of the repository's (without emailing the followers), and a deleted one is hidden (the server's "hidden").
 
    A post is Markdown, a small part of it: ## headings, **bold**, *italic*, `code`, [links](https://...),
    ![pictures](address), - lists, 1. lists, > quotes and --- lines. It's escaped first and built up from there,
@@ -82,9 +84,12 @@
   async function load() {
     const [own, served] = await Promise.all([
       fetch("blog-posts.json", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : { posts: [] })).catch(() => ({ posts: [] })),
-      api("GET", "/v1/blog").catch(() => ({ posts: [] })),
+      // Never the browser's copy (the server allows a minute of it): an author's change shows at once.
+      api("GET", `/v1/blog?at=${Date.now()}`).catch(() => ({ posts: [] })),
     ]);
-    state.posts = [...(own.posts || []).map((p) => ({ ...p, own: true })), ...(served.posts || [])]
+    // The site's own posts, less those an author deleted or changed on this page (the change is in served's posts).
+    const replaced = new Set([...(served.hidden || []), ...(served.posts || []).map((p) => p.slug)]);
+    state.posts = [...(own.posts || []).filter((p) => !replaced.has(p.slug)).map((p) => ({ ...p, own: true })), ...(served.posts || [])]
       .filter((p) => p.published_at).sort((a, b) => b.published_at.localeCompare(a.published_at));
   }
 
@@ -125,7 +130,7 @@
     $("#editor").hidden = true;
     const art = $("#post");
     art.hidden = false;
-    const editable = state.author && !p.own;
+    const editable = state.author;  // the site's own posts too: a change is saved on the server in their place
     art.innerHTML = `<a href="#" class="linklike post-back">&larr; All posts</a>
 ${p.cover && imageOk(p.cover) ? `<img class="post-cover" src="${esc(p.cover)}" alt="">` : ""}
 <header class="post-head"><p class="pc-date">${esc(when(p.published_at))} · ${minutes(p.body)} min read${p.author ? ` · ${esc(p.author)}` : ""}</p>
@@ -313,7 +318,8 @@ ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">
     $("#ed-state").textContent = "Saving ...";
     try {
       const saved = await api("POST", "/v1/blog/posts", { slug: state.editing?.slug, title, summary: $("#ed-summary").value.trim(),
-        body: body().value, cover: state.cover, published });
+        body: body().value, cover: state.cover, published,
+        quiet: !!state.editing?.own, published_at: state.editing?.own ? state.editing.published_at : undefined });
       await Promise.all([load(), loadDrafts()]);
       say(published ? "Published." : "Saved as a draft: only the blog's authors see it.");
       if (published) location.hash = saved.slug;

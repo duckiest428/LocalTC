@@ -4,7 +4,7 @@
    key). No dependencies, no cookies: the closing is kept in this browser only. */
 
 (() => {
-  const KEY = "notice-0.5.2-update";
+  const KEY = "notice-0.5.3-update";
   try { if (localStorage.getItem(KEY)) return; } catch { /* storage blocked: shown each time */ }
 
   const css = `
@@ -31,8 +31,8 @@
     bar.className = "site-notice";
     bar.setAttribute("role", "status");
     bar.innerHTML = `<span class="sn-dot" aria-hidden="true"></span>
-      <p><b>LocalTC 0.5.2 is out.</b> On 0.5.0 or 0.4? Your copy won't tell you about new versions by itself: open
-      <b>Settings</b> (the gear, top right) → <b>Updates</b> → <b>Download 0.5.2</b>, or get the
+      <p><b>A new LocalTC is out.</b> On 0.5.2, 0.5.0 or 0.4? Your copy won't tell you about new versions by itself:
+      open <b>Settings</b> (the gear, top right) → <b>Updates</b> → <b>Download</b>, or get the
       <a href="https://github.com/duckiest428/LocalTC/releases/latest" rel="noopener">new setup</a>.</p>
       <button type="button" aria-label="Close this notice" title="Close">&#10005;</button>`;
     bar.querySelector("button").onclick = () => {

@@ -1,3 +1,3 @@
 """LocalTC: free, offline-capable ATC for Microsoft Flight Simulator 2024."""
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"

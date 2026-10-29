@@ -5,7 +5,9 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.3] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **A notice on every page for LocalTC 0.5.0 and 0.4**: those versions say a new version only in Settings → Updates,
+  never by themselves, so the site says where to look (and links the new setup). Closed with the ✕, it stays closed.
 
 ## [0.5.2] - 2026-10-29
 

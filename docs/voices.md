@@ -3,7 +3,7 @@
 ATC, the ATIS, the other pilots and the copilot are spoken by one of two synthesizers behind one interface
 ([tts/providers.py](../src/localtc/tts/providers.py)), both on this PC. Piper stays the default and the last resort;
 Kokoro is the more natural voice. Researched and measured 2026-10-08. Azure AI Speech (a cloud voice with your own key)
-was offered until 0.5.5 and taken out: see the end.
+was offered until 0.5.2 and taken out: see the end.
 
 ## How a line is spoken
 
@@ -47,7 +47,7 @@ logged and the next line is spoken.
 | Memory | about 280 MB | about 210 MB more |
 | Whisper's word error after the radio (5 ATC lines, small.en) | 0.29 | 0.17 |
 
-Piper's single-voice models (Lessac, Ryan, Alan) were offered until 0.5.5 and taken out: every station sounded the
+Piper's single-voice models (Lessac, Ryan, Alan) were offered until 0.5.2 and taken out: every station sounded the
 same. A settings file that chose one goes back to LibriTTS.
 
 The word error is how the ATC lines came back from Whisper after the radio effect, the same check Piper's speakers were
@@ -62,7 +62,7 @@ it takes.
 - **The `kokoro` package** (hexgrad's own, PyTorch): needs Python under 3.13 and PyTorch (about 2 GB); kokoro-onnx
   runs the same weights on ONNX Runtime, which Piper already brings.
 - Free web demos and unofficial endpoints of cloud voices: not supported APIs.
-- **Azure AI Speech** (offered until 0.5.5): the most natural voices, every regional English, free up to 500,000
+- **Azure AI Speech** (offered until 0.5.2): the most natural voices, every regional English, free up to 500,000
   characters a month with your own key, but it needed an Azure account and a key pasted in, and sent the spoken words
   to Microsoft. Taken out to keep every voice on this PC; a settings file that chose it now has Kokoro (when it stood
   in for Azure) or Piper.

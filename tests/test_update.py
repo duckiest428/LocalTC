@@ -74,6 +74,19 @@ def test_the_same_version_is_not_an_update(tmp_path):
     assert update.check(fetch=FakeGitHub(__version__), cache=tmp_path / "l.json", now=0.0) is None
 
 
+@pytest.mark.parametrize("installed", ["0.4.0", "0.5.0"])
+def test_an_older_copy_is_offered_this_version(tmp_path, installed):
+    # What the copies out there check against: this version's release, tagged "v" + the version, its zip and sums.
+    found = update.check(fetch=FakeGitHub(__version__), cache=tmp_path / "l.json", now=0.0, current=installed)
+    assert found is not None and found.version == __version__
+
+
+def test_a_tag_with_a_capital_v_is_a_version():
+    github = FakeGitHub("9.0.0")
+    github.release["tag_name"] = "V9.0.0"
+    assert update.parse_release(github.release).version == "9.0.0"
+
+
 def test_a_release_without_its_zip_is_ignored():
     assert update.parse_release({"tag_name": "v9.0.0", "assets": []}) is None
 

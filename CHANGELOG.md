@@ -4,7 +4,11 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
-## [0.5.5] - Upcoming
+## [0.5.3] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.2] - 2026-10-29
 
 ### Added
 - **LocalTC in your language**: the whole window now comes in German, French, Spanish, Italian, Portuguese, Dutch,
@@ -64,6 +68,7 @@ a new minor version adds features, a patch fixes them.
   station its own voice from one download.
 
 ### Fixed
+- **Updates under a tag with a capital V** ("V0.5.2") are found as updates too.
 - **The copilot's replies in your language checked as its English ones are**: a reply saying it did something it
   didn't ("я уже выпускаю колёса", the gear still up) is no longer said; numbers as your language writes them ("12.000",
   "12 000") are the same numbers, and "um pouco" or "en aning" no longer count as a 1; a reply in metres or kilograms,

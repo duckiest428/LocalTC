@@ -39,7 +39,7 @@ CHECK_EVERY_S = 24 * 3600
 KEEP_DIRS = (".venv", "runtime", "recordings")
 KEEP_FILES = ("SimConnect.dll", "LocalTC.cmd", "unins*.*")
 
-_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$")
+_VERSION = re.compile(r"^[vV]?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$")
 
 
 def parse_version(text: str) -> tuple:
@@ -73,7 +73,7 @@ def parse_release(data: dict) -> Release | None:
     tag = str(data.get("tag_name", ""))
     if data.get("draft") or not _VERSION.match(tag):
         return None
-    version = tag.lstrip("v")
+    version = tag.lstrip("vV")  # ("V0.5.0", as a release on GitHub may be tagged)
     assets = {a.get("name"): a.get("browser_download_url") for a in data.get("assets", [])}
     zip_url, sums_url = assets.get(f"LocalTC-{version}.zip"), assets.get("SHA256SUMS")
     if not zip_url or not sums_url:

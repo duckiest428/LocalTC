@@ -4,9 +4,13 @@ Every version of LocalTC Companion for iPhone, newest first. It carries the same
 a version's section once, the first time it opens after the update, and the website's changelog page (Companion App)
 is built from this file.
 
-## [0.5.5] - Upcoming
+## [0.5.3] - Upcoming
 
 Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.2] - 2026-10-29
+
+No changes to the companion app in this version: it works with LocalTC 0.5.2 as it did with 0.5.0.
 
 ## [0.5.0] - 2026-10-26
 

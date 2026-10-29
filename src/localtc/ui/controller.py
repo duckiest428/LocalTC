@@ -292,7 +292,8 @@ class AppController:
             # update that brought them); the copilot's.
             "language": self.cfg.ui.language, "language_asked": self.cfg.ui.language_asked,
             "languages": languages.listing(), "crew_language": self.cfg.crew.language,
-            "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
+            "version": __version__, "update": self.updates.view(), "update_skipped": self.cfg.ui.update_skipped,
+            "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
             "welcome": not self.cfg.ui.welcome_seen,
             # A new install: the setup guide (in place of the welcome notes, which it holds). Never on an install

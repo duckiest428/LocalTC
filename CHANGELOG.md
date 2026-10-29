@@ -6,7 +6,11 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.3] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **A new version is said in a popup**: when LocalTC finds an update, a window opens by itself (never during a
+  flight) with what's new, **Update now** (it downloads, then **Install and restart**), **Later** (asked again the next
+  time LocalTC starts) and **Skip this version**. Before, it was only in Settings → Updates, where nobody saw it.
+- **Links and headings in a release's notes** are shown as links and headings, in the popup and in What's new.
 
 ## [0.5.2] - 2026-10-29
 

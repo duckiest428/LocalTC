@@ -462,6 +462,7 @@ class UiConfig(_Section):
     welcome_seen: bool = False  # the welcome notes were shown (once, on the first start: existing installs too)
     setup_done: bool = False  # the setup guide was shown (a new install's first start; Settings > Developer mode again)
     notes_seen: str = ""  # the version whose "what's new" was shown (once after each update)
+    update_skipped: str = ""  # the new version the pilot said to skip: its popup isn't shown again
     # Keep the window above the others, the sim's included: "off", "flying" (while connected to the sim), "always".
     on_top: Literal["off", "flying", "always"] = "off"
     # The app's colors (and the companion's, which has its own pick): radio (the dark panel), midnight, oled, amber,

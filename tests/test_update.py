@@ -165,3 +165,14 @@ def test_a_release_carries_only_what_an_install_runs():
     shipped = {line.split(":")[0] for line in out.splitlines() if not line.endswith(": set")}
     assert shipped == {"src", "config", "install", "pyproject.toml", "LICENSE", "README.md", "CHANGELOG.md",
                        "Install LocalTC.cmd"}
+
+
+def test_a_new_version_is_said_in_a_popup_of_its_own():
+    # Not only in Settings > Updates: a window that opens by itself, in the popups' queue, and a skip that's kept.
+    from localtc.config import UiConfig
+
+    static = Path(__file__).resolve().parent.parent / "src" / "localtc" / "ui" / "static"
+    page, script = (static / "index.html").read_text(encoding="utf-8"), (static / "app.js").read_text(encoding="utf-8")
+    assert 'id="dlg-update"' in page and 'id="up-go"' in page and 'id="up-skip"' in page
+    assert re.search(r'ORDER: \[[^\]]*"update"', script) and "UpdatePopup.update(u)" in script
+    assert UiConfig().update_skipped == ""

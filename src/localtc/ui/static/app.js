@@ -52,7 +52,7 @@ function connect() {
   on("thinking", thinking);
   on("efb", (d) => Efb.update(d));  // efb.js: the checklist, Airport Ops, ATC's hold and conditions, the notes
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); Setup.jobs(jobs); });
-  on("update", (u) => { S.state.update = u; Settings.update(u); });
+  on("update", (u) => { S.state.update = u; Settings.update(u); UpdatePopup.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
   on("dev", (d) => Dev.event(d));
   on("airport", ({ icao }) => {  // the flight fetched an airport's layout: draw it if it's on the route
@@ -93,6 +93,7 @@ function setState(st) {
     if (st.welcome && !S.welcomed) { S.welcomed = true; Popups.want("welcome"); }
     if (st.whats_new && !S.whatsNew) { S.whatsNew = true; Popups.want("whatsnew"); }
     if (st.account_prompt && !S.accountAsked) { S.accountAsked = true; Popups.want("account"); }
+    UpdatePopup.update(st.update);
   }
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
@@ -462,13 +463,14 @@ $("#dlg-whatsnew")?.addEventListener("close", () => {
 /** The CHANGELOG's Markdown (### headings, "- " items, **bold**, `code`) as HTML. */
 function notesHtml(md) {
   const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');  // (a bare link too)
   const out = [];
   let item = null, list = false;
   const flush = () => { if (item !== null) out.push(`<li>${inline(item)}</li>`); item = null; };
   const close = () => { flush(); if (list) out.push("</ul>"); list = false; };
   for (const line of String(md || "").split("\n")) {
-    if (line.startsWith("### ")) { close(); out.push(`<h3>${inline(line.slice(4))}</h3>`); }
+    if (/^#{1,3} /.test(line)) { close(); out.push(`<h3>${inline(line.replace(/^#+ /, ""))}</h3>`); }  // (a release's notes may use # and ##)
     else if (line.startsWith("- ")) { flush(); if (!list) { out.push("<ul>"); list = true; } item = line.slice(2).trim(); }
     else if (line.startsWith("  ") && item !== null) item += " " + line.trim();
     else if (line.trim()) { close(); out.push(`<p>${inline(line.trim())}</p>`); }
@@ -670,7 +672,7 @@ $("#dlg-language").addEventListener("close", () => {
 const Popups = {
   // The order they come in when more than one is due: the setup (a new install), the language (once), the welcome
   // notes (once), what's new (after an update), the account (after the third flight).
-  ORDER: ["setup", "language", "welcome", "whatsnew", "account"],
+  ORDER: ["setup", "language", "welcome", "whatsnew", "update", "account"],
   wanted: new Set(),
   want(id) { this.wanted.add(id); this.next(); },
   drop(...ids) { ids.forEach((id) => this.wanted.delete(id)); },
@@ -690,10 +692,70 @@ const Popups = {
         $("#wn-notes").innerHTML = notesHtml(S.state.whats_new.notes);
         $("#dlg-whatsnew").showModal();
       },
+      update: () => (UpdatePopup.due() ? UpdatePopup.open() : this.next()),
       account: () => (S.state?.account_prompt ? $("#dlg-account").showModal() : this.next()),
     })[id]();
   },
 };
+
+/* ---------- The update popup: a new version found, said in a window of its own (Settings > Updates has it too) ---------- */
+
+const UpdatePopup = {
+  shown: new Set(),  // the versions shown this session: "Later" asks again the next time LocalTC starts
+  /** A new version to tell the pilot about: found, not skipped, not shown yet this session, and no flight on. */
+  due(u = S.state?.update) {
+    const v = u?.release?.version;
+    return !!v && ["available", "downloading", "ready", "failed"].includes(u.state) && v !== S.state?.update_skipped
+      && !this.shown.has(v) && !["running", "starting", "stopping"].includes(S.state?.status);
+  },
+  update(u) {
+    if ($("#dlg-update")?.open) return this.render(u);
+    if (this.due(u)) Popups.want("update");
+  },
+  open() {
+    const u = S.state.update;
+    this.shown.add(u.release.version);
+    $("#up-notes").innerHTML = u.release.notes ? notesHtml(u.release.notes) : "";
+    this.render(u);
+    $("#dlg-update").showModal();
+  },
+  render(u) {
+    if (!u?.release) return;
+    const go = $("#up-go"), stateLine = $("#up-state");
+    $("#up-line").innerHTML = `<b>LocalTC ${esc(u.release.version)} is out.</b> You have ${esc(u.current)}.`;
+    stateLine.classList.toggle("error", u.state === "failed");
+    stateLine.classList.toggle("muted", u.state !== "failed");
+    go.hidden = !u.can_apply;
+    go.disabled = u.state === "downloading";
+    if (!u.can_apply) {
+      stateLine.textContent = u.why_not || "";
+    } else if (u.state === "downloading") {
+      go.textContent = "Downloading ...";
+      stateLine.textContent = "";
+    } else if (u.state === "ready") {
+      go.textContent = "Install and restart";
+      stateLine.textContent = "Downloaded. LocalTC closes, installs it and opens again in a minute.";
+    } else if (u.state === "failed") {
+      go.textContent = "Try again";
+      stateLine.textContent = u.message || "";
+    } else {
+      go.textContent = "Update now";
+      stateLine.textContent = "";
+    }
+  },
+};
+$("#up-go")?.addEventListener("click", () => {
+  const u = S.state?.update;
+  api(u?.state === "ready" ? "update/install" : "update/download", {}).catch(fail);
+});
+$("#up-skip")?.addEventListener("click", () => {
+  const v = S.state?.update?.release?.version;
+  if (v) {
+    S.state.update_skipped = v;
+    api("settings", { settings: { ui: { update_skipped: v } } }).catch(() => {});
+  }
+  $("#dlg-update").close();
+});
 // Each dialog closed (any of them, the share card's too): the next one due, if any.
 document.addEventListener("close", (e) => { if (e.target instanceof HTMLDialogElement) setTimeout(() => Popups.next(), 0); }, true);
 

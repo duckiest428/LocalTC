@@ -114,6 +114,9 @@ words your own way, the way a person would say them, short and natural. Keep eve
 runway, procedure and name exactly as given (you may say them the usual way: "FL280", "29.92"). Don't add \
 anything that isn't in the words, don't drop anything. Answer with JSON: {"reply": "..."}."""
 REWORD_SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]}
+# Languages a small local model can't write inside Ollama's JSON grammar (Mandarin: always '{"reply": ""}'): their
+# translations are asked for as plain text.
+PLAIN_TEXT = {"zh"}
 TRANSLATE_SYSTEM = """You are an airline first officer who speaks {language}, talking to the captain on the intercom. Say the given English words in natural, correct {language}, the way a {language}-speaking first officer says them on the flight deck: short, and the aviation words as pilots who speak {language} use them (many stay English: flaps, gear, autopilot, checklist, ATC). Keep every number exactly as given (as digits), and every name, runway, frequency and callsign, and every unit as it is (pounds stay pounds, feet stay feet). Station names (Zurich Approach, Seattle Tower) and ATC's own words stay in English. Don't add or drop anything. Answer with JSON: {{"reply": "..."}}."""
 HISTORY = 10  # intercom turns the model is shown
 EVENTS = 12  # flight-deck events the model is shown
@@ -135,8 +138,9 @@ def language_rule(name: str) -> str:
     """The captain talking in ``name`` ("German"): the replies in it, the captain's words in English beside them."""
     return (f"\n\nLanguage: the captain talks with you in {name}, and you answer in {name}: every \"reply\" in natural, "
             f"correct {name}, the way a {name}-speaking first officer says it on the flight deck (the aviation words "
-            f"as pilots who speak {name} use them, many of them English: flaps, gear, autopilot). Numbers, runways, "
-            f"frequencies and names exactly as given. Also put the captain's words, in English, in \"english\".")
+            f"as pilots who speak {name} use them, many of them English: flaps, gear, autopilot). Numbers as digits, "
+            f"exactly as given, with their units as given (feet stay feet, pounds stay pounds); runways, frequencies "
+            f"and names exactly as given. Also put the captain's words, in English, in \"english\".")
 
 
 def system(beyond_facts: bool = False, persona: str = "", language: str = "") -> str:
@@ -279,7 +283,11 @@ class CrewModel:
         if text in self._translated:
             return self._translated[text], []
         system_text = TRANSLATE_SYSTEM.format(language=self.language_name)
-        request = LlmRequest("crew_translate", system_text, (("user", f'Say: "{text}"'),), REWORD_SCHEMA, max_tokens=160)
+        plain = self.language in PLAIN_TEXT and not getattr(self.backend, "rich", False)
+        if plain:
+            system_text = system_text.replace('Answer with JSON: {"reply": "..."}.', "Answer with the words only.")
+        request = LlmRequest("crew_translate", system_text, (("user", f'Say: "{text}"'),), {} if plain else REWORD_SCHEMA,
+                             max_tokens=160)
         timeout_s, _ = waits(self.backend, min(self.timeout_s, 6.0), min(self.timeout_s, 6.0), min(self.patience_s, 10.0))
         result = self.backend.complete(request, timeout_s=timeout_s)
         model = getattr(self.backend, "model", "")
@@ -290,8 +298,10 @@ class CrewModel:
         try:
             words = str(json.loads(result.text).get("reply", "")).strip()
         except (ValueError, AttributeError):
-            words = ""
-        why = ("no words" if not words else "a number changed" if sorted(foreign.numbers(words)) != sorted(foreign.numbers(text))
+            # (Plain text: its first line; a small model adds the numbers again in brackets below.)
+            words = result.text.strip().splitlines()[0].strip().strip('"“”「」') if plain and result.text.strip() else ""
+        said = foreign.numbers(words) + (foreign.zh_numbers(words) if self.language == "zh" else [])
+        why = ("no words" if not words else "a number changed" if sorted(said) != sorted(foreign.numbers(text))
                else f"not in {self.language_name}" if not foreign.speaks(words, self.language)
                else "a unit changed" if not foreign.units_kept(text, words) else "")
         exchange = LlmExchange(t=t, purpose="crew_translate", model=model, key=request.key(model), prompt=text,
@@ -317,10 +327,13 @@ class CrewModel:
         except json.JSONDecodeError:
             return None, "not JSON"
         reply = str(data.get("reply", "")).strip()
-        if self.language and str(data.get("english", "")).strip():
-            # Talked to in another language: the checks read the captain's words in English ("Klappen zwei" names
-            # the flaps as "flaps two" does), the numbers as said either way.
-            said = f"{said} {str(data['english']).strip()}"
+        if self.language:
+            from localtc.crew import foreign
+
+            # Talked to in another language: the checks read the captain's words in English too ("Klappen zwei" names
+            # the flaps as "flaps two" does: the model's English of them, and the controls named in them), the numbers
+            # as said either way.
+            said = f"{said} {str(data.get('english', '')).strip()} {foreign.named(said, self.language)}".strip()
         if data.get("kind") == "command":
             action, value, target = (str(data.get(k, "")).strip().lower() for k in ("action", "value", "target"))
             if action not in ACTIONS:
@@ -340,11 +353,26 @@ class CrewModel:
             return Reading(reply or f"{action} {value}".strip(), Command(action, value, target)), ""
         if not reply:
             return None, "no reply"
-        if (claim := unsupported_claim(reply, facts)) is not None:
+        checked = written = reply
+        if self.language:
+            from localtc.crew import foreign
+
+            # The checks are English: a reply in another language is checked by what it says of the controls, in
+            # English ("ich fahre das Fahrwerk aus" claims "gear down"), and its numbers as English writes them (its
+            # digits only: "um pouco", "en aning" are "a little", not 1).
+            written = foreign.localized_numbers(reply)
+            checked = f"{written}. {foreign.claims(written, self.language)}"
+            if foreign.metric(reply) and not any(foreign.metric(str(v)) for v in facts.values()):
+                return None, "a unit changed (the facts are in feet, pounds, knots and miles)"
+            if foreign.thousands_in_words(reply, self.language):
+                return None, "a number in words (unchecked: they're to be digits)"
+            if self.language == "zh":
+                written += " " + " ".join(foreign.zh_numbers(reply))
+        if (claim := unsupported_claim(checked, facts)) is not None:
             return None, claim
         if not self.beyond_facts:
             known = numbers_in(said) | {n for v in facts.values() for n in numbers_in(v)}
-            made_up = {n for n in numbers_in(reply) if n not in known}
+            made_up = {n for n in numbers_in(written) if n not in known}
             if made_up:
                 return None, f"reply has {', '.join(sorted(made_up))}, which isn't in the facts"
         self.heard("You", reply)

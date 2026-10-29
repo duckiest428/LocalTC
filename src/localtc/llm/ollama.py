@@ -112,7 +112,7 @@ class OllamaBackend:
             "messages": [{"role": "system", "content": system}]
             + [{"role": role, "content": content} for role, content in request.messages],
             "stream": False,
-            "format": request.schema,
+            **({"format": request.schema} if request.schema else {}),  # (no schema: plain text)
             "keep_alive": self.keep_alive,
             "options": {"temperature": 0, "seed": 0, "num_predict": request.max_tokens, **self.load_options(), **self.options},
         }

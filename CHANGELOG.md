@@ -64,6 +64,18 @@ a new minor version adds features, a patch fixes them.
   station its own voice from one download.
 
 ### Fixed
+- **The copilot's replies in your language checked as its English ones are**: a reply saying it did something it
+  didn't ("я уже выпускаю колёса", the gear still up) is no longer said; numbers as your language writes them ("12.000",
+  "12 000") are the same numbers, and "um pouco" or "en aning" no longer count as a 1; a reply in metres or kilograms,
+  or with its thousands in words, is held back; and a reply with English left in it isn't taken as your language.
+- **Mandarin replies**: the copilot's lines put into Mandarin always came back empty, and are now said in it, numbers
+  written in characters (二八零) read and checked.
+- **"Unable, speed 280, gear limit 250"** and the flaps' limit come in your language as set lines, no longer as the
+  language model's guess ("Reifenbelastung").
+- **More ways of naming the gear**: the wheels ("Räder", "roues", "ruedas", "колёса", "轮子"), "lass mal…",
+  "fais descendre", "põe … cá fora" and "放下来" are understood without a language model.
+- **A line left in English is read in the English voice**, and the copilot's own words in your language with some
+  English in them in your language's voice.
 - **The last English in the translated window**: the copilots' descriptions in their list, and where the language
   model is loaded ("Now loaded: 2.4 GB, all on the graphics card"), are in your language too.
 - **Arriving traffic taken away in the air**: the check for aircraft frozen in the air removed real arrivals that were

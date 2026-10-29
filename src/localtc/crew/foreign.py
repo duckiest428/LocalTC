@@ -75,7 +75,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nein|negativ|nee|nicht",
         "CANCEL": "abbrechen|vergiss es|vergiss das|lass das|lass es|stopp|halt",
         "CHECK": "gecheckt|gepruft|erledigt",
-        "GEAR": "fahrwerk|das fahrwerk|fahrwerks",
+        "GEAR": "fahrwerk|das fahrwerk|fahrwerks|rader|die rader|rad",
         "FLAPS": "klappen|landeklappen|die klappen|die landeklappen",
         "LANDING_LIGHTS": "landescheinwerfer|landelichter|landelicht|die landescheinwerfer|die landelichter",
         "TAXI_LIGHTS": "rollscheinwerfer|taxilichter|taxi licht|taxilicht|rolllicht|rolllichter",
@@ -112,7 +112,7 @@ WORDS: dict[str, dict[str, str]] = {
         "AFTER_TAKEOFF": "nach dem abflug|nach dem takeoff|nach dem abheben|after takeoff",
         "DESCENT": "sinkflug|descent",
         "APPROACH": "anflug|approach",
-        "LANDING": "landung|landing",
+        "LANDING": "landung|landing|lande",
         "AFTER_LANDING": "nach der landung|after landing",
         "SHUTDOWN": "abstellen|shutdown|parken",
         "TAXI": "rollen|taxi",
@@ -122,7 +122,7 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "wetter|das wetter|metar",
         "DESTINATION": "ziel|zielflughafen|am ziel",
         "HOW_LONG": "wie lange|wann landen wir|wann sind wir da|restflugzeit",
-        "FILLER": "bitte|mal|mach|mache|die|der|das|den|dem|und|dann|jetzt|setzen|setze|setz|schalte|fahre|fahr|"
+        "FILLER": "bitte|mal|mach|mache|lass|lasst|lass mal|die|der|das|den|dem|und|dann|jetzt|setzen|setze|setz|schalte|fahre|fahr|"
                   "kannst du|konntest du|wurdest du|lass uns|machen|bitte schon|danke|kapitan|ok|okay|in ordnung|fur|"
                   "auf|zu|uns|wir|sie|es|noch|gleich|schon|wieder|durchgehen|durch|ausfuhren",
     },
@@ -131,7 +131,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "non|negatif|pas",
         "CANCEL": "annule|annuler|laisse tomber|oublie|stop|arrete",
         "CHECK": "verifie|vérifié|fait",
-        "GEAR": "train|train d'atterrissage|le train|le train d'atterrissage|train datterrissage",
+        "GEAR": "train|train d'atterrissage|le train|le train d'atterrissage|train datterrissage|roues|les roues",
         "FLAPS": "volets|les volets|volet",
         "LANDING_LIGHTS": "phares d'atterrissage|feux d'atterrissage|phares datterrissage|feux datterrissage|les phares d'atterrissage|les feux d'atterrissage|phares",
         "TAXI_LIGHTS": "feux de roulage|phares de roulage|les feux de roulage",
@@ -139,7 +139,7 @@ WORDS: dict[str, dict[str, str]] = {
         "BEACON": "beacon|feu anticollision|feux anticollision|le beacon",
         "NAV_LIGHTS": "feux de navigation|feux de position|les feux de navigation",
         "LOGO_LIGHTS": "feux logo|eclairage logo",
-        "SEATBELT": "consigne ceintures|consignes lumineuses|signal ceintures|ceintures|les ceintures|attachez vos ceintures",
+        "SEATBELT": "consigne ceintures|consignes ceintures|les consignes ceintures|consignes lumineuses|signal ceintures|ceintures|les ceintures|attachez vos ceintures",
         "AUTOPILOT": "pilote automatique|le pilote automatique|autopilote",
         "SPOILERS": "spoilers|aerofreins|les spoilers|les aerofreins",
         "PARKING_BRAKE": "frein de parking|frein de stationnement|le frein de parking",
@@ -151,7 +151,7 @@ WORDS: dict[str, dict[str, str]] = {
         "ON": "allume|allumer|active|activer|mets en marche|on",
         "OFF": "eteins|eteindre|coupe|couper|desactive|desactiver|off",
         "UP": "rentre|rentrer|remonte|monte|relever|releve",
-        "DOWN": "sors|sortir|sortez|descends|baisse|baisser",
+        "DOWN": "sors|sortir|sortez|sorti|sortie|descends|descendre|baisse|baisser",
         "ARM": "arme|armer|armés|armes",
         "START": "demarre|demarrer|lance|lancer",
         "FULL": "plein|pleins|full|complet",
@@ -180,7 +180,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "no|negativo",
         "CANCEL": "cancela|cancelar|olvidalo|déjalo|dejalo|para|alto",
         "CHECK": "comprobado|chequeado|hecho|listo",
-        "GEAR": "tren|tren de aterrizaje|el tren|el tren de aterrizaje",
+        "GEAR": "tren|tren de aterrizaje|el tren|el tren de aterrizaje|ruedas|las ruedas",
         "FLAPS": "flaps|los flaps|flap",
         "LANDING_LIGHTS": "luces de aterrizaje|las luces de aterrizaje|luz de aterrizaje",
         "TAXI_LIGHTS": "luces de rodaje|las luces de rodaje|luz de rodaje",
@@ -197,8 +197,8 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "velocidad|la velocidad",
         "SQUAWK": "transpondedor|codigo|squawk",
         "CHECKLIST": "checklist|lista de chequeo|lista de comprobacion|la checklist|la lista",
-        "ON": "enciende|encender|activa|activar|prende|prender|on",
-        "OFF": "apaga|apagar|desactiva|desactivar|off",
+        "ON": "enciende|encender|activa|activar|prende|prender|conecta|conectar|on",
+        "OFF": "apaga|apagar|desactiva|desactivar|desconecta|desconectar|off",
         "UP": "sube|subir|retrae|retraer|recoge|recoger|arriba",
         "DOWN": "baja|bajar|extiende|extender|saca|sacar|abajo",
         "ARM": "arma|armar|armados",
@@ -229,7 +229,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "no|negativo",
         "CANCEL": "annulla|lascia perdere|lascia stare|stop|fermati",
         "CHECK": "controllato|verificato|fatto",
-        "GEAR": "carrello|il carrello|carrello di atterraggio",
+        "GEAR": "carrello|il carrello|carrello di atterraggio|ruote|le ruote",
         "FLAPS": "flap|flaps|i flap|ipersostentatori",
         "LANDING_LIGHTS": "luci di atterraggio|le luci di atterraggio|fari di atterraggio",
         "TAXI_LIGHTS": "luci di rullaggio|le luci di rullaggio",
@@ -246,8 +246,8 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "velocita|la velocita",
         "SQUAWK": "transponder|codice|squawk",
         "CHECKLIST": "checklist|lista di controllo|la checklist",
-        "ON": "accendi|accendere|attiva|attivare|on",
-        "OFF": "spegni|spegnere|disattiva|disattivare|off",
+        "ON": "accendi|accendere|attiva|attivare|inserisci|inserire|on",
+        "OFF": "spegni|spegnere|disattiva|disattivare|disinserisci|disinserire|stacca|staccare|off",
         "UP": "su|retrai|retrarre|alza|alzare|ritira|ritirare",
         "DOWN": "giu|estendi|estendere|abbassa|abbassare|fuori",
         "ARM": "arma|armare|armati",
@@ -278,7 +278,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nao|não|negativo",
         "CANCEL": "cancela|cancelar|esquece|deixa|para|pare",
         "CHECK": "verificado|feito|checado",
-        "GEAR": "trem|trem de aterragem|trem de pouso|o trem",
+        "GEAR": "trem|trem de aterragem|trem de pouso|o trem|rodas|as rodas",
         "FLAPS": "flaps|os flaps|flap",
         "LANDING_LIGHTS": "luzes de aterragem|luzes de pouso|as luzes de aterragem|as luzes de pouso",
         "TAXI_LIGHTS": "luzes de rolagem|luzes de taxi|as luzes de rolagem",
@@ -298,7 +298,7 @@ WORDS: dict[str, dict[str, str]] = {
         "ON": "liga|ligar|acende|acender|ativa|ativar|on",
         "OFF": "desliga|desligar|apaga|apagar|desativa|desativar|off",
         "UP": "sobe|subir|recolhe|recolher|em cima",
-        "DOWN": "baixa|baixar|desce|descer|estende|estender|em baixo",
+        "DOWN": "baixa|baixar|desce|descer|estende|estender|em baixo|ca fora|fora",
         "ARM": "arma|armar|armados",
         "START": "arranca|arrancar|liga a|ligar a",
         "FULL": "todos|full|completos",
@@ -327,7 +327,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nee|negatief|neen",
         "CANCEL": "annuleer|annuleren|laat maar|vergeet het|stop",
         "CHECK": "gecontroleerd|gedaan|check",
-        "GEAR": "landingsgestel|het landingsgestel|gear|wielen",
+        "GEAR": "landingsgestel|het landingsgestel|gear|wielen|de wielen",
         "FLAPS": "kleppen|flaps|de kleppen|de flaps",
         "LANDING_LIGHTS": "landingslichten|de landingslichten|landingslicht",
         "TAXI_LIGHTS": "taxilichten|de taxilichten|taxilicht",
@@ -378,7 +378,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nie|negatyw|negatywnie",
         "CANCEL": "anuluj|odwolaj|zostaw|nie rob|stop",
         "CHECK": "sprawdzone|zrobione|gotowe",
-        "GEAR": "podwozie|podwozia",
+        "GEAR": "podwozie|podwozia|kola",
         "FLAPS": "klapy|klap|flapy",
         "LANDING_LIGHTS": "swiatla do ladowania|swiatla ladowania|reflektory do ladowania",
         "TAXI_LIGHTS": "swiatla do kolowania|swiatla kolowania",
@@ -427,7 +427,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nej|negativt|nae",
         "CANCEL": "avbryt|glom det|strunta i det|stopp",
         "CHECK": "kontrollerat|klart|check",
-        "GEAR": "stall|stallet|landstall|landstallet",
+        "GEAR": "stall|stallet|landstall|landstallet|hjul|hjulen",
         "FLAPS": "klaff|klaffar|klaffarna|flaps",
         "LANDING_LIGHTS": "landningsljus|landningsljusen",
         "TAXI_LIGHTS": "taxiljus|taxiljusen",
@@ -444,8 +444,8 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "fart|hastighet|farten",
         "SQUAWK": "transponder|transponderkod|squawk",
         "CHECKLIST": "checklista|checklistan|checklist",
-        "ON": "pa|tand|sla pa|satt pa",
-        "OFF": "av|slack|sla av|stang av",
+        "ON": "pa|tand|sla pa|satt pa|koppla in",
+        "OFF": "av|slack|sla av|stang av|koppla ur|koppla bort",
         "UP": "upp|in|fall in",
         "DOWN": "ner|ned|ut|fall ut",
         "ARM": "arma|armera|armerade",
@@ -477,7 +477,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "нет|отрицательно|не надо",
         "CANCEL": "отмена|отменить|отставить|забудь|стоп",
         "CHECK": "проверено|сделано|готово",
-        "GEAR": "шасси",
+        "GEAR": "шасси|колеса|колесо",
         "FLAPS": "закрылки|закрылков|закрылок",
         "LANDING_LIGHTS": "посадочные фары|посадочные огни|фары",
         "TAXI_LIGHTS": "рулежные фары|рулёжные фары|рулежные огни",
@@ -493,11 +493,11 @@ WORDS: dict[str, dict[str, str]] = {
         "ALTITUDE": "высоту|высота",
         "SPEED": "скорость",
         "SQUAWK": "транспондер|код ответчика|ответчик|сквок",
-        "CHECKLIST": "чеклист|чек-лист|карту контрольных проверок|карта контрольных проверок|карту",
+        "CHECKLIST": "чеклист|чек-лист|карту контрольных проверок|карта контрольных проверок|карту|карта|карты",
         "ON": "включи|включить|включаем|вкл",
-        "OFF": "выключи|выключить|выключаем|выкл",
-        "UP": "убери|убрать|убираем|вверх",
-        "DOWN": "выпусти|выпустить|выпускаем|вниз",
+        "OFF": "выключи|выключить|выключаем|выкл|отключи|отключить|отключаем",
+        "UP": "убери|убрать|убираем|убираю|убраны|убрано|вверх",
+        "DOWN": "выпусти|выпустить|выпускаем|выпускаю|выпускай|выпущено|выпущены|вниз",
         "ARM": "взвести|взведи|армировать",
         "START": "запусти|запустить|запускаем",
         "FULL": "полностью|полные",
@@ -526,7 +526,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "不是|不|否|不用|不要",
         "CANCEL": "取消|算了|停止|别做",
         "CHECK": "检查完毕|已检查|完成了",
-        "GEAR": "起落架",
+        "GEAR": "起落架|轮子",
         "FLAPS": "襟翼",
         "LANDING_LIGHTS": "着陆灯|落地灯",
         "TAXI_LIGHTS": "滑行灯",
@@ -543,10 +543,10 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "速度",
         "SQUAWK": "应答机|应答机编码",
         "CHECKLIST": "检查单|清单",
-        "ON": "打开|开启|开",
-        "OFF": "关闭|关掉|关",
+        "ON": "打开|开启|接通|开",
+        "OFF": "关闭|关掉|断开|关",
         "UP": "收起|收上|收",
-        "DOWN": "放下|放出|放",
+        "DOWN": "放下来|放下|放出|放",
         "ARM": "预位|待命",
         "START": "启动|起动",
         "FULL": "全|全放",
@@ -655,7 +655,29 @@ TEMPLATES: tuple[tuple[str, dict[str, str]], ...] = (
         "sv": "Jag kunde inte ställa in {x}. Kan du ställa in det?",
         "ru": "Не смог выставить {x}. Выставишь сам?",
         "zh": "我没能设置{x}。你能设置一下吗？"}),
-    (r"^(?P<x>[^,]{1,40}), confirm\?$", {
+    (r"^Unable, speed (?P<v>\d+), gear limit (?P<l>\d+)\.$", {
+        "de": "Geht nicht, Geschwindigkeit {v}, Fahrwerksgrenze {l}.",
+        "fr": "Impossible, vitesse {v}, limite du train {l}.",
+        "es": "Imposible, velocidad {v}, límite del tren {l}.",
+        "it": "Impossibile, velocità {v}, limite del carrello {l}.",
+        "pt": "Impossível, velocidade {v}, limite do trem {l}.",
+        "nl": "Kan niet, snelheid {v}, limiet landingsgestel {l}.",
+        "pl": "Nie mogę, prędkość {v}, limit podwozia {l}.",
+        "sv": "Går inte, fart {v}, gräns för stället {l}.",
+        "ru": "Не могу, скорость {v}, ограничение по шасси {l}.",
+        "zh": "不行，速度{v}，起落架限速{l}。"}),
+    (r"^Unable, speed (?P<v>\d+), flaps (?P<f>\S+) limit (?P<l>\d+)\.$", {
+        "de": "Geht nicht, Geschwindigkeit {v}, Grenze für Klappen {f} {l}.",
+        "fr": "Impossible, vitesse {v}, limite volets {f} {l}.",
+        "es": "Imposible, velocidad {v}, límite de flaps {f} {l}.",
+        "it": "Impossibile, velocità {v}, limite flap {f} {l}.",
+        "pt": "Impossível, velocidade {v}, limite de flaps {f} {l}.",
+        "nl": "Kan niet, snelheid {v}, limiet flaps {f} {l}.",
+        "pl": "Nie mogę, prędkość {v}, limit klap {f} {l}.",
+        "sv": "Går inte, fart {v}, gräns för klaff {f} {l}.",
+        "ru": "Не могу, скорость {v}, ограничение закрылков {f} {l}.",
+        "zh": "不行，速度{v}，襟翼{f}限速{l}。"}),
+    (r"^(?P<x>.{1,80}), confirm\?$", {
         "de": "{x}, bestätigen?", "fr": "{x}, tu confirmes ?", "es": "{x}, ¿confirmas?", "it": "{x}, confermi?",
         "pt": "{x}, confirmas?", "nl": "{x}, bevestig je?", "pl": "{x}, potwierdzasz?", "sv": "{x}, bekräftar du?",
         "ru": "{x}, подтверждаешь?", "zh": "{x}，确认吗？"}),
@@ -697,8 +719,9 @@ SAID = {"de": "{who} hat gesagt: {words}", "fr": "{who} a dit : {words}", "es": 
         "zh": "{who}说：{words}"}
 
 # Units the copilot says, and what a translation mustn't turn them into (pounds aren't kilograms).
-UNITS = (("pound", r"kilo|kg|кг|公斤|千克"), ("feet", r"met(?:er|re|ro)|метр|米"), ("foot", r"met(?:er|re|ro)|метр|米"),
-         ("knot", r"km/?h|километр|公里"), ("mile", r"kilomet|километр|公里"))
+_METRES = r"\bm[eè]t(?:er|re|ro|r)|\bметр|米"  # (not "altimeter")
+UNITS = (("pound", r"\bkilo|\bkg\b|\bкг\b|килограм|公斤|千克"), ("feet", _METRES), ("foot", _METRES),
+         ("knot", r"km/?h|километр|公里"), ("mile", r"\bkilom[eè]t|километр|公里"))
 
 # Told once when the captain calls ATC in this language: ATC only works in English.
 ENGLISH_ONLY = {
@@ -784,7 +807,7 @@ def _phrases(code: str) -> list[tuple[str, str]]:
 def _tokens(clause: str, code: str) -> list[str] | None:
     """The clause as concepts ("§GEAR"), numbers and words not known; None if empty."""
     cjk = code == "zh"
-    text = f" {clause} "
+    text = re.sub(r"[.,;:](?=\s|$)", " ", f" {clause} ")  # (a sentence's own stops; not "29.92")
     for words, concept in _phrases(code):
         pattern = re.escape(words) if cjk else rf"(?<=\s){re.escape(words)}(?=\s)"
         text = re.sub(pattern, f" §{concept} ", text)
@@ -839,7 +862,7 @@ def _command(concepts: set[str], number: str) -> str | None:
             return "run the after landing checklist"
         return None
     if "GEAR" in concepts:
-        up, down = "UP" in concepts, "DOWN" in concepts
+        up, down = "UP" in concepts, "DOWN" in concepts or "OFF" in concepts and "ON" not in concepts  # nl "uit": out
         return "gear up" if up and not down else "gear down" if down and not up else None
     if "FLAPS" in concepts:
         if number and number.isdigit() and int(number) <= 40:
@@ -931,21 +954,126 @@ def gloss(text: str, code: str) -> str | None:
     return _question(every, text, code)
 
 
+# English words that aren't the small ones, but that a line left in English has (aviation English that pilots keep in
+# every language, "flaps", "gear", "autopilot", "Captain", isn't here).
+EN_CONTENT = ("feet|foot|knots|knot|over|ground|busy|quite|speed|managed|indicated|nothing|still|right|good|fine|thanks|"
+              "sounds|about|minutes|hours|pounds|ahead|behind|weather|fuel|burn|level|climbing|descending|turning|"
+              "everything|looks|smooth|bumpy|ride|sure|maybe|think|know|yeah|really|already|left|again|from|here")
+
+
+# English words that are words of these languages too ("over" in Dutch, "was" in German).
+SHARED = {"de": "was|so|am|bin|hat|also|fast|still|ruhig", "nl": "over|was|we|is|op|hoe|still", "sv": "over|still|from",
+          "pl": "on|no|to", "it": "come|sono|fine|ore", "fr": "sur|plus|fine", "es": "sur|fin", "pt": "sur"}
+
+
+def _english_words(words: list[str], own: set[str], code: str = "") -> int:
+    """The English words in ``words``: not the short ones ("a", "in", "is" are words of many languages) nor those of
+    the language's own."""
+    eng = set(STOPWORDS["en"].split("|")) | set(EN_CONTENT.split("|"))
+    own = own | set(SHARED.get(code, "").split("|"))
+    return sum(len(w) > 2 and w in eng and w not in own for w in words)
+
+
 def speaks(text: str, code: str) -> bool:
-    """Whether ``text`` is in language ``code`` (not English): its script, or more of its small words than
-    English's. A line of no words either way (a number, "Check.") counts as in it."""
+    """Whether ``text`` is in language ``code``, not English: its script with no English words left in it (Russian,
+    Mandarin), or more of its small words than English words. A line of no words either way (a number, "Check.")
+    counts as in it. ``en_strict``: plain English (no Cyrillic or Chinese in it)."""
+    if code == "en_strict":
+        return re.search(r"[\u0400-\u04ff\u4e00-\u9fff]", text) is None and re.search(r"[A-Za-z]", text) is not None
     if code in ("", "en"):
         return True
-    if code == "zh":
-        return re.search(r"[一-鿿]", text) is not None
-    if code == "ru":
-        return re.search(r"[Ѐ-ӿ]", text) is not None
+    latin = [w.lower() for w in re.findall(r"(?<![\w])[A-Za-z]{2,}(?:'[A-Za-z]+)?(?![\w])", text)]  # (not "A320")
+    if code in ("zh", "ru"):
+        script = r"[\u4e00-\u9fff]" if code == "zh" else r"[\u0400-\u04ff]"
+        return re.search(script, text) is not None and _english_words(latin, set()) == 0
     words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text.lower())
     own = set(STOPWORDS.get(code, "").split("|"))
-    eng = set(STOPWORDS["en"].split("|"))
     mine = sum(w in own for w in words)
-    english = sum(w in eng and w not in own for w in words)
-    return mine >= english or english == 0
+    english = _english_words(words, own, code)
+    return english == 0 or mine > english
+
+
+NAMES = {"GEAR": "gear", "FLAPS": "flaps", "SEATBELT": "seatbelt sign", "AUTOPILOT": "autopilot", "SPOILERS": "spoilers",
+         "PARKING_BRAKE": "parking brake", "APU": "apu", "HEADING": "heading", "ALTITUDE": "altitude", "SPEED": "speed",
+         "SQUAWK": "squawk", "CHECKLIST": "checklist", **LIGHTS}
+
+
+def named(text: str, code: str) -> str:
+    """The English names of the controls ``text`` names in language ``code`` ("Lass die Räder runter": "gear"), for
+    the checks that a command was asked for by name."""
+    if code in ("", "en") or code not in WORDS:
+        return ""
+    plain = _plain(text) if code != "zh" else text
+    concepts = {t[1:] for t in (_tokens(plain, code) or []) if t.startswith("§")}
+    return " ".join(sorted({NAMES[c] for c in concepts if c in NAMES}))
+
+
+def claims(text: str, code: str) -> str:
+    """What a reply in language ``code`` says of the controls, as English ("Ich fahre das Fahrwerk aus": "gear down"),
+    for the checks that the copilot doesn't say it did what it didn't. "" when it says nothing of them."""
+    if code in ("", "en") or code not in WORDS:
+        return ""
+    out = []
+    for sentence in re.split(r"[.!?;。！？；，、]+", text):  # (Chinese numbers run on between commas: "280节，180节")
+        plain = _plain(sentence) if code != "zh" else sentence
+        tokens = _tokens(plain, code) or []
+        concepts = {t[1:] for t in tokens if t.startswith("§")}
+        if "NO" in concepts:
+            continue  # "not yet": no claim
+        if "CHECKLIST" in concepts and "COMPLETE" in concepts:
+            out.append("checklist complete")
+        elif (made := _command(concepts, _number(tokens))) is not None and not made.startswith("run the"):
+            out.append(made.replace("start the apu", "apu started"))
+    return ". ".join(out)
+
+
+def localized_numbers(text: str) -> str:
+    """Numbers as English writes them, for the checks: "12.000" and "12 000" are 12,000, "29,92" is 29.92."""
+    text = re.sub(r"(?<=\d)[.\s\u00a0\u202f](?=\d{3}\b)", ",", text)
+    return re.sub(r"(?<=\d),(?=\d{1,2}\b)", ".", text)
+
+
+_ZH_DIGITS = {c: i for i, c in enumerate("零一二三四五六七八九")} | {"〇": 0, "两": 2}
+_ZH_PLACES = {"十": 10, "百": 100, "千": 1000, "万": 10000}
+
+
+def zh_numbers(text: str) -> list[str]:
+    """The numbers written in Chinese characters, as digits: read digit by digit ("二八零": 280) or by place
+    ("一万二千": 12000, "二十五": 25)."""
+    out = []
+    for run in re.findall(r"[零〇一二两三四五六七八九十百千万]+", text):
+        if not any(c in _ZH_PLACES for c in run):
+            if len(run) > 1 or run not in "一两":  # (a lone 一 is "a", not a number)
+                out.append("".join(str(_ZH_DIGITS[c]) for c in run))
+            continue
+        total = section = digit = 0
+        for c in run:
+            if c in _ZH_DIGITS:
+                digit = _ZH_DIGITS[c]
+            elif c == "万":
+                total, section, digit = (total + section + digit) * 10000, 0, 0
+            else:
+                section += (digit or 1) * _ZH_PLACES[c]
+                digit = 0
+        out.append(str(total + section + digit))
+    return out
+
+
+def mostly(text: str, code: str) -> bool:
+    """Whether ``text`` is mostly in language ``code``, some English left in it or not: for the voice it's read in
+    ("12,000 feet, Captain." isn't, "Сегодня уже quite busy." is)."""
+    if code in ("zh", "ru"):
+        return re.search(r"[\u4e00-\u9fff]" if code == "zh" else r"[\u0400-\u04ff]", text) is not None
+    words = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", text.lower())
+    own = set(STOPWORDS.get(code, "").split("|"))
+    mine = sum(w in own for w in words)
+    return mine > 0 and mine >= _english_words(words, own, code)
+
+
+def native_numbers(text: str, code: str) -> list[str]:
+    """The numbers said as words in language ``code`` ("Klappen drei": 3), as digits."""
+    plain = _plain(text) if code != "zh" else text
+    return [t for t in (_tokens(plain, code) or []) if re.fullmatch(r"\d+", t)]
 
 
 def called_in(text: str, code: str) -> bool:
@@ -960,6 +1088,22 @@ def called_in(text: str, code: str) -> bool:
            + WORDS.get(code, {}).get("FILLER", "").split("|")} - eng
     mine = sum(w in own and w not in eng for w in words)
     return mine >= 2 and mine > sum(w in eng and w not in own for w in words)
+
+
+THOUSAND = {"de": r"tausend", "fr": r"\bmille\b", "es": r"\bmil\b", "it": r"\bmila\b|\bmille\b", "pt": r"\bmil\b",
+            "nl": r"duizend", "pl": r"\btysi[aąeę]c", "sv": r"tusen", "ru": r"тысяч"}
+
+
+def thousands_in_words(text: str, code: str) -> bool:
+    """A number of thousands said in words ("zwölftausend Fuß", "десять тысяч"): the copilot's numbers are digits, so
+    they can be checked against the facts (Mandarin's are read: ``zh_numbers``)."""
+    return code in THOUSAND and re.search(THOUSAND[code], text.lower()) is not None
+
+
+def metric(text: str) -> bool:
+    """Whether ``text`` gives metres, kilograms or kilometres: the copilot's numbers are all feet, pounds, knots and
+    miles, so a reply that has them changed a unit."""
+    return any(re.search(wrong, text.lower()) for _, wrong in UNITS)
 
 
 def units_kept(english: str, said: str) -> bool:

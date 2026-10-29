@@ -79,7 +79,7 @@ def test_a_command_in_german_is_done_at_once_without_the_model():
 
 def test_a_confirmation_is_asked_in_german_and_answered_with_ja():
     pm = german('{"kind": "command", "action": "gear", "value": "down", "reply": "Gear down.", "english": "drop the gear"}')
-    out = pm.observe(IntercomHeard(t=3.0, text="Lass die Räder runter"))
+    out = pm.observe(IntercomHeard(t=3.0, text="Bring uns die Räder raus, wenn's recht ist"))
     asked = [o for o in out if isinstance(o, CrewSpeech)]
     assert [(o.text, o.language) for o in asked] == [("Gear down, bestätigen?", "de")]
     assert not [o for o in out if isinstance(o, SendSimEvent)]
@@ -140,3 +140,87 @@ def test_english_is_as_before():
     pm = started()
     pm.model = CrewModel(FakeBackend('{"reply": "x"}'))
     assert pm.language == "" and SendSimEvent(name="GEAR_DOWN") in pm.observe(IntercomHeard(t=3.0, text="gear down"))
+
+
+def test_english_left_in_a_reply_is_not_the_language():
+    assert not foreign.speaks("12,000 feet, Captain.", "pl")
+    assert not foreign.speaks("Sì, credo che sia così. 280 over the ground, 180.", "it")
+    assert not foreign.speaks("Сегодня уже quite busy.", "ru")
+    assert foreign.speaks("Да, Captain, отличная машина.", "ru")  # (aviation English stays)
+    assert foreign.speaks("A320很好，很舒适。", "zh") and foreign.speaks("Flaps 3, bestätigen?", "de")
+
+
+def test_numbers_as_each_language_writes_them():
+    assert foreign.localized_numbers("Wir sind auf 12.000 Fuß, 29,92") == "Wir sind auf 12,000 Fuß, 29.92"
+    assert foreign.localized_numbers("On est à 12 000 pieds") == "On est à 12,000 pieds"
+    assert foreign.zh_numbers("速度二八零，限速二五零") == ["280", "250"]
+    assert foreign.zh_numbers("一万二千英尺，两千五百磅，二十五节") == ["12000", "2500", "25"]
+    assert foreign.zh_numbers("一周在海滩") == []  # ("a week")
+
+
+def test_what_a_reply_says_of_the_controls_is_read_in_every_language():
+    assert foreign.claims("Да, Captain, я уже выпускаю колёса.", "ru") == "gear down"
+    assert foreign.claims("Ich fahre das Fahrwerk aus.", "de") == "gear down"
+    assert foreign.claims("我们目前在280节，速度在180节。", "zh") == "speed 180"
+    assert [foreign.named(t, c) for t, c in [("Lass mal die Räder runter.", "de"), ("Wypuść koła.", "pl"),
+                                             ("Fäll ut hjulen.", "sv"), ("把轮子放下来。", "zh")]] == ["gear"] * 4
+
+
+def test_a_reply_in_german_that_says_the_gear_is_down_when_it_isnt_is_not_said():
+    pm = german('{"kind": "reply", "reply": "Ich fahre das Fahrwerk aus."}')
+    out = pm.observe(IntercomHeard(t=3.0, text="Erzähl mal, wie läuft's?"))
+    assert "Ich fahre das Fahrwerk aus." not in said(out)
+    assert any(getattr(o, "detail", "").startswith("claims the gear is down") for o in out)
+
+
+def test_a_number_written_the_languages_way_is_the_same_number():
+    pm = german('{"kind": "reply", "reply": "Wir sind auf 12.000 Fuß, ein bisschen schnell."}')
+    pm.observe(own(2.5, alt_indicated_ft=12000.0, alt_msl_ft=12000.0))
+    assert said(pm.observe(IntercomHeard(t=3.0, text="Wie sieht's aus?"))) == ["Wir sind auf 12.000 Fuß, ein bisschen schnell."]
+
+
+def test_the_speed_limit_lines_are_set_lines():
+    assert foreign.templated("Unable, speed 280, gear limit 250.", "de") == \
+        "Geht nicht, Geschwindigkeit 280, Fahrwerksgrenze 250."
+    assert foreign.templated("Unable, speed 230, flaps 3 limit 185.", "zh") == "不行，速度230，襟翼3限速185。"
+
+
+def test_mandarin_is_translated_as_plain_text():
+    # A small model held to JSON writes nothing in Mandarin ('{"reply": ""}'): asked for the words alone, and its
+    # first line taken (it adds the numbers again below), the numbers written in characters read as digits.
+    model = CrewModel(FakeBackend("不行，速度二八零，起落架限速二五零。\n\n(280, 250)"), language="zh", mode="llm")
+    words, exchanges = model.translate(0.0, "Unable, speed 280, gear limit 250, check.")
+    assert words == "不行，速度二八零，起落架限速二五零。" and exchanges[0].outcome == "used"
+    assert model.backend.asked[0].schema == {} and "JSON" not in model.backend.asked[0].system
+    german_model = CrewModel(FakeBackend('{"reply": "Geht nicht."}'), language="de", mode="llm")
+    german_model.translate(0.0, "No can do.")
+    assert german_model.backend.asked[0].schema  # (the rest as before)
+
+
+def test_a_reply_with_metres_or_a_number_in_words_is_not_said():
+    for reply in ("Oto 12 000 metrów, kapitanie.", "Десять тысяч футов, Captain."):
+        code = "pl" if "metr" in reply else "ru"
+        pm = started()
+        pm.model = CrewModel(FakeBackend(f'{{"kind": "reply", "reply": "{reply}"}}'), language=code)
+        pm.observe(own(2.0, alt_indicated_ft=12000.0, alt_msl_ft=12000.0))
+        out = pm.observe(IntercomHeard(t=3.0, text="Na jakiej jesteśmy wysokości?" if code == "pl" else "На какой мы высоте?"))
+        assert reply not in said(out)
+    assert not foreign.metric("Altimeter 29.92 gesetzt.") and foreign.metric("我们在12000米")
+
+
+def test_a_line_left_in_its_language_keeps_its_voice():
+    assert foreign.speaks("Estamos a 12,000 pies, Captain.", "es")  # ("a" is Spanish too)
+    assert foreign.speaks("We zijn op 12.000 voet, kapitein.", "nl")
+
+
+def test_an_english_line_is_read_in_the_english_voice_and_a_mixed_one_in_the_languages():
+    assert not foreign.mostly("12,000 feet, Captain.", "fr") and not foreign.mostly("12,000 feet.", "zh")
+    assert foreign.mostly("Доброе утро, все хорошо. Сегодня уже quite busy.", "ru")
+    assert foreign.mostly("Ja, ik denk dat we wel te snel gaan. 280 knots indicated.", "nl")
+
+
+@pytest.mark.parametrize("code, text", [("de", "Lass mal die Räder runter."), ("pt", "Põe as rodas cá fora."),
+                                        ("fr", "Fais descendre les roues."), ("ru", "Выпускай колёса."),
+                                        ("zh", "把轮子放下来。"), ("sv", "Fäll ut hjulen.")])
+def test_the_wheels_are_the_gear(code, text):
+    assert foreign.gloss(text, code) == "gear down"

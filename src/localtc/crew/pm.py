@@ -1285,7 +1285,9 @@ class PilotMonitoring:
                 text, exchanges = self.model.translate(o.t, o.text)
                 done += exchanges
             if text is None:
-                done.append(replace(o, language=""))  # in English: the model couldn't (or there's none)
+                # As it is: in English (the model couldn't put it into the language, or there's none), or the model's
+                # own words in the language with some English in them, in that language's voice.
+                done.append(o if o.language == lang and foreign.mostly(o.text, lang) else replace(o, language=""))
                 continue
             line = replace(o, text=text, spoken="", language=lang)
             if self._last_line is o:

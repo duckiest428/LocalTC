@@ -1415,7 +1415,7 @@ function trafficStatus(s) {
 function personalityRow(list, current, idPrefix = "s-crew") {
   const cur = current || "neutral";
   return `<div class="row"><label>Copilot's personality<select id="${idPrefix}-personality">${(list || []).map((p) =>
-    // translate="no": put into the language here, piece by piece (as a whole it's no text the dictionary has).
+    // translate="no": put into the language here, piece by piece (as a whole it is no text the dictionary has).
     `<option value="${esc(p.id)}" translate="no" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${I18n.t(p.sex === "F" ? "she" : "he")})` : ""}${p.brief ? ` · ${esc(I18n.t(p.brief))}` : ""}</option>`).join("")}</select>
     <span class="hint" id="${idPrefix}-persona-hint">${personalityHint(list, cur)}</span></label>
     <div><button type="button" class="btn small" id="${idPrefix}-preview">&#9654; Preview</button></div></div>`;

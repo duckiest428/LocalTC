@@ -173,7 +173,7 @@ def fill_schema(answer: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any
     something for (a field the schema doesn't have can't be written)."""
     required = set(schema.get("required", ()))
     out = {}
-    for name, spec in schema["properties"].items():
+    for name, spec in schema.get("properties", {}).items():
         if name in answer:
             out[name] = answer[name]
         elif name in required:

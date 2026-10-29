@@ -27,6 +27,8 @@ from localtc.tts.providers import TtsError
 from localtc.tts.synth import Speech
 
 log = logging.getLogger(__name__)
+# espeak's phonemizer warns "words count mismatch" on most lines (harmless: the line is still spoken), filling the log.
+logging.getLogger("phonemizer").setLevel(logging.ERROR)
 
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 FILES = {  # name: (bytes, sha256)
@@ -105,11 +107,24 @@ def download(voices_dir: Path, model: str = "fp32", progress=None) -> Path:
     return model_path(voices_dir, model)
 
 
+# The Americas speak American English; everywhere else British.
+AMERICAN = ("en-us", "en-ca", "en-ph", "es-mx", "es-us", "es-co", "es-ar", "es-cl", "es-pe", "es-ve", "es-ec", "es-cr",
+            "es-pa", "es-gt", "es-do", "es-cu", "es-bo", "es-uy", "es-py", "es-hn", "es-ni", "es-sv", "es-pr", "pt-br",
+            "fr-ca")
+
+
+def english_of(locale: str) -> str:
+    """The English spoken by ATC of ``locale``: its own where it's an English locale, else American in the Americas
+    and British elsewhere."""
+    low = locale.lower()
+    if low.startswith("en-"):
+        return locale
+    return "en-US" if low in AMERICAN else "en-GB"
+
+
 def pool_for(persona: Persona) -> tuple[str, list[str]]:
     """Kokoro's language ("en-us"/"en-gb") and the voices a persona is cast from: its sex, and its region's English
     (American for the US and Canada and none in particular, British for the rest of the English-speaking world)."""
-    from localtc.tts.azure import english_of
-
     locale = english_of(persona.locale).lower() if persona.locale else ""  # (Germany's: British English)
     lang = "en-gb" if locale in BRITISH else "en-us"
     return lang, list(POOLS[(lang, persona.sex if persona.sex in ("F", "M") else "M")])
@@ -178,6 +193,8 @@ class KokoroVoices:
         return lang, self.casting.cast(persona, pool)
 
     def synthesize(self, text: str, persona: Persona) -> Speech:
+        if persona.foreign:
+            raise TtsError("unavailable", "Kokoro speaks English here")  # the next voice, one of that language
         if why := self.ready():
             raise TtsError("unavailable", why)
         self.load()

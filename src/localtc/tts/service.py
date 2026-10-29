@@ -5,7 +5,7 @@ intercom (``CrewSpeech``: a dry headset voice, no radio at all), in the same voi
 
 Every station is a person of its own (``persona.Persona``: decided from its name, with its region's English) and
 speaks through the radio effect. The words are made speakable first (``aviation.speakable``), the same for every
-synthesizer; the synthesizers (Piper, Kokoro, Azure) are tried in order by a ``providers.VoiceChain``, and when none
+synthesizer; the synthesizers (Kokoro when chosen, then Piper) are tried in order by a ``providers.VoiceChain``, and when none
 can speak, the line stays text and ATC carries on. The ATIS repeats while its frequency is tuned, like the real
 thing, and stops when the pilot tunes away.
 
@@ -75,16 +75,17 @@ class VoiceOut:
         crew_pace: float = 1.0,  # the copilot's personality: its pace (over 1 quicker)
         crew_expressive: float | None = None,  # ... how lively (0-1; None: the usual)
         crew_locale: str = "",  # ... and its English ("en-GB")
+        crew_language: str = "",  # the language it talks with you in, when not English ("de")
         shift: int = 0,  # ATC's shift ([atc] shift): each station's voice is the person on shift's
         regional: bool = True,  # each station in its region's English, where a provider has it
-        chatter_cloud: bool = False,  # the other flights' pilots in a cloud voice too (off: this PC's, no credits)
     ) -> None:
         self.bus, self.player = bus, player
         self.voices = synth if isinstance(synth, VoiceChain) else VoiceChain([PiperVoices(synth, speakers=speakers)])
         self.effect, self.static, self.atis, self.copilot, self.speakers = effect, static, atis, copilot, speakers
         self.crew_speaker, self.crew_sex, self.crew_pick = crew_speaker, crew_sex, crew_pick
         self.crew_pace, self.crew_expressive, self.crew_locale = crew_pace, crew_expressive, crew_locale
-        self.shift, self.regional, self.chatter_cloud = shift, regional, chatter_cloud
+        self.crew_language = crew_language
+        self.shift, self.regional = shift, regional
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
@@ -94,11 +95,11 @@ class VoiceOut:
         self.keyed = False  # the pilot holding the push-to-talk: the other flights aren't heard (nor talked over)
         self._tunes_seen = self._tunes_reached = 0  # changes of frequency: seen at once, and reached in the line order
 
-    def persona(self, key: str, role: str, *, manner: str = "", locale: str = "") -> Persona:
+    def persona(self, key: str, role: str, *, manner: str = "", locale: str = "", language: str = "") -> Persona:
         if role == "copilot":
             return persona_for(PILOT_SPEAKER_SALT, "copilot", sex=self.crew_sex, pick=self.crew_pick,
                                piper_speaker=self.crew_speaker, pace=self.crew_pace, expressive=self.crew_expressive,
-                               locale=self.crew_locale if self.regional else "")
+                               locale=self.crew_locale if self.regional else "", language=language)
         return persona_for(key, role, manner=manner, locale=locale if self.regional else "")
 
     async def _watch_radio(self) -> None:
@@ -152,14 +153,14 @@ class VoiceOut:
                 await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), station=ev.station, channel="chatter")
             else:  # the other crews: this PC's voices unless asked (each line a cloud voice was credits spent on noise)
                 who = self.persona(f"chatter {ev.callsign}", "chatter", locale=locale)
-                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), local=not self.chatter_cloud,
+                await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), local=True,
                                station=ev.station, channel="chatter", strength=_spread(ev.callsign, SIGNAL, "signal"),
                                cabin=_spread(ev.callsign, CABIN, "cabin"))
         elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
             await self.say(ev.text, self.persona("", "copilot"), "pilot", keep=clip_id(ev))
         elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
-            await self.say(ev.spoken or ev.text, self.persona("", "copilot"), "intercom", keep=clip_id(ev),
-                           urgent=ev.kind == "alert")
+            await self.say(ev.spoken or ev.text, self.persona("", "copilot", language=ev.language), "intercom",
+                           keep=clip_id(ev), urgent=ev.kind == "alert")
         elif isinstance(ev, AtisBroadcast) and self.atis:
             self._stop_atis()
             self._atis_task = asyncio.create_task(self._loop_atis(ev))
@@ -193,12 +194,13 @@ class VoiceOut:
                local: bool = False, *, strength: float = 1.0, cabin: float = ATC_ROOM) -> Clip | None:
         """The line as heard: speakable words, the person's voice from the first provider that can, then the radio
         (or the intercom). None when there's nothing to say or nobody could say it (text only)."""
-        words = speakable(text)
-        if not words.strip():
-            return None
         if isinstance(who, str):
             role = "copilot" if kind in ("pilot", "intercom") else "atis" if kind == "atis" else "atc"
             who = self.persona(who, role, manner=manner or (kind if role == "atc" else ""))
+        # (In another language its own voice reads the numbers: "viertausend", never "four zero zero zero".)
+        words = text if who.foreign else speakable(text)
+        if not words.strip():
+            return None
         speech = self.voices.speak(words, who, local=local)
         if speech is None:
             return None

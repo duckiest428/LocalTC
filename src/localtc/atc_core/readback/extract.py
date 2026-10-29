@@ -411,7 +411,11 @@ def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] 
                 continue
             break
         name = token.text.upper()
-        if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2:
+        # Its number with it ("B6"), unless the route given has the letter alone and not that taxiway ("via Y, B, A,
+        # 15" read back "Alpha 15" was taxiway A15, and "negative").
+        alone = i + 1 < len(tokens) and token.text in names and tokens[i + 1].text in names \
+            and f"{token.text}{tokens[i + 1].text}" not in names
+        if i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) <= 2 and not alone:
             name += tokens[i + 1].text
             i += 1
         route.append(name)
@@ -706,6 +710,22 @@ def fixes(tokens: list[Token], expected: Any = None) -> list[str]:
     found = []
     for i in sorted({i for start in FIX_STARTS for i in _find_phrase(tokens, start)}):
         rest = [w for w in words[i : i + 4] if w not in ("to", "the")]
+        if isinstance(expected, str) and len(expected) >= 3 and expected.isalpha():
+            # Spelled out, or broken up by speech-to-text, in any way ("E-B-A-K-E", "E, B, AKE"): the words after it
+            # together, as many as make the name. (The callsign's "Delta" after it was the letter D: "EBAKED", and
+            # "negative, direct EBAKE" three times.)
+            joined, said = "", False
+            for w in [w for w in words[i : i + 9] if w not in ("to", "the")]:
+                joined += w.upper()
+                if not w.isalpha() or len(joined) > len(expected) + 1:
+                    break
+                if joined[:1] == expected[:1].upper() and abs(len(joined) - len(expected)) <= 1 \
+                        and difflib.SequenceMatcher(None, joined, expected.upper()).ratio() >= FIX_LIKENESS:
+                    said = True
+                    break
+            if said:
+                found.append(expected)
+                continue
         # Spelled out a letter at a time ("direct K, E, B, G, O"): the letters together.
         letters = []
         for w in words[i : i + 8]:

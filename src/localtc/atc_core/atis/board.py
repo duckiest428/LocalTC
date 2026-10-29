@@ -188,6 +188,11 @@ class AtisBoard:
                     visual_first=False, precip=weather.precip, outages=out)  # what it has for when it isn't visual
                 if published.kind != "VISUAL" and not published.circle_to:
                     instrument[e.ident] = published
+        if zulu_s is not None and ((zulu_s / 3600.0 + geo.airport.lon / 15.0) % 24.0 >= 19.0
+                                   or (zulu_s / 3600.0 + geo.airport.lon / 15.0) % 24.0 < 6.0):
+            # At night the runway's instrument approach, where it has one: "expect the visual" into La Guardia in the
+            # dark, the field a sea of lights, was no help.
+            approaches.update(instrument)
         extra = advisories(weather, end.ident)
         taxiways = frozenset(n.subject for n in notices if n.kind == "taxiway_closed" and "/" not in n.detail)
         segments = tuple((n.subject, *n.detail.split("/", 1)) for n in notices if n.kind == "taxiway_closed"

@@ -64,7 +64,7 @@ RADIO_REQUESTS = (
 )
 WITH_CHECKLIST_NOT = ("checklist", "yes", "no", "check", "say_again", "verbosity", "status", "brief", "radio")
 # "Ask clearance for a radio check", "go on the radio and ask ATC for a temperature update": asked on the radio.
-ASK_ATC = re.compile(r"\b(?:ask|check with|request from) (?:the )?(?:atc|air traffic control|controller|clearance|delivery|"
+ASK_ATC = re.compile(r"\b(?:ask|check with|request from) (?:the |a |an )?(?:atc|air traffic control|controller|clearance|delivery|"
                      r"ground|tower|approach|departure|cent(?:er|re)|them)\b(?: (?:on the radio|please))?"
                      r"(?: (?=for |what |how |when |where |if |whether |which |about )| to (?:give us |tell us |say )?)"
                      r"(?P<what>.+)")
@@ -133,8 +133,11 @@ def parse(text: str) -> list[Command]:
     text = re.sub(r"\bparking (?:bakes?|breaks?|brakes|break)\b", "parking brake", text, flags=re.IGNORECASE)
     lowered = " ".join(text.lower().replace("/", " ").split())
     if (asked := ASK_ATC.search(lowered)) is not None and asked.group("what").strip(" ?.!,"):
-        # "Can you ask clearance for a radio check?": the copilot asks on the radio (not an intercom check).
-        return [Command("radio", "ask", asked.group("what").strip(" ?.!,"))]
+        # "Can you ask clearance for a radio check?": the copilot asks on the radio (not an intercom check). One of
+        # the calls it knows ("ask ground for pushback and start, we're at gate M10") is made in its own words.
+        what = asked.group("what").strip(" ?.!,")
+        known = next((call for pattern, call in RADIO_WHICH[:3] if pattern.search(what.split(" and let", 1)[0])), None)
+        return [Command("radio", known) if known else Command("radio", "ask", what)]
     if any(phrase in lowered for phrase in CHECK):
         return [Command("check")]
     if SAY_AGAIN.search(lowered.strip(" ?!.")) and len(lowered.split()) <= 5:

@@ -438,15 +438,66 @@ def test_at_the_holding_point_it_goes_in_its_turn_when_the_real_one_is_slow():
 
 
 def test_one_hanging_in_the_air_is_taken_away():
-    """Handed back to the live data at 4,100 ft south of Seattle, its reports stopped, and it stood there eight
+    """Reported flying at 4,100 ft south of Seattle, in the same place report after report: it stood there eight
     minutes."""
     from localtc.traffic.manager import FROZEN_AIR_S
 
     m = manager()
-    m.on_feed([real("09", "ANA9", 35.40, 139.80, ground=False, alt=4000.0, track=340.0, t=NOW)], "test", NOW)
+    m.on_feed([real("09", "ANA9", 35.40, 139.80, gs=250.0, ground=False, alt=4000.0, track=340.0, t=NOW)], "test", NOW)
     for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
         m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=705), NOW)
-    plane = m.planes["live:09"]
-    plane.moved_t, plane.sent_air = NOW, True  # (as the live data left it: the same place every second since)
-    out = m.tick(NOW + FROZEN_AIR_S + 5)
+    out = []
+    for dt in range(5, int(FROZEN_AIR_S) + 15, 5):
+        m.on_feed([real("09", "ANA9", 35.40, 139.80, gs=250.0, ground=False, alt=4000.0, track=340.0, t=NOW + dt)], "test", NOW + dt)
+        out += m.tick(NOW + dt)
     assert "live:09" not in m.planes and any(isinstance(c, RemoveAiAircraft) for c in out)
+
+
+def test_an_arrival_reported_moving_is_never_taken_away_for_standing_still():
+    """Hundreds of real arrivals were taken away "standing still in the air": judged by what LocalTC had sent, not
+    by where they were reported."""
+    from localtc.traffic.manager import FROZEN_AIR_S
+
+    m = manager()
+    m.on_feed([real("10", "ANA10", 35.40, 139.80, gs=250.0, ground=False, alt=4000.0, track=340.0, t=NOW)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=706), NOW)
+    for dt in range(5, int(FROZEN_AIR_S) * 3, 5):
+        lat = 35.40 + dt * 0.0006  # about 250 kt north
+        m.on_feed([real("10", "ANA10", lat, 139.80, gs=250.0, ground=False, alt=4000.0, track=0.0, t=NOW + dt)], "test", NOW + dt)
+        m.tick(NOW + dt)
+    assert "live:10" in m.planes
+
+
+def test_a_line_goes_round_one_that_never_moves():
+    """A Delta stood across the taxiway at the end of O'Hare's line held the whole line behind it."""
+    from localtc.traffic.manager import QUEUE_M, QUEUE_STUCK_S, Local, Plane
+
+    m = manager()
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.routes = lambda cs: Route("RJTT", "RJCC")
+    m.on_own(own_at(35.58, 139.80))
+    gate = next(p for p in RJTT.parking if p.kind.startswith("gate"))
+    m.on_feed([real("07", "ANA7", gate.lat, gate.lon)], "test", NOW)
+    for c in [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=702), NOW)
+    plane = m.planes["live:07"]
+    t = NOW
+    while plane.mode != "taxi_out" or plane.local.stage != "taxi" or plane.local.follow.gs_kt < 10:
+        t += 1
+        m.on_feed([real("07", "ANA7", gate.lat - 0.0003, gate.lon, gs=4.0, t=t)], "test", t)
+        m.tick(t)
+        assert t < NOW + 600
+    loc = plane.local
+    lat, lon, _ = advance(loc.lat, loc.lon, loc.hdg, (QUEUE_M - 5) / 0.5144, 0.0, 1.0)
+    ahead = Plane("live:99", 9, "FSLTL_A320_ZZZZ", "", callsign="DAL9", object_id=703, mode="taxi_out",
+                  local=Local(lat, lon, 20.0, loc.hdg, 0.0, 0.0, True, started=t, runway=("RJTT", "34R"),
+                              stage="hold_short"))
+    m.planes[ahead.key] = ahead
+    m._released_t = t + 1e6
+    for k in range(1, int(QUEUE_STUCK_S) + 20):
+        m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + k)], "test", t + k)
+        m.tick(t + k)
+        if k == 30:
+            assert loc.follow.gs_kt == 0.0  # in line behind it
+    assert loc.follow.gs_kt > 0.0  # stood there two minutes: gone round

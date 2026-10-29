@@ -297,7 +297,8 @@ label input, label select, label textarea { color: var(--text); font-size: 14px;
 .card h3 { margin: 0 0 4px; font-size: 14px; color: var(--text-strong); }
 .card > p { margin: 0 0 10px; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-.row > label { margin: 0; flex: 1 1 180px; }
+.row > label { margin: 0; flex: 1 1 180px; min-width: 0; }
+.row > label select { max-width: 100%; }  /* a long option never widens the card */
 .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .profiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .profile { background: var(--field); border: 1px solid var(--line); padding: 8px 10px; border-radius: 3px; cursor: pointer; text-align: left; }
@@ -603,3 +604,22 @@ table.lb td { white-space: nowrap; }
   background: var(--panel-2); color: var(--text-2); font-size: 10px; cursor: pointer; display: grid; place-items: center; padding: 0; }
 .wplay:hover { color: var(--green); border-color: var(--green-dim); }
 @media (max-width: 560px) { .wchoice { grid-template-columns: 1fr; } .wizbody { padding: 12px; } }
+
+/* The toast in the top layer: seen over an open dialog too (a popover shown after it) */
+.toast[popover] { inset: auto; left: 50%; bottom: 120px; margin: 0; color: var(--text); overflow: visible; }
+
+/* The language pick: the setup's first step, the one-time question and Settings */
+.wlangs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.wlangs .wcard { align-items: flex-start; }
+.wlangs .wcard span { font-size: 12px; color: var(--text-3); }
+.lang-dialog { width: min(620px, calc(100vw - 32px)); }
+.lang-dialog .help { display: flex; flex-direction: column; gap: 10px; }
+.wwarn { border-color: #f5a524; }
+.wwarn b.exp-badge { margin: 0 0 4px; display: inline-block; }
+
+/* The voices: Piper, Kokoro and the copilot's language, each with its state and a preview */
+.voice-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 8px; }
+.voice-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); }
+.voice-row > div:first-child { flex: 1 1 280px; }
+.voice-row > div:last-child { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

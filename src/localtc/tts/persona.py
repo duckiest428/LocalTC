@@ -15,10 +15,6 @@ from localtc.tts.voices import SPEAKERS, delivery_for, sex_of, speaker_for
 ROLES = ("atc", "atis", "chatter", "copilot", "cabin", "ground_crew")
 # The voice key of a role that isn't a station: one person each.
 ROLE_KEYS = {"copilot": "pilot", "cabin": "cabin crew", "ground_crew": "ground crew"}
-# The controller's manner (atc_core.personality's kinds) as a speaking style, where a voice has one (Azure's
-# express-as); only the even ones: no voice sounds cheerful or angry on the radio.
-STYLES = {"calm": "calm", "friendly": "friendly", "conversational": "friendly", "formal": "serious",
-          "strict": "serious", "dry": "serious"}
 PITCH_SPAN = 6  # a station's voice up to this many percent higher or lower (where a provider can)
 LIBRITTS = 904  # the default Piper voice's speakers, whose sexes are known (voices.SPEAKER_SEX)
 
@@ -32,10 +28,15 @@ class Persona:
     locale: str = ""  # regional English ("en-GB", "en-AU", ...); "" none in particular
     pace: float = 1.0  # times the configured speaking rate
     pitch: int = 0  # percent, where a provider can change it
-    style: str = ""  # a speaking style where a voice has one ("calm", "friendly", "serious")
     pick: int | None = None  # the pilot's own choice among a provider's voices of that sex (the copilot's voice)
     piper_speaker: int | None = None  # the Piper speaker chosen for it (the copilot's, from the settings)
     expressive: float | None = None  # 0 flat to 1 lively where a provider can (a copilot's personality); None: the role's
+    language: str = ""  # the copilot talking in the pilot's language ("de"): a voice of that language; "" English
+
+    @property
+    def foreign(self) -> bool:
+        """It speaks a language other than English: no aviation-English spelling out, a voice of its language."""
+        return self.language not in ("", "en")
 
     @property
     def crew(self) -> bool:
@@ -66,7 +67,7 @@ def sex_for(key: str, role: str = "atc", locale: str = "") -> str:
 
 def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = "", sex: str = "",
                 pick: int | None = None, piper_speaker: int | None = None, pace: float | None = None,
-                expressive: float | None = None) -> Persona:
+                expressive: float | None = None, language: str = "") -> Persona:
     """The person speaking as ``key`` in ``role``. ``manner``: the transmission's ("tower:hurried:busy"); ``locale``:
     the region's English ("" none); ``sex`` "F"/"M" to choose (the copilot's setting), else decided from the key."""
     if role not in ROLES:
@@ -79,10 +80,9 @@ def persona_for(key: str, role: str = "atc", *, manner: str = "", locale: str = 
         "chatter" if role == "chatter" else manner or "atc"
     pace = delivery_for(key, kind).pace if pace is None else pace
     _, _, rest = manner.partition(":")
-    style = "" if role in ("atis", "copilot") else STYLES.get(rest.partition(":")[0], "")
     pitch = 0 if role in ("atis", "copilot") else _hash("pitch" + key) % (2 * PITCH_SPAN + 1) - PITCH_SPAN
     return Persona(key=key, role=role, manner=kind, sex=want or sex_for(key, role, locale), locale=locale, pace=pace, pitch=pitch,
-                   style=style, pick=pick, piper_speaker=piper_speaker, expressive=expressive)
+                   pick=pick, piper_speaker=piper_speaker, expressive=expressive, language=language)
 
 
 class Casting:

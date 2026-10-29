@@ -118,9 +118,13 @@ QUEUE_DECEL_MS2 = 0.6
 # waited for its real one, and one whose real one was slow held the whole line behind it (the user ten minutes in it).
 HOLD_SHORT_MAX_S = 75.0
 TAKEOFF_GAP_S = 60.0  # between two of LocalTC's takeoffs from the holding point (one runway)
+ROLL_AFTER_CALL_S = 18.0  # a released departure lines up and waits this long (its call, tower's clearance, the
+# readback on the radio) before it rolls: it went while it was still asking
 EARLY_KEPT_OFF_S = 1800.0  # one that went before its real one: the real one isn't made again for this long
-FROZEN_AIR_S = 45.0  # in the air and shown standing still this long (its reports stopped): taken away
+FROZEN_AIR_S = 45.0  # reported in the air at speed, and in the same place in every report this long: taken away
 QUEUE_CONE_DEG = 40.0  # ahead: within this either side of its nose
+QUEUE_STUCK_S = 120.0  # one in line behind another that hasn't moved in this long goes round it (a Delta stood across
+# the taxiway at the end of O'Hare's line, and the whole line behind it with it)
 QUEUE_SAME_WAY_DEG = 90.0  # going the same way (one coming the other way isn't queued behind: they'd both wait)
 LOCAL_TTL_S = 300.0  # a go-around or a released departure flown by LocalTC this long at most, then taken away
 FEED_FRESH_S = 15.0  # the feed answered, with something new, this recently: it's working
@@ -228,6 +232,8 @@ class AtcLink:
     runway_for: Callable[..., str | None] = lambda icao, **kw: None
     # The taxiways closed at an airport: (names closed along their length, taxi path indexes closed between two points)
     closed: Callable[[str], tuple[frozenset[str], frozenset[int]]] = lambda icao: (frozenset(), frozenset())
+    # The user's own callsign: the real flight of that number (flying the same route today) isn't shown as well.
+    user_callsign: Callable[[], str] = lambda: ""
 
 
 @dataclass
@@ -253,6 +259,8 @@ class Local:
     stage: str = ""  # taxiing out: "push", "start", "taxi", "hold_short"
     stage_t: float = 0.0
     push_to: tuple[float, float] | None = None  # where the push back ends (on the taxiway)
+    roll_after: float = 0.0  # a departure lined up: rolls from here on (once tower's cleared it on the radio)
+    behind: tuple[str, float, float, float] | None = None  # in line: the one ahead, since when, and where it was then
 
 
 @dataclass
@@ -274,8 +282,8 @@ class Plane:
     created_t: float = 0.0
     note: str = ""  # what ATC did with it, said once
     sent: tuple[float, ...] | None = None  # (lat, lon, alt, hdg, gs, vs, turn, when): the last state the bridge has
-    moved_t: float = 0.0  # when what was sent last moved: one hanging in the air is taken away
-    sent_air: bool = False  # what was sent last was in the air
+    reported_at: tuple[float, float] | None = None  # where its reports had it when they last moved ...
+    reported_moved_t: float = 0.0  # ... and when: one reported flying but never moving is taken away
     runway: tuple[str, str] | None = None  # (airport, runway end) it was held short of
     give_way_t: float = 0.0  # when it stopped for the user
     gave_way_t: float = -1e9  # when it went on again (not stopped again straight away)
@@ -357,7 +365,9 @@ class TrafficManager:
             return
         self.source = source
         self.feed_t = now
-        fresh = {f.hex: f for f in flights if f.hex}
+        mine = "".join(self.atc.user_callsign().split()).upper()
+        # (The real DAL1827 was flying beside the user's DAL1827, and taxied in to a gate at La Guardia.)
+        fresh = {f.hex: f for f in flights if f.hex and not (mine and "".join(f.callsign.split()).upper() == mine)}
         for hex_, f in fresh.items():
             old = self.flights.get(hex_)
             if old is not None and stuck(old, f):
@@ -509,9 +519,10 @@ class TrafficManager:
         # Gone: out of the area, lost, or one too many.
         for key, plane in list(self.planes.items()):
             f = self.flights.get(key[5:]) if plane.live else None
-            if plane.object_id is not None and plane.sent_air and plane.moved_t and now - plane.moved_t > FROZEN_AIR_S:
-                # Hanging in the air (its reports stopped, carried on as far as the bridge goes): a departure stood at
-                # 4,100 ft south of Seattle for eight minutes.
+            if f is not None and plane.mode == "live" and self._frozen(plane, f, now):
+                # Hanging in the air, its reports flying but never moving: a departure stood at 4,100 ft south of
+                # Seattle for eight minutes. (Judged by what was sent, the arrivals the bridge was carrying on between
+                # two sends were taken away by the dozen.)
                 self._did(f"{plane.callsign or 'An aircraft'} stood still in the air: taken away")
                 out += self._remove(plane)
                 continue
@@ -719,12 +730,16 @@ class TrafficManager:
             return 0.5 if self._dist_nm(lat, lon) > GROUND_SNAP_NM else GROUND_BLEND_MAX_S
         return max(BLEND_MIN_S, min(BLEND_MAX_S, 1.5 * err / (CATCH_UP * speed)))
 
+    @staticmethod
+    def _frozen(plane: Plane, f: Flight, now: float) -> bool:
+        """Its reports have it flying (in the air, at speed) and in the same place for ``FROZEN_AIR_S``."""
+        if f.on_ground or f.gs_kt < 50 or plane.reported_at is None \
+                or haversine_nm(plane.reported_at[0], plane.reported_at[1], f.lat, f.lon) * M_PER_NM > 5:
+            plane.reported_at, plane.reported_moved_t = (f.lat, f.lon), now
+            return False
+        return now - plane.reported_moved_t > FROZEN_AIR_S
+
     def _send(self, plane: Plane, track: AiTrack, now: float) -> AiTrack:
-        s = plane.sent
-        if s is None or track.on_ground or abs(track.alt_ft - s[2]) > 20 \
-                or haversine_nm(s[0], s[1], track.lat, track.lon) * M_PER_NM > 5:
-            plane.moved_t = now
-        plane.sent_air = not track.on_ground
         plane.sent = (track.lat, track.lon, track.alt_ft, track.hdg, track.gs_kt, track.vs_fpm, track.turn_dps, now)
         return track
 
@@ -1208,11 +1223,11 @@ class TrafficManager:
                                                      on_ground=True, blend_s=5.0), now))
         return out
 
-    def _queued(self, plane: Plane) -> float | None:
+    def _queued(self, plane: Plane, now: float) -> float | None:
         """Another of LocalTC's on the ground just ahead of ``plane``, going the same way: how far ahead (metres), to
-        stop behind it; None with nobody there."""
+        stop behind it; None with nobody there (or only one stood there ``QUEUE_STUCK_S``: gone round)."""
         loc = plane.local
-        nearest = None
+        nearest, leader, stuck = None, None, False
         for other in self.planes.values():
             there = other.local
             if other is plane or there is None or not there.on_ground or other.object_id is None:
@@ -1224,7 +1239,18 @@ class TrafficManager:
             bearing = bearing_deg(loc.lat, loc.lon, there.lat, there.lon)
             if abs(((bearing - loc.hdg + 540) % 360) - 180) <= QUEUE_CONE_DEG:
                 d = haversine_nm(loc.lat, loc.lon, there.lat, there.lon) * M_PER_NM
-                nearest = d if nearest is None else min(nearest, d)
+                w = loc.behind
+                if w is not None and w[0] == other.key and now - w[1] > QUEUE_STUCK_S \
+                        and haversine_nm(w[2], w[3], there.lat, there.lon) * M_PER_NM < 5:
+                    stuck = True
+                    continue  # stood there all this time: not a queue, an obstacle (in the sim they pass through)
+                if nearest is None or d < nearest:
+                    nearest, leader = d, other
+        if leader is None:
+            loc.behind = loc.behind if stuck else None
+        elif loc.behind is None or loc.behind[0] != leader.key or haversine_nm(
+                loc.behind[2], loc.behind[3], leader.local.lat, leader.local.lon) * M_PER_NM >= 5:
+            loc.behind = (leader.key, now, leader.local.lat, leader.local.lon)  # a new one ahead, or it moved
         return nearest
 
     @staticmethod
@@ -1263,7 +1289,7 @@ class TrafficManager:
         plane.mode = "departing"
         plane.local = Local(lat, lon, geo.airport.elev_ft, end.heading_true, 0.0, 0.0, True,
                             target_alt=geo.airport.elev_ft + 5000, target_kt=250.0, accel=2.5, rotate_kt=150.0,
-                            started=now)
+                            started=now, roll_after=now + ROLL_AFTER_CALL_S)
         self._did(f"{plane.callsign} cleared for takeoff {end.ident} after you")
         out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=geo.airport.elev_ft,
                                          hdg=end.heading_true, on_ground=True, blend_s=12.0), now)]
@@ -1355,6 +1381,8 @@ class TrafficManager:
             if plane.mode == "landing":
                 if not loc.on_ground:
                     loc.alt_ft += loc.vs_fpm * dt / 60
+            elif loc.on_ground and now < loc.roll_after:
+                loc.gs_kt = 0.0  # lined up, cleared on the radio first
             else:  # climbing away: a go-around, or a departure off the runway
                 loc.gs_kt = min(loc.target_kt, loc.gs_kt + loc.accel * dt)
                 if loc.on_ground and loc.rotate_kt and loc.gs_kt >= loc.rotate_kt:
@@ -1524,7 +1552,7 @@ class TrafficManager:
                 limit = 0.0  # the user ahead: it waits
             elif self._users_runway_at(geo, *ahead[:2], now):
                 limit = 0.0  # not across the runway the user has
-            elif (gap := self._queued(plane)) is not None:
+            elif (gap := self._queued(plane, now)) is not None:
                 limit = math.sqrt(2 * QUEUE_DECEL_MS2 * max(gap - QUEUE_GAP_M, 0.0)) / 0.5144  # in line behind it
             loc.lat, loc.lon, loc.hdg, gs = loc.follow.step(loc.lat, loc.lon, limit_kt=limit)
             if loc.follow.done:

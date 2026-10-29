@@ -591,7 +591,7 @@ class Monitor(WatchMixin):
         own = self.c.own
         if was is None or own is None:
             return
-        self.f.max_engines = max(self.f.max_engines, s.engines_running)
+        self.f.max_engines = max(self.f.max_engines, s.engines_running, was.engines_running)
         if s.engines_running < was.engines_running and not own.on_ground and "engine" not in self.commanded:
             self._call("engine_failure", SAFETY, t, "Engine failure!", again_s=60)
             self._watch_emergency(t, "engine")
@@ -1078,7 +1078,10 @@ class Monitor(WatchMixin):
         was, self._final_side = self._final_side, side
         off_course = abs(((own.hdg_true - end.heading_true) + 180) % 360 - 180)
         if was is not None and 3.0 < out < 40.0 and (was > 0) != (side > 0) and abs(was) < 2.0 and off_course > 25:
-            self._call(f"through_final:{n}", SAFETY, t, "We've gone through the localizer!", again_s=120)
+            # On a visual (or any approach without one) there's no localizer to go through: the final.
+            kind = str(getattr(st.assignments.approach, "kind", "") or "").upper()
+            what = "the localizer" if kind in ("ILS", "LOC", "LOC/DME", "LDA", "SDF", "LOC BC") else "final"
+            self._call(f"through_final:{n}", SAFETY, t, f"We've gone through {what}!", again_s=120)
 
     def _cruise_burn_pph(self, own: OwnshipState, t: float) -> float | None:
         """The fuel burn in pounds an hour, from the fuel used over the last minutes of level cruise; None until
@@ -1204,9 +1207,13 @@ class Monitor(WatchMixin):
             return
         if not self._said("summary"):
             self._call("summary", ROUTINE, t, self._summary(own), urgent=arrived)
-        if s is not None and s.engines_running == 0 and not own.parking_brake:
+        # Engines off at a standstill. An aircraft that never shows its engines running (the A220's are 0 on the takeoff
+        # roll) is shut down only once it's stopped with the brake set: "Shutdown checklist?" came taxiing in.
+        stopped = own.on_ground and own.gs_kt < 1
+        shut = s is not None and s.engines_running == 0 and stopped and (self.f.max_engines > 0 or own.parking_brake)
+        if shut and not own.parking_brake:
             self._call("park_brake", ROUTINE, t, "Parking brake?")
-        if s is not None and s.engines_running == 0:
+        if shut:
             self._prompt_checklist("parking", t=t + 2)
 
     def _summary(self, own: OwnshipState) -> str:

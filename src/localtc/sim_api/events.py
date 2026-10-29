@@ -360,6 +360,7 @@ class CrewSpeech(Event, tag="crew_speech"):
     text: str
     spoken: str = ""  # the words for speech, if they differ from the text ("flaps one plus F")
     kind: str = "reply"
+    language: str = ""  # said in the pilot's language ("de"), not English: a voice of that language speaks it
 
 
 class CrewAction(Event, tag="crew_action"):

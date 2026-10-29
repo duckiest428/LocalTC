@@ -2,8 +2,6 @@
 line, its real-time factor (time to synthesize / length of the speech: under 1 is faster than it's spoken), the
 memory it adds, and with ``--whisper`` how well Whisper understands it through the radio effect (the word error
 rate, after the readback parser's normalization), the measure LocalTC picked its Piper speakers by.
-
-Azure's run costs its characters (about 500 for the lines below) and is skipped without a key.
 """
 
 import statistics
@@ -55,7 +53,7 @@ def bench(cfg: Config, *, providers: list[str] | None = None, whisper: bool = Fa
     from localtc.tts.voices import download
 
     t = cfg.tts
-    wanted = providers or ["piper", "kokoro", "azure"]
+    wanted = providers or ["piper", "kokoro"]
     transcriber = None
     if whisper:
         from localtc.stt.whisper import WhisperTranscriber
@@ -71,10 +69,10 @@ def bench(cfg: Config, *, providers: list[str] | None = None, whisper: bool = Fa
         started = time.monotonic()
         try:
             if pid == "piper":
-                cfg.tts.provider, cfg.tts.kokoro = "piper", False
+                cfg.tts.provider = "piper"
                 chain = voice_chain(cfg, PiperSynth(download(t.voice, Path(t.voices_dir) if t.voices_dir else None), rate=t.rate))
             else:
-                cfg.tts.provider, cfg.tts.kokoro = pid, False
+                cfg.tts.provider = pid
                 chain = voice_chain(cfg, None)
         except Exception as exc:  # noqa: BLE001
             yield f"{pid}: can't load ({type(exc).__name__}: {exc})"

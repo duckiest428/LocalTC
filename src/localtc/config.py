@@ -326,22 +326,15 @@ class VoiceConfig(_Section):
 
 
 class TtsConfig(_Section):
-    """ATC's voice: speech (Piper, Kokoro or Azure: localtc.tts.providers), through a radio effect, out of the
-    speakers or headset."""
+    """ATC's voice: speech (Piper or Kokoro, both on this PC: localtc.tts.providers), through a radio effect, out of
+    the speakers or headset."""
 
     enabled: bool = True
-    # Who speaks: piper (on this PC, quick, always there) | kokoro (on this PC, more natural, slower; a 340 MB
-    # download) | azure (Microsoft's neural voices in the cloud: your own key, the words leave this PC).
-    # Falls back to Kokoro (when kokoro is on) and then Piper; with none, ATC is text.
-    provider: Literal["piper", "kokoro", "azure"] = "piper"
-    kokoro: bool = False  # Kokoro behind a cloud provider too (before Piper), when it's downloaded
+    # Who speaks: piper (quick, always there) | kokoro (more natural, slower; a 340 MB download). Kokoro falls back
+    # to Piper; with neither, ATC is text. The copilot talking in another language always has Piper's voice of it.
+    provider: Literal["piper", "kokoro"] = "piper"
     kokoro_model: Literal["fp32", "int8"] = "fp32"  # fp32 310 MB (the quicker on the CPUs tried); int8 88 MB
     kokoro_threads: int = 4  # CPU threads for Kokoro (the sim needs the rest)
-    azure_region: str = ""  # the region of your Azure Speech resource (eastus, westeurope, ...); the key isn't kept here
-    azure_monthly_chars: int = 500_000  # the allowance to stay within (F0, the free tier: 500,000 a month)
-    azure_per_minute: int = 20  # requests a minute (F0: 20); 0 for no limit (a paid resource)
-    azure_styles: bool = False  # the controller's manner as a speaking style, where the voice has one (billed characters)
-    cache_mb: float = 50.0  # cloud speech kept on this PC so a repeated line isn't sent again; 0 none
     timeout_s: float = 8.0  # the longest a provider may take for a line before the next is asked
     regional: bool = True  # stations speak their region's English (British in the UK, Australian in Australia) where a provider can
     voice: str = "en_US-libritts_r-medium"  # a Piper voice; multi-speaker voices give each controller its own
@@ -353,7 +346,6 @@ class TtsConfig(_Section):
     static: float = 0.35  # 0-1: hiss and squelch under the voice
     atis: bool = True  # read the ATIS aloud while it's tuned
     copilot: bool = True  # the copilot's calls are spoken too (in a different voice)
-    chatter_cloud: bool = False  # the other flights' pilots in a cloud voice too; off: the voices on this PC (no credits)
 
 
 class MixerConfig(_Section):
@@ -403,7 +395,7 @@ class CrewConfig(_Section):
     mode: Literal["auto", "llm", "mostly_llm", "semi", "scripted", "off"] = "auto"
     # Its answers may go past what the copilot knows from the sim and ATC (what's usual, how a system works): they can
     # be wrong. Off: a reply with a number the facts don't have is turned away. Commands are always checked.
-    beyond_facts: bool = False
+    beyond_facts: bool = True
     timeout_s: float = 6.0  # how long the copilot waits for the model (doubled on the CPU only)
     patience_s: float = 15.0  # at most this, whatever the model's usual pace on this PC
     # How much the copilot says by itself: "quiet" only what's safety (config, gear, not cleared to land, speed),
@@ -411,11 +403,15 @@ class CrewConfig(_Section):
     # Below 10,000 feet it never chats (the sterile cockpit).
     verbosity: Literal["quiet", "standard", "chatty"] = "standard"
     # "pm": the copilot works its own side (radios in standby, transponder, altimeter at the transition, exterior
-    # lights, gear and flaps after takeoff, the cleared altitude and heading); "calls": it touches nothing by itself.
-    hands: Literal["pm", "calls"] = "pm"
+    # lights, gear and flaps after takeoff, the cleared altitude and heading); "calls": it touches nothing by itself
+    # (what you ask it to do, it still does). Off by default: the aircraft is yours until you hand it its side.
+    hands: Literal["pm", "calls"] = "calls"
     # Chatty only: the key part of each ATC instruction said back to you in the moment before the readback ("Descend
     # and maintain 8,000."), unless you read it back first.
     repeat_atc: bool = False
+    # The language the copilot talks with you in (localtc.languages; "" English): what it says in conversation, and
+    # what it hears on the intercom. Its callouts, checklists and radio calls stay in aviation English.
+    language: str = ""
     # The checklists (the aircraft's own, else its family's normal checklist; none for an aircraft without): "offer"
     # each when it's due ("Before start checklist?"), "run" it straight away, or "off" only when asked for.
     checklists: Literal["offer", "run", "off"] = "offer"
@@ -445,6 +441,10 @@ class UiConfig(_Section):
     # A flight starts with its plan ("New Flight": the plan, then the flight). Off: Start flies without one, and "File
     # Plan" gives ATC the plan whenever the pilot has it, the flight going on (the plan is that flight's only).
     require_plan: bool = True
+    # The window's language (localtc.languages: en, de, fr, es, it, pt, nl, pl, sv, ru, zh). ``language_asked``: the
+    # pilot was asked once (the setup's first step, or once after the update that brought the languages).
+    language: str = "en"
+    language_asked: bool = False
     copilot: Literal["assist", "full"] = "full"  # what the app's copilot switch turns on
     # What the app connects to. Its own setting, never [source] kind: that is the command line's development
     # default (a recording), and the app must always fly the sim unless the pilot asks for a replay here.
@@ -562,7 +562,23 @@ def _migrate(data: dict) -> dict:
         old = llm.pop("understanding")
         llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
         data = {**data, "llm": llm}
+    tts = data.get("tts")
+    if isinstance(tts, dict) and (AZURE_KEYS & tts.keys() or tts.get("provider") == "azure"
+                                  or tts.get("voice") in ONE_VOICE_PIPER):
+        # Azure's voices are gone (Kokoro, when it stood in for them, speaks instead), and so are the Piper voices that
+        # gave every station the same voice.
+        tts = {k: v for k, v in tts.items() if k not in AZURE_KEYS}
+        if data["tts"].get("provider") == "azure":
+            tts["provider"] = "kokoro" if data["tts"].get("kokoro") else "piper"
+        if tts.get("voice") in ONE_VOICE_PIPER:
+            del tts["voice"]
+        data = {**data, "tts": tts}
     return data
+
+
+AZURE_KEYS = {"kokoro", "azure_region", "azure_monthly_chars", "azure_per_minute", "azure_styles", "cache_mb",
+              "chatter_cloud"}
+ONE_VOICE_PIPER = {"en_US-lessac-medium", "en_US-ryan-high", "en_GB-alan-medium", "en_US-lessac-low"}
 
 
 # --- the app's saved settings --------------------------------------------------------------------------------

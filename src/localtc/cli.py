@@ -841,7 +841,7 @@ def build_parser() -> argparse.ArgumentParser:
     veval.add_argument("--llm", choices=["off", "live"], default="live", help="understand with the model (default) or not")
     veval.set_defaults(func=_cmd_voice_eval)
 
-    tts = sub.add_parser("tts", help="ATC's voice (Piper, Kokoro, Azure)")
+    tts = sub.add_parser("tts", help="ATC's voice (Piper, Kokoro)")
     tts_sub = tts.add_subparsers(dest="tts_command", required=True)
     tdevices = tts_sub.add_parser("devices", help="list speakers and headsets")
     tdevices.set_defaults(func=_cmd_tts_devices)
@@ -852,15 +852,15 @@ def build_parser() -> argparse.ArgumentParser:
     tsay.add_argument("--no-effect", action="store_true", help="without the radio effect")
     tsay.add_argument("--out", help="write a WAV file instead of playing it")
     tsay.add_argument("--device", help="output: its number or part of its name (default: [tts] output_device)")
-    tsay.add_argument("--provider", choices=["piper", "kokoro", "azure"], help="this voice only (default: [tts] provider)")
+    tsay.add_argument("--provider", choices=["piper", "kokoro"], help="this voice only (default: [tts] provider)")
     tsay.add_argument("--locale", help="the station's English: en-US, en-GB, en-AU, ... (default: none in particular)")
     tsay.set_defaults(func=_cmd_tts_say)
     tkokoro = with_config(tts_sub.add_parser("kokoro", help="download the Kokoro voice model (once, 340 MB)"))
     tkokoro.add_argument("--model", choices=["fp32", "int8"], help="default: [tts] kokoro_model")
     tkokoro.set_defaults(func=_cmd_tts_kokoro)
     tbench = with_config(tts_sub.add_parser("bench", help="time each voice on the same ATC lines"))
-    tbench.add_argument("--provider", action="append", choices=["piper", "kokoro", "azure"],
-                        help="only this one (repeatable; default: Piper, and Kokoro and Azure when they can speak)")
+    tbench.add_argument("--provider", action="append", choices=["piper", "kokoro"],
+                        help="only this one (repeatable; default: Piper, and Kokoro when it can speak)")
     tbench.add_argument("--whisper", action="store_true", help="also score how well Whisper understands each, through the radio")
     tbench.set_defaults(func=_cmd_tts_bench)
 

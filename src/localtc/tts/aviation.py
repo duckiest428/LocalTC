@@ -3,7 +3,7 @@ turned into spoken aviation English, in one place.
 
 ATC's own words arrive already spoken (``AtcTransmission.spoken``: atc_core's phraseology says "runway three four
 left", "flight level three five zero"). What still has digits or codes in it (the copilot's lines, a language model's
-wording, a display text) is finished here, the same way for Piper, Kokoro and Azure, so no synthesizer reads a number
+wording, a display text) is finished here, the same way for Piper and Kokoro, so no synthesizer reads a number
 its own way: "119.2" is never "one hundred nineteen point two", "FL350" never "F L three hundred fifty", "2LT" never
 "two L T". Only words leave this module (no digits), so a voice can't change what a number means.
 """

@@ -1,10 +1,10 @@
 """Speech synthesizers behind one interface, and the chain that falls back through them.
 
-A *provider* turns words into mono float audio for a ``Persona`` (persona.py): Piper (on this PC, always there),
-Kokoro (on this PC, more natural, slower; kokoro.py) and Azure AI Speech (the cloud, optional; azure.py). Each says
+A *provider* turns words into mono float audio for a ``Persona`` (persona.py): Piper (always there, and the voice of
+the copilot's language: ``languages.py``) and Kokoro (more natural, slower; kokoro.py), both on this PC. Each says
 whether it's ready, and fails with a ``TtsError`` of a known kind.
 
-``VoiceChain`` asks them in a fixed order (the selected one, then Kokoro when it's on, then Piper) and the first
+``VoiceChain`` asks them in a fixed order (Kokoro when it's chosen, then Piper) and the first
 good audio is spoken. Every answer is checked (``check_audio``: mono, finite, not silent, not far too long for its
 words) before it's used. A provider that fails steps aside for a while, the same way each time:
 
@@ -54,7 +54,7 @@ class TtsError(Exception):
 
 
 class Provider(Protocol):
-    id: str  # "piper", "kokoro", "azure"
+    id: str  # "piper", "kokoro"
     name: str
     local: bool  # runs on this PC (nothing leaves it)
 
@@ -234,8 +234,7 @@ class VoiceChain:
             self.states[provider_id] = ProviderState()
 
     def status(self) -> list[dict]:
-        """Each provider: ready or why not, resting, how it has done this flight (latency, real-time factor), and its
-        own usage (Azure's characters this month)."""
+        """Each provider: ready or why not, resting, how it has done this flight (latency, real-time factor)."""
         now = self.clock()
         out = []
         for i, p in enumerate(self.providers):
@@ -250,9 +249,6 @@ class VoiceChain:
                    "latency_ms": round(statistics.median(st.latency_ms)) if st.latency_ms else None,
                    "latency_p95_ms": round(sorted(st.latency_ms)[int(0.95 * (len(st.latency_ms) - 1))]) if st.latency_ms else None,
                    "rtf": round(statistics.median(st.rtf), 3) if st.rtf else None, "speaking": p.id == self.last_via}
-            usage = getattr(p, "usage", None)
-            if callable(usage):
-                row["usage"] = usage()
             out.append(row)
         return out
 
@@ -266,9 +262,46 @@ class PiperVoices:
     name = "Piper"
     local = True
 
-    def __init__(self, synth: Any, *, speakers: tuple[int, ...] = SPEAKERS) -> None:
+    def __init__(self, synth: Any, *, speakers: tuple[int, ...] = SPEAKERS, voices_dir: Any = None) -> None:
         self.synth = synth
         self.speakers = speakers
+        self.voices_dir = voices_dir  # where the voice packs of the copilot's language are kept (None: the default)
+        self._spoken: dict[str, Any] = {}  # each language's voices, loaded once
+        self._fetching: set[str] = set()
+
+    def _voice_of(self, code: str, sex: str) -> tuple[Any, int | None]:
+        """The voice of the copilot's language and sex from its pack (languages.py), loaded once, and its speaker. Not
+        downloaded yet: the pack is fetched meanwhile, and this line is text only (an English voice reading German was
+        no use)."""
+        from localtc.languages import language
+        from localtc.tts.voices import installed, voice_path
+
+        lang = language(code)
+        if lang is None or not lang.voices:
+            raise TtsError("unavailable", f"no Piper voice for {code}")
+        name, speaker = lang.voice_for(sex)
+        if name not in self._spoken:
+            if not all(installed(v, self.voices_dir) for v in lang.voices):
+                if lang.code not in self._fetching:
+                    self._fetching.add(lang.code)
+                    threading.Thread(target=self._fetch, args=(lang,), daemon=True, name="piper-voice").start()
+                raise TtsError("unavailable", f"the {lang.english} voices are downloading")
+            from localtc.tts.synth import PiperSynth
+
+            # (At its natural pace: ATC's brisk rate made the smaller voices of a language hard to follow.)
+            self._spoken[name] = PiperSynth(voice_path(name, self.voices_dir), rate=1.0)
+        return self._spoken[name], speaker
+
+    def _fetch(self, lang: Any) -> None:
+        from localtc.tts.voices import download
+
+        try:
+            for voice in lang.voices:
+                download(voice, self.voices_dir)
+        except Exception as exc:  # noqa: BLE001 - a pack that can't be fetched: text only, as now
+            log.warning("Couldn't download the %s voices: %s", lang.english, exc)
+        finally:
+            self._fetching.discard(lang.code)
 
     def ready(self) -> str:
         return ""
@@ -287,6 +320,10 @@ class PiperVoices:
         return speaker_for(persona.key, count, self.speakers)
 
     def synthesize(self, text: str, persona: Persona) -> Speech:
+        if persona.foreign:  # the copilot in the pilot's language: that language's voice, at its own pace
+            synth, speaker = self._voice_of(persona.language, persona.sex)
+            speech = synth.synthesize(text, speaker)
+            return Speech(speech.audio, speech.rate, speech.latency_ms, "piper", synth.voice_file.stem)
         speaker = self.speaker(persona)
         how = delivery_for(persona.key, persona.manner)
         noise_scale, noise_w = how.noise_scale, how.noise_w

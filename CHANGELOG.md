@@ -6,7 +6,63 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.5] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **LocalTC in your language**: the whole window now comes in German, French, Spanish, Italian, Portuguese, Dutch,
+  Polish, Swedish, Russian and Mandarin as well as English. The language is the setup guide's first question, can be
+  changed any time in Settings (the gear), and a pilot who had LocalTC before is asked once. ATC stays in aviation
+  English, as on the real radio.
+- **The copilot talks with you in your language**: what it says to you, and what it hears from you on the intercom, in
+  the language you picked (speech recognition that knows it, and a voice that speaks it). Its callouts, checklists and
+  radio calls stay in aviation English. Each language has a voice pack of its own, a woman's and a man's voice native
+  to it (the copilot's voice setting picks between them), downloaded by itself when the language is picked, with a
+  preview of each in Quick Settings → Models.
+- **A preview for every voice**: Piper, Kokoro, and your language's voices each have a ▶ Preview in Quick Settings →
+  Models, and the setup guide's "Hear ATC" plays the voice chosen.
+- **The setup guide asks about the copilot**: fly with a copilot or alone, and whether it may work its side of the
+  cockpit; choosing who it is comes next, and is skipped when you fly alone. The second step suggests a free Mistral
+  key for the language model, and the last offers LocalTC's traffic (EXPERIMENTAL), reminding you to turn off any other
+  live traffic first.
+- **A section of its own for the language models** in Quick Settings: the model on this PC, then ATC's and the
+  copilot's settings, apart from the speech recognition and the voices.
+
+### Changed
+- **One place to choose the copilot's language model**: "Its language model" (the cloud's, this PC's, or none), then
+  how much it leans on it. The cloud card's own copilot switch and the "Off" among the script-or-model choices are gone.
+- **The voices, laid out plainly**: Piper and Kokoro side by side in Quick Settings → Models, each with its state, its
+  download and a preview, no longer folded away.
+- **The copilot's defaults**: "Let it answer beyond what it knows from the sim and ATC" is now on, and the copilot no
+  longer works its side of the cockpit unless you ask it to (Settings, or the setup guide).
+- **The popups take turns**: the setup guide, the language question, the welcome notes, what's new and the account
+  prompt open one at a time, never one over another, and a message shown with a dialog open is seen over it.
+- **At night, the ATIS gives the instrument approach** where the runway has one, not the visual.
+- **Ground says "caution, aircraft stopped ahead"** about traffic stopped in front of you, not "hold position": you
+  holding while it waited for you left both stuck.
+- **LocalTC's traffic** lines up and waits after its takeoff clearance is given on the radio before it rolls, a line of
+  aircraft goes round one that hasn't moved in two minutes, and the real-world flight with your own callsign isn't
+  shown beside you.
+
+### Removed
+- **Azure AI Speech**: every voice now runs on this PC. A settings file that chose Azure has Kokoro where Kokoro stood
+  in for it, else Piper; nothing is sent to Microsoft any more.
+- **Piper's single-voice models** (Lessac, Ryan, Alan), with which every station sounded the same: LibriTTS gives each
+  station its own voice from one download.
+
+### Fixed
+- **Arriving traffic taken away in the air**: the check for aircraft frozen in the air removed real arrivals that were
+  still being reported; it now goes by the live reports.
+- **A pushback, taxi or clearance request said to the copilot** ("ask ground for pushback") is made on the radio, not
+  answered on the intercom.
+- **"Yes, please do it"** and **"just please"** are taken as yes to the copilot's offer to run a checklist, and the
+  copilot no longer says it ran a checklist it didn't.
+- **A fix spelled out in a readback** ("direct E-B-A-K-E") is read as that fix, a taxiway and a number said apart
+  ("Alpha 15") aren't joined into another taxiway, and "runway 22 to the left" is heard as 22 left.
+- **A setting the aircraft won't take**: the copilot no longer says "set" and then that it couldn't; after two failed
+  tries at a control it leaves it to you and says so once.
+- **"Shutdown checklist?"** isn't offered while still taxiing in: only stopped, with the engines having run or the
+  parking brake set.
+- **On a visual approach** the copilot says it went through the final, not the localizer.
+- The log's "words count mismatch" warnings from Kokoro's pronunciation are gone (they never affected the voice).
+- A long choice in Quick Settings no longer makes the page scroll sideways.
 
 ## [0.5.0] - 2026-10-26
 

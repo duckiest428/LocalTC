@@ -266,9 +266,8 @@
         <li><b>Recommended language model: Mistral</b>, free with your own key (Quick Settings &rarr; Cloud language model).
           It understands far more than the model on your PC and words ATC's replies naturally. The local model works
           offline, just more strictly.</li>
-        <li><b>Recommended voices: Azure AI Speech</b>, free up to 500,000 characters a month with your own key (Quick
-          Settings &rarr; ATC voice): the most natural voices, with each region's accent. <b>Kokoro</b> is a good
-          voice that runs on your PC; <b>Piper</b> is the fast default.</li>
+        <li><b>Voices.</b> Piper is the fast default. Kokoro sounds more natural and runs on your PC too, a little slower
+          (Quick Settings &rarr; Models, with a preview of each).</li>
         <li><b>Speech-to-text:</b> the bigger Whisper model (small.en, or medium.en with an NVIDIA GPU) hears you
           much better than base.en, if your PC can spare it alongside the sim.</li>
         <li><b>Your flight plan:</b> put your SimBrief username in New Flight and LocalTC clears you as filed, with your
@@ -348,8 +347,17 @@
   </form>
 </dialog>
 
-<div class="toast" id="toast" hidden></div>
+<!-- The language, asked once of a pilot who had LocalTC before it came in other languages (app.js Language) -->
+<dialog id="dlg-language" class="dialog lang-dialog" aria-label="Language">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><h2>Your language</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
+    <div class="help" id="language-body"></div>
+  </form>
+</dialog>
 
+<div class="toast" id="toast" popover="manual" hidden></div>
+
+<script src="/static/i18n.js"></script>
 <script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/flightsmap.js"></script>
 <script src="/static/atcmap.js"></script>

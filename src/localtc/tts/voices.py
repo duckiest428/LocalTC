@@ -9,7 +9,10 @@ every time.
 import json
 import logging
 import os
+import urllib.parse
+import urllib.request
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,8 +27,7 @@ SPEAKERS: tuple[int, ...] = (
 PILOT_SPEAKER_SALT = "pilot"
 
 # Who each speaker of DEFAULT_VOICE is ("F"/"M", by speaker index), for choosing the copilot's voice: LibriSpeech's
-# SPEAKERS.TXT through the voice's speaker_id_map. The single-speaker voices, by hand.
-SINGLE_VOICE_SEX = {"en_US-lessac-medium": "F", "en_US-lessac-low": "F", "en_US-ryan-high": "M", "en_GB-alan-medium": "M"}
+# SPEAKERS.TXT through the voice's speaker_id_map.
 CREW_PICKS = 8  # voices offered per sex in the copilot settings
 
 
@@ -43,7 +45,7 @@ SPEAKER_SEX = _sex_table()
 def sex_of(speaker: int | None, voice: str = DEFAULT_VOICE) -> str:
     """"F", "M", or "" when unknown."""
     if speaker is None:
-        return SINGLE_VOICE_SEX.get(voice, "")
+        return ""
     return SPEAKER_SEX[speaker] if voice == DEFAULT_VOICE and 0 <= speaker < len(SPEAKER_SEX) else ""
 
 
@@ -78,15 +80,32 @@ def installed(voice: str, voices_dir: Path | None = None) -> bool:
     return path.is_file() and path.with_suffix(".onnx.json").is_file()
 
 
-def download(voice: str = DEFAULT_VOICE, voices_dir: Path | None = None) -> Path:
-    """Fetch a voice (once) from the Piper voices collection; returns the .onnx path."""
-    from piper.download_voices import download_voice
+VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
 
+
+def download(voice: str = DEFAULT_VOICE, voices_dir: Path | None = None,
+             progress: Callable[[float], None] | None = None) -> Path:
+    """Fetch a voice (once) from the Piper voices collection; returns the .onnx path. Each file is written beside
+    its place and moved there whole (a download cut short is never taken for the voice), and the address is quoted
+    ("pt_PT-tugão-medium": piper's own downloader can't ask for it). ``progress``: 0-1 as the model comes."""
     target = voices_dir or default_voices_dir()
     target.mkdir(parents=True, exist_ok=True)
-    if not installed(voice, target):
-        log.info("Downloading Piper voice %s to %s", voice, target)
-        download_voice(voice, target)
+    if installed(voice, target):
+        return voice_path(voice, target)
+    lang, name, quality = voice.split("-", 2)
+    log.info("Downloading Piper voice %s to %s", voice, target)
+    for ext in (".onnx.json", ".onnx"):
+        url = VOICES_URL + urllib.parse.quote(f"{lang.split('_')[0]}/{lang}/{name}/{quality}/{voice}{ext}")
+        path = target / f"{voice}{ext}"
+        part = path.with_name(path.name + ".part")
+        with urllib.request.urlopen(url, timeout=30) as response, open(part, "wb") as out:
+            size, got = int(response.headers.get("Content-Length") or 0), 0
+            while chunk := response.read(1 << 20):
+                out.write(chunk)
+                got += len(chunk)
+                if progress and size and ext == ".onnx":
+                    progress(got / size)
+        part.replace(path)
     return voice_path(voice, target)
 
 

@@ -49,11 +49,7 @@ WHISPER_MODELS = (
 )
 PIPER_VOICES = (
     ModelOption("en_US-libritts_r-medium", "LibriTTS (every controller a different voice)", 80, "fast", "good",
-                "Recommended. 904 speakers in one download: each station keeps its own voice.", tested=True),
-    ModelOption("en_US-lessac-medium", "Lessac (US, one voice)", 63, "fast", "good", "Every station sounds the same."),
-    ModelOption("en_US-ryan-high", "Ryan (US, one voice)", 120, "medium", "better", "Clearer, a bit slower."),
-    ModelOption("en_GB-alan-medium", "Alan (British, one voice)", 63, "fast", "good", "Every station sounds the same."),
-    ModelOption("en_US-lessac-low", "Lessac low (US, one voice)", 20, "instant", "basic", "Smallest and fastest."),
+                "904 speakers in one download: each station keeps its own voice.", tested=True),
 )
 
 
@@ -178,14 +174,23 @@ def status(cfg) -> list[ModelStatus]:
     out.append(ModelStatus("whisper", whisper, (model_path(whisper, models_dir) / "model.bin").exists()))
     voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None
     out.append(ModelStatus("voice", cfg.tts.voice, voice_installed(cfg.tts.voice, voices_dir)))
+    from localtc.languages import language
+
+    if (lang := language(cfg.crew.language)) is not None and cfg.crew.enabled and lang.voices:
+        # The copilot talking in the pilot's language: that language's voice pack on this PC.
+        out.append(ModelStatus("voice_lang", ", ".join(lang.voices),
+                               all(voice_installed(v, voices_dir) for v in lang.voices)))
     return out
 
 
 def whisper_model(cfg) -> str:
     """The Whisper model a flight will load ("auto" resolved without importing the GPU libraries)."""
-    if cfg.voice.model != "auto":
-        return cfg.voice.model
-    return "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0]) else "base.en"
+    model = cfg.voice.model if cfg.voice.model != "auto" else \
+        "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0]) else "base.en"
+    from localtc.languages import language
+
+    # The copilot talked to in another language: the same size that knows them all (the radio still heard as English).
+    return model.removesuffix(".en") if language(cfg.crew.language) is not None else model
 
 
 Progress = Callable[[str, float | None], None]  # (message, fraction 0-1 or None when unknown)
@@ -210,6 +215,20 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         path = download(cfg.tts.voice, voices_dir)
         say(f"Voice ready ({path.stat().st_size // 2**20} MB)" if path.exists() else "Voice ready", 1.0)
         return voice_path(cfg.tts.voice, voices_dir).exists()
+    if kind == "voice_lang":
+        from localtc.languages import language
+        from localtc.tts.voices import download, installed
+
+        lang = language(cfg.crew.language)
+        if lang is None or not lang.voices:
+            return True
+        voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None
+        for i, voice in enumerate(lang.voices):
+            say(f"Downloading the {lang.english} voices ...", i / len(lang.voices))
+            download(voice, voices_dir, lambda f, i=i: say(f"Downloading the {lang.english} voices ...",
+                                                           (i + f) / len(lang.voices)))
+        say(f"The {lang.english} voices are ready", 1.0)
+        return all(installed(v, voices_dir) for v in lang.voices)
     if kind == "kokoro":
         from localtc.tts import kokoro
         from localtc.tts.voices import default_voices_dir

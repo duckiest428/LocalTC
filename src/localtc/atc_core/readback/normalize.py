@@ -49,6 +49,8 @@ def normalize(text: str) -> list[Token]:
     lowered = re.sub(r"\b(point|decimal) (?:to|too)\b", r"\1 two", lowered)
     lowered = re.sub(r"\b(point|decimal) (?:for|fore)\b", r"\1 four", lowered)
     lowered = re.sub(r"\b(?:an? )?(?:i less|eye less|i l s|i els|iless)\b", "an ils", lowered)  # "an I-less for 26 left"
+    # "Runway 22 to the left" is speech-to-text's "22 left" (it was read as a pushback "tail left").
+    lowered = re.sub(r"\b(runway \w+(?: \w+)?) to the (left|right|center|centre)\b", r"\1 \2", lowered)
     matches = list(TOKEN_RE.finditer(lowered))
     raw = [m.group() for m in matches]
     # Digits glued to letters ("2LT", "EXP69") belong to a word; they're never one of a list of digits.

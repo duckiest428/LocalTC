@@ -71,7 +71,7 @@ CHECK_S = 3.0  # the sim shows a command within this, or it didn't take
 CONFIRM_S = 10.0  # a question waits this long for its "yes"
 OFFER_S = 15.0  # "send it?" for a radio call said on the intercom
 OWN_HANDS_FAILED = 2  # the copilot's own switches not taking this many times, none ever taking: it can't reach them
-CONTROL_FAILED = 2  # one control not taking this many times, its reading never moving: left to the pilot
+CONTROL_FAILED = 2  # one control not taking this many times: left to the pilot
 PAUSE_SUMMARY_S = 120.0
 TUNE_WAIT_S = 3.0  # a call asked for on another frequency: made this long after tuning it
 REPEAT_HEARD_S = 3.0  # the same words on the intercom again this soon: one utterance, not two  # back from a pause this long: what's going on, in a sentence or two
@@ -885,7 +885,7 @@ class PilotMonitoring:
 
     # --- questions and answers --------------------------------------------------------------------------------------
 
-    def _ask(self, t: float, intent: Intent, kind: str) -> CrewSpeech:
+    def _ask(self, t: float, intent: Intent, kind: str, language: str = "") -> CrewSpeech:
         """Ask the pilot; the answer counts for this question only (a new one replaces it)."""
         if self.intent is not None:
             self.deck.note("replaced", t, f"{self.intent.question} -> {intent.question}", utterance=intent.utterance)
@@ -894,7 +894,7 @@ class PilotMonitoring:
         self.intent = intent
         self.deck.note("asked", t, intent.question, utterance=intent.utterance,
                        action=", ".join(str(c) for c in intent.commands) or intent.text)
-        return self._say(t, intent.question, kind)
+        return self._say(t, intent.question, kind, language=language)
 
     def _context(self, commands: tuple[Command, ...]) -> dict[str, Any]:
         """What a question depends on: if any of it changes before the answer, the answer isn't taken for it."""
@@ -1041,7 +1041,7 @@ class PilotMonitoring:
                         question = f"{(words or str(cmd)).rstrip('.!')}, confirm?"
                         return [*exchanges, self._ask(t, Intent(0, "do", (cmd,), question, t, t + CONFIRM_S,
                                                                 self._context((cmd,)), uid), "confirm")]
-                    return [*exchanges, self._say(t, again.reply)]
+                    return [*exchanges, self._say(t, again.reply, language=self.model.language)]
             remark = REMARK.match(text.lower().strip()) is not None
             if why.startswith(("claims", "reassures", "names a place")) or (remark and why):
                 # Its reply turned away (it said what isn't so, or made a command of a remark: "time to start up our
@@ -1051,7 +1051,7 @@ class PilotMonitoring:
                 return [*exchanges, self._say(t, "Can't tell that from here." if asked else "Copy.")]
             return [*exchanges, self._say(t, "Say again?")]  # a command it couldn't make out, or no reply at all
         if reading.command is None:
-            return [*exchanges, self._say(t, reading.reply)]
+            return [*exchanges, self._say(t, reading.reply, language=self.model.language)]
         cmd = reading.command
         if grammar and any(g.action == cmd.action and g.value.lower() == cmd.value.lower() for g in grammar):
             return [*exchanges, *self._command(t, cmd, None, uid)]  # the model and the grammar read the same
@@ -1062,7 +1062,7 @@ class PilotMonitoring:
         # Read by the model only: never done without the captain's "yes".
         question = verdict.reason if verdict.kind == "confirm" else f"{reading.reply.rstrip('.!')}, confirm?"
         return [*exchanges, self._ask(t, Intent(0, "do", (cmd,), question, t, t + CONFIRM_S, self._context((cmd,)), uid),
-                                      "confirm"),
+                                      "confirm", language=self.model.language if verdict.kind != "confirm" else ""),
                 CrewAction(t=t, action=cmd.action, value=cmd.value, outcome="confirm", detail="read by the language model")]
 
     def _do(self, t: float, cmd: Command) -> list[Any]:
@@ -1131,9 +1131,10 @@ class PilotMonitoring:
             # Its switches never reach this aircraft: calls only from now on, said once.
             self.monitor.hands_dead = True
             out.append(self._say(t, "My switches aren't reaching this aircraft. I'll leave them to you and call.", "alert"))
-        elif self._failures[p.action] >= CONTROL_FAILED and not self.cockpit.trusts(p.reads) \
-                and p.action not in self.cockpit.dead and not self.monitor.hands_dead:
-            # This one control never moves for the copilot (an A350's autopilot knobs): left to the pilot, said once.
+        elif self._failures[p.action] >= CONTROL_FAILED and p.action not in self.cockpit.dead and not self.monitor.hands_dead:
+            # This one control never moves for the copilot (an A350's autopilot knobs, an A220's): left to the pilot,
+            # said once. (Its reading seen to move when the pilot set it, the copilot asked "can you set it?" for every
+            # altitude and heading of the flight.)
             self.cockpit.dead.add(p.action)
             self.deck.memory.preferences.setdefault("not reaching", "")
             out.append(self._say(t, f"My {_said(Command(p.action, p.value)).split()[0]} inputs aren't reaching this "
@@ -1156,7 +1157,10 @@ class PilotMonitoring:
             return []
         text, spoken = held.text, held.spoken
         for p in held.failed:
-            text = text.replace(p.done, "").replace(p.done.rstrip("."), "").strip(" ,.")
+            # However it was worded ("Heading 045, set." for "Heading 045 set."): not said as done, then "I couldn't".
+            words = re.findall(r"[\w'/]+", p.done)
+            if words:
+                text = re.sub(r"[\s,]*".join(re.escape(w) for w in words) + r"[.!]?", "", text, flags=re.I).strip(" ,.")
             text = f"{text}." if text and text[-1] not in ".!?" else text
             spoken = ""
         asks = [_ask_pilot(p, p.done.rstrip(".").replace(" set", "")) for p in held.failed
@@ -1230,7 +1234,9 @@ class PilotMonitoring:
         st = getattr(self.engine, "state", None)
         return (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
 
-    def _say(self, t: float, text: str, kind: str = "reply", spoken: str = "") -> CrewSpeech:
+    def _say(self, t: float, text: str, kind: str = "reply", spoken: str = "", language: str = "") -> CrewSpeech:
+        if language:  # the model's words in the pilot's language: as they are, in a voice of that language
+            return self._line(CrewSpeech(t=t, text=text, spoken=spoken, kind=kind, language=language))
         if not self.personality.neutral and kind == "reply":  # their "check", and their own way of talking
             said = personalities.ack(self.personality, self.monitor.rng) if text in ("Check.", "Copy.") else                 personalities.chat(self.personality, text, self.monitor.rng)
             if said != text:

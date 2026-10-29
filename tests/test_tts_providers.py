@@ -1,13 +1,13 @@
-"""The voices behind one interface (localtc.tts.providers): Piper, Kokoro and Azure given the same words, each person
-the same voice every time, the radio and intercom as before, and every way a voice can fail falling back in the same
-order (the chosen one, Kokoro, Piper, then text) without ever stopping ATC.
+"""The voices behind one interface (localtc.tts.providers): Piper and Kokoro given the same words, each person the
+same voice every time, the radio and intercom as before, and every way a voice can fail falling back in the same order
+(Kokoro when chosen, Piper, then text) without ever stopping ATC; the copilot in another language in that language's
+own voice.
 
-The real synthesizers aren't needed: Kokoro gets a fake engine, Azure a fake transport. ``-m voices`` runs Piper and
-Kokoro for real (they need their downloads) and checks they keep up with speech.
+The real synthesizers aren't needed: Kokoro gets a fake engine. ``-m voices`` runs Piper and Kokoro for real (they
+need their downloads) and checks they keep up with speech.
 """
 
 import asyncio
-import json
 import threading
 import time
 from dataclasses import dataclass
@@ -18,9 +18,8 @@ import pytest
 
 from localtc.bus import EventBus
 from localtc.sim_api import AtcTransmission, AtisBroadcast, CrewSpeech, RadioChatter, Transcript
-from localtc.tts import azure, kokoro
+from localtc.tts import kokoro
 from localtc.tts.aviation import digits_in, speakable
-from localtc.tts.azure import AudioCache, AzureVoices, Usage, ssml
 from localtc.tts.kokoro import KokoroVoices
 from localtc.tts.persona import Casting, persona_for
 from localtc.tts.player import Clip
@@ -120,31 +119,6 @@ class FakeKokoro:
         return tone(0.4, 24000), 24000
 
 
-class AzureFake:
-    """Azure's REST API: records each request; answers PCM, or the status it's told to."""
-
-    def __init__(self, status: int = 200, headers: dict | None = None, body: bytes | None = None, voices: list | None = None):
-        self.status, self.headers, self.body, self.voices = status, headers or {}, body, voices
-        self.requests: list[tuple[str, str, bytes | None, dict]] = []
-
-    def __call__(self, method, url, body, headers, timeout_s):
-        self.requests.append((method, url, body, headers))
-        if method == "GET":
-            return (200, {}, json.dumps(self.voices).encode()) if self.voices is not None else (404, {}, b"")
-        if isinstance(self.status, Exception):
-            raise self.status
-        pcm = (tone(0.5, 24000) * 32767).astype("<i2").tobytes() if self.body is None else self.body
-        return self.status, self.headers, pcm if self.status == 200 else (self.body or b"refused")
-
-    @property
-    def posts(self):
-        return [r for r in self.requests if r[0] == "POST"]
-
-
-def azure_voices(transport=None, **kw) -> AzureVoices:
-    return AzureVoices("k3y", "eastus", transport=transport or AzureFake(), **kw)
-
-
 def speak(events, voices, *, settle: float = 0.15, **kw) -> FakePlayer:
     player = FakePlayer()
 
@@ -206,20 +180,18 @@ def test_atcs_own_spoken_words_pass_through():
 
 @pytest.mark.parametrize("text", PHRASES)
 def test_every_provider_is_given_the_identical_words(text):
-    synth, kokoro_engine, transport = FakeSynth(), FakeKokoro(), AzureFake()
-    providers = [azure_voices(transport), KokoroVoices(Path("/nonexistent"), engine=kokoro_engine), PiperVoices(synth)]
+    synth, kokoro_engine = FakeSynth(), FakeKokoro()
+    providers = [KokoroVoices(Path("/nonexistent"), engine=kokoro_engine), PiperVoices(synth)]
     words = speakable(text)
     for provider in providers:
         speech = check_audio(provider.synthesize(words, persona_for("Paine Tower", manner="tower")), words)
         assert speech.audio.dtype == np.float32 and speech.audio.ndim == 1
-    sent = transport.posts[0][2].decode()
-    assert f">{words}<" in sent or f">{words}</prosody>" in sent  # the words, as they are, inside the SSML
     assert kokoro_engine.calls[0][0] == words
     assert synth.said[0][0] == words
 
 
 def test_the_service_hands_every_provider_the_same_line_when_the_first_ones_fail():
-    first, second, piper = Fake("azure", fail="network"), Fake("kokoro", fail="timeout"), FakeSynth()
+    first, second, piper = Fake("first", fail="network"), Fake("kokoro", fail="timeout"), FakeSynth()
     chain = VoiceChain([first, second, PiperVoices(piper)])
     speak([atc("Delta 234, climb FL350.")], chain)
     assert first.said == second.said == [piper.said[0][0]] == ["Delta two three four, climb flight level three five zero."]
@@ -240,9 +212,7 @@ def test_roles_are_different_people():
     assert len(keys) == 3
     assert persona_for("", "copilot", sex="F").sex == "F" and persona_for("", "copilot", sex="male").sex == "M"
     atis = persona_for("Paine Field ATIS", "atis")
-    assert atis.manner == "atis" and atis.pitch == 0 and atis.style == ""  # the recording: even, no manner
-    assert persona_for("Paine Tower", "atc", manner="tower:calm").style == "calm"
-    assert persona_for("Paine Tower", "atc", manner="tower:hurried").style == ""  # nothing that would exaggerate
+    assert atis.manner == "atis" and atis.pitch == 0  # the recording: even, no manner
 
 
 def test_the_copilot_keeps_its_sex_in_every_provider():
@@ -289,214 +259,54 @@ def test_kokoro_blends_are_voices_of_their_own():
     assert np.allclose(blend, 0.6 * len("am_michael") + 0.4 * len("am_fenrir"))
 
 
-@pytest.mark.parametrize(("locale", "prefix"), [("en-GB", "en-GB-"), ("en-AU", "en-AU-"), ("en-US", "en-US-"),
-                                                ("en-IE", "en-IE-"), ("", "en-US-")])
-def test_azure_casts_from_the_regions_voices(locale, prefix):
-    voices = azure_voices()
-    loc, voice = voices.voice_for(persona_for("Heathrow Tower", locale=locale))
-    assert voice.startswith(prefix) or (locale == "en-IE" and voice.startswith("en-GB-"))
-
-
-def test_azure_reads_the_regions_voice_list_and_leaves_out_childrens_and_previews():
-    listed = [
-        {"ShortName": "en-GB-RyanNeural", "Locale": "en-GB", "Gender": "Male", "VoiceType": "Neural", "Status": "GA",
-         "StyleList": ["cheerful", "chat"]},
-        {"ShortName": "en-GB-MaisieNeural", "Locale": "en-GB", "Gender": "Female", "VoiceType": "Neural", "Status": "GA"},
-        {"ShortName": "en-GB-SoniaNeural", "Locale": "en-GB", "Gender": "Female", "VoiceType": "Neural", "Status": "GA"},
-        {"ShortName": "en-GB-OllieMultilingualNeural", "Locale": "en-GB", "Gender": "Male", "VoiceType": "Neural"},
-        {"ShortName": "fr-FR-DeniseNeural", "Locale": "fr-FR", "Gender": "Female", "VoiceType": "Neural", "Status": "GA"},
-    ]
-    voices = azure_voices(AzureFake(voices=listed)).voices()
-    assert voices == {"en-GB": {"M": ("en-GB-RyanNeural",), "F": ("en-GB-SoniaNeural",)}}
-
-
-@pytest.mark.parametrize(("airport", "locale", "voice_prefix", "english"), [
-    ("EDDF", "de-DE", "de-DE-", "en-GB"), ("LFPG", "fr-FR", "fr-FR-", "en-GB"), ("RJTT", "ja-JP", "ja-JP-", "en-GB"),
-    ("SBGR", "pt-BR", "pt-BR-", "en-US"), ("RKSI", "ko-KR", "ko-KR-", "en-GB"), ("LIRF", "it-IT", "it-IT-", "en-GB"),
-])
-def test_azure_gives_every_region_its_own_voice_speaking_english(airport, locale, voice_prefix, english):
-    """Only England's controllers sounded of somewhere: Frankfurt's speak English in a German voice, Tokyo's in a
-    Japanese one (Azure's multilingual voices of the region, told to speak English)."""
-    from localtc.atc_core.region import accent
-
-    assert accent(airport) == locale
-    voices = azure_voices()
-    loc, voice = voices.voice_for(persona_for(f"{airport} Tower", locale=locale))
-    assert voice.startswith(voice_prefix) and "Multilingual" in voice
-    doc, _ = ssml("cleared to land", voice, loc)
-    assert f'<lang xml:lang="{english}">cleared to land</lang>' in doc
-
-
-def test_a_region_azure_has_no_voice_for_gets_the_nearest_english():
-    voices = azure_voices()
-    loc, voice = voices.voice_for(persona_for("EPWA Tower", locale="pl-PL"))  # no multilingual Polish voice known
-    assert loc == "en-GB" and voice.startswith("en-GB-")
-
-
-# --- SSML and Azure's allowance ----------------------------------------------------------------------------------
-
-
-def test_ssml_escapes_the_words_and_bills_only_what_azure_bills():
-    doc, billable = ssml("Tom & Jerry <3", "en-US-GuyNeural", "en-US")
-    assert "Tom &amp; Jerry &lt;3" in doc and billable == len("Tom &amp; Jerry &lt;3")
-    doc, billable = ssml("cleared to land", "en-US-GuyNeural", "en-US", rate=1.15, pitch=-3)
-    assert '<prosody rate="+15%" pitch="-3%">cleared to land</prosody>' in doc
-    assert billable == len('<prosody rate="+15%" pitch="-3%">cleared to land</prosody>')
-    assert "prosody" not in ssml("x", "v", "en-US", rate=1.0, pitch=0)[0]  # no markup that changes nothing
-
-
-def test_azure_speaks_the_regions_voice_with_its_pace_and_pitch():
-    transport = AzureFake()
-    voices = azure_voices(transport, rate=1.1)
-    speech = voices.synthesize("cleared to land", persona_for("Heathrow Tower", locale="en-GB", manner="tower"))
-    method, url, body, headers = transport.posts[0]
-    assert url == "https://eastus.tts.speech.microsoft.com/cognitiveservices/v1"
-    assert headers["Ocp-Apim-Subscription-Key"] == "k3y" and headers["X-Microsoft-OutputFormat"] == "raw-24khz-16bit-mono-pcm"
-    assert headers["Content-Type"] == "application/ssml+xml"
-    assert b'xml:lang="en-GB"' in body and b"<voice name=\"en-GB-" in body
-    assert speech.rate == 24000 and speech.provider == "azure" and abs(speech.audio).max() > 0.4
-
-
-def test_azure_counts_its_characters_by_month_and_keeps_them(tmp_path):
-    month = ["2026-10"]
-    usage = Usage(tmp_path / "usage.json", limit=1000, month=lambda: month[0])
-    voices = azure_voices(usage=usage)
-    voices.synthesize("cleared to land", persona_for("A Tower", "atis"))  # no pace or pitch: just the words
-    assert usage.chars == len("cleared to land") and usage.summary()["calls"] == 1
-    assert Usage(tmp_path / "usage.json", month=lambda: month[0]).chars == usage.chars  # kept on disk
-    month[0] = "2026-11"
-    assert usage.chars == 0  # a new month
-
-
-def test_azure_stops_at_the_monthly_allowance_and_piper_carries_on(tmp_path):
-    usage = Usage(tmp_path / "u.json", limit=100)
-    usage.add(97)
-    transport, piper = AzureFake(), FakeSynth()
-    chain = VoiceChain([azure_voices(transport, usage=usage), PiperVoices(piper)])
-    speech = chain.speak("cleared to land runway two seven left", persona_for("A Tower"))
-    assert speech.provider == "piper" and not transport.posts  # nothing sent past the allowance
-    row = chain.status()[0]
-    assert row["failures"] == {"quota": 1} and row["resting_s"] > 0 and row["usage"]["left"] == 3
-
-
-def test_azure_keeps_to_twenty_requests_a_minute():
-    clock = [0.0]
-    voices = azure_voices(clock=lambda: clock[0])
-    for _ in range(20):
-        voices._take_slot()
-    with pytest.raises(TtsError) as exc:
-        voices._take_slot()
-    assert exc.value.kind == "rate_limit" and exc.value.retry_after == pytest.approx(60.0)
-    clock[0] = 61.0
-    voices._take_slot()
-
-
-def test_a_line_heard_before_comes_from_the_cache_and_costs_nothing(tmp_path):
-    transport = AzureFake()
-    usage = Usage(None)
-    voices = azure_voices(transport, usage=usage, cache=AudioCache(tmp_path))
-    who = persona_for("Paine Field ATIS", "atis")
-    a = voices.synthesize("paine field information charlie", who)
-    chars = usage.chars
-    b = voices.synthesize("paine field information charlie", who)
-    assert len(transport.posts) == 1 and usage.chars == chars and usage.summary()["cached"] == 1
-    assert np.allclose(a.audio, b.audio, atol=1 / 32768)
-
-
-def test_the_cache_stays_within_its_size(tmp_path):
-    cache = AudioCache(tmp_path, max_mb=0.001)  # about 1 kB
-    for i in range(5):
-        cache.put(f"k{i}", b"\x00\x01" * 300)
-    assert sum(p.stat().st_size for p in tmp_path.glob("*.pcm")) <= 1100
-
-
-@pytest.mark.parametrize(("status", "headers", "body", "kind"), [
-    (401, {}, b"", "auth"),
-    (403, {}, b"Out of call volume quota.", "quota"),
-    (429, {"Retry-After": "7"}, b"", "rate_limit"),
-    (500, {}, b"oops", "unavailable"),
-    (503, {}, b"", "unavailable"),
-    (400, {}, b"bad ssml", "error"),
-])
-def test_azures_refusals_are_told_apart(status, headers, body, kind):
-    voices = azure_voices(AzureFake(status=status, headers=headers, body=body))
-    with pytest.raises(TtsError) as exc:
-        voices.synthesize("cleared to land", persona_for("A Tower"))
-    assert exc.value.kind == kind
-    if kind == "rate_limit":
-        assert exc.value.retry_after == 7.0
-
-
-@pytest.mark.parametrize(("error", "kind"), [(TimeoutError("timed out"), "timeout"), (OSError("no route"), "network")])
-def test_azure_unreachable(error, kind):
-    with pytest.raises(TtsError) as exc:
-        azure_voices(AzureFake(status=error)).synthesize("cleared to land", persona_for("A Tower"))
-    assert exc.value.kind == kind
-
-
-def test_azure_needs_a_key_and_a_region():
-    assert "key" in AzureVoices("", "eastus").ready()
-    assert "region" in AzureVoices("k", "").ready()
-    assert "region" in AzureVoices("k", "east us; drop").ready()
-    assert AzureVoices("k", "westeurope").ready() == ""
-
-
 # --- falling back -------------------------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("kind", ["timeout", "quota", "rate_limit", "network", "unavailable", "auth", "error", "crash"])
 def test_every_failure_falls_back_to_the_next_voice(kind):
-    first, piper = Fake("azure", fail=kind), FakeSynth()
+    first, piper = Fake("kokoro", fail=kind), FakeSynth()
     chain = VoiceChain([first, PiperVoices(piper)])
     speech = chain.speak("cleared to land", persona_for("A Tower"))
     assert speech is not None and speech.provider == "piper"
     assert chain.status()[0]["failures"] == {"error" if kind == "crash" else kind: 1}
 
 
-def test_the_fallback_order_is_the_chosen_one_then_kokoro_then_piper():
+def test_the_fallback_order_is_kokoro_when_chosen_then_piper():
     from localtc.app import voice_chain
     from localtc.config import Config
 
     cfg = Config()
-    cfg.tts.provider, cfg.tts.kokoro = "azure", True
-    assert [p.id for p in voice_chain(cfg, FakeSynth(), key="k").providers] == ["azure", "kokoro", "piper"]
-    cfg.tts.provider, cfg.tts.kokoro = "kokoro", False
+    cfg.tts.provider = "kokoro"
     assert [p.id for p in voice_chain(cfg, FakeSynth()).providers] == ["kokoro", "piper"]
     cfg.tts.provider = "piper"
     assert [p.id for p in voice_chain(cfg, FakeSynth()).providers] == ["piper"]
     assert voice_chain(cfg, None) is None  # nothing at all: text only
 
 
-def test_cloud_is_off_unless_chosen():
-    from localtc.config import Config
+def test_piper_unless_kokoro_is_chosen_and_azure_is_gone(tmp_path):
+    """Azure's voices were taken out: a settings file that chose them loads, with Kokoro when it stood in for them
+    (else Piper), and so does one that chose a Piper voice that gave every station the same voice."""
+    from localtc.config import Config, load_config
 
-    cfg = Config()
-    assert cfg.tts.provider == "piper" and not cfg.tts.kokoro
+    assert Config().tts.provider == "piper"
+    for saved, provider in (('provider = "azure"\nkokoro = true', "kokoro"), ('provider = "azure"', "piper")):
+        settings = tmp_path / "settings.toml"
+        settings.write_text(f'[tts]\n{saved}\nazure_region = "eastus"\ncache_mb = 10\nchatter_cloud = true\n'
+                            'voice = "en_US-ryan-high"\n', encoding="utf-8")
+        cfg = load_config(env={}, settings=settings)
+        assert cfg.tts.provider == provider and cfg.tts.voice == "en_US-libritts_r-medium"
 
 
 def test_a_failed_provider_rests_and_comes_back():
     clock = [0.0]
-    first, piper = Fake("azure", fail="network"), FakeSynth()
+    first, piper = Fake("kokoro", fail="network"), FakeSynth()
     chain = VoiceChain([first, PiperVoices(piper)], clock=lambda: clock[0])
     chain.speak("one", persona_for("A Tower"))
     chain.speak("two", persona_for("A Tower"))
     assert first.said == ["one"]  # resting: not asked again at once
     clock[0] = 31.0
     first.fail = ""
-    assert chain.speak("three", persona_for("A Tower")).provider == "azure"
-
-
-def test_a_refused_key_is_out_until_its_changed():
-    clock = [0.0]
-    first = Fake("azure", fail="auth")
-    chain = VoiceChain([first, PiperVoices(FakeSynth())], clock=lambda: clock[0])
-    chain.speak("one", persona_for("A Tower"))
-    clock[0] = 10_000.0
-    chain.speak("two", persona_for("A Tower"))
-    assert first.said == ["one"] and chain.status()[0]["why"]
-    first.fail = ""
-    chain.reset("azure")
-    assert chain.speak("three", persona_for("A Tower")).provider == "azure"
+    assert chain.speak("three", persona_for("A Tower")).provider == "kokoro"
 
 
 def test_a_slow_voice_is_given_up_on_in_time_and_left_to_finish():
@@ -532,7 +342,7 @@ def test_audio_is_made_mono_float_within_range():
 
 
 def test_with_no_voice_atc_is_text_and_carries_on():
-    chain = VoiceChain([Fake("azure", fail="network"), Fake("kokoro", fail="unavailable")])
+    chain = VoiceChain([Fake("kokoro", fail="network"), Fake("piper", fail="unavailable")])
     player = speak([atc("cleared to land", t=1.0), atc("contact ground", t=2.0)], chain)
     assert player.played == [] and chain.text_only == 2
 
@@ -563,15 +373,6 @@ def test_the_service_survives_a_bug_of_its_own(monkeypatch):
     assert len(calls) == 2 and len(player.played) == 1
 
 
-def test_the_other_crews_chatter_is_spoken_on_this_pc():
-    """Other pilots on the frequency in a voice on this PC: a cloud voice for each was credits spent on chatter."""
-    cloud, here = Fake("azure"), PiperVoices(FakeSynth())
-    cloud.local = False
-    chain = VoiceChain([cloud, here])
-    assert chain.speak("x ray", persona_for("A"), local=True).provider == "piper"
-    assert chain.speak("x ray", persona_for("A")).provider == "azure"
-
-
 def test_a_provider_that_isnt_ready_is_skipped_without_counting_as_a_call():
     first = Fake("kokoro")
     first.not_ready = "model not downloaded"
@@ -594,7 +395,7 @@ def test_kokoro_without_its_download_says_so():
 
 @pytest.mark.parametrize("rate", [22050, 24000])
 def test_radio_and_intercom_are_kept_for_every_provider(rate):
-    chain = VoiceChain([Fake("azure", rate=rate)])
+    chain = VoiceChain([Fake("kokoro", rate=rate)])
     player = speak([
         atc("cleared to land"),
         RadioChatter(t=2.0, station="Paine Tower", frequency_mhz=120.2, speaker="pilot", callsign="Alaska 12", text="Alaska 12, wilco"),
@@ -657,8 +458,7 @@ def flight() -> list:
     ]
 
 
-@pytest.mark.parametrize("make", [lambda: PiperVoices(FakeSynth()), lambda: KokoroVoices(Path("/x"), engine=FakeKokoro()),
-                                  lambda: azure_voices()])
+@pytest.mark.parametrize("make", [lambda: PiperVoices(FakeSynth()), lambda: KokoroVoices(Path("/x"), engine=FakeKokoro())])
 def test_a_replay_sounds_the_same(make):
     runs = []
     for _ in range(2):
@@ -676,7 +476,7 @@ def test_the_clips_kept_for_replay_are_the_processed_audio(monkeypatch):
     monkeypatch.setattr(CLIPS, "enabled", True)
     CLIPS.clear()
     ev = atc("cleared to land")
-    speak([ev], VoiceChain([Fake("azure")]))
+    speak([ev], VoiceChain([Fake("kokoro")]))
     assert CLIPS.get(clip_id(ev)) is not None
     CLIPS.clear()
 
@@ -741,10 +541,6 @@ def test_old_recordings_without_a_locale_still_load():
     assert ev.locale == ""
 
 
-def test_azure_module_names_its_limits():
-    assert azure.FREE_CHARS == 500_000 and azure.FREE_PER_MINUTE == 20
-
-
 def test_abbreviations_are_said_as_letters_not_the_phonetic_alphabet():
     assert speakable("Transition level, Q N H one zero one five set.") == "Transition level, QNH one zero one five set."
     assert speakable("expect I L S runway two seven left") == "expect ILS runway two seven left"
@@ -756,3 +552,64 @@ def test_no_whispering_kokoro_voice():
     from localtc.tts.kokoro import POOLS
 
     assert not any("af_nicole" in voice for pool in POOLS.values() for voice in pool)
+
+
+# --- the copilot in the pilot's language ---------------------------------------------------------------------------
+
+
+def test_every_language_has_a_voice_pack_of_its_own():
+    from localtc.languages import LANGUAGES
+
+    packs = set()
+    for lang in LANGUAGES.values():
+        if lang.code == "en":
+            continue
+        assert lang.woman and lang.man and lang.sample, lang.code
+        for voice in lang.voices:
+            assert voice.split("-")[0].split("_")[0] == lang.code, voice  # a voice of that language, not English
+        packs.add(lang.voices)
+    assert len(packs) == len(LANGUAGES) - 1  # no two languages share one
+
+
+def test_the_copilot_in_another_language_speaks_with_its_packs_voice_of_its_sex(monkeypatch, tmp_path):
+    from localtc.languages import LANGUAGES
+    from localtc.tts import synth as synth_module
+
+    loaded = []
+
+    class Synth(FakeSynth):
+        def __init__(self, path, rate=1.0):
+            super().__init__()
+            self.voice_file = Path(path)
+            loaded.append(Path(path).stem)
+
+    monkeypatch.setattr(synth_module, "PiperSynth", Synth)
+    for voice in LANGUAGES["es"].voices + LANGUAGES["de"].voices:
+        (tmp_path / f"{voice}.onnx").write_bytes(b"x")
+        (tmp_path / f"{voice}.onnx.json").write_text("{}")
+    english = FakeSynth()
+    piper = PiperVoices(english, voices_dir=tmp_path)
+    woman = piper.synthesize("Hola", persona_for("", "copilot", sex="F", language="es"))
+    man = piper.synthesize("Hola", persona_for("", "copilot", sex="M", language="es"))
+    assert woman.voice == man.voice == "es_ES-sharvard-medium" and loaded == ["es_ES-sharvard-medium"]  # one file, two speakers
+    assert piper._spoken["es_ES-sharvard-medium"].said == [("Hola", 1), ("Hola", 0)]
+    assert piper.synthesize("Hallo", persona_for("", "copilot", sex="M", language="de")).voice == "de_DE-thorsten-medium"
+    assert english.said == []  # never the English voice reading another language
+    with pytest.raises(TtsError):  # and never Kokoro's: it steps aside for Piper
+        KokoroVoices(Path("/x"), engine=FakeKokoro()).synthesize("Hallo", persona_for("", "copilot", language="de"))
+
+
+def test_a_language_not_downloaded_yet_is_fetched_meanwhile_and_the_line_is_text(monkeypatch, tmp_path):
+    from localtc.tts import voices
+
+    fetched = []
+    monkeypatch.setattr(voices, "download", lambda voice, d=None, progress=None: fetched.append(voice))
+    piper = PiperVoices(FakeSynth(), voices_dir=tmp_path)
+    with pytest.raises(TtsError) as exc:
+        piper.synthesize("Bonjour", persona_for("", "copilot", sex="F", language="fr"))
+    assert exc.value.kind == "unavailable"
+    for _ in range(50):
+        if len(fetched) == 2:
+            break
+        time.sleep(0.02)
+    assert fetched == ["fr_FR-siwis-medium", "fr_FR-tom-medium"]  # the whole pack, both voices

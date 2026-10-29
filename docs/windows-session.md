@@ -112,11 +112,11 @@ factor 0.2-0.3); nobody has measured it beside MSFS.
 1. `localtc tts kokoro` (a 337 MB download), then with MSFS running a flight: `localtc tts bench --whisper`. Note each
    voice's latency, real-time factor and word error in windows-findings.md, and try `--provider kokoro` with
    `[tts] kokoro_model = "int8"` and `kokoro_threads` 2, 4 and 8: which is quickest without the sim stuttering?
-2. A flight with Quick Settings > ATC voice > Voices: Kokoro. Does ATC answer late? Does the sim's frame rate drop
+2. A flight with Quick Settings > Models > Voices: Kokoro. Does ATC answer late? Does the sim's frame rate drop
    while it speaks? Is any line given to Piper (the status under Voices says)?
-3. If the user has an Azure Speech key (KEY 1 from the resource's Keys and Endpoint page, in Quick Settings > ATC voice >
-   Voices, and the region): the same with Azure, and the characters it counted for the flight. On the Mac it took
-   about 0.55 s a line and Whisper understood it best of the three (word error 0.10).
+3. The copilot in another language (the window's language, with "The copilot talks with me in my language"): its
+   voice pack downloads by itself; does it answer in that language, in that language's voice, and does Whisper hear
+   what's said to it on the intercom? Its callouts and checklists should stay in English.
 
 ## Task 4: the taxi guidance's arrows
 
@@ -145,7 +145,7 @@ Built without the sim or a headset in use; the user heard sample clips only.
 3. The radio on a busy frequency: ATC as loud as before, the other flights each sounding a little different (near,
    far, a noisy flight deck), the squelch tail. Natural speech's "uh": how often, and whether any lands somewhere odd.
 4. A copilot personality for a whole flight (Elena or Maya: their thousand-foot call is easy to hear), its voice and
-   pace on Piper, Kokoro and Azure, and that the safety calls stay standard. Tom's readback tips; Hannah's weather
+   pace on Piper and Kokoro, and that the safety calls stay standard. Tom's readback tips; Hannah's weather
    offer on a cruise over 40 minutes.
 5. The Live Map at an airport, zoomed in: the taxiways, names and gates over the sim's scenery, and the frame rate of
    the app's window at a big airport (KORD: about 4,500 taxiway pieces on one canvas).

@@ -81,6 +81,11 @@ def choose(model: str = "auto", device: str = "auto", compute_type: str = "auto"
     )
 
 
+def multilingual(model: str) -> str:
+    """The same size of model that knows every language ("small.en": "small"), for a copilot talked to in one."""
+    return model.removesuffix(".en")
+
+
 def model_path(model: str, models_dir: Path) -> Path:
     return models_dir / f"faster-whisper-{model}"
 
@@ -158,15 +163,16 @@ class WhisperTranscriber:
             tokens = tokens[len(tokens) - max(room, 0):] if room > 0 else []
         return tokens, max(1, min(want, MAX_LENGTH - SPECIAL_TOKENS - hot - len(tokens)))
 
-    def transcribe(self, audio, *, prompt: str = "", hotwords: str = "") -> SttResult:
-        """``audio``: mono float32 samples at 16 kHz."""
+    def transcribe(self, audio, *, prompt: str = "", hotwords: str = "", language: str = "en") -> SttResult:
+        """``audio``: mono float32 samples at 16 kHz. ``language``: what's said in it (the radio English; the
+        intercom the copilot's language, with a multilingual model)."""
         self.load()
         started = time.monotonic()
         seconds = len(audio) / SAMPLE_RATE
         initial, max_new = self.budget(prompt, hotwords, min(TOKENS_MAX, int(TOKENS_BASE + TOKENS_PER_S * seconds)))
         segments, _info = self._model.transcribe(
             audio,
-            language="en",
+            language=language if not self.choice.model.endswith(".en") else "en",
             beam_size=self.beam_size,
             initial_prompt=initial or None,
             hotwords=hotwords or None,

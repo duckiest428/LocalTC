@@ -126,15 +126,9 @@ tail_ms = 250
 
 [tts]                         # ATC talks back; --no-tts for text only
 enabled = true
-provider = "piper"            # piper (this PC, quick) | kokoro (this PC, more natural, slower) | azure (cloud, your key)
-kokoro = false                # Kokoro behind Azure too, before Piper (when downloaded: localtc tts kokoro)
+provider = "piper"            # piper (quick) | kokoro (more natural, slower; Piper stands in): both on this PC
 kokoro_model = "fp32"         # fp32 (310 MB) | int8 (88 MB)
 kokoro_threads = 4            # CPU threads Kokoro may use
-azure_region = ""             # your Azure Speech resource's region (eastus, westeurope, ...); key: Settings > Voices or AZURE_SPEECH_KEY
-azure_monthly_chars = 500000  # stay within this many characters a month (the free tier's 500,000)
-azure_per_minute = 20         # requests a minute (the free tier's 20); 0 = no limit
-azure_styles = false          # each controller's manner as a speaking style, where the voice has one
-cache_mb = 50                 # cloud speech kept on this PC so repeated lines aren't sent again
 timeout_s = 8.0               # a provider slower than this for a line hands it to the next
 regional = true               # stations speak their region's English where the provider has it
 voice = "en_US-libritts_r-medium"   # multi-speaker: every controller gets its own voice (localtc setup downloads it)
@@ -146,7 +140,6 @@ radio_effect = true           # band-pass, compression, static and squelch
 static = 0.35                 # 0-1
 atis = true                   # read the ATIS aloud while it's tuned
 copilot = true                # speak the copilot's calls too
-chatter_cloud = false         # the other flights' pilots in the cloud voice too (off: this PC's voices, no credits spent)
 
 [copilot]                     # works the radio for you (or use --copilot)
 mode = "off"                  # off | assist (readbacks + frequency changes) | full (every call)
@@ -159,7 +152,7 @@ voice_sex = "any"             # the copilot's voice: female | male | any
 voice_pick = 0                # which of that sex's voices, 0-7 (the copilot uses it on the radio too)
 llm = "full"                  # the language model on the intercom: off | questions | full (commands in other words, confirmed)
 verbosity = "standard"        # what it says by itself: quiet (safety only) | standard (callouts, relays, reminders) | chatty
-hands = "pm"                  # pm: it works its own side (radios, transponder, altimeter, lights, gear and flaps after takeoff) | calls: says only
+hands = "calls"               # calls: it says what's due and does what you ask | pm: it also works its own side by itself (radios, transponder, altimeter, lights, gear and flaps after takeoff)
 repeat_atc = false            # chatty only: the key part of each ATC instruction said back to you before your readback
 checklists = "offer"          # the checklists (the aircraft's own, else its family's normal one; none made up): "offer"
                               # each when it's due, "run" it straight away, "off" only when you ask for one

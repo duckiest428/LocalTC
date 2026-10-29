@@ -21,7 +21,7 @@ from typing import Any
 
 import msgspec
 
-from localtc import __version__, components, models
+from localtc import __version__, components, languages, models
 from localtc.airports import AirportCache, load_airport
 from localtc.app import LiveSession, run_session
 from localtc.config import (
@@ -180,8 +180,6 @@ class AppController:
             (post, "cloud/key"): self.api_cloud_key,
             (post, "cloud/test"): self.api_cloud_test,
             (get, "tts"): self.api_tts,
-            (post, "tts/key"): self.api_tts_key,
-            (post, "tts/test"): self.api_tts_test,
             (post, "models/install"): self.api_install,
             (post, "models/profile"): self.api_profile,
             (get, "devices"): self.api_devices,
@@ -290,6 +288,10 @@ class AppController:
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
             "require_plan": self.cfg.ui.require_plan,
+            # The window's language, and whether the pilot has been asked (once: the setup, or a question after the
+            # update that brought them); the copilot's.
+            "language": self.cfg.ui.language, "language_asked": self.cfg.ui.language_asked,
+            "languages": languages.listing(), "crew_language": self.cfg.crew.language,
             "version": __version__, "update": self.updates.view(), "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
             "welcome": not self.cfg.ui.welcome_seen,
@@ -894,6 +896,12 @@ class AppController:
         who = get(str(args.get("personality") or self.cfg.crew.personality))
         sex = who.voice_sex(str(args.get("sex") or self.cfg.crew.voice_sex))
         pick = who.voice_pick(int(args.get("pick", self.cfg.crew.voice_pick)))
+        from localtc.languages import language
+
+        if (lang := language(self.cfg.crew.language)) is not None and lang.voices:
+            # Talking with the pilot in their language: its voice pack's, of that sex.
+            seconds = await asyncio.to_thread(_language_preview, self.cfg, lang, "F" if sex.lower().startswith("f") else "M")
+            return {"seconds": seconds}
         seconds = await asyncio.to_thread(_crew_preview, self.cfg, sex, pick, who)
         return {"seconds": seconds}
 
@@ -1112,14 +1120,15 @@ class AppController:
         return {"results": [r.__dict__ for r in results]}
 
     async def api_tts(self, args: dict) -> dict:
-        """The voices: the provider chosen and its fallbacks, whether each can speak and why not, how each has done this
-        flight (latency, real-time factor, failures), Azure's characters this month, and whether a key is set (never
-        the key itself)."""
-        from localtc.app import KEY_ENV, tts_key, tts_region, voice_chain
+        """The voices: the provider chosen and its fallback, whether each can speak and why not, how each has done this
+        flight (latency, real-time factor, failures), Kokoro's download, and the voice pack of the copilot's
+        language."""
+        from localtc.app import voice_chain
+        from localtc.languages import language
         from localtc.tts import kokoro
+        from localtc.tts.voices import installed
 
         t = self.cfg.tts
-        key = await asyncio.to_thread(tts_key)
         service = getattr(getattr(self.live, "speaker", None), "service", None) if self.live is not None else None
         chain = getattr(service, "voices", None)
         live = chain is not None
@@ -1128,35 +1137,23 @@ class AppController:
         voices_dir = Path(t.voices_dir) if t.voices_dir else None
         from localtc.tts.voices import default_voices_dir
 
+        lang = language(self.cfg.crew.language)
+        pack = None
+        if lang is not None and lang.voices:
+            pack = {"code": lang.code, "native": lang.native, "english": lang.english,
+                    "installed": all(installed(v, voices_dir) for v in lang.voices),
+                    "size_mb": sum(VOICE_MB.get(v.rsplit("-", 1)[-1], 63) for v in lang.voices),
+                    "voices": [{"sex": sex, "name": who.partition("#")[0].split("-")[1].capitalize()}
+                               for sex, who in (("F", lang.woman), ("M", lang.man))
+                               if who and (sex == "F" or who != lang.woman)]}  # (one voice for both: once)
         return {"provider": t.provider, "live": live, "providers": chain.status() if chain else [],
-                "text_only": getattr(chain, "text_only", 0), "has_key": bool(key),
-                "key_from_env": any(os.environ.get(n) for n in KEY_ENV), "region": tts_region(self.cfg),
+                "text_only": getattr(chain, "text_only", 0), "language": pack,
                 "kokoro": {"package": kokoro.available(), "installed": kokoro.installed(voices_dir or default_voices_dir(),
                                                                                           t.kokoro_model),
                            "model": t.kokoro_model,
                            "size_mb": round((kokoro.FILES[kokoro.MODELS[t.kokoro_model]][0]
                                              + kokoro.FILES[kokoro.VOICES_FILE][0]) / 2**20)},
-                "jobs": {k: v for k, v in self.jobs.items() if k == "kokoro"}}
-
-    async def api_tts_key(self, args: dict) -> dict:
-        from localtc.app import set_tts_key
-
-        await asyncio.to_thread(set_tts_key, str(args.get("key") or ""))
-        service = getattr(getattr(self.live, "speaker", None), "service", None) if self.live is not None else None
-        for p in getattr(getattr(service, "voices", None), "providers", ()):
-            if p.id == "azure":
-                from localtc.app import tts_key
-
-                p.key = await asyncio.to_thread(tts_key)
-                service.voices.reset("azure")
-        return await self.api_tts({})
-
-    async def api_tts_test(self, args: dict) -> dict:
-        """Each provider asked for the same ATC line, now: how long it took and how long the speech is, or why not.
-        Azure's test costs about 90 characters."""
-        from localtc.app import voice_chain
-
-        return {"results": await asyncio.to_thread(_tts_test, self.cfg, voice_chain, str(args.get("provider") or ""))}
+                "jobs": {k: v for k, v in self.jobs.items() if k in ("kokoro", "voice_lang")}}
 
     async def api_models(self, args: dict) -> dict:
         hw = await asyncio.to_thread(models.detect_hardware)
@@ -1180,7 +1177,7 @@ class AppController:
     async def api_install(self, args: dict) -> dict:
         kinds = args.get("kinds") or [args.get("kind")]
         for kind in kinds:
-            if kind not in ("llm", "whisper", "voice", "kokoro", *COMPONENTS):
+            if kind not in ("llm", "whisper", "voice", "voice_lang", "kokoro", *COMPONENTS):
                 raise HttpError(400, f"unknown model kind {kind!r}")
             if self.jobs.get(kind, {}).get("state") == "running":
                 continue
@@ -1235,6 +1232,22 @@ class AppController:
         return {"button": name, "device": found.get(device, f"controller {device}"), "number": button}
 
     async def api_preview(self, args: dict) -> dict:
+        """A voice heard: Piper's (``voice``, as ATC on the radio), Kokoro's (``provider`` "kokoro"), or one of the
+        copilot's language's (``language`` and ``sex``, on the intercom, saying its line in that language)."""
+        if args.get("language"):
+            from localtc.languages import language
+
+            lang = language(str(args["language"]))
+            if lang is None or not lang.voices:
+                raise HttpError(400, f"no voices for {args['language']!r}")
+            seconds = await asyncio.to_thread(_language_preview, self.cfg, lang, str(args.get("sex") or "F"))
+            return {"seconds": seconds}
+        if args.get("provider") == "kokoro":
+            try:
+                seconds = await asyncio.to_thread(_kokoro_preview, self.cfg)
+            except Exception as exc:  # noqa: BLE001 - not downloaded, or its package missing: said as it is
+                raise HttpError(409, str(getattr(exc, "detail", "") or exc)) from None
+            return {"seconds": seconds}
         voice = str(args.get("voice") or self.cfg.tts.voice)
         station = str(args.get("station") or "Seattle Center")
         text = str(args.get("text") or "Skyhawk one seven two lima tango, climb and maintain one zero thousand, "
@@ -1538,6 +1551,48 @@ def _preview(cfg: Config, voice: str, station: str, text: str) -> float:
     return round(speech.seconds, 1)
 
 
+def _play(cfg: Config, audio, rate: int, channel: str = "atc") -> None:
+    from localtc.tts.player import AudioPlayer, Clip
+
+    player = AudioPlayer(cfg.tts.output_device or None, volume=cfg.tts.volume, mix=cfg.mixer.gains())
+    player.play(Clip(audio, rate, channel)).done.wait(timeout=30)
+    player.close()
+
+
+def _kokoro_preview(cfg: Config) -> float:
+    """Kokoro saying an ATC line on the radio, as a flight would hear it."""
+    from localtc.dsp.radio import clean, radio_effect
+    from localtc.tts.kokoro import KokoroVoices
+    from localtc.tts.persona import persona_for
+    from localtc.tts.service import radio_words
+    from localtc.tts.voices import default_voices_dir
+
+    t = cfg.tts
+    voices = KokoroVoices(Path(t.voices_dir) if t.voices_dir else default_voices_dir(), model=t.kokoro_model,
+                          rate=t.rate, threads=t.kokoro_threads)
+    speech = voices.synthesize(radio_words(TEST_LINE), persona_for("London Heathrow Tower", "atc", manner="tower",
+                                                                   locale="en-GB"))
+    _play(cfg, radio_effect(speech.audio, speech.rate, static=t.static) if t.radio_effect else clean(speech.audio),
+          speech.rate)
+    return round(speech.seconds, 1)
+
+
+def _language_preview(cfg: Config, lang, sex: str) -> float:
+    """The copilot's voice of ``sex`` from ``lang``'s pack (downloaded first, when it isn't yet) saying its line."""
+    from localtc.dsp.radio import intercom_effect
+    from localtc.tts.synth import PiperSynth
+    from localtc.tts.voices import download
+
+    name, speaker = lang.voice_for(sex)
+    synth = PiperSynth(download(name, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None), rate=1.0)
+    speech = synth.synthesize(lang.sample, speaker)
+    _play(cfg, intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")
+    return round(speech.seconds, 1)
+
+
+VOICE_MB = {"x_low": 25, "low": 60, "medium": 63}  # a Piper voice's download by its quality, about
+
+
 class _PiperStandIn:
     """Piper as the status shows it before a flight (the voice isn't loaded until then)."""
 
@@ -1548,38 +1603,6 @@ class _PiperStandIn:
 
 
 TEST_LINE = "Speedbird one two, runway two seven left, cleared for takeoff, wind two seven zero at eight."
-
-
-def _tts_test(cfg: Config, voice_chain, wanted: str) -> list[dict]:
-    from localtc.tts.persona import persona_for
-    from localtc.tts.providers import TtsError, check_audio
-    from localtc.tts.synth import PiperSynth
-    from localtc.tts.voices import download
-
-    piper = None
-    try:
-        piper = PiperSynth(download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None), rate=cfg.tts.rate)
-    except Exception:  # noqa: BLE001 - reported as Piper's result
-        pass
-    chain = voice_chain(cfg, piper)
-    out = []
-    for p in chain.providers if chain else []:
-        if wanted and p.id != wanted:
-            continue
-        row = {"id": p.id, "name": p.name}
-        if why := p.ready():
-            out.append(row | {"ok": False, "why": why})
-            continue
-        try:
-            speech = check_audio(p.synthesize(TEST_LINE, persona_for("London Heathrow Tower", "atc", manner="tower", locale="en-GB")), TEST_LINE)
-            seconds = len(speech.audio) / speech.rate
-            out.append(row | {"ok": True, "latency_ms": round(speech.latency_ms), "seconds": round(seconds, 1),
-                              "rtf": round(speech.latency_ms / 1000 / seconds, 3), "voice": speech.voice})
-        except TtsError as exc:
-            out.append(row | {"ok": False, "why": str(exc)})
-        except Exception as exc:  # noqa: BLE001
-            out.append(row | {"ok": False, "why": f"{type(exc).__name__}: {exc}"})
-    return out
 
 
 def _crew_preview(cfg: Config, sex: str, pick: int, who=None) -> float:

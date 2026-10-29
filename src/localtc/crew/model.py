@@ -83,6 +83,7 @@ SCHEMA = {
         "value": {"type": "string"},
         "target": {"type": "string"},
         "reply": {"type": "string"},
+        "english": {"type": "string"},  # talking in another language: the captain's words in English, for the checks
     },
     "required": ["kind", "reply"],
 }
@@ -129,10 +130,18 @@ BEYOND_RULE = ("Use the facts first. Where they say nothing about the flight, yo
                "never invent anything about this flight (where we are, the weather, what's set).")
 
 
-def system(beyond_facts: bool = False, persona: str = "") -> str:
+def language_rule(name: str) -> str:
+    """The captain talking in ``name`` ("German"): the replies in it, the captain's words in English beside them."""
+    return (f"\n\nLanguage: the captain talks with you in {name}, and you answer in {name}: every \"reply\" in natural, "
+            f"correct {name}, the way a {name}-speaking first officer says it on the flight deck (the aviation words "
+            f"as pilots who speak {name} use them, many of them English: flaps, gear, autopilot). Numbers, runways, "
+            f"frequencies and names exactly as given. Also put the captain's words, in English, in \"english\".")
+
+
+def system(beyond_facts: bool = False, persona: str = "", language: str = "") -> str:
     text = SYSTEM.replace("{facts_rule}", BEYOND_RULE if beyond_facts else FACTS_RULE)
     return text + (f"\n\nWho you are (the same every time you're asked; nothing more made up about it): {persona}"
-                   if persona else "")
+                   if persona else "") + (language_rule(language) if language else "")
 
 
 FIRST_NAMES = {"male": ("Tom", "James", "Daniel", "Marco", "Raj", "Luke", "Chris", "Sam"),
@@ -165,9 +174,14 @@ def effective_mode(mode: str, backend) -> str:
 
 class CrewModel:
     def __init__(self, backend, *, mode: str = "auto", timeout_s: float = 8.0, patience_s: float = 20.0,
-                 beyond_facts: bool = False) -> None:
+                 beyond_facts: bool = False, language: str = "") -> None:
+        from localtc.languages import language as known
+
         self.backend, self.timeout_s, self.patience_s = backend, timeout_s, patience_s
         self.setting = mode
+        lang = known(language)
+        self.language = lang.code if lang is not None else ""  # [crew] language: its replies in it ("" English)
+        self.language_name = lang.english if lang is not None else ""
         self.beyond_facts = beyond_facts  # [crew] beyond_facts: replies may go past what the copilot knows
         self.persona = ""  # the first officer's own story (``persona``), set for each flight
         self.history: deque[tuple[str, str]] = deque(maxlen=HISTORY)  # ("Captain" or "You", words)
@@ -214,7 +228,8 @@ class CrewModel:
         prompt = ("Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items())
                   + (f"\n\n{context}" if context else "") + f'\n\nCaptain: "{text}"' + (f"\n\n{note}" if note else ""))
         messages = tuple(m for q, a in EXAMPLES for m in (("user", q), ("assistant", a))) + (("user", prompt),)
-        request = LlmRequest("crew", system(self.beyond_facts, self.persona), messages, SCHEMA, max_tokens=120,
+        request = LlmRequest("crew", system(self.beyond_facts, self.persona, self.language_name), messages, SCHEMA,
+                             max_tokens=200 if self.language else 120,
                              context="\n".join(f"- {k}: {v}" for k, v in (more or {}).items()))
         known = {**(more or {}), **facts}  # what the reply is checked against
         timeout_s, _ = waits(self.backend, self.timeout_s, self.timeout_s, self.patience_s)
@@ -267,6 +282,10 @@ class CrewModel:
         except json.JSONDecodeError:
             return None, "not JSON"
         reply = str(data.get("reply", "")).strip()
+        if self.language and str(data.get("english", "")).strip():
+            # Talked to in another language: the checks read the captain's words in English ("Klappen zwei" names
+            # the flaps as "flaps two" does), the numbers as said either way.
+            said = f"{said} {str(data['english']).strip()}"
         if data.get("kind") == "command":
             action, value, target = (str(data.get(k, "")).strip().lower() for k in ("action", "value", "target"))
             if action not in ACTIONS:
@@ -363,6 +382,13 @@ def _claimed(low: str, facts: dict[str, str]) -> str | None:
     """A reply saying the copilot set something (or that a control is so) that it didn't do and the facts don't show:
     "just the QNH set at 1020" (never set), "Copy, autopilot off" (the autopilot can't even be read)."""
     did = str(facts.get("what I did lately", "")).lower()
+    # A checklist is run by the copilot's own checklists, line by line, never by the model's say-so ("Before takeoff
+    # checklist, sir." and then "Before takeoff checklist complete, sir." with not one line read).
+    for sentence in re.split(r"(?<=[.!;])\s+", low):
+        if "checklist" in sentence and "?" not in sentence and "checklist" not in did and not _NEGATED.search(sentence) \
+                and re.search(r"\bcomplete(?:d)?\b|\bdone\b|\bfinished\b|\bstart(?:ed|ing)?\b|\brunning\b|"
+                              r"^[\w\s-]*checklist\b[,.]?(?:\s*(?:sir|captain|skipper))?[.!]?$", sentence.strip()):
+            return "claims a checklist it didn't run (the checklists are the copilot's own)"
     for word, pattern in (("qnh", r"\b(?:qnh|altimeter|baro)\b"), ("heading", r"\bheading\b"), ("altitude", r"\baltitude\b"),
                           ("squawk", r"\bsquawk\b")):
         for m in re.finditer(pattern + r"[^.;,]*?\b(?:set|selected|dialled|dialed)\b", low):

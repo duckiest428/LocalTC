@@ -64,7 +64,7 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 </td>
 <td valign="top">
 <h3>📻 It sounds like a radio</h3>
-<p>Static, squelch and a voice for each station that stays the same all flight. Other aircraft talk on the frequency. Optional natural voices: <a href="docs/voices.md">Kokoro</a> on your PC, or Azure in the cloud.</p>
+<p>Static, squelch and a voice for each station that stays the same all flight. Other aircraft talk on the frequency. An optional more natural voice, <a href="docs/voices.md">Kokoro</a>, on your PC too.</p>
 </td>
 </tr>
 <tr>
@@ -172,9 +172,10 @@ Updates are checked once a day and install with one click, never during a flight
 |---|---|---|---|---|
 | **Piper** (default) | your PC | clear radio voices, 904 speakers | instant | free |
 | **Kokoro** | your PC | more natural | a second or two per call | free (337 MB download) |
-| **Azure AI Speech** | Microsoft's cloud | the most natural, with regional accents | quick, over the internet | free tier, your own key |
 
-Choose in **Quick Settings → Models → ATC and copilot voices**. If a voice can't speak a line, the next one does.
+Choose in **Quick Settings → Models → Voices**, with a preview of each. If Kokoro can't speak a line, Piper does.
+The copilot talking with you in your language has that language's own voices (a woman's and a man's, downloaded
+once).
 More in [docs/voices.md](docs/voices.md).
 
 ## 🔐 Privacy
@@ -391,7 +392,7 @@ src/localtc/
   copilot.py   the copilot: reads back, changes frequencies, makes calls
   scenario.py  offline scripted-pilot scenarios
   stt/         microphone, push-to-talk, Whisper
-  tts/ dsp/    the voices (Piper, Kokoro, Azure), the radio effect, audio out
+  tts/ dsp/    the voices (Piper, Kokoro), the radio effect, audio out
   ui/          the app: local HTTP/SSE server, controller, static page (HTML/CSS/JS, Leaflet)
   flightplan.py  SimBrief import and typed flight plans
   models.py    model catalog, hardware profiles, downloads
@@ -547,7 +548,7 @@ localtc run ... --no-tts                          # text only
 
 ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for Windows, macOS and Linux, so there's no separate binary to install). The voice is `en_US-libritts_r-medium`: one 80 MB download (`localtc setup`, or automatically on the first flight) with 904 speakers. Every station gets its own speaker, and the same one every time: Phoenix Tower never sounds like Phoenix Approach. The pool is the 40 speakers Whisper understood best reading ATC phraseology over the radio (`tools/pick_speakers.py`). Synthesis takes about 0.3 s for a 10 s clearance.
 
-**Other voices, optional** (Quick Settings → ATC voice → Voices; [docs/voices.md](docs/voices.md)): **Kokoro** (Kokoro-82M, on your PC, more natural, slower: a 337 MB download, about 0.2-0.3 s of CPU work per second of speech) and **Azure AI Speech** (Microsoft's neural voices in every regional English, in the cloud, with your own key; the free tier's 500,000 characters a month cover about 50-60 hours of flying; while it's chosen, the words to be spoken go to Microsoft). The words are put into aviation English first, the same for every voice, and each station is the same person whichever voice speaks. If the chosen voice can't speak a line, Kokoro (when on) and then Piper do; with none, ATC is text.
+**Kokoro, optional** (Quick Settings → Models → Voices; [docs/voices.md](docs/voices.md)): Kokoro-82M, on your PC, more natural, slower: a 337 MB download, about 0.2-0.3 s of CPU work per second of speech. The words are put into aviation English first, the same for either voice, and each station is the same person whichever voice speaks. If Kokoro can't speak a line, Piper does; with neither, ATC is text.
 
 **Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
 

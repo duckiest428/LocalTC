@@ -27,8 +27,10 @@ function toast(text, error = false, ms = null) {
   el.textContent = text;
   el.className = "toast" + (error ? " error" : "");
   el.hidden = false;
+  // In the top layer, shown after (so over) any dialog open: an error in the setup was hidden behind it.
+  try { el.hidePopover?.(); el.showPopover?.(); } catch { /* no popovers here: a plain toast */ }
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.hidden = true), ms ?? (error ? 6000 : 3000));
+  toastTimer = setTimeout(() => { el.hidden = true; try { el.hidePopover?.(); } catch { /* already gone */ } }, ms ?? (error ? 6000 : 3000));
 }
 const fail = (e) => toast(e.message || String(e), true);
 
@@ -75,25 +77,23 @@ function setState(st) {
   setStatus(st);
   if (st.flight && Object.keys(st.flight).length) setFlight(st.flight);
   $("#sw-copilot").classList.toggle("on", st.copilot && st.copilot !== "off");
-  $("#sw-copilot").title = `Copilot ${st.copilot !== "off" ? "on" : "off"}: ${st.copilot_mode === "assist" ? "reads back and changes frequencies" : "works the whole radio"}`;
+  const radioMode = st.copilot_mode === "assist" ? "reads back and changes frequencies" : "works the whole radio";
+  $("#sw-copilot").title = st.copilot && st.copilot !== "off" ? `Copilot on: ${radioMode}` : `Copilot off: ${radioMode}`;
   $("#sw-atc").classList.toggle("on", !st.muted);
   $("#devbar").hidden = !st.dev_mode;
   $("#btn-coffee").hidden = !!st.coffee_clicked;
+  if (st.language && st.language !== I18n.lang) I18n.set(st.language);
   Flight.label();
-  const dlg = $("#dlg-account");
-  const welcome = $("#dlg-welcome");
-  if (st.setup && !S.welcomed) {  // a new install: the setup guide, which holds the welcome notes too
-    S.welcomed = true;
-    Setup.open();
-  } else if (st.welcome && welcome && !welcome.open && !S.welcomed && !$("#dlg-setup").open) {
-    S.welcomed = true;  // once a session; saved as seen when it's closed
-    welcome.showModal();
-  } else if (st.whats_new && !S.whatsNew && !welcome?.open && !$("#dlg-setup").open) {
-    S.whatsNew = true;  // once a session; saved as seen when it's closed
-    $("#wn-version").textContent = st.whats_new.version;
-    $("#wn-notes").innerHTML = notesHtml(st.whats_new.notes);
-    $("#dlg-whatsnew").showModal();
-  } else if (st.account_prompt && dlg && !dlg.open && !welcome?.open && !$("#dlg-whatsnew").open && !$("#dlg-setup").open) dlg.showModal();
+  // The popups that open by themselves, each once a session (saved as seen when it's closed), one at a time and never
+  // over a dialog that's open (Popups): a new install's setup holds the welcome and the language.
+  if (st.setup) {
+    if (!S.setupAsked) { S.setupAsked = true; Popups.want("setup"); }
+  } else {
+    if (st.language_asked === false && !S.languageAsked) { S.languageAsked = true; Popups.want("language"); }
+    if (st.welcome && !S.welcomed) { S.welcomed = true; Popups.want("welcome"); }
+    if (st.whats_new && !S.whatsNew) { S.whatsNew = true; Popups.want("whatsnew"); }
+    if (st.account_prompt && !S.accountAsked) { S.accountAsked = true; Popups.want("account"); }
+  }
   $("#btn-ptt").classList.toggle("off", !st.voice);
   $("#help-ptt").textContent = pttName(st.ptt);
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
@@ -156,6 +156,7 @@ function addLine(l) {
   const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
   const row = document.createElement("div");
   row.className = `line ${l.kind}` + (l.level ? ` ${l.level}` : "") + (l.kind === "readback" && !l.ok ? " bad" : "");
+  row.setAttribute("translate", "no");  // the radio's words: aviation English in every language
   let body;
   switch (l.kind) {
     case "atc":
@@ -197,7 +198,7 @@ function addLine(l) {
   if (l.kind === "alert") { S.alerts.push(l); updateAlerts(); }
   // The model running out of time changes what ATC said: always shown, with where to give it longer.
   if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);
-  if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → ATC → Language model timing.`, true, 12000);
+  if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → Language models → ATC.`, true, 12000);
 }
 
 // Each airline in its own colour (its livery's, where known), each of its flights a shade of it.
@@ -449,6 +450,7 @@ $("#btn-help").onclick = () => $("#dlg-help").showModal();
 // count as seen with it: a new install has nothing to catch up on.
 $("#dlg-welcome")?.addEventListener("close", () => {
   if (S.state) { S.state.welcome = false; S.state.whats_new = null; }
+  Popups.drop("whatsnew");  // (this version's notes count as seen with it)
   api("settings", { settings: { ui: { welcome_seen: true, notes_seen: S.state?.version || "" } } }).catch(() => {});
 });
 // What's new: once after each update, this version's CHANGELOG section.
@@ -602,6 +604,99 @@ const Mixer = {
 };
 $("#btn-mixer").onclick = () => Mixer.open();
 
+/* ---------- Language: the window's, and the one the copilot talks with you in ---------- */
+
+const Language = {
+  list() { return S.state?.languages?.length ? S.state.languages : [{ code: "en", native: "English", english: "English" }]; },
+  current() { return S.state?.language || "en"; },
+  /** The languages as cards, and whether the copilot talks with you in the one chosen (``id``: the ids' prefix). */
+  picker(id) {
+    const cur = this.current(), crew = S.settings?.settings?.crew?.language || S.state?.crew_language || "";
+    return `<div class="wlangs">${this.list().map((l) => `<button type="button" class="wcard ${l.code === cur ? "current" : ""}"
+        data-lang="${esc(l.code)}" translate="no"><b>${esc(l.native)}</b><span>${esc(l.english)}</span></button>`).join("")}</div>
+      <div ${cur === "en" ? "hidden" : ""}><label class="check-row"><input type="checkbox" id="${id}-crew-lang" ${crew && crew === cur ? "checked" : ""}>
+        The copilot talks with me in my language</label>
+        <span class="hint">What it says to you and what it hears on the intercom. Its callouts, checklists and radio calls stay
+          in aviation English, as ATC does. It needs speech recognition that knows the language and a voice that speaks
+          it: downloaded once, by itself (the voices of your language: Quick Settings &rarr; Models).</span></div>
+      <p class="muted small">ATC always speaks aviation English, as on the real radio.</p>`;
+  },
+  wire(id, after) {
+    $$("[data-lang]").forEach((b) => (b.onclick = async () => {
+      const code = b.dataset.lang;
+      if (!await Settings.save("ui", "language", code)) return;
+      if (S.state) S.state.language = code;
+      I18n.set(code);
+      // The copilot in the language picked too, unless it's English (or the pilot turns it off below).
+      await Settings.save("crew", "language", code === "en" ? "" : code);
+      if (S.state) S.state.crew_language = code === "en" ? "" : code;
+      this.fetchVoices(code === "en" ? "" : code);
+      after?.();
+    }));
+    const crew = $(`#${id}-crew-lang`);
+    if (crew) crew.onchange = async () => {
+      const code = crew.checked ? this.current() : "";
+      if (await Settings.save("crew", "language", code) && S.state) S.state.crew_language = code;
+      this.fetchVoices(code);
+    };
+  },
+  /** The voice pack of the language the copilot talks in, and the speech recognition that knows it, downloaded
+   *  meanwhile (each once: skipped when it's there). */
+  fetchVoices(code) {
+    if (code && S.settings?.settings?.crew?.enabled !== false) api("models/install", { kinds: ["voice_lang", "whisper"] }).catch(() => {});
+  },
+  /** Asked once of a pilot who had LocalTC before it came in other languages. */
+  ask() {
+    const dlg = $("#dlg-language");
+    const draw = () => {
+      $("#language-body").innerHTML = `<p>LocalTC now comes in your language. Which would you like? You can change it any time
+        in Settings (the gear).</p>${this.picker("l")}<div class="row welcome-go"><button class="btn primary" value="ok">Done</button></div>`;
+      this.wire("l", draw);
+    };
+    // Open at once (the next popup due waits for it: opened a moment later, "what's new" came up underneath it).
+    draw();
+    if (!dlg.open) dlg.showModal();
+    if (!S.settings) api("settings").then((s) => { S.settings = s; if (dlg.open) draw(); }).catch(() => {});
+  },
+};
+// However the question's closed, it's been asked: never again.
+$("#dlg-language").addEventListener("close", () => {
+  if (S.state) S.state.language_asked = true;
+  api("settings", { settings: { ui: { language_asked: true } } }).catch(() => {});
+});
+
+/* ---------- Popups: the ones that open by themselves, one at a time and never over another ---------- */
+
+const Popups = {
+  // The order they come in when more than one is due: the setup (a new install), the language (once), the welcome
+  // notes (once), what's new (after an update), the account (after the third flight).
+  ORDER: ["setup", "language", "welcome", "whatsnew", "account"],
+  wanted: new Set(),
+  want(id) { this.wanted.add(id); this.next(); },
+  drop(...ids) { ids.forEach((id) => this.wanted.delete(id)); },
+  /** The next one due, once nothing else is open (a dialog the pilot opened, or another of these). */
+  next() {
+    if ($$("dialog[open]").length) return;
+    const id = this.ORDER.find((k) => this.wanted.has(k));
+    if (!id) return;
+    this.wanted.delete(id);
+    ({
+      setup: () => Setup.open(),
+      language: () => Language.ask(),
+      welcome: () => $("#dlg-welcome").showModal(),
+      whatsnew: () => {
+        if (!S.state?.whats_new) return this.next();
+        $("#wn-version").textContent = S.state.whats_new.version;
+        $("#wn-notes").innerHTML = notesHtml(S.state.whats_new.notes);
+        $("#dlg-whatsnew").showModal();
+      },
+      account: () => (S.state?.account_prompt ? $("#dlg-account").showModal() : this.next()),
+    })[id]();
+  },
+};
+// Each dialog closed (any of them, the share card's too): the next one due, if any.
+document.addEventListener("close", (e) => { if (e.target instanceof HTMLDialogElement) setTimeout(() => Popups.next(), 0); }, true);
+
 /* ---------- Components: Ollama, Whisper on the GPU and WebView2, installed from the app (the setup leaves them) ---------- */
 
 const COMPONENT_KINDS = ["ollama", "gpu", "webview2"];
@@ -624,10 +719,13 @@ function componentsPart(m, only = COMPONENT_KINDS) {
 
 const Setup = {
   STEPS: [
-    ["welcome", "Welcome"], ["computer", "Your computer"], ["talk", "Talking to ATC"], ["hear", "Hearing"],
-    ["copilot", "Your copilot"], ["atc", "ATC"], ["flight", "Your flights"], ["done", "Ready"],
+    ["language", "Welcome"], ["model", "Language model"], ["computer", "Your computer"], ["talk", "Talking to ATC"],
+    ["hear", "Hearing"], ["copilot", "Your copilot"], ["people", "Who flies with you"], ["atc", "ATC"],
+    ["flight", "Your flights"], ["traffic", "Traffic"], ["done", "Ready"],
   ],
   step: 0,
+  /** The steps shown: who flies with you only with a copilot. */
+  steps() { return this.STEPS.filter(([id]) => id !== "people" || S.settings?.settings?.crew?.enabled !== false); },
   async open() {
     const dlg = $("#dlg-setup");
     $("#setup-body").innerHTML = '<div class="muted pad">Loading ...</div>';
@@ -640,22 +738,25 @@ const Setup = {
     this.render();
   },
   go(delta) {
-    this.step = Math.max(0, Math.min(this.STEPS.length - 1, this.step + delta));
+    const steps = this.steps();
+    this.step = Math.max(0, Math.min(steps.length - 1, this.step + delta));
     this.render();
     $("#setup-body").scrollTop = 0;
   },
   save(section, key, value) { return Settings.save(section, key, value); },
   render() {
     this.shown = true;
-    const [id, title] = this.STEPS[this.step];
-    $("#setup-steps").innerHTML = this.STEPS.map(([, t], i) =>
+    const steps = this.steps();
+    this.step = Math.min(this.step, steps.length - 1);
+    const [id, title] = steps[this.step];
+    $("#setup-steps").innerHTML = steps.map(([, t], i) =>
       `<span class="wdot ${i < this.step ? "done" : ""} ${i === this.step ? "now" : ""}" title="${esc(t)}"></span>`).join("");
     $("#setup-title").textContent = title;
-    $("#setup-count").textContent = `Step ${this.step + 1} of ${this.STEPS.length}`;
+    $("#setup-count").textContent = `Step ${this.step + 1} of ${steps.length}`;
     $("#setup-body").innerHTML = this[id]();
     $("#setup-back").hidden = this.step === 0;
-    $("#setup-skip").hidden = this.step === this.STEPS.length - 1;
-    $("#setup-next").textContent = this.step === 0 ? "Let's set it up" : this.step === this.STEPS.length - 1 ? "Let's fly" : "Next";
+    $("#setup-skip").hidden = this.step === steps.length - 1;
+    $("#setup-next").textContent = this.step === 0 ? "Let's set it up" : this.step === steps.length - 1 ? "Let's fly" : "Next";
     this["wire_" + id]?.();
   },
   finish() { $("#dlg-setup").close(); },
@@ -664,13 +765,48 @@ const Setup = {
       `<option value="${esc(d.name)}" ${cur && d.name.toLowerCase().includes(String(cur).toLowerCase()) ? "selected" : ""}>${esc(d.name)}</option>`).join("");
   },
 
-  welcome() {
-    return `<div class="whero"><img src="/static/logo.svg" alt="" width="72" height="72">
+  language() {
+    return `<div class="whero"><img src="/static/logo.svg" alt="" width="64" height="64">
       <h2>Welcome to LocalTC</h2>
-      <p>ATC and a first officer for MSFS 2024, running on this computer. A couple of minutes here sets up the
-        things worth choosing before your first flight: your computer's models, your microphone and push-to-talk,
-        what you hear, your copilot and how ATC talks.</p>
-      <p class="muted small">Everything here saves as you go, and all of it can be changed later in Quick Settings and the gear.</p></div>`;
+      <p>ATC and a first officer for MSFS 2024, running on this computer. A couple of minutes here sets up what's worth
+        choosing before your first flight. First, your language:</p></div>
+      ${Language.picker("w")}
+      <p class="muted small">Everything here saves as you go, and all of it can be changed later in Quick Settings and the gear.</p>`;
+  },
+  wire_language() { Language.wire("w", () => this.render()); },
+
+  model() {
+    const st = S.settings.settings, mistral = (S.cloud?.providers || []).find((p) => p.id === "mistral");
+    const on = mistral?.has_key && st.cloud?.enabled;
+    const link = mistral?.signup || "https://console.mistral.ai/";
+    return `<p>ATC and the copilot understand what you say, and word what they say back, with a language model. The one on
+      this PC works offline but is small enough to run beside the sim; a large one in the cloud understands far more of
+      what you say, and its replies sound like people.</p>
+      <div class="wbox"><b>Recommended: Mistral, free with your own key</b>
+        <ol class="small">
+          <li>Sign up at <a href="${esc(link)}" target="_blank" rel="noopener">console.mistral.ai</a>: the free plan, no card needed.</li>
+          <li>Open <b>API Keys</b> and create a key.</li>
+          <li>Paste it here and press <b>Save and use it</b>.</li>
+        </ol>
+        <div class="row"><input type="password" id="w-mistral" placeholder="${mistral?.has_key ? "A key is saved" : "Paste your Mistral key"}" autocomplete="off" spellcheck="false">
+          <button type="button" class="btn primary small" id="w-mistral-save">Save and use it</button></div>
+        <span class="small" id="w-mistral-note">${on ? '<span class="ok">&#10003; The cloud model is on.</span>' : ""}</span>
+        <p class="muted small">The key is kept in Windows' credential store, never in a file. While the cloud model is on, what
+          you say and your flight's details go to Mistral to be understood.</p></div>
+      <p class="muted small">No key? Press <b>Next</b>: everything works offline with the model on this PC, just more strictly.
+        You can add one any time in Quick Settings &rarr; Language models.</p>`;
+  },
+  wire_model() {
+    $("#w-mistral-save").onclick = async () => {
+      const key = $("#w-mistral").value.trim();
+      if (!key) { toast("Paste the key first", true); return; }
+      try {
+        S.cloud = await api("cloud/key", { provider: "mistral", key });
+        await this.save("cloud", "enabled", true);
+        $("#w-mistral").value = "";
+        $("#w-mistral-note").innerHTML = '<span class="ok">&#10003; Saved. The cloud model is on from the next flight.</span>';
+      } catch (e) { fail(e); }
+    };
   },
 
   computer() {
@@ -685,7 +821,7 @@ const Setup = {
       <div class="profiles">${m.catalog.profiles.map((p) => `<button type="button" class="profile ${cur?.id === p.id ? "current" : ""}" data-wprofile="${p.id}">
         <b>${esc(p.label)}</b>${p.id === m.recommended ? '<span class="rec">recommended</span>' : ""}<div class="small muted">${esc(p.description)}</div></button>`).join("")}</div>
       <div class="wbox">${missing.length
-        ? `<b>${missing.length} download${missing.length > 1 ? "s" : ""} still to do</b>: once, and flights then work offline.
+        ? `<b>${missing.length === 1 ? "1 download still to do" : `${missing.length} downloads still to do`}</b>: once, and flights then work offline.
            ${missing.some((s) => s.kind === "llm") && !m.ollama.running ? '<span class="muted small">The language model comes with Ollama, its engine, installed first.</span>' : ""}
            <div class="row"><button type="button" class="btn primary small" id="w-install">Download now</button><span class="muted small" id="w-jobs"></span></div>`
         : '<span class="ok">&#10003; Everything for this profile is downloaded.</span>'}</div>
@@ -706,11 +842,12 @@ const Setup = {
       .then(() => ($("#w-jobs").textContent = "Downloading: carry on meanwhile.")).catch(fail);
   },
   jobs(jobs) {
-    if (!$("#dlg-setup").open || this.STEPS[this.step][0] !== "computer") return;
+    if (!$("#dlg-setup").open || this.steps()[this.step]?.[0] !== "computer") return;
     const running = Object.entries(jobs || {}).filter(([, j]) => j.state === "running");
-    const names = { llm: "the language model", whisper: "Whisper", voice: "the voice", kokoro: "Kokoro", ...COMPONENT_NAMES };
+    const names = { llm: "the language model", whisper: "Whisper", voice: "the voice", voice_lang: "the copilot's voices",
+      kokoro: "Kokoro", ...COMPONENT_NAMES };
     const el = $("#w-jobs");
-    if (el) el.textContent = running.length ? running.map(([k, j]) => `${names[k] || k}: ${j.message}`).join(" · ") : "Done.";
+    if (el) el.innerHTML = running.length ? running.map(([k, j]) => `<span>${esc(names[k] || k)}</span>: <span>${esc(j.message)}</span>`).join(" · ") : "Done.";
     for (const kind of COMPONENT_KINDS) {
       const bar = $(`#p-${kind}`), j = jobs?.[kind];
       if (bar) bar.hidden = !j || j.state !== "running";
@@ -719,7 +856,7 @@ const Setup = {
     const key = Object.entries(jobs || {}).map(([k, j]) => `${k}:${j.state}`).join(",");
     if (!running.length && key !== this.doneJobs) {  // all finished: show what's installed now
       this.doneJobs = key;
-      api("models").then((m) => { S.models = m; if (this.STEPS[this.step][0] === "computer") this.render(); }).catch(() => {});
+      api("models").then((m) => { S.models = m; if (this.steps()[this.step]?.[0] === "computer") this.render(); }).catch(() => {});
     }
   },
 
@@ -787,8 +924,7 @@ const Setup = {
       </div>
       <div class="row"><label>Voices<select id="w-provider">
         <option value="piper" ${t.provider === "piper" ? "selected" : ""}>Piper: on this PC, quick, always there</option>
-        <option value="kokoro" ${t.provider === "kokoro" ? "selected" : ""}>Kokoro: on this PC, more natural, a little slower (a 340 MB download)</option>
-        <option value="azure" ${t.provider === "azure" ? "selected" : ""}>Azure AI Speech: the most natural, each region's accent (your own free key, in Quick Settings)</option></select></label></div>
+        <option value="kokoro" ${t.provider === "kokoro" ? "selected" : ""}>Kokoro: on this PC, more natural, a little slower (a 340 MB download)</option></select></label></div>
       <div class="row"><button type="button" class="btn small" id="w-hear">&#9654; Hear ATC</button>
         <span class="muted small">The mixer (the sliders at the top of the window) sets the volume of each.</span></div>`;
   },
@@ -800,30 +936,64 @@ const Setup = {
       S.settings.settings.mixer.sidetone = sidetone;
       this.render();
     }));
-    $("#w-provider").onchange = () => this.save("tts", "provider", $("#w-provider").value);
+    $("#w-provider").onchange = async () => {
+      const v = $("#w-provider").value;
+      // Kokoro chosen: downloaded meanwhile (Piper speaks until it's there).
+      if (await this.save("tts", "provider", v) && v === "kokoro") api("models/install", { kinds: ["kokoro"] }).catch(() => {});
+    };
     $("#w-hear").onclick = async (e) => {
       e.target.disabled = true;
-      try { await api("voice/preview", {}); } catch (err) { fail(err); }
+      // Kokoro's own voice once it's downloaded; Piper's until then.
+      const kokoro = S.settings.settings.tts.provider === "kokoro";
+      try { await api("voice/preview", kokoro ? { provider: "kokoro" } : {}); } catch (err) {
+        if (kokoro) { toast("Kokoro is still downloading: this is Piper"); await api("voice/preview", {}).catch(fail); } else fail(err);
+      }
       e.target.disabled = false;
     };
   },
 
   copilot() {
-    const st = S.settings.settings, cur = st.crew.personality || "neutral";
+    const st = S.settings.settings, on = st.crew.enabled !== false;
     const verbosity = [["quiet", "Quiet: only what's safety"], ["standard", "Standard: callouts, ATC relays and reminders"],
       ["chatty", "Chatty: also status updates and small talk"]];
-    return `<p>A first officer beside you: it works the radio with you if you like, makes the callouts, runs the checklists
-      and works its side of the cockpit. Choose who it is. The safety calls are the standard ones whoever you pick.</p>
-      <div class="wpeople">${(S.settings.personalities || []).map((p) => `<div class="wcard person ${p.id === cur ? "current" : ""}" data-person="${esc(p.id)}" role="button" tabindex="0">
-        <b>${esc(p.name)}</b><span class="muted small">${esc(p.style)}</span><i class="small">&ldquo;${esc(p.sample)}&rdquo;</i>
-        <button type="button" class="wplay" data-hear="${esc(p.id)}" title="Hear ${esc(p.name)}">&#9654;</button></div>`).join("")}</div>
-      <div class="row"><label>When the Copilot switch is on, it
-        <select id="w-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
-        <option value="assist" ${st.ui.copilot === "assist" ? "selected" : ""}>reads back and changes frequencies; you make the calls</option></select></label></div>
-      <div class="row"><label>What it says by itself<select id="w-verbosity">${verbosity.map(([v, l]) =>
-        `<option value="${v}" ${st.crew.verbosity === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>`;
+    return `<p>A first officer beside you: it makes the callouts, runs the checklists, answers you on the intercom and, with the
+      Copilot switch, works the radio with ATC. Do you want one?</p>
+      <div class="wchoice">
+        <button type="button" class="wcard ${on ? "current" : ""}" data-wcrew="on"><b>Fly with a copilot</b>
+          <span class="muted small">Callouts, checklists and the intercom; the radio with ATC when you flip the Copilot switch.</span></button>
+        <button type="button" class="wcard ${on ? "" : "current"}" data-wcrew="off"><b>Fly alone</b>
+          <span class="muted small">No copilot. You can bring one in any time in Quick Settings.</span></button>
+      </div>
+      ${on ? `<label class="check-row"><input type="checkbox" id="w-hands" ${st.crew.hands === "pm" ? "checked" : ""}> Let it work the aircraft's controls</label>
+        <span class="hint">Its own side of the cockpit, by itself: the radios in standby, the transponder, the altimeter, the lights, the
+          gear and flaps after takeoff, the altitude and heading ATC gives. Off: it says what's due and does only what you ask it
+          to ("flaps 2"). Only in aircraft it knows; your side (the engines, the autopilot, flaps for takeoff and landing) it never
+          touches either way.</span>
+        <div class="row"><label>When the Copilot switch is on, it
+          <select id="w-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
+          <option value="assist" ${st.ui.copilot === "assist" ? "selected" : ""}>reads back and changes frequencies; you make the calls</option></select></label></div>
+        <div class="row"><label>What it says by itself<select id="w-verbosity">${verbosity.map(([v, l]) =>
+          `<option value="${v}" ${st.crew.verbosity === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>` : ""}`;
   },
   wire_copilot() {
+    $$("[data-wcrew]").forEach((b) => (b.onclick = async () => {
+      if (await this.save("crew", "enabled", b.dataset.wcrew === "on")) this.render();
+    }));
+    const on = (id, fn) => { if ($(id)) $(id).onchange = fn; };
+    on("#w-hands", (e) => this.save("crew", "hands", e.target.checked ? "pm" : "calls"));
+    on("#w-copilot", () => this.save("ui", "copilot", $("#w-copilot").value));
+    on("#w-verbosity", () => this.save("crew", "verbosity", $("#w-verbosity").value));
+  },
+
+  people() {
+    const cur = S.settings.settings.crew.personality || "neutral";
+    return `<p>Choose who's in the right seat. Each has a voice and a manner of their own; the safety calls are the standard
+      ones whoever you pick.</p>
+      <div class="wpeople">${(S.settings.personalities || []).map((p) => `<div class="wcard person ${p.id === cur ? "current" : ""}" data-person="${esc(p.id)}" role="button" tabindex="0">
+        <b translate="no">${esc(p.name)}</b><span class="muted small">${esc(p.style)}</span><i class="small" translate="no">&ldquo;${esc(p.sample)}&rdquo;</i>
+        <button type="button" class="wplay" data-hear="${esc(p.id)}" title="Hear ${esc(p.name)}">&#9654;</button></div>`).join("")}</div>`;
+  },
+  wire_people() {
     $$("[data-hear]").forEach((b) => (b.onclick = (e) => {
       e.stopPropagation();
       api("voice/crew_preview", { personality: b.dataset.hear }).catch(fail);
@@ -836,44 +1006,23 @@ const Setup = {
       card.onclick = pick;
       card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
     });
-    $("#w-copilot").onchange = () => this.save("ui", "copilot", $("#w-copilot").value);
-    $("#w-verbosity").onchange = () => this.save("crew", "verbosity", $("#w-verbosity").value);
   },
 
   atc() {
-    const st = S.settings.settings, mistral = (S.cloud?.providers || []).find((p) => p.id === "mistral");
+    const st = S.settings.settings;
     const phrase = [["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]];
-    const link = mistral?.signup ? `<a href="${esc(mistral.signup)}" target="_blank" rel="noopener">get one here</a>` : "from mistral.ai";
     return `<p>How ATC works with you.</p>
       <div class="row"><label>Phraseology<select id="w-phrase">${phrase.map(([v, l]) =>
         `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${l}</option>`).join("")}</select></label></div>
       <label class="check-row"><input type="checkbox" id="w-humanize" ${st.atc.humanize !== false ? "checked" : ""}> Natural speech: controllers and other pilots say "uh" now and then, as people do</label>
       <label class="check-row"><input type="checkbox" id="w-chatter" ${st.atc.chatter ? "checked" : ""}> Other flights on the frequency</label>
-      <label class="check-row"><input type="checkbox" id="w-personal" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities of their own</label>
-      ${mistral ? `<div class="wbox"><b>Recommended: a free cloud language model</b>
-        <p class="muted small">It understands far more of what you say than the model on your PC, and words ATC's replies
-          naturally. Mistral is free with your own key (${link}); it's kept in Windows' credential store, never in a file.
-          Without one everything works offline, just more strictly.</p>
-        <div class="row"><input type="password" id="w-mistral" placeholder="${mistral.has_key ? "A key is saved" : "Paste your Mistral key"}" autocomplete="off">
-          <button type="button" class="btn small" id="w-mistral-save">Save and use it</button></div>
-        <span class="muted small" id="w-mistral-note">${mistral.has_key && st.cloud?.enabled ? "<span class=\"ok\">&#10003; The cloud model is on.</span>" : ""}</span></div>` : ""}`;
+      <label class="check-row"><input type="checkbox" id="w-personal" ${st.atc.personalities !== false ? "checked" : ""}> Controllers with personalities of their own</label>`;
   },
   wire_atc() {
     $("#w-phrase").onchange = () => this.save("atc", "phraseology", $("#w-phrase").value);
     $("#w-humanize").onchange = (e) => this.save("atc", "humanize", e.target.checked);
     $("#w-chatter").onchange = (e) => this.save("atc", "chatter", e.target.checked);
     $("#w-personal").onchange = (e) => this.save("atc", "personalities", e.target.checked);
-    const save = $("#w-mistral-save");
-    if (save) save.onclick = async () => {
-      const key = $("#w-mistral").value.trim();
-      if (!key) return;
-      try {
-        S.cloud = await api("cloud/key", { provider: "mistral", key });
-        await this.save("cloud", "enabled", true);
-        $("#w-mistral").value = "";
-        $("#w-mistral-note").innerHTML = "<span class=\"ok\">&#10003; Saved. The cloud model is on from the next flight.</span>";
-      } catch (e) { fail(e); }
-    };
   },
 
   flight() {
@@ -881,8 +1030,8 @@ const Setup = {
     return `<p>LocalTC clears you as filed: put in your SimBrief username and <b>New Flight</b> imports your latest plan, with
       your callsign, route and runways. You can type a plan in instead, or just press Start and fly.</p>
       <div class="row"><label>SimBrief username or Pilot ID<input id="w-simbrief" value="${esc(ui.simbrief_user)}" autocomplete="off" spellcheck="false"></label></div>
-      <label class="check-row"><input type="checkbox" id="w-require-plan" ${ui.require_plan !== false ? "checked" : ""}> Require a flight
-        plan to start a flight. Off: press <b>Start</b> and fly, and <b>File Plan</b> gives ATC your plan whenever you have it.</label>
+      <label class="check-row"><input type="checkbox" id="w-require-plan" ${ui.require_plan !== false ? "checked" : ""}> <span>Require a flight
+        plan to start a flight. Off: press <b>Start</b> and fly, and <b>File Plan</b> gives ATC your plan whenever you have it.</span></label>
       <div class="wbox"><b>Each flight</b><ol class="small">
         <li>Load your aircraft in MSFS 2024, at a gate, cold and dark or ready to go.</li>
         <li><b>New Flight</b> imports your plan; then <b>Start</b>. The light turns green when the sim's connected.</li>
@@ -894,30 +1043,58 @@ const Setup = {
     $("#w-require-plan").onchange = (e) => requirePlan(e.target.checked);
   },
 
+  traffic() {
+    const on = !!S.settings.settings.traffic?.enabled;
+    return `<p>The other aircraft around you: the sim's own traffic, or LocalTC's.</p>
+      <div class="wbox wwarn"><b class="exp-badge">EXPERIMENTAL</b>
+        <p><b>LocalTC's traffic</b>: the real flights around you, live from free ADS-B sources, flown in the sim with their
+          airline's FSLTL model; the gates filled with the airlines that fly there; and ATC controlling them, holding them
+          short or sending them around when you have the runway and stopping them to give way to you on the ground.</p>
+        <p><b>It's still in progress:</b> now and then an aircraft stops somewhere odd, turns late or holds the others up.
+          Each report you send in helps it along.</p>
+        <p><b>Before you turn it on, turn off every other traffic</b>: MSFS's own (Options &rarr; General &rarr; Traffic: air
+          traffic and parked aircraft off) and any traffic add-on (FSLTL's injector, AIG and the like). With both on you'll see
+          aircraft twice.</p>
+        <label class="check-row"><input type="checkbox" id="w-traffic" ${on ? "checked" : ""}> Turn on LocalTC's traffic</label></div>
+      <p class="muted small">FSLTL's free models give each aircraft its airline's colours; without them the sim's own models stand
+        in. Turn it on or off any time in Quick Settings &rarr; Traffic.</p>`;
+  },
+  wire_traffic() {
+    $("#w-traffic").onchange = (e) => this.save("traffic", "enabled", e.target.checked);
+  },
+
   done() {
     const st = S.settings.settings, v = st.voice;
     const who = (S.settings.personalities || []).find((p) => p.id === (st.crew.personality || "neutral"));
     const copilot = who && who.sex ? who.name : "your copilot";
     const ptt = v.ptt === "keyboard" ? keyLabel(v.ptt_key) : v.ptt === "joystick" ? "your yoke or joystick button" : "the headset button";
-    const talk = v.enabled ? `Hold <b>${esc(ptt)}</b> to talk to ATC` : "Type your calls to ATC";
-    const intercom = st.crew.enabled && v.intercom_key ? `, and <b>${esc(keyLabel(v.intercom_key))}</b> to talk to ${esc(copilot)}` : "";
-    return `<div class="whero"><img src="/static/logo.svg" alt="" width="56" height="56"><h2>You're set</h2><p>${talk}${intercom}.</p></div>
+    // One sentence each way, so it's one sentence in every language ("Hold" alone was a holding pattern).
+    const ic = st.crew.enabled && v.intercom_key ? keyLabel(v.intercom_key) : "";
+    const named = who && who.sex;  // (one with a name, else "your copilot": a sentence of its own, for the grammar)
+    const said = v.enabled
+      ? (!ic ? `Hold ${ptt} to talk to ATC.` : named ? `Hold ${ptt} to talk to ATC, and ${ic} to talk to ${copilot}.`
+        : `Hold ${ptt} to talk to ATC, and ${ic} to talk to your copilot.`)
+      : (!ic ? "Type your calls to ATC." : named ? `Type your calls to ATC, and hold ${ic} to talk to ${copilot}.`
+        : `Type your calls to ATC, and hold ${ic} to talk to your copilot.`);
+    return `<div class="whero"><img src="/static/logo.svg" alt="" width="56" height="56"><h2>You're set</h2><p>${esc(said)}</p></div>
       <ul class="benefits small">
         <li><b>Talk like on a real radio.</b> Hold the key a moment before you speak and until you've finished, say your callsign, and read back what ATC gives you.</li>
         <li><b>ATC and the copilot aren't perfect.</b> When something goes wrong, send it in (the gear &rarr; Support &amp; feedback): each report makes them better.</li>
         <li><b>The mixer</b> (the sliders at the top) sets the volume of ATC, the other flights, the copilot and your microphone.</li>
-        <li><b>Quick Settings</b> has all of this and more: the voices, the copilot's hands, checklists, LocalTC's traffic, the taxi guidance.</li>
+        <li><b>Quick Settings</b> has all of this and more: the voices, the language models, the copilot's hands, checklists, LocalTC's traffic, the taxi guidance.</li>
       </ul>`;
   },
 };
-$("#setup-next").onclick = () => (Setup.step === Setup.STEPS.length - 1 ? Setup.finish() : Setup.go(1));
+$("#setup-next").onclick = () => (Setup.step === Setup.steps().length - 1 ? Setup.finish() : Setup.go(1));
 $("#setup-back").onclick = () => Setup.go(-1);
 $("#setup-skip").onclick = () => Setup.finish();
-// However it's closed (finished, skipped, Esc), it's done: never shown by itself again, nor the welcome notes it holds.
+// However it's closed (finished, skipped, Esc), it's done: never shown by itself again, nor the welcome notes it holds
+// or the language question (its first step).
 $("#dlg-setup").addEventListener("close", () => {
   if (!Setup.shown) return;  // it never loaded: shown again next time
-  if (S.state) { S.state.setup = false; S.state.welcome = false; S.state.whats_new = null; }
-  api("settings", { settings: { ui: { setup_done: true, welcome_seen: true, notes_seen: S.state?.version || "" } } }).catch(() => {});
+  if (S.state) { S.state.setup = false; S.state.welcome = false; S.state.whats_new = null; S.state.language_asked = true; }
+  Popups.drop("welcome", "whatsnew", "language");
+  api("settings", { settings: { ui: { setup_done: true, welcome_seen: true, language_asked: true, notes_seen: S.state?.version || "" } } }).catch(() => {});
 });
 
 /* ---------- New Flight ---------- */
@@ -1241,7 +1418,7 @@ function personalityRow(list, current, idPrefix = "s-crew") {
 }
 function personalityHint(list, id) {
   const p = (list || []).find((x) => x.id === id);
-  return p ? `${esc(p.style)} <i>&ldquo;${esc(p.sample)}&rdquo;</i>` : "";
+  return p ? `${esc(p.style)} <i translate="no">&ldquo;${esc(p.sample)}&rdquo;</i>` : "";  // (its words: aviation English)
 }
 
 const Settings = {
@@ -1296,7 +1473,6 @@ const Settings = {
           on, what you say and your flight's details go to the service answering. Mistral is tried first (the most generous free
           limits), Pollinations (no key) last; one that's busy, out of allowance or down steps aside and the next answers.</p>
         <label class="check-row"><input type="checkbox" id="s-cloud" ${on ? "checked" : ""}> Use cloud language models (from the next flight)</label>
-        <label class="check-row"><input type="checkbox" id="s-cloud-copilot" ${st.cloud?.copilot !== false ? "checked" : ""}> The copilot uses it too, with its own connection (its questions never hold up ATC's). Off: the copilot uses the model on this PC</label>
         <label class="check-row"><input type="checkbox" id="s-cloud-local" ${st.cloud?.local_fallback ? "checked" : ""}> When every cloud service fails, the model on this PC answers (if Ollama is running)</label>
         ${c.via ? `<p class="small">This flight's last answer came from <b>${esc(c.via)}</b>.</p>` : ""}
         <details class="cloud-services" ${this.cloudOpen?.has("_all") ? "open" : ""} data-cloud-fold="_all">
@@ -1317,8 +1493,8 @@ const Settings = {
           service's models can be changed in the settings file ([cloud] order, models).</p>
       </div>`;
   },
-  // Who speaks for ATC and the copilot: Piper (here, quick), Kokoro (here, more natural, slower) or Azure (the cloud,
-  // your own key), each falling back to the next. The key goes to the system's credential store and never comes back.
+  // Who speaks for ATC and the copilot, all on this PC: Piper (quick, always there) or Kokoro (more natural, slower,
+  // Piper standing in), each with a preview; and the voices of the language the copilot talks with you in.
   voicesPart(st) {
     const v = S.tts;
     if (!v) return "";
@@ -1331,50 +1507,37 @@ const Settings = {
       const speed = p.latency_ms != null ? ` · ${p.latency_ms} ms a line, ${p.rtf}× real time` : "";
       return `<span class="mstatus ok">&#10003; ${p.ok ? `${p.ok} lines` : "ready"}${speed}</span>`;
     };
-    const k = v.kokoro, job = (v.jobs || {}).kokoro;
-    const usage = by.azure?.usage;
-    const opts = [["piper", "Piper: on this PC, quick, always there"], ["kokoro", "Kokoro: on this PC, more natural, slower"],
-      ["azure", "Azure AI Speech: Microsoft's neural voices, in the cloud (your key)"]];
-    return `<div class="row"><label>ATC and copilot voices<select id="s-provider">${opts.map(([id, label]) =>
-        `<option value="${id}" ${st.tts.provider === id ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
-      <div class="small voices-status">
-        ${by.azure ? `<div><b>Azure</b> ${state("azure")}</div>` : ""}
-        ${by.kokoro ? `<div><b>Kokoro</b> ${state("kokoro")}</div>` : ""}
-        ${by.piper ? `<div><b>Piper</b> ${state("piper")}</div>` : ""}
-        ${v.text_only ? `<div class="mstatus missing">${v.text_only} lines this flight had no voice (text only)</div>` : ""}
-        <div class="muted">If the voice chosen can't speak a line, the next one does: ${st.tts.provider === "azure" ? "Azure, " : ""}${st.tts.provider === "kokoro" || st.tts.kokoro ? "Kokoro, " : ""}Piper, then text.</div>
+    const k = v.kokoro, kjob = (v.jobs || {}).kokoro, lang = v.language, ljob = (v.jobs || {}).voice_lang;
+    const piper = this.statusOf("voice");
+    const play = (attrs) => `<button class="btn small" ${attrs}>&#9654; Preview</button>`;
+    const kokoroState = k.package ? `<span class="mstatus missing">${esc(k.package)}</span>`
+      : !k.installed ? `<button class="btn small" id="s-kokoro-get" ${kjob?.state === "running" ? "disabled" : ""}>Download (${k.size_mb} MB)</button>`
+      : `${play('data-preview="kokoro"')} ${st.tts.provider === "kokoro" ? state("kokoro") : '<span class="mstatus ok">&#10003; Downloaded</span>'}`;
+    return `<p class="sub-h">Voices</p>
+      <div class="row"><label>ATC and the copilot speak with<select id="s-provider">
+        <option value="piper" ${st.tts.provider !== "kokoro" ? "selected" : ""}>Piper: quick, always there</option>
+        <option value="kokoro" ${st.tts.provider === "kokoro" ? "selected" : ""}>Kokoro: more natural, slower (Piper stands in)</option></select></label></div>
+      <div class="voice-list">
+        <div class="voice-row"><div><b>Piper</b> <span class="muted small">LibriTTS: every controller a voice of their own,
+          from one download (80 MB)</span></div>
+          <div>${play('id="s-preview"')} ${piper?.installed ? (st.tts.provider === "kokoro" ? '<span class="mstatus ok">&#10003; installed</span>' : state("piper") || '<span class="mstatus ok">&#10003; installed</span>')
+            : '<span class="mstatus missing">not downloaded</span> <button class="btn small" data-install="voice">Download</button>'}</div></div>
+        <div class="progress" id="p-voice" hidden><div></div></div>
+        <div class="voice-row"><div><b>Kokoro</b> <span class="muted small">Kokoro-82M (Apache-2.0): more natural, American or
+          British English. About 0.2-0.3 s of work per second of speech, so a long clearance starts a second or two later.</span></div>
+          <div>${kokoroState}</div></div>
+        <div class="progress busy" id="p-kokoro" hidden><div></div></div>
+        ${lang ? `<div class="voice-row"><div><b translate="no">${esc(lang.native)}</b> <span class="muted small">The copilot's voices
+          when it talks with you in your language (its voice setting picks between them).</span></div>
+          <div>${lang.installed ? lang.voices.map((x) => `<button class="btn small" data-preview-lang="${x.sex}" translate="no">&#9654; ${esc(x.name)}</button>`).join(" ")
+            + ' <span class="mstatus ok">&#10003; installed</span>'
+            : `<span class="mstatus missing">not downloaded</span> <button class="btn small" data-install="voice_lang" ${ljob?.state === "running" ? "disabled" : ""}>Download (${lang.size_mb} MB)</button>`}</div></div>
+        <div class="progress" id="p-voice_lang" hidden><div></div></div>` : ""}
       </div>
-      <details class="cloud-services" ${this.voicesOpen ? "open" : ""} id="voices-more">
-        <summary><b>Kokoro and Azure</b></summary>
-        <p class="small"><b>Kokoro</b> (Kokoro-82M, Apache-2.0) runs on this PC: nothing leaves it. Its voices sound more natural
-          than Piper's, American or British. It needs a ${k.size_mb} MB download and about 0.2-0.3 s of CPU work per second of
-          speech, so a long clearance starts a second or two later than with Piper.
-          ${k.package ? `<br><span class="mstatus missing">${esc(k.package)}</span>` : k.installed
-            ? '<br><span class="mstatus ok">&#10003; Downloaded</span>'
-            : `<br><button class="btn small" id="s-kokoro-get" ${job?.state === "running" ? "disabled" : ""}>Download Kokoro (${k.size_mb} MB)</button>`}
-          </p><div class="progress busy" id="p-kokoro" hidden><div></div></div>
-        <label class="check-row"><input type="checkbox" id="s-kokoro" ${st.tts.kokoro ? "checked" : ""}> Kokoro stands in for Azure before Piper does</label>
-        <p class="small"><b>Azure AI Speech</b> is Microsoft's: natural voices in every regional English (British in the UK,
-          Australian in Australia ...). It's off unless chosen, and needs your own Speech resource (the free F0 tier: 500,000
-          characters and 20 lines a minute; a flight uses roughly 8,000-10,000 characters an hour). While it's chosen, the
-          words ATC and the copilot say go to Microsoft to be spoken, nothing else of the flight; Microsoft says it doesn't
-          keep the text or the audio. Lines heard before come from this PC.
-          <a href="${"https://portal.azure.com/#create/Microsoft.CognitiveServicesSpeechServices"}">Create a Speech resource</a></p>
-        <p class="small">Both are on your resource's <b>Keys and Endpoint</b> page in the Azure portal (a Speech resource,
-          or a Foundry / AI services one). Azure shows two keys: either works. <b>Use KEY 1</b> here and keep KEY 2 as the
-          spare: when you regenerate KEY 1 (now and then, or if it was ever shared), paste KEY 2 here first so the voices
-          keep working, then regenerate KEY 1. The region is the <b>Location/Region</b> on that page (eastus, westeurope
-          ...); the endpoint isn't needed (pasted here, its region is taken from it).</p>
-        <div class="row"><label>Region<input id="s-az-region" value="${esc(st.tts.azure_region || "")}" placeholder="eastus" spellcheck="false"></label></div>
-        <div class="cloud-key">${v.key_from_env ? '<span class="small muted">The key comes from AZURE_SPEECH_KEY.</span>' :
-          `<input type="password" autocomplete="off" spellcheck="false" id="s-az-key" placeholder="${v.has_key ? "Key saved: paste a new one to replace it" : "Paste your Speech resource key"}">
-          <button class="btn small" id="s-az-save">Save</button>${v.has_key ? '<button class="btn small" id="s-az-clear">Remove</button>' : ""}`}
-          <button class="btn small" id="s-tts-test">Test the voices</button></div>
-        ${usage ? `<div class="small">This month: <b>${usage.chars.toLocaleString()}</b> of ${usage.limit.toLocaleString()} characters
-          (${usage.percent} %, LocalTC's own count)${usage.cached ? `, ${usage.cached} lines from this PC` : ""}.</div>` : ""}
-        <div class="small cloud-test" id="tts-test"></div>
-        <label class="check-row"><input type="checkbox" id="s-chatter-local" ${st.tts.chatter_cloud ? "" : "checked"}> Other pilots on the frequency in this PC's voices (Kokoro or Piper), so no Azure characters go on chatter. Off: in the Azure voice too</label>
-      </details>`;
+      <div class="small voices-status">
+        ${v.text_only ? `<div class="mstatus missing">${v.text_only} lines this flight had no voice (text only)</div>` : ""}
+        <div class="muted">${st.tts.provider === "kokoro" ? "If Kokoro can't speak a line, Piper does; with neither, it's text." : "If Piper can't speak a line, it's text."}</div>
+      </div>`;
   },
   // A yoke or joystick button found by pressing it: LocalTC reads the controllers from Windows (as during a flight,
   // whichever window has focus), so Detect then press it. Written as MSFS names it, joystick:<device>:button:<n>.
@@ -1409,41 +1572,18 @@ const Settings = {
     on("#s-cloud", "change", (e) => this.save("cloud", "enabled", e.target.checked));
     const ttsRefresh = async (v) => { S.tts = v || await api("tts"); this.render(); };
     on("#s-provider", "change", async () => { if (await this.save("tts", "provider", $("#s-provider").value)) ttsRefresh(); });
-    on("#s-kokoro", "change", async (e) => { if (await this.save("tts", "kokoro", e.target.checked)) ttsRefresh(); });
-    on("#s-chatter-local", "change", (e) => this.save("tts", "chatter_cloud", !e.target.checked));
-    on("#s-az-region", "change", async () => {
-      // "https://eastus.api.cognitive.microsoft.com/" (the endpoint, pasted by mistake) is the region eastus.
-      let region = $("#s-az-region").value.trim().toLowerCase();
-      const host = region.match(/^(?:https?:\/\/)?([a-z0-9-]+)\.(?:api\.cognitive|tts\.speech|stt\.speech)\./);
-      if (host) $("#s-az-region").value = region = host[1];
-      if (await this.save("tts", "azure_region", region)) ttsRefresh();
-    });
-    $("#voices-more")?.addEventListener("toggle", (e) => { this.voicesOpen = e.target.open; });
     on("#s-kokoro-get", "click", async () => {
       try { await api("models/install", { kinds: ["kokoro"] }); toast("Downloading Kokoro ..."); } catch (e) { fail(e); }
     });
-    on("#s-az-save", "click", async () => {
-      const key = $("#s-az-key").value.trim();
-      if (!key) { toast("Paste the key first", true); return; }
-      try { await ttsRefresh(await api("tts/key", { key })); toast("Key saved"); } catch (e) { fail(e); }
-    });
-    on("#s-az-clear", "click", async () => {
-      try { await ttsRefresh(await api("tts/key", { key: "" })); toast("Key removed"); } catch (e) { fail(e); }
-    });
-    on("#s-tts-test", "click", async (e) => {
-      const out = $("#tts-test");
-      e.target.disabled = true; out.textContent = "Speaking the same line with each voice ...";
-      try {
-        const { results } = await api("tts/test", {});
-        out.innerHTML = results.map((r) => r.ok
-          ? `<span class="ok">&#10003; ${esc(r.name)} (${esc(r.voice)}): ${r.seconds} s of speech in ${r.latency_ms} ms (${r.rtf}× real time)</span>`
-          : `<span class="bad">&#10007; ${esc(r.name)}: ${esc(r.why)}</span>`).join("<br>");
-        S.tts = await api("tts");
-      } catch (err) { out.textContent = err.message; }
-      e.target.disabled = false;
-    });
+    const preview = async (b, args) => {
+      const label = b.innerHTML;
+      b.disabled = true; b.textContent = "Speaking ...";
+      try { await api("voice/preview", args); } catch (err) { fail(err); }
+      finally { b.disabled = false; b.innerHTML = label; }
+    };
+    $$("[data-preview]").forEach((b) => (b.onclick = () => preview(b, { provider: b.dataset.preview })));
+    $$("[data-preview-lang]").forEach((b) => (b.onclick = () => preview(b, { language: S.tts.language.code, sex: b.dataset.previewLang })));
     on("#s-cloud-local", "change", (e) => this.save("cloud", "local_fallback", e.target.checked));
-    on("#s-cloud-copilot", "change", (e) => this.save("cloud", "copilot", e.target.checked));
     this.cloudOpen ??= new Set();
     $$("[data-cloud-fold]").forEach((d) => d.addEventListener("toggle", () => {
       this.cloudOpen[d.open ? "add" : "delete"](d.dataset.cloudFold);  // stays as it was when the card is drawn again
@@ -1475,6 +1615,7 @@ const Settings = {
     const llmIds = new Set(cat.llm.map((o) => o.id));
     const extra = (m.ollama.installed || []).filter((n) => !llmIds.has(n) && !llmIds.has(n.replace(/:latest$/, "")));
     const llmCur = st.llm.enabled ? st.llm.model : "__off";
+    const crewNone = st.crew.llm === "off" || st.crew.mode === "off";  // the copilot without a model
     const profileCur = m.catalog.profiles.find((p) => p.llm === st.llm.model && (p.whisper === st.voice.model || (st.voice.model === "auto" && p.whisper === m.whisper_model)) && p.voice === st.tts.voice);
     const gpu = hw.gpu ? `${esc(hw.gpu)} (${hw.gpu_vram_gb} GB)` : "no NVIDIA GPU";
     const devOpts = (list, cur) => `<option value="" ${!cur ? "selected" : ""}>System default</option>` +
@@ -1490,7 +1631,7 @@ const Settings = {
     $("#settings-body").innerHTML = `
       <div class="card">
         <h3>Performance</h3>
-        <div class="hw">This computer: ${hw.cpu_cores} CPU threads, ${hw.ram_gb} GB RAM, ${gpu}. Recommended: <b>${esc(m.recommended)}</b>.</div>
+        <div class="hw">This computer: ${hw.cpu_cores} CPU threads, ${hw.ram_gb} GB RAM, ${gpu}. Recommended: <b>${esc(cat.profiles.find((p) => p.id === m.recommended)?.label || m.recommended)}</b>.</div>
         <div class="profiles">${cat.profiles.map((p) => `<button class="profile ${profileCur?.id === p.id ? "current" : ""}" data-profile="${p.id}">
           <b>${esc(p.label)}</b>${p.id === m.recommended ? '<span class="rec">recommended</span>' : ""}<div class="small muted">${esc(p.description)}</div></button>`).join("")}</div>
         ${componentsPart(m)}
@@ -1498,14 +1639,8 @@ const Settings = {
 
       <div class="card">
         <h3>Models</h3>
-        <p class="muted small">Bigger models understand and hear better but answer more slowly. All run on this computer.
-          For the best understanding and replies, a <a href="#cloud-card" class="jump">cloud language model</a> is recommended (below).</p>
-        <div class="row"><label>Language model (reads your calls)
-          <select id="s-llm"><option value="__off" ${llmCur === "__off" ? "selected" : ""}>Off: grammar only (fastest, strict phrasing)</option>${opt(cat.llm, llmCur)}
-          ${extra.map((n) => `<option value="${esc(n)}" ${n === llmCur ? "selected" : ""}>${esc(n)} (installed in Ollama, untested)</option>`).join("")}</select>
-          <span class="hint">${note(cat.llm, st.llm.model)}${m.ollama.running ? "" : " Ollama isn't running."}</span></label>
-          <div>${st.llm.enabled ? status("llm") : ""}</div></div>
-        <div class="progress" id="p-llm" hidden><div></div></div>
+        <p class="muted small">Speech recognition and the voices. Bigger models hear better but answer more slowly. All run on
+          this computer. The language models are in their own section, below.</p>
         <div class="row"><label>Speech recognition (Whisper)
           <select id="s-whisper"><option value="auto" ${st.voice.model === "auto" ? "selected" : ""}>Automatic (${esc(m.whisper_model)})</option>${opt(cat.whisper, st.voice.model)}</select>
           <span class="hint">${note(cat.whisper, st.voice.model === "auto" ? m.whisper_model : st.voice.model)}</span></label>
@@ -1513,12 +1648,72 @@ const Settings = {
           <div>${status("whisper")}</div></div>
         <div class="progress" id="p-whisper" hidden><div></div></div>
         ${this.voicesPart(st)}
-        <div class="row"><label>Piper voice (the default, and the fallback for the others)
-          <select id="s-voice">${opt(cat.voice, st.tts.voice)}</select><span class="hint">${note(cat.voice, st.tts.voice)}</span></label>
-          <div><button class="btn small" id="s-preview">&#9654; Preview</button> ${status("voice")}</div></div>
-        <div class="progress" id="p-voice" hidden><div></div></div>
         ${missing ? `<div class="row"><button class="btn primary" id="s-install-all">Download everything missing</button><span class="muted small">Once; flights then work offline.</span></div>` : ""}
         <div class="muted small" id="job-msg"></div>
+      </div>
+      <div class="card" id="llm-card">
+        <h3>Language models</h3>
+        <p class="muted small">How ATC and the copilot understand what you say and word what they say back: the model on this
+          PC, a <a href="#cloud-card" class="jump">cloud model</a> (recommended for quality, below), and how much each of them
+          leans on it.</p>
+        <p class="sub-h">The model on this PC</p>
+        <div class="row"><label>Language model (reads your calls)
+          <select id="s-llm"><option value="__off" ${llmCur === "__off" ? "selected" : ""}>Off: grammar only (fastest, strict phrasing)</option>${opt(cat.llm, llmCur)}
+          ${extra.map((n) => `<option value="${esc(n)}" ${n === llmCur ? "selected" : ""}>${esc(n)} (installed in Ollama, untested)</option>`).join("")}</select>
+          <span class="hint">${note(cat.llm, st.llm.model)}${m.ollama.running ? "" : " Ollama isn't running."}</span></label>
+          <div>${st.llm.enabled ? status("llm") : ""}</div></div>
+        <div class="progress" id="p-llm" hidden><div></div></div>
+        <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run it on the CPU only: leaves the graphics card and its memory to the sim. Answers take a little longer (its timeouts are doubled). From the next flight</label>
+        <div class="row"><label>After a flight, keep the language model loaded for
+          <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
+          <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. ${esc(m.ollama.loaded || "")}</span></label></div>
+        <p class="sub-h">ATC</p>
+        <div class="row llm-timing"><label>Wait for an answer
+          <input id="s-llm-timeout" type="number" min="1" max="60" step="0.5" value="${st.llm.timeout_s}"> s</label>
+          <label>Per call, all tries
+          <input id="s-llm-budget" type="number" min="1" max="120" step="0.5" value="${st.llm.budget_s}"> s</label>
+          <label>Second try when it missed
+          <input id="s-llm-patience" type="number" min="0" max="120" step="1" value="${st.llm.patience_s}"> s</label>
+          <span class="hint">How long ATC waits for the model before answering without it. Longer is more patient with
+            a busy PC (the app shows the controller thinking meanwhile); shorter answers sooner. On the CPU the first two are
+            doubled. The app tells you whenever the model runs out of time. From the next flight.</span></div>
+        <div class="row"><label>Script or model
+          <select id="s-llm-mode">${[
+            ["mostly_llm", "Mostly LLM: the model reads and words most calls; the script takes the clearly routine ones (recommended)"],
+            ["llm", "Fully LLM: the model reads and words every call (slowest; the script checks it and steps in when it fails)"],
+            ["semi", "Semi script/LLM: the script for clear routine calls, the model for the rest and for wording off the script"],
+            ["scripted", "Fully scripted: standard phraseology; the model only for a call the script can't read (lightest)"],
+          ].map(([v, t]) => `<option value="${v}" ${st.llm.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">How much ATC leans on the language model, for understanding you and for the words of its replies.
+            Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
+            anything that fails the checks is said in the script's words.</span></label></div>
+        <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
+
+        <p class="sub-h">Copilot</p>
+        <div class="row"><label>Its language model
+          <select id="s-crew-which">
+            <option value="cloud" ${!crewNone && st.cloud?.copilot !== false ? "selected" : ""}>The cloud model, when it's on (its own connection, never holding up ATC; the whole flight as context)</option>
+            <option value="local" ${!crewNone && st.cloud?.copilot === false ? "selected" : ""}>The model on this PC</option>
+            <option value="none" ${crewNone ? "selected" : ""}>None: the listed commands and common questions only</option></select>
+          <span class="hint">${crewNone ? "" : st.cloud?.enabled ? "The cloud language model is on." : 'The cloud language model is off (<a href="#cloud-card" class="jump">Cloud language model</a>): the copilot uses the model on this PC either way.'}</span></label></div>
+        <div ${crewNone ? "hidden" : ""}>
+        <div class="row"><label>How much it leans on it<select id="s-crew-mode">${[
+            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)"],
+            ["llm", "Fully LLM: the model reads everything you say and words everything it says but the safety calls"],
+            ["mostly_llm", "Mostly LLM: short clear commands straight away; the rest, and its own calls, the model's"],
+            ["semi", "Semi script/LLM: the listed commands from the script; everything else you say to the model"],
+            ["scripted", "Fully scripted: the listed commands and common questions; the model only when nothing else understood"],
+          ].map(([v, t]) => `<option value="${v}" ${(st.crew.mode && st.crew.mode !== "off" ? st.crew.mode : "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">As ATC's setting does. A command it reads from your own words that the script didn't read the
+            same is said back for "confirm" first; checklists, callouts and safety calls never wait on the model.</span></label></div>
+        <label class="check-row"><input type="checkbox" id="s-crew-beyond" ${st.crew.beyond_facts ? "checked" : ""}> Let it answer beyond what it knows from the sim and ATC: its answers may use what a first officer would know (how a system works, what's usual). They can be wrong. Commands are still read back and checked</label>
+        <div class="row llm-timing"><label>Wait for an answer
+          <input id="s-crew-timeout" type="number" min="1" max="60" step="0.5" value="${st.crew.timeout_s}"> s</label>
+          <label>At most, on a busy PC
+          <input id="s-crew-patience" type="number" min="1" max="120" step="1" value="${st.crew.patience_s}"> s</label>
+          <span class="hint">How long the copilot waits for the model before "say again?". On the CPU only the first is doubled;
+            with the cloud, at least the cloud's own wait. From the next flight.</span></div>
+        </div>
       </div>
       ${this.cloudCard(st)}
 
@@ -1584,36 +1779,10 @@ const Settings = {
           <option value="quiet" ${st.crew.verbosity === "quiet" ? "selected" : ""}>Quiet: only what's safety (config, gear, not cleared to land, speed)</option>
           <option value="standard" ${st.crew.verbosity === "standard" ? "selected" : ""}>Standard: callouts, ATC relays and reminders</option>
           <option value="chatty" ${st.crew.verbosity === "chatty" ? "selected" : ""}>Chatty: also status updates and small talk (never below 10,000 ft)</option></select></label></div>
-        <div class="row"><label>Its hands<select id="s-crew-hands">
-          <option value="pm" ${st.crew.hands === "pm" ? "selected" : ""}>It works its own side: radios in standby, transponder, altimeter, lights, gear and flaps after takeoff</option>
-          <option value="calls" ${st.crew.hands === "calls" ? "selected" : ""}>Calls only: it says what's due and touches nothing</option></select></label></div>
+        <label class="check-row"><input type="checkbox" id="s-crew-hands" ${st.crew.hands === "pm" ? "checked" : ""}> Let it work the aircraft's controls: its own side by itself (the radios in standby, the transponder, the altimeter, lights, gear and flaps after takeoff, the altitude and heading ATC gives). Off: it says what's due and does only what you ask it to</label>
         <label class="check-row"><input type="checkbox" id="s-crew-repeat" ${st.crew.repeat_atc ? "checked" : ""}> Chatty only: it says the key part of each ATC instruction back to you before your readback ("Descend and maintain 8,000"), unless you read it back first</label>
         <span class="hint">Your side (parking brake, engines, the autopilot, flaps for takeoff and landing) it never touches: it tells you when something's missed. Say "quiet please" or "keep me posted" to change how much it talks mid-flight.</span>
 
-        <p class="sub-h">Copilot's language model</p>
-        <div class="row"><label>Script or model<select id="s-crew-mode">${[
-            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)"],
-            ["llm", "Fully LLM: the model reads everything you say and words everything it says but the safety calls"],
-            ["mostly_llm", "Mostly LLM: short clear commands straight away; the rest, and its own calls, the model's"],
-            ["semi", "Semi script/LLM: the listed commands from the script; everything else you say to the model"],
-            ["scripted", "Fully scripted: the listed commands and common questions; the model only when nothing else understood"],
-            ["off", "Off: no model at all (the listed commands and common questions only)"],
-          ].map(([v, t]) => `<option value="${v}" ${(st.crew.llm === "off" ? "off" : st.crew.mode || "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">How much the copilot leans on the language model, as ATC's setting does. A command it reads from your
-            own words that the script didn't read the same is said back for "confirm" first; checklists, callouts and safety
-            calls never wait on the model.</span></label></div>
-        <div class="row"><label>Which model
-          <select id="s-crew-which">
-            <option value="cloud" ${st.cloud?.copilot !== false ? "selected" : ""}>The cloud model, when it's on (its own connection, never holding up ATC; the whole flight as context)</option>
-            <option value="local" ${st.cloud?.copilot === false ? "selected" : ""}>The model on this PC</option></select>
-          <span class="hint">${st.cloud?.enabled ? "The cloud language model is on." : 'The cloud language model is off (<a href="#cloud-card" class="jump">Cloud language model</a>): the copilot uses the model on this PC either way.'}</span></label></div>
-        <label class="check-row"><input type="checkbox" id="s-crew-beyond" ${st.crew.beyond_facts ? "checked" : ""}> Let it answer beyond what it knows from the sim and ATC: its answers may use what a first officer would know (how a system works, what's usual). They can be wrong. Commands are still read back and checked</label>
-        <div class="row llm-timing"><label>Wait for an answer
-          <input id="s-crew-timeout" type="number" min="1" max="60" step="0.5" value="${st.crew.timeout_s}"> s</label>
-          <label>At most, on a busy PC
-          <input id="s-crew-patience" type="number" min="1" max="120" step="1" value="${st.crew.patience_s}"> s</label>
-          <span class="hint">How long the copilot waits for the model before "say again?". On the CPU only the first is doubled;
-            with the cloud, at least the cloud's own wait. From the next flight.</span></div>
         </div>
       </div>
 
@@ -1644,31 +1813,6 @@ const Settings = {
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
         <div class="row"><label>Center name (where no airport lists one)<input id="s-center" value="${esc(st.atc.center_name)}"></label>
           <label>Center frequency<input id="s-center-mhz" type="number" step="0.005" min="118" max="137" value="${st.atc.center_mhz}"></label></div>
-        <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run the language model on the CPU only: leaves the graphics card and its memory to the sim. Answers take a little longer (its timeouts are doubled). From the next flight</label>
-        <div class="row"><label>After a flight, keep the language model loaded for
-          <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
-          <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. ${esc(m.ollama.loaded || "")}</span></label></div>
-        <p class="sub-h">Language model timing</p>
-        <div class="row llm-timing"><label>Wait for an answer
-          <input id="s-llm-timeout" type="number" min="1" max="60" step="0.5" value="${st.llm.timeout_s}"> s</label>
-          <label>Per call, all tries
-          <input id="s-llm-budget" type="number" min="1" max="120" step="0.5" value="${st.llm.budget_s}"> s</label>
-          <label>Second try when it missed
-          <input id="s-llm-patience" type="number" min="0" max="120" step="1" value="${st.llm.patience_s}"> s</label>
-          <span class="hint">How long ATC waits for the model before answering without it. Longer is more patient with
-            a busy PC (the app shows the controller thinking meanwhile); shorter answers sooner. On the CPU the first two are
-            doubled. The app tells you whenever the model runs out of time. From the next flight.</span></div>
-        <div class="row"><label>Script or model
-          <select id="s-llm-mode">${[
-            ["mostly_llm", "Mostly LLM: the model reads and words most calls; the script takes the clearly routine ones (recommended)"],
-            ["llm", "Fully LLM: the model reads and words every call (slowest; the script checks it and steps in when it fails)"],
-            ["semi", "Semi script/LLM: the script for clear routine calls, the model for the rest and for wording off the script"],
-            ["scripted", "Fully scripted: standard phraseology; the model only for a call the script can't read (lightest)"],
-          ].map(([v, t]) => `<option value="${v}" ${st.llm.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">How much ATC leans on the language model, for understanding you and for the words of its replies.
-            Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
-            anything that fails the checks is said in the script's words.</span></label></div>
-        <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
       </div>
 
       <div class="card">
@@ -1702,6 +1846,11 @@ const Settings = {
         <span id="restart-bar" hidden><button class="btn small primary" id="s-restart">Restart flight to apply</button></span></div>`;
     // Everything that isn't about flying: in Settings (the gear), not Quick Settings.
     $("#settings-more").innerHTML = `
+      <div class="card" id="s-language-card">
+        <h3>Language</h3>
+        ${Language.picker("s")}
+      </div>
+
       <div class="card">
         <h3>Third party</h3>
         <p class="muted small">Accounts LocalTC reads flight plans from. Nothing is sent anywhere else.</p>
@@ -1709,9 +1858,9 @@ const Settings = {
           placeholder="e.g. 1207576" autocomplete="off" spellcheck="false"></label>
           <div><button class="btn small" id="s-simbrief-fetch">Import latest plan</button></div></div>
         <span class="hint">Your Pilot ID is on the SimBrief Account Settings page. <b>New Flight</b> uses this too.</span>
-        <label class="check-row"><input type="checkbox" id="s-require-plan" ${st.ui.require_plan !== false ? "checked" : ""}> Require a
+        <label class="check-row"><input type="checkbox" id="s-require-plan" ${st.ui.require_plan !== false ? "checked" : ""}> <span>Require a
           flight plan to start a flight (<b>New Flight</b>: the plan, then the flight). Off: <b>Start</b> flies without one, and
-          <b>File Plan</b> gives ATC your plan whenever you have it, the flight going on.</label>
+          <b>File Plan</b> gives ATC your plan whenever you have it, the flight going on.</span></label>
       </div>
 
       <div class="card">
@@ -1806,10 +1955,9 @@ const Settings = {
     });
     on("#s-whisper", "change", async () => { await this.save("voice", "model", val("#s-whisper")); this.refreshModels(); });
     on("#s-device", "change", async () => { await this.save("voice", "device", val("#s-device")); this.refreshModels(); });
-    on("#s-voice", "change", async () => { await this.save("tts", "voice", val("#s-voice")); this.refreshModels(); });
     on("#s-preview", "click", async (e) => {
       const b = e.target; b.disabled = true; b.textContent = "Speaking ...";
-      try { await api("voice/preview", { voice: val("#s-voice") }); this.refreshModels(); } catch (err) { fail(err); }
+      try { await api("voice/preview", {}); this.refreshModels(); } catch (err) { fail(err); }
       finally { b.disabled = false; b.innerHTML = "&#9654; Preview"; }
     });
     $$("[data-install]").forEach((b) => (b.onclick = () => api("models/install", { kinds: [b.dataset.install] }).catch(fail)));
@@ -1826,7 +1974,16 @@ const Settings = {
     this.bindJoy("ptt", "#s-joy", "ptt_joystick");
     this.bindJoy("ic", "#s-ic-joy", "intercom_joystick");
     on("#s-crew", "change", (e) => { this.save("crew", "enabled", e.target.checked); $("#crew-opts")?.classList.toggle("off", !e.target.checked); });
-    on("#s-crew-which", "change", () => this.save("cloud", "copilot", val("#s-crew-which") === "cloud"));
+    on("#s-crew-which", "change", async () => {
+      const v = val("#s-crew-which"), crew = S.settings.settings.crew;
+      if (v === "none") await this.save("crew", "llm", "off");
+      else {
+        if (crew.llm === "off") await this.save("crew", "llm", "full");
+        if (crew.mode === "off") await this.save("crew", "mode", "auto");
+        await this.save("cloud", "copilot", v === "cloud");
+      }
+      this.render();
+    });
     on("#s-crew-beyond", "change", (e) => this.save("crew", "beyond_facts", e.target.checked));
     for (const [id, key, low, high] of [["#s-crew-timeout", "timeout_s", 1, 60], ["#s-crew-patience", "patience_s", 1, 120]])
       on(id, "change", () => {
@@ -1837,11 +1994,10 @@ const Settings = {
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
     on("#s-crew-mode", "change", async () => {
       const v = val("#s-crew-mode");
-      if (S.settings.settings.crew.llm === "off" && v !== "off") await this.save("crew", "llm", "full");
       this.save("crew", "mode", v);
     });
     on("#s-crew-verbosity", "change", () => this.save("crew", "verbosity", val("#s-crew-verbosity")));
-    on("#s-crew-hands", "change", () => this.save("crew", "hands", val("#s-crew-hands")));
+    on("#s-crew-hands", "change", (e) => this.save("crew", "hands", e.target.checked ? "pm" : "calls"));
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
     on("#s-crew-preview", "click", async (e) => {
       e.target.disabled = true;
@@ -1903,6 +2059,7 @@ const Settings = {
         if (!Number.isFinite(value) || value < low || value > high) { toast(`Between ${low} and ${high} seconds`, true); return; }
         this.save("llm", key, value);
       });
+    Language.wire("s", () => this.render());
     on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
     on("#s-require-plan", "change", (e) => requirePlan(e.target.checked));
     on("#s-simbrief-fetch", "click", async (e) => {
@@ -2049,7 +2206,7 @@ const Settings = {
   jobs(jobs) {
     if (!$("#settings-body .card")) return;
     let msg = [];
-    for (const kind of ["llm", "whisper", "voice", "kokoro", ...COMPONENT_KINDS]) {
+    for (const kind of ["llm", "whisper", "voice", "voice_lang", "kokoro", ...COMPONENT_KINDS]) {
       const bar = $(`#p-${kind}`), j = jobs[kind];
       if (!bar) continue;
       bar.hidden = !j || j.state !== "running";
@@ -2057,7 +2214,8 @@ const Settings = {
         bar.classList.toggle("busy", j.fraction == null);
         bar.firstElementChild.style.width = j.fraction == null ? "" : `${Math.round(j.fraction * 100)}%`;
       }
-      if (j) msg.push(`${{ llm: "Language model", whisper: "Whisper", voice: "Voice", kokoro: "Kokoro", ...COMPONENT_NAMES }[kind]}: ${j.message}`);
+      // (Each part its own text, so each is translated: "Whisper" "Ready".)
+      if (j) msg.push(`<span>${esc({ llm: "Language model", whisper: "Whisper", voice: "Voice", voice_lang: "The copilot's voices", kokoro: "Kokoro", ...COMPONENT_NAMES }[kind])}</span>: <span>${esc(j.message)}</span>`);
       const key = j ? `${kind}:${j.state}:${j.message}` : "";
       if (j && j.state !== "running" && !this.seenJobs.has(key)) {
         this.seenJobs.add(key);
@@ -2066,7 +2224,7 @@ const Settings = {
       }
     }
     const el = $("#job-msg");
-    if (el) el.textContent = msg.join(" · ");
+    if (el) el.innerHTML = msg.join(" · ");
   },
   async sessions() {
     try {

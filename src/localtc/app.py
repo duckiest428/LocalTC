@@ -219,7 +219,8 @@ def traffic_atc(engine) -> "AtcLink":
 
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
                    destination=lambda: engine.state.flight.destination or "", call=call, managed=managed,
-                   runway_in_use=runway_in_use, runway_for=runway_for, closed=closed)
+                   runway_in_use=runway_in_use, runway_for=runway_for, closed=closed,
+                   user_callsign=lambda: str(engine.state.flight.callsign.ident) if engine.state.flight.callsign else "")
 
 
 _OPS = None
@@ -575,7 +576,8 @@ async def run_session(
                                 cfg.cloud.timeout_s if getattr(crew_backend, "rich", False) else 0.0)
                 crew_model = (CrewModel(crew_backend, mode="off" if cfg.crew.llm == "off" else cfg.crew.mode,
                                         timeout_s=crew_wait,
-                                        patience_s=max(cfg.crew.patience_s, crew_wait), beyond_facts=cfg.crew.beyond_facts)
+                                        patience_s=max(cfg.crew.patience_s, crew_wait), beyond_facts=cfg.crew.beyond_facts,
+                                        language=cfg.crew.language)
                               if crew_backend is not None and cfg.crew.llm != "off" and cfg.crew.mode != "off" else None)
                 if crew_model is not None:
                     log.info("Copilot's language model: %s, %s", "the cloud" if getattr(crew_backend, "rich", False)
@@ -853,56 +855,20 @@ class VoiceOutput:
         self.player.close()
 
 
-TTS_KEY = "tts:azure"  # the Azure Speech key's name in the credential store
-KEY_ENV = ("AZURE_SPEECH_KEY", "SPEECH_KEY")  # Microsoft's samples call it SPEECH_KEY
-REGION_ENV = ("AZURE_SPEECH_REGION", "SPEECH_REGION")
-
-
-def tts_key() -> str:
-    """The Azure Speech key: from the environment, else the system's credential store (never the settings file)."""
-    for name in KEY_ENV:
-        if key := os.environ.get(name, "").strip():
-            return key
-    from localtc.account import TokenStore
-
-    return TokenStore().get(TTS_KEY) or ""
-
-
-def set_tts_key(key: str) -> None:
-    from localtc.account import TokenStore
-
-    store = TokenStore()
-    if key.strip():
-        store.set(TTS_KEY, key.strip())
-    else:
-        store.delete(TTS_KEY)
-
-
-def tts_region(cfg: Config) -> str:
-    return cfg.tts.azure_region.strip() or next((os.environ[n].strip() for n in REGION_ENV if os.environ.get(n, "").strip()), "")
-
-
-def voice_chain(cfg: Config, piper: object | None, *, key: str | None = None):
-    """The voices in fallback order: the provider chosen, Kokoro (when on), Piper (when loaded)."""
+def voice_chain(cfg: Config, piper: object | None):
+    """The voices in fallback order: Kokoro (when chosen), then Piper (when loaded)."""
     from localtc.tts.providers import PiperVoices, VoiceChain
     from localtc.tts.voices import default_voices_dir
 
     t = cfg.tts
     voices_dir = Path(t.voices_dir) if t.voices_dir else default_voices_dir()
     providers: list = []
-    if t.provider == "azure":
-        from localtc.tts.azure import AudioCache, AzureVoices, Usage
-
-        providers.append(AzureVoices(tts_key() if key is None else key, tts_region(cfg),
-                                     usage=Usage(data_dir() / "tts_usage.json", limit=t.azure_monthly_chars),
-                                     cache=AudioCache(data_dir() / "tts_cache", t.cache_mb), rate=t.rate,
-                                     styles=t.azure_styles, per_minute=t.azure_per_minute, timeout_s=t.timeout_s))
-    if t.provider == "kokoro" or t.kokoro:
+    if t.provider == "kokoro":
         from localtc.tts.kokoro import KokoroVoices
 
         providers.append(KokoroVoices(voices_dir, model=t.kokoro_model, rate=t.rate, threads=t.kokoro_threads))
     if piper is not None:
-        providers.append(PiperVoices(piper))
+        providers.append(PiperVoices(piper, voices_dir=voices_dir))
     return VoiceChain(providers, timeout_s=t.timeout_s) if providers else None
 
 
@@ -966,8 +932,8 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
     service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
                        crew_speaker=copilot_voice, crew_sex=sex, crew_pick=voice_pick, crew_pace=1 / who.length,
                        crew_expressive=None if who.neutral else who.expressive, crew_locale=who.locale,
-                       shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional,
-                       chatter_cloud=t.chatter_cloud)
+                       crew_language=cfg.crew.language,
+                       shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional)
     return VoiceOutput(service, player)
 
 
@@ -992,9 +958,13 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     from localtc.stt.service import VoiceService
     from localtc.stt.whisper import WhisperTranscriber
 
+    from localtc.languages import language
+    from localtc.models import whisper_model
+
     v = cfg.voice
-    transcriber = WhisperTranscriber(v.model, device=v.device, compute_type=v.compute_type, models_dir=v.models_dir or None,
-                                     beam_size=v.beam_size)
+    talked = language(cfg.crew.language) if cfg.crew.enabled else None  # the copilot talked to in another language
+    transcriber = WhisperTranscriber(whisper_model(cfg) if talked is not None else v.model, device=v.device,
+                                     compute_type=v.compute_type, models_dir=v.models_dir or None, beam_size=v.beam_size)
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await asyncio.to_thread(transcriber.warm_up)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
@@ -1007,7 +977,8 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
 
         hints = lambda: flight_hints(engine)  # noqa: E731
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
-                           vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000)
+                           vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
+                           intercom_language=talked.code if talked is not None else "")
     ptt = None
     if v.ptt == "keyboard":
         from localtc.stt.ptt import KeyboardPtt

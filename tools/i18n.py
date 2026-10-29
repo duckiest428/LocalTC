@@ -213,7 +213,11 @@ EXTRA = ("{0} · {1} nm, {2} min", "{0}: hears you faster and more accurately.",
          "LocalTC {0} is downloaded and ready to install.",
          "This is a git checkout: update it with git pull (or GitHub Desktop).",
          "This copy wasn't set up by the installer; run the latest LocalTC-Setup.exe instead.",
-         "Updates install themselves on Windows. Here, update with git pull.")
+         "Updates install themselves on Windows. Here, update with git pull.",
+         # A personality's he or she (in the copilot's list), and where the language model is loaded (llm/ollama.py).
+         "she", "he", "Now loaded: {0}, on the CPU.", "Now loaded: {0}, all on the graphics card.",
+         "Now loaded: {0}, split: {1} on the graphics card and the rest on the CPU (too little free video memory when "
+         "it loaded: slower than either).")
 # Strings that look like words and are code: key names, CSS, a class list, an event list, an SVG path.
 JUNK = re.compile(r"^(?:M[\d.]|Arrow(?:Left|Right|Up|Down)$|Escape$|Content-Type$|use strict$|JetBrains Mono$|Inter$|"
                   r"translate\(|width \{0\}ms|line atc thinking$|small (?:error|green|\{0\})$|zoomend |joystick:\d|"

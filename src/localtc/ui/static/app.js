@@ -779,6 +779,7 @@ const Setup = {
     const st = S.settings.settings, mistral = (S.cloud?.providers || []).find((p) => p.id === "mistral");
     const on = mistral?.has_key && st.cloud?.enabled;
     const link = mistral?.signup || "https://console.mistral.ai/";
+    const talking = (st.crew?.language || "") !== "" && st.crew?.enabled !== false && !on;
     return `<p>ATC and the copilot understand what you say, and word what they say back, with a language model. The one on
       this PC works offline but is small enough to run beside the sim; a large one in the cloud understands far more of
       what you say, and its replies sound like people.</p>
@@ -793,6 +794,8 @@ const Setup = {
         <span class="small" id="w-mistral-note">${on ? '<span class="ok">&#10003; The cloud model is on.</span>' : ""}</span>
         <p class="muted small">The key is kept in Windows' credential store, never in a file. While the cloud model is on, what
           you say and your flight's details go to Mistral to be understood.</p></div>
+      ${talking ? `<div class="wbox warnbox"><b>${esc(I18n.t("Recommended for talking with the copilot in your language"))}</b>
+        <p class="small">${esc(I18n.t("The model on this PC understands and speaks your language only roughly: the copilot's commands and short answers work, but its conversation is better in English. Mistral speaks your language well."))}</p></div>` : ""}
       <p class="muted small">No key? Press <b>Next</b>: everything works offline with the model on this PC, just more strictly.
         You can add one any time in Quick Settings &rarr; Language models.</p>`;
   },
@@ -1412,7 +1415,8 @@ function trafficStatus(s) {
 function personalityRow(list, current, idPrefix = "s-crew") {
   const cur = current || "neutral";
   return `<div class="row"><label>Copilot's personality<select id="${idPrefix}-personality">${(list || []).map((p) =>
-    `<option value="${esc(p.id)}" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${p.sex === "F" ? "she" : "he"})` : ""}${p.brief ? ` · ${esc(p.brief)}` : ""}</option>`).join("")}</select>
+    // translate="no": put into the language here, piece by piece (as a whole it's no text the dictionary has).
+    `<option value="${esc(p.id)}" translate="no" ${p.id === cur ? "selected" : ""}>${esc(p.name)}${p.sex ? ` (${I18n.t(p.sex === "F" ? "she" : "he")})` : ""}${p.brief ? ` · ${esc(I18n.t(p.brief))}` : ""}</option>`).join("")}</select>
     <span class="hint" id="${idPrefix}-persona-hint">${personalityHint(list, cur)}</span></label>
     <div><button type="button" class="btn small" id="${idPrefix}-preview">&#9654; Preview</button></div></div>`;
 }
@@ -1666,7 +1670,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run it on the CPU only: leaves the graphics card and its memory to the sim. Answers take a little longer (its timeouts are doubled). From the next flight</label>
         <div class="row"><label>After a flight, keep the language model loaded for
           <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
-          <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. ${esc(m.ollama.loaded || "")}</span></label></div>
+          <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. <span>${esc(m.ollama.loaded || "")}</span></span></label></div>
         <p class="sub-h">ATC</p>
         <div class="row llm-timing"><label>Wait for an answer
           <input id="s-llm-timeout" type="number" min="1" max="60" step="0.5" value="${st.llm.timeout_s}"> s</label>

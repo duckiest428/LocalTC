@@ -159,7 +159,9 @@ class VoiceOut:
         elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
             await self.say(ev.text, self.persona("", "copilot"), "pilot", keep=clip_id(ev))
         elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
-            await self.say(ev.spoken or ev.text, self.persona("", "copilot", language=ev.language), "intercom",
+            # The copilot is one person: talking with you in another language, its English callouts are in that voice too.
+            await self.say(ev.spoken or ev.text, self.persona("", "copilot", language=ev.language or self.crew_language),
+                           "intercom",
                            keep=clip_id(ev), urgent=ev.kind == "alert")
         elif isinstance(ev, AtisBroadcast) and self.atis:
             self._stop_atis()

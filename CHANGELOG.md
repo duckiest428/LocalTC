@@ -26,6 +26,22 @@ a new minor version adds features, a patch fixes them.
   copilot's settings, apart from the speech recognition and the voices.
 
 ### Changed
+- **The copilot understands your language without a language model**: the common things said to it in German,
+  French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish, Russian or Mandarin are understood at once, as English
+  is: yes and no ("ja", "oui, confirmé", "sí"), its commands ("Fahrwerk ausfahren", "volets un", "放下起落架", the
+  lights, the autopilot, heading and altitude, the checklists by name) and the questions answered from the sim (the
+  fuel, what ATC said, the time to go, the weather there). Before, everything but English went to the language model,
+  commands asked "confirm?" in English and a "ja" never counted, so nothing said in another language got done.
+- **Its replies in your language, checked**: the copilot's short words and set lines ("Say again?", "Flaps 3,
+  confirm?", "I couldn't get the gear down from here") come in your language at once; its other replies are put into it
+  by the language model and checked to keep every number and unit (pounds stay pounds) and to really be in your
+  language. What ATC said is quoted in ATC's English. A reply that can't be put into your language is said in English,
+  and shown as English. Its callouts and checklists stay in aviation English, in the same voice: the copilot no longer
+  switches between two voices.
+- **ATC works in English, and the copilot says so**: call ATC in your own language and the copilot reminds you, once a
+  flight, to call them in English.
+- **Mistral recommended for your language**: picking a language other than English, the setup guide says that the
+  model on this PC speaks it only roughly, and that Mistral speaks it well.
 - **One place to choose the copilot's language model**: "Its language model" (the cloud's, this PC's, or none), then
   how much it leans on it. The cloud card's own copilot switch and the "Off" among the script-or-model choices are gone.
 - **The voices, laid out plainly**: Piper and Kokoro side by side in Quick Settings → Models, each with its state, its
@@ -48,6 +64,8 @@ a new minor version adds features, a patch fixes them.
   station its own voice from one download.
 
 ### Fixed
+- **The last English in the translated window**: the copilots' descriptions in their list, and where the language
+  model is loaded ("Now loaded: 2.4 GB, all on the graphics card"), are in your language too.
 - **Arriving traffic taken away in the air**: the check for aircraft frozen in the air removed real arrivals that were
   still being reported; it now goes by the live reports.
 - **A pushback, taxi or clearance request said to the copilot** ("ask ground for pushback") is made on the radio, not

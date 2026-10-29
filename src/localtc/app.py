@@ -589,6 +589,7 @@ async def run_session(
                                      verbosity=cfg.crew.verbosity, hands=cfg.crew.hands, perf=cfg.flight.perf,
                                      plan_source=cfg.flight.plan_source, alternate=cfg.flight.alternate,
                                      repeat_atc=cfg.crew.repeat_atc, deck=deck, personality=cfg.crew.personality,
+                                     language=cfg.crew.language,
                                      voice_sex=copilot_personality(cfg.crew.personality).voice_sex(cfg.crew.voice_sex),
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
                 crew = CrewService(pm, bus, source)

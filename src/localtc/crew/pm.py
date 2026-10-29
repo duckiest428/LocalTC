@@ -40,7 +40,7 @@ from localtc.atc_core import region as regions
 from localtc.atc_core.phraseology import speech
 from localtc.config import PlanPerf
 from localtc.crew import monitor as monitors
-from localtc.crew import personalities, speech_acts
+from localtc.crew import foreign, personalities, speech_acts
 from localtc.crew.actions import PILOT_SIDE, Cockpit, Plan, as_read, plan, safety
 from localtc.crew.answers import Picture, answer, facts
 from localtc.crew.commands import ASK_ATC, Command
@@ -159,12 +159,16 @@ class Intent:
     options: dict[str, Command] = field(default_factory=dict)
 
 
+TALKED = ("reply", "refused", "confirm")  # the copilot's conversation, in the captain's language; the rest English
+
+
 class PilotMonitoring:
     def __init__(self, engine: Any = None, *, profiles: list[Profile] | None = None, model: Any = None,
                  verbosity: str = "standard", hands: str = "pm", perf: PlanPerf | None = None, plan_source: str = "",
                  radio_mode=lambda: "off", alternate: str = "", repeat_atc: bool = False,
                  deck: FlightDeck | None = None, voice_sex: str = "", checklists: Any = None,
-                 checklist_setting: str = "offer", checklist_mode: str = "challenge", personality: str = "neutral") -> None:
+                 checklist_setting: str = "offer", checklist_mode: str = "challenge", personality: str = "neutral",
+                 language: str = "") -> None:
         self.engine = engine  # the ATC engine, read only: what's been cleared, the stations, the callsign
         self.profiles = profiles if profiles is not None else load_all()
         self.model = model  # crew.model.CrewModel, or None: the grammar and the data answers only
@@ -180,8 +184,17 @@ class PilotMonitoring:
         self._generation = self.deck.generation
         self.voice_sex = voice_sex  # the copilot's voice ("male"/"female"): its name goes with it
         self.personality = personalities.get(personality)  # who's in the right seat ([crew] personality)
+        self._language = language  # [crew] language: what the captain talks to it in ("" English; else the model's)
         self._aircraft = ""
         self._start()
+
+    @property
+    def language(self) -> str:
+        """The language the captain talks with the copilot in ("" for English)."""
+        from localtc.languages import language
+
+        lang = language(self._language or (getattr(self.model, "language", "") if self.model is not None else ""))
+        return lang.code if lang is not None and lang.code in foreign.WORDS else ""
 
     def file_plan(self, perf: PlanPerf, plan_source: str, alternate: str) -> None:
         """A flight plan filed with the flight under way: its speeds, fuel and alternate from now on."""
@@ -219,6 +232,7 @@ class PilotMonitoring:
         self._last_heard: tuple[float, str] | None = None
         self.utterances: deque[speech_acts.Reading | Any] = deque(maxlen=20)
         self._last_line: CrewSpeech | None = None  # for "say again"
+        self._told_english = False  # the captain told ATC only speaks English (a call in their own language)
         self._radio_queue: list[Any] = []  # the copilot's own radio calls (crew.monitor's), waiting for a free moment
         self._radio_after: dict[int, float] = {}  # ... not before this (a frequency being tuned first)
         self.hands_off: set[str] = set()  # controls the pilot said not to touch
@@ -260,6 +274,8 @@ class PilotMonitoring:
         failure is logged, recorded, and the copilot carries on with the next event."""
         try:
             out = self._observe(ev)
+            if self.language:
+                out = self._in_language(out)
         except Exception as exc:  # noqa: BLE001 - the copilot failing must never stop ATC
             log.exception("Copilot failed on %s", type(ev).__name__)
             self.deck.note("error", getattr(ev, "t", 0.0), f"{type(ev).__name__}: {type(exc).__name__}: {exc}")
@@ -321,6 +337,11 @@ class PilotMonitoring:
             self._note(ev.t, f'{ev.station} said: "{ev.text}"')
         elif isinstance(ev, Transcript) and ev.radio != 0 and ev.text:
             self._note(ev.t, f'{"the copilot" if ev.source == "copilot" else "you"} said on the radio: "{ev.text}"')
+            if ev.source != "copilot" and self.language and not self._told_english and foreign.called_in(ev.text, self.language):
+                # The captain called ATC in their own language: ATC only works in English, said once a flight.
+                self._told_english = True
+                out.append(self._line(CrewSpeech(t=ev.t, text=foreign.ENGLISH_ONLY[self.language], kind="reply",
+                                                 language=self.language)))
         elif isinstance(ev, SimLifecycle) and ev.kind == "unpaused":
             out += self._back_from_pause(ev.t)
         elif isinstance(ev, IntercomHeard):
@@ -441,6 +462,10 @@ class PilotMonitoring:
             return []  # the same words handed over twice: once is enough
         self._last_heard = (t, text.strip().lower())
         self._heard_n += 1
+        said_as = text
+        english = foreign.gloss(text, self.language) if self.language else None
+        if english is not None:  # "Fahrwerk ausfahren": read as "gear down", as the grammar knows it
+            text = english
         reading = speech_acts.read(text, ev.confidence, radio_call=self._radio_call(text))
         own = self.cockpit.own
         if own is not None and own.on_ground and any(c.action == "go_around" for c in reading.commands):
@@ -448,7 +473,7 @@ class PilotMonitoring:
             # around." was said at the gate).
             rest = tuple(c for c in reading.commands if c.action != "go_around")
             reading = dc_replace(reading, commands=rest, act=reading.act if rest else "chat")
-        utterance = self.deck.said(t, "pilot", "intercom", text, confidence=ev.confidence, audio_ref=ev.audio_ref,
+        utterance = self.deck.said(t, "pilot", "intercom", said_as, confidence=ev.confidence, audio_ref=ev.audio_ref,
                                    act=reading.act, extra=(("input", ev.source),))
         uid = utterance.id
         self.utterances.append(reading)
@@ -456,8 +481,14 @@ class PilotMonitoring:
                                                                          else ", typed")
                        + (f", {ev.audio_ref}" if ev.audio_ref else "") + ")",
                        utterance=uid, act=reading.act, action=", ".join(str(c) for c in reading.commands))
+        if english is not None:
+            self.deck.note("translated", t, f'"{said_as}" read as "{english}"', utterance=uid)
         mode = self.model.mode if self.model is not None else "off"
         act = reading.act
+        if english is not None and act in ("question", "chat") and (said := answer(text, self.picture)) is not None:
+            # A common question in the captain's language: answered from the data (and put into it), never guessed.
+            self._heard_by_model(said_as)
+            return [self._say(t, said)]
         if act == "unclear":
             return []  # noise, or speech-to-text going round in circles: nothing to answer
         if PF_CALLOUT.match(text.lower().strip()) and not reading.commands:
@@ -1233,6 +1264,34 @@ class PilotMonitoring:
     def _airports(self) -> tuple[str, ...]:
         st = getattr(self.engine, "state", None)
         return (st.flight.origin or "", st.flight.destination or "") if st is not None else ()
+
+    def _in_language(self, out: list[Any]) -> list[Any]:
+        """The copilot's talk in the captain's language: its short words from a table, the rest put into it by the
+        language model (every number kept). Callouts, checklists and what it does stay in aviation English. A line that
+        can't be put into it is said as it is, in English, and marked so."""
+        lang, done = self.language, []
+        for o in out:
+            talked = isinstance(o, CrewSpeech) and (o.kind in TALKED or o.kind == "alert" and o.text.startswith("I couldn't"))
+            if not talked or (o.language == lang and foreign.speaks(o.text, lang)):  # (asked to do it: said too)
+                done.append(o)
+                continue
+            text = foreign.ACKS.get(lang, {}).get(o.text) or foreign.templated(o.text, lang)
+            if text is None and (quoted := re.match(r"^(.+?) said: (.+)$", o.text)):
+                # What ATC said is ATC's words, in English: only "said" is put into the language.
+                text = foreign.SAID[lang].format(who=quoted[1], words=quoted[2])
+            if text is None and foreign.speaks(o.text, lang) and o.language == lang:
+                text = o.text
+            if text is None and self.model is not None:
+                text, exchanges = self.model.translate(o.t, o.text)
+                done += exchanges
+            if text is None:
+                done.append(replace(o, language=""))  # in English: the model couldn't (or there's none)
+                continue
+            line = replace(o, text=text, spoken="", language=lang)
+            if self._last_line is o:
+                self._last_line = line
+            done.append(line)
+        return done
 
     def _say(self, t: float, text: str, kind: str = "reply", spoken: str = "", language: str = "") -> CrewSpeech:
         if language:  # the model's words in the pilot's language: as they are, in a voice of that language

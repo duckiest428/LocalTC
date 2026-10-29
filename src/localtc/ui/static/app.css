@@ -589,6 +589,7 @@ table.lb td { white-space: nowrap; }
 .whero p { max-width: 540px; margin: 0 auto 8px; line-height: 1.55; }
 .wbox { background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; font-size: 13px; }
 .wbox p { margin: 4px 0 8px; }
+.wbox.warnbox { border-color: var(--amber); margin-top: 10px; }
 .wbox ol { margin: 6px 0 0; padding-left: 18px; line-height: 1.6; }
 .wbox input[type=password] { flex: 1 1 240px; }
 .wchoice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

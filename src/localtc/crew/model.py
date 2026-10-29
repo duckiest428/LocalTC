@@ -114,6 +114,7 @@ words your own way, the way a person would say them, short and natural. Keep eve
 runway, procedure and name exactly as given (you may say them the usual way: "FL280", "29.92"). Don't add \
 anything that isn't in the words, don't drop anything. Answer with JSON: {"reply": "..."}."""
 REWORD_SCHEMA = {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]}
+TRANSLATE_SYSTEM = """You are an airline first officer who speaks {language}, talking to the captain on the intercom. Say the given English words in natural, correct {language}, the way a {language}-speaking first officer says them on the flight deck: short, and the aviation words as pilots who speak {language} use them (many stay English: flaps, gear, autopilot, checklist, ATC). Keep every number exactly as given (as digits), and every name, runway, frequency and callsign, and every unit as it is (pounds stay pounds, feet stay feet). Station names (Zurich Approach, Seattle Tower) and ATC's own words stay in English. Don't add or drop anything. Answer with JSON: {{"reply": "..."}}."""
 HISTORY = 10  # intercom turns the model is shown
 EVENTS = 12  # flight-deck events the model is shown
 
@@ -186,6 +187,7 @@ class CrewModel:
         self.persona = ""  # the first officer's own story (``persona``), set for each flight
         self.history: deque[tuple[str, str]] = deque(maxlen=HISTORY)  # ("Captain" or "You", words)
         self.events: deque[tuple[float, str]] = deque(maxlen=EVENTS)  # what happened on the flight deck
+        self._translated: dict[str, str] = {}  # the copilot's English lines already put into the captain's language
 
     @property
     def mode(self) -> str:
@@ -265,6 +267,39 @@ class CrewModel:
         exchange = LlmExchange(t=t, purpose="crew_reword", model=model, key=request.key(model), prompt=prompt,
                                response=result.text, outcome="used" if words else "rejected", detail=why,
                                latency_ms=result.latency_ms)
+        return words, [exchange]
+
+    def translate(self, t: float, text: str) -> tuple[str | None, list[LlmExchange]]:
+        """The copilot's English line ``text`` in the captain's language, checked: every number kept, and really in
+        that language. None: it couldn't be (no model, too slow, or a number lost), and the line is said in English."""
+        from localtc.crew import foreign
+
+        if self.backend is None or not self.language or not text.strip():
+            return None, []
+        if text in self._translated:
+            return self._translated[text], []
+        system_text = TRANSLATE_SYSTEM.format(language=self.language_name)
+        request = LlmRequest("crew_translate", system_text, (("user", f'Say: "{text}"'),), REWORD_SCHEMA, max_tokens=160)
+        timeout_s, _ = waits(self.backend, min(self.timeout_s, 6.0), min(self.timeout_s, 6.0), min(self.patience_s, 10.0))
+        result = self.backend.complete(request, timeout_s=timeout_s)
+        model = getattr(self.backend, "model", "")
+        if result.text is None:
+            return None, [LlmExchange(t=t, purpose="crew_translate", model=model, key=request.key(model),
+                                      prompt=text, response="", outcome="timeout" if result.error == "timeout" else "error",
+                                      detail=result.error, latency_ms=result.latency_ms)]
+        try:
+            words = str(json.loads(result.text).get("reply", "")).strip()
+        except (ValueError, AttributeError):
+            words = ""
+        why = ("no words" if not words else "a number changed" if sorted(foreign.numbers(words)) != sorted(foreign.numbers(text))
+               else f"not in {self.language_name}" if not foreign.speaks(words, self.language)
+               else "a unit changed" if not foreign.units_kept(text, words) else "")
+        exchange = LlmExchange(t=t, purpose="crew_translate", model=model, key=request.key(model), prompt=text,
+                               response=result.text, outcome="rejected" if why else "used", detail=why,
+                               latency_ms=result.latency_ms)
+        if why:
+            return None, [exchange]
+        self._translated[text] = words
         return words, [exchange]
 
     def _named_before(self, action: str, heard: str) -> bool:

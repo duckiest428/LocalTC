@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest]  # what LocalTC runs on (the Mac runs the tests before each commit)
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

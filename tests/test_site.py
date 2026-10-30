@@ -198,4 +198,4 @@ def test_the_404_page_works_at_any_depth():
 
 def test_every_page_links_the_discord():
     for page in [*PAGES, "404.html"]:
-        assert "https://discord.gg/6vbD2T9zHE" in (ROOT / "site" / page).read_text(encoding="utf-8"), page
+        assert "https://discord.gg/fDKfMxfC9a" in (ROOT / "site" / page).read_text(encoding="utf-8"), page

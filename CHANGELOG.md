@@ -6,7 +6,8 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.4] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Changed
+- **The Discord buttons** go to the server's new invite link.
 
 ## [0.5.3] - 2026-10-30
 

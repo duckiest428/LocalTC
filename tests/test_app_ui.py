@@ -75,6 +75,18 @@ def test_simbrief_plan_is_read():
     assert plan.summary() == "ASA123 KSEA-KLAX FL350"
 
 
+def test_the_sid_and_star_from_the_route_when_the_navlog_doesnt_mark_them():
+    """An LLBG-LLER plan filed "TOMA4F TOMAL J10 MZD T94 ZFR J10 NURIT NURI1B" was cleared with no SID."""
+    data = {**SIMBRIEF, "general": {**SIMBRIEF["general"], "route": "TOMA4F TOMAL J10 MZD T94 ZFR J10 NURIT NURI1B"},
+            "navlog": {"fix": [{**f, "is_sid_star": "0"} for f in SIMBRIEF["navlog"]["fix"]]}}
+    plan = parse_simbrief(data)
+    assert (plan.sid, plan.star) == ("TOMA4F", "NURI1B")
+    assert (parse_simbrief(SIMBRIEF).sid, parse_simbrief(SIMBRIEF).star) == ("HAROB6", "SADDE8")  # the navlog's first
+    typed = manual_plan(origin="LLBG", destination="LLER", route="toma4f tomal j10 nurit nuri1b")
+    assert (typed.sid, typed.star) == ("TOMA4F", "NURI1B")
+    assert (manual_plan(destination="LLER", route="DCT TOMAL J10 NURIT").sid, manual_plan(destination="LLER", route="UL9 KONAN").star) == ("", "")
+
+
 def test_simbrief_errors_and_urls():
     with pytest.raises(FlightPlanError, match="Unknown UserID"):
         parse_simbrief({"fetch": {"status": "Error: Unknown UserID"}})

@@ -35,6 +35,7 @@ SIMBRIEF_URL = "https://www.simbrief.com/api/xml.fetcher.php"
 SIMBRIEF_DISPATCH = "https://dispatch.simbrief.com/options/custom"  # where a new plan is made
 ICAO = re.compile(r"^[A-Z0-9]{3,4}$")
 CALLSIGN = re.compile(r"^[A-Z0-9]{2,8}$")
+PROCEDURE = re.compile(r"^[A-Z]{2,5}\d[A-Z]?$")  # a SID or STAR in a route: TOMA4F, NURI1B, ANJLL4
 
 
 class Fix(msgspec.Struct, frozen=True, kw_only=True):
@@ -114,10 +115,24 @@ def manual_plan(*, callsign: str = "", origin: str = "", destination: str, cruis
     sign = callsign.strip().upper().replace(" ", "").replace("-", "")
     if sign and not CALLSIGN.match(sign):
         raise FlightPlanError(f"callsign {callsign!r}: letters and digits only, e.g. N172LT or DAL123")
-    return FlightPlan(source="manual", callsign=sign, origin=icao(origin, "origin"),
+    route = " ".join(route.upper().split())
+    sid, star = route_procedures(route)
+    return FlightPlan(source="manual", callsign=sign, sid=sid, star=star, origin=icao(origin, "origin"),
                       destination=icao(destination, "destination", required=True), alternate=icao(alternate, "alternate"),
-                      cruise_ft=parse_altitude(cruise), route=" ".join(route.upper().split()),
+                      cruise_ft=parse_altitude(cruise), route=route,
                       aircraft=aircraft.strip().upper(), rules="VFR" if str(rules).upper() == "VFR" else "IFR")
+
+
+def route_procedures(route: str) -> tuple[str, str]:
+    """The SID and STAR a route names: its first item and its last, when they're procedures ("TOMA4F TOMAL J10 ...
+    NURIT NURI1B"); airways (J10, UL9) are never first or last, fixes have no digit."""
+    items = [i for i in route.upper().split() if i not in ("DCT", "SID", "STAR")]
+    items = [i.split("/")[0] for i in items]  # "TOMA4F/26": the SID for runway 26
+    if len(items) < 2:
+        return "", ""
+    sid = items[0] if PROCEDURE.match(items[0]) else ""
+    star = items[-1] if PROCEDURE.match(items[-1]) else ""
+    return sid, star
 
 
 # --- SimBrief ----------------------------------------------------------------------------------------------------
@@ -182,6 +197,10 @@ def parse_simbrief(data: dict[str, Any]) -> FlightPlan:
                 and f.get("via_airway") not in (None, "", "DCT")), "")
     star = next((str(f.get("via_airway")) for f in reversed(navlog) if f.get("is_sid_star") == "1"
                  and f.get("stage") == "DSC" and f.get("via_airway") not in (None, "", "DCT")), "")
+    route = " ".join(str(general.get("route") or "").split())
+    # A navlog that doesn't mark the procedures' fixes (or names them otherwise): the route string says them.
+    named_sid, named_star = route_procedures(route)
+    sid, star = sid or named_sid, star or named_star
     return FlightPlan(
         source="simbrief",
         callsign=callsign,
@@ -189,7 +208,7 @@ def parse_simbrief(data: dict[str, Any]) -> FlightPlan:
         destination=str(_get(data, "destination", "icao_code")).upper(),
         alternate=str(_get(data, "alternate", "icao_code")).upper(),
         cruise_ft=_int(general.get("initial_altitude")),
-        route=" ".join(str(general.get("route") or "").split()),
+        route=route,
         aircraft=str(aircraft.get("icaocode") or aircraft.get("icao_code") or "").upper(),
         registration=str(aircraft.get("reg") or ""),
         sid=sid, star=star,

@@ -10,6 +10,7 @@ a new minor version adds features, a patch fixes them.
 - **The Discord buttons** go to the server's new invite link.
 
 ### Fixed
+- A SID or STAR filed in the route ("TOMA4F TOMAL J10 ... NURIT NURI1B") is in the clearance even when SimBrief's navlog doesn't mark its fixes as one, and a typed route's SID and STAR are read too: some plans were cleared with no SID at all.
 - **"cublas64_12.dll was not found" when a flight starts** on a PC with an NVIDIA graphics card but without Whisper's
   GPU libraries (Quick Settings → Models → Whisper on your graphics card): Whisper used the card all the same and failed
   at the first words. It now uses the card only when those libraries are installed, and if the card still fails, it

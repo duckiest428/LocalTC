@@ -85,7 +85,7 @@ def test_what_an_aircraft_cant_do_is_the_pilots_from_the_start():
     from localtc.crew.pm import PilotMonitoring
     from localtc.sim_api import AircraftIdentity
 
-    from tests.test_copilot_deck import FakeEngine, heard, said, sent
+    from test_copilot_deck import FakeEngine, heard, said, sent
 
     pm = PilotMonitoring(FakeEngine())
     pm.observe(AircraftIdentity(t=0.0, title="FenixA320 CFM", atc_model="A320"))
@@ -97,7 +97,7 @@ def test_an_fcu_altitude_at_index_3_is_the_one_the_copilot_reads():
     from localtc.crew.pm import PilotMonitoring
     from localtc.sim_api import AircraftIdentity, AircraftSystems
 
-    from tests.test_copilot_deck import FakeEngine
+    from test_copilot_deck import FakeEngine
 
     pm = PilotMonitoring(FakeEngine())
     pm.observe(AircraftIdentity(t=0.0, title="Airbus A330-900neo Delta", atc_model="A330"))

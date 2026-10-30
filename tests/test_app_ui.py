@@ -30,7 +30,7 @@ def test_settings_file_holds_only_changes_and_loads_on_top(tmp_path):
     cfg.tts.volume = 0.5
     cfg.ui.dev_mode = True
     path = save_settings(cfg, base=base, path=tmp_path / "settings.toml")
-    saved = tomllib.loads(path.read_text())
+    saved = tomllib.loads(path.read_text(encoding="utf-8"))
     assert saved == {"voice": {"ptt_key": "f13"}, "tts": {"volume": 0.5}, "ui": {"dev_mode": True}}
     again = load_config(ROOT / "config" / "localtc.toml", env={}, settings=path)
     assert again.voice.ptt_key == "f13" and again.ui.dev_mode and again.tts.volume == 0.5

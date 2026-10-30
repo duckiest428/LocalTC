@@ -83,7 +83,7 @@ def test_the_shared_flight_page_gets_the_hashes_of_what_it_loads(tmp_path):
         (site / name).write_text((ROOT / "site" / name).read_text(encoding="utf-8"), encoding="utf-8")
     stamps = build_site.asset_stamps(site)
     assert set(stamps) == set(build_site.SHARE_PAGE_ASSETS)
-    assert json.loads((site / "assets.json").read_text()) == stamps
+    assert json.loads((site / "assets.json").read_text(encoding="utf-8")) == stamps
     shares = (ROOT / "server" / "src" / "shares.ts").read_text(encoding="utf-8")
     assert all(f'asset("{name}")' in shares for name in build_site.SHARE_PAGE_ASSETS)
 

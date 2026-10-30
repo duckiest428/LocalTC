@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_one_version_everywhere():
-    assert tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"] == __version__
-    assert update.changelog_section((ROOT / "CHANGELOG.md").read_text(), __version__), "CHANGELOG.md needs this version"
+    assert tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"] == __version__
+    assert update.changelog_section((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), __version__), "CHANGELOG.md needs this version"
 
 
 @pytest.mark.parametrize(("a", "b"), [("0.2.0", "0.1.9"), ("1.0.0", "0.99.99"), ("0.2.0", "0.2.0-rc1"), ("v0.10.0", "0.9.0")])

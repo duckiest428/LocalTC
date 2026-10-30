@@ -44,7 +44,7 @@ REPORTS = [
 
 def gates(icao: str) -> GateData | None:
     path = FLIGHT / f"gates_{icao}.json"
-    return GateData.from_json(json.loads(path.read_text())) if path.exists() else None
+    return GateData.from_json(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else None
 
 
 def replay(recording: Path, *, pinned: bool = False) -> list[str]:

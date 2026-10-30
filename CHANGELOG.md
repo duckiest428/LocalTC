@@ -9,6 +9,12 @@ a new minor version adds features, a patch fixes them.
 ### Changed
 - **The Discord buttons** go to the server's new invite link.
 
+### Fixed
+- **"cublas64_12.dll was not found" when a flight starts** on a PC with an NVIDIA graphics card but without Whisper's
+  GPU libraries (Quick Settings → Models → Whisper on your graphics card): Whisper used the card all the same and failed
+  at the first words. It now uses the card only when those libraries are installed, and if the card still fails, it
+  moves to the processor and hears the words again there, without an error.
+
 ## [0.5.3] - 2026-10-30
 
 ### Added

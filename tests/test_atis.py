@@ -309,3 +309,26 @@ def test_the_destinations_atis_is_fetched_fresh_on_the_way_in(monkeypatch):
     assert fetched == ["KLAS"]  # the usual: held for five minutes
     store.get("KLAS", max_age_s=60.0)
     assert fetched == ["KLAS", "KLAS"]
+
+
+def test_an_awos_reads_the_weather_alone():
+    """An untowered field's AWOS was read like an ATIS: a letter, the runway in use, "advise on initial contact"."""
+    board, geo = AtisBoard(seed=1), geometry("KPAE")
+    info = board.update("KPAE", geo, weather(340, 8, temperature_c=14, dewpoint_c=9), 63180.0, "Paine Field", t=0.0)
+    info.automated = True
+    text, said = info.text, info.spoken
+    assert text.startswith("Paine Field automated weather observation, 1653 Zulu. Wind 340 at 8"), text
+    assert "Altimeter 29.92" in text and "Temperature 14" in text
+    for atis_only in ("information", "advise", "runway", "hold short"):
+        assert atis_only not in text.lower() and atis_only not in said.lower(), text
+
+
+def test_awos_only_airports():
+    from localtc.atc_core.engine import automated_only
+    from localtc.sim_api.airport import Frequency
+
+    geo = geometry("KPAE")
+    assert not automated_only(geo)  # Paine has an ATIS
+    awos = msgspec.structs.replace(geo.airport, frequencies=tuple(
+        Frequency(kind="awos", mhz=135.0, name="AWOS") if f.kind == "atis" else f for f in geo.airport.frequencies))
+    assert automated_only(AirportGeometry(awos))

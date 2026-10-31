@@ -156,3 +156,11 @@ def test_stopped_again_after_landing_is_still_at_the_destination():
     assert engine._working_airport() == "CYUL"  # at the gate before the flight
     engine._landed = True
     assert engine._working_airport() == "LFPG"
+
+
+def test_no_clearance_alerts_where_nobody_gives_clearances():
+    """An untowered field: "moving without a taxi clearance" when there's no one to give one."""
+    engine, own = parked_engine()
+    assert engine._staffed("KPAE", "ground", "tower") and engine._staffed("KPAE", "tower")
+    engine.facilities = [f for f in engine.facilities if f.airport != "KPAE" or f.controller not in ("ground", "tower")]
+    assert not engine._staffed("KPAE", "ground", "tower") and not engine._staffed(None, "tower")

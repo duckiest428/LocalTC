@@ -347,6 +347,12 @@ DESCENT_LEAD_MIN = 5.0  # the descent is cleared this long before the top of des
 JOIN_LATERAL_NM, JOIN_FINAL_NM, JOIN_HEADING_DEG = 3.0, 20.0, 100.0
 ATIS_CHECK_S = 30.0  # how often the flight's ATIS are brought up to date
 ATIS_KINDS = ("atis", "awos", "asos")
+
+
+def automated_only(geo: AirportGeometry) -> bool:
+    """The airport's weather is broadcast by an AWOS or ASOS, with no ATIS."""
+    kinds = {f.kind for f in geo.airport.frequencies}
+    return "atis" not in kinds and bool(kinds & {"awos", "asos"})
 REPEAT_WINDOW_S = 180.0
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
 AIRPORT_CONTROLLERS = ("ground", "tower", "clearance", "delivery", "ramp", "apron")  # one airport's own
@@ -957,6 +963,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                         real=real, source=source)
                 atis_reach = self._reach(Facility("atis", "ATIS", 0.0, icao), own)
                 tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.com1_mhz))
+                if key in self.atis.current:  # an AWOS or ASOS and no ATIS: an automated observation, read as one
+                    self.atis.current[key].automated = automated_only(geo)
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
                     out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.com1_mhz,
@@ -1335,15 +1343,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             geo = self.geometry(st.flight.origin) if st.flight.origin else None
             gate = stands.parked_at(geo, own.lat, own.lon, self._real_gates(geo.icao)) if geo is not None else None
             self._assign(departure_gate=gate.display if gate is not None else None)
+        # Only where there's a controller to clear it: an untowered field's pilots announce themselves on the CTAF.
         if phase is P.TAXI_OUT and change.previous in (P.PARKED, P.PUSHBACK) and "taxi" not in st.clearances \
-                and st.flight.origin:
+                and st.flight.origin and self._staffed(st.flight.origin, "ground", "tower"):
             out.append(self._alert(t, "taxi_without_clearance", "moving without a taxi clearance"))
             ground = self.facility("ground")
             if ground is not None and st.comms.tuned is not None and st.comms.tuned.controller == "ground":
                 self._schedule(t, "ground.hold_position", {}, ground, delay=False)
-        elif phase is P.TAKEOFF and "takeoff" not in st.clearances:
+        elif phase is P.TAKEOFF and "takeoff" not in st.clearances and self._staffed(self._working_airport(), "tower"):
             out.append(self._alert(t, "takeoff_without_clearance", "takeoff roll without a takeoff clearance"))
-        elif phase is P.TAXI_IN and change.previous == P.LANDING and "landing" not in st.clearances:
+        elif phase is P.TAXI_IN and change.previous == P.LANDING and "landing" not in st.clearances \
+                and self._staffed(self._working_airport(), "tower"):
             out.append(self._alert(t, "landed_without_clearance", "landed without a landing clearance"))
         elif phase is P.DEPARTURE and change.previous == P.LANDING and self._vfr:
             self._vfr_touch_and_go(t)  # a touch and go, or a VFR go-around: round the pattern again
@@ -5695,6 +5705,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         ends = [airports[icao].airport for icao in (origin, dest) if icao and icao in airports]
         facilities.append(self._sector or self._first_center(ends))
         self.facilities = facilities
+
+    def _staffed(self, icao: str | None, *controllers: str) -> bool:
+        """``icao`` has one of ``controllers`` (its frequencies in the sim): a towered field, not one whose pilots
+        announce themselves on the CTAF."""
+        return bool(icao) and any(f.airport == icao and f.controller in controllers for f in self.facilities)
 
     def _first_center(self, ends: list) -> Facility:
         """The centre that takes the flight from departure: the one whose airspace the departure airport is

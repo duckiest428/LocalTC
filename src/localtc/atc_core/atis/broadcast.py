@@ -56,6 +56,7 @@ class AtisInfo:
     departing: tuple[str, ...] = ()  # the runways departures are given (``operations.departing``)
     real_remarks: tuple[str, ...] = ()  # the real ATIS's own remarks, as published (read out by ``notes``)
     offered: tuple[str, ...] = ()  # the real ATIS's "EXP ILS, RNAV, OR VISUAL APCH": its approaches, no runway named
+    automated: bool = False  # an AWOS or ASOS, no ATIS: the weather alone, no letter, runways or "advise on contact"
 
     @property
     def icao_style(self) -> bool:
@@ -106,7 +107,37 @@ class _Say:
 def compose(info: AtisInfo, *, spoken: bool, variant: int = 0) -> str:
     region = info.region or Region("faa", 18000)
     with speaking(region):
+        if info.automated:
+            return _automated(info, _Say(spoken), region.icao)
         return (_icao if region.icao else _faa)(info, _Say(spoken), variant)
+
+
+def _automated(info: AtisInfo, say: _Say, icao: bool) -> str:
+    """An AWOS or ASOS (an untowered field's, or one whose tower is closed): the observation as the machine reads it,
+    "Kelso automated weather observation, one seven five three zulu. Wind ...". Nothing a controller would add."""
+    w = info.weather
+    say.add(f"{info.name} automated weather observation, {info.zulu} Zulu",
+            f"{info.name} automated weather observation, {speech.digits(info.zulu)} zulu")
+    say.add(*(_icao_wind(w) if icao else _faa_wind(w)))
+    weather = ", ".join(_phenomenon(p) for p in w.phenomena)
+    if w.visibility_sm is not None:
+        vis = _icao_visibility(w.visibility_sm) if icao else _sm(w.visibility_sm)
+        say.add(f"Visibility {vis[0]}" + (f", {weather}" if weather else ""),
+                f"visibility {vis[1]}" + (f", {weather}" if weather else ""))
+    elif weather:
+        say.add(weather)
+    if (sky := (_icao_clouds(w) if icao else _faa_sky(w))) is not None:
+        say.add(*sky)
+    if w.temperature_c is not None:
+        dew = f", dew point {w.dewpoint_c}" if w.dewpoint_c is not None else ""
+        dew_said = f", dew point {_temp(w.dewpoint_c)}" if w.dewpoint_c is not None else ""
+        say.add(f"Temperature {w.temperature_c}{dew}", f"temperature {_temp(w.temperature_c)}{dew_said}")
+    if w.altimeter_inhg is not None:
+        say.add(f"Altimeter {w.altimeter_inhg:.2f}", f"altimeter {speech.altimeter(w.altimeter_inhg)}")
+    ops = info.operations
+    if ops is not None and ops.density_altitude_ft:
+        say.add(f"Density altitude {ops.density_altitude_ft:,}", f"density altitude {speech.feet(ops.density_altitude_ft)}")
+    return say.text()
 
 
 # --- FAA ------------------------------------------------------------------------------------------------------------

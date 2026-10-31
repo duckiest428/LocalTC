@@ -10,6 +10,12 @@ a new minor version adds features, a patch fixes them.
 - **The Discord buttons** go to the server's new invite link.
 
 ### Fixed
+- **Two controllers at once, and ATC still talking with LocalTC closed:** LocalTC opened a second time ran a second
+  ATC beside the first. Only one runs now: opening it again brings the open window to the front. Closing the window
+  ends LocalTC entirely, and a flight restarted with a new plan is fully stopped before the new one starts.
+- **Untowered airports:** no "moving without a taxi clearance" (or takeoff or landing clearance) alert where the
+  airport has no tower or ground controller, and an AWOS or ASOS is read as an automated weather observation, not an
+  ATIS: no information letter, runway or "advise on initial contact".
 - A SID or STAR filed in the route ("TOMA4F TOMAL J10 ... NURIT NURI1B") is in the clearance even when SimBrief's navlog doesn't mark its fixes as one, and a typed route's SID and STAR are read too: some plans were cleared with no SID at all.
 - **"cublas64_12.dll was not found" when a flight starts** on a PC with an NVIDIA graphics card but without Whisper's
   GPU libraries (Quick Settings → Models → Whisper on your graphics card): Whisper used the card all the same and failed

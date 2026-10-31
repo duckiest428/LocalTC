@@ -24,9 +24,19 @@ WINDOW_MIN = (460, 560)
 
 def run_app(*, config_path: str | None = None, port: int | None = None, browser: bool = False,
             open_page: bool = True) -> int:
+    from localtc.config import data_dir
     from localtc.ui.controller import AppController
+    from localtc.ui.instance import Instance
     from localtc.ui.server import AppServer
 
+    instance = Instance(data_dir())
+    if not instance.acquire():
+        # One app at a time: a second one answered the radio as well (two controllers at once).
+        log.info("LocalTC is already running: bringing its window up")
+        if not instance.show_running() and open_page and (url := instance.running_url()):
+            webbrowser.open(url)
+        print("LocalTC is already running")
+        return 0
     controller = AppController(config_path=config_path)
     ready = threading.Event()
     stop: dict = {}
@@ -38,6 +48,7 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
         server = AppServer(controller.routes(), controller.stream, controller.on_connect)
         await server.start(port if port is not None else controller.cfg.ui.port)
         box["url"] = server.url
+        instance.publish(server.url)
         stopped = asyncio.Event()
         stop["set"] = lambda: loop.call_soon_threadsafe(stopped.set)
         ready.set()
@@ -76,6 +87,22 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
             w.on_top = value
 
     controller.window_on_top = on_top
+
+    def show() -> None:
+        """Another launch of LocalTC: this window to the front instead."""
+        if not window:
+            if open_page:
+                webbrowser.open(url)
+            return
+        import webview
+
+        for w in list(webview.windows):
+            w.restore()
+            w.show()
+            w.on_top = True
+            w.on_top = controller.cfg.ui.on_top == "always"
+
+    controller.window_show = show
     try:
         if window and _open_window(url, on_top=controller.cfg.ui.on_top == "always"):
             pass  # returns when the window is closed
@@ -146,7 +173,8 @@ def _set_icon(window) -> None:
 
 
 def main() -> int:
-    """The windowed launcher (``localtc-app``, no console)."""
+    """The windowed launcher (``localtc-app``, no console). The process ends when the window is closed: a thread
+    still going (a flight that wouldn't stop) kept LocalTC on the radio with its window gone."""
     from localtc.console import log_dir, setup_logging
 
     for name in ("stdout", "stderr"):
@@ -154,7 +182,9 @@ def main() -> int:
             setattr(sys, name, open(os.devnull, "w"))
     use_project_folder()
     setup_logging(quiet_console=True, log_file=log_dir() / "localtc.log")
-    return run_app()
+    code = run_app()
+    logging.shutdown()
+    os._exit(code)
 
 
 def use_project_folder() -> None:

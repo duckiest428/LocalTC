@@ -6,6 +6,7 @@ goes to threads, and model downloads report progress to the page as they go.
 """
 
 import asyncio
+from contextlib import suppress
 import logging
 import os
 import shutil
@@ -138,6 +139,7 @@ class AppController:
         self.companion = CompanionHub()
         self.companion.set_route(route_view(self.plan))
         self.window_on_top: Callable[[bool], None] | None = None  # set by the app window (ui/__init__.py)
+        self.window_show: Callable[[], None] | None = None  # the same: brings it to the front
         self.companion_server: CompanionServer | None = None
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
@@ -161,6 +163,7 @@ class AppController:
         return {
             (get, "state"): self.api_state,
             (post, "flight/start"): self.api_start,
+            (post, "window/show"): self.api_window_show,
             (post, "flight/stop"): self.api_stop,
             (post, "flight/plan"): self.api_plan,
             (post, "flight/simbrief"): self.api_simbrief,
@@ -499,7 +502,11 @@ class AppController:
             try:
                 await asyncio.wait_for(asyncio.shield(self._task), timeout=15)
             except TimeoutError:
+                # Ended before the next one starts: a flight restarted with a new plan, the old one still going,
+                # was two controllers on the radio.
                 self._task.cancel()
+                with suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(self._task, timeout=10)
 
     async def shutdown(self) -> None:
         await self.stop()
@@ -813,6 +820,12 @@ class AppController:
 
     async def api_state(self, args: dict) -> dict:
         return self.state()
+
+    async def api_window_show(self, args: dict) -> dict:
+        """LocalTC started again while it's running: this one's window comes up instead (ui/instance.py)."""
+        if self.window_show is not None:
+            await asyncio.to_thread(self.window_show)
+        return {}
 
     async def api_start(self, args: dict) -> dict:
         await self.start()

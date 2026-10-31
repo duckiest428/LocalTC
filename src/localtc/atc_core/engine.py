@@ -963,8 +963,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                         real=real, source=source)
                 atis_reach = self._reach(Facility("atis", "ATIS", 0.0, icao), own)
                 tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.com1_mhz))
-                if key in self.atis.current:  # an AWOS or ASOS and no ATIS: an automated observation, read as one
-                    self.atis.current[key].automated = automated_only(geo)
+                if key in self.atis.current:
+                    # An AWOS or ASOS and no ATIS: an automated observation (the field's real METAR, as an ATIS has),
+                    # read as one. A real ATIS for it (a VATSIM controller's) is read as the ATIS it is.
+                    self.atis.current[key].automated = automated_only(geo) and real is None
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
                     out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.com1_mhz,

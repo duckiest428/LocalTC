@@ -102,6 +102,10 @@ def test_the_service_carries_out_the_copilots_actions():
                 com1 = tuned[-1].hz / 1e6 if tuned else com1  # the sim follows the tune command
                 event = msgspec.structs.replace(event, com1_mhz=com1 or event.com1_mhz)
             bus.publish(event)
+            # Each event handled (and its tune sent) before the next: fed faster than the service works, a slow
+            # machine had the recording move on with the radio not yet tuned.
+            while not service._inputs._queue.empty():
+                await asyncio.sleep(0)
             await asyncio.sleep(0)
         await asyncio.sleep(0.05)
         bus.close()

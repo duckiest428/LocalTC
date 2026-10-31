@@ -1,6 +1,6 @@
 # The Windows session: what only the sim can answer
 
-You're the Claude session on the Windows PC with MSFS 2024. The Mac session writes most of LocalTC, but it has no
+You're the Claude session on the Windows PC with MSFS 2024 (and MSFS 2020, Steam, since 2026-10-31). The Mac session writes most of LocalTC, but it has no
 sim, so some things were built from the SDK docs and never seen working. Your job: run them against the real sim, find
 what doesn't work, fix it, and leave a note for the Mac session. Read [CLAUDE.md](../CLAUDE.md) first; its rules apply.
 
@@ -28,7 +28,7 @@ $env:LOCALTC_SIM_LIVE = "1"
 
 | Command | What it does | Needs |
 |---|---|---|
-| `localtc debug aircraft` | The aircraft's title and model, the copilot profile it gets, every MSFS 2024 input event it lists, and whether the profile's input event names exist | A flight loaded |
+| `localtc debug aircraft` | The aircraft's title and model, the copilot profile it gets, every input event it lists, and whether the profile's input event names exist | A flight loaded |
 | `localtc debug hands` | Each control the copilot can move (lights, flaps, spoilers arm, heading/altitude/speed/VS bugs, squawk, COM1 standby and active, the first officer's altimeter, parking brake with engines off; `--autopilot` adds the autopilot), sent the way the copilot sends it, read back the way the copilot reads it, then put back. `--only light` for some | Parked: on the ground, stopped. Never touches the gear or the engines |
 | `localtc debug traffic` | The sim's AI traffic as LocalTC sees it (snapshots, identities and AI states, installed models, FSLTL), then one aircraft created 120 m to the right of yours, seen in the traffic, removed. `--no-spawn` to only watch. `--enroute KSEA 16R --watch 180`: also one flying in on a LocalTC flight plan to that runway, to see if the sim's AI flies it | A flight loaded; Live Traffic on in the sim for the first part |
 

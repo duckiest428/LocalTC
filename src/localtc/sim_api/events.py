@@ -540,13 +540,14 @@ class AiObjectAssigned(Event, tag="ai_object_assigned"):
 
 
 class ModelList(Event, tag="model_list"):
-    """The aircraft models and liveries installed (MSFS 2024's EnumerateSimObjectsAndLiveries): (title, livery)."""
+    """The aircraft models and liveries installed (MSFS 2024's EnumerateSimObjectsAndLiveries; MSFS 2020's titles
+    from its packages, the livery empty): (title, livery)."""
 
     models: tuple[tuple[str, str], ...] = ()
 
 
 class AircraftInputEvents(Event, tag="aircraft_input_events"):
-    """The user aircraft's MSFS 2024 input events by name ("LIGHTING_LANDING_1"), listed once per aircraft: what its
+    """The user aircraft's input events by name ("LIGHTING_LANDING_1"), listed once per aircraft: what its
     copilot profile can move them by (``[actions.x] input``), and what ``localtc debug aircraft`` writes out."""
 
     names: tuple[str, ...] = ()
@@ -601,7 +602,7 @@ def event_type(event: Event) -> str:
 
 class SessionInfo(msgspec.Struct, frozen=True, kw_only=True):
     source_kind: Literal["live", "replay"]
-    sim_product: str = ""  # e.g. "MSFS 2024"
+    sim_product: str = ""  # "MSFS 2024" or "MSFS 2020"
     sim_version: str = ""
     simconnect_version: str = ""
     recording: str | None = None  # set by replay sources

@@ -1,11 +1,11 @@
 # LocalTC architecture
 
 LocalTC is one Python process. The sim, the radio, ATC and the app talk over an in-process event
-bus. Everything runs on the pilot's computer: MSFS 2024 over SimConnect, Whisper for speech in,
+bus. Everything runs on the pilot's computer: MSFS 2020 or 2024 over SimConnect, Whisper for speech in,
 a small language model in Ollama for understanding, Piper for ATC's voice.
 
 ```
-            MSFS 2024                               the pilot
+            MSFS 2020/2024                          the pilot
                │ SimConnect (ctypes)                  │ microphone, push-to-talk        ▲ headset
                ▼                                      ▼                                 │
   sim_bridge ─► SimSource ──events──►  ┌───────────── EventBus ─────────────┐     tts (Piper + radio DSP)
@@ -25,7 +25,7 @@ a small language model in Ollama for understanding, Piper for ATC's voice.
 | Package | Job | May import |
 |---|---|---|
 | `sim_api/` | The contract: event types (`events.py`), commands, the `SimSource` interface, session clock, airport structs | nothing else in LocalTC |
-| `sim_bridge/` | The live MSFS 2024 bridge over SimConnect (Windows) | `sim_api` |
+| `sim_bridge/` | The live MSFS bridge over SimConnect, 2020 or 2024 (Windows) | `sim_api` |
 | `replay/`, `recorder/` | Play and record sessions as JSONL (+ WAV audio) | `sim_api`, `bus` |
 | `bus/` | Async publish/subscribe, one queue per subscriber | `sim_api` |
 | `atc_core/` | ATC: phase detection, the dialogue, phraseology, readback checking, the model's two jobs | `sim_api`, `bus`, `airports` |

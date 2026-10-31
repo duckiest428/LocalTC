@@ -148,7 +148,7 @@ script: every number, runway and route.
    When LocalTC opens, its setup guide picks the right speech and language models for your PC and downloads
    them once. After that, flights work offline.
 3. **Open LocalTC** from the desktop, press **New Flight** to import your **SimBrief** plan (or type one in), load
-   up in MSFS 2024, and press **Start**. Hold **Right Ctrl** and call clearance.
+   up in MSFS 2020 or 2024, and press **Start**. Hold **Right Ctrl** and call clearance.
 
 > [!TIP]
 > New to talking to ATC? **Getting Started**, at the bottom of the app, walks you through your first flight call
@@ -223,6 +223,9 @@ gate; engaging the autopilot and V/S can only be checked in flight and haven't b
 | Boeing 747-8i (stock) | ✅ | ✅ | ✅ | ✅ |
 | Boeing 787-9 (HorizonSim) / 787-10 (stock) | ✅ | ✅ | ✅ | ✅ |
 | FSLabs A319 / A320 / A321 | ✅ | ✅ | ✅ (clicks the FCU knobs, V/S too) | COM ✅ (RMP 1); squawk not yet seen powered |
+
+**In MSFS 2020** the same was checked with the Asobo A320neo (stock): lights, flaps, the FCU's speed, heading and
+altitude knobs, squawk and both COM frequencies ✅ (2026-10-31).
 
 The copilot works its own side: the radios, transponder, its own altimeter, and the gear, flaps and FCU when you ask.
 The parking brake, the speedbrake lever (spoilers), the thrust, engaging the autopilot and the exterior lights are
@@ -323,7 +326,7 @@ tabs, settings and airport lookup all work, and **Start** is what needs MSFS.
 | **Logbook** | Every live flight, kept on this computer: date, callsign, route, air and block time, the landing rate, and totals (hours, airports, distance, readbacks right). A map shows every airport and route flown; click a route to find its flights, or a flight to see its route. **Replay** rewatches a flight: the aircraft moving on the map with the whole radio transcript in step, a timeline to scrub, and speeds up to 64× (skipping the quiet stretches). |
 
 - **New Flight**: import your latest **SimBrief** plan (username or Pilot ID), or type one in (**Manual**). Then **Save and start flight**.
-- **Start / Stop** (top right) connects to MSFS 2024 and runs ATC.
+- **Start / Stop** (top right) connects to MSFS (2020 or 2024, whichever is running) and runs ATC.
 - **Talk**: hold your push-to-talk key (Right Ctrl by default) or the headset button next to the text box. You can also type a call and press Enter.
 - **ATC** switch: ATC's voice on or off (text only). **Copilot** switch: the copilot works the radio with ATC.
 - **Support & feedback** (Quick Settings): write to the developer from the app, signed in to the account. It's emailed on, and the answer comes to the account's address. The website's [Dashboard](https://localtc.tech/dashboard#support) has a Support section too.
@@ -372,7 +375,7 @@ Settings save as you change them, to `%LOCALAPPDATA%\LocalTC\settings.toml`. Onl
 ```
 src/localtc/
   sim_api/     Event types, SimSource interface, session clock, unit decoding (pure; any OS)
-  sim_bridge/  Live MSFS 2024 bridge over SimConnect (ctypes; Windows only at runtime)
+  sim_bridge/  Live MSFS 2020 / 2024 bridge over SimConnect (ctypes; Windows only at runtime)
   bus/         In-process async pub/sub
   recorder/    Bus events -> timestamped JSONL + WAV sidecars
   replay/      ReplaySource: plays a recording through the SimSource interface
@@ -427,7 +430,7 @@ uv sync --extra dev
 ```bash
 localtc replay tests/fixtures/pattern_short --speed 4     # play back a recording (any OS)
 localtc inspect tests/fixtures/pattern_short              # summarize a recording
-localtc record --print                                    # record a live session (Windows + MSFS 2024)
+localtc record --print                                    # record a live session (Windows + MSFS 2020 or 2024)
 localtc run --source replay --no-record --print           # run with config/localtc.toml
 
 # ATC (Phase 1)
@@ -710,7 +713,7 @@ never talks over ATC or you; safety calls cut in.
 
 **Aircraft profiles** (`src/localtc/crew/profiles/*.toml`, and your own in `%LOCALAPPDATA%\LocalTC\profiles`, which win)
 name the flap detents, the placard speeds, and any action an add-on wants sent another way: its own key event, or an
-L:var (MSFS 2024), the autobrake's positions and whether it has reversers. The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
+L:var, the autobrake's positions and whether it has reversers. The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
 ignore those (PMDG, Fenix) need a profile of their own; until then the copilot says when a command didn't take.
 
 ## Live bridge setup (Windows)
@@ -720,16 +723,22 @@ ignore those (PMDG, Fenix) need a profile of their own; until then the copilot s
    instead, set `live.connection = "dll"`; it's then found in this order:
    1. `live.dll_path` in the config
    2. `LOCALTC_SIMCONNECT_DLL`
-   3. `%MSFS2024_SDK%\SimConnect SDK\lib\SimConnect.dll` (or `%MSFS_SDK%`)
-   4. `C:\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll` (the installer's default location)
+   3. `%MSFS2024_SDK%\SimConnect SDK\lib\SimConnect.dll` (or `%MSFS_SDK%`, MSFS 2020's)
+   4. `C:\MSFS 2024 SDK\SimConnect SDK\lib\SimConnect.dll`, then `C:\MSFS SDK\...` (the installers' default locations)
    5. `.\SimConnect.dll`
 2. **Connection.** The default local named pipe needs no setup. If connecting fails, check `SimConnect.xml`:
-   - Steam: `%APPDATA%\Microsoft Flight Simulator 2024\`
-   - MS Store: `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\`
+   - Steam: `%APPDATA%\Microsoft Flight Simulator 2024\` (MSFS 2020: `%APPDATA%\Microsoft Flight Simulator\`)
+   - MS Store: `%LOCALAPPDATA%\Packages\Microsoft.Limitless_8wekyb3d8bbwe\LocalCache\` (MSFS 2020:
+     `Microsoft.FlightSimulator_8wekyb3d8bbwe`)
    - If a leftover `simconnect_ws.exe` is still running after the sim closed, end it in Task Manager.
 3. **Mute the built-in ATC.** SimConnect can't disable it. In MSFS, set Sound → Character voices to 0 and turn off ATC subtitles and assistance.
 
-On connect, LocalTC logs the sim version (major 12 = MSFS 2024, 11 = MSFS 2020) and saves it in each recording header.
+On connect, LocalTC logs the sim version (major 12 = MSFS 2024, 11 = MSFS 2020), shows it in the status, and saves it in
+each recording header. Both sims answer the same client; what MSFS 2020 hasn't, LocalTC does another way: its AI
+aircraft are made by the calls before 2024's (a 2020 title is the model and livery in one), its installed aircraft (for
+LocalTC's traffic) are read from its packages' `aircraft.cfg`, and the taxi guidance's package goes in its Community
+folder as in 2024's. The few variables 2020 doesn't know (`AMBIENT IN SMOKE`, `LIVERY NAME`, the approaches'
+`IS_RNPAR`) only lose themselves.
 
 ## ATC (Phase 1)
 
@@ -795,7 +804,7 @@ Event types live in `src/localtc/sim_api/events.py`. Their `type` tags are part 
 
 **macOS: `No module named 'localtc'`.** If the project is in an iCloud-synced folder such as `~/Desktop`, macOS can mark the editable install's `.pth` file as hidden, and Python 3.12.13+ skips hidden `.pth` files. Tests aren't affected, because pytest adds `src` to the path itself. For the CLI, either move the project outside the synced folder, run `chflags nohidden .venv/lib/python3*/site-packages/*.pth`, or prefix commands with `PYTHONPATH=src`.
 
-`tests/windows/` runs the SimSource contract against the live sim. It only runs on Windows with MSFS 2024 running and `LOCALTC_LIVE_SIM=1`.
+`tests/windows/` runs the SimSource contract against the live sim. It only runs on Windows with MSFS 2020 or 2024 running and `LOCALTC_LIVE_SIM=1`.
 
 ## Releasing
 

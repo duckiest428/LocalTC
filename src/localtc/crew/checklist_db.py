@@ -231,23 +231,10 @@ def bundled(folder: Path = BUNDLED) -> list[ChecklistSet]:
 
 
 def package_roots() -> list[Path]:
-    """Where MSFS 2024 (and 2020) keeps the packages on this PC: the InstalledPackagesPath of its UserCfg.opt."""
-    import os
+    """Where MSFS 2024 and 2020 keep the packages on this PC: the InstalledPackagesPath of their UserCfg.opt."""
+    from localtc.simpaths import package_roots as roots
 
-    roots = []
-    local = Path(os.environ.get("LOCALAPPDATA", ""))
-    appdata = Path(os.environ.get("APPDATA", ""))
-    for cfg in (local / "Packages/Microsoft.Limitless_8wekyb3d8bbwe/LocalCache/UserCfg.opt",
-                appdata / "Microsoft Flight Simulator 2024/UserCfg.opt",
-                local / "Packages/Microsoft.FlightSimulator_8wekyb3d8bbwe/LocalCache/UserCfg.opt",
-                appdata / "Microsoft Flight Simulator/UserCfg.opt"):
-        try:
-            text = cfg.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if m := re.search(r'InstalledPackagesPath\s+"([^"]+)"', text):
-            roots.append(Path(m.group(1)))
-    return roots
+    return roots()
 
 
 @dataclass

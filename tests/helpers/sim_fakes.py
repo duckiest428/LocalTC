@@ -194,6 +194,8 @@ class FakeSimConnect:
         self.transmitted: list[tuple] = []  # (sim event name, data, object id, group, flags)
         self.written: list[tuple] = []  # (the variable's name, the bytes written) through SetDataOnSimObject
         self.aircraft = {d.field: 0 for d in defs.AIRCRAFT} | {"flaps_positions": 4, "light_beacon": 1}
+        self.created: list[tuple] = []  # (kind, title, livery, ex1) of each AI aircraft asked for
+        self.enumerated = 0  # EnumerateSimObjectsAndLiveries calls
         self._inbox: deque[bytes] = deque()
         self._lock = threading.Lock()
 
@@ -282,6 +284,12 @@ class FakeSimConnect:
     def request_facilities_list(self, handle, list_type, request_id) -> None:
         assert request_id == REQ_AIRPORT_LIST
         self.push(airport_list_message(request_id, list(self.airports.values())))
+
+    def ai_create(self, handle, kind, request_id, title, livery, tail, **kw) -> None:
+        self.created.append((kind, title, livery, kw.get("ex1", True)))
+
+    def enumerate_models(self, handle, request_id) -> None:
+        self.enumerated += 1
 
     def get_next_dispatch(self, handle: int) -> bytes | None:
         with self._lock:

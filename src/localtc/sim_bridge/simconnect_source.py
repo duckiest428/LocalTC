@@ -1,4 +1,4 @@
-"""``SimConnectSource``: the live MSFS 2024 bridge behind the ``SimSource`` interface.
+"""``SimConnectSource``: the live MSFS bridge (2020 or 2024, whichever answers) behind the ``SimSource`` interface.
 
 A dedicated thread owns the SimConnect handle. It sends requests on a fixed
 schedule, drains ``GetNextDispatch``, and hands decoded events to the asyncio
@@ -134,9 +134,11 @@ SYSTEM_EVENTS = {
     EVT_CRASHED: "Crashed",
 }
 
-# SIMCONNECT_RECV_OPEN.dwApplicationVersionMajor
+# SIMCONNECT_RECV_OPEN.dwApplicationVersionMajor: which sim answered. MSFS 2020 hasn't 2024's calls for an AI
+# aircraft in a livery of its own or for the installed aircraft: the older calls are used, and its aircraft are read
+# from its packages (localtc.simpaths).
 SIM_PRODUCTS = {11: "MSFS 2020", 12: "MSFS 2024"}
-TARGET_SIM_MAJOR = 12
+MSFS_2024 = 12
 
 OPEN_TIMEOUT_S = 10.0
 POLL_INTERVAL_S = 0.005
@@ -207,6 +209,8 @@ class SimConnectSource:
         self._airport_list_received = 0
         self._nearest_to_fetch: str | None = None
         self._next_facility_request = FIRST_FACILITY_REQUEST
+        self._sim_major = MSFS_2024  # until the sim says which it is
+        self._installed: list[tuple[str, str]] | None = None  # MSFS 2020's aircraft, read from its packages once
 
     @property
     def clock(self) -> SessionClock:
@@ -399,7 +403,10 @@ class SimConnectSource:
                     next_traffic = _next_deadline(next_traffic, traffic_period, now)
                 if self._cfg.traffic_identity and now >= next_ident:
                     next_ident = now + TRAFFIC_IDENT_EVERY_S
-                    for req, definition in ((REQ_TRAFFIC_IDENT, DEF_TRAFFIC_IDENT), (REQ_TRAFFIC_LIVERY, DEF_TRAFFIC_LIVERY)):
+                    asks = [(REQ_TRAFFIC_IDENT, DEF_TRAFFIC_IDENT)]
+                    if self._sim_major >= MSFS_2024:  # MSFS 2020 has no LIVERY NAME (its title is the livery)
+                        asks.append((REQ_TRAFFIC_LIVERY, DEF_TRAFFIC_LIVERY))
+                    for req, definition in asks:
                         try:
                             dll.request_data_on_sim_object_type(handle, req, definition, self._cfg.traffic_radius_m,
                                                                 SimObjectType.AIRCRAFT)
@@ -523,10 +530,12 @@ class SimConnectSource:
                     if len(self._ai_spawned) > 200:  # never answered: forgotten
                         self._ai_spawned.pop(next(iter(self._ai_spawned)))
                 try:
+                    extra = {} if self._sim_major >= MSFS_2024 else {"ex1": False}  # MSFS 2020: no liveries
                     dll.ai_create(handle, command.kind, command.request_id, command.title, command.livery, command.tail,
                                   flight_number=command.flight_number, lat=command.lat, lon=command.lon,
                                   alt_ft=command.alt_ft, heading=command.heading, on_ground=command.on_ground,
-                                  airspeed_kt=command.airspeed_kt, plan=command.plan, plan_position=command.plan_position)
+                                  airspeed_kt=command.airspeed_kt, plan=command.plan, plan_position=command.plan_position,
+                                  **extra)
                 except (SimConnectError, AttributeError) as exc:
                     log.warning("Traffic control couldn't create %s: %s", command.tail or command.title, exc)
             elif isinstance(command, AiTrack):
@@ -542,6 +551,8 @@ class SimConnectSource:
                     log.info("Traffic control couldn't remove object %d: %s", command.object_id, exc)
             elif isinstance(command, GroundMarks):
                 self._ground_marks(dll, handle, command)
+            elif isinstance(command, EnumerateModels) and self._sim_major < MSFS_2024:
+                self._list_installed()
             elif isinstance(command, EnumerateModels):
                 try:
                     self._models = []
@@ -550,6 +561,25 @@ class SimConnectSource:
                     log.info("No list of installed aircraft: %s", exc)
             else:
                 log.warning("unsupported command %r", command)
+
+    def _list_installed(self) -> None:
+        """MSFS 2020's aircraft, which it can't list: read from its packages' aircraft.cfg (once, on a thread of its
+        own: a few seconds the first time), each title a model in its livery."""
+        if self._installed is not None:
+            self._emit(ModelList(t=self._clock.now(), models=tuple(self._installed)))
+            return
+
+        def read() -> None:
+            from localtc.simpaths import aircraft_titles, package_roots
+
+            try:
+                self._installed = [(title, "") for title in aircraft_titles(package_roots("2020"))]
+            except OSError as exc:
+                log.warning("MSFS 2020's aircraft not read: %s", exc)
+                self._installed = []
+            self._emit(ModelList(t=self._clock.now(), models=tuple(self._installed)))
+
+        threading.Thread(target=read, name="localtc-installed-aircraft", daemon=True).start()
 
     def _ground_marks(self, dll: SimConnectApi, handle: int, command: GroundMarks) -> None:
         """The taxi guidance: the marks not shown yet made (on the ground where they go), the ones no longer wanted
@@ -595,7 +625,7 @@ class SimConnectSource:
             log.warning("Copilot couldn't send %s: %s", command.name, exc)
 
     def _set_input_event(self, dll: SimConnectApi, handle: int, command: SetInputEvent) -> None:
-        """A cockpit control through the aircraft's own input event (MSFS 2024), by its name in the aircraft's list."""
+        """A cockpit control through the aircraft's own input event (a B: var), by its name in the aircraft's list."""
         hash_ = self._input_events.get(command.name.upper())
         if hash_ is None:
             log.warning("Copilot: this aircraft has no input event %s (its list is in the log)", command.name)
@@ -927,10 +957,9 @@ class SimConnectSource:
 
     def _on_open(self, msg: OpenInfo) -> None:
         self._open = msg
-        major = msg.app_version[0]
+        major = self._sim_major = msg.app_version[0]
         product = SIM_PRODUCTS.get(major, f"unknown sim (v{major})")
-        if major != TARGET_SIM_MAJOR:
-            log.warning("Connected to %s; LocalTC targets MSFS 2024", product)
+        log.info("Connected to %s", product)
         info = SessionInfo(
             source_kind="live",
             sim_product=product,

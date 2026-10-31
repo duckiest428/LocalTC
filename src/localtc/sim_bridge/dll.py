@@ -1,4 +1,4 @@
-"""ctypes bindings for the MSFS 2024 SDK's ``SimConnect.dll`` (Windows only)."""
+"""ctypes bindings for the MSFS SDK's ``SimConnect.dll``, 2024's or 2020's (Windows only)."""
 
 import ctypes
 import os
@@ -30,19 +30,20 @@ def find_dll(explicit: str | None = None) -> Path:
         candidates.append(Path(explicit))
     if env_path := os.environ.get("LOCALTC_SIMCONNECT_DLL"):
         candidates.append(Path(env_path))
-    for var in ("MSFS2024_SDK", "MSFS_SDK"):
+    for var in ("MSFS2024_SDK", "MSFS_SDK"):  # MSFS_SDK: 2020's
         if sdk := os.environ.get(var):
             candidates.append(Path(sdk) / "SimConnect SDK" / "lib" / "SimConnect.dll")
-    # The SDK installer's default location; it doesn't always set the variables above.
+    # The SDK installers' default locations; they don't always set the variables above.
     system_drive = os.environ.get("SystemDrive", "C:") + "\\"
-    candidates.append(Path(system_drive) / "MSFS 2024 SDK" / "SimConnect SDK" / "lib" / "SimConnect.dll")
+    for folder in ("MSFS 2024 SDK", "MSFS SDK"):
+        candidates.append(Path(system_drive) / folder / "SimConnect SDK" / "lib" / "SimConnect.dll")
     candidates.append(Path.cwd() / "SimConnect.dll")
     for candidate in candidates:
         if candidate.is_file():
             return candidate
     looked = "\n  ".join(str(c) for c in candidates)
     raise SimConnectUnavailable(
-        "SimConnect.dll not found. Install the MSFS 2024 SDK, or set live.dll_path / "
+        "SimConnect.dll not found. Install the MSFS 2024 or 2020 SDK, or set live.dll_path / "
         f"LOCALTC_SIMCONNECT_DLL.\nLooked in:\n  {looked}"
     )
 
@@ -93,7 +94,7 @@ class SimConnectDll:
                 [c_void_p, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32, c_uint32])
         except SimConnectUnavailable:
             self._transmit_client_event_ex1 = None
-        try:  # MSFS 2024 only: the aircraft's input events (B: vars)
+        try:  # the aircraft's input events (B: vars): MSFS 2024, and 2020 since its SU13
             self._enumerate_input_events = _bind(lib, "SimConnect_EnumerateInputEvents", [c_void_p, c_uint32])
             self._set_input_event = _bind(lib, "SimConnect_SetInputEvent", [c_void_p, ctypes.c_uint64, c_uint32, c_void_p])
         except SimConnectUnavailable:
@@ -203,10 +204,12 @@ class SimConnectDll:
 
     def ai_create(self, handle: int, kind: str, request_id: int, title: str, livery: str, tail: str, *,
                   flight_number: int = -1, lat: float = 0, lon: float = 0, alt_ft: float = 0, heading: float = 0,
-                  on_ground: bool = True, airspeed_kt: float = 0, plan: str = "", plan_position: float = 0) -> None:
-        """An AI aircraft: ``parked`` (still, where it's put) or ``enroute`` (flying ``plan`` under the sim's AI)."""
+                  on_ground: bool = True, airspeed_kt: float = 0, plan: str = "", plan_position: float = 0,
+                  ex1: bool = True) -> None:
+        """An AI aircraft: ``parked`` (still, where it's put) or ``enroute`` (flying ``plan`` under the sim's AI).
+        ``ex1`` False: without the livery, by the older calls (MSFS 2020 ignores the newer ones)."""
         if kind == "enroute":
-            if "enroute_ex1" in self._ai:
+            if ex1 and "enroute_ex1" in self._ai:
                 hr = self._ai["enroute_ex1"](handle, title.encode(), livery.encode(), tail.encode(), flight_number,
                                              plan.encode(), plan_position, 0, request_id)
             elif "enroute" in self._ai:
@@ -216,7 +219,7 @@ class SimConnectDll:
                 raise SimConnectError("this SimConnect can't create AI aircraft")
         else:
             pos = InitPosition(lat, lon, alt_ft, 0.0, 0.0, heading, int(on_ground), int(airspeed_kt))
-            if "non_atc_ex1" in self._ai:
+            if ex1 and "non_atc_ex1" in self._ai:
                 hr = self._ai["non_atc_ex1"](handle, title.encode(), livery.encode(), tail.encode(), pos, request_id)
             elif "non_atc" in self._ai:
                 hr = self._ai["non_atc"](handle, title.encode(), tail.encode(), pos, request_id)
@@ -239,7 +242,7 @@ class SimConnectDll:
 
     def enumerate_models(self, handle: int, request_id: int) -> None:
         if "models" not in self._ai:
-            raise SimConnectError("this SimConnect can't list the installed aircraft (MSFS 2024 only)")
+            raise SimConnectError("this SimConnect can't list the installed aircraft")
         _check(self._ai["models"](handle, request_id, 2), "EnumerateSimObjectsAndLiveries")  # SIMCONNECT_SIMOBJECT_TYPE_AIRCRAFT (1 is ALL: refused)
 
     def set_data_on_sim_object(self, handle: int, define_id: int, object_id: int, data: bytes) -> None:

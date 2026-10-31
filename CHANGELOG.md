@@ -6,7 +6,16 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.4] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **MSFS 2020 as well as 2024**: LocalTC finds the sim that's running and connects to it, with nothing to install or
+  set for either. The status shows which it is ("MSFS 2020 11.0 ..."), and everything works the same in both: ATC, the
+  ATIS, the copilot and its hands (checked in 2020 with the stock A320neo: lights, flaps, the FCU's knobs, squawk and
+  both radios), the taxi guidance's arrows (its package goes in 2020's Community folder too, shown from the sim's next
+  start), and LocalTC's traffic, drawn with the aircraft installed in 2020 (FSLTL's when you have them) as it is in
+  2024.
+
+### Changed
+- **Settings → Sim → Connect to: "MSFS"**, no longer "MSFS 2024": the one connection for both sims.
 
 ## [0.5.3] - 2026-10-30
 

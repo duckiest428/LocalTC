@@ -399,7 +399,7 @@ class AppController:
             self.system(f"Developer mode: replaying the recording {cfg.replay.path}, not the sim "
                         "(Quick Settings > Sim to change)", "warn")
         else:
-            self.system("Connecting to MSFS 2024 ...")
+            self.system("Connecting to MSFS (2020 or 2024, whichever is running) ...")
             if cfg.atc.taxi_guide:
                 # A new version of the arrows' package, put in with the sim running: the sim still has the old one,
                 # its files gone, and shows no arrows at all until it's restarted (a whole flight without them, the

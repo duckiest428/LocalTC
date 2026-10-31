@@ -830,7 +830,7 @@ const Setup = {
   language() {
     return `<div class="whero"><img src="/static/logo.svg" alt="" width="64" height="64">
       <h2>Welcome to LocalTC</h2>
-      <p>ATC and a first officer for MSFS 2024, running on this computer. A couple of minutes here sets up what's worth
+      <p>ATC and a first officer for MSFS 2020 and 2024, running on this computer. A couple of minutes here sets up what's worth
         choosing before your first flight. First, your language:</p></div>
       ${Language.picker("w")}
       <p class="muted small">Everything here saves as you go, and all of it can be changed later in Quick Settings and the gear.</p>`;
@@ -1098,7 +1098,7 @@ const Setup = {
       <label class="check-row"><input type="checkbox" id="w-require-plan" ${ui.require_plan !== false ? "checked" : ""}> <span>Require a flight
         plan to start a flight. Off: press <b>Start</b> and fly, and <b>File Plan</b> gives ATC your plan whenever you have it.</span></label>
       <div class="wbox"><b>Each flight</b><ol class="small">
-        <li>Load your aircraft in MSFS 2024, at a gate, cold and dark or ready to go.</li>
+        <li>Load your aircraft in MSFS 2020 or 2024, at a gate, cold and dark or ready to go.</li>
         <li><b>New Flight</b> imports your plan; then <b>Start</b>. The light turns green when the sim's connected.</li>
         <li>Tune COM1 and call clearance: "Request IFR to Denver". Read back what ATC gives you, and check in after each handoff.</li>
       </ol></div>`;
@@ -1937,8 +1937,9 @@ const Settings = {
 
       <div class="card">
         <h3>Sim</h3>
-        <div class="row"><label>Connect to<select id="s-source"><option value="live" ${st.ui.source === "live" ? "selected" : ""}>MSFS 2024 (live)</option>
+        <div class="row"><label>Connect to<select id="s-source"><option value="live" ${st.ui.source === "live" ? "selected" : ""}>MSFS (live)</option>
           <option value="replay" ${st.ui.source === "replay" ? "selected" : ""}>A recorded flight (replay, for development)</option></select></label></div>
+        <span class="hint" ${st.ui.source === "replay" ? "hidden" : ""}>MSFS 2020 or 2024: LocalTC finds the one running and connects to it, with nothing to set.</span>
         <div class="row" ${st.ui.source === "replay" ? "" : "hidden"}><label>Recording<input id="s-replay" value="${esc(st.replay.path)}"></label>
           <label style="flex:0 1 100px">Speed<input id="s-replay-speed" type="number" step="0.5" min="0" value="${st.replay.speed}"></label></div>
         <label class="check-row" ${st.ui.source === "replay" ? "hidden" : ""}><input type="checkbox" id="s-sc-builtin" ${(st.live.connection || "builtin") === "builtin" ? "checked" : ""}> Built-in SimConnect: nothing to install</label>

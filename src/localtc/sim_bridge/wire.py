@@ -6,7 +6,8 @@ DLL uses by default) and on the ports in its ``SimConnect.xml`` (127.0.0.1:500 a
 a 16-byte header (size, protocol version 6, 0xF0000000 + the call's number, a running packet number) and the call's
 arguments as the DLL lays them out (strings in fixed-size, NUL-padded fields). What comes back is exactly what the
 DLL's ``SimConnect_GetNextDispatch`` hands over (``protocol.parse_message`` reads both). The layouts were taken from
-the SDK's DLL talking to MSFS 2024 12.2 (docs/windows-findings.md, 2026-10-09).
+the SDK's DLL talking to MSFS 2024 12.2 (docs/windows-findings.md, 2026-10-09); MSFS 2020 (11.0) takes the same
+client and answers it the same way, without 2024's newest calls (``ai_create`` has the older ones for it).
 
 The same methods as ``dll.SimConnectDll``, so ``SimConnectSource`` takes either.
 """
@@ -39,6 +40,7 @@ OPEN, MAP_CLIENT_EVENT, TRANSMIT_CLIENT_EVENT, SET_SYSTEM_EVENT_STATE, ADD_CLIEN
 SET_GROUP_PRIORITY, ADD_TO_DATA_DEFINITION, CLEAR_DATA_DEFINITION = 0x09, 0x0C, 0x0D
 REQUEST_DATA_ON_SIM_OBJECT, REQUEST_DATA_ON_SIM_OBJECT_TYPE, SET_DATA_ON_SIM_OBJECT = 0x0E, 0x0F, 0x10
 SUBSCRIBE_TO_SYSTEM_EVENT, UNSUBSCRIBE_FROM_SYSTEM_EVENT = 0x17, 0x18
+AI_CREATE_PARKED_ATC, AI_CREATE_ENROUTE_ATC = 0x27, 0x28
 AI_CREATE_NON_ATC, AI_CREATE_SIMULATED_OBJECT, AI_RELEASE_CONTROL, AI_REMOVE_OBJECT, AI_SET_FLIGHT_PLAN = \
     0x29, 0x2A, 0x2B, 0x2C, 0x2D
 REQUEST_SYSTEM_STATE = 0x35
@@ -54,7 +56,7 @@ def _s(text: str, size: int) -> bytes:
 
 def server_addresses() -> list[tuple[str, object]]:
     """Where the sim listens, in the order to try: the default pipe, then each local pipe and TCP port in its
-    SimConnect.xml (MSFS 2024 Store and Steam; MSFS 2020's too), then port 500 as shipped."""
+    SimConnect.xml (MSFS 2024's and 2020's, Store and Steam), then port 500 as shipped."""
     found: list[tuple[str, object]] = [("pipe", PIPE)]
     local, roaming = os.environ.get("LOCALAPPDATA", ""), os.environ.get("APPDATA", "")
     files = [Path(local) / "Packages" / pkg / "LocalCache" / "SimConnect.xml"
@@ -298,17 +300,21 @@ class SimConnectWire:
     def ai_create(self, handle: int, kind: str, request_id: int, title: str, livery: str, tail: str, *,
                   flight_number: int = -1, lat: float = 0, lon: float = 0, alt_ft: float = 0, heading: float = 0,
                   on_ground: bool = True, airspeed_kt: float = 0, plan: str = "", plan_position: float = 0,
-                  pitch: float = 0, bank: float = 0) -> None:
+                  pitch: float = 0, bank: float = 0, ex1: bool = True) -> None:
         """An AI aircraft: ``parked`` (non-ATC: still where it's put, or moved by LocalTC), ``enroute`` (flying
-        ``plan`` under the sim's AI), or ``parked_atc`` (at a gate of ``plan``, an airport ICAO, by the sim)."""
-        head = _s(title, 256) + _s(livery, 256) + _s(tail, 12)
+        ``plan`` under the sim's AI), or ``parked_atc`` (at a gate of ``plan``, an airport ICAO, by the sim).
+        ``ex1`` False: the calls before MSFS 2024's, without the livery (MSFS 2020, which ignores the newer ones; its
+        title is the livery)."""
+        head = _s(title, 256) + (_s(livery, 256) if ex1 else b"") + _s(tail, 12)
         if kind == "enroute":
-            self._c(handle).send(AI_CREATE_ENROUTE_ATC_EX1, head + struct.pack("<i", flight_number) + _s(plan, 260)
+            self._c(handle).send(AI_CREATE_ENROUTE_ATC_EX1 if ex1 else AI_CREATE_ENROUTE_ATC, head
+                                 + struct.pack("<i", flight_number) + _s(plan, 260)
                                  + struct.pack("<diI", plan_position, 0, request_id))
         elif kind == "parked_atc":
-            self._c(handle).send(AI_CREATE_PARKED_ATC_EX1, head + _s(plan, 5) + struct.pack("<I", request_id))
+            self._c(handle).send(AI_CREATE_PARKED_ATC_EX1 if ex1 else AI_CREATE_PARKED_ATC,
+                                 head + _s(plan, 5) + struct.pack("<I", request_id))
         else:
-            self._c(handle).send(AI_CREATE_NON_ATC_EX1, head + struct.pack(
+            self._c(handle).send(AI_CREATE_NON_ATC_EX1 if ex1 else AI_CREATE_NON_ATC, head + struct.pack(
                 "<6dIII", lat, lon, alt_ft, pitch, bank, heading, int(on_ground), int(airspeed_kt), request_id))
 
     def ai_create_object(self, handle: int, request_id: int, title: str, *, lat: float, lon: float, alt_ft: float = 0.0,

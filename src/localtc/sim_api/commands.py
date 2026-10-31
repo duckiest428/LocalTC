@@ -39,7 +39,7 @@ class SendSimEvent(SimCommand, tag="send_sim_event"):
 
 
 class SetInputEvent(SimCommand, tag="set_input_event"):
-    """Move a cockpit control through its MSFS 2024 input event (a B: var, "LIGHTING_LANDING_1"), the way the
+    """Move a cockpit control through its input event (a B: var, "LIGHTING_LANDING_1"), the way the
     aircraft's own switches do: what an aircraft whose panel ignores the old key events needs. The name as the
     aircraft lists it (case doesn't matter)."""
 

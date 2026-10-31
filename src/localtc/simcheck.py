@@ -251,10 +251,10 @@ async def check_aircraft(probe: Probe, *, wait_s: float = 20.0) -> Report:
     probe.fill(report)
     events = set(probe.input_events or ())
     report.add(Step("input events", "info" if events else "fail",
-                    f"{len(events)} listed" if events else "none listed (MSFS 2020, or the aircraft has none)"))
+                    f"{len(events)} listed" if events else "none listed (MSFS 2020 before its SU13, or the aircraft has none)"))
     for key, write in sorted(probe.cockpit.profile.actions.items()):
         if write.input:
-            known = write.input.upper() in events
+            known = all(n.strip().upper() in events for n in write.input.split(","))  # "CPT_PUSH, FO_PUSH": both
             report.add(Step(f"profile {key}: input {write.input}", "pass" if known else "fail",
                             "" if known else "this aircraft has no input event by that name"))
     s = probe.cockpit.systems

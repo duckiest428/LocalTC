@@ -155,7 +155,8 @@ def test_live_source_passes_contract():
     asyncio.run(check_source_contract(source, min_events=20, max_events=20))
 
 
-def test_wrong_sim_version_still_connects(caplog):
+def test_msfs_2020_connects_as_itself(caplog):
+    caplog.set_level("INFO")
     async def main():
         source = SimConnectSource(FAST, dll_factory=lambda: FakeSimConnect(sim_major=11))
         info = await asyncio.wait_for(source.start(), 3)
@@ -163,7 +164,7 @@ def test_wrong_sim_version_still_connects(caplog):
         return info
 
     assert asyncio.run(main()).sim_product == "MSFS 2020"
-    assert "targets MSFS 2024" in caplog.text
+    assert "Connected to MSFS 2020" in caplog.text and "targets" not in caplog.text
 
 
 def test_start_raises_when_dll_cannot_load():

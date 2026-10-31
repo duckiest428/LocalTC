@@ -711,7 +711,7 @@ def _run(cfg, record: bool, printer: EventPrinter | None, *, typed_input: bool =
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="localtc", description="Offline ATC for MSFS 2024")
+    parser = argparse.ArgumentParser(prog="localtc", description="Offline ATC for MSFS 2020 and 2024")
     parser.add_argument("--version", action="version", version=f"localtc {__version__}")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = parser.add_subparsers(dest="command")
@@ -742,7 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--mic", help="microphone: its number or part of its name (see: localtc voice devices)")
     run.set_defaults(func=_cmd_run)
 
-    record = with_config(sub.add_parser("record", help="record a live MSFS 2024 session (Windows)"))
+    record = with_config(sub.add_parser("record", help="record a live MSFS session (Windows)"))
     record.add_argument("--print", action="store_true", help="print events while recording")
     record.set_defaults(func=_cmd_record)
 
@@ -774,7 +774,7 @@ def build_parser() -> argparse.ArgumentParser:
     airport.add_argument("--raw", type=Path, help="write raw facility messages (length-prefixed) to this file")
     airport.add_argument("--timeout", type=float, default=60.0)
     airport.set_defaults(func=_cmd_debug_airport)
-    for name, text in (("aircraft", "the user aircraft, its copilot profile and its MSFS 2024 input events"),
+    for name, text in (("aircraft", "the user aircraft, its copilot profile and its input events"),
                        ("hands", "the copilot's hands: move each control, see the sim show it, put it back (parked only)"),
                        ("traffic", "the AI traffic as LocalTC sees it; create one aircraft beside yours and remove it")):
         check = with_config(debug_sub.add_parser(name, help=text))

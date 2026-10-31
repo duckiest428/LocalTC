@@ -20,9 +20,10 @@ FAMILY = {"A19N": "A319", "A20N": "A320", "A21N": "A321", "B38M": "B738", "B39M"
           "B763": "B767", "B764": "B767"}
 # When the type isn't known: by its ADS-B category (A1 light ... A5 heavy).
 BY_CATEGORY = {"A1": "C172", "A2": "CRJ9", "A3": "A320", "A4": "B752", "A5": "B77W", "A7": "R44"}
-# The sim's own aircraft, by size, when FSLTL has nothing of the type.
-STOCK = (("A320", ("A320neo V2",)), ("A321", ("A321",)), ("B738", ("737 Max 8 Passengers",)),
-         ("B777", ("777-300ER",)), ("B747", ("747-8i",)), ("A350", ("A350-900 (No Cabin)", "A350-900 (Default Cabin)")),
+# The sim's own aircraft, by size, when FSLTL has nothing of the type: MSFS 2024's, then 2020's.
+STOCK = (("A320", ("A320neo V2", "Airbus A320 Neo Asobo")), ("A321", ("A321",)), ("B738", ("737 Max 8 Passengers",)),
+         ("B777", ("777-300ER",)), ("B747", ("747-8i", "Boeing 747-8i Asobo")),
+         ("A350", ("A350-900 (No Cabin)", "A350-900 (Default Cabin)")),
          ("A330", ("A330-300 (GE)",)), ("C172", ("Cessna 172 Skyhawk", "Cessna Skyhawk G1000 Asobo")))
 VENDORS = {"FSLTL", "FAIB", "TFS", "FSPXAI", "AIG", "GA"}
 # An airline flying in its parent's colours (or close to them) when FSLTL has none of its own: Air Canada Rouge was
@@ -77,7 +78,8 @@ def parse(title: str, livery: str = "") -> Model | None:
 
 @dataclass
 class ModelPicker:
-    """The installed models (EnumerateSimObjectsAndLiveries), and the best one for a type and airline."""
+    """The installed models (MSFS 2024 lists them; 2020's are read from its packages), and the best one for a type
+    and airline."""
 
     models: list[tuple[str, str]] = field(default_factory=list)
 

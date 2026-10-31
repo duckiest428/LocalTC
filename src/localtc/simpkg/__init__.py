@@ -15,7 +15,7 @@ FILETIME_EPOCH_S = 11_644_473_600  # 1601 to 1970: layout.json's dates are Windo
 
 
 def community_folders(roots: list[Path] | None = None) -> list[Path]:
-    """The sim's Community folders on this PC (MSFS 2024's first)."""
+    """The sims' Community folders on this PC, MSFS 2024's and 2020's (the package goes in each)."""
     if roots is None:
         from localtc.crew.checklist_db import package_roots
 

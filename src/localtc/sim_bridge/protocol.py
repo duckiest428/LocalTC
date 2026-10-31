@@ -250,7 +250,7 @@ class AirportList:
 
 @dataclass(frozen=True)
 class InputEventList:
-    """MSFS 2024's input events of the user's aircraft (SimConnect_EnumerateInputEvents): the B: vars its cockpit
+    """The input events of the user's aircraft (SimConnect_EnumerateInputEvents, MSFS 2024 and 2020): the B: vars its cockpit
     switches move through. (name, hash, type) each."""
 
     request_id: int

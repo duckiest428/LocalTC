@@ -29,7 +29,7 @@ zip in Downloads. The zip is the most useful thing you can send back.
 
 Fly a SimBrief flight you know, for example KSAN → KPHX, with the copilot **off** so you do all the talking.
 
-- [ ] **Start** connects to MSFS 2024, and COM1/COM2 and the transponder follow the sim.
+- [ ] **Start** connects to MSFS 2024 (and to MSFS 2020, run on its own), and COM1/COM2 and the transponder follow the sim.
 - [ ] Clearance: "... IFR to Phoenix, with information X, ready to copy" gets the full clearance, and reading it back gets "readback correct".
 - [ ] Ground: pushback (at a gate), taxi with the route and the hold-short, and the handoff to tower.
 - [ ] Tower: line up and wait / cleared for takeoff, then the handoff to departure once airborne.

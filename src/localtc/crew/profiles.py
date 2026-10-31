@@ -26,7 +26,7 @@ class Write:
     event: str = ""
     value: int | None = None
     lvar: str = ""
-    input: str = ""  # an MSFS 2024 input event by name ("LIGHTING_LANDING_1"), set to ``on``/``off`` or the value
+    input: str = ""  # an input event by name ("LIGHTING_LANDING_1"), set to ``on``/``off`` or the value
     unit: str = "number"
     on: float = 1.0
     off: float = 0.0

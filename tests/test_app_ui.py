@@ -30,7 +30,7 @@ def test_settings_file_holds_only_changes_and_loads_on_top(tmp_path):
     cfg.tts.volume = 0.5
     cfg.ui.dev_mode = True
     path = save_settings(cfg, base=base, path=tmp_path / "settings.toml")
-    saved = tomllib.loads(path.read_text())
+    saved = tomllib.loads(path.read_text(encoding="utf-8"))
     assert saved == {"voice": {"ptt_key": "f13"}, "tts": {"volume": 0.5}, "ui": {"dev_mode": True}}
     again = load_config(ROOT / "config" / "localtc.toml", env={}, settings=path)
     assert again.voice.ptt_key == "f13" and again.ui.dev_mode and again.tts.volume == 0.5
@@ -73,6 +73,18 @@ def test_simbrief_plan_is_read():
     assert plan.route == "HAROB6 HAROB Q7 JINMO" and len(plan.fixes) == 3 and plan.fixes[1].lat == 40.0
     assert plan.simbrief_id == "1758300000"  # static_id is empty ({}), the generation time stands in
     assert plan.summary() == "ASA123 KSEA-KLAX FL350"
+
+
+def test_the_sid_and_star_from_the_route_when_the_navlog_doesnt_mark_them():
+    """An LLBG-LLER plan filed "TOMA4F TOMAL J10 MZD T94 ZFR J10 NURIT NURI1B" was cleared with no SID."""
+    data = {**SIMBRIEF, "general": {**SIMBRIEF["general"], "route": "TOMA4F TOMAL J10 MZD T94 ZFR J10 NURIT NURI1B"},
+            "navlog": {"fix": [{**f, "is_sid_star": "0"} for f in SIMBRIEF["navlog"]["fix"]]}}
+    plan = parse_simbrief(data)
+    assert (plan.sid, plan.star) == ("TOMA4F", "NURI1B")
+    assert (parse_simbrief(SIMBRIEF).sid, parse_simbrief(SIMBRIEF).star) == ("HAROB6", "SADDE8")  # the navlog's first
+    typed = manual_plan(origin="LLBG", destination="LLER", route="toma4f tomal j10 nurit nuri1b")
+    assert (typed.sid, typed.star) == ("TOMA4F", "NURI1B")
+    assert (manual_plan(destination="LLER", route="DCT TOMAL J10 NURIT").sid, manual_plan(destination="LLER", route="UL9 KONAN").star) == ("", "")
 
 
 def test_simbrief_errors_and_urls():

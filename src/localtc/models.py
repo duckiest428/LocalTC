@@ -184,9 +184,13 @@ def status(cfg) -> list[ModelStatus]:
 
 
 def whisper_model(cfg) -> str:
-    """The Whisper model a flight will load ("auto" resolved without importing the GPU libraries)."""
+    """The Whisper model a flight will load ("auto" resolved without importing the GPU libraries). An NVIDIA card
+    counts only with its CUDA libraries installed: without them Whisper runs on the CPU."""
+    from localtc.stt.whisper import cuda_libraries
+
     model = cfg.voice.model if cfg.voice.model != "auto" else \
-        "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0]) else "base.en"
+        "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0] and cuda_libraries()) \
+        else "base.en"
     from localtc.languages import language
 
     # The copilot talked to in another language: the same size that knows them all (the radio still heard as English).

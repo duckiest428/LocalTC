@@ -86,7 +86,8 @@ describe("the blog", () => {
     expect(r).toEqual({ reactions: { love: 1 }, mine: ["love"] });
     expect((await call("POST", "/v1/blog/posts/welcome-to-the-blog/react", { kind: "angry" }, me1)).status).toBe(400);
     const stored = await env.DB.prepare("SELECT viewer FROM blog_reads").all<{ viewer: string }>();
-    expect(stored.results.every((x) => /^[a-f0-9]{64}$/.test(x.viewer) && !x.viewer.includes("203"))).toBe(true);
+    // A salted hash, never the address (a hash may hold "203" by chance: the address with its dots never fits).
+    expect(stored.results.every((x) => /^[a-f0-9]{64}$/.test(x.viewer) && !x.viewer.includes("203.0.113"))).toBe(true);
     const me = await signIn(AUTHOR);
     const drafts = await data(await call("GET", "/v1/blog/drafts", undefined, bearer(me.token)));
     expect(drafts.reads["welcome-to-the-blog"]).toBe(2);

@@ -219,7 +219,7 @@ def test_a_report_is_written(tmp_path):
     report = simcheck.Report("hands", aircraft="X")
     report.add(simcheck.Step("a", "pass"))
     path = simcheck.write(report, tmp_path / "r.json")
-    assert json.loads(path.read_text())["steps"][0]["name"] == "a"
+    assert json.loads(path.read_text(encoding="utf-8"))["steps"][0]["name"] == "a"
 
 
 def test_the_command_lines_entry_runs_a_check_on_any_source():

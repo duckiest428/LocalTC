@@ -12,6 +12,7 @@
 import logging
 import math
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -55,7 +56,23 @@ def add_nvidia_dll_dirs() -> list[str]:
     return added
 
 
+def cuda_libraries() -> bool:
+    """Windows: the CUDA libraries ctranslate2 loads (cuBLAS, cuDNN) are installed (Quick Settings > Models > Whisper on
+    your graphics card). An NVIDIA driver alone isn't enough: Whisper on the card without them fails at its first
+    words ("cublas64_12.dll is not found"). Elsewhere they come with the system's CUDA, so they're taken as there."""
+    if sys.platform != "win32":
+        return True
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("nvidia.cublas") is not None and importlib.util.find_spec("nvidia.cudnn") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def cuda_available() -> bool:
+    if not cuda_libraries():
+        return False
     try:
         add_nvidia_dll_dirs()
         import ctranslate2
@@ -165,7 +182,19 @@ class WhisperTranscriber:
 
     def transcribe(self, audio, *, prompt: str = "", hotwords: str = "", language: str = "en") -> SttResult:
         """``audio``: mono float32 samples at 16 kHz. ``language``: what's said in it (the radio English; the
-        intercom the copilot's language, with a multilingual model)."""
+        intercom the copilot's language, with a multilingual model). On the graphics card, a CUDA library that can't be
+        loaded (it's found only at the first words) moves Whisper to the CPU, and the words are heard again there."""
+        try:
+            return self._transcribe(audio, prompt=prompt, hotwords=hotwords, language=language)
+        except (RuntimeError, OSError) as exc:
+            if self.choice.device != "cuda" or not re.search(r"cuda|cublas|cudnn|\.dll", str(exc), re.IGNORECASE):
+                raise
+            log.warning("Whisper on the graphics card failed (%s); using the CPU from now on", exc)
+            self.choice = Choice(self.choice.model, "cpu", "int8")
+            self._model = None
+            return self._transcribe(audio, prompt=prompt, hotwords=hotwords, language=language)
+
+    def _transcribe(self, audio, *, prompt: str, hotwords: str, language: str) -> SttResult:
         self.load()
         started = time.monotonic()
         seconds = len(audio) / SAMPLE_RATE

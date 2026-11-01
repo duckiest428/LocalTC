@@ -442,3 +442,43 @@ def test_whisper_is_never_asked_for_more_than_it_can_hold():
     tokens, max_new = t.budget(prompt, hot, 195)
     assert max_new == 195 and 100 + len(tokens) + max_new <= MAX_LENGTH - 8
     assert t.budget("", "", 40) == ("", 40)
+
+
+def test_an_nvidia_card_without_the_cuda_libraries_is_not_used(monkeypatch):
+    # The driver says there's a card, but the CUDA libraries (Quick Settings > Models) aren't installed: the CPU.
+    import importlib.util
+
+    from localtc.stt import whisper
+
+    monkeypatch.setattr(whisper.sys, "platform", "win32")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name.startswith("nvidia") else object())
+    assert not whisper.cuda_libraries() and not whisper.cuda_available()
+    assert whisper.choose().device == "cpu"
+
+
+def test_a_cuda_library_missing_at_the_first_words_moves_whisper_to_the_cpu(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    import numpy as np
+
+    from localtc.stt import whisper
+
+    class Segment:
+        text, start, end, avg_logprob, no_speech_prob = "ready for departure", 0.0, 1.0, -0.1, 0.01
+
+    class Model:
+        def __init__(self, path, device, compute_type):
+            self.device, self.hf_tokenizer = device, None
+
+        def transcribe(self, audio, **kw):
+            if self.device == "cuda":
+                raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+            return iter([Segment()]), None
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    (tmp_path / "faster-whisper-small.en").mkdir()
+    (tmp_path / "faster-whisper-small.en" / "model.bin").write_bytes(b"")
+    stt = whisper.WhisperTranscriber("small.en", device="cuda", compute_type="float16", models_dir=tmp_path)
+    result = stt.transcribe(np.zeros(16000, dtype=np.float32))
+    assert result.text == "ready for departure" and stt.choice.device == "cpu"

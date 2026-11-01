@@ -5,7 +5,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.4] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Changed
+- **The Discord buttons** on every page go to the server's new invite link.
 
 ## [0.5.3] - 2026-10-30
 

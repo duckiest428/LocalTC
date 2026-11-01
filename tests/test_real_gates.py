@@ -25,7 +25,7 @@ def _read(name: str) -> dict:
     path = HERE / name
     if not path.exists():
         return json.loads(gzip.decompress((HERE / f"{name}.gz").read_bytes()))
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load(icao: str) -> tuple[AirportGeometry, real_gates.GateData]:

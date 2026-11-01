@@ -116,28 +116,28 @@ class OllamaBackend:
             "keep_alive": self.keep_alive,
             "options": {"temperature": 0, "seed": 0, "num_predict": request.max_tokens, **self.load_options(), **self.options},
         }
-        started = time.monotonic()
+        started = time.perf_counter()
         try:
             data = self._post("/api/chat", body, timeout_s)
         except (urllib.error.URLError, OSError, ValueError) as exc:
             reason = getattr(exc, "reason", exc)
             if not isinstance(exc, TimeoutError) and not isinstance(reason, (TimeoutError, socket.timeout)):
-                return LlmReply(None, (time.monotonic() - started) * 1000, f"error: {reason}")
+                return LlmReply(None, (time.perf_counter() - started) * 1000, f"error: {reason}")
             if request.purpose == "understand":
                 self._understand = request
                 self.prime()  # cut off, maybe before Ollama had read it all: have it read (and keep) it now
-            return LlmReply(None, (time.monotonic() - started) * 1000, "timeout")
+            return LlmReply(None, (time.perf_counter() - started) * 1000, "timeout")
         self._timings(data, request)
         if request.purpose == "understand":
             self._understand = request
             if self.last_stats["load_ms"] <= COLD_LOAD_S * 1000:
-                self._paces.append(time.monotonic() - started)
+                self._paces.append(time.perf_counter() - started)
         elif request.purpose in ("phrase", "reword", "crew"):
             self.prime()  # the phrasing prompt may have taken the understanding one's place in Ollama's cache
         content = (data.get("message") or {}).get("content")
         if not isinstance(content, str):
-            return LlmReply(None, (time.monotonic() - started) * 1000, f"error: unexpected response {str(data)[:200]}")
-        return LlmReply(content, (time.monotonic() - started) * 1000)
+            return LlmReply(None, (time.perf_counter() - started) * 1000, f"error: unexpected response {str(data)[:200]}")
+        return LlmReply(content, (time.perf_counter() - started) * 1000)
 
     def _timings(self, data: dict, request: LlmRequest) -> None:
         ms = lambda k: round((data.get(k) or 0) / 1e6)  # Ollama reports nanoseconds

@@ -13,7 +13,7 @@ from localtc.sim_bridge.dll import SimConnectError
 from localtc.sim_bridge.protocol import DataType, FacilityListType, OpenInfo, Period, parse_message
 
 PACKETS = {name: bytes.fromhex(hexes) for name, hexes in (
-    line.split() for line in (Path(__file__).parent / "fixtures" / "simconnect_packets.txt").read_text().splitlines()
+    line.split() for line in (Path(__file__).parent / "fixtures" / "simconnect_packets.txt").read_text(encoding="utf-8").splitlines()
     if line and not line.startswith("#"))}
 
 

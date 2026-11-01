@@ -10,7 +10,7 @@ from localtc.crew.pm import _declines
 from localtc.crew import speech_acts
 from localtc.sim_api import AtcTransmission, CrewAction, IntercomHeard, PhaseChanged, SendSimEvent, Transcript
 
-from tests.test_crew_monitor import FakeEngine, crew, fly, own, said, systems
+from test_crew_monitor import FakeEngine, crew, fly, own, said, systems
 
 
 def test_fair_enough_and_i_know_in_a_sentence_dont_quiet_the_copilot():

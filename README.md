@@ -1,13 +1,13 @@
 # _https://buymeacoffee.com/petey1_
 
 <p align="center">
-  <img src="docs/images/banner.svg" alt="LocalTC: air traffic control and a copilot for Microsoft Flight Simulator 2024" width="100%">
+  <img src="docs/images/banner.svg" alt="LocalTC: air traffic control and a copilot for Microsoft Flight Simulator 2020 and 2024" width="100%">
 </p>
 
 <p align="center">
   <a href="https://github.com/duckiest428/LocalTC/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/duckiest428/LocalTC?style=for-the-badge&color=2fbf71&label=release"></a>
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=for-the-badge&logo=windows&logoColor=white">
-  <img alt="MSFS 2024" src="https://img.shields.io/badge/MSFS-2024-1f6feb?style=for-the-badge">
+  <img alt="MSFS 2020 and 2024" src="https://img.shields.io/badge/MSFS-2020%20%7C%202024-1f6feb?style=for-the-badge">
   <img alt="Free forever" src="https://img.shields.io/badge/price-free%20forever-2fbf71?style=for-the-badge">
   <a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-555?style=for-the-badge"></a>
 </p>
@@ -32,7 +32,7 @@
 
 # ✈️ For pilots
 
-**LocalTC gives Microsoft Flight Simulator 2024 air traffic control you can actually talk to.** Press your
+**LocalTC gives Microsoft Flight Simulator 2020 and 2024 air traffic control you can actually talk to.** Press your
 push-to-talk key, make your call the way a real pilot would, and a controller answers, from clearance delivery
 to the gate. Every station is a different person with their own voice. You get a first officer on the intercom
 too.
@@ -158,7 +158,7 @@ script: every number, runway and route.
 
 | | |
 |---|---|
-| 🖥️ **System** | Windows 10 or 11 with Microsoft Flight Simulator 2024 |
+| 🖥️ **System** | Windows 10 or 11 with Microsoft Flight Simulator 2020 or 2024 |
 | 🎧 **Audio** | A microphone and speakers or a headset |
 | 💾 **Disk** | About 3 GB for the speech and language models (downloaded once) |
 | ⚡ **Hardware** | Any PC that runs MSFS. An NVIDIA card makes speech recognition faster and more accurate. |

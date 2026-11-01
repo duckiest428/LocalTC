@@ -1917,6 +1917,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-cabin-interphone" ${st.cabin.interphone ? "checked" : ""}> Calls to the flight deck: boarding complete, cabin secure for takeoff and landing</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-chime" ${st.cabin.chime ? "checked" : ""}> Cabin chime: before an announcement, and when the seatbelt sign changes</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-music" ${st.cabin.boarding_music ? "checked" : ""}> Boarding music: quietly in the cabin while people get on and off</label>
+        <span class="hint" translate="no">"Airport Lounge" Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: "Airplane Chime Sound Effect" by Sharelk (CC0).</span>
         <label class="check-row"><input type="checkbox" id="s-cabin-applause" ${st.cabin.applause ? "checked" : ""}> Applause on a soft landing (gentler than 200 feet per minute)</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-english" ${st.cabin.english_too ? "checked" : ""}> Announcements in English too: a crew whose language isn't English repeats each one in English</label>
         </div>

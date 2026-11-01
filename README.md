@@ -857,6 +857,9 @@ and JetBrains Mono typefaces bundled with [the website](site/fonts/) under the S
 The airspace outlines in [`src/localtc/atc_core/airspace/`](src/localtc/atc_core/airspace/README.md) come
 from the VATSIM community's VATSpy Data Project and SimAware TRACON Project and are CC BY-SA 4.0.
 Real gate names are © OpenStreetMap contributors, available under the Open Database License (ODbL).
+The cabin's boarding music is "Airport Lounge" by Kevin MacLeod (incompetech.com), licensed under Creative
+Commons: By Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/); its chime is "Airplane Chime Sound Effect"
+by Sharelk (CC0, Wikimedia Commons). The Live Map's airports are OurAirports' (public domain).
 
 
 _Shamelessly vibecoded_

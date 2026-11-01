@@ -9,7 +9,7 @@ import pytest
 from localtc.crew.cabin import CabinCrew, CabinSettings, Facts, duration_in, fill, flight_words, words
 from localtc.crew.cabin_data import airline_of, city_of, describe, exits, seats
 from localtc.crew.cabin_lines import FOREIGN, LINES, PEOPLE, REPLIES
-from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, pa_effect
+from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, made_chime, made_music, pa_effect
 from localtc.sim_api import (
     AircraftSystems,
     CabinSound,
@@ -260,9 +260,10 @@ def test_the_cabins_sounds():
     for kind in ("pa", "seatbelt", "call"):
         c = chime(rate, kind)
         assert 0.5 < len(c) / rate < 3.0 and abs(np.max(np.abs(c)) - 0.6) < 0.01
-    music = boarding_music(rate, seconds=16, seed=4)
-    assert len(music) == 16 * rate and np.max(np.abs(music)) <= 0.51
-    assert np.array_equal(music, boarding_music(rate, seconds=16, seed=4))
+    made = made_music(rate, seconds=16, seed=4)
+    assert len(made) == 16 * rate and np.max(np.abs(made)) <= 0.51
+    assert np.array_equal(made, made_music(rate, seconds=16, seed=4))
+    assert len(made_chime(rate, "pa")) / rate > 0.5
     clap = applause(rate, seconds=4, people=10, seed=1)
     assert len(clap) == 4 * rate and np.max(np.abs(clap)) <= 0.51
     voice = np.sin(np.linspace(0, 2000, rate)).astype(np.float32)
@@ -312,3 +313,17 @@ def test_the_voice_says_each_line_and_plays_the_cabins_sounds():
     kinds = [c.kind for c in clips]
     assert kinds.count("chime") == 2 and kinds.count("pa") == 2
     assert kinds.index("chime") < kinds.index("pa")
+
+
+def test_the_chime_and_the_music_are_the_real_recordings():
+    rate = 22050
+    pa, belt = chime(rate, "pa"), chime(rate, "seatbelt")
+    assert 2.0 < len(pa) / rate < 2.4 and 1.0 < len(belt) / rate < 1.3  # the high-low pair, and the low note alone
+
+    def pitch(audio):
+        spectrum = np.abs(np.fft.rfft(audio[: rate // 4]))
+        return np.argmax(spectrum) * rate / (rate // 4 * 2 // 2 * 2)
+
+    assert pitch(pa) > pitch(belt)  # it starts on the high note; the seatbelt's is the low one
+    music = boarding_music(rate)
+    assert len(music) / rate > 300 and np.max(np.abs(music)) <= 0.51  # "Airport Lounge", five minutes

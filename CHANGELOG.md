@@ -39,6 +39,8 @@ a new minor version adds features, a patch fixes them.
   Lufthansa in German and English, and 9 languages in all), with the chimes, the cabin's speakers and the interphone's
   handset. Five people to choose from to lead the cabin, each with a manner of their own (polished, cheerful, warm,
   brisk, the storyteller), or a different one each flight.
+  The chime is a real airliner's (the high-low pair before an announcement, the low note for the seatbelt sign), and
+  the boarding music is a real piece, Kevin MacLeod's "Airport Lounge" (CC BY 3.0).
 - **Talk to the cabin** on the intercom by starting with "cabin", "cabin crew", "purser" or their name: a coffee (white,
   two sugars) or a meal brought up a few minutes later, how the cabin is, how many are on board, "prepare the cabin for
   landing", turbulence ahead, a delay ("we've got a twenty minute delay") or anything to pass on ("tell the passengers

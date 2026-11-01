@@ -5,19 +5,44 @@ cabin crew are heard on the flight deck.
   echo behind it, heard through the flight deck door.
 - The **interphone** (``interphone_effect``): a cabin crew member on the handset to the flight deck, dry and close, a
   telephone's band, no hiss and no squelch.
-- The **chimes** (``chime``): struck bars, their partials a little out of tune with each other as a real bar's are.
-  ``pa`` is the high-low pair before an announcement, ``seatbelt`` one low note when the sign changes, ``call`` two
-  quick high notes when the cabin calls the flight deck.
-- The **boarding music** (``boarding_music``): a slow, soft progression on an electric piano and a pad, through the
-  cabin speakers, made the same for a given seed (each airline its own).
+- The **chimes** (``chime``): a real airliner's cabin chime (sounds/chime.ogg: "Airplane Chime Sound Effect" by
+  Sharelk, CC0). ``pa`` and ``call`` are its high-low pair, ``seatbelt`` its low note alone, as the sign's is.
+- The **boarding music** (``boarding_music``): "Airport Lounge" by Kevin MacLeod (incompetech.com), licensed under
+  Creative Commons: By Attribution 3.0 (sounds/boarding.ogg), through the cabin speakers.
+
+Both recordings come from ``tools/make_cabin_sounds.py`` and are decoded with PyAV (Whisper's own dependency); where
+they can't be, the chime is made from struck bars and the music from a soft progression on a piano and a pad.
 - The **applause** (``applause``): a cabin of people clapping, each at their own pace, starting and stopping raggedly.
 
 Pure numpy and deterministic for a given seed, like ``dsp.radio``.
 """
 
+import logging
+from functools import lru_cache
+from pathlib import Path
+
 import numpy as np
 
-from localtc.dsp.radio import bandpass, compress
+from localtc.dsp.radio import bandpass, compress, resample
+
+log = logging.getLogger(__name__)
+SOUNDS = Path(__file__).with_name("sounds")
+CHIME_START_S, CHIME_LOW_S = 0.74, 1.78  # in chime.ogg: where the high note is struck, and the low one
+
+
+@lru_cache(maxsize=4)
+def recording(name: str) -> tuple[np.ndarray, int] | None:
+    """A recording in sounds/, mono float, and its rate; None where it can't be decoded."""
+    try:
+        import av
+
+        with av.open(str(SOUNDS / name)) as container:
+            stream = container.streams.audio[0]
+            parts = [frame.to_ndarray().reshape(frame.to_ndarray().shape[0], -1).mean(axis=0) for frame in container.decode(stream)]
+            return np.concatenate(parts).astype(np.float32), int(stream.rate)
+    except Exception as exc:  # noqa: BLE001 - no PyAV, a broken file: the made sound instead
+        log.warning("Couldn't play %s (%s): a made one instead", name, exc)
+        return None
 
 
 def _bar(rate: int, freq: float, seconds: float, *, loud: float = 1.0) -> np.ndarray:
@@ -37,7 +62,18 @@ CHIMES = ("pa", "seatbelt", "call")
 
 
 def chime(rate: int, kind: str = "pa") -> np.ndarray:
-    """``pa`` the high and the low note, ``seatbelt`` one low note, ``call`` two quick high ones. Peak 0.6."""
+    """The real chime: ``pa`` and ``call`` the high and the low note, ``seatbelt`` the low note. Peak 0.6."""
+    found = recording("chime.ogg")
+    if found is not None:
+        audio, at = found
+        start = CHIME_LOW_S if kind == "seatbelt" else CHIME_START_S
+        out = resample(audio[int(start * at):], at, rate)
+        return (out / (np.max(np.abs(out)) or 1.0) * 0.6).astype(np.float32)
+    return made_chime(rate, kind)
+
+
+def made_chime(rate: int, kind: str = "pa") -> np.ndarray:
+    """The chime made from struck bars, where the recording can't be played."""
     if kind == "seatbelt":
         notes = [(0.0, 659.3, 1.8, 1.0)]
     elif kind == "call":
@@ -105,7 +141,21 @@ def _note(rate: int, freq: float, seconds: float, *, soft: bool) -> np.ndarray:
 
 
 def boarding_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.ndarray:
-    """A slow, soft progression through the cabin's speakers, to loop under the boarding. Peak 0.5."""
+    """The boarding music through the cabin's speakers, to loop under the boarding (the whole recording; ``seconds``
+    and ``seed`` only for the made one). Peak 0.5."""
+    found = recording("boarding.ogg")
+    if found is not None:
+        audio, at = found
+        out = bandpass(resample(audio, at, rate), rate, 150.0, 7000.0, presence_db=0.0)
+        fade = int(rate * 1.5)
+        out[:fade] *= np.linspace(0, 1, fade)
+        out[-fade:] *= np.linspace(1, 0, fade)
+        return (out / (np.max(np.abs(out)) or 1.0) * 0.5).astype(np.float32)
+    return made_music(rate, seconds=seconds, seed=seed)
+
+
+def made_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.ndarray:
+    """A slow, soft progression through the cabin's speakers, where the recording can't be played. Peak 0.5."""
     rng = np.random.default_rng(seed)
     key = 196.0 * 2 ** (int(rng.integers(0, 7)) / 12)  # somewhere from G3 up
     chords = PROGRESSIONS[int(rng.integers(0, len(PROGRESSIONS)))]

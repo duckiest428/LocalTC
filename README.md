@@ -64,7 +64,7 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 </td>
 <td valign="top">
 <h3>📻 It sounds like a radio</h3>
-<p>Static, squelch and a voice for each station that stays the same all flight. Other aircraft talk on the frequency. An optional more natural voice, <a href="docs/voices.md">Kokoro</a>, on your PC too.</p>
+<p>Static, squelch and a voice for each station that stays the same all flight. Other aircraft talk on the frequency. Every controller with the accent of where they are, from the <a href="docs/voices.md">LocalTC voice library</a> on your PC.</p>
 </td>
 </tr>
 <tr>
@@ -168,14 +168,15 @@ Updates are checked once a day and install with one click, never during a flight
 
 ## 🔊 Voices
 
-| | Where it runs | Sound | Speed | Cost |
-|---|---|---|---|---|
-| **Piper** (default) | your PC | clear radio voices, 904 speakers | instant | free |
-| **Kokoro** | your PC | more natural | a second or two per call | free (337 MB download) |
+**The LocalTC voice library**: every controller speaks English with the accent of where they are. French at Charles
+de Gaulle, German in Frankfurt, Japanese at Haneda, Indian in Delhi, Arabic in Dubai, Australian in Sydney: 33
+accents, with every country in one of them. The other crews sound like their airline (an Air France crew is French at
+JFK too). It runs on your PC (Kokoro-82M, a 337 MB download with the other models); until it's downloaded, Piper
+speaks, with the same accents.
 
-Choose in **Quick Settings → Models → Voices**, with a preview of each. If Kokoro can't speak a line, Piper does.
-The copilot talking with you in your language has that language's own voices (a woman's and a man's, downloaded
-once).
+Hear any accent in **Quick Settings → Models → Voices**. The copilot talking with you in your language speaks it with
+the library's voices (German, French, Spanish, Italian, Portuguese, Polish) or that language's own (Dutch, Swedish,
+Russian, Chinese: a woman's and a man's, downloaded once).
 More in [docs/voices.md](docs/voices.md).
 
 ## 🔐 Privacy
@@ -395,7 +396,7 @@ src/localtc/
   copilot.py   the copilot: reads back, changes frequencies, makes calls
   scenario.py  offline scripted-pilot scenarios
   stt/         microphone, push-to-talk, Whisper
-  tts/ dsp/    the voices (Piper, Kokoro), the radio effect, audio out
+  tts/ dsp/    the voices (the voice library: Kokoro and its accents; Piper), the radio effect, audio out
   ui/          the app: local HTTP/SSE server, controller, static page (HTML/CSS/JS, Leaflet)
   flightplan.py  SimBrief import and typed flight plans
   models.py    model catalog, hardware profiles, downloads
@@ -551,7 +552,7 @@ localtc run ... --no-tts                          # text only
 
 ATC talks through **Piper** (the `piper-tts` package ships prebuilt wheels for Windows, macOS and Linux, so there's no separate binary to install). The voice is `en_US-libritts_r-medium`: one 80 MB download (`localtc setup`, or automatically on the first flight) with 904 speakers. Every station gets its own speaker, and the same one every time: Phoenix Tower never sounds like Phoenix Approach. The pool is the 40 speakers Whisper understood best reading ATC phraseology over the radio (`tools/pick_speakers.py`). Synthesis takes about 0.3 s for a 10 s clearance.
 
-**Kokoro, optional** (Quick Settings → Models → Voices; [docs/voices.md](docs/voices.md)): Kokoro-82M, on your PC, more natural, slower: a 337 MB download, about 0.2-0.3 s of CPU work per second of speech. The words are put into aviation English first, the same for either voice, and each station is the same person whichever voice speaks. If Kokoro can't speak a line, Piper does; with neither, ATC is text.
+**The voice library** (Quick Settings → Models → Voices; [docs/voices.md](docs/voices.md)): Kokoro-82M, on your PC, more natural than Piper, slower: a 337 MB download, about 0.2-0.3 s of CPU work per second of speech. Each region's accent is LocalTC's own (`tts/accents.py`): espeak's English phonemes moved onto the sounds of the speaker's language, then spoken by voices of that language where Kokoro has them (`tts/library.py`). The words are put into aviation English first, the same for either voice, and each station is the same person whichever voice speaks. Until it's downloaded, or if it can't speak a line, Piper does, with the same accents; with neither, ATC is text.
 
 **Radio effect** (`[tts] radio_effect`, `static`): band-pass 300-3000 Hz, radio-style compression with light overdrive, slow carrier fading, hiss, and a squelch burst at the end of each transmission. The copilot's calls are spoken too (`[tts] copilot`) in a pilot voice, band-limited but without static.
 

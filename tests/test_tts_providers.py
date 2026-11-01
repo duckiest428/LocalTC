@@ -105,17 +105,30 @@ class FakePlayer:
         self.cuts.append(kind)
 
 
+class FakeTokenizer:
+    """kokoro_onnx's tokenizer: the "phonemes" are the words themselves, so a test can read what was said."""
+
+    def __init__(self) -> None:
+        self.lang = ""
+
+    def phonemize(self, text, lang="en-us"):
+        self.lang = lang
+        return text
+
+
 class FakeKokoro:
-    """kokoro_onnx.Kokoro: a style vector per voice, audio from create()."""
+    """kokoro_onnx.Kokoro: a style vector per voice, audio from create(). ``calls``: (text or phonemes, the language
+    they're in, speed)."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, float]] = []
+        self.tokenizer = FakeTokenizer()
 
     def get_voice_style(self, name):
         return np.full((4, 1, 8), float(len(name)), dtype=np.float32)
 
-    def create(self, text, voice, speed=1.0, lang="en-us"):
-        self.calls.append((text, lang, speed))
+    def create(self, text, voice, speed=1.0, lang="en-us", is_phonemes=False):
+        self.calls.append((text, self.tokenizer.lang if is_phonemes else lang, speed))
         return tone(0.4, 24000), 24000
 
 
@@ -245,7 +258,8 @@ def test_the_pilots_own_pick_stands():
 
 
 @pytest.mark.parametrize(("locale", "lang"), [("en-GB", "en-gb"), ("en-AU", "en-gb"), ("en-US", "en-us"), ("", "en-us"),
-                                              ("en-CA", "en-us")])
+                                              ("en-CA", "en-us"), ("de-DE", "en-gb"), ("ja-JP", "en-us"),
+                                              ("es-MX", "en-us")])
 def test_kokoro_speaks_the_regions_english(locale, lang):
     engine = FakeKokoro()
     voices = KokoroVoices(Path("/x"), engine=engine)
@@ -271,25 +285,25 @@ def test_every_failure_falls_back_to_the_next_voice(kind):
     assert chain.status()[0]["failures"] == {"error" if kind == "crash" else kind: 1}
 
 
-def test_the_fallback_order_is_kokoro_when_chosen_then_piper():
+def test_the_fallback_order_is_the_library_then_piper():
     from localtc.app import voice_chain
     from localtc.config import Config
 
     cfg = Config()
-    cfg.tts.provider = "kokoro"
     assert [p.id for p in voice_chain(cfg, FakeSynth()).providers] == ["kokoro", "piper"]
     cfg.tts.provider = "piper"
     assert [p.id for p in voice_chain(cfg, FakeSynth()).providers] == ["piper"]
     assert voice_chain(cfg, None) is None  # nothing at all: text only
 
 
-def test_piper_unless_kokoro_is_chosen_and_azure_is_gone(tmp_path):
-    """Azure's voices were taken out: a settings file that chose them loads, with Kokoro when it stood in for them
-    (else Piper), and so does one that chose a Piper voice that gave every station the same voice."""
+def test_the_voice_library_whatever_was_chosen_before(tmp_path):
+    """The voice library is the one voice: a settings file that chose Piper, Kokoro or Azure (taken out) loads with
+    it, and so does one that chose a Piper voice that gave every station the same voice."""
     from localtc.config import Config, load_config
 
-    assert Config().tts.provider == "piper"
-    for saved, provider in (('provider = "azure"\nkokoro = true', "kokoro"), ('provider = "azure"', "piper")):
+    assert Config().tts.provider == "library"
+    for saved, provider in (('provider = "azure"\nkokoro = true', "library"), ('provider = "azure"', "library"),
+                            ('provider = "piper"', "library"), ('provider = "kokoro"', "library")):
         settings = tmp_path / "settings.toml"
         settings.write_text(f'[tts]\n{saved}\nazure_region = "eastus"\ncache_mb = 10\nchatter_cloud = true\n'
                             'voice = "en_US-ryan-high"\n', encoding="utf-8")
@@ -549,9 +563,10 @@ def test_abbreviations_are_said_as_letters_not_the_phonetic_alphabet():
 
 def test_no_whispering_kokoro_voice():
     """af_nicole whispers: a pilot on the radio with it sounded awful."""
-    from localtc.tts.kokoro import POOLS
+    from localtc.tts.library import NATIVE, VOICES
 
-    assert not any("af_nicole" in voice for pool in POOLS.values() for voice in pool)
+    assert not any("af_nicole" in voice for pools in VOICES.values() for pool in pools.values() for voice in pool)
+    assert not any("af_nicole" in voice for _, voices in NATIVE.values() for voice in voices.values())
 
 
 # --- the copilot in the pilot's language ---------------------------------------------------------------------------
@@ -595,8 +610,16 @@ def test_the_copilot_in_another_language_speaks_with_its_packs_voice_of_its_sex(
     assert piper._spoken["es_ES-sharvard-medium"].said == [("Hola", 1), ("Hola", 0)]
     assert piper.synthesize("Hallo", persona_for("", "copilot", sex="M", language="de")).voice == "de_DE-thorsten-medium"
     assert english.said == []  # never the English voice reading another language
-    with pytest.raises(TtsError):  # and never Kokoro's: it steps aside for Piper
-        KokoroVoices(Path("/x"), engine=FakeKokoro()).synthesize("Hallo", persona_for("", "copilot", language="de"))
+    with pytest.raises(TtsError):  # and Kokoro steps aside for Piper where it doesn't speak the language well
+        KokoroVoices(Path("/x"), engine=FakeKokoro()).synthesize("Hej", persona_for("", "copilot", language="sv"))
+
+
+def test_the_voice_library_speaks_the_copilots_language_where_kokoro_speaks_it_well():
+    engine = FakeKokoro()
+    voices = KokoroVoices(Path("/x"), engine=engine)
+    speech = voices.synthesize("Hallo, ich bin dein Copilot.", persona_for("", "copilot", sex="F", language="de"))
+    assert engine.calls[-1][:2] == ("Hallo, ich bin dein Copilot.", "de") and speech.voice == "ff_siwis+if_sara"
+    assert voices.speaks("fr") and voices.speaks("pl") and not voices.speaks("ru") and not voices.speaks("zh")
 
 
 def test_a_language_not_downloaded_yet_is_fetched_meanwhile_and_the_line_is_text(monkeypatch, tmp_path):

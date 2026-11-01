@@ -7,10 +7,12 @@ of the v1.0 weights, downloaded once to the voices folder (``[tts] voices_dir``)
 ``kokoro-v1.0.onnx`` (310 MB, full precision: the quicker of the two on the CPUs tried) or ``kokoro-v1.0.int8.onnx``
 (88 MB), and ``voices-v1.0.bin`` (27 MB, every voice).
 
-Kokoro's English is American or British only: those voices, sorted by its own grades, the weakest left out. It has
-few good male voices, so the pools add blends of two (a style vector mixed from both), each a voice of its own.
-Stations are cast from the pool of their sex and region (``persona.Casting``): no two people share a voice while
-another is free.
+Kokoro is the LocalTC voice library: every person on the radio speaks English with the accent of where they're
+from (``accents.py``: the English phonemes moved onto their language's sounds) in voices of their region
+(``library.py``: Kokoro's own French, Spanish, Italian, Portuguese, Hindi, Japanese and Mandarin voices, and blends
+of two for the rest). Stations are cast from the pool of their accent and sex (``persona.Casting``): no two people
+share a voice while another is free, and each person's pitch moves it a little more their own. The copilot talking
+with you in your language speaks it with Kokoro where Kokoro speaks it well (``library.NATIVE``).
 """
 
 import hashlib
@@ -22,6 +24,8 @@ from typing import Any
 
 import numpy as np
 
+from localtc.tts.accents import Accent, accent_for, accented
+from localtc.tts.library import NATIVE, voices_for
 from localtc.tts.persona import Casting, Persona
 from localtc.tts.providers import TtsError
 from localtc.tts.synth import Speech
@@ -41,20 +45,8 @@ VOICES_FILE = "voices-v1.0.bin"
 SAMPLE_RATE = 24000
 USER_AGENT = "LocalTC (+https://localtc.tech)"
 
-# The pools, best first (Kokoro's VOICES.md grades; D and below left out, but for a blend). "a+b" is a blend: 60 % a.
-# Never af_nicole: it whispers (made for headphones), and a pilot whispering on the radio sounded awful.
-POOLS: dict[tuple[str, str], tuple[str, ...]] = {
-    ("en-us", "F"): ("af_heart", "af_bella", "af_aoede", "af_kore", "af_sarah", "af_nova", "af_alloy",
-                     "af_heart+af_sarah", "af_bella+af_kore"),
-    ("en-us", "M"): ("am_michael", "am_fenrir", "am_puck", "am_michael+am_fenrir", "am_puck+am_michael",
-                     "am_fenrir+am_puck", "am_michael+am_echo", "am_fenrir+am_onyx", "am_puck+am_eric",
-                     "am_michael+am_liam"),
-    ("en-gb", "F"): ("bf_emma", "bf_isabella", "bf_emma+bf_isabella", "bf_isabella+bf_alice", "bf_emma+bf_lily"),
-    ("en-gb", "M"): ("bm_george", "bm_fable", "bm_george+bm_fable", "bm_fable+bm_lewis", "bm_george+bm_daniel",
-                     "bm_lewis"),
-}
-BRITISH = ("en-gb", "en-ie", "en-au", "en-nz", "en-za", "en-in", "en-sg", "en-hk")  # nearer British than American
-BLEND = 0.6
+BLEND = 0.6  # a blend "a+b": 60 % a
+PITCH = 0.01  # a person's pitch (persona.pitch, percent) moved this much a step: each a voice a little their own
 
 
 def model_path(voices_dir: Path, model: str = "fp32") -> Path:
@@ -99,7 +91,7 @@ def download(voices_dir: Path, model: str = "fp32", progress=None) -> Path:
                 h.update(chunk)
                 got += len(chunk)
                 if progress:
-                    progress(f"Downloading Kokoro {name} ...", got / size)
+                    progress(f"Downloading the voice library ({name}) ...", got / size)
         if h.hexdigest() != digest:
             part.unlink(missing_ok=True)
             raise OSError(f"{name}: the download doesn't match its checksum")
@@ -107,27 +99,12 @@ def download(voices_dir: Path, model: str = "fp32", progress=None) -> Path:
     return model_path(voices_dir, model)
 
 
-# The Americas speak American English; everywhere else British.
-AMERICAN = ("en-us", "en-ca", "en-ph", "es-mx", "es-us", "es-co", "es-ar", "es-cl", "es-pe", "es-ve", "es-ec", "es-cr",
-            "es-pa", "es-gt", "es-do", "es-cu", "es-bo", "es-uy", "es-py", "es-hn", "es-ni", "es-sv", "es-pr", "pt-br",
-            "fr-ca")
-
-
-def english_of(locale: str) -> str:
-    """The English spoken by ATC of ``locale``: its own where it's an English locale, else American in the Americas
-    and British elsewhere."""
-    low = locale.lower()
-    if low.startswith("en-"):
-        return locale
-    return "en-US" if low in AMERICAN else "en-GB"
-
-
-def pool_for(persona: Persona) -> tuple[str, list[str]]:
-    """Kokoro's language ("en-us"/"en-gb") and the voices a persona is cast from: its sex, and its region's English
-    (American for the US and Canada and none in particular, British for the rest of the English-speaking world)."""
-    locale = english_of(persona.locale).lower() if persona.locale else ""  # (Germany's: British English)
-    lang = "en-gb" if locale in BRITISH else "en-us"
-    return lang, list(POOLS[(lang, persona.sex if persona.sex in ("F", "M") else "M")])
+def pool_for(persona: Persona) -> tuple[str, Accent | None, list[str]]:
+    """Kokoro's English for a persona ("en-us"/"en-gb"), its accent (accents.py: its region's, None for none in
+    particular) and the voices it's cast from (library.py: its accent's, of its sex)."""
+    accent = accent_for(persona.locale)
+    lang = "en-gb" if accent is not None and accent.english == "gb" else "en-us"
+    return lang, accent, list(voices_for(accent, persona.sex))
 
 
 class KokoroVoices:
@@ -189,17 +166,40 @@ class KokoroVoices:
         return self._styles[voice]
 
     def voice_for(self, persona: Persona) -> tuple[str, str]:
-        lang, pool = pool_for(persona)
+        lang, _, pool = pool_for(persona)
         return lang, self.casting.cast(persona, pool)
 
+    def speaks(self, language: str) -> bool:
+        """Kokoro speaks the copilot's ``language`` well enough itself (library.NATIVE); else that language's Piper."""
+        return language.split("-")[0].lower() in NATIVE
+
+    def phonemes(self, text: str, persona: Persona) -> str:
+        """The line's phonemes as the persona says them: its English, in its accent."""
+        lang, accent, _ = pool_for(persona)
+        return accented(self.engine.tokenizer.phonemize(text, lang), accent)
+
     def synthesize(self, text: str, persona: Persona) -> Speech:
-        if persona.foreign:
-            raise TtsError("unavailable", "Kokoro speaks English here")  # the next voice, one of that language
+        if persona.foreign and not self.speaks(persona.language):
+            raise TtsError("unavailable", f"Kokoro doesn't speak {persona.language} well")  # the next voice: Piper's
         if why := self.ready():
             raise TtsError("unavailable", why)
         self.load()
-        lang, voice = self.voice_for(persona)
         started = time.monotonic()
-        speed = float(np.clip(self.rate * persona.pace, 0.6, 1.8))
-        audio, rate = self.engine.create(text, self.style(voice), speed=speed, lang=lang)
-        return Speech(np.asarray(audio, dtype=np.float32), int(rate), (time.monotonic() - started) * 1000, "kokoro", voice)
+        # A person's pitch: the voice spoken that much slower and played back faster (its pace kept, its pitch and
+        # its formants moved), so two people cast the same voice still don't sound like one.
+        shift = 1.0 + PITCH * persona.pitch
+        speed = float(np.clip(self.rate * persona.pace / shift, 0.6, 1.8))
+        if persona.foreign:  # the copilot in your language: Kokoro's voice for it, reading it as it's written
+            espeak, voices = NATIVE[persona.language.split("-")[0].lower()]
+            voice = voices["F" if persona.sex == "F" else "M"]
+            # (At its natural pace, as Piper's packs: ATC's brisk rate made another language hard to follow.)
+            speed = float(np.clip(persona.pace / shift, 0.6, 1.8))
+            audio, rate = self.engine.create(text, self.style(voice), speed=speed, lang=espeak)
+        else:
+            _, voice = self.voice_for(persona)
+            audio, rate = self.engine.create(self.phonemes(text, persona), self.style(voice), speed=speed,
+                                             is_phonemes=True)
+        audio = np.asarray(audio, dtype=np.float32)
+        if shift != 1.0 and len(audio) > 1:
+            audio = np.interp(np.arange(0, len(audio) - 1, shift), np.arange(len(audio)), audio).astype(np.float32)
+        return Speech(audio, int(rate), (time.monotonic() - started) * 1000, "kokoro", voice)

@@ -29,6 +29,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from localtc.tts.accents import accent_for
 from localtc.tts.persona import Persona
 from localtc.tts.synth import Speech
 from localtc.tts.voices import DEFAULT_VOICE, SPEAKERS, delivery_for, sex_of, speaker_for
@@ -331,8 +332,9 @@ class PiperVoices:
             noise_scale, noise_w = 0.25 + 0.75 * persona.expressive, 0.5 + 0.5 * persona.expressive
         rate = getattr(self.synth, "rate", None)
         try:
+            kwargs = {"accent": accent} if (accent := accent_for(persona.locale)) is not None else {}
             speech = self.synth.synthesize(text, speaker, rate=rate * persona.pace if rate else None,
-                                           noise_scale=noise_scale, noise_w=noise_w)
+                                           noise_scale=noise_scale, noise_w=noise_w, **kwargs)
         except TypeError:  # a synthesizer without the knobs (tests' fakes): its own manner
             speech = self.synth.synthesize(text, speaker)
         voice_file = getattr(self.synth, "voice_file", None)

@@ -72,7 +72,7 @@ def bench(cfg: Config, *, providers: list[str] | None = None, whisper: bool = Fa
                 cfg.tts.provider = "piper"
                 chain = voice_chain(cfg, PiperSynth(download(t.voice, Path(t.voices_dir) if t.voices_dir else None), rate=t.rate))
             else:
-                cfg.tts.provider = pid
+                cfg.tts.provider = "library"  # Kokoro, the voice library's
                 chain = voice_chain(cfg, None)
         except Exception as exc:  # noqa: BLE001
             yield f"{pid}: can't load ({type(exc).__name__}: {exc})"
@@ -109,3 +109,72 @@ def bench(cfg: Config, *, providers: list[str] | None = None, whisper: bool = Fa
             if errors:
                 summary += f", WER {statistics.mean(errors):.3f}"
             yield summary
+
+
+def accents(cfg: Config, *, only: list[str] | None = None, out: Path | None = None,
+            whisper: bool = True) -> Iterator[str]:
+    """``localtc tts accents``: each accent of the voice library (a woman's and a man's voice) saying its preview line:
+    how well Whisper understands it through the radio (the word error rate; Kokoro's own American about 0.05) and,
+    with ``out``, each written to a WAV file there to listen to."""
+    from localtc.app import voice_chain
+    from localtc.dsp.radio import radio_effect, resample
+    from localtc.stt.audio import write_wav
+    from localtc.tts.accents import ACCENTS
+    from localtc.tts.library import sample, voices_for
+
+    cfg.tts.provider = "library"
+    chain = voice_chain(cfg, None)
+    kokoro = chain.providers[0] if chain else None
+    if kokoro is None or (why := kokoro.ready()):
+        yield f"The voice library can't speak: {why if kokoro else 'not configured'}"
+        return
+    kokoro.load()
+    transcriber = None
+    if whisper:
+        from localtc.stt.whisper import WhisperTranscriber
+
+        transcriber = WhisperTranscriber("base.en", device="cpu", compute_type="int8",
+                                         models_dir=Path(cfg.voice.models_dir) if cfg.voice.models_dir else None)
+        transcriber.warm_up()
+    if out is not None:
+        out.mkdir(parents=True, exist_ok=True)
+    for accent in sorted(ACCENTS.values(), key=lambda a: a.name):
+        if only and accent.id not in only:
+            continue
+        station, locale, line = sample(accent.id)
+        for sex in ("F", "M"):
+            for voice in voices_for(accent, sex)[:1]:
+                kokoro.casting.given.clear()
+                kokoro.casting.taken.clear()
+                who = persona_for(f"{station} {sex}", "atc", manner="tower", locale=locale, sex=sex, pick=0)
+                speech = kokoro.synthesize(line, who)
+                radio = radio_effect(speech.audio, speech.rate, static=cfg.tts.static, seed=1)
+                row = f"{accent.name:30s} {sex} {voice:22s}"
+                if transcriber is not None:
+                    heard = transcriber.transcribe(resample(radio, speech.rate, 16000)).text
+                    row += f" WER {word_error(line, heard):.2f}  \"{heard}\""
+                if out is not None:
+                    write_wav(out / f"{accent.id}-{sex}.wav", radio, speech.rate)
+                yield row
+
+
+DIGITS = "zero one two three four five six seven eight nine".split()
+SAME = {"niner": "nine", "point": "decimal"}
+
+
+def words(text: str) -> list[str]:
+    """A line's words, each digit one ("270" and "two seven zero" the same), for comparing what was said."""
+    import re
+
+    text = re.sub(r"\d", lambda m: f" {DIGITS[int(m.group())]} ", text.lower())
+    return [SAME.get(w, w) for w in re.findall(r"[a-z]+", text)]
+
+
+def word_error(said: str, heard: str) -> float:
+    ref, hyp = words(said), words(heard)
+    row = list(range(len(hyp) + 1))
+    for i, r in enumerate(ref, 1):
+        prev, row[0] = row[0], i
+        for j, h in enumerate(hyp, 1):
+            prev, row[j] = row[j], min(row[j] + 1, row[j - 1] + 1, prev + (r != h))
+    return row[-1] / max(len(ref), 1)

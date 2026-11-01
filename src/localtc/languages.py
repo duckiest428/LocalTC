@@ -7,7 +7,9 @@ speech-to-text model that knows it and spoken by a voice of that language.
 
 Each language's voice pack: Piper voices native to it (rhasspy/piper-voices), a woman's and a man's where it has
 both, downloaded together once (Quick Settings, or when the copilot first needs them). The copilot's sex setting picks
-between them. Kokoro is left out: its voices here speak English only. Mandarin has only huayan: Piper's other Mandarin
+between them. The voice library (Kokoro) speaks German, French, Spanish, Italian, Portuguese and Polish itself
+(``tts/library.py`` NATIVE: measured by Whisper reading it back), so those packs are only its stand-in; Dutch,
+Swedish, Russian and Mandarin are spoken by their packs. Mandarin has only huayan: Piper's other Mandarin
 voices need a Chinese pronunciation model (g2pW, with PyTorch's tokenizers) far bigger than the voice.
 """
 

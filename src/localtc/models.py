@@ -174,6 +174,14 @@ def status(cfg) -> list[ModelStatus]:
     out.append(ModelStatus("whisper", whisper, (model_path(whisper, models_dir) / "model.bin").exists()))
     voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None
     out.append(ModelStatus("voice", cfg.tts.voice, voice_installed(cfg.tts.voice, voices_dir)))
+    if cfg.tts.enabled and cfg.tts.provider == "library":
+        from localtc.tts import kokoro
+        from localtc.tts.voices import default_voices_dir
+
+        # The voice library: Kokoro's model and voices (the accents are LocalTC's own, nothing more to fetch).
+        out.append(ModelStatus("kokoro", "LocalTC voice library",
+                               kokoro.installed(voices_dir or default_voices_dir(), cfg.tts.kokoro_model),
+                               kokoro.available()))
     from localtc.languages import language
 
     if (lang := language(cfg.crew.language)) is not None and cfg.crew.enabled and lang.voices:
@@ -238,11 +246,11 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         from localtc.tts.voices import default_voices_dir
 
         if why := kokoro.available():
-            say(f"Kokoro can't run: {why}", None)
+            say(f"The voice library can't run: {why}", None)
             return False
         voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else default_voices_dir()
         kokoro.download(voices_dir, cfg.tts.kokoro_model, say)
-        say("Kokoro ready", 1.0)
+        say("The voice library is ready", 1.0)
         return kokoro.installed(voices_dir, cfg.tts.kokoro_model)
     if kind == "llm":
         from localtc import components

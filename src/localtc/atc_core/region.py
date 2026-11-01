@@ -97,6 +97,18 @@ def accent(code: str | None) -> str:
     return ""
 
 
+def airline_accent(ident: str) -> str:
+    """The English of an airline's crews ("AFR123": French), from its home country (traffic/airlines.py); "" an
+    airline not known there."""
+    from localtc.traffic.airlines import COUNTRY
+
+    prefix = "".join(ch for ch in (ident or "")[:3].upper() if ch.isalpha())
+    for country, airlines in COUNTRY.items():
+        if prefix in airlines:
+            return accent(country)
+    return ""
+
+
 def forced(style: str, transition_ft: int = 0) -> Region | None:
     """A region from the setting ``[atc] phraseology``: None for "auto"."""
     if style == "faa":

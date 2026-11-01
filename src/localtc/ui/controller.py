@@ -1158,13 +1158,21 @@ class AppController:
                     "voices": [{"sex": sex, "name": who.partition("#")[0].split("-")[1].capitalize()}
                                for sex, who in (("F", lang.woman), ("M", lang.man))
                                if who and (sex == "F" or who != lang.woman)]}  # (one voice for both: once)
+        from localtc.tts.accents import ACCENTS
+        from localtc.tts.library import NATIVE
+
+        if pack is not None:
+            pack["kokoro"] = lang.code in NATIVE  # the voice library speaks it: no pack needed
+        library = {"package": kokoro.available(), "installed": kokoro.installed(voices_dir or default_voices_dir(),
+                                                                                t.kokoro_model),
+                   "model": t.kokoro_model,
+                   "size_mb": round((kokoro.FILES[kokoro.MODELS[t.kokoro_model]][0]
+                                     + kokoro.FILES[kokoro.VOICES_FILE][0]) / 2**20),
+                   "accents": [{"id": a.id, "name": a.name} for a in sorted(ACCENTS.values(), key=lambda a: a.name)],
+                   "here": _accent_here(self)}
         return {"provider": t.provider, "live": live, "providers": chain.status() if chain else [],
-                "text_only": getattr(chain, "text_only", 0), "language": pack,
-                "kokoro": {"package": kokoro.available(), "installed": kokoro.installed(voices_dir or default_voices_dir(),
-                                                                                          t.kokoro_model),
-                           "model": t.kokoro_model,
-                           "size_mb": round((kokoro.FILES[kokoro.MODELS[t.kokoro_model]][0]
-                                             + kokoro.FILES[kokoro.VOICES_FILE][0]) / 2**20)},
+                "text_only": getattr(chain, "text_only", 0), "language": pack, "library": library,
+                "kokoro": library,
                 "jobs": {k: v for k, v in self.jobs.items() if k in ("kokoro", "voice_lang")}}
 
     async def api_models(self, args: dict) -> dict:
@@ -1244,8 +1252,8 @@ class AppController:
         return {"button": name, "device": found.get(device, f"controller {device}"), "number": button}
 
     async def api_preview(self, args: dict) -> dict:
-        """A voice heard: Piper's (``voice``, as ATC on the radio), Kokoro's (``provider`` "kokoro"), or one of the
-        copilot's language's (``language`` and ``sex``, on the intercom, saying its line in that language)."""
+        """A voice heard: Piper's (``voice``, as ATC on the radio), the voice library's (``accent``: a controller of
+        that accent's region; none: the region of this flight, else British), or one of the copilot's language's (``language`` and ``sex``, on the intercom, saying its line in that language)."""
         if args.get("language"):
             from localtc.languages import language
 
@@ -1254,9 +1262,9 @@ class AppController:
                 raise HttpError(400, f"no voices for {args['language']!r}")
             seconds = await asyncio.to_thread(_language_preview, self.cfg, lang, str(args.get("sex") or "F"))
             return {"seconds": seconds}
-        if args.get("provider") == "kokoro":
+        if args.get("provider") in ("kokoro", "library") or args.get("accent"):
             try:
-                seconds = await asyncio.to_thread(_kokoro_preview, self.cfg)
+                seconds = await asyncio.to_thread(_library_preview, self.cfg, str(args.get("accent") or ""))
             except Exception as exc:  # noqa: BLE001 - not downloaded, or its package missing: said as it is
                 raise HttpError(409, str(getattr(exc, "detail", "") or exc)) from None
             return {"seconds": seconds}
@@ -1571,33 +1579,64 @@ def _play(cfg: Config, audio, rate: int, channel: str = "atc") -> None:
     player.close()
 
 
-def _kokoro_preview(cfg: Config) -> float:
-    """Kokoro saying an ATC line on the radio, as a flight would hear it."""
+def _accent_here(controller) -> str:
+    """The accent of the flight's region (its departure's), for the preview to start on; "" none."""
+    from localtc.atc_core.region import accent
+    from localtc.tts.accents import accent_for
+
+    flight = getattr(getattr(getattr(controller, "live", None), "engine", None), "state", None)
+    icao = getattr(getattr(flight, "flight", None), "origin", "") or ""
+    found = accent_for(accent(icao)) if icao else None
+    return found.id if found is not None else ""
+
+
+def _library_preview(cfg: Config, accent_id: str = "") -> float:
+    """A controller of ``accent_id``'s region saying a line on the radio, as a flight would hear it. Not downloaded
+    yet: Piper says it, in the accent."""
     from localtc.dsp.radio import clean, radio_effect
     from localtc.tts.kokoro import KokoroVoices
+    from localtc.tts.library import sample
     from localtc.tts.persona import persona_for
-    from localtc.tts.service import radio_words
+    from localtc.tts.providers import TtsError
     from localtc.tts.voices import default_voices_dir
 
     t = cfg.tts
+    station, locale, line = sample(accent_id or "gb")
+    who = persona_for(station, "atc", manner="tower", locale=locale)
     voices = KokoroVoices(Path(t.voices_dir) if t.voices_dir else default_voices_dir(), model=t.kokoro_model,
                           rate=t.rate, threads=t.kokoro_threads)
-    speech = voices.synthesize(radio_words(TEST_LINE), persona_for("London Heathrow Tower", "atc", manner="tower",
-                                                                   locale="en-GB"))
+    try:
+        speech = voices.synthesize(line, who)
+    except TtsError:
+        from localtc.tts.providers import PiperVoices
+        from localtc.tts.synth import PiperSynth
+        from localtc.tts.voices import download
+
+        speech = PiperVoices(PiperSynth(download(t.voice, Path(t.voices_dir) if t.voices_dir else None),
+                                        rate=t.rate)).synthesize(line, who)
     _play(cfg, radio_effect(speech.audio, speech.rate, static=t.static) if t.radio_effect else clean(speech.audio),
           speech.rate)
     return round(speech.seconds, 1)
 
 
 def _language_preview(cfg: Config, lang, sex: str) -> float:
-    """The copilot's voice of ``sex`` from ``lang``'s pack (downloaded first, when it isn't yet) saying its line."""
+    """The copilot's voice of ``sex`` in ``lang`` saying its line: the voice library's where it speaks the language
+    (and is downloaded), else the language's Piper pack (downloaded first, when it isn't yet)."""
     from localtc.dsp.radio import intercom_effect
+    from localtc.tts.kokoro import KokoroVoices
+    from localtc.tts.persona import persona_for
     from localtc.tts.synth import PiperSynth
-    from localtc.tts.voices import download
+    from localtc.tts.voices import default_voices_dir, download
 
-    name, speaker = lang.voice_for(sex)
-    synth = PiperSynth(download(name, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None), rate=1.0)
-    speech = synth.synthesize(lang.sample, speaker)
+    t = cfg.tts
+    voices = KokoroVoices(Path(t.voices_dir) if t.voices_dir else default_voices_dir(), model=t.kokoro_model,
+                          rate=1.0, threads=t.kokoro_threads)
+    if voices.speaks(lang.code) and not voices.ready():
+        speech = voices.synthesize(lang.sample, persona_for("pilot", "copilot", sex=sex, language=lang.code))
+    else:
+        name, speaker = lang.voice_for(sex)
+        synth = PiperSynth(download(name, Path(t.voices_dir) if t.voices_dir else None), rate=1.0)
+        speech = synth.synthesize(lang.sample, speaker)
     _play(cfg, intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")
     return round(speech.seconds, 1)
 

@@ -987,9 +987,8 @@ const Setup = {
         <button type="button" class="wcard ${headset ? "" : "current"}" data-wear="speakers"><b>&#128266; Speakers</b>
           <span class="muted small">No sidetone: the microphone would hear it.</span></button>
       </div>
-      <div class="row"><label>Voices<select id="w-provider">
-        <option value="piper" ${t.provider === "piper" ? "selected" : ""}>Piper: on this PC, quick, always there</option>
-        <option value="kokoro" ${t.provider === "kokoro" ? "selected" : ""}>Kokoro: on this PC, more natural, a little slower (a 340 MB download)</option></select></label></div>
+      <p class="muted small">The voices are the LocalTC voice library: every controller with the accent of where they are
+        (a 340 MB download, with the others). Until it's here, a simpler voice speaks.</p>
       <div class="row"><button type="button" class="btn small" id="w-hear">&#9654; Hear ATC</button>
         <span class="muted small">The mixer (the sliders at the top of the window) sets the volume of each.</span></div>`;
   },
@@ -1001,18 +1000,9 @@ const Setup = {
       S.settings.settings.mixer.sidetone = sidetone;
       this.render();
     }));
-    $("#w-provider").onchange = async () => {
-      const v = $("#w-provider").value;
-      // Kokoro chosen: downloaded meanwhile (Piper speaks until it's there).
-      if (await this.save("tts", "provider", v) && v === "kokoro") api("models/install", { kinds: ["kokoro"] }).catch(() => {});
-    };
     $("#w-hear").onclick = async (e) => {
       e.target.disabled = true;
-      // Kokoro's own voice once it's downloaded; Piper's until then.
-      const kokoro = S.settings.settings.tts.provider === "kokoro";
-      try { await api("voice/preview", kokoro ? { provider: "kokoro" } : {}); } catch (err) {
-        if (kokoro) { toast("Kokoro is still downloading: this is Piper"); await api("voice/preview", {}).catch(fail); } else fail(err);
-      }
+      try { await api("voice/preview", { accent: "gb" }); } catch (err) { fail(err); }
       e.target.disabled = false;
     };
   },
@@ -1559,8 +1549,8 @@ const Settings = {
           service's models can be changed in the settings file ([cloud] order, models).</p>
       </div>`;
   },
-  // Who speaks for ATC and the copilot, all on this PC: Piper (quick, always there) or Kokoro (more natural, slower,
-  // Piper standing in), each with a preview; and the voices of the language the copilot talks with you in.
+  // Who speaks for ATC and the copilot: the LocalTC voice library (Kokoro on this PC, each region in its accent), with
+  // an accent to hear, Piper standing in until it's downloaded; and the voices of the language the copilot talks in.
   voicesPart(st) {
     const v = S.tts;
     if (!v) return "";
@@ -1573,36 +1563,39 @@ const Settings = {
       const speed = p.latency_ms != null ? ` · ${p.latency_ms} ms a line, ${p.rtf}× real time` : "";
       return `<span class="mstatus ok">&#10003; ${p.ok ? `${p.ok} lines` : "ready"}${speed}</span>`;
     };
-    const k = v.kokoro, kjob = (v.jobs || {}).kokoro, lang = v.language, ljob = (v.jobs || {}).voice_lang;
+    const lib = v.library, kjob = (v.jobs || {}).kokoro, lang = v.language, ljob = (v.jobs || {}).voice_lang;
     const piper = this.statusOf("voice");
-    const play = (attrs) => `<button class="btn small" ${attrs}>&#9654; Preview</button>`;
-    const kokoroState = k.package ? `<span class="mstatus missing">${esc(k.package)}</span>`
-      : !k.installed ? `<button class="btn small" id="s-kokoro-get" ${kjob?.state === "running" ? "disabled" : ""}>Download (${k.size_mb} MB)</button>`
-      : `${play('data-preview="kokoro"')} ${st.tts.provider === "kokoro" ? state("kokoro") : '<span class="mstatus ok">&#10003; Downloaded</span>'}`;
-    return `<p class="sub-h">Voices</p>
-      <div class="row"><label>ATC and the copilot speak with<select id="s-provider">
-        <option value="piper" ${st.tts.provider !== "kokoro" ? "selected" : ""}>Piper: quick, always there</option>
-        <option value="kokoro" ${st.tts.provider === "kokoro" ? "selected" : ""}>Kokoro: more natural, slower (Piper stands in)</option></select></label></div>
-      <div class="voice-list">
-        <div class="voice-row"><div><b>Piper</b> <span class="muted small">LibriTTS: every controller a voice of their own,
-          from one download (80 MB)</span></div>
-          <div>${play('id="s-preview"')} ${piper?.installed ? (st.tts.provider === "kokoro" ? '<span class="mstatus ok">&#10003; installed</span>' : state("piper") || '<span class="mstatus ok">&#10003; installed</span>')
-            : '<span class="mstatus missing">not downloaded</span> <button class="btn small" data-install="voice">Download</button>'}</div></div>
-        <div class="progress" id="p-voice" hidden><div></div></div>
-        <div class="voice-row"><div><b>Kokoro</b> <span class="muted small">Kokoro-82M (Apache-2.0): more natural, American or
-          British English. About 0.2-0.3 s of work per second of speech, so a long clearance starts a second or two later.</span></div>
-          <div>${kokoroState}</div></div>
-        <div class="progress busy" id="p-kokoro" hidden><div></div></div>
-        ${lang ? `<div class="voice-row"><div><b translate="no">${esc(lang.native)}</b> <span class="muted small">The copilot's voices
+    const libState = lib.package ? `<span class="mstatus missing">${esc(lib.package)}</span>`
+      : !lib.installed ? `<button class="btn small primary" id="s-kokoro-get" ${kjob?.state === "running" ? "disabled" : ""}>Download (${lib.size_mb} MB)</button>`
+      : state("kokoro") || '<span class="mstatus ok">&#10003; Downloaded</span>';
+    this.accent ??= lib.here || "fr";
+    const langRow = !lang ? "" : lang.kokoro && lib.installed
+      ? `<div class="voice-row"><div><b translate="no">${esc(lang.native)}</b> <span class="muted small">The copilot talks with
+          you in it with the voice library's voices.</span></div>
+          <div>${["F", "M"].map((sex) => `<button class="btn small" data-preview-lang="${sex}">&#9654; ${sex === "F" ? "Woman" : "Man"}</button>`).join(" ")}</div></div>`
+      : `<div class="voice-row"><div><b translate="no">${esc(lang.native)}</b> <span class="muted small">The copilot's voices
           when it talks with you in your language (its voice setting picks between them).</span></div>
           <div>${lang.installed ? lang.voices.map((x) => `<button class="btn small" data-preview-lang="${x.sex}" translate="no">&#9654; ${esc(x.name)}</button>`).join(" ")
             + ' <span class="mstatus ok">&#10003; installed</span>'
             : `<span class="mstatus missing">not downloaded</span> <button class="btn small" data-install="voice_lang" ${ljob?.state === "running" ? "disabled" : ""}>Download (${lang.size_mb} MB)</button>`}</div></div>
-        <div class="progress" id="p-voice_lang" hidden><div></div></div>` : ""}
+        <div class="progress" id="p-voice_lang" hidden><div></div></div>`;
+    return `<p class="sub-h">Voices</p>
+      <div class="voice-list">
+        <div class="voice-row"><div><b>The LocalTC voice library</b> <span class="muted small">Every controller, the ATIS,
+          the other crews and your copilot, each with the accent of where they're from: French in Paris, Japanese in Tokyo,
+          Australian in Sydney, an Air France crew French wherever it flies. All on this PC.</span></div>
+          <div>${libState}</div></div>
+        <div class="progress busy" id="p-kokoro" hidden><div></div></div>
+        <div class="row"><label>Hear an accent<select id="s-accent">${lib.accents.map((a) => `<option value="${esc(a.id)}" ${a.id === this.accent ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label>
+          <button class="btn small" id="s-accent-play">&#9654; Preview</button></div>
+        ${langRow}
       </div>
       <div class="small voices-status">
         ${v.text_only ? `<div class="mstatus missing">${v.text_only} lines this flight had no voice (text only)</div>` : ""}
-        <div class="muted">${st.tts.provider === "kokoro" ? "If Kokoro can't speak a line, Piper does; with neither, it's text." : "If Piper can't speak a line, it's text."}</div>
+        <div class="muted">${lib.installed ? "If the library can't speak a line, a simpler voice (Piper) does; with neither, it's text."
+          : "Until the library is downloaded, a simpler voice (Piper) speaks, with the same accents."}</div>
+        ${piper && !piper.installed ? '<div><span class="mstatus missing">Piper not downloaded</span> <button class="btn small" data-install="voice">Download</button></div>' : ""}
+        <div class="progress" id="p-voice" hidden><div></div></div>
       </div>`;
   },
   // A yoke or joystick button found by pressing it: LocalTC reads the controllers from Windows (as during a flight,
@@ -1637,17 +1630,17 @@ const Settings = {
     const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);
     on("#s-cloud", "change", (e) => this.save("cloud", "enabled", e.target.checked));
     const ttsRefresh = async (v) => { S.tts = v || await api("tts"); this.render(); };
-    on("#s-provider", "change", async () => { if (await this.save("tts", "provider", $("#s-provider").value)) ttsRefresh(); });
     on("#s-kokoro-get", "click", async () => {
-      try { await api("models/install", { kinds: ["kokoro"] }); toast("Downloading Kokoro ..."); } catch (e) { fail(e); }
+      try { await api("models/install", { kinds: ["kokoro"] }); toast("Downloading the voice library ..."); } catch (e) { fail(e); }
     });
+    on("#s-accent", "change", (e) => { this.accent = e.target.value; });
     const preview = async (b, args) => {
       const label = b.innerHTML;
       b.disabled = true; b.textContent = "Speaking ...";
       try { await api("voice/preview", args); } catch (err) { fail(err); }
       finally { b.disabled = false; b.innerHTML = label; }
     };
-    $$("[data-preview]").forEach((b) => (b.onclick = () => preview(b, { provider: b.dataset.preview })));
+    on("#s-accent-play", "click", (e) => preview(e.currentTarget, { accent: $("#s-accent").value }));
     $$("[data-preview-lang]").forEach((b) => (b.onclick = () => preview(b, { language: S.tts.language.code, sex: b.dataset.previewLang })));
     on("#s-cloud-local", "change", (e) => this.save("cloud", "local_fallback", e.target.checked));
     this.cloudOpen ??= new Set();
@@ -2282,7 +2275,7 @@ const Settings = {
         bar.firstElementChild.style.width = j.fraction == null ? "" : `${Math.round(j.fraction * 100)}%`;
       }
       // (Each part its own text, so each is translated: "Whisper" "Ready".)
-      if (j) msg.push(`<span>${esc({ llm: "Language model", whisper: "Whisper", voice: "Voice", voice_lang: "The copilot's voices", kokoro: "Kokoro", ...COMPONENT_NAMES }[kind])}</span>: <span>${esc(j.message)}</span>`);
+      if (j) msg.push(`<span>${esc({ llm: "Language model", whisper: "Whisper", voice: "Voice", voice_lang: "The copilot's voices", kokoro: "The voice library", ...COMPONENT_NAMES }[kind])}</span>: <span>${esc(j.message)}</span>`);
       const key = j ? `${kind}:${j.state}:${j.message}` : "";
       if (j && j.state !== "running" && !this.seenJobs.has(key)) {
         this.seenJobs.add(key);

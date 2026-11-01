@@ -304,6 +304,9 @@ def from_python() -> set[str]:
         for c in components.status(platform=platform, gpu=gpu):
             found.update(x for x in (c.label, c.detail) if x and "GPU:" not in x)
     found.update(p.note for p in PROVIDERS if p.note)
+    from localtc.tts.accents import ACCENTS
+
+    found.update(a.name for a in ACCENTS.values())  # the voice library's accents, to hear
     return {norm(s) for s in found if people(norm(s), plain=False)}
 
 

@@ -856,15 +856,24 @@ class VoiceOutput:
         self.player.close()
 
 
+def copilot_locale(personality: str, language_code: str) -> str:
+    """The copilot's English: its personality's ("en-GB"), else that of the language it talks with you in (a German
+    copilot's callouts in German-accented English), else none in particular."""
+    from localtc.languages import language
+
+    lang = language(language_code)
+    return personality or (lang.locale if lang is not None else "")
+
+
 def voice_chain(cfg: Config, piper: object | None):
-    """The voices in fallback order: Kokoro (when chosen), then Piper (when loaded)."""
+    """The voices in fallback order: the voice library (Kokoro), then Piper (when loaded)."""
     from localtc.tts.providers import PiperVoices, VoiceChain
     from localtc.tts.voices import default_voices_dir
 
     t = cfg.tts
     voices_dir = Path(t.voices_dir) if t.voices_dir else default_voices_dir()
     providers: list = []
-    if t.provider == "kokoro":
+    if t.provider == "library":
         from localtc.tts.kokoro import KokoroVoices
 
         providers.append(KokoroVoices(voices_dir, model=t.kokoro_model, rate=t.rate, threads=t.kokoro_threads))
@@ -875,7 +884,10 @@ def voice_chain(cfg: Config, piper: object | None):
 
 def _warm_language(chain, code: str, sex: str) -> None:
     """The voice of the copilot's language loaded at the start, not at its first line: loading took 8 s, the line ran
-    out of time for it, and Piper was rested for 30 s."""
+    out of time for it, and Piper was rested for 30 s. Not where the voice library speaks it: Piper's pack is only
+    its stand-in there."""
+    if any(p.id == "kokoro" and p.speaks(code) and not p.ready() for p in chain.providers):
+        return
     for p in chain.providers:
         if p.id == "piper":
             try:
@@ -946,7 +958,7 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
     sex = {"female": "F", "male": "M"}.get(voice_sex, "")
     service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
                        crew_speaker=copilot_voice, crew_sex=sex, crew_pick=voice_pick, crew_pace=1 / who.length,
-                       crew_expressive=None if who.neutral else who.expressive, crew_locale=who.locale,
+                       crew_expressive=None if who.neutral else who.expressive, crew_locale=copilot_locale(who.locale, cfg.crew.language),
                        crew_language=cfg.crew.language,
                        shift=cfg.atc.shift if cfg.atc.personalities else 0, regional=t.regional)
     return VoiceOutput(service, player)

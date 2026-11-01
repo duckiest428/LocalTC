@@ -326,13 +326,14 @@ class VoiceConfig(_Section):
 
 
 class TtsConfig(_Section):
-    """ATC's voice: speech (Piper or Kokoro, both on this PC: localtc.tts.providers), through a radio effect, out of
-    the speakers or headset."""
+    """ATC's voice: the LocalTC voice library (Kokoro on this PC, each region in its accent: localtc.tts.library),
+    through a radio effect, out of the speakers or headset."""
 
     enabled: bool = True
-    # Who speaks: piper (quick, always there) | kokoro (more natural, slower; a 340 MB download). Kokoro falls back
-    # to Piper; with neither, ATC is text. The copilot talking in another language always has Piper's voice of it.
-    provider: Literal["piper", "kokoro"] = "piper"
+    # Who speaks: library, the voice library (Kokoro, a 340 MB download), with Piper standing in while it downloads
+    # or when it can't speak a line; with neither, ATC is text. "piper": Piper alone (for tools and tests). The
+    # copilot talking in a language Kokoro doesn't speak well has Piper's voice of it.
+    provider: Literal["library", "piper"] = "library"
     kokoro_model: Literal["fp32", "int8"] = "fp32"  # fp32 310 MB (the quicker on the CPUs tried); int8 88 MB
     kokoro_threads: int = 4  # CPU threads for Kokoro (the sim needs the rest)
     timeout_s: float = 8.0  # the longest a provider may take for a line before the next is asked
@@ -564,13 +565,16 @@ def _migrate(data: dict) -> dict:
         llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
         data = {**data, "llm": llm}
     tts = data.get("tts")
+    if isinstance(tts, dict) and tts.get("provider") in ("piper", "kokoro"):
+        # Piper or Kokoro chosen before the voice library: the library is the one voice now (Piper standing in).
+        tts = {k: v for k, v in tts.items() if k != "provider"}
+        data = {**data, "tts": tts}
     if isinstance(tts, dict) and (AZURE_KEYS & tts.keys() or tts.get("provider") == "azure"
                                   or tts.get("voice") in ONE_VOICE_PIPER):
         # Azure's voices are gone (Kokoro, when it stood in for them, speaks instead), and so are the Piper voices that
         # gave every station the same voice.
         tts = {k: v for k, v in tts.items() if k not in AZURE_KEYS}
-        if data["tts"].get("provider") == "azure":
-            tts["provider"] = "kokoro" if data["tts"].get("kokoro") else "piper"
+        tts.pop("provider", None)  # Azure's: the voice library speaks instead
         if tts.get("voice") in ONE_VOICE_PIPER:
             del tts["voice"]
         data = {**data, "tts": tts}

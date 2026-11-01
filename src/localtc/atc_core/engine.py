@@ -1752,7 +1752,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             text, spoken = first  # they call first: "O'Hare Ground, United 1921, request pushback"
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker="pilot",
                                     callsign=shown, text=text, spoken=spoken, controller=facility.controller,
-                                    locale=self._locale(facility), ident=callsign.ident))
+                                    locale=self._voice_locale(facility, "pilot", callsign.ident), ident=callsign.ident))
             at += self._speech_s(spoken) + CHATTER_TURN_S
         out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz,
                                 speaker="atc", callsign=shown, text=atc.text, spoken=atc.spoken,
@@ -1769,7 +1769,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             spoken = self.library.pilot_readback(iid, slots)
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker="pilot",
                                     callsign=shown, text=spoken[:1].upper() + spoken[1:], spoken=spoken,
-                                    controller=facility.controller, locale=self._locale(facility), ident=callsign.ident))
+                                    controller=facility.controller, locale=self._voice_locale(facility, "pilot", callsign.ident), ident=callsign.ident))
             at += self._speech_s(spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)
         return self._paced(out)
@@ -1870,7 +1870,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._said_on.append((at, facility.station))
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker=line.speaker,
                                     callsign=line.callsign, text=line.text, spoken=line.spoken, controller=facility.controller,
-                                    locale=self._locale(facility), ident=line.ident))
+                                    locale=self._voice_locale(facility, line.speaker, line.ident), ident=line.ident))
             at += self._speech_s(line.spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)  # ATC doesn't talk over its own other traffic
         return self._paced(out)
@@ -6068,6 +6068,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if facility is None or not self.cfg.personalities:
             return ""
         return self._controller(facility).describe(self._workload(facility))
+
+    def _voice_locale(self, facility: Facility, speaker: str, ident: str) -> str:
+        """The English of someone else on the frequency: a crew's their airline's (an Air France crew at JFK sounds
+        French), the controller's their region's."""
+        return (regions.airline_accent(ident) if speaker == "pilot" else "") or self._locale(facility)
 
     def _locale(self, facility: Facility) -> str:
         """The English of the controller's region, for the voice: its airport's, or for a centre the FIR the aircraft

@@ -13,8 +13,23 @@ a new minor version adds features, a patch fixes them.
   both radios), the taxi guidance's arrows (its package goes in 2020's Community folder too, shown from the sim's next
   start), and LocalTC's traffic, drawn with the aircraft installed in 2020 (FSLTL's when you have them) as it is in
   2024.
+- **The LocalTC voice library: accents from all over the world.** Every controller speaks English with the accent of
+  where they are: French at Charles de Gaulle, German in Frankfurt, Japanese at Haneda, Indian in Delhi, Brazilian in
+  São Paulo, Arabic in Dubai, Australian in Sydney, 33 accents in all, with every country of the world in one of them.
+  Each is the region's own way of saying English (a French controller drops the h and says "s" for "th", a German says
+  "v" for "w", a Japanese ends a word on a vowel), spoken by voices of that language where there are some (Kokoro's
+  French, Spanish, Italian, Portuguese, Hindi, Japanese and Mandarin voices) and blends of the nearest elsewhere, and
+  kept light enough that every number still comes through the radio. The other crews on the frequency sound like their
+  airline (an Air France crew is French at JFK too), and the copilot's English callouts carry the accent of the language
+  it talks with you in.
+- **The copilot in German, French, Spanish, Italian, Portuguese or Polish** talks with you in the voice library's
+  voices, more natural than before (Dutch, Swedish, Russian and Chinese keep their own voices).
+- **Hear an accent** (Settings → Models → Voices): any of them, as a controller of that region on the radio.
+- `localtc tts accents`: each accent through the radio, scored by Whisper, and written to WAV files with `--out`.
 
 ### Changed
+- **One voice: the LocalTC voice library** (a 340 MB download, with the other models), in place of choosing Piper or
+  Kokoro. Until it's downloaded, Piper speaks, with the same accents.
 - **Settings → Sim → Connect to: "MSFS"**, no longer "MSFS 2024": the one connection for both sims.
 - **The Discord buttons** go to the server's new invite link.
 

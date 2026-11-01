@@ -631,7 +631,7 @@ def _tts_chain(cfg, provider: str | None):
     from localtc.tts.voices import download
 
     if provider:
-        cfg.tts.provider = provider if provider != "piper" else cfg.tts.provider
+        cfg.tts.provider = "library" if provider == "kokoro" else cfg.tts.provider
     piper = None
     if provider in (None, "piper"):
         piper = PiperSynth(download(cfg.tts.voice, Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None),
@@ -681,7 +681,7 @@ def _cmd_tts_kokoro(args: argparse.Namespace) -> int:
     ok = install(cfg, "kokoro", lambda message, fraction: print(
         f"\r{message} {'' if fraction is None else f'{fraction * 100:.0f} %'}   ", end="", flush=True))
     print()
-    print("Kokoro is ready: choose it in Settings > Voices, or [tts] provider = \"kokoro\"." if ok else "Kokoro isn't ready.")
+    print("The voice library is ready." if ok else "The voice library isn't ready.")
     return 0 if ok else 1
 
 
@@ -692,6 +692,17 @@ def _cmd_tts_bench(args: argparse.Namespace) -> int:
 
     cfg = load_config(args.config)
     for line in bench(cfg, providers=args.provider or None, whisper=args.whisper):
+        print(line, flush=True)
+    return 0
+
+
+def _cmd_tts_accents(args: argparse.Namespace) -> int:
+    """Each accent of the voice library through the radio: how well Whisper understands it; WAVs to listen to."""
+    from localtc.ttsbench import accents
+
+    cfg = load_config(args.config)
+    for line in accents(cfg, only=args.accent or None, out=Path(args.out) if args.out else None,
+                        whisper=not args.no_whisper):
         print(line, flush=True)
     return 0
 
@@ -841,7 +852,7 @@ def build_parser() -> argparse.ArgumentParser:
     veval.add_argument("--llm", choices=["off", "live"], default="live", help="understand with the model (default) or not")
     veval.set_defaults(func=_cmd_voice_eval)
 
-    tts = sub.add_parser("tts", help="ATC's voice (Piper, Kokoro)")
+    tts = sub.add_parser("tts", help="ATC's voice (the voice library, Piper)")
     tts_sub = tts.add_subparsers(dest="tts_command", required=True)
     tdevices = tts_sub.add_parser("devices", help="list speakers and headsets")
     tdevices.set_defaults(func=_cmd_tts_devices)
@@ -853,7 +864,7 @@ def build_parser() -> argparse.ArgumentParser:
     tsay.add_argument("--out", help="write a WAV file instead of playing it")
     tsay.add_argument("--device", help="output: its number or part of its name (default: [tts] output_device)")
     tsay.add_argument("--provider", choices=["piper", "kokoro"], help="this voice only (default: [tts] provider)")
-    tsay.add_argument("--locale", help="the station's English: en-US, en-GB, en-AU, ... (default: none in particular)")
+    tsay.add_argument("--locale", help="the station's region, for its accent: en-GB, en-AU, de-DE, ja-JP, es-MX ... (default: none in particular)")
     tsay.set_defaults(func=_cmd_tts_say)
     tkokoro = with_config(tts_sub.add_parser("kokoro", help="download the Kokoro voice model (once, 340 MB)"))
     tkokoro.add_argument("--model", choices=["fp32", "int8"], help="default: [tts] kokoro_model")
@@ -863,6 +874,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="only this one (repeatable; default: Piper, and Kokoro when it can speak)")
     tbench.add_argument("--whisper", action="store_true", help="also score how well Whisper understands each, through the radio")
     tbench.set_defaults(func=_cmd_tts_bench)
+    taccents = with_config(tts_sub.add_parser("accents", help="each accent of the voice library through the radio"))
+    taccents.add_argument("--accent", action="append", help="only this one (repeatable: fr, de, ja, latam ...)")
+    taccents.add_argument("--out", help="write each to a WAV file in this folder, to listen to")
+    taccents.add_argument("--no-whisper", action="store_true", help="don't score them with Whisper")
+    taccents.set_defaults(func=_cmd_tts_accents)
 
     setup = with_config(sub.add_parser("setup", help="download the speech, voice and language models; check the microphone"))
     setup.add_argument("--whisper-model", action="append", help="model(s) to download (default: the one [voice] uses)")

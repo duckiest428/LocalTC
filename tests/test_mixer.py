@@ -47,7 +47,7 @@ def test_the_radios_clicks_never_wait_for_a_line_and_keying_doesnt_cut_them():
 def test_the_mixer_is_a_settings_section_with_old_files_loading():
     cfg = Config()
     assert cfg.mixer.sidetone == 0.0  # off unless asked: with speakers the microphone would hear it
-    assert set(cfg.mixer.gains()) == {"atc", "atis", "chatter", "copilot_radio", "copilot", "effects", "sidetone"}
+    assert set(cfg.mixer.gains()) == {"atc", "atis", "chatter", "copilot_radio", "copilot", "cabin", "effects", "sidetone"}
 
 
 def test_a_distant_station_sounds_weaker_and_a_flight_deck_noisier():

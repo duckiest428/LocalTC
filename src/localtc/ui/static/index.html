@@ -21,6 +21,7 @@
     <div class="radios" id="radios">
       <span class="radio"><span class="rlabel">COM1</span> <span class="freq active" id="com1">---.---</span></span>
       <span class="radio"><span class="rlabel">COM2</span> <span class="freq" id="com2">OFF</span></span>
+      <span class="radio zulu" title="Zulu time (UTC): the sim's during a flight, this computer's otherwise" translate="no"><span class="code" id="zulu">--:--Z</span></span>
       <span class="radio xpdr"><span class="rlabel">XPDR</span> <span class="code" id="squawk">----</span> <span class="xmode" id="xmode"></span></span>
     </div>
     <a class="coffee" id="btn-coffee" href="https://buymeacoffee.com/petey1" target="_blank" rel="noopener" hidden
@@ -120,6 +121,7 @@
         <button class="btn small" id="map-follow" aria-pressed="true">Follow</button>
         <button class="btn small" id="map-route">Route</button>
         <button class="btn small" id="map-zones" aria-pressed="true" title="Show who controls which airspace">ATC zones</button>
+        <button class="btn small" id="map-airports" aria-pressed="true" title="The airports with airline service around you, by their codes">Airports</button>
         <button class="btn small" id="map-wx" aria-pressed="true" title="Weather (SIGMETs, radar), TFRs / restricted areas and NOTAMs">Weather, areas &amp; NOTAMs</button>
       </div>
       <div class="mapinfo" id="map-info"></div>

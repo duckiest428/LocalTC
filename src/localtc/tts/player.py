@@ -2,7 +2,7 @@
 
 Two channels, as in a headset: the radio (ATC, the other flights, the ATIS, your own side) and the intercom (the
 copilot beside you), each one line after another; and the radio's own sounds (your push-to-talk's click), which never
-wait for either. Radio clips never overlap, as on a real frequency; the copilot talks over the radio when it has to,
+wait for either. The cabin (crew.cabin) has two more: its crew and chimes, and the music and applause under them. Radio clips never overlap, as on a real frequency; the copilot talks over the radio when it has to,
 as a real one does. The radio can be cut: the ATIS when the pilot tunes away, everything from the old frequency the
 moment the pilot changes it, and whatever is being said when the pilot keys the microphone.
 
@@ -28,16 +28,21 @@ BLOCK_S = 0.05
 INTERCOM_WAIT_S = 15.0
 
 # The mixer's channels: who is heard, each with its own volume ([mixer]).
-CHANNELS = ("atc", "atis", "chatter", "copilot_radio", "copilot", "effects", "sidetone")
+CHANNELS = ("atc", "atis", "chatter", "copilot_radio", "copilot", "cabin", "effects", "sidetone")
 # A clip's channel when it doesn't say: by its kind.
-KIND_CHANNEL = {"atc": "atc", "atis": "atis", "pilot": "copilot_radio", "intercom": "copilot", "effect": "effects"}
+KIND_CHANNEL = {"atc": "atc", "atis": "atis", "pilot": "copilot_radio", "intercom": "copilot", "effect": "effects",
+                "pa": "cabin", "interphone": "cabin", "deck": "cabin", "chime": "cabin", "ambience": "cabin"}
+CABIN = ("pa", "interphone", "deck", "chime")  # the cabin crew and their chimes, one after another
+TO_THE_DECK = ("interphone", "deck")  # a crew member talking to the pilots: they wait for ATC to finish, as the copilot does
 
 
 @dataclass
 class Clip:
     audio: np.ndarray
     rate: int
-    kind: str = "atc"  # atc, atis, pilot (the copilot on the radio), intercom (the copilot beside you), effect
+    kind: str = "atc"  # atc, atis, pilot (the copilot on the radio), intercom (the copilot beside you), effect,
+    # the cabin's: pa (an announcement), interphone (a call to the flight deck), deck (in the flight deck), chime,
+    # ambience (the boarding music, the applause)
     done: threading.Event = field(default_factory=threading.Event)
     station: str | None = None  # who's on the radio saying it: cut when the pilot tunes away from them
     channel: str = ""  # the mixer's channel (CHANNELS); "" by its kind (another flight's exchange is "chatter")
@@ -104,7 +109,7 @@ class _Lane:
         while (clip := self.queue.get()) is not None:
             if clip.done.is_set():
                 continue  # dropped while it waited
-            if self is self.player.intercom and not clip.urgent:
+            if (self is self.player.intercom or clip.kind in TO_THE_DECK) and not clip.urgent:
                 waited = 0.0
                 while waited < INTERCOM_WAIT_S and self.player.atc_to_us() and not clip.done.is_set():
                     time.sleep(BLOCK_S)
@@ -137,6 +142,8 @@ class AudioPlayer:
         self.radio = _Lane(self, "radio")
         self.intercom = _Lane(self, "intercom")
         self.effects = _Lane(self, "effects")
+        self.cabin = _Lane(self, "cabin")  # the cabin crew: announcements, calls to the flight deck, the chimes
+        self.ambience = _Lane(self, "ambience")  # the boarding music and the applause, under the rest
         self._started = False
 
     def gain(self, channel: str) -> float:
@@ -145,7 +152,7 @@ class AudioPlayer:
 
     @property
     def lanes(self) -> tuple[_Lane, ...]:
-        return (self.radio, self.intercom, self.effects)
+        return (self.radio, self.intercom, self.effects, self.cabin, self.ambience)
 
     @property
     def name(self) -> str:
@@ -164,7 +171,9 @@ class AudioPlayer:
 
     def play(self, clip: Clip) -> Clip:
         self.start()
-        (self.intercom if clip.kind == "intercom" else self.effects if clip.kind == "effect" else self.radio).queue.put(clip)
+        lane = (self.intercom if clip.kind == "intercom" else self.effects if clip.kind == "effect" else
+                self.cabin if clip.kind in CABIN else self.ambience if clip.kind == "ambience" else self.radio)
+        lane.queue.put(clip)
         return clip
 
     def atc_to_us(self) -> bool:

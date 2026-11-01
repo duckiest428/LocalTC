@@ -60,7 +60,7 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 <tr>
 <td valign="top">
 <h3>🧑‍✈️ A copilot beside you</h3>
-<p>Callouts, warnings for turbulence, wind shear, ice and fuel, and the arrival's restrictions, all over the intercom. Hand it the radios and it flies the comms for you.</p>
+<p>Callouts, warnings for turbulence, wind shear, ice and fuel, and the arrival's restrictions, all over the intercom. Hand it the radios and it flies the comms for you. Behind the door, a cabin crew makes the announcements in the airline's own languages and brings you a coffee when you ask.</p>
 </td>
 <td valign="top">
 <h3>📻 It sounds like a radio</h3>
@@ -70,7 +70,7 @@ It runs on your own PC, works offline, and costs nothing. There's no subscriptio
 <tr>
 <td valign="top">
 <h3>🗺️ A live map that explains ATC</h3>
-<p>Your aircraft, the route, AI traffic, and who controls which airspace. You can see where each handoff will happen before it does. VFR mode shows terrain and airspace classes.</p>
+<p>Your aircraft, the route, AI traffic, the airports around you, and who controls which airspace. You can see where each handoff will happen before it does. VFR mode shows terrain and airspace classes.</p>
 </td>
 <td valign="top">
 <h3>📒 Logbook, replays and Wrapped</h3>
@@ -716,6 +716,25 @@ never talks over ATC or you; safety calls cut in.
 name the flap detents, the placard speeds, and any action an add-on wants sent another way: its own key event, or an
 L:var, the autobrake's positions and whether it has reversers. The stock A320neo has one; everything else gets the sim's standard key events. Add-on aircraft that
 ignore those (PMDG, Fenix) need a profile of their own; until then the copilot says when a command didn't take.
+
+### The cabin crew
+
+`[cabin]` (Settings → Cabin crew; the setup guide asks): a cabin manager who follows the flight from what the aircraft
+does, on airline flights and in airliners. Boarding music and the welcome at the gate; boarding complete on the
+interphone when you switch the beacon on; the doors armed; the welcome (the flight time, the airline's loyalty members,
+who's running the cabin) and the safety demonstration with the aircraft's own exits during the taxi; "cabin secure for
+takeoff"; the seatbelt sign announced when you switch it off and back on; a call before the service, then the trolley;
+the descent with the destination's local time, weather and a word about the city; "cabin secure for landing"; applause
+for a touchdown under 200 fpm; the welcome to the city, the doors to manual, the goodbye. The crew is the airline's:
+names and English from its country, and the announcements in its languages (Air Canada English and French, Lufthansa
+German and English) with English repeated when `english_too` is on. `crew` picks who leads the cabin: claire
+(polished), jamie (cheerful), grace (warm), daniel (brisk), sophie (the storyteller), or auto.
+
+On the intercom, start with "cabin", "cabin crew", "purser" or their name: "cabin, a coffee please, white, one sugar",
+"cabin, how many on board?", "cabin, prepare for landing", "cabin, turbulence in five minutes", "cabin, we've got a
+twenty minute delay", "cabin, tell the passengers we're number two for departure". Words starting "Ladies and
+gentlemen" are your own announcement. The copilot never answers what's for the cabin. The crew's announcements,
+calls, chimes, music and applause have their own slider on the mixer (Cabin).
 
 ## Live bridge setup (Windows)
 

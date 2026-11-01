@@ -44,7 +44,7 @@ OWNSHIP_VALUES = {
     "on_runway": 0, "fuel_lb": 318.0, "fuel_flow_pph": 0.0, "gross_weight_lb": 2320.0,
     "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,
     "temperature_c": 12.0, "visibility_m": 16000.0, "precip": 2, "in_cloud": 0, "zulu_s": 64800.0, "eng_n1": 0.0, "eng_rpm": 2100.0,
-    "precip_rate_mm": 0.0, "in_smoke": 0,
+    "precip_rate_mm": 0.0, "in_smoke": 0, "local_s": 43200.0,
 }
 
 IDENTITY_VALUES = {

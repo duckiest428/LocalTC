@@ -72,6 +72,8 @@ OWNSHIP: tuple[Datum, ...] = (
     # raining or snowing, and smoke (wildfire haze).
     Datum("precip_rate_mm", "AMBIENT PRECIP RATE", "millimeters of water"),
     Datum("in_smoke", "AMBIENT IN SMOKE", "Bool", I32),
+    # The local time where the aircraft is (0.6, last): the cabin crew's "the local time is".
+    Datum("local_s", "LOCAL TIME", "seconds"),
 )
 
 # Requested with PERIOD_SECOND + FLAG_CHANGED, so it only arrives when something changes.
@@ -258,6 +260,7 @@ def ownship_from_raw(raw: dict[str, Any], t: float) -> OwnshipState:
         gross_weight_lb=round(raw["gross_weight_lb"], 1),
         precip_rate_mm=round(raw.get("precip_rate_mm", 0.0), 2),
         in_smoke=bool(raw.get("in_smoke", 0)),
+        local_s=round(raw["local_s"], 1) if raw.get("local_s") else None,  # (0: a sim that refused it)
     )
 
 

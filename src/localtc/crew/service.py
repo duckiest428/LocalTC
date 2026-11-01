@@ -33,8 +33,9 @@ REPLY_PAUSE_S = 0.9  # the copilot's answer comes at least this long after the c
 
 
 class CrewService:
-    def __init__(self, pm: PilotMonitoring, bus: EventBus, source: SimSource | None = None) -> None:
-        self.pm, self.bus, self.source = pm, bus, source
+    def __init__(self, pm: PilotMonitoring, bus: EventBus, source: SimSource | None = None, cabin=None) -> None:
+        """``cabin``: the cabin crew (crew.cabin.CabinCrew), whose words on the intercom ("cabin, ...") are theirs."""
+        self.pm, self.bus, self.source, self.cabin = pm, bus, source, cabin
         # Subscribed now, not in run(): a fast source could publish before run() starts.
         # Everything the copilot watches to speak first (crew.monitor): ATC and the pilot on the radio (so it doesn't
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
@@ -46,6 +47,16 @@ class CrewService:
         loop = asyncio.get_running_loop()
         async for event in self._inputs:
             started = loop.time()
+            if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t):
+                try:
+                    outputs = self.cabin.heard(event)
+                except Exception:
+                    log.exception("Cabin crew failed on the intercom")
+                    continue
+                await asyncio.sleep(max(0.0, REPLY_PAUSE_S + 0.3 - (loop.time() - started)))
+                for output in outputs:
+                    self.bus.publish(output)
+                continue  # for the cabin: the copilot doesn't answer it
             try:
                 # Off the event loop, in order: what the pilot says may need the language model, and so may the
                 # copilot's own calls (put in its own words in the LLM modes); the sim's data doesn't wait for either.

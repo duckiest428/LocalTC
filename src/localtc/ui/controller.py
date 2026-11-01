@@ -170,6 +170,7 @@ class AppController:
             (post, "radio/say"): self.api_say,
             (post, "radio/crew"): self.api_crew,
             (post, "voice/crew_preview"): self.api_crew_preview,
+            (post, "voice/cabin_preview"): self.api_cabin_preview,
             (post, "support"): self.api_support,
             (post, "radio/ptt"): self.api_ptt,
             (post, "radio/tune"): self.api_tune,
@@ -196,6 +197,7 @@ class AppController:
             (get, "airport/layout"): self.api_layout,
             (get, "clip"): self.api_clip,
             (get, "airports/search"): self.api_search,
+            (get, "airports/around"): self.api_airports_around,
             (post, "dev/note"): self.api_note,
             (get, "dev/sessions"): self.api_sessions,
             (post, "dev/export"): self.api_export,
@@ -919,6 +921,14 @@ class AppController:
         seconds = await asyncio.to_thread(_crew_preview, self.cfg, sex, pick, who)
         return {"seconds": seconds}
 
+    async def api_cabin_preview(self, args: dict) -> dict:
+        """A cabin crew member ([cabin] crew, or ``crew``) saying their line on the address system, the chime first."""
+        from localtc.crew.cabin_lines import BY_ID, PEOPLE
+
+        who = BY_ID.get(str(args.get("crew") or self.cfg.cabin.crew)) or PEOPLE[0]
+        seconds = await asyncio.to_thread(_cabin_preview, self.cfg, who)
+        return {"seconds": seconds}
+
     async def api_ptt(self, args: dict) -> dict:
         if not self._need_live().ptt(bool(args.get("down")), 0 if args.get("intercom") else 1):
             raise HttpError(409, "voice input is off (Quick Settings > Push-to-talk)")
@@ -972,10 +982,13 @@ class AppController:
             self.publish("traffic_control", self.traffic_control)
 
     async def api_settings(self, args: dict) -> dict:
+        from localtc.crew.cabin_lines import PEOPLE
         from localtc.crew.personalities import PERSONALITIES
 
         return {"settings": msgspec.to_builtins(self.cfg), "path": str(settings_path() or ""),
                 "catalog": models.catalog(),
+                "cabin_crew": [{"id": p.id, "name": p.name, "sex": p.sex, "brief": p.brief, "sample": p.sample}
+                               for p in PEOPLE],
                 "personalities": [{"id": p.id, "name": p.name, "sex": p.sex, "brief": p.brief, "style": p.style, "sample": p.sample}
                                   for p in PERSONALITIES]}
 
@@ -1345,6 +1358,18 @@ class AppController:
                 self._index[airport.icao] = _index_entry(airport)
         return self._index
 
+    async def api_airports_around(self, args: dict) -> dict:
+        """The Live Map's airports: the world's airline airports in the map's view (airports/world.py)."""
+        from localtc.airports.world import within
+
+        try:
+            bounds = tuple(float(args[k]) for k in ("south", "west", "north", "east"))
+        except (KeyError, TypeError, ValueError):
+            raise HttpError(400, "south, west, north and east") from None
+        found = await asyncio.to_thread(within, *bounds)
+        return {"airports": [{"icao": a.icao, "iata": a.iata, "large": a.large, "lat": a.lat, "lon": a.lon,
+                              "name": a.name, "city": a.city} for a in found]}
+
     async def api_search(self, args: dict) -> dict:
         query = str(args.get("q", "")).strip().upper()
         await self._airport_index()
@@ -1410,7 +1435,7 @@ def own_view(ev: OwnshipState) -> dict:
     return {"t": round(ev.t, 1), "lat": ev.lat, "lon": ev.lon, "alt": round(ev.alt_indicated_ft), "agl": round(ev.alt_agl_ft),
             "hdg": round(ev.hdg_true), "hdg_mag": round(ev.hdg_mag), "gs": round(ev.gs_kt), "vs": round(ev.vs_fpm),
             "ground": ev.on_ground, "com1": ev.com1_mhz, "com2": ev.com2_mhz, "squawk": ev.squawk,
-            "xpdr": str(ev.xpdr_mode), "tx": ev.com1_tx}
+            "xpdr": str(ev.xpdr_mode), "tx": ev.com1_tx, "zulu": ev.zulu_s}
 
 
 def airport_summary(airport, engine=None) -> dict:
@@ -1638,6 +1663,36 @@ def _language_preview(cfg: Config, lang, sex: str) -> float:
         synth = PiperSynth(download(name, Path(t.voices_dir) if t.voices_dir else None), rate=1.0)
         speech = synth.synthesize(lang.sample, speaker)
     _play(cfg, intercom_effect(speech.audio, speech.rate), speech.rate, "intercom")
+    return round(speech.seconds, 1)
+
+
+def _cabin_preview(cfg: Config, who) -> float:
+    """``who`` (cabin_lines.Person) saying their line on the address system, the chime before it: the voice
+    library's voice where it's downloaded, else Piper's."""
+    import numpy as np
+
+    from localtc.dsp.cabin import chime, pa_effect
+    from localtc.dsp.radio import resample
+    from localtc.tts.kokoro import KokoroVoices
+    from localtc.tts.persona import persona_for
+    from localtc.tts.voices import default_voices_dir
+
+    t = cfg.tts
+    persona = persona_for(f"cabin {who.name}", "cabin", sex=who.sex, locale="en-GB" if who.sex == "F" else "en-US")
+    voices = KokoroVoices(Path(t.voices_dir) if t.voices_dir else default_voices_dir(), model=t.kokoro_model,
+                          rate=1.0, threads=t.kokoro_threads)
+    if not voices.ready():
+        speech = voices.synthesize(who.sample, persona)
+    else:
+        from localtc.tts.providers import PiperVoices
+        from localtc.tts.synth import PiperSynth
+        from localtc.tts.voices import download
+
+        speech = PiperVoices(PiperSynth(download(t.voice, Path(t.voices_dir) if t.voices_dir else None),
+                                        rate=1.0)).synthesize(who.sample, persona)
+    ding = resample(chime(22050, "pa"), 22050, speech.rate)
+    audio = np.concatenate([ding, pa_effect(speech.audio, speech.rate)])
+    _play(cfg, audio, speech.rate, "pa")
     return round(speech.seconds, 1)
 
 

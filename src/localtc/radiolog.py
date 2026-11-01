@@ -10,6 +10,7 @@ from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
     BusEvent,
+    CabinSpeech,
     ConnectionStatus,
     CrewAction,
     CrewSpeech,
@@ -45,6 +46,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         return {"kind": "intercom", "t": t, "text": ev.text, "unclear": ev.confidence is not None and ev.confidence < 0.5}
     if isinstance(ev, CrewSpeech):
         return {"kind": "crew", "t": t, "text": ev.text, "level": "warn" if ev.kind in ("refused", "alert") else ""}
+    if isinstance(ev, CabinSpeech):  # the cabin crew: to the passengers, or to you
+        return {"kind": "cabin", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel}
     if isinstance(ev, CrewAction):
         return None  # what the copilot said about it is the line; the action itself is in the recording
     if isinstance(ev, ReadbackEvaluated):

@@ -170,6 +170,8 @@ function addLine(l) {
       body = `<span class="who">YOU</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
+    case "cabin":  // the cabin crew: an announcement, or to you on the interphone
+      body = `<span class="who">CABIN</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="st">${esc(l.who || "")}</span> <span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
       if ((l.live || S.settings?.traffic?.enabled) && l.callsign) {
         // LocalTC's traffic (real flights): shown like a real transmission, by its callsign in its airline's colour.
@@ -255,6 +257,7 @@ function updateAlerts() {
 
 function setOwn(o) {
   S.own = o;
+  S.ownAt = Date.now();
   $("#com1").textContent = mhz(o.com1);
   $("#com2").textContent = o.com2 ? mhz(o.com2) : "OFF";
   $("#squawk").textContent = o.squawk || "----";
@@ -262,6 +265,17 @@ function setOwn(o) {
   markTuned();
   MapView.own(o);
 }
+
+/* Zulu time in the radio bar: the sim's while it's sending (its clock can be set to any time), this computer's
+   otherwise. Ticks each second, between the sim's updates too. */
+function zulu() {
+  const fresh = S.own && S.own.zulu != null && Date.now() - (S.ownAt || 0) < 10000;
+  const secs = fresh ? S.own.zulu + (Date.now() - S.ownAt) / 1000 : (Date.now() / 1000) % 86400;
+  const m = Math.floor(secs / 60) % 1440;
+  $("#zulu").textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}Z`;
+}
+zulu();
+setInterval(zulu, 1000);
 
 /* The last flight gone from the screen (10 minutes after it ended): the aircraft, its path, the traffic, the radio
    log and the flight's details. The state with the plan (or none) follows. */
@@ -531,6 +545,7 @@ const Mixer = {
       ["mixer", "copilot", "On the intercom", "The copilot beside you.", 1.5],
       ["mixer", "copilot_radio", "On the radio", "Its readbacks and calls to ATC.", 1.5],
     ]],
+    ["Cabin", [["mixer", "cabin", "Cabin crew", "Their announcements and calls, the chimes, the boarding music and the applause.", 1.5]]],
     ["Radio sounds", [["mixer", "effects", "Clicks and squelch", "Your push-to-talk's click and the receiver's rush when you let go.", 1.5]]],
   ],
   async open() {
@@ -782,7 +797,7 @@ function componentsPart(m, only = COMPONENT_KINDS) {
 const Setup = {
   STEPS: [
     ["language", "Welcome"], ["model", "Language model"], ["computer", "Your computer"], ["talk", "Talking to ATC"],
-    ["hear", "Hearing"], ["copilot", "Your copilot"], ["people", "Who flies with you"], ["atc", "ATC"],
+    ["hear", "Hearing"], ["copilot", "Your copilot"], ["people", "Who flies with you"], ["cabin", "Cabin crew"], ["atc", "ATC"],
     ["flight", "Your flights"], ["traffic", "Traffic"], ["done", "Ready"],
   ],
   step: 0,
@@ -1057,6 +1072,41 @@ const Setup = {
       const pick = async () => {
         await this.save("crew", "personality", card.dataset.person);
         $$("[data-person]").forEach((x) => x.classList.toggle("current", x === card));
+      };
+      card.onclick = pick;
+      card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
+    });
+  },
+
+  cabin() {
+    const c = S.settings.settings.cabin || {}, on = !!c.enabled;
+    return `<p>A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration,
+      the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the
+      interphone, and answer when you start with "cabin": "cabin, could I get a coffee?". Do you want them?</p>
+      <div class="wchoice">
+        <button type="button" class="wcard ${on ? "current" : ""}" data-wcabin="on"><b>Fly with a cabin crew</b>
+          <span class="muted small">On airline flights and in airliners. Change it any time in Quick Settings.</span></button>
+        <button type="button" class="wcard ${on ? "" : "current"}" data-wcabin="off"><b>No cabin crew</b>
+          <span class="muted small">A quiet cabin. You can bring them in any time in Quick Settings.</span></button>
+      </div>
+      ${on ? `<p class="small">Who leads the cabin? Their name and accent follow the airline: on Lufthansa, a German crew.</p>
+        <div class="wpeople">${[{ id: "auto", name: "A different one each flight", brief: "One of them, chosen for each flight", sample: "" },
+          ...(S.settings.cabin_crew || [])].map((p) => `<div class="wcard person ${p.id === (c.crew || "auto") ? "current" : ""}" data-cabin-person="${esc(p.id)}" role="button" tabindex="0">
+          <b translate="no">${esc(p.name)}</b><span class="muted small">${esc(p.brief)}</span>${p.sample ? `<i class="small" translate="no">&ldquo;${esc(p.sample)}&rdquo;</i>
+          <button type="button" class="wplay" data-cabin-hear="${esc(p.id)}" title="Hear them">&#9654;</button>` : ""}</div>`).join("")}</div>` : ""}`;
+  },
+  wire_cabin() {
+    $$("[data-wcabin]").forEach((b) => (b.onclick = async () => {
+      if (await this.save("cabin", "enabled", b.dataset.wcabin === "on")) this.render();
+    }));
+    $$("[data-cabin-hear]").forEach((b) => (b.onclick = (e) => {
+      e.stopPropagation();
+      api("voice/cabin_preview", { crew: b.dataset.cabinHear }).catch(fail);
+    }));
+    $$("[data-cabin-person]").forEach((card) => {
+      const pick = async () => {
+        await this.save("cabin", "crew", card.dataset.cabinPerson);
+        $$("[data-cabin-person]").forEach((x) => x.classList.toggle("current", x === card));
       };
       card.onclick = pick;
       card.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } };
@@ -1846,6 +1896,33 @@ const Settings = {
       </div>
 
       <div class="card">
+        <h3>Cabin crew</h3>
+        <div class="master-row">
+          <div><b>Cabin crew</b><div class="muted small">A cabin manager who makes the announcements, calls you on the
+            interphone and answers when you start with "cabin" on the intercom: "cabin, could I get a coffee?", "cabin,
+            prepare for landing", "cabin, tell the passengers ...". Only on airline flights and in airliners.</div></div>
+          <label class="toggle" title="Cabin crew on or off"><input type="checkbox" id="s-cabin" ${st.cabin.enabled ? "checked" : ""}><span></span></label>
+        </div>
+        <div id="cabin-opts" class="${st.cabin.enabled ? "" : "off"}">
+        <div class="row"><label>Who leads the cabin<select id="s-cabin-crew">
+          <option value="auto" ${(st.cabin.crew || "auto") === "auto" ? "selected" : ""}>A different one each flight</option>
+          ${(S.settings.cabin_crew || []).map((p) =>  // (translate="no": put together here, its manner in the language)
+            `<option value="${esc(p.id)}" translate="no" ${st.cabin.crew === p.id ? "selected" : ""}>${esc(p.name)} (${I18n.t(p.sex === "F" ? "she" : "he")}) · ${esc(I18n.t(p.brief))}</option>`).join("")}</select></label>
+          <button type="button" class="btn small" id="s-cabin-hear">Hear them</button></div>
+        <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages.</span>
+        <div class="row"><label>Your name, for the welcome<input id="s-cabin-captain" value="${esc(st.cabin.captain || "")}" placeholder="Reyes" autocomplete="off" spellcheck="false"></label></div>
+        <label class="check-row"><input type="checkbox" id="s-cabin-announcements" ${st.cabin.announcements ? "checked" : ""}> Announcements: boarding, the welcome, the seatbelt sign, the descent and the arrival</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-safety" ${st.cabin.safety_demo ? "checked" : ""}> Safety demonstration during the taxi out, with this aircraft's exits</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-service" ${st.cabin.service ? "checked" : ""}> Food and drink: a call to the flight deck first, then the trolley</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-interphone" ${st.cabin.interphone ? "checked" : ""}> Calls to the flight deck: boarding complete, cabin secure for takeoff and landing</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-chime" ${st.cabin.chime ? "checked" : ""}> Cabin chime: before an announcement, and when the seatbelt sign changes</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-music" ${st.cabin.boarding_music ? "checked" : ""}> Boarding music: quietly in the cabin while people get on and off</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-applause" ${st.cabin.applause ? "checked" : ""}> Applause on a soft landing (gentler than 200 feet per minute)</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-english" ${st.cabin.english_too ? "checked" : ""}> Announcements in English too: a crew whose language isn't English repeats each one in English</label>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
@@ -2081,6 +2158,19 @@ const Settings = {
     on("#s-replay", "change", (e) => this.save("ui", "replay_audio", e.target.checked));
     on("#s-crew-repeat", "change", (e) => this.save("crew", "repeat_atc", e.target.checked));
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
+    on("#s-cabin", "change", (e) => { this.save("cabin", "enabled", e.target.checked); $("#cabin-opts")?.classList.toggle("off", !e.target.checked); });
+    on("#s-cabin-crew", "change", () => this.save("cabin", "crew", val("#s-cabin-crew")));
+    on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
+    for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],
+      ["#s-cabin-service", "service"], ["#s-cabin-interphone", "interphone"], ["#s-cabin-chime", "chime"],
+      ["#s-cabin-music", "boarding_music"], ["#s-cabin-applause", "applause"], ["#s-cabin-english", "english_too"]])
+      on(id, "change", (e) => this.save("cabin", key, e.target.checked));
+    on("#s-cabin-hear", "click", async (e) => {
+      e.target.disabled = true;
+      const crew = val("#s-cabin-crew");
+      try { await api("voice/cabin_preview", { crew: crew === "auto" ? "claire" : crew }); } catch (err) { fail(err); }
+      e.target.disabled = false;
+    });
     on("#s-unscripted", "change", (e) => this.save("atc", "unscripted", e.target.checked));
     on("#s-strict", "change", (e) => this.save("atc", "strict_callsign", e.target.checked));
     on("#s-chatter", "change", (e) => this.save("atc", "chatter", e.target.checked));
@@ -2305,6 +2395,7 @@ const MapView = {
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
   wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null, notamLayer: null,
   zoneAirports: [],
+  aptLayer: null, aptOn: true, aptTimer: null, aptView: null,  // the airports around you (airports/world.py)
   grounds: new Map(), groundRenderer: null, gateSeen: "",  // each airport's ground close in (AtcMap.ground), by ICAO
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
@@ -2336,6 +2427,11 @@ const MapView = {
     this.zoneLayer = L.layerGroup().addTo(this.map);  // under the route, the track and the aircraft
     this.opsLayer = L.layerGroup().addTo(this.map);  // ATC's hold and route amendments
     this.notamLayer = L.layerGroup().addTo(this.map);  // the flight's airports' NOTAMs (with the weather toggle)
+    this.map.createPane("apts").style.zIndex = 450;  // over the zones and routes, under the aircraft
+    this.aptLayer = L.layerGroup().addTo(this.map);
+    try { this.aptOn = localStorage.getItem("map-airports") !== "off"; } catch { /* default on */ }
+    $("#map-airports").onclick = () => this.setAirports(!this.aptOn);
+    this.setAirports(this.aptOn);
     try { this.wxOn = localStorage.getItem("map-wx") !== "off"; } catch { /* default on */ }
     $("#map-wx").onclick = () => this.setWx(!this.wxOn);
     this.setWx(this.wxOn);
@@ -2530,6 +2626,55 @@ const MapView = {
   },
 
   /* ATC zones: the airspace the engine hands over at, drawn from the same data it uses. */
+  /* The airports with airline service in view: a dot each and its code, the large ones only when zoomed far out.
+     Fetched again when the view has really changed (following the aircraft pans it all the time). */
+  setAirports(on) {
+    this.aptOn = on;
+    $("#map-airports").setAttribute("aria-pressed", String(on));
+    try { localStorage.setItem("map-airports", on ? "on" : "off"); } catch { /* not remembered */ }
+    this.aptView = null;
+    if (on) this.airportsSoon(0); else this.aptLayer?.clearLayers();
+  },
+  airportsSoon(delay = 500) {
+    if (!this.map || !this.aptOn) return;
+    const v = this.aptView;
+    if (v && v.zoom === this.map.getZoom() && v.bounds.contains(this.map.getBounds())) return;
+    clearTimeout(this.aptTimer);
+    this.aptTimer = setTimeout(() => this.airports(), delay);
+  },
+  async airports() {
+    if (!this.map || !this.aptOn) return;
+    const zoom = this.map.getZoom(), b = this.map.getBounds().pad(0.25);
+    let r;
+    try {
+      r = await api(`airports/around?south=${b.getSouth().toFixed(3)}&west=${b.getWest().toFixed(3)}&north=${b.getNorth().toFixed(3)}&east=${b.getEast().toFixed(3)}`);
+    } catch { return; }
+    if (!this.aptOn) return;
+    this.aptView = { zoom, bounds: b };
+    this.aptLayer.clearLayers();
+    const mine = new Set((this.zonesOn ? this.zoneAirports : []).map((a) => a.icao));  // the flight's own: drawn already
+    for (const a of r.airports) {
+      if (mine.has(a.icao) || (zoom < 6 && !a.large)) continue;
+      const code = a.iata || a.icao;
+      const size = a.large ? "big" : zoom < 8 ? "small" : "";
+      const icon = L.divIcon({ className: `apt-icon ${size}`, iconSize: [12, 12], iconAnchor: [6, 6],
+        html: `<span class="apt-dot"></span><span class="apt-code" translate="no">${esc(code)}</span>` });
+      const m = L.marker([a.lat, this.path.lon(a.lon)], { icon, pane: "apts", keyboard: false, title: `${a.icao} ${a.name}` });
+      m.bindPopup(() => this.airportPopup(a));
+      m.addTo(this.aptLayer);
+    }
+  },
+  airportPopup(a) {
+    let away = "";
+    if (S.own) {  // how far and which way from the aircraft
+      const rad = Math.PI / 180, f1 = S.own.lat * rad, f2 = a.lat * rad, dl = (a.lon - S.own.lon) * rad;
+      const nm = 3440.065 * 2 * Math.asin(Math.sqrt(Math.sin((f2 - f1) / 2) ** 2 + Math.cos(f1) * Math.cos(f2) * Math.sin(dl / 2) ** 2));
+      const brg = (Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) / rad + 360) % 360;
+      away = `<div class="muted small">${Math.round(nm)} nm, ${String(Math.round(brg) % 360).padStart(3, "0")}°</div>`;
+    }
+    return `<div translate="no"><b>${esc(a.icao)}${a.iata ? ` / ${esc(a.iata)}` : ""}</b><div>${esc(a.name)}</div>`
+      + `${a.city ? `<div class="muted small">${esc(a.city)}</div>` : ""}${away}</div>`;
+  },
   setZones(on) {
     this.zonesOn = on;
     $("#map-zones").setAttribute("aria-pressed", String(on));
@@ -2546,6 +2691,7 @@ const MapView = {
   // Following the aircraft moves the map several times a second: the zones are fetched again only when the view
   // has really changed (another zoom, or panned out of the area last drawn), else the wait never ends.
   viewChanged() {
+    this.airportsSoon();
     const v = this.zonesView;
     if (v && v.zoom === this.map.getZoom() && v.bounds.contains(this.map.getBounds())) return;
     this.zonesSoon();

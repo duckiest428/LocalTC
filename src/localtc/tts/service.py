@@ -16,15 +16,19 @@ being said on the radio (the copilot's intercom carries on).
 
 import asyncio
 import logging
+import re
 import zlib
 from typing import Any
 
 from localtc.bus import EventBus
+from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, pa_effect
 from localtc.dsp.clips import CLIPS, clip_id
 from localtc.dsp.radio import clean, intercom_effect, key_sound, radio_effect
 from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
+    CabinSound,
+    CabinSpeech,
     CrewSpeech,
     PttPressed,
     PttReleased,
@@ -50,6 +54,18 @@ def _spread(key: str, span: tuple[float, float], salt: str) -> float:
     """A value in ``span`` decided by the name, the same every flight."""
     low, high = span
     return low + (high - low) * (zlib.crc32(f"{salt}|{key}".encode()) % 1000) / 999
+
+
+def sentences(text: str) -> list[str]:
+    """``text`` cut into its sentences (an announcement is said a sentence at a time)."""
+    parts = re.split(r"(?<=[.!?。！？])\s+", text.strip())
+    out: list[str] = []
+    for part in parts:
+        if out and len(part.split()) < 4:  # a short one rides with the one before ("Thank you.")
+            out[-1] = f"{out[-1]} {part}"
+        elif part:
+            out.append(part)
+    return out
 
 
 def radio_words(text: str) -> str:
@@ -86,7 +102,10 @@ class VoiceOut:
         self.crew_pace, self.crew_expressive, self.crew_locale = crew_pace, crew_expressive, crew_locale
         self.crew_language = crew_language
         self.shift, self.regional = shift, regional
-        self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech)
+        self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech,
+                                     CabinSpeech, CabinSound)
+        self._cabin: asyncio.Queue = asyncio.Queue()  # the cabin crew's lines, said in turn beside the radio's
+        self._music_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
         self._atis_task: asyncio.Task | None = None
         self._radio = bus.subscribe(RadioTuned, PttPressed, PttReleased)  # at once, not behind the lines being made
@@ -131,6 +150,7 @@ class VoiceOut:
 
     async def run(self) -> None:
         watcher = asyncio.create_task(self._watch_radio())
+        cabin = asyncio.create_task(self._cabin_crew())
         try:
             async for ev in self._events:
                 try:
@@ -139,7 +159,9 @@ class VoiceOut:
                     log.exception("Voice failed on %s; carrying on", type(ev).__name__)
         finally:
             watcher.cancel()
+            cabin.cancel()
             self._stop_atis()
+            self._stop_music()
 
     async def _speak(self, ev: Any) -> None:
         locale = getattr(ev, "locale", "")
@@ -163,6 +185,10 @@ class VoiceOut:
             await self.say(ev.spoken or ev.text, self.persona("", "copilot", language=ev.language or self.crew_language),
                            "intercom",
                            keep=clip_id(ev), urgent=ev.kind == "alert")
+        elif isinstance(ev, CabinSpeech) and (ev.spoken or ev.text):
+            self._cabin.put_nowait(ev)  # (their own queue: the safety demonstration never holds up ATC)
+        elif isinstance(ev, CabinSound):
+            self._cabin_sound(ev)
         elif isinstance(ev, AtisBroadcast) and self.atis:
             self._stop_atis()
             self._atis_task = asyncio.create_task(self._loop_atis(ev))
@@ -219,6 +245,61 @@ class VoiceOut:
         log.info("Speaking %s as %s (%s %s, %.1f s, synthesized in %.0f ms)", kind, who.key, speech.provider,
                  speech.voice, len(speech.audio) / speech.rate, speech.latency_ms)
         return Clip(audio, speech.rate, kind)
+
+    async def _cabin_crew(self) -> None:
+        """The cabin crew's lines, one after another: each sentence made in turn with the radio's (a long announcement
+        is many sentences; ATC's next line goes between two of them, not after the whole safety demonstration)."""
+        while True:
+            ev = await self._cabin.get()
+            try:
+                await self._say_cabin(ev)
+            except Exception:  # noqa: BLE001 - a voice failing never stops the next line
+                log.exception("Cabin voice failed; carrying on")
+
+    async def _say_cabin(self, ev: CabinSpeech) -> None:
+        who = persona_for(f"cabin {ev.speaker}", "cabin", sex=ev.sex, locale=ev.locale if self.regional else "",
+                          language=ev.language)
+        rate = 22050
+        if ev.chime:
+            self.player.play(Clip(chime(rate, ev.chime), rate, "chime"))
+        kind = {"pa": "pa", "interphone": "interphone"}.get(ev.channel, "deck")
+        for sentence in sentences(ev.spoken or ev.text):
+            async with self._lock:
+                speech = await asyncio.to_thread(self.voices.speak, sentence, who, local=True)
+            if speech is None:
+                return  # nobody could say it: text only
+            effect = {"pa": pa_effect, "interphone": interphone_effect}.get(kind, intercom_effect)
+            audio = effect(speech.audio, speech.rate)
+            self.player.play(Clip(audio, speech.rate, kind))
+            log.info("Cabin %s as %s (%s %s, %.1f s)", kind, who.key, speech.provider, speech.voice,
+                     len(speech.audio) / speech.rate)
+
+    def _cabin_sound(self, ev: CabinSound) -> None:
+        rate = 22050
+        if ev.sound == "chime":
+            self.player.play(Clip(chime(rate, ev.detail or "pa"), rate, "chime"))
+        elif ev.sound == "applause":
+            self.player.play(Clip(applause(rate, seed=ev.seed), rate, "ambience"))
+        elif ev.sound == "music":
+            self._stop_music()
+            self._music_task = asyncio.create_task(self._loop_music(ev.seed))
+        elif ev.sound == "music_stop":
+            self._stop_music()
+
+    async def _loop_music(self, seed: int) -> None:
+        """The boarding music, round and round until it's stopped."""
+        rate = 22050
+        music = await asyncio.to_thread(boarding_music, rate, seed=seed)
+        while True:
+            playing = Clip(music, rate, "ambience")
+            self.player.play(playing)
+            await asyncio.to_thread(playing.done.wait)
+
+    def _stop_music(self) -> None:
+        if self._music_task is not None:
+            self._music_task.cancel()
+            self._music_task = None
+            self.player.cut("ambience")
 
     async def _loop_atis(self, ev: AtisBroadcast) -> None:
         """The ATIS on a loop, each time round in its next wording (the same information, the words around it

@@ -358,6 +358,7 @@ class MixerConfig(_Section):
     chatter: float = 0.8  # other flights and ATC's calls to them
     copilot_radio: float = 1.0  # the copilot's own calls on the radio
     copilot: float = 1.0  # the copilot beside you, on the intercom
+    cabin: float = 0.7  # the cabin crew's announcements and calls, the chimes, the boarding music and the applause
     effects: float = 0.6  # the radio's sounds: your push-to-talk's click and the squelch
     # You on the radio in your headset while you talk, as in a real aircraft. 0 off: with speakers the microphone
     # would hear it.
@@ -367,7 +368,7 @@ class MixerConfig(_Section):
 
     def gains(self) -> dict[str, float]:
         """Each channel's volume as played: 0 when muted."""
-        names = ("atc", "atis", "chatter", "copilot_radio", "copilot", "effects", "sidetone")
+        names = ("atc", "atis", "chatter", "copilot_radio", "copilot", "cabin", "effects", "sidetone")
         return {name: 0.0 if name in self.muted else float(getattr(self, name)) for name in names}
 
 
@@ -419,6 +420,23 @@ class CrewConfig(_Section):
     # How it reads them: "challenge" (challenge and response: it asks, you answer; its own side it answers itself),
     # "read" (it reads each line and says what's wrong), "auto" (as read, and it sets what it can).
     checklist_mode: Literal["challenge", "read", "auto"] = "challenge"
+
+
+class CabinConfig(_Section):
+    """The cabin crew (crew/cabin.py): a cabin manager who makes the announcements, calls the flight deck and answers
+    you on the intercom ("cabin, could I get a coffee?"). Only on an airline's flight or in an airliner."""
+
+    enabled: bool = False  # the setup guide asks
+    crew: str = "auto"  # who leads the cabin: claire, jamie, grace, daniel, sophie; auto: a different one each flight
+    announcements: bool = True  # boarding, the welcome, the seatbelt sign, the descent, the arrival
+    safety_demo: bool = True  # the safety demonstration during the taxi out
+    service: bool = True  # the drinks: a call to the flight deck first, then the trolley
+    chime: bool = True  # the chimes before an announcement and when the seatbelt sign changes
+    boarding_music: bool = True  # quietly in the cabin while people get on (and off), stopped at the doors
+    applause: bool = True  # the cabin clapping a touchdown gentler than 200 feet per minute
+    english_too: bool = True  # a crew whose language isn't English repeats each announcement in English
+    interphone: bool = True  # the crew call the flight deck: boarding complete, cabin secure, the service
+    captain: str = ""  # your name, for the welcome ("on behalf of Captain Reyes"); blank: "the captain"
 
 
 class SessionConfig(_Section):
@@ -485,6 +503,7 @@ class Config(_Section):
     session: SessionConfig = msgspec.field(default_factory=SessionConfig)
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)
+    cabin: CabinConfig = msgspec.field(default_factory=CabinConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     mixer: MixerConfig = msgspec.field(default_factory=MixerConfig)

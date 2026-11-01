@@ -69,6 +69,7 @@ class OwnshipState(Event, tag="ownship_state"):
     # For the ATIS (0.4); None / False where a recording predates them.
     precip_rate_mm: float | None = None  # AMBIENT PRECIP RATE, mm/h
     in_smoke: bool = False
+    local_s: float | None = None  # the sim's local time of day where the aircraft is, seconds (0.6; None before)
 
 
 class AircraftSystems(Event, tag="aircraft_systems"):
@@ -363,6 +364,29 @@ class CrewSpeech(Event, tag="crew_speech"):
     language: str = ""  # said in the pilot's language ("de"), not English: a voice of that language speaks it
 
 
+class CabinSpeech(Event, tag="cabin_speech"):
+    """A cabin crew member speaking (crew.cabin): ``channel`` "pa" on the address system to the passengers, or
+    "interphone" on the handset to the flight deck. ``chime`` the chime before it ("pa", "call"; "" none)."""
+
+    text: str
+    speaker: str  # the crew member ("Claire"), each a person of their own
+    channel: str = "pa"
+    chime: str = ""
+    sex: str = "F"
+    locale: str = ""  # their English ("fr-FR": a French crew speaking English)
+    language: str = ""  # said in another language ("fr"): a voice of that language speaks it
+    spoken: str = ""  # the words for speech, if they differ from the text
+
+
+class CabinSound(Event, tag="cabin_sound"):
+    """The cabin's other sounds: ``sound`` chime (``detail`` its kind: seatbelt, pa, call), music (on), music_stop,
+    applause."""
+
+    sound: str
+    detail: str = ""
+    seed: int = 0  # the same music or applause for the same flight
+
+
 class CrewAction(Event, tag="crew_action"):
     """Something the copilot did in the cockpit, or wouldn't do: ``outcome`` sent (the sim was told), done (the sim
     shows it), failed (it didn't take), refused (unsafe), confirm (waiting for the pilot's "confirm")."""
@@ -584,7 +608,7 @@ AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExcha
                  AtcThinking, AtcDecision, FlightArrived, AtcOperations]
 AppEvent = Union[SessionNote]
 CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
-                  ChecklistState]
+                  ChecklistState, CabinSpeech, CabinSound]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

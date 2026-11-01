@@ -34,6 +34,8 @@ from localtc.sim_api import (
     Airport,
     AirportData,
     AtcTransmission,
+    CabinSound,
+    CabinSpeech,
     BusEvent,
     FlightArrived,
     RequestAirportData,
@@ -470,8 +472,9 @@ def make_source(cfg: Config) -> SimSource:
         end_at=cfg.replay.end_at,
         loop=cfg.replay.loop,
         include_radio=cfg.replay.include_radio,
-        # A live ATC engine re-creates ATC output; replaying the recorded one would duplicate it.
-        exclude_types=(*ATC_EVENT_TYPES, AtcTransmission) if cfg.atc.enabled else (),
+        # A live ATC engine re-creates ATC output (and the cabin crew theirs); replaying the recorded one would duplicate it.
+        exclude_types=((*ATC_EVENT_TYPES, AtcTransmission) if cfg.atc.enabled else ())
+        + ((CabinSpeech, CabinSound) if cfg.atc.enabled and cfg.cabin.enabled else ()),
     )
 
 
@@ -563,6 +566,13 @@ async def run_session(
                     atc_service.weather_source = MetarStore().get
                     atc_service.atis_source = AtisStore().get
             consumers.append(asyncio.create_task(atc_service.run()))
+            cabin = None
+            if cfg.cabin.enabled:  # the cabin crew: the announcements, the service, "cabin, ..." on the intercom
+                from localtc.crew.cabin import CabinCrew
+                from localtc.crew.cabin_service import CabinService
+
+                cabin = CabinCrew(cabin_settings(cfg), lambda: cabin_facts(engine, cfg), seed=int(time.time()) % 100000)
+                consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled).run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring
                 from localtc.crew.profiles import load_all
@@ -592,7 +602,7 @@ async def run_session(
                                      language=cfg.crew.language,
                                      voice_sex=copilot_personality(cfg.crew.personality).voice_sex(cfg.crew.voice_sex),
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
-                crew = CrewService(pm, bus, source)
+                crew = CrewService(pm, bus, source, cabin=cabin)
                 consumers.append(asyncio.create_task(crew.run()))
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
             traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
@@ -856,6 +866,41 @@ class VoiceOutput:
         self.player.close()
 
 
+def cabin_settings(cfg: Config):
+    """[cabin] as the cabin crew take it."""
+    from localtc.crew.cabin import CabinSettings
+
+    c = cfg.cabin
+    return CabinSettings(crew=c.crew, announcements=c.announcements, safety_demo=c.safety_demo, service=c.service,
+                         chime=c.chime, boarding_music=c.boarding_music, applause=c.applause,
+                         english_too=c.english_too, interphone=c.interphone, captain=c.captain)
+
+
+def cabin_facts(engine, cfg: Config):
+    """What the cabin crew are told about the flight: the engine's flight (callsign, airports, aircraft) and the
+    plan's time."""
+    from localtc.crew.cabin import Facts
+
+    flight = engine.state.flight
+    cache = AirportCache()
+
+    def where(icao: str | None) -> tuple[float | None, float | None]:
+        if not icao:
+            return None, None
+        geo = engine.geometry(icao)
+        airport = geo.airport if geo is not None else cache.get(icao)
+        return (airport.lat, airport.lon) if airport is not None else (None, None)
+
+    origin, dest = flight.origin or cfg.flight.origin, flight.destination or cfg.flight.destination
+    dest_lat, dest_lon = where(dest)
+    origin_lat, origin_lon = where(origin)
+    planned = max((f.time_s for f in cfg.flight.fixes), default=0)
+    return Facts(callsign=flight.callsign.ident if flight.callsign else (cfg.flight.callsign or ""),
+                 origin=origin or "", destination=dest or "", aircraft=flight.aircraft_type or "",
+                 dest_lat=dest_lat, dest_lon=dest_lon, origin_lat=origin_lat, origin_lon=origin_lon,
+                 planned_s=float(planned), cruise_ft=flight.cruise_ft or cfg.flight.cruise_ft or 0)
+
+
 def copilot_locale(personality: str, language_code: str) -> str:
     """The copilot's English: its personality's ("en-GB"), else that of the language it talks with you in (a German
     copilot's callouts in German-accented English), else none in particular."""
@@ -1022,7 +1067,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     buttons = JoystickButtons()  # read from Windows: MSFS 2024 never sends a button bound through SimConnect
     for name, what, down, up in (
         (v.ptt_joystick if v.ptt == "joystick" else "", "Push-to-talk", service.press, service.release),
-        (v.intercom_joystick if cfg.crew.enabled else "", "Intercom (the copilot)", lambda: service.press(INTERCOM),
+        (v.intercom_joystick if cfg.crew.enabled or cfg.cabin.enabled else "", "Intercom (the copilot)", lambda: service.press(INTERCOM),
          lambda: service.release(INTERCOM)),
     ):
         if name.strip():
@@ -1033,7 +1078,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     if not buttons.start():
         buttons = None
     intercom = None
-    if cfg.crew.enabled and v.intercom_key and v.ptt != "enter" and (v.ptt != "keyboard" or v.intercom_key != v.ptt_key):
+    if (cfg.crew.enabled or cfg.cabin.enabled) and v.intercom_key and v.ptt != "enter" and (v.ptt != "keyboard" or v.intercom_key != v.ptt_key):
         from localtc.stt.ptt import KeyboardPtt
 
         try:

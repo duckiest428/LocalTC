@@ -221,7 +221,7 @@ EXTRA = ("{0} · {1} nm, {2} min", "{0}: hears you faster and more accurately.",
 # Strings that look like words and are code: key names, CSS, a class list, an event list, an SVG path.
 JUNK = re.compile(r"^(?:M[\d.]|Arrow(?:Left|Right|Up|Down)$|Escape$|Content-Type$|use strict$|JetBrains Mono$|Inter$|"
                   r"translate\(|width \{0\}ms|line atc thinking$|small (?:error|green|\{0\})$|zoomend |joystick:\d|"
-                  r"\d+ \{0\}px|(?:center|line) \{0\}$)")
+                  r"\d+ \{0\}px|(?:center|line) \{0\}$|apt-icon \{0\}$)")
 
 
 def people(text: str, *, plain: bool) -> bool:
@@ -292,6 +292,9 @@ def from_python() -> set[str]:
         found.update(x for x in (p.get("label"), p.get("description")) if x)
     for p in PERSONALITIES:
         found.update(x for x in (p.style, p.brief) if x)
+    from localtc.crew.cabin_lines import PEOPLE
+
+    found.update(p.brief for p in PEOPLE)  # the cabin crew's manners
     from localtc.console import ALERTS, PHASES
 
     found.update(PHASES.values())  # the flight's phase, under the radios

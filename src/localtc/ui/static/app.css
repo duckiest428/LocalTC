@@ -105,6 +105,7 @@ a { color: var(--cyan); }
 .freq.active { color: var(--green); }
 .freq.active::before { content: "\2022"; color: var(--green); margin-right: 2px; font-size: 11px; }
 .xpdr { margin-left: auto; }
+.zulu .code { color: #cfd3d8; }
 .code { color: var(--green); }
 .xmode { color: var(--green); font-size: 12px; }
 .iconbtn { background: none; border: 0; color: var(--text-2); width: 32px; height: 32px; padding: 4px; cursor: pointer; position: relative; flex: none; border-radius: var(--radius); }
@@ -196,7 +197,8 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.pilot .who { color: var(--green); }
 .line.copilot .who { color: #9ad29e; }
 .line.crew .who, .line.intercom .who { color: #8fb8e8; }
-.line.crew .ic, .line.intercom .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
+.line.crew .ic, .line.intercom .ic, .line.cabin .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
+.line.cabin .who { color: #d6a8e0; }
 .ptt.ic { font-weight: 700; font-size: 12px; color: #8fb8e8; }
 .line.thinking .dots { display: inline-flex; gap: 4px; padding: 4px 0; }
 .line.thinking .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); opacity: .25;
@@ -462,7 +464,17 @@ table.lb td { white-space: nowrap; }
 /* Quick Settings: the intercom copilot's master switch; its options greyed out while it's off */
 .master-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; margin: 6px 0;
   border-top: 1px solid var(--line, rgba(127,127,127,.2)); border-bottom: 1px solid var(--line, rgba(127,127,127,.2)); }
-#crew-opts.off, #traffic-opts.off { opacity: .45; pointer-events: none; }
+/* The Live Map's airports around you: a dot and its code (IATA, else ICAO), the big ones bigger. */
+.apt-icon { overflow: visible; }
+.apt-icon .apt-dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+  background: #e8eef5; box-shadow: 0 0 0 1px rgba(0, 0, 0, .55); }
+.apt-icon.big .apt-dot { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
+.apt-icon .apt-code { position: absolute; left: 50%; top: calc(50% + 5px); transform: translateX(-50%); white-space: nowrap;
+  font: 600 10.5px/1 var(--mono); color: #e8eef5; text-shadow: 0 0 3px #000, 0 0 2px #000, 0 0 1px #000; letter-spacing: .02em; }
+.apt-icon.small .apt-code { display: none; }
+#page-map[data-mode="vfr"] .apt-icon .apt-dot { background: #1d2a3a; box-shadow: 0 0 0 1px rgba(255, 255, 255, .8); }
+#page-map[data-mode="vfr"] .apt-icon .apt-code { color: #1d2a3a; text-shadow: 0 0 3px #fff, 0 0 2px #fff, 0 0 1px #fff; }
+#crew-opts.off, #traffic-opts.off, #cabin-opts.off { opacity: .45; pointer-events: none; }
 .toggle { position: relative; display: inline-block; width: 42px; height: 24px; flex: none; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle span { position: absolute; inset: 0; border-radius: 999px; background: rgba(127,127,127,.35); transition: background .15s; cursor: pointer; }

@@ -26,6 +26,28 @@ a new minor version adds features, a patch fixes them.
   voices, more natural than before (Dutch, Swedish, Russian and Chinese keep their own voices).
 - **Hear an accent** (Settings → Models → Voices): any of them, as a controller of that region on the radio.
 - `localtc tts accents`: each accent through the radio, scored by Whisper, and written to WAV files with `--out`.
+- **A cabin crew** (Settings → Cabin crew; the setup guide asks): a cabin manager who looks after the passengers and
+  works with you through the flight, from what the aircraft does. Boarding music and the welcome at the gate, boarding
+  complete on the interphone with how many are aboard, "doors to automatic and cross-check", the welcome with the
+  flight time, a word for the airline's loyalty members (Aeroplan, SkyMiles, Miles & More ...) and who's running the
+  cabin, the safety demonstration with this aircraft's exits, the lights dimmed at night, "cabin secure for takeoff";
+  the seatbelt sign announced when you switch it off (and back on in turbulence), a call to the flight deck before the
+  drinks, then the trolley (for sale on a low-cost airline); the descent with the destination's local time, weather and
+  a word about the city, the approach, "cabin secure for landing", applause for a soft landing, the welcome to the city,
+  "doors to manual", the goodbye and everyone off, with a word about your landing. The crew is the airline's: their
+  names and English from its country, the announcements in its languages too (Air Canada in English and French,
+  Lufthansa in German and English, and 9 languages in all), with the chimes, the cabin's speakers and the interphone's
+  handset. Five people to choose from to lead the cabin, each with a manner of their own (polished, cheerful, warm,
+  brisk, the storyteller), or a different one each flight.
+- **Talk to the cabin** on the intercom by starting with "cabin", "cabin crew", "purser" or their name: a coffee (white,
+  two sugars) or a meal brought up a few minutes later, how the cabin is, how many are on board, "prepare the cabin for
+  landing", turbulence ahead, a delay ("we've got a twenty minute delay") or anything to pass on ("tell the passengers
+  we're number two for departure"), all announced to the cabin. "Ladies and gentlemen ..." is your own announcement:
+  nobody answers it, and the copilot never answers what's for the cabin.
+- **The time in Zulu** in the radio bar: the sim's during a flight, the computer's otherwise.
+- **The airports around you on the Live Map** (the new Airports button): every airport with airline service, its IATA
+  code beside it, the big ones bigger and the only ones shown zoomed far out; click one for its name and how far it is.
+  From OurAirports' data, kept in LocalTC, so they show before a flight too.
 
 ### Changed
 - **One voice: the LocalTC voice library** (a 340 MB download, with the other models), in place of choosing Piper or

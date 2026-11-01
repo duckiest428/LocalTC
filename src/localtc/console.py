@@ -26,6 +26,7 @@ from localtc.sim_api import (
     ReadbackEvaluated,
     SimLifecycle,
     Transcript,
+    CabinSpeech,
     CrewSpeech,
     IntercomHeard,
 )
@@ -118,6 +119,9 @@ class FlightConsole:
             return [f"{when}  {s('YOU', BOLD, GREEN)}  {ev.text}  {s('(intercom)', DIM)}"]
         if isinstance(ev, CrewSpeech):
             return [f"{when}  {s('COPILOT', BOLD, CYAN)}  {ev.text}  {s('(intercom)', DIM)}"]
+        if isinstance(ev, CabinSpeech):
+            where = "(cabin PA)" if ev.channel == "pa" else "(interphone)"
+            return [f"{when}  {s('CABIN', BOLD, CYAN)}  {ev.text}  {s(where, DIM)}"]
         if isinstance(ev, ReadbackEvaluated):
             if ev.status == "correct":
                 return [f"{' ' * 7}{s('   readback ok', DIM)}"]

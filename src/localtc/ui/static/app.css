@@ -334,6 +334,13 @@ input[type=range] { accent-color: var(--green-dim); width: 100%; }
 .mapctl { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; gap: 6px; }
 .mapctl .btn[aria-pressed=true] { background: var(--teal); }
 .mapinfo { position: absolute; left: 10px; bottom: 10px; z-index: 500; background: rgba(20, 23, 27, .88); border: 1px solid var(--line); padding: 6px 10px; font-family: var(--mono); font-size: 12px; border-radius: 3px; }
+.maplegend .lg-fold { display: flex; align-items: center; gap: 6px; width: 100%; margin: -2px 0 4px; padding: 0; border: 0;
+  background: none; color: #e8ecf0; font: 600 11.5px/1.5 var(--z-font, inherit); cursor: pointer; text-align: left; }
+.maplegend .lg-fold::after { content: "\25BE"; margin-left: auto; color: #8d959e; }
+.maplegend.folded .lg-fold { margin-bottom: 0; }
+.maplegend.folded .lg-fold::after { content: "\25B8"; }
+.maplegend.folded > :not(.lg-fold):not(.lg-talk) { display: none; }
+.maplegend.folded .lg-talk { margin: 4px 0 0; }
 .leaflet-container { font: 12px var(--font); }
 .own-icon svg { filter: drop-shadow(0 0 2px #000); }
 .leaflet-control-attribution { background: rgba(20, 23, 27, .7) !important; color: #888 !important; }

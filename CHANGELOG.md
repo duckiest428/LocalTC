@@ -30,6 +30,7 @@ a new minor version adds features, a patch fixes them.
 ### Changed
 - **One voice: the LocalTC voice library** (a 340 MB download, with the other models), in place of choosing Piper or
   Kokoro. Until it's downloaded, Piper speaks, with the same accents.
+- **The Live Map's legend folds away** with its header (who you talk to now and next stays), and stays as you left it.
 - **Settings → Sim → Connect to: "MSFS"**, no longer "MSFS 2024": the one connection for both sims.
 - **The Discord buttons** go to the server's new invite link.
 

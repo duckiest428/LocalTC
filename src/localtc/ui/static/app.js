@@ -2316,7 +2316,19 @@ const MapView = {
     this.map.createPane("ground").style.zIndex = 390;  // under the routes, the zones and the aircraft (400 and up)
     this.groundRenderer = L.canvas({ padding: 0.5, pane: "ground" });
     this.map.on("zoomend", () => this.groundZoom());
-    $("#map-legend").innerHTML = AtcMap.LEGEND;  // atcmap.js: the same legend as the website's Flight Tracker
+    // atcmap.js: the same legend as the website's Flight Tracker, folded away with its header (who you talk to stays).
+    const legend = $("#map-legend");
+    legend.innerHTML = `<button type="button" class="lg-fold" aria-expanded="true" title="Show or hide the legend">Legend</button>${AtcMap.LEGEND}`;
+    const fold = (folded) => {
+      legend.classList.toggle("folded", folded);
+      legend.querySelector(".lg-fold").setAttribute("aria-expanded", String(!folded));
+    };
+    try { fold(localStorage.getItem("map-legend") === "folded"); } catch { /* storage unavailable: open */ }
+    legend.querySelector(".lg-fold").onclick = () => {
+      const folded = !legend.classList.contains("folded");
+      fold(folded);
+      try { localStorage.setItem("map-legend", folded ? "folded" : "open"); } catch { /* kept for this window only */ }
+    };
     $$("#map-mode [data-mode]").forEach((b) => (b.onclick = () => this.setMode(b.dataset.mode)));
     this.syncRules();
     this.tiles();

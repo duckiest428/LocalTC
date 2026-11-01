@@ -81,6 +81,8 @@ def installed(voice: str, voices_dir: Path | None = None) -> bool:
 
 
 VOICES_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+# The same collection on Hugging Face's public mirror, for where huggingface.co can't be reached (China).
+VOICES_URLS = (VOICES_URL, "https://hf-mirror.com/rhasspy/piper-voices/resolve/main/")
 
 
 def download(voice: str = DEFAULT_VOICE, voices_dir: Path | None = None,
@@ -95,16 +97,23 @@ def download(voice: str = DEFAULT_VOICE, voices_dir: Path | None = None,
     lang, name, quality = voice.split("-", 2)
     log.info("Downloading Piper voice %s to %s", voice, target)
     for ext in (".onnx.json", ".onnx"):
-        url = VOICES_URL + urllib.parse.quote(f"{lang.split('_')[0]}/{lang}/{name}/{quality}/{voice}{ext}")
+        file = urllib.parse.quote(f"{lang.split('_')[0]}/{lang}/{name}/{quality}/{voice}{ext}")
         path = target / f"{voice}{ext}"
         part = path.with_name(path.name + ".part")
-        with urllib.request.urlopen(url, timeout=30) as response, open(part, "wb") as out:
-            size, got = int(response.headers.get("Content-Length") or 0), 0
-            while chunk := response.read(1 << 20):
-                out.write(chunk)
-                got += len(chunk)
-                if progress and size and ext == ".onnx":
-                    progress(got / size)
+        for i, base in enumerate(VOICES_URLS):
+            try:
+                with urllib.request.urlopen(base + file, timeout=30) as response, open(part, "wb") as out:
+                    size, got = int(response.headers.get("Content-Length") or 0), 0
+                    while chunk := response.read(1 << 20):
+                        out.write(chunk)
+                        got += len(chunk)
+                        if progress and size and ext == ".onnx":
+                            progress(got / size)
+                break
+            except OSError as exc:  # URLError and timeouts are OSErrors
+                if i == len(VOICES_URLS) - 1:
+                    raise
+                log.warning("Piper voice %s not downloaded from %s (%s); trying its mirror", voice, base, exc)
         part.replace(path)
     return voice_path(voice, target)
 

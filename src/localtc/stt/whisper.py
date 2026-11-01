@@ -29,6 +29,7 @@ MAX_LENGTH = 448  # Whisper's: the prompt, the hotwords and the words it may say
 PROMPT_PART = MAX_LENGTH // 2 - 1  # faster-whisper keeps this much of the prompt, and of the hotwords
 SPECIAL_TOKENS = 8  # start of transcript, language, task, no timestamps (and room to spare)
 TEMPERATURES = (0.0, 0.3, 0.6)
+SIZES = ("tiny", "base", "small", "medium", "distil-large-v3", "large-v3")  # smallest first
 MODELS = ("tiny.en", "base.en", "small.en", "medium.en", "large-v3", "distil-large-v3")
 
 
@@ -107,16 +108,57 @@ def model_path(model: str, models_dir: Path) -> Path:
     return models_dir / f"faster-whisper-{model}"
 
 
+# Where the models come from: Hugging Face, then its public mirror (huggingface.co can't be reached from China, where
+# a pilot's every download timed out and every flight stopped before it began).
+HUB_ENDPOINTS = ("https://huggingface.co", "https://hf-mirror.com")
+HUB_FILES = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
+
+
 def download(model: str, models_dir: Path | None = None) -> Path:
-    """Fetch a model into the local folder (once); returns its path."""
-    from faster_whisper import download_model
+    """Fetch a model into the local folder (once); returns its path. Each of ``HUB_ENDPOINTS`` is tried in turn."""
+    import huggingface_hub
+    from faster_whisper.utils import _MODELS
 
     target = model_path(model, models_dir or default_models_dir())
     if (target / "model.bin").exists():
         return target
     target.mkdir(parents=True, exist_ok=True)
-    log.info("Downloading Whisper %s to %s", model, target)
-    return Path(download_model(model, output_dir=str(target)))
+    repo = _MODELS.get(model, model)
+    error: Exception | None = None
+    for endpoint in HUB_ENDPOINTS:
+        log.info("Downloading Whisper %s to %s (from %s)", model, target, endpoint)
+        try:
+            return Path(huggingface_hub.snapshot_download(repo, local_dir=str(target), allow_patterns=HUB_FILES,
+                                                          endpoint=endpoint))
+        except Exception as exc:  # no network, the host blocked, ...
+            log.warning("Whisper %s not downloaded from %s: %s", model, endpoint, str(exc).splitlines()[0])
+            error = exc
+    assert error is not None
+    raise error
+
+
+def installed(models_dir: Path) -> list[str]:
+    """The Whisper models in the local folder, smallest first."""
+    have = [p.name.removeprefix("faster-whisper-") for p in models_dir.glob("faster-whisper-*") if (p / "model.bin").exists()]
+    return sorted(have, key=_size)
+
+
+def stand_in(model: str, models_dir: Path) -> str | None:
+    """An installed model to use when ``model`` can't be downloaded: the same size in the other kind (``base`` for
+    ``base.en``), else the largest installed one no bigger, else the smallest bigger one."""
+    have = installed(models_dir)
+    if not have:
+        return None
+    for same in (multilingual(model), model + ".en"):
+        if same in have:
+            return same
+    smaller = [m for m in have if _size(m) <= _size(model)]
+    return smaller[-1] if smaller else have[0]
+
+
+def _size(model: str) -> int:
+    size = model.removesuffix(".en")
+    return SIZES.index(size) if size in SIZES else len(SIZES)
 
 
 @dataclass(frozen=True)
@@ -136,6 +178,7 @@ class WhisperTranscriber:
         self.beam_size = beam_size
         self.allow_download = allow_download
         self._model: Any = None
+        self.stand_in_for = ""  # the model asked for, when it couldn't be downloaded and an installed one is used
 
     @property
     def description(self) -> str:
@@ -151,7 +194,17 @@ class WhisperTranscriber:
             if not self.allow_download:
                 raise FileNotFoundError(f"Whisper {self.choice.model} isn't installed in {self.models_dir}; "
                                         "run: localtc setup")
-            path = download(self.choice.model, self.models_dir)
+            try:
+                path = download(self.choice.model, self.models_dir)
+            except Exception:
+                other = stand_in(self.choice.model, self.models_dir)
+                if other is None:
+                    raise
+                log.warning("Whisper %s couldn't be downloaded; using Whisper %s, already on this PC",
+                            self.choice.model, other)
+                self.stand_in_for = self.choice.model
+                self.choice = Choice(other, self.choice.device, self.choice.compute_type)
+                path = model_path(other, self.models_dir)
         try:
             self._model = WhisperModel(str(path), device=self.choice.device, compute_type=self.choice.compute_type)
         except Exception as exc:

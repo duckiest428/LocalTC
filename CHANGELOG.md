@@ -19,6 +19,13 @@ a new minor version adds features, a patch fixes them.
 - **The Discord buttons** go to the server's new invite link.
 
 ### Fixed
+- **Settings that wouldn't save during a flight:** every change made with a flight running failed (a setting of the
+  removed Azure voices was still read).
+- **No flight at all where Hugging Face can't be reached (China):** Whisper and the Piper voices are fetched from
+  Hugging Face's public mirror when huggingface.co doesn't answer, and when neither does, the flight starts on a Whisper
+  model already on the PC (the same size, or the nearest smaller) and says so, instead of stopping before it began.
+- **The copilot's first line in another language lost:** its voice took 8 s to load at that line, the line ran out of
+  time and the voices were rested for 30 s. It's loaded when the flight starts now.
 - **Two controllers at once, and ATC still talking with LocalTC closed:** LocalTC opened a second time ran a second
   ATC beside the first. Only one runs now: opening it again brings the open window to the front. Closing the window
   ends LocalTC entirely, and a flight restarted with a new plan is fully stopped before the new one starts.

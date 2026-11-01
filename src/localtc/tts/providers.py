@@ -269,7 +269,7 @@ class PiperVoices:
         self._spoken: dict[str, Any] = {}  # each language's voices, loaded once
         self._fetching: set[str] = set()
 
-    def _voice_of(self, code: str, sex: str) -> tuple[Any, int | None]:
+    def voice_of(self, code: str, sex: str) -> tuple[Any, int | None]:
         """The voice of the copilot's language and sex from its pack (languages.py), loaded once, and its speaker. Not
         downloaded yet: the pack is fetched meanwhile, and this line is text only (an English voice reading German was
         no use)."""
@@ -321,7 +321,7 @@ class PiperVoices:
 
     def synthesize(self, text: str, persona: Persona) -> Speech:
         if persona.foreign:  # the copilot in the pilot's language: that language's voice, at its own pace
-            synth, speaker = self._voice_of(persona.language, persona.sex)
+            synth, speaker = self.voice_of(persona.language, persona.sex)
             speech = synth.synthesize(text, speaker)
             return Speech(speech.audio, speech.rate, speech.latency_ms, "piper", synth.voice_file.stem)
         speaker = self.speaker(persona)

@@ -873,6 +873,17 @@ def voice_chain(cfg: Config, piper: object | None):
     return VoiceChain(providers, timeout_s=t.timeout_s) if providers else None
 
 
+def _warm_language(chain, code: str, sex: str) -> None:
+    """The voice of the copilot's language loaded at the start, not at its first line: loading took 8 s, the line ran
+    out of time for it, and Piper was rested for 30 s."""
+    for p in chain.providers:
+        if p.id == "piper":
+            try:
+                p.voice_of(code, "F" if sex == "female" else "M")
+            except Exception as exc:  # noqa: BLE001 - downloading, or none for the language: as at the line itself
+                log.info("The %s copilot voice isn't loaded yet (%s)", code, exc)
+
+
 def _warm_kokoro(chain) -> None:
     """Kokoro loaded and run once before the first line (half a second, then each line is quicker)."""
     from localtc.tts.persona import persona_for
@@ -928,6 +939,9 @@ async def start_tts(cfg: Config, bus: EventBus) -> VoiceOutput | None:
 
     who = copilot_personality(cfg.crew.personality)  # the copilot's voice: its personality's, or the setting's
     voice_sex, voice_pick = who.voice_sex(cfg.crew.voice_sex), who.voice_pick(cfg.crew.voice_pick)
+    if cfg.crew.language not in ("", "en"):
+        threading.Thread(target=_warm_language, args=(chain, cfg.crew.language, voice_sex), daemon=True,
+                         name="piper-language").start()
     copilot_voice = crew_speaker(voice_sex, voice_pick, synth.speakers, t.voice) if synth else None
     sex = {"female": "F", "male": "M"}.get(voice_sex, "")
     service = VoiceOut(bus, chain, player, effect=t.radio_effect, static=t.static, atis=t.atis, copilot=t.copilot,
@@ -969,7 +983,11 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await asyncio.to_thread(transcriber.warm_up)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
-    capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000, gain=cfg.mixer.mic_gain)
+    if transcriber.stand_in_for:
+        log.warning("Whisper %s couldn't be downloaded (no connection to Hugging Face or its mirror): using Whisper "
+                    "%s, already on this PC, for this flight", transcriber.stand_in_for, transcriber.choice.model,
+                    extra=CONSOLE)
+    capture =AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000, gain=cfg.mixer.mic_gain)
     capture.start()
     log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)", extra=CONSOLE)
     hints = None

@@ -1038,8 +1038,6 @@ class AppController:
         self.cfg = cfg
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()
-        if self.live is not None and self.live.speaker is not None:
-            self.live.speaker.chatter_cloud = cfg.tts.chatter_cloud  # the next line of chatter
         self._apply_mixer(cfg)
         self._push_state()
         return {"saved": str(path), "restart": live_now}

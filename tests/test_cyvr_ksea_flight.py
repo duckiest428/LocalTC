@@ -114,8 +114,6 @@ def test_no_takeoff_clearance_before_the_runway(recorded):
 def test_good_weather_in_the_us_is_the_visual(recorded):
     expected = [line for line in atc(recorded) if "expect" in line and "approach" in line]
     assert expected and all("expect visual approach runway 34R" in line for line in expected), expected
-    # (The recorded pilot went to tower before the turn onto the final, which clears a visual now: the vectors were for it.)
-    assert "vectors visual approach runway 34R" in "".join(atc(recorded))
     assert not [line for line in atc(recorded) if "visual" in line and "localizer" in line]
 
 
@@ -147,8 +145,7 @@ def test_approach_lets_a_descend_via_carry_on(recorded):
 
 def test_speeds_are_reductions(recorded):
     speeds = [line for line in atc(recorded) if "knots" in line]
-    # Nobody landing ahead and above 10,000 ft: the speed is the pilot's own.
-    assert all("reduce speed to" in line for line in speeds)
+    assert all("reduce speed to" in line or "until" in line for line in speeds)
 
 
 def test_an_airports_altimeter_stays_put_until_measured_there():

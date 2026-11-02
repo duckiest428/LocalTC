@@ -36,7 +36,7 @@ class Pattern:
     lead_nm: float = 2.0  # the base turn is given this much before the base point
 
 
-JET = Pattern(gate_nm=9.0, base_nm=17.0, offset_nm=6.0)
+JET = Pattern(gate_nm=8.0, base_nm=14.0, offset_nm=5.0)
 SLOW = Pattern(gate_nm=5.0, base_nm=10.0, offset_nm=3.5, lead_nm=1.0)
 SLOW_KT = 160.0  # flying slower than this, the tighter pattern
 # A visual approach's last vector is the final itself ("turn left heading 170, cleared visual approach runway 16L"),

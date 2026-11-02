@@ -334,13 +334,12 @@ MAX_ENDURANCE_MIN = 20 * 60  # beyond this the numbers are not telling us anythi
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
-SPEED_CONTROL_MIN_KT = 200.0  # slower than this and there is nothing to manage
-SPEED_GATES = ((30.0, 250, "speed250"), (18.0, 210, "speed210"), (10.0, 180, "speed180"))
+SPEED_CONTROL_MIN_KT = 175.0  # slower than this and there is nothing to manage
+SPEED_GATES = ((30.0, 250, "speed250"), (25.0, 210, "speed210"), (12.0, 180, "speed180"), (8.0, 160, "speed160"))
 # Speeds are the pilot's own unless there's a reason: 250 knots below 10,000 feet (the rule) and the slower ones for
 # traffic landing ahead (another aircraft this close to the airport, nearer it and lower). Slowing every arrival to
 # 210 and 180 with nobody around was "unrealistic".
 SPEED_LIMIT_BELOW_FT = 10000.0
-SPEED_TRAFFIC_NM, SPEED_TRAFFIC_AGL_FT = 25.0, 8000.0
 DESCENT_LEAD_MIN = 5.0  # the descent is cleared this long before the top of descent, at the current groundspeed
 # Joining the final: within this of the extended centreline, this far out or less, pointing no further off
 # the final course than this (so a base leg counts and a downwind doesn't).
@@ -386,8 +385,8 @@ DEPARTURE_STEPS_FT = (6000, 8000, 10000, 12000)  # (3,000 at a time: "too small,
 DEPARTURE_REACHING_FT = 2000  # this close below its altitude (climbing), a departure gets the next step at once
 CENTER_STEPS = (23000, 24000, 26000, 28000)  # a centre's usual intermediate level on the way up (one each)
 CENTER_STEP_GAP_FT = 4000  # ... when the cruise is at least this far above it
-CLIMB_REACHING_FT = 1000  # within this of the level given, the next climb is on its way ...
-CLIMB_WAIT_S = (10.0, 60.0)  # ... after this long (each centre its own pace), so it doesn't have to level off
+CLIMB_REACHING_FT = 3000  # within this of the level given, the next climb is on its way ...
+CLIMB_WAIT_S = (0.0, 20.0)  # ... after this long (each centre its own pace), so it doesn't have to level off
 DEPARTURE_ENDS_FT = 15000.0  # above this the departure controller hands the climb to a centre
 DEPARTURE_ENDS_NM = 40.0  # or this far from the field, whichever comes first
 # Calls that never open with "good afternoon": repeats, corrections, alerts, handoffs.
@@ -3751,8 +3750,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """
         st, ctx, t = self.state, self.tracker.context, own.t
         tuned = st.comms.tuned
-        if tuned is None or not self._works_approach(own) or "approach" in st.clearances or self._holding():
+        if tuned is None or not self._works_approach(own) or self._holding():
             return False
+        if "approach" in st.clearances:  # cleared: still slowing down until tower has it
+            return st.pending is None and self._speed_control(own, t, tuned)
         if (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
             return False  # wait for the check-in
         plan = self._arrival_plan(own)
@@ -3892,9 +3893,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if self._vector_leg in ("join", "downwind") and runway and (leg := self._vector(own, runway)) is not None                 and leg.track_nm > FAR_ROUND_NM:
             to_go = max(to_go, leg.track_nm)  # vectored: the miles round the pattern, not abeam the field ("maintain
             # 180 until five mile final" on a downwind 30 miles from landing)
-        traffic = None
         star_kt = self._star_speed()
-        vectored = self._vector_leg in ("join", "downwind", "base", "intercept")
         for distance, speed, flag in SPEED_GATES:
             if assigned is not None and speed >= assigned:
                 continue  # slowed down already: never sped up again (210, then "maintain 250", then 180)
@@ -3902,12 +3901,6 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 continue  # off the STAR at its published 210: never faster than it (its speed, or slower)
             if speed == 250 and own.alt_indicated_ft >= SPEED_LIMIT_BELOW_FT:
                 continue
-            if speed == 210 and vectored:
-                pass  # on vectors (downwind, base): the vectoring speed, as approach gives it
-            elif speed < 250:
-                traffic = self._landing_ahead(own) if traffic is None else traffic
-                if not traffic:
-                    continue
             if to_go <= distance and own.ias_kt > speed + 20 and flag not in self.state.flags:
                 self.state.flags.add(flag)
                 self._vector_t = t
@@ -3928,17 +3921,6 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         runway = (self.state.assignments.arrival_runway or "").upper()
         on = [leg for leg in legs if not leg.transition or leg.transition.upper() in (f"RW{runway}", f"RW{runway[:2]}B")]
         return next((leg.speed_kt for leg in reversed(on) if leg.speed_kt), 0)
-
-    def _landing_ahead(self, own: OwnshipState) -> bool:
-        """Another aircraft on its way down to the destination ahead of this one: airborne, low, and nearer it."""
-        geo = self.geometry(self.state.flight.destination)
-        if geo is None:
-            return False
-        mine = geo.distance_nm(own.lat, own.lon)
-        elevation = geo.airport.elev_ft
-        return any(not tgt.on_ground and tgt.alt_ft - elevation < SPEED_TRAFFIC_AGL_FT
-                   and (theirs := geo.distance_nm(tgt.lat, tgt.lon)) < min(mine, SPEED_TRAFFIC_NM)
-                   for tgt in self._traffic.values())
 
     @staticmethod
     def _turn_towards(current: float, target: int) -> str | None:

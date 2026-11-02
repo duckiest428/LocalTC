@@ -71,6 +71,12 @@ a new minor version adds features, a patch fixes them.
 - **Settings → Sim → Connect to: "MSFS"**, no longer "MSFS 2024": the one connection for both sims.
 - **The Discord buttons** go to the server's new invite link.
 
+- **Step climbs without levelling off:** a centre gives the next level about 3,000 feet before you reach the one you have.
+- **A shorter way round to the final:** jets are turned onto base about 14 miles out rather than 17, on a closer downwind,
+  for a final of about 8 to 12 miles. Too high to get down from there, they're still given more room.
+- **Approach slows you down in good time:** 210 knots from about 25 miles, 180 from 12, 160 from 8, whatever other traffic
+  there is, and after the approach clearance too.
+
 ### Fixed
 - **Taxiway India lost from a taxi clearance:** the language model could drop it from "via K, A, I", being the word "I".
 - **ATC silent after a callsign on its own:** asked again for the callsign with "readbacks must include the callsign" on,

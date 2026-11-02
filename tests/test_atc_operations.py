@@ -275,6 +275,18 @@ def test_the_clearance_frequency_does_grounds_work_where_there_is_no_ground():
     assert not engine._works_ground("clearance")
 
 
+def test_the_next_climb_comes_before_the_level_is_reached():
+    engine = engine_at_kbfi()
+    st = engine.state
+    st.comms.tuned, st.assignments.altitude_ft, st.assignments.cruise_ft = CENTER, 17000, 40000
+    far = _own(engine, 10.0, on_ground=False, alt=13000.0)
+    assert engine._climb_due(far) is None  # 4,000 ft to go
+    near = _own(engine, 20.0, on_ground=False, alt=14500.0)
+    engine._climb_due(near)  # (each centre its own pace, a few seconds at most)
+    later = _own(engine, 45.0, on_ground=False, alt=15500.0)
+    assert engine._climb_due(later) > 17000  # still climbing: no levelling off
+
+
 def test_operations_go_out_for_the_maps():
     engine = engine_at_kbfi()
     data = engine.operations_json(_own(engine, 1.0))

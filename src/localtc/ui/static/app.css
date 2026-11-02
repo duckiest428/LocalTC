@@ -199,6 +199,8 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.crew .who, .line.intercom .who { color: #8fb8e8; }
 .line.crew .ic, .line.intercom .ic, .line.cabin .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
 .line.cabin .who { color: #d6a8e0; }
+.offblock.late .code { color: #e0a040; }
+#btn-cabin[hidden], #btn-cab[hidden], #offblock[hidden] { display: none; }
 .ptt.ic { font-weight: 700; font-size: 12px; color: #8fb8e8; }
 .line.thinking .dots { display: inline-flex; gap: 4px; padding: 4px 0; }
 .line.thinking .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); opacity: .25;

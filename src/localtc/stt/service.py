@@ -6,7 +6,8 @@ recording, transcribes it off the event loop, and publishes the transcript. The 
 waits for it before answering.
 
 The intercom key (``radio`` 0) works the same with the same microphone and model, but it's the copilot listening:
-``IntercomPressed``/``IntercomReleased`` in, ``IntercomHeard`` out, primed with crew words, never ATC's.
+``IntercomPressed``/``IntercomReleased`` in, ``IntercomHeard`` out, primed with crew words, never ATC's. The cabin's key
+(``radio`` -1) is the same again, for the cabin crew (``to`` "cabin").
 """
 
 import asyncio
@@ -33,6 +34,7 @@ NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignor
 GUESSED_CONFIDENCE, GUESSED_MAX_S = 0.35, 3.0
 WORDS_PER_S = 6.0  # more words a second than this: made up
 INTERCOM = 0  # the "radio" of the intercom key: the copilot, not a COM radio
+CABIN = -1  # ... and of the cabin's key: the cabin crew
 # What Whisper is primed with on the intercom: the words a pilot says to the copilot.
 CREW_STYLE = (
     "Gear up. Gear down. Flaps 1. Flaps 2, flaps 3, flaps full, flaps up. Landing lights on. Taxi lights off. "
@@ -68,6 +70,16 @@ def made_up(text: str, audio_s: float, confidence: float | None = None) -> bool:
     return len(words) >= 16 and len(set(words)) < len(words) / 4
 
 
+def _to(radio: int) -> str:
+    return "cabin" if radio == CABIN else ""
+
+
+def _radio_of(event: Any) -> int:
+    if isinstance(event, IntercomPressed | IntercomReleased):
+        return CABIN if event.to == "cabin" else INTERCOM
+    return event.radio
+
+
 class VoiceService:
     def __init__(
         self,
@@ -94,7 +106,7 @@ class VoiceService:
     # Called from the push-to-talk source's thread. ``radio`` INTERCOM: the intercom key.
     def press(self, radio: int = 1) -> None:
         if self._loop is not None:
-            event = IntercomPressed(t=self.now()) if radio == INTERCOM else PttPressed(t=self.now(), radio=radio)
+            event = IntercomPressed(t=self.now(), to=_to(radio)) if radio <= INTERCOM else PttPressed(t=self.now(), radio=radio)
             self._loop.call_soon_threadsafe(lambda: self.bus.publish(event))
 
     def cancel(self, radio: int = 1) -> None:
@@ -104,14 +116,14 @@ class VoiceService:
 
     def release(self, radio: int = 1) -> None:
         if self._loop is not None:
-            event = IntercomReleased(t=self.now()) if radio == INTERCOM else PttReleased(t=self.now(), radio=radio)
+            event = IntercomReleased(t=self.now(), to=_to(radio)) if radio <= INTERCOM else PttReleased(t=self.now(), radio=radio)
             self._loop.call_soon_threadsafe(lambda: self.bus.publish(event))
 
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
         async for event in self._inputs:
             if isinstance(event, (PttPressed, IntercomPressed)):
-                radio = INTERCOM if isinstance(event, IntercomPressed) else event.radio
+                radio = _radio_of(event)
                 if self._held is not None:  # one microphone: the second key waits for the first to come up
                     continue
                 self._held = self._radio = radio
@@ -119,7 +131,7 @@ class VoiceService:
                     await self._stalled_microphone()
                 self.capture.begin()
             elif isinstance(event, (PttReleased, IntercomReleased)):
-                radio = INTERCOM if isinstance(event, IntercomReleased) else event.radio
+                radio = _radio_of(event)
                 if self._held != radio:
                     continue
                 self._held = None
@@ -127,7 +139,7 @@ class VoiceService:
                     self._cancelled = False
                     self.capture.end()
                     log.info("Push-to-talk key used in a shortcut: nothing sent")
-                    if radio != INTERCOM:  # ATC is waiting for this transmission: it was nothing
+                    if radio > INTERCOM:  # ATC is waiting for this transmission: it was nothing
                         self.bus.publish(Transcript(t=self.now(), text="", radio=radio, source="cancelled"))
                     continue
                 await asyncio.sleep(self.tail_s)  # the last word often ends as the switch is let go
@@ -139,8 +151,9 @@ class VoiceService:
                     self.bus.publish(self._heard("", None, None, 0.0))
 
     def _heard(self, text: str, confidence: float | None, ref: str | None, stt_ms: float) -> Transcript | IntercomHeard:
-        if self._radio == INTERCOM:
-            return IntercomHeard(t=self.now(), text=text, confidence=confidence, audio_ref=ref, stt_ms=stt_ms)
+        if self._radio <= INTERCOM:
+            return IntercomHeard(t=self.now(), text=text, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
+                                 to=_to(self._radio))
         return Transcript(t=self.now(), text=text, radio=self._radio, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
                           source="voice")
 
@@ -191,7 +204,7 @@ class VoiceService:
             return self._heard("", None, None, 0.0)
         ref = self.recorder.save_audio(to_pcm16(audio), sample_rate=SAMPLE_RATE) if self.recorder else None
         hints = self.hints() if (self.hints and self.vocabulary) else VocabularyHints()
-        if self._radio == INTERCOM:  # the words a pilot says to the copilot, never ATC's names and numbers
+        if self._radio <= INTERCOM:  # the words a pilot says to the crew, never ATC's names and numbers
             hints = VocabularyHints(style=CREW_STYLE)
         prompt = build_prompt(hints) if self.vocabulary else ""
         speech = trim_silence(audio)

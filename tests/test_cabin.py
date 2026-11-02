@@ -224,7 +224,8 @@ def test_off_switches_are_honoured():
 def test_every_line_fills_for_an_ordinary_flight():
     cabin = CabinCrew(CabinSettings(captain="Reyes"), lambda: facts(), seed=1)
     cabin.observe(own(0))
-    values = cabin._values()[0] | {"local": "", "weather": "", "members": "", "members_bye": "", "cruise": "FL370"}
+    values = cabin._values()[0] | {"local": "", "weather": "", "members": "", "members_bye": "", "cruise": "FL370",
+                                 "reason": "", "plain": "", "left": "five", "minutes": "five"}
     for key, manners in LINES.items():
         for manner, options in manners.items():
             for option in options:
@@ -436,3 +437,80 @@ def test_the_prompted_callsign_is_not_what_the_pilot_said():
     assert without_prompt("This is Swiss 2027.", hints) == ""
     assert without_prompt("This is Swiss 2027. Request pushback.", hints) == "Request pushback."
     assert without_prompt("Request pushback, Swiss 2027.", hints) == "Request pushback, Swiss 2027."
+
+
+# ---- their own key, and the time ----
+
+
+def test_the_cabins_own_key_is_theirs_whatever_the_words():
+    cabin = CabinCrew(CabinSettings(crew="claire"), lambda: facts(), seed=3)
+    run(cabin, [own(0.0)])
+    assert cabin.claims("how are you doing today", 1.0, "cabin") and not cabin.claims("how are you doing today", 1.0)
+    assert not cabin.claims("   ", 1.0, "cabin")
+
+
+def test_a_greeting_with_their_name_is_for_them():
+    cabin = CabinCrew(CabinSettings(crew="claire"), lambda: facts("SWR2027"), seed=3)
+    run(cabin, [own(0.0)])
+    name = cabin.crew()[1].split()[0]
+    assert cabin.claims(f"hello there {name} how are you?", 1.0)
+    assert not cabin.claims("hello there how are you?", 1.0)
+
+
+NOON = 12 * 3600
+
+
+def at_gate(cabin, t, zulu_late_s, board=None):
+    """The gate, ``zulu_late_s`` past the plan's off-block."""
+    events = []
+    if board is not None:
+        events.append(AircraftVars(t=t, values={"L:FSDT_GSX_BOARDING_STATE": float(board)}))
+    events.append(own(t, zulu_s=NOON + zulu_late_s))
+    return run(cabin, events)
+
+
+def late_crew(**settings):
+    return CabinCrew(CabinSettings(crew="claire", **settings), lambda: facts(sched_out_s=1793620800 - 1793620800 % 86400 + NOON),
+                     seed=3)
+
+
+def test_they_say_when_boarding_runs_past_off_block_and_how_long_it_has_to_go():
+    cabin = late_crew()
+    at_gate(cabin, 0.0, -1800.0, board=1)
+    out = at_gate(cabin, 5.0, -1400.0, board=1)
+    out += [o for t in range(10, 40, 5) for o in at_gate(cabin, float(t), -1400.0 + t, board=1)]
+    assert any("hasn't started" in s.text for s in said(out, "interphone"))  # 25 minutes to go, and nobody on board
+    out = [o for t in range(40, 100, 5) for o in at_gate(cabin, float(t), -600.0, board=5)]
+    out = [o for t in range(100, 160, 5) for o in at_gate(cabin, float(t), 30.0, board=5)]
+    assert any("still boarding" in s.text and "minutes" in s.text for s in said(out, "interphone"))
+    out = [o for t in range(160, 260, 5) for o in at_gate(cabin, float(t), 700.0, board=5)]
+    pa = said(out, "pa")
+    assert any("delay" in s.text and "finishing the boarding" in s.text for s in pa)
+    out = [o for t in range(260, 320, 5) for o in at_gate(cabin, float(t), 800.0, board=6)]
+    assert any("minutes past" in s.text for s in said(out, "interphone"))
+
+
+def test_a_plan_hours_from_the_clock_isnt_held_to():
+    cabin = late_crew()
+    out = [o for t in range(0, 100, 5) for o in at_gate(cabin, float(t), -7 * 3600.0, board=5)]
+    assert not [s for s in said(out) if "off-block" in s.text or "delay" in s.text]
+    assert cabin._where_we_are(100.0)[0] == "boarding_left"
+    cabin = late_crew()
+    run(cabin, [own(0.0, zulu_s=NOON - 7 * 3600.0)])
+    assert cabin._where_we_are(1.0)[0] == "no_schedule"
+
+
+def test_no_delay_announced_to_an_empty_cabin():
+    cabin = late_crew()
+    out = [o for t in range(0, 100, 5) for o in at_gate(cabin, float(t), 1500.0, board=1)]
+    assert not said(out, "pa")
+
+
+def test_are_we_on_time():
+    cabin = late_crew()
+    run(cabin, [own(0.0, zulu_s=NOON + 720.0)])
+    out = cabin.heard(IntercomHeard(t=1.0, text="cabin, are we on time?"))
+    assert "twelve" in out[0].text or "12" in out[0].text
+    cabin = late_crew()
+    run(cabin, [own(0.0, zulu_s=NOON - 720.0)])
+    assert "on time" in cabin.heard(IntercomHeard(t=1.0, text="cabin, are we running late?"))[0].text.lower()

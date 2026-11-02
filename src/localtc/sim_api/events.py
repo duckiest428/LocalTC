@@ -338,21 +338,26 @@ class Transcript(Event, tag="transcript"):
 
 
 class IntercomPressed(Event, tag="intercom_pressed"):
-    """The intercom key went down: the pilot talking to the copilot, not on the radio."""
+    """The intercom key went down: the pilot talking to the copilot, not on the radio. ``to`` "cabin": the cabin's key."""
+
+    to: str = ""
 
 
 class IntercomReleased(Event, tag="intercom_released"):
     audio_ref: str | None = None
+    to: str = ""
 
 
 class IntercomHeard(Event, tag="intercom_heard"):
-    """What the pilot said to the copilot. ``source``: voice, or typed (the app's crew box)."""
+    """What the pilot said to the copilot, or with ``to`` "cabin" to the cabin crew. ``source``: voice, or typed (the
+    app's crew box)."""
 
     text: str
     confidence: float | None = None
     audio_ref: str | None = None
     stt_ms: float = 0.0
     source: str = "voice"
+    to: str = ""
 
 
 class CrewSpeech(Event, tag="crew_speech"):

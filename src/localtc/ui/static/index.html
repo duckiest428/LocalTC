@@ -22,6 +22,7 @@
       <span class="radio"><span class="rlabel">COM1</span> <span class="freq active" id="com1">---.---</span></span>
       <span class="radio"><span class="rlabel">COM2</span> <span class="freq" id="com2">OFF</span></span>
       <span class="radio zulu" title="Zulu time (UTC): the sim's during a flight, this computer's otherwise" translate="no"><span class="code" id="zulu">--:--Z</span></span>
+      <span class="radio offblock" id="offblock" title="The flight plan's off-block time, and how far off it is by the sim's clock: + late, - to go" hidden><span class="rlabel" translate="no">OBT</span> <span class="code" id="offblock-time" translate="no"></span></span>
       <span class="radio xpdr"><span class="rlabel">XPDR</span> <span class="code" id="squawk">----</span> <span class="xmode" id="xmode"></span></span>
     </div>
     <a class="coffee" id="btn-coffee" href="https://buymeacoffee.com/petey1" target="_blank" rel="noopener" hidden
@@ -177,6 +178,8 @@
       <button class="btn com" id="btn-send" title="Transmit on COM1">COM</button>
       <button class="btn com" id="btn-crew" title="Say it to the copilot on the intercom (not transmitted)">CREW</button>
       <button class="ptt ic" id="btn-ic" title="Hold to talk to the copilot (or your intercom key)">IC</button>
+      <button class="btn com" id="btn-cabin" title="Say it to the cabin crew on the interphone (not transmitted)" hidden>CABIN</button>
+      <button class="ptt ic" id="btn-cab" title="Hold to talk to the cabin crew (or your cabin key)" hidden>CAB</button>
       <button class="btn x" id="btn-clear" title="Clear">&#10005;</button>
       <div class="switches">
         <button class="switch on" id="sw-atc" title="ATC's voice (off: text only)">ATC</button>

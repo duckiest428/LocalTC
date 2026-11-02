@@ -47,7 +47,9 @@ class CrewService:
         loop = asyncio.get_running_loop()
         async for event in self._inputs:
             started = loop.time()
-            if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t):
+            if isinstance(event, IntercomHeard) and event.to == "cabin" and not event.text.strip():
+                continue  # the cabin's key, and nothing heard: not the copilot's to answer
+            if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t, event.to):
                 from localtc.crew.cabin_service import answer
 
                 asyncio.create_task(answer(self.cabin, event, self.bus))

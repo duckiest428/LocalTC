@@ -47,7 +47,6 @@
 ": your flight live on the website, full screen, with the radio beside the map.": ": ваш полёт в прямом эфире на сайте, во весь экран, с радиообменом рядом с картой.",
 ": your weeks, months and years of flying as a story.": ": ваши недели, месяцы и годы полётов в виде истории.",
 "A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration, the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the interphone, and answer when you start with \"cabin\": \"cabin, could I get a coffee?\". Do you want them?": "Бортпроводники за дверью кабины пилотов: музыка при посадке и приветствие у выхода, демонстрация безопасности, табло «Пристегните ремни», напитки, снижение и прилёт, на языках авиакомпании. Они звонят вам по интерфону и отвечают, когда вы начинаете с «cabin»: «cabin, could I get a coffee?». Хотите их?",
-"A cabin manager who makes the announcements, calls you on the interphone and answers when you start with \"cabin\" on the intercom: \"cabin, could I get a coffee?\", \"cabin, prepare for landing\", \"cabin, tell the passengers ...\". Only on airline flights and in airliners.": "Старший бортпроводник, который делает объявления, звонит вам по интерфону и отвечает, когда вы начинаете в интеркоме с «cabin»: «cabin, could I get a coffee?», «cabin, prepare for landing», «cabin, tell the passengers ...». Только на рейсах авиакомпаний и на авиалайнерах.",
 "A chatty long-haul companion.": "Разговорчивый спутник на дальних рейсах.",
 "A couple of notes and recommendations before your first flight:": "Пара замечаний и советов перед первым полётом:",
 "A different one each flight": "Каждый рейс другой",
@@ -1342,5 +1341,13 @@
 "🎤 Test": "🎤 Проверить",
 "🎤 Test my microphone": "🎤 Проверить микрофон",
 "🎧 A headset": "🎧 Гарнитура",
-"🔊 Speakers": "🔊 Динамики"
+"🔊 Speakers": "🔊 Динамики",
+"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "Старший бортпроводник, который делает объявления, вызывает вас по интерфону и отвечает: на своей клавише, кнопками CABIN и CAB рядом с полем передачи или когда вы начинаете с \"cabin\" на интеркоме: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Только на рейсах авиакомпаний и на авиалайнерах.",
+"Cabin key": "Клавиша салона",
+"Hold to talk to the cabin crew (or your cabin key)": "Удерживайте, чтобы говорить с бортпроводниками (или ваша клавиша салона)",
+"Hold to talk to the cabin crew{0}": "Удерживайте, чтобы говорить с бортпроводниками{0}",
+"Say it to the cabin crew on the interphone (not transmitted)": "Сказать бортпроводникам по интерфону (не передаётся в эфир)",
+"The flight plan's off-block time, and how far off it is by the sim's clock: + late, - to go": "Плановое время начала движения и разница по часам симулятора: + опоздание, - осталось",
+"CAB": "CAB",
+"OBT": "OBT"
 }

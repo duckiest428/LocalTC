@@ -47,7 +47,6 @@
 ": your flight live on the website, full screen, with the radio beside the map.": "：你的航班在网站上实时显示，全屏，无线电通话就在地图旁边。",
 ": your weeks, months and years of flying as a story.": "：把你一周、一个月、一年的飞行讲成一个故事。",
 "A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration, the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the interphone, and answer when you start with \"cabin\": \"cabin, could I get a coffee?\". Do you want them?": "驾驶舱门后的客舱机组：登机时的音乐和登机口的欢迎、安全演示、安全带指示灯、饮料、下降和到达，使用航空公司自己的语言。他们会通过内话呼叫你，当你以 “cabin” 开头时会回答你：“cabin, could I get a coffee?”。需要他们吗？",
-"A cabin manager who makes the announcements, calls you on the interphone and answers when you start with \"cabin\" on the intercom: \"cabin, could I get a coffee?\", \"cabin, prepare for landing\", \"cabin, tell the passengers ...\". Only on airline flights and in airliners.": "一位乘务长：负责广播，通过内话呼叫你，当你在内话中以 “cabin” 开头时会回答你：“cabin, could I get a coffee?”、“cabin, prepare for landing”、“cabin, tell the passengers ...”。仅在航空公司航班和客机上。",
 "A chatty long-haul companion.": "一位健谈的远程航线伙伴。",
 "A couple of notes and recommendations before your first flight:": "首次飞行前的几点说明和建议：",
 "A different one each flight": "每次飞行换一位",
@@ -1342,5 +1341,13 @@
 "🎤 Test": "🎤 测试",
 "🎤 Test my microphone": "🎤 测试我的麦克风",
 "🎧 A headset": "🎧 耳机",
-"🔊 Speakers": "🔊 扬声器"
+"🔊 Speakers": "🔊 扬声器",
+"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "客舱经理负责广播、通过内话呼叫你并回答：使用专用按键、发送框旁的 CABIN 和 CAB 按钮，或在机组通话中以 \"cabin\" 开头：\"could I get a coffee?\"、\"prepare for landing\"、\"tell the passengers ...\"、\"are we on time?\"。仅限航空公司航班和客机。",
+"Cabin key": "客舱键",
+"Hold to talk to the cabin crew (or your cabin key)": "按住与客舱机组通话（或使用客舱键）",
+"Hold to talk to the cabin crew{0}": "按住与客舱机组通话{0}",
+"Say it to the cabin crew on the interphone (not transmitted)": "通过内话告诉客舱机组（不发送到无线电）",
+"The flight plan's off-block time, and how far off it is by the sim's clock: + late, - to go": "飞行计划的撤轮挡时间，以及按模拟器时钟的差值：+ 晚点，- 剩余",
+"CAB": "CAB",
+"OBT": "OBT"
 }

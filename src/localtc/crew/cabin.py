@@ -53,6 +53,7 @@ from localtc.crew.cabin_data import (
     seats,
 )
 from localtc.crew.commands import parse as copilot_command
+from localtc.crew.turnaround import off_block_in
 from localtc.crew.cabin_lines import BY_ID, FOREIGN, LANDING_WORDS, LINES, PEOPLE, REPLIES, Person
 from localtc.sim_api import (
     AircraftIdentity,
@@ -99,6 +100,7 @@ class Facts:
     origin_lon: float | None = None
     planned_s: float = 0.0  # the planned flight time (0: not known)
     cruise_ft: int = 0
+    sched_out_s: int = 0  # the plan's off-block time (Unix seconds; 0: not planned)
 
 
 # What says where the boarding is: GSX's own state where it's running (its manual's L:vars: 1 available, 3 skipped,
@@ -125,6 +127,10 @@ DEBOARDED_S = 120.0
 SOFT_FPM = 200.0  # a touchdown gentler than this is applauded
 FIRM_FPM = 450.0
 MIN_SERVICE_S = 25 * 60  # a flight shorter than this has no service
+BOARDING_S_PER_PAX = 7.6  # GSX's pace, about (130 on an A220 took 16 and a half minutes)
+NOT_BOARDING_S = 25 * 60  # this long before off-block with nobody on board: said
+READY_LATE_S = 5 * 60  # this late, boarded, and not pushing: said
+LATE_PA_S = (10 * 60, 30 * 60)  # this late: the passengers are told
 SPEECH_S_PER_WORD = 0.42  # how long an announcement takes to say, about
 FACTS_EVERY_S = 10.0  # the flight's details asked for again this often
 
@@ -511,7 +517,8 @@ class CabinCrew:
                            channel=channel, chime=chime if self.settings.chime else "", sex=sex, locale=english,
                            language="" if language == "en" else language)
 
-    def announce(self, key: str, *, landed: bool = False, chime: bool = True, first_only: bool = False) -> list[Any]:
+    def announce(self, key: str, *, landed: bool = False, chime: bool = True, first_only: bool = False,
+                 extra: dict[str, str] | None = None) -> list[Any]:
         """An announcement on the address system, in each of the airline's languages (the chime before the first;
         ``first_only``: an order to the crew, given once)."""
         if not self.settings.announcements:
@@ -519,7 +526,7 @@ class CabinCrew:
         out: list[Any] = []
         for lang in self.languages()[:1] if first_only else self.languages():
             if lang == "en":
-                said = self._english(key, landed=landed)
+                said = self._english(key, landed=landed, extra=extra)
                 if said is None:
                     continue
                 text, spoken = said
@@ -720,6 +727,8 @@ class CabinCrew:
             if "boarding" not in self.done and "begun" in self.done and not ready and not finished \
                     and t - self._at["begun"] >= BOARDING_PA_S:
                 out += self._moment("boarding", t, self.announce("boarding"))
+            if not pushing:
+                out += self._schedule(t, gsx=gsx)
             if "boarded" not in self.done and (finished or ready):
                 self._mark("boarded", t)
                 if s.interphone:
@@ -887,11 +896,13 @@ class CabinCrew:
 
     # ---- the pilot on the intercom ----
 
-    def claims(self, text: str, t: float) -> bool:
-        """Whether the pilot's words on the intercom are for the cabin (or the passengers): addressed to them, an
-        announcement of the pilot's own, or the answer to the question they've asked."""
+    def claims(self, text: str, t: float, to: str = "") -> bool:
+        """Whether the pilot's words are for the cabin (or the passengers): said on the cabin's own key (``to``),
+        addressed to them, an announcement of the pilot's own, or the answer to the question they've asked."""
         if not self.active or not text.strip():
             return False
+        if to == "cabin":
+            return True
         if self._address(text) is not None or CAPTAIN_PA.match(text):
             return True
         if t <= self._listening_until:
@@ -909,7 +920,7 @@ class CabinCrew:
         if m:
             return text[m.end():].strip()
         # Whisper's spelling of their name ("Stephan", "Steven") or of the cabin ("Kevin").
-        first = re.match(r"\s*(?:(?:hey|hi|hello|okay|ok)[,.]?\s+)?([^\W\d_]+)[,.!?]?\s*", text)
+        first = re.match(r"\s*(?:(?:hey|hi|hello|okay|ok)[,.]?\s+(?:there[,.]?\s+)?)?([^\W\d_]+)[,.!?]?\s*", text)
         if first and (difflib.SequenceMatcher(None, first.group(1).lower(), name.lower()).ratio() >= 0.7
                       or first.group(1).lower() in ("kevin", "cabins", "cabin's")):
             return text[first.end():].strip()
@@ -964,6 +975,16 @@ class CabinCrew:
                              detail=result.error or "", latency_ms=result.latency_ms)
         return reply or draft, [record]
 
+    def _where_we_are(self, t: float) -> tuple[str, dict[str, str]]:
+        """The answer to "are we on time?", "how long for the boarding?": the reply's key and its values."""
+        left = self._boarding_left_s(t)
+        to_go = self._to_off_block()
+        if left is not None:
+            return "boarding_left", {"left": words(max(1, round(left / 60)))}
+        if to_go is None:
+            return "no_schedule", {}
+        return ("on_time", {}) if to_go >= 0 else ("behind", {"minutes": words(max(1, round(-to_go / 60)))})
+
     def _conversation_facts(self) -> dict[str, str]:
         values, _ = self._values()
         own = self._own
@@ -976,9 +997,61 @@ class CabinCrew:
         done = [k for k in ("boarding", "boarded", "doors_arm", "welcome", "safety", "secure_takeoff", "seatbelt_off",
                             "service_call", "descent", "landing", "secure_landing", "after_landing") if k in self.done]
         facts["done so far in the cabin"] = ", ".join(done) or "nothing yet"
+        to_go = self._to_off_block()
+        if to_go is not None and not self._was_airborne:
+            facts["off-block time (the plan)"] = f"{abs(round(to_go / 60))} minutes {'away' if to_go >= 0 else 'ago'}"
+        left = self._boarding_left_s(self._t)
+        if left is not None:
+            facts["boarding to go, about"] = f"{round(left / 60)} minutes"
         facts["boarding"] = {4: "requested", 5: "in progress", 6: "complete"}.get(int(self._var(GSX_BOARDING)),
                                                                                   "complete" if "boarded" in self.done else "not reported")
         return facts
+
+    # ---- the schedule ----
+
+    def _to_off_block(self) -> float | None:
+        """Seconds to the plan's off-block time (negative: late), None without a time that fits the sim's clock."""
+        return off_block_in(self.facts.sched_out_s, self._own.zulu_s if self._own is not None else None)
+
+    def _boarding_left_s(self, t: float) -> float | None:
+        """How long the boarding has to go at GSX's pace, None when it isn't going (or isn't GSX's)."""
+        board = self._var(GSX_BOARDING)
+        pax = self.passengers()
+        if board not in (4, 5) or not pax:
+            return None
+        return max(60.0, pax * BOARDING_S_PER_PAX - (t - self._at.get("boarding_going", t) if board == 5 else 0.0))
+
+    def _schedule(self, t: float, *, gsx: bool) -> list[Any]:
+        """A word when the flight is behind the plan: to the flight deck with what they know, and to the passengers
+        once it's a real delay. Nothing's made up: what's said is where the boarding is and what the clock says."""
+        if self._var(GSX_BOARDING) == 5:
+            self._at.setdefault("boarding_going", t)
+        to_go = self._to_off_block()
+        if to_go is None:
+            return []
+        out: list[Any] = []
+        begun, boarded = "begun" in self.done, "boarded" in self.done
+        phone = self.settings.interphone
+        if gsx and not begun and 0 < to_go <= NOT_BOARDING_S and "late_not_boarding" not in self.done:
+            self._mark("late_not_boarding", t)
+            if phone:
+                out += self.call("late_not_boarding", extra={"minutes": words(max(1, round(to_go / 60)))})
+        left = self._boarding_left_s(t)
+        if to_go <= 0 and begun and not boarded and "late_boarding" not in self.done:
+            self._mark("late_boarding", t)
+            if phone:
+                out += self.call("late_boarding", extra={"left": words(max(1, round(left / 60)))} if left else {"plain": ""})
+        if to_go <= -READY_LATE_S and boarded and "late_ready" not in self.done:
+            self._mark("late_ready", t)
+            if phone:
+                out += self.call("late_ready", extra={"minutes": words(round(-to_go / 60))})
+        for i, late in enumerate(LATE_PA_S):
+            if begun and to_go <= -late and f"late_pa{i}" not in self.done:
+                self.done.update(f"late_pa{j}" for j in range(i + 1))
+                reason = {"reason": "we're just finishing the boarding"} if not boarded else {"plain": ""}
+                out += self.announce("delay", extra=reason)
+                break
+        return out
 
     def _answer(self, body: str, t: float, *, asked: bool) -> list[Any]:  # noqa: C901 - one reading per kind of call
         low = body.lower()
@@ -1032,6 +1105,8 @@ class CabinCrew:
             return reply("prepare_takeoff")
         if re.search(r"how\s+many\s+(?:passengers|people|pax|souls)|passenger\s+count|head\s*count|pax\s+count", low):
             return reply("count")
+        if re.search(r"\bon\s+time\b|\brunning\s+(?:late|behind)\b|\bare\s+we\s+late\b|how\s+long\b.*\bboard|\bboarding\b.*\b(?:done|finished|complete|long)\b", low):
+            return reply(*self._where_we_are(t))
         if re.search(r"how\s+was\s+(?:the|my|that)\s+landing", low):
             verdict = self._landing_words() or "Ask me again once we've landed!"
             return reply("landing_feedback", {"verdict": verdict})

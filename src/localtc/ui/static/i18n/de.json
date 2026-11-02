@@ -47,7 +47,6 @@
 ": your flight live on the website, full screen, with the radio beside the map.": ": dein Flug live auf der Website, im Vollbild, mit dem Funk neben der Karte.",
 ": your weeks, months and years of flying as a story.": ": deine Wochen, Monate und Jahre des Fliegens als Geschichte.",
 "A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration, the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the interphone, and answer when you start with \"cabin\": \"cabin, could I get a coffee?\". Do you want them?": "Eine Kabinenbesatzung hinter der Cockpittür: Boarding-Musik und die Begrüßung am Gate, die Sicherheitsvorführung, die Anschnallzeichen, die Getränke, der Sinkflug und die Ankunft, in den eigenen Sprachen der Airline. Sie rufen dich über das Interphone an und antworten, wenn du mit „cabin“ beginnst: „cabin, could I get a coffee?“. Möchtest du sie dabeihaben?",
-"A cabin manager who makes the announcements, calls you on the interphone and answers when you start with \"cabin\" on the intercom: \"cabin, could I get a coffee?\", \"cabin, prepare for landing\", \"cabin, tell the passengers ...\". Only on airline flights and in airliners.": "Eine Kabinenchefin oder ein Kabinenchef, die die Durchsagen machen, dich über das Interphone anrufen und antworten, wenn du am Intercom mit „cabin“ beginnst: „cabin, could I get a coffee?“, „cabin, prepare for landing“, „cabin, tell the passengers ...“. Nur bei Airline-Flügen und in Verkehrsflugzeugen.",
 "A chatty long-haul companion.": "Ein gesprächiger Langstrecken-Begleiter.",
 "A couple of notes and recommendations before your first flight:": "Ein paar Hinweise und Empfehlungen vor deinem ersten Flug:",
 "A different one each flight": "Bei jedem Flug jemand anderes",
@@ -1342,5 +1341,13 @@
 "🎤 Test": "🎤 Test",
 "🎤 Test my microphone": "🎤 Mein Mikrofon testen",
 "🎧 A headset": "🎧 Ein Headset",
-"🔊 Speakers": "🔊 Lautsprecher"
+"🔊 Speakers": "🔊 Lautsprecher",
+"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "Ein Kabinenchef, der die Ansagen macht, dich über die Bordsprechanlage ruft und antwortet: auf einer eigenen Taste, über die Schaltflächen CABIN und CAB neben dem Sendefeld oder wenn du auf dem Intercom mit \"cabin\" beginnst: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Nur auf Linienflügen und in Verkehrsflugzeugen.",
+"Cabin key": "Kabinentaste",
+"Hold to talk to the cabin crew (or your cabin key)": "Halten, um mit der Kabinenbesatzung zu sprechen (oder deine Kabinentaste)",
+"Hold to talk to the cabin crew{0}": "Halten, um mit der Kabinenbesatzung zu sprechen{0}",
+"Say it to the cabin crew on the interphone (not transmitted)": "An die Kabinenbesatzung über die Bordsprechanlage (wird nicht gesendet)",
+"The flight plan's off-block time, and how far off it is by the sim's clock: + late, - to go": "Die geplante Off-Block-Zeit und ihr Abstand nach der Uhr des Simulators: + verspätet, - verbleibend",
+"CAB": "CAB",
+"OBT": "OBT"
 }

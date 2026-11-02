@@ -273,15 +273,21 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
     from localtc.traffic.service import TrafficService
 
     t = cfg.traffic
+    schedules = None
+    if t.scheduled:
+        from localtc.ops.fetch import Cache
+        from localtc.ops.schedules import Schedules
+
+        schedules = Schedules(Cache(data_dir() / "ops" / "schedules.json"), account_url=cfg.account.api_url)
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
                                parked_fill=t.parked_fill,
                                atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
-    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, ATC %s)",
-             t.radius_nm, "on" if t.parked else "off",
+    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, departures due %s, ATC %s)",
+             t.radius_nm, "on" if t.parked else "off", "on" if schedules is not None else "off",
              "on" if settings.atc_control else "off")
-    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json")
+    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json", schedules=schedules)
 
 
 def copilot_model(cfg: Config, backend):
@@ -765,16 +771,17 @@ class LiveSession:
             self.crew.file_plan(flight.perf, flight.plan_source, flight.alternate)
         self.note(f"Flight plan filed: {plan.summary()}")
 
-    def say_crew(self, text: str) -> None:
-        """Typed to the copilot, as if said on the intercom."""
+    def say_crew(self, text: str, to: str = "") -> None:
+        """Typed to the copilot (``to`` "cabin": the cabin crew), as if said on the intercom."""
         if text.strip():
-            self.bus.publish(IntercomHeard(t=self.now(), text=text.strip(), source="typed"))
+            self.bus.publish(IntercomHeard(t=self.now(), text=text.strip(), source="typed", to=to))
 
     def note(self, text: str) -> None:
         self.bus.publish(SessionNote(t=self.now(), text=text))
 
     def ptt(self, down: bool, radio: int = 1) -> bool:
-        """Push-to-talk from the app's button (``radio`` 0: the intercom button). False without voice input."""
+        """Push-to-talk from the app's button (``radio`` 0: the intercom button, -1: the cabin's). False without voice
+        input."""
         if self.voice is None:
             return False
         (self.voice.service.press if down else self.voice.service.release)(radio)
@@ -891,7 +898,8 @@ def cabin_facts(engine, cfg: Config):
     return Facts(callsign=flight.callsign.ident if flight.callsign else (cfg.flight.callsign or ""),
                  origin=origin or "", destination=dest or "", aircraft=flight.aircraft_type or "",
                  dest_lat=dest_lat, dest_lon=dest_lon, origin_lat=origin_lat, origin_lon=origin_lon,
-                 planned_s=float(planned), cruise_ft=flight.cruise_ft or cfg.flight.cruise_ft or 0)
+                 planned_s=float(planned), cruise_ft=flight.cruise_ft or cfg.flight.cruise_ft or 0,
+                 sched_out_s=cfg.flight.perf.sched_out_s)
 
 
 def copilot_locale(personality: str, language_code: str) -> str:
@@ -1008,10 +1016,11 @@ class VoiceInput:
     capture: object
     ptt: object | None = None
     intercom: object | None = None  # the intercom key's listener
+    cabin: object | None = None  # the cabin's key's listener
     buttons: object | None = None  # joystick buttons for either
 
     def close(self) -> None:
-        for listener in (self.ptt, self.intercom, self.buttons):
+        for listener in (self.ptt, self.intercom, self.cabin, self.buttons):
             if listener is not None:
                 listener.stop()
         self.capture.close()
@@ -1055,13 +1064,15 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         ptt = KeyboardPtt(v.ptt_key, service.press, service.release, on_cancel=service.cancel)
         ptt.start()
     from localtc.stt.joystick import JoystickButtons
-    from localtc.stt.service import INTERCOM
+    from localtc.stt.service import CABIN, INTERCOM
 
     buttons = JoystickButtons()  # read from Windows: MSFS 2024 never sends a button bound through SimConnect
     for name, what, down, up in (
         (v.ptt_joystick if v.ptt == "joystick" else "", "Push-to-talk", service.press, service.release),
         (v.intercom_joystick if cfg.crew.enabled or cfg.cabin.enabled else "", "Intercom (the copilot)", lambda: service.press(INTERCOM),
          lambda: service.release(INTERCOM)),
+        (v.cabin_joystick if cfg.cabin.enabled else "", "The cabin crew", lambda: service.press(CABIN),
+         lambda: service.release(CABIN)),
     ):
         if name.strip():
             try:
@@ -1080,7 +1091,17 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
             intercom.start()
         except ValueError as exc:
             log.warning("No intercom key: %s", exc)
-    return VoiceInput(service, capture, ptt, intercom, buttons)
+    cabin = None
+    if cfg.cabin.enabled and v.cabin_key and v.ptt != "enter" and v.cabin_key not in (v.ptt_key if v.ptt == "keyboard" else "", v.intercom_key):
+        from localtc.stt.ptt import KeyboardPtt
+
+        try:
+            cabin = KeyboardPtt(v.cabin_key, lambda: service.press(CABIN), lambda: service.release(CABIN),
+                                what="The cabin crew", on_cancel=lambda: service.cancel(CABIN))
+            cabin.start()
+        except ValueError as exc:
+            log.warning("No cabin key: %s", exc)
+    return VoiceInput(service, capture, ptt, intercom, cabin, buttons)
 
 
 async def _cache_airports(sub: Subscription, cache: AirportCache) -> None:

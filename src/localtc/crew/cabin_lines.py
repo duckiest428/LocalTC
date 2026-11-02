@@ -8,7 +8,8 @@ announcement's language), ``{captain}`` ("Captain Reyes", or "the captain"; ``{C
 ``{name}`` (the crew member),
 ``{program}`` (the loyalty programme), ``{alliance}``, ``{pax}`` (passengers on board), ``{local}`` (the local time),
 ``{weather}`` (the temperature and the sky), ``{exits}`` (how many exits and where), ``{drink}``, ``{minutes}``,
-``{message}``, ``{greeting}`` ("Good morning"), ``{aircraft}`` and ``{aircraft_fact}``, ``{overwing}``. A template naming one that isn't known for this flight isn't used
+``{message}``, ``{left}`` (minutes of boarding), ``{reason}``, ``{plain}`` (nothing: the wording for when those aren't
+known), ``{greeting}`` ("Good morning"), ``{aircraft}`` and ``{aircraft_fact}``, ``{overwing}``. A template naming one that isn't known for this flight isn't used
 (another wording is, or the line goes without that sentence: ``cabin.fill``).
 
 Each crew member's manner (``PEOPLE``) chooses among a line's wordings: polished (by the book), cheerful (a joke in the
@@ -290,6 +291,50 @@ LINES: dict[str, dict[str, tuple[str, ...]]] = {
         "polished": ("A special thank you to our {program} members. ",),
         "cheerful": ("{program} members, thanks for sticking with us! ",),
     },
+    "delay": {
+        "polished": ("Ladies and gentlemen, we apologise for the delay to our departure: {reason}. We'll be on our way "
+                     "as soon as we can. Thank you for your patience.",
+                     "Ladies and gentlemen, we apologise for the delay to our departure.{plain} We'll be on our way as soon as "
+                     "we can. Thank you for your patience.",),
+        "cheerful": ("Thanks for bearing with us, everyone. We're running a little behind today: {reason}. We'll get "
+                     "going just as soon as we can!",
+                     "Thanks for bearing with us, everyone. We're running a little behind today,{plain} and we'll get going "
+                     "just as soon as we can!",),
+        "warm": ("We know you're keen to be on your way, and we're sorry for the wait: {reason}. We'll be off as soon as "
+                 "we can. Thank you for being so patient.",
+                 "We know you're keen to be on your way, and we're sorry for the wait.{plain} We'll be off as soon as we can. "
+                 "Thank you for being so patient.",),
+        "brisk": ("Ladies and gentlemen, our departure is delayed. We'll update you shortly.",),
+    },
+    "late_not_boarding": {
+        "polished": ("Captain, it's {name}. We're {minutes} minutes from off-block and boarding hasn't started. Shall we "
+                     "begin?",),
+        "cheerful": ("Hi Captain, {name} here! {minutes} minutes to off-block and nobody on board yet. Shall we let them on?",),
+        "warm": ("Captain, it's {name}. It's {minutes} minutes to off-block and the passengers are still waiting at the "
+                 "gate. Are we all right to board?",),
+        "brisk": ("{minutes} minutes to off-block, boarding not started. Your call.",),
+    },
+    "late_boarding": {
+        "polished": ("Captain, it's {name}. That's our off-block time and we're still boarding, about {left} minutes to go.",
+                     "Captain, it's {name}. That's our off-block time and we're still boarding.{plain}",),
+        "cheerful": ("Captain, {name} here. We've hit off-block and they're still coming down the aisle. About {left} "
+                     "more minutes!",
+                     "Captain, {name} here. We've hit off-block and they're still coming down the aisle.{plain}",),
+        "warm": ("Captain, it's {name}. We've reached our off-block time and we're still boarding, about {left} minutes "
+                 "more. I'll tell you as soon as everyone's settled.",
+                 "Captain, it's {name}. We've reached our off-block time and we're still boarding.{plain} I'll tell you as soon "
+                 "as everyone's settled.",),
+        "brisk": ("Off-block time, still boarding. About {left} minutes.", "Off-block time, still boarding.{plain}",),
+    },
+    "late_ready": {
+        "polished": ("Captain, it's {name}. We're {minutes} minutes past our off-block time and all ready in the cabin, "
+                     "whenever you are.",),
+        "cheerful": ("Captain, {name} here! We're {minutes} minutes down and everyone's asking when we're off. We're all "
+                     "ready back here.",),
+        "warm": ("Captain, it's {name}. We're {minutes} minutes behind now. The cabin's ready and everyone's settled, so "
+                 "just let me know.",),
+        "brisk": ("{minutes} minutes late. Cabin ready.",),
+    },
     "boarded": {
         "polished": ("Captain, it's {name}. Boarding is complete: {pax} passengers on board. The cabin's ready, and "
                      "the doors can be closed whenever you are.",),
@@ -324,6 +369,10 @@ REPLIES: dict[str, tuple[str, ...]] = {
     "no_drink": ("No problem. Just call if you change your mind.", "All right. Give me a call if you need anything."),
     "meal": ("Of course. I'll bring your meals up shortly.", "Sure. Crew meals coming up in a few minutes."),
     "meal_delivered": ("Here are your meals, Captain. Enjoy.",),
+    "boarding_left": ("About {left} minutes of boarding to go, Captain.", "Another {left} minutes or so for the boarding.",),
+    "on_time": ("We're on time so far, Captain.", "On time, as far as I can see.",),
+    "behind": ("We're {minutes} minutes behind the plan, Captain.", "About {minutes} minutes late so far.",),
+    "no_schedule": ("I don't have a departure time that fits today, Captain.",),
     "status": ("All good back here. {pax} passengers, nice and calm.", "Everything's fine in the cabin. Quiet one so far.",
                "All calm. A few people asleep already."),
     "count": ("We've got {pax} passengers on board today.", "{pax} passengers, Captain."),
@@ -347,6 +396,8 @@ REPLIES: dict[str, tuple[str, ...]] = {
 # English, as the airline does). Fewer wordings than in English, and no manners: the same words for every crew.
 FOREIGN: dict[str, dict[str, str]] = {
     "fr": {
+        "delay": "Mesdames et messieurs, nous vous prions de nous excuser pour ce retard au départ. Nous partirons dès "
+                 "que possible. Merci de votre patience.",
         "boarding": "Bonjour et bienvenue à bord du vol {airline} {flight} à destination de {dest}. Merci de placer vos "
                     "bagages dans les coffres à bagages ou sous le siège devant vous.",
         "welcome": "Mesdames et messieurs, au nom du commandant de bord et de tout l'équipage, bienvenue à bord du vol "
@@ -376,6 +427,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Personnel de cabine, portes en manuel, vérification de la porte opposée.",
     },
     "de": {
+        "delay": "Meine Damen und Herren, wir bitten die Verspätung unseres Abflugs zu entschuldigen. Wir starten, sobald "
+                 "es möglich ist. Vielen Dank für Ihre Geduld.",
         "boarding": "Guten Tag und herzlich willkommen an Bord des {airline} Flugs {flight} nach {dest}. Bitte verstauen "
                     "Sie Ihr Handgepäck in den Gepäckfächern oder unter dem Sitz vor Ihnen.",
         "welcome": "Meine Damen und Herren, im Namen unseres Kapitäns und der gesamten Crew begrüßen wir Sie an Bord des "
@@ -406,6 +459,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Kabinenpersonal, Türen auf Manuell und Gegenkontrolle.",
     },
     "es": {
+        "delay": "Señoras y señores, les pedimos disculpas por el retraso de nuestra salida. Saldremos en cuanto sea "
+                 "posible. Gracias por su paciencia.",
         "boarding": "Buenos días y bienvenidos a bordo del vuelo {flight} de {airline} con destino a {dest}. Por favor, "
                     "coloquen su equipaje en los compartimentos superiores o debajo del asiento delantero.",
         "welcome": "Señoras y señores, en nombre del comandante y de toda la tripulación, les damos la bienvenida a "
@@ -434,6 +489,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Tripulación de cabina, puertas en manual y comprobación cruzada.",
     },
     "it": {
+        "delay": "Signore e signori, ci scusiamo per il ritardo della partenza. Partiremo non appena possibile. Grazie "
+                 "per la vostra pazienza.",
         "boarding": "Buongiorno e benvenuti a bordo del volo {airline} {flight} per {dest}. Vi preghiamo di riporre il "
                     "bagaglio nelle cappelliere o sotto il sedile davanti a voi.",
         "welcome": "Signore e signori, a nome del comandante e di tutto l'equipaggio, benvenuti a bordo del volo "
@@ -462,6 +519,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Personale di cabina, porte in manuale e controllo incrociato.",
     },
     "pt": {
+        "delay": "Senhoras e senhores, pedimos desculpa pelo atraso da nossa partida. Partiremos assim que possível. "
+                 "Obrigado pela vossa paciência.",
         "boarding": "Bom dia e bem-vindos a bordo do voo {flight} da {airline} com destino a {dest}. Por favor, coloquem "
                     "a bagagem nos compartimentos superiores ou debaixo do assento à vossa frente.",
         "welcome": "Senhoras e senhores, em nome do comandante e de toda a tripulação, bem-vindos a bordo do voo "
@@ -489,6 +548,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Tripulação de cabine, portas em manual e verificação cruzada.",
     },
     "nl": {
+        "delay": "Dames en heren, onze excuses voor de vertraging van ons vertrek. We vertrekken zo snel mogelijk. Dank "
+                 "u voor uw geduld.",
         "boarding": "Goedendag en welkom aan boord van {airline} vlucht {flight} naar {dest}. Wilt u uw handbagage in de "
                     "bagagevakken of onder de stoel voor u plaatsen?",
         "welcome": "Dames en heren, namens de gezagvoerder en de hele bemanning welkom aan boord van {airline} vlucht "
@@ -516,6 +577,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Cabinepersoneel, deuren op handmatig en kruiscontrole.",
     },
     "pl": {
+        "delay": "Szanowni Państwo, przepraszamy za opóźnienie naszego odlotu. Wyruszymy tak szybko, jak to możliwe. "
+                 "Dziękujemy za cierpliwość.",
         "boarding": "Dzień dobry, witamy na pokładzie lotu {airline} {flight} do {dest}. Prosimy o umieszczenie bagażu "
                     "w schowkach nad głową lub pod fotelem przed Państwem.",
         "welcome": "Szanowni Państwo, w imieniu kapitana i całej załogi witamy na pokładzie lotu {airline} {flight} do "
@@ -540,6 +603,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Załoga kabinowa, drzwi na manual i kontrola krzyżowa.",
     },
     "sv": {
+        "delay": "Mina damer och herrar, vi ber om ursäkt för förseningen av vår avgång. Vi åker så snart som möjligt. "
+                 "Tack för ert tålamod.",
         "boarding": "God dag och välkomna ombord på {airline} flight {flight} till {dest}. Placera gärna ert handbagage "
                     "i bagagefacken eller under stolen framför er.",
         "welcome": "Mina damer och herrar, på kaptenens och hela besättningens vägnar, välkomna ombord på {airline} "
@@ -565,6 +630,8 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Kabinpersonal, dörrar till manuellt läge och korskontroll.",
     },
     "ru": {
+        "delay": "Дамы и господа, приносим извинения за задержку вылета. Мы отправимся, как только это будет возможно. "
+                 "Благодарим за терпение.",
         "boarding": "Добрый день и добро пожаловать на борт рейса {airline} {flight} в {dest}. Пожалуйста, разместите "
                     "ручную кладь на багажных полках или под сиденьем перед вами.",
         "welcome": "Уважаемые пассажиры, от имени командира и всего экипажа приветствуем вас на борту рейса {airline} "
@@ -590,6 +657,7 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "Бортпроводникам: двери в ручной режим, перекрёстная проверка.",
     },
     "zh": {
+        "delay": "女士们，先生们，我们对航班延误深表歉意。我们将尽快出发。感谢您的耐心等待。",
         "boarding": "女士们，先生们，欢迎乘坐{airline}{flight}次航班前往{dest}。请将您的行李放在行李架上或您前方的座椅下方。",
         "welcome": "女士们，先生们，我谨代表机长和全体机组成员，欢迎您乘坐{airline}{flight}次航班前往{dest}。"
                    "预计飞行时间为{ltime}。请您系好安全带。",

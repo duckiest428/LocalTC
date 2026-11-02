@@ -48,7 +48,7 @@ function connect() {
   on("traffic", (t) => { S.traffic = t; MapView.traffic(t); });
   on("flight", (f) => { setFlight(f); MapView.flightChanged(f); });
   on("cleared", clearFlight);
-  on("ptt", (p) => $(p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
+  on("ptt", (p) => $(p.cabin ? "#btn-cab" : p.intercom ? "#btn-ic" : "#btn-ptt").classList.toggle("down", p.down));
   on("thinking", thinking);
   on("efb", (d) => Efb.update(d));  // efb.js: the checklist, Airport Ops, ATC's hold and conditions, the notes
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); Setup.jobs(jobs); });
@@ -100,6 +100,9 @@ function setState(st) {
   $("#btn-ptt").title = st.voice ? `Hold to talk (or ${pttName(st.ptt)})` : "Voice input is off (Quick Settings > Push-to-talk)";
   $("#btn-ic").classList.toggle("off", !st.voice);
   $("#btn-ic").title = st.voice ? `Hold to talk to the copilot${st.ptt && st.ptt.intercom ? ` (or ${keyLabel(st.ptt.intercom)})` : ""}` : "Voice input is off (Quick Settings > Push-to-talk)";
+  $("#btn-cabin").hidden = $("#btn-cab").hidden = !st.cabin;  // (a button of their own: "cabin, ..." on the intercom wasn't to be found)
+  $("#btn-cab").classList.toggle("off", !st.voice);
+  $("#btn-cab").title = st.voice ? `Hold to talk to the cabin crew${st.ptt && st.ptt.cabin ? ` (or ${keyLabel(st.ptt.cabin)})` : ""}` : "Voice input is off (Quick Settings > Push-to-talk)";
   if (!S.flight.callsign) planHeader(st.plan);
   MapView.plan(st.plan);
   MapView.syncRules();
@@ -167,7 +170,7 @@ function addLine(l) {
     case "copilot":
       body = `<span class="who">COPILOT</span><span class="body">${esc(l.text)}</span>`; break;
     case "intercom":  // you, to the copilot
-      body = `<span class="who">YOU</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
+      body = `<span class="who">YOU</span><span class="ic">${l.to === "cabin" ? "interphone" : "intercom"}</span><span class="body">${esc(l.text)}</span>${l.unclear ? '<span class="unclear">(unclear)</span>' : ""}`; break;
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "cabin":  // the cabin crew: an announcement, or to you on the interphone
@@ -276,6 +279,22 @@ function zulu() {
 }
 zulu();
 setInterval(zulu, 1000);
+
+/* The plan's off-block time beside it, while the flight's at the gate: "2300Z +12" (late), "2300Z -8" (to go). A plan
+   hours from the sim's clock isn't held to (crew.turnaround), and isn't shown. */
+function offBlock() {
+  const out = S.state && S.state.plan && S.state.plan.perf && S.state.plan.perf.sched_out_s;
+  const own = S.own, box = $("#offblock");
+  if (out && own && own.gs > 2) S.offBlockGone = out;
+  const secs = out && own && own.zulu != null && own.on_ground !== false && S.offBlockGone !== out
+    ? ((out % 86400) - own.zulu + 129600) % 86400 - 43200 : null;
+  box.hidden = secs == null || Math.abs(secs) > 3 * 3600;
+  if (box.hidden) return;
+  const m = Math.round(-secs / 60), of = Math.floor((out % 86400) / 60);
+  $("#offblock-time").textContent = `${String(Math.floor(of / 60)).padStart(2, "0")}${String(of % 60).padStart(2, "0")}Z ${m > 0 ? "+" : ""}${m}`;
+  box.classList.toggle("late", m > 0);
+}
+setInterval(offBlock, 5000);
 
 /* The last flight gone from the screen (10 minutes after it ended): the aircraft, its path, the traffic, the radio
    log and the flight's details. The state with the plan (or none) follows. */
@@ -407,21 +426,26 @@ $("#btn-crew").onclick = async () => {
   if (!text) return;
   try { await api("radio/crew", { text }); input.value = ""; } catch (e) { fail(e); }
 };
+$("#btn-cabin").onclick = async () => {
+  const input = $("#tx-text"), text = input.value.trim();
+  if (!text) return;
+  try { await api("radio/crew", { text, to: "cabin" }); input.value = ""; } catch (e) { fail(e); }
+};
 $("#btn-clear").onclick = () => { $("#tx-text").value = ""; $("#tx-text").focus(); };
 
-const held = { radio: false, intercom: false };
-async function ptt(down, intercom = false) {
-  const which = intercom ? "intercom" : "radio", btn = $(intercom ? "#btn-ic" : "#btn-ptt");
+const held = { radio: false, intercom: false, cabin: false };
+async function ptt(down, which = "radio") {
+  const btn = $({ radio: "#btn-ptt", intercom: "#btn-ic", cabin: "#btn-cab" }[which]);
   if (down === held[which]) return;
   held[which] = down;
   btn.classList.toggle("down", down);
-  try { await api("radio/ptt", { down, intercom }); } catch (e) { held[which] = false; btn.classList.remove("down"); if (down) fail(e); }
+  try { await api("radio/ptt", { down, intercom: which === "intercom", cabin: which === "cabin" }); } catch (e) { held[which] = false; btn.classList.remove("down"); if (down) fail(e); }
 }
-for (const [id, intercom] of [["#btn-ptt", false], ["#btn-ic", true]]) {
+for (const [id, which] of [["#btn-ptt", "radio"], ["#btn-ic", "intercom"], ["#btn-cab", "cabin"]]) {
   const btn = $(id);
-  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); ptt(true, intercom); });
-  btn.addEventListener("pointerup", () => ptt(false, intercom));
-  btn.addEventListener("pointercancel", () => ptt(false, intercom));
+  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); ptt(true, which); });
+  btn.addEventListener("pointerup", () => ptt(false, which));
+  btn.addEventListener("pointercancel", () => ptt(false, which));
 }
 
 $("#sw-atc").onclick = async () => {
@@ -1917,11 +1941,18 @@ const Settings = {
         <h3>Cabin crew</h3>
         <div class="master-row">
           <div><b>Cabin crew</b><div class="muted small">A cabin manager who makes the announcements, calls you on the
-            interphone and answers when you start with "cabin" on the intercom: "cabin, could I get a coffee?", "cabin,
-            prepare for landing", "cabin, tell the passengers ...". Only on airline flights and in airliners.</div></div>
+            interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you
+            start with "cabin" on the intercom: "could I get a coffee?", "prepare for landing", "tell the passengers ...",
+            "are we on time?". Only on airline flights and in airliners.</div></div>
           <label class="toggle" title="Cabin crew on or off"><input type="checkbox" id="s-cabin" ${st.cabin.enabled ? "checked" : ""}><span></span></label>
         </div>
         <div id="cabin-opts" class="${st.cabin.enabled ? "" : "off"}">
+        <div class="row">
+          <span>Cabin key</span><span class="keycap" id="s-cab-key">${esc(keyLabel(st.voice.cabin_key))}</span>
+          <button class="btn small" id="s-cab-key-set">Change</button><span class="muted small" id="s-cab-key-hint"></span>
+        </div>
+        <div class="row"><label>Or a yoke or joystick button<input id="s-cab-joy" value="${esc(st.voice.cabin_joystick)}" placeholder="joystick:0:button:5"></label>
+          ${this.joyPicker("cab")}</div>
         <div class="row"><label>Who leads the cabin<select id="s-cabin-crew">
           <option value="auto" ${(st.cabin.crew || "auto") === "auto" ? "selected" : ""}>A different one each flight</option>
           ${(S.settings.cabin_crew || []).map((p) =>  // (translate="no": put together here, its manner in the language)
@@ -2128,6 +2159,9 @@ const Settings = {
     on("#s-key-set", "click", () => this.captureKey());
     on("#s-ic-key-set", "click", () => this.captureKey("intercom_key", "#s-ic-key", "#s-ic-key-hint"));
     on("#s-ic-joy", "change", () => this.save("voice", "intercom_joystick", val("#s-ic-joy").trim()));
+    on("#s-cab-key-set", "click", () => this.captureKey("cabin_key", "#s-cab-key", "#s-cab-key-hint"));
+    on("#s-cab-joy", "change", () => this.save("voice", "cabin_joystick", val("#s-cab-joy").trim()));
+    this.bindJoy("cab", "#s-cab-joy", "cabin_joystick");
     this.bindJoy("ptt", "#s-joy", "ptt_joystick");
     this.bindJoy("ic", "#s-ic-joy", "intercom_joystick");
     on("#s-crew", "change", (e) => { this.save("crew", "enabled", e.target.checked); $("#crew-opts")?.classList.toggle("off", !e.target.checked); });

@@ -281,6 +281,7 @@ class TrafficConfig(_Section):
     fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
     live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
+    scheduled: bool = True  # the departures due, at gates 45 min before they push (LocalTC's server, no account needed)
     control: str = ""
     max_reinjected: int = 0
 
@@ -308,6 +309,9 @@ class VoiceConfig(_Section):
     # The intercom: a second key (or button) held to talk to the copilot instead of ATC. Blank: none.
     intercom_key: str = "alt_r"  # keyboard
     intercom_joystick: str = ""  # joystick, as MSFS names it
+    # The cabin: a key (or button) of its own held to talk to the cabin crew. Blank: none (the app's button still works).
+    cabin_key: str = ""  # keyboard
+    cabin_joystick: str = ""  # joystick, as MSFS names it
     input_device: str = ""  # blank = the system default microphone; or part of its name, or its number
     model: str = "auto"  # auto: small.en with an NVIDIA GPU, base.en otherwise
     device: Literal["auto", "cpu", "cuda"] = "auto"
@@ -578,8 +582,8 @@ def _migrate(data: dict) -> dict:
         old = llm.pop("understanding")
         llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
         data = {**data, "llm": llm}
-    # The schedule and NOTAM sources that needed an account of the pilot's own are gone, and their switches with them.
-    for section, key in (("traffic", "scheduled"), ("ops", "notams")):
+    # The NOTAM source that needed an account of the pilot's own is gone, and its switch with it.
+    for section, key in (("ops", "notams"),):
         if isinstance(data.get(section), dict) and key in data[section]:
             data = {**data, section: {k: v for k, v in data[section].items() if k != key}}
     tts = data.get("tts")

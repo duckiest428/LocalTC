@@ -47,7 +47,6 @@
 ": your flight live on the website, full screen, with the radio beside the map.": ": je vlucht live op de website, schermvullend, met de radio naast de kaart.",
 ": your weeks, months and years of flying as a story.": ": je weken, maanden en jaren vliegen als een verhaal.",
 "A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration, the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the interphone, and answer when you start with \"cabin\": \"cabin, could I get a coffee?\". Do you want them?": "Een cabinebemanning achter de cockpitdeur: boardingmuziek en het welkom bij de gate, de veiligheidsdemonstratie, het gordelteken, de drankjes, de daling en de aankomst, in de eigen talen van de maatschappij. Ze bellen je via de interphone en antwoorden als je begint met 'cabin': 'cabin, could I get a coffee?'. Wil je ze erbij?",
-"A cabin manager who makes the announcements, calls you on the interphone and answers when you start with \"cabin\" on the intercom: \"cabin, could I get a coffee?\", \"cabin, prepare for landing\", \"cabin, tell the passengers ...\". Only on airline flights and in airliners.": "Een purser die de omroepen doet, je via de interphone belt en antwoordt als je op de intercom begint met 'cabin': 'cabin, could I get a coffee?', 'cabin, prepare for landing', 'cabin, tell the passengers ...'. Alleen bij lijnvluchten en in verkeersvliegtuigen.",
 "A chatty long-haul companion.": "Een spraakzame langeafstandsmaat.",
 "A couple of notes and recommendations before your first flight:": "Een paar opmerkingen en tips voor je eerste vlucht:",
 "A different one each flight": "Elke vlucht een ander",
@@ -1342,5 +1341,13 @@
 "🎤 Test": "🎤 Testen",
 "🎤 Test my microphone": "🎤 Mijn microfoon testen",
 "🎧 A headset": "🎧 Een headset",
-"🔊 Speakers": "🔊 Luidsprekers"
+"🔊 Speakers": "🔊 Luidsprekers",
+"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "Een cabinechef die de omroepen doet, je via de intercom oproept en antwoordt: op een eigen toets, met de knoppen CABIN en CAB naast het zendvak, of als je op de intercom begint met \"cabin\": \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Alleen op lijnvluchten en in verkeersvliegtuigen.",
+"Cabin key": "Cabinetoets",
+"Hold to talk to the cabin crew (or your cabin key)": "Ingedrukt houden om met het cabinepersoneel te praten (of je cabinetoets)",
+"Hold to talk to the cabin crew{0}": "Ingedrukt houden om met het cabinepersoneel te praten{0}",
+"Say it to the cabin crew on the interphone (not transmitted)": "Tegen het cabinepersoneel zeggen via de intercom (niet uitgezonden)",
+"The flight plan's off-block time, and how far off it is by the sim's clock: + late, - to go": "De off-blocktijd van het vliegplan en het verschil volgens de klok van de simulator: + te laat, - te gaan",
+"CAB": "CAB",
+"OBT": "OBT"
 }

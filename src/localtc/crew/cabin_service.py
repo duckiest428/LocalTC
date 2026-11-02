@@ -1,6 +1,7 @@
 """Puts the cabin crew on the bus: the flight's events in, their announcements, calls and sounds published.
 
-What the pilot says on the intercom goes to the cabin when it's for them (``CabinCrew.claims``): through the copilot's
+What the pilot says on the cabin's own key or button is theirs. What's said on the intercom goes to the cabin when it's
+for them (``CabinCrew.claims``): through the copilot's
 service when there's a copilot (crew.service asks the cabin first, so the copilot never answers "cabin, a coffee
 please"), else here.
 """
@@ -67,7 +68,7 @@ class CabinService:
                 await self.source.send(WatchVars(names=WATCHED, owner="cabin"))
             try:
                 if isinstance(event, IntercomHeard):
-                    if not self.cabin.claims(event.text, event.t):
+                    if not self.cabin.claims(event.text, event.t, event.to):
                         continue
                     asyncio.create_task(answer(self.cabin, event, self.bus))
                     continue

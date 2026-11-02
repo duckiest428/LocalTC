@@ -288,7 +288,9 @@ class AppController:
             "copilot_mode": self.cfg.ui.copilot,
             "muted": self.muted, "dev_mode": self.cfg.ui.dev_mode, "voice": self.cfg.voice.enabled, "theme": self.cfg.ui.theme,
             "ptt": {"mode": self.cfg.voice.ptt, "key": self.cfg.voice.ptt_key, "joystick": self.cfg.voice.ptt_joystick,
-                    "intercom": self.cfg.voice.intercom_key if self.cfg.crew.enabled else ""},
+                    "intercom": self.cfg.voice.intercom_key if self.cfg.crew.enabled else "",
+                    "cabin": self.cfg.voice.cabin_key if self.cfg.cabin.enabled else ""},
+            "cabin": self.cfg.cabin.enabled,
             "recording": str(self.live.recording) if self.live and self.live.recording else None,
             "jobs": self.jobs, "map_tiles": self.cfg.ui.map_tiles, "platform": sys.platform,
             "simbrief_user": self.cfg.ui.simbrief_user, "lookup_kinds": list(self.cfg.ui.lookup_kinds),
@@ -678,7 +680,7 @@ class AppController:
         elif isinstance(ev, PttPressed | PttReleased):
             self.publish("ptt", {"down": isinstance(ev, PttPressed)})
         elif isinstance(ev, IntercomPressed | IntercomReleased):
-            self.publish("ptt", {"down": isinstance(ev, IntercomPressed), "intercom": True})
+            self.publish("ptt", {"down": isinstance(ev, IntercomPressed), "intercom": ev.to != "cabin", "cabin": ev.to == "cabin"})
         elif isinstance(ev, PhaseChanged | RadioTuned | AtcTransmission):
             if isinstance(ev, AtcTransmission):
                 self._last_atc = ev
@@ -903,7 +905,7 @@ class AppController:
 
     async def api_crew(self, args: dict) -> dict:
         """Typed to the copilot (the intercom), not transmitted."""
-        self._need_live().say_crew(str(args.get("text", "")))
+        self._need_live().say_crew(str(args.get("text", "")), "cabin" if args.get("to") == "cabin" else "")
         return {}
 
     async def api_crew_preview(self, args: dict) -> dict:
@@ -932,7 +934,8 @@ class AppController:
         return {"seconds": seconds}
 
     async def api_ptt(self, args: dict) -> dict:
-        if not self._need_live().ptt(bool(args.get("down")), 0 if args.get("intercom") else 1):
+        radio = -1 if args.get("cabin") else 0 if args.get("intercom") else 1  # (stt.service: CABIN, INTERCOM)
+        if not self._need_live().ptt(bool(args.get("down")), radio):
             raise HttpError(409, "voice input is off (Quick Settings > Push-to-talk)")
         return {}
 
@@ -1004,7 +1007,7 @@ class AppController:
             cfg = msgspec.convert(merge(msgspec.to_builtins(self.cfg), changes), Config)
         except msgspec.ValidationError as exc:
             raise HttpError(400, f"setting not valid: {exc}") from None
-        for key in ("ptt_key", "intercom_key"):
+        for key in ("ptt_key", "intercom_key", "cabin_key"):
             value = getattr(cfg.voice, key)
             if value != getattr(self.cfg.voice, key) and value and sys.platform == "win32":  # key names differ by OS
                 try:
@@ -1017,6 +1020,8 @@ class AppController:
                     raise HttpError(400, str(exc)) from None
         if cfg.voice.intercom_key and cfg.voice.intercom_key == cfg.voice.ptt_key:
             raise HttpError(400, "The intercom key can't be the push-to-talk key")
+        if cfg.voice.cabin_key and cfg.voice.cabin_key in (cfg.voice.ptt_key, cfg.voice.intercom_key):
+            raise HttpError(400, "The cabin key can't be the push-to-talk key or the intercom key")
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
         interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None

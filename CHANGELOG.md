@@ -7,6 +7,18 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.4] - Upcoming
 
 ### Added
+- **The cabin crew have their own key and buttons.** A cabin key or yoke button (Settings → Cabin crew), and beside the
+  transmission box CABIN (typed) and CAB (hold to talk): whatever you say there is theirs, without starting with "cabin".
+- **The flight keeps to the plan's off-block time.** The time and how far off it is show beside the Zulu clock while
+  you're at the gate. The copilot says when the clearance is still to come, when the time arrives, how late you are at
+  5, 15, 30 and 60 minutes and what's holding you up, and how it went at the push. The cabin crew call when boarding
+  hasn't started 25 minutes out, when it runs past the time (with about how long is left at GSX's pace), and when
+  they're ready and waiting, and they apologise to the passengers at 10 and 30 minutes late, in the airline's languages.
+  "Are we on time?" and "how long for the boarding?" are answered. A plan more than three hours from the sim's clock
+  isn't held to, and the copilot says so once.
+- **Aircraft at the gates that really leave:** the departures due come from LocalTC's server, with no account or key
+  for you: yesterday's flights from that airport at the same hours (OpenSky Network). Each is at a gate 45 minutes before
+  its time, gets its clearance and pushes back, the real one taking over if its transponder comes on.
 - **MSFS 2020 as well as 2024**: LocalTC finds the sim that's running and connects to it, with nothing to install or
   set for either. The status shows which it is ("MSFS 2020 11.0 ..."), and everything works the same in both: ATC, the
   ATIS, the copilot and its hands (checked in 2020 with the stock A320neo: lights, flaps, the FCU's knobs, squawk and
@@ -63,10 +75,8 @@ a new minor version adds features, a patch fixes them.
 
 ### Changed
 - **Real-world data is one key, in Settings (the gear)**: the EFB's Data section is gone, and openAIP's key, for
-  restricted, danger and prohibited areas, moved to Settings. OpenSky, AirLabs and the FAA NOTAM API are no longer used.
-  With them go the departures due at the gates before they push (LocalTC's traffic still flies the real flights around
-  and can fill the gates with the airport's airlines) and the EFB's NOTAM list: the notices are on the ATIS, and ATC
-  works to them.
+  restricted, danger and prohibited areas, moved to Settings. You no longer need accounts of your own with OpenSky,
+  AirLabs or the FAA. The EFB's NOTAM list goes with them: the notices are on the ATIS, and ATC works to them.
 - **The real ATIS outside the US is the airport's own, no longer a VATSIM controller's:** its live digital ATIS from
   ATIS.guru (about 560 airports in 68 countries): the real letter, runways, approaches and closures, with the real
   METAR's weather. Where it has no recent one, LocalTC's ATIS from the real METAR.
@@ -83,6 +93,8 @@ a new minor version adds features, a patch fixes them.
   there is, and after the approach clearance too.
 
 ### Fixed
+- **"Hello there, Stefan" went to the copilot,** who answered as if it was its name. A greeting with the cabin manager's
+  name is theirs.
 - **Taxiway India lost from a taxi clearance:** the language model could drop it from "via K, A, I", being the word "I".
 - **ATC silent after a callsign on its own:** asked again for the callsign with "readbacks must include the callsign" on,
   the answer made ATC fail on the call.

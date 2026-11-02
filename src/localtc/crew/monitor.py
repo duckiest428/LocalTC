@@ -43,10 +43,12 @@ from localtc.crew.checklist_run import Progress
 from localtc.crew.actions import Cockpit
 from localtc.crew.answers import LB_PER_KG, Picture, _hm
 from localtc.crew.commands import Command
+from localtc.crew.turnaround import DAY_S, from_clock_s, off_block_in
 from localtc.crew.watches import WatchMixin
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AircraftVars,
     ArrivalData,
     AtcAlert,
     AtcTransmission,
@@ -118,6 +120,11 @@ ASKED = ("run:", "checklist:", "nochecklist")
 # The copilot's suggestions (not callouts, not warnings): what "later" quiets.
 PROMPTS = ("clearance_prompt", "brief", "prompt:", "flaps_for_takeoff", "tod_soon", "step:", "divert:", "sight",
            "app_mode", "lights:", "push_brake", "seatbelt", "turb:belts")
+
+
+CLEARANCE_DUE_S = 20 * 60  # this long before off-block with no clearance: said
+DOORS_DUE_S = 5 * 60  # this long before off-block: said
+LATE_CALLS = ((60, "An hour"), (30, "Half an hour"), (15, "Fifteen minutes"), (5, "Five minutes"))  # how late: said, once each
 
 
 @dataclass
@@ -197,6 +204,7 @@ class Monitor(WatchMixin):
         self.hushed_t = -1e9  # ... or "shut up", "chill out": nothing but safety calls for a while
         self.ias_history: list[tuple[float, float]] = []  # (t, IAS) over the last SPEED_TREND_S
         self.perf = perf or PlanPerf()
+        self.vars: dict[str, float] = {}  # the sim's values watched for the cabin (GSX's boarding)
         self.plan_source = plan_source
         self.radio_mode = radio_mode  # the radio copilot's mode: "off", "assist" or "full"
         self.rng = random.Random(seed)
@@ -308,6 +316,8 @@ class Monitor(WatchMixin):
             self._on_phase(ev.previous, ev.phase, t)
         elif isinstance(ev, AircraftIdentity):
             self.title = ev.title or ev.atc_model
+        elif isinstance(ev, AircraftVars):
+            self.vars.update(ev.values)
         elif isinstance(ev, AtcAlert) and ev.kind == "emergency":
             self._call("emergency", ROUTINE, t, "Copy the emergency. Want me to squawk 7700?")
             self.offer = Offer("squawk", "7700", t + 20.0)
@@ -651,6 +661,7 @@ class Monitor(WatchMixin):
             if info is not None and self.atis_seen.get(f.origin or "") != info.letter:
                 self.atis_seen[f.origin or ""] = info.letter
             # (No "call for the clearance when you're ready": the captain calls when the captain's ready.)
+            self._schedule(own, t)
             if self.phase == "PUSHBACK":
                 self.f.said.setdefault("pushed", t)  # pushed back: the brake set after it is the end of the push
             if self._cleared("pushback") and own.parking_brake and own.gs_kt < 0.5 and not self._said("push_brake") \
@@ -658,6 +669,63 @@ class Monitor(WatchMixin):
                 when = self.f.said.get("pushback_seen") or self.f.said.setdefault("pushback_seen", t)
                 if t - when > PUSH_BRAKE_S:  # a tug takes its time (GSX: minutes): not a nag 10 s after the approval
                     self._call("push_brake", ROUTINE, t, "We're cleared to push; parking brake's still set.")
+
+    def _schedule(self, own: OwnshipState, t: float) -> None:
+        """The plan's off-block time: what's still to do as it nears, how late the flight is once it's gone by, and how
+        it went at the push. A plan far from the sim's clock is said once and not held to."""
+        away = from_clock_s(self.perf.sched_out_s, own.zulu_s)
+        if away is None or not self._said("greeting"):
+            return
+        to_go = off_block_in(self.perf.sched_out_s, own.zulu_s)
+        of_day = self.perf.sched_out_s % DAY_S
+        when = f"{of_day // 3600:02d}{of_day % 3600 // 60:02d}"
+        off = self.phase not in (None, "PARKED") or own.gs_kt > 2.0
+        if to_go is None:
+            if not off:
+                self._call("schedule_far", ROUTINE, t, f"The plan has us off block at {when} Zulu. That's "
+                           f"{_hm(abs(away) / 60)} {'from now' if away > 0 else 'ago'} on the sim's clock, so I won't hold us to it.")
+            return
+        if off:
+            late = round(-to_go / 60)
+            if late >= 3:
+                self._call("off_blocks", ROUTINE, t, f"Off blocks, {late} minutes late.")
+            elif late > -3:
+                self._call("off_blocks", ROUTINE, t, "Off blocks, right on time.")
+            else:
+                self.f.said.setdefault("off_blocks", t)
+            return
+        if to_go > 0:
+            if to_go <= CLEARANCE_DUE_S and self._owes_clearance() and not self._said("schedule_clearance"):
+                self._call("schedule_clearance", ROUTINE, t, f"{round(to_go / 60)} minutes to off-block, and we don't have our clearance yet.")
+            if to_go <= DOORS_DUE_S and not self._said("schedule_soon"):
+                self._call("schedule_soon", ROUTINE, t, f"{round(to_go / 60)} minutes to off-block, at {when}.")
+            return
+        late = -to_go / 60
+        due = next(((m, words) for m, words in LATE_CALLS if late >= m), None)
+        if due is None:
+            self._call("schedule_now", ROUTINE, t, "That's our off-block time.")
+            return
+        self.f.said.setdefault("schedule_now", t)
+        key = f"schedule_late:{due[0]}"
+        if not self._said(key):
+            for m, _ in LATE_CALLS:  # (an hour late on loading: one word, not the five that went before)
+                if m <= due[0]:
+                    self.f.said.setdefault(f"schedule_late:{m}", t)
+            self.f.said.pop(key, None)
+            self._call(key, ROUTINE, t, f"{due[1]} late off block.{self._holding_up()}")
+
+    def _owes_clearance(self) -> bool:
+        return not self._cleared("ifr") and not getattr(self.engine, "_vfr", False)
+
+    def _holding_up(self) -> str:
+        """What's between the flight and the push, as far as it's known."""
+        if self.vars.get("L:FSDT_GSX_BOARDING_STATE") in (4, 5):
+            return " Boarding's still going."
+        if self._owes_clearance():
+            return " We still need our clearance."
+        if not self._cleared("pushback"):
+            return " We still need push clearance."
+        return ""
 
     def _always(self, own: OwnshipState, prev: OwnshipState, t: float) -> None:
         self._fuel_steady(own, t)

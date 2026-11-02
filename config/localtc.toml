@@ -98,6 +98,8 @@ parked_fill = "realistic"     # "realistic": as full as the airport is at that h
 fill_gates = false            # true: the gates filled with made-up aircraft too (false: only the real ones)
 live_delay_s = 30.0           # each real flight shown this far behind, so it always moves between known positions
 atc_control = true            # real flights sent around, held short or stopped to give way when they'd be in your way
+scheduled = true              # the departures due, at gates 45 min before they push, from LocalTC's server (no account needed);
+                              # the real one takes over when its transponder comes on
 
 [ops]                         # real-world data, each from a free public source, kept on this PC with its age
 weather = true                # TAFs, SIGMETs and AIRMETs, the weather radar (aviationweather.gov, RainViewer)
@@ -111,6 +113,8 @@ ptt_key = "ctrl_r"            # keyboard: hold to talk; works while the sim has 
 ptt_joystick = "joystick:0:button:0"   # joystick: the button as MSFS names it (bound through SimConnect)
 intercom_key = "alt_r"        # hold to talk to the copilot instead of ATC (keyboard; blank: none)
 intercom_joystick = ""        # ... or a joystick button for it, as MSFS names it
+cabin_key = ""                # hold to talk to the cabin crew (keyboard; blank: none, the app's button still works)
+cabin_joystick = ""           # ... or a joystick button for it, as MSFS names it
 input_device = ""             # blank = default microphone; or part of its name (localtc voice devices)
 model = "auto"                # auto: small.en with an NVIDIA GPU, base.en otherwise; tiny.en ... large-v3
 device = "auto"               # auto | cpu | cuda

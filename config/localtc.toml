@@ -98,8 +98,6 @@ parked_fill = "realistic"     # "realistic": as full as the airport is at that h
 fill_gates = false            # true: the gates filled with made-up aircraft too (false: only the real ones)
 live_delay_s = 30.0           # each real flight shown this far behind, so it always moves between known positions
 atc_control = true            # real flights sent around, held short or stopped to give way when they'd be in your way
-scheduled = true              # the departures due, at gates 45 min before they push, from LocalTC's server (no account needed);
-                              # the real one takes over when its transponder comes on
 
 [ops]                         # real-world data, each from a free public source, kept on this PC with its age
 weather = true                # TAFs, SIGMETs and AIRMETs, the weather radar (aviationweather.gov, RainViewer)

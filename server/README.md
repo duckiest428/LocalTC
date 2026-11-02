@@ -81,8 +81,6 @@ npx wrangler d1 create localtc          # copy the database_id into wrangler.tom
 npm run migrate                         # creates the tables
 npx wrangler secret put RESEND_API_KEY  # the sign-in emails: a Resend account with localtc.tech verified
 npx wrangler secret put SUPPORT_EMAIL   # where the Dashboard's and the app's support messages go (your own inbox)
-npx wrangler secret put OPENSKY_CLIENT_ID      # the departures at the app's gates (src/departures.ts): a free OpenSky Network
-npx wrangler secret put OPENSKY_CLIENT_SECRET  # account's API client; without both, the app simply has none. Migration 0011.
 npm run deploy                          # also creates the api.localtc.tech custom domain
 ```
 

@@ -8,7 +8,6 @@
 import * as auth from "./auth";
 import * as blog from "./blog";
 import * as chartfox from "./chartfox";
-import * as departures from "./departures";
 import type { Env } from "./env";
 import * as flights from "./flights";
 import { HttpError, cors, json } from "./http";
@@ -89,8 +88,6 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/chartfox\/callback$/, (env, req, url) => chartfox.callback(env, req, url)],
   ["POST", /^\/v1\/chartfox\/token$/, (env, req) => chartfox.token(env, req)],
   ["POST", /^\/v1\/chartfox\/refresh$/, (env, req) => chartfox.refresh(env, req)],
-  // The departures due from an airport, for the app's traffic (src/departures.ts). No account needed.
-  ["GET", /^\/v1\/departures\/([A-Z0-9]{4})$/, (env, req, _u, p) => departures.departures(env, req, p[0])],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],
   ["DELETE", /^\/v1\/push-tokens\/(\w+)$/, signedIn((env, _req, a, _u, p) => live.removePushToken(env, a, p[0]))],
 ];
@@ -131,6 +128,5 @@ export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     await auth.cleanup(env);
     await chartfox.cleanup(env);
-    await departures.cleanup(env);
   },
 } satisfies ExportedHandler<Env>;

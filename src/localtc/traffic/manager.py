@@ -166,14 +166,6 @@ HUB_GATES, REGIONAL_GATES = 40, 10  # an airport with this many gates is a hub; 
 # A large "GA" ramp spot at an airline airport is a remote airliner stand (Haneda's scenery calls its 157 remote stands
 # RAMP_GA_LARGE): it gets an airliner of its size, not a light aircraft.
 REMOTE_STAND_M = 18.0
-# Scheduled departures (ops.schedules): each at a gate this long before it's due off it, and pushing this long after
-# its time if the real one's transponder hasn't come on (not every flight keeps yesterday's callsign), gone this long
-# after if it couldn't (no way to a runway), the controller's clearance this long before.
-SCHEDULED_BEFORE_S = 45 * 60.0
-SCHEDULED_PUSH_S = 3 * 60.0
-SCHEDULED_LATE_S = 60 * 60.0
-SCHEDULED_CLEARANCE_S = 20 * 60.0
-SCHEDULED_MAX = 30
 # The ground, LocalTC's: pushed back this far onto the taxiway at a walking pace, engines started for this long, then
 # the taxi; an arrival this close in and this low is LocalTC's to land and taxi in; a departure LocalTC took off goes
 # back to the live data once up this high and this close to the real one.
@@ -347,8 +339,6 @@ class TrafficManager:
         self._user_runway_t = 0.0  # when the user last had a runway
         self._released_t = -1e9  # the last held departure sent on its way
         self._call_t = -1e9  # the last time tower told one to hold short
-        # The departures due from an airport (ops.schedules, fetched by the service): by airport.
-        self.scheduled: dict[str, list] = {}
         self._graphs: dict[str, tuple[tuple, TaxiGraph]] = {}  # airport: (its closures, the graph around them)
         self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
 
@@ -468,7 +458,6 @@ class TrafficManager:
         out += self._live(now)
         if self.s.parked:
             out += self._parked(now)
-        out += self._scheduled(now)
         out += self._dedupe()
         out += self._clear_reserved()
         self.atc.managed({p.object_id for p in self.planes.values() if p.object_id is not None})
@@ -568,23 +557,6 @@ class TrafficManager:
                 continue
             if far or age > LOST_S or (key not in keep and age > STALE_S):
                 out += self._remove(plane)
-        # A scheduled departure's stand-in at the gate gives way to the real one once its transponder's on.
-        heard = {f.callsign for f in self.flights.values() if f.callsign}
-        for plane in [p for p in self.planes.values() if p.key.startswith("sched:") and p.callsign in heard]:
-            f = next(f for f in self.flights.values() if f.callsign == plane.callsign)
-            key = f"live:{f.hex}"
-            if key in self.planes:
-                out += self._remove(plane)
-                continue
-            # Its transponder on: the same aircraft on the same stand is the real one from here (taken away and made
-            # again from the live data, it was somewhere else).
-            self._did(f"{plane.callsign}'s transponder is on: the real one from here")
-            del self.planes[plane.key]
-            plane.key, plane.flight, plane.stood_t = key, f, (now if f.gs_kt < 1 else 0.0)
-            plane.stood_at = (f.lat, f.lon) if f.gs_kt < 1 else None
-            plane.push_due = f.gs_kt >= MOVING_OFF_KT
-            plane.said = self._said.setdefault(key, plane.said)
-            self.planes[key] = plane
         # New ones.
         made = 0
         for d, f in wanted[: self.s.max_live]:
@@ -1562,7 +1534,7 @@ class TrafficManager:
             end = geo.end(ident)
             busy = end is not None and self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
             waited = now - loc.stage_t >= HOLD_SHORT_MAX_S
-            if (rolling or waited or plane.key.startswith("sched:")) and not busy and now - self._released_t >= TAKEOFF_GAP_S:
+            if (rolling or waited) and not busy and now - self._released_t >= TAKEOFF_GAP_S:
                 self._released_t = now
                 if not rolling and plane.live:
                     self._kept_off[plane.key] = now + EARLY_KEPT_OFF_S  # gone before its real one: not made again
@@ -1694,61 +1666,6 @@ class TrafficManager:
             if haversine_nm(lat, lon, a, b) * M_PER_NM < OVERLAP_M:
                 return True
         return False
-
-    # --- the scheduled departures ------------------------------------------------------------------------------
-
-    def _scheduled(self, now: float) -> list[Any]:
-        """At the airport the user's on the ground at: each departure due within ``SCHEDULED_BEFORE_S`` at a gate
-        (one a second), its clearance given before it's due, and taken away once the real one's transponder is on
-        or it's well past its time."""
-        out: list[Any] = []
-        here = set(self._parked_airports())
-        for plane in [p for p in self.planes.values() if p.key.startswith("sched:") and p.mode == "parked"]:
-            due = plane.parked_t  # (its time off the gate)
-            icao = plane.spot[0] if plane.spot else ""
-            if icao not in here and icao not in self.parked_at or now > due + SCHEDULED_LATE_S:
-                out += self._remove(plane)
-                continue
-            if plane.object_id is not None and now >= due + SCHEDULED_PUSH_S and self.own is not None:
-                out += self._start_taxi_out(plane, now)  # the real one not heard: it goes all the same
-                continue
-            if plane.object_id is not None and "clearance" not in plane.said and now >= due - SCHEDULED_CLEARANCE_S \
-                    and self.s.atc_control and now - self._calls_t.get(icao, -1e9) >= CALLS_GAP_S:
-                plane.said.add("clearance")
-                self._calls_t[icao] = now
-                out += self.atc.call(callsign=plane.callsign, kind="clearance", icao=icao, runway="",
-                                     destination=plane.note or "")
-        made = 0
-        heard = {f.callsign for f in self.flights.values() if f.callsign}
-        for icao in here:
-            geo = self._geo(icao)
-            if geo is None:
-                continue
-            count = sum(1 for p in self.planes.values() if p.key.startswith("sched:"))
-            for dep in sorted(self.scheduled.get(icao, ()), key=lambda d: d.off_t):
-                if made >= 1 or count >= SCHEDULED_MAX:
-                    break
-                key = f"sched:{dep.callsign}"
-                if key in self.planes or dep.callsign in heard or not dep.off_t - SCHEDULED_BEFORE_S <= now <= dep.off_t:
-                    continue
-                kind = dep.type or (self.types(dep.hex) if dep.hex else "") or "A320"
-                model = self.picker.pick(kind, dep.airline)
-                spot = free_stand(geo, self._taken(icao), wingspan_m(kind), self._airline_near(dep.airline, icao),
-                                  seed=dep.callsign)
-                if model is None or spot is None:
-                    continue
-                p = geo.airport.parking[spot]
-                plane = Plane(key, self._request(), model[0], model[1], callsign=dep.callsign, spot=(icao, spot),
-                              mode="parked", created_t=now, note=dep.destination)
-                plane.parked_t = dep.off_t
-                self._add(plane)
-                made += 1
-                count += 1
-                self._did(f"{dep.callsign} at {p.name.title()}, due off at {_hhmm(dep.off_t)}Z ({dep.source})")
-                out.append(SpawnAiAircraft(request_id=plane.request_id, kind="parked", title=plane.title,
-                                           livery=plane.livery, tail=dep.callsign[:9], lat=p.lat, lon=p.lon,
-                                           alt_ft=geo.airport.elev_ft, heading=p.heading_true, on_ground=True))
-        return out
 
     # --- the controllers' calls to the real flights ------------------------------------------------------------
 

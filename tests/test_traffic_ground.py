@@ -1,5 +1,4 @@
-"""LocalTC's traffic at the gates and on the taxiways: the departures due put at gates their wings fit before they
-push, the real one taking over once its transponder's on; an arrival the receivers lost landed, turned off and taxied
+"""LocalTC's traffic at the gates and on the taxiways: an arrival the receivers lost landed, turned off and taxied
 to a stand; a stand not swapped for the taxi line and back as the real positions wander; and what stands on a ramp
 fitting the airport."""
 
@@ -11,7 +10,6 @@ from pathlib import Path
 from localtc.airports import load_airport
 from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.taxi_route import TaxiGraph
-from localtc.ops.schedules import Departure, Schedules
 from localtc.sim_api import AiObjectAssigned, AiTrack, OwnshipState, RemoveAiAircraft, SpawnAiAircraft
 from localtc.sim_api.geo import advance, haversine_nm
 from localtc.traffic.feed import Flight, Route
@@ -38,79 +36,6 @@ def manager(calls: list | None = None) -> TrafficManager:
     m.on_airport(RJTT)
     m.on_own(own_at())
     return m
-
-
-def test_a_departure_due_waits_at_a_gate_its_wings_fit_then_gives_way_to_the_real_one():
-    calls: list = []
-    m = manager(calls)
-    m.scheduled["RJTT"] = [Departure("JAL5", "JAL", NOW + 30 * 60, destination="KJFK", type="B788", source="test"),
-                           Departure("JAL7", "JAL", NOW + 3 * 3600, destination="KORD", type="B788", source="test")]
-    out = m.tick(NOW)
-    spawns = [c for c in out if isinstance(c, SpawnAiAircraft)]
-    assert len(spawns) == 1 and spawns[0].tail == "JAL5"  # the one due within 45 minutes, not the one in three hours
-    plane = m.planes["sched:JAL5"]
-    spot = RJTT.parking[plane.spot[1]]
-    assert spot.kind.startswith("gate") and spot.radius_m + 1 >= 60.1 / 2
-    m.on_assigned(AiObjectAssigned(t=0.0, request_id=spawns[0].request_id, object_id=500), NOW)
-    m.tick(NOW + 11 * 60)  # 19 minutes before it's due: delivery's clearance
-    assert [c["kind"] for c in calls] == ["clearance"] and calls[0]["destination"] == "KJFK"
-    real = Flight(hex="8401", callsign="JAL5", registration="", type="B788", category="A5", lat=spot.lat,
-                  lon=spot.lon, alt_ft=None, on_ground=True, gs_kt=0.0, track=0.0, vs_fpm=0.0, squawk="", t=NOW + 12 * 60)
-    m.on_feed([real], "test", NOW + 12 * 60)
-    out = m.tick(NOW + 12 * 60)
-    # The same aircraft on the same stand is the real one from here (taken away and made again, it was elsewhere).
-    assert RemoveAiAircraft(object_id=500) not in out and "sched:JAL5" not in m.planes
-    plane = m.planes["live:8401"]
-    assert plane.object_id == 500 and RJTT.parking[plane.spot[1]] is spot and plane.mode == "parked"
-
-
-def test_a_departure_never_heard_goes_an_hour_after_its_time():
-    m = manager()
-    m.scheduled["RJTT"] = [Departure("JAL9", "JAL", NOW + 10 * 60, type="A35K")]
-    out = m.tick(NOW)
-    m.on_assigned(AiObjectAssigned(t=0.0, request_id=[c for c in out if isinstance(c, SpawnAiAircraft)][0].request_id,
-                                   object_id=501), NOW)
-    assert "sched:JAL9" in m.planes
-    assert RemoveAiAircraft(object_id=501) in m.tick(NOW + 75 * 60) and "sched:JAL9" not in m.planes
-
-
-def test_nothing_is_scheduled_while_flying():
-    m = manager()
-    m.on_own(own_at(ground=False))
-    m.scheduled["RJTT"] = [Departure("JAL5", "JAL", NOW + 600, type="B788")]
-    assert not [c for c in m.tick(NOW) if isinstance(c, SpawnAiAircraft)]
-
-
-def test_a_departure_never_heard_pushes_back_all_the_same():
-    """Not every flight keeps yesterday's callsign: one whose transponder never comes on still goes, not left standing."""
-    m = manager()
-    m.scheduled["RJTT"] = [Departure("JAL9", "JAL", NOW + 10 * 60, type="A35K")]
-    out = m.tick(NOW)
-    m.on_assigned(AiObjectAssigned(t=0.0, request_id=[c for c in out if isinstance(c, SpawnAiAircraft)][0].request_id,
-                                   object_id=501), NOW)
-    m.tick(NOW + 12 * 60)
-    assert m.planes["sched:JAL9"].mode == "parked"
-    m.tick(NOW + 14 * 60)
-    plane = m.planes["sched:JAL9"]
-    assert plane.mode == "taxi_out" and plane.local.stage == "push"
-    m.tick(NOW + 14 * 60 + 1)  # (on its way, not taken for a parked one that's lost its stand)
-    assert "sched:JAL9" in m.planes
-
-
-def test_the_departures_come_from_localtcs_server_with_no_key():
-    from localtc.ops.fetch import Cache
-
-    asked = []
-
-    def fetch(url, **kw):
-        asked.append((url, kw))
-        return {"departures": [{"callsign": "IBE0263", "off_t": NOW + 600, "destination": "MDSD", "hex": "34520b"},
-                               {"callsign": "IBE1", "off_t": NOW - 7200}, {"bad": 1}]}
-
-    got = Schedules(Cache(), fetch=fetch, clock=lambda: NOW).departures("lemd")
-    assert [d.callsign for d in got] == ["IBE0263"] and got[0].airline == "IBE" and got[0].destination == "MDSD"
-    assert asked == [("https://api.localtc.tech/v1/departures/LEMD", {})]
-    Schedules(Cache(), fetch=lambda url, **kw: None, clock=lambda: NOW).departures("LEMD")  # (no answer: none)
 
 
 def test_an_arrival_lost_on_the_runway_turns_off_and_taxies_to_a_stand():

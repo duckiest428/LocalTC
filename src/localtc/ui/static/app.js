@@ -1934,8 +1934,7 @@ const Settings = {
             ["hybrid", "Real world: the airport's real ATIS, else LocalTC's from its real METAR, the simulator's only where there's neither (recommended)"],
             ["sim", "Simulator only: LocalTC's ATIS from the sim's weather, nothing downloaded"],
           ].map(([v, t]) => `<option value="${v}" ${({real: "hybrid"}[st.atc.atis_source] || st.atc.atis_source || "hybrid") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">The real ATIS is the FAA's digital ATIS (atis.info) in the US; elsewhere it's the ATIS of a VATSIM
-            controller on at the airport, when there is one (its runways and approaches; the weather is the real METAR's).
+          <span class="hint">The real ATIS is the FAA's digital ATIS (atis.info) in the US; elsewhere it's the airport's own digital ATIS from ATIS.guru, at about 560 airports in 68 countries (its letter, runways and approaches; the weather is the real METAR's).
             The METAR is aviationweather.gov's; only the airport codes are sent. Once you're at or near an airport, the weather the sim has there wins over any real-world
             report, so ATC never gives you conditions you aren't flying in; the ATIS says when the two differ. Each ATIS shows
             where it's from and how old it is. Takes effect on the next flight.</span></label></div>

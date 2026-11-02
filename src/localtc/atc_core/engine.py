@@ -965,7 +965,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.com1_mhz))
                 if key in self.atis.current:
                     # An AWOS or ASOS and no ATIS: an automated observation (the field's real METAR, as an ATIS has),
-                    # read as one. A real ATIS for it (a VATSIM controller's) is read as the ATIS it is.
+                    # read as one. A real ATIS for it (ATIS.guru's) is read as the ATIS it is.
                     self.atis.current[key].automated = automated_only(geo) and real is None
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
@@ -1100,8 +1100,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         from). None: nothing known of it.
 
         - "sim": the simulator's weather, as LocalTC observes it.
-        - "real" (and "hybrid", the same): the airport's real ATIS (its letter, runways and weather; outside the US a
-          VATSIM controller's, with the real METAR's weather), else LocalTC's own from the real METAR, else from the
+        - "real" (and "hybrid", the same): the airport's real ATIS (its letter, runways and weather; outside the US
+          ATIS.guru's, with the real METAR's weather), else LocalTC's own from the real METAR, else from the
           simulator. ("real" once fell back on the sim's weather straight away: Dubai's runway came from a wind
           sampled 270 miles out, and the A380 landed on 12R with a tailwind against the real traffic on 30L.)
 
@@ -1117,8 +1117,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             age = real_atis.age_minutes(real.zulu, own.zulu_s) if real is not None else None
             if age is not None and age > REAL_ATIS_MAX_AGE_MIN:
                 real = None  # stale: the METAR's or the sim's weather instead (an ATIS is issued at least hourly)
-        if real is not None and (real.weather is None or real.source == "vatsim") and icao in self.weather.reports:
-            # A VATSIM controller's ATIS (or one with no observation in it): its runways, the real METAR's weather
+        if real is not None and (real.weather is None or real.source in ("vatsim", "atis.guru")) and icao in self.weather.reports:
+            # ATIS.guru's (each country words its observation differently), or one with no observation in it: its
+            # letter, runways and approaches, the real METAR's weather
             label = f"{'VATSIM' if real.source == 'vatsim' else 'real'} ATIS"
             return self.weather.surface(icao, airports, report_first=True), real, (label, None, real.zulu)
         if real is not None and real.weather is not None:

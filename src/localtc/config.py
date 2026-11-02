@@ -197,7 +197,7 @@ class AtcConfig(_Section):
     # Recordings made before took it from the wind where the aircraft was, and replay with that.
     destination_weather: bool = True
     # Where each airport's ATIS comes from: "sim" (LocalTC's, from the simulator's weather), "hybrid" or "real" (the
-    # same: the airport's real ATIS, the FAA's in the US and a VATSIM controller's elsewhere when one is on; else
+    # same: the airport's real ATIS, the FAA's in the US and ATIS.guru's elsewhere; else
     # LocalTC's from the real METAR; else the simulator: only where there's no real report at all, however old the
     # real one is).
     atis_source: Literal["sim", "real", "hybrid"] = "hybrid"

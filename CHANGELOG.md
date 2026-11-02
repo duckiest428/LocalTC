@@ -62,6 +62,9 @@ a new minor version adds features, a patch fixes them.
   From OurAirports' data, kept in LocalTC, so they show before a flight too.
 
 ### Changed
+- **The real ATIS outside the US is the airport's own, no longer a VATSIM controller's:** its live digital ATIS from
+  ATIS.guru (about 560 airports in 68 countries): the real letter, runways, approaches and closures, with the real
+  METAR's weather. Where it has no recent one, LocalTC's ATIS from the real METAR.
 - **One voice: the LocalTC voice library** (a 340 MB download, with the other models), in place of choosing Piper or
   Kokoro. Until it's downloaded, Piper speaks, with the same accents.
 - **The Live Map's legend folds away** with its header (who you talk to now and next stays), and stays as you left it.

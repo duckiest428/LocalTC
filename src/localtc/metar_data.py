@@ -1,6 +1,6 @@
 """Airports' real weather reports (METARs, from aviationweather.gov) and real ATIS (the FAA's digital ATIS, from
-atis.info, for US airports; elsewhere the ATIS of a VATSIM controller on there, from VATSIM's public data feed), all
-free public APIs, for ATC (``[atc] atis_source``).
+atis.info, for US airports; elsewhere the airport's own D-ATIS as ATIS.guru publishes it, which aircraft asked for by
+datalink: about 560 airports in 68 countries), all free, for ATC (``[atc] atis_source``).
 
 MSFS gives add-ons only the weather where the aircraft is, so the destination's weather was unknown until the
 aircraft got there: "the weather at the destination?" got "information not available", and its runway was chosen from
@@ -11,6 +11,8 @@ airport until the aircraft samples the sim's own weather there.
 on a background thread, and ``get`` returns what it has meanwhile (or None). LOCALTC_METAR="" turns it off (the tests).
 """
 
+import calendar
+import html
 import json
 import logging
 import re
@@ -26,10 +28,9 @@ log = logging.getLogger(__name__)
 
 URL = "https://aviationweather.gov/api/data/metar"
 ATIS_URL = "https://atis.info/api/{icao}"  # US airports' digital ATIS; "No results found" (a 404) elsewhere
-# Everyone on VATSIM, its controllers' ATIS among them: worldwide, but only where a controller is on. Their runways and
-# approaches follow the real airport's (the network's controllers work to the real wind and procedures).
-VATSIM_URL = "https://data.vatsim.net/v3/vatsim-data.json"
-VATSIM_KEEP_S = 120.0  # the feed (a few MB, new every 15 s) fetched at most this often for all airports together
+GURU_URL = "https://atis.guru/atis/{icao}"
+GURU_CARD = re.compile(r'card-title[^>]*>\s*([^<]*?)\s*</h5>.*?card-subtitle[^>]*>([^<]*)</h6>\s*<div class="atis">(.*?)</div>', re.S)
+GURU_MAX_AGE_MIN = 90  # (as ATC's own limit on a real ATIS, atc_core.engine)
 FAA_PREFIXES = ("K", "P", "TJ", "TI")  # the airports atis.info has: the US's (Hawaii, Alaska, Guam, Puerto Rico ...)
 REFRESH_S = 1800.0  # a new METAR comes hourly (and specials between): looked for every half hour
 ATIS_REFRESH_S = 300.0  # a real ATIS looked for this often (a new letter comes hourly, specials between: caught soon)
@@ -73,7 +74,7 @@ def parse(row: dict) -> WeatherReport:
 
 def fetch_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] | None:
     """The airport's real ATIS (one, or an arrival and a departure one): the FAA's digital ATIS in the US, else (or
-    when it has none) a VATSIM controller's; None where there's neither. Dubai asked atis.info every ten minutes of a
+    when it has none) the airport's as ATIS.guru has it; None where there's neither. Dubai asked atis.info every ten minutes of a
     fifteen-hour flight and got a 404 each time."""
     icao = icao.upper()
     if icao.startswith(FAA_PREFIXES):
@@ -85,7 +86,7 @@ def fetch_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] |
             found = None
         if found:
             return found
-    return fetch_vatsim_atis(icao, timeout_s=timeout_s)
+    return fetch_guru_atis(icao, timeout_s=timeout_s)
 
 
 def fetch_faa_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] | None:
@@ -102,41 +103,58 @@ def fetch_faa_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisRepor
     return out or None
 
 
-_vatsim: tuple[float, list] = (-1e9, [])  # (when fetched, monotonic; the feed's ATIS list)
-_vatsim_lock = threading.Lock()
-
-
-def _vatsim_atis_list(timeout_s: float) -> list:
-    global _vatsim
-    with _vatsim_lock:
-        if time.monotonic() - _vatsim[0] < VATSIM_KEEP_S:
-            return _vatsim[1]
-        request = urllib.request.Request(VATSIM_URL, headers={"User-Agent": "LocalTC"})
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            feed = json.loads(response.read() or b"{}")
-        _vatsim = (time.monotonic(), [a for a in feed.get("atis") or () if isinstance(a, dict)])
-        return _vatsim[1]
-
-
-def fetch_vatsim_atis(icao: str, *, timeout_s: float = TIMEOUT_S, rows: list | None = None,
-                      now_zulu: str = "") -> list[AtisReport] | None:
-    """The ATIS of a VATSIM controller on at ``icao`` (OMDB_ATIS; LEPA_A_ATIS and LEPA_D_ATIS, an arrival's and a
-    departure's), from the network's public data feed; None when nobody's on there. Its time is now's (it's on the
-    air now; ``now_zulu``: the tests'). ``rows``: the feed's ATIS list (the tests')."""
-    icao = icao.upper()
-    out = []
-    for row in rows if rows is not None else _vatsim_atis_list(timeout_s):
-        callsign = str(row.get("callsign") or "").upper()
-        parts = callsign.split("_")
-        lines = row.get("text_atis") or ()
-        if parts[0] != icao or parts[-1] != "ATIS" or not lines or not row.get("atis_code"):
+def guru_text(body: str) -> str:
+    """A published D-ATIS as one text in sentences. Datalink wraps its lines wherever they run out ("ATIS A / RR W",
+    "TWY B CLSD BTN TWY O AND / TWY Q"), and each country has its own marks between items ("-RWY 08L 08R", " , ")."""
+    body = html.unescape(body).replace("\r", "")
+    body = re.sub(r"\bATIS A\nRR\b", "ATIS ARR", body)
+    out = ""
+    for line in body.split("\n"):
+        line = " ".join(line.split()).strip(" -")
+        if not line:
             continue
-        middle = parts[1] if len(parts) == 3 else ""
-        kind = {"A": "arrival", "ARR": "arrival", "D": "departure", "DEP": "departure"}.get(middle, "both")
-        out.append(AtisReport(t=0.0, icao=icao, letter=str(row["atis_code"]).upper()[:1],
-                              text=" ".join(str(x) for x in lines), kind=kind,
-                              zulu=now_zulu or time.strftime("%H%M", time.gmtime()), source="vatsim"))
+        if not out or re.search(r"(?:\b(?:AND|OR|BTN|ON|OF|AT|TO|IN|THE|FOR|FROM|WITH|DO|NOT)|,)$", out) \
+                or re.match(r"(?:CLSD|CLOSED|U/S|WIP|,)", line):
+            out = f"{out} {line}".strip()
+        else:
+            out = f"{out}. {line}" if not out.endswith(".") else f"{out} {line}"
+    out = re.sub(r"\s+,+\s*", ". ", out)
+    out = re.sub(r"\b(RWYS?|RUNWAYS?):\s*", r"\1 ", out)
+    # "RUNWAY 1 0 LEFT" (a voice's words, typed), "34L AND R", "34L/R"
+    out = re.sub(r"\b(RWYS?|RUNWAYS?) (\d) (\d)\b", r"\1 \2\3", out)
+    return re.sub(r"\b(\d{2})([LRC])(\s+AND\s+|/)([LRC])\b", r"\1\2\3\1\4", out)
+
+
+def read_guru_page(page: str, icao: str, now_s: float) -> list[AtisReport] | None:
+    """The live ATIS on an airport's page of ATIS.guru, arrival and departure: only one published in the last
+    ``GURU_MAX_AGE_MIN`` (each stays up until an aircraft next asks for that airport's, so Munich's departure ATIS was
+    a day and a half old beside an arrival one half an hour old). ``now_s``: Unix time."""
+    out = []
+    kinds = {"arrival": "arrival", "departure": "departure"}
+    for title, when, body in GURU_CARD.findall(page):
+        stamp = re.fullmatch(r"\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}) UTC\s*", when)
+        if stamp is None:
+            continue
+        published = calendar.timegm(time.strptime(stamp.group(1), "%Y-%m-%d %H:%M"))
+        if now_s - published > GURU_MAX_AGE_MIN * 60:
+            continue
+        text = guru_text(body)
+        # Every one starts the same way, whatever follows: "EDDM ARR ATIS B. 2120Z ..."
+        head = re.match(r"\w{4}\s+(?:(?:ARR|DEP)\s+)?ATIS\s+(?:(?:ARR|DEP)\s+)?([A-Z])\b\.?\s*(\d{4})Z\.?\s*", text)
+        if head is None:
+            continue
+        out.append(AtisReport(t=0.0, icao=icao, letter=head.group(1), zulu=head.group(2), source="atis.guru",
+                              kind=kinds.get(title.split()[0].lower(), "both"),
+                              text=f"ATIS {head.group(1)} {head.group(2)}Z. {text[head.end():]}"))
     return out or None
+
+
+def fetch_guru_atis(icao: str, *, timeout_s: float = TIMEOUT_S) -> list[AtisReport] | None:
+    """The airport's D-ATIS as published on ATIS.guru (a public page; no API); None where it has no recent one."""
+    icao = icao.upper()
+    request = urllib.request.Request(GURU_URL.format(icao=icao), headers={"User-Agent": "LocalTC (https://localtc.tech)"})
+    with urllib.request.urlopen(request, timeout=timeout_s) as response:
+        return read_guru_page(response.read().decode("utf-8", "replace"), icao, time.time())
 
 
 class MetarStore:
@@ -186,7 +204,7 @@ class MetarStore:
             if report is None:
                 self._failed[icao] = time.monotonic()  # no METAR station there: asked again later
                 if self.what == "ATIS":
-                    self._reports.pop(icao, None)  # the VATSIM controller went off, and their ATIS with them
+                    self._reports.pop(icao, None)  # no recent one any more
                 return
             self._reports[icao] = (time.monotonic(), report)
         log.info("%s for %s: %s", "METAR" if isinstance(report, WeatherReport) else "ATIS", icao,

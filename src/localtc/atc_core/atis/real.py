@@ -7,7 +7,8 @@ the time, the runways in use for landing and departing, the approach, and the we
 LocalTC then speaks it in its own ATIS's words (``broadcast``), with the real letter and runways: the published text
 is all abbreviations ("DEPG RWYS", "SIMUL CLSLY SPCD DPNDNT ILS RY 28R"), made for reading, not for a voice.
 
-Outside the US it's a VATSIM controller's ATIS (``source`` "vatsim"), in the words of Europe's and Asia's ATIS: "RWY IN
+Outside the US it's the airport's own D-ATIS from ATIS.guru (``source`` "atis.guru"; older recordings a VATSIM
+controller's, "vatsim"), in the words of Europe's and Asia's ATIS: "RWY IN
 USE FOR ARRIVALS 24 LEFT", "DEP AND ARR RWY 10", "ARRIVAL RUNWAY 23R", "RWY 27R 27L". The network's own notes ("submit
 your TOBT at vats.im") aren't the airport's and aren't read out.
 """
@@ -81,6 +82,8 @@ def parse(text: str, kind: str = "both", *, source: str = "", zulu: str = "") ->
         landing = tuple(dict.fromkeys((*listed, *by_runway))) or landing or in_use
     departing = departing or (in_use if kind != "arrival" else ())
     found = _remarks(upper)
+    if source == "atis.guru":  # (wrapped by datalink, each country's its own: what's safely read out, the closures)
+        found = tuple(r for r in found if NEWS.search(r))
     notices = tuple(dict.fromkeys(n for r in found for n in read_notices(r)))
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
                     approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()),
@@ -110,6 +113,10 @@ OWN_WORDS = re.compile(r"^(?:SIMUL|EXP|EXPC|EXPECT|LNDG|LDG|LANDING|DEPG|DEPARTI
 # The network's notes on a VATSIM controller's ATIS: not the airport's ("submit their TOBT at vats.im/vdgs")
 NETWORK = re.compile(r"VATS|DISCORD|HTTPS?\b|WWW\.|\.(?:COM|NET|ORG|IM)\b|\bTOBT\b|\bVDGS\b|\bCPDLC\b|\bHOPPIE\b|"
                      r"\bDATALINK\b|\bPDC\b|\bCHARTS?\b|\bCONTROLLER\b|\bONLINE\b")
+
+
+NEWS = re.compile(r"^(?:TWYS?|TAXIWAYS?|RWYS?|RUNWAYS?|GATE|STAND|APRON|EXIT|ILS|LOC|GP)\b.*\b(?:CLSD|CLOSED|U/S|WIP|OUT OF SERVICE)\b|"
+                  r"\b(?:BIRD|WILDLIFE|CAUTION)\b")
 
 
 def _remarks(upper: str) -> tuple[str, ...]:

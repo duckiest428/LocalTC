@@ -37,8 +37,8 @@ strict_callsign = false       # true: a readback without the callsign is incompl
 transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?"
 notams = true                 # notices on the ATIS (a taxiway closed, an ILS out, birds ...); ATC works to them
-atis_source = "hybrid"        # the ATIS: "hybrid" (or "real", the same: the real ATIS, the FAA's in the US and a VATSIM
-                              # controller's elsewhere when one is on; else LocalTC's from the real METAR; else the
+atis_source = "hybrid"        # the ATIS: "hybrid" (or "real", the same: the real ATIS, the FAA's in the US and ATIS.guru's
+                              # elsewhere; else LocalTC's from the real METAR; else the
                               # sim), "sim" (the sim's weather only). The sim's weather only where there's no real
                               # report at all, however old the real one is
 chatter = true                # other flights heard on the frequency now and then (nothing behind them to answer)

@@ -2,10 +2,6 @@
 cloud models' keys are, never in a settings file. An environment variable wins (``LOCALTC_<NAME>``: the tests, a
 developer's own).
 
-- ``opensky_id`` / ``opensky_secret``: an OpenSky Network API client (opensky-network.org, Account > API client):
-  yesterday's departures from an airport, the day's schedule as it was flown.
-- ``airlabs``: an AirLabs key (airlabs.co, free plan): today's scheduled departures.
-- ``faa_id`` / ``faa_secret``: the FAA's NOTAM API (api.faa.gov, free): NOTAMs worldwide by airport.
 - ``openaip``: an openAIP key (openaip.net, free): restricted, danger and prohibited areas worldwide.
 - ``chartfox``: the pilot's own ChartFox token (signed in with ChartFox through the account server).
 """
@@ -13,12 +9,8 @@ developer's own).
 import os
 from dataclasses import dataclass, field
 
-NAMES = ("opensky_id", "opensky_secret", "airlabs", "faa_id", "faa_secret", "openaip", "chartfox", "chartfox_refresh")
+NAMES = ("openaip", "chartfox", "chartfox_refresh")
 SERVICES = {
-    "opensky": ("OpenSky Network", "https://opensky-network.org/my-opensky/account", ("opensky_id", "opensky_secret"),
-                "Yesterday's departures from the airport you're at: the aircraft at the gates before they push"),
-    "airlabs": ("AirLabs", "https://airlabs.co/signup", ("airlabs",), "Today's scheduled departures"),
-    "faa": ("FAA NOTAM API", "https://api.faa.gov/s/", ("faa_id", "faa_secret"), "NOTAMs for any airport"),
     "openaip": ("openAIP", "https://www.openaip.net/", ("openaip",), "Restricted, danger and prohibited areas"),
 }
 

@@ -1,12 +1,11 @@
 /* The EFB tab (ui/efb_api.py): the briefing, the plan with its fuel and weights, the airport and its gates, the
-   charts (ChartFox), the checklists, the scratchpad, Airport Ops, the documents, the achievements, and the data
-   services' keys. The same as the companion's EFB; what changes in flight arrives as the "efb" event. */
+   charts (ChartFox), the checklists, the scratchpad, Airport Ops, the documents, and the achievements. The same as the companion's EFB; what changes in flight arrives as the "efb" event. */
 
 const Efb = {
   section: "briefing", state: {}, briefIcao: "", airportIcao: "", chartIcao: "", gateMap: null, chartfoxPoll: null,
   SECTIONS: [["briefing", "Briefing"], ["plan", "Plan & fuel"], ["airport", "Airport & gates"], ["charts", "Charts"],
     ["checklists", "Checklists"], ["scratchpad", "Scratchpad"], ["ops", "Airport Ops"], ["docs", "Documents"],
-    ["achievements", "Achievements"], ["data", "Data"]],
+    ["achievements", "Achievements"]],
 
   init() {
     $("#efb-nav").innerHTML = this.SECTIONS.map(([id, label]) =>
@@ -60,7 +59,6 @@ const Efb = {
     const icao = this.briefIcao || this.airports()[0] || "";
     if (!icao) { body.innerHTML = `${this.picker("", null)}<div class="muted pad">Load a flight plan, or type an airport.</div>`; this.bindPicker(body, (a) => { this.briefIcao = a; this.show(); }); return; }
     const b = await api(`efb/briefing?icao=${encodeURIComponent(icao)}`);
-    const notams = b.notams?.items || [];
     body.innerHTML = `${this.picker(icao)}
       <div class="efbgrid">
         <div class="panel efbcard"><h3>METAR</h3><pre class="raw">${esc(b.metar || "Not known yet (fetched once the flight starts)")}</pre></div>
@@ -68,10 +66,6 @@ const Efb = {
         ${b.atis ? `<div class="panel efbcard"><h3>ATIS ${esc(b.atis.letter)} <span class="muted">${esc(b.atis.source)}</span></h3>
           <div>Runway ${esc(b.atis.runway)} · ${esc(b.atis.approach)} approach</div>
           ${(b.atis.notices || []).map((n) => `<div class="small">• ${esc(n)}</div>`).join("")}</div>` : ""}
-        <div class="panel efbcard wide"><h3>NOTAMs (${notams.length}) ${this.age(b.notams)}</h3>
-          ${notams.length ? notams.map((n) => `<div class="notam ${n.works_to?.length ? "atc" : ""} ${n.in_force ? "" : "later"}">
-            <b>${esc(n.id)}</b> ${n.works_to?.length ? `<span class="tag">ATC works to it</span>` : ""}${n.in_force ? "" : ` <span class="tag">not yet</span>`}
-            <div class="small">${esc(n.text)}</div></div>`).join("") : `<div class="muted">${esc(b.notams?.why || "None in force")}</div>`}</div>
       </div>`;
     this.bindPicker(body, (a) => { this.briefIcao = a; this.show(); });
   },
@@ -327,19 +321,4 @@ const Efb = {
       <div class="muted small">A flight that breaks a rule (an incursion, a takeoff or landing without a clearance, a low altitude alert) earns no flight-quality achievements.</div></div>`;
   },
 
-  /* --- the data services' keys --- */
-  async render_data(body) {
-    const r = await api("data/keys");
-    body.innerHTML = `<div class="panel efbcard"><h3>Real-world data</h3>
-      <p class="small muted">Each is a free account of your own. The keys are kept in Windows' credential store, never in a file; leave a box empty to keep the key you have.</p>
-      ${r.services.map((s) => `<div class="keyrow"><b>${esc(s.name)}</b> ${s.has_key ? `<span class="tag ok">set</span>` : `<span class="tag">not set</span>`}
-        <div class="small muted">${esc(s.what)} · <a href="${esc(s.signup)}" data-ext>get one</a></div>
-        ${s.fields.map((f) => `<input type="password" data-key="${esc(f)}" placeholder="${esc(f.replace(/_/g, " "))}" autocomplete="off">`).join("")}</div>`).join("")}
-      <div class="row"><button class="btn small primary" id="keys-save">Save keys</button></div></div>`;
-    this.bindExt(body);
-    $("#keys-save").onclick = async () => {
-      const keys = Object.fromEntries($$("[data-key]", body).filter((i) => i.value.trim()).map((i) => [i.dataset.key, i.value.trim()]));
-      try { await api("data/keys", { keys }); toast("Keys saved"); this.show(); } catch (e) { fail(e); }
-    };
-  },
 };

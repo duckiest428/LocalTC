@@ -181,7 +181,7 @@ private struct ChecklistLineRow: View {
 
 // MARK: - Briefing
 
-/// The flight's airports' METAR, TAF and NOTAMs (the ones ATC works to marked), and the ATIS ATC gives.
+/// The flight's airports' METAR and TAF, and the ATIS ATC gives.
 struct BriefingView: View {
     @Environment(AppModel.self) private var model
     @State private var icao: String?
@@ -206,28 +206,14 @@ struct BriefingView: View {
                         Text(atis.source ?? "").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Section("NOTAMs") {
-                    let items = b.notams?.items ?? []
-                    if items.isEmpty { Text(b.notams?.why ?? "None in force").foregroundStyle(.secondary) }
-                    ForEach(items, id: \.self) { n in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(n.id ?? "").font(.caption.bold())
-                                if n.forAtc { Text("ATC works to it").font(.caption2).padding(.horizontal, 4).background(.orange.opacity(0.3), in: Capsule()) }
-                            }
-                            Text(n.text ?? "").font(.caption)
-                        }
-                        .opacity(n.inForce == false ? 0.6 : 1)
-                    }
-                }
             }
         }
         .overlay {
             if airports.isEmpty {
                 ContentUnavailableView("No briefing yet", systemImage: "cloud.sun",
                                        description: Text(model.store.efb == nil
-                                           ? "The flight's airports' weather and NOTAMs appear once a flight starts in LocalTC."
-                                           : "Fetching the weather and NOTAMs: they show once LocalTC knows the flight's airports (from the sim or the flight plan)."))
+                                           ? "The flight's airports' weather appears once a flight starts in LocalTC."
+                                           : "Fetching the weather: it shows once LocalTC knows the flight's airports (from the sim or the flight plan)."))
             }
         }
         .navigationTitle("Briefing")

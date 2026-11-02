@@ -251,7 +251,7 @@ def ops_data(cfg: Config | None = None):
 
 
 def start_ops(cfg: Config, engine, bus):
-    """The flight's real-world data in the background: the airports' NOTAMs to ATC, the terrain ahead fetched."""
+    """The flight's real-world data in the background: the terrain ahead fetched."""
     from localtc.ops.service import OpsService
 
     data = ops_data(cfg)  # (the terrain and the hazards reach the ATC as events: TerrainGrid, OpsSnapshot "hazards")
@@ -273,26 +273,15 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
     from localtc.traffic.service import TrafficService
 
     t = cfg.traffic
-    schedules = None
-    if t.scheduled:
-        from localtc.ops.fetch import Cache
-        from localtc.ops.keys import default_keys
-        from localtc.ops.schedules import Schedules
-
-        schedules = Schedules(default_keys(), Cache(data_dir() / "ops" / "schedules.json"))
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
                                parked_fill=t.parked_fill,
                                atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)
-    # The departures due at the gates need a schedule: a free OpenSky or AirLabs account. Without one the gates stay
-    # empty (no made-up aircraft there), and the app says why.
-    manager.unscheduled = t.scheduled and (schedules is None or not schedules.available)
-    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, scheduled departures %s, ATC %s)",
+    log.info("Traffic: LocalTC's own (live flights within %.0f nm, parked aircraft %s, ATC %s)",
              t.radius_nm, "on" if t.parked else "off",
-             "on" if schedules is not None and schedules.available else "off (no schedule source)" if t.scheduled else "off",
              "on" if settings.atc_control else "off")
-    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json", schedules=schedules)
+    return TrafficService(manager, bus, source, book_path=data_dir() / "traffic" / "flights.json")
 
 
 def copilot_model(cfg: Config, backend):
@@ -620,7 +609,7 @@ async def run_session(
                 from localtc import simpkg
 
                 await asyncio.to_thread(simpkg.install)
-        if session.source_kind == "live" and (cfg.ops.notams or cfg.ops.terrain or cfg.ops.restrictions or cfg.ops.weather):
+        if session.source_kind == "live" and (cfg.ops.terrain or cfg.ops.restrictions or cfg.ops.weather):
             consumers.append(asyncio.create_task(start_ops(cfg, engine if cfg.atc.enabled else None, bus).run()))
         speaker = await start_tts(cfg, bus) if cfg.tts.enabled and cfg.atc.enabled else None
         if speaker is not None:

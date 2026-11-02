@@ -1,6 +1,5 @@
 """The real-world data for the flight in hand: fetched in the background around the airports and the aircraft, told
-to the ATC (an airport's NOTAMs as ``NoticesReport``), kept for the replay (``OpsSnapshot``), and served to the app
-and the companion: the briefing for an airport, and what the maps draw (SIGMETs, TFRs and restricted areas, the
+to the ATC, kept for the replay (``OpsSnapshot``), and served to the app and the companion: the briefing for an airport, and what the maps draw (SIGMETs, TFRs and restricted areas, the
 radar). Every item says where it's from, when it was got and until when it's current; what isn't known is
 "unavailable", with why, never left out quietly.
 """
@@ -14,11 +13,10 @@ from pathlib import Path
 
 from localtc.ops.fetch import Cache, Fetched
 from localtc.ops.keys import DataKeys
-from localtc.ops.notams import Notams, notices_of
 from localtc.ops.restrictions import Area, Restrictions
 from localtc.ops.terrain import Terrain
 from localtc.ops.weather import Weather
-from localtc.sim_api import NoticeItem, NoticesReport, OpsSnapshot, TerrainGrid
+from localtc.sim_api import OpsSnapshot, TerrainGrid
 
 log = logging.getLogger(__name__)
 
@@ -32,8 +30,6 @@ NEAR_NM = 250.0  # SIGMETs, TFRs and areas shown this far around the aircraft
 class OpsState:
     """What's known now: by airport and for the area around the aircraft."""
 
-    notams: dict[str, list] = field(default_factory=dict)
-    notams_meta: dict[str, dict] = field(default_factory=dict)
     sigmets: list = field(default_factory=list)
     sigmets_meta: dict = field(default_factory=dict)
     areas: list[Area] = field(default_factory=list)
@@ -54,25 +50,18 @@ class OpsData:
         self.cache = Cache(folder / "cache.json", clock=clock)
         self.keys = keys
         self.weather = Weather(self.cache, clock=clock)
-        self.notam_source = Notams(keys, self.cache, clock=clock)
         self.restrictions = Restrictions(keys, self.cache, clock=clock)
         self.terrain = Terrain(folder / "terrain")
         self.max_age_s = max_age_h * 3600.0
         self.clock = clock
 
     def briefing(self, icao: str, metar: str = "") -> dict:
-        """An airport's briefing: its METAR (given), TAF, NOTAMs (and what ATC works to of them), each with its
-        provenance."""
+        """An airport's briefing: its METAR (given) and TAF, with its provenance."""
         icao = icao.upper()
         taf, taf_got = self.weather.taf(icao)
-        notams, notams_got = self.notam_source.for_airport(icao)
-        now = self.clock()
         return {
             "icao": icao, "metar": metar,
             "taf": {"raw": taf.raw if taf else "", "valid_to": taf.valid_to if taf else None, **meta(taf_got)},
-            "notams": {"items": [{**n.to_json(), "works_to": [list(x) for x in notices_of(n)], "in_force": n.in_force(now)}
-                                 for n in notams],
-                       **meta(notams_got, "" if self.notam_source.available else "no FAA NOTAM API key (EFB > Data)")},
         }
 
     def around(self, lat: float, lon: float) -> dict:
@@ -84,7 +73,7 @@ class OpsData:
         shown = [a for a in [*tfrs, *areas] if _near(a.polygon, lat, lon)]
         return {"sigmets": [s.to_json() for s in near], "sigmets_meta": meta(sig_got),
                 "areas": [a.to_json() for a in shown], "tfrs_meta": meta(tfr_got),
-                "airspace_meta": meta(area_got, "" if self.keys.has("openaip") else "no openAIP key (EFB > Data)"),
+                "airspace_meta": meta(area_got, "" if self.keys.has("openaip") else "no openAIP key (Settings > Real-world data)"),
                 "radar": self.weather.radar()}
 
     def hazards(self, places: list[tuple[float, float]], *, weather: bool = True, restrictions: bool = True) -> list[dict]:
@@ -114,15 +103,6 @@ class OpsData:
                             "floor_ft": a.floor_ft, "ceiling_ft": a.ceiling_ft})
         return out
 
-    def notices_report(self, icao: str, t: float) -> NoticesReport | None:
-        """An airport's real NOTAMs as ATC works to them, or None without them (no key, none known)."""
-        notams, got = self.notam_source.for_airport(icao)
-        if got is None or got.data is None:
-            return None
-        now = self.clock()
-        items = tuple(NoticeItem(kind=k, subject=s, detail=d, id=n.id, text=n.text[:200]) for n in notams
-                      if n.in_force(now) for k, s, d in notices_of(n))
-        return NoticesReport(t=t, icao=icao.upper(), notices=items, source=got.source, count=len(notams))
 
 
 def _near(polygon, lat: float, lon: float, within_nm: float = NEAR_NM) -> bool:
@@ -141,7 +121,6 @@ class OpsService:
 
     def __init__(self, data: OpsData, bus, *, flight, cfg) -> None:
         self.data, self.bus, self.flight, self.cfg = data, bus, flight, cfg
-        self._told: dict[str, tuple] = {}
         self._terrain_done: set = set()
         self._hazards_told: str | None = None
 
@@ -165,15 +144,6 @@ class OpsService:
         f = self.flight()  # {"own", "origin", "destination", "places": [(lat, lon) of the airports]}
         own = f.get("own")
         t = own.t if own is not None else 0.0
-        if self.cfg.notams:
-            for icao in dict.fromkeys(a for a in (f.get("origin"), f.get("destination")) if a):
-                report = await asyncio.to_thread(self.data.notices_report, icao, t)
-                if report is not None and self._told.get(icao) != report.notices:
-                    self._told[icao] = report.notices
-                    self.bus.publish(report)
-                    self.bus.publish(OpsSnapshot(t=t, kind="notams", key=icao, source=report.source, got=time.time(),
-                                                 data=json.dumps([msgspec_dict(n) for n in report.notices])))
-                    log.info("Real NOTAMs for %s: %d in force, %d ATC works to", icao, report.count, len(report.notices))
         if self.cfg.terrain:
             places = [(own.lat, own.lon)] if own is not None else []
             places += [p for p in f.get("places", ()) if p not in self._terrain_done]
@@ -201,6 +171,3 @@ class OpsService:
                     self.bus.publish(OpsSnapshot(t=t, kind="hazards", key="route", source="aviationweather.gov, FAA, openAIP",
                                                  got=time.time(), data=data))
 
-
-def msgspec_dict(item) -> dict:
-    return {f: getattr(item, f) for f in item.__struct_fields__}

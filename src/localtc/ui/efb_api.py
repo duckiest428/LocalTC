@@ -34,7 +34,6 @@ CHECKLIST_SAYS = {"pause": "hold the checklist", "resume": "resume the checklist
                   "check": "checked"}
 EXTRAS_EVERY_S = 900.0
 EXTRAS_CHECK_S = 15.0  # how often the flight's airports are looked at: fetched as soon as they're known or change
-BRIEFING_NOTAMS = 40  # in the phone's copy of a briefing (the app asks for all of them)
 COMMANDS = ("checklist", "scratchpad", "gate", "ops_note", "briefing", "charts", "chart")
 
 
@@ -273,7 +272,7 @@ class EfbRoutes:
         return self.state()
 
     async def api_briefing(self, args: dict) -> dict:
-        """An airport's briefing: its METAR, TAF and NOTAMs (and what ATC works to of them), the ATIS ATC gives and
+        """An airport's briefing: its METAR and TAF, the ATIS ATC gives and
         where it's from, each with its age."""
         from localtc.app import ops_data
 
@@ -578,7 +577,7 @@ class EfbRoutes:
             log.debug("Milestones not worked out", exc_info=True)
         return self.achievements.to_json()
 
-    # --- the data services' keys (EFB > Data) ----------------------------------------------------------
+    # --- the data services' keys (Settings > Real-world data) ----------------------------------------------------------
 
     async def api_keys(self, args: dict) -> dict:
         from localtc.app import ops_data
@@ -630,10 +629,6 @@ class EfbRoutes:
 def trim_briefing(b: dict) -> dict:
     """A briefing small enough to go to the phone with the rest of the EFB."""
     out = dict(b)
-    notams = dict(out.get("notams") or {})
-    notams["items"] = [{k: n.get(k) for k in ("id", "text", "works_to", "in_force", "start", "end")} | {"text": str(n.get("text", ""))[:300]}
-                       for n in (notams.get("items") or [])[:BRIEFING_NOTAMS]]
-    out["notams"] = notams
     return out
 
 

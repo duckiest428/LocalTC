@@ -208,7 +208,6 @@ const AtcMap = (() => {
     </div>
     <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
     <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
-    <div class="lg-row lg-wx"><span class="sw sw-notam"></span>NOTAMs (a closed runway red)</div>
     <div class="lg-row"><span class="sw sw-twy-closed"></span>Taxiway closed (the ATIS's notices)</div>
     <div class="lg-vfr">
       <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>

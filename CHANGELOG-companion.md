@@ -6,7 +6,8 @@ is built from this file.
 
 ## [0.5.4] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Changed
+- The EFB's briefing no longer has a NOTAM list: the notices are on the ATIS it shows.
 
 ## [0.5.3] - 2026-10-30
 

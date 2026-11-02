@@ -584,7 +584,7 @@ class AppController:
         destination's frequencies came up at cruise, hours before they were any use. None near either airport."""
         from localtc.atc_core.airlines import TELEPHONY
         from localtc.atc_core.phraseology import speech
-        from localtc.ops.schedules import IATA_TO_ICAO
+        from localtc.ops.airline_codes import IATA_TO_ICAO
         from localtc.sim_api.geo import haversine_nm
 
         own = engine.state.aircraft

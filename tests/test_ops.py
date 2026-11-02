@@ -1,5 +1,5 @@
 """Real-world data (localtc.ops) without the network: what each source answers, read; the cache's ages and the stale
-copy kept when a fetch fails; NOTAMs read into what ATC works to; terrain tiles decoded."""
+copy kept when a fetch fails; terrain tiles decoded."""
 
 import struct
 import urllib.error
@@ -10,7 +10,6 @@ import numpy as np
 from localtc.atc_core.atis.board import AtisBoard
 from localtc.ops.fetch import Cache
 from localtc.ops.keys import DataKeys
-from localtc.ops.notams import Notam, Notams, notices_of
 from localtc.ops.restrictions import Area, parse_tfr
 from localtc.ops.terrain import Terrain, decode_png, tile_xy
 from localtc.ops.weather import Weather, parse_sigmet, parse_taf
@@ -69,47 +68,6 @@ def test_the_radar_frame_is_a_tile_template():
     radar = w.radar()
     assert radar["url"] == "https://tiles/v2/radar/b/256/{z}/{x}/{y}/2/1_1.png" and radar["time"] == 2
     assert "RainViewer" in radar["attribution"]
-
-
-def notam(text: str) -> Notam:
-    return Notam(id="A1/26", icao="EGLL", text=text, start=None, end=None)
-
-
-def test_notams_read_into_what_atc_works_to():
-    assert notices_of(notam("RWY 09L/27R CLSD DUE TO WIP")) == [("runway_closed", "09L/27R", "")]
-    assert notices_of(notam("TWY A10E, B CLSD")) == [("taxiway_closed", "A10E", ""), ("taxiway_closed", "B", "")]
-    assert notices_of(notam("ILS RWY 27L U/S")) == [("ils_out", "27L", "")]
-    assert notices_of(notam("ILS RWY 27L GP U/S")) == [("glideslope_out", "27L", "")]
-    assert notices_of(notam("ALS RWY 09R U/S")) == [("approach_lights_out", "09R", "")]
-    assert notices_of(notam("BIG VOR/DME U/S")) == [("navaid_out", "VOR", "")]
-    assert notices_of(notam("CRANE ERECTED 512341N 0002812W 230FT AMSL")) == []  # nothing ATC works to
-    # Closed between two points: only that stretch
-    assert notices_of(notam("TWY K BTN TWY J AND RWY 22 CLSD")) == [("taxiway_closed", "K", "J/RWY 22")]
-
-
-def test_notams_need_the_faa_key_and_say_so():
-    n = Notams(DataKeys(memory={}), Cache(clock=Clock()))
-    assert n.for_airport("EGLL") == ([], None) and not n.available
-
-
-def test_notams_from_the_faa_api(monkeypatch):
-    monkeypatch.setenv("LOCALTC_FAA_ID", "id")
-    monkeypatch.setenv("LOCALTC_FAA_SECRET", "secret")
-    seen = {}
-
-    def fetch(url, params=None, headers=None, **kw):
-        seen.update(headers)
-        return {"totalPages": 1, "items": [{"properties": {"coreNOTAMData": {"notam": {
-            "number": "A5000/26", "icaoLocation": "EGLL", "text": "RWY 09L/27R CLSD",
-            "effectiveStart": "2026-10-01T00:00:00.000Z", "effectiveEnd": "PERM",
-            "icaoMessage": "A5000/26 NOTAMN Q) EGTT/QMRLC E) RWY 09L/27R CLSD"}}}}]}
-
-    clock = Clock(1_792_000_000.0)
-    n = Notams(DataKeys(memory={}), Cache(clock=clock), fetch=fetch, clock=clock)
-    notams, got = n.for_airport("egll")
-    assert seen == {"client_id": "id", "client_secret": "secret"}
-    assert [x.id for x in notams] == ["A5000/26"] and notams[0].end is None and notams[0].in_force(clock.t)
-    assert got.source == "FAA NOTAM API"
 
 
 def test_real_notams_replace_the_drawn_ones_on_the_atis():

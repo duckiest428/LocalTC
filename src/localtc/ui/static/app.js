@@ -1538,6 +1538,24 @@ const Settings = {
       this.render();
     } catch (e) { body.innerHTML = `<div class="error">${esc(e.message)}</div>`; }
   },
+  /** The data service's key, kept in the system's credential store. */
+  async renderDataKeys() {
+    const box = $("#s-data-keys");
+    const r = await api("data/keys").catch(() => null);
+    if (!box || !r) return;
+    box.innerHTML = `<h3>Real-world data</h3>
+      <p class="muted small">A free account of your own. The key is kept in Windows' credential store, never in a file; leave the box empty to keep the key you have.</p>
+      ${r.services.map((s) => `<div class="keyrow"><b>${esc(s.name)}</b> ${s.has_key ? `<span class="tag ok">set</span>` : `<span class="tag">not set</span>`}
+        <div class="small muted">${esc(s.what)} · <a href="${esc(s.signup)}" data-ext>get one</a></div>
+        ${s.fields.map((f) => `<input type="password" data-key="${esc(f)}" placeholder="${esc(f.replace(/_/g, " "))}" autocomplete="off">`).join("")}</div>`).join("")}
+      <div class="row"><button class="btn small primary" id="keys-save">Save keys</button></div>`;
+    Efb.bindExt(box);
+    $("#keys-save").onclick = async () => {
+      const keys = Object.fromEntries($$("[data-key]", box).filter((i) => i.value.trim()).map((i) => [i.dataset.key, i.value.trim()]));
+      try { await api("data/keys", { keys }); toast("Keys saved"); this.renderDataKeys(); } catch (e) { fail(e); }
+    };
+  },
+
   async save(section, key, value) {
     try {
       const r = await api("settings", { settings: { [section]: { [key]: value } } });
@@ -1964,8 +1982,7 @@ const Settings = {
           <label class="toggle" title="LocalTC's traffic on or off"><input type="checkbox" id="s-traffic" ${st.traffic?.enabled ? "checked" : ""}><span></span></label>
         </div>
         <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
-          <label class="check-row"><input type="checkbox" id="s-traffic-scheduled" ${st.traffic?.scheduled !== false ? "checked" : ""}> Scheduled departures at the gates: the airport's departures due in the next 45 minutes parked at gates their wings fit, handed to the real flight when its transponder comes on (a free OpenSky or AirLabs account: EFB → Data; without one, only the real aircraft at the gates are shown)</label>
-          <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates the departures don't take filled with the airport's airlines (off: the remote stands and ramps only)</label>
+          <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
           <div class="row"><label>Parked aircraft on the ramps<select id="s-traffic-parked">${[[-1, "Realistic: as busy as the airport is at that hour (up to 60)"], [0, "None"], [10, "A few (10)"], [20, "Some (20)"], [40, "Busy (40)"], [60, "Packed (60)"]].map(([n, label]) => {
             const t = st.traffic || {};
@@ -1987,6 +2004,8 @@ const Settings = {
         <h3>Language</h3>
         ${Language.picker("s")}
       </div>
+
+      <div class="card" id="s-data-keys"></div>
 
       <div class="card">
         <h3>Third party</h3>
@@ -2183,7 +2202,6 @@ const Settings = {
     on("#s-personalities", "change", (e) => this.save("atc", "personalities", e.target.checked));
     on("#s-humanize", "change", (e) => this.save("atc", "humanize", e.target.checked));
     on("#s-traffic", "change", (e) => { this.save("traffic", "enabled", e.target.checked); $("#traffic-opts")?.classList.toggle("off", !e.target.checked); });
-    on("#s-traffic-scheduled", "change", (e) => this.save("traffic", "scheduled", e.target.checked));
     on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));
     on("#s-traffic-gates", "change", (e) => this.save("traffic", "fill_gates", e.target.checked));
     on("#s-traffic-parked", "change", (e) => {
@@ -2211,6 +2229,7 @@ const Settings = {
         this.save("llm", key, value);
       });
     Language.wire("s", () => this.render());
+    this.renderDataKeys();
     on("#s-simbrief", "change", () => this.save("ui", "simbrief_user", val("#s-simbrief").trim()));
     on("#s-require-plan", "change", (e) => requirePlan(e.target.checked));
     on("#s-simbrief-fetch", "click", async (e) => {

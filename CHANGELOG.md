@@ -62,6 +62,11 @@ a new minor version adds features, a patch fixes them.
   From OurAirports' data, kept in LocalTC, so they show before a flight too.
 
 ### Changed
+- **Real-world data is one key, in Settings (the gear)**: the EFB's Data section is gone, and openAIP's key, for
+  restricted, danger and prohibited areas, moved to Settings. OpenSky, AirLabs and the FAA NOTAM API are no longer used.
+  With them go the departures due at the gates before they push (LocalTC's traffic still flies the real flights around
+  and can fill the gates with the airport's airlines) and the EFB's NOTAM list: the notices are on the ATIS, and ATC
+  works to them.
 - **The real ATIS outside the US is the airport's own, no longer a VATSIM controller's:** its live digital ATIS from
   ATIS.guru (about 560 airports in 68 countries): the real letter, runways, approaches and closures, with the real
   METAR's weather. Where it has no recent one, LocalTC's ATIS from the real METAR.

@@ -281,11 +281,6 @@ class TrafficConfig(_Section):
     fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
     live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
-    # The departures due at the airport the user is on the ground at, at gates their wings fit 45 minutes before they
-    # push (needs a free OpenSky or AirLabs account: EFB > Data); handed over to the real one when its
-    # transponder comes on.
-    scheduled: bool = True
-    # The experiment this replaced (shadowing and putting back MSFS's own): still read from old settings, not used.
     control: str = ""
     max_reinjected: int = 0
 
@@ -298,8 +293,7 @@ class OpsConfig(_Section):
     are sent; nothing about the flight."""
 
     weather: bool = True  # TAFs, SIGMETs/AIRMETs, the weather radar on the map
-    notams: bool = True  # real NOTAMs (needs a free FAA NOTAM API key: EFB > Data): ATC works to them
-    restrictions: bool = True  # TFRs (the US) and restricted, danger and prohibited areas (openAIP key)
+    restrictions: bool = True  # TFRs (the US) and restricted, danger and prohibited areas (openAIP key: Settings > Real-world data)
     terrain: bool = True  # terrain tiles: ATC's vectors and altitudes above the ground, minimum safe altitudes
     max_age_h: float = 6.0  # data older than this isn't used for a live flight (shown as stale)
 
@@ -584,6 +578,10 @@ def _migrate(data: dict) -> dict:
         old = llm.pop("understanding")
         llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
         data = {**data, "llm": llm}
+    # The schedule and NOTAM sources that needed an account of the pilot's own are gone, and their switches with them.
+    for section, key in (("traffic", "scheduled"), ("ops", "notams")):
+        if isinstance(data.get(section), dict) and key in data[section]:
+            data = {**data, section: {k: v for k, v in data[section].items() if k != key}}
     tts = data.get("tts")
     if isinstance(tts, dict) and tts.get("provider") in ("piper", "kokoro"):
         # Piper or Kokoro chosen before the voice library: the library is the one voice now (Piper standing in).

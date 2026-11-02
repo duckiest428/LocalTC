@@ -117,7 +117,7 @@ def test_the_real_world_data_ends_with_the_flight():
     async def main():
         bus = EventBus()
         ops = OpsService(SimpleNamespace(cache=SimpleNamespace(save=lambda: None)), bus, flight=dict,
-                         cfg=OpsConfig(weather=False, notams=False, restrictions=False, terrain=False))
+                         cfg=OpsConfig(weather=False, restrictions=False, terrain=False))
         task = asyncio.create_task(ops.run())
         await asyncio.sleep(0.1)
         bus.close()

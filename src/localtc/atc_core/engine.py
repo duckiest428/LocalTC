@@ -1475,12 +1475,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif phase in (P.RUNWAY_HOLD, P.TAXI_OUT) and tuned == "tower" and self._takeoff_wait is not None \
                 and "takeoff" not in st.clearances and st.pending is None:
             self._release(t, st.comms.tuned, self._takeoff_wait, answering=False)
-        elif phase is P.TAXI_OUT and tuned == "ground" and not self._vfr and "taxi" in st.clearances \
+        elif phase is P.TAXI_OUT and self._works_ground(tuned) and not self._vfr and "taxi" in st.clearances \
                 and st.pending is None and own.gs_kt >= 3.0 and not [r for r in self._crossings if r not in self._crossed] \
                 and (left := self._taxi_left_m(own)) is not None and left <= TOWER_HANDOFF_M and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
                 self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
-        elif phase is P.RUNWAY_HOLD and tuned == "ground" and "taxi" in st.clearances \
+        elif phase is P.RUNWAY_HOLD and self._works_ground(tuned) and "taxi" in st.clearances \
                 and self._at_departure_runway(st.assignments.departure_runway or "") and once("handoff_tower"):
             if (tower := self.facility("tower")) is not None:
                 self._handoff(t, "ground.handoff_tower", st.comms.tuned, tower)
@@ -5896,6 +5896,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 or P(st.phase) not in (P.ARRIVAL, P.APPROACH, P.LANDING):
             return False
         return self._destination_approach() is None and "descend" in st.flags and self._arriving_in_area(own)
+
+    def _works_ground(self, controller: str | None) -> bool:
+        """Ground, or the clearance frequency doing its work where there's no ground (Boca Raton's only one: it gave the
+        taxi, and never sent the flight on to tower)."""
+        return controller == "ground" or (controller == "clearance" and self.facility("ground") is None)
+
+    def _being_vectored(self, own: OwnshipState) -> bool:
+        """Approach has the flight, close enough to be turned onto the final, or has cleared it for the approach: the
+        headings are approach's now, and the route ahead isn't where it's going."""
+        if "approach" in self.state.clearances:
+            return True
+        distance = self.tracker.context.destination_distance_nm
+        return self._works_approach(own) and distance is not None and distance <= VECTOR_FROM_NM
 
     def _works_approach(self, own: OwnshipState | None) -> bool:
         """The tuned controller does approach's work: approach itself, or a centre standing in for one."""

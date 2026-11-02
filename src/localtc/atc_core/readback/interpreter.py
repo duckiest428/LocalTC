@@ -207,6 +207,10 @@ class GrammarInterpreter:
         present = 0
         values_only = without_callsign(tokens, context.callsign)
         for element in (*pending.required, *pending.optional):
+            if element == "callsign":  # (asked again for it alone, "JetBlue 8526": ATC failed on the call, and stayed silent)
+                if callsign_heard:
+                    present += 1
+                continue
             expected = pending.expected.get(element, True)
             found = candidates(element, values_only, expected)
             if not found:

@@ -244,6 +244,37 @@ def test_a_restricted_area_on_the_route_ahead_gets_vectors_around_it():
     assert engine._scheduled[-1].instruction_id == "common.direct" and engine._scheduled[-1].slots["fix"] == "BRAVO"
 
 
+def test_no_vectors_around_an_area_while_approach_turns_the_flight_onto_the_final():
+    from localtc.atc_core.route import RouteFix
+
+    engine = engine_at_kbfi()
+    engine.state.flight.destination = "KBFI"
+    engine.route = type(engine.route)((RouteFix("ALPHA", 46.0, -121.5), RouteFix("BRAVO", 47.0, -121.5),
+                                       RouteFix("CHRLY", 48.5, -121.5)))
+    square = [[46.4, -121.7], [46.4, -121.3], [46.6, -121.3], [46.6, -121.7]]
+    engine.handle(OpsSnapshot(t=0.0, kind="hazards", data=json.dumps(
+        [{"id": "T1", "kind": "tfr", "polygon": square, "floor_ft": 0, "ceiling_ft": 18000}])))
+    own = _own(engine, 50.0, lat=45.8, lon=-121.5, hdg_true=0.0, on_ground=False, alt=12000.0)
+    engine.state.aircraft = own
+    engine._being_vectored = lambda _own: True
+    assert not engine._hazards_ahead(own, CENTER) and not engine.amendments
+    # A reroute already given: cancelled, with no "proceed direct" after the approach clearance.
+    engine._being_vectored = lambda _own: False
+    assert engine._hazards_ahead(own, CENTER)
+    engine._scheduled.clear()
+    engine._being_vectored = lambda _own: True
+    assert not engine._watch_amendments(own, CENTER)
+    assert engine.amendments[-1].state == "cancelled" and not engine._scheduled
+
+
+def test_the_clearance_frequency_does_grounds_work_where_there_is_no_ground():
+    engine = engine_at_kbfi()
+    engine.facility = lambda name: None if name == "ground" else CENTER
+    assert engine._works_ground("clearance") and engine._works_ground("ground") and not engine._works_ground("tower")
+    engine.facility = lambda name: CENTER
+    assert not engine._works_ground("clearance")
+
+
 def test_operations_go_out_for_the_maps():
     engine = engine_at_kbfi()
     data = engine.operations_json(_own(engine, 1.0))

@@ -229,8 +229,8 @@ class RoutingMixin:
         around it), at the flight's level: said once each."""
         st, t = self.state, own.t
         if facility.controller not in ("center", "departure", "approach") or st.pending is not None or own.on_ground \
-                or self._vfr:
-            return False
+                or self._vfr or self._being_vectored(own):
+            return False  # (at Fulton County: "turn left heading 148" around a TFR, "fly heading 265" 30 s later)
         points = self._route_points()
         i = self._next_fix(own, points)
         if i is None:
@@ -320,7 +320,10 @@ class RoutingMixin:
         """A reroute's way clear to its fix: "proceed direct"; a deviation going on a long time: asked about."""
         t = own.t
         for a in [a for a in self.amendments if a.state == "active"]:
-            if a.kind == "reroute":
+            if a.kind == "reroute" and self._being_vectored(own):
+                a.state = "cancelled"  # approach has it: no "proceed direct" after the approach clearance
+                self._ops_changed = True
+            elif a.kind == "reroute":
                 h = next((x for x in self.hazards if x.id == a.hazard), None)
                 fix = next(((p[1], p[2]) for p in self._route_points() if p[0] == a.fix), None)
                 if fix is None:

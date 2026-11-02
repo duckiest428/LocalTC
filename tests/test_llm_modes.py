@@ -670,3 +670,13 @@ def test_a_controllers_wording_said_another_standard_way_is_kept():
     assert check_reworded('{"reply":"taxi to runway 24R via A, F, B4, B"}', "runway 24R at B, taxi via A, F, B4, B", cs)
     with pytest.raises(PhraseError):
         check_reworded('{"reply":"negative KEBGO"}', "negative, direct KEBGO", cs)
+
+
+def test_taxiway_india_is_kept_and_the_word_i_is_not_asked_for():
+    from localtc.atc_core.llm.phrase import _idents, keep_line
+
+    assert keep_line("taxi to the general aviation ramp via K, A, I") == "K; A; I"
+    assert "I" in _idents("taxi to the ramp via K, A, I")
+    assert keep_line("via K and I") == "K; I"
+    assert "I" not in keep_line("I say again, climb and maintain 9,000")
+    assert "I" not in _idents("I say again, climb and maintain 9,000")

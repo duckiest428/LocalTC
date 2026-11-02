@@ -302,11 +302,17 @@ def _plain(text: str) -> str:
     return t
 
 
+# Taxiway India in a route ("via K, A, I"): not the word "I", which a reply may say (the model dropped it from Fulton
+# County's "via K, A, I" and sent the pilot looking for a taxiway it had renamed).
+TAXIWAY_I = re.compile(r"\bvia\s+(?:[A-Z][A-Z0-9]{0,3}(?:,\s*|\s+and\s+|\s+))*I\b")
+
+
 def keep_line(scripted: str) -> str:
     """What the reworded reply must say as written, for the model to see: "FL360; 127.575; 3305; GOPUP4"."""
     found = re.findall(r"\bFL\s?\d{2,3}\b|\b\d{1,2}[LRC]\b|\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?|"
                        r"\b(?=[A-Z0-9]*[A-Z])[A-Z][A-Z0-9]{0,6}\b", scripted)
-    items = [f for f in dict.fromkeys(found) if f not in COMMON_IDENTS]
+    keep_i = TAXIWAY_I.search(scripted) is not None
+    items = [f for f in dict.fromkeys(found) if f not in COMMON_IDENTS or (f == "I" and keep_i)]
     if "readback correct" in scripted.lower():
         items.insert(0, "readback correct")
     return "; ".join(items) or "nothing"
@@ -326,7 +332,8 @@ def _repeats(text: str) -> str | None:
 
 def _idents(text: str) -> set[str]:
     found = {m.group(0) for m in IDENT_RE.finditer(text)}
-    return {i for i in found if not RUNWAY_DESIGNATOR.fullmatch(i) and not i.startswith("FL")} - COMMON_IDENTS
+    common = COMMON_IDENTS - {"I"} if TAXIWAY_I.search(text) else COMMON_IDENTS
+    return {i for i in found if not RUNWAY_DESIGNATOR.fullmatch(i) and not i.startswith("FL")} - common
 
 
 def _sequence(text: str) -> list[str]:

@@ -88,6 +88,15 @@ def test_strict_callsign_makes_readback_incomplete():
     assert (result.status, result.missing) == ("incomplete", ("callsign",))
 
 
+def test_asked_again_for_the_callsign_alone_it_is_read():
+    from dataclasses import replace
+
+    slots = slots_from_toml(CORPUS["slots"]["takeoff"])
+    strict = InterpretContext(callsign=CALLSIGN, strict_callsign=True)
+    again = replace(pending_for("tower.takeoff", slots), required=("callsign",), optional=())
+    assert GrammarInterpreter().interpret("November 172 Lima Tango", again, strict) is not None  # (it failed on the call)
+
+
 def test_second_failed_attempt_needs_fallback():
     slots = slots_from_toml(CORPUS["slots"]["takeoff"])
     g = GrammarInterpreter()

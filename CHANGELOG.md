@@ -72,6 +72,14 @@ a new minor version adds features, a patch fixes them.
 - **The Discord buttons** go to the server's new invite link.
 
 ### Fixed
+- **Taxiway India lost from a taxi clearance:** the language model could drop it from "via K, A, I", being the word "I".
+- **ATC silent after a callsign on its own:** asked again for the callsign with "readbacks must include the callsign" on,
+  the answer made ATC fail on the call.
+- **No "contact tower" at airports with no ground frequency:** the clearance frequency giving the taxi now hands the
+  flight to tower near the hold short, as ground does.
+- **Vectors around a TFR in the middle of radar vectors to the final:** approach gave a heading around it, took it back
+  30 seconds later, and said "proceed direct" after the approach clearance. Once approach is turning a flight onto the
+  final, the headings are approach's alone.
 - **Announcements talked over ATC:** the cabin and the copilot now wait for a long clearance to finish. The cabin's lines
   come one at a time, in the log and aloud, and an order to the crew ("doors to automatic") is given once, not in each
   language.

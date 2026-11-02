@@ -12,6 +12,7 @@ from localtc.crew.cabin_lines import FOREIGN, LINES, PEOPLE, REPLIES
 from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, made_chime, made_music, pa_effect
 from localtc.sim_api import (
     AircraftSystems,
+    AircraftVars,
     CabinSound,
     CabinSpeech,
     IntercomHeard,
@@ -52,7 +53,8 @@ def at_the_gate(cabin, until=300.0, step=5.0) -> list:
 
 def flown(cabin) -> list:
     """A whole flight: boarding, the push, the taxi, a climb, the cruise, the descent, a soft landing, the gate."""
-    out = at_the_gate(cabin)
+    out = run(cabin, [AircraftVars(t=0, values={"INTERACTIVE POINT OPEN:0": 1.0})])
+    out += at_the_gate(cabin)
     out += run(cabin, [AircraftSystems(t=300, seatbelt=True, light_beacon=True, engines_running=2)])
     out += run(cabin, [own(t, gs_kt=12 if t > 500 else 0, engine_running=True) for t in range(300, 1000, 5)])
     out += run(cabin, [own(t, on_ground=False, alt_agl_ft=min(37000, (t - 1000) * 40), alt_msl_ft=min(37000, (t - 1000) * 40) + 500,
@@ -327,3 +329,110 @@ def test_the_chime_and_the_music_are_the_real_recordings():
     assert pitch(pa) > pitch(belt)  # it starts on the high note; the seatbelt's is the low one
     music = boarding_music(rate)
     assert len(music) / rate > 300 and np.max(np.abs(music)) <= 0.51  # "Airport Lounge", five minutes
+
+
+def test_no_clock_at_the_gate_nothing_happens_until_the_door_or_gsx_says():
+    cabin = CabinCrew(CabinSettings(), lambda: facts("BAW1"))
+    assert at_the_gate(cabin, until=1500) == []  # 25 minutes at a dark gate: not a word
+    cabin = CabinCrew(CabinSettings(), lambda: facts("BAW1"))
+    door = "INTERACTIVE POINT OPEN:0"
+    run(cabin, [AircraftVars(t=0, values={door: 1.0})])
+    out = run(cabin, [own(t) for t in range(0, 100, 5)])
+    assert "boarding" in cabin.done and "boarded" not in cabin.done
+    assert any(isinstance(o, CabinSound) and o.sound == "music" for o in out)
+    run(cabin, [own(t) for t in range(100, 900, 5)])
+    assert "boarded" not in cabin.done  # the jetway still on
+    run(cabin, [AircraftVars(t=900, values={door: 0.0})])  # it's gone: boarding's over
+    run(cabin, [own(t) for t in range(900, 1000, 5)])
+    assert "boarded" in cabin.done and "doors_arm" in cabin.done and "welcome" in cabin.done
+    assert "safety" not in cabin.done  # with the push
+    run(cabin, [own(t, gs_kt=2.5) for t in range(1000, 1200, 5)])
+    assert "safety" in cabin.done
+
+
+def test_with_gsx_its_boarding_state_decides_not_the_door():
+    cabin = CabinCrew(CabinSettings(), lambda: facts("BAW1"))
+    gsx, door = "L:FSDT_GSX_BOARDING_STATE", "INTERACTIVE POINT OPEN:0"
+    run(cabin, [AircraftVars(t=0, values={gsx: 1.0, door: 1.0})] + [own(t) for t in range(0, 100, 5)])
+    assert "begun" not in cabin.done  # available, not begun
+    run(cabin, [AircraftVars(t=100, values={gsx: 5.0})] + [own(t) for t in range(100, 200, 5)])
+    assert "boarding" in cabin.done and "boarded" not in cabin.done
+    run(cabin, [AircraftVars(t=200, values={gsx: 6.0})] + [own(t) for t in range(200, 210, 5)])
+    assert "boarded" in cabin.done and "doors_arm" not in cabin.done  # the door's still open: at the beacon
+
+
+def test_one_line_at_a_time_and_an_order_to_the_crew_in_one_language():
+    cabin = CabinCrew(CabinSettings(), lambda: facts("DLH400"))
+    lines = said(flown(cabin))
+    assert all(a.t < b.t for a, b in zip(lines, lines[1:]))
+    assert sum("Kabinenpersonal, Türen auf Automatik" in s.text or s.text.startswith("Cabin crew, doors to automatic")
+               for s in lines) == 1
+
+
+def test_the_aircraft_has_its_own_words():
+    cabin = CabinCrew(CabinSettings(crew="sophie"), lambda: facts("SWR2027", aircraft="A220-300"))
+    assert seats("A220-300") == 145 and exits("A220-300")[0] == 6
+    lines = said(flown(cabin))
+    assert any("Airbus A220" in s.text and "windows" in s.text for s in lines)
+    assert any("exit row" in s.text.lower() for s in lines)
+    assert any("smoke detectors" in s.text for s in lines)
+
+
+def test_the_pilot_answers_after_their_call_and_the_copilot_keeps_its_commands():
+    cabin = CabinCrew(CabinSettings(), lambda: facts())
+    cabin.observe(own(0))
+    cabin._called_t = 100.0
+    assert cabin.claims("sounds good, thank you", 110.0)
+    assert not cabin.claims("flaps one", 110.0)
+    assert not cabin.claims("before start checklist", 110.0)
+    assert not cabin.claims("sounds good, thank you", 200.0)
+
+
+def test_whispers_spelling_of_their_name_reaches_them():
+    cabin = CabinCrew(CabinSettings(crew="daniel"), lambda: facts("DLH400"))
+    cabin.observe(own(0))
+    name = cabin.crew()[1]
+    assert cabin.claims(f"{name}, how many passengers?", 5.0)
+    assert cabin.claims(f"{name}n, how many passengers?", 5.0)
+
+
+def test_slewing_with_the_brake_on_is_no_flight():
+    cabin = CabinCrew(CabinSettings(), lambda: facts())
+    run(cabin, [own(t, on_ground=False, alt_agl_ft=200, alt_msl_ft=2000, parking_brake=True) for t in range(0, 60)])
+    out = run(cabin, [own(t, parking_brake=True) for t in range(60, 200, 5)])
+    assert not cabin._was_airborne and not said(out)
+
+
+def test_the_model_words_the_answer_and_the_script_stands_in():
+    class Result:
+        def __init__(self, text):
+            self.text, self.error, self.latency_ms = text, "", 5.0
+
+    class Backend:
+        model = "m"
+
+        def __init__(self, text):
+            self.text = text
+            self.requests = []
+
+        def complete(self, request, timeout_s=0):
+            self.requests.append(request)
+            return Result(self.text)
+
+    cabin = CabinCrew(CabinSettings(), lambda: facts())
+    cabin.observe(own(0))
+    cabin.backend = Backend('{"reply": "All quiet back here, Captain."}')
+    assert cabin.word("how's it going", "Everything's fine.", 1.0)[0] == "All quiet back here, Captain."
+    assert "Aeroplan" in cabin.backend.requests[0].messages[-1][1]  # it knows the flight
+    cabin.backend = Backend(None)
+    words, records = cabin.word("how's it going", "Everything's fine.", 1.0)
+    assert words == "Everything's fine." and records[0].outcome == "error"
+
+
+def test_the_prompted_callsign_is_not_what_the_pilot_said():
+    from localtc.stt.vocabulary import VocabularyHints, without_prompt
+
+    hints = VocabularyHints(callsign="Swiss 2027")
+    assert without_prompt("This is Swiss 2027.", hints) == ""
+    assert without_prompt("This is Swiss 2027. Request pushback.", hints) == "Request pushback."
+    assert without_prompt("Request pushback, Swiss 2027.", hints) == "Request pushback, Swiss 2027."

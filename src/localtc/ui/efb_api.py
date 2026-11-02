@@ -117,11 +117,10 @@ class EfbRoutes:
         if self._extras_task is not None:
             self._extras_task.cancel()
         self._extras_task = asyncio.ensure_future(self._extras_loop())
-        if live.crew is None and live.source is not None:
-            # No copilot to watch GSX's L:vars along with its own: Airport Ops asks for them itself.
+        if live.source is not None:  # Airport Ops reads GSX's L:vars (beside the copilot's own)
             from localtc.sim_api import WatchVars
 
-            asyncio.ensure_future(live.source.send(WatchVars(names=tuple(GSX_VARS.values()))))
+            asyncio.ensure_future(live.source.send(WatchVars(names=tuple(GSX_VARS.values()), owner="efb")))
         self.push(force=True)
 
     def flight_ended(self, record=None) -> None:

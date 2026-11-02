@@ -48,14 +48,9 @@ class CrewService:
         async for event in self._inputs:
             started = loop.time()
             if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t):
-                try:
-                    outputs = self.cabin.heard(event)
-                except Exception:
-                    log.exception("Cabin crew failed on the intercom")
-                    continue
-                await asyncio.sleep(max(0.0, REPLY_PAUSE_S + 0.3 - (loop.time() - started)))
-                for output in outputs:
-                    self.bus.publish(output)
+                from localtc.crew.cabin_service import answer
+
+                asyncio.create_task(answer(self.cabin, event, self.bus))
                 continue  # for the cabin: the copilot doesn't answer it
             try:
                 # Off the event loop, in order: what the pilot says may need the language model, and so may the

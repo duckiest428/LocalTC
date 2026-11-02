@@ -2,12 +2,14 @@
 
 They follow the flight as a real crew does, from what the aircraft does rather than a clock:
 
-- **At the gate**: boarding music, and the welcome while people board. Boarding complete on the interphone (with how
-  many are aboard) when you switch the beacon on, start an engine or push back, or after a few minutes. Then "doors to
-  automatic and cross-check", and the music stops.
-- **Taxiing out**: the welcome (the airline, the flight, the flight time, a word for the loyalty programme's members,
-  who's looking after the cabin), the safety demonstration (this aircraft's exits), the cabin lights dimmed at night,
-  and "cabin secure for takeoff" on the interphone.
+- **At the gate**: boarding begins when GSX says so, or without GSX when the door opens for the jetway or the stairs:
+  the music, and the welcome while people board. Boarding complete on the interphone (with how many are aboard) when
+  GSX's boarding is over or the door shuts as the jetway leaves (at the latest with the beacon, an engine or the push).
+  Then "doors to automatic and cross-check", the music stops, and the welcome (the airline, the flight, the flight
+  time, a word for the loyalty programme's members, who's looking after the cabin). No clock in any of it.
+- **The push and the taxi out**: the exit rows and the safety demonstration when the push begins (this aircraft's
+  exits, what a briefing has to say by regulation), the cabin lights dimmed at night, and "cabin secure for takeoff" on
+  the interphone once taxiing.
 - **In the air**: the seatbelt sign switched off is announced the moment it's off (an aircraft that has never shown
   the sign on gets it once climbing through ten thousand feet); a call to the flight deck before the service (what
   would you like?), then the trolley; the sign back on mid-flight is the turbulence announcement.
@@ -26,15 +28,21 @@ and plays (``CabinSpeech``, ``CabinSound``); ``claims`` says whether words on th
 ``heard`` answers them.
 """
 
+import difflib
+import json
 import random
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+import msgspec
+
+from localtc.atc_core.llm.backend import LlmRequest
 from localtc.atc_core.region import accent, airline_accent
 from localtc.crew.cabin_data import (
     Airline,
+    aircraft_facts,
     airline_of,
     city_of,
     crc,
@@ -44,14 +52,17 @@ from localtc.crew.cabin_data import (
     flight_number,
     seats,
 )
+from localtc.crew.commands import parse as copilot_command
 from localtc.crew.cabin_lines import BY_ID, FOREIGN, LANDING_WORDS, LINES, PEOPLE, REPLIES, Person
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
+    AircraftVars,
     CabinSound,
     CabinSpeech,
     FlightArrived,
     IntercomHeard,
+    LlmExchange,
     OwnshipState,
     PhaseChanged,
     SimLifecycle,
@@ -90,11 +101,18 @@ class Facts:
     cruise_ft: int = 0
 
 
-BOARDING_PA_S = 25.0  # after the flight starts at the gate: the boarding welcome
-BOARDED_S = 360.0  # boarding takes this long at most (sooner when the beacon comes on)
+# What says where the boarding is: GSX's own state where it's running (its manual's L:vars: 1 available, 3 skipped,
+# 4 requested, 5 in progress, 6 done), else the door the jetway or the stairs come to.
+GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE = ("L:FSDT_GSX_BOARDING_STATE", "L:FSDT_GSX_DEBOARDING_STATE",
+                                               "L:FSDT_GSX_DEPARTURE_STATE")
+DOORS = ("INTERACTIVE POINT OPEN:0", "INTERACTIVE POINT OPEN:1")
+WATCHED = (GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE, *DOORS)
+BOARDING_PA_S = 25.0  # after boarding begins: the boarding welcome
+AIRCRAFT_TALK_S = 600.0  # after the seatbelt sign is off: a word about the aircraft
+GAP_S = 1.5  # between one thing said and the next
 WELCOME_AFTER_DOORS_S = 20.0
-SAFETY_AFTER_WELCOME_S = 15.0
 SECURE_AFTER_SAFETY_S = 25.0
+LISTENING_S = 30.0  # after their call to the flight deck: the pilot's answer is theirs (unless it's a command)
 SERVICE_CALL_S = 150.0  # after the seatbelt sign is off: the call to the flight deck before the service
 SERVICE_PA_S = 70.0  # ... and the trolley this long after the call
 DRINK_S = (100.0, 170.0)  # a drink asked for arrives this long after
@@ -253,6 +271,8 @@ class CabinCrew:
         self.settings = settings or CabinSettings()
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
+        self.backend: Any = None  # the language model, for their answers on the interphone (None: the script's)
+        self.model_wait_s = 10.0
         self._new_flight()
 
     # ---- the flight ----
@@ -278,12 +298,16 @@ class CabinCrew:
         self._weather: dict[str, WeatherReport] = {}
         self._later: list[_Later] = []
         self._asking: tuple[str, float] | None = None  # the question put to the flight deck, and when
+        self._called_t = -1e9  # their last call to the flight deck
         self._listening_until = -1.0  # called with nothing more ("cabin?"): the next words are for them too
         self._service_paused = False
         self._crew: tuple[Person, str, str, str] | None = None  # the person, their name, English, sex
         self._crew_for = ""
         self._facts: Facts | None = None
         self._facts_t = 0.0
+        self._vars: dict[str, float] = {}
+        self._queue: list[CabinSpeech] = []  # said one at a time
+        self._free_at = 0.0
 
     # ---- who's on board ----
 
@@ -405,6 +429,12 @@ class CabinCrew:
         local = self._local_s()
         hour = (local or 12 * 3600) / 3600 % 24
         text["greeting"] = "Good morning" if 4 <= hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
+        type_facts = aircraft_facts(f.aircraft)
+        if type_facts is not None:
+            text["aircraft"], text["aircraft_fact"] = type_facts.name, type_facts.fact
+            if type_facts.overwing:
+                text["overwing"] = ("If you are sitting beside an exit over the wing, please read the card in your seat "
+                                    "pocket: you would open it. ")
         count, where = exits(f.aircraft)
         text["exits"] = (f"{words(count)} emergency exits: {where}" if count else
                          f"emergency exits {where}" if where else "emergency exits at the front and the rear")
@@ -481,12 +511,13 @@ class CabinCrew:
                            channel=channel, chime=chime if self.settings.chime else "", sex=sex, locale=english,
                            language="" if language == "en" else language)
 
-    def announce(self, key: str, *, landed: bool = False, chime: bool = True) -> list[Any]:
-        """An announcement on the address system, in each of the airline's languages (the chime before the first)."""
+    def announce(self, key: str, *, landed: bool = False, chime: bool = True, first_only: bool = False) -> list[Any]:
+        """An announcement on the address system, in each of the airline's languages (the chime before the first;
+        ``first_only``: an order to the crew, given once)."""
         if not self.settings.announcements:
             return []
         out: list[Any] = []
-        for lang in self.languages():
+        for lang in self.languages()[:1] if first_only else self.languages():
             if lang == "en":
                 said = self._english(key, landed=landed)
                 if said is None:
@@ -513,6 +544,8 @@ class CabinCrew:
              ) -> list[Any]:
         """A call of the crew's own to the flight deck (``LINES``): in English, on the interphone."""
         said = self._english(key, extra=extra)
+        if said is not None and channel == "interphone":
+            self._called_t = self._t
         return [self._speech(said[0], said[1], channel, chime=chime)] if said is not None else []
 
     def reply(self, key: str, extra: dict[str, str] | None = None, *, channel: str = "interphone") -> list[Any]:
@@ -534,7 +567,21 @@ class CabinCrew:
     # ---- the events ----
 
     def observe(self, ev: Any) -> list[Any]:
-        """Everything that happens; what the cabin says and plays in return."""
+        """Everything that happens; what the cabin says and plays in return, one line at a time."""
+        return self._paced(self._happened(ev), ev.t)
+
+    def _paced(self, out: list[Any], t: float) -> list[Any]:
+        """What's to be said waits its turn behind what's being said (shown and heard one at a time, not three
+        languages of an announcement at once); the sounds don't wait."""
+        self._queue += [o for o in out if isinstance(o, CabinSpeech)]
+        out = [o for o in out if not isinstance(o, CabinSpeech)]
+        if self._queue and t >= self._free_at:
+            line = msgspec.structs.replace(self._queue.pop(0), t=t)
+            self._free_at = t + _speaking_s(line) + GAP_S
+            out.append(line)
+        return out
+
+    def _happened(self, ev: Any) -> list[Any]:
         self._t = max(self._t, ev.t)
         out: list[Any] = []
         if isinstance(ev, SimLifecycle) and ev.kind in ("flight_loaded", "aircraft_loaded"):
@@ -547,6 +594,8 @@ class CabinCrew:
             self._weather[ev.icao.upper()] = ev
         elif isinstance(ev, PhaseChanged):
             self._phase = ev.phase
+        elif isinstance(ev, AircraftVars):
+            self._vars.update(ev.values)
         elif isinstance(ev, AircraftSystems):
             out += self._systems(ev)
         elif isinstance(ev, OwnshipState):
@@ -598,17 +647,19 @@ class CabinCrew:
             self._start = own.t
         if not own.on_ground:
             self._last_vs = own.vs_fpm
-        airborne = not own.on_ground and own.alt_agl_ft > 50
+        # (Parking brake set off the ground: the pilot moving the aircraft in slew, not a flight.)
+        airborne = not own.on_ground and own.alt_agl_ft > 50 and not own.parking_brake
         if airborne and not self._airborne:
             self._was_airborne = True
             self._mark("airborne", own.t)
+            self._queue.clear()  # what was still to be said on the ground
         if own.on_ground and self._airborne:  # touchdown
             self._landed_t = own.t
             self._touchdown_fpm = abs(self._last_vs)
             self._mark("touchdown", own.t)
             if self.active:
                 out += self._touchdown(own.t)
-        self._airborne = airborne if airborne or own.on_ground else self._airborne
+        self._airborne = airborne if airborne or own.on_ground or own.parking_brake else self._airborne
         if airborne and own.alt_msl_ft >= 10000 and self._above_10k_t is None:
             self._above_10k_t = own.t
         self._own = own
@@ -626,11 +677,14 @@ class CabinCrew:
         self.done.add(key)
         self._at.setdefault(key, t)
 
-    def _since(self, key: str, t: float) -> float:
-        return t - self._at[key] if key in self._at else -1.0
+    def _var(self, name: str) -> float:
+        return self._vars.get(name, 0.0)
+
+    def _door_open(self) -> bool:
+        return any(self._var(d) > 0.5 for d in DOORS)
 
     def _length(self, said: list[Any]) -> float:
-        return sum(len((s.spoken or s.text).split()) for s in said if isinstance(s, CabinSpeech)) * SPEECH_S_PER_WORD
+        return sum(_speaking_s(s) + GAP_S for s in said if isinstance(s, CabinSpeech))
 
     def _moment(self, key: str, t: float, said: list[Any]) -> list[Any]:
         """``key`` done now; it takes as long as its words to say."""
@@ -649,36 +703,45 @@ class CabinCrew:
         moving = own.on_ground and own.gs_kt > 2.0
         before_departure = not self._was_airborne
         if before_departure and own.on_ground:
-            if "music" not in self.done and s.boarding_music and not moving and engines == 0 and not beacon:
-                self._mark("music", t)
-                out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000))
-            elapsed = t - (self._start if self._start is not None else t)
-            ready = beacon or engines > 0 or moving or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
-            if "boarding" not in self.done and not ready and elapsed >= BOARDING_PA_S:
+            board, departure = self._var(GSX_BOARDING), self._var(GSX_DEPARTURE)
+            gsx = board >= 1 and board != 3  # GSX is looking after the boarding (3: skipped in it)
+            door = self._door_open()
+            begun = board in (4, 5, 6) if gsx else door
+            finished = board == 6 if gsx else "door_seen" in self.done and not door
+            ready = beacon or engines > 0 or moving or departure >= 4 or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
+            pushing = moving or departure == 5 or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
+            if door:
+                self._mark("door_seen", t)
+            if begun and "begun" not in self.done:
+                self._mark("begun", t)
+                if s.boarding_music and not ready:
+                    self._mark("music", t)
+                    out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000))
+            if "boarding" not in self.done and "begun" in self.done and not ready and not finished \
+                    and t - self._at["begun"] >= BOARDING_PA_S:
                 out += self._moment("boarding", t, self.announce("boarding"))
-            if "boarded" not in self.done and (ready or elapsed >= BOARDED_S) and t >= self._at.get("boarding_end", 0):
+            if "boarded" not in self.done and (finished or ready):
                 self._mark("boarded", t)
                 if s.interphone:
                     out += self.call("boarded")
-            if "doors_arm" not in self.done and "boarded" in self.done and (ready or elapsed >= BOARDED_S + 60):
+            # The doors armed with the door shut (GSX's boarding over, the door may yet be open: at the beacon).
+            if "doors_arm" not in self.done and "boarded" in self.done and (ready or (not gsx and not door)):
                 if "music" in self.done and "music_stop" not in self.done:
                     self._mark("music_stop", t)
                     out.append(CabinSound(t=t, sound="music_stop"))
                 key = "doors_arm_us" if self.locale().lower() == "en-us" else "doors_arm"
-                out += self._moment("doors_arm", t, self.announce(key))
-            if "doors_arm" in self.done and moving and "music_stop" not in self.done and "music" in self.done:
-                self._mark("music_stop", t)
-                out.append(CabinSound(t=t, sound="music_stop"))
+                out += self._moment("doors_arm", t, self.announce(key, first_only=True))
             if "welcome" not in self.done and "doors_arm" in self.done \
                     and t >= self._at.get("doors_arm_end", 0) + WELCOME_AFTER_DOORS_S:
                 out += self._moment("welcome", t, self.announce("welcome"))
-            if "safety" not in self.done and "welcome" in self.done and s.safety_demo \
-                    and t >= self._at.get("welcome_end", 0) + SAFETY_AFTER_WELCOME_S:
-                out += self._moment("safety", t, self.announce("safety"))
+            if "safety" not in self.done and "welcome" in self.done and s.safety_demo and pushing \
+                    and t >= self._at.get("welcome_end", 0):  # with the push, as the crew stand in the aisles
+                out += self._moment("safety", t, self.announce("exit_row") + self.announce("safety") + self.announce("safety_more"))
             at_runway = own.on_runway or self._phase == "RUNWAY_HOLD"
             done_talking = t >= max(self._at.get("safety_end", 0), self._at.get("welcome_end", 0)) + SECURE_AFTER_SAFETY_S
+            taxiing = engines > 0 and (moving or self._phase == "TAXI_OUT")
             if "secure_takeoff" not in self.done and "welcome" in self.done \
-                    and ("safety" in self.done or not s.safety_demo) and (done_talking or at_runway):
+                    and ("safety" in self.done or not s.safety_demo) and ((done_talking and taxiing) or at_runway):
                 if self._night() and "night" not in self.done:
                     self._mark("night", t)
                     out += self.announce("night")
@@ -705,6 +768,10 @@ class CabinCrew:
         descending = "descent" not in self.done and "seatbelt_off" in self.done and (
             self._phase == "ARRIVAL" or (own.vs_fpm < -700 and self._remaining_s() < 45 * 60
                                          and own.alt_msl_ft > 8000))
+        if "aircraft_talk" not in self.done and "seatbelt_off" in self.done and not descending and own.vs_fpm > -300 \
+                and t - self._at["seatbelt_off"] >= AIRCRAFT_TALK_S and self._remaining_s() >= MIN_SERVICE_S:
+            self._mark("aircraft_talk", t)
+            out += self.announce("aircraft_talk")
         if "service_call" not in self.done and "seatbelt_off" in self.done and s.service and not descending \
                 and t - self._at["seatbelt_off"] >= SERVICE_CALL_S and self._remaining_s() >= MIN_SERVICE_S \
                 and not self._service_paused:
@@ -743,7 +810,9 @@ class CabinCrew:
             if s.boarding_music:
                 out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000 + 1))
                 self._at["music2"] = t
-        if "deboarded" not in self.done and "goodbye" in self.done and t - self._at["goodbye"] >= DEBOARDED_S:
+        off = self._var(GSX_DEBOARDING) == 6 if self._var(GSX_DEBOARDING) >= 1 and self._var(GSX_DEBOARDING) != 3 \
+            else t - self._at.get("goodbye", t) >= DEBOARDED_S  # GSX's deboarding over, else a little while
+        if "deboarded" not in self.done and "goodbye" in self.done and off:
             self._mark("deboarded", t)
             if "music2" in self._at:
                 out.append(CabinSound(t=t, sound="music_stop"))
@@ -827,15 +896,24 @@ class CabinCrew:
             return True
         if t <= self._listening_until:
             return True
+        if t - self._called_t <= LISTENING_S and not copilot_command(text) and "checklist" not in text.lower():
+            return True  # they've just called: the answer's theirs
         if self._asking is not None and t - self._asking[1] <= ASKING_S:
             return bool(_drink(text) or NO_THANKS.search(text) or re.search(r"\b(?:meal|food|something\s+to\s+eat)\b", text, re.I))
         return False
 
     def _address(self, text: str) -> str | None:
         """The words after "cabin, ...", or None when they're not addressed to the cabin."""
-        name = re.escape(self.crew()[1].split()[0]) if self.active else "cabin"
-        m = re.compile(ADDRESS.pattern.replace("{name}", name), re.I).match(text)
-        return text[m.end():].strip() if m else None
+        name = self.crew()[1].split()[0] if self.active else "cabin"
+        m = re.compile(ADDRESS.pattern.replace("{name}", re.escape(name)), re.I).match(text)
+        if m:
+            return text[m.end():].strip()
+        # Whisper's spelling of their name ("Stephan", "Steven") or of the cabin ("Kevin").
+        first = re.match(r"\s*(?:(?:hey|hi|hello|okay|ok)[,.]?\s+)?([^\W\d_]+)[,.!?]?\s*", text)
+        if first and (difflib.SequenceMatcher(None, first.group(1).lower(), name.lower()).ratio() >= 0.7
+                      or first.group(1).lower() in ("kevin", "cabins", "cabin's")):
+            return text[first.end():].strip()
+        return None
 
     def heard(self, ev: IntercomHeard) -> list[Any]:
         """The cabin's answer to the pilot's words (``claims`` said they're the cabin's)."""
@@ -845,6 +923,7 @@ class CabinCrew:
             return []  # the captain's own announcement
         body = self._address(text)
         listening = ev.t <= self._listening_until
+        self._called_t = ev.t  # (a conversation: the pilot's next words are theirs too, unless a command)
         self._listening_until = -1.0
         if body is None:
             body = text
@@ -852,6 +931,54 @@ class CabinCrew:
             self._listening_until = ev.t + 20.0
             return self.reply("hello")
         return self._answer(body, ev.t, asked=self._asking is not None or listening)
+
+    def word(self, heard: str, draft: str, t: float) -> tuple[str, list[LlmExchange]]:
+        """The answer in the crew member's own words, from the language model (``backend``), knowing what they're doing
+        about it (``draft``: what the script would say, and what's said when the model can't answer)."""
+        if self.backend is None:
+            return draft, []
+        person, name, _, _ = self.crew()
+        facts = self._conversation_facts()
+        system = (f"You are {name}, the cabin manager on this flight, on the interphone with the captain. Your manner: "
+                  f"{person.brief}. Answer as a real flight attendant talks: one or two short spoken sentences, plain "
+                  "words, no stage directions. Use only the facts given and never make up a number, a time or a gate. "
+                  "Anything about flying the aircraft is the flight deck's, not yours. "
+                  'Reply as JSON: {"reply": "..."}')
+        ask = ("Answer as best you can from the facts; if it isn't something you'd know, say so." if draft in
+               [fill(o, {}) for o in REPLIES["unclear"]] else
+               f'What you would say, to put in your own words (keep what it promises): "{draft}"')
+        prompt = ("Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items()) + f'\n\nCaptain: "{heard}"\n\n{ask}')
+        request = LlmRequest("crew", system, (("user", prompt),),
+                             {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]},
+                             max_tokens=120)
+        result = self.backend.complete(request, timeout_s=self.model_wait_s)
+        model = getattr(self.backend, "model", "")
+        reply = ""
+        if result.text:
+            try:
+                reply = str(json.loads(result.text).get("reply", "")).strip()
+            except (ValueError, AttributeError):
+                reply = ""
+        record = LlmExchange(t=t, purpose="cabin", model=model, key=request.key(model), prompt=prompt,
+                             response=result.text or "", outcome="used" if reply else "error",
+                             detail=result.error or "", latency_ms=result.latency_ms)
+        return reply or draft, [record]
+
+    def _conversation_facts(self) -> dict[str, str]:
+        values, _ = self._values()
+        own = self._own
+        facts = {k: values[v] for k, v in (("airline", "airline"), ("flight", "flight"), ("destination", "dest"),
+                                           ("flight time", "time"), ("passengers on board", "pax"), ("aircraft", "aircraft"),
+                                           ("about the aircraft", "aircraft_fact"), ("exits", "exits"),
+                                           ("loyalty programme", "program"), ("cruising", "cruise")) if v in values}
+        if own is not None:
+            facts["where"] = "on the ground" if own.on_ground else f"in the air at {round(own.alt_msl_ft, -2):,.0f} feet"
+        done = [k for k in ("boarding", "boarded", "doors_arm", "welcome", "safety", "secure_takeoff", "seatbelt_off",
+                            "service_call", "descent", "landing", "secure_landing", "after_landing") if k in self.done]
+        facts["done so far in the cabin"] = ", ".join(done) or "nothing yet"
+        facts["boarding"] = {4: "requested", 5: "in progress", 6: "complete"}.get(int(self._var(GSX_BOARDING)),
+                                                                                  "complete" if "boarded" in self.done else "not reported")
+        return facts
 
     def _answer(self, body: str, t: float, *, asked: bool) -> list[Any]:  # noqa: C901 - one reading per kind of call
         low = body.lower()
@@ -927,13 +1054,20 @@ class CabinCrew:
         return reply("unclear")
 
 
+def _speaking_s(line: CabinSpeech) -> float:
+    words = line.spoken or line.text
+    if line.language == "zh":
+        return len(words) * 0.24
+    return len(words.split()) * SPEECH_S_PER_WORD
+
+
 def _fields(speech: CabinSpeech) -> dict:
     return {f: getattr(speech, f) for f in speech.__struct_fields__}
 
 
 def fill(template: str, values: dict[str, str]) -> str | None:
     """``template`` with its ``{names}`` filled; None when one isn't known (the optional parts are "" when not)."""
-    optional = {"members", "members_bye", "local", "weather", "alliance_part"}
+    optional = {"members", "members_bye", "local", "weather", "alliance_part", "overwing"}
     missing = [n for n in re.findall(r"\{(\w+)\}", template) if n not in values and n not in optional]
     if missing:
         return None

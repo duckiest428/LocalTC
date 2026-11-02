@@ -1919,6 +1919,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-cabin-music" ${st.cabin.boarding_music ? "checked" : ""}> Boarding music: quietly in the cabin while people get on and off</label>
         <span class="hint" translate="no">"Airport Lounge" Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: "Airplane Chime Sound Effect" by Sharelk (CC0).</span>
         <label class="check-row"><input type="checkbox" id="s-cabin-applause" ${st.cabin.applause ? "checked" : ""}> Applause on a soft landing (gentler than 200 feet per minute)</label>
+        <label class="check-row"><input type="checkbox" id="s-cabin-log" ${st.cabin.show_log !== false ? "checked" : ""}> Show their words in the radio log</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-english" ${st.cabin.english_too ? "checked" : ""}> Announcements in English too: a crew whose language isn't English repeats each one in English</label>
         </div>
       </div>
@@ -2164,7 +2165,7 @@ const Settings = {
     on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
     for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],
       ["#s-cabin-service", "service"], ["#s-cabin-interphone", "interphone"], ["#s-cabin-chime", "chime"],
-      ["#s-cabin-music", "boarding_music"], ["#s-cabin-applause", "applause"], ["#s-cabin-english", "english_too"]])
+      ["#s-cabin-music", "boarding_music"], ["#s-cabin-applause", "applause"], ["#s-cabin-log", "show_log"], ["#s-cabin-english", "english_too"]])
       on(id, "change", (e) => this.save("cabin", key, e.target.checked));
     on("#s-cabin-hear", "click", async (e) => {
       e.target.disabled = true;

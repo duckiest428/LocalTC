@@ -657,6 +657,8 @@ class AppController:
         if self.cfg.ui.dev_mode and not isinstance(ev, AirportData):
             self.publish("dev", {"t": round(ev.t, 2), "json": encode_event(ev).decode(errors="replace")[:4000]})
         line = radio_line(ev)
+        if line is not None and line["kind"] == "cabin" and not self.cfg.cabin.show_log:
+            line = None
         if line is not None:
             if CLIPS.enabled and self._has_audio(ev):
                 line["audio"] = clip_id(ev)  # its audio, to play again: the app, the phone and the website ask by this

@@ -557,7 +557,8 @@ class Monitor(WatchMixin):
                 own, sys_ = self.c.own, self.c.systems
                 if own is not None and own.on_ground and self.f.landing_t is None \
                         and (sys_ is None or sys_.engines_running == 0):
-                    self._prompt_checklist("before_start", t=t + (20.0 if iid.startswith("clearance") else 4.0))
+                    # (The preflight first, where the aircraft has one that isn't done.)
+                    self._prompt_checklist("cockpit_prep", "before_start", t=t + (20.0 if iid.startswith("clearance") else 4.0))
 
     # --- phases ------------------------------------------------------------------------------------------------
 

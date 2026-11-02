@@ -310,6 +310,7 @@ class SimConnectSource:
         self._hands: deque[SimCommand] = deque()
         self._hand: tuple | None = None
         self._watch: tuple[str, ...] = ()
+        self._watch_lists: dict[str, tuple[str, ...]] = {}  # each reader's (WatchVars' owner)
         self._watch_define = 0
         self._watch_count = 0
         self._ai_tracks: dict[int, Track] = {}  # LocalTC's traffic, as it's being moved (AiTrack)
@@ -521,7 +522,8 @@ class SimConnectSource:
             elif isinstance(command, (TurnKnob, ClickSequence)):
                 self._hands.append(command)
             elif isinstance(command, WatchVars):
-                self._watch_vars(dll, handle, command.names)
+                self._watch_lists[command.owner] = command.names
+                self._watch_vars(dll, handle, tuple(dict.fromkeys(n for names in self._watch_lists.values() for n in names)))
             elif isinstance(command, SetAiVar):
                 self._set_ai_var(dll, handle, command)
             elif isinstance(command, SpawnAiAircraft):

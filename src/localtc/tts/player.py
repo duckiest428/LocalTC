@@ -25,15 +25,14 @@ log = logging.getLogger(__name__)
 BLOCK_S = 0.05
 # The copilot waits for ATC to finish talking to the flight (another flight's chatter it talks over, as a real one
 # does), this long at most; a warning ("speed!") never waits.
-INTERCOM_WAIT_S = 15.0
+INTERCOM_WAIT_S = 45.0  # (a long clearance takes half a minute)
 
 # The mixer's channels: who is heard, each with its own volume ([mixer]).
 CHANNELS = ("atc", "atis", "chatter", "copilot_radio", "copilot", "cabin", "effects", "sidetone")
 # A clip's channel when it doesn't say: by its kind.
 KIND_CHANNEL = {"atc": "atc", "atis": "atis", "pilot": "copilot_radio", "intercom": "copilot", "effect": "effects",
                 "pa": "cabin", "interphone": "cabin", "deck": "cabin", "chime": "cabin", "ambience": "cabin"}
-CABIN = ("pa", "interphone", "deck", "chime")  # the cabin crew and their chimes, one after another
-TO_THE_DECK = ("interphone", "deck")  # a crew member talking to the pilots: they wait for ATC to finish, as the copilot does
+CABIN = ("pa", "interphone", "deck", "chime")  # the cabin crew and their chimes, one after another, never over ATC
 
 
 @dataclass
@@ -109,7 +108,7 @@ class _Lane:
         while (clip := self.queue.get()) is not None:
             if clip.done.is_set():
                 continue  # dropped while it waited
-            if (self is self.player.intercom or clip.kind in TO_THE_DECK) and not clip.urgent:
+            if (self is self.player.intercom or clip.kind in CABIN) and not clip.urgent:
                 waited = 0.0
                 while waited < INTERCOM_WAIT_S and self.player.atc_to_us() and not clip.done.is_set():
                     time.sleep(BLOCK_S)

@@ -169,6 +169,7 @@ boarding_music = true
 applause = true               # a touchdown gentler than 200 feet per minute
 english_too = true            # a crew whose language isn't English repeats each announcement in English
 interphone = true             # the crew call the flight deck: boarding complete, cabin secure, the service
+show_log = true               # their words in the radio log (false: only heard)
 captain = ""                  # your name, for the welcome ("Captain Reyes"); blank: "the captain"
 
 [recorder]

@@ -436,6 +436,7 @@ class CabinConfig(_Section):
     applause: bool = True  # the cabin clapping a touchdown gentler than 200 feet per minute
     english_too: bool = True  # a crew whose language isn't English repeats each announcement in English
     interphone: bool = True  # the crew call the flight deck: boarding complete, cabin secure, the service
+    show_log: bool = True  # their words in the radio log (off: only heard)
     captain: str = ""  # your name, for the welcome ("on behalf of Captain Reyes"); blank: "the captain"
 
 

@@ -8,7 +8,7 @@ announcement's language), ``{captain}`` ("Captain Reyes", or "the captain"; ``{C
 ``{name}`` (the crew member),
 ``{program}`` (the loyalty programme), ``{alliance}``, ``{pax}`` (passengers on board), ``{local}`` (the local time),
 ``{weather}`` (the temperature and the sky), ``{exits}`` (how many exits and where), ``{drink}``, ``{minutes}``,
-``{message}``, ``{greeting}`` ("Good morning"). A template naming one that isn't known for this flight isn't used
+``{message}``, ``{greeting}`` ("Good morning"), ``{aircraft}`` and ``{aircraft_fact}``, ``{overwing}``. A template naming one that isn't known for this flight isn't used
 (another wording is, or the line goes without that sentence: ``cabin.fill``).
 
 Each crew member's manner (``PEOPLE``) chooses among a line's wordings: polished (by the book), cheerful (a joke in the
@@ -118,6 +118,42 @@ LINES: dict[str, dict[str, tuple[str, ...]]] = {
                   "mouth, breathe normally, your own first. Life vest under the seat, inflate only outside. No smoking "
                   "or vaping anywhere. More on the card in your seat pocket. Thank you.",),
     },
+    "exit_row": {  # who sits at an exit is asked (14 CFR 121.585)
+        "polished": ("If you are seated in an emergency exit row, you must be willing and able to help in an emergency. "
+                     "If you would rather not, please tell one of us and we will find you another seat.",),
+        "cheerful": ("A word for those of you enjoying the extra legroom in the exit rows: it comes with a job. You need to "
+                     "be willing and able to help in an emergency. If that's not for you, tell us and we'll find you "
+                     "another seat, no hard feelings.",),
+        "brisk": ("Exit rows: you must be willing and able to help in an emergency. If not, tell us and we'll move you.",),
+    },
+    "safety_more": {  # the rest of what a briefing has to say (14 CFR 121.571; the FAA on lithium batteries)
+        "polished": ("Please keep your seatbelt fastened whenever the sign is on, low and tight across your hips. "
+                     "{overwing}Phones and other devices go into flight mode now, and larger items like laptops must be "
+                     "stowed for takeoff and landing. If a device with a lithium battery slips down beside your seat, "
+                     "please do not move the seat: call one of us. It is against the law to tamper with, disable or "
+                     "destroy the smoke detectors in the washrooms.",),
+        "cheerful": ("Keep your belt low and tight across your hips whenever the sign is on. {overwing}Flight mode "
+                     "on those phones, please, and laptops away for takeoff. If your phone falls down beside the seat, "
+                     "don't go moving the seat to get it: those batteries don't like being crushed, so call us. And "
+                     "tampering with the washroom smoke detectors is against the law, however good that cigarette "
+                     "sounds.",),
+        "brisk": ("Belts low and tight when the sign is on. {overwing}Devices in flight mode, laptops stowed. A device "
+                  "lost beside your seat: don't move the seat, call us. Tampering with washroom smoke detectors is "
+                  "illegal.",),
+    },
+    "aircraft_talk": {  # in the cruise: about the aircraft they're on
+        "polished": ("Ladies and gentlemen, a word about your aircraft today. This is an {aircraft}: {aircraft_fact}. Our "
+                     "cruising altitude is {cruise}. Please keep your seatbelt fastened while you are seated, even "
+                     "with the sign off.",),
+        "cheerful": ("Folks, since you're stuck with us for a while: you're riding on an {aircraft}, and {aircraft_fact}. "
+                     "We're up at {cruise}. Keep those belts on while you're seated, the sign's off but the sky "
+                     "doesn't always tell us first.",),
+        "warm": ("Ladies and gentlemen, I hope you're comfortable. In case you were wondering, this is an {aircraft}, "
+                 "and {aircraft_fact}. We're cruising at {cruise}. When you're in your seat, please keep your belt "
+                 "fastened, just in case.",),
+        "storyteller": ("A little something for the curious: you're on an {aircraft}, and {aircraft_fact}. We're at "
+                        "{cruise}, on our way to {dest_about}. Do keep your belt fastened while seated, even with the sign off.",),
+    },
     "secure_takeoff": {
         "polished": ("Flight deck, cabin's secure for takeoff.", "Captain, it's {name}. The cabin is secure for takeoff."),
         "cheerful": ("Hi, it's {name}! Cabin's all secure for takeoff, everyone's buckled in.",),
@@ -204,7 +240,7 @@ LINES: dict[str, dict[str, tuple[str, ...]]] = {
     "landing": {
         "polished": ("Ladies and gentlemen, we are now on our approach. Please make sure your seatbelt is fastened, your "
                      "seat back is upright, your tray table is stowed and your window blind is open. Bags under the "
-                     "seat in front of you, please. Thank you.",),
+                     "seat in front of you, laptops stowed, and the washrooms are now closed. Thank you.",),
         "cheerful": ("Last call, everyone: belts on, seats up, tables away, blinds open. We'll be on the ground before "
                      "you know it.",),
         "brisk": ("We're on our approach. Belts fastened, seats upright, tables stowed, blinds open.",),

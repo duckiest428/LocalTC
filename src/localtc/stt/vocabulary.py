@@ -52,6 +52,16 @@ def build_prompt(hints: VocabularyHints) -> str:
     return prompt[-MAX_PROMPT_CHARS:] if len(prompt) > MAX_PROMPT_CHARS else prompt
 
 
+def without_prompt(text: str, hints: VocabularyHints) -> str:
+    """``text`` without the prompt's last sentence, where Whisper heard it at the start ("This is Swiss 2027." from a
+    moment of doubtful sound, the pilot having said nothing of the kind)."""
+    if not hints.callsign:
+        return text
+    lead = re.compile(r"^\s*this is (?:%s)[.,]?\s*" % "|".join(
+        re.escape(c) for c in (hints.callsign, hints.callsign_spoken) if c), re.I)
+    return lead.sub("", text)
+
+
 def hotwords(hints: VocabularyHints) -> str:
     """Words worth boosting on their own: the callsign and station names."""
     words = [hints.callsign, hints.callsign_spoken, *hints.stations]

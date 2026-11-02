@@ -46,6 +46,16 @@ a new minor version adds features, a patch fixes them.
   landing", turbulence ahead, a delay ("we've got a twenty minute delay") or anything to pass on ("tell the passengers
   we're number two for departure"), all announced to the cabin. "Ladies and gentlemen ..." is your own announcement:
   nobody answers it, and the copilot never answers what's for the cabin.
+- **The cabin works to what's happening at the gate, not a clock:** boarding begins and ends with GSX's own boarding
+  state, and without GSX with the door the jetway comes to; the doors are armed then, and the safety demonstration
+  starts with the push. Nothing is said at a dark gate.
+- **Talk to the cabin in your own words:** with a language model on, the crew's answers are theirs, knowing the flight;
+  after they've called you (or you've called them), your next words go to them without "cabin" first, commands to the
+  copilot aside.
+- **Scripts from what crews really have to say:** the exit rows, flight mode, lithium batteries down the side of a seat,
+  the washrooms' smoke detectors and the belt low and tight, each aircraft's own exits (over-wing exits included), and
+  in the cruise a word about the aircraft you're on.
+- **Settings → Cabin crew → Show their words in the radio log:** off, they're only heard.
 - **The time in Zulu** in the radio bar: the sim's during a flight, the computer's otherwise.
 - **The airports around you on the Live Map** (the new Airports button): every airport with airline service, its IATA
   code beside it, the big ones bigger and the only ones shown zoomed far out; click one for its name and how far it is.
@@ -59,6 +69,13 @@ a new minor version adds features, a patch fixes them.
 - **The Discord buttons** go to the server's new invite link.
 
 ### Fixed
+- **Announcements talked over ATC:** the cabin and the copilot now wait for a long clearance to finish. The cabin's lines
+  come one at a time, in the log and aloud, and an order to the crew ("doors to automatic") is given once, not in each
+  language.
+- **Other flights heard after you'd tuned away** from their frequency.
+- **"This is Swiss 2027" put in your mouth:** the callsign Whisper is told to expect is no longer taken for your words.
+- **The preflight checklist is offered before the before start**, where the aircraft has one.
+- **Airport Ops and the copilot's profile share the sim's variables:** one replaced the other's, so GSX's state wasn't read.
 - **Settings that wouldn't save during a flight:** every change made with a flight running failed (a setting of the
   removed Azure voices was still read).
 - **No flight at all where Hugging Face can't be reached (China):** Whisper and the Piper voices are fetched from

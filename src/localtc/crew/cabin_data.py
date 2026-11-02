@@ -55,9 +55,9 @@ AIRLINES: dict[str, Airline] = {
     "DLH": Airline("Lufthansa", "ED", "Miles & More", STAR, ("de", "en")),
     "EWG": Airline("Eurowings", "ED", languages=("de", "en"), low_cost=True),
     "CFG": Airline("Condor", "ED", languages=("de", "en")),
-    "SWR": Airline("Swiss", "LS", "Miles & More", STAR, ("de", "en", "fr")),
+    "SWR": Airline("Swiss", "LS", "Miles & More", STAR, ("de", "en")),
     "AUA": Airline("Austrian", "LO", "Miles & More", STAR, ("de", "en")),
-    "BEL": Airline("Brussels Airlines", "EB", "Miles & More", STAR, ("nl", "fr", "en")),
+    "BEL": Airline("Brussels Airlines", "EB", "Miles & More", STAR, ("nl", "en")),
     "AFR": Airline("Air France", "LF", "Flying Blue", SKYTEAM, ("fr", "en")),
     "TVF": Airline("Transavia", "LF", "Flying Blue", languages=("fr", "en"), low_cost=True),
     "KLM": Airline("KLM", "EH", "Flying Blue", SKYTEAM, ("nl", "en")),
@@ -144,7 +144,7 @@ EXITS = {
     "A20N": (8, "two at the front, four over the wings and two at the rear"),
     "A21N": (8, "two at the front, two either side of the wings and two at the rear"),
     "A19N": (6, "two at the front, two over the wings and two at the rear"),
-    "BCS1": (6, "two at the front, two over the wings and two at the rear"),
+    "BCS1": (4, "two at the front and two at the rear"),
     "BCS3": (6, "two at the front, two over the wings and two at the rear"),
     "E170": (6, "two at the front, two over the wings and two at the rear"),
     "E175": (6, "two at the front, two over the wings and two at the rear"),
@@ -235,9 +235,68 @@ def crew_name(locale: str, sex: str, seed: str) -> str:
     return pool[crc(seed) % len(pool)]
 
 
+# What the sim calls a type ("A220-300", its ATC MODEL) to its ICAO designator.
+SIM_NAMES = (("A220-100", "BCS1"), ("CS100", "BCS1"), ("A220-300", "BCS3"), ("CS300", "BCS3"), ("A220", "BCS3"),
+             ("A319NEO", "A19N"), ("A320NEO", "A20N"), ("A321NEO", "A21N"), ("A319", "A319"), ("A320", "A320"),
+             ("A321", "A321"), ("A330-200", "A332"), ("A330-300", "A333"), ("A330-900", "A339"), ("A350-900", "A359"),
+             ("A350-1000", "A35K"), ("A380", "A388"), ("737-MAX8", "B38M"), ("737 MAX 8", "B38M"), ("737-700", "B737"),
+             ("737-800", "B738"), ("737-900", "B739"), ("757-200", "B752"), ("767-300", "B763"), ("777-200", "B772"),
+             ("777-300", "B77W"), ("787-8", "B788"), ("787-9", "B789"), ("787-10", "B78X"), ("747-400", "B744"),
+             ("747-8", "B748"))
+
+
+def designator(aircraft: str) -> str:
+    """The ICAO type of what the flight or the sim calls it ("A220-300": BCS3)."""
+    code = (aircraft or "").upper().strip()
+    if code in SEATS:
+        return code
+    return next((icao for name, icao in SIM_NAMES if name in code), code)
+
+
+@dataclass(frozen=True)
+class AircraftFacts:
+    name: str  # as a passenger would say it
+    fact: str  # a true line about it, for the cabin to tell
+    overwing: bool = False  # the exit over the wing is a hatch or door the passengers beside it open
+
+
+# By the start of the ICAO type, the longest first.
+AIRCRAFT = (
+    ("BCS", AircraftFacts("Airbus A220", "it seats two on one side and three on the other, and its windows are the largest "
+                                         "of any single-aisle airliner", True)),
+    ("A19N", AircraftFacts("Airbus A319neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
+    ("A20N", AircraftFacts("Airbus A320neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
+    ("A21N", AircraftFacts("Airbus A321neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
+    ("A31", AircraftFacts("Airbus A319", "its family was the first airliner flown by digital fly-by-wire, with sidesticks instead of control columns", True)),
+    ("A32", AircraftFacts("Airbus A320", "it was the first airliner flown by digital fly-by-wire, with sidesticks instead of control columns", True)),
+    ("A33", AircraftFacts("Airbus A330", "it's a twin-aisle built for long ocean crossings on two engines")),
+    ("A35", AircraftFacts("Airbus A350", "more than half of its structure is carbon-fibre composite, and the cabin is kept at the "
+                                         "pressure of about six thousand feet, so you should feel fresher when we land")),
+    ("A38", AircraftFacts("Airbus A380", "it's the largest passenger airliner ever built, with two full decks from nose to tail")),
+    ("B38", AircraftFacts("Boeing 737 MAX", "the tips of its wings split in two, to save fuel", True)),
+    ("B39", AircraftFacts("Boeing 737 MAX", "the tips of its wings split in two, to save fuel", True)),
+    ("B73", AircraftFacts("Boeing 737", "the first one flew in 1967, and it's still in production today", True)),
+    ("B75", AircraftFacts("Boeing 757", "it's a single-aisle with so much power that pilots call it a rocket")),
+    ("B76", AircraftFacts("Boeing 767", "it's a twin-aisle with two seats by the window on each side")),
+    ("B74", AircraftFacts("Boeing 747", "they call it the Queen of the Skies, and it first flew in 1969")),
+    ("B77", AircraftFacts("Boeing 777", "its engines are among the most powerful ever put on an airliner")),
+    ("B78", AircraftFacts("Boeing 787 Dreamliner", "about half of it is composite, and instead of blinds its windows dim at the touch of a button")),
+    ("E1", AircraftFacts("Embraer E-Jet", "it seats two and two, so nobody has a middle seat")),
+    ("E2", AircraftFacts("Embraer E-Jet", "it seats two and two, so nobody has a middle seat")),
+    ("CRJ", AircraftFacts("Bombardier CRJ", "it seats two and two, so nobody has a middle seat")),
+    ("DH8", AircraftFacts("Dash 8", "it's a turboprop, and one of the fastest flying")),
+    ("AT7", AircraftFacts("ATR 72", "it's a turboprop, among the most fuel-efficient airliners flying")),
+)
+
+
+def aircraft_facts(aircraft: str) -> AircraftFacts | None:
+    code = designator(aircraft)
+    return next((f for prefix, f in AIRCRAFT if code.startswith(prefix)), None)
+
+
 def seats(aircraft: str) -> int:
     """About how many seats an aircraft type has (0: not an airliner LocalTC knows)."""
-    code = (aircraft or "").upper()
+    code = designator(aircraft)
     if code in SEATS:
         return SEATS[code]
     return next((n for prefix, n in FAMILY_SEATS if code.startswith(prefix)), 0)
@@ -245,7 +304,7 @@ def seats(aircraft: str) -> int:
 
 def exits(aircraft: str) -> tuple[int, str]:
     """The exits' count and where they are; (0, "") where the type isn't known."""
-    code = (aircraft or "").upper()
+    code = designator(aircraft)
     if code in EXITS:
         return EXITS[code]
     n = seats(code)

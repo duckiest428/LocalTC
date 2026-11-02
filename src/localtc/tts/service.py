@@ -148,6 +148,10 @@ class VoiceOut:
         tuned), or one from the station tuned now."""
         return station is None or self._tunes_reached >= self._tunes_seen or station == self.tuned
 
+    def off_frequency(self, station: str | None, channel: str) -> bool:
+        """Another flight's exchange from a frequency no longer tuned (a chatter goes on after you've left it)."""
+        return channel == "chatter" and self.tuned is not None and station != self.tuned
+
     async def run(self) -> None:
         watcher = asyncio.create_task(self._watch_radio())
         cabin = asyncio.create_task(self._cabin_crew())
@@ -205,7 +209,7 @@ class VoiceOut:
         on the radio (not said once the pilot has tuned away from them). ``channel``: the mixer's ("" by the kind).
         ``strength`` and ``cabin``: how well it comes through and what's behind the speaker (``dsp.radio``)."""
         async with self._lock:
-            if not self.on_air(station) or (channel == "chatter" and self.keyed):
+            if not self.on_air(station) or (channel == "chatter" and self.keyed) or self.off_frequency(station, channel):
                 return None  # tuned away while it waited its turn, or another flight's line with the pilot on the air
             clip = await asyncio.to_thread(self.render, text, who, kind, manner, local, strength=strength, cabin=cabin)
             if clip is not None and (not self.on_air(station) or (channel == "chatter" and self.keyed)):

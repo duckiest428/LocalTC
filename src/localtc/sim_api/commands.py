@@ -83,9 +83,11 @@ class ClickSequence(SimCommand, tag="click_sequence"):
 
 class WatchVars(SimCommand, tag="watch_vars"):
     """Read these variables (an add-on's L:vars, its switches as the copilot sees them) every second, as
-    ``AircraftVars``; an empty list stops it."""
+    ``AircraftVars``; an empty list stops it. ``owner``: whose list it is (the copilot's profile, Airport Ops, the
+    cabin crew): each has its own, and all of them are read."""
 
     names: tuple[str, ...] = ()
+    owner: str = ""
 
 
 class NudgeVar(SimCommand, tag="nudge_var"):

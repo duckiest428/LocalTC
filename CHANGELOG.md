@@ -71,6 +71,14 @@ a new minor version adds features, a patch fixes them.
   From OurAirports' data, kept in LocalTC, so they show before a flight too.
 
 ### Changed
+- **The Live Map's aircraft have one colour for each thing they can be doing,** in the legend now: green you, blue in
+  the air, amber taxiing, grey parked, their shape showing their size. Gates are in the legend too, and a free gate's
+  dot is no longer the colour of an aircraft in the air.
+- **The airport's arrival and departure ATIS are one:** the ATIS you hear has the landing runways and approaches, the
+  departing runways, and the notices of both. Where only one is out it's still used, rather than LocalTC's own ATIS on
+  another runway.
+- **The transmission box:** CREW is now COPILOT, with IC between it and COM. The cabin manager's lines in the log are
+  under their name, in place of CABIN and the name again.
 - **Real-world data is one key, in Settings (the gear)**: the EFB's Data section is gone, and openAIP's key, for
   restricted, danger and prohibited areas, moved to Settings. OpenSky, AirLabs and the FAA NOTAM API are no longer used.
   With them go the departures due at the gates before they push (LocalTC's traffic still flies the real flights around
@@ -92,6 +100,8 @@ a new minor version adds features, a patch fixes them.
   there is, and after the approach clearance too.
 
 ### Fixed
+- **The airport on the Live Map wasn't drawn:** no runways, taxiways or gates close in.
+- **A transponder sending no callsign** was called "@@@@@@@@" in the traffic's calls.
 - **"Hello there, Stefan" went to the copilot,** who answered as if it was its name. A greeting with the cabin manager's
   name is theirs.
 - **Taxiway India lost from a taxi clearance:** the language model could drop it from "via K, A, I", being the word "I".

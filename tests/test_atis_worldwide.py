@@ -104,3 +104,22 @@ def test_an_old_atis_on_the_page_is_not_used():
     assert read_guru_page(old, "EDDM", NOW) is None
     assert [r.kind for r in read_guru_page(old + page("Arrival", "EDDM ARR ATIS B\n0010Z -RWY 08L"), "EDDM", NOW)] == ["arrival"]
     assert read_guru_page("<p>No ATIS available...</p>", "XXXX", NOW) is None
+
+
+ZURICH_ARRIVAL = ("LSZH ARR ATIS L\n1850Z ARRIVALS, EXP ILS APCH,\nRWY 14.\nTRL 70.\nDEP RWY 28.\n"
+                  "TWY B CLSD.\nQNH 1025.")
+ZURICH_DEPARTURE = "LSZH DEP ATIS Z\n1850Z DEP RWY 28.\nTRL 70.\nARRIVALS, EXP ILS APCH, RWY\n14.\nTWY F CLSD.\nQNH 1025."
+
+
+def test_an_arrival_and_a_departure_atis_are_read_as_one():
+    arrival = real.parse(read_guru_page(page("Arrival", ZURICH_ARRIVAL), "LSZH", NOW)[0].text, "arrival", source="atis.guru")
+    departure = real.parse(read_guru_page(page("Departure", ZURICH_DEPARTURE), "LSZH", NOW)[0].text, "departure",
+                           source="atis.guru")
+    both = real.combined(departure, arrival)
+    assert (both.letter, both.kind) == ("Z", "both")  # the letter of the one the flight wants
+    assert both.landing == ("14",) and both.departing == ("28",) and both.approach == "ILS"
+    assert {r for r in both.remarks} == {"TWY B CLSD", "TWY F CLSD"}  # what only one of them says
+
+
+def test_a_line_wrapped_after_rwy_stays_one_sentence():
+    assert "ARRIVALS, EXP ILS APCH, RWY 14." in read_guru_page(page("Departure", ZURICH_DEPARTURE), "LSZH", NOW)[0].text

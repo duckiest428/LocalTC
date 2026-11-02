@@ -113,7 +113,7 @@ def guru_text(body: str) -> str:
         line = " ".join(line.split()).strip(" -")
         if not line:
             continue
-        if not out or re.search(r"(?:\b(?:AND|OR|BTN|ON|OF|AT|TO|IN|THE|FOR|FROM|WITH|DO|NOT)|,)$", out) \
+        if not out or re.search(r"(?:\b(?:AND|OR|BTN|ON|OF|AT|TO|IN|THE|FOR|FROM|WITH|DO|NOT|RWYS?|RUNWAYS?|TWYS?)|,)$", out) \
                 or re.match(r"(?:CLSD|CLOSED|U/S|WIP|,)", line):
             out = f"{out} {line}".strip()
         else:

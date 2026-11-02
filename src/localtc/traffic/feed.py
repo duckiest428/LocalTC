@@ -79,7 +79,7 @@ def parse(data: dict, now: float | None = None) -> list[Flight]:
         alt = a.get("alt_baro")
         ground = alt == "ground"
         out.append(Flight(
-            hex=str(a.get("hex", "")).lower().lstrip("~"), callsign=str(a.get("flight") or "").strip().upper(),
+            hex=str(a.get("hex", "")).lower().lstrip("~"), callsign=str(a.get("flight") or "").strip(" @").upper(),  # ("@@@@@@@@": it isn't sending one)
             registration=str(a.get("r") or "").strip().upper(), type=str(a.get("t") or "").strip().upper(),
             category=str(a.get("category") or ""), lat=float(a["lat"]), lon=float(a["lon"]),
             alt_ft=None if ground or alt is None else float(alt), on_ground=ground,

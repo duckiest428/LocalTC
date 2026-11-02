@@ -174,7 +174,7 @@ function addLine(l) {
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "cabin":  // the cabin crew: an announcement, or to you on the interphone
-      body = `<span class="who">CABIN</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="st">${esc(l.who || "")}</span> <span class="body">${esc(l.text)}</span>`; break;
+      body = `<span class="who">${esc((l.who || "Cabin").toUpperCase())}</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
       if ((l.live || S.settings?.traffic?.enabled) && l.callsign) {
         // LocalTC's traffic (real flights): shown like a real transmission, by its callsign in its airline's colour.
@@ -2445,7 +2445,7 @@ const Settings = {
 
 
 const MapView = {
-  map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, airports: new Set(),
+  map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, drawnAirports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
   wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null, notamLayer: null,
   zoneAirports: [],
@@ -2596,7 +2596,7 @@ const MapView = {
     if (this.drawnRef == null || Math.abs(at[1] - this.drawnRef) > 90) this.drawnRef = at[1];
     // Drawn as what's being flown (a Cessna as a Cessna), from the flight's aircraft type
     const kind = AtcMap.kindOf(S.flight?.aircraft || S.state.plan?.aircraft || "");
-    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${AtcMap.PLANE("#5fd068", 30, kind)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    const icon = L.divIcon({ className: "own-icon", html: `<div style="transform:rotate(${o.hdg}deg)">${AtcMap.PLANE(AtcMap.COLOURS.own, 30, kind)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] });
     if (!this.ownMarker) { this.ownMarker = L.marker(at, { icon, zIndexOffset: 1000 }).addTo(this.map); this.map.setView(at, 11); }
     else { this.ownMarker.setLatLng(at); this.ownMarker.setIcon(icon); }
     if (this.follow) this.map.panTo(at, { animate: false });
@@ -2644,8 +2644,8 @@ const MapView = {
     } catch { return null; /* not known yet: drawn when the flight fetches it */ }
   },
   drawAirport(a) {
-    if (!this.map || this.airports.has(a.icao)) return;
-    this.airports.add(a.icao);
+    if (!this.map || this.drawnAirports.has(a.icao)) return;
+    this.drawnAirports.add(a.icao);
     AtcMap.runways(this.map, a);
     this.layout(a.icao);
   },

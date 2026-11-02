@@ -1110,12 +1110,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         mode = self.cfg.atis_source
         real = None
         if mode in ("real", "hybrid"):
-            arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
-            wanted = (kind,) if kind != "both" else ("both", "arrival" if arriving else "departure")
-            real = next((self._real_atis[(icao, k)] for k in wanted if (icao, k) in self._real_atis), None)
-            age = real_atis.age_minutes(real.zulu, own.zulu_s) if real is not None else None
-            if age is not None and age > REAL_ATIS_MAX_AGE_MIN:
-                real = None  # stale: the METAR's or the sim's weather instead (an ATIS is issued at least hourly)
+            real = self._real_for(icao, kind, own)
         if real is not None and (real.weather is None or real.source in ("vatsim", "atis.guru")) and icao in self.weather.reports:
             # ATIS.guru's (each country words its observation differently), or one with no observation in it: its
             # letter, runways and approaches, the real METAR's weather
@@ -1134,6 +1129,23 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if weather is None:
             return None
         return weather, None, ("simulator", weather.t, "")
+
+    def _real_for(self, icao: str, kind: str, own: OwnshipState) -> real_atis.RealAtis | None:
+        """The airport's real ATIS for a broadcast of ``kind``: its arrival and departure ones read as one, the letter
+        the flight's own (Madrid's departures were given LocalTC's own ATIS on another runway because only its arrival
+        one was out)."""
+        def fresh(which: str) -> real_atis.RealAtis | None:
+            report = self._real_atis.get((icao, which))
+            age = real_atis.age_minutes(report.zulu, own.zulu_s) if report is not None else None
+            # (stale: the METAR's or the sim's weather instead; an ATIS is issued at least hourly)
+            return None if age is not None and age > REAL_ATIS_MAX_AGE_MIN else report
+
+        if kind == "both" and (one := fresh("both")) is not None:
+            return one
+        arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
+        mine = kind if kind != "both" else "arrival" if arriving else "departure"
+        first, other = fresh(mine), fresh("departure" if mine == "arrival" else "arrival")
+        return real_atis.combined(first, other) if first is not None and other is not None else first or other
 
     def atis_source_text(self, info: AtisInfo, own: OwnshipState | None) -> str:
         """Where an ATIS is from and how old: "real ATIS 1756Z, 12 min old", "simulator, observed 3 min ago"."""

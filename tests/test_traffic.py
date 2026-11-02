@@ -621,3 +621,10 @@ def test_the_same_aircraft_is_never_shown_twice_the_one_flying_kept():
     assign(m, m.tick(NOW + 2), NOW + 2)
     m.tick(NOW + 3)
     assert set(m.planes) == {"live:c3"}
+
+
+def test_a_transponder_sending_no_callsign_has_none():
+    from localtc.traffic.feed import parse
+
+    [flight] = parse({"ac": [{"hex": "abc123", "flight": "@@@@@@@@", "lat": 40.0, "lon": -3.0, "alt_baro": "ground"}]}, 0.0)
+    assert flight.callsign == ""

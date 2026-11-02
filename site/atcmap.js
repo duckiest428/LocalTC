@@ -100,7 +100,7 @@ const AtcMap = (() => {
     }
     for (const s of a.gates || []) {
       const cls = s.yours ? "yours" : s.occupied ? "taken" : "free";
-      const colour = { yours: "#b892ff", taken: "#8d959e", free: "#62c7e6" }[cls];
+      const colour = { yours: COLOURS.yours, taken: COLOURS.parked, free: COLOURS.free }[cls];
       L.circleMarker(at(s.lat, s.lon), { renderer: r, radius: s.yours ? 6 : 3.5, color: s.yours ? "#fff" : "#0b0d0f", weight: s.yours ? 2 : 1,
         fillColor: colour, fillOpacity: 1 }).addTo(g.gates)
         .bindTooltip(`${esc(s.word === "gate" ? "Gate" : "Stand")} ${esc(s.label)}${s.yours ? ": yours" : s.occupied ? ": taken" : ""}`);
@@ -194,34 +194,6 @@ const AtcMap = (() => {
     return out.join("<br>");
   }
 
-  /** The legend's contents: what each colour means, IFR and VFR (the map's data-mode shows one). */
-  const LEGEND = `
-    <div class="lg-talk"></div>
-    <div class="lg-ifr">
-      <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
-      <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
-      <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
-      <div class="lg-row"><span class="sw sw-taxi"></span>Taxi route ground gave</div>
-      <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
-      <div class="lg-row"><span class="sw sw-route"></span>Flight plan route</div>
-      <div class="lg-row"><span class="sw sw-hold"></span>Hold ATC gave, and route amendments</div>
-    </div>
-    <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
-    <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
-    <div class="lg-row"><span class="sw sw-twy-closed"></span>Taxiway closed (the ATIS's notices)</div>
-    <div class="lg-vfr">
-      <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
-      <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
-      <div class="lg-row"><span class="sw sw-d"></span>Class D / control zone: call the tower first</div>
-      <div class="lg-row"><span class="sw sw-atz"></span>Traffic zone (ATZ)</div>
-      <div class="lg-row lg-muted">Labels: ceiling / floor in hundreds of feet MSL (SFC = surface)</div>
-    </div>
-    <div class="lg-row lg-badges"><span><span class="atc-badge b-clearance">D</span>Clearance</span>
-      <span><span class="atc-badge b-ground">G</span>Ground</span> <span><span class="atc-badge b-tower">T</span>Tower</span>
-      <span><span class="atc-badge b-terminal">A</span>Dep/App</span></div>
-    <div class="lg-src lg-ifr">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
-    <div class="lg-src lg-vfr">Airspace classes are simplified (typical sizes), not for real navigation</div>`;
-
   /* The path flown, kept as the app keeps it (ui/companion.py): a point every ~200 m in the air and every ~10 m on
      the ground, so the taxi from the gate keeps its turns; one always on lifting off or touching down. Past `keep`
      points it's simplified (Douglas-Peucker): straight legs lose their points, the turns and the taxi keep theirs.
@@ -279,12 +251,54 @@ const AtcMap = (() => {
     }
     return { A1: "light", A2: "turboprop", A5: "heavy", A7: "heli" }[String(category || "").toUpperCase()] || "jet";
   }
+  /* One colour for each thing an aircraft can be doing, the same on the map and in the legend; a gate's dot is taken in
+     a parked aircraft's grey, and yours in the purple of your gate's label. */
+  const COLOURS = { own: "#5fd068", air: "#62c7e6", taxi: "#f0b849", parked: "#8d959e", free: "#eef1f4", yours: "#b892ff" };
+  const TAXIING_KT = 2;  // on the ground and moving at least this: taxiing, not parked
   const PLANE = (color, size, kind = "jet") => {
     const outline = kind === "heli" ? 0.8 : 1;
     return `<svg viewBox="0 0 32 32" width="${size}" height="${size}"><path fill="${color}" stroke="#000" stroke-width="${outline}" d="${SHAPES[kind] || SHAPES.jet}"/></svg>`;
   };
+  /** The legend's contents: what each colour means, IFR and VFR (the map's data-mode shows one). */
+  const LEGEND = `
+    <div class="lg-talk"></div>
+    <div class="lg-head">Aircraft</div>
+    <div class="lg-row"><span class="lg-plane">${PLANE(COLOURS.own, 16)}</span>Your aircraft</div>
+    <div class="lg-row"><span class="lg-plane">${PLANE(COLOURS.air, 16)}</span>In the air</div>
+    <div class="lg-row"><span class="lg-plane">${PLANE(COLOURS.taxi, 16)}</span>Taxiing</div>
+    <div class="lg-row"><span class="lg-plane">${PLANE(COLOURS.parked, 16)}</span>Parked</div>
+    <div class="lg-row lg-muted">Its shape shows its size</div>
+    <div class="lg-head">Gates</div>
+    <div class="lg-row lg-gates"><span><span class="sw-gate" style="background:${COLOURS.yours}"></span>Your gate</span>
+      <span><span class="sw-gate" style="background:${COLOURS.free}"></span>Free</span>
+      <span><span class="sw-gate" style="background:${COLOURS.parked}"></span>Taken</span></div>
+    <div class="lg-head">Airspace and routes</div>
+    <div class="lg-ifr">
+      <div class="lg-row"><span class="sw sw-center"></span>Centre: enroute, handed over at its boundary</div>
+      <div class="lg-row"><span class="sw sw-terminal"></span>Departure / Approach area</div>
+      <div class="lg-row"><span class="sw sw-final"></span>Joining final: cleared, then to Tower</div>
+      <div class="lg-row"><span class="sw sw-taxi"></span>Taxi route ground gave</div>
+      <div class="lg-row"><span class="sw sw-tower"></span>Tower's control zone</div>
+      <div class="lg-row"><span class="sw sw-route"></span>Flight plan route</div>
+      <div class="lg-row"><span class="sw sw-hold"></span>Hold ATC gave, and route amendments</div>
+    </div>
+    <div class="lg-row lg-wx"><span class="sw sw-sigmet"></span>SIGMET / AIRMET (red: thunderstorms)</div>
+    <div class="lg-row lg-wx"><span class="sw sw-tfr"></span>TFR, restricted or danger area</div>
+    <div class="lg-row"><span class="sw sw-twy-closed"></span>Taxiway closed (the ATIS's notices)</div>
+    <div class="lg-vfr">
+      <div class="lg-row"><span class="sw sw-b"></span>Class B: needs "cleared into the Class Bravo"</div>
+      <div class="lg-row"><span class="sw sw-c"></span>Class C: talk to approach before entering</div>
+      <div class="lg-row"><span class="sw sw-d"></span>Class D / control zone: call the tower first</div>
+      <div class="lg-row"><span class="sw sw-atz"></span>Traffic zone (ATZ)</div>
+      <div class="lg-row lg-muted">Labels: ceiling / floor in hundreds of feet MSL (SFC = surface)</div>
+    </div>
+    <div class="lg-row lg-badges"><span><span class="atc-badge b-clearance">D</span>Clearance</span>
+      <span><span class="atc-badge b-ground">G</span>Ground</span> <span><span class="atc-badge b-tower">T</span>Tower</span>
+      <span><span class="atc-badge b-terminal">A</span>Dep/App</span></div>
+    <div class="lg-src lg-ifr">Airspace: VATSpy &amp; SimAware TRACON projects, CC BY-SA 4.0</div>
+    <div class="lg-src lg-vfr">Airspace classes are simplified (typical sizes), not for real navigation</div>`;
   function trafficIcon(t) {
-    const color = t.ground ? "#8d959e" : "#62c7e6";
+    const color = !t.ground ? COLOURS.air : (Number(t.gs) || 0) >= TAXIING_KT ? COLOURS.taxi : COLOURS.parked;
     const alt = t.ground ? "GND" : `${Math.round((t.alt || 0) / 100).toString().padStart(3, "0")}`;
     const kind = kindOf(t.type, t.category);
     const size = { heavy: 24, light: 16, heli: 16, regional: 18, turboprop: 18 }[kind] || 20;
@@ -416,6 +430,6 @@ const AtcMap = (() => {
     }
   }
 
-  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, kindOf, shape: (kind) => SHAPES[kind] || SHAPES.jet, LEGEND,
+  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, COLOURS, kindOf, shape: (kind) => SHAPES[kind] || SHAPES.jet, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

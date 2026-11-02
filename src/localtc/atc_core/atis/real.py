@@ -14,7 +14,7 @@ your TOBT at vats.im") aren't the airport's and aren't read out.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from localtc.atc_core.atis.observation import Layer, Weather
 from localtc.atc_core.atis.operations import read_notices
@@ -88,6 +88,19 @@ def parse(text: str, kind: str = "both", *, source: str = "", zulu: str = "") ->
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
                     approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()),
                     remarks=found, notices=notices, source=source)
+
+
+def combined(first: RealAtis, other: RealAtis) -> RealAtis:
+    """An airport's arrival and departure ATIS as one, with nothing either says lost: ``first``'s letter and time, the
+    landing runways and approaches of the arrival one and the departing runways of the departure one, each else from
+    the other, and the notices of both."""
+    arrival, departure = (first, other) if first.kind == "arrival" else (other, first)
+    return replace(first, kind="both", landing=arrival.landing or departure.landing,
+                   departing=departure.departing or arrival.departing, approach=arrival.approach or departure.approach,
+                   approaches=arrival.approaches or departure.approaches, offered=arrival.offered or departure.offered,
+                   weather=first.weather or other.weather, text=f"{first.text} {other.text}",
+                   remarks=tuple(dict.fromkeys((*first.remarks, *other.remarks))),
+                   notices=tuple(dict.fromkeys((*first.notices, *other.notices))))
 
 
 def _first_runways(upper: str) -> tuple[str, ...]:

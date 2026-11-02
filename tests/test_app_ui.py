@@ -352,3 +352,10 @@ def test_the_personalities_are_offered_with_the_settings(tmp_path, monkeypatch):
     got = asyncio.run(AppController(Config(), plan_path=tmp_path / "f.json", cache=None).api_settings({}))
     ids = [p["id"] for p in got["personalities"]]
     assert ids[0] == "neutral" and len(ids) == 11 and "hannah" in ids
+
+
+def test_the_live_maps_drawn_airports_are_not_named_as_its_method():
+    """One object with ``airports: new Set()`` and ``airports()``: the method won, and no airport's ground was drawn."""
+    source = (Path(__file__).parent.parent / "src" / "localtc" / "ui" / "static" / "app.js").read_text(encoding="utf-8")
+    assert "async airports()" in source and "airports: new Set()" not in source.replace("drawnAirports: new Set()", "")
+    assert "this.airports.has" not in source and "this.airports.add" not in source

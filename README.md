@@ -655,7 +655,7 @@ It tunes COM1 through SimConnect (`COM_RADIO_SET_HZ`). Two-decimal frequency nam
 
 A second key talks to the copilot instead of ATC (`[voice] intercom_key`, Right Alt by default, or a yoke button
 with `intercom_joystick`; Quick Settings → Copilot). It hears you on the same microphone and answers in a dry
-headset voice, never over the radio. The **IC** button holds the intercom from the app, and **CREW** sends typed
+headset voice, never over the radio. The **IC** button holds the intercom from the app, and **COPILOT** sends typed
 words to the copilot instead of transmitting them.
 
 It works the aircraft through SimConnect and says so once the sim shows it ("Flaps 2."), or that it didn't take:

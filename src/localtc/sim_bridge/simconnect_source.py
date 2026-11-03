@@ -53,6 +53,7 @@ from localtc.sim_api import (
     SetComFrequency,
     SetSimVar,
     SimCommand,
+    SimFrameRate,
     SimLifecycle,
     TrafficSnapshot,
     TrafficTarget,
@@ -76,6 +77,7 @@ from localtc.sim_bridge.protocol import (
     DataType,
     FACILITY_IDS,
     EventInfo,
+    FrameInfo,
     ExceptionInfo,
     FacilityData,
     FacilityDataEnd,
@@ -126,7 +128,10 @@ EVT_SIM_START, EVT_SIM_STOP, EVT_PAUSE, EVT_FLIGHT_LOADED, EVT_AIRCRAFT_LOADED, 
 EVT_COM1_SET_HZ, EVT_COM2_SET_HZ = 20, 21
 CLIENT_EVENTS = {EVT_COM1_SET_HZ: "COM_RADIO_SET_HZ", EVT_COM2_SET_HZ: "COM2_RADIO_SET_HZ"}
 FIRST_COPILOT_EVENT = 100  # key events the copilot sends ("GEAR_DOWN"), mapped as first used, from here up
+EV_FRAME = 190
+FRAME_RATE_EVERY_S = 5.0
 SYSTEM_EVENTS = {
+    EV_FRAME: "Frame",
     EVT_SIM_START: "SimStart",
     EVT_SIM_STOP: "SimStop",
     EVT_PAUSE: "Pause_EX1",
@@ -188,6 +193,7 @@ class SimConnectSource:
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue | None = None
+        self._frames, self._frames_fps, self._frames_t = 0, 0.0, -1e9
         self._ready: asyncio.Future[SessionInfo] | None = None
         # Owned by the bridge thread:
         self._open: OpenInfo | None = None
@@ -452,6 +458,11 @@ class SimConnectSource:
             return False
         elif isinstance(msg, ExceptionInfo):
             log.warning("SimConnect exception %s (send id %d, index %d)", msg.name, msg.send_id, msg.index)
+        elif isinstance(msg, FrameInfo):
+            self._frames, self._frames_fps = self._frames + 1, self._frames_fps + msg.fps
+            if t - self._frames_t >= FRAME_RATE_EVERY_S:
+                self._emit(SimFrameRate(t=t, fps=self._frames_fps / self._frames))
+                self._frames, self._frames_fps, self._frames_t = 0, 0.0, t
         elif isinstance(msg, EventInfo):
             if (event := _lifecycle_event(msg, t)) is not None:
                 self._emit(event)

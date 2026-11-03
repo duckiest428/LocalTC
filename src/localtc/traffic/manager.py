@@ -79,10 +79,18 @@ RESERVED_M = 35.0
 COUNTED_EVERY_S = 300.0
 # The live flights' places, shared out: the nearest alone were all on the ground at a busy airport (29 of the nearest 30
 # at Phoenix, within 0.7 nm of the user, with 53 descending further out). What a share doesn't use goes to the others.
-MIXES = {"balanced": (("arrival", 0.3), ("departure", 0.2), ("gate", 0.4), ("other", 0.1)),
-         "arrivals": (("arrival", 0.5), ("departure", 0.15), ("gate", 0.3), ("other", 0.05)),
-         "departures": (("arrival", 0.2), ("departure", 0.45), ("gate", 0.3), ("other", 0.05)),
-         "gates": (("arrival", 0.2), ("departure", 0.15), ("gate", 0.6), ("other", 0.05))}
+MIXES = {"ground": (("arrival", 0.3), ("departure", 0.2), ("gate", 0.4), ("other", 0.1)),  # at an airport
+         "low": (("arrival", 0.4), ("departure", 0.3), ("gate", 0.2), ("other", 0.1)),  # climbing out or coming in
+         "cruise": (("arrival", 0.1), ("departure", 0.1), ("gate", 0.0), ("other", 0.8))}  # around the user up there
+CRUISE_AGL_FT = 18000.0
+GROUND_NM = 8.0  # one on the ground further from the user than this can't be seen: not made
+TAXIING_OUT = 0.15  # of the places, 3 at least: the next real one stays on its stand (a dozen in line cost frames for little)
+# How many real ones the sim is given, by what it can draw: fewer while it struggles, more when it has frames to spare.
+START_LIVE, FEWEST_LIVE, LIVE_STEP = 40, 15, 5
+LOW_FPS, HIGH_FPS = 20.0, 35.0
+FPS_SETTLE_S = 120.0  # the sim loading models after the traffic comes on isn't its real frame rate
+FPS_WINDOW_S = 30.0
+HIGH_WINDOWS = 3  # that many in a row before more are added: a dip costs at once, more come slowly
 LOW_LEVEL_FT = 8000.0  # level below this: on its way in
 HIGH_CLIMB_FT = 18000.0  # climbing above this: on its way through
 SHOWN_ALREADY = 0.6  # one already in the sim counts as this much nearer, so two about as near don't swap places
@@ -205,14 +213,10 @@ TYPES_BY_SIZE = {"heavy": ("B789", "B77W", "A359", "A333", "B763", "B788", "B772
 @dataclass(frozen=True)
 class TrafficSettings:
     radius_nm: float = 40.0
-    max_live: int = 40
+    max_live: int = 60  # the most, with frames to spare (START_LIVE to begin with)
     parked: bool = True
     max_parked: int = 12
     parked_fill: str = "auto"  # or "fixed": max_parked of them, whatever the hour
-    ground_nm: float = 8.0  # one on the ground further from the user than this can't be seen: not made
-    # At once: the next real one stays on its stand until there's room (a dozen in line cost frames for little).
-    taxiing_out: int = 6
-    mix: str = "balanced"  # MIXES
     atc_control: bool = True
     # Made-up aircraft only on the cargo and GA ramps: the gates have the real ones (at a gate with its transponder
     # on, or an arrival on its stand), not a full terminal of guesses at six in the morning.
@@ -360,6 +364,10 @@ class TrafficManager:
         self._graphs: dict[str, tuple[tuple, TaxiGraph]] = {}  # airport: (its closures, the graph around them)
         self._own_stand: tuple[float, float] | None = None  # where the user was parked: nobody's put there as they push
         self._counted_t = -1e9  # the last time what the live feed has around was logged
+        self.live_limit = min(START_LIVE, self.s.max_live)  # the real flights in the sim at most, by the frame rate
+        self._fps: list[float] = []
+        self._fps_start: float | None = None
+        self._fps_t, self._fps_high = 0.0, 0
         self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
 
     # --- what happens ------------------------------------------------------------------------------------------
@@ -577,7 +585,7 @@ class TrafficManager:
                                               destination=route.destination_name or route.destination)
                 shown = self._shown(f.hex, now) if f is not None else None
                 if plane.object_id is not None and plane.spot is not None and self._pushing(plane, f, shown, now) \
-                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < self.s.taxiing_out:
+                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < max(3, round(self.live_limit * TAXIING_OUT)):
                     out += self._start_taxi_out(plane, now)  # the real one's pushing: so does LocalTC's, its own way
                     continue
                 lat, lon = self._spot_latlon(plane.spot) if plane.spot is not None else \
@@ -638,6 +646,39 @@ class TrafficManager:
             out += self._create_live(f, spot, now)
         return out
 
+    def _scene(self) -> str:
+        """Where the user is, for how the places are shared out."""
+        if self.own.on_ground:
+            return "ground"
+        return "cruise" if self.own.alt_agl_ft > CRUISE_AGL_FT else "low"
+
+    def _ground_nm(self) -> float:
+        return 0.0 if self._scene() == "cruise" else GROUND_NM
+
+    def on_frame_rate(self, fps: float, now: float) -> None:
+        """The sim's frame rate: the real flights it's given follow what it can draw."""
+        if not self.on:
+            return
+        if self._fps_start is None:
+            self._fps_start = now
+        if now - self._fps_start < FPS_SETTLE_S:
+            return
+        self._fps.append(fps)
+        self._fps_t = self._fps_t or now
+        if now - self._fps_t < FPS_WINDOW_S:
+            return
+        average = sum(self._fps) / len(self._fps)
+        self._fps, self._fps_t = [], now
+        self._fps_high = self._fps_high + 1 if average > HIGH_FPS else 0
+        was = self.live_limit
+        if average < LOW_FPS:
+            self.live_limit = max(min(FEWEST_LIVE, self.s.max_live), was - LIVE_STEP)
+        elif self._fps_high >= HIGH_WINDOWS:
+            self._fps_high = 0
+            self.live_limit = min(self.s.max_live, was + LIVE_STEP)
+        if self.live_limit != was:
+            log.info("Traffic: %.0f frames a second: %d real aircraft at most, was %d", average, self.live_limit, was)
+
     def _kind_of(self, f: Flight, d: float) -> str | None:
         """Which share a flight belongs to; None: not one to make (too far to see on the ground, or taxiing in, which
         appears once it's on a stand)."""
@@ -648,9 +689,9 @@ class TrafficManager:
             if plane.mode in FLOWN_OUT:
                 return "departure"
             if plane.mode == "parked":
-                return "gate" if d <= self.s.ground_nm else None
+                return "gate" if d <= self._ground_nm() else None
         if f.on_ground:
-            if d > self.s.ground_nm:
+            if d > self._ground_nm():
                 return None
             if f.gs_kt < MOVING_OFF_KT:
                 return "gate"
@@ -666,7 +707,7 @@ class TrafficManager:
     def _choose(self, wanted: list[tuple[float, Flight]]) -> list[tuple[float, Flight, str]]:
         """The flights to have in the sim, ``max_live`` at most: each kind its share, the nearest (and lowest, for those
         in the air) first; what a share leaves goes to the nearest of the rest. Those flown by LocalTC always stay."""
-        by_kind: dict[str, list[tuple[float, float, Flight]]] = {kind: [] for kind, _ in MIXES["balanced"]}
+        by_kind: dict[str, list[tuple[float, float, Flight]]] = {kind: [] for kind, _ in MIXES["ground"]}
         own_alt = self.own.alt_msl_ft
         out: list[tuple[float, Flight, str]] = []
         for d, f in wanted:
@@ -683,13 +724,13 @@ class TrafficManager:
         held = sum(1 for p in self.planes.values() if p.live and p.mode == "parked" and p.key[5:] not in self.flights)
         rest: list[tuple[float, float, Flight, str]] = []
         flying = list(out)
-        for kind, share in MIXES.get(self.s.mix, MIXES["balanced"]):
+        for kind, share in MIXES[self._scene()]:
             ranked = sorted(by_kind[kind], key=lambda x: x[0])
             flown = sum(k == kind for _, _, k in flying)
-            places = round(self.s.max_live * share) - flown - (held if kind == "gate" else 0)
+            places = round(self.live_limit * share) - flown - (held if kind == "gate" else 0)
             out += [(d, f, kind) for _, d, f in ranked[:max(0, places)]]
             rest += [(score, d, f, kind) for score, d, f in ranked[max(0, places):]]
-        room = self.s.max_live - held - len(out)
+        room = self.live_limit - held - len(out)
         rest.sort(key=lambda x: x[0])
         out += [(d, f, kind) for _, d, f, kind in rest[:max(0, room)]]
         out.sort(key=lambda x: x[0])

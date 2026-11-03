@@ -2033,13 +2033,7 @@ const Settings = {
               `<option value="${v}" ${v === fill ? "selected" : ""}>${label}</option>`).join("")}</select></label>
               <label>Up to<select id="s-traffic-max-parked">${pick(t.max_parked ?? 12, [5, 12, 20, 30, 40, 60, 80])}</select></label></div>
             <span class="hint">Auto goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today.</span>
-            <div class="row"><label>Real aircraft at most<select id="s-traffic-live">${pick(t.max_live ?? 40, [10, 20, 30, 40, 60, 80])}</select></label>
-              <label>Who gets more of them<select id="s-traffic-mix">${[["balanced", "Balanced"], ["arrivals", "More arrivals"], ["departures", "More departures"], ["gates", "More at the gates"]]
-                .map(([v, label]) => `<option value="${v}" ${v === (t.mix || "balanced") ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
-            <div class="row"><label>Real aircraft within (nm)<select id="s-traffic-radius">${pick(t.radius_nm ?? 40, [20, 30, 40, 60, 80])}</select></label>
-              <label>On the ground within (nm)<select id="s-traffic-ground">${pick(t.ground_nm ?? 8, [3, 5, 8, 12, 20])}</select></label>
-              <label>Taxiing out at once<select id="s-traffic-taxiing">${pick(t.taxiing_out ?? 6, [2, 4, 6, 10, 15])}</select></label></div>
-            <span class="hint">Each aircraft is a model the sim draws: lower these if the frame rate suffers, aircraft on the ground first. From the next flight.</span>`;
+            <span class="hint">LocalTC manages the real aircraft itself: how many by the sim's frame rate, and which by where you are, with arrivals, departures and the gates all kept in. Static aircraft cost frames too: fewer if it suffers. From the next flight.</span>`;
           })()}
         </div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
@@ -2267,10 +2261,7 @@ const Settings = {
       parkedLimit();
       this.save("traffic", "parked", fill !== "none").then(() => (fill !== "none" ? this.save("traffic", "parked_fill", fill) : null));
     });
-    for (const [id, key] of [["#s-traffic-max-parked", "max_parked"], ["#s-traffic-live", "max_live"], ["#s-traffic-radius", "radius_nm"],
-      ["#s-traffic-ground", "ground_nm"], ["#s-traffic-taxiing", "taxiing_out"]])
-      on(id, "change", () => this.save("traffic", key, Number(val(id))));
-    on("#s-traffic-mix", "change", () => this.save("traffic", "mix", val("#s-traffic-mix")));
+    on("#s-traffic-max-parked", "change", () => this.save("traffic", "max_parked", Number(val("#s-traffic-max-parked"))));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));

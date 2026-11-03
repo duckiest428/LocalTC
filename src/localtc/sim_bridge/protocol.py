@@ -141,6 +141,11 @@ class RecvEvent(Recv):
     _fields_ = [("uGroupID", DWORD), ("uEventID", DWORD), ("dwData", DWORD)]
 
 
+class RecvEventFrame(RecvEvent):
+    _pack_ = 1
+    _fields_ = [("fFrameRate", ctypes.c_float), ("fSimSpeed", ctypes.c_float)]
+
+
 class RecvEventFilename(RecvEvent):
     _pack_ = 1
     _fields_ = [("szFileName", ctypes.c_char * 260), ("dwFlags", DWORD)]
@@ -222,6 +227,11 @@ class ExceptionInfo:
     @property
     def name(self) -> str:
         return EXCEPTION_NAMES.get(self.code, f"code {self.code}")
+
+
+@dataclass(frozen=True)
+class FrameInfo:
+    fps: float
 
 
 @dataclass(frozen=True)
@@ -311,7 +321,7 @@ class ObjectData:
 
 
 Message = (
-    OpenInfo | QuitInfo | ExceptionInfo | EventInfo | ObjectData | AirportList | FacilityData | FacilityDataEnd
+    OpenInfo | QuitInfo | ExceptionInfo | EventInfo | FrameInfo | ObjectData | AirportList | FacilityData | FacilityDataEnd
     | InputEventList | AssignedObject | ModelLivery
 )
 
@@ -345,6 +355,8 @@ def parse_message(buf: bytes) -> Message | None:
     if rid == RecvId.EVENT:
         m = _read(RecvEvent, buf)
         return EventInfo(event_id=m.uEventID, data=m.dwData)
+    if rid == RecvId.EVENT_FRAME:
+        return FrameInfo(fps=float(_read(RecvEventFrame, buf).fFrameRate))
     if rid == RecvId.EVENT_FILENAME:
         m = _read(RecvEventFilename, buf)
         return EventInfo(event_id=m.uEventID, data=m.dwData, filename=_cstr(m.szFileName))

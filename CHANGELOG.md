@@ -26,9 +26,9 @@ a new minor version adds features, a patch fixes them.
   those on the ground took every place. Arrivals, departures and the gates now each have a share.
 
 ### Changed
-- **More say over the traffic's limits (Quick Settings → Traffic):** static aircraft are Auto (was Realistic), Fixed or
-  None, with an "Up to" limit of their own; and the most real aircraft, who gets more of them (balanced, arrivals,
-  departures, the gates), how far out they're shown in the air and on the ground, and how many taxi out at once.
+- **The traffic manages itself:** how many real aircraft follows the sim's frame rate (fewer while it struggles, more with
+  frames to spare), and which follows where you are: at an airport, climbing out or coming in, or in the cruise.
+- **Static aircraft (Quick Settings → Traffic)** are Auto (was Realistic), Fixed or None, with an "Up to" limit of their own.
 - **Traffic is lighter on the frame rate:** real aircraft on the ground are shown within 8 nm of you, and the made-up ones
   on the ramps are up to 12 by default. Six real departures taxi out at once, the next waiting on its stand.
 - **The cabin crew's language model is a cloud one only:** without a cloud model they use the script's words and the

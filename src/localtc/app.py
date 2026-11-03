@@ -275,7 +275,7 @@ def start_traffic(cfg: Config, engine, source: SimSource, bus):
 
     t = cfg.traffic
     settings = TrafficSettings(radius_nm=t.radius_nm, max_live=t.max_live, parked=t.parked, max_parked=t.max_parked,
-                               parked_fill=t.parked_fill, ground_nm=t.ground_nm, taxiing_out=t.taxiing_out, mix=t.mix,
+                               parked_fill=t.parked_fill,
                                atc_control=t.atc_control and engine is not None, fill_gates=t.fill_gates,
                                live_delay_s=t.live_delay_s)
     manager = TrafficManager(settings, traffic_atc(engine) if engine is not None else AtcLink(), seed=cfg.atc.seed)

@@ -61,7 +61,7 @@ def test_event_tags_are_stable():
         "intercom_heard", "intercom_pressed", "intercom_released", "llm_exchange", "model_list", "nearby_airports", "notices_report",
         "ops_snapshot",
         "ownship_state", "phase_changed", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "readback_evaluated",
-        "sim_lifecycle", "terrain_grid", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "weather_report",
+        "sim_frame_rate", "sim_lifecycle", "terrain_grid", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "weather_report",
     ]
 
 

@@ -589,6 +589,12 @@ class AircraftVars(Event, tag="aircraft_vars"):
     values: dict[str, float] = {}
 
 
+class SimFrameRate(Event, tag="sim_frame_rate"):
+    """The sim's frames per second, the average of the last few seconds: LocalTC's traffic keeps to what it can draw."""
+
+    fps: float
+
+
 class TrafficControlStatus(Event, tag="traffic_control_status"):
     """What LocalTC's traffic is doing, for the app and the log: the real flights it's flying in the sim (``live``),
     the aircraft it parked at the gates (``parked``), and the sim's own traffic still around (``native``: it should be
@@ -607,7 +613,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
                  TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
-                 OpsSnapshot, TerrainGrid]
+                 OpsSnapshot, TerrainGrid, SimFrameRate]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived, AtcOperations]

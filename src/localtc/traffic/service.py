@@ -13,7 +13,7 @@ from localtc.sim_api import (
     ConnectionStatus,
     EnumerateModels,
     ModelList,
-    OwnshipState,
+    OwnshipState, SimFrameRate,
     SimCommand,
     SimSource,
     TrafficSnapshot,
@@ -37,7 +37,7 @@ class TrafficService:
         manager.routes = self.book.route
         manager.types = self.book.type_of
         self._inputs = bus.subscribe(OwnshipState, TrafficSnapshot, AiObjectAssigned, ModelList, AirportData,
-                                     ConnectionStatus)
+                                     ConnectionStatus, SimFrameRate)
         self._tasks: list[asyncio.Task] = []
         self._connected = True
 
@@ -67,6 +67,8 @@ class TrafficService:
         m = self.manager
         if isinstance(ev, OwnshipState):
             m.on_own(ev)
+        elif isinstance(ev, SimFrameRate):
+            m.on_frame_rate(ev.fps, time.time())
         elif isinstance(ev, TrafficSnapshot):
             m.on_snapshot(ev)
         elif isinstance(ev, AiObjectAssigned):

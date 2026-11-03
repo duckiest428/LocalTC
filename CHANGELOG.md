@@ -107,6 +107,8 @@ a new minor version adds features, a patch fixes them.
   there is, and after the approach clearance too.
 
 ### Fixed
+- **Installing an update closed the app and installed nothing:** the installing step never ran. Updating from a version
+  before this one still needs LocalTC-Setup.exe.
 - **The flight starting from the wrong airport:** the plan's departure airport is used while you're at it, and fetched
   if it isn't known yet. Where the nearest airport had no runways, no origin was found, and the destination's Clearance,
   ATIS and traffic were all there was.

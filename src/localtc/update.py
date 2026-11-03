@@ -226,8 +226,9 @@ def launch_apply(payload: Path, *, relaunch: bool, root: Path | None = None) -> 
         raise RuntimeError(why)
     script = updates_dir() / "apply.ps1"
     script.write_text(apply_script(payload, root, os.getpid(), relaunch=relaunch), encoding="utf-8")
-    flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) \
-        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    # A console of its own, unseen. DETACHED_PROCESS leaves PowerShell no console at all: it exits at once without running
+    # the script, so the app closed and nothing was installed.
+    flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
                       "-File", str(script)], creationflags=flags, close_fds=True)
     log.info("Update will be applied from %s after LocalTC exits", payload)

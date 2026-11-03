@@ -79,19 +79,22 @@ RESERVED_M = 35.0
 COUNTED_EVERY_S = 300.0
 # The live flights' places, shared out: the nearest alone were all on the ground at a busy airport (29 of the nearest 30
 # at Phoenix, within 0.7 nm of the user, with 53 descending further out). What a share doesn't use goes to the others.
-MIXES = {"ground": (("arrival", 0.3), ("departure", 0.2), ("gate", 0.4), ("other", 0.1)),  # at an airport
-         "low": (("arrival", 0.4), ("departure", 0.3), ("gate", 0.2), ("other", 0.1)),  # climbing out or coming in
+MIXES = {"ground": (("arrival", 0.45), ("departure", 0.15), ("gate", 0.3), ("other", 0.1)),  # at an airport
+         "low": (("arrival", 0.5), ("departure", 0.25), ("gate", 0.15), ("other", 0.1)),  # climbing out or coming in
          "cruise": (("arrival", 0.1), ("departure", 0.1), ("gate", 0.0), ("other", 0.8))}  # around the user up there
 CRUISE_AGL_FT = 18000.0
 GROUND_NM = 8.0  # one on the ground further from the user than this can't be seen: not made
-TAXIING_OUT = 0.15  # of the places, 3 at least: the next real one stays on its stand (a dozen in line cost frames for little)
+TAXIING_OUT = 0.1  # of the places, 3 at least: the next real one stays on its stand (a dozen in line cost frames for little)
 # How many real ones the sim is given, by what it can draw: fewer while it struggles, more when it has frames to spare.
-START_LIVE, FEWEST_LIVE, LIVE_STEP = 40, 15, 5
+START_LIVE, FEWEST_LIVE, LIVE_STEP = 75, 20, 10
 LOW_FPS, HIGH_FPS = 20.0, 35.0
 FPS_SETTLE_S = 120.0  # the sim loading models after the traffic comes on isn't its real frame rate
 FPS_WINDOW_S = 30.0
 HIGH_WINDOWS = 3  # that many in a row before more are added: a dip costs at once, more come slowly
 LOW_LEVEL_FT = 8000.0  # level below this: on its way in
+# Not arrivals, whatever they're doing: at Phoenix 97 of the 122 "coming in" were flight school trainers going round
+# at 2,000 ft, nearer than the airliners, and they took the arrivals' places. Light, rotorcraft, gliders, ultralights ...
+LIGHT_CATEGORIES = ("A1", "A7", "B1", "B2", "B3", "B4", "B6", "B7")
 HIGH_CLIMB_FT = 18000.0  # climbing above this: on its way through
 SHOWN_ALREADY = 0.6  # one already in the sim counts as this much nearer, so two about as near don't swap places
 FLOWN_IN = ("landing", "go_around")
@@ -212,8 +215,8 @@ TYPES_BY_SIZE = {"heavy": ("B789", "B77W", "A359", "A333", "B763", "B788", "B772
 
 @dataclass(frozen=True)
 class TrafficSettings:
-    radius_nm: float = 40.0
-    max_live: int = 60  # the most, with frames to spare (START_LIVE to begin with)
+    radius_nm: float = 60.0
+    max_live: int = 120  # the most, with frames to spare (START_LIVE to begin with)
     parked: bool = True
     max_parked: int = 12
     parked_fill: str = "auto"  # or "fixed": max_parked of them, whatever the hour
@@ -699,6 +702,8 @@ class TrafficManager:
                 return "arrival" if plane.airborne_seen else "departure"
             route = self.routes(f.callsign)
             return "departure" if route is not None and route.origin == self._near_airport(f.lat, f.lon) else None
+        if f.category in LIGHT_CATEGORIES:
+            return "other"
         alt = f.alt_ft or 0.0
         if f.vs_fpm < -300 or (f.vs_fpm <= 300 and alt < LOW_LEVEL_FT):
             return "arrival"

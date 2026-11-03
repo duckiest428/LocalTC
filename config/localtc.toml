@@ -89,8 +89,8 @@ timeout_s = 6.0               # per call, every service tried in it
 
 [traffic]                     # EXPERIMENTAL. LocalTC's traffic: the real flights around (free ADS-B), FSLTL's models, the gates filled, under ATC's control
 enabled = false               # on: set MSFS's own air traffic and parked aircraft to off (Options > General > Traffic)
-radius_nm = 40.0              # the real flights within this of you
-max_live = 60                 # never more at once; LocalTC keeps below it by the sim's frame rate
+radius_nm = 60.0              # the real flights within this of you
+max_live = 120                # never more at once; LocalTC keeps below it by the sim's frame rate
 parked = true                 # aircraft parked on the cargo and GA ramps of the airport you're on the ground at
 max_parked = 12               # more costs frames (each model loads its textures)
 parked_fill = "auto"          # "auto": as full as the airport is at that hour (its size, the local time, how

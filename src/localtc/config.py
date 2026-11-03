@@ -271,8 +271,8 @@ class TrafficConfig(_Section):
     Off unless turned on, and then MSFS's own air traffic should be off (Options > General > Traffic), or both fly."""
 
     enabled: bool = False
-    radius_nm: float = 40.0  # the real flights within this of the user
-    max_live: int = 60  # never more at once; LocalTC keeps below it by the sim's frame rate, shared out by where the user is
+    radius_nm: float = 60.0  # the real flights within this of the user
+    max_live: int = 120  # never more at once; LocalTC keeps below it by the sim's frame rate, shared out by where the user is
     parked: bool = True  # aircraft parked on the ramps of the airport the user is on the ground at
     max_parked: int = 12  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
     # How many: "auto" (as full as the airport is at that hour: its size, the hour there, and how busy the live
@@ -593,7 +593,7 @@ def _migrate(data: dict) -> dict:
     # The schedule and NOTAM sources that needed an account of the pilot's own are gone, and their switches with them;
     # so are the traffic's limits, which LocalTC manages itself.
     for section, key in (("traffic", "scheduled"), ("ops", "notams"), ("traffic", "ground_nm"), ("traffic", "taxiing_out"),
-                         ("traffic", "mix")):
+                         ("traffic", "mix"), ("traffic", "max_live"), ("traffic", "radius_nm")):
         if isinstance(data.get(section), dict) and key in data[section]:
             data = {**data, section: {k: v for k, v in data[section].items() if k != key}}
     tts = data.get("tts")

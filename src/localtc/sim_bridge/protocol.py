@@ -356,7 +356,7 @@ def parse_message(buf: bytes) -> Message | None:
         m = _read(RecvEvent, buf)
         return EventInfo(event_id=m.uEventID, data=m.dwData)
     if rid == RecvId.EVENT_FRAME:
-        return FrameInfo(fps=float(_read(RecvEventFrame, buf).fFrameRate))
+        return FrameInfo(fps=float(_read(RecvEventFrame, buf).fFrameRate)) if len(buf) >= ctypes.sizeof(RecvEventFrame) else None
     if rid == RecvId.EVENT_FILENAME:
         m = _read(RecvEventFilename, buf)
         return EventInfo(event_id=m.uEventID, data=m.dwData, filename=_cstr(m.szFileName))

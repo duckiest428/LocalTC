@@ -276,7 +276,7 @@ def test_an_arrival_gone_quiet_on_final_is_landed_and_kept_on_the_ground_when_he
     assign(m, m.tick(NOW))
     out = []
     for i in range(1, 140):  # nothing heard from it any more (the others still are: the feed is working)
-        m.on_feed([flight(hex_="far", lat=0.6 + i * 0.001, lon=0.6, t=NOW + i)], "adsb.lol", NOW + i)
+        m.on_feed([flight(hex_="far", lat=1.2 + i * 0.001, lon=1.2, t=NOW + i)], "adsb.lol", NOW + i)
         out += m.tick(NOW + i)
     plane = m.planes["live:a1"]
     assert plane.mode == "landing" and plane.local.on_ground  # down on 09, not hanging in the air
@@ -644,8 +644,21 @@ def test_the_gates_dont_take_every_place_from_the_arrivals_and_departures():
     far = (30.0, _flight(300, 0.5, ground=True))
     chosen = m._choose(ground + down + up + [far])
     kinds = [k for _, _, k in chosen]
-    assert len(chosen) == 40 and kinds.count("arrival") >= 12 and kinds.count("departure") >= 8 and kinds.count("gate") >= 16
+    assert len(chosen) == 40 and kinds.count("arrival") >= 18 and kinds.count("departure") >= 6 and kinds.count("gate") >= 12
     assert far[1].hex not in {f.hex for _, f, _ in chosen}  # on the ground too far off to see
+
+
+def test_a_trainer_going_round_isnt_an_arrival():
+    """At Phoenix 97 of the 122 "coming in" were light aircraft, nearer than the airliners."""
+    import dataclasses
+
+    m = TrafficManager(TrafficSettings(max_live=20))
+    m.own = own()
+    trainers = [(5.0 + i / 10, dataclasses.replace(_flight(i, 0.1, alt=2500.0, vs=-400.0, gs=100.0), category="A1")) for i in range(40)]
+    airliners = [(30.0 + i / 10, _flight(100 + i, 0.5, alt=9000.0, vs=-900.0, gs=250.0)) for i in range(9)]
+    chosen = m._choose(trainers + airliners)
+    assert {f.hex for _, f, k in chosen if k == "arrival"} == {f.hex for _, f in airliners}
+    assert len(m._choose(trainers)) == 20  # with no airliners about, they still fly
 
 
 def test_the_share_follows_where_the_user_is():
@@ -664,7 +677,7 @@ def test_the_number_follows_the_frame_rate():
     m = TrafficManager(TrafficSettings())
     m.on = True
     now = 0.0
-    assert m.live_limit == 40
+    assert m.live_limit == 75
 
     def run(fps, seconds):
         nonlocal now
@@ -673,19 +686,19 @@ def test_the_number_follows_the_frame_rate():
             m.on_frame_rate(fps, now)
 
     run(10.0, 100.0)
-    assert m.live_limit == 40  # the sim still loading what it was just given
+    assert m.live_limit == 75  # the sim still loading what it was just given
     run(10.0, 70.0)
-    assert m.live_limit == 35  # struggling: fewer at once
+    assert m.live_limit == 65  # struggling: fewer at once
     run(25.0, 300.0)
-    assert m.live_limit == 30  # (the window it recovered in still low) then fine: as it is
+    assert m.live_limit == 55  # (the window it recovered in still low) then fine: as it is
     run(60.0, 60.0)
-    assert m.live_limit == 30  # frames to spare, not for long enough yet
+    assert m.live_limit == 55  # frames to spare, not for long enough yet
     run(60.0, 60.0)
-    assert m.live_limit == 35
+    assert m.live_limit == 65
     run(10.0, 1000.0)
-    assert m.live_limit == 15  # never to nothing
+    assert m.live_limit == 20  # never to nothing
     run(60.0, 5000.0)
-    assert m.live_limit == 60  # the most
+    assert m.live_limit == 120  # the most
 
 
 def test_realistic_is_auto_and_its_old_number_goes():
@@ -693,6 +706,7 @@ def test_realistic_is_auto_and_its_old_number_goes():
 
     assert _migrate({"traffic": {"parked_fill": "realistic", "max_parked": 60}}) == {"traffic": {"parked_fill": "auto"}}
     assert _migrate({"traffic": {"parked_fill": "fixed", "max_parked": 40}})["traffic"]["max_parked"] == 40
+    assert _migrate({"traffic": {"max_live": 40, "radius_nm": 40.0}}) == {"traffic": {}}
     assert _migrate({"traffic": {"mix": "gates", "ground_nm": 3.0, "taxiing_out": 2, "enabled": True}}) == {"traffic": {"enabled": True}}
 
 

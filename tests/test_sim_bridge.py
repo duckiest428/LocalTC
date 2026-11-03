@@ -197,7 +197,10 @@ def test_find_dll_explains_windows_only():
 def test_unhandled_message_types_are_ignored():
     from localtc.sim_bridge.protocol import RecvEvent, build_message
 
-    assert parse_message(build_message(RecvEvent(), RecvId.EVENT_FRAME)) is None
+    from localtc.sim_bridge.protocol import FrameInfo, RecvEventFrame
+
+    assert parse_message(build_message(RecvEvent(), RecvId.EVENT_FRAME)) is None  # too short to hold a frame rate
+    assert parse_message(build_message(RecvEventFrame(fFrameRate=30.0), RecvId.EVENT_FRAME)) == FrameInfo(fps=30.0)
     assert isinstance(parse_message(build_message(RecvEvent(uEventID=3, dwData=0), RecvId.EVENT)), EventInfo)
     from localtc.sim_bridge.protocol import RecvException
 

@@ -651,3 +651,38 @@ table.lb td { white-space: nowrap; }
   padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); }
 .voice-row > div:first-child { flex: 1 1 280px; }
 .voice-row > div:last-child { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Daylight: the colors above that aren't tokens were chosen for a dark page. */
+html[data-theme="daylight"] .txrow #tx-text { background: var(--input); }
+html[data-theme="daylight"] .txrow #tx-text::placeholder { color: var(--muted); }
+html[data-theme="daylight"] .radios .rlabel { color: #e8e8e8; }
+html[data-theme="daylight"] .tab:hover { background: var(--line); }
+html[data-theme="daylight"] .btn:hover { background: var(--line-2); }
+html[data-theme="daylight"] .btn.primary, html[data-theme="daylight"] .btn.btn-primary { color: #fff; }
+html[data-theme="daylight"] .btn.primary:hover, html[data-theme="daylight"] .btn.btn-primary:hover { background: #24635e; }
+html[data-theme="daylight"] .btn.danger { color: #a32a20; background: #f7dedb; border-color: #dfa8a2; }
+html[data-theme="daylight"] .subtab.active .muted, html[data-theme="daylight"] .switch.on .muted { color: inherit; }
+html[data-theme="daylight"] .ptt { color: var(--amber); }
+html[data-theme="daylight"] .ptt.ic { color: var(--cyan); }
+html[data-theme="daylight"] .ptt.down { color: var(--red); background: #f7dedb; }
+html[data-theme="daylight"] .ptt.off { color: var(--muted); }
+html[data-theme="daylight"] .line.copilot .who { color: #2b7a3b; }
+html[data-theme="daylight"] .line.crew .who, html[data-theme="daylight"] .line.intercom .who { color: #2a5f9e; }
+html[data-theme="daylight"] .line.cabin .who { color: #8a3f9c; }
+html[data-theme="daylight"] .line.atis .who { color: #6f3fa8; }
+html[data-theme="daylight"] .line.phase .body, html[data-theme="daylight"] .line.tuned .body,
+html[data-theme="daylight"] .line.system .body { color: var(--muted); }
+html[data-theme="daylight"] .line.crew .ic, html[data-theme="daylight"] .line.intercom .ic,
+html[data-theme="daylight"] .line.cabin .ic, html[data-theme="daylight"] .line .t { color: var(--muted); }
+html[data-theme="daylight"] .offblock.late .code { color: var(--amber); }
+html[data-theme="daylight"] .error { color: #a32a20; background: #f7dedb; border-color: #dfa8a2; }
+html[data-theme="daylight"] .toast.error { color: var(--red); background: var(--toast); }
+html[data-theme="daylight"] .mapinfo { background: rgba(255, 255, 255, .92); color: var(--text); }
+html[data-theme="daylight"] .mapmva { color: #0f766e; }
+html[data-theme="daylight"] .leaflet-control-attribution { background: rgba(255, 255, 255, .8) !important; color: #555 !important; }
+html[data-theme="daylight"] .leaflet-control-attribution a { color: #2a5f9e !important; }
+html[data-theme="daylight"] .tag.ok, html[data-theme="daylight"] .tag.same, html[data-theme="daylight"] .tag.done,
+html[data-theme="daylight"] .tag.differs, html[data-theme="daylight"] .tag.not-available,
+html[data-theme="daylight"] .tag.in-progress { color: #fff; }
+html[data-theme="daylight"] .exp-badge { color: var(--amber); }
+html[data-theme="daylight"] .linkbtn:hover { color: var(--red); }

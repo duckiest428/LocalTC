@@ -12,6 +12,7 @@ a new minor version adds features, a patch fixes them.
 - **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.
 
 ### Fixed
+- **The Daylight theme:** the box to type a transmission in was dark text on a dark background; buttons, hover colors, errors, the names in the radio log and the map's info panels are readable now too.
 - **Talking to ATC with the copilot in another language:** the radio was heard by a weaker model than in English
   ("Frontier 603" as "Frontier 600 and 3"). It now has the English model, and the copilot's language a model of its own.
 - **Your own language on the radio:** heard as it's said, so the copilot can tell you ATC only works in English, instead of
@@ -26,6 +27,9 @@ a new minor version adds features, a patch fixes them.
   those on the ground took every place. Arrivals, departures and the gates now each have a share.
 
 ### Changed
+- **Many more real arrivals:** LocalTC starts with 75 real aircraft, not 40 (up to 120 with frames to spare, fewer if the
+  sim struggles), seen out to 60 nm, and arrivals have the biggest share. Flight school trainers and other light aircraft
+  no longer count as arrivals: near a busy airport they took most of those places from the airliners.
 - **The traffic manages itself:** how many real aircraft follows the sim's frame rate (fewer while it struggles, more with
   frames to spare), and which follows where you are: at an airport, climbing out or coming in, or in the cruise.
 - **Static aircraft (Quick Settings → Traffic)** are Auto (was Realistic), Fixed or None, with an "Up to" limit of their own.

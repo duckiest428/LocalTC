@@ -628,3 +628,27 @@ def test_a_transponder_sending_no_callsign_has_none():
 
     [flight] = parse({"ac": [{"hex": "abc123", "flight": "@@@@@@@@", "lat": 40.0, "lon": -3.0, "alt_baro": "ground"}]}, 0.0)
     assert flight.callsign == ""
+
+
+def _flight(i, lat, *, alt=None, vs=0.0, gs=0.0, ground=False):
+    return Flight(f"{i:06x}", f"AAL{i}", "", "A320", "A3", lat, 0.0, alt, ground, gs, 0.0, vs, "", 0.0)
+
+
+def test_the_gates_dont_take_every_place_from_the_arrivals_and_departures():
+    """At a busy airport the nearest were all on the ground: 29 of 30 at Phoenix, with 53 descending further out."""
+    m = TrafficManager(TrafficSettings(max_live=40))
+    m.own = own()
+    ground = [(0.1, _flight(i, 0.02, ground=True)) for i in range(60)]
+    down = [(20.0 + i / 10, _flight(100 + i, 0.4, alt=9000.0, vs=-900.0, gs=250.0)) for i in range(50)]
+    up = [(15.0 + i / 10, _flight(200 + i, 0.3, alt=7000.0, vs=1500.0, gs=220.0)) for i in range(40)]
+    far = (30.0, _flight(300, 0.5, ground=True))
+    chosen = m._choose(ground + down + up + [far])
+    kinds = [k for _, _, k in chosen]
+    assert len(chosen) == 40 and kinds.count("arrival") >= 12 and kinds.count("departure") >= 8 and kinds.count("gate") >= 16
+    assert far[1].hex not in {f.hex for _, f, _ in chosen}  # on the ground too far off to see
+
+
+def test_a_quiet_share_goes_to_the_others():
+    m = TrafficManager(TrafficSettings(max_live=10))
+    m.own = own()
+    assert len(m._choose([(0.1, _flight(i, 0.02, ground=True)) for i in range(20)])) == 10

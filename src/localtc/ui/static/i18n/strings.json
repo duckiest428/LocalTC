@@ -755,7 +755,7 @@
 "Real-world data",
 "Real-world data:",
 "Realistic goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.",
-"Realistic: as busy as the airport is at that hour (up to 60)",
+"Realistic: as busy as the airport is at that hour (up to 12)",
 "Rebuild",
 "Rebuilding ...",
 "Rebuilt from the recording",

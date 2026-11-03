@@ -11,7 +11,13 @@ a new minor version adds features, a patch fixes them.
   on, with a "Fly on LocalTC" button to localtc.tech.
 - **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.
 
+### Fixed
+- **Arrivals and departures missing at busy airports:** the live aircraft were simply the nearest, so at a big airport
+  those on the ground took every place. Arrivals, departures and the gates now each have a share.
+
 ### Changed
+- **Traffic is lighter on the frame rate:** real aircraft on the ground are shown within 8 nm of you, and the made-up ones
+  on the ramps are 12 at most in Realistic. Six real departures taxi out at once, the next waiting on its stand.
 - **The cabin crew's language model is a cloud one only:** without a cloud model they use the script's words and the
   choice is unavailable. Safety announcements are never reworded.
 

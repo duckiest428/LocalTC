@@ -272,9 +272,9 @@ class TrafficConfig(_Section):
 
     enabled: bool = False
     radius_nm: float = 40.0  # the real flights within this of the user
-    max_live: int = 30  # never more of them at once (the nearest)
+    max_live: int = 40  # never more of them at once (shared out between arrivals, departures and the gates)
     parked: bool = True  # aircraft parked on the ramps of the airport the user is on the ground at
-    max_parked: int = 60  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
+    max_parked: int = 12  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
     # How many: "realistic" (as full as the airport is at that hour: its size, the hour there, and how busy the live
     # traffic shows it today, up to ``max_parked``), or "fixed" (``max_parked`` of them, the hour aside)
     parked_fill: Literal["realistic", "fixed"] = "realistic"

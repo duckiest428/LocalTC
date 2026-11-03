@@ -755,7 +755,7 @@
 "Real-world data": "Echtwelt-Daten",
 "Real-world data:": "Echtwelt-Daten:",
 "Realistic goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.": "Realistisch richtet sich nach der Größe des Flughafens, der Ortszeit dort (volle Morgen und Abende, eine ruhige Nacht) und danach, wie voll ihn der Live-Verkehr heute zeigt. Jedes ist ein Modell, das der Simulator zeichnet: weniger, wenn die Bildrate leidet. Ab dem nächsten Flug.",
-"Realistic: as busy as the airport is at that hour (up to 60)": "Realistisch: so voll, wie der Flughafen zu dieser Stunde ist (bis zu 60)",
+"Realistic: as busy as the airport is at that hour (up to 12)": "Realistisch: so voll, wie der Flughafen zu dieser Stunde ist (bis zu 12)",
 "Rebuild": "Neu aufbauen",
 "Rebuilding ...": "Wird neu aufgebaut ...",
 "Rebuilt from the recording": "Aus der Aufzeichnung neu aufgebaut",

@@ -755,7 +755,7 @@
 "Real-world data": "Реальные данные",
 "Real-world data:": "Реальные данные:",
 "Realistic goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.": "«Реалистично» зависит от размера аэропорта, местного времени (оживлённые утро и вечер, тихая ночь) и того, насколько загруженным его показывает сегодня реальный трафик. Каждый — это модель, которую рисует симулятор: меньше, если страдает частота кадров. Со следующего полёта.",
-"Realistic: as busy as the airport is at that hour (up to 60)": "Реалистично: с той загрузкой, какая у аэропорта в этот час (до 60)",
+"Realistic: as busy as the airport is at that hour (up to 12)": "Реалистично: с той загрузкой, какая у аэропорта в этот час (до 12)",
 "Rebuild": "Пересобрать",
 "Rebuilding ...": "Пересборка ...",
 "Rebuilt from the recording": "Пересобрано по записи",

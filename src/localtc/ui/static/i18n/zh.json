@@ -755,7 +755,7 @@
 "Real-world data": "真实世界数据",
 "Real-world data:": "真实世界数据：",
 "Realistic goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim draws: fewer if the frame rate suffers. From the next flight.": "“真实”取决于机场规模、当地时间（早晚繁忙，夜间安静）以及今天实时交通显示的繁忙程度。每一架都是模拟器要绘制的模型：帧率受影响时会减少。从下一次飞行开始生效。",
-"Realistic: as busy as the airport is at that hour (up to 60)": "真实：与该机场在那个时段一样繁忙（最多 60）",
+"Realistic: as busy as the airport is at that hour (up to 12)": "真实：与该机场在那个时段一样繁忙（最多 12）",
 "Rebuild": "重建",
 "Rebuilding ...": "正在重建 ...",
 "Rebuilt from the recording": "已根据录像重建",

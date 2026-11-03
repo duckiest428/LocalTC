@@ -79,13 +79,13 @@ RESERVED_M = 35.0
 COUNTED_EVERY_S = 300.0
 # The live flights' places, shared out: the nearest alone were all on the ground at a busy airport (29 of the nearest 30
 # at Phoenix, within 0.7 nm of the user, with 53 descending further out). What a share doesn't use goes to the others.
-SHARES = (("arrival", 0.3), ("departure", 0.2), ("gate", 0.4), ("other", 0.1))
-GROUND_NM = 8.0  # one on the ground further from the user than this can't be seen: not made
+MIXES = {"balanced": (("arrival", 0.3), ("departure", 0.2), ("gate", 0.4), ("other", 0.1)),
+         "arrivals": (("arrival", 0.5), ("departure", 0.15), ("gate", 0.3), ("other", 0.05)),
+         "departures": (("arrival", 0.2), ("departure", 0.45), ("gate", 0.3), ("other", 0.05)),
+         "gates": (("arrival", 0.2), ("departure", 0.15), ("gate", 0.6), ("other", 0.05))}
 LOW_LEVEL_FT = 8000.0  # level below this: on its way in
 HIGH_CLIMB_FT = 18000.0  # climbing above this: on its way through
 SHOWN_ALREADY = 0.6  # one already in the sim counts as this much nearer, so two about as near don't swap places
-TAXIING_OUT = 6  # at once: the next real one stays on its stand until there's room (a dozen in line cost frames for little)
-REALISTIC_PARKED = 12  # "realistic" fills this many at most: nearest first, what's seen from the gate
 FLOWN_IN = ("landing", "go_around")
 FLOWN_OUT = ("departing", "hold", "give_way", "taxi_out")
 OWN_STAND_CLEAR_M = 1500.0  # the stand the user left is kept empty until they're this far away (or off the ground)
@@ -208,7 +208,11 @@ class TrafficSettings:
     max_live: int = 40
     parked: bool = True
     max_parked: int = 12
-    parked_fill: str = "realistic"  # or "fixed": max_parked of them, whatever the hour
+    parked_fill: str = "auto"  # or "fixed": max_parked of them, whatever the hour
+    ground_nm: float = 8.0  # one on the ground further from the user than this can't be seen: not made
+    # At once: the next real one stays on its stand until there's room (a dozen in line cost frames for little).
+    taxiing_out: int = 6
+    mix: str = "balanced"  # MIXES
     atc_control: bool = True
     # Made-up aircraft only on the cargo and GA ramps: the gates have the real ones (at a gate with its transponder
     # on, or an arrival on its stand), not a full terminal of guesses at six in the morning.
@@ -573,7 +577,7 @@ class TrafficManager:
                                               destination=route.destination_name or route.destination)
                 shown = self._shown(f.hex, now) if f is not None else None
                 if plane.object_id is not None and plane.spot is not None and self._pushing(plane, f, shown, now) \
-                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < TAXIING_OUT:
+                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < self.s.taxiing_out:
                     out += self._start_taxi_out(plane, now)  # the real one's pushing: so does LocalTC's, its own way
                     continue
                 lat, lon = self._spot_latlon(plane.spot) if plane.spot is not None else \
@@ -644,9 +648,9 @@ class TrafficManager:
             if plane.mode in FLOWN_OUT:
                 return "departure"
             if plane.mode == "parked":
-                return "gate" if d <= GROUND_NM else None
+                return "gate" if d <= self.s.ground_nm else None
         if f.on_ground:
-            if d > GROUND_NM:
+            if d > self.s.ground_nm:
                 return None
             if f.gs_kt < MOVING_OFF_KT:
                 return "gate"
@@ -662,7 +666,7 @@ class TrafficManager:
     def _choose(self, wanted: list[tuple[float, Flight]]) -> list[tuple[float, Flight, str]]:
         """The flights to have in the sim, ``max_live`` at most: each kind its share, the nearest (and lowest, for those
         in the air) first; what a share leaves goes to the nearest of the rest. Those flown by LocalTC always stay."""
-        by_kind: dict[str, list[tuple[float, float, Flight]]] = {kind: [] for kind, _ in SHARES}
+        by_kind: dict[str, list[tuple[float, float, Flight]]] = {kind: [] for kind, _ in MIXES["balanced"]}
         own_alt = self.own.alt_msl_ft
         out: list[tuple[float, Flight, str]] = []
         for d, f in wanted:
@@ -679,7 +683,7 @@ class TrafficManager:
         held = sum(1 for p in self.planes.values() if p.live and p.mode == "parked" and p.key[5:] not in self.flights)
         rest: list[tuple[float, float, Flight, str]] = []
         flying = list(out)
-        for kind, share in SHARES:
+        for kind, share in MIXES.get(self.s.mix, MIXES["balanced"]):
             ranked = sorted(by_kind[kind], key=lambda x: x[0])
             flown = sum(k == kind for _, _, k in flying)
             places = round(self.s.max_live * share) - flown - (held if kind == "gate" else 0)
@@ -1074,8 +1078,7 @@ class TrafficManager:
             spots.append(i)
         rng.shuffle(spots)
         wanted = len(spots) if self.s.parked_fill == "fixed" else int(round(len(spots) * share))
-        most = min(self.s.max_parked, REALISTIC_PARKED) if self.s.parked_fill == "realistic" else self.s.max_parked
-        count = min(wanted, most - sum(1 for p in self.planes.values() if not p.live))
+        count = min(wanted, self.s.max_parked - sum(1 for p in self.planes.values() if not p.live))
         # Nearest the user first (what's seen from the gate), and drawn with a few models over and over.
         if self.own is not None:
             spots.sort(key=lambda i: haversine_nm(self.own.lat, self.own.lon, airport.parking[i].lat, airport.parking[i].lon))

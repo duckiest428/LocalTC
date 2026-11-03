@@ -2023,13 +2023,24 @@ const Settings = {
         <div id="traffic-opts" class="${st.traffic?.enabled ? "" : "off"}">
           <label class="check-row"><input type="checkbox" id="s-traffic-gates" ${st.traffic?.fill_gates ? "checked" : ""}> Parked airliners at the gates too: the gates filled with the airport's airlines (off: the remote stands and ramps only)</label>
           <label class="check-row"><input type="checkbox" id="s-traffic-atc" ${st.traffic?.atc_control !== false ? "checked" : ""}> ATC controls them: sent around or held short when you have the runway, stopped to give way to you on the ground</label>
-          <div class="row"><label>Parked aircraft on the ramps<select id="s-traffic-parked">${[[-1, "Realistic: as busy as the airport is at that hour (up to 12)"], [0, "None"], [10, "A few (10)"], [20, "Some (20)"], [40, "Busy (40)"], [60, "Packed (60)"]].map(([n, label]) => {
+          ${(() => {
             const t = st.traffic || {};
-            const cur = t.parked === false ? 0 : (t.parked_fill || "realistic") === "realistic" ? -1 : (t.max_parked ?? 12);
-            return `<option value="${n}" ${n === cur ? "selected" : ""}>${label}</option>`;
-          }).join("")}</select></label><span class="hint">Realistic goes by the airport's size, the local time there (busy
-            mornings and evenings, a quiet night) and how busy the live traffic shows it today. Each one is a model the sim
-            draws: fewer if the frame rate suffers. From the next flight.</span></div>
+            const fill = t.parked === false ? "none" : t.parked_fill === "fixed" ? "fixed" : "auto";
+            const pick = (cur, list) => [...new Set([...list, cur])].sort((x, y) => x - y)
+              .map((n) => `<option value="${n}" ${n === cur ? "selected" : ""}>${n}</option>`).join("");
+            return `<div class="row"><label>Static aircraft on the ramps<select id="s-traffic-parked">${[["auto", "Auto: as busy as the airport is at that hour"],
+              ["fixed", "Fixed: always the most below"], ["none", "None"]].map(([v, label]) =>
+              `<option value="${v}" ${v === fill ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+              <label>Up to<select id="s-traffic-max-parked">${pick(t.max_parked ?? 12, [5, 12, 20, 30, 40, 60, 80])}</select></label></div>
+            <span class="hint">Auto goes by the airport's size, the local time there (busy mornings and evenings, a quiet night) and how busy the live traffic shows it today.</span>
+            <div class="row"><label>Real aircraft at most<select id="s-traffic-live">${pick(t.max_live ?? 40, [10, 20, 30, 40, 60, 80])}</select></label>
+              <label>Who gets more of them<select id="s-traffic-mix">${[["balanced", "Balanced"], ["arrivals", "More arrivals"], ["departures", "More departures"], ["gates", "More at the gates"]]
+                .map(([v, label]) => `<option value="${v}" ${v === (t.mix || "balanced") ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
+            <div class="row"><label>Real aircraft within (nm)<select id="s-traffic-radius">${pick(t.radius_nm ?? 40, [20, 30, 40, 60, 80])}</select></label>
+              <label>On the ground within (nm)<select id="s-traffic-ground">${pick(t.ground_nm ?? 8, [3, 5, 8, 12, 20])}</select></label>
+              <label>Taxiing out at once<select id="s-traffic-taxiing">${pick(t.taxiing_out ?? 6, [2, 4, 6, 10, 15])}</select></label></div>
+            <span class="hint">Each aircraft is a model the sim draws: lower these if the frame rate suffers, aircraft on the ground first. From the next flight.</span>`;
+          })()}
         </div>
         <label class="check-row"><input type="checkbox" id="s-traffic-rwy" ${st.atc.traffic_runways !== false ? "checked" : ""}> Runways in use follow the sim's traffic: the way its AI aircraft take off and land, when the wind allows (fewer head-on finals and go-arounds). Off: by the wind alone</label>
         <label class="check-row"><input type="checkbox" id="s-chatter" ${st.atc.chatter ? "checked" : ""}> Other traffic on the frequency: other flights cleared and reading back now and then</label>
@@ -2249,12 +2260,17 @@ const Settings = {
     on("#s-traffic", "change", (e) => { this.save("traffic", "enabled", e.target.checked); $("#traffic-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-traffic-atc", "change", (e) => this.save("traffic", "atc_control", e.target.checked));
     on("#s-traffic-gates", "change", (e) => this.save("traffic", "fill_gates", e.target.checked));
+    const parkedLimit = () => { if ($("#s-traffic-max-parked")) $("#s-traffic-max-parked").disabled = val("#s-traffic-parked") === "none"; };
+    parkedLimit();
     on("#s-traffic-parked", "change", (e) => {
-      const n = Number(e.target.value);
-      this.save("traffic", "parked", n !== 0)
-        .then(() => (n !== 0 ? this.save("traffic", "parked_fill", n < 0 ? "realistic" : "fixed") : null))
-        .then(() => (n !== 0 ? this.save("traffic", "max_parked", n < 0 ? 12 : n) : null));
+      const fill = e.target.value;
+      parkedLimit();
+      this.save("traffic", "parked", fill !== "none").then(() => (fill !== "none" ? this.save("traffic", "parked_fill", fill) : null));
     });
+    for (const [id, key] of [["#s-traffic-max-parked", "max_parked"], ["#s-traffic-live", "max_live"], ["#s-traffic-radius", "radius_nm"],
+      ["#s-traffic-ground", "ground_nm"], ["#s-traffic-taxiing", "taxiing_out"]])
+      on(id, "change", () => this.save("traffic", key, Number(val(id))));
+    on("#s-traffic-mix", "change", () => this.save("traffic", "mix", val("#s-traffic-mix")));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));

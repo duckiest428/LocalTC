@@ -648,6 +648,24 @@ def test_the_gates_dont_take_every_place_from_the_arrivals_and_departures():
     assert far[1].hex not in {f.hex for _, f, _ in chosen}  # on the ground too far off to see
 
 
+def test_the_mix_and_the_ground_range_are_the_pilots():
+    m = TrafficManager(TrafficSettings(max_live=20, mix="arrivals", ground_nm=3.0))
+    m.own = own()
+    ground = [(0.1, _flight(i, 0.02, ground=True)) for i in range(30)]
+    down = [(20.0 + i / 10, _flight(100 + i, 0.4, alt=9000.0, vs=-900.0, gs=250.0)) for i in range(30)]
+    far = (5.0, _flight(300, 0.1, ground=True))
+    chosen = m._choose(ground + down + [far])
+    assert [k for _, _, k in chosen].count("arrival") >= 10
+    assert far[1].hex not in {f.hex for _, f, _ in chosen}
+
+
+def test_realistic_is_auto_and_its_old_number_goes():
+    from localtc.config import _migrate
+
+    assert _migrate({"traffic": {"parked_fill": "realistic", "max_parked": 60}}) == {"traffic": {"parked_fill": "auto"}}
+    assert _migrate({"traffic": {"parked_fill": "fixed", "max_parked": 40}})["traffic"]["max_parked"] == 40
+
+
 def test_a_quiet_share_goes_to_the_others():
     m = TrafficManager(TrafficSettings(max_live=10))
     m.own = own()

@@ -275,9 +275,13 @@ class TrafficConfig(_Section):
     max_live: int = 40  # never more of them at once (shared out between arrivals, departures and the gates)
     parked: bool = True  # aircraft parked on the ramps of the airport the user is on the ground at
     max_parked: int = 12  # (each one's model is the sim's memory and frames: 80 at LAX dropped frames)
-    # How many: "realistic" (as full as the airport is at that hour: its size, the hour there, and how busy the live
+    # How many: "auto" (as full as the airport is at that hour: its size, the hour there, and how busy the live
     # traffic shows it today, up to ``max_parked``), or "fixed" (``max_parked`` of them, the hour aside)
-    parked_fill: Literal["realistic", "fixed"] = "realistic"
+    parked_fill: Literal["auto", "fixed"] = "auto"
+    ground_nm: float = 8.0  # real aircraft on the ground shown this close to the user at most
+    taxiing_out: int = 6  # real departures taxiing out at once; the next waits on its stand
+    # How the places of max_live are shared out: balanced, arrivals, departures or gates (more of those).
+    mix: Literal["balanced", "arrivals", "departures", "gates"] = "balanced"
     fill_gates: bool = False  # the gates filled with made-up aircraft too (off: only the real ones are at the gates)
     live_delay_s: float = 30.0  # each real flight shown this far behind, between two positions known
     atc_control: bool = True  # real flights sent around, held short or stopped to give way for the user
@@ -585,6 +589,11 @@ def _migrate(data: dict) -> dict:
         old = llm.pop("understanding")
         llm.setdefault("mode", LEGACY_LLM_MODES.get(old, old))
         data = {**data, "llm": llm}
+    traffic = data.get("traffic")
+    if isinstance(traffic, dict) and traffic.get("parked_fill") == "realistic":
+        # "Realistic" is "auto", and its limit is the pilot's own now: the number saved beside it was the old list's.
+        traffic = {k: v for k, v in traffic.items() if k != "max_parked"}
+        data = {**data, "traffic": {**traffic, "parked_fill": "auto"}}
     # The schedule and NOTAM sources that needed an account of the pilot's own are gone, and their switches with them.
     for section, key in (("traffic", "scheduled"), ("ops", "notams")):
         if isinstance(data.get(section), dict) and key in data[section]:

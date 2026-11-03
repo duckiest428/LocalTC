@@ -300,7 +300,8 @@ class CrewModel:
         except (ValueError, AttributeError):
             # (Plain text: its first line; a small model adds the numbers again in brackets below.)
             words = result.text.strip().splitlines()[0].strip().strip('"“”「」') if plain and result.text.strip() else ""
-        said = foreign.numbers(words) + (foreign.zh_numbers(words) if self.language == "zh" else [])
+        words = words.replace("**", "").strip().strip('"“”')  # (some models dress their answer up)
+        said = foreign.numbers(foreign.in_digits(words, self.language)) + (foreign.zh_numbers(words) if self.language == "zh" else [])
         why = ("no words" if not words else "a number changed" if sorted(said) != sorted(foreign.numbers(text))
                else f"not in {self.language_name}" if not foreign.speaks(words, self.language)
                else "a unit changed" if not foreign.units_kept(text, words) else "")

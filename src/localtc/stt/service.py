@@ -80,6 +80,9 @@ def _radio_of(event: Any) -> int:
     return event.radio
 
 
+OWN_LANGUAGE_SURE = 0.85  # Spanish on the radio read 0.98 and up; English in a Spanish accent 0.62 at most
+
+
 class VoiceService:
     def __init__(
         self,
@@ -93,10 +96,12 @@ class VoiceService:
         vocabulary: bool = True,
         tail_s: float = 0.25,
         intercom_language: str = "",  # the copilot talked to in this language ("de"); "" English
+        intercom_transcriber: Any = None,  # the model that knows it (None: ``transcriber``); the radio keeps its own
     ) -> None:
         self.bus, self.now, self.transcriber, self.capture = bus, now, transcriber, capture
         self.recorder, self.hints, self.vocabulary, self.tail_s = recorder, hints, vocabulary, tail_s
         self.intercom_language = intercom_language
+        self.intercom_transcriber = intercom_transcriber or transcriber
         self._inputs = bus.subscribe(PttPressed, PttReleased, IntercomPressed, IntercomReleased)
         self._loop: asyncio.AbstractEventLoop | None = None
         self._radio = 1
@@ -210,17 +215,27 @@ class VoiceService:
         speech = trim_silence(audio)
         words = hotwords(hints)
         kwargs = {}
-        if self._radio == INTERCOM and self.intercom_language:
+        transcriber = self.transcriber
+        in_language = self._radio <= INTERCOM
+        if self.intercom_language and not in_language and (tell := getattr(self.intercom_transcriber, "language_of", None)):
+            # The pilot's own language on the radio: heard as English it was English of a sort ("Remove the brake of the
+            # steering wheel"), so ATC only said "say again" and nobody could tell them why. Heard as it was said.
+            code, sure = await asyncio.to_thread(tell, speech)
+            in_language = code == self.intercom_language and sure >= OWN_LANGUAGE_SURE
+            if in_language:
+                log.info("The radio call was in %s (%.2f)", code, sure)
+        if in_language and self.intercom_language:
             # The copilot talked to in the pilot's language: heard as that language, without the English prompt.
             prompt, words, kwargs = "", "", {"language": self.intercom_language}
-        result = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt=prompt, hotwords=words, **kwargs)
+            transcriber = self.intercom_transcriber
+        result = await asyncio.to_thread(transcriber.transcribe, speech, prompt=prompt, hotwords=words, **kwargs)
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
         text = match_names(without_prompt(text, hints) if prompt else text, hints)
         if text and made_up(text, audio_s) and (prompt or words):
             # Caught in a loop on the airport's names it was given ("United 318, A15, A15, A15, ..." for a 22 s
             # clearance readback, dropped, and ATC asked "how do you read?"): heard again without them.
             log.info("Heard %r, the same few over and over: once more without the airport's words", text[:80])
-            again = await asyncio.to_thread(self.transcriber.transcribe, speech, prompt="", hotwords="", **kwargs)
+            again = await asyncio.to_thread(transcriber.transcribe, speech, prompt="", hotwords="", **kwargs)
             if again.no_speech < NO_SPEECH and (redone := fixup(again.text)) and not made_up(redone, audio_s):
                 result, text = again, redone
         if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:

@@ -39,6 +39,9 @@ ENGLISH = {
     "HEADING": "heading",
     "ALTITUDE": "altitude",
     "SPEED": "speed",
+    "FEET": "feet|foot",
+    "KNOTS": "knots|knot",
+    "FLIGHT_LEVEL": "flight level",
     "SQUAWK": "squawk|transponder",
     "CHECKLIST": "checklist|check list",
     "ON": "on|turn on|switch on",
@@ -191,14 +194,23 @@ WORDS: dict[str, dict[str, str]] = {
         "SEATBELT": "senal de cinturones|cinturones|los cinturones|aviso de cinturones|señal de cinturones",
         "AUTOPILOT": "piloto automatico|el piloto automatico|autopiloto",
         "SPOILERS": "spoilers|aerofrenos|los spoilers|los aerofrenos",
-        "PARKING_BRAKE": "freno de estacionamiento|freno de parking|el freno de estacionamiento|freno de mano",
+        "PARKING_BRAKE": "freno de estacionamiento|freno de parking|el freno de estacionamiento|freno de mano|"
+                         "freno de aparcamiento|el freno de aparcamiento|el freno de parking",
         "HEADING": "rumbo|el rumbo",
         "ALTITUDE": "altitud|la altitud|altura",
         "SPEED": "velocidad|la velocidad",
+        "FEET": "pies",
+        "KNOTS": "nudos",
+        "FLIGHT_LEVEL": "nivel de vuelo|nivel",
         "SQUAWK": "transpondedor|codigo|squawk",
-        "CHECKLIST": "checklist|lista de chequeo|lista de comprobacion|la checklist|la lista",
-        "ON": "enciende|encender|activa|activar|prende|prender|conecta|conectar|on",
-        "OFF": "apaga|apagar|desactiva|desactivar|desconecta|desconectar|off",
+        "CHECKLIST": "checklist|lista de chequeo|lista de comprobacion|lista de verificacion|la checklist|la lista",
+        "CHECKLIST+DESCENT": "lista de descenso",
+        "CHECKLIST+APPROACH": "lista de aproximacion",
+        "CHECKLIST+LANDING": "lista de aterrizaje",
+        "ON": "enciende|encender|activa|activar|prende|prender|conecta|conectar|on|pon|poner|puesto|encendido|encendida|"
+              "encendidos|encendidas|activado|conectado",
+        "OFF": "apaga|apagar|desactiva|desactivar|desconecta|desconectar|off|quita|quitar|suelta|soltar|libera|liberar|"
+               "apagada|apagados|apagadas|desconectado",
         "UP": "sube|subir|retrae|retraer|recoge|recoger|arriba",
         "DOWN": "baja|bajar|extiende|extender|saca|sacar|abajo",
         "ARM": "arma|armar|armados",
@@ -220,7 +232,7 @@ WORDS: dict[str, dict[str, str]] = {
         "SAID": "dijo|dicho|decir|ha dicho",
         "WEATHER": "tiempo|el tiempo|meteo|clima|metar",
         "DESTINATION": "destino|en destino|el destino",
-        "HOW_LONG": "cuanto falta|cuanto tiempo|cuando aterrizamos|tiempo restante",
+        "HOW_LONG": "cuanto falta|cuanto queda|cuanto nos queda|cuanto tiempo|cuando aterrizamos|tiempo restante",
         "FILLER": "por favor|el|la|los|las|y|luego|ahora|pon|poner|puedes|podrias|nos|gracias|capitan|vale|bueno|"
                   "de|del|al|a|haz|hacer|vamos|con|en",
     },
@@ -681,6 +693,13 @@ TEMPLATES: tuple[tuple[str, dict[str, str]], ...] = (
         "de": "{x}, bestätigen?", "fr": "{x}, tu confirmes ?", "es": "{x}, ¿confirmas?", "it": "{x}, confermi?",
         "pt": "{x}, confirmas?", "nl": "{x}, bevestig je?", "pl": "{x}, potwierdzasz?", "sv": "{x}, bekräftar du?",
         "ru": "{x}, подтверждаешь?", "zh": "{x}，确认吗？"}),
+    (r"^Confirm (?P<x>.{1,40})\?$", {
+        "de": "{x} bestätigen?", "fr": "Tu confirmes {x} ?", "es": "¿Confirmas {x}?", "it": "Confermi {x}?",
+        "pt": "Confirmas {x}?", "nl": "Bevestig je {x}?", "pl": "Potwierdzasz {x}?", "sv": "Bekräftar du {x}?",
+        "ru": "Подтверждаешь {x}?", "zh": "确认{x}吗？"}),
+    (r"^We're at (?P<x>[\d,]+) feet\.$", {"es": "Estamos a {x} pies."}),
+    (r"^We've got (?P<x>[\d,]+) pounds, about (?P<h>\d+ hours?(?: \d+ minutes?)?|\d+ minutes?) at this burn\.$", {
+        "es": "Tenemos {x} libras, unas {h} a este consumo."}),
     (r"^That sounded like a radio call\. I haven't sent it; want me to\?$", {
         "de": "Das klang nach einem Funkspruch. Ich habe ihn nicht gesendet. Soll ich?",
         "fr": "Ça ressemblait à un message radio. Je ne l'ai pas envoyé. Je le fais ?",
@@ -704,11 +723,22 @@ TEMPLATES: tuple[tuple[str, dict[str, str]], ...] = (
 )
 
 
+def _control_names(text: str, code: str) -> str:
+    """"heading 270" with the name in the language ("rumbo 270")."""
+    for concept, english in (("HEADING", "heading"), ("ALTITUDE", "altitude"), ("SPEED", "speed")):
+        if word := WORDS.get(code, {}).get(concept, "").split("|")[0]:
+            text = re.sub(rf"\b{english}\b", word, text)
+    if code == "es":
+        for english, word in (("hours", "horas"), ("hour", "hora"), ("minutes", "minutos"), ("minute", "minuto")):
+            text = re.sub(rf"\b{english}\b", word, text)
+    return text
+
+
 def templated(text: str, code: str) -> str | None:
     """One of the copilot's set lines in language ``code``, what's in it kept as said; None if it isn't one."""
     for pattern, said in TEMPLATES:
         if code in said and (m := re.match(pattern, text)):
-            return said[code].format(**m.groupdict())
+            return said[code].format(**{k: _control_names(v, code) for k, v in m.groupdict().items()})
     return None
 
 
@@ -829,6 +859,50 @@ def _tokens(clause: str, code: str) -> list[str] | None:
     return out or None
 
 
+_ES_ONES = {"un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8,
+            "nueve": 9, "diez": 10}
+_ES_BIG = {"once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15, "dieciseis": 16, "diecisiete": 17,
+           "dieciocho": 18, "diecinueve": 19, "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
+           "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26, "veintisiete": 27, "veintiocho": 28, "veintinueve": 29,
+           "treinta": 30, "cuarenta": 40, "cincuenta": 50, "sesenta": 60, "setenta": 70, "ochenta": 80, "noventa": 90,
+           "cien": 100, "ciento": 100, "doscientos": 200, "trescientos": 300, "cuatrocientos": 400, "quinientos": 500,
+           "seiscientos": 600, "setecientos": 700, "ochocientos": 800, "novecientos": 900}
+_ES_DIGIT = {"cero": 0, **_ES_ONES}
+_ES_NUMBER = re.compile(r"(?<!\S)(?:\d+|mil|%s)(?:\s+(?:y\s+)?(?:\d+|mil|%s))*(?!\S)" % (("|".join({**_ES_DIGIT, **_ES_BIG}),) * 2))
+
+
+def _spanish_numbers(text: str) -> str:
+    """Numbers said whole as digits ("diez mil": 10000, "doscientos cincuenta": 250); digits said one by one stay as they
+    are ("dos siete cero"), and so does "y" between two things ("flaps dos y tren abajo")."""
+    def value(m: re.Match) -> str:
+        words = m[0].split()
+        if not any(w == "mil" or w in _ES_BIG for w in words):
+            return m[0]
+        total = current = 0
+        for w in words:
+            if w == "mil":
+                total, current = total + max(current, 1) * 1000, 0
+            elif w != "y":
+                current += int(w) if w.isdigit() else _ES_DIGIT[w] if w in _ES_DIGIT else _ES_BIG[w]
+        return str(total + current)
+    return _ES_NUMBER.sub(value, text)
+
+
+def in_digits(text: str, code: str) -> str:
+    """A line with the numbers it spells out in digits, for checking them: the model asked for digits often writes "cinco
+    mil pies" all the same, and a correct translation was thrown away and the line said in English. "uno" and "una" alone
+    are words ("una hora" isn't checked as a number)."""
+    if code != "es":
+        return text
+
+    def digits(m: re.Match) -> str:
+        words = m[0].split()
+        if any(w == "mil" or w in _ES_BIG for w in words) or any(w.isdigit() for w in words):
+            return m[0]
+        return m[0] if words[0] in ("un", "una", "uno") and len(words) == 1 else "".join(str(_ES_DIGIT[w]) for w in words if w != "y")
+    return _ES_NUMBER.sub(digits, _spanish_numbers(_plain(text)))
+
+
 def _number(tokens: list[str]) -> str:
     """The numbers in a clause as one value: digits said one by one are one number ("zwei sieben null" is 270)."""
     nums = [t for t in tokens if re.fullmatch(r"\d+(?:\.\d+)?", t)]
@@ -891,6 +965,12 @@ def _command(concepts: set[str], number: str) -> str | None:
         if "UP" in concepts or "OFF" in concepts:
             return "speedbrakes retract"
         return None
+    if "FLIGHT_LEVEL" in concepts and number.isdigit():
+        return f"altitude {int(number) * 100}"
+    if "SQUAWK" not in concepts and "FEET" in concepts and number:
+        return f"altitude {number}"
+    if "KNOTS" in concepts and number:
+        return f"speed {number}"
     for concept, word in (("HEADING", "heading"), ("ALTITUDE", "altitude"), ("SPEED", "speed"), ("SQUAWK", "squawk")):
         if concept in concepts and number:
             return f"{word} {number}"
@@ -912,6 +992,12 @@ def _question(concepts: set[str], text: str, code: str) -> str | None:
         return "what is the weather at destination?" if "DESTINATION" in concepts else "how's the weather at destination?"
     if "HOW_LONG" in concepts:
         return "how long to destination?"
+    if "ALTITUDE" in concepts:
+        return "what altitude are we at?"
+    if "SPEED" in concepts:
+        return "what speed are we doing?"
+    if "HEADING" in concepts:
+        return "what heading are we on?"
     return None
 
 
@@ -921,6 +1007,8 @@ def gloss(text: str, code: str) -> str | None:
     if not text.strip() or code in ("", "en") or code not in WORDS:
         return None
     plain = _plain(text) if code != "zh" else re.sub(r"[\s，。！？、,.!?]+", " ", text.lower()).strip()
+    if code == "es":
+        plain = _spanish_numbers(plain)
     joiners = "|".join(re.escape(_plain(j) if code != "zh" else j) for j in JOINERS[code].split("|") + JOINERS["en"].split("|"))
     split = r"\s*(?:[,;]|(?<=\s)(?:%s)(?=\s))\s*" % joiners if code != "zh" else r"\s*(?:[,;，]|%s)\s*" % joiners
     clauses = [c.strip(" .") for c in re.split(split, f" {plain} ") if c.strip(" .")]
@@ -932,6 +1020,8 @@ def gloss(text: str, code: str) -> str | None:
         concepts = {t[1:] for t in tokens if t.startswith("§")} - {"FILLER"}
         every |= concepts
         unknown = [t for t in tokens if not t.startswith("§") and not re.fullmatch(r"\d+(?:\.\d+)?", t)]
+        if not concepts and not unknown and not any(t[0].isdigit() for t in tokens):
+            continue  # only the small words: "flaps dos, por favor"
         if concepts <= {"YES", "CHECK"} and concepts and not unknown and not commands:
             answer = answer or ("yes" if "YES" in concepts else "check")
             continue

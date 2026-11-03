@@ -1037,12 +1037,18 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     from localtc.stt.whisper import WhisperTranscriber
 
     from localtc.languages import language
-    from localtc.models import whisper_model
+    from localtc.models import radio_model, whisper_model
 
     v = cfg.voice
     talked = language(cfg.crew.language) if cfg.crew.enabled else None  # the copilot talked to in another language
-    transcriber = WhisperTranscriber(whisper_model(cfg) if talked is not None else v.model, device=v.device,
+    transcriber = WhisperTranscriber(radio_model(cfg) if talked is not None else v.model, device=v.device,
                                      compute_type=v.compute_type, models_dir=v.models_dir or None, beam_size=v.beam_size)
+    talked_to = transcriber
+    if talked is not None and whisper_model(cfg) != radio_model(cfg):  # the copilot's language: a model of its own
+        talked_to = WhisperTranscriber(whisper_model(cfg), device=v.device, compute_type=v.compute_type,
+                                       models_dir=v.models_dir or None, beam_size=v.beam_size)
+        log.info("Loading %s ...", talked_to.description, extra=CONSOLE)
+        await asyncio.to_thread(talked_to.warm_up)
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await asyncio.to_thread(transcriber.warm_up)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
@@ -1060,7 +1066,7 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         hints = lambda: flight_hints(engine)  # noqa: E731
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
                            vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
-                           intercom_language=talked.code if talked is not None else "")
+                           intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to)
     ptt = None
     if v.ptt == "keyboard":
         from localtc.stt.ptt import KeyboardPtt

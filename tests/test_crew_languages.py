@@ -224,3 +224,66 @@ def test_an_english_line_is_read_in_the_english_voice_and_a_mixed_one_in_the_lan
                                         ("zh", "把轮子放下来。"), ("sv", "Fäll ut hjulen.")])
 def test_the_wheels_are_the_gear(code, text):
     assert foreign.gloss(text, code) == "gear down"
+
+
+@pytest.mark.parametrize("text, english", [
+    ("Flaps dos, por favor", "flaps 2"),
+    ("Sube a diez mil pies", "altitude 10000"),
+    ("Sube a 10 mil pies.", "altitude 10000"),
+    ("Nivel de vuelo tres cinco cero", "altitude 35000"),
+    ("Velocidad doscientos cincuenta", "speed 250"),
+    ("Velocidad 250 Nudos", "speed 250"),
+    ("Quita el freno de estacionamiento.", "parking brake off"),
+    ("Pon el freno de aparcamiento", "parking brake on"),
+    ("Luces de rodaje encendidas", "taxi lights on"),
+    ("Pon el transpondedor siete mil", "squawk 7000"),
+    ("Rumbo dos siete cero", "heading 270"),
+    ("Flaps dos y tren abajo", "flaps 2, gear down"),
+    ("Lista de descenso", "run the descent checklist"),
+    ("¿A qué altitud estamos?", "what altitude are we at?"),
+    ("¿Qué velocidad llevamos?", "what speed are we doing?"),
+    ("¿Cuánto queda?", "how long to destination?"),
+])
+def test_spanish_as_its_said(text, english):
+    assert foreign.gloss(text, "es") == english
+
+
+def spanish(answer: str = '{"reply": "Sí."}') -> object:
+    pm = started()
+    pm.model = CrewModel(FakeBackend(answer), language="es")
+    pm.observe(own(2.0))
+    pm.observe(AircraftSystems(t=2.0, flaps_positions=4, engines_running=2))
+    return pm
+
+
+def test_a_question_is_asked_in_spanish():
+    assert foreign.templated("Confirm heading 270?", "es") == "¿Confirmas rumbo 270?"
+
+
+def test_the_models_own_words_are_confirmed_in_spanish():
+    pm = spanish()
+    line = CrewSpeech(t=3.0, text="Freno de estacionamiento liberado, confirm?", kind="confirm", language="es")
+    assert [o.text for o in pm._in_language([line])] == ["Freno de estacionamiento liberado, ¿confirmas?"]
+
+
+def test_a_translation_with_its_numbers_in_words_is_kept():
+    answer = '{"reply": "Tenemos cuarenta y un mil trescientos libras, unas ocho horas dieciséis minutos a este consumo."}'
+    model = CrewModel(FakeBackend(answer), language="es")
+    words, _ = model.translate(1.0, "We've got 41,300 pounds, about 8 hours 16 minutes at this burn.")
+    assert words is not None and words.startswith("Tenemos cuarenta")
+    model = CrewModel(FakeBackend('{"reply": "Estamos a seis mil pies."}'), language="es")
+    assert model.translate(1.0, "We're at 5,000 feet.")[0] is None  # a number really changed
+
+
+def test_the_common_answers_are_in_spanish_without_a_model():
+    assert foreign.templated("We're at 5,000 feet.", "es") == "Estamos a 5,000 pies."
+    assert foreign.templated("We've got 41,300 pounds, about 8 hours 16 minutes at this burn.", "es") \
+        == "Tenemos 41,300 libras, unas 8 horas 16 minutos a este consumo."
+
+
+def test_what_wasnt_read_isnt_copied():
+    pm = started()
+    pm._language = "es"
+    pm.observe(own(2.0))
+    out = pm.observe(IntercomHeard(t=3.0, text="como va el vuelo"))
+    assert [o.text for o in out if isinstance(o, CrewSpeech)] == ["¿Puedes repetir?"]

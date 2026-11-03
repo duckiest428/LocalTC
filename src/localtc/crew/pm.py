@@ -487,6 +487,8 @@ class PilotMonitoring:
             self.deck.note("translated", t, f'"{said_as}" read as "{english}"', utterance=uid)
         mode = self.model.mode if self.model is not None else "off"
         act = reading.act
+        if self.language and english is None and mode == "off" and not reading.commands and act != "unclear":
+            return [self._say(t, "Say again?")]  # in their language, and no model to read it: not "Copy." to what wasn't read
         if english is not None and act in ("question", "chat") and (said := answer(text, self.picture)) is not None:
             # A common question in the captain's language: answered from the data (and put into it), never guessed.
             self._heard_by_model(said_as)
@@ -1276,7 +1278,8 @@ class PilotMonitoring:
         lang, done = self.language, []
         for o in out:
             talked = isinstance(o, CrewSpeech) and (o.kind in TALKED or o.kind == "alert" and o.text.startswith("I couldn't"))
-            if not talked or (o.language == lang and foreign.speaks(o.text, lang)):  # (asked to do it: said too)
+            if not talked or (o.language == lang and foreign.speaks(o.text, lang) and not foreign.templated(o.text, lang)):
+                # (asked to do it: said too; "Tren fuera, confirm?" still has its set words to put into the language)
                 done.append(o)
                 continue
             text = foreign.ACKS.get(lang, {}).get(o.text) or foreign.templated(o.text, lang)

@@ -191,15 +191,22 @@ def status(cfg) -> list[ModelStatus]:
     return out
 
 
+def radio_model(cfg) -> str:
+    """The model that hears the radio, English whatever the copilot is talked to in: the multilingual one of the same
+    size heard "Frontier 603" as "Frontier 600 and 3", and "IFR" as "IFO"."""
+    from localtc.stt.whisper import cuda_libraries
+
+    return cfg.voice.model if cfg.voice.model != "auto" else \
+        "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0] and cuda_libraries()) \
+        else "base.en"
+
+
 def whisper_model(cfg) -> str:
     """The Whisper model a flight will load ("auto" resolved without importing the GPU libraries). An NVIDIA card
     counts only with its CUDA libraries installed: without them Whisper runs on the CPU."""
-    from localtc.stt.whisper import cuda_libraries
-
-    model = cfg.voice.model if cfg.voice.model != "auto" else \
-        "small.en" if cfg.voice.device == "cuda" or (cfg.voice.device == "auto" and _nvidia()[0] and cuda_libraries()) \
-        else "base.en"
     from localtc.languages import language
+
+    model = radio_model(cfg)
 
     # The copilot talked to in another language: the same size that knows them all (the radio still heard as English).
     return model.removesuffix(".en") if language(cfg.crew.language) is not None else model
@@ -217,6 +224,9 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         model = whisper_model(cfg)
         say(f"Downloading Whisper {model} ...", None)
         download(model, Path(cfg.voice.models_dir) if cfg.voice.models_dir else None)
+        if (radio := radio_model(cfg)) != model:
+            say(f"Downloading Whisper {radio} ...", None)
+            download(radio, Path(cfg.voice.models_dir) if cfg.voice.models_dir else None)
         say(f"Whisper {model} ready", 1.0)
         return True
     if kind == "voice":

@@ -12,6 +12,14 @@ a new minor version adds features, a patch fixes them.
 - **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.
 
 ### Fixed
+- **Talking to ATC with the copilot in another language:** the radio was heard by a weaker model than in English
+  ("Frontier 603" as "Frontier 600 and 3"). It now has the English model, and the copilot's language a model of its own.
+- **Your own language on the radio:** heard as it's said, so the copilot can tell you ATC only works in English, instead of
+  ATC answering "say again" to words turned into nonsense.
+- **The copilot in Spanish:** altitudes, speeds, flight levels and whole numbers ("diez mil pies"), the parking brake, "por
+  favor" after a comma and more wordings are read without a language model. Its questions ("¿Confirmas rumbo 270?") are in
+  the language, and it no longer says "Copied" to what it couldn't read. Every language gets the comma fix, the set
+  question, and altitude, speed and heading asked about.
 - **Arrivals and departures missing at busy airports:** the live aircraft were simply the nearest, so at a big airport
   those on the ground took every place. Arrivals, departures and the gates now each have a share.
 

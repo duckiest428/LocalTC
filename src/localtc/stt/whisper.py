@@ -233,6 +233,18 @@ class WhisperTranscriber:
             tokens = tokens[len(tokens) - max(room, 0):] if room > 0 else []
         return tokens, max(1, min(want, MAX_LENGTH - SPECIAL_TOKENS - hot - len(tokens)))
 
+    def language_of(self, audio) -> tuple[str, float]:
+        """The language spoken in ``audio`` and how sure of it (a multilingual model); ("", 0.0): can't tell."""
+        if self.choice.model.endswith(".en"):
+            return "", 0.0
+        try:
+            self._load()
+            code, probability, *_ = self._model.detect_language(audio)
+            return code, float(probability)
+        except Exception as exc:  # noqa: BLE001 - telling is a nicety: the words are still heard as English
+            log.info("Couldn't tell the language: %s", exc)
+            return "", 0.0
+
     def transcribe(self, audio, *, prompt: str = "", hotwords: str = "", language: str = "en") -> SttResult:
         """``audio``: mono float32 samples at 16 kHz. ``language``: what's said in it (the radio English; the
         intercom the copilot's language, with a multilingual model). On the graphics card, a CUDA library that can't be

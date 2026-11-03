@@ -20,6 +20,8 @@ a new minor version adds features, a patch fixes them.
   favor" after a comma and more wordings are read without a language model. Its questions ("¿Confirmas rumbo 270?") are in
   the language, and it no longer says "Copied" to what it couldn't read. Every language gets the comma fix, the set
   question, and altitude, speed and heading asked about.
+- **The release notes in another language:** they stay as written, in English, instead of words being cut up ("button"
+  shown as "but a n" in Spanish).
 - **Arrivals and departures missing at busy airports:** the live aircraft were simply the nearest, so at a big airport
   those on the ground took every place. Arrivals, departures and the gates now each have a share.
 

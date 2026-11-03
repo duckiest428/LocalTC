@@ -28,8 +28,9 @@ const I18n = (() => {
       parts.forEach((part, i) => {
         if (i % 2) re += "(.*?)";
         else {
-          // (A space beside a value may not be there: "... with Piper. {1}" drawn without its {1}.)
-          re += part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/^ /, " ?").replace(/ $/, " ?");
+          // (A space beside a value may not be there: "... with Piper. {1}" drawn without its {1}. Never inside a
+          // word: "{0} to {1}." made "button" into "but a n".)
+          re += part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/^ /, "(?: |(?<![A-Za-z]))").replace(/ $/, "(?: |(?![A-Za-z]))");
           if (part.trim().length > anchor.length) anchor = part.trim();
         }
       });

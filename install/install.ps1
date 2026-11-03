@@ -161,7 +161,7 @@ try {
 # --- 6. SimConnect ------------------------------------------------------------------------------------------------
 # Nothing to install: LocalTC talks to the sim itself (live.connection = "builtin"). The SDK's SimConnect.dll is only
 # for live.connection = "dll".
-Step "MSFS 2024 SimConnect"
+Step "MSFS SimConnect"
 Ok "Built in: nothing to install (the sim just has to be running)"
 
 # --- 7. The app window ---------------------------------------------------------------------------------------------

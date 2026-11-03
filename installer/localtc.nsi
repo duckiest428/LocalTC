@@ -40,7 +40,7 @@ VIAddVersionKey "LegalCopyright" "LocalTC contributors, AGPL-3.0"
 !define MUI_UNICON "..\install\localtc.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "LocalTC ${AppVersion}"
-!define MUI_WELCOMEPAGE_TEXT "ATC and a copilot for MSFS 2024, running on this PC.$\r$\n$\r$\nThis installs LocalTC with everything it needs to start: no administrator rights, nothing downloaded.$\r$\n$\r$\nWhen LocalTC opens, its setup guide downloads the rest once (the speech recognition, the voices and the language model) and sets up your microphone. Flights then work offline.$\r$\n$\r$\nIf LocalTC is running, it is closed first."
+!define MUI_WELCOMEPAGE_TEXT "ATC and a copilot for MSFS 2020 and 2024, running on this PC.$\r$\n$\r$\nThis installs LocalTC with everything it needs to start: no administrator rights, nothing downloaded.$\r$\n$\r$\nWhen LocalTC opens, its setup guide downloads the rest once (the speech recognition, the voices and the language model) and sets up your microphone. Flights then work offline.$\r$\n$\r$\nIf LocalTC is running, it is closed first."
 !define MUI_FINISHPAGE_TITLE "LocalTC is installed"
 !define MUI_FINISHPAGE_TEXT "Start it from the LocalTC shortcut on the desktop or in the Start menu. The first time, its setup guide walks you through the rest."
 !define MUI_FINISHPAGE_RUN

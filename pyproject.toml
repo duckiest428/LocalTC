@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "localtc"
-version = "0.5.3"
-description = "Free, offline-capable ATC for Microsoft Flight Simulator 2024"
+version = "0.5.5"
+description = "Free, offline-capable ATC for Microsoft Flight Simulator 2020 and 2024"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -51,7 +51,7 @@ packages = ["src/localtc"]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
 markers = [
-    "windows: needs Windows and a running MSFS 2024 (set LOCALTC_LIVE_SIM=1)",
+    "windows: needs Windows and a running MSFS 2020 or 2024 (set LOCALTC_LIVE_SIM=1)",
     "ollama: needs a running Ollama with the configured model (skipped otherwise)",
     "whisper: needs the Whisper base.en model (localtc setup); skipped otherwise",
     "voices: needs the downloaded Piper and Kokoro voices (localtc setup, localtc tts kokoro); skipped otherwise",

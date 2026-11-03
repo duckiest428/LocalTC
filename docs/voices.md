@@ -53,7 +53,7 @@ logged and the next line is spoken.
 
 Piper's single-voice models (Lessac, Ryan, Alan) were offered until 0.5.2 and taken out: every station sounded the
 same. A settings file that chose one goes back to LibriTTS; one that chose Piper or Kokoro as the voice has the
-library (the only choice since 0.5.4).
+library (the only choice since 0.5.5).
 
 ## Accents
 

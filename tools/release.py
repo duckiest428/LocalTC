@@ -1,7 +1,9 @@
 """Release helpers for .github/workflows/release.yml.
 
     python tools/release.py check v0.2.0    # the tag, pyproject.toml, localtc.__version__ and CHANGELOG agree
-    python tools/release.py notes 0.2.0     # that version's CHANGELOG section (the release notes)
+    python tools/release.py notes 0.2.0     # the release notes: .github/release-notes/0.2.0.md where a version has its
+                                            # own (what the versions before it show in their update popup), else its
+                                            # CHANGELOG section
 """
 
 import re
@@ -44,7 +46,12 @@ def check(tag: str) -> int:
 
 
 def notes(version: str) -> int:
-    print(changelog_section((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), version.removeprefix("v")))
+    version = version.removeprefix("v")
+    own = ROOT / ".github" / "release-notes" / f"{version}.md"
+    text = own.read_text(encoding="utf-8").strip() if own.is_file() else changelog_section(
+        (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), version)
+    sys.stdout.reconfigure(encoding="utf-8")  # (the runner's console is cp1252: an arrow in the notes stopped the release)
+    print(text)
     return 0
 
 

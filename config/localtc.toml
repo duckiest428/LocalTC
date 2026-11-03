@@ -3,7 +3,7 @@
 # Use a different config file: LOCALTC_CONFIG=path/to/file.toml
 
 [source]
-kind = "replay"               # "live" (Windows + MSFS 2024) or "replay" (any OS)
+kind = "replay"               # "live" (Windows + MSFS 2020 or 2024) or "replay" (any OS)
 
 [live]
 connection = "builtin"        # builtin: LocalTC talks to the sim itself, nothing to install | dll: through the MSFS SDK's SimConnect.dll

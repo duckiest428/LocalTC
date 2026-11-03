@@ -3,9 +3,14 @@
 Every version of localtc.tech, newest first. It carries the same version as LocalTC; the website's changelog page
 (Website) is built from this file.
 
-## [0.5.4] - Upcoming
+## [0.5.6] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.5] - 2026-11-02
 
 ### Changed
+- **For MSFS 2020 and 2024:** the pages say so, no longer 2024 alone.
 - **The Discord buttons** on every page go to the server's new invite link.
 
 ## [0.5.3] - 2026-10-30

@@ -16,7 +16,7 @@ Also capture the material for:
 
 ## Core promise
 
-LocalTC is free ATC for Microsoft Flight Simulator 2024 that you can talk to. It runs on the pilot's PC, works offline after setup, answers from clearance delivery through the gate, and includes an optional first officer on the intercom.
+LocalTC is free ATC for Microsoft Flight Simulator 2020 and 2024 that you can talk to. It runs on the pilot's PC, works offline after setup, answers from clearance delivery through the gate, and includes an optional first officer on the intercom.
 
 Do not imply that LocalTC is a replacement for VATSIM, real-world ATC, GSX, cabin crew, multiplayer ATC, or features marked as planned. Do not show roadmap features as if they are already available.
 
@@ -448,13 +448,13 @@ Clean LocalTC title card over the aircraft at the gate, with the app radio log o
 
 ### Voiceover
 
-> "LocalTC. Free ATC for Microsoft Flight Simulator 2024. Talk to your flight. Fly the flight."
+> "LocalTC. Free ATC for Microsoft Flight Simulator 2020 and 2024. Talk to your flight. Fly the flight."
 
 ### On-screen text
 
 > **LocalTC**
 >
-> **Free ATC for MSFS 2024**
+> **Free ATC for MSFS 2020 and 2024**
 >
 > Runs on your PC. Works offline. No subscription.
 >
@@ -514,7 +514,7 @@ Logo/title card:
 
 > **LocalTC**
 >
-> Free ATC for MSFS 2024
+> Free ATC for MSFS 2020 and 2024
 >
 > Download at localtc.tech
 
@@ -580,4 +580,4 @@ Use the actual shipped claims:
 - 1:1 or 4:5 optional social crop
 - captioned versions with speaker labels: `PILOT`, `ATC`, `COPILOT`
 - clean audio master without music
-- thumbnail showing the aircraft, LocalTC radio log, and the text `FREE ATC FOR MSFS 2024`
+- thumbnail showing the aircraft, LocalTC radio log, and the text `FREE ATC FOR MSFS 2020 AND 2024`

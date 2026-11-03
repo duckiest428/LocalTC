@@ -176,3 +176,18 @@ def test_a_new_version_is_said_in_a_popup_of_its_own():
     assert 'id="dlg-update"' in page and 'id="up-go"' in page and 'id="up-skip"' in page
     assert re.search(r'ORDER: \[[^\]]*"update"', script) and "UpdatePopup.update(u)" in script
     assert UiConfig().update_skipped == ""
+
+
+def test_the_release_notes_tell_the_versions_before_a_broken_updater_what_to_do(capsys):
+    """0.5.3 and earlier show the GitHub release's text in their update popup, and pressing its button installs nothing:
+    the text sends them to the setup, for this version's own file. The CHANGELOG (what's new, after updating) stays as it is."""
+    import importlib.util
+
+    root = Path(__file__).parents[1]
+    spec = importlib.util.spec_from_file_location("release_tool", root / "tools" / "release.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    tool.notes("v0.5.5")
+    out = capsys.readouterr().out
+    assert "releases/download/v0.5.5/LocalTC-Setup.exe" in out and "don't press" in out
+    assert "don't press" not in update.changelog_section((root / "CHANGELOG.md").read_text(encoding="utf-8"), "0.5.5")

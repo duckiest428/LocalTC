@@ -1,13 +1,13 @@
 # LocalTC
 
-Local ATC and a copilot for MSFS 2024: Python (`src/localtc`), the app's page (`src/localtc/ui/static`), the website
+Local ATC and a copilot for MSFS 2020 and 2024: Python (`src/localtc`), the app's page (`src/localtc/ui/static`), the website
 (`site/`), the account Worker (`server/`, TypeScript), the companion app (`ios/`). Docs in `docs/` (architecture,
 replay format, phraseology, test checklists).
 
 Two machines work on it:
 
 - **The Mac** writes most of the code and builds the installer. It has no sim.
-- **The Windows PC** has MSFS 2024. A session there runs and fixes what only the sim can answer: start with
+- **The Windows PC** has MSFS 2024 and 2020. A session there runs and fixes what only the sim can answer: start with
   [docs/windows-session.md](docs/windows-session.md).
 
 ## Rules
@@ -20,7 +20,7 @@ Two machines work on it:
 - Three changelogs, one version: `CHANGELOG.md` (the Main App), `CHANGELOG-companion.md` and `CHANGELOG-website.md`;
   the website's changelog page has a tab for each (`tools/release.py check` wants the version in all three and in the
   companion's `MARKETING_VERSION`).
-- New work goes in the CHANGELOG's top section, `## [0.5.4] - Upcoming` (replacing its "Nothing yet" line), until the
+- New work goes in the CHANGELOG's top section, `## [0.5.6] - Upcoming` (replacing its "Nothing yet" line), until the
   user names the next release. Don't bump `pyproject.toml` / `__version__` and don't build the installer (the exe)
   unless asked. The installer (`python tools/build_installer.py --release`, needs `makensis` and `uv`) carries the
   committed source, its own Python and every wheel, and builds into `dist/` (never committed: it's ~140 MB); Ollama,

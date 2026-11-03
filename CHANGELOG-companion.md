@@ -4,7 +4,11 @@ Every version of LocalTC Companion for iPhone, newest first. It carries the same
 a version's section once, the first time it opens after the update, and the website's changelog page (Companion App)
 is built from this file.
 
-## [0.5.4] - Upcoming
+## [0.5.6] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.5] - 2026-11-02
 
 ### Changed
 - The EFB's briefing no longer has a NOTAM list: the notices are on the ATIS it shows.

@@ -4,7 +4,11 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
-## [0.5.4] - Upcoming
+## [0.5.6] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
+## [0.5.5] - 2026-11-02
 
 ### Added
 - **The cabin crew have their own key and buttons.** A cabin key or yoke button (Settings → Cabin crew), and beside the
@@ -107,6 +111,7 @@ a new minor version adds features, a patch fixes them.
   there is, and after the approach clearance too.
 
 ### Fixed
+- **A release's files could go missing:** the release's build stopped on an arrow in its notes, on GitHub's Windows machines.
 - **Installing an update closed the app and installed nothing:** the installing step never ran. Updating from a version
   before this one still needs LocalTC-Setup.exe.
 - **The flight starting from the wrong airport:** the plan's departure airport is used while you're at it, and fetched

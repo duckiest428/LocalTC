@@ -36,7 +36,7 @@ async def answer(cabin: CabinCrew, event: IntercomHeard, bus: EventBus) -> None:
     model where there is one, a beat after the captain's words. On its own task: the model never holds up the flight."""
     try:
         outputs = cabin.heard(event)
-        if cabin.backend is not None and outputs and isinstance(outputs[0], CabinSpeech):
+        if outputs and isinstance(outputs[0], CabinSpeech) and cabin.answers_by_model(outputs[0].text):
             words, records = await asyncio.to_thread(cabin.word, event.text, outputs[0].text, event.t)
             for record in records:
                 bus.publish(record)

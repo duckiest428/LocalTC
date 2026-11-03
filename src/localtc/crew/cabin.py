@@ -114,6 +114,7 @@ ROLLING_S = 3.0  # moving for this long: moving
 # The announcements the language model may put in the crew member's own words, when it's a cloud one (never the safety
 # ones, whose words are what the rules ask for, nor an order to the crew).
 OWN_WORDS = ("boarding", "welcome", "aircraft_talk", "service", "descent", "landing", "after_landing", "goodbye", "seatbelt_off")
+ALWAYS_SCRIPTED = ("safety", "exit_row", "doors", "turbulence")  # (Fully LLM too: what these begin with)
 NUMBER = re.compile(r"\d[\d:,.]*|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|"
                     r"forty|fifty|sixty|hour|hours|minutes?)\b", re.I)
 AIRCRAFT_TALK_S = 600.0  # after the seatbelt sign is off: a word about the aircraft
@@ -283,8 +284,8 @@ class CabinCrew:
         self.settings = settings or CabinSettings()
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
-        self.backend: Any = None  # the language model, for their answers on the interphone (None: the script's)
-        self.own_words = False  # ... and their long announcements in their own words (a cloud model's quick enough)
+        self.backend: Any = None  # the cloud language model (None: the script's words)
+        self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
         self._to_word: set[str] = set()  # the announcements it may word
         self._rolling_since: float | None = None
         self.model_wait_s = 10.0
@@ -547,7 +548,7 @@ class CabinCrew:
                     continue
                 spoken = text
             out.append(self._speech(text, spoken, "pa", chime="pa" if chime and not out else "", language=lang))
-            if lang == "en" and key in OWN_WORDS and self.own_words:
+            if lang == "en" and self._worded(key):
                 self._to_word.add(text)
         return out
 
@@ -997,6 +998,24 @@ class CabinCrew:
                              latency_ms=result.latency_ms)
         return (reply if good else draft), [record]
 
+    def _worded(self, key: str) -> bool:
+        """Whether this announcement goes to the model, by ``llm_mode``."""
+        if self.backend is None:
+            return False
+        if self.llm_mode == "llm":
+            return not key.startswith(ALWAYS_SCRIPTED)
+        return self.llm_mode == "mostly_llm" and key in OWN_WORDS
+
+    def answers_by_model(self, draft: str) -> bool:
+        """Whether this answer to the pilot goes to the model: Semi, only what the script has no answer to."""
+        if self.backend is None or self.llm_mode == "scripted":
+            return False
+        return self.llm_mode != "semi" or self._unclear(draft)
+
+    @staticmethod
+    def _unclear(draft: str) -> bool:
+        return draft in [fill(o, {}) for o in REPLIES["unclear"]]
+
     def wants_words(self, text: str) -> bool:
         return text in self._to_word
 
@@ -1012,8 +1031,7 @@ class CabinCrew:
                   "words, no stage directions. Use only the facts given and never make up a number, a time or a gate. "
                   "Anything about flying the aircraft is the flight deck's, not yours. "
                   'Reply as JSON: {"reply": "..."}')
-        ask = ("Answer as best you can from the facts; if it isn't something you'd know, say so." if draft in
-               [fill(o, {}) for o in REPLIES["unclear"]] else
+        ask = ("Answer as best you can from the facts; if it isn't something you'd know, say so." if self._unclear(draft) else
                f'What you would say, to put in your own words (keep what it promises): "{draft}"')
         prompt = ("Facts:\n" + "\n".join(f"{k}: {v}" for k, v in facts.items()) + f'\n\nCaptain: "{heard}"\n\n{ask}')
         request = LlmRequest("crew", system, (("user", prompt),),

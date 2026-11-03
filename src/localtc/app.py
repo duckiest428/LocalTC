@@ -300,6 +300,15 @@ def copilot_model(cfg: Config, backend):
     return CloudBackend(own, fallback=local)
 
 
+def cabin_model(cfg: Config, backend):
+    """The cabin crew's language model: a connection of its own to the cloud services, or none (the script's words)."""
+    from localtc.llm.cloud import CloudBackend, Route
+
+    if cfg.cabin.llm == "scripted" or not getattr(backend, "rich", False):
+        return None
+    return CloudBackend([Route(r.provider, r.model, r.key, json_mode=r.json_mode, dead=r.dead) for r in backend.routes])
+
+
 async def local_model(cfg: Config, source: SimSource, *, behind_cloud: bool = False):
     llm = cfg.llm
     say = log.info if behind_cloud else log.warning  # behind the cloud, no Ollama is only no last resort
@@ -562,10 +571,9 @@ async def run_session(
                 from localtc.crew.cabin_service import CabinService
 
                 cabin = CabinCrew(cabin_settings(cfg), lambda: cabin_facts(engine, cfg), seed=int(time.time()) % 100000)
-                if cfg.crew.llm != "off" and cfg.crew.mode != "off":  # their answers in their own words
-                    cabin.backend = copilot_model(cfg, backend)
-                    cabin.model_wait_s = max(cfg.crew.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0), cfg.cloud.timeout_s)
-                    cabin.own_words = bool(cfg.cloud.enabled and cloud_keys().all())
+                cabin.llm_mode = cfg.cabin.llm
+                cabin.backend = cabin_model(cfg, backend)  # in their own words: a cloud model only
+                cabin.model_wait_s = max(cfg.crew.timeout_s, cfg.cloud.timeout_s)
                 consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled,
                                                                   source=source).run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft

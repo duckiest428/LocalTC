@@ -1599,6 +1599,9 @@ const Settings = {
   statusOf(kind) { return S.models.status.find((x) => x.kind === kind); },
   // Cloud language models: optional, off by default, recommended for quality. Keys go to the system's credential
   // store through the app and never come back to the page.
+  hasCloud(st) {
+    return !!st.cloud?.enabled && (S.cloud?.providers || []).some((p) => p.key === "none" || p.has_key);
+  },
   cloudCard(st) {
     const c = S.cloud;
     if (!c) return "";
@@ -1958,6 +1961,13 @@ const Settings = {
           ${(S.settings.cabin_crew || []).map((p) =>  // (translate="no": put together here, its manner in the language)
             `<option value="${esc(p.id)}" translate="no" ${st.cabin.crew === p.id ? "selected" : ""}>${esc(p.name)} (${I18n.t(p.sex === "F" ? "she" : "he")}) · ${esc(I18n.t(p.brief))}</option>`).join("")}</select></label>
           <button type="button" class="btn small" id="s-cabin-hear">Hear them</button></div>
+        <div class="row"><label>How they use the language model<select id="s-cabin-llm" ${this.hasCloud(st) ? "" : "disabled"}>${[
+          ["scripted", "Fully scripted: the script's words only"],
+          ["semi", "Semi script/LLM: the model answers only what the script can't"],
+          ["mostly_llm", "Mostly LLM: the model words their answers and longer announcements (recommended)"],
+          ["llm", "Fully LLM: the model words all they say, except the safety announcements"]]
+          .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.cabin.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+        <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they use the script's words.</span>
         <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages.</span>
         <div class="row"><label>Your name, for the welcome<input id="s-cabin-captain" value="${esc(st.cabin.captain || "")}" placeholder="Reyes" autocomplete="off" spellcheck="false"></label></div>
         <label class="check-row"><input type="checkbox" id="s-cabin-announcements" ${st.cabin.announcements ? "checked" : ""}> Announcements: boarding, the welcome, the seatbelt sign, the descent and the arrival</label>
@@ -1997,8 +2007,6 @@ const Settings = {
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
             .map(([v, t]) => `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${t}</option>`).join("")}</select>
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
-        <div class="row"><label>Center name (where no airport lists one)<input id="s-center" value="${esc(st.atc.center_name)}"></label>
-          <label>Center frequency<input id="s-center-mhz" type="number" step="0.005" min="118" max="137" value="${st.atc.center_mhz}"></label></div>
       </div>
 
       <div class="card">
@@ -2069,6 +2077,8 @@ const Settings = {
         <div class="row"><label>Keep LocalTC above other windows<select id="s-on-top">${[["off", "Never"], ["flying", "While flying (above the sim)"], ["always", "Always"]]
           .map(([v, label]) => `<option value="${v}" ${st.ui.on_top === v ? "selected" : ""}>${label}</option>`).join("")}</select></label></div>
         <span class="hint">Above the sim when it runs in a window or borderless full screen; exclusive full screen always covers it.</span>
+        <label class="check-row"><input type="checkbox" id="s-discord" ${st.ui.discord ? "checked" : ""}> Show your flight on your Discord profile</label>
+        <span class="hint">While you fly: your route, the phase and the frequency you're on, with a button to localtc.tech. Needs the Discord app open on this PC.</span>
       </div>
 
       <div class="card" id="s-account-card"></div>
@@ -2214,6 +2224,7 @@ const Settings = {
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
     on("#s-cabin", "change", (e) => { this.save("cabin", "enabled", e.target.checked); $("#cabin-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-cabin-crew", "change", () => this.save("cabin", "crew", val("#s-cabin-crew")));
+    on("#s-cabin-llm", "change", () => this.save("cabin", "llm", val("#s-cabin-llm")));
     on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
     for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],
       ["#s-cabin-service", "service"], ["#s-cabin-interphone", "interphone"], ["#s-cabin-chime", "chime"],
@@ -2246,8 +2257,6 @@ const Settings = {
     });
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
-    on("#s-center", "change", () => this.save("atc", "center_name", val("#s-center").trim()));
-    on("#s-center-mhz", "change", () => this.save("atc", "center_mhz", Number(val("#s-center-mhz"))));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-taxi-ribbon", "change", (e) => this.save("atc", "taxi_guide", e.target.checked));
@@ -2278,6 +2287,7 @@ const Settings = {
     });
     on("#s-source", "change", async () => { await this.save("ui", "source", val("#s-source")); this.render(); });
     on("#s-on-top", "change", () => this.save("ui", "on_top", val("#s-on-top")));
+    on("#s-discord", "change", (e) => this.save("ui", "discord", e.target.checked));
     $$("[data-theme-pick]").forEach((b) => (b.onclick = async () => {
       applyTheme(b.dataset.themePick);
       $$("[data-theme-pick]").forEach((x) => x.classList.toggle("on", x === b));

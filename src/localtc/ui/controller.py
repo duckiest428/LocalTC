@@ -216,8 +216,20 @@ class AppController:
         logging.getLogger().addHandler(self._log_handler)
         loop.create_task(self._companion_on())
         loop.call_later(3.0, lambda: asyncio.ensure_future(self.pilot.recover(self._recording_now())))
+        self._discord_task = loop.create_task(self._discord_loop())
         if self.cfg.ui.updates != "off":
             loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
+
+    async def _discord_loop(self) -> None:
+        """The flight on the pilot's Discord profile, when they've asked for it; at Discord's pace."""
+        from localtc.discord_rpc import Presence, activity
+
+        presence, started = Presence(), 0
+        while True:
+            flight = self.flight if self.cfg.ui.discord else {}
+            started = (started or int(time.time())) if flight else 0
+            presence.show(activity(flight, started))
+            await asyncio.sleep(15.0)
 
     def _recording_now(self) -> tuple[str, ...]:
         """The recording a flight running now is writing (not one to make a logbook line from)."""

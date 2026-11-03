@@ -425,6 +425,16 @@ def test_the_model_words_the_answer_and_the_script_stands_in():
     cabin.backend = Backend('{"reply": "All quiet back here, Captain."}')
     assert cabin.word("how's it going", "Everything's fine.", 1.0)[0] == "All quiet back here, Captain."
     assert "Aeroplan" in cabin.backend.requests[0].messages[-1][1]  # it knows the flight
+    cabin.llm_mode = "semi"
+    assert not cabin.answers_by_model("Right away, Captain.")
+    assert cabin.answers_by_model(fill(REPLIES["unclear"][0], {}))
+    cabin.llm_mode = "mostly_llm"
+    assert cabin.answers_by_model("Right away, Captain.") and cabin._worded("descent") and not cabin._worded("night")
+    cabin.llm_mode = "llm"
+    assert cabin._worded("night") and not cabin._worded("safety_more") and not cabin._worded("doors_arm")
+    cabin.llm_mode = "scripted"
+    assert not cabin.answers_by_model("Right away, Captain.") and not cabin._worded("descent")
+    cabin.llm_mode = "mostly_llm"
     cabin.backend = Backend(None)
     words, records = cabin.word("how's it going", "Everything's fine.", 1.0)
     assert words == "Everything's fine." and records[0].outcome == "error"

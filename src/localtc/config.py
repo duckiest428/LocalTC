@@ -435,6 +435,9 @@ class CabinConfig(_Section):
     interphone: bool = True  # the crew call the flight deck: boarding complete, cabin secure, the service
     show_log: bool = True  # their words in the radio log (off: only heard)
     captain: str = ""  # your name, for the welcome ("on behalf of Captain Reyes"); blank: "the captain"
+    # How much they lean on the language model, a cloud one only (without one, the script's words): scripted, semi (only
+    # what the script can't answer), mostly_llm (their answers and longer announcements), llm (all but the safety ones).
+    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
 
 
 class SessionConfig(_Section):
@@ -452,6 +455,7 @@ class UiConfig(_Section):
     """The LocalTC app window."""
 
     dev_mode: bool = False  # record every flight (with audio) and show the tools for sending one in
+    discord: bool = False  # the flight and its frequency on the pilot's Discord profile (discord_rpc.py)
     port: int = 0  # 0 = any free port on 127.0.0.1
     window: bool = True  # a window of its own (pywebview); false = the default browser
     simbrief_user: str = ""  # SimBrief username or pilot ID, remembered for "New flight"

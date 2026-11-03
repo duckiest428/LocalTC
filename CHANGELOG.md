@@ -6,7 +6,18 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.6] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **Your flight on Discord:** an option in Settings, off by default, shows your route, the phase and the frequency you're
+  on, with a "Fly on LocalTC" button to localtc.tech.
+- **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.
+
+### Changed
+- **The cabin crew's language model is a cloud one only:** without a cloud model they use the script's words and the
+  choice is unavailable. Safety announcements are never reworded.
+
+### Removed
+- **The Center name and Center frequency settings:** the fallback for where no airport or airspace gives a centre stays
+  as a hidden default.
 
 ## [0.5.5] - 2026-11-02
 

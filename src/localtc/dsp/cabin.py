@@ -105,19 +105,28 @@ def pa_effect(audio: np.ndarray, rate: int) -> np.ndarray:
     the levelling of a microphone held close. Peak 0.75."""
     if len(audio) == 0:
         return audio.astype(np.float32)
-    voice = bandpass(audio.astype(np.float32), rate, 280.0, 4200.0, presence_db=4.0, presence_hz=1300.0)
+    voice = bandpass(audio.astype(np.float32), rate, 350.0, 3600.0, presence_db=4.0, presence_hz=1300.0)
     voice = compress(voice, rate, threshold=0.18, ratio=3.0, drive=1.5)
-    voice = _echo(voice, rate)
-    return (voice / (np.max(np.abs(voice)) or 1.0) * 0.75).astype(np.float32)
+    voice = _echo(voice, rate, seconds=0.26, mix=0.3)
+    return (voice / (np.max(np.abs(voice)) or 1.0) * 0.6).astype(np.float32)
 
 
 def interphone_effect(audio: np.ndarray, rate: int) -> np.ndarray:
     """A cabin crew member on the handset: a telephone's band, close and dry. Peak 0.8."""
     if len(audio) == 0:
         return audio.astype(np.float32)
-    voice = bandpass(audio.astype(np.float32), rate, 300.0, 3400.0, presence_db=2.0, presence_hz=1800.0)
-    voice = compress(voice, rate, threshold=0.2, ratio=2.5, drive=1.3)
+    voice = bandpass(audio.astype(np.float32), rate, 450.0, 2900.0, presence_db=3.0, presence_hz=1800.0)
+    voice = compress(voice, rate, threshold=0.2, ratio=3.0, drive=1.6)
     return (voice / (np.max(np.abs(voice)) or 1.0) * 0.8).astype(np.float32)
+
+
+def in_person_effect(audio: np.ndarray, rate: int) -> np.ndarray:
+    """A cabin crew member in the flight deck, in person: the whole voice, no handset, a little of the small room around
+    it. Peak 0.7."""
+    if len(audio) == 0:
+        return audio.astype(np.float32)
+    voice = _echo(bandpass(audio.astype(np.float32), rate, 120.0, 7000.0, presence_db=0.0), rate, seconds=0.05, mix=0.1)
+    return (voice / (np.max(np.abs(voice)) or 1.0) * 0.7).astype(np.float32)
 
 
 # Chords as semitones above the key: a slow, warm progression (major sevenths and ninths, nothing that resolves hard).

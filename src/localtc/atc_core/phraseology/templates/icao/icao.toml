@@ -259,4 +259,5 @@ text = ["{callsign}, leave the holding pattern, proceed direct {fix}."]
 pilot_readback = "Leaving the hold, direct {fix}, {callsign_short}."
 
 [fragments]
+hold_fix = "hold at {fix}"
 hold_short = "hold short of runway {hold_short}"

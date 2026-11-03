@@ -236,8 +236,8 @@ class HoldsMixin:
         names = [p[0] for p in self._route_points()]
         dest = self.state.flight.destination or ""
         nxt = names[names.index(hold.fix) + 1] if hold.fix in names and names.index(hold.fix) + 1 < len(names) else dest
-        if nxt == dest and dest:
-            nxt = self._airport_name(dest)
+        if nxt == dest and dest:  # the end of the filed route: on to the approach's fix, before the airport itself
+            nxt = self._approach_fix(dest) or self._airport_name(dest)
         hold.state = "leaving"
         hold.history.append((t, "leaving"))
         self._ops_changed = True
@@ -249,6 +249,14 @@ class HoldsMixin:
         self._schedule(t, "common.leave_hold", {"fix": nxt or hold.fix}, facility, delay=answering, on_issue=done)
         return True
 
+    def _approach_fix(self, icao: str) -> str:
+        """The final approach fix of a published approach to the runway the flight's landing on, "" when none is known."""
+        geo = self.geometry(icao)
+        runway = self.state.assignments.arrival_runway
+        if geo is None or not runway:
+            return ""
+        return next((a.faf for a in geo.airport.approaches if a.runway == runway and a.faf and a.faf != self.hold.fix), "")
+
     def _hold_request(self, interp: "Interpretation", facility: "Facility", t: float, own: OwnshipState | None) -> None:
         """ "Request holding at BLAKO": given there (or at the route's next fix), with an EFC, "as requested"; "ready
         to continue" from the hold: out of it."""
@@ -256,6 +264,12 @@ class HoldsMixin:
             self._schedule(t, "common.unable", {}, facility)
             return
         if interp.values.get("leave"):
+            pending = self.state.pending
+            if pending is not None and pending.instruction_id == "common.leave_hold":
+                # "Cleared out of the hold, Frontier 1469": it's been read back, not asked for (answered "roger", and
+                # the clearance came again a minute later).
+                self.state.pending = None
+                return
             if self.hold is not None and self.hold.state not in ("done", "cancelled", "leaving"):
                 self._leave_hold(own, facility, answering=True)
             else:

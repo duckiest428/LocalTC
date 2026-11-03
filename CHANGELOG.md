@@ -71,6 +71,13 @@ a new minor version adds features, a patch fixes them.
   From OurAirports' data, kept in LocalTC, so they show before a flight too.
 
 ### Changed
+- **What you say is written with the flight's own names:** "Raider 2" is RADYR2, "from to 1469" is Frontier 1469, "L-Y-N-D-I"
+  is LYNDI, "Echo 10" is E10, "information Mike" is M. A wrong procedure or number doesn't sound the same, so it stays wrong,
+  and ATC catches it.
+- **The cabin crew vary:** many more wordings for each crew member, and with a cloud model their long announcements (not the
+  safety ones) in fresh words each flight, keeping every fact. No ding on the interphone. The address system, the handset
+  and a crew member in person each sound their own way.
+- **Clearance's "stand by"** is shorter and rarer.
 - **The Live Map's aircraft have one colour for each thing they can be doing,** in the legend now: green you, blue in
   the air, amber taxiing, grey parked, their shape showing their size. Gates are in the legend too, and a free gate's
   dot is no longer the colour of an aircraft in the air.
@@ -100,6 +107,25 @@ a new minor version adds features, a patch fixes them.
   there is, and after the approach clearance too.
 
 ### Fixed
+- **The flight starting from the wrong airport:** the plan's departure airport is used while you're at it, and fetched
+  if it isn't known yet. Where the nearest airport had no runways, no origin was found, and the destination's Clearance,
+  ATIS and traffic were all there was.
+- **"Everyone's on" with nobody on board, and "off blocks" at the gate:** one reading of 2.5 knots as GSX's jetway came up
+  counted as moving. While GSX is boarding, the beacon or an engine doesn't end it either.
+- **"Boeing 737 landing" with nobody landing:** LocalTC's own traffic was read as 0 knots and off the ground. Its real speed
+  is worked out now, so ATC and the map see it taxiing. Held departures roll onto the runway round a curve, no longer
+  sliding there with the nose swinging on the spot.
+- **Aircraft put on your gate as you pushed back:** it's kept empty until you're well away.
+- **Tower's first words a speed before you'd called:** approach's speed ends with the handoff to tower.
+- **Out of a hold:** on to the next filed fix or the approach's, no longer "direct" the airport; "cleared out of the hold" is
+  taken as the readback, and a hold's missing fix is asked for as "hold at", not "direct".
+- **A problem report went unanswered:** ("our managed speed isn't working").
+- **Commands in a checklist:** "full flaps, please" is done, not taken as the answer to "Landing gear?".
+- **The copilot read the destination's ATIS during the takeoff:** now once the climb's out of the way.
+- **Voices giving up on a long line:** an ATIS could run out of time on both voices and be left unsaid.
+- **The window, small:** the transmission box keeps its width (its buttons move below it), and the radios take less room.
+- **A crash below Python** (a graphics driver, the speech model) now leaves a trace in `crash.log`, in the logs' folder.
+- **"Words count mismatch" in the log** is gone.
 - **The airport on the Live Map wasn't drawn:** no runways, taxiways or gates close in.
 - **A transponder sending no callsign** was called "@@@@@@@@" in the traffic's calls.
 - **"Hello there, Stefan" went to the copilot,** who answered as if it was its name. A greeting with the cabin manager's

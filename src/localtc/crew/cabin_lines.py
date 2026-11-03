@@ -351,6 +351,193 @@ LINES: dict[str, dict[str, tuple[str, ...]]] = {
     },
 }
 
+# More wordings of what's heard every flight, each crew member's manner: the same words flight after flight gave it away.
+for _key, _wordings in {
+    "boarding": {
+        "polished": ("{greeting} and welcome on board {airline} flight {flight}, with service to {dest}. Please find your seat as "
+                     "quickly as you can, and stow your hand luggage in the overhead lockers or under the seat ahead of you.",
+                     "{greeting}, ladies and gentlemen. This is {airline} flight {flight} to {dest}. To help us leave on time, "
+                     "please step out of the aisle while you stow your bags. Thank you.",),
+        "cheerful": ("{greeting}, folks! You've found {airline} flight {flight} to {dest}, so that's the hard part done. Bags up "
+                     "top, or under the seat in front. If it won't fit, give us a shout before you start wrestling it.",
+                     "{greeting}, everyone, and welcome aboard! This one's headed for {dest}, flight {flight}. Grab your seat, stow "
+                     "your bag, and let's keep that aisle moving. There's no prize for last on, I promise.",),
+        "warm": ("{greeting}, everyone, and welcome aboard flight {flight} to {dest}. It's lovely to have you with us. Please "
+                 "settle in at your own pace, and do ask if you'd like some help with anything.",
+                 "{greeting}, and welcome. This is {airline} flight {flight} to {dest}. If you're travelling with little ones or need "
+                 "a hand with a bag, just catch one of us; we'd be glad to help.",),
+        "brisk": ("{greeting}. Flight {flight} to {dest}. Stow your bags and take your seat, please, so the aisle stays clear.",
+                  "{greeting}. This is flight {flight} to {dest}. Bags stowed, aisle clear, seats as soon as you can.",),
+    },
+    "welcome": {
+        "polished": ("Good to have you with us, ladies and gentlemen. On behalf of {captain} and the crew, welcome to {airline} "
+                     "flight {flight} to {dest}, a flight of {time} today. {members}I'm {name}, your cabin manager. Please check that "
+                     "your seatbelt is fastened, and your seat back and tray table are upright.",),
+        "cheerful": ("Right then, everyone, welcome aboard {airline} flight {flight} to {dest}! {Captain} tells me it's about {time} "
+                     "today. {members}I'm {name}, and I'm in charge back here, which surprises me as much as you. Belts on, seats "
+                     "up, tables away, and we'll get going.",
+                     "Hi again, folks! You're on {airline} flight {flight}, bound for {dest}, and that's about {time} from here. "
+                     "{members}My name's {name}. If you need anything, press the call button; if you just want a chat, press it "
+                     "anyway.",),
+        "warm": ("Hello again, everyone, and welcome aboard {airline} flight {flight} to {dest}. We'll be together for about {time} "
+                 "today. {members}I'm {name}, and it's our pleasure to look after you. Do let us know if there's anything you need.",),
+        "brisk": ("Welcome aboard {airline} flight {flight} to {dest}. Flight time {time}. {members}I'm {name}, your cabin manager. "
+                  "Belts fastened, seats upright, tables stowed.",),
+    },
+    "safety": {
+        "polished": ("Ladies and gentlemen, for your safety, please give us your full attention for the next few moments. Your "
+                     "seatbelt fastens by inserting the metal tip into the buckle; pull the strap to tighten it, and lift the buckle "
+                     "to release it. This aircraft has {exits}. Please find your nearest exit now, and remember it may be behind you. "
+                     "Lighting along the floor will guide you to an exit if it's needed. If the cabin loses pressure, oxygen masks "
+                     "will drop from above: pull one towards you, cover your nose and mouth, and breathe normally, and fit your own "
+                     "before helping anyone else. Your life vest is under your seat; inflate it only as you leave the aircraft. "
+                     "Smoking, and electronic cigarettes, are not permitted on board. Please read the safety card in your seat "
+                     "pocket. Thank you.",),
+        "cheerful": ("All right, everybody, this is the bit we practise in the mirror. Seatbelt: metal tip into the buckle, pull to "
+                     "tighten, lift the buckle to get out. If you've ever been in a car, you've got this. This aircraft has {exits}. "
+                     "Find the one nearest you now, and bear in mind it might be behind you. If we need them, lights on the floor "
+                     "show the way. If the cabin loses pressure, masks drop from above: pull one towards you, over your nose and "
+                     "mouth, breathe normally, and sort yours out before helping anyone else. Your life vest is under your seat; "
+                     "don't inflate it until you're leaving the aircraft, or you'll never get through the door. No smoking anywhere, "
+                     "e-cigarettes included. The card in your seat pocket has it all, with lovely drawings. Thanks for watching!",),
+        "warm": ("Ladies and gentlemen, please take a moment with us for your safety; it only takes a minute. To fasten your "
+                 "seatbelt, slide the metal tip into the buckle and pull it snug; lift the buckle to undo it. This aircraft has "
+                 "{exits}. Have a look for the one closest to you, which may be behind you, and lights along the floor will lead the "
+                 "way if you ever need them. If the cabin loses pressure, masks will come down from above. Pull one towards you, put "
+                 "it over your nose and mouth, breathe normally, and put yours on before helping those around you. Your life vest is "
+                 "under your seat; inflate it only as you leave the aircraft. There's no smoking on board, electronic cigarettes "
+                 "included. The card in your seat pocket has the details. Thank you, and do ask if you have any questions.",),
+        "brisk": ("Safety briefing. Seatbelt: metal tip into the buckle, pull tight, lift to release. This aircraft has {exits}: find "
+                  "your nearest, it may be behind you. Floor lights lead to the exits. If the cabin loses pressure, masks drop from "
+                  "above: pull one down, cover nose and mouth, breathe normally, your own before helping others. Life vest under "
+                  "your seat: inflate it only as you leave. No smoking, e-cigarettes included. Safety card in the seat pocket.",),
+    },
+    "exit_row": {
+        "polished": ("A reminder to passengers in the emergency exit rows: you must be willing and able to assist in an emergency. "
+                     "If you are not, please let us know and we will gladly move you.",),
+        "cheerful": ("Exit row friends, a quick word. That legroom's lovely, but you may be asked to help in an emergency, so you "
+                     "have to be willing and able. Not for you? Just say so and we'll find you another seat.",),
+        "brisk": ("Passengers at the exits must be willing and able to help in an emergency. Tell us if you'd like to move.",),
+    },
+    "safety_more": {
+        "polished": ("Whenever the seatbelt sign is on, please keep your belt fastened, low and tight across your hips. {overwing}"
+                     "Please set your phones and devices to flight mode, and stow larger items such as laptops for takeoff and "
+                     "landing. Should a device with a lithium battery fall beside your seat, do not move the seat; call a crew "
+                     "member. Tampering with, disabling or destroying a washroom smoke detector is against the law.",),
+        "cheerful": ("Two more things, then you're free. Belt low and tight whenever the sign's on. {overwing}Phones in flight mode, "
+                     "and laptops tucked away for takeoff. Lost your phone down the side of the seat? Don't move the seat, those "
+                     "batteries hate it; call us instead. And no tampering with the washroom smoke detectors. It's the law, and "
+                     "they always win.",),
+        "brisk": ("Belt low and tight with the sign on. {overwing}Flight mode on, laptops stowed for takeoff. If a device falls beside "
+                  "your seat, leave the seat and call us. Don't tamper with the washroom smoke detectors: it's against the law.",),
+    },
+    "secure_takeoff": {
+        "cheerful": ("{name} here! Cabin's ready for takeoff. Everyone's strapped in and looking keen.", "Cabin's good to go, Captain. Off we pop!",),
+        "warm": ("Captain, we're all settled and secure back here for takeoff. Safe flight.",),
+        "brisk": ("Secure for takeoff.", "Cabin ready for takeoff.",),
+    },
+    "secure_landing": {
+        "cheerful": ("Cabin's ready for landing, Captain. Everyone's strapped in and hoping for a greaser!", "{name} here. All secure back here for landing. Over to you!",),
+        "warm": ("Captain, it's {name}. Everyone's settled and secure for landing. Thank you.",),
+        "brisk": ("Secure for landing.", "Cabin ready for landing.",),
+    },
+    "boarded": {
+        "polished": ("Captain, it's {name}. We have {pax} passengers on board and the cabin is ready. We can close the doors when "
+                     "you're ready.",),
+        "cheerful": ("Captain, {name} here! That's the last of them: {pax} on board, bags all squeezed in somehow. Ready to close up "
+                     "when you are.", "Hi Captain, it's {name}! All {pax} passengers are in. No stragglers, no drama. Say the word and we'll "
+                     "close the doors.",),
+        "warm": ("Captain, it's {name}. Everyone's found their seat, {pax} passengers in all, and they're nicely settled. Ready when "
+                 "you are.",),
+        "brisk": ("{pax} on board. Cabin ready, doors when you say.", "Boarding done. {pax} passengers.",),
+    },
+    "late_not_boarding": {
+        "cheerful": ("Captain, it's {name}! Off-block's in {minutes} minutes and the cabin's still empty. Shall we let the crowd in?",),
+        "polished": ("Captain, {name} here. Off-block is in {minutes} minutes and boarding has not begun. Would you like us to start?",),
+    },
+    "late_ready": {
+        "polished": ("Captain, it's {name}. We're now {minutes} minutes behind schedule. The cabin is ready when you are.",
+                     "Captain, {name} here. {minutes} minutes past off-block, and the cabin remains ready.",),
+        "cheerful": ("Captain, {name} here! {minutes} minutes behind now. The cabin's ready, and I've run out of small talk.",
+                     "Hi Captain, it's {name}. We're {minutes} minutes down. All set back here, whenever the flight deck's happy.",
+                     "Captain, {name} again! {minutes} minutes late, and a few people have started looking at their watches. "
+                     "We're ready when you are.",),
+        "warm": ("Captain, it's {name}. {minutes} minutes behind so far. Everyone's being very patient, and we're ready when you are.",
+                 "Captain, it's {name}. No rush from us: we're {minutes} minutes late and the cabin's all set.",),
+        "brisk": ("{minutes} minutes down. Cabin's ready.", "Cabin ready, {minutes} minutes late.",),
+    },
+    "seatbelt_off": {
+        "polished": ("Ladies and gentlemen, the seatbelt sign has now been switched off. You may move about the cabin, but please "
+                     "keep your belt fastened while seated, and take care with the overhead lockers.",),
+        "cheerful": ("That's the seatbelt sign off, everyone! Stretch, wander, visit the washroom. When you sit back down, keep your "
+                     "belt on loosely; turbulence never sends a warning.",
+                     "Ding! That's your cue, folks: the sign's off and you're free to roam. Belts stay on when you're seated, please.",),
+        "warm": ("The seatbelt sign is off now, everyone, so do get up and stretch if you'd like. While you're sitting down, please "
+                 "keep your belt on, just to be safe.",),
+        "brisk": ("Seatbelt sign off. Belts on when seated.",),
+    },
+    "service_call": {
+        "polished": ("Captain, it's {name}. We'll begin the service shortly. May I bring anything to the flight deck?",),
+        "cheerful": ("Captain, {name} here! Trolley's nearly out. Last orders for the flight deck: coffee, tea, a cold one? Soft "
+                     "drink, I mean.", "Hi, it's {name}! Service time. What can I get you up there?",),
+        "warm": ("Captain, it's {name}. We're about to serve the cabin. Can I look after you two first?",),
+        "brisk": ("Service starting. Need anything?",),
+    },
+    "service": {
+        "polished": ("Ladies and gentlemen, we'll shortly begin our service of complimentary drinks and snacks. Please have your "
+                     "tray table ready as we come to your row.",),
+        "cheerful": ("Who's hungry? The trolley's coming your way with drinks and snacks, on us. Tray tables down when you see it!",),
+        "brisk": ("Drinks and snacks coming through now. Have your tray table ready.",),
+    },
+    "descent": {
+        "polished": ("Ladies and gentlemen, we have started our descent towards {dest}. {local}{weather}Please take your seat, fasten "
+                     "your belt, and stow your tray table. Thank you.",),
+        "cheerful": ("Nearly there, everyone: we've started down towards {dest}! {local}{weather}Back to your seats, belts on, tables "
+                     "up, and gather up whatever's made its way under the seat in front.",
+                     "That's the top of the descent, folks. {dest} is coming up! {local}{weather}Time to put things away and buckle in.",),
+        "warm": ("We're on our way down into {dest} now, everyone. {local}{weather}Please head back to your seat when you can and "
+                 "fasten your belt. Thank you for your patience today.",),
+        "brisk": ("Descending into {dest}. {local}{weather}Please return to your seat and fasten your belt.",),
+    },
+    "landing": {
+        "polished": ("Ladies and gentlemen, we'll be landing shortly. Please check that your belt is fastened, your seat is upright, "
+                     "your table is stowed and your blind is open, and put your bags under the seat ahead. The washrooms are now closed.",),
+        "cheerful": ("Final stretch, folks! Belts on, seats upright, tables up, blinds open, bags under the seat in front.",
+                     "Almost down, everyone. One last check: belt, seat, table, blind. Thanks!",),
+        "brisk": ("Landing shortly. Belts, seats, tables, blinds.",),
+    },
+    "after_landing": {
+        "polished": ("Welcome to {dest}, ladies and gentlemen. {local}{weather}Please stay in your seat with your belt fastened until the "
+                     "aircraft has stopped and the sign is off, and open the overhead lockers with care.",),
+        "cheerful": ("And we're down! Welcome to {dest}, everybody. {local}{weather}Belts stay on until the sign goes off. I can hear "
+                     "those buckles, you know.",
+                     "Welcome to {dest}, folks! {local}{weather}Hold tight until we've stopped at the gate and the sign's off. Your bags "
+                     "aren't going anywhere without you.",),
+        "warm": ("Welcome to {dest}, everyone. {local}{weather}Please keep your belt fastened until the sign is off, and have a look "
+                 "around for anything you may have left.",),
+        "brisk": ("{dest}. {local}{weather}Belts on until the sign is off.",),
+    },
+    "goodbye": {
+        "polished": ("Thank you for choosing {airline} today, ladies and gentlemen. {members_bye}From all of the crew, we wish you a "
+                     "pleasant onward journey, and we look forward to seeing you again.",),
+        "cheerful": ("Thanks for putting up with us, everyone! {members_bye}Enjoy {dest}, mind your head on the way out, and come fly "
+                     "{airline} again soon.",
+                     "That's us! Thanks for flying {airline} today. {members_bye}Have a great time in {dest}, and please take all your "
+                     "things with you. We've got enough phone chargers.",),
+        "warm": ("Thank you for being with us today, everyone. {members_bye}We hope you have a lovely time in {dest}, and we'd love to "
+                 "see you on board again.",),
+        "brisk": ("Thanks for flying {airline}. {members_bye}Please take all your belongings.",),
+    },
+    "deboarded": {
+        "polished": ("Captain, it's {name}. All passengers have left. Thank you, it was a pleasure.",),
+        "cheerful": ("All gone, Captain! Only one lost scarf to report. Thanks for the ride.", "Cabin's clear, Captain! Nice flying. Same time tomorrow?",),
+        "warm": ("Captain, it's {name}. Everyone's safely off. Thank you, that was a lovely flight.",),
+        "brisk": ("Everyone's off.",),
+    },
+}.items():
+    for _manner, _more in _wordings.items():
+        LINES[_key][_manner] = (*LINES[_key].get(_manner, ()), *_more)
+
 # What the crew member says about the landing, on the way off (by how firm it was).
 LANDING_WORDS = {
     "applauded": ("That landing was lovely, by the way. Some of them clapped!", "Did you hear the applause? Lovely landing."),

@@ -217,6 +217,11 @@ def test_a_departures_push_and_taxi_are_localtcs_and_it_goes_once_the_real_one_h
         t += 1
         m.on_feed([real("05", "ANA5", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)
         m.tick(t)
+    for _ in range(120):  # onto the runway on its wheels, then the takeoff
+        t += 1.0
+        m.tick(t)
+        if plane.mode == "departing":
+            break
     assert plane.mode == "departing" and said[-1] == ("takeoff", "34R")
 
 
@@ -383,7 +388,17 @@ def test_at_the_holding_point_it_goes_in_its_turn_when_the_real_one_is_slow():
     t = NOW + HOLD_SHORT_MAX_S + 1
     m.on_feed([real("08", "ANA8", gate.lat, gate.lon, t=t)], "test", t)
     m.tick(t)
-    assert plane.mode == "departing" and m._kept_off.get("live:08", 0.0) > t
+    assert plane.local.stage == "line_up" and m._kept_off.get("live:08", 0.0) > t
+    moved = []
+    for _ in range(120):  # round a curve onto the centreline: never a slide, nor the nose swinging on the spot
+        t += 1.0
+        before = (plane.local.lat, plane.local.lon, plane.local.hdg)
+        m.tick(t)
+        if plane.mode == "departing":
+            break
+        moved.append((abs(plane.local.hdg - before[2]) % 360, abs(plane.local.lat - before[0]) + abs(plane.local.lon - before[1])))
+    assert plane.mode == "departing"
+    assert all(step > 0 or swing < 1.0 for swing, step in moved)
 
 
 def test_one_hanging_in_the_air_is_taken_away():

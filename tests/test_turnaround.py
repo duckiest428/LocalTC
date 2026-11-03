@@ -78,11 +78,24 @@ def test_it_says_whats_holding_the_flight_up():
 
 def test_how_the_push_went():
     m = _monitor()
+    m.phase = "PUSHBACK"
     m._schedule(_own(1.0, 720.0, gs=3.0), 1.0)
     assert _words(m) == ["Off blocks, 12 minutes late."]
     m = _monitor()
+    m.phase = "PUSHBACK"
     m._schedule(_own(1.0, 30.0, gs=3.0), 1.0)
     assert _words(m) == ["Off blocks, right on time."]
+
+
+def test_one_reading_of_a_few_knots_at_the_gate_isnt_off_blocks():
+    """GSX's jetway coming up: 2.5 knots for a moment, with nobody on board."""
+    m = _monitor()
+    m._schedule(_own(1.0, 30.0, gs=2.5), 1.0)
+    m._schedule(_own(1.5, 30.0, gs=0.0), 1.5)
+    assert "Off blocks" not in " ".join(_words(m))
+    m._schedule(_own(10.0, 30.0, gs=3.0), 10.0)
+    m._schedule(_own(14.0, 30.0, gs=3.0), 14.0)
+    assert "Off blocks, right on time." in _words(m)
 
 
 def test_a_plan_hours_from_the_clock_is_said_once_and_left():

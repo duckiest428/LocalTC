@@ -466,6 +466,8 @@ class PilotMonitoring:
         english = foreign.gloss(text, self.language) if self.language else None
         if english is not None:  # "Fahrwerk ausfahren": read as "gear down", as the grammar knows it
             text = english
+        # ("Full flaps please" wasn't a command, and answered the checklist's item instead.)
+        text = re.sub(r"\bfull flaps\b", "flaps full", text, flags=re.I)
         reading = speech_acts.read(text, ev.confidence, radio_call=self._radio_call(text))
         own = self.cockpit.own
         if own is not None and own.on_ground and any(c.action == "go_around" for c in reading.commands):
@@ -517,6 +519,8 @@ class PilotMonitoring:
             for cmd in reading.commands:  # "flaps one" as the answer to "Flaps?": set too
                 if cmd.action not in ("yes", "no", "check") and act != "report":  # ("they're armed": already so)
                     done += self._command(t, cmd, reading, uid)
+            if done and not self.monitor.about_the_item(reading.commands):
+                return done  # "Full flaps, please" in the landing checklist: done, and not "Landing gear?" answered with it
             if self.monitor.respond(text, t):
                 return done + self._now(t)
         if act == "answer" and (self.intent is not None or self.monitor.offer is not None):

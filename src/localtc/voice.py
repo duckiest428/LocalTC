@@ -55,6 +55,8 @@ def flight_hints(engine: AtcEngine) -> VocabularyHints:
         airports=tuple(dict.fromkeys(airports)),
         runways=tuple(dict.fromkeys(runways)),
         taxiways=tuple(taxiways[:20]),
+        procedures=tuple(p.upper() for p in (engine.cfg.sid, engine.cfg.star) if p),
+        fixes=tuple(f.ident for f in engine.route.fixes) if engine.route else (),
     )
 
 

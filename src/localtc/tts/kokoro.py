@@ -32,7 +32,9 @@ from localtc.tts.synth import Speech
 
 log = logging.getLogger(__name__)
 # espeak's phonemizer warns "words count mismatch" on most lines (harmless: the line is still spoken), filling the log.
+# (A filter, as phonemizer sets its own logger's level when it makes its backend, after this.)
 logging.getLogger("phonemizer").setLevel(logging.ERROR)
+logging.getLogger("phonemizer").addFilter(lambda record: "words count mismatch" not in record.getMessage())
 
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/"
 FILES = {  # name: (bytes, sha256)

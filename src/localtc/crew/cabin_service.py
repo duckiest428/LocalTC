@@ -78,4 +78,14 @@ class CabinService:
                 log.exception("Cabin crew failed on %s", type(event).__name__)
                 continue
             for output in outputs:
+                if isinstance(output, CabinSpeech) and self.cabin.wants_words(output.text):
+                    try:
+                        words, records = await asyncio.to_thread(self.cabin.word_announcement, output.text, output.t)
+                    except Exception:
+                        log.exception("Cabin crew's own words failed")
+                    else:
+                        for record in records:
+                            self.bus.publish(record)
+                        if words != output.text:
+                            output = msgspec.structs.replace(output, text=words, spoken="")
                 self.bus.publish(output)

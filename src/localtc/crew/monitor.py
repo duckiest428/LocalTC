@@ -68,6 +68,7 @@ from localtc.sim_api.geo import haversine_nm
 SAFETY, ROUTINE, CHATTER = 3, 2, 1
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
 GAP_S = 8.0  # between two of the copilot's own routine calls: a person, not a feed
+ROLLING_S = 3.0  # moving for this long: moving
 QUIET_AFTER_RADIO_S = 6.0  # routine calls wait this long after anything said on the radio
 GREETING_AFTER_S = 20.0  # the copilot settles in before it says hello
 ATIS_RUNWAY_ONLY = True  # a new ATIS letter is news only when the runway, approach or setting changed
@@ -232,6 +233,7 @@ class Monitor(WatchMixin):
         self.atis_said: dict[str, tuple] = {}  # airport: (runway, approach, setting) last told
         self.book: ChecklistSet | None = None  # the aircraft's checklists (None: it has none)
         self.progress: Progress | None = None  # the checklist being read
+        self._rolling_since: float | None = None
         self.paused_progress: Progress | None = None  # one put on hold, to resume
         self.minimums_ft: int | None = None  # the captain's minimum, above the touchdown zone
         self._prev_above: float | None = None
@@ -679,7 +681,7 @@ class Monitor(WatchMixin):
         to_go = off_block_in(self.perf.sched_out_s, own.zulu_s)
         of_day = self.perf.sched_out_s % DAY_S
         when = f"{of_day // 3600:02d}{of_day % 3600 // 60:02d}"
-        off = self.phase not in (None, "PARKED") or own.gs_kt > 2.0
+        off = self.phase not in (None, "PARKED") or self._rolling(own)
         if to_go is None:
             if not off:
                 self._call("schedule_far", ROUTINE, t, f"The plan has us off block at {when} Zulu. That's "
@@ -1119,7 +1121,7 @@ class Monitor(WatchMixin):
         # Not once ATC has said which approach to expect, nor after a go-around: then the ATIS's runway and approach
         # only contradict the clearance ("expect VISUAL approach" read out after being vectored for the ILS).
         if info is not None and self.atis_seen.get(st.flight.destination or "") != info.letter and to_go < 250 \
-                and not st.assignments.approach and not self.f.approaches \
+                and not st.assignments.approach and not self.f.approaches and self.phase not in ("TAKEOFF", "DEPARTURE") \
                 and self._atis_news(st.flight.destination or "", info):
             self.atis_seen[st.flight.destination or ""] = info.letter
             w = info.weather
@@ -1129,6 +1131,15 @@ class Monitor(WatchMixin):
                         f"runway {info.runway}, "
                         f"wind {speech.wind_display(w.wind)}{q}, expect {info.approach or 'the'} approach.")
             self._call(f"atis:{st.flight.destination}:{info.letter}", ROUTINE, t, text.replace("expect the approach", "expect vectors"))
+
+    def _rolling(self, own: OwnshipState) -> bool:
+        """Moving under its own wheels for a few seconds: one reading of 2.5 knots at the gate, as GSX's jetway comes
+        up, was "off blocks" and the cabin's "everyone's on" with nobody on board."""
+        if own.gs_kt <= 2.0:
+            self._rolling_since = None
+            return False
+        self._rolling_since = own.t if self._rolling_since is None else self._rolling_since
+        return own.t - self._rolling_since >= ROLLING_S
 
     def _through_final(self, own: OwnshipState, st: Any, t: float, n: int) -> None:
         """Cleared for the approach and gone straight through the final, not turning onto it: said, from where the
@@ -1479,6 +1490,14 @@ class Monitor(WatchMixin):
                 self.progress = None
         if lines:
             self._call(f"run:{pr.checklist.id}:{pr.index}:{t:.2f}", ROUTINE, t, " ".join(lines), commands=tuple(cmds))
+
+    def about_the_item(self, commands: tuple) -> bool:
+        """Whether what the captain asked for is what the checklist's asking about ("flaps one" to "Flaps?")."""
+        pr = self.progress
+        if pr is None or pr.index >= len(pr.checklist.lines):
+            return True
+        challenge = pr.checklist.lines[pr.index].challenge.lower()
+        return any(c.action in ("yes", "no", "check") or c.action.split("_")[0] in challenge for c in commands)
 
     def respond(self, text: str, t: float) -> bool:
         """The captain's answer to the item asked; True when it was one (the next read). One the aircraft shows

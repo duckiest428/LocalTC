@@ -212,6 +212,7 @@ controller = "clearance"
 text = ["{callsign}, clearance on request, stand by.", "{callsign}, stand by for your clearance."]
 
 [fragments]
+hold_fix = "hold at {fix}"
 altitude = "maintain {altitude}"
 cruise = "expect {cruise}"
 frequency = "frequency {frequency}"

@@ -37,6 +37,9 @@ from localtc.tts.voices import DEFAULT_VOICE, SPEAKERS, delivery_for, sex_of, sp
 log = logging.getLogger(__name__)
 
 KINDS = ("timeout", "quota", "rate_limit", "network", "auth", "invalid_audio", "unavailable", "busy", "error")
+# Time for a long line beside the sim: an ATIS's 400 characters ran out of 8 s, the voice went to another, and that ran out
+# too: text only.
+SECONDS_PER_CHAR = 0.06
 REST_S = 30.0
 REST_MAX_S = 600.0
 RATE_LIMIT_S = 60.0
@@ -144,7 +147,7 @@ class VoiceChain:
                 continue
             st.calls += 1
             try:
-                speech = check_audio(self._run(provider, text, persona), text)
+                speech = check_audio(self._run(provider, text, persona, max(self.timeout_s, len(text) * SECONDS_PER_CHAR)), text)
             except TtsError as exc:
                 self._failed(provider, st, exc)
                 continue
@@ -178,11 +181,12 @@ class VoiceChain:
             st.not_ready = f"{type(exc).__name__}: {exc}"
         return bool(st.not_ready) or self.clock() < st.until
 
-    def _run(self, provider: Any, text: str, persona: Persona) -> Speech:
+    def _run(self, provider: Any, text: str, persona: Persona, timeout_s: float | None = None) -> Speech:
         """``provider.synthesize`` in its own thread, given at most ``timeout_s``. A line it ran out of time for is
         left to finish on its own (its provider skipped until it has: ``busy``)."""
+        timeout_s = self.timeout_s if timeout_s is None else timeout_s
         lock = self._locks[provider.id]
-        if provider.id in self._abandoned or not lock.acquire(timeout=self.timeout_s):
+        if provider.id in self._abandoned or not lock.acquire(timeout=timeout_s):
             raise TtsError("busy", "still on an earlier line")
         box: dict[str, Any] = {}
         done = threading.Event()
@@ -198,11 +202,11 @@ class VoiceChain:
                 done.set()
 
         threading.Thread(target=work, name=f"localtc-tts-{provider.id}", daemon=True).start()
-        if not done.wait(self.timeout_s):
+        if not done.wait(timeout_s):
             self._abandoned.add(provider.id)
             if done.is_set():  # finished just now
                 self._abandoned.discard(provider.id)
-            raise TtsError("timeout", f"no audio in {self.timeout_s:.0f} s")
+            raise TtsError("timeout", f"no audio in {timeout_s:.0f} s")
         if "error" in box:
             raise box["error"]
         return box["speech"]

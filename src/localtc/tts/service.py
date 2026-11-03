@@ -21,7 +21,7 @@ import zlib
 from typing import Any
 
 from localtc.bus import EventBus
-from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, pa_effect
+from localtc.dsp.cabin import applause, boarding_music, chime, in_person_effect, interphone_effect, pa_effect
 from localtc.dsp.clips import CLIPS, clip_id
 from localtc.dsp.radio import clean, intercom_effect, key_sound, radio_effect
 from localtc.sim_api import (
@@ -272,7 +272,7 @@ class VoiceOut:
                 speech = await asyncio.to_thread(self.voices.speak, sentence, who, local=True)
             if speech is None:
                 return  # nobody could say it: text only
-            effect = {"pa": pa_effect, "interphone": interphone_effect}.get(kind, intercom_effect)
+            effect = {"pa": pa_effect, "interphone": interphone_effect}.get(kind, in_person_effect)
             audio = effect(speech.audio, speech.rate)
             self.player.play(Clip(audio, speech.rate, kind))
             log.info("Cabin %s as %s (%s %s, %.1f s)", kind, who.key, speech.provider, speech.voice,

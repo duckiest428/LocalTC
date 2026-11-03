@@ -110,6 +110,12 @@ GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE = ("L:FSDT_GSX_BOARDING_STATE", "L:F
 DOORS = ("INTERACTIVE POINT OPEN:0", "INTERACTIVE POINT OPEN:1")
 WATCHED = (GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE, *DOORS)
 BOARDING_PA_S = 25.0  # after boarding begins: the boarding welcome
+ROLLING_S = 3.0  # moving for this long: moving
+# The announcements the language model may put in the crew member's own words, when it's a cloud one (never the safety
+# ones, whose words are what the rules ask for, nor an order to the crew).
+OWN_WORDS = ("boarding", "welcome", "aircraft_talk", "service", "descent", "landing", "after_landing", "goodbye", "seatbelt_off")
+NUMBER = re.compile(r"\d[\d:,.]*|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|"
+                    r"forty|fifty|sixty|hour|hours|minutes?)\b", re.I)
 AIRCRAFT_TALK_S = 600.0  # after the seatbelt sign is off: a word about the aircraft
 GAP_S = 1.5  # between one thing said and the next
 WELCOME_AFTER_DOORS_S = 20.0
@@ -278,6 +284,9 @@ class CabinCrew:
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
         self.backend: Any = None  # the language model, for their answers on the interphone (None: the script's)
+        self.own_words = False  # ... and their long announcements in their own words (a cloud model's quick enough)
+        self._to_word: set[str] = set()  # the announcements it may word
+        self._rolling_since: float | None = None
         self.model_wait_s = 10.0
         self._new_flight()
 
@@ -538,6 +547,8 @@ class CabinCrew:
                     continue
                 spoken = text
             out.append(self._speech(text, spoken, "pa", chime="pa" if chime and not out else "", language=lang))
+            if lang == "en" and key in OWN_WORDS and self.own_words:
+                self._to_word.add(text)
         return out
 
     def _foreign_values(self, lang: str, landed: bool) -> dict[str, str]:
@@ -547,7 +558,7 @@ class CabinCrew:
             values["ltime"] = duration_in(lang, planned)
         return values
 
-    def call(self, key: str, *, extra: dict[str, str] | None = None, chime: str = "call", channel: str = "interphone"
+    def call(self, key: str, *, extra: dict[str, str] | None = None, chime: str = "", channel: str = "interphone"
              ) -> list[Any]:
         """A call of the crew's own to the flight deck (``LINES``): in English, on the interphone."""
         said = self._english(key, extra=extra)
@@ -699,6 +710,15 @@ class CabinCrew:
         self._at[key + "_end"] = t + self._length(said)
         return said
 
+    def _rolling(self, own: Any, t: float) -> bool:
+        """On the ground and moving for a few seconds: one reading of 2.5 knots as GSX's jetway came up was "everyone's
+        on" with nobody on board."""
+        if not own.on_ground or own.gs_kt <= 2.0:
+            self._rolling_since = None
+            return False
+        self._rolling_since = t if self._rolling_since is None else self._rolling_since
+        return t - self._rolling_since >= ROLLING_S
+
     def _moments(self, t: float) -> list[Any]:  # noqa: C901 - the flight, in order
         own, sys = self._own, self._sys
         if own is None:
@@ -707,7 +727,7 @@ class CabinCrew:
         s = self.settings
         engines = (sys.engines_running if sys is not None else 0) or (1 if own.engine_running else 0)
         beacon = sys.light_beacon if sys is not None else False
-        moving = own.on_ground and own.gs_kt > 2.0
+        moving = self._rolling(own, t)
         before_departure = not self._was_airborne
         if before_departure and own.on_ground:
             board, departure = self._var(GSX_BOARDING), self._var(GSX_DEPARTURE)
@@ -715,7 +735,10 @@ class CabinCrew:
             door = self._door_open()
             begun = board in (4, 5, 6) if gsx else door
             finished = board == 6 if gsx else "door_seen" in self.done and not door
-            ready = beacon or engines > 0 or moving or departure >= 4 or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
+            # (GSX still boarding: nobody's "all on" for the beacon or an engine, only once the flight really goes)
+            boarding = gsx and board in (4, 5)
+            ready = (not boarding and (beacon or engines > 0)) or moving or departure >= 4 \
+                or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
             pushing = moving or departure == 5 or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")
             if door:
                 self._mark("door_seen", t)
@@ -942,6 +965,40 @@ class CabinCrew:
             self._listening_until = ev.t + 20.0
             return self.reply("hello")
         return self._answer(body, ev.t, asked=self._asking is not None or listening)
+
+    def word_announcement(self, draft: str, t: float) -> tuple[str, list[LlmExchange]]:
+        """An announcement in the crew member's own words, different each flight, from the language model; ``draft``, the
+        script's, if it can't do it or loses a fact (every number and time in it has to be there still)."""
+        self._to_word.discard(draft)
+        if self.backend is None:
+            return draft, []
+        person, name, _, _ = self.crew()
+        system = (f"You are {name}, the cabin manager on this flight, making an announcement to the passengers. Your manner: "
+                  f"{person.brief}. Say the announcement in your own fresh words, the way you'd say it today: about the "
+                  "same length, spoken, plain, no stage directions. Keep every fact, name, number and instruction in it and "
+                  'add no fact of your own. Reply as JSON: {"reply": "..."}')
+        request = LlmRequest("crew", system, (("user", f'The announcement: "{draft}"'),),
+                             {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]},
+                             max_tokens=240)
+        result = self.backend.complete(request, timeout_s=self.model_wait_s)
+        reply = ""
+        if result.text:
+            try:
+                reply = str(json.loads(result.text).get("reply", "")).strip()
+            except (ValueError, AttributeError):
+                reply = ""
+        wanted = {n.lower().strip(".,") for n in NUMBER.findall(draft)}
+        kept = {n.lower().strip(".,") for n in NUMBER.findall(reply)}
+        good = bool(reply) and wanted <= kept and 0.5 * len(draft) <= len(reply) <= 1.6 * len(draft)
+        model = getattr(self.backend, "model", "")
+        record = LlmExchange(t=t, purpose="cabin", model=model, key=request.key(model), prompt=draft,
+                             response=result.text or "", outcome="used" if good else "rejected",
+                             detail=result.error or ("" if good else "a fact lost, or the wrong length: the script's words"),
+                             latency_ms=result.latency_ms)
+        return (reply if good else draft), [record]
+
+    def wants_words(self, text: str) -> bool:
+        return text in self._to_word
 
     def word(self, heard: str, draft: str, t: float) -> tuple[str, list[LlmExchange]]:
         """The answer in the crew member's own words, from the language model (``backend``), knowing what they're doing

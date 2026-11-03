@@ -899,6 +899,17 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def crash_trace(path: Path) -> None:
+    """Where a crash below Python goes (a graphics driver, the speech model's native code): the app just vanishes
+    otherwise, with nothing in its log to say why. In the logs' folder, so a report carries it."""
+    import faulthandler
+
+    try:
+        faulthandler.enable(open(path, "a", encoding="utf-8"))  # noqa: SIM115 - open until the process ends
+    except OSError:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -913,6 +924,8 @@ def main(argv: list[str] | None = None) -> int:
                              log_file=log_dir() / "localtc.log" if args.command in ("run", "record", "app") else None)
     if flying and log_file is not None and not args.verbose:
         print(f"Details go to {log_file} (-v shows them here)")
+    if log_file is not None:
+        crash_trace(log_file.parent / "crash.log")
     try:
         return args.func(args)
     except KeyboardInterrupt:

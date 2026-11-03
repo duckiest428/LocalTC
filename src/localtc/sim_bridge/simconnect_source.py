@@ -60,6 +60,7 @@ from localtc.sim_api import (
 from localtc.sim_bridge import definitions as defs
 from localtc.sim_bridge import arrivals, facilities
 from localtc.sim_bridge.knob import KnobTurn
+from localtc.sim_bridge.traffic_speed import TrafficSpeeds
 from localtc.sim_bridge.motion import Track
 from localtc.sim_bridge.dll import SimConnectError
 from localtc.sim_bridge.wire import make_client
@@ -208,6 +209,7 @@ class SimConnectSource:
         self._airport_list: list = []
         self._airport_list_received = 0
         self._nearest_to_fetch: str | None = None
+        self._traffic_speeds = TrafficSpeeds()
         self._next_facility_request = FIRST_FACILITY_REQUEST
         self._sim_major = MSFS_2024  # until the sim says which it is
         self._installed: list[tuple[str, str]] | None = None  # MSFS 2020's aircraft, read from its packages once
@@ -1032,7 +1034,8 @@ class SimConnectSource:
 
     def _emit_traffic(self, targets: tuple[TrafficTarget, ...] | None, t: float | None = None) -> None:
         if targets is not None:
-            self._emit(TrafficSnapshot(t=self._clock.now() if t is None else t, targets=targets))
+            now = self._clock.now() if t is None else t
+            self._emit(TrafficSnapshot(t=now, targets=self._traffic_speeds.apply(targets, now)))
 
     def _set_connected(self, connected: bool, detail: str) -> None:
         if not connected and self._last_connected is False:

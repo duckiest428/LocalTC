@@ -60,7 +60,7 @@ from localtc.sim_api import (
 from localtc.sim_api.geo import advance, bearing_deg, haversine_nm, unit
 from localtc.traffic import airlines as airline_data
 from localtc.traffic.feed import Flight
-from localtc.traffic.ground import Follower, free_stand, taxi_in_path
+from localtc.traffic.ground import TURN_RADIUS_M, Follower, free_stand, rounded, taxi_in_path
 from localtc.traffic.models import ModelPicker
 
 log = logging.getLogger(__name__)
@@ -76,6 +76,9 @@ FIRST_LOT_S = 30.0  # the first lot: everything around when the traffic comes on
 SNAP_M = 45.0  # a live aircraft standing this close to a parking spot is put on it
 CLEAR_OF_USER_M = 70.0
 RESERVED_M = 35.0
+COUNTED_EVERY_S = 300.0
+OWN_STAND_CLEAR_M = 1500.0  # the stand the user left is kept empty until they're this far away (or off the ground)
+LINE_UP_IN_M, LINE_UP_ON_M = 60.0, 70.0  # a held departure joins the centreline this far along, and rolls on this far
 # Parked aircraft are put at the airport the user is on the ground at (the nearest within this), never while flying:
 # at FL390 they were put at the fields below (Cork, Cherbourg), and Paris's 36 came while on final, each a stutter.
 # Each live one is shown where it was this long ago: always between two positions known, never guessed ahead (the
@@ -248,7 +251,7 @@ class Local:
     runway: tuple[str, str] | None = None  # (airport, runway end) it's landing on, or taxiing out to
     follow: Follower | None = None  # rolled out: off the runway and along the taxiways to a stand (or out to a runway)
     owned: bool = False  # LocalTC's from here on (low on final, on the ground): never handed back to the live data
-    stage: str = ""  # taxiing out: "push", "start", "taxi", "hold_short"
+    stage: str = ""  # taxiing out: "push", "start", "taxi", "hold_short", "line_up"
     stage_t: float = 0.0
     push_to: tuple[float, float] | None = None  # where the push back ends (on the taxiway)
     roll_after: float = 0.0  # a departure lined up: rolls from here on (once tower's cleared it on the radio)
@@ -340,12 +343,20 @@ class TrafficManager:
         self._released_t = -1e9  # the last held departure sent on its way
         self._call_t = -1e9  # the last time tower told one to hold short
         self._graphs: dict[str, tuple[tuple, TaxiGraph]] = {}  # airport: (its closures, the graph around them)
+        self._own_stand: tuple[float, float] | None = None  # where the user was parked: nobody's put there as they push
+        self._counted_t = -1e9  # the last time what the live feed has around was logged
         self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
 
     # --- what happens ------------------------------------------------------------------------------------------
 
     def on_own(self, own: OwnshipState) -> None:
         self.own = own
+        if not own.on_ground:
+            self._own_stand = None
+        elif own.gs_kt < 1 and not own.engine_running:  # (stopped at a hold short with its engines on isn't a stand)
+            self._own_stand = (own.lat, own.lon)
+        elif self._own_stand is not None and haversine_nm(own.lat, own.lon, *self._own_stand) * M_PER_NM > OWN_STAND_CLEAR_M:
+            self._own_stand = None
 
     def on_feed(self, flights: list[Flight] | None, source: str, now: float) -> None:
         """A new set of live positions (None: no source answered)."""
@@ -503,6 +514,12 @@ class TrafficManager:
                 wanted.append((d, f))
         wanted.sort(key=lambda x: x[0])
         keep = {f"live:{f.hex}" for _, f in wanted[: self.s.max_live]}
+        if now - self._counted_t >= COUNTED_EVERY_S:
+            self._counted_t = now
+            air = [f for _, f in wanted if not f.on_ground]
+            log.info("Traffic: the feed has %d within %.0f nm: %d on the ground, %d climbing, %d descending, %d level",
+                     len(wanted), self.s.radius_nm, len(wanted) - len(air), sum(f.vs_fpm > 300 for f in air),
+                     sum(f.vs_fpm < -300 for f in air), sum(abs(f.vs_fpm) <= 300 for f in air))
         # Gone: out of the area, lost, or one too many.
         for key, plane in list(self.planes.items()):
             f = self.flights.get(key[5:]) if plane.live else None
@@ -887,6 +904,8 @@ class TrafficManager:
         return None if (icao, best[1]) in taken else (icao, best[1])
 
     def _reserved_at(self, lat: float, lon: float) -> bool:
+        if self._own_stand is not None and haversine_nm(lat, lon, *self._own_stand) * M_PER_NM < RESERVED_M:
+            return True  # (planes were put on the user's gate as the pushback left it)
         return any(haversine_nm(lat, lon, a, b) * M_PER_NM < RESERVED_M for a, b in self.atc.reserved())
 
     def _clear_reserved(self) -> list[Any]:
@@ -1262,7 +1281,7 @@ class TrafficManager:
                             started=now, roll_after=now + ROLL_AFTER_CALL_S)
         self._did(f"{plane.callsign} cleared for takeoff {end.ident} after you")
         out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=geo.airport.elev_ft,
-                                         hdg=end.heading_true, on_ground=True, blend_s=12.0), now)]
+                                         hdg=end.heading_true, on_ground=True, blend_s=3.0), now)]
         return out + self._say(plane.callsign, "takeoff", geo.icao, end.ident, now)
 
     def _go_around(self, plane: Plane, geo: AirportGeometry, end, now: float) -> list[Any]:
@@ -1538,12 +1557,34 @@ class TrafficManager:
                 self._released_t = now
                 if not rolling and plane.live:
                     self._kept_off[plane.key] = now + EARLY_KEPT_OFF_S  # gone before its real one: not made again
+                if not self._line_up(plane, geo, ident, now):
+                    return self._release(plane, now)
+        elif loc.stage == "line_up":
+            limit = 0.0 if self._users_runway_at(geo, loc.lat, loc.lon, now) else None
+            loc.lat, loc.lon, loc.hdg, gs = loc.follow.step(loc.lat, loc.lon, limit_kt=limit)
+            if loc.follow.done:
                 return self._release(plane, now)
         loc.alt_ft = geo.airport.elev_ft
         out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
                                              hdg=loc.hdg, gs_kt=gs, on_ground=True, blend_s=1.5), now))
         return out + self._lights(plane, on_ground=True, gs=abs(gs) if loc.stage != "push" else 0.0, agl=0.0,
                                   lat=loc.lat, lon=loc.lon)
+
+    def _line_up(self, plane: Plane, geo: AirportGeometry, ident: str, now: float) -> bool:
+        """From the hold short onto the runway on its wheels, a curve round to the centreline: it was slid there
+        sideways over 12 s, the nose swinging round on the spot. False when there's no runway to line up on."""
+        loc, end = plane.local, geo.end(ident)
+        if end is None:
+            return False
+        xy = geo.xy(loc.lat, loc.lon)
+        along, _ = end.runway.along_across(xy)
+        u, way = unit(end.runway.ends[0].heading_true), unit(end.heading_true)
+        foot = (end.runway.center[0] + u[0] * along, end.runway.center[1] + u[1] * along)
+        turn_in = geo.frame.to_latlon(foot[0] + way[0] * LINE_UP_IN_M, foot[1] + way[1] * LINE_UP_IN_M)
+        lined = geo.frame.to_latlon(foot[0] + way[0] * (LINE_UP_IN_M + LINE_UP_ON_M), foot[1] + way[1] * (LINE_UP_IN_M + LINE_UP_ON_M))
+        loc.follow = Follower(rounded([(loc.lat, loc.lon), turn_in, lined], TURN_RADIUS_M), gs_kt=0.0, exit_index=-1, last_hdg=loc.hdg)
+        loc.stage, loc.stage_t = "line_up", now
+        return True
 
     def _users_runway_at(self, geo: AirportGeometry, lat: float, lon: float, now: float) -> bool:
         """``lat, lon`` is on the runway the user has (cleared onto it, on it, landing on it), or had just now."""
@@ -1586,6 +1627,8 @@ class TrafficManager:
         out += list(self.atc.reserved()) + list(self.native_spots)
         if self.own is not None and self.own.on_ground:
             out.append((self.own.lat, self.own.lon))
+        if self._own_stand is not None:
+            out.append(self._own_stand)
         return out
 
     def _airline_near(self, airline: str, icao: str) -> list[tuple[float, float]]:

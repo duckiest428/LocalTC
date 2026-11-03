@@ -393,6 +393,13 @@ class ConditionsMixin:
         if self.state.assignments.speed_kt != c.value or own.on_ground or self._going_around:
             self.conditions.end(c, "expired", own.t, "a new speed" if self.state.assignments.speed_kt != c.value else "")
             return False
+        tuned = self.state.comms.tuned
+        if tuned is not None and tuned.controller == "tower":
+            # Handed to tower, approach's speed is done with: tower's first words were "reduce speed to 180" before the
+            # pilot had even called, and again on final.
+            self.conditions.end(c, "expired", own.t, "with tower")
+            self._assign(speed_kt=None)
+            return False
         if ctx.final is not None and ctx.final.distance_nm <= SPEED_UNTIL_NM:
             self.conditions.end(c, "satisfied", own.t, "at the five mile final")
             self._assign(speed_kt=None)
@@ -401,8 +408,7 @@ class ConditionsMixin:
             c.off_since = None  # (slower is the pilot configuring to land: "reduce speed to 180" at 151 on final)
             return False
         c.off_since = c.off_since if c.off_since is not None else own.t
-        tuned = self.state.comms.tuned
-        if c.reminded or own.t - c.off_since < SPEED_OFF_S or tuned is None or tuned.controller not in ("approach", "tower", "center"):
+        if c.reminded or own.t - c.off_since < SPEED_OFF_S or tuned is None or tuned.controller not in ("approach", "center"):
             return False
         c.reminded = True
         self._schedule(own.t, "approach.speed", {"speed": int(c.value)}, tuned, delay=False)

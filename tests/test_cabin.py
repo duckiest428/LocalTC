@@ -113,7 +113,7 @@ def test_each_announcement_chimes_once_before_its_first_language():
     welcome = [s for s in said(out, "pa") if "Lufthansa" in s.text and ("Flugzeit" in s.text or "flight time" in s.text
                                                                           or "tailwind" in s.text or "Flight time" in s.text)]
     assert welcome[0].chime == "pa" and all(not s.chime for s in welcome[1:])
-    assert said(out, "interphone")[0].chime == "call"
+    assert said(out, "interphone")[0].chime == ""  # no ding on the interphone: it's a call to the flight deck
 
 
 def test_a_crew_of_another_country_has_its_names_and_its_english():

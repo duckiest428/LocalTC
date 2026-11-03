@@ -336,7 +336,8 @@ class Copilot(CallWords):
         tuned = st.comms.tuned
         phase = st.phase
         if phase == "PARKED" and "ifr" not in st.clearances and st.flight.destination:
-            self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)
+            if st.flight.origin:  # (not knowing where it is yet, it called the destination's Clearance for its clearance)
+                self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)
         elif phase == "PARKED" and self._cleared("ifr") and "taxi" not in st.clearances:
             # At a gate: push and start first, and only once the crew is ready (the beacon on, or asked for on the
             # intercom). It called "ready to taxi" straight after the clearance, at the gate, not pushed back.

@@ -37,6 +37,7 @@ TAXI_DECEL_MS2 = 0.7
 LOOK_AHEAD_M = 150.0
 MIN_TURN_KT = 5.0
 MAX_YAW_DEG_S = 12.0  # the nose swings round no faster than this (a nosewheel's steering)
+MIN_STEER_RADIUS_M = 20.0  # ... nor faster than rolling allows: a nose can't swing round on the spot
 # Rolling out: braked to reach the exit at this speed, not down to a crawl at once and then 2 km of runway at 8 knots
 # (a 777 that landed the other way sat on Dubai's runway two minutes, with the user on final)
 EXIT_KT = 18.0
@@ -102,7 +103,8 @@ class Follower:
         lat, lon = lat + (target[0] - lat) * k, lon + (target[1] - lon) * k
         if self.last_hdg is not None and self.gs_kt > 0:  # the nose swings round, it doesn't snap to the next leg
             turn = (hdg - self.last_hdg + 180) % 360 - 180
-            hdg = (self.last_hdg + max(-MAX_YAW_DEG_S * dt, min(MAX_YAW_DEG_S * dt, turn))) % 360
+            rate = min(MAX_YAW_DEG_S, math.degrees(self.gs_kt * 0.5144 / MIN_STEER_RADIUS_M))
+            hdg = (self.last_hdg + max(-rate * dt, min(rate * dt, turn))) % 360
         self.last_hdg = hdg
         return lat, lon, hdg, self.gs_kt
 

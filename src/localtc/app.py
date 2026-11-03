@@ -57,6 +57,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
     from localtc.atc_core.route import RouteFix
 
     return EngineConfig(
+        origin=flight.origin or None,
         destination=flight.destination or None,
         cruise_ft=flight.cruise_ft or None,
         callsign=flight.callsign or None,
@@ -564,6 +565,7 @@ async def run_session(
                 if cfg.crew.llm != "off" and cfg.crew.mode != "off":  # their answers in their own words
                     cabin.backend = copilot_model(cfg, backend)
                     cabin.model_wait_s = max(cfg.crew.timeout_s * (2.0 if cfg.llm.cpu_only else 1.0), cfg.cloud.timeout_s)
+                    cabin.own_words = bool(cfg.cloud.enabled and cloud_keys().all())
                 consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled,
                                                                   source=source).run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft

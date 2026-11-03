@@ -252,8 +252,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--green-dim); }
 .wrapped-page[hidden] { display: none; }
 
 footer { background: var(--bg-2); border-top: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 10px; margin: 0 10px 10px; border: 1px solid var(--line); border-top: 0; }
-.txrow { display: flex; gap: 6px; align-items: center; }
-.txrow #tx-text { flex: 1 1 auto; background: var(--lcd); border-color: var(--line-2); padding: 7px 8px; }
+.txrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.txrow #tx-text { flex: 1 1 240px; min-width: 200px; background: var(--lcd); border-color: var(--line-2); padding: 7px 8px; }
 .ptt { width: 38px; height: 34px; background: none; border: 0; color: #d89a2b; cursor: pointer; padding: 2px; flex: none; border-radius: var(--radius); }
 .ptt svg { width: 100%; height: 100%; }
 .ptt.down { color: var(--red); background: #3a1f1d; }
@@ -368,6 +368,12 @@ tr.tunable:hover td { background: var(--panel-2); }
 .detail .meta { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 .detail h3 { font-size: 13px; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
 
+@media (max-width: 860px) {
+  .radios { gap: 8px; font-size: 12px; padding: 4px 8px; }
+  .radios .rlabel { font-size: 10px; color: var(--text-2); }
+  .radio:has(#com2), .logo { display: none; }
+  .btn.com { padding: 6px 9px; }
+}
 @media (max-width: 560px) {
   .radios { gap: 8px; font-size: 12px; padding: 5px 8px; }
   .flightrow { grid-template-columns: repeat(2, minmax(0, 1fr)); }

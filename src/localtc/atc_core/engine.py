@@ -175,11 +175,13 @@ MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the control
 TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 5.0, 1200.0, 300.0
 TRAFFIC_MIN_KT = 40.0  # slower than this and not on the ground: a sim glitch, not something flying
 TRAFFIC_FIELD_NM, TRAFFIC_FIELD_AGL_FT = 5.0, 1000.0  # this low this close to an airport: the tower's, no call
-STANDBY_S = (40.0, 90.0)  # after "stand by for your clearance", the clearance this long later
+ORIGIN_NEAR_NM = 6.0  # the plan's origin, while the aircraft is this close to it: the flight starts there
+ORIGIN_WAIT_S = 20.0  # ... and its data waited for this long before the nearest airport is taken
+STANDBY_S = (20.0, 35.0)  # after "stand by for your clearance", the clearance this long later
 INITIAL_MIN_FT = 4000  # the initial altitude of an IFR clearance: at least this ...
 INITIAL_STEPS_FT = (0, 1000, 2000, 4000, 5000)  # ... a few steps above 3,000 ft over the field ...
 INITIAL_MAX_FT = 10000  # ... and no higher than this (unless the field itself is that high)
-STANDBY_CHANCE = 0.3  # clearance delivery sometimes has to go get it
+STANDBY_CHANCE = 0.2  # clearance delivery sometimes has to go get it
 MAX_TAILWIND_REQUEST_KT = 10.0  # a pilot's runway request is granted up to this much tailwind
 MAX_READBACK_ATTEMPTS = 3  # then ATC repeats the instruction once more and stops asking
 STT_WAIT_S = 8.0  # with voice input: how long ATC waits after push-to-talk for the transcript
@@ -428,6 +430,7 @@ REQUEST_CONTROLLER = {
 
 @dataclass
 class EngineConfig:
+    origin: str | None = None  # the plan's: the airport the flight starts from, when the aircraft is there
     standby_s: tuple[float, float] = STANDBY_S  # after "stand by for your clearance", the clearance this long later
     destination: str | None = None
     cruise_ft: int | None = None
@@ -518,6 +521,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self.tracker.context_builder.fixes = airport_fixes.load(self.cfg.airport_fixes)
         self.facilities: list[Facility] = []
         self.airport_requests: list[str] = []  # airports the engine needs; the service fetches them
+        self._origin_asked_t = 0.0  # when the plan's origin was asked for
         # The real gates of an airport (``localtc.gate_data``), or None while unknown; None: the scenery's names only.
         self.gate_source: Callable[[str], real_gates.GateData | None] | None = None
         self._taxiways_named: set[str] = set()  # airports whose unnamed taxiways were named from the real ones
@@ -1130,6 +1134,40 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return None
         return weather, None, ("simulator", weather.t, "")
 
+    def _find_origin(self, own: OwnshipState, nearest: AirportGeometry | None) -> None:
+        """The airport the flight starts from: the plan's while the aircraft is at it, else the nearest with runways.
+        At San Francisco's far side the nearest was a Coast Guard station with none, San Francisco's data was never
+        asked for, and with no origin the destination's Clearance and ATIS were all there was."""
+        st = self.state
+        if not own.on_ground or st.clearances or self._arriving:
+            return
+        planned = (self.cfg.origin or "").upper()
+        if planned and st.flight.origin != planned:
+            geo = self.geometry(planned)
+            if geo is None and planned not in self._requested:
+                self._requested.add(planned)
+                self._origin_asked_t = own.t
+                self.airport_requests.append(planned)
+                self._real_gates(planned)
+            elif geo is not None and geo.distance_nm(own.lat, own.lon) <= ORIGIN_NEAR_NM:
+                st.flight.origin = planned
+                self._rebuild_facilities()
+                return
+        if st.flight.origin is not None:
+            return
+        if planned and self.geometry(planned) is None and own.t - self._origin_asked_t < ORIGIN_WAIT_S:
+            return  # the plan's on its way
+        if nearest is not None:
+            st.flight.origin = nearest.icao
+            self._rebuild_facilities()
+            return
+        # The nearest has no runways (a heliport, a Coast Guard station): the next ones around, the sim sends only that one.
+        for near in self.diversion.nearby:
+            if len(near.icao) == 4 and near.icao not in self._requested and near.icao not in self.tracker.context_builder.airports \
+                    and _distance_nm(own.lat, own.lon, near.lat, near.lon) <= ORIGIN_NEAR_NM:
+                self._requested.add(near.icao)
+                self.airport_requests.append(near.icao)
+
     def _real_for(self, icao: str, kind: str, own: OwnshipState) -> real_atis.RealAtis | None:
         """The airport's real ATIS for a broadcast of ``kind``: its arrival and departure ones read as one, the letter
         the flight's own (Madrid's departures were given LocalTC's own ATIS on another runway because only its arrival
@@ -1221,9 +1259,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         ctx = self.tracker.context
         out: list[BusEvent] = []
 
-        if st.flight.origin is None and own.on_ground and ctx.airport is not None:
-            st.flight.origin = ctx.airport.icao
-            self._rebuild_facilities()
+        self._find_origin(own, ctx.airport)
         dest = st.flight.destination
         if dest and dest not in self.tracker.context_builder.airports and dest not in self._requested:
             self._requested.add(dest)
@@ -3387,7 +3423,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             correction = self._fragments(list(interp.mismatched), slots)
             self._schedule(t, "common.negative", {"correction": correction}, facility, expects_readback=False)
         else:
-            self._schedule(t, "common.read_back", {"missing": self._fragments(list(interp.missing), slots)}, facility,
+            missing = ["hold_fix" if e == "fix" and pending.instruction_id == "common.hold" else e for e in interp.missing]
+            self._schedule(t, "common.read_back", {"missing": self._fragments(missing, slots)}, facility,
                            expects_readback=False)
         return out
 
@@ -3495,7 +3532,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # that" and the hold stayed; "we're back on track, can we continue the course" got the hold said again.
             self._leave_hold(own, facility, answering=True)
             return []
-        if intent == "other":
+        if intent in ("other", "report_problem"):  # (a problem it couldn't place: "our managed speed isn't working" went unanswered)
             return self._decline(interp, facility, t)
         if self._vfr and self._vfr_request(interp, facility, t, own):
             return []

@@ -134,7 +134,7 @@ def test_service_on_the_bus_with_cached_destination(tmp_path):
 
 def test_stand_by_means_a_while():
     """ "Stand by for your clearance", and the clearance a dozen seconds later sounded like nobody went to get it: it
-    comes 40 s to a minute and a half on."""
+    comes 20 to 35 s on (a minute and a half felt slow)."""
     for seed in range(1, 40):
         engine, own = parked_engine(destination="KBFI", cruise_ft=12000)
         engine.cfg.seed = seed
@@ -142,7 +142,7 @@ def test_stand_by_means_a_while():
         if not any(getattr(o, "instruction_id", "") == "clearance.standby" for o in said):
             continue
         clearance = next(item for item in engine._scheduled if item.instruction_id.startswith("clearance.ifr"))
-        assert 40 <= clearance.due - 5 <= 95, clearance.due
+        assert 20 <= clearance.due - 5 <= 40, clearance.due
         return
     raise AssertionError("no stand by in 40 seeds")
 
@@ -164,3 +164,21 @@ def test_no_clearance_alerts_where_nobody_gives_clearances():
     assert engine._staffed("KPAE", "ground", "tower") and engine._staffed("KPAE", "tower")
     engine.facilities = [f for f in engine.facilities if f.airport != "KPAE" or f.controller not in ("ground", "tower")]
     assert not engine._staffed("KPAE", "ground", "tower") and not engine._staffed(None, "tower")
+
+
+def test_the_flight_starts_from_the_plans_airport_while_the_aircraft_is_at_it():
+    """San Francisco's far side: the nearest airport had no runways, so there was no origin, and the destination's
+    Clearance was all there was to call."""
+    engine, own = parked_engine(destination="KBFI", cruise_ft=12000)
+    engine.cfg.origin = "KPAE"
+    engine.state.flight.origin = None
+    engine._find_origin(own, None)
+    assert engine.state.flight.origin == "KPAE"
+    engine.cfg.origin = "KLAX"  # a plan from somewhere else: it's fetched, and the nearest is where the flight is
+    engine.state.flight.origin = None
+    near = engine.geometry("KPAE")
+    engine._find_origin(own, near)
+    assert "KLAX" in engine.airport_requests and engine.state.flight.origin is None  # (waiting for it)
+    engine._origin_asked_t = own.t - 60.0
+    engine._find_origin(own, near)
+    assert engine.state.flight.origin == "KPAE"

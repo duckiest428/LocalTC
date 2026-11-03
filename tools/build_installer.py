@@ -169,8 +169,11 @@ def release_files(setup: Path) -> None:
     sys.path.insert(0, str(ROOT / "src"))
     from localtc.update import changelog_section
 
-    (dist / "notes.md").write_text(changelog_section((ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), v) + "\n",
-                                   encoding="utf-8")
+    # A version's own notes where it has them (what the versions before it show in their update popup: tools/release.py).
+    own = ROOT / ".github" / "release-notes" / f"{v}.md"
+    notes = own.read_text(encoding="utf-8").strip() if own.is_file() else changelog_section(
+        (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), v)
+    (dist / "notes.md").write_text(notes + "\n", encoding="utf-8")
     sums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in (archive, setup))
     (dist / "SHA256SUMS").write_text(sums, encoding="utf-8", newline="\n")
     for p in (archive, dist / "notes.md", dist / "SHA256SUMS"):

@@ -15,7 +15,7 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 # The application at discord.com/developers that the profile shows as "LocalTC" (its public id, not a secret).
-APP_ID = ""
+APP_ID = "1567208592128475249"
 SITE = "https://localtc.tech"
 BUTTON = "Fly on LocalTC"
 LOGO = "logo"  # the image uploaded to that application under Rich Presence

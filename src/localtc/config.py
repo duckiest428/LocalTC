@@ -391,7 +391,7 @@ class CrewConfig(_Section):
     llm: Literal["off", "questions", "full"] = "full"  # older setting; ``mode`` decides (kept so old files load)
     # How much the copilot leans on the language model, as ATC's [llm] mode: "auto" (mostly LLM with the cloud model,
     # fully scripted with the one on this PC), "llm", "mostly_llm", "semi", "scripted", or "off".
-    mode: Literal["auto", "llm", "mostly_llm", "semi", "scripted", "off"] = "auto"
+    mode: Literal["auto", "llm", "mostly_llm", "semi", "scripted", "off"] = "llm"
     # Its answers may go past what the copilot knows from the sim and ATC (what's usual, how a system works): they can
     # be wrong. Off: a reply with a number the facts don't have is turned away. Commands are always checked.
     beyond_facts: bool = True

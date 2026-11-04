@@ -5,6 +5,7 @@ Phoenix 160 miles off. Yuma (a 13,300 ft runway with an ILS) is one of the airpo
 El Centro, 30 miles behind, was fetched on the way.
 """
 
+import dataclasses
 from pathlib import Path
 
 import msgspec
@@ -204,3 +205,73 @@ def test_close_to_the_destination_it_stays_the_destination():
     f.fly(30)
     assert "common.emergency_priority" in f.ids() and "common.emergency_nearest" not in f.ids()
     assert f.engine.state.flight.destination == "KPHX"
+
+
+# --- what a flight out of Mumbai turned up: an engine failure, and four "say intentions" ------------------------------------
+
+def declared(*calls: str) -> Flight:
+    f = Flight()
+    f.say("Mayday mayday mayday, Los Angeles Center, Frontier 2084, engine fire")
+    f.fetch()
+    f.fly(30)
+    for text in calls:
+        f.say(text)
+        f.fly(25)
+    return f
+
+
+@pytest.mark.parametrize("text", ["Intensions are to land at the nearest airport to engine failure.",
+                                  "We have ENGINE FAILURE WE NEED TO LAND IMMEDIATELY TO THE NEAREST AIRPORT AVAILABLE",
+                                  "Frontier 2084, we need to land immediately"])
+def test_the_intentions_said_are_acted_on_not_asked_for_again(text):
+    f = declared()
+    before = len(f.said)
+    f.say(text)
+    f.fly(25)
+    new = [o.instruction_id for o in f.said[before:]]
+    assert "common.divert" in new or "common.divert_level" in new, new
+    assert "common.emergency_copied" not in new and "common.emergency_intentions" not in new
+
+
+def test_a_nearest_airport_isnt_read_as_a_place():
+    assert resolve(match_intents(normalize("land at the nearest airport due to engine failure")))[0].values.get("fix") is None
+
+
+def test_the_same_emergency_said_again_isnt_asked_about_again():
+    f = declared("Frontier 2084, engine fire, 150 souls on board and 9 tons of fuel")
+    before = len(f.said)
+    f.say("Frontier 2084, engine fire, 150 souls on board and 9 tons of fuel")
+    f.fly(25)
+    new = [o.instruction_id for o in f.said[before:]]
+    assert new and "common.emergency_copied" not in new and "common.emergency_intentions" not in new
+
+
+def test_souls_and_fuel_said_are_heard_whoever_read_the_call():
+    f = Flight()
+    f.say("Mayday, Frontier 2084, engine failure. We have 9 tons of fuel left and 150 souls on board.")
+    f.fetch()
+    f.fly(30)
+    assert "common.emergency_intentions" not in f.ids()
+    copied = next(o for o in f.said if o.instruction_id == "common.emergency_copied")
+    assert "150 souls" in copied.text and "9 tons" in copied.text
+
+
+@pytest.mark.parametrize("text", ["Frontier 2084, mayday needed.", "Frontier 2084, engine failure", "Frontier 2084, requesting immediate land."])
+def test_a_mayday_on_the_old_frequency_is_answered_there(text):
+    f = Flight()
+    f.engine._handed_off_from = lambda facility: facility  # (read back a handoff, and still here)
+    f.say(text)
+    f.fly(10)
+    assert "common.contact" not in f.ids() and f.ids()[:1] == ["common.emergency"]
+
+
+def test_on_final_the_mayday_said_again_gets_the_equipment_not_questions():
+    f = declared()
+    tuned = f.engine.state.comms.tuned
+    f.engine._emergency_told["emergency"] = "engine fire"
+    tuned_tower = dataclasses.replace(tuned, controller="tower")
+    from localtc.atc_core.readback import Interpretation
+
+    f.engine._emergency(Interpretation(kind="request", intent="emergency", values={"emergency": "mayday on the ILS"}, text="mayday on the ILS"), tuned_tower, f.t)
+    f.fly(10)
+    assert f.ids()[-1] == "common.equipment"

@@ -347,12 +347,12 @@ class FlightDeck:
         elif isinstance(ev, OwnshipState):
             self.memory.aircraft = (("altitude", round(ev.alt_indicated_ft)), ("heading", round(ev.hdg_mag)),
                                     ("ias", round(ev.ias_kt)), ("vs", round(ev.vs_fpm)), ("on_ground", ev.on_ground),
-                                    ("com1", round(ev.com1_mhz, 3)))
-            khz = round(ev.com1_mhz * 1000)
+                                    ("com1", round(ev.tx_mhz, 3)))
+            khz = round(ev.tx_mhz * 1000)
             if self._com1_khz is not None and khz != self._com1_khz:
                 ours = any(abs(k - khz) <= 5 and t - when <= TUNE_EXPECTED_S for when, k in self._tunes)
                 if not ours:
-                    self.cancel(t, f"the pilot tuned {ev.com1_mhz:.3f}", kinds=("call", "checkin", "request", "tune"),
+                    self.cancel(t, f"the pilot tuned {ev.tx_mhz:.3f}", kinds=("call", "checkin", "request", "tune"),
                                 before=t)
-                    self.note("manual_tune", t, f"COM1 {ev.com1_mhz:.3f}")
+                    self.note("manual_tune", t, f"COM{ev.tx_radio} {ev.tx_mhz:.3f}")
             self._com1_khz = khz

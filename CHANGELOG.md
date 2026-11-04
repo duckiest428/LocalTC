@@ -78,6 +78,14 @@ a new minor version adds features, a patch fixes them.
 - **The ATIS no longer invents mist:** a METAR's 9999 was read as "visibility 9 kilometres, mist" outside the US. It's now 10 km or more, and the weather read out from a METAR is only what the METAR says. Where one runway does both, an ICAO ATIS says "arrival and departure runway 04" instead of "runway in use 04".
 - **No more than three of one model on an airport's GA ramps**, where a ramp could fill up with whichever one or two models were picked first.
 - **Quick Settings comes in sections** (Voice & radio, ATC, Crew, Traffic, AI & models) with a box to find a setting. The switches beside the radio box say what they do, "ATC voice" and "Copilot radio", each with a light, and the X beside the typing box is gone.
+- **The Live Map draws the airports around you, with a flight plan or without one:** taxiways, runways and gates were only drawn for a plan's origin and destination, so with no plan the map showed none of it.
+- **Jetway and stairs when GSX stalls:** GSX can accept a call and stop at the first page of its menu. The crew now pick the row themselves, and no longer close the menu under it or say nothing's happened too soon.
+- **COM2 works:** ATC, the ground crew and the copilot follow the radio selected to transmit on. Click COM1 or COM2 in the radio bar to choose, also on an aircraft whose own selector ignores the sim.
+- **ATC in an emergency acts on your intentions:** "we need to land at the nearest airport" gets vectors instead of "say intentions" again, souls and fuel already given aren't asked for, a mayday on the old frequency is answered there, and an engine failure or "immediate landing" counts as an emergency.
+- **The copilot takes "yes, please ask for it"** as the yes to its offer to ask ATC.
+- **ATC understands more of a pilot's own words, with a small local model too:** "good to go" at the runway, "can we go" at the gate, "off the runway, where do you want us". A question about traffic gets an answer, and the destination's tower frequency asked for in the cruise is told, not a handoff to the airport you left.
+- **The language model is kept from more wrong replies:** "clearance granted" for a clearance on request, "continue as filed" at the gate, "unable" to a call that asked nothing, made-up traffic, emergency details left out, and a ground crew waiting for you to tell them you're ready.
+- **The ATC voice and Copilot radio switches look like the checkboxes they are.** The copilot's language model is on Fully LLM by default.
 
 ## [0.5.5] - 2026-11-02
 

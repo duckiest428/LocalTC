@@ -152,7 +152,6 @@
 "Auto: as busy as the airport is at that hour": "Auto: tão movimentado quanto o aeroporto a essa hora",
 "Automatic": "Automático",
 "Automatic ({0})": "Automático ({0})",
-"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)": "Automático: sobretudo LLM com o modelo na nuvem, totalmente por script com o modelo deste PC (recomendado)",
 "Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)": "Fora desta Wi-Fi, enviar o mapa, o tráfego e o registo de rádio pelo servidor enquanto o telemóvel ou o Flight Tracker do site estão a ver (guardado em memória lá, nunca armazenado)",
 "BEST FPM": "MELHOR FPM",
 "BUTTER": "MANTEIGA",
@@ -1023,7 +1022,7 @@
 "Traffic zone (ATZ)": "Zona de tráfego de aeródromo (ATZ)",
 "Transmit button": "Botão de transmissão",
 "Transmit key": "Tecla de transmissão",
-"Transmit on COM1": "Transmitir em COM1",
+"Transmit on COM1": "Transmitir no COM1",
 "Trip": "Viagem",
 "Try again": "Tentar de novo",
 "Tune COM1": "Sintonizar COM1",
@@ -1390,5 +1389,8 @@
 "Voice & radio": "Voz e rádio",
 "What listens, speaks and thinks, and how much your computer does.": "O que ouve, fala e pensa, e quanto faz o seu computador.",
 "Your copilot, the cabin crew and the ground crew.": "O seu copiloto, a tripulação de cabine e a equipa de solo.",
-"Your microphone and what you hear.": "O seu microfone e o que ouve."
+"Your microphone and what you hear.": "O seu microfone e o que ouve.",
+"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "Automático: sobretudo LLM com o modelo na nuvem, totalmente por script com o modelo deste PC",
+"Transmit on COM2": "Transmitir no COM2",
+"COM2 {0}": "COM2 {0}"
 }

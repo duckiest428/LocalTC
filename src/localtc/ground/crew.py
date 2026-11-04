@@ -30,8 +30,10 @@ SAFETY, ROUTINE, CHATTER = 3, 2, 1  # as the copilot's calls (crew.monitor)
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
 STERILE_FT = 10000.0
 LISTENING_S = 20.0  # after the crew's spoken, an answer needs no "ramp, ..."
-SEND_S = 25.0  # a service called, and this long for GSX to show it took
-RETRY_S = 15.0  # called and nothing yet: called once more first (GSX's own steps through its menu sometimes stall)
+SEND_S = 75.0  # a service called, and this long for GSX to show it took (each of its menu steps took 20 s on a flight at Frankfurt)
+RETRY_S = 30.0  # called and no sign of it, not even its menu: called once more first
+PICKED_S = 240.0  # ... and after its row's been picked: the stairs at Frankfurt took two minutes to show
+MENU_STALL_S = 8.0  # GSX's own steps through its menu sometimes stop at the first page: this long there, and the crew pick the row
 ONE_CALL_MOVES = ("OperateJetways", "OperateStairs", "Departure")  # the same call undoes these: never called twice
 # GSX's own variables say a service is requested long before its Remote API does (de-ice at Geneva: 5 s against 85 s).
 GSX_STATE_VARS = {"Boarding": "L:FSDT_GSX_BOARDING_STATE", "Deboarding": "L:FSDT_GSX_DEBOARDING_STATE", "Catering": "L:FSDT_GSX_CATERING_STATE",
@@ -114,6 +116,8 @@ class RampCrew:
         self._as_written: set[str] = set()
         self.last_said = ""
         self._ours: dict[str, float] = {}  # the services the pilot asked for, and when
+        self._menu_since: float | None = None  # since when GSX's menu has been up
+        self._menu_tried = False  # the row picked for the service being called
         self._run: MenuRun | None = None
         self._run_after: tuple[str, str] | None = None  # what it was for: (kind, service)
         self._push: Push | None = None
@@ -134,7 +138,7 @@ class RampCrew:
 
     @property
     def tuned(self) -> bool:
-        return self.own is not None and on_ramp(self.own.com1_mhz, self.ramp_mhz)
+        return self.own is not None and on_ramp(self.own.tx_mhz, self.ramp_mhz)
 
     @property
     def parked(self) -> bool:
@@ -698,10 +702,13 @@ class RampCrew:
             kind, service = self._run_after or ("", "")
             name = self._name(service)
             if run.failed:
+                if kind == "call":
+                    self._sending = None
+                    self._ours.pop(service, None)
                 self._cancelled.discard(service)
                 out.append(self._speech({"cancel": "cancel_failed", "finish": "finish_failed", "off": "off_failed"}.get(kind, "menu_failed"),
                                         t, name=name, why=self._why(run.failed)))
-            else:
+            elif kind != "call":  # (a service called: GSX showing it says the rest)
                 out.append(self._speech({"cancel": "cancelled", "finish": "finished", "off": "off"}[kind], t, name=name))
         return out
 
@@ -737,6 +744,7 @@ class RampCrew:
         if state.message != before.message and state.message:
             out += self._message(state.message, t)
         menu = state.menu
+        self._menu_since = None if menu is None else (t if before.menu is None else self._menu_since)
         if menu is None:
             self._asking = None
             self._seen_question = None
@@ -838,12 +846,21 @@ class RampCrew:
                 self._sending = None
             elif self.state.menu is not None and is_question(self.state.menu):
                 self._sending = (service, t)  # (answering GSX's questions about it: not stuck)
-            elif not self._called_again and t - sent >= RETRY_S and service not in ONE_CALL_MOVES:
+            elif self._run is not None:
+                self._sending = (service, t)  # (on its way through the menu: its time starts when that's over)
+                return []
+            elif not self._menu_tried and self.state.menu is not None and self._menu_since is not None \
+                    and t - max(self._menu_since, sent) >= MENU_STALL_S:
+                self._menu_tried = True
+                self._sending = (service, t)
+                log.info("Ground crew: GSX stopped at %r with %s called: picking its row", self.state.menu.title, service)
+                return self._start_run((row_of(service),), "call", service, t)
+            elif self.state.menu is None and not self._called_again and t - sent >= RETRY_S and service not in ONE_CALL_MOVES:
                 self._called_again = True
                 self._sending = (service, t)
                 log.info("Ground crew: %s not taken yet, calling it again", service)
                 return [Send(service)]
-            elif t - sent >= SEND_S:
+            elif t - sent >= (PICKED_S if self._menu_tried else SEND_S):
                 self._sending = None
                 self._ours.pop(service, None)
                 out: list[Any] = [Close()] if self.state.menu is not None else []
@@ -855,6 +872,7 @@ class RampCrew:
         service = self._queue.pop(0)
         self._sending = (service, t)
         self._called_again = False
+        self._menu_tried = False
         self._ours[service] = t
         return [Send(service)]
 

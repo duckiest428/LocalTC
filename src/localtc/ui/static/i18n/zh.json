@@ -152,7 +152,6 @@
 "Auto: as busy as the airport is at that hour": "自动：与机场当时的繁忙程度一致",
 "Automatic": "自动",
 "Automatic ({0})": "自动（{0}）",
-"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)": "自动：使用云端模型时大部分用 LLM，使用这台电脑上的模型时完全用脚本（推荐）",
 "Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)": "离开这个 Wi-Fi 时，在手机或网站的 Flight Tracker 观看期间，通过服务器发送地图、交通和无线电日志（只在那里的内存中，从不存储）",
 "BEST FPM": "最佳 FPM",
 "BUTTER": "丝滑落地",
@@ -1390,5 +1389,8 @@
 "Voice & radio": "语音与无线电",
 "What listens, speaks and thinks, and how much your computer does.": "负责听、说和思考的部分，以及你的电脑承担多少。",
 "Your copilot, the cabin crew and the ground crew.": "你的副驾驶、客舱机组和地勤。",
-"Your microphone and what you hear.": "你的麦克风和你听到的内容。"
+"Your microphone and what you hear.": "你的麦克风和你听到的内容。",
+"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "自动：使用云端模型时大部分用 LLM，使用这台电脑上的模型时完全用脚本",
+"Transmit on COM2": "在 COM2 上发射",
+"COM2 {0}": "COM2 {0}"
 }

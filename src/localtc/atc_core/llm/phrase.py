@@ -199,6 +199,10 @@ def facts_problem(detail: str) -> bool:
     return any(p in detail for p in FACTS_PROBLEMS)
 
 
+ON_THE_GROUND = {"parked", "pushback", "taxi out", "taxi in", "runway hold"}
+AS_FILED = re.compile(r",?\s*continue as filed", re.IGNORECASE)
+
+
 def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], required: str = "", *,
                 beyond_facts: bool = False) -> str:
     """The model's reply, checked against the facts. ``required``: the data's own answer to the question (the facts'
@@ -206,6 +210,10 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
     ``beyond_facts``: what the facts don't cover may come from the model ([llm] beyond_facts); the safety checks (no
     instruction, short, the data's own answer when there is one) stay."""
     text = without_thanks(_reply_text(raw, callsigns))
+    if facts.get("phase") in ON_THE_GROUND:
+        text = AS_FILED.sub("", text).strip(" ,.")  # (nothing to continue: "unable, continue as filed" at the gate, to "can we go")
+    if re.search(r"\btraffic\b", text, re.IGNORECASE) and not any("traffic" in f"{k} {v}".lower() for k, v in facts.items()):
+        raise PhraseError("reply says something about traffic, and the facts have none; say it isn't available")  # ("no traffic off your left")
     words = re.findall(r"[a-z]+", text.lower())
     if not words:
         raise PhraseError("reply has no words")
@@ -368,7 +376,8 @@ _DIGIT_RUN = re.compile(r"\b(?:(?:%s)(?:[\s-]+(?:point|decimal)[\s-]+|[\s-]+)){1
 # Phrases whose words carry the meaning together: kept as phrases ("tail right" is not "tailwind right").
 KEPT_PHRASES = ("tail right", "tail left", "hold short", "line up and wait", "cleared for takeoff", "cleared to land",
                 "go around", "until established", "descend via", "climb via", "at or above", "at or below",
-                "give way", "cleared for the option", "touch and go", "low approach", "readback correct", "radar contact")
+                "give way", "cleared for the option", "touch and go", "low approach", "readback correct", "radar contact",
+                "souls", "fuel", "intentions", "number one", "emergency equipment", "on request")  # ("say souls on board and fuel remaining" came back as "soul on board")
 
 
 def digits_from_words(text: str) -> str:

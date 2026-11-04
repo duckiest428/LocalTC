@@ -50,6 +50,8 @@ from localtc.sim_api import (
     AiObjectAssigned,
     ModelList,
     TrafficIdentity,
+    OwnshipState,
+    SelectRadio,
     SetComFrequency,
     SetSimVar,
     SimCommand,
@@ -208,6 +210,8 @@ class SimConnectSource:
         self._more_raw: dict | None = None
         self._arrival_assemblers: dict[int, arrivals.ArrivalAssembler] = {}
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
+        self._tx_choice: int | None = None  # the COM picked in the app's radio bar (SelectRadio)
+        self._tx_sim: tuple[bool, bool] | None = None  # ... and the aircraft's own selector since
         self._simvar_definitions: dict[str, int] = {}  # variable -> data definition id, this connection
         self._position: tuple[float, float] | None = None
         self._assemblers: dict[int, facilities.AirportAssembler] = {}
@@ -524,6 +528,9 @@ class SimConnectSource:
                     log.info("Tuning COM%d to %.3f", command.radio, command.hz / 1e6)
                 except SimConnectError as exc:
                     log.warning("Couldn't tune COM%d: %s", command.radio, exc)
+            elif isinstance(command, SelectRadio):
+                self._tx_choice, self._tx_sim = (2 if command.radio == 2 else 1), None
+                self._send_event(dll, handle, SendSimEvent(name="COM2_TRANSMIT_SELECT" if command.radio == 2 else "COM1_TRANSMIT_SELECT"))
             elif isinstance(command, SendSimEvent):
                 self._send_event(dll, handle, command)
             elif isinstance(command, SetSimVar):
@@ -620,6 +627,20 @@ class SimConnectSource:
             self._marks_made[self._mark_request] = key
             if len(self._marks_made) > 400:  # never answered (the package isn't in the sim): forgotten
                 self._marks_made.pop(next(iter(self._marks_made)))
+
+    def _with_radio_chosen(self, own: OwnshipState) -> OwnshipState:
+        """The COM picked in the app's radio bar, on an aircraft whose selector ignores the sim's event (the A340 at Frankfurt
+        did). The aircraft's own selector moving to the other radio afterwards is the pilot's newer word."""
+        choice = self._tx_choice
+        if choice is None:
+            return own
+        sim = (own.com1_tx, own.com2_tx)
+        if sim != self._tx_sim:
+            first, self._tx_sim = self._tx_sim is None, sim
+            if not first and own.tx_radio != choice:
+                self._tx_choice = None
+                return own
+        return replace(own, com1_tx=choice == 1, com2_tx=choice == 2)
 
     def _send_event(self, dll: SimConnectApi, handle: int, command: SendSimEvent) -> None:
         """A key event from the copilot ("GEAR_DOWN"), mapped to a client event the first time it's sent."""
@@ -1004,7 +1025,7 @@ class SimConnectSource:
             self._emit(AircraftVars(t=t, values=dict(zip(self._watch, values))))
         elif msg.request_id == REQ_OWNSHIP:
             self._user_object_id = msg.object_id
-            ownship = defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t)
+            ownship = self._with_radio_chosen(defs.ownship_from_raw(defs.unpack(defs.OWNSHIP, msg.payload), t))
             self._position = (ownship.lat, ownship.lon)
             self._emit(ownship)
         elif msg.request_id == REQ_IDENTITY:

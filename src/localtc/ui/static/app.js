@@ -55,9 +55,9 @@ function connect() {
   on("update", (u) => { S.state.update = u; Settings.update(u); UpdatePopup.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
   on("dev", (d) => Dev.event(d));
-  on("airport", ({ icao }) => {  // the flight fetched an airport's layout: draw it if it's on the route
-    const wanted = [S.state.plan?.origin, S.state.plan?.destination, S.flight.origin, S.flight.destination];
-    if (wanted.includes(icao)) MapView.airport(icao);
+  on("airport", ({ icao }) => {  // the flight fetched an airport's layout: on the map, with a plan or without one
+    MapView.fetched.add(icao);
+    MapView.airport(icao);
   });
   es.onerror = () => setStatus({ status: "error", detail: "LocalTC isn't answering" });
   es.onopen = () => setStatus(S.state);
@@ -77,6 +77,8 @@ function setState(st) {
   setStatus(st);
   if (st.flight && Object.keys(st.flight).length) setFlight(st.flight);
   $("#sw-copilot").classList.toggle("on", st.copilot && st.copilot !== "off");
+  $("#sw-copilot").setAttribute("aria-checked", String(!!(st.copilot && st.copilot !== "off")));
+  $("#sw-atc").setAttribute("aria-checked", String(!st.muted));
   const radioMode = st.copilot_mode === "assist" ? "reads back and changes frequencies" : "works the whole radio";
   $("#sw-copilot").title = st.copilot && st.copilot !== "off" ? `Copilot on: ${radioMode}` : `Copilot off: ${radioMode}`;
   $("#sw-atc").classList.toggle("on", !st.muted);
@@ -265,6 +267,8 @@ function setOwn(o) {
   S.ownAt = Date.now();
   $("#com1").textContent = mhz(o.com1);
   $("#com2").textContent = o.com2 ? mhz(o.com2) : "OFF";
+  $("#com1").classList.toggle("active", o.tx !== 2);
+  $("#com2").classList.toggle("active", o.tx === 2);
   $("#squawk").textContent = o.squawk || "----";
   $("#xmode").textContent = { alt: "ALT", on: "ON", standby: "STBY", off: "OFF", ground: "GND", test: "TST" }[o.xpdr] || "";
   markTuned();
@@ -401,8 +405,8 @@ function enRoute(s) {
 }
 
 function markTuned() {
-  const com1 = S.own?.com1;
-  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", com1 != null && Math.abs(Number(el.dataset.mhz) - com1) < 0.004));
+  const tx = S.own?.tx === 2 ? S.own?.com2 : S.own?.com1;
+  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", tx != null && Math.abs(Number(el.dataset.mhz) - tx) < 0.004));
 }
 
 $("#ap-freqs").addEventListener("click", (e) => {
@@ -411,7 +415,13 @@ $("#ap-freqs").addEventListener("click", (e) => {
 });
 
 async function tune(f) {
-  try { await api("radio/tune", { mhz: f }); toast(`COM1 ${mhz(f)}`); } catch (e) { fail(e); }
+  const radio = S.own?.tx === 2 ? 2 : 1;
+  try { await api("radio/tune", { mhz: f, radio }); toast(radio === 2 ? `COM2 ${mhz(f)}` : `COM1 ${mhz(f)}`); } catch (e) { fail(e); }
+}
+for (const radio of [1, 2]) {
+  $(`#pick-com${radio}`).onclick = async () => {
+    try { await api("radio/select", { radio }); } catch (e) { fail(e); }
+  };
 }
 
 /* ---------- footer: talk, type, switches ---------- */
@@ -1869,7 +1879,7 @@ const Settings = {
           <span class="hint">${crewNone ? "" : st.cloud?.enabled ? "The cloud language model is on." : 'The cloud language model is off (<a href="#cloud-card" class="jump">Cloud language model</a>): the copilot uses the model on this PC either way.'}</span></label></div>
         <div ${crewNone ? "hidden" : ""}>
         <div class="row"><label>How much it leans on it<select id="s-crew-mode">${[
-            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)"],
+            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC"],
             ["llm", "Fully LLM: the model reads everything you say and words everything it says but the safety calls"],
             ["mostly_llm", "Mostly LLM: short clear commands straight away; the rest, and its own calls, the model's"],
             ["semi", "Semi script/LLM: the listed commands from the script; everything else you say to the model"],
@@ -2538,7 +2548,7 @@ const Settings = {
 
 
 const MapView = {
-  map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, drawnAirports: new Set(),
+  fetched: new Set(), map: null, ownMarker: null, trail: null, path: AtcMap.track(), tfc: new Map(), route: null, routeLayer: null, follow: true, tileLayer: null, drawnAirports: new Set(),
   zoneLayer: null, zonesOn: true, zonesTimer: null, zonesAt: 0, zonesWho: "", drawnRef: null,
   wxLayer: null, wxOn: true, wxAt: 0, wxWhere: null, radarLayer: null, opsLayer: null, atcOps: null, notamLayer: null,
   zoneAirports: [],
@@ -2546,7 +2556,10 @@ const MapView = {
   grounds: new Map(), groundRenderer: null, gateSeen: "",  // each airport's ground close in (AtcMap.ground), by ICAO
   mode: "ifr", rulesSeen: null,  // the IFR or VFR map: follows the flight's rules when they change, else the pilot's pick
   show() {
-    if (!this.map) this.init();
+    if (!this.map) {
+      this.init();
+      this.fetched.forEach((icao) => this.airport(icao));
+    }
     setTimeout(() => this.map.invalidateSize(), 0);
   },
   init() {
@@ -2865,6 +2878,11 @@ const MapView = {
     } catch { return; /* nothing to draw yet */ }
     this.zonesAt = Date.now();
     this.zonesView = { zoom: this.map.getZoom(), bounds: b.pad(0.3) };
+    // The airports around the flight, with a plan or without one: their runways, taxiways and gates for when you zoom in.
+    for (const ap of z.airports || []) {
+      if (!this.drawnAirports.has(ap.icao)) this.airport(ap.icao);
+      else if (!this.grounds.has(ap.icao)) this.layout(ap.icao);  // (not known when it was first asked for)
+    }
     if (!this.zonesOn) return;
     this.zoneLayer.clearLayers();
     AtcMap.zones(this.zoneLayer, z, { vfr: this.mode === "vfr" });  // atcmap.js, shared with the website

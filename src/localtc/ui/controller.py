@@ -176,6 +176,7 @@ class AppController:
             (post, "support"): self.api_support,
             (post, "radio/ptt"): self.api_ptt,
             (post, "radio/tune"): self.api_tune,
+            (post, "radio/select"): self.api_select_radio,
             (post, "radio/copilot"): self.api_copilot,
             (post, "radio/mute"): self.api_mute,
             (post, "account/prompt"): self.api_account_prompt,
@@ -964,6 +965,10 @@ class AppController:
         await self._need_live().tune(mhz, int(args.get("radio", 1)))
         return {}
 
+    async def api_select_radio(self, args: dict) -> dict:
+        await self._need_live().select_radio(2 if args.get("radio") in (2, "2") else 1)
+        return {}
+
     async def api_copilot(self, args: dict) -> dict:
         """The copilot switch: on works the radio the way Quick Settings says (``ui.copilot``), off gives it back."""
         if "mode" in args:
@@ -1460,7 +1465,7 @@ def own_view(ev: OwnshipState) -> dict:
     return {"t": round(ev.t, 1), "lat": ev.lat, "lon": ev.lon, "alt": round(ev.alt_indicated_ft), "agl": round(ev.alt_agl_ft),
             "hdg": round(ev.hdg_true), "hdg_mag": round(ev.hdg_mag), "gs": round(ev.gs_kt), "vs": round(ev.vs_fpm),
             "ground": ev.on_ground, "com1": ev.com1_mhz, "com2": ev.com2_mhz, "squawk": ev.squawk,
-            "xpdr": str(ev.xpdr_mode), "tx": ev.com1_tx, "zulu": ev.zulu_s}
+            "xpdr": str(ev.xpdr_mode), "tx": ev.tx_radio, "zulu": ev.zulu_s}
 
 
 def airport_summary(airport, engine=None) -> dict:

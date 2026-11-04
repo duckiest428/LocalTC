@@ -5,6 +5,7 @@ can't call a service that doesn't exist or get a push past the brake or ATC. The
 """
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,6 +41,10 @@ WORD_SYSTEM = (
     "same numbers and names. Add nothing: no gate, clearance or time that isn't in it, no promise, and never ask them to let you know "
     "when they're ready. Don't say who's calling whom. "
     'Reply as JSON: {"reply": "..."}')
+
+
+# Told not to, a model still had the crew waiting on the pilot: "Jetway's coming right up, just let me know when you're ready to plug in."
+WAITS_ON_THE_PILOT = re.compile(r"\blet (?:me|us) know\b|\bwhen you(?:'|\u2019)?(?:re| are) ready\b|\bgive (?:me|us) a shout\b", re.IGNORECASE)
 
 
 @dataclass
@@ -112,4 +117,7 @@ class RampModel:
             reply = str(json.loads(text).get("reply", "")).strip() if text else ""
         except (ValueError, AttributeError):
             reply = ""
+        if reply and WAITS_ON_THE_PILOT.search(reply) and not WAITS_ON_THE_PILOT.search(draft):
+            return draft, [LlmExchange(t=t, purpose=record.purpose, model=record.model, key=record.key, prompt=record.prompt, response=record.response,
+                                       outcome="rejected", detail="it had the crew waiting for the pilot", latency_ms=record.latency_ms)]
         return reply or draft, [record]

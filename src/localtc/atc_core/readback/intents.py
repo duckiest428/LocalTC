@@ -159,6 +159,8 @@ NOT_A_PLACE = {"final", "runway", "ils", "rnav", "gps", "visual", "localizer", "
 def _divert_to(tokens: list[Token]) -> str | None:
     """Where a diversion is to, after the last "to": "Yuma", "Palm Springs", "KNYL" (spelled out). None for "the
     nearest suitable airport": ATC picks."""
+    if _has_any(tokens, ("nearest",), ("closest",)):
+        return None  # ("land at the nearest airport due to engine failure": it isn't going to "engine failure")
     asked = next((i for i, t in enumerate(tokens) if t.text in ("vectors", "vector", "divert", "diverting", "diversion")), 0)
     starts = [i for i, t in enumerate(tokens) if t.text == "to" and i > asked]  # not "unable to make it"
     if not starts:
@@ -218,7 +220,8 @@ def tail_side(tokens: list[Token]) -> str | None:
 
 # An emergency whatever words come with it: smoke or fire on board.
 EMERGENCY_WORDS = (("smoke",), ("on", "fire"), ("engine", "fire"), ("cabin", "fire"), ("cockpit", "fire"), ("fire", "in"),
-                   ("fire", "on", "board"), ("fire", "warning"))
+                   ("fire", "on", "board"), ("fire", "warning"), ("engine", "failure"), ("engine", "failed"), ("lost", "an", "engine"),
+                   ("immediate", "land"), ("immediate", "landing"), ("land", "immediately"))
 NEED_TIME = (("more", "time"), ("not", "ready"), ("not", "quite", "there"), ("not", "quite", "ready"), ("few", "minutes"),
              ("few", "more", "minutes"), ("a", "minute"), ("a", "moment"), ("give", "us", "a"), ("little", "more", "time"),
              ("bit", "more", "time"), ("need", "a", "minute"), ("standby", "for", "a"))
@@ -324,16 +327,16 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     parking = _has_any(tokens, ("to", "parking"), ("to", "the", "ramp"), ("to", "ramp"), ("to", "the", "gate"), ("to", "gate"),
                        ("to", "a", "gate"), ("to", "our", "gate"), ("to", "the", "stand"), ("to", "a", "stand"), ("to", "stand"),
                        ("to", "the", "apron"))
-    if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of")):
+    if _has_any(tokens, ("clear", "of", "runway"), ("clear", "of", "the", "runway"), ("clear", "runway"), ("clear", "of"), ("off", "the", "runway")):
         add("clear_of_runway", runway=_any_runway(tokens))
     wants_stand = _has_any(tokens, ("request", "gate"), ("request", "parking"), ("request", "stand"), ("request", "ramp"),
                            ("requesting", "gate"), ("requesting", "parking"), ("gate", "assignment"), ("which", "gate"),
                            ("request", "taxi", "to", "gate"), ("request", "taxi", "gate"), ("for", "gate"), ("to", "our", "gate"),
                            ("get", "gate"), ("grab", "gate"), ("have", "gate"), ("another", "gate"), ("different", "gate"),
-                           ("at", "our", "gate"), ("gate", "instead"), ("other", "gate"))
+                           ("at", "our", "gate"), ("gate", "instead"), ("other", "gate"), ("where", "do", "you", "want"))
     if (parking and _has_any(tokens, ("taxi",))) or (wants_stand and not pushing):
         add("request_taxi_parking")  # "request taxi to the gate", "request gate", "request parking"
-    elif _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("requesting", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
+    elif [t.text for t in tokens[-3:]] == ["can", "we", "go"] or _has_any(tokens, ("ready", "to", "taxi"), ("request", "taxi"), ("requesting", "taxi"), ("taxi", "with"), ("ready", "for", "taxi"),
                   ("get", "taxi"), ("have", "taxi"), ("taxi", "please"), ("like", "taxi"), ("a", "taxi"),
                   ("taxi", "for", "departure"), ("taxi", "for", "the", "departure"),
                   ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),
@@ -345,7 +348,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     # runway") isn't being ready for it: only "ready ..." itself counts then (it got a taxi clearance).
     asking = _has_any(tokens, ("what",), ("which",), ("when",), ("where",), ("how",), ("asking",), ("disregard",),
                       ("expect",))
-    ready = _has_any(tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"),
+    ready = _has_any(tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"), ("ready", "to", "go"), ("good", "to", "go"),
                      ("ready", "for", "take", "off"), ("ready", "to", "depart"), ("ready", "to", "departure"),
                      ("ready", "for", "departures"), ("ready", "in", "sequence"))
     if not taxi_asked and (ready or not asking and _has_any(

@@ -152,7 +152,6 @@
 "Auto: as busy as the airport is at that hour": "Авто: так же загружено, как аэропорт в этот час",
 "Automatic": "Автоматически",
 "Automatic ({0})": "Автоматически ({0})",
-"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)": "Автоматически: в основном LLM с облачной моделью, полностью по скрипту с моделью на этом ПК (рекомендуется)",
 "Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)": "Вне этой сети Wi-Fi отправлять карту, трафик и журнал радиообмена через сервер, пока за ними следит телефон или Flight Tracker на сайте (там хранятся только в памяти, никогда не сохраняются)",
 "BEST FPM": "ЛУЧШИЙ FPM",
 "BUTTER": "КАК ПО МАСЛУ",
@@ -1390,5 +1389,8 @@
 "Voice & radio": "Голос и радио",
 "What listens, speaks and thinks, and how much your computer does.": "Что слушает, говорит и думает, и сколько делает ваш компьютер.",
 "Your copilot, the cabin crew and the ground crew.": "Ваш второй пилот, бортпроводники и наземная служба.",
-"Your microphone and what you hear.": "Ваш микрофон и то, что вы слышите."
+"Your microphone and what you hear.": "Ваш микрофон и то, что вы слышите.",
+"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "Автоматически: в основном LLM с облачной моделью, полностью по скрипту с моделью на этом ПК",
+"Transmit on COM2": "Передавать на COM2",
+"COM2 {0}": "COM2 {0}"
 }

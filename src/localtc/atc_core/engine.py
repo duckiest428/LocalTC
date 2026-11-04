@@ -335,6 +335,23 @@ SEQUENCE_NM = 12.0  # where the landing order is given
 SEQUENCE_ALT_FT = 3000.0  # traffic within this of our altitude counts as being on the same final
 MAX_ENDURANCE_MIN = 20 * 60  # beyond this the numbers are not telling us anything useful
 EMERGENCY_LAND_NM = 25.0  # with an emergency running, tower clears the landing from this far out
+# With an emergency running: wanting to be on the ground, wherever that is.
+WANTS_DOWN = re.compile(r"\b(?:need|needs|want|wants|have|got|must|request|requesting|intend|intentions?|intensions?)\b.{0,24}\bland\b"
+                        r"|\bland(?:ing)?\b.{0,16}\b(?:immediately|now|asap|possible)\b|\bimmediate land|\bemergency landing", re.IGNORECASE)
+NOT_AN_ANSWER = re.compile(r"\b(?:information|that's|not) not available\b|\bunable\b.*\bnot available\b", re.IGNORECASE)
+SOULS_SAID = re.compile(r"\b(\d[\d,]*)\s+(?:souls?|people|persons?|passengers?|pax|pob)\b", re.IGNORECASE)
+FUEL_SAID = re.compile(r"\b(\d[\d.,]*(?:\s+(?:tons?|tonnes?|kilos?|kg|pounds?|lbs?|minutes?|hours?))?)\s+(?:of\s+)?fuel\b", re.IGNORECASE)
+
+
+def _emergency_details(text: str | None) -> dict[str, str]:
+    """Souls and fuel where the pilot said them, whoever read the call: "9 tons of fuel left and 150 souls on board" got asked for them."""
+    out: dict[str, str] = {}
+    if text and (souls := SOULS_SAID.search(text)):
+        out["souls"] = souls.group(1)
+    if text and (fuel := FUEL_SAID.search(text)):
+        out["fuel"] = fuel.group(1)
+    return out
+
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 175.0  # slower than this and there is nothing to manage
@@ -650,6 +667,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._chatter_station: str | None = None
         self._routes_cache: dict[str, list[tuple[str, ...]]] = {}
         self._range_told: dict[str, float] = {}  # station -> when the pilot was last told it's out of range
+        self._emergency_told: dict[str, Any] = {}  # what ATC's been told of the emergency: souls, fuel, what's wrong
         self._reaching_t: float | None = None  # when the climb got near the level a centre gave
         self._taxi_path: tuple[str, list[tuple[float, float]]] | None = None  # (airport, points) of the route ground gave
         self._deferred: Transcript | None = None  # the model missed it once: it gets a second, longer look
@@ -772,7 +790,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._ptt_since = event.t
             own = self.state.aircraft
             # A transcript arrives after the key is released, maybe after a frequency change: it belongs here.
-            self._tx_mhz = (own.com2_mhz if event.radio == 2 else own.com1_mhz) if own else None
+            self._tx_mhz = own.mhz_of(event.radio) if own else None
         elif isinstance(event, PttReleased):
             self._ptt_since = None
             if self.cfg.await_transcripts:
@@ -968,14 +986,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 info = self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind,
                                         real=real, source=source)
                 atis_reach = self._reach(Facility("atis", "ATIS", 0.0, icao), own)
-                tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.com1_mhz))
+                tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.tx_mhz))
                 if key in self.atis.current:
                     # An AWOS or ASOS and no ATIS: an automated observation (the field's real METAR, as an ATIS has),
                     # read as one. A real ATIS for it (ATIS.guru's) is read as the ATIS it is.
                     self.atis.current[key].automated = automated_only(geo) and real is None
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
-                    out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.com1_mhz,
+                    out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.tx_mhz,
                                              letter=current.letter, text=current.text, spoken=current.spoken,
                                              variants=current.variants, locale=regions.accent(icao),
                                              source=self.atis_source_text(current, own)))
@@ -1272,16 +1290,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self.weather.update(raw, self.tracker.context_builder.airports)
         previous = (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned)
         ramp_was = self._ramp_tuned
-        st.comms.tuned_mhz = own.com1_mhz
-        st.comms.tuned = self._facility_for(own.com1_mhz)
-        atis = self._atis_airport(own.com1_mhz)
+        st.comms.tuned_mhz = own.tx_mhz  # the radio selected to transmit on: COM1 unless the aircraft says COM2
+        st.comms.tuned = self._facility_for(own.tx_mhz)
+        atis = self._atis_airport(own.tx_mhz)
         if atis is not None and st.comms.tuned is not None and st.comms.tuned.airport not in (None, atis) \
                 and st.comms.tuned.airport != self._working_airport():
             # Denver's ATIS is on 125.6, and so is one of Seattle Approach's frequencies: parked at Denver, it's the ATIS.
             st.comms.tuned = None
         self._atis_tuned = atis if st.comms.tuned is None else None
         self._ramp_tuned = st.comms.tuned is None and self._atis_tuned is None and self.ramp_mhz is not None \
-            and on_ramp(own.com1_mhz, self.ramp_mhz)
+            and on_ramp(own.tx_mhz, self.ramp_mhz)
         if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous or self._ramp_tuned != ramp_was:
             tuned = st.comms.tuned
             self._tuned_since = own.t
@@ -1297,12 +1315,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             elif st.pending is not None and tuned is not None and st.pending.controller != tuned.controller:
                 st.pending = None  # left that controller: whatever they were waiting for is moot now
             if self._atis_tuned is not None:
-                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="atis",
+                out.append(RadioTuned(t=own.t, radio=own.tx_radio, frequency_mhz=own.tx_mhz, controller="atis",
                                       station=f"{self._airport_name(self._atis_tuned)} ATIS"))
             elif self._ramp_tuned:
-                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="ramp", station="Ramp"))
+                out.append(RadioTuned(t=own.t, radio=own.tx_radio, frequency_mhz=own.tx_mhz, controller="ramp", station="Ramp"))
             else:
-                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz,
+                out.append(RadioTuned(t=own.t, radio=own.tx_radio, frequency_mhz=own.tx_mhz,
                                       controller=tuned.controller if tuned else None, station=tuned.station if tuned else None))
         out += self._refresh_atis(own, force=self._atis_tuned is not None and self._atis_tuned != previous[2])
 
@@ -2848,7 +2866,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if self.ramp_mhz is None:
             return False
         own = self.state.aircraft
-        mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None)
+        mhz = self._tx_mhz if self._tx_mhz is not None else (own.mhz_of(ev.radio) if own else None)
         return on_ramp(mhz, self.ramp_mhz) and self._facility_for(mhz) is None
 
     def _on_pilot(self, ev: Transcript) -> list[BusEvent]:
@@ -2984,7 +3002,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         st, t = self.state, ev.t
         st.comms.last_pilot_t = t
         own = st.aircraft
-        mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None)
+        mhz = self._tx_mhz if self._tx_mhz is not None else (own.mhz_of(ev.radio) if own else None)
         facility = self._facility_for(mhz) if mhz is not None else None
         if st.pending is not None and mhz is not None and facility is not None and facility.controller != st.pending.controller:
             # One frequency, two controllers (ground also works clearance delivery; KPHX approach also
@@ -2998,7 +3016,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             st.exchanges.append(Exchange(t, "pilot", None, ev.text, None))
             where = f"{mhz:.3f}" if mhz is not None else "an unknown frequency"
             return [self._alert(t, "no_atc_on_frequency", f"no LocalTC controller on {where}; transmission not answered")]
-        if pending is None and self._handed_off_from(facility) is not None \
+        if pending is None and self._handed_off_from(facility) is not None and "emergency" not in st.flags \
+                and not any(m.intent == "emergency" for m in match_intents(normalize(ev.text))) \
                 and not self._repeats_readback(ev.text, facility, mhz, t):  # ("Tower 119.9" once more: no reminder)
             # The pilot is still on the old frequency after reading back the handoff: send them again,
             # whatever they said. Nothing else on this frequency is theirs to ask for any more.
@@ -4235,7 +4254,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _pirep(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
         self._schedule(t, "common.pirep", {}, facility)
 
-    def _traffic_reply(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
+    def _traffic_reply(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> list[BusEvent] | None:
+        if is_question(interp.text or "") or asks(interp.text or ""):
+            return self._phrase(interp, facility, t, "answer", otherwise="common.unable")  # "what's that traffic off our left": it went unanswered
         if interp.values.get("traffic") == "in_sight" or "sight" in interp.text.lower():
             self._schedule(t, "common.roger", {}, facility)  # "looking" and "negative contact" need no answer
 
@@ -4253,25 +4274,52 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         out: list[BusEvent] = []
         if "emergency" not in st.flags:
             st.flags.add("emergency")
+            self._emergency_told = {}
             out.append(self._alert(t, "emergency", interp.text))
             self._emergency_started(t)
-        details = dict(interp.values)
+        details = {**_emergency_details(interp.text), **interp.values}
+        told = dict(self._emergency_told)
+        # "Mayday, engine fire, request vectors to the nearest airport", "intentions are to land at the nearest": where it wants to go.
+        said = match_intents(normalize(interp.text))
+        divert = next((m for m in said if m.intent == "request_diversion"), None)
+        back = next((m for m in said if m.intent == "request_return"), None)
+        wants_down = divert is not None or back is not None or WANTS_DOWN.search(interp.text or "") is not None
+        airborne = own is not None and not own.on_ground and facility.controller in ("departure", "center", "approach")
+        if airborne and wants_down and "emergency_priority" in st.flags:
+            # The priority's been given and this is the answer to "say intentions": it asked four times over and never acted.
+            self._emergency_told.update(details)
+            if back is not None:
+                self._return(interp, facility, t, own)
+            elif self.diversion.target is not None and not (divert is not None and divert.values.get("fix")):
+                self._schedule(t, "common.roger", {}, facility, expects_readback=False)  # (on the way there already)
+            else:
+                fix = divert.values.get("fix") if divert is not None else None
+                self._divert(Interpretation(kind="request", intent="request_diversion", text=interp.text, values={"fix": fix} if fix else {}),
+                             facility, t, own)
+            return out
         if details and "fuel" not in details and (endurance := self._endurance()) is not None:
             details["fuel"] = endurance  # the sim knows; no need to make the pilot work it out
-        if details:
+        # (What's wrong is said once: "mayday on the ILS" to tower isn't news, nor "Say intentions" on short final.)
+        new = {k: v for k, v in details.items() if told.get(k) != v and not (k == "emergency" and k in told)}
+        self._emergency_told.update(details)
+        if new and wants_down:
+            self._schedule(t, "common.roger", {}, facility, expects_readback=False)  # (nothing to ask: the intentions came with it)
+        elif new:
             parts = [details.get("emergency", ""), f"{details['souls']} souls" if "souls" in details else "",
                      f"{details['fuel']} of fuel" if "fuel" in details else ""]
             text = ", ".join(p for p in parts if p)
             self._schedule(t, "common.emergency_copied", {"message": Phrase(text, text)}, facility)
+        elif told and not airborne:
+            self._schedule(t, "common.equipment", {}, facility, expects_readback=False)  # (asked already; ground and tower have no vectors to give)
+        elif told and airborne and "emergency_priority" in st.flags:
+            self._emergency_priority(t, own, facility)  # nothing new: where it stands, not "say intentions" once more
         elif "emergency_asked" in st.flags:
             self._schedule(t, "common.emergency_intentions", {}, facility, expects_readback=False)
         else:
             st.flags.add("emergency_asked")
             self._schedule(t, "common.emergency", {}, facility)
-        # "Mayday, engine fire, request vectors to the nearest airport": the intentions come with the call.
-        divert = next((m for m in match_intents(normalize(interp.text)) if m.intent == "request_diversion"), None)
-        if divert is not None:
-            self.diversion.asked, self.diversion.asked_fix = True, divert.values.get("fix")
+        if divert is not None or (wants_down and back is None):
+            self.diversion.asked, self.diversion.asked_fix = True, divert.values.get("fix") if divert is not None else None
         if "emergency_priority" not in st.flags and own is not None and not own.on_ground \
                 and facility.controller in ("departure", "center", "approach"):
             if not self._priority_ready(t):
@@ -4326,6 +4374,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                           if w in CONTROLLER_WORDS and CONTROLLER_WORDS[w] != facility.controller), None)
             target = self.facility(named) if named else st.comms.expected
             own = st.aircraft
+            elsewhere = next((f for f in self.facilities if f.controller == named and f.airport == st.flight.destination), None) \
+                if named in ("tower", "ground") and own is not None and not own.on_ground and not self._arriving else None
+            if elsewhere is not None:
+                # Asked in the cruise for the destination's tower: told it. It got "contact Paine Tower", the airport it left.
+                self._schedule(t, "common.info", {"message": Phrase(f"{elsewhere.station} {speech.frequency_display(elsewhere.mhz)}",
+                                                                    f"{elsewhere.station} {speech.frequency(elsewhere.mhz)}")},
+                               facility, expects_readback=False)
+                return []
             if named == "tower" and target is not None and own is not None and not own.on_ground \
                     and "approach" not in st.clearances and self._works_approach(own) and self._arrival_plan(own) is not None:
                 self._clear_approach(t, own, facility, delay=True)  # "cleared ILS runway 13 approach, contact tower"
@@ -4555,6 +4611,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             required=known.display if known is not None and require else "", more=more,
             persona=self._persona(facility),
         )
+        if message is not None and decision == "reply" and NOT_AN_ANSWER.search(message.display) and exchanges \
+                and not (is_question(interp.text or "") or asks(interp.text or "")):
+            # "Cleared in, two lima tango": asked nothing, and got "unable, information not available".
+            exchanges = [*exchanges[:-1], msgspec.structs.replace(exchanges[-1], outcome="invalid", detail="it answers a question nobody asked")]
+            message = None
         if message is not None:
             self._schedule(t, "common.info", {"message": message}, facility, worded_by="model")
             return list(exchanges)

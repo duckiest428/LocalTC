@@ -680,3 +680,59 @@ def test_taxiway_india_is_kept_and_the_word_i_is_not_asked_for():
     assert keep_line("via K and I") == "K; I"
     assert "I" not in keep_line("I say again, climb and maintain 9,000")
     assert "I" not in _idents("I say again, climb and maintain 9,000")
+
+
+# --- what the local models did with a mayday, run over a whole flight ------------------------------------------------------
+
+def test_the_models_other_doesnt_overrule_a_reading_the_grammar_is_sure_of():
+    from localtc.atc_core.llm.understand import Answer, LlmInterpreter
+    from localtc.atc_core.readback import Interpretation, InterpretContext
+    from localtc.atc_core.values import Callsign
+
+    grammar = Interpretation(kind="request", intent="request_return", values={}, confidence=0.9, text="we want to go back")
+    merged = LlmInterpreter._merge(LlmInterpreter(None), grammar, Answer(kind="request", intent="other"), "we want to go back", None,
+                                   InterpretContext(callsign=Callsign("N172LT"), phase="CRUISE", station="Center"))
+    assert merged.intent == "request_return"
+
+
+def test_a_model_cant_lose_the_souls_and_fuel():
+    from localtc.atc_core.llm.phrase import PhraseError, check_reworded
+
+    with pytest.raises(PhraseError):
+        check_reworded('{"reply": "soul on board"}', "say souls on board and fuel remaining", ("N172LT",))
+    assert "souls" in check_reworded('{"reply": "say your souls on board and fuel remaining"}', "say souls on board and fuel remaining", ("N172LT",))
+
+
+def test_at_the_gate_there_is_nothing_to_continue_as_filed():
+    from localtc.atc_core.llm.phrase import check_reply
+
+    facts = {"phase": "parked", "controller": "Paine Ground"}
+    assert check_reply('{"reply": "unable, continue as filed"}', facts, ("N172LT",), beyond_facts=True).lower() == "unable"
+    assert "continue as filed" in check_reply('{"reply": "unable, continue as filed"}', {"phase": "cruise"}, ("N172LT",), beyond_facts=True)
+
+
+def test_clearance_on_request_isnt_reworded_into_a_clearance():
+    from localtc.atc_core.llm.phrase import PhraseError, check_reworded
+
+    with pytest.raises(PhraseError):
+        check_reworded('{"reply": "clearance granted, Boeing, IFR, stand by"}', "clearance on request, stand by", ("N172LT",))
+
+
+@pytest.mark.parametrize("text, intent", [("tower two lima tango at the runway, good to go when you are", "ready_for_departure"),
+                                          ("ground two lima tango off the runway where do you want us", "clear_of_runway"),
+                                          ("ground two lima tango we are all done here can we go", "ready_to_taxi")])
+def test_what_the_local_models_couldnt_read_in_a_pilots_own_words(text, intent):
+    from localtc.atc_core.readback.intents import match_intents
+    from localtc.atc_core.readback.normalize import normalize
+
+    assert intent in [m.intent for m in match_intents(normalize(text))]
+
+
+def test_can_we_go_direct_isnt_ready_to_taxi_and_no_traffic_is_made_up():
+    from localtc.atc_core.llm.phrase import PhraseError, check_reply
+    from localtc.atc_core.readback.intents import match_intents
+    from localtc.atc_core.readback.normalize import normalize
+
+    assert "ready_to_taxi" not in [m.intent for m in match_intents(normalize("center can we go direct boeing to save some time"))]
+    with pytest.raises(PhraseError):
+        check_reply('{"reply": "no traffic off your left"}', {"phase": "cruise"}, ("N172LT",), beyond_facts=True)

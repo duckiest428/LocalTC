@@ -84,7 +84,7 @@ class GroundService:
         elif isinstance(event, PttPressed):
             self.crew.keyed = True
             own = self.crew.own
-            self._tx_mhz = (own.com2_mhz if event.radio == 2 else own.com1_mhz) if own is not None else None
+            self._tx_mhz = own.mhz_of(event.radio) if own is not None else None
         elif isinstance(event, PttReleased):
             self.crew.keyed = False
         elif isinstance(event, AtcTransmission):
@@ -97,7 +97,7 @@ class GroundService:
 
     async def _on_transcript(self, event: Transcript) -> None:
         own = self.crew.own
-        mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if event.radio == 2 else own.com1_mhz) if own else None)
+        mhz = self._tx_mhz if self._tx_mhz is not None else (own.mhz_of(event.radio) if own else None)
         self._tx_mhz = None
         if event.source == "copilot" or not event.text.strip() or not on_ramp(mhz, self.crew.ramp_mhz):
             return
@@ -157,6 +157,8 @@ class GroundService:
                 words, records = await asyncio.to_thread(self.model.word, text, output.text, t)
                 for record in records:
                     self.bus.publish(record)
+                    if record.outcome == "rejected":
+                        self.bus.publish(AtcAlert(t=t, kind="llm_rejected", detail=f"ground crew: {record.detail}; said in the crew's own script"))
                 output = msgspec.structs.replace(output, text=words, spoken="")
             said.append(output)
         return said

@@ -78,6 +78,8 @@ MODES: dict[str, str] = {
 }
 LEGACY_MODES = {"primary": "llm", "fallback": "semi"}  # the setting's values before the four modes
 # Scripted: why the grammar couldn't read a call. Only then is the model asked (see ``triggers``).
+GRAMMAR_KNOWS_BETTER = {"request_return": ("other",), "request_diversion": ("other",), "ready_for_departure": ("other", "ready_to_taxi"),
+                        "clear_of_runway": ("other",), "request_taxi_parking": ("other",), "request_altitude": ("report_conditions",)}
 CANNOT_READ = {"emergency", "question", "parser_failure", "ambiguous", "readback_rejected", "self_correction", "hesitation",
                "low_confidence", "digits_unsure"}
 # Mostly LLM: calls with a procedure the script runs the same way every time. One of these that the grammar reads
@@ -744,6 +746,11 @@ class LlmInterpreter:
         if answer.kind == "question":
             return Interpretation(kind="request", intent="question", values={"topic": answer.topic}, confidence=0.8,
                                   source="llm", callsign_heard=grammar.callsign_heard, text=text)
+        if answer.kind == "request" and grammar.kind == "request" and not grammar.needs_fallback \
+                and answer.intent in GRAMMAR_KNOWS_BETTER.get(grammar.intent, ()):
+            # "we want to go back to the airport we came from" is a return, and the model's "other" got "unable, continue as
+            # filed"; "good to go" at the runway is no taxi; "request lower for the ride" is no ride report.
+            return grammar
         if answer.kind == "request":
             values = {**grammar.values, **{k: v for k, v in answer.values.items()
                                           if k in ("runway", "atis", "altitude", "fix", "approach", "conditions")}}

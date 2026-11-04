@@ -29,6 +29,12 @@ class SetComFrequency(SimCommand, tag="set_com_frequency"):
     radio: int = 1
 
 
+class SelectRadio(SimCommand, tag="select_radio"):
+    """Transmit on this COM (the app's radio bar). The aircraft's selector is told too, but many add-ons have their own."""
+
+    radio: int = 1
+
+
 class SendSimEvent(SimCommand, tag="send_sim_event"):
     """A key event, as the sim's controls send it ("GEAR_DOWN", "FLAPS_SET" with 0-16383, "HEADING_BUG_SET" with
     270): the copilot working the aircraft (localtc.crew)."""
@@ -193,6 +199,6 @@ class GroundMarks(SimCommand, tag="ground_marks"):
     marks: tuple[tuple[str, str, float, float, float], ...] = ()
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
+AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SelectRadio, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
                       ClickSequence, WatchVars, AiTrack, AiLights,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels, GroundMarks]

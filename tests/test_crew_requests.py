@@ -3,6 +3,8 @@ forget" and "change it", a command the model reads that the captain didn't name,
 
 import json
 
+import pytest
+
 from msgspec.structs import replace
 from test_crew_monitor import crew, said
 from test_engine import parked_engine
@@ -80,3 +82,10 @@ def test_a_command_it_didnt_do_is_asked_not_said_done():
     ]), mode="llm")
     out = pm.observe(IntercomHeard(t=2.0, text="Seaport sines please.", confidence=0.9))
     assert said(out) == ["Seatbelt sign on, confirm?"]
+
+
+@pytest.mark.parametrize("words", ["Yes, please ask for it.", "Ask for it", "Yes please ask them", "go ahead and ask for it", "Yes, please do."])
+def test_yes_to_want_me_to_ask_for_it_in_the_pilots_own_words(words):
+    from localtc.crew import speech_acts
+
+    assert speech_acts.read(words).act == "answer"

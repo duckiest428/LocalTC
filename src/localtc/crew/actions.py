@@ -432,8 +432,9 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
     if a == "com_active":
         mhz = float(v)
         hz = channel_khz(mhz) * 1000
-        return Plan(a, v, (_write(p, "com_active", SetComFrequency(hz=hz), hz / 1000),),
-                    _own(lambda o: channel_khz(o.com1_mhz) == channel_khz(mhz)), f"{speech.frequency_display(mhz)} set.",
+        radio = c.own.tx_radio if c.own is not None else 1
+        return Plan(a, v, (_write(p, "com_active", SetComFrequency(hz=hz, radio=radio), hz / 1000),),
+                    _own(lambda o: channel_khz(o.mhz_of(radio)) == channel_khz(mhz)), f"{speech.frequency_display(mhz)} set.",
                     f"{speech.frequency(mhz)} set")
     if a == "com_standby":
         mhz = float(v)

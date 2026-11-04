@@ -152,7 +152,6 @@
 "Auto: as busy as the airport is at that hour": "Auto: tak tłoczno, jak na lotnisku o tej porze",
 "Automatic": "Automatycznie",
 "Automatic ({0})": "Automatycznie ({0})",
-"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)": "Automatycznie: głównie LLM z modelem chmurowym, w pełni skryptowo z modelem na tym komputerze (zalecane)",
 "Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)": "Poza tą siecią Wi-Fi wysyłaj mapę, ruch i dziennik radia przez serwer, gdy telefon lub Flight Tracker na stronie je oglądają (trzymane tam w pamięci, nigdy nie zapisywane)",
 "BEST FPM": "NAJLEPSZE FPM",
 "BUTTER": "JAK PO MAŚLE",
@@ -1390,5 +1389,8 @@
 "Voice & radio": "Głos i radio",
 "What listens, speaks and thinks, and how much your computer does.": "Co słucha, mówi i myśli oraz ile robi twój komputer.",
 "Your copilot, the cabin crew and the ground crew.": "Twój drugi pilot, załoga kabiny i obsługa naziemna.",
-"Your microphone and what you hear.": "Twój mikrofon i to, co słyszysz."
+"Your microphone and what you hear.": "Twój mikrofon i to, co słyszysz.",
+"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "Automatycznie: głównie LLM z modelem chmurowym, w pełni skryptowo z modelem na tym komputerze",
+"Transmit on COM2": "Nadawaj na COM2",
+"COM2 {0}": "COM2 {0}"
 }

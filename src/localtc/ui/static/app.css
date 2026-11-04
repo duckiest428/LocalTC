@@ -263,11 +263,13 @@ footer { background: var(--bg-2); border-top: 1px solid var(--line); padding: 10
 .btn.com { background: var(--field); border-color: var(--btn); padding: 6px 14px; }
 .switches { display: flex; flex-direction: column; gap: 2px; margin-left: 8px; flex: none; }
 .switch { background: var(--field); border: 1px solid var(--line); color: var(--text-2); padding: 6px 12px; cursor: pointer; border-radius: 2px; }
-.switch.on { background: var(--teal); border-color: #41807b; color: #fff; }
 /* Two labelled lines where two unlabelled boxes were: what each does, and a light for whether it's on. */
-.switches .switch { display: flex; align-items: center; gap: 6px; padding: 1px 8px; font-size: 11px; line-height: 15px; text-align: left; white-space: nowrap; }
-.sw-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
-.switch.on .sw-dot { background: currentColor; }
+.switches .switch { display: flex; align-items: center; gap: 6px; padding: 1px 4px; font-size: 11px; line-height: 15px; text-align: left; white-space: nowrap; background: none; border: 0; color: var(--text); }
+.sw-box { width: 11px; height: 11px; border: 1px solid var(--text-2); border-radius: 2px; flex: none; background: var(--field); display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 10px; line-height: 1; color: #fff; }
+.switch.on .sw-box { background: var(--teal); border-color: #41807b; }
+.switch.on .sw-box::before { content: "\2713"; }
+.radio.com { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.radio.com:hover .rlabel { text-decoration: underline; }
 /* Quick Settings: a section at a time */
 .setnav { display: flex; flex-direction: column; gap: 6px; }
 .setnav-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }

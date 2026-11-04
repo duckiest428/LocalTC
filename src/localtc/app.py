@@ -43,6 +43,7 @@ from localtc.sim_api import (
     SessionInfo,
     IntercomHeard,
     SessionNote,
+    SelectRadio,
     SetComFrequency,
     SimSource,
     CrewSpeech,
@@ -872,6 +873,10 @@ class LiveSession:
         from localtc.atc_core.facilities import channel_khz
 
         await self.source.send(SetComFrequency(hz=channel_khz(mhz) * 1000, radio=radio))
+
+    async def select_radio(self, radio: int) -> None:
+        """Transmit on this COM, as the aircraft's own selector would."""
+        await self.source.send(SelectRadio(radio=radio))
 
     async def request_airport(self, icao: str) -> None:
         await self.source.send(RequestAirportData(icao=icao.upper()))

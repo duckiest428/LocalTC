@@ -82,7 +82,7 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
     "request_pushback": ({"push", "pushback", "pushing", "start", "startup"},),
-    "ready_to_taxi": ({"taxi", "ready"},),  # (not "push back": that's request_pushback, Phoenix's gate F4)
+    "ready_to_taxi": ({"taxi", "ready", "go", "done", "move", "moving"},),  # (not "push back": that's request_pushback, Phoenix's gate F4)
     "ready_for_departure": ({"ready", "holding", "hold", "departure", "takeoff", "go", "short"},),
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
     "clear_of_runway": ({"clear", "vacated", "off", "exited"},),

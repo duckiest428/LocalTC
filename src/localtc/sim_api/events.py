@@ -71,6 +71,20 @@ class OwnshipState(Event, tag="ownship_state"):
     in_smoke: bool = False
     local_s: float | None = None  # the sim's local time of day where the aircraft is, seconds (0.6; None before)
 
+    @property
+    def tx_radio(self) -> int:
+        """The COM selected to transmit on: 1 unless the aircraft says it's COM2."""
+        return 2 if self.com2_tx and not self.com1_tx else 1
+
+    @property
+    def tx_mhz(self) -> float:
+        return self.com2_mhz if self.tx_radio == 2 else self.com1_mhz
+
+    def mhz_of(self, radio: int) -> float:
+        """A transmission's frequency: COM2 if it was on COM2, otherwise what's selected (a push-to-talk key says 1 for "the radio")."""
+        return self.com2_mhz if radio == 2 else self.tx_mhz
+
+
 
 class AircraftSystems(Event, tag="aircraft_systems"):
     """The cockpit's switches and settings the copilot checks and sets (``localtc.crew``): sent once a second while

@@ -152,7 +152,6 @@
 "Auto: as busy as the airport is at that hour": "Auto: så livligt som flygplatsen är vid den tiden",
 "Automatic": "Automatisk",
 "Automatic ({0})": "Automatisk ({0})",
-"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC (recommended)": "Automatiskt: mest LLM med molnmodellen, helt skriptat med modellen på den här datorn (rekommenderas)",
 "Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)": "Utanför det här wifi-nätet, skicka kartan, trafiken och radiologgen via servern medan telefonen eller webbplatsens Flight Tracker tittar (hålls i minnet där, sparas aldrig)",
 "BEST FPM": "BÄSTA FPM",
 "BUTTER": "SMÖRMJUK",
@@ -1390,5 +1389,8 @@
 "Voice & radio": "Röst och radio",
 "What listens, speaks and thinks, and how much your computer does.": "Det som lyssnar, talar och tänker, och hur mycket datorn gör.",
 "Your copilot, the cabin crew and the ground crew.": "Din andrepilot, kabinbesättningen och markpersonalen.",
-"Your microphone and what you hear.": "Din mikrofon och det du hör."
+"Your microphone and what you hear.": "Din mikrofon och det du hör.",
+"Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "Automatiskt: mest LLM med molnmodellen, helt skriptat med modellen på den här datorn",
+"Transmit on COM2": "Sänd på COM2",
+"COM2 {0}": "COM2 {0}"
 }

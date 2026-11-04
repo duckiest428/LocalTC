@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from localtc.ground.api import ADDITIONAL, Menu
 
-OPEN_S = 5.0  # the menu asked for, and this long to come up
+OPEN_S = 15.0  # the menu asked for, and this long to come up (20 s at worst so far: asked again by then, it's still on its way)
 PICK_S = 5.0  # picked, and this long for it to change
 RETRIES = 2
 ADDITIONAL_ROW = ("additional services",)

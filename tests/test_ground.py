@@ -154,8 +154,9 @@ def test_a_stale_title_isnt_a_menu_and_a_menu_that_never_comes_says_so():
     assert state.menu is None  # (the title stays for a moment after it's gone)
     run = MenuRun((row_of("Catering"),), 0.0)
     assert run.step(None, 0.0) == Open(fallback=False)
-    assert run.step(None, 5.0) == Open(fallback=True)  # GSX's documented LVar, when the API says yes and nothing comes
-    assert run.step(None, 10.0) is None and run.failed == "never_opened"
+    assert run.step(None, 5.0) is None  # (20 s to come up on a flight at Frankfurt)
+    assert run.step(None, 15.0) == Open(fallback=True)  # GSX's documented LVar, when the API says yes and nothing comes
+    assert run.step(None, 30.0) is None and run.failed == "never_opened"
 
 
 def test_a_menu_that_changes_underneath_is_read_again():
@@ -292,8 +293,8 @@ def test_gsx_saying_no_is_passed_on_and_a_call_that_does_nothing_too():
     c = crew()
     c.heard("catering please", 0.0)
     c.tick(0.0)
-    assert any(isinstance(o, Send) for o in c.tick(16.0))  # (called once more first)
-    assert any("Catering" in s or "atering" in s for s in said(c.tick(45.0)))
+    assert any(isinstance(o, Send) for o in c.tick(31.0))  # (called once more first)
+    assert any("Catering" in s or "atering" in s for s in said(c.tick(107.0)))
     assert c._sending is None
 
 
@@ -1124,7 +1125,7 @@ def test_a_call_gsx_did_not_take_is_made_once_more_but_never_one_that_toggles():
         c = crew()
         c.do(Ask(REQUEST, (service,)), 0.0)
         assert any(isinstance(o, Send) for o in c.tick(0.5))
-        assert any(isinstance(o, Send) for o in c.tick(16.0)) is again
+        assert any(isinstance(o, Send) for o in c.tick(31.0)) is again
 
 
 def test_every_english_call_opens_ground_to_cockpit():
@@ -1211,3 +1212,65 @@ def test_a_line_with_a_condition_in_it_keeps_its_words():
     line = said(c.heard("jetway please", 1.0))[0]
     assert c.keeps_its_words(line)
     assert not c.keeps_its_words("No problem: catering. On the way.")
+
+
+# ---- what a flight at Frankfurt turned up ---------------------------------------------------------------------------
+
+
+def test_gsx_stopping_at_its_first_page_gets_the_row_picked_and_the_menu_isnt_closed_under_it():
+    from localtc.ground.crew import Send
+    from localtc.ground.grammar import Ask, REQUEST
+
+    top = Menu("Activate Services at EDDF/Frankfurt/Main", ("Request Deboarding", "Operate Jetway", "Operate Stairs", "Additional Services ▶"))
+    c = crew()
+    c.own = own()
+    c.update(state_with(c, services=services(OperateJetways="available")), 0.0)
+    c.do(Ask(REQUEST, ("OperateJetways",)), 0.0)
+    assert any(isinstance(o, Send) for o in c.tick(0.5))
+    assert c.update(state_with(c, services=services(OperateJetways="available"), menu=top), 21.0) == []  # 20 s to come up
+    out = c.tick(30.0)
+    assert [o for o in out if isinstance(o, Pick)] == [Pick(1, "Operate Jetway")]
+    assert not said(out)
+    assert c.tick(31.0) == []
+    done = c.update(state_with(c, services=services(OperateJetways="completed")), 50.0)
+    assert not any(isinstance(o, Close) for o in done)
+    assert c._sending is None
+
+
+def test_a_slow_gsx_isnt_called_twice_or_reported_as_no_answer_early():
+    from localtc.ground.crew import Send
+    from localtc.ground.grammar import Ask, REQUEST
+
+    c = crew()
+    c.own = own()
+    c.update(state_with(c, services=services(Lavatory="available")), 0.0)
+    c.do(Ask(REQUEST, ("Lavatory",)), 0.0)
+    assert any(isinstance(o, Send) for o in c.tick(0.5))
+    for t in (10.0, 20.0, 25.0):
+        out = c.tick(t)
+        assert not any(isinstance(o, Send) for o in out) and not said(out), t
+
+
+def test_the_radio_transmitted_on_is_the_one_selected():
+    from localtc.sim_api.events import OwnshipState
+
+    base = own()
+    assert base.tx_radio == 1 and base.tx_mhz == base.com1_mhz
+    com2 = msgspec.structs.replace(base, com1_tx=False, com2_tx=True, com2_mhz=119.99)
+    assert com2.tx_radio == 2 and com2.tx_mhz == 119.99 and com2.mhz_of(1) == 119.99 and com2.mhz_of(2) == 119.99
+    assert isinstance(com2, OwnshipState)
+    both = msgspec.structs.replace(base, com1_tx=True, com2_tx=True, com2_mhz=119.99)  # (receiving both: COM1's the one)
+    assert both.tx_radio == 1
+
+
+def test_a_model_cant_have_the_crew_wait_on_the_pilot():
+    class Says:
+        model = "fake"
+
+        def complete(self, request, *, timeout_s):
+            from localtc.atc_core.llm import LlmReply
+
+            return LlmReply('{"reply": "Jetway’s coming right up, just let me know when you’re ready to plug in."}', latency_ms=1.0)
+
+    words, records = RampModel(Says()).word("attach the jetway", "Jetway's on its way.", 0.0)
+    assert words == "Jetway's on its way." and records[0].outcome == "rejected"

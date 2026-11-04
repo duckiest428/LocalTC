@@ -49,7 +49,7 @@ NEGATION = re.compile(r"\b(?:(?:don't|do not|dont)(?!\s+(?:forget|hesitate))|nev
 CORRECTION = re.compile(r"^(?:no|negative|nope|correction|sorry|i said|i meant|i mean|actually|not)\b[,.\s]*")
 # (Speech-to-text's "just please" is "yes please": "Shall we do the before takeoff checklist?" "Just please." went to
 # the model, which said the checklist was done without a line of it read.)
-YES = re.compile(r"^(?:(?:yes|yeah|yep|yup|sure|ok|okay)[,\s]+)?(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|"
+YES = re.compile(r"^(?:(?:yes|yeah|yep|yup|sure|ok|okay)[,\s]+)?(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|(?:please )?(?:go ahead and )?ask (?:for it|them|atc)|(?:please )?request it|"
                  r"go ahead|go for it|please do (?:it|that|them)|please do|let'?s do (?:it|that|them)|let'?s go|just please|sure|that's right|thats right|right|ok do it|okay do it|do (?:them |it )?both|"
                  r"both(?: please)?|do that|please)\b[\s,.!]*(?:please|thanks)?[\s.!]*$")
 NO = re.compile(r"^(?:no|nope|negative|no thanks|not now|don't|leave it|cancel|never ?mind)\b[\s,.!]*(?:thanks)?[\s.!]*$")

@@ -438,7 +438,7 @@ def test_the_copilot_tunes_the_ramp_in_every_language(code, said):
     from localtc.crew.commands import parse
 
     assert foreign.gloss(said, code) == "tune ramp"
-    assert [(c.action, c.value) for c in parse("tune ramp")] == [("com_active", "119.999")]
+    assert [(c.action, c.value) for c in parse("tune ramp")] == [("com_active", "119.990")]
 
 
 # --- the copilot, whole ------------------------------------------------------------------------------------------------

@@ -111,8 +111,8 @@ def test_only_the_ramp_is_addressed_not_atc():
 # --- the frequency ---------------------------------------------------------------------------------------------------
 
 
-def test_the_ramp_frequency_and_where_a_radio_stops_short_of_it():
-    assert on_ramp(119.999) and on_ramp(119.990) and on_ramp(120.000) and on_ramp(119.995)
+def test_the_ramp_frequency_is_one_real_channel():
+    assert on_ramp(119.990) and not on_ramp(120.000) and not on_ramp(119.980) and not on_ramp(119.999)
     assert not on_ramp(119.975) and not on_ramp(121.9) and not on_ramp(None)
 
 
@@ -957,7 +957,7 @@ def test_on_the_ramps_frequency_its_theirs_and_elsewhere_it_isnt():
     async def scenario():
         service, gsx, c, clock, heard = _rig()
         await gsx.start(service._changed.set)
-        c.own = own(com1=119.999)
+        c.own = own(com1=119.990)
         await service._on(PttPressed(t=0.0, radio=1))
         await service._on(Transcript(t=0.1, text="water please", radio=1, source="voice"))
         await asyncio.sleep(0)
@@ -972,7 +972,7 @@ def test_on_the_ramps_frequency_its_theirs_and_elsewhere_it_isnt():
             await task
         assert c._push is None and not c._queue
         # the copilot's own transmissions aren't the pilot asking
-        c.own = own(com1=119.999)
+        c.own = own(com1=119.990)
         await service._on(Transcript(t=2.0, text="water please", radio=1, source="copilot"))
         assert not c._queue
     run(scenario())
@@ -981,7 +981,7 @@ def test_on_the_ramps_frequency_its_theirs_and_elsewhere_it_isnt():
 def test_the_line_on_the_ramp_is_on_the_radio_and_otherwise_the_interphone():
     c = crew()
     assert [o for o in c.heard("status", 0.0) if isinstance(o, RampSpeech)][0].channel == "interphone"
-    c.own = own(com1=119.999)
+    c.own = own(com1=119.990)
     assert [o for o in c.heard("status", 1.0) if isinstance(o, RampSpeech)][0].channel == "radio"
 
 
@@ -1086,6 +1086,6 @@ def test_the_ramp_is_in_the_frequency_list_at_every_airport():
     from localtc.ui.controller import airport_detail, airport_summary
 
     bare = SimpleNamespace(icao="XXXX", name="Nowhere", frequencies=[], runways=[], lat=0.0, lon=0.0, elev_ft=0.0, magvar=0.0, parking=[], taxi_paths=[])
-    assert airport_summary(bare)["frequencies"] == [{"label": "RAMP", "kind": "ramp", "mhz": 119.999, "others": []}]
+    assert airport_summary(bare)["frequencies"] == [{"label": "RAMP", "kind": "ramp", "mhz": 119.99, "others": []}]
     assert airport_summary(bare, ramp_mhz=120.0)["frequencies"][0]["mhz"] == 120.0
     assert airport_detail(bare)["all_frequencies"][-1]["label"] == "RAMP"

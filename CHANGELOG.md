@@ -7,7 +7,7 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
-- **RAMP in the frequency list at every airport**, and on the phone; click it to tune. It lights up on 119.990 or 120.000 too. Tuning it with the
+- **RAMP in the frequency list at every airport**, and on the phone; click it to tune. Tuning it with the
   ground crew off now says so, and where to turn them on.
 - **Every language gets what Spanish got, and the ground crew and cabin crew too:** in German, French, Spanish, Italian, Portuguese,
   Dutch, Polish, Swedish, Russian and Mandarin, numbers said as words ("zehntausend Fuß", "deux cent cinquante"), feet, knots and flight
@@ -17,7 +17,7 @@ a new minor version adds features, a patch fixes them.
 - **The copilot's Polish voice is Piper's:** the voice library's was hard to make out ("Pamy" for "Mamy"). The Polish pack downloads the first time it's needed.
 - **Speech recognition listens for the crew's words in your language:** "checklist" was heard as "Cake list", "Klappen" as "Captain". A number
   as it's written down ("10.000", "10 000", "CAP270") is read as the number it is.
-- **Ground crew:** the turnaround and the push by voice, with no menus: on the worldwide ramp frequency, 119.999 ("tune ramp"
+- **Ground crew:** the turnaround and the push by voice, with no menus: on the worldwide ramp frequency, 119.990 ("tune ramp"
   to the copilot), or on the intercom starting with "ramp". Off by default, in Settings → Ground crew. Fuel, catering, water,
   lavatory, cleaning, de-icing, the GPU, the jetway and stairs, several in one call ("catering, fuel and a GPU please"), what's
   still outstanding, and calling one off. They answer GSX's questions for you and tell you what it's waiting on. The cabin crew

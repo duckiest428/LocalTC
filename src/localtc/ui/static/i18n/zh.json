@@ -991,7 +991,7 @@
 "The release on GitHub": "GitHub 上的发布版本",
 "The replay is in your account (localtc.tech and the phone). Click to remove it from the account.": "回放已在你的账户中（localtc.tech 和手机）。点击可从账户中移除。",
 "The replay on the page": "页面上的回放",
-"The same at every airport. Say \"tune ramp\" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.": "每个机场都一样。说 \"调机坪频率\"，副驾驶就会调好；只能调到 119.990 或 120.000 的电台也能联系到。",
+"The same at every airport. Say \"tune ramp\" and the copilot sets it.": "每个机场都一样。说 \"调机坪频率\"，副驾驶就会调好。",
 "The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS). A personality changes only the routine and conversational lines: the safety calls (stall, overspeed, wind shear, minimums, \"not cleared to land\") keep their standard words for every one.": "同一个声音在无线电中复诵。需要多说话人的管制声音（LibriTTS）。个性只改变例行和闲聊的语句：安全喊话（失速、超速、风切变、最低标准、“not cleared to land”）对所有人都保持标准措辞。",
 "The sim's own tug and jetway": "模拟器自带的拖车和廊桥",
 "The turnaround and the push by voice, with no menus: on the ramp frequency, or on the intercom starting with \"ramp\": \"catering, fuel and a GPU please\", \"what's still outstanding?\", \"cancel catering\", \"pushback, nose left\". The cabin crew look after boarding and deboarding.": "用语音完成过站和推出，无需菜单：在机坪频率上，或在内话中以 \"地勤\" 开头：\"配餐、加油和地面电源\"、\"还剩什么？\"、\"取消配餐\"、\"推出，机头向左\"。登机和下机由客舱机组负责。",

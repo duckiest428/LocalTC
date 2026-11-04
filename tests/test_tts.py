@@ -155,7 +155,7 @@ def test_the_ground_crew_on_their_frequency_and_on_the_headset():
     from localtc.sim_api import RadioTuned, RampSpeech
 
     synth, player = speak([
-        RadioTuned(t=0.0, frequency_mhz=119.999, controller="ramp", station="Ramp"),
+        RadioTuned(t=0.0, frequency_mhz=119.99, controller="ramp", station="Ramp"),
         RampSpeech(t=1.0, text="Fuel's done.", channel="radio"),
         RampSpeech(t=2.0, text="Set parking brake.", channel="interphone"),
     ], settle=0.2)

@@ -444,7 +444,7 @@ class GroundConfig(_Section):
     """The ground crew (localtc.ground): the turnaround and the push by voice, through GSX where it's installed."""
 
     enabled: bool = False
-    ramp_mhz: float = 119.999  # the same at every airport
+    ramp_mhz: float = 119.990  # the same at every airport
     verbosity: Literal["quiet", "standard", "chatty"] = "standard"  # what they say by themselves
     without_gsx: Literal["standalone", "tell", "off"] = "standalone"  # the sim's own tug and jetway, just say so, or no crew
     # How much they lean on the language model, a cloud one only (without one, the grammar and the script): scripted, semi

@@ -1,6 +1,6 @@
 # The ground crew
 
-The turnaround and the push by voice, with no menus: on the ramp frequency (119.999 worldwide), or on the intercom starting
+The turnaround and the push by voice, with no menus: on the ramp frequency (119.990 worldwide), or on the intercom starting
 with "ramp". Off by default (`[ground] enabled`). The code is `src/localtc/ground/`.
 
 ## What's behind it
@@ -62,9 +62,8 @@ This GSX's `hello` lists `state, services, menu, prompts, billing`. Later builds
 
 ## The ramp frequency
 
-`sim_api/ramp.py`. **119.999 is on neither radio grid**, but `COM_STBY_RADIO_SET_HZ` and `COM_RADIO_SET_HZ` take it exactly (read
-back on the iniBuilds A350), so "tune ramp" to the copilot works. A radio's own knobs stop at 119.990 or 120.000, so those count
-too, within ±0.0105 MHz. **A real controller on that frequency always comes first.**
+`sim_api/ramp.py`. 119.990 is a real 8.33 kHz channel, so a radio's own knobs reach it, and "tune ramp" to the copilot sets it. A radio with only 25 kHz
+steps can't dial it. **A real controller on that frequency always comes first.**
 
 The engine stays out of it: with `engine.ramp_mhz` set, a transmission there with no real controller returns before any language
 model is asked, and `RadioTuned` says "Ramp".

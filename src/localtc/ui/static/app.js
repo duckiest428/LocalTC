@@ -352,7 +352,7 @@ function setFlight(f) {
     const key = JSON.stringify(ap.frequencies) + ap.icao;
     if (freqs.dataset.key !== key) {
       freqs.dataset.key = key;
-      freqs.innerHTML = ap.frequencies.map((q) => `<div class="fq" data-mhz="${q.mhz}" data-kind="${q.kind}" title="Tune COM1 to ${mhz(q.mhz)}${q.others.length ? " (also " + q.others.map(mhz).join(", ") + ")" : ""}">
+      freqs.innerHTML = ap.frequencies.map((q) => `<div class="fq" data-mhz="${q.mhz}" title="Tune COM1 to ${mhz(q.mhz)}${q.others.length ? " (also " + q.others.map(mhz).join(", ") + ")" : ""}">
         <span class="fl">${esc(q.label)}</span><span class="fv">${mhz(q.mhz)}</span></div>`).join("");
     }
   } else if (!ap && freqs.dataset.key) {
@@ -402,7 +402,7 @@ function enRoute(s) {
 
 function markTuned() {
   const com1 = S.own?.com1;
-  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", com1 != null && Math.abs(Number(el.dataset.mhz) - com1) < (el.dataset.kind === "ramp" ? 0.0105 : 0.004)));
+  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", com1 != null && Math.abs(Number(el.dataset.mhz) - com1) < 0.004));
 }
 
 $("#ap-freqs").addEventListener("click", (e) => {
@@ -1995,7 +1995,7 @@ const Settings = {
         </div>
         <div id="ground-opts" class="${st.ground.enabled ? "" : "off"}">
         <div class="row"><label>Ramp frequency<input id="s-ground-mhz" type="number" step="0.001" min="118" max="136.99" value="${st.ground.ramp_mhz}"></label></div>
-        <span class="hint">The same at every airport. Say "tune ramp" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.</span>
+        <span class="hint">The same at every airport. Say "tune ramp" and the copilot sets it.</span>
         <div class="row"><label>What they say by themselves<select id="s-ground-verbosity">${[
           ["quiet", "Only what needs you"], ["standard", "When each service is done"], ["chatty", "Everything"]]
           .map(([v, t]) => `<option value="${v}" ${st.ground.verbosity === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>

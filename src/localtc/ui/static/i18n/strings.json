@@ -992,7 +992,7 @@
 "The release on GitHub",
 "The replay is in your account (localtc.tech and the phone). Click to remove it from the account.",
 "The replay on the page",
-"The same at every airport. Say \"tune ramp\" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.",
+"The same at every airport. Say \"tune ramp\" and the copilot sets it.",
 "The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS). A personality changes only the routine and conversational lines: the safety calls (stall, overspeed, wind shear, minimums, \"not cleared to land\") keep their standard words for every one.",
 "The sim's own tug and jetway",
 "The turnaround and the push by voice, with no menus: on the ramp frequency, or on the intercom starting with \"ramp\": \"catering, fuel and a GPU please\", \"what's still outstanding?\", \"cancel catering\", \"pushback, nose left\". The cabin crew look after boarding and deboarding.",

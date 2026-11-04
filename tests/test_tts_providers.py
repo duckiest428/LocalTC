@@ -619,7 +619,7 @@ def test_the_voice_library_speaks_the_copilots_language_where_kokoro_speaks_it_w
     voices = KokoroVoices(Path("/x"), engine=engine)
     speech = voices.synthesize("Hallo, ich bin dein Copilot.", persona_for("", "copilot", sex="F", language="de"))
     assert engine.calls[-1][:2] == ("Hallo, ich bin dein Copilot.", "de") and speech.voice == "ff_siwis+if_sara"
-    assert voices.speaks("fr") and voices.speaks("pl") and not voices.speaks("ru") and not voices.speaks("zh")
+    assert voices.speaks("fr") and not voices.speaks("pl") and not voices.speaks("ru") and not voices.speaks("zh")
 
 
 def test_a_language_not_downloaded_yet_is_fetched_meanwhile_and_the_line_is_text(monkeypatch, tmp_path):

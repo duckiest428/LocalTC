@@ -70,7 +70,6 @@ NATIVE: dict[str, tuple[str, dict[str, str]]] = {
     "es": ("es", {"F": "ef_dora", "M": "em_alex"}),
     "it": ("it", {"F": "if_sara", "M": "im_nicola"}),
     "pt": ("pt", {"F": "pf_dora", "M": "pm_alex"}),
-    "pl": ("pl", {"F": "ef_dora", "M": "em_alex"}),
 }
 
 

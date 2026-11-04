@@ -8,7 +8,8 @@ what's still open.
 - Said to the copilot with no model: 457 of 569 phrases read, now all. Every language but Spanish missed numbers said as words, feet, knots, flight levels.
 - The real cloud model's translations, 50 lines over ten languages: 39 kept, now 48. Thrown away over "29,92", "час двадцать", 两. The two left are its own garbled French.
 - Synthesized speech through Whisper small, 12 commands: with the crew's words primed, de 12 (Thorsten; 9 without), fr 12 (Tom; 8), it 12, es 11, pt 11, pl 9 (Kokoro). A live German session: copilot, ramp and cabin all answered in German.
-- Open: nl, sv, ru, zh not heard through a real voice (their Piper packs aren't on this PC). **Polish by Kokoro reads back at 0.71**, the other five at 1.00: compare with its Piper pack. A single word ("sí", "sim") is misheard from Kokoro's voice. No real human voice has been through any of it. The copilot's greeting and personality lines stay English without a model.
+- The Piper packs, same 12 commands, read-back of a long line: nl 12 and 12 (0.95, 0.95), ru 12 and 11 (1.00, 0.93), pl 11 and 11 (0.93, 1.00), zh 10 (0.92), sv 9 and 8 (0.84, 0.73). Polish moved from Kokoro (0.71, 0.79) to its pack. Swedish is the weakest: its two voices are all Piper has.
+- Open: a single word ("sí", "sim") is misheard from Kokoro's voice. No real human voice has been through any of it. The copilot's greeting and personality lines stay English without a model.
 
 ## 2026-11-03: the ground crew against GSX Pro 4.0.5, Zurich B37 (iniBuilds A350, parked)
 - Worked for real, through an isolated copy: requests, operators answered, fuel level answered, status, "ground power off",

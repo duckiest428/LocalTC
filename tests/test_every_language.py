@@ -460,3 +460,9 @@ def test_the_copilot_works_in_every_language_with_no_model(code):
     lights = next(t for c, t, e in CASES if c == code and e == "landing lights on")
     assert any(isinstance(o, CrewAction) for o in pm.observe(IntercomHeard(t=60.0, text=lights)))
 
+
+def test_polish_is_spoken_by_its_own_pack():
+    from localtc.tts.library import NATIVE
+
+    assert "pl" not in NATIVE
+

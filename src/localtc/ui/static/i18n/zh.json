@@ -47,7 +47,7 @@
 ": your flight live on the website, full screen, with the radio beside the map.": "：你的航班在网站上实时显示，全屏，无线电通话就在地图旁边。",
 ": your weeks, months and years of flying as a story.": "：把你一周、一个月、一年的飞行讲成一个故事。",
 "A cabin crew behind the flight deck door: boarding music and the welcome at the gate, the safety demonstration, the seatbelt sign, the drinks, the descent and the arrival, in the airline's own languages. They call you on the interphone, and answer when you start with \"cabin\": \"cabin, could I get a coffee?\". Do you want them?": "驾驶舱门后的客舱机组：登机时的音乐和登机口的欢迎、安全演示、安全带指示灯、饮料、下降和到达，使用航空公司自己的语言。他们会通过内话呼叫你，当你以 “cabin” 开头时会回答你：“cabin, could I get a coffee?”。需要他们吗？",
-"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "客舱经理负责广播、通过内话呼叫你并回答：使用专用按键、发送框旁的 CABIN 和 CAB 按钮，或在机组通话中以 \"cabin\" 开头：\"could I get a coffee?\"、\"prepare for landing\"、\"tell the passengers ...\"、\"are we on time?\"。仅限航空公司航班和客机。",
+"A cabin manager who makes the announcements, calls you on the interphone and answers on their own key, on the CABIN and CAB buttons beside the transmission box, or when you start with \"cabin\" on the intercom: \"could I get a coffee?\", \"prepare for landing\", \"tell the passengers ...\", \"are we on time?\". Only on airline flights and in airliners.": "客舱经理负责广播、通过内话呼叫你并回答：使用专用按键、发送框旁的 CABIN 和 CAB 按钮，或在机组通话中以 \"客舱\" 开头：\"来杯咖啡\"、\"准备着陆\"、\"多少乘客？\"、\"准时吗？\"。仅限航空公司航班和客机。",
 "A chatty long-haul companion.": "一位健谈的远程航线伙伴。",
 "A couple of notes and recommendations before your first flight:": "首次飞行前的几点说明和建议：",
 "A different one each flight": "每次飞行换一位",
@@ -991,10 +991,10 @@
 "The release on GitHub": "GitHub 上的发布版本",
 "The replay is in your account (localtc.tech and the phone). Click to remove it from the account.": "回放已在你的账户中（localtc.tech 和手机）。点击可从账户中移除。",
 "The replay on the page": "页面上的回放",
-"The same at every airport. Say \"tune ramp\" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.": "每个机场都一样。说 \"tune ramp\"，副驾驶就会调好；只能调到 119.990 或 120.000 的电台也能联系到。",
+"The same at every airport. Say \"tune ramp\" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.": "每个机场都一样。说 \"调机坪频率\"，副驾驶就会调好；只能调到 119.990 或 120.000 的电台也能联系到。",
 "The same voice reads back on the radio. Needs the multi-speaker ATC voice (LibriTTS). A personality changes only the routine and conversational lines: the safety calls (stall, overspeed, wind shear, minimums, \"not cleared to land\") keep their standard words for every one.": "同一个声音在无线电中复诵。需要多说话人的管制声音（LibriTTS）。个性只改变例行和闲聊的语句：安全喊话（失速、超速、风切变、最低标准、“not cleared to land”）对所有人都保持标准措辞。",
 "The sim's own tug and jetway": "模拟器自带的拖车和廊桥",
-"The turnaround and the push by voice, with no menus: on the ramp frequency, or on the intercom starting with \"ramp\": \"catering, fuel and a GPU please\", \"what's still outstanding?\", \"cancel catering\", \"pushback, nose left\". The cabin crew look after boarding and deboarding.": "用语音完成过站和推出，无需菜单：在机坪频率上，或在内话中以 \"ramp\" 开头：\"catering, fuel and a GPU please\", \"what's still outstanding?\", \"cancel catering\", \"pushback, nose left\"。登机和下机由客舱机组负责。",
+"The turnaround and the push by voice, with no menus: on the ramp frequency, or on the intercom starting with \"ramp\": \"catering, fuel and a GPU please\", \"what's still outstanding?\", \"cancel catering\", \"pushback, nose left\". The cabin crew look after boarding and deboarding.": "用语音完成过站和推出，无需菜单：在机坪频率上，或在内话中以 \"地勤\" 开头：\"配餐、加油和地面电源\"、\"还剩什么？\"、\"取消配餐\"、\"推出，机头向左\"。登机和下机由客舱机组负责。",
 "The voice library": "语音库",
 "The voices are the LocalTC voice library: every controller with the accent of where they are (a 340 MB download, with the others). Until it's here, a simpler voice speaks.": "语音来自 LocalTC 语音库：每位管制员都带着所在地区的口音（340 MB，与其他内容一起下载）。下载完成前，由一个更简单的语音来说。",
 "The volume of ATC, the ATIS, other flights, the copilot and the radio's clicks, and your microphone": "管制、ATIS、其他航班、副驾驶和无线电咔嗒声的音量，以及你的麦克风",
@@ -1379,5 +1379,6 @@
 "🎤 Test": "🎤 测试",
 "🎤 Test my microphone": "🎤 测试我的麦克风",
 "🎧 A headset": "🎧 耳机",
-"🔊 Speakers": "🔊 扬声器"
+"🔊 Speakers": "🔊 扬声器",
+"Restricted, danger and prohibited areas": "限制区、危险区和禁区"
 }

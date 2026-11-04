@@ -12,6 +12,8 @@ a new minor version adds features, a patch fixes them.
   levels are understood, the copilot's common answers (fuel, altitude, speed, heading, time to go, what's assigned) come in your language
   without a language model, the ground crew understand and answer you (the push's safety calls stay in aviation English), and the cabin
   crew talk with you in it. A good translation is no longer thrown away over how it writes a number ("29,92", "une heure", "час двадцать").
+- **Speech recognition listens for the crew's words in your language:** "checklist" was heard as "Cake list", "Klappen" as "Captain". A number
+  as it's written down ("10.000", "10 000", "CAP270") is read as the number it is.
 - **Ground crew:** the turnaround and the push by voice, with no menus: on the worldwide ramp frequency, 119.999 ("tune ramp"
   to the copilot), or on the intercom starting with "ramp". Off by default, in Settings → Ground crew. Fuel, catering, water,
   lavatory, cleaning, de-icing, the GPU, the jetway and stairs, several in one call ("catering, fuel and a GPU please"), what's

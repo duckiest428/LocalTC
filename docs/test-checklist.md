@@ -167,6 +167,16 @@ starting with "ramp".
 - [ ] Without GSX (Settings → Ground crew → Without GSX): the sim's jetway, and the sim's tug. **Moves the aircraft.**
 - [ ] From the phone, Airport Ops: request and cancel a service, and watch it change.
 
+## 8. In your language (with [crew] language set: try one you speak)
+
+- [ ] To the copilot, by voice: gear, flaps, lights, a heading, "ten thousand feet" and a speed said as words, a checklist. *If not:* Mark, and say what it wrote down in the log.
+- [ ] Without a language model: "how much fuel?", altitude, speed, heading, time to go. The answer's in your language.
+- [ ] With a cloud model: small talk, in your language, not falling back to English.
+- [ ] "Ramp" in your language, then a service: understood and answered in it. The push's safety calls stay in English.
+- [ ] "Cabin" in your language, then a coffee: understood and answered in it.
+- [ ] The voice: can you understand it, and is it the right language? **Polish especially.**
+- [ ] A radio call in your language: told once that ATC works in English. On the ramp frequency it's just answered.
+
 ## What to send back
 
 - The **Export session** zip from the IFR flight (and from any flight where something went wrong)

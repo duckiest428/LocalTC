@@ -201,7 +201,7 @@ def html_unescape(text: str) -> str:
 
 
 # Texts the page puts together from pieces found elsewhere: "Cruise · 12 nm, 5 min" (the phase, then where it is).
-EXTRA = ("{0} · {1} nm, {2} min", "{0}: hears you faster and more accurately.", "✓ ready", "✓ {0} lines",
+EXTRA = ("Restricted, danger and prohibited areas", "{0} · {1} nm, {2} min", "{0}: hears you faster and more accurately.", "✓ ready", "✓ {0} lines",
          # The components' notes when they're missing (components.status: not on a PC that has them all).
          "Without it LocalTC understands you with its grammar only, or the cloud model.",
          "Without it LocalTC opens in your browser.", "Install it from ollama.com.",

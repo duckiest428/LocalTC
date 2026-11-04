@@ -177,7 +177,7 @@ def whole_numbers(text: str, code: str) -> str:
     table = TABLES.get(code)
     if table is None:
         return text
-    words = _prepared(text, code).split(" ")
+    words = _prepared(digits_as_written(text), code).split(" ")
     for first, last, parts in reversed(_runs(" ".join(words), table)):
         if _whole(parts, table) or (any(p.isdigit() for p in parts) and len(parts) > 1 and _has_scale(parts, table)):
             end = words[last - 1][len(words[last - 1].rstrip(".,;")):]
@@ -187,6 +187,19 @@ def whole_numbers(text: str, code: str) -> str:
 
 def _has_scale(parts: list[str], table: Words) -> bool:
     return any(p in table.thousand or p in table.hundred for p in parts)
+
+
+_GROUPED = re.compile(r"(?<!\d)(\d{1,3})(?:[.,\s\u00a0\u202f]\d{3})+(?!\d)")
+_GLUED = re.compile(r"(?<![\w])([^\W\d_]{2,})(\d{2,})(?!\w)")
+_DIGIT_RUN = re.compile(r"(?<![\d.,])\d(?:\s*,\s*\d)+(?![\d.,])")
+
+
+def digits_as_written(text: str) -> str:
+    """Numbers as Whisper writes them, as one: "10.000", "10 000" and "10,000" are 10000, "CAP270" is "CAP 270", and "2, 7, 0" is three
+    digits said one by one, not three things."""
+    text = _GROUPED.sub(lambda m: re.sub(r"[.,\s\u00a0\u202f]", "", m[0]), text)
+    text = _GLUED.sub(r"\1 \2", text)
+    return _DIGIT_RUN.sub(lambda m: " ".join(re.findall(r"\d", m[0])), text)
 
 
 # "двадцать девять целых девяносто два": 29.92 said as words.

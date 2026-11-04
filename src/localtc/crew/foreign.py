@@ -14,7 +14,7 @@ the language model reads the words as they were), so a command is never made of 
 import re
 
 from localtc import spoken_numbers
-from localtc.spoken_numbers import plain as _plain, whole_numbers, zh_value, zh_whole_numbers
+from localtc.spoken_numbers import digits_as_written, plain as _plain, whole_numbers, zh_value, zh_whole_numbers
 
 # --- what each language says ------------------------------------------------------------------------------------------
 # Concepts, each with its words in every language (accents don't matter: they're taken off before matching). English
@@ -46,6 +46,7 @@ ENGLISH = {
     "FLIGHT_LEVEL": "flight level",
     "SQUAWK": "squawk|transponder",
     "CHECKLIST": "checklist|check list",
+    "TUNE_RAMP": "tune ramp|tune the ramp",
     "ON": "on|turn on|switch on",
     "OFF": "off|turn off|switch off",
     "UP": "up|retract|raise",
@@ -129,7 +130,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "wie lange|wann landen wir|wann sind wir da|restflugzeit",
         "FEET": "fuss",
         "KNOTS": "knoten",
-        "FLIGHT_LEVEL": "flugflache|flugflaeche|flugflachen|flight level",
+        "FLIGHT_LEVEL": "fl|flugflache|flugflaeche|flugflachen|flight level",
+        "TUNE_RAMP": "stell die rampe ein|rampe einstellen|rampenfrequenz einstellen|rampenfrequenz|frequenz rampe|rastet rampe",
         "FILLER": "steigen|steige|steigflug|sinken|sinke|auf|bitte mal|unsere|unser|welche|welchen|welcher|haben|sind|am|an bord|noch|wieviel|wie viel|ist|hat|sagte|bitte|mal|mach|mache|lass|lasst|lass mal|die|der|das|den|dem|und|dann|jetzt|setzen|setze|setz|schalte|fahre|fahr|"
                   "kannst du|konntest du|wurdest du|lass uns|machen|bitte schon|danke|kapitan|ok|okay|in ordnung|fur|"
                   "auf|zu|uns|wir|sie|es|noch|gleich|schon|wieder|durchgehen|durch|ausfuhren",
@@ -140,7 +142,7 @@ WORDS: dict[str, dict[str, str]] = {
         "CANCEL": "annule|annuler|laisse tomber|oublie|stop|arrete",
         "CHECK": "verifie|vérifié|fait",
         "GEAR": "train|train d'atterrissage|le train|le train d'atterrissage|train datterrissage|roues|les roues",
-        "FLAPS": "volets|les volets|volet",
+        "FLAPS": "volet|volets|les volets|volet",
         "LANDING_LIGHTS": "phares d'atterrissage|feux d'atterrissage|phares datterrissage|feux datterrissage|les phares d'atterrissage|les feux d'atterrissage|phares",
         "TAXI_LIGHTS": "feux de roulage|phares de roulage|les feux de roulage",
         "STROBES": "strobes|feux stroboscopiques|flashs",
@@ -159,7 +161,7 @@ WORDS: dict[str, dict[str, str]] = {
         "ON": "mets|allumes|allumee|allumees|allume|mis|serre|serrer|enclenche|enclencher|allume|allumer|active|activer|mets en marche|on",
         "OFF": "desserre|desserrer|relache|relacher|eteints|eteint|desactive|coupes|coupe|eteins|eteindre|coupe|couper|desactive|desactiver|off",
         "UP": "rentre|rentrer|remonte|monte|relever|releve",
-        "DOWN": "sors|sortir|sortez|sorti|sortie|descends|descendre|baisse|baisser",
+        "DOWN": "sort|sort le|sors|sortir|sortez|sorti|sortie|descends|descendre|baisse|baisser",
         "ARM": "arme|armer|armés|armes",
         "START": "demarre|demarrer|lance|lancer",
         "FULL": "plein|pleins|full|complet",
@@ -182,7 +184,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "combien de temps reste t il|on arrive quand|arrive quand|arrivons nous quand|il reste combien de temps|combien de temps|quand atterrissons nous|quand est ce qu'on atterrit|temps restant",
         "FEET": "pieds|pied",
         "KNOTS": "noeuds|noeud",
-        "FLIGHT_LEVEL": "niveau de vol|niveau|flight level",
+        "FLIGHT_LEVEL": "fl|niveau de vol|niveau|flight level",
+        "TUNE_RAMP": "regle la rampe|mets la rampe|frequence rampe|frequence de la rampe",
         "FILLER": "quel|quelle|est|notre|nos|nous|avons|reste|il|qu est ce que|qu est ce|est ce que|a|avons nous|t il|on est|sommes nous|s'il te plait|s'il vous plait|stp|svp|le|la|les|l'|de|du|des|et|puis|maintenant|mets|mettre|"
                   "peux tu|pourrais tu|tu peux|on|nous|merci|commandant|ok|bon|alors|fais|faire|lance la|en|au|a",
     },
@@ -209,7 +212,7 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "velocidad|la velocidad",
         "FEET": "pies",
         "KNOTS": "nudos",
-        "FLIGHT_LEVEL": "nivel de vuelo|nivel",
+        "FLIGHT_LEVEL": "fl|nivel de vuelo|nivel",
         "SQUAWK": "transpondedor|codigo|squawk",
         "CHECKLIST": "checklist|lista de chequeo|lista de comprobacion|lista de verificacion|la checklist|la lista",
         "CHECKLIST+DESCENT": "lista de descenso",
@@ -243,6 +246,7 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "tiempo|el tiempo|meteo|clima|metar",
         "DESTINATION": "destino|en destino|el destino",
         "HOW_LONG": "cuanto queda|cuanto falta|cuanto falta|cuanto queda|cuanto nos queda|cuanto tiempo|cuando aterrizamos|tiempo restante",
+        "TUNE_RAMP": "sintoniza la rampa|pon la rampa|frecuencia de rampa|frecuencia de la rampa",
         "FILLER": "un|una|nuestro|nuestra|estamos|llevamos|tenemos|hace|ha|que|cual|es|tenemos|a que|por favor|el|la|los|las|y|luego|ahora|pon|poner|puedes|podrias|nos|gracias|capitan|vale|bueno|"
                   "de|del|al|a|haz|hacer|vamos|con|en",
     },
@@ -294,7 +298,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "quanto manca|quanto tempo|quando atterriamo|tempo rimanente",
         "FEET": "piedi|piede",
         "KNOTS": "nodi|nodo",
-        "FLIGHT_LEVEL": "livello di volo|livello|flight level",
+        "FLIGHT_LEVEL": "fl|livello di volo|livello|flight level",
+        "TUNE_RAMP": "sintonizza la rampa|metti la rampa|frequenza di rampa|frequenza rampa",
         "FILLER": "siamo|abbiamo|che|a|la nostra|nostra|nostro|qual e|quale|ha|fa|l|la|per favore|dell|per favore|il|lo|la|i|gli|le|e|poi|ora|adesso|metti|mettere|puoi|potresti|ci|grazie|comandante|"
                   "bene|allora|di|del|della|fai|fare|facciamo|a|al",
     },
@@ -346,7 +351,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "quanto falta|quanto tempo|quando aterramos|quando pousamos",
         "FEET": "pes|pe",
         "KNOTS": "nos|no",
-        "FLIGHT_LEVEL": "nivel de voo|nivel|flight level",
+        "FLIGHT_LEVEL": "fl|nivel de voo|nivel|flight level",
+        "TUNE_RAMP": "sintoniza a rampa|poe a rampa|frequencia da rampa",
         "FILLER": "estamos|temos|qual|e|nosso|nossa|a nossa|o nosso|o|a|que|para|esta|disse|dos|das|o que|tem|por favor|o|a|os|as|e|depois|agora|poe|põe|pode|podes|nos|obrigado|comandante|bem|entao|de|"
                   "do|da|faz|fazer|vamos|em|no|na",
     },
@@ -400,7 +406,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "hoe lang nog|hoelang nog|wanneer landen we|resterende tijd",
         "FEET": "voet",
         "KNOTS": "knopen|knoop",
-        "FLIGHT_LEVEL": "vliegniveau|vlieghoogte|flight level",
+        "FLIGHT_LEVEL": "fl|vliegniveau|vlieghoogte|flight level",
+        "TUNE_RAMP": "zet het platform op|stem af op platform|platformfrequentie|frequentie platform",
         "FILLER": "klim|klimmen|naar|zitten|gaan|hebben|wat|is|onze|ons|op|zei|heeft|we|hoeveel|alsjeblieft|alstublieft|graag|de|het|en|dan|nu|zet|doe|kun je|kan je|kunt u|we|ons|"
                   "bedankt|dank je|gezagvoerder|oke|goed|nou|maar|even|naar|met",
     },
@@ -452,7 +459,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "ile jeszcze|jak dlugo|kiedy ladujemy|pozostaly czas",
         "FEET": "stop|stopy|stopach",
         "KNOTS": "wezlow|wezly|wezel",
-        "FLIGHT_LEVEL": "poziom lotu|poziom|flight level",
+        "FLIGHT_LEVEL": "fl|poziom lotu|poziom|flight level",
+        "TUNE_RAMP": "ustaw rampe|nastaw rampe|czestotliwosc rampy",
         "FILLER": "jestesmy|mamy|jaka|jaki|jest|nasza|nasz|na|nad|sie|prosze|ile|co|ma|powiedziala|prosze|i|a|potem|teraz|ustaw|daj|mozesz|czy mozesz|nam|dzieki|dziekuje|kapitanie|dobra|no|"
                   "to|zrob|przeprowadz|na|do|z",
     },
@@ -506,7 +514,8 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "hur lange till|hur lange kvar|hur lange|nar landar vi|hur lang tid",
         "FEET": "fot",
         "KNOTS": "knop",
-        "FLIGHT_LEVEL": "flygniva|flight level",
+        "FLIGHT_LEVEL": "fl|flygniva|flight level",
+        "TUNE_RAMP": "stall in rampen|rampfrekvens|frekvens ramp",
         "FILLER": "stig|sjunk|vilken|vilket|har|vi|ar|pa|hur|mycket|till|sa|tack|snalla|och|sedan|nu|satt|kan du|vi|oss|kapten|bra|da|den|det|gor|kor|till|med",
     },
     "ru": {
@@ -557,8 +566,9 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "сколько осталось|сколько еще|сколько ещё|когда садимся|когда посадка",
         "FEET": "футов|фута|футы|фут",
         "KNOTS": "узлов|узла|узлы|узел",
-        "FLIGHT_LEVEL": "эшелон|эшелона|flight level",
+        "FLIGHT_LEVEL": "fl|эшелон|эшелона|flight level",
         "APU": "всу",
+        "TUNE_RAMP": "настрой перрон|настрой частоту перрона|частоту перрона|частота перрона",
         "FILLER": "какой|какая|какое|у нас|нас|у|мы|на|в|перед|сколько|осталось|что|есть|пожалуйста|и|потом|теперь|сейчас|поставь|установи|можешь|давай|нам|спасибо|командир|ну|"
                   "ладно|выполни|выполняем|проведи|на|в",
     },
@@ -610,8 +620,9 @@ WORDS: dict[str, dict[str, str]] = {
         "HOW_LONG": "还要多久|多久|什么时候落地|什么时候到",
         "FEET": "英尺|呎",
         "KNOTS": "节",
-        "FLIGHT_LEVEL": "飞行高度层|高度层",
+        "FLIGHT_LEVEL": "fl|飞行高度层|高度层",
         "APU": "辅助动力装置|apu",
+        "TUNE_RAMP": "调机坪频率|机坪频率|调到机坪|调到地勤频率",
         "FILLER": "现在|我们|还有|多少|什么|怎么样|是|到|执行|把|请|吗|请|吧|一下|的|了|把|我们|帮我|你|可以吗|谢谢|机长|现在|然后|和|再|执行一下|做|呢|吗",
     },
 }
@@ -1063,6 +1074,8 @@ SWITCHES = {"ON": "on", "OFF": "off"}
 
 def _command(concepts: set[str], number: str) -> str | None:
     """One clause's concepts as the English command they make, or None."""
+    if "TUNE_RAMP" in concepts:
+        return "tune ramp"
     on = "ON" in concepts or "START" in concepts
     off = "OFF" in concepts or "CANCEL" in concepts
     state = "on" if on and not off else "off" if off and not on else ""
@@ -1146,7 +1159,7 @@ def gloss(text: str, code: str) -> str | None:
     every word of it is understood; None otherwise (the language model reads it as said)."""
     if not text.strip() or code in ("", "en") or code not in WORDS:
         return None
-    plain = whole_numbers(_plain(text), code) if code != "zh" else zh_whole_numbers(re.sub(r"[\s。！？、.!?]+", " ", text.lower()).strip())
+    plain = whole_numbers(_plain(text), code) if code != "zh" else zh_whole_numbers(digits_as_written(re.sub(r"[\s。！？、!?]+", " ", text.lower())).strip(" ."))
     joiners = "|".join(re.escape(_plain(j) if code != "zh" else j) for j in JOINERS[code].split("|") + JOINERS["en"].split("|"))
     if code == "pt":
         joiners = joiners.replace("depois", r"depois(?!\s+d[aeo]\b)")  # ("depois da aterragem" is a checklist's name)

@@ -405,3 +405,58 @@ def test_every_cabin_answer_is_there_and_fills_in(code):
 def test_ramp_words_are_the_ramps_in_the_captains_language_too():
     c = _cabin("de")
     assert not c.claims("Rampe, Treibstoff bitte", 1.0)
+
+
+@pytest.mark.parametrize("code, heard, english", [
+    ("es", "sube a 10.000 pies.", "altitude 10000"), ("it", "Quota 10.000 piedi.", "altitude 10000"), ("pt", "altitude de 10.000 pés.", "altitude 10000"),
+    ("fr", "altitude de 10 000 pieds.", "altitude 10000"), ("de", "Höhe 10.000 Fuß", "altitude 10000"), ("fr", "CAP270", "heading 270"), ("de", "Kurs 2, 7, 0", "heading 270"),
+    ("es", "RUMBO 270", "heading 270"), ("de", "FL350", "altitude 35000"), ("fr", "sort le train.", "gear down"), ("ru", "Высота 10 000 футов", "altitude 10000"), ("zh", "高度10,000英尺", "altitude 10000"),
+])
+def test_numbers_as_whisper_writes_them(code, heard, english):
+    assert foreign.gloss(heard, code) == english
+
+
+def test_decimals_and_flaps_stay_what_they_are():
+    from localtc.spoken_numbers import digits_as_written
+
+    assert digits_as_written("29.92") == "29.92" and digits_as_written("A320") == "A320"
+    assert digits_as_written("flaps 2, gear down") == "flaps 2, gear down"
+
+
+@pytest.mark.parametrize("code", sorted(foreign.WORDS))
+def test_whisper_listens_for_the_crews_words_in_every_language(code):
+    from localtc.stt.vocabulary import CREW_STYLE_IN, MAX_PROMPT_CHARS
+
+    assert 100 < len(CREW_STYLE_IN[code]) <= MAX_PROMPT_CHARS
+
+
+@pytest.mark.parametrize("code, said", [
+    ("de", "Rampenfrequenz einstellen"), ("fr", "Règle la rampe"), ("es", "Sintoniza la rampa"), ("it", "Sintonizza la rampa"), ("pt", "Sintoniza a rampa"),
+    ("nl", "Platformfrequentie"), ("pl", "Ustaw rampę"), ("sv", "Ställ in rampen"), ("ru", "Настрой перрон"), ("zh", "调机坪频率"),
+])
+def test_the_copilot_tunes_the_ramp_in_every_language(code, said):
+    from localtc.crew.commands import parse
+
+    assert foreign.gloss(said, code) == "tune ramp"
+    assert [(c.action, c.value) for c in parse("tune ramp")] == [("com_active", "119.999")]
+
+
+# --- the copilot, whole ------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("code", sorted(foreign.WORDS))
+def test_the_copilot_works_in_every_language_with_no_model(code):
+    from test_crew import own, said, started
+
+    from localtc.sim_api import AircraftSystems, CrewAction, IntercomHeard
+
+    pm = started()
+    pm._language = code
+    pm.observe(own(2.0, fuel_lb=41300.0, fuel_flow_pph=2500.0))
+    pm.observe(AircraftSystems(t=2.0, flaps_positions=4, engines_running=2))
+    fuel = next(t for c, t, e in CASES if c == code and e == "how much fuel do we have?")
+    answer = said(pm.observe(IntercomHeard(t=30.0, text=fuel)))
+    assert answer and foreign.speaks(answer[0], code) and foreign.numbers(answer[0].replace(" ", " "))[0] == "41300"
+    lights = next(t for c, t, e in CASES if c == code and e == "landing lights on")
+    assert any(isinstance(o, CrewAction) for o in pm.observe(IntercomHeard(t=60.0, text=lights)))
+

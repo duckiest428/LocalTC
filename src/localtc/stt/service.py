@@ -19,7 +19,7 @@ from typing import Any
 from localtc.bus import EventBus
 from localtc.dsp.clips import CLIPS, clip_id
 from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16, trim_silence
-from localtc.stt.vocabulary import VocabularyHints, build_prompt, fixup, hotwords, match_names, without_prompt
+from localtc.stt.vocabulary import CREW_STYLE_IN, VocabularyHints, build_prompt, fixup, hotwords, match_names, without_prompt
 from localtc.sim_api import IntercomHeard, IntercomPressed, IntercomReleased, PttPressed, PttReleased, Transcript
 
 log = logging.getLogger(__name__)
@@ -226,8 +226,9 @@ class VoiceService:
             if in_language:
                 log.info("The radio call was in %s (%.2f)", code, sure)
         if in_language and self.intercom_language:
-            # The copilot talked to in the pilot's language: heard as that language, without the English prompt.
-            prompt, words, kwargs = "", "", {"language": self.intercom_language}
+            # The copilot talked to in the pilot's language: heard as that language, listening for the crew's words in it.
+            hints = VocabularyHints(style=CREW_STYLE_IN.get(self.intercom_language, " "))
+            prompt, words, kwargs = (build_prompt(hints).strip() if self.vocabulary else ""), "", {"language": self.intercom_language}
             transcriber = self.intercom_transcriber
         result = await asyncio.to_thread(transcriber.transcribe, speech, prompt=prompt, hotwords=words, **kwargs)
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""

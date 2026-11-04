@@ -105,6 +105,13 @@ It answers in a closed list (`model.ACTIONS`, `SERVICES`), and what it reads goe
 invent a service or get a push past the brake or ATC. A reading turned away falls back to the grammar for that same call, and the
 pilot's told (`llm_rejected`).
 
+## In the pilot's language
+
+With `[crew] language` set, the crew understand and answer in it (`ground/words.py`): `as_english` turns what's said into the English
+the grammar reads, and each line has its translation. **The headset's calls on the push stay in aviation English** (`lines.FIXED`), and what
+GSX itself says stays as GSX says it. Foreign lines are "{Name}: ..." because Polish and Russian change a noun with its place in a sentence.
+One wording per line, against several in English.
+
 ## Aircraft
 
 Handled generally by passing on `waiting` and `message`. Known differences:

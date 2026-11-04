@@ -7,6 +7,8 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
+- **RAMP in the frequency list at every airport**, and on the phone; click it to tune. It lights up on 119.990 or 120.000 too. Tuning it with the
+  ground crew off now says so, and where to turn them on.
 - **Every language gets what Spanish got, and the ground crew and cabin crew too:** in German, French, Spanish, Italian, Portuguese,
   Dutch, Polish, Swedish, Russian and Mandarin, numbers said as words ("zehntausend Fuß", "deux cent cinquante"), feet, knots and flight
   levels are understood, the copilot's common answers (fuel, altitude, speed, heading, time to go, what's assigned) come in your language

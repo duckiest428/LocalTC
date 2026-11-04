@@ -1078,3 +1078,14 @@ def test_the_phones_command_reaches_the_crew_and_says_when_theyre_off():
         with pytest.raises(HttpError):
             await efb.command({"action": "ground", "do": "request", "service": "Catering"})
     run(scenario())
+
+
+def test_the_ramp_is_in_the_frequency_list_at_every_airport():
+    from types import SimpleNamespace
+
+    from localtc.ui.controller import airport_detail, airport_summary
+
+    bare = SimpleNamespace(icao="XXXX", name="Nowhere", frequencies=[], runways=[], lat=0.0, lon=0.0, elev_ft=0.0, magvar=0.0, parking=[], taxi_paths=[])
+    assert airport_summary(bare)["frequencies"] == [{"label": "RAMP", "kind": "ramp", "mhz": 119.999, "others": []}]
+    assert airport_summary(bare, ramp_mhz=120.0)["frequencies"][0]["mhz"] == 120.0
+    assert airport_detail(bare)["all_frequencies"][-1]["label"] == "RAMP"

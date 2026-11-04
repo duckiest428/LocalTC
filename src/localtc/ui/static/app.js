@@ -352,7 +352,7 @@ function setFlight(f) {
     const key = JSON.stringify(ap.frequencies) + ap.icao;
     if (freqs.dataset.key !== key) {
       freqs.dataset.key = key;
-      freqs.innerHTML = ap.frequencies.map((q) => `<div class="fq" data-mhz="${q.mhz}" title="Tune COM1 to ${mhz(q.mhz)}${q.others.length ? " (also " + q.others.map(mhz).join(", ") + ")" : ""}">
+      freqs.innerHTML = ap.frequencies.map((q) => `<div class="fq" data-mhz="${q.mhz}" data-kind="${q.kind}" title="Tune COM1 to ${mhz(q.mhz)}${q.others.length ? " (also " + q.others.map(mhz).join(", ") + ")" : ""}">
         <span class="fl">${esc(q.label)}</span><span class="fv">${mhz(q.mhz)}</span></div>`).join("");
     }
   } else if (!ap && freqs.dataset.key) {
@@ -402,7 +402,7 @@ function enRoute(s) {
 
 function markTuned() {
   const com1 = S.own?.com1;
-  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", com1 != null && Math.abs(Number(el.dataset.mhz) - com1) < 0.004));
+  $$("#ap-freqs .fq").forEach((el) => el.classList.toggle("tuned", com1 != null && Math.abs(Number(el.dataset.mhz) - com1) < (el.dataset.kind === "ramp" ? 0.0105 : 0.004)));
 }
 
 $("#ap-freqs").addEventListener("click", (e) => {

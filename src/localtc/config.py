@@ -440,6 +440,20 @@ class CabinConfig(_Section):
     llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
 
 
+class GroundConfig(_Section):
+    """The ground crew (localtc.ground): the turnaround and the push by voice, through GSX where it's installed."""
+
+    enabled: bool = False
+    ramp_mhz: float = 119.999  # the same at every airport
+    verbosity: Literal["quiet", "standard", "chatty"] = "standard"  # what they say by themselves
+    without_gsx: Literal["standalone", "tell", "off"] = "standalone"  # the sim's own tug and jetway, just say so, or no crew
+    # How much they lean on the language model, a cloud one only (without one, the grammar and the script): scripted, semi
+    # (it reads what the grammar can't), mostly_llm (it words their answers too), llm (it reads everything first).
+    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
+    wait_for_clearance: bool = True  # the push waits for ATC, when there's a controller who'd clear it
+    adapter: Literal["auto", "gsx", "standalone", "mock"] = "auto"  # who does the work (mock: a stand-in, for working without a sim)
+
+
 class SessionConfig(_Section):
     """When a flight ends by itself."""
 
@@ -506,6 +520,7 @@ class Config(_Section):
     copilot: CopilotConfig = msgspec.field(default_factory=CopilotConfig)
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)
     cabin: CabinConfig = msgspec.field(default_factory=CabinConfig)
+    ground: GroundConfig = msgspec.field(default_factory=GroundConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     mixer: MixerConfig = msgspec.field(default_factory=MixerConfig)

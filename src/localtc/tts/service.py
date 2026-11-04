@@ -28,6 +28,7 @@ from localtc.sim_api import (
     AtcTransmission,
     AtisBroadcast,
     CabinSound,
+    RampSpeech,
     CabinSpeech,
     CrewSpeech,
     PttPressed,
@@ -103,7 +104,7 @@ class VoiceOut:
         self.crew_language = crew_language
         self.shift, self.regional = shift, regional
         self._events = bus.subscribe(AtcTransmission, AtisBroadcast, RadioTuned, Transcript, RadioChatter, CrewSpeech,
-                                     CabinSpeech, CabinSound)
+                                     CabinSpeech, CabinSound, RampSpeech)
         self._cabin: asyncio.Queue = asyncio.Queue()  # the cabin crew's lines, said in turn beside the radio's
         self._music_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()  # transmissions are synthesized and queued in the order they were made
@@ -191,6 +192,11 @@ class VoiceOut:
                            keep=clip_id(ev), urgent=ev.kind == "alert")
         elif isinstance(ev, CabinSpeech) and (ev.spoken or ev.text):
             self._cabin.put_nowait(ev)  # (their own queue: the safety demonstration never holds up ATC)
+        elif isinstance(ev, RampSpeech) and (ev.spoken or ev.text):
+            if ev.channel == "radio":  # on the ramp's frequency: a station like any other, gone when tuned away
+                await self.say(ev.spoken or ev.text, self._ramp_voice(ev), "atc", station=ev.speaker, local=True)
+            else:
+                self._cabin.put_nowait(ev)  # the headset, on the interphone
         elif isinstance(ev, CabinSound):
             self._cabin_sound(ev)
         elif isinstance(ev, AtisBroadcast) and self.atis:
@@ -256,9 +262,21 @@ class VoiceOut:
         while True:
             ev = await self._cabin.get()
             try:
-                await self._say_cabin(ev)
+                await (self._say_ramp(ev) if isinstance(ev, RampSpeech) else self._say_cabin(ev))
             except Exception:  # noqa: BLE001 - a voice failing never stops the next line
                 log.exception("Cabin voice failed; carrying on")
+
+    def _ramp_voice(self, ev: RampSpeech) -> Persona:
+        return persona_for(f"ramp {ev.speaker}", "ground_crew", sex=ev.sex, locale=ev.locale if self.regional else "")
+
+    async def _say_ramp(self, ev: RampSpeech) -> None:
+        who = self._ramp_voice(ev)
+        for sentence in sentences(ev.spoken or ev.text):
+            async with self._lock:
+                speech = await asyncio.to_thread(self.voices.speak, sentence, who, local=True)
+            if speech is None:
+                return  # nobody could say it: text only
+            self.player.play(Clip(interphone_effect(speech.audio, speech.rate), speech.rate, "interphone"))
 
     async def _say_cabin(self, ev: CabinSpeech) -> None:
         who = persona_for(f"cabin {ev.speaker}", "cabin", sex=ev.sex, locale=ev.locale if self.regional else "",

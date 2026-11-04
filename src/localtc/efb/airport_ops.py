@@ -62,6 +62,7 @@ class AirportOps:
         self.clock = clock
         self.s = OpsState()
         self.gsx: dict[str, float] = {}
+        self.ground: dict | None = None  # the ground crew's services, when they're on (localtc.ground)
         self._fuel: tuple[float, float] | None = None  # (lb, when) the fuel was last seen steady
         self._fuel_rising_t: float | None = None
         self._told: set[str] = set()
@@ -70,9 +71,14 @@ class AirportOps:
     # --- what it's told ---------------------------------------------------------------------------------------
 
     def observe(self, ev) -> None:
-        from localtc.sim_api import AircraftVars, FlightArrived, NoticesReport, OwnshipState, PhaseChanged
+        from localtc.sim_api import AircraftVars, FlightArrived, GroundStatus, NoticesReport, OwnshipState, PhaseChanged
 
-        if isinstance(ev, AircraftVars):
+        if isinstance(ev, GroundStatus):
+            self.ground = {"provider": ev.provider, "connected": ev.connected, "parking": ev.parking,
+                           "services": [{"id": s.id, "name": s.name, "state": s.state, "waiting": s.waiting, "status": s.status}
+                                        for s in ev.services]}
+            self._changed()
+        elif isinstance(ev, AircraftVars):
             self._gsx({k: v for k, v in ev.values.items()} if hasattr(ev, "values") else {})
         elif isinstance(ev, OwnshipState):
             self._ownship(ev)
@@ -243,4 +249,4 @@ class AirportOps:
         s = self.s
         return {"icao": s.icao, "role": s.role, "services": {k: v.to_json() for k, v in s.services.items()},
                 "gsx": bool(self.gsx), "deice": s.deice, "messages": s.messages[-30:], "requests": s.requests[-10:],
-                "closures": s.closures, "notes": s.notes[-20:]}
+                "closures": s.closures, "notes": s.notes[-20:], "ground": self.ground}

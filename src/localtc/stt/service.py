@@ -41,7 +41,8 @@ CREW_STYLE = (
     "Strobes on. Beacon on. Arm the spoilers. Autopilot on. Autopilot off. Heading mode. Approach mode. "
     "Set heading 270. Altitude 10,000. Flight level 240. Speed 250. Vertical speed minus 1,500. Squawk 4521. "
     "Tune 121.9. Set standby 118.7. Altimeter 29.92. Standard. Parking brake set. Confirm. Negative. Cancel. "
-    "How do you hear me? Check. Set. Before start checklist. Your radios. My radios."
+    "How do you hear me? Check. Set. Before start checklist. Your radios. My radios. "
+    "Ramp, catering, fuel and a GPU please. Jetway. Lavatory. Tune ramp."
 )
 
 

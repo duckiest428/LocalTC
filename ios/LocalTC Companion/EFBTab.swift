@@ -454,6 +454,40 @@ struct OpsView: View {
                 }
                 ForEach(ops?.closures ?? [], id: \.self) { Label($0, systemImage: "exclamationmark.triangle").font(.caption) }
             }
+            if let ground = ops?.ground, let services = ground.services, !services.isEmpty {
+                Section(ground.parking.map { "Ground crew · \($0)" } ?? "Ground crew") {
+                    ForEach(services) { service in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(service.name ?? service.id)
+                                Text(service.waiting == true ? "Waiting: \(service.status ?? "")" : (service.status ?? service.state).components(separatedBy: "\n").first ?? "")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if service.id != "Departure" {
+                                Button(service.active ? "Cancel" : "Request") {
+                                    groundCrew(service.active ? "cancel" : "request", service: service.id)
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(service.active ? .red : .accentColor)
+                            }
+                        }
+                    }
+                    if let push = services.first(where: { $0.id == "Departure" }) {
+                        if push.active {
+                            Button("Stop the push", role: .destructive) { groundCrew("stop_push") }
+                        } else {
+                            HStack {
+                                Text("Pushback")
+                                Spacer()
+                                Button("Nose left") { groundCrew("push", direction: "nose_left") }.buttonStyle(.bordered)
+                                Button("Straight") { groundCrew("push", direction: "straight") }.buttonStyle(.bordered)
+                                Button("Nose right") { groundCrew("push", direction: "nose_right") }.buttonStyle(.bordered)
+                            }
+                        }
+                    }
+                }
+            }
             if let atc = efb?.atc {
                 Section("ATC") {
                     if let hold = atc.hold, hold.active { HoldSummary(hold: hold) }
@@ -481,6 +515,12 @@ struct OpsView: View {
             }
         }
         .navigationTitle("Airport Ops")
+    }
+
+    private func groundCrew(_ action: String, service: String? = nil, direction: String? = nil) {
+        Task {
+            do { try await model.connection.efb(.ground(action: action, service: service, direction: direction)); problem = nil } catch { problem = error.localizedDescription }
+        }
     }
 
     private func send() {

@@ -196,11 +196,14 @@ LocalTC's JSON (`409 {"error": ...}` when it can't):
   `text`), `"op": "delete"` (`id`).
 - `{"action": "gate", "gate": "B25"}`: Airport Ops asks ATC for it (`{"ok": true, "why": "Gate B25 approved."}`).
 - `{"action": "ops_note", "text": ..., "kind": "maintenance" | "dispatch" | "other"}`.
+- `{"action": "ground", "do": "request" | "cancel" | "finish" | "off" | "push", "service": "Catering", "direction": "nose_left" | "nose_right" | "straight"}`:
+  asks the ground crew, with the same checks as the pilot's voice (`409` with no ground crew). `services` in `ops.ground` shows how it stands:
+  `{"provider": "gsx", "connected": true, "parking": "Gate B 37", "services": [{"id": "Catering", "name": "Catering", "state": "requested", "waiting": false, "status": "front on the way"}]}`.
 - Questions, on the same Wi-Fi only: `{"action": "gates", "icao": ""}` (the gate map: each stand's name, position,
   occupied, fits, airline), `{"action": "chart", "id": ..., "height": 800}` (its viewing link, and `own`: where the
   aircraft is on it in pixels at that height), `{"action": "achievements"}`, `{"action": "briefing", "icao": ...}`,
   `{"action": "charts", "icao": ...}`, `{"action": "perf"}`, `{"action": "checklists"}`.
 
-Anywhere else, through the account: `POST /v1/live/say {"to": "efb", "command": {...}}` for the four that change something
-(`checklist`, `scratchpad`, `gate`, `ops_note`; 2,000 characters at most): held like a typed call, picked up by the desktop
+Anywhere else, through the account: `POST /v1/live/say {"to": "efb", "command": {...}}` for the five that change something
+(`checklist`, `scratchpad`, `gate`, `ops_note`, `ground`; 2,000 characters at most): held like a typed call, picked up by the desktop
 the same way; no answer, the next `efb` message shows the outcome.

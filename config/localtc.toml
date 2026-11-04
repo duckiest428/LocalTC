@@ -157,6 +157,15 @@ checklists = "offer"          # the checklists (the aircraft's own, else its fam
                               # each when it's due, "run" it straight away, "off" only when you ask for one
 checklist_mode = "challenge"  # challenge (it asks, you answer) | read (it reads and checks) | auto (it also sets what it can)
 
+[ground]                      # the ground crew: the turnaround and the push by voice, through GSX where it's installed
+enabled = false
+ramp_mhz = 119.999            # the same at every airport (a radio that stops at 119.990 or 120.000 reaches it too)
+verbosity = "standard"        # what they say by themselves: quiet | standard | chatty
+without_gsx = "standalone"    # standalone (the sim's own tug and jetway) | tell | off
+llm = "mostly_llm"            # a cloud model only: scripted | semi | mostly_llm | llm
+wait_for_clearance = true     # the push waits for ATC
+adapter = "auto"              # auto | gsx | standalone | mock (a stand-in, for working without a sim)
+
 [cabin]                       # the cabin crew: announcements, the safety demo, the service, and "cabin, ..." on the intercom
 enabled = false               # only on an airline's flight or in an airliner
 crew = "auto"                 # who leads the cabin: claire | jamie | grace | daniel | sophie | auto (a different one each flight)

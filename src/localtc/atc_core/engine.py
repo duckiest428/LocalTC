@@ -20,6 +20,7 @@ from typing import Any
 
 import msgspec
 
+from localtc.sim_api.ramp import on_ramp
 from localtc.atc_core import chatter, disfluency, personality, procedures, radio_range, vectors
 from localtc.atc_core import region as regions
 from localtc.atc_core.airport import (
@@ -535,6 +536,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._ptt_since: float | None = None  # set while the pilot holds push-to-talk
         self._stt_since: float | None = None  # set from push-to-talk release until its transcript arrives
         self._tx_mhz: float | None = None  # the frequency the pilot keyed the mic on
+        self.ramp_mhz: float | None = None  # the ground crew's frequency, when there's a ground crew: not ATC's to answer
+        self._ramp_tuned = False
         self._radio_busy_until = -math.inf  # voice out: until ATC (or the copilot) has finished speaking
         self._paused_at: float | None = None  # when the sim was paused (its pause is no silence on the frequency)
         self._departure_override: str | None = None  # a departure runway the pilot asked for
@@ -1268,6 +1271,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
         self.weather.update(raw, self.tracker.context_builder.airports)
         previous = (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned)
+        ramp_was = self._ramp_tuned
         st.comms.tuned_mhz = own.com1_mhz
         st.comms.tuned = self._facility_for(own.com1_mhz)
         atis = self._atis_airport(own.com1_mhz)
@@ -1276,7 +1280,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # Denver's ATIS is on 125.6, and so is one of Seattle Approach's frequencies: parked at Denver, it's the ATIS.
             st.comms.tuned = None
         self._atis_tuned = atis if st.comms.tuned is None else None
-        if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous:
+        self._ramp_tuned = st.comms.tuned is None and self._atis_tuned is None and self.ramp_mhz is not None \
+            and on_ramp(own.com1_mhz, self.ramp_mhz)
+        if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous or self._ramp_tuned != ramp_was:
             tuned = st.comms.tuned
             self._tuned_since = own.t
             if previous[1] is not None and tuned is not None and tuned.station != previous[1].station:
@@ -1293,6 +1299,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if self._atis_tuned is not None:
                 out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="atis",
                                       station=f"{self._airport_name(self._atis_tuned)} ATIS"))
+            elif self._ramp_tuned:
+                out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz, controller="ramp", station="Ramp"))
             else:
                 out.append(RadioTuned(t=own.t, radio=1, frequency_mhz=own.com1_mhz,
                                       controller=tuned.controller if tuned else None, station=tuned.station if tuned else None))
@@ -2835,7 +2843,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     # --- pilot transmissions -----------------------------------------------------------------------
 
+    def _for_the_ramp(self, ev: Transcript) -> bool:
+        """Said on the ground crew's frequency, with no real controller on it: theirs (localtc.ground), not ATC's."""
+        if self.ramp_mhz is None:
+            return False
+        own = self.state.aircraft
+        mhz = self._tx_mhz if self._tx_mhz is not None else ((own.com2_mhz if ev.radio == 2 else own.com1_mhz) if own else None)
+        return on_ramp(mhz, self.ramp_mhz) and self._facility_for(mhz) is None
+
     def _on_pilot(self, ev: Transcript) -> list[BusEvent]:
+        if self._for_the_ramp(ev):
+            return []
         self._answering = True  # whatever is scheduled now answers the pilot, and goes out even with the sim paused
         self._interp, self._not_used = None, []
         before = len(self._scheduled)

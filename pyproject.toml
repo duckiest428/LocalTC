@@ -111,6 +111,15 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "The ground crew works through its adapter and the bus: the rest of LocalTC is wired in by the app"
+type = "forbidden"
+source_modules = ["localtc.ground"]
+forbidden_modules = [
+    "localtc.app", "localtc.cli", "localtc.copilot", "localtc.crew", "localtc.dsp", "localtc.replay", "localtc.scenario",
+    "localtc.sim_bridge", "localtc.stt", "localtc.tts", "localtc.traffic", "localtc.ui", "localtc.account", "localtc.update",
+]
+
+[[tool.importlinter.contracts]]
 name = "The ATC never reaches the network: accounts, the logbook and updates stay outside it"
 type = "forbidden"
 source_modules = ["localtc.atc_core", "localtc.stt", "localtc.tts", "localtc.dsp", "localtc.copilot", "localtc.llm"]

@@ -33,9 +33,10 @@ REPLY_PAUSE_S = 0.9  # the copilot's answer comes at least this long after the c
 
 
 class CrewService:
-    def __init__(self, pm: PilotMonitoring, bus: EventBus, source: SimSource | None = None, cabin=None) -> None:
-        """``cabin``: the cabin crew (crew.cabin.CabinCrew), whose words on the intercom ("cabin, ...") are theirs."""
-        self.pm, self.bus, self.source, self.cabin = pm, bus, source, cabin
+    def __init__(self, pm: PilotMonitoring, bus: EventBus, source: SimSource | None = None, cabin=None, ground=None) -> None:
+        """``cabin``: the cabin crew (crew.cabin.CabinCrew), whose words on the intercom ("cabin, ...") are theirs.
+        ``ground``: the ground crew's service (ground.service.GroundService): so are "ramp, ..."."""
+        self.pm, self.bus, self.source, self.cabin, self.ground = pm, bus, source, cabin, ground
         # Subscribed now, not in run(): a fast source could publish before run() starts.
         # Everything the copilot watches to speak first (crew.monitor): ATC and the pilot on the radio (so it doesn't
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
@@ -49,6 +50,9 @@ class CrewService:
             started = loop.time()
             if isinstance(event, IntercomHeard) and event.to == "cabin" and not event.text.strip():
                 continue  # the cabin's key, and nothing heard: not the copilot's to answer
+            if isinstance(event, IntercomHeard) and self.ground is not None and self.ground.crew.claims(event.text, event.t, event.to):
+                asyncio.create_task(self.ground.answer(event.text, event.t))
+                continue  # for the ramp ("ramp, ...", or the answer to what they just asked), whoever else is listening
             if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t, event.to):
                 from localtc.crew.cabin_service import answer
 

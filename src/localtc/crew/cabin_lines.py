@@ -548,6 +548,11 @@ LANDING_WORDS = {
 
 # The answers on the interphone, when the pilot calls the cabin.
 REPLIES: dict[str, tuple[str, ...]] = {
+    "ground_boarding": ("Thanks, Captain. We're ready for them, starting boarding now.", "Lovely, we'll get them on board.",
+                        "Understood, boarding now."),
+    "ground_deboarding": ("Thanks, Captain, we'll start getting everyone off.", "Understood, deboarding now.",
+                          "Okay, opening up and getting them off."),
+    "ground_not_yet": ("We can't start that just yet, Captain.", "Not from here just yet, Captain: the ramp can't do that now."),
     "drink": ("Of course. One {drink}, coming right up.", "No problem, I'll bring a {drink} up in a moment.",
               "Sure thing. A {drink} it is."),
     "drink_both": ("Two {drink}s, coming up.", "Of course. I'll bring two {drink}s up."),

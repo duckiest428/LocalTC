@@ -4,6 +4,13 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-11-03: the ground crew against GSX Pro 4.0.5, Zurich B37 (iniBuilds A350, parked)
+- Worked for real, through an isolated copy: requests, operators answered, fuel level answered, status, "ground power off",
+  boarding through the cabin crew, a mid-service abort by the menu logic. "tune ramp": 119.999 set and read back on the A350.
+- Found by doing it: GSX's "Select refueling level" gives up in about 30 s; "Attach Pushback Tug now?" and "Do you want to board
+  crew?" come during boarding; the GPU never shows `completed`; `completed` lasts about 10 s.
+- Open: no push tried, the standalone tug untried, voices unheard (the test ran with speech off), the other aircraft.
+
 ## 2026-10-14: CYUL to EGLL (iniBuilds A330-300) and EGLL to RJTT (stock A350-1000), the reports' marks
 - The iniBuilds profile matched the A330-200 only: the -300 got the stock one ("seatbelt already off" with no reading).
   It matches both now; its seatbelt isn't read (``unread``), so nothing is said to be "already" so.

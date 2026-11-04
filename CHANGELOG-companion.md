@@ -6,7 +6,9 @@ is built from this file.
 
 ## [0.5.6] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **Ground crew in Airport Ops:** with the ground crew on in LocalTC, each service with how it's going, a button to request
+  or cancel it, and the push: nose left, straight or nose right.
 
 ## [0.5.5] - 2026-11-02
 

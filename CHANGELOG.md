@@ -7,6 +7,13 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
+- **Ground crew:** the turnaround and the push by voice, with no menus: on the worldwide ramp frequency, 119.999 ("tune ramp"
+  to the copilot), or on the intercom starting with "ramp". Off by default, in Settings → Ground crew. Fuel, catering, water,
+  lavatory, cleaning, de-icing, the GPU, the jetway and stairs, several in one call ("catering, fuel and a GPU please"), what's
+  still outstanding, and calling one off. They answer GSX's questions for you and tell you what it's waiting on. The cabin crew
+  look after boarding and deboarding. The push waits for ATC's clearance, the brake and the engines. With GSX through its own
+  Remote API, without it the sim's tug and jetway. Without a cloud language model they understand set phrases; with one, what
+  you say your own way.
 - **Your flight on Discord:** an option in Settings, off by default, shows your route, the phase and the frequency you're
   on, with a "Fly on LocalTC" button to localtc.tech.
 - **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.

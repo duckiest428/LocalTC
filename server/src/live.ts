@@ -278,9 +278,9 @@ export function pushFor(before: Status | null, after: Status): { title: string; 
 }
 
 /** Who a typed call is for: ATC on COM1 ("atc"), on COM2 ("com2"), the copilot on the intercom ("crew"), or the
- * EFB ("efb": a command from the phone's EFB, as JSON: a checklist, a note, a gate request, a note to Ops). */
+ * EFB ("efb": a command from the phone's EFB, as JSON: a checklist, a note, a gate request, a note to Ops, the ground crew). */
 export type Listener = "atc" | "com2" | "crew" | "efb";
-const EFB_ACTIONS = ["checklist", "scratchpad", "gate", "ops_note"];
+const EFB_ACTIONS = ["checklist", "scratchpad", "gate", "ops_note", "ground"];
 const EFB_CALL_MAX = 2000;
 
 /** A typed call: its words, trimmed to one line, and who it's for. */

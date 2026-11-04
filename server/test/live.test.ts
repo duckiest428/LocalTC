@@ -235,13 +235,15 @@ describe("radio calls from the phone and the website", () => {
   it("takes the phone's EFB commands for the desktop, only the ones it knows", async () => {
     const { token } = await signIn();
     await call("PUT", "/v1/live", cruise, bearer(token));
+    const ground = { action: "ground", do: "request", service: "Catering" };
+    expect((await call("POST", "/v1/live/say", { to: "efb", command: ground }, bearer(token))).status).toBe(200);
     const gate = { action: "gate", gate: "B25" };
     expect((await call("POST", "/v1/live/say", { to: "efb", command: gate }, bearer(token))).status).toBe(200);
     expect((await call("POST", "/v1/live/say", { to: "efb", command: { action: "shutdown" } }, bearer(token))).status).toBe(400);
     expect((await call("POST", "/v1/live/say", { to: "efb", command: { action: "scratchpad", text: "x".repeat(3000) } },
       bearer(token))).status).toBe(413);
     const answer = await data(await call("GET", "/v1/live/calls", undefined, bearer(token)));
-    expect(answer.calls.map((c: { text: string; to: string }) => [JSON.parse(c.text), c.to])).toEqual([[gate, "efb"]]);
+    expect(answer.calls.map((c: { text: string; to: string }) => [JSON.parse(c.text), c.to])).toEqual([[ground, "efb"], [gate, "efb"]]);
   });
 
   it("passes the EFB on with the map, its own parts only, and forgets it", async () => {

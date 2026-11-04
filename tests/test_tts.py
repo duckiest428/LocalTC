@@ -151,6 +151,18 @@ def test_atc_and_the_copilot_are_spoken_in_their_own_voices():
     assert synth.said[0][1] != synth.said[1][1]
 
 
+def test_the_ground_crew_on_their_frequency_and_on_the_headset():
+    from localtc.sim_api import RadioTuned, RampSpeech
+
+    synth, player = speak([
+        RadioTuned(t=0.0, frequency_mhz=119.999, controller="ramp", station="Ramp"),
+        RampSpeech(t=1.0, text="Fuel's done.", channel="radio"),
+        RampSpeech(t=2.0, text="Set parking brake.", channel="interphone"),
+    ], settle=0.2)
+    assert [c.kind for c in player.played] == ["atc", "interphone"]
+    assert len(synth.said) == 2
+
+
 def test_the_atis_repeats_until_tuned_away():
     atis = AtisBroadcast(t=1.0, airport="KPAE", station="Paine Field", frequency_mhz=128.65, letter="C",
                          text="Paine Field information Charlie.", spoken="paine field information charlie.")

@@ -150,6 +150,13 @@ Built without the sim or a headset in use; the user heard sample clips only.
 5. The Live Map at an airport, zoomed in: the taxiways, names and gates over the sim's scenery, and the frame rate of
    the app's window at a big airport (KORD: about 4,500 taxiway pieces on one canvas).
 
+## Task 6: the ground crew and GSX (2026-11-03)
+
+[docs/ground-crew.md](ground-crew.md) has what's known. Only Zurich, GSX 4.0.5 and the iniBuilds A350 have been tried, and **no
+push yet: it moves the aircraft, so only with the user there and saying so.** When there's one, record GSX's frames (its Remote
+API, listen only) and put its pages in `tests/fixtures/gsx/`, icons taken out: `mock.py`'s and `crew.DIRECTIONS`' words for it
+come from the manual. Check the standalone tug the same way. Once the user has a newer GSX: `gate.select`, `settings.set`.
+
 ## Fixing and leaving a note
 
 - Fix in the code, add or adjust a unit test where the fix can be tested without the sim (tests/test_traffic_control.py,

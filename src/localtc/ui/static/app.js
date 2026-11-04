@@ -175,6 +175,8 @@ function addLine(l) {
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "cabin":  // the cabin crew: an announcement, or to you on the interphone
       body = `<span class="who">${esc((l.who || "Cabin").toUpperCase())}</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="body">${esc(l.text)}</span>`; break;
+    case "ramp":  // the ground crew: on their frequency, or the headset
+      body = `<span class="who">RAMP</span><span class="ic">${l.channel === "radio" ? "radio" : "interphone"}</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
       if ((l.live || S.settings?.traffic?.enabled) && l.callsign) {
         // LocalTC's traffic (real flights): shown like a real transmission, by its callsign in its airline's colour.
@@ -1984,6 +1986,34 @@ const Settings = {
       </div>
 
       <div class="card">
+        <h3>Ground crew</h3>
+        <div class="master-row">
+          <div><b>Ground crew</b><div class="muted small">The turnaround and the push by voice, with no menus: on the ramp
+            frequency, or on the intercom starting with "ramp": "catering, fuel and a GPU please", "what's still outstanding?",
+            "cancel catering", "pushback, nose left". The cabin crew look after boarding and deboarding.</div></div>
+          <label class="toggle" title="Ground crew on or off"><input type="checkbox" id="s-ground" ${st.ground.enabled ? "checked" : ""}><span></span></label>
+        </div>
+        <div id="ground-opts" class="${st.ground.enabled ? "" : "off"}">
+        <div class="row"><label>Ramp frequency<input id="s-ground-mhz" type="number" step="0.001" min="118" max="136.99" value="${st.ground.ramp_mhz}"></label></div>
+        <span class="hint">The same at every airport. Say "tune ramp" and the copilot sets it; a radio that stops short at 119.990 or 120.000 reaches it too.</span>
+        <div class="row"><label>What they say by themselves<select id="s-ground-verbosity">${[
+          ["quiet", "Only what needs you"], ["standard", "When each service is done"], ["chatty", "Everything"]]
+          .map(([v, t]) => `<option value="${v}" ${st.ground.verbosity === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+        <div class="row"><label>Without GSX<select id="s-ground-nogsx">${[
+          ["standalone", "The sim's own tug and jetway"], ["tell", "Just say there's no GSX"], ["off", "No ground crew"]]
+          .map(([v, t]) => `<option value="${v}" ${st.ground.without_gsx === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+        <div class="row"><label>How they use the language model<select id="s-ground-llm" ${this.hasCloud(st) ? "" : "disabled"}>${[
+          ["scripted", "Fully scripted: only what the grammar understands"],
+          ["semi", "Semi script/LLM: the model reads what the grammar can't"],
+          ["mostly_llm", "Mostly LLM: the model also words their answers (recommended)"],
+          ["llm", "Fully LLM: the model reads and words everything, except the push's safety calls"]]
+          .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.ground.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
+        <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they understand the grammar's phrases only.</span>
+        <label class="check-row"><input type="checkbox" id="s-ground-clearance" ${st.ground.wait_for_clearance ? "checked" : ""}> Hold the push until ATC has cleared it</label>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
@@ -2229,6 +2259,12 @@ const Settings = {
     on("#s-copilot", "change", () => api("radio/copilot", { mode: val("#s-copilot") }).then(() => this.save("ui", "copilot", val("#s-copilot"))).catch(fail));
     on("#s-cabin", "change", (e) => { this.save("cabin", "enabled", e.target.checked); $("#cabin-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-cabin-crew", "change", () => this.save("cabin", "crew", val("#s-cabin-crew")));
+    on("#s-ground", "change", (e) => { this.save("ground", "enabled", e.target.checked); $("#ground-opts")?.classList.toggle("off", !e.target.checked); });
+    on("#s-ground-mhz", "change", () => this.save("ground", "ramp_mhz", Number(val("#s-ground-mhz"))));
+    on("#s-ground-verbosity", "change", () => this.save("ground", "verbosity", val("#s-ground-verbosity")));
+    on("#s-ground-nogsx", "change", () => this.save("ground", "without_gsx", val("#s-ground-nogsx")));
+    on("#s-ground-llm", "change", () => this.save("ground", "llm", val("#s-ground-llm")));
+    on("#s-ground-clearance", "change", (e) => this.save("ground", "wait_for_clearance", e.target.checked));
     on("#s-cabin-llm", "change", () => this.save("cabin", "llm", val("#s-cabin-llm")));
     on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
     for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],

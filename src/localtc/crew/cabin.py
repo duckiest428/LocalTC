@@ -284,6 +284,7 @@ class CabinCrew:
         self.settings = settings or CabinSettings()
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
+        self.ground_call: Any = None  # the ground crew, to start boarding and deboarding (ground.crew.RampCrew.called_by_cabin)
         self.backend: Any = None  # the cloud language model (None: the script's words)
         self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
         self._to_word: set[str] = set()  # the announcements it may word
@@ -927,6 +928,8 @@ class CabinCrew:
             return False
         if to == "cabin":
             return True
+        if RAMP_CALL.match(text):
+            return False  # for the ground crew, even with the cabin still listening
         if self._address(text) is not None or CAPTAIN_PA.match(text):
             return True
         if t <= self._listening_until:
@@ -1128,9 +1131,26 @@ class CabinCrew:
                 break
         return out
 
+    def ground_relay(self, what: str, t: float) -> list[Any] | None:
+        """The ground crew passing on boarding or deboarding: what's said about it. Not on this flight: None, it's theirs to
+        say. (When it's over they say so at their own moment, whoever started it.)"""
+        if not self.active:
+            return None
+        self._t = t
+        if what == "boarding_start":
+            return self.reply("ground_boarding")
+        if what == "deboarding_start":
+            return self.reply("ground_deboarding")
+        return []
+
     def _answer(self, body: str, t: float, *, asked: bool) -> list[Any]:  # noqa: C901 - one reading per kind of call
         low = body.lower()
         reply = self.reply
+        if self.ground_call is not None and (m := re.search(r"\b(?:start|begin|commence)\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?board\s+(?:them|the\s+passengers)\b", low)):
+            service = "Deboarding" if m.group(1) or m.group(2) else "Boarding"
+            if not self.ground_call(service, t):
+                return reply("ground_not_yet")
+            return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")
         drink = _drink(body)
         if drink is not None:
             self._asking = None
@@ -1223,6 +1243,9 @@ def fill(template: str, values: dict[str, str]) -> str | None:
         return None
     out = re.sub(r"\{(\w+)\}", lambda m: values.get(m.group(1), ""), template)
     return re.sub(r"\s{2,}", " ", out).strip()
+
+
+RAMP_CALL = re.compile(r"^\W*(?:ramp|ground\s+crew|chief|headset|tug)\b", re.I)
 
 
 def _drink(text: str) -> tuple[str, bool, bool] | None:

@@ -1,0 +1,23 @@
+{
+  "_note": "GSX Pro's Remote API, as it answered at Zurich, Gate B 37 (MSFS 2024, 2026-11-03): only the menus' words, its icons taken out.",
+  "hello": {"v": 1, "type": "hello", "ts": 1793750673, "protocol": 1, "engine": "couatl", "sim": "MSFS", "gsxRunning": true, "authRequired": false, "capabilities": ["state", "services", "menu", "prompts", "billing"]},
+  "top": {"title": "Activate Services at LSZH/Zurich", "entries": ["Request Deboarding", "Request Catering service", "Request Refueling", "Request Boarding", "Prepare for Push-back and Departure", "Operate Jetway", "Operate Stairs", "Additional Services ▶", "Customize this Parking position", "Reposition Aircraft"]},
+  "top_busy": {"title": "Activate Services at LSZH/Zurich", "entries": ["Request Deboarding", "Catering vehicles are in position", "Refueling service requested", "Request Boarding", "Prepare for Push-back and Departure", "No Jetways here", "Cannot operate stairs while water/lavatory servicing", "Additional Services ▶", "Reset position", "Reposition Aircraft"]},
+  "additional": {"title": "Additional Services", "entries": ["Request Ground Power Unit", "Request DeIce", "Request Lavatory service", "Request Water service", "Request Cleaning service", "Cameras ▶", "Show LSZH airport diagram", "Show KSAN airport diagram [PLANNED]", "Next Page ▶", "↑ Back"], "disabled": [false, false, false, false, false, true, false, false, false, false]},
+  "additional_busy": {"title": "Additional Services", "entries": ["Dismiss Ground Power Unit", "Request DeIce", "Lavatory service requested. Waiting for other services to complete (Catering,Water)", "Dismiss Water service", "Cleaning crew on the way...", "Cameras ▶", "Show LSZH airport diagram", "Show KSAN airport diagram [PLANNED]", "Next Page ▶", "↑ Back"]},
+  "in_progress": {"title": "Service in progress", "entries": ["Complete now", "Abort service", "Back"]},
+  "handler": {"title": "Select handling operator", "entries": ["Swissport International [GSX choice]", "Airline Assitance Switzerland", "DNATA", "Back"]},
+  "caterer": {"title": "Select catering operator", "entries": ["Bijoux [GSX choice]", "First Catering", "Gate Gourmet", "LSG Sky Chefs", "Back"]},
+  "fuel_operator": {"title": "Select fueltruck operator", "entries": ["Jetaviation [GSX choice]", "Back"]},
+  "fuel_level": {"title": "Select refueling level", "entries": [" 35% - 14700 USGAL / 98490 lb", " 50% - 21000 USGAL / 140700 lb", " 60% - 25200 USGAL / 168840 lb", " 70% - 29400 USGAL / 196980 lb", " 80% - 33600 USGAL / 225120 lb", " 90% - 37800 USGAL / 253260 lb", "100% - 42000 USGAL / 281400 lb", "Custom refueling using default Fuel menu"]},
+  "attach_tug": {"title": "Attach Pushback Tug now?", "entries": ["Yes", "No [GSX choice]"]},
+  "board_crew": {"title": "Do you want to board crew?", "entries": ["Nobody", "Crew", "Pilots", "Both"]},
+  "services": [
+    {"id": "Catering", "displayName": "Catering", "state": "requested", "stateRaw": 4, "canTrigger": false, "operator": "Bijoux", "statusText": "front on the way, ETA 25 secs, rear on the way, ETA 19 secs", "progressText": ""},
+    {"id": "Refueling", "displayName": "Refuel", "state": "requested", "stateRaw": 4, "canTrigger": false, "waiting": true, "statusText": "waiting for Catering\naircraft 26455 lb", "progressText": ""},
+    {"id": "GPU", "displayName": "GPU", "state": "performing", "stateRaw": 5, "canTrigger": false, "statusText": "connected\nconnected\n0:01:07 running $51", "progressText": ""},
+    {"id": "Boarding", "displayName": "Board", "state": "available", "stateRaw": 1, "canTrigger": true, "progressText": ""},
+    {"id": "Departure", "displayName": "Pushback", "state": "available", "stateRaw": 1, "canTrigger": true, "progressText": ""}
+  ],
+  "messages": ["Catering service requested", "Lavatory service requested. Waiting for other services to complete (Catering,Water)", "Cannot operate stairs while water/lavatory servicing", "Waiting for your action: open R4", "Cleaning crew on the way...", "This gate has a standard jetway."]
+}

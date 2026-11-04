@@ -473,6 +473,17 @@ class EfbRoutes:
         except ValueError as exc:
             raise HttpError(400, str(exc)) from None
 
+    async def api_ground(self, args: dict) -> dict:
+        """The phone asking the ground crew: the same checks as the pilot's voice."""
+        ground = getattr(self.live, "ground", None) if self.live is not None else None
+        if ground is None:
+            raise HttpError(409, "The ground crew isn't on (Settings → Ground crew)")
+        try:
+            await ground.from_phone(str(args.get("do", "")), str(args.get("service", "")), str(args.get("direction", "")))
+        except ValueError as exc:
+            raise HttpError(400, str(exc)) from None
+        return {"ok": True}
+
     # --- charts -----------------------------------------------------------------------------------------------
 
     async def api_charts(self, args: dict) -> dict:
@@ -607,6 +618,8 @@ class EfbRoutes:
             return await self.api_gate(cmd)
         if action == "ops_note":
             return await self.api_ops_note(cmd)
+        if action == "ground":
+            return await self.api_ground(cmd)
         if action == "briefing":
             return await self.api_briefing(cmd)
         if action == "charts":

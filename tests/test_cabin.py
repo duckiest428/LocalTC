@@ -524,3 +524,10 @@ def test_are_we_on_time():
     cabin = late_crew()
     run(cabin, [own(0.0, zulu_s=NOON - 720.0)])
     assert "on time" in cabin.heard(IntercomHeard(t=1.0, text="cabin, are we running late?"))[0].text.lower()
+
+
+def test_ramp_words_are_the_ramps_even_with_the_cabin_listening():
+    from localtc.crew.cabin import RAMP_CALL
+
+    assert RAMP_CALL.match("ramp, how's the boarding") and RAMP_CALL.match("Ground crew, fuel please")
+    assert not RAMP_CALL.match("the ramp agent's here") and not RAMP_CALL.match("cabin, start boarding")

@@ -22,6 +22,7 @@ from localtc.sim_api import (
     RadioTuned,
     ReadbackEvaluated,
     SessionNote,
+    RampSpeech,
     SimLifecycle,
     Transcript,
 )
@@ -48,6 +49,8 @@ def radio_line(ev: BusEvent) -> dict | None:
         return {"kind": "crew", "t": t, "text": ev.text, "level": "warn" if ev.kind in ("refused", "alert") else ""}
     if isinstance(ev, CabinSpeech):  # the cabin crew: to the passengers, or to you
         return {"kind": "cabin", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel}
+    if isinstance(ev, RampSpeech):  # the ground crew: on their frequency, or the headset
+        return {"kind": "ramp", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel}
     if isinstance(ev, CrewAction):
         return None  # what the copilot said about it is the line; the action itself is in the recording
     if isinstance(ev, ReadbackEvaluated):

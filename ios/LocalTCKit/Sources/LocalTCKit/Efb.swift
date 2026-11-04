@@ -87,10 +87,30 @@ public struct AirportOpsState: Codable, Sendable, Equatable {
     public var messages: [Message]?
     public var requests: [GateRequest]?
     public var closures: [String]?
+    public var ground: GroundCrew?
 
     public struct Service: Codable, Sendable, Equatable {
         public var state: String
         public var source: String?
+    }
+
+    /// The ground crew's services as they stand (GSX's own states), when the ground crew is on.
+    public struct GroundCrew: Codable, Sendable, Equatable {
+        public var provider: String?
+        public var connected: Bool?
+        public var parking: String?
+        public var services: [GroundService]?
+    }
+
+    public struct GroundService: Codable, Sendable, Equatable, Identifiable {
+        public var id: String
+        public var name: String?
+        public var state: String
+        public var waiting: Bool?
+        public var status: String?
+
+        /// Under way: it can be called off, not called again.
+        public var active: Bool { ["requested", "performing", "completing"].contains(state) }
     }
 
     public struct Deice: Codable, Sendable, Equatable {
@@ -317,6 +337,7 @@ public enum EfbCommand: Sendable {
     case deleteNote(id: String)
     case gate(String)
     case opsNote(text: String, kind: String = "maintenance")
+    case ground(action: String, service: String? = nil, direction: String? = nil)  // request, cancel, finish, off, push
     case gates(icao: String? = nil)
     case chart(id: String, height: Int)
     case achievements
@@ -343,6 +364,8 @@ public enum EfbCommand: Sendable {
             return ["action": "gate", "gate": label]
         case .opsNote(let text, let kind):
             return ["action": "ops_note", "text": text, "kind": kind]
+        case .ground(let action, let service, let direction):
+            return ["action": "ground", "do": action, "service": service ?? "", "direction": direction ?? ""]
         case .gates(let icao):
             return ["action": "gates", "icao": icao ?? ""]
         case .chart(let id, let height):

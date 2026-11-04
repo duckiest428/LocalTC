@@ -383,6 +383,36 @@ class CabinSpeech(Event, tag="cabin_speech"):
     spoken: str = ""  # the words for speech, if they differ from the text
 
 
+class RampSpeech(Event, tag="ramp_speech"):
+    """The ground crew speaking (localtc.ground): ``channel`` "radio" on the ramp's frequency, or "interphone", the headset
+    to the flight deck."""
+
+    text: str
+    speaker: str = "Ramp"
+    channel: str = "interphone"
+    sex: str = "M"
+    locale: str = ""  # their English
+    spoken: str = ""  # the words for speech, if they differ from the text
+
+
+class GroundServiceState(msgspec.Struct, frozen=True):
+    id: str
+    name: str = ""
+    state: str = "available"
+    waiting: bool = False
+    status: str = ""
+
+
+class GroundStatus(Event, tag="ground_status"):
+    """How the turnaround stands, for the app and the phone: who's doing the work ("gsx", "standalone", "" nobody), and
+    each service."""
+
+    provider: str = ""
+    connected: bool = False
+    services: tuple[GroundServiceState, ...] = ()
+    parking: str = ""
+
+
 class CabinSound(Event, tag="cabin_sound"):
     """The cabin's other sounds: ``sound`` chime (``detail`` its kind: seatbelt, pa, call), music (on), music_stop,
     applause."""
@@ -619,7 +649,7 @@ AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExcha
                  AtcThinking, AtcDecision, FlightArrived, AtcOperations]
 AppEvent = Union[SessionNote]
 CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
-                  ChecklistState, CabinSpeech, CabinSound]
+                  ChecklistState, CabinSpeech, CabinSound, RampSpeech, GroundStatus]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 
 SIM_EVENT_TYPES: tuple[type, ...] = get_args(SimEvent)

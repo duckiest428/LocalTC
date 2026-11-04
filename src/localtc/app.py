@@ -44,6 +44,7 @@ from localtc.sim_api import (
     SessionNote,
     SetComFrequency,
     SimSource,
+    CrewSpeech,
     Transcript,
 )
 
@@ -300,6 +301,64 @@ def copilot_model(cfg: Config, backend):
     return CloudBackend(own, fallback=local)
 
 
+RAMP_STYLE = ("Ramp, catering, fuel and a GPU please. Pushback, nose left. Tail right. What's still outstanding? Cancel catering. "
+              "Speed up boarding. Connect the jetway. Disconnect the stairs. Ground power off. Water and lavatory service. "
+              "De-icing. Brakes set. Brakes released. Good start. Change to gate B40.")
+
+
+def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
+    """The ground crew, and who does their work: GSX where it's installed, else the sim's own services (None: no crew)."""
+    from localtc.atc_core.region import accent
+    from localtc.ground import gsx_remote
+    from localtc.ground.crew import RampCrew, RampLink
+    from localtc.ground.model import RampModel
+    from localtc.ground.service import GroundService
+
+    g = cfg.ground
+    kind = g.adapter
+    if kind == "auto":
+        kind = "gsx" if gsx_remote.installed() else {"standalone": "standalone", "tell": "gsx", "off": ""}[g.without_gsx]
+    if not kind:
+        log.info("Ground crew: no GSX here, and set to do without", extra=CONSOLE)
+        return None
+    if kind == "mock":
+        from localtc.ground.mock import MockGsx
+
+        adapter = MockGsx(source.clock.now)
+    elif kind == "standalone":
+        from localtc.ground.standalone import SimServices
+
+        adapter = SimServices(lambda command: asyncio.ensure_future(source.send(command)), source.clock.now)
+    else:
+        adapter = gsx_remote.GsxRemote()
+
+    def relay(what: str, t: float):
+        cabin = get_cabin()
+        said = cabin.ground_relay(what, t) if cabin is not None else None
+        if said is None and cfg.crew.enabled and what in COPILOT_RELAY:
+            return [CrewSpeech(t=t, text=COPILOT_RELAY[what], kind="reply")]
+        return said
+
+    link = RampLink(pushback_cleared=lambda: "pushback" in engine.state.clearances,
+                    atc_working=lambda: engine.facility("ground") is not None or engine.facility("tower") is not None,
+                    gate=lambda: engine.gate_given() or "",
+                    request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),
+                    locale=lambda airport: accent(airport or engine.state.flight.origin), relay=relay)
+    crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, ramp_mhz=g.ramp_mhz, seed=int(time.time()) % 100000)
+    model = None
+    if g.llm != "scripted" and getattr(backend, "rich", False):  # a cloud model only: without one, the grammar
+        from localtc.llm.cloud import CloudBackend, Route
+
+        model = RampModel(CloudBackend([Route(r.provider, r.model, r.key, json_mode=r.json_mode, dead=r.dead) for r in backend.routes]),
+                          g.llm, wait_s=cfg.cloud.timeout_s)
+    log.info("Ground crew: on %.3f, by %s, %s", g.ramp_mhz, adapter.name, "the cloud model too" if model else "the grammar", extra=CONSOLE)
+    return GroundService(crew, adapter, bus, source, model=model, clock=source.clock.now, intercom=not cfg.crew.enabled)
+
+
+COPILOT_RELAY = {"boarding_start": "Ramp's starting boarding.", "deboarding_start": "Ramp's getting them off.",
+                 "boarding_done": "Boarding's complete.", "deboarding_done": "Everyone's off."}
+
+
 def cabin_model(cfg: Config, backend):
     """The cabin crew's language model: a connection of its own to the cloud services, or none (the script's words)."""
     from localtc.llm.cloud import CloudBackend, Route
@@ -506,6 +565,7 @@ async def run_session(
     voice = speaker = None
     traffic = None
     guide = None
+    ground = None
     engine = atc_service = None
     pm = None
     flight_log = None
@@ -576,6 +636,13 @@ async def run_session(
                 cabin.model_wait_s = max(cfg.crew.timeout_s, cfg.cloud.timeout_s)
                 consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled,
                                                                   source=source).run()))
+            if cfg.ground.enabled and session.source_kind == "live":  # the ramp: their frequency, and "ramp, ..." on the intercom
+                ground = start_ground(cfg, engine, source, bus, backend, lambda: cabin)
+                if ground is not None:
+                    engine.ramp_mhz = cfg.ground.ramp_mhz
+                    if cabin is not None:
+                        cabin.ground_call = ground.crew.called_by_cabin
+                    consumers.append(asyncio.create_task(ground.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring
                 from localtc.crew.profiles import load_all
@@ -605,7 +672,7 @@ async def run_session(
                                      language=cfg.crew.language,
                                      voice_sex=copilot_personality(cfg.crew.personality).voice_sex(cfg.crew.voice_sex),
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
-                crew = CrewService(pm, bus, source, cabin=cabin)
+                crew = CrewService(pm, bus, source, cabin=cabin, ground=ground)
                 consumers.append(asyncio.create_task(crew.run()))
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)
             traffic = start_traffic(cfg, engine if cfg.atc.enabled else None, source, bus)
@@ -645,7 +712,7 @@ async def run_session(
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
                                  voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None,
-                                 crew=pm, traffic=traffic, guide=guide))
+                                 crew=pm, traffic=traffic, guide=guide, ground=ground))
         waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
         await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
         for task in waits:
@@ -752,6 +819,7 @@ class LiveSession:
     crew: object | None = None  # crew.pm.PilotMonitoring
     traffic: object | None = None  # traffic.service.TrafficService (None when off)
     guide: object | None = None  # taxi_guidance.TaxiGuidance
+    ground: object | None = None  # ground.service.GroundService (None when off)
 
     def now(self) -> float:
         return self.source.clock.now()
@@ -1061,9 +1129,13 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)", extra=CONSOLE)
     hints = None
     if engine is not None:
+        from localtc.sim_api.ramp import on_ramp
+        from localtc.stt.vocabulary import VocabularyHints
         from localtc.voice import flight_hints
 
-        hints = lambda: flight_hints(engine)  # noqa: E731
+        # (On the ramp's frequency, the ramp's words: ATC's names and numbers there only make it hear them.)
+        ramp = VocabularyHints(style=RAMP_STYLE)
+        hints = lambda: ramp if on_ramp(engine.state.comms.tuned_mhz, engine.ramp_mhz or 0.0) else flight_hints(engine)  # noqa: E731
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
                            vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
                            intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to)

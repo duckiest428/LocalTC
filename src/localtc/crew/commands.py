@@ -16,6 +16,7 @@ import re
 from dataclasses import dataclass
 
 from localtc.atc_core.readback.normalize import Token, normalize
+from localtc.sim_api.ramp import RAMP_MHZ
 
 
 @dataclass(frozen=True)
@@ -266,6 +267,8 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
         if len(code) == 4 and all(c in "01234567" for c in code):
             return Command("squawk", code), i + 2
         return None, i + 2
+    if w in ("tune", "frequency") and (nxt == "ramp" or (nxt == "the" and _word(tokens, i + 2) == "ramp")):
+        return Command("com_active", f"{RAMP_MHZ:.3f}"), i + (3 if nxt == "the" else 2)
     if w in ("tune", "frequency", "active") and (n := _number(tokens, i + 1)) is not None and 118 <= n < 137:
         return Command("com_active", f"{n:.3f}".rstrip("0").rstrip(".")), i + 2
     if w == "standby" and (n := _number(tokens, i + 1)) is not None and 118 <= n < 137:

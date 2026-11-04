@@ -142,6 +142,31 @@ pick your phone and your team, press Run). A free-account install stops working 
 - [ ] Turn the phone's Wi-Fi off (use cellular): the badge changes to **Via server** and the map still moves.
 - [ ] Handoffs and clearances pop up as banners.
 
+## 7. The ground crew (with GSX, then without)
+
+Turn it on in Settings → Ground crew. Say each on the ramp frequency ("tune ramp" to the copilot), and some on the intercom
+starting with "ramp".
+
+- [ ] "Catering, fuel and a GPU please": all three come, one after another, with no menu to answer. *If not:* Mark, and say which.
+- [ ] "Fuel 60 percent" up front, and once with no level: when the truck's in position they ask how much, in time. *If not:* did
+  the truck leave?
+- [ ] "What's still outstanding?": what's going, what's waiting and on what, what's done.
+- [ ] "Cancel catering" mid-service, while it's driving in and again once it's working.
+- [ ] "Speed up catering": they say they can't, and offer to finish it. "Yes" finishes it.
+- [ ] "Ground power off", "connect the jetway", "disconnect the jetway", the stairs. Asked twice, they say it's already done.
+- [ ] A door they're waiting on ("open R4"): they tell you, and not every 15 seconds.
+- [ ] "Start boarding" to the ramp, and "cabin, start boarding": the cabin crew answer. Boarding complete comes from them, once.
+- [ ] Asked with the engines running, or moving: refused, saying why.
+- [ ] **Pushback, each of left, right and straight:** with no clearance the tug waits; call ground; once cleared it connects by
+  itself. "Release parking brake", "Cleared to start", "Set parking brake" (repeated until it's set), the disconnect and the hand
+  signal on the right side. *If not:* Mark. **These are the first real pushes: export the session.**
+- [ ] "Ask ground for the push" on the intercom is still the copilot's, and ATC's frequencies don't answer ramp words.
+- [ ] Changing gate by voice: ATC agrees or says why not. Parked somewhere else than ATC gave: they say so, once.
+- [ ] Each aircraft: iniBuilds A350 and A330, FSLabs A321, PMDG 777, Fenix, FlyByWire. *Note anything GSX waits on forever.*
+- [ ] A cloud model on: something said your own way ("top up the drinking tank") is understood. Off: "say again".
+- [ ] Without GSX (Settings → Ground crew → Without GSX): the sim's jetway, and the sim's tug. **Moves the aircraft.**
+- [ ] From the phone, Airport Ops: request and cancel a service, and watch it change.
+
 ## What to send back
 
 - The **Export session** zip from the IFR flight (and from any flight where something went wrong)

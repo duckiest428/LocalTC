@@ -199,6 +199,8 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .line.crew .who, .line.intercom .who { color: #8fb8e8; }
 .line.crew .ic, .line.intercom .ic, .line.cabin .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
 .line.cabin .who { color: #d6a8e0; }
+.line.ramp .who { color: #e8b86d; }
+.line.ramp .ic { color: #6c7680; font-size: 0.85em; margin-right: 6px; }
 .offblock.late .code { color: #e0a040; }
 #btn-cabin[hidden], #btn-cab[hidden], #offblock[hidden] { display: none; }
 .ptt.ic { font-weight: 700; font-size: 12px; color: #8fb8e8; }
@@ -669,6 +671,8 @@ html[data-theme="daylight"] .ptt.off { color: var(--muted); }
 html[data-theme="daylight"] .line.copilot .who { color: #2b7a3b; }
 html[data-theme="daylight"] .line.crew .who, html[data-theme="daylight"] .line.intercom .who { color: #2a5f9e; }
 html[data-theme="daylight"] .line.cabin .who { color: #8a3f9c; }
+html[data-theme="daylight"] .line.ramp .who { color: #a5620a; }
+html[data-theme="daylight"] .line.ramp .ic { color: var(--muted); }
 html[data-theme="daylight"] .line.atis .who { color: #6f3fa8; }
 html[data-theme="daylight"] .line.phase .body, html[data-theme="daylight"] .line.tuned .body,
 html[data-theme="daylight"] .line.system .body { color: var(--muted); }

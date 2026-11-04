@@ -33,6 +33,15 @@ LISTENING_S = 20.0  # after the crew's spoken, an answer needs no "ramp, ..."
 SEND_S = 25.0  # a service called, and this long for GSX to show it took
 RETRY_S = 15.0  # called and nothing yet: called once more first (GSX's own steps through its menu sometimes stall)
 ONE_CALL_MOVES = ("OperateJetways", "OperateStairs", "Departure")  # the same call undoes these: never called twice
+# GSX's own variables say a service is requested long before its Remote API does (de-ice at Geneva: 5 s against 85 s).
+GSX_STATE_VARS = {"Boarding": "L:FSDT_GSX_BOARDING_STATE", "Deboarding": "L:FSDT_GSX_DEBOARDING_STATE", "Catering": "L:FSDT_GSX_CATERING_STATE",
+                  "Refueling": "L:FSDT_GSX_REFUELING_STATE", "Departure": "L:FSDT_GSX_DEPARTURE_STATE", "DeIce": "L:FSDT_GSX_DEICING_STATE",
+                  "Cleaning": "L:FSDT_GSX_CLEANING_STATE"}
+GSX_TOOK = (4.0, 5.0)  # requested, performing
+# Lines with a condition or a fact in them: a model rewording "parking brake first" said "parking brake set", and "the jetway
+# isn't running" said "jetway's down". Said as written.
+AS_WRITTEN = ("say_again", "brake_for_bridge", "brakes_set_first", "stopped_first", "engines_off_first", "on_stand_first", "fuel_engines",
+              "cancel_nothing", "off_nothing", "no_take", "no_gsx", "not_here", "parked_at", "parked_unknown")
 OURS_S = 120.0  # GSX's questions this soon after calling a service are about it
 CALL_GAP_S = 4.0  # between the crew's own calls
 CALL_WAIT_S = 45.0  # a call that couldn't be said this long (ATC talking, the pilot keyed): dropped
@@ -97,7 +106,13 @@ class RampCrew:
         self._queue: list[str] = []
         self._sending: tuple[str, float] | None = None
         self._called_again = False
-        self._after_brake: list[str] = []  # the jetway or stairs asked for before the brake was set
+        self._after_brake: list[str] = []  # the jetway, stairs or push asked for before the brake was set
+        self._push_way = ""  # the way that push was asked to go
+        self._brake_said = False  # the pilot says it's set: an aircraft whose brake can't be read has only their word
+        self._brake_read = False  # the sim has shown it set: its reading works, and goes before anyone's word
+        self._gsx_vars: dict[str, float] = {}
+        self._as_written: set[str] = set()
+        self.last_said = ""
         self._ours: dict[str, float] = {}  # the services the pilot asked for, and when
         self._run: MenuRun | None = None
         self._run_after: tuple[str, str] | None = None  # what it was for: (kind, service)
@@ -127,9 +142,23 @@ class RampCrew:
 
     def _speech(self, key: str, t: float, **values: str) -> RampSpeech:
         self._spoke_t = t
-        return RampSpeech(t=t, text=self.words.line(key, **values), speaker="Ramp", channel="radio" if self.tuned else "interphone",
+        text = self.words.line(key, **values)
+        self.last_said = text
+        if key in AS_WRITTEN:
+            self._as_written.add(text)
+        return RampSpeech(t=t, text=text, speaker="Ramp", channel="radio" if self.tuned else "interphone",
                           sex="M" if self.seed % 2 else "F", locale=self.link.locale(self.state.airport),
                           language=self.language if self.words.in_language(key) else "")
+
+    def keeps_its_words(self, text: str) -> bool:
+        """Said just as it's written, never in a model's words (``AS_WRITTEN``)."""
+        return text in self._as_written
+
+    @property
+    def braked(self) -> bool:
+        """The parking brake: as the aircraft shows it, or where it has never shown it set, as the pilot says."""
+        own = self.own
+        return own is not None and (own.parking_brake or (self._brake_said and not self._brake_read))
 
     def read(self, text: str) -> str:
         """The pilot's words as the grammar reads them."""
@@ -162,7 +191,8 @@ class RampCrew:
         said = self.read(text)
         if g.is_addressed(said):
             return True
-        return t - self._spoke_t <= LISTENING_S and (self._offer is not None or self._asking is not None) and bool(g.parse(said))
+        return t - self._spoke_t <= LISTENING_S and (self._offer is not None or self._asking is not None or bool(self._after_brake)) \
+            and bool(g.parse(said))
 
     # ---- the pilot -------------------------------------------------------------------------------------------------
 
@@ -261,7 +291,7 @@ class RampCrew:
             return None
         if service == "Refueling" and own.engine_running:
             return self._speech("fuel_engines", t)
-        if service in ("OperateJetways", "OperateStairs") and not own.parking_brake:
+        if service in ("OperateJetways", "OperateStairs") and not self.braked:
             return self._speech("brake_for_bridge", t)
         return None
 
@@ -336,6 +366,7 @@ class RampCrew:
             return [self._speech("cancelled", t, name=self._name(service))]
         if service == "Departure" and self._push is not None and self._push.stage == "armed":
             self._push = None
+            self._push_way = ""
             return [self._speech("cancelled", t, name=self._name(service))]
         if svc is None or not svc.active:
             return [self._speech("cancel_nothing", t, name=self._name(service))]
@@ -440,7 +471,10 @@ class RampCrew:
         if own is not None:
             if not (own.on_ground and own.gs_kt < 1.0):
                 return [self._speech("stopped_first", t)]
-            if not own.parking_brake:
+            if not self.braked:  # asked for, and it comes when the brake's set (``_once_braked``)
+                self._push_way = direction or self._push_way
+                if "Departure" not in self._after_brake:
+                    self._after_brake.append("Departure")
                 return [self._speech("brakes_set_first", t)]
             if own.engine_running:
                 return [self._speech("engines_off_first", t)]
@@ -477,7 +511,15 @@ class RampCrew:
             found = find(menu, GOOD_START_ROW)
             if found.index is not None:
                 return self._picked(menu, found.index, t)
-        return []  # (the brakes are read from the aircraft: said or not, that's what counts)
+        if what == g.BRAKES_RELEASED:
+            self._brake_said = False
+        if what == g.BRAKES_SET:
+            self._brake_said = True
+            if self.own is not None and self._brake_read and not self.own.parking_brake:
+                return [self._speech("brakes_set_first", t)]  # the sim's been showing it, and it shows it off
+            if not self._after_brake and self._push is None:
+                return [self._speech("ok", t)]
+        return []  # (what was waiting on it goes by itself; the headset's calls follow the aircraft)
 
     def _push_moves(self, t: float) -> list[Any]:
         """The push as it goes: what the aircraft and GSX are doing, the standard words at each point."""
@@ -498,9 +540,9 @@ class RampCrew:
             push.stage = "connecting"
         if push.stage == "connecting" and "release" not in push.told and ("release" in message or svc.state == "performing"):
             push.told.add("release")
-            if own.parking_brake:
+            if self.braked:
                 out.append(self._speech("release_brakes", t))
-        if push.stage == "connecting" and not own.parking_brake and "release" in push.told:
+        if push.stage == "connecting" and not self.braked and "release" in push.told:
             push.stage = "pushing"
             out.append(self._speech("pushing", t))
         if push.stage == "pushing":
@@ -510,11 +552,11 @@ class RampCrew:
             if "brake" in message or svc.state == "completing":
                 push.stage = "set_brake"
         if push.stage == "set_brake":
-            if not own.parking_brake and ("brake" not in push.told or t - push.brake_said_t >= BRAKE_AGAIN_S):
+            if not self.braked and ("brake" not in push.told or t - push.brake_said_t >= BRAKE_AGAIN_S):
                 out.append(self._speech("brake_again" if "brake" in push.told else "set_brake", t))
                 push.told.add("brake")
                 push.brake_said_t = t
-            elif own.parking_brake:
+            elif self.braked:
                 push.stage = "start"
         if push.stage == "start" and not svc.active:
             side = SIDE.get(push.direction)
@@ -529,7 +571,7 @@ class RampCrew:
             return True
         for service, asked_t in self._ours.items():
             svc = self._service(service)
-            if t - asked_t <= OURS_S or (svc is not None and svc.active):
+            if t - asked_t <= OURS_S or (svc is not None and svc.active) or self._gsx_took(service):
                 return True
         return False
 
@@ -667,6 +709,16 @@ class RampCrew:
 
     def observe(self, own: OwnshipState) -> None:
         self.own = own
+        self._brake_read = self._brake_read or own.parking_brake
+        if own.gs_kt > 1.0:
+            self._brake_said = False  # rolling: whatever was said about it is over
+
+    def observe_vars(self, values: dict[str, float]) -> None:
+        """The aircraft's variables, GSX's among them."""
+        self._gsx_vars.update(values)
+
+    def _gsx_took(self, service: str) -> bool:
+        return self._gsx_vars.get(GSX_STATE_VARS.get(service, ""), 0.0) in GSX_TOOK
 
     def update(self, state: GroundState, t: float) -> list[Any]:
         """GSX's state changed."""
@@ -675,7 +727,7 @@ class RampCrew:
         out: list[Any] = []
         for service, new in state.services.items():
             old = before.services.get(service)
-            if service == "GPU" and new.state == "performing" and (old is None or old.state != "performing"):
+            if service == "GPU" and new.state == "performing" and old is not None and old.state != "performing":  # (already on when we came: not news)
                 self._calls.append((t, ROUTINE, "done_GPU", {}))  # (it stays "performing" for as long as it's connected)
             if service in ("OperateJetways", "OperateStairs") and new.status:
                 said = norm(new.status)
@@ -754,30 +806,35 @@ class RampCrew:
         out: list[Any] = self._step_run(t)
         out += self._push_moves(t)
         out += self._engines_answer(t)
-        out += self._bridge_once_braked(t)
+        out += self._once_braked(t)
         out += self._send_next(t)
         out += self._due_calls(t)
         out += self._parked_elsewhere(t)
         return out
 
-    def _bridge_once_braked(self, t: float) -> list[Any]:
-        """The jetway or stairs waiting on the brake: they come when it's set, as the crew said. Rolling away calls it off."""
+    def _once_braked(self, t: float) -> list[Any]:
+        """The jetway, stairs or push waiting on the brake: they come when it's set, as the crew said. Rolling away calls it off."""
         own = self.own
         if not self._after_brake or own is None:
             return []
         if not self.parked:
             self._after_brake.clear()
+            self._push_way = ""
             return []
-        if not own.parking_brake:
+        if not self.braked:
             return []
-        waiting, self._after_brake = tuple(self._after_brake), []
-        return self._request(waiting, t)
+        waiting, self._after_brake = self._after_brake, []
+        out = self._request(tuple(s for s in waiting if s != "Departure"), t)
+        if "Departure" in waiting:
+            way, self._push_way = self._push_way, ""
+            out += self._ask_push(way, t)
+        return out
 
     def _send_next(self, t: float) -> list[Any]:
         if self._sending is not None:
             service, sent = self._sending
             svc = self._service(service)
-            if svc is not None and (svc.active or svc.state == "completed"):
+            if (svc is not None and (svc.active or svc.state == "completed")) or self._gsx_took(service):
                 self._sending = None
             elif self.state.menu is not None and is_question(self.state.menu):
                 self._sending = (service, t)  # (answering GSX's questions about it: not stuck)

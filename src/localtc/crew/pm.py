@@ -282,8 +282,11 @@ class PilotMonitoring:
             out = []
         return out + self.deck.drain()
 
-    def _as_read(self, ev: Any) -> Any:
+    def as_read(self, ev: Any) -> Any:
+        """An event with what this aircraft's profile reads from its own variables, as they say."""
         return as_read(ev, self.cockpit.profile, self.cockpit.vars)
+
+    _as_read = as_read
 
     def _observe(self, ev: Any) -> list[Any]:
         out: list[Any] = []

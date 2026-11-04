@@ -14,7 +14,7 @@ from localtc.atc_core.llm.backend import LlmRequest
 from localtc.sim_api import LlmExchange
 
 MODES = ("scripted", "semi", "mostly_llm", "llm")
-ACTIONS = (g.WHERE, g.REQUEST, g.CANCEL, g.FINISH, g.HURRY, g.STATUS, g.PUSH, g.STOP_PUSH, g.OFF, g.GATE, g.YES, g.NO, g.OPTION, g.FULL)
+ACTIONS = (g.BRAKES_SET, g.WHERE, g.REQUEST, g.CANCEL, g.FINISH, g.HURRY, g.STATUS, g.PUSH, g.STOP_PUSH, g.OFF, g.GATE, g.YES, g.NO, g.OPTION, g.FULL)
 DIRECTIONS = (g.NOSE_LEFT, g.NOSE_RIGHT, g.STRAIGHT)
 SCHEMA = {"type": "object", "properties": {
     "asks": {"type": "array", "items": {"type": "object", "properties": {
@@ -29,8 +29,10 @@ READ_SYSTEM = (
     "GPU (ground power), OperateJetways, OperateStairs, Deboarding, Cleaning, Catering, Refueling, Water, Lavatory, DeIce, "
     "Boarding, Departure (the push). Actions: request, cancel, finish (complete it now), hurry, status, push (with direction "
     "nose_left, nose_right or straight; tail left means nose_right, tail right means nose_left), stop_push, off (take it "
-    "away), gate (a stand asked for), where (which stand they're on), yes, no, option (a numbered choice), full (the whole turnaround). Only what was really "
-    'asked for. Not something for the ramp, or unclear: {"asks": [], "understood": false}. Reply as JSON: '
+    "away, the way to ask for a jetway or stairs to be disconnected), gate (a stand asked for), where (which stand they're on), brakes_set (they say the "
+    "parking brake is set, or just \"it's set\" after you asked for it), yes, no, option (a numbered choice), full (the whole turnaround). Only what was really "
+    "asked for: something they tell you isn't a request, and a service named in the situation isn't being asked about. "
+    'Not something for the ramp, or unclear: {"asks": [], "understood": false}. Reply as JSON: '
     '{"asks": [{"action": "request", "services": ["Catering"]}], "understood": true}')
 WORD_SYSTEM = (
     "You are the ramp agent on the radio with the flight crew. Put what you're about to say in your own words: one short "

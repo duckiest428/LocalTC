@@ -261,10 +261,20 @@ footer { background: var(--bg-2); border-top: 1px solid var(--line); padding: 10
 .ptt.down { color: var(--red); background: #3a1f1d; }
 .ptt.off { color: #666; }
 .btn.com { background: var(--field); border-color: var(--btn); padding: 6px 14px; }
-.btn.x { background: var(--field); border-color: var(--btn); padding: 6px 10px; }
-.switches { display: flex; gap: 4px; margin-left: 8px; flex: none; }
+.switches { display: flex; flex-direction: column; gap: 2px; margin-left: 8px; flex: none; }
 .switch { background: var(--field); border: 1px solid var(--line); color: var(--text-2); padding: 6px 12px; cursor: pointer; border-radius: 2px; }
 .switch.on { background: var(--teal); border-color: #41807b; color: #fff; }
+/* Two labelled lines where two unlabelled boxes were: what each does, and a light for whether it's on. */
+.switches .switch { display: flex; align-items: center; gap: 6px; padding: 1px 8px; font-size: 11px; line-height: 15px; text-align: left; white-space: nowrap; }
+.sw-dot { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; flex: none; }
+.switch.on .sw-dot { background: currentColor; }
+/* Quick Settings: a section at a time */
+.setnav { display: flex; flex-direction: column; gap: 6px; }
+.setnav-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.setnav #s-find { flex: 0 1 200px; min-width: 120px; }
+.setnav .seg { display: flex; flex-wrap: wrap; gap: 2px; }
+.setnav .seg .btn[aria-pressed="true"] { background: var(--teal); border-color: #41807b; color: #fff; }
+.card[hidden] { display: none; }
 .btnrow { display: flex; gap: 8px; }
 
 /* --- dialogs --- */
@@ -384,7 +394,6 @@ tr.tunable:hover td { background: var(--panel-2); }
   .grid2 { grid-template-columns: 1fr; }
   .status #status-text { display: none; }
   .switches { margin-left: 0; }
-  .switch { padding: 6px 8px; }
 }
 
 /* The ATC zones' own styles: atcmap.css, shared with the website's Flight Tracker */

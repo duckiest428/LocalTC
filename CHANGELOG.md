@@ -69,6 +69,15 @@ a new minor version adds features, a patch fixes them.
 ### Removed
 - **The Center name and Center frequency settings:** the fallback for where no airport or airspace gives a centre stays
   as a hidden default.
+- **The ground crew read an add-on's own parking brake:** on the FSLabs the sim's own brake variable never shows it set, so the crew kept asking for a brake that was on. They now see it as the copilot does. Where an aircraft's brake can't be read at all, "it's set" is taken at your word.
+- **A push asked for before the brake is set comes once it is**, with the way you asked for, as the jetway and stairs already did. "Can we get a pushback? Tail left please" is one call, not two.
+- **"Request jetway disconnection" takes the jetway away** instead of asking for it, and doesn't need the brake. A typed "parking break" is read as the brake.
+- **A service GSX has taken isn't reported as not responding:** GSX's own variables show it requested long before its Remote API does, so the crew no longer call it twice or say nothing's happened.
+- **A language model can't change what the crew's refusals and facts say:** "Parking brake first" became "Parking brake set", and "the jetway isn't running" became "Jetway's down". Those lines are now said as written. No GPU announcement just because it was already on when the app connected.
+- **Play buttons on the ground crew's calls**, on the radio and on the interphone.
+- **The ATIS no longer invents mist:** a METAR's 9999 was read as "visibility 9 kilometres, mist" outside the US. It's now 10 km or more, and the weather read out from a METAR is only what the METAR says. Where one runway does both, an ICAO ATIS says "arrival and departure runway 04" instead of "runway in use 04".
+- **No more than three of one model on an airport's GA ramps**, where a ramp could fill up with whichever one or two models were picked first.
+- **Quick Settings comes in sections** (Voice & radio, ATC, Crew, Traffic, AI & models) with a box to find a setting. The switches beside the radio box say what they do, "ATC voice" and "Copilot radio", each with a light, and the X beside the typing box is gone.
 
 ## [0.5.5] - 2026-11-02
 

@@ -32,6 +32,7 @@ Recorded at Zurich on GSX Pro 4.0.5 (MSFS 2024, A350). `tests/fixtures/gsx/lszh.
 
 - **Calls in a row get dropped** (reported by others, not tried here): the crew sends one and waits for the state to change.
 - **A `service.trigger` sometimes stalls** after GSX's first step through its menu (seen once, Lavatory at Geneva, cause unknown; the same call worked twice later, once with a menu left open). The crew call once more after 15 s, except the jetway, stairs and push, which a second call undoes. GSX's menu shows for about a second on every trigger: that's GSX stepping through it itself.
+- **The Remote API can show a service late:** de-ice at Geneva stayed `available` for 85 s while `L:FSDT_GSX_DEICING_STATE` said requested after 5 s. So a service with one of those variables counts as taken when it says 4 or 5 (`crew.GSX_STATE_VARS`). GPU, water, lavatory, jetway and stairs have none: for those only the API can tell.
 - **The rows change with what's going on:** "Request Catering service", "Catering vehicles are on their way", "Dismiss Ground
   Power Unit", "No Jetways here", "Cannot operate stairs while water/lavatory servicing". So the menu is read before every
   pick, by the row's words, and one row must match. Never a place in the list, never a wrong click.
@@ -78,9 +79,13 @@ model is asked, and `RadioTuned` says "Ramp".
 - **Boarding and deboarding** are the cabin crew's (`CabinCrew.ground_relay`, and "cabin, start boarding" directly). No cabin
   crew: the copilot says it. No copilot: the ramp.
 
+## The brake
+
+The crew see the aircraft as the copilot does (`GroundService.as_read`, wired in `app.py`): the FSLabs's brake is its own lever, and the sim's variable never shows it set. With no copilot, or an aircraft nothing reads, the sim's variable reads off for good, so "it's set" is taken at the pilot's word until the aircraft rolls. Once the sim has shown the brake set, its reading goes before anyone's word.
+
 ## The push
 
-Refused unless stopped, brake set and engines off. Warns about anything still running, and asks. Then it **waits for ATC's
+Refused unless stopped, brake set and engines off. Asked for before the brake's set, it comes once it is, as the jetway and stairs do. Warns about anything still running, and asks. Then it **waits for ATC's
 clearance** while there's a controller who'd give it (`wait_for_clearance`), and calls the tug once cleared, by itself.
 
 The headset's calls (`lines.FIXED`) are the same every time and never reworded by a model: "Release parking brake", "Cleared to
@@ -100,6 +105,8 @@ Left/Tail Right"), and the stages from what it describes. The first real push sh
 | `semi` | reads what the grammar can't |
 | `mostly_llm` | also words their answers |
 | `llm` | reads everything first |
+
+A line with a condition or a fact in it is never reworded (`crew.AS_WRITTEN`): "parking brake first" came back as "parking brake set".
 
 It answers in a closed list (`model.ACTIONS`, `SERVICES`), and what it reads goes through the same checks as plain words: it can't
 invent a service or get a push past the brake or ATC. A reading turned away falls back to the grammar for that same call, and the

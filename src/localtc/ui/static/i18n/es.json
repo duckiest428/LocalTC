@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Clase B: necesita «cleared into the Class Bravo»",
 "Class C: talk to approach before entering": "Clase C: habla con aproximación antes de entrar",
 "Class D / control zone: call the tower first": "Clase D / zona de control: llama primero a la torre",
-"Clear": "Borrar",
 "Clearance": "Autorización",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Autorización: «Request IFR to Boeing Field». Rodadura: «ready to taxi with information Alpha». Torre: «holding short runway 34L, ready for departure». Después colaciona cada instrucción y notifica tras cada transferencia: «Seattle Departure, N172LT, 2,000 climbing 5,000».",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Haz clic en una puerta para pedirla a Airport Ops (solo a la llegada; el ATC te manda allí).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Probar mi micrófono",
 "🎧 A headset": "🎧 Auriculares",
 "🔊 Speakers": "🔊 Altavoces",
-"Restricted, danger and prohibited areas": "Zonas restringidas, peligrosas y prohibidas"
+"Restricted, danger and prohibited areas": "Zonas restringidas, peligrosas y prohibidas",
+"AI & models": "IA y modelos",
+"Copilot radio": "Copiloto en radio",
+"Crew": "Tripulación",
+"Find a setting": "Buscar un ajuste",
+"How the controllers work.": "Cómo trabajan los controladores.",
+"Nothing here matches.": "Aquí no hay coincidencias.",
+"The other aircraft around you.": "Los demás aviones a tu alrededor.",
+"Voice & radio": "Voz y radio",
+"What listens, speaks and thinks, and how much your computer does.": "Lo que escucha, habla y piensa, y cuánto hace tu ordenador.",
+"Your copilot, the cabin crew and the ground crew.": "Tu copiloto, la tripulación de cabina y el personal de tierra.",
+"Your microphone and what you hear.": "Tu micrófono y lo que oyes."
 }

@@ -35,7 +35,8 @@ _NO = re.compile(r"^\W*(?:no|nope|negative|not\s+now|no\s+thanks|don'?t|leave\s+
 _NUMBERS = {"one": 1, "first": 1, "two": 2, "second": 2, "three": 3, "third": 3, "four": 4, "fourth": 4, "five": 5, "fifth": 5,
             "six": 6, "sixth": 6, "seven": 7, "seventh": 7, "eight": 8, "eighth": 8, "nine": 9, "ninth": 9, "ten": 10, "tenth": 10}
 _OPTION = re.compile(r"\b(?:option|number|choice)\s+(\d+|" + "|".join(_NUMBERS) + r")\b|\bthe\s+(" + "|".join(k for k in _NUMBERS if k.endswith(("st", "nd", "rd", "th"))) + r")\s+one\b", re.I)
-_BRAKES_SET = re.compile(r"\bbrakes?\s+(?:are\s+|is\s+)?(?:set|on|parked|applied)\b|\bparking\s+brake\s+(?:is\s+)?(?:set|on)\b|\bset\s+(?:the\s+)?parking\s+brake\b", re.I)
+_BRAKES_SET = re.compile(r"\bbrakes?\s+(?:are\s+|is\s+)?(?:now\s+)?(?:set|on|parked|applied)\b|\bparking\s+brake\s+(?:is\s+)?(?:now\s+)?(?:set|on)\b|\bset\s+(?:the\s+)?parking\s+brake\b|"
+                         r"\bbrakes?\s+(?:has|have)\s+been\s+set\b|^\W*(?:it'?s|it\s+is|that'?s|its)\s+(?:now\s+)?set\W*$", re.I)
 _BRAKES_OFF = re.compile(r"\bbrakes?\s+(?:are\s+|is\s+)?(?:released?|off)\b|\breleas(?:e|ed|ing)\s+(?:the\s+)?(?:parking\s+)?brakes?\b", re.I)
 _GOOD_START = re.compile(r"\bgood\s+start\b|\bengines?\s+(?:is\s+|are\s+)?(?:started|running|stable|good)\b|\ball\s+(?:engines\s+)?started\b|\bstart\s+(?:is\s+)?good\b", re.I)
 _STOP_PUSH = re.compile(r"\bstop\s+(?:the\s+)?(?:push|pushback|tug|tow)\b|\bstop\s+stop\b|^\W*(?:stop|hold\s+position|hold\s+there)\W*$", re.I)
@@ -43,7 +44,7 @@ _STATUS = re.compile(r"\bstatus\b|\boutstanding\b|\bwhat(?:'?s|\s+is)\s+(?:still
 _CANCEL = re.compile(r"\b(?:cancel|abort|scrub|forget(?:\s+about)?|never\s*mind|skip|call\s+off|don'?t\s+(?:need|want|bother(?:\s+with)?)|no\s+need\s+for)\b", re.I)
 _FINISH = re.compile(r"\b(?:complete|finish|wrap\s+up|end)\b[^.]*\bnow\b|\b(?:that'?s\s+enough|wrap\s+it\s+up|finish\s+(?:it\s+)?up)\b", re.I)
 _HURRY = re.compile(r"\bspeed\s+(?:it\s+|that\s+|things\s+)?up\b|\bhurry\b|\bexpedite\b|\bfaster\b|\bquicker\b|\brush\b", re.I)
-_OFF = re.compile(r"\b(?:disconnect|remove|dismiss|retract|detach|pull(?:\s+\w+){0,2}\s+back|pull\s+back|take\s+(?:\w+\s+){0,2}away|send\s+(?:\w+\s+){0,2}away|get\s+rid\s+of|undock)\b|\b(?:off|away)\W*(?:please\W*)?$", re.I)
+_OFF = re.compile(r"\b(?:disconnect(?:ion|ing)?|remov(?:e|al|ing)|dismiss|retract(?:ion)?|detach|pull(?:\s+\w+){0,2}\s+back|pull\s+back|take\s+(?:\w+\s+){0,2}away|send\s+(?:\w+\s+){0,2}away|get\s+rid\s+of|undock)\b|\b(?:off|away)\W*(?:please\W*)?$", re.I)
 _FULL = re.compile(r"\b(?:full\s+(?:service|turn\s?around)|the\s+(?:whole\s+)?turn\s?around|do\s+the\s+turn\s?around|the\s+works|all\s+(?:the\s+)?services|everything\s+please)\b", re.I)
 _GATE = re.compile(r"\b(?:gate|stand|parking(?:\s+(?:spot|position))?)\s+([a-z]?\s?-?\s?\d{1,3}\s?[a-z]?|[a-z]{1,2}\s?\d{1,3})\b", re.I)
 _WHERE = re.compile(r"\b(?:what|which)\s+(?:gate|stand|bay|parking(?:\s+(?:spot|position))?)\b|\bwhere\s+are\s+we\s+parked\b|\bwhat(?:'?s|\s+is)\s+(?:our|my|this)\s+(?:gate|stand)\b", re.I)
@@ -54,6 +55,7 @@ _STRAIGHT = re.compile(r"\bstraight(?:\s+(?:back|out))?\b", re.I)
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "one hundred": 100, "hundred": 100}
 _PERCENT = re.compile(r"\b(\d{1,3}|" + "|".join(_TENS) + r")(?:[\s-]+(five))?\s*(?:%|per\s?cent)", re.I)
 _FILL_UP = re.compile(r"\bfull\s+(?:tanks?|fuel|load)\b|\bfill\s+(?:it|her|them|us|the\s+tanks?)\s+up\b|\bfill\s+up\b", re.I)
+_BREAK = re.compile(r"\bbreaks?\b", re.I)  # (typed, or heard: "parking break")
 # Clauses that ask for different things: "cancel catering but send water". (Not "and": "cancel catering and fuel".)
 _CLAUSES = re.compile(r"\s*(?:[.;!?]+|\bbut\b|\bthen\b|\bafter\s+that\b|\balso\b)\s*", re.I)
 
@@ -152,9 +154,12 @@ def _clause(text: str) -> list[Ask]:
 
 def parse(text: str) -> tuple[Ask, ...]:
     """What's asked, in the order said; nothing when it couldn't be read."""
-    said = without_address(text).strip()
+    said = _BREAK.sub("brake", without_address(text).strip())
     asks: list[Ask] = []
     for clause in _CLAUSES.split(said):
-        if clause.strip():
-            asks += _clause(clause.strip())
+        for ask in _clause(clause.strip()) if clause.strip() else ():
+            if ask.action == PUSH and asks and asks[-1].action == PUSH:  # "can we get a pushback? tail left please": one push
+                asks[-1] = Ask(PUSH, direction=ask.direction or asks[-1].direction)
+            else:
+                asks.append(ask)
     return tuple(asks)

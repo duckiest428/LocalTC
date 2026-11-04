@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Classe B: serve «cleared into the Class Bravo»",
 "Class C: talk to approach before entering": "Classe C: parla con l'avvicinamento prima di entrare",
 "Class D / control zone: call the tower first": "Classe D / zona di controllo: chiama prima la torre",
-"Clear": "Cancella",
 "Clearance": "Autorizzazione",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Autorizzazione: «Request IFR to Boeing Field». Ground: «ready to taxi with information Alpha». Torre: «holding short runway 34L, ready for departure». Poi ripeti ogni istruzione e annunciati dopo ogni passaggio: «Seattle Departure, N172LT, 2,000 climbing 5,000».",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Clicca su un gate per chiederlo ad Airport Ops (solo all'arrivo; l'ATC ti manda lì).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Prova il microfono",
 "🎧 A headset": "🎧 Cuffie",
 "🔊 Speakers": "🔊 Altoparlanti",
-"Restricted, danger and prohibited areas": "Zone regolamentate, pericolose e vietate"
+"Restricted, danger and prohibited areas": "Zone regolamentate, pericolose e vietate",
+"AI & models": "IA e modelli",
+"Copilot radio": "Copilota in radio",
+"Crew": "Equipaggio",
+"Find a setting": "Cerca un'impostazione",
+"How the controllers work.": "Come lavorano i controllori.",
+"Nothing here matches.": "Nessun risultato.",
+"The other aircraft around you.": "Gli altri aerei intorno a te.",
+"Voice & radio": "Voce e radio",
+"What listens, speaks and thinks, and how much your computer does.": "Cosa ascolta, parla e ragiona, e quanto fa il tuo computer.",
+"Your copilot, the cabin crew and the ground crew.": "Il tuo copilota, l'equipaggio di cabina e il personale di terra.",
+"Your microphone and what you hear.": "Il tuo microfono e ciò che senti."
 }

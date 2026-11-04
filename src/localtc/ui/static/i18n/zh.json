@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "B 类：需要 “cleared into the Class Bravo”",
 "Class C: talk to approach before entering": "C 类：进入前联系进近",
 "Class D / control zone: call the tower first": "D 类 / 管制地带：先呼叫塔台",
-"Clear": "清除",
 "Clearance": "放行许可",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "放行：“Request IFR to Boeing Field”。地面：“ready to taxi with information Alpha”。塔台：“holding short runway 34L, ready for departure”。然后复诵每条指令，并在每次移交后报到：“Seattle Departure, N172LT, 2,000 climbing 5,000”。",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "点击一个登机口向 Airport Ops 申请（仅到达时；管制会把你引导到那里）。",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 测试我的麦克风",
 "🎧 A headset": "🎧 耳机",
 "🔊 Speakers": "🔊 扬声器",
-"Restricted, danger and prohibited areas": "限制区、危险区和禁区"
+"Restricted, danger and prohibited areas": "限制区、危险区和禁区",
+"AI & models": "AI 与模型",
+"Copilot radio": "副驾驶通话",
+"Crew": "机组",
+"Find a setting": "查找设置",
+"How the controllers work.": "管制员的工作方式。",
+"Nothing here matches.": "没有匹配项。",
+"The other aircraft around you.": "你周围的其他飞机。",
+"Voice & radio": "语音与无线电",
+"What listens, speaks and thinks, and how much your computer does.": "负责听、说和思考的部分，以及你的电脑承担多少。",
+"Your copilot, the cabin crew and the ground crew.": "你的副驾驶、客舱机组和地勤。",
+"Your microphone and what you hear.": "你的麦克风和你听到的内容。"
 }

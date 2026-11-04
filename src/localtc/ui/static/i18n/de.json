@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Klasse B: braucht „cleared into the Class Bravo“",
 "Class C: talk to approach before entering": "Klasse C: vor dem Einflug mit Approach sprechen",
 "Class D / control zone: call the tower first": "Klasse D / Kontrollzone: zuerst den Tower rufen",
-"Clear": "Leeren",
 "Clearance": "Streckenfreigabe",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Freigabe: „Request IFR to Boeing Field“. Ground: „ready to taxi with information Alpha“. Tower: „holding short runway 34L, ready for departure“. Lies dann jede Anweisung zurück und melde dich nach jeder Übergabe: „Seattle Departure, N172LT, 2,000 climbing 5,000“.",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Klicke auf ein Gate, um Airport Ops darum zu bitten (nur bei der Ankunft; ATC schickt dich dorthin).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Mein Mikrofon testen",
 "🎧 A headset": "🎧 Ein Headset",
 "🔊 Speakers": "🔊 Lautsprecher",
-"Restricted, danger and prohibited areas": "Sperr-, Gefahren- und Beschränkungsgebiete"
+"Restricted, danger and prohibited areas": "Sperr-, Gefahren- und Beschränkungsgebiete",
+"AI & models": "KI & Modelle",
+"Copilot radio": "Copilot am Funk",
+"Crew": "Crew",
+"Find a setting": "Einstellung suchen",
+"How the controllers work.": "Wie die Lotsen arbeiten.",
+"Nothing here matches.": "Hier passt nichts.",
+"The other aircraft around you.": "Die anderen Flugzeuge um dich herum.",
+"Voice & radio": "Stimme & Funk",
+"What listens, speaks and thinks, and how much your computer does.": "Was zuhört, spricht und denkt, und wie viel dein Computer davon übernimmt.",
+"Your copilot, the cabin crew and the ground crew.": "Dein Copilot, die Kabinencrew und die Bodencrew.",
+"Your microphone and what you hear.": "Dein Mikrofon und was du hörst."
 }

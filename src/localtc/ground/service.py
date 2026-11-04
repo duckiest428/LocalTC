@@ -14,6 +14,7 @@ from localtc.ground.api import GroundAdapter
 from localtc.ground.crew import Close, Open, Pick, RampCrew, Send
 from localtc.ground.model import RampModel
 from localtc.sim_api import (
+    AircraftVars,
     AtcAlert,
     AtcTransmission,
     GroundServiceState,
@@ -44,7 +45,10 @@ class GroundService:
         """``intercom``: the pilot's words on the intercom are heard here (False: the copilot's service hands them over)."""
         self.crew, self.adapter, self.bus, self.source, self.model = crew, adapter, bus, source, model
         self.clock = clock
-        kinds: list[Any] = [OwnshipState, Transcript, PttPressed, PttReleased, AtcTransmission]
+        kinds: list[Any] = [OwnshipState, AircraftVars, Transcript, PttPressed, PttReleased, AtcTransmission]
+        # The aircraft as the copilot reads it (``app`` sets this): an add-on's own brake lever where the sim's variable doesn't follow it.
+        self.as_read = lambda own: own
+        self._raw_own: OwnshipState | None = None
         if intercom:
             kinds.append(IntercomHeard)
         self._inputs = bus.subscribe(*kinds)
@@ -73,7 +77,10 @@ class GroundService:
     async def _on(self, event: Any) -> None:
         self._t = max(self._t, getattr(event, "t", self._t))
         if isinstance(event, OwnshipState):
-            self.crew.observe(event)
+            self._raw_own = event
+            self.crew.observe(self.as_read(event))
+        elif isinstance(event, AircraftVars):
+            self.crew.observe_vars(event.values)
         elif isinstance(event, PttPressed):
             self.crew.keyed = True
             own = self.crew.own
@@ -140,7 +147,8 @@ class GroundService:
 
         running = [f"{s.id} {s.state}" for s in state.services.values() if s.active or s.state == "completed"]
         menu = f"; a question is up: {state.menu.title}: {', '.join(state.menu.entries)}" if state.menu is not None and is_question(state.menu) else ""
-        return f"parked at {state.parking or 'a stand'}; services: {', '.join(running) or 'none running'}{menu}"
+        said = f'; you last said: "{self.crew.last_said}"' if self.crew.last_said else ""
+        return f"parked at {state.parking or 'a stand'}; services: {', '.join(running) or 'none running'}{menu}{said}"
 
     async def _in_own_words(self, text: str, outputs: list[Any], t: float) -> list[Any]:
         said: list[Any] = []
@@ -154,13 +162,13 @@ class GroundService:
         return said
 
     def _keeps_its_words(self, text: str) -> bool:
-        """One of the push's standard calls: never reworded. Nor "say again": there's nothing in it for a model to word, only
-        an answer for it to make up."""
+        """One of the push's standard calls: never reworded. Nor "say again", where there's nothing for a model to word, only an
+        answer for it to make up, nor a line with a condition or a fact in it (``crew.AS_WRITTEN``)."""
         from localtc.ground.lines import FIXED, LINES
         from localtc.ground.words import LINES as FOREIGN
 
         again = {*LINES["say_again"], *(lines["say_again"] for lines in FOREIGN.values())}
-        return text in again or any(text == line or "hand signal" in text for lines in FIXED.values() for line in lines)
+        return self.crew.keeps_its_words(text) or text in again or any(text == line or "hand signal" in text for lines in FIXED.values() for line in lines)
 
     async def from_phone(self, action: str, service: str = "", direction: str = "") -> None:
         """The companion's buttons: what the pilot could have said, and answered the same way."""

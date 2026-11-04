@@ -354,9 +354,8 @@ def _runways(info: AtisInfo, *, icao: bool) -> tuple[str, str]:
 
     if landing and landing == departing:
         noun = "runways" if len(landing) > 1 else "runway"
-        if icao:
-            return f"Runway{'s' if len(landing) > 1 else ''} in use {listed(landing, False)}", \
-                f"runway{'s' if len(landing) > 1 else ''} in use {listed(landing, True)}"
+        if icao:  # (said both ways: "runway in use" after "expect ILS approach" didn't say where departures go)
+            return f"Arrival and departure {noun} {listed(landing, False)}", f"arrival and departure {noun} {listed(landing, True)}"
         return f"Landing and departing {noun} {listed(landing, False)}", f"landing and departing {noun} {listed(landing, True)}"
     shown, said = [], []
     if landing:

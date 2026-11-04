@@ -332,3 +332,15 @@ def test_awos_only_airports():
     awos = msgspec.structs.replace(geo.airport, frequencies=tuple(
         Frequency(kind="awos", mhz=135.0, name="AWOS") if f.kind == "atis" else f for f in geo.airport.frequencies))
     assert automated_only(AirportGeometry(awos))
+
+
+def test_a_metars_9999_is_ten_kilometres_or_more_with_no_mist_made_up():
+    """METAR LSGG 02006KT 9999 BKN021 (the source's "6+"): read as "visibility 9 kilometres, mist"."""
+    from localtc.atc_core.atis.observation import from_report, metar_weather
+    from localtc.metar_data import parse
+
+    row = {"rawOb": "METAR LSGG 041620Z AUTO 02006KT 9999 BKN021 07/03 Q1021 NOSIG", "icaoId": "LSGG", "wdir": 20, "wspd": 6, "visib": "6+",
+           "altim": 1021, "temp": 7, "dewp": 3}
+    weather = from_report(parse(row), 0.0)
+    assert weather.visibility_sm == 10.0 and weather.phenomena == ()
+    assert [p.kind for p in metar_weather("METAR EGLL 041620Z 02006KT 4000 -RA BR BKN010 07/05 Q1021 TEMPO SN")] == ["RA", "BR"]

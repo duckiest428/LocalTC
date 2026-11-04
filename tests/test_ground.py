@@ -1135,3 +1135,79 @@ def test_every_english_call_opens_ground_to_cockpit():
     assert line.text == "Ground to cockpit. Ground power's on."
     assert _on_the_air(line).text == line.text
     assert _on_the_air(RampSpeech(t=0.0, text="Strom ist da.", speaker="Ramp", channel="radio", language="de")).text == "Strom ist da."
+
+
+# ---- what a real flight on an FSLabs A321 at Geneva turned up -----------------------------------------------------------
+
+
+def test_a_gpu_already_on_when_we_come_isnt_news():
+    c = crew()
+    c.own = own()
+    c.update(state_with(c, services=services(GPU="performing")), 1.0)
+    assert not any("GPU" in s or "power" in s.lower() for s in said(c.tick(10.0)))
+
+
+def test_the_brake_set_lets_through_what_was_waiting_for_it_with_its_way():
+    c = crew()
+    c.own = own(brake=False)
+    c.update(state_with(c, services=services(Departure="available")), 0.0)
+    out = c.heard("can we get a pushback? tail left please", 1.0)
+    assert len(said(out)) == 1 and "parking brake" in said(out)[0].lower()  # (one line: it's one push)
+    assert c._push is None and "Departure" in c._after_brake
+    c.observe(own(brake=True))
+    said_now = said(c.tick(2.0))
+    assert c._push is not None and c._push.direction == g.NOSE_RIGHT, said_now
+
+
+def test_an_aircraft_whose_brake_cant_be_read_has_the_pilots_word():
+    c = crew()
+    c.observe(own(brake=False))  # (a lever of its own: the sim's variable never shows it)
+    c.update(state_with(c, services=services(Departure="available")), 0.0)
+    c.heard("pushback", 1.0)
+    assert c._push is None
+    assert asks("we have set parking break")[0][0] == g.BRAKES_SET and asks("it is set")[0][0] == g.BRAKES_SET
+    c.heard("it is set", 2.0)
+    c.tick(3.0)
+    assert c._push is not None
+
+
+def test_where_the_sim_reads_the_brake_its_reading_goes_before_a_word():
+    c = crew()
+    c.observe(own(brake=True))
+    c.observe(own(brake=False))
+    c.update(state_with(c, services=services(Departure="available")), 0.0)
+    c.heard("pushback", 1.0)
+    assert "parking brake" in said(c.heard("brakes set", 2.0))[0].lower()
+    c.tick(3.0)
+    assert c._push is None
+
+
+def test_disconnecting_the_jetway_is_taking_it_away_and_asks_no_brake():
+    assert asks("cockpit to ground, request jetway disconnection")[0][:2] == (g.OFF, ("OperateJetways",))
+    c = crew()
+    c.own = own(brake=False)
+    c.update(state_with(c, services=services(OperateJetways="completed")), 0.0)
+    c._bridge["OperateJetways"] = True
+    assert not any("brake" in s.lower() for s in said(c.heard("disconnect the jetway", 1.0)))
+    assert c._queue == ["OperateJetways"]
+
+
+def test_gsxs_own_variable_shows_a_service_taken_long_before_its_api():
+    c = crew()
+    c.own = own()
+    c.update(state_with(c, services=services(DeIce="available")), 0.0)
+    c.heard("de-ice please", 0.0)
+    assert any(isinstance(o, Send) for o in c.tick(0.5))
+    c.observe_vars({"L:FSDT_GSX_DEICING_STATE": 4.0})
+    for t in (16.0, 30.0, 60.0):
+        out = c.tick(t)
+        assert not any(isinstance(o, Send) for o in out) and not said(out)
+
+
+def test_a_line_with_a_condition_in_it_keeps_its_words():
+    c = crew()
+    c.own = own(brake=False)
+    c.update(state_with(c, services=services(OperateJetways="available")), 0.0)
+    line = said(c.heard("jetway please", 1.0))[0]
+    assert c.keeps_its_words(line)
+    assert not c.keeps_its_words("No problem: catering. On the way.")

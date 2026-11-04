@@ -433,7 +433,6 @@ $("#btn-cabin").onclick = async () => {
   if (!text) return;
   try { await api("radio/crew", { text, to: "cabin" }); input.value = ""; } catch (e) { fail(e); }
 };
-$("#btn-clear").onclick = () => { $("#tx-text").value = ""; $("#tx-text").focus(); };
 
 const held = { radio: false, intercom: false, cabin: false };
 async function ptt(down, which = "radio") {
@@ -1618,7 +1617,7 @@ const Settings = {
       if (p.key === "none" || p.has_key) return '<span class="mstatus ok">ready</span>';
       return '<span class="mstatus muted">needs a key</span>';
     };
-    return `<div class="card" id="cloud-card">
+    return `<div class="card" id="cloud-card" data-section="models">
         <h3>Cloud language model <span class="rec-badge">Recommended for quality</span></h3>
         <p class="muted small">A large model in the cloud understands your calls and words ATC's and the copilot's replies far
           better than one small enough to run beside the sim, and it's given the whole flight (the route, every clearance,
@@ -1784,8 +1783,24 @@ const Settings = {
         : `<span class="mstatus missing">${esc(s.detail || "not downloaded")}</span> <button class="btn small" data-install="${kind}">Download</button>`;
     };
     const missing = m.status.filter((s) => !s.installed).length;
+    const sections = [
+      ["voice", "Voice & radio", "Your microphone and what you hear."],
+      ["atc", "ATC", "How the controllers work."],
+      ["crew", "Crew", "Your copilot, the cabin crew and the ground crew."],
+      ["traffic", "Traffic", "The other aircraft around you."],
+      ["models", "AI & models", "What listens, speaks and thinks, and how much your computer does."],
+    ];
+    this.section = this.section || (missing ? "models" : "voice");
     $("#settings-body").innerHTML = `
-      <div class="card">
+      <div class="setnav">
+        <div class="setnav-row">
+          <div class="seg" role="group" aria-label="Quick Settings">${sections.map(([id, name]) => `<button class="btn small" data-section-tab="${id}">${esc(name)}</button>`).join("")}</div>
+          <input id="s-find" type="search" placeholder="Find a setting" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="muted small" id="s-section-about"></div>
+      </div>
+      <div class="muted pad" id="s-find-none" hidden>Nothing here matches.</div>
+      <div class="card" data-section="models">
         <h3>Performance</h3>
         <div class="hw">This computer: ${hw.cpu_cores} CPU threads, ${hw.ram_gb} GB RAM, ${gpu}. Recommended: <b>${esc(cat.profiles.find((p) => p.id === m.recommended)?.label || m.recommended)}</b>.</div>
         <div class="profiles">${cat.profiles.map((p) => `<button class="profile ${profileCur?.id === p.id ? "current" : ""}" data-profile="${p.id}">
@@ -1793,7 +1808,7 @@ const Settings = {
         ${componentsPart(m)}
       </div>
 
-      <div class="card">
+      <div class="card" data-section="models">
         <h3>Models</h3>
         <p class="muted small">Speech recognition and the voices. Bigger models hear better but answer more slowly. All run on
           this computer. The language models are in their own section, below.</p>
@@ -1807,7 +1822,7 @@ const Settings = {
         ${missing ? `<div class="row"><button class="btn primary" id="s-install-all">Download everything missing</button><span class="muted small">Once; flights then work offline.</span></div>` : ""}
         <div class="muted small" id="job-msg"></div>
       </div>
-      <div class="card" id="llm-card">
+      <div class="card" id="llm-card" data-section="models">
         <h3>Language models</h3>
         <p class="muted small">How ATC and the copilot understand what you say and word what they say back: the model on this
           PC, a <a href="#cloud-card" class="jump">cloud model</a> (recommended for quality, below), and how much each of them
@@ -1873,7 +1888,7 @@ const Settings = {
       </div>
       ${this.cloudCard(st)}
 
-      <div class="card">
+      <div class="card" data-section="voice">
         <h3>Push-to-talk</h3>
         <label class="check-row"><input type="checkbox" id="s-voice-on" ${st.voice.enabled ? "checked" : ""}> Talk to ATC with a microphone</label>
         <div class="row">
@@ -1893,7 +1908,7 @@ const Settings = {
         <div class="row"><label>Microphone<select id="s-mic">${devOpts(S.devices.inputs || [], st.voice.input_device)}</select></label></div>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="voice">
         <h3>ATC voice</h3>
         <div class="row"><label>Speakers or headset<select id="s-out">${devOpts(S.devices.outputs || [], st.tts.output_device)}</select></label></div>
         <div class="row">
@@ -1907,7 +1922,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-replay" ${st.ui.replay_audio ? "checked" : ""}> Play buttons on the radio log: ATC and the copilot as you heard them, you as the microphone took it (here, on the phone and on the website's Flight Tracker; the last 80, in memory only)</label>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="crew">
         <h3>Copilot</h3>
         <div class="row"><label>When the Copilot switch is on, it
           <select id="s-copilot"><option value="full" ${st.ui.copilot === "full" ? "selected" : ""}>works the whole radio: requests, check-ins, readbacks</option>
@@ -1942,7 +1957,7 @@ const Settings = {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="crew">
         <h3>Cabin crew</h3>
         <div class="master-row">
           <div><b>Cabin crew</b><div class="muted small">A cabin manager who makes the announcements, calls you on the
@@ -1985,7 +2000,7 @@ const Settings = {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="crew">
         <h3>Ground crew</h3>
         <div class="master-row">
           <div><b>Ground crew</b><div class="muted small">The turnaround and the push by voice, with no menus: on the ramp
@@ -2013,7 +2028,7 @@ const Settings = {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="atc">
         <h3>ATC</h3>
         <label class="check-row"><input type="checkbox" id="s-unscripted" ${st.atc.unscripted ? "checked" : ""}> Unscripted moments: traffic calls, altitude checks, "how do you read"</label>
         <label class="check-row"><input type="checkbox" id="s-strict" ${st.atc.strict_callsign ? "checked" : ""}> Readbacks must include the callsign</label>
@@ -2039,7 +2054,7 @@ const Settings = {
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
       </div>
 
-      <div class="card">
+      <div class="card" data-section="traffic">
         <h3>Traffic</h3>
         <div class="master-row"><div><b>LocalTC's traffic</b> <span class="exp-badge">EXPERIMENTAL</span>
           <div class="muted small">On: the real flights around you (live from free ADS-B sources) fly in the sim with their own
@@ -2147,6 +2162,7 @@ const Settings = {
       </div>
       <div class="savebar"><span class="muted small">Changes save as you make them.</span></div>`;
     this.wire();
+    this.wireSections(sections);
     this.jobs(S.state.jobs || {});
     this.update(S.state.update);
     this.supportCard();
@@ -2176,6 +2192,31 @@ const Settings = {
       } catch (e) { note.className = "small error"; note.textContent = e.message; }
       finally { button.disabled = false; }
     };
+  },
+  // One section at a time, or with words in the box, every card that has them. ``sections``: [id, name, what's in it].
+  showSection(sections) {
+    const find = ($("#s-find")?.value || "").trim().toLowerCase();
+    const cards = $$("#settings-body > .card[data-section]");
+    let shown = 0;
+    for (const card of cards) {
+      const show = find ? card.textContent.toLowerCase().includes(find) : card.dataset.section === this.section;
+      card.hidden = !show;
+      if (show) shown++;
+    }
+    $$("[data-section-tab]").forEach((b) => b.setAttribute("aria-pressed", String(!find && b.dataset.sectionTab === this.section)));
+    $("#s-section-about").textContent = find ? "" : sections.find((s) => s[0] === this.section)?.[2] || "";
+    $("#s-find-none").hidden = shown > 0;
+  },
+  wireSections(sections) {
+    $$("[data-section-tab]").forEach((b) => (b.onclick = () => {
+      this.section = b.dataset.sectionTab;
+      $("#s-find").value = "";
+      this.showSection(sections);
+      $("#page-settings").scrollTop = 0;
+      $("#settings-body").scrollTop = 0;
+    }));
+    $("#s-find").oninput = () => this.showSection(sections);
+    this.showSection(sections);
   },
   wire() {
     const on = (id, ev, fn) => $(id)?.addEventListener(ev, fn);

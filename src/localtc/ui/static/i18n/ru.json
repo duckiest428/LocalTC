@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Класс B: нужно «cleared into the Class Bravo»",
 "Class C: talk to approach before entering": "Класс C: свяжитесь с подходом перед входом",
 "Class D / control zone: call the tower first": "Класс D / диспетчерская зона: сначала вызовите вышку",
-"Clear": "Очистить",
 "Clearance": "Разрешение",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Разрешение: «Request IFR to Boeing Field». Руление: «ready to taxi with information Alpha». Вышка: «holding short runway 34L, ready for departure». Затем повторяйте каждое указание и выходите на связь после каждой передачи: «Seattle Departure, N172LT, 2,000 climbing 5,000».",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Нажмите на гейт, чтобы запросить его у Airport Ops (только при прибытии; диспетчер направит вас туда).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Проверить микрофон",
 "🎧 A headset": "🎧 Гарнитура",
 "🔊 Speakers": "🔊 Динамики",
-"Restricted, danger and prohibited areas": "Зоны ограничения, опасные и запретные зоны"
+"Restricted, danger and prohibited areas": "Зоны ограничения, опасные и запретные зоны",
+"AI & models": "ИИ и модели",
+"Copilot radio": "Второй пилот на связи",
+"Crew": "Экипаж",
+"Find a setting": "Найти настройку",
+"How the controllers work.": "Как работают диспетчеры.",
+"Nothing here matches.": "Ничего не найдено.",
+"The other aircraft around you.": "Другие самолёты вокруг вас.",
+"Voice & radio": "Голос и радио",
+"What listens, speaks and thinks, and how much your computer does.": "Что слушает, говорит и думает, и сколько делает ваш компьютер.",
+"Your copilot, the cabin crew and the ground crew.": "Ваш второй пилот, бортпроводники и наземная служба.",
+"Your microphone and what you hear.": "Ваш микрофон и то, что вы слышите."
 }

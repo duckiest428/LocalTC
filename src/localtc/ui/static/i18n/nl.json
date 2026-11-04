@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Klasse B: vraagt \"cleared into the Class Bravo\"",
 "Class C: talk to approach before entering": "Klasse C: spreek naderingsverkeersleiding voor je binnenvliegt",
 "Class D / control zone: call the tower first": "Klasse D / controlezone: roep eerst de toren op",
-"Clear": "Wissen",
 "Clearance": "Klaring",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Klaring: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Toren: \"holding short runway 34L, ready for departure\". Lees daarna elke instructie terug en meld je na elke overdracht: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Klik op een gate om die bij Airport Ops te vragen (alleen bij aankomst; ATC stuurt je erheen).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Mijn microfoon testen",
 "🎧 A headset": "🎧 Een headset",
 "🔊 Speakers": "🔊 Luidsprekers",
-"Restricted, danger and prohibited areas": "Beperkte, gevaarlijke en verboden gebieden"
+"Restricted, danger and prohibited areas": "Beperkte, gevaarlijke en verboden gebieden",
+"AI & models": "AI en modellen",
+"Copilot radio": "Copiloot op de radio",
+"Crew": "Bemanning",
+"Find a setting": "Instelling zoeken",
+"How the controllers work.": "Hoe de verkeersleiders werken.",
+"Nothing here matches.": "Niets gevonden.",
+"The other aircraft around you.": "De andere vliegtuigen om je heen.",
+"Voice & radio": "Stem en radio",
+"What listens, speaks and thinks, and how much your computer does.": "Wat luistert, spreekt en denkt, en hoeveel je computer doet.",
+"Your copilot, the cabin crew and the ground crew.": "Je copiloot, de cabinebemanning en het grondpersoneel.",
+"Your microphone and what you hear.": "Je microfoon en wat je hoort."
 }

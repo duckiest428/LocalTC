@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Classe B: precisa de «cleared into the Class Bravo»",
 "Class C: talk to approach before entering": "Classe C: fala com a aproximação antes de entrar",
 "Class D / control zone: call the tower first": "Classe D / zona de controlo: chama primeiro a torre",
-"Clear": "Limpar",
 "Clearance": "Autorização",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Autorização: «Request IFR to Boeing Field». Solo: «ready to taxi with information Alpha». Torre: «holding short runway 34L, ready for departure». Depois colaciona cada instrução e reporta após cada transferência: «Seattle Departure, N172LT, 2,000 climbing 5,000».",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Clica numa porta para a pedir à Airport Ops (só na chegada; o ATC manda-te para lá).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Testar o meu microfone",
 "🎧 A headset": "🎧 Auscultadores",
 "🔊 Speakers": "🔊 Altifalantes",
-"Restricted, danger and prohibited areas": "Áreas restritas, perigosas e proibidas"
+"Restricted, danger and prohibited areas": "Áreas restritas, perigosas e proibidas",
+"AI & models": "IA e modelos",
+"Copilot radio": "Copiloto no rádio",
+"Crew": "Tripulação",
+"Find a setting": "Procurar uma definição",
+"How the controllers work.": "Como os controladores trabalham.",
+"Nothing here matches.": "Nada corresponde.",
+"The other aircraft around you.": "As outras aeronaves à sua volta.",
+"Voice & radio": "Voz e rádio",
+"What listens, speaks and thinks, and how much your computer does.": "O que ouve, fala e pensa, e quanto faz o seu computador.",
+"Your copilot, the cabin crew and the ground crew.": "O seu copiloto, a tripulação de cabine e a equipa de solo.",
+"Your microphone and what you hear.": "O seu microfone e o que ouve."
 }

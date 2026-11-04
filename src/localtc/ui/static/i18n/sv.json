@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Klass B: kräver ”cleared into the Class Bravo”",
 "Class C: talk to approach before entering": "Klass C: tala med inflygningen innan du flyger in",
 "Class D / control zone: call the tower first": "Klass D / kontrollzon: anropa tornet först",
-"Clear": "Rensa",
 "Clearance": "Klarering",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Klarering: ”Request IFR to Boeing Field”. Ground: ”ready to taxi with information Alpha”. Torn: ”holding short runway 34L, ready for departure”. Kollationera sedan varje instruktion och anmäl dig efter varje överlämning: ”Seattle Departure, N172LT, 2,000 climbing 5,000”.",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Klicka på en gate för att be Airport Ops om den (bara vid ankomst; ATC skickar dig dit).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Testa min mikrofon",
 "🎧 A headset": "🎧 Ett headset",
 "🔊 Speakers": "🔊 Högtalare",
-"Restricted, danger and prohibited areas": "Restriktionsområden, riskområden och förbjudna områden"
+"Restricted, danger and prohibited areas": "Restriktionsområden, riskområden och förbjudna områden",
+"AI & models": "AI och modeller",
+"Copilot radio": "Andrepilot på radion",
+"Crew": "Besättning",
+"Find a setting": "Hitta en inställning",
+"How the controllers work.": "Hur flygledarna arbetar.",
+"Nothing here matches.": "Inget matchar.",
+"The other aircraft around you.": "De andra flygplanen omkring dig.",
+"Voice & radio": "Röst och radio",
+"What listens, speaks and thinks, and how much your computer does.": "Det som lyssnar, talar och tänker, och hur mycket datorn gör.",
+"Your copilot, the cabin crew and the ground crew.": "Din andrepilot, kabinbesättningen och markpersonalen.",
+"Your microphone and what you hear.": "Din mikrofon och det du hör."
 }

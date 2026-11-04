@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Classe B : il faut « cleared into the Class Bravo »",
 "Class C: talk to approach before entering": "Classe C : contacter l'approche avant d'y entrer",
 "Class D / control zone: call the tower first": "Classe D / zone de contrôle : appeler d'abord la tour",
-"Clear": "Effacer",
 "Clearance": "Clairance",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Clairance : « Request IFR to Boeing Field ». Sol : « ready to taxi with information Alpha ». Tour : « holding short runway 34L, ready for departure ». Collationne ensuite chaque instruction et annonce-toi après chaque transfert : « Seattle Departure, N172LT, 2,000 climbing 5,000 ».",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Clique sur une porte pour la demander à Airport Ops (à l'arrivée seulement ; l'ATC t'y envoie).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Tester mon micro",
 "🎧 A headset": "🎧 Un casque",
 "🔊 Speakers": "🔊 Des haut-parleurs",
-"Restricted, danger and prohibited areas": "Zones réglementées, dangereuses et interdites"
+"Restricted, danger and prohibited areas": "Zones réglementées, dangereuses et interdites",
+"AI & models": "IA et modèles",
+"Copilot radio": "Copilote à la radio",
+"Crew": "Équipage",
+"Find a setting": "Chercher un réglage",
+"How the controllers work.": "Comment travaillent les contrôleurs.",
+"Nothing here matches.": "Rien ne correspond.",
+"The other aircraft around you.": "Les autres avions autour de vous.",
+"Voice & radio": "Voix et radio",
+"What listens, speaks and thinks, and how much your computer does.": "Ce qui écoute, parle et réfléchit, et ce que fait votre ordinateur.",
+"Your copilot, the cabin crew and the ground crew.": "Votre copilote, l'équipage de cabine et l'équipe au sol.",
+"Your microphone and what you hear.": "Votre micro et ce que vous entendez."
 }

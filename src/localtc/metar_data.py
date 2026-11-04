@@ -59,7 +59,8 @@ def parse(row: dict) -> WeatherReport:
     if isinstance(visib, (int, float)):
         visibility = float(visib)
     elif isinstance(visib, str) and (m := re.match(r"(\d+(?:\.\d+)?)", visib)):
-        visibility = float(m.group(1))
+        # "6+" (its word for a METAR's 9999) is 10 km or more, not 6 miles: Geneva's clear day was read as "9 kilometres, mist".
+        visibility = max(float(m.group(1)), 10.0) if visib.strip().endswith("+") else float(m.group(1))
     altim = row.get("altim")
     altimeter = round(float(altim) / HPA_PER_INHG, 2) if isinstance(altim, (int, float)) and altim > 800 else None
     observed = re.search(r"\b\d{2}(\d{4})Z\b", raw)

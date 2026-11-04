@@ -20,6 +20,8 @@ import re
 import zlib
 from typing import Any
 
+import numpy as np
+
 from localtc.bus import EventBus
 from localtc.dsp.cabin import applause, boarding_music, chime, in_person_effect, interphone_effect, pa_effect
 from localtc.dsp.clips import CLIPS, clip_id
@@ -194,7 +196,7 @@ class VoiceOut:
             self._cabin.put_nowait(ev)  # (their own queue: the safety demonstration never holds up ATC)
         elif isinstance(ev, RampSpeech) and (ev.spoken or ev.text):
             if ev.channel == "radio":  # on the ramp's frequency: a station like any other, gone when tuned away
-                await self.say(ev.spoken or ev.text, self._ramp_voice(ev), "atc", station=ev.speaker, local=True)
+                await self.say(ev.spoken or ev.text, self._ramp_voice(ev), "atc", keep=clip_id(ev), station=ev.speaker, local=True)
             else:
                 self._cabin.put_nowait(ev)  # the headset, on the interphone
         elif isinstance(ev, CabinSound):
@@ -271,12 +273,19 @@ class VoiceOut:
 
     async def _say_ramp(self, ev: RampSpeech) -> None:
         who = self._ramp_voice(ev)
+        kept: list[Any] = []
+        rate = 0
         for sentence in sentences(ev.spoken or ev.text):
             async with self._lock:
                 speech = await asyncio.to_thread(self.voices.speak, sentence, who, local=True)
             if speech is None:
-                return  # nobody could say it: text only
-            self.player.play(Clip(interphone_effect(speech.audio, speech.rate), speech.rate, "interphone"))
+                break  # nobody could say it: text only
+            audio = interphone_effect(speech.audio, speech.rate)
+            self.player.play(Clip(audio, speech.rate, "interphone"))
+            kept.append(audio)
+            rate = speech.rate
+        if kept and CLIPS.enabled:  # (to play again from the radio log, the whole call)
+            await asyncio.to_thread(CLIPS.put, clip_id(ev), np.concatenate(kept), rate)
 
     async def _say_cabin(self, ev: CabinSpeech) -> None:
         who = persona_for(f"cabin {ev.speaker}", "cabin", sex=ev.sex, locale=ev.locale if self.regional else "",

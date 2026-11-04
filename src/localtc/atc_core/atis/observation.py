@@ -21,6 +21,7 @@ worked out:
 """
 
 import math
+import re
 from collections import deque
 from dataclasses import dataclass, field, replace
 
@@ -73,6 +74,7 @@ class Weather:
     wind: Wind
     gust_kt: int | None = None
     visibility_sm: float | None = None
+    reported: tuple[Phenomenon, ...] | None = None  # the weather a METAR gives (None: worked out from the sim's, ``phenomena``)
     temperature_c: int | None = None
     altimeter_inhg: float | None = None
     precip: str = ""  # "", "rain", "snow"
@@ -111,6 +113,8 @@ class Weather:
 
     @property
     def phenomena(self) -> tuple[Phenomenon, ...]:
+        if self.reported is not None:
+            return self.reported
         found: list[Phenomenon] = []
         freezing = self.temperature_c is not None and self.temperature_c <= 0
         rate = self.precip_rate_mm
@@ -374,4 +378,17 @@ def from_report(report, magvar: float, t: float = 0.0) -> Weather:
     dewpoint = int(round(report.dewpoint_c)) if report.dewpoint_c is not None else None
     return Weather(wind=Wind(direction_mag=mag if true is not None and speed else 0, speed_kt=speed), gust_kt=gust,
                    visibility_sm=report.visibility_sm, temperature_c=temperature, altimeter_inhg=report.altimeter_inhg,
-                   t=t, wind_dir_true=true if true is not None else 0.0, dewpoint_c=dewpoint)
+                   t=t, wind_dir_true=true if true is not None else 0.0, dewpoint_c=dewpoint, reported=metar_weather(report.raw))
+
+
+METAR_WEATHER = re.compile(r"(?:^|\s)([-+]?)(TS|FZ|SH)?(RA|DZ|SN|SG|FG|BR|HZ|FU)(?=\s|$)")
+
+
+def metar_weather(raw: str) -> tuple[Phenomenon, ...] | None:
+    """The weather a METAR's text says, nothing more: "-RA BR" (a METAR with no weather has none: not worked out from its
+    visibility). None: there's no text to read. Its remarks and trend aren't the weather now."""
+    if not raw:
+        return None
+    now = re.split(r"\b(?:RMK|NOSIG|TEMPO|BECMG)\b", raw, maxsplit=1)[0]
+    return tuple(Phenomenon("RA" if kind == "DZ" else "SN" if kind == "SG" else kind, intensity, "" if descriptor == "SH" else descriptor)
+                 for intensity, descriptor, kind in METAR_WEATHER.findall(now))

@@ -679,6 +679,8 @@ async def run_session(
                                      language=cfg.crew.language,
                                      voice_sex=copilot_personality(cfg.crew.personality).voice_sex(cfg.crew.voice_sex),
                                      radio_mode=lambda: service.copilot.mode if service.copilot is not None else "off")
+                if ground is not None:
+                    ground.as_read = pm.as_read  # (the FSLabs's brake lever: the sim's variable doesn't follow it)
                 crew = CrewService(pm, bus, source, cabin=cabin, ground=ground)
                 consumers.append(asyncio.create_task(crew.run()))
         if cfg.traffic.enabled and session.source_kind == "live":  # (the live flights are now: not a replay's)

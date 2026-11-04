@@ -185,6 +185,7 @@ GA_TYPES = ("C172", "PA28", "SR22", "C208", "TBM9", "C25C", "DA62")
 # A big airport's GA ramp is business jets (no Cessnas at an international airport), a mid-size one's turboprops too.
 BIZJET_TYPES = ("C56X", "CL60", "GLF5", "E55P", "C680", "GLEX", "FA7X", "C25A")
 TURBOPROP_TYPES = ("C208", "PC12", "BE20", "TBM9", "C56X", "E55P")
+GA_SAME_MODEL = 3  # this many of one model on an airport's GA ramps: a whole ramp of TBMs is the one model installed, not an airport
 CARGO_TYPES = ("B744", "B77L", "MD11", "B763", "A306")
 CARGO_AIRLINES = ("FDX", "UPS", "DHK", "CLX", "GTI", "CKS", "ABX", "BOX", "CAO", "QTR", "ATN")
 HUB_GATES, REGIONAL_GATES = 40, 10  # an airport with this many gates is a hub; under the other, a small field
@@ -372,6 +373,7 @@ class TrafficManager:
         self._fps_start: float | None = None
         self._fps_t, self._fps_high = 0.0, 0
         self._gates_here = 0  # the gates at the airport being filled (what kind of airport it is)
+        self._ga_standing: Counter = Counter()  # ... and the models on its GA ramps so far
 
     # --- what happens ------------------------------------------------------------------------------------------
 
@@ -1110,6 +1112,7 @@ class TrafficManager:
         rng = random.Random(zlib.crc32(f"{icao}:{hour}:{self.seed}".encode()))
         airlines = self._airlines_at(icao)
         self._gates_here = sum(1 for p in airport.parking if p.kind.startswith("gate"))
+        self._ga_standing = Counter()
         taken = [self._spot_latlon(p.spot) for p in self.planes.values() if p.spot is not None and p.spot[0] == icao]
         spots = []
         for i, p in enumerate(airport.parking):
@@ -1169,9 +1172,13 @@ class TrafficManager:
             # at a mid-size airport, light aircraft only at a small field. None installed of those: left empty, never
             # a light aircraft in their place.
             types = BIZJET_TYPES if gates >= HUB_GATES else TURBOPROP_TYPES if gates >= REGIONAL_GATES else GA_TYPES
-            return self._reuse(used, ("ramp_ga", ""), rng, lambda: next(
+            model = self._reuse(used, ("ramp_ga", ""), rng, lambda: next(
                 (m for t in rng.sample(types, k=len(types)) if (m := self.picker.pick(t)) is not None
                  and (types is GA_TYPES or not _light(m[0]))), None))
+            if model is None or self._ga_standing[model] >= GA_SAME_MODEL:
+                return None
+            self._ga_standing[model] += 1
+            return model
         if kind.startswith("ramp_cargo"):
             def cargo() -> tuple[str, str] | None:  # a cargo airline's colours, else any airline's: never unpainted
                 for t in rng.sample(CARGO_TYPES, k=len(CARGO_TYPES)):

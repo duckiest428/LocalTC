@@ -217,7 +217,6 @@
 "Class B: needs \"cleared into the Class Bravo\"": "Klasa B: wymaga „cleared into the Class Bravo”",
 "Class C: talk to approach before entering": "Klasa C: przed wlotem skontaktuj się z podejściem",
 "Class D / control zone: call the tower first": "Klasa D / strefa kontrolowana: najpierw wywołaj wieżę",
-"Clear": "Wyczyść",
 "Clearance": "Zgoda",
 "Clearance: \"Request IFR to Boeing Field\". Ground: \"ready to taxi with information Alpha\". Tower: \"holding short runway 34L, ready for departure\". Then read back each instruction and check in after every handoff: \"Seattle Departure, N172LT, 2,000 climbing 5,000\".": "Zgoda: „Request IFR to Boeing Field”. Ground: „ready to taxi with information Alpha”. Wieża: „holding short runway 34L, ready for departure”. Potem powtarzaj każdą instrukcję i melduj się po każdym przekazaniu: „Seattle Departure, N172LT, 2,000 climbing 5,000”.",
 "Click a gate to ask Airport Ops for it (the arrival only; ATC sends you there).": "Kliknij bramkę, by poprosić o nią Airport Ops (tylko przy przylocie; ATC cię tam skieruje).",
@@ -1380,5 +1379,16 @@
 "🎤 Test my microphone": "🎤 Przetestuj mikrofon",
 "🎧 A headset": "🎧 Słuchawki",
 "🔊 Speakers": "🔊 Głośniki",
-"Restricted, danger and prohibited areas": "Strefy ograniczone, niebezpieczne i zakazane"
+"Restricted, danger and prohibited areas": "Strefy ograniczone, niebezpieczne i zakazane",
+"AI & models": "AI i modele",
+"Copilot radio": "Drugi pilot na radiu",
+"Crew": "Załoga",
+"Find a setting": "Znajdź ustawienie",
+"How the controllers work.": "Jak pracują kontrolerzy.",
+"Nothing here matches.": "Nic nie pasuje.",
+"The other aircraft around you.": "Inne samoloty wokół ciebie.",
+"Voice & radio": "Głos i radio",
+"What listens, speaks and thinks, and how much your computer does.": "Co słucha, mówi i myśli oraz ile robi twój komputer.",
+"Your copilot, the cabin crew and the ground crew.": "Twój drugi pilot, załoga kabiny i obsługa naziemna.",
+"Your microphone and what you hear.": "Twój mikrofon i to, co słyszysz."
 }

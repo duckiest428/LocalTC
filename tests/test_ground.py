@@ -292,7 +292,8 @@ def test_gsx_saying_no_is_passed_on_and_a_call_that_does_nothing_too():
     c = crew()
     c.heard("catering please", 0.0)
     c.tick(0.0)
-    assert any("Catering" in s or "atering" in s for s in said(c.tick(30.0)))
+    assert any(isinstance(o, Send) for o in c.tick(16.0))  # (called once more first)
+    assert any("Catering" in s or "atering" in s for s in said(c.tick(45.0)))
     assert c._sending is None
 
 
@@ -1087,5 +1088,50 @@ def test_the_ramp_is_in_the_frequency_list_at_every_airport():
 
     bare = SimpleNamespace(icao="XXXX", name="Nowhere", frequencies=[], runways=[], lat=0.0, lon=0.0, elev_ft=0.0, magvar=0.0, parking=[], taxi_paths=[])
     assert airport_summary(bare)["frequencies"] == [{"label": "RAMP", "kind": "ramp", "mhz": 119.99, "others": []}]
-    assert airport_summary(bare, ramp_mhz=120.0)["frequencies"][0]["mhz"] == 120.0
     assert airport_detail(bare)["all_frequencies"][-1]["label"] == "RAMP"
+
+
+def test_which_stand_is_answered_from_what_gsx_says_and_never_guessed():
+    from dataclasses import replace
+
+    from localtc.ground.grammar import WHERE, parse
+
+    assert parse("hey what gate are we at?")[0].action == WHERE
+    assert parse("can we have gate 12")[0].action != WHERE
+    c = RampCrew()
+    c.state = replace(c.state, parking="Gate 17")
+    assert c.do(parse("what stand is this")[0], 0.0)[0].text.endswith("Gate 17.")
+    assert "can't see" in RampCrew().do(parse("what gate are we at")[0], 0.0)[0].text
+
+
+def test_a_jetway_asked_for_before_the_brake_comes_once_it_is_set():
+    from localtc.ground.crew import Send
+    from localtc.ground.grammar import Ask, REQUEST
+
+    c = crew()
+    c.own = own(brake=False)
+    c.do(Ask(REQUEST, ("OperateJetways",)), 0.0)
+    assert not any(isinstance(o, Send) for o in c.tick(1.0))
+    c.own = own(brake=True)
+    assert any(isinstance(o, Send) and o.service == "OperateJetways" for o in c.tick(2.0))
+
+
+def test_a_call_gsx_did_not_take_is_made_once_more_but_never_one_that_toggles():
+    from localtc.ground.crew import Send
+    from localtc.ground.grammar import Ask, REQUEST
+
+    for service, again in (("Lavatory", True), ("OperateJetways", False)):
+        c = crew()
+        c.do(Ask(REQUEST, (service,)), 0.0)
+        assert any(isinstance(o, Send) for o in c.tick(0.5))
+        assert any(isinstance(o, Send) for o in c.tick(16.0)) is again
+
+
+def test_every_english_call_opens_ground_to_cockpit():
+    from localtc.ground.service import _on_the_air
+    from localtc.sim_api import RampSpeech
+
+    line = _on_the_air(RampSpeech(t=0.0, text="Ground power's on.", speaker="Ramp", channel="radio"))
+    assert line.text == "Ground to cockpit. Ground power's on."
+    assert _on_the_air(line).text == line.text
+    assert _on_the_air(RampSpeech(t=0.0, text="Strom ist da.", speaker="Ramp", channel="radio", language="de")).text == "Strom ist da."

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from localtc.ground.api import SERVICES
 
 REQUEST, CANCEL, FINISH, HURRY, STATUS, PUSH, STOP_PUSH, OFF = "request", "cancel", "finish", "hurry", "status", "push", "stop_push", "off"
-GATE, YES, NO, OPTION, BRAKES_SET, BRAKES_RELEASED, GOOD_START, FULL = "gate", "yes", "no", "option", "brakes_set", "brakes_released", "good_start", "full"
+WHERE, GATE, YES, NO, OPTION, BRAKES_SET, BRAKES_RELEASED, GOOD_START, FULL = "where", "gate", "yes", "no", "option", "brakes_set", "brakes_released", "good_start", "full"
 LEVEL = "level"  # how much fuel: ``option`` percent
 
 # Nose and tail, as GSX has them: nose left is tail right. Said on its own, "left" is GSX's left: the tail.
@@ -46,6 +46,7 @@ _HURRY = re.compile(r"\bspeed\s+(?:it\s+|that\s+|things\s+)?up\b|\bhurry\b|\bexp
 _OFF = re.compile(r"\b(?:disconnect|remove|dismiss|retract|detach|pull(?:\s+\w+){0,2}\s+back|pull\s+back|take\s+(?:\w+\s+){0,2}away|send\s+(?:\w+\s+){0,2}away|get\s+rid\s+of|undock)\b|\b(?:off|away)\W*(?:please\W*)?$", re.I)
 _FULL = re.compile(r"\b(?:full\s+(?:service|turn\s?around)|the\s+(?:whole\s+)?turn\s?around|do\s+the\s+turn\s?around|the\s+works|all\s+(?:the\s+)?services|everything\s+please)\b", re.I)
 _GATE = re.compile(r"\b(?:gate|stand|parking(?:\s+(?:spot|position))?)\s+([a-z]?\s?-?\s?\d{1,3}\s?[a-z]?|[a-z]{1,2}\s?\d{1,3})\b", re.I)
+_WHERE = re.compile(r"\b(?:what|which)\s+(?:gate|stand|bay|parking(?:\s+(?:spot|position))?)\b|\bwhere\s+are\s+we\s+parked\b|\bwhat(?:'?s|\s+is)\s+(?:our|my|this)\s+(?:gate|stand)\b", re.I)
 _GATE_CHANGE = re.compile(r"\b(?:change|move|switch|different|another|prefer|want|like|give|assign|need|request|can\s+(?:we|i)\s+have)\b", re.I)
 _NOSE = re.compile(r"\bnose\s+(left|right)\b|\bfac(?:e|ing)\s+(left|right)\b|\b(left|right)\s+nose\b", re.I)
 _TAIL = re.compile(r"\btail\s+(left|right)\b|\b(left|right)\s+tail\b|\bpush(?:\s?-?back)?\s+(?:to\s+the\s+)?(left|right)\b|^\W*(left|right)\W*(?:please\W*)?$", re.I)
@@ -126,6 +127,8 @@ def _clause(text: str) -> list[Ask]:
         return [Ask(YES)]
     if _NO.match(text):
         return [Ask(NO)]
+    if _WHERE.search(text) and not _GATE_CHANGE.search(text):
+        return [Ask(WHERE)]
     if (gate := _gate(text)) and (_GATE_CHANGE.search(text) or not named):
         return [Ask(GATE, gate=gate)]
     if _CANCEL.search(text):

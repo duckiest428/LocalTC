@@ -29,6 +29,7 @@ from localtc.gate_data import GateStore
 from localtc.recorder import Recorder
 from localtc.recorder.format import AUDIO_DIR
 from localtc.replay import ReplaySource
+from localtc.sim_api.ramp import RAMP_MHZ
 from localtc.sim_api import (
     ATC_EVENT_TYPES,
     Airport,
@@ -346,7 +347,7 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
                     request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),
                     locale=lambda airport: accent(airport or engine.state.flight.origin), relay=relay)
     talked = crew_language(cfg.crew.language)  # the pilot's language: theirs too
-    crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, ramp_mhz=g.ramp_mhz, seed=int(time.time()) % 100000,
+    crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, seed=int(time.time()) % 100000,
                     language=talked.code if talked is not None else "")
     model = None
     if g.llm != "scripted" and getattr(backend, "rich", False):  # a cloud model only: without one, the grammar
@@ -354,7 +355,7 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
 
         model = RampModel(CloudBackend([Route(r.provider, r.model, r.key, json_mode=r.json_mode, dead=r.dead) for r in backend.routes]),
                           g.llm, wait_s=cfg.cloud.timeout_s, language=talked.english if talked is not None else "")
-    log.info("Ground crew: on %.3f, by %s, %s", g.ramp_mhz, adapter.name, "the cloud model too" if model else "the grammar", extra=CONSOLE)
+    log.info("Ground crew: on %.3f, by %s, %s", RAMP_MHZ, adapter.name, "the cloud model too" if model else "the grammar", extra=CONSOLE)
     return GroundService(crew, adapter, bus, source, model=model, clock=source.clock.now, intercom=not cfg.crew.enabled)
 
 
@@ -645,7 +646,7 @@ async def run_session(
             if cfg.ground.enabled and session.source_kind == "live":  # the ramp: their frequency, and "ramp, ..." on the intercom
                 ground = start_ground(cfg, engine, source, bus, backend, lambda: cabin)
                 if ground is not None:
-                    engine.ramp_mhz = cfg.ground.ramp_mhz
+                    engine.ramp_mhz = RAMP_MHZ
                     if cabin is not None:
                         cabin.ground_call = ground.crew.called_by_cabin
                     consumers.append(asyncio.create_task(ground.run()))

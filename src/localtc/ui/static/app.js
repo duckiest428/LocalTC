@@ -1994,7 +1994,7 @@ const Settings = {
           <label class="toggle" title="Ground crew on or off"><input type="checkbox" id="s-ground" ${st.ground.enabled ? "checked" : ""}><span></span></label>
         </div>
         <div id="ground-opts" class="${st.ground.enabled ? "" : "off"}">
-        <div class="row"><label>Ramp frequency<input id="s-ground-mhz" type="number" step="0.001" min="118" max="136.99" value="${st.ground.ramp_mhz}"></label></div>
+        <div class="row"><label>Ramp frequency</label> <b class="mono">119.990</b></div>
         <span class="hint">The same at every airport. Say "tune ramp" and the copilot sets it.</span>
         <div class="row"><label>What they say by themselves<select id="s-ground-verbosity">${[
           ["quiet", "Only what needs you"], ["standard", "When each service is done"], ["chatty", "Everything"]]
@@ -2260,7 +2260,6 @@ const Settings = {
     on("#s-cabin", "change", (e) => { this.save("cabin", "enabled", e.target.checked); $("#cabin-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-cabin-crew", "change", () => this.save("cabin", "crew", val("#s-cabin-crew")));
     on("#s-ground", "change", (e) => { this.save("ground", "enabled", e.target.checked); $("#ground-opts")?.classList.toggle("off", !e.target.checked); });
-    on("#s-ground-mhz", "change", () => this.save("ground", "ramp_mhz", Number(val("#s-ground-mhz"))));
     on("#s-ground-verbosity", "change", () => this.save("ground", "verbosity", val("#s-ground-verbosity")));
     on("#s-ground-nogsx", "change", () => this.save("ground", "without_gsx", val("#s-ground-nogsx")));
     on("#s-ground-llm", "change", () => this.save("ground", "llm", val("#s-ground-llm")));

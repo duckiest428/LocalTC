@@ -31,6 +31,8 @@ VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
 STERILE_FT = 10000.0
 LISTENING_S = 20.0  # after the crew's spoken, an answer needs no "ramp, ..."
 SEND_S = 25.0  # a service called, and this long for GSX to show it took
+RETRY_S = 15.0  # called and nothing yet: called once more first (GSX's own steps through its menu sometimes stall)
+ONE_CALL_MOVES = ("OperateJetways", "OperateStairs", "Departure")  # the same call undoes these: never called twice
 OURS_S = 120.0  # GSX's questions this soon after calling a service are about it
 CALL_GAP_S = 4.0  # between the crew's own calls
 CALL_WAIT_S = 45.0  # a call that couldn't be said this long (ATC talking, the pilot keyed): dropped
@@ -94,6 +96,8 @@ class RampCrew:
         self._spoke_t = -1e9
         self._queue: list[str] = []
         self._sending: tuple[str, float] | None = None
+        self._called_again = False
+        self._after_brake: list[str] = []  # the jetway or stairs asked for before the brake was set
         self._ours: dict[str, float] = {}  # the services the pilot asked for, and when
         self._run: MenuRun | None = None
         self._run_after: tuple[str, str] | None = None  # what it was for: (kind, service)
@@ -185,8 +189,10 @@ class RampCrew:
             return self._confirmation(a, t)
         if a == g.STATUS:
             return self._status(ask.services, t)
+        if a == g.WHERE:
+            return self._where(t)
         if a == g.GATE:
-            return self._gate(ask.gate, t)
+            return self._gate(ask.gate, t) if ask.gate else self._where(t)
         if not self.parked and a in (g.REQUEST, g.FULL, g.PUSH):
             return [self._speech("stopped_first" if a == g.PUSH else "on_stand_first", t)]
         if a == g.LEVEL:
@@ -229,6 +235,8 @@ class RampCrew:
                 out += self._ask_push("", t)
             elif (no := self._refused(service, t)) is not None:
                 out.append(no)
+                if service in ("OperateJetways", "OperateStairs") and service not in self._after_brake:
+                    self._after_brake.append(service)
             elif service in RELAYED:
                 out += self._relayed_request(service, t)
                 coming += []
@@ -320,6 +328,9 @@ class RampCrew:
 
     def _cancel(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
+        if service in self._after_brake:
+            self._after_brake.remove(service)
+            return [self._speech("cancelled", t, name=self._name(service))]
         if service in self._queue:
             self._queue.remove(service)
             return [self._speech("cancelled", t, name=self._name(service))]
@@ -358,6 +369,11 @@ class RampCrew:
             return [self._speech("off_nothing", t, name=self._name(service))]
         self._cancelled.add(service)
         return self._start_run((Want(("dismiss " + (SPOKEN_ROW.get(service, service.lower())),), service == "GPU" or service in ("Water", "Lavatory")),), "off", service, t)
+
+    def _where(self, t: float) -> list[Any]:
+        """Which stand they're on: GSX's word for it, else the gate ATC gave. Never a guess."""
+        parked = self.state.parking or self.link.gate()
+        return [self._speech("parked_at", t, parked=parked) if parked else self._speech("parked_unknown", t)]
 
     def _gate(self, label: str, t: float) -> list[Any]:
         ok, why = self.link.request_gate(label)
@@ -738,10 +754,24 @@ class RampCrew:
         out: list[Any] = self._step_run(t)
         out += self._push_moves(t)
         out += self._engines_answer(t)
+        out += self._bridge_once_braked(t)
         out += self._send_next(t)
         out += self._due_calls(t)
         out += self._parked_elsewhere(t)
         return out
+
+    def _bridge_once_braked(self, t: float) -> list[Any]:
+        """The jetway or stairs waiting on the brake: they come when it's set, as the crew said. Rolling away calls it off."""
+        own = self.own
+        if not self._after_brake or own is None:
+            return []
+        if not self.parked:
+            self._after_brake.clear()
+            return []
+        if not own.parking_brake:
+            return []
+        waiting, self._after_brake = tuple(self._after_brake), []
+        return self._request(waiting, t)
 
     def _send_next(self, t: float) -> list[Any]:
         if self._sending is not None:
@@ -751,6 +781,11 @@ class RampCrew:
                 self._sending = None
             elif self.state.menu is not None and is_question(self.state.menu):
                 self._sending = (service, t)  # (answering GSX's questions about it: not stuck)
+            elif not self._called_again and t - sent >= RETRY_S and service not in ONE_CALL_MOVES:
+                self._called_again = True
+                self._sending = (service, t)
+                log.info("Ground crew: %s not taken yet, calling it again", service)
+                return [Send(service)]
             elif t - sent >= SEND_S:
                 self._sending = None
                 self._ours.pop(service, None)
@@ -762,6 +797,7 @@ class RampCrew:
             return []
         service = self._queue.pop(0)
         self._sending = (service, t)
+        self._called_again = False
         self._ours[service] = t
         return [Send(service)]
 

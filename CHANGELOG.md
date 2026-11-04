@@ -6,6 +6,17 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.6] - Upcoming
 
+### Changed
+- **The ramp is always 119.990:** no longer a setting.
+- **The ground crew open every call in English "Ground to cockpit".**
+- **Asked which stand you're on, they say what GSX says,** and if they can't see it, they say so. A call they didn't catch stays "say again": a model
+  rewording it made up a gate and a clearance.
+- **They no longer tack on "let me know when you're ready".**
+
+### Fixed
+- **A jetway or stairs asked for before the brake is set** now comes once it's set. It used to be promised and then forgotten.
+- **A service GSX didn't take** is called once more before they give up. The jetway, stairs and push aren't, as a second call would undo them.
+
 ### Added
 - **RAMP in the frequency list at every airport**, and on the phone; click it to tune. Tuning it with the
   ground crew off now says so, and where to turn them on.

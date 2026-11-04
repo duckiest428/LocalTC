@@ -34,6 +34,7 @@ log = logging.getLogger(__name__)
 TICK_S = 0.5
 REPLY_PAUSE_S = 1.0  # an answer comes a beat after the pilot's words
 ATC_TALKS_S = 6.0  # ATC just spoke: the crew's own calls wait this long
+CALLS_AS = "Ground to cockpit"
 MENU_OPEN_LVAR = "L:FSDT_GSX_MENU_OPEN"  # (GSX's documented way, when its API says yes and no menu comes)
 
 
@@ -135,14 +136,16 @@ class GroundService:
 
     def _situation(self) -> str:
         state = self.crew.state
+        from localtc.ground.menu import is_question
+
         running = [f"{s.id} {s.state}" for s in state.services.values() if s.active or s.state == "completed"]
-        menu = f"; a question is up: {state.menu.title}: {', '.join(state.menu.entries)}" if state.menu is not None else ""
+        menu = f"; a question is up: {state.menu.title}: {', '.join(state.menu.entries)}" if state.menu is not None and is_question(state.menu) else ""
         return f"parked at {state.parking or 'a stand'}; services: {', '.join(running) or 'none running'}{menu}"
 
     async def _in_own_words(self, text: str, outputs: list[Any], t: float) -> list[Any]:
         said: list[Any] = []
         for output in outputs:
-            if isinstance(output, RampSpeech) and self.model is not None and not self._is_headset(output.text):
+            if isinstance(output, RampSpeech) and self.model is not None and not self._keeps_its_words(output.text):
                 words, records = await asyncio.to_thread(self.model.word, text, output.text, t)
                 for record in records:
                     self.bus.publish(record)
@@ -150,11 +153,14 @@ class GroundService:
             said.append(output)
         return said
 
-    def _is_headset(self, text: str) -> bool:
-        """One of the push's standard calls: never reworded."""
-        from localtc.ground.lines import FIXED
+    def _keeps_its_words(self, text: str) -> bool:
+        """One of the push's standard calls: never reworded. Nor "say again": there's nothing in it for a model to word, only
+        an answer for it to make up."""
+        from localtc.ground.lines import FIXED, LINES
+        from localtc.ground.words import LINES as FOREIGN
 
-        return any(text == line or "hand signal" in text for lines in FIXED.values() for line in lines)
+        again = {*LINES["say_again"], *(lines["say_again"] for lines in FOREIGN.values())}
+        return text in again or any(text == line or "hand signal" in text for lines in FIXED.values() for line in lines)
 
     async def from_phone(self, action: str, service: str = "", direction: str = "") -> None:
         """The companion's buttons: what the pilot could have said, and answered the same way."""
@@ -226,8 +232,16 @@ class GroundService:
                     await self.source.send(output)
             else:
                 if isinstance(output, RampSpeech):
+                    output = _on_the_air(output)
                     log.info("Ramp (%s): %s", output.channel, output.text)
                 self.bus.publish(output)
+
+
+def _on_the_air(speech: RampSpeech) -> RampSpeech:
+    """Every call opens with who's calling whom, as on a real headset. In English: other languages keep their own wording."""
+    if speech.language or speech.text.lower().startswith(CALLS_AS.lower()):
+        return speech
+    return msgspec.structs.replace(speech, text=f"{CALLS_AS}. {speech.text}", spoken=f"{CALLS_AS}. {speech.spoken}" if speech.spoken else "")
 
 
 __all__ = ["GroundService", "LlmExchange"]

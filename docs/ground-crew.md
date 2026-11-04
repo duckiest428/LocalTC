@@ -31,6 +31,7 @@ fixtures hold only short menu labels, with its icons taken out.
 Recorded at Zurich on GSX Pro 4.0.5 (MSFS 2024, A350). `tests/fixtures/gsx/lszh.json` holds the menus.
 
 - **Calls in a row get dropped** (reported by others, not tried here): the crew sends one and waits for the state to change.
+- **A `service.trigger` sometimes stalls** after GSX's first step through its menu (seen once, Lavatory at Geneva, cause unknown; the same call worked twice later, once with a menu left open). The crew call once more after 15 s, except the jetway, stairs and push, which a second call undoes. GSX's menu shows for about a second on every trigger: that's GSX stepping through it itself.
 - **The rows change with what's going on:** "Request Catering service", "Catering vehicles are on their way", "Dismiss Ground
   Power Unit", "No Jetways here", "Cannot operate stairs while water/lavatory servicing". So the menu is read before every
   pick, by the row's words, and one row must match. Never a place in the list, never a wrong click.
@@ -63,7 +64,7 @@ This GSX's `hello` lists `state, services, menu, prompts, billing`. Later builds
 ## The ramp frequency
 
 `sim_api/ramp.py`. 119.990 is a real 8.33 kHz channel, so a radio's own knobs reach it, and "tune ramp" to the copilot sets it. A radio with only 25 kHz
-steps can't dial it. **A real controller on that frequency always comes first.**
+steps can't dial it. It isn't a setting. **A real controller on that frequency always comes first.**
 
 The engine stays out of it: with `engine.ramp_mhz` set, a transmission there with no real controller returns before any language
 model is asked, and `RadioTuned` says "Ramp".

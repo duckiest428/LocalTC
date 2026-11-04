@@ -14,7 +14,7 @@ from localtc.atc_core.llm.backend import LlmRequest
 from localtc.sim_api import LlmExchange
 
 MODES = ("scripted", "semi", "mostly_llm", "llm")
-ACTIONS = (g.REQUEST, g.CANCEL, g.FINISH, g.HURRY, g.STATUS, g.PUSH, g.STOP_PUSH, g.OFF, g.GATE, g.YES, g.NO, g.OPTION, g.FULL)
+ACTIONS = (g.WHERE, g.REQUEST, g.CANCEL, g.FINISH, g.HURRY, g.STATUS, g.PUSH, g.STOP_PUSH, g.OFF, g.GATE, g.YES, g.NO, g.OPTION, g.FULL)
 DIRECTIONS = (g.NOSE_LEFT, g.NOSE_RIGHT, g.STRAIGHT)
 SCHEMA = {"type": "object", "properties": {
     "asks": {"type": "array", "items": {"type": "object", "properties": {
@@ -29,13 +29,15 @@ READ_SYSTEM = (
     "GPU (ground power), OperateJetways, OperateStairs, Deboarding, Cleaning, Catering, Refueling, Water, Lavatory, DeIce, "
     "Boarding, Departure (the push). Actions: request, cancel, finish (complete it now), hurry, status, push (with direction "
     "nose_left, nose_right or straight; tail left means nose_right, tail right means nose_left), stop_push, off (take it "
-    "away), gate (a stand asked for), yes, no, option (a numbered choice), full (the whole turnaround). Only what was really "
+    "away), gate (a stand asked for), where (which stand they're on), yes, no, option (a numbered choice), full (the whole turnaround). Only what was really "
     'asked for. Not something for the ramp, or unclear: {"asks": [], "understood": false}. Reply as JSON: '
     '{"asks": [{"action": "request", "services": ["Catering"]}], "understood": true}')
 WORD_SYSTEM = (
     "You are the ramp agent on the radio with the flight crew. Put what you're about to say in your own words: one short "
     "spoken sentence or two, a working person on a busy ramp, plain and friendly. Keep what it says: the same services, the "
-    'same numbers and names, promise nothing more. Reply as JSON: {"reply": "..."}')
+    "same numbers and names. Add nothing: no gate, clearance or time that isn't in it, no promise, and never ask them to let you know "
+    "when they're ready. Don't say who's calling whom. "
+    'Reply as JSON: {"reply": "..."}')
 
 
 @dataclass

@@ -566,7 +566,7 @@ class AppController:
             "callsign": snap.callsign, "aircraft": getattr(engine.state.flight, "aircraft_type", None),
             "origin": snap.origin, "destination": snap.destination, "cruise_ft": snap.cruise_ft,
             "phase": snap.phase, "phase_label": PHASES.get(snap.phase or "", snap.phase or ""),
-            "airport": airport_summary(airport, engine, self.cfg.ground.ramp_mhz) if airport else ({"icao": icao} if icao else None),
+            "airport": airport_summary(airport, engine) if airport else ({"icao": icao} if icao else None),
             "atis": atis.letter if atis else None,
             "atis_source": engine.atis_source_text(atis, engine.state.aircraft) if atis else None,
             "squawk": a.get("squawk"), "altitude_ft": a.get("altitude_ft"),
@@ -699,7 +699,7 @@ class AppController:
             if isinstance(ev, AtcTransmission):
                 self._last_atc = ev
                 self.companion.on_event(ev)
-            if isinstance(ev, RadioTuned) and ev.controller is None and not self.cfg.ground.enabled                     and not self._told_ramp_off and on_ramp(ev.frequency_mhz, self.cfg.ground.ramp_mhz):
+            if isinstance(ev, RadioTuned) and ev.controller is None and not self.cfg.ground.enabled                     and not self._told_ramp_off and on_ramp(ev.frequency_mhz):
                 self._told_ramp_off = True
                 self.system("That's the ramp frequency, but the ground crew are off. Turn them on in Settings, Ground crew: "
                             "they start with the next flight.")
@@ -783,7 +783,7 @@ class AppController:
             geo = engine.geometry(icao) if icao else None
             if geo is None or any(a["icao"] == icao for a in out):
                 continue
-            detail = airport_detail(geo.airport, self.cfg.ground.ramp_mhz)
+            detail = airport_detail(geo.airport)
             atis = engine.current_atis(icao)
             out.append({
                 "icao": icao, "name": detail["name"], "role": role, "lat": detail["lat"], "lon": detail["lon"],
@@ -1329,7 +1329,7 @@ class AppController:
         if airport is None:
             hint = "" if self.live else " Start a flight to look it up in the sim."
             raise HttpError(404, f"No data for {icao} yet.{hint}")
-        return airport_detail(airport, self.cfg.ground.ramp_mhz)
+        return airport_detail(airport)
 
     async def api_layout(self, args: dict) -> dict:
         """An airport's ground for the Live Map close in (ui/airport_layout.py): runways, taxiways and their names,
@@ -1463,14 +1463,14 @@ def own_view(ev: OwnshipState) -> dict:
             "xpdr": str(ev.xpdr_mode), "tx": ev.com1_tx, "zulu": ev.zulu_s}
 
 
-def airport_summary(airport, engine=None, ramp_mhz: float = RAMP_MHZ) -> dict:
+def airport_summary(airport, engine=None) -> dict:
     """The ATC tab's airport box: name and the frequencies, in the order a flight uses them. The ramp's is at every airport."""
     freqs: dict[str, list[float]] = {}
     for f in airport.frequencies:
         freqs.setdefault(f.kind, [])
         if f.mhz not in freqs[f.kind]:
             freqs[f.kind].append(f.mhz)
-    freqs["ramp"] = [ramp_mhz]
+    freqs["ramp"] = [RAMP_MHZ]
     rows = [{"label": freq_label(kind), "kind": kind, "mhz": mhzs[0], "others": mhzs[1:]}
             for kind, mhzs in sorted(freqs.items(), key=lambda kv: FREQ_ORDER.index(kv[0]) if kv[0] in FREQ_ORDER else 99)]
     if engine is not None:
@@ -1494,7 +1494,7 @@ def airport_summary(airport, engine=None, ramp_mhz: float = RAMP_MHZ) -> dict:
     return {"icao": airport.icao, "name": _title(airport.name), "frequencies": rows}
 
 
-def airport_detail(airport, ramp_mhz: float = RAMP_MHZ) -> dict:
+def airport_detail(airport) -> dict:
     from localtc.atc_core.airport import published
     from localtc.sim_api.airport import FEET_PER_METER
 
@@ -1510,12 +1510,12 @@ def airport_detail(airport, ramp_mhz: float = RAMP_MHZ) -> dict:
                                 if e.ils_ident],
                         "lat": rw.lat, "lon": rw.lon, "heading_true": rw.heading_true, "length_m": rw.length_m})
     return {
-        **airport_summary(airport, ramp_mhz=ramp_mhz), "lat": airport.lat, "lon": airport.lon, "elev_ft": round(airport.elev_ft),
+        **airport_summary(airport), "lat": airport.lat, "lon": airport.lon, "elev_ft": round(airport.elev_ft),
         "magvar": airport.magvar, "runways": runways, "parking": len(airport.parking),
         "taxiways": sorted({p.name for p in airport.taxi_paths if p.kind == "taxi" and p.name}),
         "all_frequencies": [{"kind": f.kind, "label": freq_label(f.kind), "mhz": f.mhz,
                              "name": f.name} for f in airport.frequencies]
-        + [{"kind": "ramp", "label": freq_label("ramp"), "mhz": ramp_mhz, "name": "Ground crew"}],
+        + [{"kind": "ramp", "label": freq_label("ramp"), "mhz": RAMP_MHZ, "name": "Ground crew"}],
     }
 
 

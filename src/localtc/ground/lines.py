@@ -44,6 +44,8 @@ LINES = {
                 "{Name} isn't responding. Give me another shout in a minute."),
     "on_stand_first": ("Call us once you're stopped on the stand.", "Not until you're parked on the stand."),
     "fuel_engines": ("No fuel truck with an engine running: shut down first.",),
+    "parked_at": ("You're on {parked}.", "We've got you on {parked}."),
+    "parked_unknown": ("I can't see which stand you're on from here.",),
     "brake_for_bridge": ("Parking brake first, then I'll bring that up.",),
     "armed": ("Tug's standing by. Call ground for your push, and I'll connect as soon as you're cleared.",
               "Tug's ready when you are. We just need you cleared by ground first."),

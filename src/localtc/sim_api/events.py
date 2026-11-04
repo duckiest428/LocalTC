@@ -393,6 +393,7 @@ class RampSpeech(Event, tag="ramp_speech"):
     sex: str = "M"
     locale: str = ""  # their English
     spoken: str = ""  # the words for speech, if they differ from the text
+    language: str = ""  # said in the pilot's language ("de"): a voice of that language speaks it
 
 
 class GroundServiceState(msgspec.Struct, frozen=True):

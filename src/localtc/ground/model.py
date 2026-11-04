@@ -68,8 +68,9 @@ def checked(raw: str) -> ModelRead:
 
 
 class RampModel:
-    def __init__(self, backend: Any, mode: str = "mostly_llm", wait_s: float = 15.0) -> None:
-        self.backend, self.mode, self.wait_s = backend, mode, wait_s
+    def __init__(self, backend: Any, mode: str = "mostly_llm", wait_s: float = 15.0, language: str = "") -> None:
+        """``language``: its name ("German"), when the pilot talks in one: what the crew say stays in it."""
+        self.backend, self.mode, self.wait_s, self.language = backend, mode, wait_s, language
 
     @property
     def reads(self) -> bool:
@@ -100,7 +101,8 @@ class RampModel:
 
     def word(self, heard: str, draft: str, t: float) -> tuple[str, list[LlmExchange]]:
         """The crew's line in their own words; the script's when the model can't, which is the same answer."""
-        text, record = self._ask("ramp_word", WORD_SYSTEM, f"Pilot said: \"{heard}\"\nYou were going to say: \"{draft}\"",
+        system = WORD_SYSTEM + (f" Say it in {self.language}, as what you were going to say is." if self.language else "")
+        text, record = self._ask("ramp_word", system, f"Pilot said: \"{heard}\"\nYou were going to say: \"{draft}\"",
                                  {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]}, t, 120)
         try:
             reply = str(json.loads(text).get("reply", "")).strip() if text else ""

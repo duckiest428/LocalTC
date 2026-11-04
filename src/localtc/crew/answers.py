@@ -210,6 +210,8 @@ QUESTIONS: tuple[tuple[str, str], ...] = (
     (r"how (?:far|long)|\bto go\b|\bdistance\b|\beta\b|when (?:do|will) we (?:get|arrive|land)|time to destination", "to_go"),
     (r"what did (?:atc|they|he|she|the controller) (?:say|want)|say again what|last (?:call|clearance|transmission)", "atc"),
     (r"(?:what|which) (?:altitude|level)|how high|our altitude", "altitude"),
+    (r"(?:what|which) speed|how fast|our speed", "speed"),
+    (r"(?:what|which) heading|our heading", "heading"),
     (r"(?:what|which) frequency|who (?:are|am) (?:we|i) (?:talking|on)|which (?:controller|station)", "frequency"),
     (r"\bsquawk\b|transponder code", "squawk"),
     (r"\bweather\b|\bwinds?\b at|\bmetar\b|\batis\b", "weather"),
@@ -245,6 +247,10 @@ def answer(text: str, p: Picture) -> str | None:
     if kind == "altitude":
         cleared = f", cleared to {f['cleared altitude']}" if "cleared altitude" in f else ""
         return f"We're at {f['altitude']}{cleared}." if "altitude" in f else None
+    if kind == "speed":
+        return f"{f['speed']}." if "speed" in f else None
+    if kind == "heading":
+        return f"Heading {f['heading']}." if "heading" in f else None
     if kind == "frequency":
         return f"We're with {f['talking to']}." if "talking to" in f else "We're not on an ATC frequency."
     if kind == "squawk":

@@ -2843,7 +2843,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     # --- pilot transmissions -----------------------------------------------------------------------
 
-    def _for_the_ramp(self, ev: Transcript) -> bool:
+    def for_the_ramp(self, ev: Transcript) -> bool:
         """Said on the ground crew's frequency, with no real controller on it: theirs (localtc.ground), not ATC's."""
         if self.ramp_mhz is None:
             return False
@@ -2852,7 +2852,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         return on_ramp(mhz, self.ramp_mhz) and self._facility_for(mhz) is None
 
     def _on_pilot(self, ev: Transcript) -> list[BusEvent]:
-        if self._for_the_ramp(ev):
+        if self.for_the_ramp(ev):
             return []
         self._answering = True  # whatever is scheduled now answers the pilot, and goes out even with the sim paused
         self._interp, self._not_used = None, []

@@ -313,6 +313,7 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
     from localtc.ground.crew import RampCrew, RampLink
     from localtc.ground.model import RampModel
     from localtc.ground.service import GroundService
+    from localtc.languages import language as crew_language
 
     g = cfg.ground
     kind = g.adapter
@@ -344,13 +345,15 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
                     gate=lambda: engine.gate_given() or "",
                     request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),
                     locale=lambda airport: accent(airport or engine.state.flight.origin), relay=relay)
-    crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, ramp_mhz=g.ramp_mhz, seed=int(time.time()) % 100000)
+    talked = crew_language(cfg.crew.language)  # the pilot's language: theirs too
+    crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, ramp_mhz=g.ramp_mhz, seed=int(time.time()) % 100000,
+                    language=talked.code if talked is not None else "")
     model = None
     if g.llm != "scripted" and getattr(backend, "rich", False):  # a cloud model only: without one, the grammar
         from localtc.llm.cloud import CloudBackend, Route
 
         model = RampModel(CloudBackend([Route(r.provider, r.model, r.key, json_mode=r.json_mode, dead=r.dead) for r in backend.routes]),
-                          g.llm, wait_s=cfg.cloud.timeout_s)
+                          g.llm, wait_s=cfg.cloud.timeout_s, language=talked.english if talked is not None else "")
     log.info("Ground crew: on %.3f, by %s, %s", g.ramp_mhz, adapter.name, "the cloud model too" if model else "the grammar", extra=CONSOLE)
     return GroundService(crew, adapter, bus, source, model=model, clock=source.clock.now, intercom=not cfg.crew.enabled)
 
@@ -629,10 +632,13 @@ async def run_session(
             if cfg.cabin.enabled:  # the cabin crew: the announcements, the service, "cabin, ..." on the intercom
                 from localtc.crew.cabin import CabinCrew
                 from localtc.crew.cabin_service import CabinService
+                from localtc.languages import language as crew_language
 
                 cabin = CabinCrew(cabin_settings(cfg), lambda: cabin_facts(engine, cfg), seed=int(time.time()) % 100000)
                 cabin.llm_mode = cfg.cabin.llm
                 cabin.backend = cabin_model(cfg, backend)  # in their own words: a cloud model only
+                if (spoken := crew_language(cfg.crew.language)) is not None:  # talking with the captain in the captain's language
+                    cabin.talks_in, cabin.language_name = spoken.code, spoken.english
                 cabin.model_wait_s = max(cfg.crew.timeout_s, cfg.cloud.timeout_s)
                 consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled,
                                                                   source=source).run()))

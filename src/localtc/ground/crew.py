@@ -18,6 +18,7 @@ from typing import Any
 
 from localtc.ground import grammar as g
 from localtc.ground.api import GroundState, Menu, Service
+from localtc.ground import words as foreign
 from localtc.ground.lines import SPOKEN, Words, spoken_list
 from localtc.ground.menu import Close, MenuRun, Open, Pick, Want, find, has_words, is_question, norm, real_entries, row_of
 from localtc.sim_api import OwnshipState, RampSpeech
@@ -77,12 +78,13 @@ class Push:
 
 class RampCrew:
     def __init__(self, link: RampLink | None = None, *, verbosity: str = "standard", wait_for_clearance: bool = True,
-                 ramp_mhz: float = RAMP_MHZ, seed: int = 0) -> None:
+                 ramp_mhz: float = RAMP_MHZ, seed: int = 0, language: str = "") -> None:
         self.link = link or RampLink()
         self.level = VERBOSITY.get(verbosity, ROUTINE)
         self.wait_for_clearance = wait_for_clearance
         self.ramp_mhz = ramp_mhz
-        self.words = Words(seed)
+        self.language = language  # [crew] language: what the pilot talks in ("" English)
+        self.words = Words(seed, language)
         self.seed = seed
         self.own: OwnshipState | None = None
         self.state = GroundState()
@@ -122,23 +124,48 @@ class RampCrew:
     def _speech(self, key: str, t: float, **values: str) -> RampSpeech:
         self._spoke_t = t
         return RampSpeech(t=t, text=self.words.line(key, **values), speaker="Ramp", channel="radio" if self.tuned else "interphone",
-                          sex="M" if self.seed % 2 else "F", locale=self.link.locale(self.state.airport))
+                          sex="M" if self.seed % 2 else "F", locale=self.link.locale(self.state.airport),
+                          language=self.language if self.words.in_language(key) else "")
+
+    def read(self, text: str) -> str:
+        """The pilot's words as the grammar reads them."""
+        return foreign.as_english(text, self.language)
+
+    def _name(self, service: str) -> str:
+        return foreign.NAMES.get(self.language, {}).get(service) or SPOKEN.get(service, service.lower())
+
+    def _names(self, names: list[str]) -> str:
+        joined = spoken_list(names)
+        word = foreign.AND.get(self.language)
+        return joined.replace(" and ", f" {word} ") if word else joined
+
+    def _said_direction(self, direction: str) -> str:
+        terms = foreign.TERMS.get(self.language)
+        return terms[(g.NOSE_LEFT, g.NOSE_RIGHT, g.STRAIGHT).index(direction)] if terms else SAID_DIRECTION[direction]
+
+    def _term(self, index: int, english: str) -> str:
+        terms = foreign.TERMS.get(self.language)
+        return terms[index] if terms else english
+
+    def _why(self, failed: str) -> str:
+        return foreign.WHY.get(self.language, {}).get(failed) or WHY.get(failed, "it didn't work.")
 
     def claims(self, text: str, t: float, to: str = "") -> bool:
         """Whether words on the intercom are for the ground crew: addressed to them, or the answer to what they just said.
         "Ground" alone stays ATC's: "ask ground for the push" is for the copilot."""
         if to == "cabin" or not text.strip():
             return False
-        if g.is_addressed(text):
+        said = self.read(text)
+        if g.is_addressed(said):
             return True
-        return t - self._spoke_t <= LISTENING_S and (self._offer is not None or self._asking is not None) and bool(g.parse(text))
+        return t - self._spoke_t <= LISTENING_S and (self._offer is not None or self._asking is not None) and bool(g.parse(said))
 
     # ---- the pilot -------------------------------------------------------------------------------------------------
 
     def heard(self, text: str, t: float) -> list[Any]:
         """The pilot's words (on the ramp's frequency, or claimed on the intercom)."""
         self._t = t
-        asks = g.parse(text)
+        asks = g.parse(self.read(text))
         if not asks:
             if (said := self._by_label(text, t)) is not None:
                 return said
@@ -208,16 +235,16 @@ class RampCrew:
             else:
                 svc = self._service(service)
                 if svc is None:
-                    out.append(self._speech("no_gsx" if not self.state.services else "not_here", t, name=SPOKEN[service]))
+                    out.append(self._speech("no_gsx" if not self.state.services else "not_here", t, name=self._name(service)))
                 elif svc.active or service in self._queue or self._bridge.get(service) is True:
-                    out.append(self._speech("already", t, name=SPOKEN[service]))
+                    out.append(self._speech("already", t, name=self._name(service)))
                 elif svc.state == "unavailable" or (not svc.can_trigger and svc.state != "completed"):
-                    out.append(self._speech("not_here", t, name=SPOKEN[service]))
+                    out.append(self._speech("not_here", t, name=self._name(service)))
                 else:
                     self._queue.append(service)
-                    coming.append(SPOKEN[service])
+                    coming.append(self._name(service))
         if coming:
-            out.insert(0, self._speech("ack", t, list=spoken_list(coming)))
+            out.insert(0, self._speech("ack", t, list=self._names(coming)))
         return out
 
     def _refused(self, service: str, t: float) -> RampSpeech | None:
@@ -234,14 +261,14 @@ class RampCrew:
         """Boarding and deboarding: the cabin crew's. The ramp starts GSX's side and they tell the captain about it."""
         svc = self._service(service)
         if svc is None:
-            return [self._speech("no_gsx" if not self.state.services else "not_here", t, name=SPOKEN[service])]
+            return [self._speech("no_gsx" if not self.state.services else "not_here", t, name=self._name(service))]
         if svc.active or service in self._queue:
-            return [self._speech("already", t, name=SPOKEN[service])]
+            return [self._speech("already", t, name=self._name(service))]
         self._queue.append(service)
         said = self.link.relay("boarding_start" if service == "Boarding" else "deboarding_start", t)
         if said is not None:
             return [self._speech("relay_boarding", t), *said]
-        return [self._speech("ack", t, list=SPOKEN[service])]
+        return [self._speech("ack", t, list=self._name(service))]
 
     def called_by_cabin(self, service: str, t: float) -> bool:
         """The cabin crew told to start boarding or deboarding: called without a word from the ramp. False: it can't be."""
@@ -265,7 +292,7 @@ class RampCrew:
             parts = []
             for s in named:
                 svc = services.get(s)
-                parts.append(self._said_status(svc, s) if svc is not None else f"I've got nothing on {SPOKEN[s]}.")
+                parts.append(self._said_status(svc, s) if svc is not None else f"{self._name(s)}: {self._term(5, 'not called')}.")
             return [self._speech("status", t, report=" ".join(parts))]
         active = [s for s in services.values() if s.active and not s.waiting]
         waiting = [s for s in services.values() if s.active and s.waiting]
@@ -274,62 +301,61 @@ class RampCrew:
             return [self._speech("status_none", t)]
         parts = [self._said_status(s, s.id) for s in active + waiting]
         if self._queue:
-            parts.append(f"Still to call: {spoken_list([SPOKEN[s] for s in self._queue])}.")
+            parts.append(f"{self._term(3, 'Still to call')}: {self._names([self._name(s) for s in self._queue])}.")
         if done:
-            parts.append(f"Done: {spoken_list([SPOKEN.get(s, s) for s in done])}.")
+            parts.append(f"{self._term(4, 'Done')}: {self._names([self._name(s) for s in done])}.")
         return [self._speech("status", t, report=" ".join(parts))]
 
-    @staticmethod
-    def _said_status(svc: Service, service: str) -> str:
-        name = SPOKEN.get(service, svc.name)
+    def _said_status(self, svc: Service, service: str) -> str:
+        name = self._name(service)
         name = name[0].upper() + name[1:]
         first = next((line.strip() for line in svc.status.splitlines() if line.strip()), "")
         if svc.progress and first:
             first = f"{first}, {svc.progress}"
         if svc.state == "completed":
-            return f"{name}: done."
+            return f"{name}: {self._term(6, 'done')}."
         if not svc.active:
-            return f"{name}: not called."
+            return f"{name}: {self._term(5, 'not called')}."
         return f"{name}: {first}." if first else f"{name}: {svc.state}."
 
     def _cancel(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
         if service in self._queue:
             self._queue.remove(service)
-            return [self._speech("cancelled", t, name=SPOKEN[service])]
+            return [self._speech("cancelled", t, name=self._name(service))]
         if service == "Departure" and self._push is not None and self._push.stage == "armed":
             self._push = None
-            return [self._speech("cancelled", t, name=SPOKEN[service])]
+            return [self._speech("cancelled", t, name=self._name(service))]
         if svc is None or not svc.active:
-            return [self._speech("cancel_nothing", t, name=SPOKEN[service])]
+            return [self._speech("cancel_nothing", t, name=self._name(service))]
         self._cancelled.add(service)
         return self._start_run((row_of(service), Want(("abort service", "abort"))), "cancel", service, t)
 
     def _finish(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
         if svc is None or not svc.active:
-            return [self._speech("cancel_nothing", t, name=SPOKEN[service])]
+            return [self._speech("cancel_nothing", t, name=self._name(service))]
         self._cancelled.add(service)  # (its own "done" isn't said as well)
         return self._start_run((row_of(service), Want(("complete now",))), "finish", service, t)
 
     def _hurry(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
         if svc is None or not svc.active:
-            return [self._speech("cancel_nothing", t, name=SPOKEN[service])]
+            return [self._speech("cancel_nothing", t, name=self._name(service))]
         self._offer = ("finish", service)
-        return [self._speech("cant_hurry", t, name=SPOKEN[service])]
+        return [self._speech("cant_hurry", t, name=self._name(service))]
 
     def _off(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
         if service in ("OperateJetways", "OperateStairs"):
             if service in self._queue:
-                return [self._speech("already", t, name=SPOKEN[service])]
+                return [self._speech("already", t, name=self._name(service))]
             if self._bridge.get(service) is False:
-                return [self._speech("off_nothing", t, name=SPOKEN[service])]
+                return [self._speech("off_nothing", t, name=self._name(service))]
             self._queue.append(service)  # (the same call moves them either way)
-            return [self._speech("off", t, name=SPOKEN[service])]
+            return [self._speech("off", t, name=self._name(service))]
         if svc is None or not svc.active:
-            return [self._speech("off_nothing", t, name=SPOKEN[service])]
+            return [self._speech("off_nothing", t, name=self._name(service))]
         self._cancelled.add(service)
         return self._start_run((Want(("dismiss " + (SPOKEN_ROW.get(service, service.lower())),), service == "GPU" or service in ("Water", "Lavatory")),), "off", service, t)
 
@@ -389,7 +415,7 @@ class RampCrew:
                 return said
             if direction and not self._push.direction:
                 self._push.direction = direction
-                return [self._speech("direction", t, direction=SAID_DIRECTION[direction])]
+                return [self._speech("direction", t, direction=self._said_direction(direction))]
             return [self._speech("push_under_way", t)]
         svc = self._service("Departure")
         if svc is not None and svc.active:
@@ -405,11 +431,11 @@ class RampCrew:
         running = [s for s in self.state.services.values() if s.active and s.id not in ("Departure",)]
         if running:
             self._offer = ("push", direction)
-            return [self._speech("warn_push", t, list=spoken_list([SPOKEN.get(s.id, s.name) for s in running]))]
+            return [self._speech("warn_push", t, list=self._names([self._name(s.id) for s in running]))]
         return self._begin_or_arm(direction, t)
 
     def _begin_or_arm(self, direction: str, t: float) -> list[Any]:
-        said = [self._speech("direction", t, direction=SAID_DIRECTION[direction])] if direction else []
+        said = [self._speech("direction", t, direction=self._said_direction(direction))] if direction else []
         self._push = Push(direction=direction, t=t)
         if self.wait_for_clearance and self.link.atc_working() and not self.link.pushback_cleared():
             return [*said, self._speech("armed", t)]
@@ -577,13 +603,13 @@ class RampCrew:
         wanted = push.direction if push is not None else ""
         if wanted and rows[wanted].index is not None:
             return [Pick(rows[wanted].index, menu.entries[rows[wanted].index])]
-        available = [SAID_DIRECTION[d].split(",")[0] for d, f in rows.items() if f.index is not None]
+        available = [self._said_direction(d).replace("，", ",").split(",")[0] for d, f in rows.items() if f.index is not None]
         self._asking = menu
         if push is not None:
             push.stage = "asked"
         if wanted:
-            return [self._speech("no_direction", t, direction=SAID_DIRECTION[wanted], choices=spoken_list(available))]
-        return [self._speech("ask_direction", t, choices=spoken_list(available))]
+            return [self._speech("no_direction", t, direction=self._said_direction(wanted), choices=self._names(available))]
+        return [self._speech("ask_direction", t, choices=self._names(available))]
 
     def _direction_given(self, direction: str, t: float) -> list[Any]:
         """The pilot's answer to which way: the row picked now, while the question's up."""
@@ -593,7 +619,7 @@ class RampCrew:
         if menu is not None and (found := find(menu, DIRECTIONS[direction])).index is not None:
             self._asking = None
             self._seen_question = None
-            return [Pick(found.index, menu.entries[found.index]), self._speech("direction", t, direction=SAID_DIRECTION[direction])]
+            return [Pick(found.index, menu.entries[found.index]), self._speech("direction", t, direction=self._said_direction(direction))]
         return []
 
     # ---- the menu --------------------------------------------------------------------------------------------------
@@ -612,11 +638,11 @@ class RampCrew:
         if run.finished:
             self._run = None
             kind, service = self._run_after or ("", "")
-            name = SPOKEN.get(service, service.lower())
+            name = self._name(service)
             if run.failed:
                 self._cancelled.discard(service)
                 out.append(self._speech({"cancel": "cancel_failed", "finish": "finish_failed", "off": "off_failed"}.get(kind, "menu_failed"),
-                                        t, name=name, why=WHY.get(run.failed, "it didn't work.")))
+                                        t, name=name, why=self._why(run.failed)))
             else:
                 out.append(self._speech({"cancel": "cancelled", "finish": "finished", "off": "off"}[kind], t, name=name))
         return out
@@ -677,7 +703,8 @@ class RampCrew:
         values = {}
         if service == "Refueling":
             fuel = self.own.fuel_lb if self.own is not None else None
-            values["fuel"] = f", {int(round(fuel, -1)):,} pounds on board" if fuel else ""
+            amount = f"{int(round(fuel, -1)):,}" if fuel else ""
+            values["fuel"] = "" if not fuel else foreign.FUEL_ON_BOARD[self.language].format(x=amount) if self.language in foreign.FUEL_ON_BOARD else f", {amount} pounds on board"
         self._calls.append((t, ROUTINE if service != "Departure" else CHATTER, f"done_{service}", values))
         return []
 
@@ -703,7 +730,7 @@ class RampCrew:
         """GSX refused the call, or wasn't there to take it."""
         self._sending = None
         self._ours.pop(service, None)
-        return [self._speech("no_gsx" if code in ("not_connected", "gsx_not_running") else "no_take", t, name=SPOKEN.get(service, service))]
+        return [self._speech("no_gsx" if code in ("not_connected", "gsx_not_running") else "no_take", t, name=self._name(service))]
 
     def tick(self, t: float) -> list[Any]:
         """A moment passing: the next service called, the menu driven, the push followed, the crew's own calls."""
@@ -728,7 +755,7 @@ class RampCrew:
                 self._sending = None
                 self._ours.pop(service, None)
                 out: list[Any] = [Close()] if self.state.menu is not None else []
-                return [*out, self._speech("no_take", t, name=SPOKEN.get(service, service))]
+                return [*out, self._speech("no_take", t, name=self._name(service))]
             else:
                 return []
         if self._run is not None or not self._queue or (self.state.menu is not None and is_question(self.state.menu)):

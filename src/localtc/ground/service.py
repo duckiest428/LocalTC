@@ -116,7 +116,7 @@ class GroundService:
 
         model = self.model
         crew = self.crew
-        asks = grammar.parse(text)
+        asks = grammar.parse(crew.read(text))
         if model is None or not model.reads or (asks and model.mode != "llm"):
             return crew.heard(text, t)
         read, records = await asyncio.to_thread(model.read, text, self._situation(), t)

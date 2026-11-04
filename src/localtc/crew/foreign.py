@@ -12,7 +12,9 @@ the language model reads the words as they were), so a command is never made of 
 """
 
 import re
-import unicodedata
+
+from localtc import spoken_numbers
+from localtc.spoken_numbers import plain as _plain, whole_numbers, zh_value, zh_whole_numbers
 
 # --- what each language says ------------------------------------------------------------------------------------------
 # Concepts, each with its words in every language (accents don't matter: they're taken off before matching). English
@@ -91,12 +93,12 @@ WORDS: dict[str, dict[str, str]] = {
         "SPOILERS": "spoiler|bremsklappen|die spoiler|die bremsklappen",
         "PARKING_BRAKE": "parkbremse|feststellbremse|die parkbremse",
         "HEADING": "kurs|steuerkurs",
-        "ALTITUDE": "hohe|flughohe",
-        "SPEED": "geschwindigkeit|fahrt",
+        "ALTITUDE": "wie hoch|hohe|flughohe",
+        "SPEED": "wie schnell|geschwindigkeit|fahrt",
         "SQUAWK": "transpondercode|transponder|squawk",
         "CHECKLIST": "checkliste|die checkliste|checklisten",
-        "ON": "an|ein|einschalten|anschalten|anmachen|schalte an|mach an",
-        "OFF": "aus|ausschalten|ausmachen|abschalten|losen|lose",
+        "ON": "setzen|setze|setz|an|ein|einschalten|anschalten|anmachen|schalte an|mach an",
+        "OFF": "aufheben|heb auf|aus|ausschalten|ausmachen|abschalten|losen|lose",
         "UP": "einfahren|hoch|rauf|rein",
         "DOWN": "ausfahren|runter|raus",
         "ARM": "scharf|scharf machen|scharfschalten|armieren|armed",
@@ -117,7 +119,7 @@ WORDS: dict[str, dict[str, str]] = {
         "APPROACH": "anflug|approach",
         "LANDING": "landung|landing|lande",
         "AFTER_LANDING": "nach der landung|after landing",
-        "SHUTDOWN": "abstellen|shutdown|parken",
+        "SHUTDOWN": "motoren aus|abstellen|shutdown|parken",
         "TAXI": "rollen|taxi",
         "FUEL": "treibstoff|sprit|kraftstoff|fuel|kerosin",
         "ATC": "flugsicherung|lotse|der lotse|die flugsicherung|turm|tower|atc|kontrolle",
@@ -125,7 +127,10 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "wetter|das wetter|metar",
         "DESTINATION": "ziel|zielflughafen|am ziel",
         "HOW_LONG": "wie lange|wann landen wir|wann sind wir da|restflugzeit",
-        "FILLER": "bitte|mal|mach|mache|lass|lasst|lass mal|die|der|das|den|dem|und|dann|jetzt|setzen|setze|setz|schalte|fahre|fahr|"
+        "FEET": "fuss",
+        "KNOTS": "knoten",
+        "FLIGHT_LEVEL": "flugflache|flugflaeche|flugflachen|flight level",
+        "FILLER": "steigen|steige|steigflug|sinken|sinke|auf|bitte mal|unsere|unser|welche|welchen|welcher|haben|sind|am|an bord|noch|wieviel|wie viel|ist|hat|sagte|bitte|mal|mach|mache|lass|lasst|lass mal|die|der|das|den|dem|und|dann|jetzt|setzen|setze|setz|schalte|fahre|fahr|"
                   "kannst du|konntest du|wurdest du|lass uns|machen|bitte schon|danke|kapitan|ok|okay|in ordnung|fur|"
                   "auf|zu|uns|wir|sie|es|noch|gleich|schon|wieder|durchgehen|durch|ausfuhren",
     },
@@ -146,13 +151,13 @@ WORDS: dict[str, dict[str, str]] = {
         "AUTOPILOT": "pilote automatique|le pilote automatique|autopilote",
         "SPOILERS": "spoilers|aerofreins|les spoilers|les aerofreins",
         "PARKING_BRAKE": "frein de parking|frein de stationnement|le frein de parking",
-        "HEADING": "cap|le cap",
-        "ALTITUDE": "altitude|l'altitude",
-        "SPEED": "vitesse|la vitesse",
+        "HEADING": "quel cap|cap|le cap",
+        "ALTITUDE": "a quelle altitude|quelle altitude|altitude|l'altitude",
+        "SPEED": "quelle vitesse|vitesse|la vitesse",
         "SQUAWK": "transpondeur|code transpondeur|squawk",
         "CHECKLIST": "checklist|check-list|liste de verification|la checklist|la check-list",
-        "ON": "allume|allumer|active|activer|mets en marche|on",
-        "OFF": "eteins|eteindre|coupe|couper|desactive|desactiver|off",
+        "ON": "mets|allumes|allumee|allumees|allume|mis|serre|serrer|enclenche|enclencher|allume|allumer|active|activer|mets en marche|on",
+        "OFF": "desserre|desserrer|relache|relacher|eteints|eteint|desactive|coupes|coupe|eteins|eteindre|coupe|couper|desactive|desactiver|off",
         "UP": "rentre|rentrer|remonte|monte|relever|releve",
         "DOWN": "sors|sortir|sortez|sorti|sortie|descends|descendre|baisse|baisser",
         "ARM": "arme|armer|armés|armes",
@@ -174,8 +179,11 @@ WORDS: dict[str, dict[str, str]] = {
         "SAID": "dit|a dit|dire",
         "WEATHER": "meteo|la meteo|temps|metar",
         "DESTINATION": "destination|a destination|l'arrivee|arrivee",
-        "HOW_LONG": "combien de temps|quand atterrissons nous|quand est ce qu'on atterrit|temps restant",
-        "FILLER": "s'il te plait|s'il vous plait|stp|svp|le|la|les|l'|de|du|des|et|puis|maintenant|mets|mettre|"
+        "HOW_LONG": "combien de temps reste t il|on arrive quand|arrive quand|arrivons nous quand|il reste combien de temps|combien de temps|quand atterrissons nous|quand est ce qu'on atterrit|temps restant",
+        "FEET": "pieds|pied",
+        "KNOTS": "noeuds|noeud",
+        "FLIGHT_LEVEL": "niveau de vol|niveau|flight level",
+        "FILLER": "quel|quelle|est|notre|nos|nous|avons|reste|il|qu est ce que|qu est ce|est ce que|a|avons nous|t il|on est|sommes nous|s'il te plait|s'il vous plait|stp|svp|le|la|les|l'|de|du|des|et|puis|maintenant|mets|mettre|"
                   "peux tu|pourrais tu|tu peux|on|nous|merci|commandant|ok|bon|alors|fais|faire|lance la|en|au|a",
     },
     "es": {
@@ -205,11 +213,13 @@ WORDS: dict[str, dict[str, str]] = {
         "SQUAWK": "transpondedor|codigo|squawk",
         "CHECKLIST": "checklist|lista de chequeo|lista de comprobacion|lista de verificacion|la checklist|la lista",
         "CHECKLIST+DESCENT": "lista de descenso",
+        "CHECKLIST+AFTER_LANDING": "lista despues del aterrizaje",
+        "CHECKLIST+COMPLETE": "lista completada|lista completa|lista terminada",
         "CHECKLIST+APPROACH": "lista de aproximacion",
         "CHECKLIST+LANDING": "lista de aterrizaje",
         "ON": "enciende|encender|activa|activar|prende|prender|conecta|conectar|on|pon|poner|puesto|encendido|encendida|"
               "encendidos|encendidas|activado|conectado",
-        "OFF": "apaga|apagar|desactiva|desactivar|desconecta|desconectar|off|quita|quitar|suelta|soltar|libera|liberar|"
+        "OFF": "suelte|quite|apaga|apagar|desactiva|desactivar|desconecta|desconectar|off|quita|quitar|suelta|soltar|libera|liberar|"
                "apagada|apagados|apagadas|desconectado",
         "UP": "sube|subir|retrae|retraer|recoge|recoger|arriba",
         "DOWN": "baja|bajar|extiende|extender|saca|sacar|abajo",
@@ -232,8 +242,8 @@ WORDS: dict[str, dict[str, str]] = {
         "SAID": "dijo|dicho|decir|ha dicho",
         "WEATHER": "tiempo|el tiempo|meteo|clima|metar",
         "DESTINATION": "destino|en destino|el destino",
-        "HOW_LONG": "cuanto falta|cuanto queda|cuanto nos queda|cuanto tiempo|cuando aterrizamos|tiempo restante",
-        "FILLER": "por favor|el|la|los|las|y|luego|ahora|pon|poner|puedes|podrias|nos|gracias|capitan|vale|bueno|"
+        "HOW_LONG": "cuanto queda|cuanto falta|cuanto falta|cuanto queda|cuanto nos queda|cuanto tiempo|cuando aterrizamos|tiempo restante",
+        "FILLER": "un|una|nuestro|nuestra|estamos|llevamos|tenemos|hace|ha|que|cual|es|tenemos|a que|por favor|el|la|los|las|y|luego|ahora|pon|poner|puedes|podrias|nos|gracias|capitan|vale|bueno|"
                   "de|del|al|a|haz|hacer|vamos|con|en",
     },
     "it": {
@@ -253,17 +263,17 @@ WORDS: dict[str, dict[str, str]] = {
         "AUTOPILOT": "pilota automatico|il pilota automatico|autopilota",
         "SPOILERS": "spoiler|diruttori|aerofreni|gli spoiler",
         "PARKING_BRAKE": "freno di parcheggio|freno di stazionamento|il freno di parcheggio",
-        "HEADING": "prua|direzione|heading",
-        "ALTITUDE": "altitudine|quota|la quota",
-        "SPEED": "velocita|la velocita",
+        "HEADING": "che prua|quale prua|prua|direzione|heading",
+        "ALTITUDE": "a che quota|che quota|altitudine|quota|la quota",
+        "SPEED": "a che velocita|che velocita|velocita|la velocita",
         "SQUAWK": "transponder|codice|squawk",
         "CHECKLIST": "checklist|lista di controllo|la checklist",
-        "ON": "accendi|accendere|attiva|attivare|inserisci|inserire|on",
-        "OFF": "spegni|spegnere|disattiva|disattivare|disinserisci|disinserire|stacca|staccare|off",
-        "UP": "su|retrai|retrarre|alza|alzare|ritira|ritirare",
-        "DOWN": "giu|estendi|estendere|abbassa|abbassare|fuori",
+        "ON": "accese|accesi|acceso|accesa|inserito|inserita|attivato|attivata|accendi|accendere|attiva|attivare|inserisci|inserire|on",
+        "OFF": "spente|spenti|spento|spenta|rilascia|rilasciare|togli|togliere|disinserito|spegni|spegnere|disattiva|disattivare|disinserisci|disinserire|stacca|staccare|off",
+        "UP": "sali|salire|retratto|su|retrai|retrarre|alza|alzare|ritira|ritirare",
+        "DOWN": "scendi|scendere|fuori il|abbassato|giu|estendi|estendere|abbassa|abbassare|fuori",
         "ARM": "arma|armare|armati",
-        "START": "avvia|avviare|accendi l",
+        "START": "avvia l|avvia la|avvia|avviare|accendi l",
         "FULL": "tutti|full|completi",
         "COMPLETE": "completata|completa|finita|terminata",
         "BEFORE_START": "prima dell'avviamento|prima dell avviamento|before start",
@@ -282,7 +292,10 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "meteo|tempo|il tempo|metar",
         "DESTINATION": "destinazione|a destinazione",
         "HOW_LONG": "quanto manca|quanto tempo|quando atterriamo|tempo rimanente",
-        "FILLER": "per favore|il|lo|la|i|gli|le|e|poi|ora|adesso|metti|mettere|puoi|potresti|ci|grazie|comandante|"
+        "FEET": "piedi|piede",
+        "KNOTS": "nodi|nodo",
+        "FLIGHT_LEVEL": "livello di volo|livello|flight level",
+        "FILLER": "siamo|abbiamo|che|a|la nostra|nostra|nostro|qual e|quale|ha|fa|l|la|per favore|dell|per favore|il|lo|la|i|gli|le|e|poi|ora|adesso|metti|mettere|puoi|potresti|ci|grazie|comandante|"
                   "bene|allora|di|del|della|fai|fare|facciamo|a|al",
     },
     "pt": {
@@ -298,18 +311,18 @@ WORDS: dict[str, dict[str, str]] = {
         "BEACON": "beacon|luz anticolisao",
         "NAV_LIGHTS": "luzes de navegacao|as luzes de navegacao",
         "LOGO_LIGHTS": "luzes do logo|luz do logo",
-        "SEATBELT": "sinal de cintos|cintos|os cintos|aviso de cintos",
+        "SEATBELT": "sinal de cintos|sinal dos cintos|sinal de cintos|cintos|os cintos|aviso de cintos",
         "AUTOPILOT": "piloto automatico|o piloto automatico|autopiloto",
         "SPOILERS": "spoilers|freios aerodinamicos|os spoilers",
-        "PARKING_BRAKE": "travao de estacionamento|freio de estacionamento|travão de parque|freio de mao",
-        "HEADING": "rumo|proa|o rumo",
-        "ALTITUDE": "altitude|a altitude",
+        "PARKING_BRAKE": "freio de estacionamento|o travao de estacionamento|o freio de estacionamento|travao de estacionamento|freio de estacionamento|travão de parque|freio de mao",
+        "HEADING": "qual o rumo|qual e o nosso rumo|rumo|proa|o rumo",
+        "ALTITUDE": "a que altitude|que altitude|altitude|a altitude",
         "SPEED": "velocidade|a velocidade",
         "SQUAWK": "transponder|codigo|squawk",
         "CHECKLIST": "checklist|lista de verificacao|a checklist|a lista",
-        "ON": "liga|ligar|acende|acender|ativa|ativar|on",
-        "OFF": "desliga|desligar|apaga|apagar|desativa|desativar|off",
-        "UP": "sobe|subir|recolhe|recolher|em cima",
+        "ON": "ligadas|ligados|ligada|ligado|acesas|acesos|ativado|ativada|poe|por|liga|ligar|acende|acender|ativa|ativar|on",
+        "OFF": "solta|soltar|tira|tirar|desligadas|desligados|desligada|desligado|apagadas|desliga|desligar|apaga|apagar|desativa|desativar|off",
+        "UP": "em cima|recolhido|sobe|subir|recolhe|recolher|em cima",
         "DOWN": "baixa|baixar|desce|descer|estende|estender|em baixo|ca fora|fora",
         "ARM": "arma|armar|armados",
         "START": "arranca|arrancar|liga a|ligar a",
@@ -331,7 +344,10 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "tempo|meteorologia|o tempo|metar",
         "DESTINATION": "destino|no destino",
         "HOW_LONG": "quanto falta|quanto tempo|quando aterramos|quando pousamos",
-        "FILLER": "por favor|o|a|os|as|e|depois|agora|poe|põe|pode|podes|nos|obrigado|comandante|bem|entao|de|"
+        "FEET": "pes|pe",
+        "KNOTS": "nos|no",
+        "FLIGHT_LEVEL": "nivel de voo|nivel|flight level",
+        "FILLER": "estamos|temos|qual|e|nosso|nossa|a nossa|o nosso|o|a|que|para|esta|disse|dos|das|o que|tem|por favor|o|a|os|as|e|depois|agora|poe|põe|pode|podes|nos|obrigado|comandante|bem|entao|de|"
                   "do|da|faz|fazer|vamos|em|no|na",
     },
     "nl": {
@@ -352,14 +368,14 @@ WORDS: dict[str, dict[str, str]] = {
         "SPOILERS": "spoilers|luchtremmen|de spoilers",
         "PARKING_BRAKE": "parkeerrem|de parkeerrem|handrem",
         "HEADING": "koers|de koers",
-        "ALTITUDE": "hoogte|de hoogte",
-        "SPEED": "snelheid|de snelheid",
+        "ALTITUDE": "hoe hoog|hoogte|de hoogte",
+        "SPEED": "hoe snel|snelheid|de snelheid",
         "SQUAWK": "transponder|transpondercode|squawk",
         "CHECKLIST": "checklist|controlelijst|de checklist",
-        "ON": "aan|inschakelen|aanzetten|zet aan",
-        "OFF": "uit|uitschakelen|uitzetten|zet uit",
-        "UP": "op|omhoog|intrekken|in",
-        "DOWN": "neer|omlaag|uitklappen|uitschuiven|naar beneden",
+        "ON": "zet aan|aangezet|ingeschakeld|aan|inschakelen|aanzetten|zet aan",
+        "OFF": "los|eraf|losmaken|uitgeschakeld|uit|uitschakelen|uitzetten|zet uit",
+        "UP": "klim|op|omhoog|intrekken|in",
+        "DOWN": "neer|omlaag|uit|neer|omlaag|uitklappen|uitschuiven|naar beneden",
         "ARM": "armen|bewapenen|gearmd",
         "START": "starten|start de",
         "FULL": "vol|volledig",
@@ -382,13 +398,16 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "weer|het weer|metar",
         "DESTINATION": "bestemming|op de bestemming",
         "HOW_LONG": "hoe lang nog|hoelang nog|wanneer landen we|resterende tijd",
-        "FILLER": "alsjeblieft|alstublieft|graag|de|het|en|dan|nu|zet|doe|kun je|kan je|kunt u|we|ons|"
+        "FEET": "voet",
+        "KNOTS": "knopen|knoop",
+        "FLIGHT_LEVEL": "vliegniveau|vlieghoogte|flight level",
+        "FILLER": "klim|klimmen|naar|zitten|gaan|hebben|wat|is|onze|ons|op|zei|heeft|we|hoeveel|alsjeblieft|alstublieft|graag|de|het|en|dan|nu|zet|doe|kun je|kan je|kunt u|we|ons|"
                   "bedankt|dank je|gezagvoerder|oke|goed|nou|maar|even|naar|met",
     },
     "pl": {
         "YES": "tak|potwierdzam|potwierdzone|zgadza sie|dobrze|zrob to|jasne|ok|okej",
         "NO": "nie|negatyw|negatywnie",
-        "CANCEL": "anuluj|odwolaj|zostaw|nie rob|stop",
+        "CANCEL": "anuluj|odwolaj|zostaw|nie rob",
         "CHECK": "sprawdzone|zrobione|gotowe",
         "GEAR": "podwozie|podwozia|kola",
         "FLAPS": "klapy|klap|flapy",
@@ -398,19 +417,19 @@ WORDS: dict[str, dict[str, str]] = {
         "BEACON": "beacon|swiatlo antykolizyjne",
         "NAV_LIGHTS": "swiatla nawigacyjne",
         "LOGO_LIGHTS": "swiatla logo|podswietlenie logo",
-        "SEATBELT": "znak zapiecia pasow|pasy|zapiac pasy|zapiecie pasow",
+        "SEATBELT": "pasow|pasy|znak zapiecia pasow|pasy|zapiac pasy|zapiecie pasow",
         "AUTOPILOT": "autopilot|autopilota",
         "SPOILERS": "spojlery|spoilery|hamulce aerodynamiczne",
         "PARKING_BRAKE": "hamulec postojowy|hamulec parkingowy|reczny",
         "HEADING": "kurs|kursu",
-        "ALTITUDE": "wysokosc|wysokosci",
+        "ALTITUDE": "jakiej wysokosci|wysokosc|wysokosc|wysokosci",
         "SPEED": "predkosc|predkosci",
         "SQUAWK": "transponder|kod transpondera|squawk",
         "CHECKLIST": "checklista|checkliste|liste kontrolna|lista kontrolna|checklist",
-        "ON": "wlacz|wlaczyc|zapal|zapalic|on",
-        "OFF": "wylacz|wylaczyc|zgas|zgasic|off",
-        "UP": "schowaj|schowac|w gore|podnies|podniesc",
-        "DOWN": "wypusc|wypuscic|opusc|opuscic|w dol|wysun|wysunac",
+        "ON": "wlaczone|wlaczony|wlaczona|zaciagnij|zaciagnac|wlacz|wlaczyc|zapal|zapalic|on",
+        "OFF": "zwolnij|zwolnic|pusc|wylaczone|wylaczony|wylacz|wylaczyc|zgas|zgasic|off",
+        "UP": "wznos|wznos sie|wznies|schowaj|schowac|w gore|podnies|podniesc",
+        "DOWN": "wypuszczone|wypuszczony|wypusc|wypuscic|opusc|opuscic|w dol|wysun|wysunac",
         "ARM": "uzbroj|uzbroic|uzbrojone",
         "START": "uruchom|uruchomic|odpal|odpalic",
         "FULL": "pelne|full|calkowicie",
@@ -426,12 +445,15 @@ WORDS: dict[str, dict[str, str]] = {
         "SHUTDOWN": "wylaczenie|postoj|shutdown",
         "TAXI": "kolowanie|kolowania",
         "FUEL": "paliwo|paliwa|fuel",
-        "ATC": "kontrola|kontroler|wieza|atc|kontroli",
-        "SAID": "powiedzial|powiedziala|mowil|mowila",
+        "ATC": "wieza|wiezy|kontrola|kontroler|wieza|atc|kontroli",
+        "SAID": "powiedziala|powiedzial|powiedzial|powiedziala|mowil|mowila",
         "WEATHER": "pogoda|pogode|pogody|metar",
-        "DESTINATION": "cel|celu|lotnisko docelowe|na miejscu",
+        "DESTINATION": "lotnisku docelowym|lotnisko docelowe|cel|celu|lotnisko docelowe|na miejscu",
         "HOW_LONG": "ile jeszcze|jak dlugo|kiedy ladujemy|pozostaly czas",
-        "FILLER": "prosze|i|a|potem|teraz|ustaw|daj|mozesz|czy mozesz|nam|dzieki|dziekuje|kapitanie|dobra|no|"
+        "FEET": "stop|stopy|stopach",
+        "KNOTS": "wezlow|wezly|wezel",
+        "FLIGHT_LEVEL": "poziom lotu|poziom|flight level",
+        "FILLER": "jestesmy|mamy|jaka|jaki|jest|nasza|nasz|na|nad|sie|prosze|ile|co|ma|powiedziala|prosze|i|a|potem|teraz|ustaw|daj|mozesz|czy mozesz|nam|dzieki|dziekuje|kapitanie|dobra|no|"
                   "to|zrob|przeprowadz|na|do|z",
     },
     "sv": {
@@ -439,7 +461,7 @@ WORDS: dict[str, dict[str, str]] = {
         "NO": "nej|negativt|nae",
         "CANCEL": "avbryt|glom det|strunta i det|stopp",
         "CHECK": "kontrollerat|klart|check",
-        "GEAR": "stall|stallet|landstall|landstallet|hjul|hjulen",
+        "GEAR": "stallet|landstall|stall|stallet|landstall|landstallet|hjul|hjulen",
         "FLAPS": "klaff|klaffar|klaffarna|flaps",
         "LANDING_LIGHTS": "landningsljus|landningsljusen",
         "TAXI_LIGHTS": "taxiljus|taxiljusen",
@@ -447,7 +469,7 @@ WORDS: dict[str, dict[str, str]] = {
         "BEACON": "beacon|antikollisionsljus",
         "NAV_LIGHTS": "navigationsljus|navigationsljusen|positionsljus",
         "LOGO_LIGHTS": "logoljus|logoljuset",
-        "SEATBELT": "baltesskylt|baltesskylten|baltena|baltesskyltarna",
+        "SEATBELT": "baltesskylten|baltesskylt|baltesskylt|baltesskylten|baltena|baltesskyltarna",
         "AUTOPILOT": "autopilot|autopiloten",
         "SPOILERS": "spoilers|luftbromsar|spoilrarna",
         "PARKING_BRAKE": "parkeringsbroms|parkeringsbromsen",
@@ -456,10 +478,10 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "fart|hastighet|farten",
         "SQUAWK": "transponder|transponderkod|squawk",
         "CHECKLIST": "checklista|checklistan|checklist",
-        "ON": "pa|tand|sla pa|satt pa|koppla in",
-        "OFF": "av|slack|sla av|stang av|koppla ur|koppla bort",
-        "UP": "upp|in|fall in",
-        "DOWN": "ner|ned|ut|fall ut",
+        "ON": "satt|sla pa|pa|tand|sla pa|satt pa|koppla in",
+        "OFF": "slapp|slappa|av|slack|sla av|stang av|koppla ur|koppla bort",
+        "UP": "fall in|fall upp|upp|in|fall in",
+        "DOWN": "fall ut|ner|ned|ut|fall ut",
         "ARM": "arma|armera|armerade",
         "START": "starta|starta upp",
         "FULL": "full|fullt|alla",
@@ -481,8 +503,11 @@ WORDS: dict[str, dict[str, str]] = {
         "SAID": "sa|sagt|sade",
         "WEATHER": "vader|vadret|metar",
         "DESTINATION": "destination|destinationen|framme",
-        "HOW_LONG": "hur lange|nar landar vi|hur lang tid",
-        "FILLER": "tack|snalla|och|sedan|nu|satt|kan du|vi|oss|kapten|bra|da|den|det|gor|kor|till|med",
+        "HOW_LONG": "hur lange till|hur lange kvar|hur lange|nar landar vi|hur lang tid",
+        "FEET": "fot",
+        "KNOTS": "knop",
+        "FLIGHT_LEVEL": "flygniva|flight level",
+        "FILLER": "stig|sjunk|vilken|vilket|har|vi|ar|pa|hur|mycket|till|sa|tack|snalla|och|sedan|nu|satt|kan du|vi|oss|kapten|bra|da|den|det|gor|kor|till|med",
     },
     "ru": {
         "YES": "да|подтверждаю|подтверждено|верно|так точно|правильно|давай|делай|хорошо|ок|окей",
@@ -502,14 +527,14 @@ WORDS: dict[str, dict[str, str]] = {
         "SPOILERS": "спойлеры|интерцепторы|спойлеров",
         "PARKING_BRAKE": "стояночный тормоз|стояночный",
         "HEADING": "курс",
-        "ALTITUDE": "высоту|высота",
-        "SPEED": "скорость",
+        "ALTITUDE": "высоте|высоты|на какой высоте|высоту|высота",
+        "SPEED": "скорости|скорость",
         "SQUAWK": "транспондер|код ответчика|ответчик|сквок",
-        "CHECKLIST": "чеклист|чек-лист|карту контрольных проверок|карта контрольных проверок|карту|карта|карты",
-        "ON": "включи|включить|включаем|вкл",
-        "OFF": "выключи|выключить|выключаем|выкл|отключи|отключить|отключаем",
-        "UP": "убери|убрать|убираем|убираю|убраны|убрано|вверх",
-        "DOWN": "выпусти|выпустить|выпускаем|выпускаю|выпускай|выпущено|выпущены|вниз",
+        "CHECKLIST": "карта|карту|чеклист|чек-лист|карту контрольных проверок|карта контрольных проверок|карту|карта|карты",
+        "ON": "поставь|поставить|включено|включены|включи|включить|включаем|вкл",
+        "OFF": "сними|снять|отпусти|отпустить|выключено|выключи|выключить|выключаем|выкл|отключи|отключить|отключаем",
+        "UP": "набери|наберите|набрать|набираем|убери|убрать|убираем|убираю|убраны|убрано|вверх",
+        "DOWN": "снижайся|снижаемся|выпусти|выпустить|выпускаем|выпускаю|выпускай|выпущено|выпущены|вниз",
         "ARM": "взвести|взведи|армировать",
         "START": "запусти|запустить|запускаем",
         "FULL": "полностью|полные",
@@ -530,7 +555,11 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "погода|погоду|погоды|метар",
         "DESTINATION": "в пункте назначения|пункт назначения|аэродром назначения|назначения",
         "HOW_LONG": "сколько осталось|сколько еще|сколько ещё|когда садимся|когда посадка",
-        "FILLER": "пожалуйста|и|потом|теперь|сейчас|поставь|установи|можешь|давай|нам|спасибо|командир|ну|"
+        "FEET": "футов|фута|футы|фут",
+        "KNOTS": "узлов|узла|узлы|узел",
+        "FLIGHT_LEVEL": "эшелон|эшелона|flight level",
+        "APU": "всу",
+        "FILLER": "какой|какая|какое|у нас|нас|у|мы|на|в|перед|сколько|осталось|что|есть|пожалуйста|и|потом|теперь|сейчас|поставь|установи|можешь|давай|нам|спасибо|командир|ну|"
                   "ладно|выполни|выполняем|проведи|на|в",
     },
     "zh": {
@@ -555,10 +584,10 @@ WORDS: dict[str, dict[str, str]] = {
         "SPEED": "速度",
         "SQUAWK": "应答机|应答机编码",
         "CHECKLIST": "检查单|清单",
-        "ON": "打开|开启|接通|开",
-        "OFF": "关闭|关掉|断开|关",
-        "UP": "收起|收上|收",
-        "DOWN": "放下来|放下|放出|放",
+        "ON": "设置|设好|打开|开启|接通|开",
+        "OFF": "松开|解除|释放|关闭|关掉|断开|关",
+        "UP": "收上|上升到|上升|爬升到|爬升|收起|收上|收",
+        "DOWN": "下降到|放下来|放下|放出|放",
         "ARM": "预位|待命",
         "START": "启动|起动",
         "FULL": "全|全放",
@@ -579,7 +608,11 @@ WORDS: dict[str, dict[str, str]] = {
         "WEATHER": "天气",
         "DESTINATION": "目的地",
         "HOW_LONG": "还要多久|多久|什么时候落地|什么时候到",
-        "FILLER": "请|吧|一下|的|了|把|我们|帮我|你|可以吗|谢谢|机长|现在|然后|和|再|执行一下|做|呢|吗",
+        "FEET": "英尺|呎",
+        "KNOTS": "节",
+        "FLIGHT_LEVEL": "飞行高度层|高度层",
+        "APU": "辅助动力装置|apu",
+        "FILLER": "现在|我们|还有|多少|什么|怎么样|是|到|执行|把|请|吗|请|吧|一下|的|了|把|我们|帮我|你|可以吗|谢谢|机长|现在|然后|和|再|执行一下|做|呢|吗",
     },
 }
 
@@ -605,7 +638,7 @@ DIGITS: dict[str, dict[str, int]] = {
     "ru": {"ноль": 0, "один": 1, "одна": 1, "раз": 1, "два": 2, "две": 2, "три": 3, "четыре": 4, "пять": 5,
            "шесть": 6, "семь": 7, "восемь": 8, "девять": 9, "десять": 10},
     "zh": {"零": 0, "〇": 0, "一": 1, "幺": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8,
-           "九": 9, "十": 10},
+           "九": 9, "十": 10, "洞": 0, "拐": 7},
 }
 
 # Words that join two commands ("gear down and flaps one").
@@ -697,9 +730,103 @@ TEMPLATES: tuple[tuple[str, dict[str, str]], ...] = (
         "de": "{x} bestätigen?", "fr": "Tu confirmes {x} ?", "es": "¿Confirmas {x}?", "it": "Confermi {x}?",
         "pt": "Confirmas {x}?", "nl": "Bevestig je {x}?", "pl": "Potwierdzasz {x}?", "sv": "Bekräftar du {x}?",
         "ru": "Подтверждаешь {x}?", "zh": "确认{x}吗？"}),
-    (r"^We're at (?P<x>[\d,]+) feet\.$", {"es": "Estamos a {x} pies."}),
-    (r"^We've got (?P<x>[\d,]+) pounds, about (?P<h>\d+ hours?(?: \d+ minutes?)?|\d+ minutes?) at this burn\.$", {
-        "es": "Tenemos {x} libras, unas {h} a este consumo."}),
+    (r"^We're at (?P<x>[\d,]+) feet\.$", {
+        "de": "Wir sind auf {x} {feet}.", "fr": "Nous sommes à {x} {feet}.", "es": "Estamos a {x} {feet}.", "it": "Siamo a {x} {feet}.",
+        "pt": "Estamos a {x} {feet}.", "nl": "We zitten op {x} {feet}.", "pl": "Jesteśmy na {x} {feet}.", "sv": "Vi är på {x} {feet}.",
+        "ru": "Мы на {x} {feet}.", "zh": "我们在{x}{feet}。"}),
+    (r"^We're at (?P<x>[\d,]+) feet, cleared to (?P<c>.+)\.$", {
+        "de": "Wir sind auf {x} {feet}, Freigabe für {c}.", "fr": "Nous sommes à {x} {feet}, autorisés {c}.", "es": "Estamos a {x} {feet}, autorizados a {c}.",
+        "it": "Siamo a {x} {feet}, autorizzati a {c}.", "pt": "Estamos a {x} {feet}, autorizados para {c}.", "nl": "We zitten op {x} {feet}, klaring naar {c}.",
+        "pl": "Jesteśmy na {x} {feet}, zezwolenie na {c}.", "sv": "Vi är på {x} {feet}, klarerade till {c}.", "ru": "Мы на {x} {feet}, разрешено {c}.",
+        "zh": "我们在{x}{feet}，许可高度{c}。"}),
+    (r"^We've got (?P<x>[\d,]+) (?P<u>pounds|kilos), about (?P<h>\d+ hours?(?: \d+ minutes?)?|\d+ minutes?) at this burn\.$", {
+        "de": "Wir haben {x} {u}, etwa {h} bei diesem Verbrauch.", "fr": "Nous avons {x} {u}, environ {h} à cette consommation.",
+        "es": "Tenemos {x} {u}, unas {h} a este consumo.", "it": "Abbiamo {x} {u}, circa {h} con questo consumo.", "pt": "Temos {x} {u}, cerca de {h} com este consumo.",
+        "nl": "We hebben {x} {u}, ongeveer {h} bij dit verbruik.", "pl": "Mamy {x} {u}, około {h} przy tym spalaniu.", "sv": "Vi har {x} {u}, ungefär {h} med den här förbrukningen.",
+        "ru": "У нас {x} {u}, примерно {h} при таком расходе.", "zh": "我们有{x}{u}，按当前油耗约{h}。"}),
+    (r"^We've got (?P<x>[\d,]+) (?P<u>pounds|kilos)\.$", {
+        "de": "Wir haben {x} {u}.", "fr": "Nous avons {x} {u}.", "es": "Tenemos {x} {u}.", "it": "Abbiamo {x} {u}.", "pt": "Temos {x} {u}.",
+        "nl": "We hebben {x} {u}.", "pl": "Mamy {x} {u}.", "sv": "Vi har {x} {u}.", "ru": "У нас {x} {u}.", "zh": "我们有{x}{u}。"}),
+    (r"^The fuel quantity isn't showing here\.$", {
+        "de": "Die Treibstoffmenge wird hier nicht angezeigt.", "fr": "La quantité de carburant ne s'affiche pas ici.", "es": "La cantidad de combustible no aparece aquí.",
+        "it": "La quantità di carburante qui non si vede.", "pt": "A quantidade de combustível não aparece aqui.", "nl": "De hoeveelheid brandstof is hier niet te zien.",
+        "pl": "Ilość paliwa nie jest tu widoczna.", "sv": "Bränslemängden syns inte här.", "ru": "Количество топлива здесь не показывается.", "zh": "这里看不到油量。"}),
+    (r"^(?P<d>[\d,]+) miles, about (?P<h>\d+ hours?(?: \d+ minutes?)?|\d+ minutes?) to (?P<to>\S+)\.$", {
+        "de": "{d} {miles}, etwa {h} bis {to}.", "fr": "{d} {miles}, environ {h} jusqu'à {to}.", "es": "{d} {miles}, unas {h} hasta {to}.", "it": "{d} {miles}, circa {h} fino a {to}.",
+        "pt": "{d} {miles}, cerca de {h} até {to}.", "nl": "{d} {miles}, ongeveer {h} tot {to}.", "pl": "{d} {miles}, około {h} do {to}.", "sv": "{d} {miles}, ungefär {h} till {to}.",
+        "ru": "{d} {miles}, примерно {h} до {to}.", "zh": "距离{to}{d}{miles}，约{h}。"}),
+    (r"^(?P<d>[\d,]+) miles to (?P<to>\S+)\.$", {
+        "de": "{d} {miles} bis {to}.", "fr": "{d} {miles} jusqu'à {to}.", "es": "{d} {miles} hasta {to}.", "it": "{d} {miles} fino a {to}.", "pt": "{d} {miles} até {to}.",
+        "nl": "{d} {miles} tot {to}.", "pl": "{d} {miles} do {to}.", "sv": "{d} {miles} till {to}.", "ru": "{d} {miles} до {to}.", "zh": "距离{to}{d}{miles}。"}),
+    (r"^I don't have the destination's position yet\.$", {
+        "de": "Die Position des Ziels habe ich noch nicht.", "fr": "Je n'ai pas encore la position de la destination.", "es": "Aún no tengo la posición del destino.",
+        "it": "Non ho ancora la posizione della destinazione.", "pt": "Ainda não tenho a posição do destino.", "nl": "Ik heb de positie van de bestemming nog niet.",
+        "pl": "Nie mam jeszcze pozycji lotniska docelowego.", "sv": "Jag har inte destinationens position än.", "ru": "Координат пункта назначения пока нет.", "zh": "我还没有目的地的位置。"}),
+    (r"^Nothing from ATC yet\.$", {
+        "de": "Von der Flugsicherung noch nichts.", "fr": "Rien du contrôle pour l'instant.", "es": "Nada del control todavía.", "it": "Ancora niente dal controllo.",
+        "pt": "Ainda nada do controlo.", "nl": "Nog niets van de verkeersleiding.", "pl": "Na razie nic od kontroli.", "sv": "Inget från flygledningen än.",
+        "ru": "От диспетчера пока ничего.", "zh": "管制还没有呼叫。"}),
+    (r"^We're with (?P<x>.+)\.$", {
+        "de": "Wir sind bei {x}.", "fr": "Nous sommes avec {x}.", "es": "Estamos con {x}.", "it": "Siamo con {x}.", "pt": "Estamos com {x}.", "nl": "We zitten bij {x}.",
+        "pl": "Jesteśmy na {x}.", "sv": "Vi har {x}.", "ru": "Мы на связи с {x}.", "zh": "我们在和{x}通话。"}),
+    (r"^We're not on an ATC frequency\.$", {
+        "de": "Wir sind auf keiner Flugsicherungsfrequenz.", "fr": "Nous ne sommes sur aucune fréquence de contrôle.", "es": "No estamos en una frecuencia de control.",
+        "it": "Non siamo su una frequenza di controllo.", "pt": "Não estamos numa frequência de controlo.", "nl": "We zitten niet op een frequentie van de verkeersleiding.",
+        "pl": "Nie jesteśmy na częstotliwości kontroli.", "sv": "Vi är inte på en flygledningsfrekvens.", "ru": "Мы не на частоте диспетчера.", "zh": "我们不在管制频率上。"}),
+    (r"^No code assigned yet\.$", {
+        "de": "Noch kein Code zugewiesen.", "fr": "Pas encore de code attribué.", "es": "Aún no hay código asignado.", "it": "Nessun codice assegnato ancora.",
+        "pt": "Ainda sem código atribuído.", "nl": "Nog geen code toegewezen.", "pl": "Nie ma jeszcze przydzielonego kodu.", "sv": "Ingen kod tilldelad än.",
+        "ru": "Код пока не назначен.", "zh": "还没有分配应答机编码。"}),
+    (r"^At (?P<to>\S+): (?P<w>.+)\.$", {
+        "de": "In {to}: {w}.", "fr": "À {to} : {w}.", "es": "En {to}: {w}.", "it": "A {to}: {w}.", "pt": "Em {to}: {w}.", "nl": "In {to}: {w}.", "pl": "W {to}: {w}.",
+        "sv": "I {to}: {w}.", "ru": "В {to}: {w}.", "zh": "{to}：{w}。"}),
+    (r"^No ATIS for the destination yet\.$", {
+        "de": "Noch kein ATIS für das Ziel.", "fr": "Pas encore d'ATIS pour la destination.", "es": "Aún no hay ATIS del destino.", "it": "Ancora nessun ATIS per la destinazione.",
+        "pt": "Ainda não há ATIS do destino.", "nl": "Nog geen ATIS voor de bestemming.", "pl": "Nie ma jeszcze ATIS dla lotniska docelowego.", "sv": "Ingen ATIS för destinationen än.",
+        "ru": "ATIS пункта назначения пока нет.", "zh": "还没有目的地的通播。"}),
+    (r"^It's (?P<x>.+)\.$", {
+        "de": "Es ist {x}.", "fr": "Il est {x}.", "es": "Son las {x}.", "it": "Sono le {x}.", "pt": "São {x}.", "nl": "Het is {x}.", "pl": "Jest {x}.", "sv": "Klockan är {x}.",
+        "ru": "Сейчас {x}.", "zh": "现在是{x}。"}),
+    (r"^No runway assigned yet\.$", {
+        "de": "Noch keine Piste zugewiesen.", "fr": "Pas encore de piste attribuée.", "es": "Aún no hay pista asignada.", "it": "Nessuna pista assegnata ancora.",
+        "pt": "Ainda sem pista atribuída.", "nl": "Nog geen baan toegewezen.", "pl": "Nie ma jeszcze przydzielonego pasa.", "sv": "Ingen bana tilldelad än.",
+        "ru": "Полоса пока не назначена.", "zh": "还没有分配跑道。"}),
+    (r"^Runway (?P<x>\S+)\.$", {
+        "de": "Piste {x}.", "fr": "Piste {x}.", "es": "Pista {x}.", "it": "Pista {x}.", "pt": "Pista {x}.", "nl": "Baan {x}.", "pl": "Pas {x}.", "sv": "Bana {x}.",
+        "ru": "Полоса {x}.", "zh": "跑道{x}。"}),
+    (r"^No gate assigned yet\.$", {
+        "de": "Noch kein Gate zugewiesen.", "fr": "Pas encore de porte attribuée.", "es": "Aún no hay puerta asignada.", "it": "Nessun gate assegnato ancora.",
+        "pt": "Ainda sem portão atribuído.", "nl": "Nog geen gate toegewezen.", "pl": "Nie ma jeszcze przydzielonej bramki.", "sv": "Ingen gate tilldelad än.",
+        "ru": "Гейт пока не назначен.", "zh": "还没有分配登机口。"}),
+    (r"^I don't have the runway's wind yet\.$", {
+        "de": "Den Wind für die Piste habe ich noch nicht.", "fr": "Je n'ai pas encore le vent de la piste.", "es": "Aún no tengo el viento de la pista.",
+        "it": "Non ho ancora il vento della pista.", "pt": "Ainda não tenho o vento da pista.", "nl": "Ik heb de wind voor de baan nog niet.", "pl": "Nie mam jeszcze wiatru dla pasa.",
+        "sv": "Jag har inte banans vind än.", "ru": "Ветра по полосе пока нет.", "zh": "我还没有跑道风的数据。"}),
+    (r"^Gear's down\.$", {
+        "de": "Fahrwerk ist draußen.", "fr": "Le train est sorti.", "es": "El tren está abajo.", "it": "Il carrello è giù.", "pt": "O trem está em baixo.", "nl": "Het landingsgestel is uit.",
+        "pl": "Podwozie jest wypuszczone.", "sv": "Stället är ute.", "ru": "Шасси выпущено.", "zh": "起落架已放下。"}),
+    (r"^Gear's up\.$", {
+        "de": "Fahrwerk ist drin.", "fr": "Le train est rentré.", "es": "El tren está arriba.", "it": "Il carrello è su.", "pt": "O trem está recolhido.", "nl": "Het landingsgestel is in.",
+        "pl": "Podwozie jest schowane.", "sv": "Stället är inne.", "ru": "Шасси убрано.", "zh": "起落架已收上。"}),
+    (r"^Flaps (?P<x>\S+)\.$", {
+        "de": "Klappen {x}.", "fr": "Volets {x}.", "es": "Flaps {x}.", "it": "Flap {x}.", "pt": "Flaps {x}.", "nl": "Flaps {x}.", "pl": "Klapy {x}.", "sv": "Klaff {x}.",
+        "ru": "Закрылки {x}.", "zh": "襟翼{x}。"}),
+    (r"^Autopilot's on\.$", {
+        "de": "Der Autopilot ist an.", "fr": "Le pilote automatique est engagé.", "es": "El piloto automático está conectado.", "it": "Il pilota automatico è inserito.",
+        "pt": "O piloto automático está ligado.", "nl": "De autopiloot staat aan.", "pl": "Autopilot jest włączony.", "sv": "Autopiloten är på.", "ru": "Автопилот включён.", "zh": "自动驾驶已接通。"}),
+    (r"^Autopilot's off\.$", {
+        "de": "Der Autopilot ist aus.", "fr": "Le pilote automatique est coupé.", "es": "El piloto automático está desconectado.", "it": "Il pilota automatico è disinserito.",
+        "pt": "O piloto automático está desligado.", "nl": "De autopiloot staat uit.", "pl": "Autopilot jest wyłączony.", "sv": "Autopiloten är av.", "ru": "Автопилот выключен.", "zh": "自动驾驶已断开。"}),
+    (r"^I can't read the autopilot on this aircraft\.$", {
+        "de": "Den Autopiloten kann ich bei diesem Flugzeug nicht lesen.", "fr": "Je ne peux pas lire le pilote automatique sur cet avion.", "es": "En este avión no puedo leer el piloto automático.",
+        "it": "Su questo aereo non riesco a leggere il pilota automatico.", "pt": "Neste avião não consigo ler o piloto automático.", "nl": "Op dit toestel kan ik de autopiloot niet uitlezen.",
+        "pl": "Na tym samolocie nie mogę odczytać autopilota.", "sv": "Jag kan inte läsa av autopiloten på det här planet.", "ru": "На этом самолёте я не вижу состояние автопилота.", "zh": "这架飞机上我读不到自动驾驶状态。"}),
+    (r"^(?P<a>\d+) knots indicated, (?P<g>\d+) over the ground\.$", {
+        "de": "{a} {knots} angezeigt, {g} über Grund.", "fr": "{a} {knots} indiqués, {g} sol.", "es": "{a} {knots} indicados, {g} sobre el terreno.", "it": "{a} {knots} indicati, {g} al suolo.",
+        "pt": "{a} {knots} indicados, {g} em relação ao solo.", "nl": "{a} {knots} aangewezen, {g} over de grond.", "pl": "{a} {knots} przyrządowej, {g} nad ziemią.", "sv": "{a} {knots} indikerat, {g} över marken.",
+        "ru": "{a} {knots} по прибору, {g} над землёй.", "zh": "指示空速{a}{knots}，地速{g}。"}),
+    (r"^Heading (?P<x>\d+)\.$", {
+        "de": "Kurs {x}.", "fr": "Cap {x}.", "es": "Rumbo {x}.", "it": "Prua {x}.", "pt": "Rumo {x}.", "nl": "Koers {x}.", "pl": "Kurs {x}.", "sv": "Kurs {x}.", "ru": "Курс {x}.", "zh": "航向{x}。"}),
     (r"^That sounded like a radio call\. I haven't sent it; want me to\?$", {
         "de": "Das klang nach einem Funkspruch. Ich habe ihn nicht gesendet. Soll ich?",
         "fr": "Ça ressemblait à un message radio. Je ne l'ai pas envoyé. Je le fais ?",
@@ -723,22 +850,74 @@ TEMPLATES: tuple[tuple[str, dict[str, str]], ...] = (
 )
 
 
+# What the set lines' units are called. Polish and Russian change a noun with its number: one, a few, many.
+UNITS_SAID = {
+    "de": {"feet": "Fuß", "pounds": "Pfund", "kilos": "Kilo", "knots": "Knoten", "miles": "Meilen"},
+    "fr": {"feet": "pieds", "pounds": "livres", "kilos": "kilos", "knots": "nœuds", "miles": "milles"},
+    "es": {"feet": "pies", "pounds": "libras", "kilos": "kilos", "knots": "nudos", "miles": "millas"},
+    "it": {"feet": "piedi", "pounds": "libbre", "kilos": "chili", "knots": "nodi", "miles": "miglia"},
+    "pt": {"feet": "pés", "pounds": "libras", "kilos": "quilos", "knots": "nós", "miles": "milhas"},
+    "nl": {"feet": "voet", "pounds": "pond", "kilos": "kilo", "knots": "knopen", "miles": "mijl"},
+    "pl": {"feet": "stóp", "pounds": "funtów", "kilos": "kilogramów", "knots": "węzłów", "miles": "mil"},
+    "sv": {"feet": "fot", "pounds": "pund", "kilos": "kilo", "knots": "knop", "miles": "nautiska mil"},
+    "ru": {"feet": "футов", "pounds": "фунтов", "kilos": "килограммов", "knots": "узлов", "miles": "миль"},
+    "zh": {"feet": "英尺", "pounds": "磅", "kilos": "公斤", "knots": "节", "miles": "海里"},
+}
+TIME_SAID = {"de": ("Stunde", "Stunden", "Stunden", "Minute", "Minuten", "Minuten"), "fr": ("heure", "heures", "heures", "minute", "minutes", "minutes"),
+             "es": ("hora", "horas", "horas", "minuto", "minutos", "minutos"), "it": ("ora", "ore", "ore", "minuto", "minuti", "minuti"),
+             "pt": ("hora", "horas", "horas", "minuto", "minutos", "minutos"), "nl": ("uur", "uur", "uur", "minuut", "minuten", "minuten"),
+             "pl": ("godzina", "godziny", "godzin", "minuta", "minuty", "minut"), "sv": ("timme", "timmar", "timmar", "minut", "minuter", "minuter"),
+             "ru": ("час", "часа", "часов", "минута", "минуты", "минут"), "zh": ("小时", "小时", "小时", "分钟", "分钟", "分钟")}
+
+
+def _form(n: int, one: str, few: str, many: str) -> str:
+    """A noun with its number: "1 hour, 3 hours, 5 hours", as Slavic languages have it (few: 2-4, not 12-14)."""
+    if n == 1:
+        return one
+    return few if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else many
+
+
+def _time_said(text: str, code: str) -> str:
+    """"8 hours 16 minutes" in the language."""
+    if code not in TIME_SAID:
+        return text
+    h1, h2, h3, m1, m2, m3 = TIME_SAID[code]
+    glue = "" if code == "zh" else " "
+    text = re.sub(r"(\d+) hours?(?: (?=\d))?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), h1, h2, h3)}" + (" " if code != "zh" and m[0].endswith(" ") else ""), text)
+    return re.sub(r"(\d+) minutes?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), m1, m2, m3)}", text)
+
+
+# How a language groups a number's thousands: German reads "41,300" as forty-one point three.
+THOUSANDS = {"de": ".", "es": ".", "it": ".", "pt": ".", "nl": ".", "fr": "\u202f", "pl": "\u202f", "ru": "\u202f", "sv": "\u202f", "zh": ""}
+
+
+def _grouped(text: str, code: str) -> str:
+    return re.sub(r"(?<=\d),(?=\d{3}\b)", THOUSANDS.get(code, ","), text)
+
+
 def _control_names(text: str, code: str) -> str:
-    """"heading 270" with the name in the language ("rumbo 270")."""
+    """"heading 270" with the name in the language ("rumbo 270"), and its hours and minutes."""
     for concept, english in (("HEADING", "heading"), ("ALTITUDE", "altitude"), ("SPEED", "speed")):
-        if word := WORDS.get(code, {}).get(concept, "").split("|")[0]:
+        if word := SHOWN_NAMES.get(code, {}).get(concept):
             text = re.sub(rf"\b{english}\b", word, text)
-    if code == "es":
-        for english, word in (("hours", "horas"), ("hour", "hora"), ("minutes", "minutos"), ("minute", "minuto")):
-            text = re.sub(rf"\b{english}\b", word, text)
-    return text
+    return _time_said(text, code)
+
+
+SHOWN_NAMES = {"de": {"HEADING": "Kurs", "ALTITUDE": "Höhe", "SPEED": "Geschwindigkeit"}, "fr": {"HEADING": "cap", "ALTITUDE": "altitude", "SPEED": "vitesse"},
+               "es": {"HEADING": "rumbo", "ALTITUDE": "altitud", "SPEED": "velocidad"}, "it": {"HEADING": "prua", "ALTITUDE": "quota", "SPEED": "velocità"},
+               "pt": {"HEADING": "rumo", "ALTITUDE": "altitude", "SPEED": "velocidade"}, "nl": {"HEADING": "koers", "ALTITUDE": "hoogte", "SPEED": "snelheid"},
+               "pl": {"HEADING": "kurs", "ALTITUDE": "wysokość", "SPEED": "prędkość"}, "sv": {"HEADING": "kurs", "ALTITUDE": "höjd", "SPEED": "fart"},
+               "ru": {"HEADING": "курс", "ALTITUDE": "высота", "SPEED": "скорость"}, "zh": {"HEADING": "航向", "ALTITUDE": "高度", "SPEED": "速度"}}
 
 
 def templated(text: str, code: str) -> str | None:
     """One of the copilot's set lines in language ``code``, what's in it kept as said; None if it isn't one."""
     for pattern, said in TEMPLATES:
         if code in said and (m := re.match(pattern, text)):
-            return said[code].format(**{k: _control_names(v, code) for k, v in m.groupdict().items()})
+            values = {k: _grouped(_control_names(v or "", code), code) for k, v in m.groupdict().items()}
+            if "u" in values:
+                values["u"] = UNITS_SAID[code].get(values["u"], values["u"])
+            return said[code].format(**values, **UNITS_SAID.get(code, {}))
     return None
 
 
@@ -809,22 +988,11 @@ RADIO_WORDS = {
 _JOIN_CACHE: dict[str, list[tuple[str, str]]] = {}
 
 
-def _plain(text: str) -> str:
-    """Lowercase, accents off (not in Russian or Chinese, where the marks are letters), apostrophes and dashes as
-    spaces."""
-    text = text.lower().replace("ё", "е")
-    if not re.search(r"[Ѐ-ӿ一-鿿]", text):
-        text = "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
-        text = text.replace("ł", "l")
-    text = re.sub(r"[’'`´\-]", " ", text)
-    return re.sub(r"\s+", " ", re.sub(r"[^\w\s.,;]", " ", text)).strip()
-
-
 def _phrases(code: str) -> list[tuple[str, str]]:
     """Every (words, concept) of the language and English, the longest first (so "landing lights" is one thing)."""
     if code not in _JOIN_CACHE:
         found: dict[str, str] = {}
-        for table in (ENGLISH, WORDS.get(code, {})):
+        for table in (WORDS.get(code, {}), ENGLISH):  # (its own first: Polish "stóp" is feet, not "stop")
             for concept, words in table.items():
                 for w in words.split("|"):
                     w = _plain(w)
@@ -859,48 +1027,20 @@ def _tokens(clause: str, code: str) -> list[str] | None:
     return out or None
 
 
-_ES_ONES = {"un": 1, "uno": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8,
-            "nueve": 9, "diez": 10}
-_ES_BIG = {"once": 11, "doce": 12, "trece": 13, "catorce": 14, "quince": 15, "dieciseis": 16, "diecisiete": 17,
-           "dieciocho": 18, "diecinueve": 19, "veinte": 20, "veintiuno": 21, "veintidos": 22, "veintitres": 23,
-           "veinticuatro": 24, "veinticinco": 25, "veintiseis": 26, "veintisiete": 27, "veintiocho": 28, "veintinueve": 29,
-           "treinta": 30, "cuarenta": 40, "cincuenta": 50, "sesenta": 60, "setenta": 70, "ochenta": 80, "noventa": 90,
-           "cien": 100, "ciento": 100, "doscientos": 200, "trescientos": 300, "cuatrocientos": 400, "quinientos": 500,
-           "seiscientos": 600, "setecientos": 700, "ochocientos": 800, "novecientos": 900}
-_ES_DIGIT = {"cero": 0, **_ES_ONES}
-_ES_NUMBER = re.compile(r"(?<!\S)(?:\d+|mil|%s)(?:\s+(?:y\s+)?(?:\d+|mil|%s))*(?!\S)" % (("|".join({**_ES_DIGIT, **_ES_BIG}),) * 2))
-
-
-def _spanish_numbers(text: str) -> str:
-    """Numbers said whole as digits ("diez mil": 10000, "doscientos cincuenta": 250); digits said one by one stay as they
-    are ("dos siete cero"), and so does "y" between two things ("flaps dos y tren abajo")."""
-    def value(m: re.Match) -> str:
-        words = m[0].split()
-        if not any(w == "mil" or w in _ES_BIG for w in words):
-            return m[0]
-        total = current = 0
-        for w in words:
-            if w == "mil":
-                total, current = total + max(current, 1) * 1000, 0
-            elif w != "y":
-                current += int(w) if w.isdigit() else _ES_DIGIT[w] if w in _ES_DIGIT else _ES_BIG[w]
-        return str(total + current)
-    return _ES_NUMBER.sub(value, text)
-
-
 def in_digits(text: str, code: str) -> str:
-    """A line with the numbers it spells out in digits, for checking them: the model asked for digits often writes "cinco
-    mil pies" all the same, and a correct translation was thrown away and the line said in English. "uno" and "una" alone
-    are words ("una hora" isn't checked as a number)."""
-    if code != "es":
-        return text
+    """A line with the numbers it spells out in digits, for checking them (``spoken_numbers.in_digits``)."""
+    return spoken_numbers.in_digits(text, code)
 
-    def digits(m: re.Match) -> str:
-        words = m[0].split()
-        if any(w == "mil" or w in _ES_BIG for w in words) or any(w.isdigit() for w in words):
-            return m[0]
-        return m[0] if words[0] in ("un", "una", "uno") and len(words) == 1 else "".join(str(_ES_DIGIT[w]) for w in words if w != "y")
-    return _ES_NUMBER.sub(digits, _spanish_numbers(_plain(text)))
+
+def numbers_kept(english: str, said: str, code: str) -> bool:
+    """A translation has the English line's numbers, however it writes them. "1 hour" may be "une heure": a 1 that's gone is
+    fine where the language's word for "a" stands for it."""
+    theirs = numbers(localized_numbers(in_digits(said, code))) + (zh_numbers(said) if code == "zh" else [])
+    ours = numbers(english)
+    if sorted(theirs) == sorted(ours):
+        return True
+    ones = ours.count("1") - theirs.count("1")
+    return 0 < ones <= spoken_numbers.lone_articles(said, code) and sorted(n for n in ours if n != "1") == sorted(n for n in theirs if n != "1")
 
 
 def _number(tokens: list[str]) -> str:
@@ -1006,10 +1146,10 @@ def gloss(text: str, code: str) -> str | None:
     every word of it is understood; None otherwise (the language model reads it as said)."""
     if not text.strip() or code in ("", "en") or code not in WORDS:
         return None
-    plain = _plain(text) if code != "zh" else re.sub(r"[\s，。！？、,.!?]+", " ", text.lower()).strip()
-    if code == "es":
-        plain = _spanish_numbers(plain)
+    plain = whole_numbers(_plain(text), code) if code != "zh" else zh_whole_numbers(re.sub(r"[\s。！？、.!?]+", " ", text.lower()).strip())
     joiners = "|".join(re.escape(_plain(j) if code != "zh" else j) for j in JOINERS[code].split("|") + JOINERS["en"].split("|"))
+    if code == "pt":
+        joiners = joiners.replace("depois", r"depois(?!\s+d[aeo]\b)")  # ("depois da aterragem" is a checklist's name)
     split = r"\s*(?:[,;]|(?<=\s)(?:%s)(?=\s))\s*" % joiners if code != "zh" else r"\s*(?:[,;，]|%s)\s*" % joiners
     clauses = [c.strip(" .") for c in re.split(split, f" {plain} ") if c.strip(" .")]
     every: set[str] = set()
@@ -1053,7 +1193,7 @@ EN_CONTENT = ("feet|foot|knots|knot|over|ground|busy|quite|speed|managed|indicat
 
 # English words that are words of these languages too ("over" in Dutch, "was" in German).
 SHARED = {"de": "was|so|am|bin|hat|also|fast|still|ruhig", "nl": "over|was|we|is|op|hoe|still", "sv": "over|still|from",
-          "pl": "on|no|to", "it": "come|sono|fine|ore", "fr": "sur|plus|fine", "es": "sur|fin", "pt": "sur"}
+          "pl": "on|no|to", "it": "come|sono|fine|ore", "fr": "sur|plus|fine|minutes", "es": "sur|fin", "pt": "sur"}
 
 
 def _english_words(words: list[str], own: set[str], code: str = "") -> int:
@@ -1107,7 +1247,7 @@ def claims(text: str, code: str) -> str:
     for sentence in re.split(r"[.!?;。！？；，、]+", text):  # (Chinese numbers run on between commas: "280节，180节")
         plain = _plain(sentence) if code != "zh" else sentence
         tokens = _tokens(plain, code) or []
-        concepts = {t[1:] for t in tokens if t.startswith("§")}
+        concepts = {t[1:] for t in tokens if t.startswith("§")} - {"FEET", "KNOTS", "FLIGHT_LEVEL"}  # (saying how high isn't setting it)
         if "NO" in concepts:
             continue  # "not yet": no claim
         if "CHECKLIST" in concepts and "COMPLETE" in concepts:
@@ -1123,30 +1263,11 @@ def localized_numbers(text: str) -> str:
     return re.sub(r"(?<=\d),(?=\d{1,2}\b)", ".", text)
 
 
-_ZH_DIGITS = {c: i for i, c in enumerate("零一二三四五六七八九")} | {"〇": 0, "两": 2}
-_ZH_PLACES = {"十": 10, "百": 100, "千": 1000, "万": 10000}
-
-
 def zh_numbers(text: str) -> list[str]:
     """The numbers written in Chinese characters, as digits: read digit by digit ("二八零": 280) or by place
     ("一万二千": 12000, "二十五": 25)."""
-    out = []
-    for run in re.findall(r"[零〇一二两三四五六七八九十百千万]+", text):
-        if not any(c in _ZH_PLACES for c in run):
-            if len(run) > 1 or run not in "一两":  # (a lone 一 is "a", not a number)
-                out.append("".join(str(_ZH_DIGITS[c]) for c in run))
-            continue
-        total = section = digit = 0
-        for c in run:
-            if c in _ZH_DIGITS:
-                digit = _ZH_DIGITS[c]
-            elif c == "万":
-                total, section, digit = (total + section + digit) * 10000, 0, 0
-            else:
-                section += (digit or 1) * _ZH_PLACES[c]
-                digit = 0
-        out.append(str(total + section + digit))
-    return out
+    return [zh_value(run) for run in re.findall(r"[零〇一二两三四五六七八九十百千万]+", text)
+            if len(run) > 1 or run != "一"]  # (a lone 一 is "a", not a number)
 
 
 def mostly(text: str, code: str) -> bool:

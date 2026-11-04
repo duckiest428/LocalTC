@@ -337,7 +337,8 @@ class PilotMonitoring:
             self._note(ev.t, f'{ev.station} said: "{ev.text}"')
         elif isinstance(ev, Transcript) and ev.radio != 0 and ev.text:
             self._note(ev.t, f'{"the copilot" if ev.source == "copilot" else "you"} said on the radio: "{ev.text}"')
-            if ev.source != "copilot" and self.language and not self._told_english and foreign.called_in(ev.text, self.language):
+            if ev.source != "copilot" and self.language and not self._told_english and foreign.called_in(ev.text, self.language) \
+                    and not (self.engine is not None and self.engine.for_the_ramp(ev)):  # (the ramp does speak it)
                 # The captain called ATC in their own language: ATC only works in English, said once a flight.
                 self._told_english = True
                 out.append(self._line(CrewSpeech(t=ev.t, text=foreign.ENGLISH_ONLY[self.language], kind="reply",

@@ -91,7 +91,7 @@ def test_a_question_from_the_data_is_answered_in_german():
     out = pm.observe(IntercomHeard(t=3.0, text="Wie viel Treibstoff haben wir?"))
     line = [o for o in out if isinstance(o, CrewSpeech)][0]
     assert line.language == "de" and line.text.startswith("Wir haben 41.300 Pfund")
-    assert pm.model.backend.asked[0].purpose == "crew_translate"
+    assert pm.model.backend.asked == []  # one of the set answers: no model needed
 
 
 def test_what_atc_said_stays_atcs_words():
@@ -102,10 +102,8 @@ def test_what_atc_said_stays_atcs_words():
 
 
 def test_a_translation_that_loses_a_number_or_a_unit_is_said_in_english():
-    pm = german('{"reply": "Wir haben 41.300 Kilo."}')  # pounds aren't kilograms
-    out = pm.observe(IntercomHeard(t=3.0, text="Wie viel Treibstoff haben wir?"))
-    line = [o for o in out if isinstance(o, CrewSpeech)][0]
-    assert line.language == "" and "41,300 pounds" in line.text
+    model = CrewModel(FakeBackend('{"reply": "Wir haben 41.300 Kilo Treibstoff an Bord."}'), language="de")  # pounds aren't kilograms
+    assert model.translate(3.0, "There's 41,300 pounds on board now.")[0] is None
 
 
 def test_a_reply_in_english_from_the_model_is_put_into_german():
@@ -198,7 +196,7 @@ def test_mandarin_is_translated_as_plain_text():
 
 
 def test_a_reply_with_metres_or_a_number_in_words_is_not_said():
-    for reply in ("Oto 12 000 metrów, kapitanie.", "Десять тысяч футов, Captain."):
+    for reply in ("Oto 12 000 metrów, kapitanie.", "Десять тысяч футов, Captain."):  # (a unit changed; a number that's wrong)
         code = "pl" if "metr" in reply else "ru"
         pm = started()
         pm.model = CrewModel(FakeBackend(f'{{"kind": "reply", "reply": "{reply}"}}'), language=code)
@@ -276,9 +274,9 @@ def test_a_translation_with_its_numbers_in_words_is_kept():
 
 
 def test_the_common_answers_are_in_spanish_without_a_model():
-    assert foreign.templated("We're at 5,000 feet.", "es") == "Estamos a 5,000 pies."
+    assert foreign.templated("We're at 5,000 feet.", "es") == "Estamos a 5.000 pies."
     assert foreign.templated("We've got 41,300 pounds, about 8 hours 16 minutes at this burn.", "es") \
-        == "Tenemos 41,300 libras, unas 8 horas 16 minutos a este consumo."
+        == "Tenemos 41.300 libras, unas 8 horas 16 minutos a este consumo."
 
 
 def test_what_wasnt_read_isnt_copied():
@@ -287,3 +285,18 @@ def test_what_wasnt_read_isnt_copied():
     pm.observe(own(2.0))
     out = pm.observe(IntercomHeard(t=3.0, text="como va el vuelo"))
     assert [o.text for o in out if isinstance(o, CrewSpeech)] == ["¿Puedes repetir?"]
+
+
+def test_a_number_in_words_that_is_right_is_said():
+    pm = started()
+    pm.model = CrewModel(FakeBackend('{"kind": "reply", "reply": "Двенадцать тысяч футов, Captain."}'), language="ru")
+    pm.observe(own(2.0, alt_indicated_ft=12000.0, alt_msl_ft=12000.0))
+    out = pm.observe(IntercomHeard(t=3.0, text="Расскажи, как дела"))
+    assert "Двенадцать тысяч футов, Captain." in said(out)
+
+
+def test_one_hour_may_be_said_as_a_hour():
+    assert foreign.numbers_kept("About 1 hour 20 minutes.", "Environ une heure vingt minutes.", "fr")
+    assert foreign.numbers_kept("About 1 hour.", "Etwa eine Stunde.", "de")
+    assert not foreign.numbers_kept("About 2 hours.", "Etwa eine Stunde.", "de")
+    assert foreign.numbers_kept("Flaps 15.", "Klappen fünfzehn.", "de")

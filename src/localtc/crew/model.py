@@ -283,12 +283,27 @@ class CrewModel:
         if text in self._translated:
             return self._translated[text], []
         system_text = TRANSLATE_SYSTEM.format(language=self.language_name)
+        if units := foreign.UNITS_SAID.get(self.language):  # (asked to keep pounds as pounds, it still said kilos: its words for them)
+            system_text += (f" In {self.language_name}: pounds are {units['pounds']}, feet are {units['feet']}, knots are {units['knots']}.")
         plain = self.language in PLAIN_TEXT and not getattr(self.backend, "rich", False)
         if plain:
             system_text = system_text.replace('Answer with JSON: {"reply": "..."}.', "Answer with the words only.")
-        request = LlmRequest("crew_translate", system_text, (("user", f'Say: "{text}"'),), {} if plain else REWORD_SCHEMA,
-                             max_tokens=160)
         timeout_s, _ = waits(self.backend, min(self.timeout_s, 6.0), min(self.timeout_s, 6.0), min(self.patience_s, 10.0))
+        words, exchanges = self._translate_once(t, text, system_text, plain, timeout_s, "")
+        if words is None and exchanges and exchanges[-1].outcome == "rejected" and "changed" in exchanges[-1].detail:
+            # Most of these are a slip: asked once more, told what went wrong, rather than said in English.
+            words, again = self._translate_once(t, text, system_text, plain, timeout_s, exchanges[-1].detail)
+            exchanges += again
+        if words is not None:
+            self._translated[text] = words
+        return words, exchanges
+
+    def _translate_once(self, t: float, text: str, system_text: str, plain: bool, timeout_s: float, wrong: str) -> tuple[str | None, list[LlmExchange]]:
+        from localtc.crew import foreign
+
+        told = f' Your last answer was wrong: {wrong}. Every number and unit exactly as given.' if wrong else ""
+        request = LlmRequest("crew_translate", system_text, (("user", f'Say: "{text}"{told}'),), {} if plain else REWORD_SCHEMA,
+                             max_tokens=160)
         result = self.backend.complete(request, timeout_s=timeout_s)
         model = getattr(self.backend, "model", "")
         if result.text is None:
@@ -301,17 +316,13 @@ class CrewModel:
             # (Plain text: its first line; a small model adds the numbers again in brackets below.)
             words = result.text.strip().splitlines()[0].strip().strip('"“”「」') if plain and result.text.strip() else ""
         words = words.replace("**", "").strip().strip('"“”')  # (some models dress their answer up)
-        said = foreign.numbers(foreign.in_digits(words, self.language)) + (foreign.zh_numbers(words) if self.language == "zh" else [])
-        why = ("no words" if not words else "a number changed" if sorted(said) != sorted(foreign.numbers(text))
+        why = ("no words" if not words else "a number changed" if not foreign.numbers_kept(text, words, self.language)
                else f"not in {self.language_name}" if not foreign.speaks(words, self.language)
                else "a unit changed" if not foreign.units_kept(text, words) else "")
         exchange = LlmExchange(t=t, purpose="crew_translate", model=model, key=request.key(model), prompt=text,
                                response=result.text, outcome="rejected" if why else "used", detail=why,
                                latency_ms=result.latency_ms)
-        if why:
-            return None, [exchange]
-        self._translated[text] = words
-        return words, [exchange]
+        return (None, [exchange]) if why else (words, [exchange])
 
     def _named_before(self, action: str, heard: str) -> bool:
         """The captain's line before named it ("set your altimeter to 30.39"), and this one says "it" or "that" ("no,
@@ -365,8 +376,11 @@ class CrewModel:
             checked = f"{written}. {foreign.claims(written, self.language)}"
             if foreign.metric(reply) and not any(foreign.metric(str(v)) for v in facts.values()):
                 return None, "a unit changed (the facts are in feet, pounds, knots and miles)"
-            if foreign.thousands_in_words(reply, self.language):
-                return None, "a number in words (unchecked: they're to be digits)"
+            # (A number in words is checked as the number it is; one that can't be read is turned away.)
+            digits = foreign.in_digits(reply, self.language)
+            if foreign.thousands_in_words(digits, self.language):
+                return None, "a number in words that couldn't be read"
+            written = foreign.localized_numbers(digits)
             if self.language == "zh":
                 written += " " + " ".join(foreign.zh_numbers(reply))
         if (claim := unsupported_claim(checked, facts)) is not None:

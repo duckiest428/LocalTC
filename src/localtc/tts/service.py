@@ -267,7 +267,7 @@ class VoiceOut:
                 log.exception("Cabin voice failed; carrying on")
 
     def _ramp_voice(self, ev: RampSpeech) -> Persona:
-        return persona_for(f"ramp {ev.speaker}", "ground_crew", sex=ev.sex, locale=ev.locale if self.regional else "")
+        return persona_for(f"ramp {ev.speaker}", "ground_crew", sex=ev.sex, locale=ev.locale if self.regional else "", language=ev.language)
 
     async def _say_ramp(self, ev: RampSpeech) -> None:
         who = self._ramp_voice(ev)

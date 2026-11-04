@@ -5,6 +5,8 @@ is an aircraft rolling with a tug under it.
 
 import random
 
+from localtc.ground.words import LINES as FOREIGN
+
 # How each service is spoken of.
 SPOKEN = {"GPU": "the GPU", "OperateJetways": "the jetway", "OperateStairs": "the stairs", "Deboarding": "deboarding",
           "Boarding": "boarding", "Cleaning": "the cleaners", "Catering": "catering", "Refueling": "the fuel truck",
@@ -95,12 +97,17 @@ LINES = {
 
 
 class Words:
-    def __init__(self, seed: int = 0) -> None:
+    def __init__(self, seed: int = 0, language: str = "") -> None:
         self.rng = random.Random(seed)
+        self.language = language
         self.last: dict[str, str] = {}
 
+    def in_language(self, key: str) -> bool:
+        """Whether this line is said in the pilot's language: the headset's calls stay in aviation English."""
+        return key in FOREIGN.get(self.language, {}) and key not in FIXED
+
     def line(self, key: str, **values: str) -> str:
-        options = FIXED.get(key) or LINES[key]
+        options = FIXED.get(key) or ((FOREIGN[self.language][key],) if self.in_language(key) else LINES[key])
         pick = options[0] if len(options) == 1 else self.rng.choice([o for o in options if o != self.last.get(key)])
         self.last[key] = pick
         capitalised = {k[0].upper() + k[1:]: v[0].upper() + v[1:] if v else v for k, v in values.items()}

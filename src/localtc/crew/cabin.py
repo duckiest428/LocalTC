@@ -53,7 +53,9 @@ from localtc.crew.cabin_data import (
     seats,
 )
 from localtc.crew.commands import parse as copilot_command
+from localtc.ground import words as ramp_words
 from localtc.crew.turnaround import off_block_in
+from localtc.crew import cabin_words
 from localtc.crew.cabin_lines import BY_ID, FOREIGN, LANDING_WORDS, LINES, PEOPLE, REPLIES, Person
 from localtc.sim_api import (
     AircraftIdentity,
@@ -284,6 +286,8 @@ class CabinCrew:
         self.settings = settings or CabinSettings()
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
+        self.talks_in = ""  # [crew] language: the captain's language, which they answer in ("" English)
+        self.language_name = ""  # ... its name, for the language model
         self.ground_call: Any = None  # the ground crew, to start boarding and deboarding (ground.crew.RampCrew.called_by_cabin)
         self.backend: Any = None  # the cloud language model (None: the script's words)
         self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
@@ -570,7 +574,15 @@ class CabinCrew:
 
     def reply(self, key: str, extra: dict[str, str] | None = None, *, channel: str = "interphone") -> list[Any]:
         """An answer to the pilot (``REPLIES``), on the interphone (or in person: ``channel`` "deck")."""
-        said = self._reply(key, extra or {})
+        extra = extra or {}
+        if (own := cabin_words.REPLIES.get(self.talks_in, {}).get(key)) is not None:
+            # In the captain's language. (Their drink too: "coffee, black" said back in English isn't what was asked for.)
+            text_values, _ = self._values()
+            text_values.update({k: cabin_words.drink_said(v, self.talks_in) if k == "drink" else v for k, v in extra.items()})
+            words = fill(own, text_values)
+            if words is not None:
+                return [self._speech(words, words, channel, language=self.talks_in)]
+        said = self._reply(key, extra)
         return [self._speech(said[0], said[1], channel)] if said is not None else []
 
     def _reply(self, key: str, extra: dict[str, str]) -> tuple[str, str] | None:
@@ -928,8 +940,9 @@ class CabinCrew:
             return False
         if to == "cabin":
             return True
-        if RAMP_CALL.match(text):
+        if RAMP_CALL.match(ramp_words.as_english(text, self.talks_in)):
             return False  # for the ground crew, even with the cabin still listening
+        text = cabin_words.as_english(text, self.talks_in)
         if self._address(text) is not None or CAPTAIN_PA.match(text):
             return True
         if t <= self._listening_until:
@@ -956,7 +969,7 @@ class CabinCrew:
     def heard(self, ev: IntercomHeard) -> list[Any]:
         """The cabin's answer to the pilot's words (``claims`` said they're the cabin's)."""
         self._t = max(self._t, ev.t)
-        text = ev.text.strip()
+        text = cabin_words.as_english(ev.text.strip(), self.talks_in)
         if CAPTAIN_PA.match(text):
             return []  # the captain's own announcement
         body = self._address(text)
@@ -1015,9 +1028,8 @@ class CabinCrew:
             return False
         return self.llm_mode != "semi" or self._unclear(draft)
 
-    @staticmethod
-    def _unclear(draft: str) -> bool:
-        return draft in [fill(o, {}) for o in REPLIES["unclear"]]
+    def _unclear(self, draft: str) -> bool:
+        return draft in [fill(o, {}) for o in REPLIES["unclear"]] or draft == cabin_words.REPLIES.get(self.talks_in, {}).get("unclear")
 
     def wants_words(self, text: str) -> bool:
         return text in self._to_word
@@ -1033,6 +1045,7 @@ class CabinCrew:
                   f"{person.brief}. Answer as a real flight attendant talks: one or two short spoken sentences, plain "
                   "words, no stage directions. Use only the facts given and never make up a number, a time or a gate. "
                   "Anything about flying the aircraft is the flight deck's, not yours. "
+                  + (f"Answer in {self.language_name}. " if self.language_name else "") +
                   'Reply as JSON: {"reply": "..."}')
         ask = ("Answer as best you can from the facts; if it isn't something you'd know, say so." if self._unclear(draft) else
                f'What you would say, to put in your own words (keep what it promises): "{draft}"')

@@ -165,6 +165,7 @@ class TrafficTarget(msgspec.Struct, frozen=True, kw_only=True):
     hdg_true: float
     gs_kt: float
     on_ground: bool
+    gear: float = 1.0  # how far out its gear is, 0 to 1
 
 
 class TrafficSnapshot(Event, tag="traffic_snapshot"):

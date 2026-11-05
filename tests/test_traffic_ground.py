@@ -465,3 +465,24 @@ def test_a_line_goes_round_one_that_never_moves():
         if k == 30:
             assert loc.follow.gs_kt == 0.0  # in line behind it
     assert loc.follow.gs_kt > 0.0  # stood there two minutes: gone round
+
+
+def test_taken_over_rolling_out_it_doesnt_go_back_for_where_it_was():
+    """The path starts where it was when it was worked out, and it's rolled on a second since: it went back for that point,
+    the nose swung right round and the aircraft was driven sideways off the runway."""
+    geo = AirportGeometry(RJTT)
+    graph = TaxiGraph(geo)
+    runway = next(r for r in geo.runways if r.name == "22/04")
+    end = next(e for e in runway.ends if e.ident == "04")
+    u = (math.sin(math.radians(end.heading_true)), math.cos(math.radians(end.heading_true)))
+    lat, lon = geo.frame.to_latlon(end.threshold[0] + u[0] * 600, end.threshold[1] + u[1] * 600)
+    spot = free_stand(geo, [], 60.1, [], seed="JAL5")
+    points, exit_index = taxi_in_path(geo, graph, lat, lon, end.heading_true, spot)
+    follower = Follower(points, gs_kt=57.0, exit_index=exit_index, spot=spot, index=1, last_hdg=end.heading_true)
+    # (A second on along the runway at 60 knots, as it has by the first step.)
+    x, y = geo.xy(lat, lon)
+    lat, lon = geo.frame.to_latlon(x + u[0] * 30.9, y + u[1] * 30.9)
+    for _ in range(8):
+        lat, lon, hdg, gs = follower.step(lat, lon)
+        assert abs((hdg - end.heading_true + 180) % 360 - 180) < 10.0, hdg
+        assert gs <= 57.0

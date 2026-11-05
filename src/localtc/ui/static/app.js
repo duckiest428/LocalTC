@@ -286,23 +286,31 @@ function zulu() {
 zulu();
 setInterval(zulu, 1000);
 
-/* The plan's off-block time beside it, while the flight's at the gate: "2300Z +12" (late), "2300Z -8" (to go). A plan
-   hours from the sim's clock isn't held to (crew.turnaround), and isn't shown. */
+/* The plan's off-block time beside it, while the flight's at the gate: "2300Z +12" (late), "2300Z -8" (to go); its on-block
+   time after that. A plan hours from the sim's clock isn't held to (crew.turnaround), and isn't shown. */
+function blockTime(box, label, when, zulu) {
+  const secs = ((when % 86400) - zulu + 129600) % 86400 - 43200;
+  const m = Math.round(-secs / 60), of = Math.floor((when % 86400) / 60);
+  label.textContent = `${String(Math.floor(of / 60)).padStart(2, "0")}${String(of % 60).padStart(2, "0")}Z ${m > 0 ? "+" : ""}${m}`;
+  box.classList.toggle("late", m > 0);
+  return secs;
+}
 function offBlock() {
-  const out = S.state && S.state.plan && S.state.plan.perf && S.state.plan.perf.sched_out_s;
-  const own = S.own, box = $("#offblock");
+  const perf = S.state && S.state.plan && S.state.plan.perf;
+  const out = perf && perf.sched_out_s, into = perf && perf.sched_in_s;
+  const own = S.own, box = $("#offblock"), inBox = $("#onblock");
   // Off blocks is a flight that's been rolling: not a moment of speed while the sim loads, and a new flight starts afresh.
   if (own && S.offBlockT != null && own.t < S.offBlockT) { S.offBlockGone = null; S.offBlockRolled = 0; }
   if (own) S.offBlockT = own.t;
   S.offBlockRolled = own && own.gs > 2 ? (S.offBlockRolled || 0) + 1 : 0;
   if (out && S.offBlockRolled >= 3) S.offBlockGone = out;
-  const secs = out && own && own.zulu != null && own.on_ground !== false && S.offBlockGone !== out
-    ? ((out % 86400) - own.zulu + 129600) % 86400 - 43200 : null;
+  const gone = !!out && S.offBlockGone === out;
+  const known = own && own.zulu != null;
+  const secs = out && known && !gone ? blockTime(box, $("#offblock-time"), out, own.zulu) : null;
   box.hidden = secs == null || Math.abs(secs) > 3 * 3600;
-  if (box.hidden) return;
-  const m = Math.round(-secs / 60), of = Math.floor((out % 86400) / 60);
-  $("#offblock-time").textContent = `${String(Math.floor(of / 60)).padStart(2, "0")}${String(of % 60).padStart(2, "0")}Z ${m > 0 ? "+" : ""}${m}`;
-  box.classList.toggle("late", m > 0);
+  if (!box.hidden) S.offBlockHeld = out;  // the sim's clock is on the plan's: its on-block time means something too
+  const inSecs = into && known && gone && S.offBlockHeld === out ? blockTime(inBox, $("#onblock-time"), into, own.zulu) : null;
+  inBox.hidden = inSecs == null;
 }
 setInterval(offBlock, 5000);
 

@@ -1392,5 +1392,7 @@
 "Your microphone and what you hear.": "你的麦克风和你听到的内容。",
 "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "自动：使用云端模型时大部分用 LLM，使用这台电脑上的模型时完全用脚本",
 "Transmit on COM2": "在 COM2 上发射",
-"COM2 {0}": "COM2 {0}"
+"COM2 {0}": "COM2 {0}",
+"The flight plan's on-block time, and how far off it is by the sim's clock: + late, - to go": "飞行计划的挡轮挡时间，以及按模拟器时钟的偏差：+ 晚点，- 还剩",
+"IBT": "IBT"
 }

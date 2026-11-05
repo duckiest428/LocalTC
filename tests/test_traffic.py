@@ -714,3 +714,30 @@ def test_a_quiet_share_goes_to_the_others():
     m = TrafficManager(TrafficSettings(max_live=10))
     m.own = own()
     assert len(m._choose([(0.1, _flight(i, 0.02, ground=True)) for i in range(20)])) == 10
+
+
+def test_gear_that_should_be_down_and_isnt_is_told_again():
+    from types import SimpleNamespace
+
+    from localtc.sim_api import AiLights, SetAiVar, TrafficSnapshot, TrafficTarget
+    from localtc.traffic.manager import TrafficManager
+
+    plane = SimpleNamespace(object_id=7, lights=(True, False, True, True, False, True, False), gear_told_t=-1e9, callsign="JBU672", title="A320")
+    manager = SimpleNamespace(by_object={7: plane}, _gear_again=[])
+
+    def target(gear, on_ground=True):
+        return TrafficTarget(object_id=7, lat=0.0, lon=0.0, alt_ft=0.0, hdg_true=0.0, gs_kt=10.0, on_ground=on_ground, gear=gear)
+
+    TrafficManager._gear_seen(manager, TrafficSnapshot(t=10.0, targets=(target(1.0),)))
+    assert not manager._gear_again
+    TrafficManager._gear_seen(manager, TrafficSnapshot(t=11.0, targets=(target(0.0),)))
+    assert manager._gear_again == [plane]
+    out = TrafficManager._gear_commands(manager)
+    assert any(isinstance(o, AiLights) and o.gear_down for o in out) and any(isinstance(o, SetAiVar) and o.value == 1.0 for o in out)
+    TrafficManager._gear_seen(manager, TrafficSnapshot(t=12.0, targets=(target(0.0),)))
+    assert not manager._gear_again  # not every snapshot
+    plane.lights = (False, False, False, True, True, True, False)
+    TrafficManager._gear_seen(manager, TrafficSnapshot(t=30.0, targets=(target(0.0, on_ground=False),)))
+    assert not manager._gear_again  # up, climbing away: meant to be
+    TrafficManager._gear_seen(manager, TrafficSnapshot(t=40.0, targets=(target(0.0),)))
+    assert manager._gear_again == [plane]  # on the ground it's down, whatever it was last told

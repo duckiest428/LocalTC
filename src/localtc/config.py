@@ -135,6 +135,7 @@ class PlanPerf(msgspec.Struct, frozen=True, kw_only=True):
     sched_out_s: int = 0  # the scheduled off-block time (Unix seconds; 0: not planned)
     sched_off_s: int = 0  # the scheduled takeoff
     pax: int = 0  # the passengers planned
+    sched_in_s: int = 0  # the scheduled on-block time
 
 
 class FlightConfig(_Section):

@@ -163,6 +163,7 @@ TRAFFIC: tuple[Datum, ...] = (
     Datum("hdg_true", "PLANE HEADING DEGREES TRUE", "degrees"),
     Datum("gs_kt", "GROUND VELOCITY", "knots"),
     Datum("on_ground", "SIM ON GROUND", "Bool", I32),
+    Datum("gear", "GEAR CENTER POSITION", "percent over 100"),  # (read live: 1 on the ground, 0 in the cruise, on FSLTL's and the sim's own)
 )
 
 # EXPERIMENTAL traffic control only: who each AI aircraft is (its model, to put the same one back) and where its AI
@@ -332,4 +333,5 @@ def traffic_from_raw(raw: dict[str, Any], object_id: int) -> TrafficTarget:
         hdg_true=round(raw["hdg_true"], 1),
         gs_kt=round(raw["gs_kt"], 1),
         on_ground=bool(raw["on_ground"]),
+        gear=float(raw.get("gear", 1.0)),
     )

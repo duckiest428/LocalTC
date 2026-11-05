@@ -163,6 +163,8 @@ EXTRAPOLATE_GROUND_S = 8.0  # ... on the ground only a few seconds (one carried 
 STAND_NM = 150 / 1852  # one taxiing in this close to a free stand it's heading for is put on it ...
 STAND_SLOW_KT = 20.0  # ... at taxi speed or less
 TAXI_IN_MPS = 2.5  # and rolls onto the stand's marker at a walking pace, stopping there
+GEAR_DOWN = 0.9  # the share of the gear out that counts as down
+GEAR_AGAIN_S = 5.0
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
 PATH_MIN_M = 8.0  # on the ground, moved this far between two reports: its track is the way it went
@@ -297,6 +299,7 @@ class Plane:
     turn_dps: float = 0.0
     last_track: tuple[float, float] | None = None  # (track, when): the turn worked out from the next one
     lights: tuple = ()
+    gear_told_t: float = -1e9  # when it was last told again that its gear should be down
     created_t: float = 0.0
     note: str = ""  # what ATC did with it, said once
     sent: tuple[float, ...] | None = None  # (lat, lon, alt, hdg, gs, vs, turn, when): the last state the bridge has
@@ -352,6 +355,7 @@ class TrafficManager:
         self.planes: dict[str, Plane] = {}
         self.by_request: dict[int, Plane] = {}
         self.by_object: dict[int, Plane] = {}
+        self._gear_again: list[Plane] = []  # gear seen up that should be down: told again on the next tick
         self.airports: dict[str, Airport] = {}
         self._geometry: dict[str, AirportGeometry] = {}
         self.parked_at: set[str] = set()  # airports filled with parked aircraft
@@ -470,7 +474,21 @@ class TrafficManager:
         out += self._track(plane, now)  # from where it was made (the bridge holds it there): eased, not jumped
         return out
 
+    def _gear_seen(self, snap: TrafficSnapshot) -> None:
+        """The gear as the sim shows it, against what it should be: one meant to be down and isn't is told again, until it is.
+        Once wasn't always enough, a command sent as it spawned going nowhere, and it taxied with its wheels up from then on."""
+        for target in snap.targets:
+            plane = self.by_object.get(target.object_id)
+            if plane is None or target.gear >= GEAR_DOWN or not (target.on_ground or (plane.lights and plane.lights[0])):
+                continue
+            if snap.t - plane.gear_told_t >= GEAR_AGAIN_S:
+                if plane.gear_told_t < 0:
+                    log.info("Traffic: %s (%s) has its gear up on the way down or on the ground: told again", plane.callsign or "An aircraft", plane.title)
+                plane.gear_told_t = snap.t
+                self._gear_again.append(plane)
+
     def on_snapshot(self, snap: TrafficSnapshot) -> None:
+        self._gear_seen(snap)
         """The sim's traffic: anything not LocalTC's is the sim's own (it should be off while this is on)."""
         others = [t for t in snap.targets if t.object_id not in self.by_object]
         self.native = sum(1 for t in others if t.gs_kt > 1.0 or not t.on_ground)
@@ -490,10 +508,23 @@ class TrafficManager:
 
     # --- every second ------------------------------------------------------------------------------------------
 
+    def _gear_commands(self) -> list[Any]:
+        out: list[Any] = []
+        for plane in self._gear_again:
+            if plane.object_id is None:
+                continue
+            gear, landing, taxi, beacon, strobe, nav, logo = plane.lights or (True, False, False, False, False, False, False)
+            out.append(AiLights(object_id=plane.object_id, gear_down=True, landing=landing, taxi=taxi, beacon=beacon, strobe=strobe, nav=nav,
+                                logo=logo, engines=beacon))
+            out += [SetAiVar(object_id=plane.object_id, name="GEAR HANDLE POSITION", unit="Bool", value=1.0)]
+            out += [SetAiVar(object_id=plane.object_id, name=f"GEAR {leg} POSITION", unit="percent over 100", value=1.0) for leg in ("CENTER", "LEFT", "RIGHT")]
+        self._gear_again.clear()
+        return out
+
     def tick(self, now: float) -> list[Any]:
         if not self.on or self.own is None:
             return []
-        out: list[Any] = []
+        out: list[Any] = self._gear_commands()
         out += self._live(now)
         if self.s.parked:
             out += self._parked(now)
@@ -930,9 +961,8 @@ class TrafficManager:
         gear, landing, taxi, beacon, strobe, nav, logo = state
         out: list[Any] = [AiLights(object_id=plane.object_id, gear_down=gear, landing=landing, taxi=taxi, beacon=beacon,
                                    strobe=strobe, nav=nav, logo=logo, engines=beacon)]
-        if not was or was[0] != gear or gear:
-            # The gear handle too: the key event alone left arrivals landing with their wheels up. Again at each change while
-            # it's meant to be down: aircraft were seen taxiing with it up, the first one not having taken.
+        if not was or was[0] != gear:
+            # The gear handle too: the key event alone left arrivals landing with their wheels up.
             out.append(SetAiVar(object_id=plane.object_id, name="GEAR HANDLE POSITION", unit="Bool", value=float(gear)))
         return out
 
@@ -1789,7 +1819,9 @@ class TrafficManager:
         points, exit_index = got
         self._did(f"{plane.callsign or 'An arrival'} taxied in to {geo.airport.parking[spot].name.title()} by LocalTC")
         plane.spot = (geo.icao, spot)  # kept for it: nobody else is put there meanwhile
-        return Follower(points, gs_kt=loc.gs_kt, exit_index=exit_index, spot=spot)
+        # On to the exit from the first: the first is where it was a moment ago, and it's rolled on since. Going back for it swung
+        # the nose round and drove it sideways across the grass at 110 knots, on every arrival that was taken over.
+        return Follower(points, gs_kt=loc.gs_kt, exit_index=exit_index, spot=spot, index=1, last_hdg=loc.hdg)
 
     def _taxi_in(self, plane: Plane, loc: Local, now: float) -> list[Any]:
         """A second along the way in; on the stand, parked there (and staying, as an arrival does)."""

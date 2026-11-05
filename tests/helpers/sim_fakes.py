@@ -56,7 +56,7 @@ IDENTITY_VALUES = {
 def traffic_values(atc_id: str) -> dict:
     return {
         "atc_id": atc_id, "airline": "", "flight_number": "", "atc_model": "PA28", "lat": 47.91,
-        "lon": -122.29, "alt_ft": 1600.0, "hdg_true": 90.0, "gs_kt": 95.0, "on_ground": 0,
+        "lon": -122.29, "alt_ft": 1600.0, "hdg_true": 90.0, "gs_kt": 95.0, "on_ground": 0, "gear": 1.0,
     }
 
 

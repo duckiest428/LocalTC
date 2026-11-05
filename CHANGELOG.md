@@ -95,7 +95,9 @@ a new minor version adds features, a patch fixes them.
 - **What you say, written properly:** "119. Decimal 7" is 119.7, "climate" and "crime and maintain" are climb, "via Tango, Charlie" is "via T, C", "gate Delta 1" is "gate D1". While a takeoff or landing clearance is owed, "clear" with a garbled word after it counts, and the speech recogniser expects the words owed.
 - **ATC:** the tower waits up to 30 seconds for your call before giving the landing order. The rest of another flight's exchange isn't shown once you've tuned away. A model's "Charlie, Bravo, three" for "C, B, 3" is accepted, and a correction keeps its "negative". An ATIS no longer calls a METAR "1151 min old" when the sim's clock is set earlier than the real one.
 - **The copilot** turns the seatbelt sign off at the gate, and says it doesn't have the answer to a plain question instead of "say again".
-- **COM2 stays in the radio bar on a narrow window,** and the off-block time isn't lost to a moment of speed while the sim loads. Traffic's gear is set again at each change on the ground.
+- **COM2 stays in the radio bar on a narrow window,** and the off-block time isn't lost to a moment of speed while the sim loads. The plan's on-block time (IBT) takes over from it once you've left the gate.
+- **Traffic's gear:** the sim's own reading of each aircraft's gear is checked, and one on the ground or on the way down with its gear up is told again until it's out.
+- **Traffic turning off the runway:** an arrival LocalTC takes over on its rollout no longer swings round and slides sideways off the runway at the moment it's given its way to a stand.
 
 ## [0.5.5] - 2026-11-02
 

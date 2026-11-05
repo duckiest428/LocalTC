@@ -1392,5 +1392,7 @@
 "Your microphone and what you hear.": "Ваш микрофон и то, что вы слышите.",
 "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC": "Автоматически: в основном LLM с облачной моделью, полностью по скрипту с моделью на этом ПК",
 "Transmit on COM2": "Передавать на COM2",
-"COM2 {0}": "COM2 {0}"
+"COM2 {0}": "COM2 {0}",
+"The flight plan's on-block time, and how far off it is by the sim's clock: + late, - to go": "Время прибытия на стоянку по плану полёта и отклонение по часам симулятора: + опоздание, - осталось",
+"IBT": "IBT"
 }

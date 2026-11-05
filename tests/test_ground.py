@@ -1274,3 +1274,165 @@ def test_a_model_cant_have_the_crew_wait_on_the_pilot():
 
     words, records = RampModel(Says()).word("attach the jetway", "Jetway's on its way.", 0.0)
     assert words == "Jetway's on its way." and records[0].outcome == "rejected"
+
+
+def _gsx_state(departure="performing", message="", menu=None, parking="Gate D1"):
+    from localtc.ground.api import GroundState, Service
+
+    services = {"Departure": Service(id="Departure", name="Pushback", state=departure, can_trigger=True),
+                "Cleaning": Service(id="Cleaning", name="Cleaning", state="available", can_trigger=True),
+                "Deboarding": Service(id="Deboarding", name="Deboard", state="available", can_trigger=True)}
+    return GroundState(connected=True, running=True, services=services, message=message, menu=menu, parking=parking)
+
+
+def _push_crew(**link):
+    from localtc.ground.crew import Push, RampCrew, RampLink
+
+    crew = RampCrew(RampLink(**link), seed=1)
+    crew._push = Push(direction="", stage="connecting", t=0.0)
+    return crew
+
+
+def _own(brake=True, gs=0.0, t=0.0):
+    from localtc.sim_api import OwnshipState
+
+    return OwnshipState(t=t, lat=26.0, lon=-80.0, alt_msl_ft=10.0, alt_indicated_ft=10.0, alt_agl_ft=0.0, altimeter_inhg=29.92, hdg_mag=90.0, hdg_true=90.0,
+                        ias_kt=gs, gs_kt=gs, vs_fpm=0.0, on_ground=True, squawk="1200", xpdr_mode="standby", com1_mhz=119.99, com2_mhz=121.5,
+                        parking_brake=brake, engine_running=False)
+
+
+def test_release_parking_brake_isnt_the_push_being_over():
+    """GSX's own "release parking brake": it had "Pushback complete. Set parking brake" called before the aircraft moved."""
+    crew = _push_crew()
+    crew.observe(_own(brake=True))
+    assert "Release parking brake" in " ".join(s.text for s in crew.update(_gsx_state(message="Release parking brake"), 1.0) if hasattr(s, "text"))
+    crew.observe(_own(brake=False))
+    said = " ".join(s.text for s in crew.update(_gsx_state(message="Release parking brake"), 2.0) if hasattr(s, "text"))
+    assert "pushing back" in said and "complete" not in said
+    # GSX stops to ask which way, the service "available" meanwhile: no disconnecting, and "pushing" isn't said again
+    crew.observe(_own(brake=False))
+    said = " ".join(s.text for s in crew.update(_gsx_state(departure="available"), 3.0) if hasattr(s, "text"))
+    assert "isconnect" not in said and "complete" not in said and "pushing back" not in said
+    # and after it's moved and stopped, the brake
+    crew.observe(_own(brake=False, gs=3.0))
+    crew.update(_gsx_state(), 4.0)
+    crew.observe(_own(brake=False, gs=0.0))
+    said = " ".join(s.text for s in crew.update(_gsx_state(message="Set parking brake", departure="completing"), 5.0) if hasattr(s, "text"))
+    assert "Set parking brake" in said
+
+
+def test_the_way_ground_cleared_is_the_way_gsx_is_told():
+    from localtc.ground import grammar as g
+    from localtc.ground.api import Menu
+    from localtc.ground.crew import Pick
+
+    crew = _push_crew(cleared_push_way=lambda: g.NOSE_RIGHT)  # "tail left"
+    crew.observe(_own(brake=False))
+    menu = Menu("Select pushback direction", ("Nose left (tail right)", "Nose right (tail left)"), (False, False))
+    picks = [o for o in crew.update(_gsx_state(menu=menu), 1.0) if isinstance(o, Pick)]
+    assert [p.index for p in picks] == [1]
+
+
+def test_until_left_is_tail_left():
+    from localtc.ground import grammar as g
+
+    asks = g.parse("Hello, Ramp, please start the pushback until left, please.")
+    assert [a.direction for a in asks if a.action == g.PUSH] == [g.NOSE_RIGHT]
+
+
+def test_interrupt_pushback_is_put_away_not_read_out():
+    from localtc.ground.api import Menu
+    from localtc.ground.crew import Close
+
+    crew = _push_crew()
+    crew.observe(_own(brake=False))
+    out = crew.update(_gsx_state(menu=Menu("Interrupt pushback?", ("Yes", "No", "Cameras"), (False, False, False))), 1.0)
+    assert any(isinstance(o, Close) for o in out)
+    assert not [o for o in out if hasattr(o, "text") and "Interrupt" in o.text]
+
+
+def test_a_question_that_comes_and_goes_is_read_once():
+    from localtc.ground.api import Menu
+
+    crew = _push_crew()
+    crew.observe(_own(brake=False))
+    menu = Menu("Something else?", ("One", "Two"), (False, False))
+    said = []
+    for t, up in ((1.0, menu), (2.0, None), (3.0, menu), (4.0, None), (5.0, menu)):
+        said += [o.text for o in crew.update(_gsx_state(menu=up), t) if hasattr(o, "text") and "Something" in o.text]
+    assert len(said) == 1
+
+
+def test_the_handler_is_the_airlines_else_gsxs_choice_else_the_first():
+    from localtc.ground.api import Menu
+    from localtc.ground.crew import Pick, RampCrew, RampLink
+
+    def picked(entries, airline):
+        crew = RampCrew(RampLink(airline=lambda: airline), seed=1)
+        crew._ours["Catering"] = 0.0
+        crew.observe(_own())
+        out = crew.update(_gsx_state(menu=Menu("Select catering operator", entries, tuple(False for _ in entries))), 1.0)
+        return next(o.index for o in out if isinstance(o, Pick))
+
+    rows = ("Southwest 2001 [GSX choice]", "Delta Flight Products", "Gate Gourmet")
+    assert picked(rows, "Delta") == 1
+    assert picked(rows, "Air Canada") == 0
+    assert picked(("Gate Gourmet", "Sky Chefs"), "Air Canada") == 0
+
+
+def test_several_services_in_one_breath_get_one_answer():
+    from localtc.ground import grammar as g
+    from localtc.ground.service import _together
+
+    asks = [g.Ask(g.REQUEST, ("OperateJetways",)), g.Ask(g.REQUEST, ("Catering",)), g.Ask(g.REQUEST, ("Cleaning",)), g.Ask(g.REQUEST, ("GPU",))]
+    assert [a.services for a in _together(asks)] == [("OperateJetways", "Catering", "Cleaning", "GPU")]
+    assert len(_together([g.Ask(g.REQUEST, ("GPU",)), g.Ask(g.STATUS), g.Ask(g.REQUEST, ("Water",))])) == 3
+
+
+def test_a_model_cant_say_the_jetway_is_gone_while_its_on_the_door():
+    from localtc.ground.model import RampModel
+
+    class Backend:
+        model = "m"
+
+        def complete(self, request, timeout_s):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(text='{"reply": "Jetway’s clear, you’re good to go."}', error="", latency_ms=1.0)
+
+    said, records = RampModel(Backend()).word("get the jetway off", "Okay, taking away the jetway.", 1.0)
+    assert said == "Okay, taking away the jetway." and records[0].outcome == "rejected"
+
+
+def test_the_cleaners_wait_for_the_passengers():
+    from localtc.ground.api import GroundState, Service
+    from localtc.ground.crew import RampCrew, RampLink, Send
+
+    crew = RampCrew(RampLink(), seed=1)
+    crew.observe(_own())
+
+    def state(deboarding):
+        return GroundState(connected=True, running=True, services={
+            "Deboarding": Service(id="Deboarding", name="Deboard", state=deboarding, can_trigger=True),
+            "Cleaning": Service(id="Cleaning", name="Cleaning", state="available", can_trigger=True)})
+
+    crew.update(state("performing"), 1.0)
+    said = crew.heard("ramp, cleaning please", 2.0)
+    assert any("passengers on board" in s.text for s in said if hasattr(s, "text"))
+    assert not [o for o in crew.tick(3.0) if isinstance(o, Send)]
+    out = crew.update(state("completed"), 4.0)
+    assert any(isinstance(o, Send) and o.service == "Cleaning" for o in out)
+
+
+def test_gsx_is_told_the_gate_atc_gave_only_where_it_can_be():
+    from dataclasses import replace
+
+    from localtc.ground.crew import RampCrew, RampLink, SelectGate
+
+    crew = RampCrew(RampLink(gate=lambda: "Gate 26"), seed=1)
+    crew.observe(_own(gs=10.0))
+    assert not [o for o in crew.update(_gsx_state(parking=""), 1.0) if isinstance(o, SelectGate)]  # GSX 4.0.5: no such thing
+    able = replace(_gsx_state(parking=""), capabilities=frozenset(("gate",)))
+    assert [o.gate for o in crew.update(able, 2.0) if isinstance(o, SelectGate)] == ["Gate 26"]
+    assert not [o for o in crew.update(able, 3.0) if isinstance(o, SelectGate)]  # not again straight away
+    assert not [o for o in crew.update(replace(able, parking="Gate 26"), 100.0) if isinstance(o, SelectGate)]  # it has it

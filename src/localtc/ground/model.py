@@ -39,12 +39,16 @@ WORD_SYSTEM = (
     "You are the ramp agent on the radio with the flight crew. Put what you're about to say in your own words: one short "
     "spoken sentence or two, a working person on a busy ramp, plain and friendly. Keep what it says: the same services, the "
     "same numbers and names. Add nothing: no gate, clearance or time that isn't in it, no promise, and never ask them to let you know "
-    "when they're ready. Don't say who's calling whom. "
+    "when they're ready. Something about to happen hasn't happened: don't say it's done, clear or all set. Don't say who's calling whom. "
     'Reply as JSON: {"reply": "..."}')
 
 
 # Told not to, a model still had the crew waiting on the pilot: "Jetway's coming right up, just let me know when you're ready to plug in."
 WAITS_ON_THE_PILOT = re.compile(r"\blet (?:me|us) know\b|\bwhen you(?:'|\u2019)?(?:re| are) ready\b|\bgive (?:me|us) a shout\b", re.IGNORECASE)
+
+
+# "Jetway's clear, you're good to go" for "taking away the jetway", with it still on the door, and the copilot then told the captain it was.
+SAYS_DONE = re.compile(r"\b(?:clear|cleared|good to go|all set|all done|done|finished|complete|completed|disconnected|gone)\b", re.IGNORECASE)
 
 
 @dataclass
@@ -117,7 +121,9 @@ class RampModel:
             reply = str(json.loads(text).get("reply", "")).strip() if text else ""
         except (ValueError, AttributeError):
             reply = ""
-        if reply and WAITS_ON_THE_PILOT.search(reply) and not WAITS_ON_THE_PILOT.search(draft):
+        why = "it had the crew waiting for the pilot" if reply and WAITS_ON_THE_PILOT.search(reply) and not WAITS_ON_THE_PILOT.search(draft) \
+            else "it said something was done that isn't yet" if reply and SAYS_DONE.search(reply) and not SAYS_DONE.search(draft) else ""
+        if why:
             return draft, [LlmExchange(t=t, purpose=record.purpose, model=record.model, key=record.key, prompt=record.prompt, response=record.response,
-                                       outcome="rejected", detail="it had the crew waiting for the pilot", latency_ms=record.latency_ms)]
+                                       outcome="rejected", detail=why, latency_ms=record.latency_ms)]
         return reply or draft, [record]

@@ -291,7 +291,11 @@ setInterval(zulu, 1000);
 function offBlock() {
   const out = S.state && S.state.plan && S.state.plan.perf && S.state.plan.perf.sched_out_s;
   const own = S.own, box = $("#offblock");
-  if (out && own && own.gs > 2) S.offBlockGone = out;
+  // Off blocks is a flight that's been rolling: not a moment of speed while the sim loads, and a new flight starts afresh.
+  if (own && S.offBlockT != null && own.t < S.offBlockT) { S.offBlockGone = null; S.offBlockRolled = 0; }
+  if (own) S.offBlockT = own.t;
+  S.offBlockRolled = own && own.gs > 2 ? (S.offBlockRolled || 0) + 1 : 0;
+  if (out && S.offBlockRolled >= 3) S.offBlockGone = out;
   const secs = out && own && own.zulu != null && own.on_ground !== false && S.offBlockGone !== out
     ? ((out % 86400) - own.zulu + 129600) % 86400 - 43200 : null;
   box.hidden = secs == null || Math.abs(secs) > 3 * 3600;

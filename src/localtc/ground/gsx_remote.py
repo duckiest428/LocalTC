@@ -178,6 +178,9 @@ class GsxRemote:
     async def trigger(self, service: str) -> Result:
         return await self._command("service.trigger", {"service": service})
 
+    async def select_gate(self, gate: str) -> Result:
+        return await self._command("gate.select", {"gate": gate, "revokeServices": False, "force": False})
+
     async def open_menu(self) -> Result:
         return await self._command("menu.open")  # never menu.toggle: on a menu already up, it closes it
 

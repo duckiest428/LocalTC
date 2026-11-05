@@ -359,7 +359,10 @@ def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ..
 
 
 def _is_route_token(token: Token, names: frozenset[str] | set[str] = frozenset()) -> bool:
-    return token.kind == "letter" or (token.kind == "word" and (len(token.text) == 1 or token.text in names))
+    # (A number too where the route given has a taxiway of that name: "via C, B, A, 3, 5" at LaGuardia was read back three
+    # times, by the copilot as well, and each time was "negative": the route stopped at A.)
+    return token.kind == "letter" or (token.kind == "word" and (len(token.text) == 1 or token.text in names)) \
+        or (token.kind == "number" and token.text in names)
 
 
 def _callsign_letter(tokens: list[Token], i: int) -> bool:
@@ -637,7 +640,8 @@ def callsigns(tokens: list[Token], expected: Callsign | None = None) -> list[Cal
         telephony = expected.telephony.lower().split()
         n = len(telephony)
         for i in range(len(words) - n + 1):
-            if words[i : i + n] == telephony and (num := _number(tokens, i + n)) and num.lstrip("0") == expected.flight_number.lstrip("0"):
+            if words[i : i + n] == telephony and (_flight_number_end(tokens, i + n, expected.flight_number) is not None
+                                                  or ((num := _number(tokens, i + n)) and num.lstrip("0") == expected.flight_number.lstrip("0"))):
                 return [expected]
         return []
     ident = expected.ident.lower().replace("-", "")
@@ -649,6 +653,19 @@ def callsigns(tokens: list[Token], expected: Callsign | None = None) -> list[Cal
                 or segment.startswith(suffix):
             return [expected]
     return []
+
+
+def _flight_number_end(tokens: list[Token], start: int, number: str) -> int | None:
+    """Past a flight number at ``start``, spelled in as many pieces as it takes: "98P" said "ninety-eight papa"."""
+    want, have = number.lower().lstrip("0"), ""
+    for i in range(start, min(len(tokens), start + 8)):
+        have += tokens[i].text.lower()
+        have = have.lstrip("0")
+        if have == want:
+            return i + 1
+        if not want.startswith(have):
+            return None
+    return None
 
 
 def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Token]:
@@ -664,8 +681,8 @@ def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Tok
         for i in range(len(words) - len(telephony)):
             if words[i : i + len(telephony)] == telephony:
                 end = i + len(telephony)
-                if end < len(tokens) and tokens[end].kind == "number" and tokens[end].text.lstrip("0") == number:
-                    end += 1
+                # (All of it: "via V, D, A, Emirates ninety-eight papa" left "98 P", read as taxiways A98 and P.)
+                end = _flight_number_end(tokens, end, callsign.flight_number) or end
                 return tokens[:i] + tokens[end:]
         return tokens
     ident = callsign.ident.lower().replace("-", "")
@@ -687,6 +704,19 @@ def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Tok
 def phrase(*phrases: tuple[str, ...]) -> Extractor:
     def extract(tokens: list[Token], expected: Any = None) -> list[bool]:
         return [True] if _has_any(tokens, *phrases) else []
+
+    return extract
+
+
+CLEARED_WORDS = {"clear", "cleared", "clearance", "clearing", "cleard", "clair"}
+
+
+def clearance(*phrases: tuple[str, ...]) -> Extractor:
+    """A takeoff or landing clearance read back. ATC has just given it and is waiting for it, so a "clear" with speech-to-text's
+    guess after it is that clearance ("clear photograph runway 10R", "clear the line, runway 22"): it isn't what a pilot
+    would say about anything else right then, and it took three tries on the runway and on short final."""
+    def extract(tokens: list[Token], expected: Any = None) -> list[bool]:
+        return [True] if _has_any(tokens, *phrases) or (expected and CLEARED_WORDS & set(_words(tokens))) else []
 
     return extract
 
@@ -795,12 +825,12 @@ ELEMENTS: dict[str, Extractor] = {
     "fix": fixes,
     "callsign": callsigns,
     # With what speech-to-text makes of "cleared": "great for takeoff", "cut to land", "clean to land".
-    "cleared_for_takeoff": phrase(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
+    "cleared_for_takeoff": clearance(("cleared", "for", "takeoff"), ("cleared", "takeoff"), ("cleared", "for", "take", "off"),
                                  ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off"),
                                  ("great", "for", "takeoff"), ("clean", "for", "takeoff"), ("cleat", "for", "takeoff"),
                                  ("cleared", "for", "departure")),
     "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"), ("position", "and", "hold")),
-    "cleared_to_land": phrase(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land"), ("cut", "to", "land"),
+    "cleared_to_land": clearance(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land"), ("cut", "to", "land"),
                               ("great", "to", "land"), ("clean", "to", "land"), ("cleat", "to", "land"), ("clear", "land"),
                               ("cleared", "for", "landing"), ("clear", "for", "landing")),
     "hold_position": phrase(("hold", "position"), ("holding", "position")),

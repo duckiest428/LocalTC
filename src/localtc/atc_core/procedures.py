@@ -86,3 +86,49 @@ def sid_first_fix(geo: AirportGeometry | None, fixes: tuple[RouteFix, ...]) -> R
         return None
     first = fixes[0]
     return first if geo.distance_nm(first.lat, first.lon) <= SID_PATH_NM else None
+
+
+def _same_sid(sim: str, plan: str) -> bool:
+    """SimBrief's "ANJLL4" and the sim's "ANJL4": navdata names are cut to five characters, then the number."""
+    sim, plan = sim.upper(), plan.upper()
+    if sim == plan:
+        return True
+    if len(plan) < 3 or len(sim) < 3 or sim[-1] != plan[-1] or not sim[-1].isalnum():
+        return False
+    return plan[:-1].startswith(sim[:-1]) or sim[:-1].startswith(plan[:-1])
+
+
+def _stem(name: str) -> str:
+    """The name's waypoint: "UNGA" of UNGA1M, "DTY" of DTY2Y."""
+    head = ""
+    for c in name.upper():
+        if not c.isalpha():
+            break
+        head += c
+    return head
+
+
+def _same_runway(a: str, b: str) -> bool:
+    return a.upper().lstrip("0") == b.upper().lstrip("0")
+
+
+def sid_for_runway(departures, runway: str, filed: str | None, *, joins: tuple[str, ...] = ()) -> str | None:
+    """The SID to clear a flight on from ``runway``, from the sim's ``departures``. The one filed if it's flown from that runway;
+    otherwise the one from that runway going the same way: it reaches a fix of ``joins`` (where the filed route goes next), or
+    has the filed one's waypoint in its name. None: there isn't one, and the clearance names no SID.
+
+    Birmingham, filed UNGA1M off 33 with 15 in use: "cleared via UNGA1M, expect runway 15", a procedure the aircraft's FMS
+    doesn't even offer for that runway."""
+    def from_here(p) -> bool:
+        return not p.runways or any(_same_runway(r, runway) for r in p.runways)
+
+    if filed and (found := [p for p in departures if _same_sid(p.name, filed)]) and any(from_here(p) for p in found):
+        return filed
+    candidates = sorted((p for p in departures if p.runways and from_here(p)), key=lambda p: p.name)
+    wanted = {j.upper() for j in joins}
+    if wanted and (hit := next((p for p in candidates if wanted & {*p.fixes, *p.enroute}), None)) is not None:
+        return hit.name
+    stem = _stem(filed or "")
+    if len(stem) >= 3 and (hit := next((p for p in candidates if _stem(p.name) == stem), None)) is not None:
+        return hit.name
+    return None

@@ -1291,6 +1291,10 @@ class Monitor(WatchMixin):
         # roll) is shut down only once it's stopped with the brake set: "Shutdown checklist?" came taxiing in.
         stopped = own.on_ground and own.gs_kt < 1
         shut = s is not None and s.engines_running == 0 and stopped and (self.f.max_engines > 0 or own.parking_brake)
+        # At the gate, brake set (an add-on's own brake doesn't always show, so the engines shut down count too): the sign goes off.
+        if stopped and (own.parking_brake or shut) and self.hands and "seatbelt" not in self.c.dead and not self._said("seatbelt_gate") \
+                and (s is None or s.seatbelt or "seatbelt" in self.c.profile.unread):
+            self._call("seatbelt_gate", ROUTINE, t, "Seatbelt sign off.", commands=(Command("seatbelt", "off"),))
         if shut and not own.parking_brake:
             self._call("park_brake", ROUTINE, t, "Parking brake?")
         if shut:

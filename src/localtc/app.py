@@ -345,6 +345,8 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
     link = RampLink(pushback_cleared=lambda: "pushback" in engine.state.clearances,
                     atc_working=lambda: engine.facility("ground") is not None or engine.facility("tower") is not None,
                     gate=lambda: engine.gate_given() or "",
+                    cleared_push_way=lambda: {"left": "nose_right", "right": "nose_left"}.get(engine.cleared_tail or "", ""),  # tail left: nose right
+                    airline=lambda: _airline_name(engine),
                     request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),
                     locale=lambda airport: accent(airport or engine.state.flight.origin), relay=relay)
     talked = crew_language(cfg.crew.language)  # the pilot's language: theirs too
@@ -985,7 +987,18 @@ def cabin_facts(engine, cfg: Config):
                  origin=origin or "", destination=dest or "", aircraft=flight.aircraft_type or "",
                  dest_lat=dest_lat, dest_lon=dest_lon, origin_lat=origin_lat, origin_lon=origin_lon,
                  planned_s=float(planned), cruise_ft=flight.cruise_ft or cfg.flight.cruise_ft or 0,
-                 sched_out_s=cfg.flight.perf.sched_out_s)
+                 sched_out_s=cfg.flight.perf.sched_out_s, pax=cfg.flight.perf.pax)
+
+
+def _airline_name(engine) -> str:
+    """The flight's airline by name, for the ground crew to pick its handler: "Delta", not a callsign."""
+    from localtc.crew.cabin_data import airline_of
+
+    callsign = engine.state.flight.callsign
+    if callsign is None:
+        return ""
+    known = airline_of(callsign.ident)[1]
+    return known.name if known is not None else (callsign.telephony if callsign.is_airline else "")
 
 
 def copilot_locale(personality: str, language_code: str) -> str:

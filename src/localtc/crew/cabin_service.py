@@ -19,6 +19,7 @@ from localtc.sim_api import (
     AircraftVars,
     CabinSpeech,
     FlightArrived,
+    GroundStatus,
     IntercomHeard,
     OwnshipState,
     PhaseChanged,
@@ -55,7 +56,7 @@ class CabinService:
         """``intercom``: the pilot's words on the intercom are heard here (False: the copilot's service hands them
         over)."""
         self.cabin, self.bus, self.source = cabin, bus, source
-        kinds = [AircraftVars, OwnshipState, AircraftSystems, AircraftIdentity, PhaseChanged, FlightArrived, WeatherReport, SimLifecycle]
+        kinds = [AircraftVars, OwnshipState, AircraftSystems, AircraftIdentity, PhaseChanged, FlightArrived, WeatherReport, SimLifecycle, GroundStatus]
         if intercom:
             kinds.append(IntercomHeard)
         self._inputs = bus.subscribe(*kinds)

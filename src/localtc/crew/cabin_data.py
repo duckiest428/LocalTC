@@ -267,6 +267,7 @@ AIRCRAFT = (
     ("A19N", AircraftFacts("Airbus A319neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
     ("A20N", AircraftFacts("Airbus A320neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
     ("A21N", AircraftFacts("Airbus A321neo", "neo stands for new engine option, and those engines burn around a fifth less fuel", True)),
+    ("A321", AircraftFacts("Airbus A321", "its family was the first airliner flown by digital fly-by-wire, with sidesticks instead of control columns", True)),
     ("A31", AircraftFacts("Airbus A319", "its family was the first airliner flown by digital fly-by-wire, with sidesticks instead of control columns", True)),
     ("A32", AircraftFacts("Airbus A320", "it was the first airliner flown by digital fly-by-wire, with sidesticks instead of control columns", True)),
     ("A33", AircraftFacts("Airbus A330", "it's a twin-aisle built for long ocean crossings on two engines")),

@@ -327,6 +327,22 @@ class ArrivalData(Event, tag="arrival_data"):
     legs: tuple[ArrivalLeg, ...] = ()
 
 
+class DepartureProcedure(msgspec.Struct, frozen=True, kw_only=True):
+    """A SID: the runways it's flown from ("15", "24R"; none listed: any), its enroute transitions and the fixes on it."""
+
+    name: str
+    runways: tuple[str, ...] = ()
+    enroute: tuple[str, ...] = ()
+    fixes: tuple[str, ...] = ()
+
+
+class DeparturesData(Event, tag="departures_data"):
+    """An airport's departure procedures, from the sim's navdata."""
+
+    airport: str
+    departures: tuple[DepartureProcedure, ...] = ()
+
+
 # --- Radio events (produced by LocalTC itself, published on the bus) --------
 
 
@@ -656,7 +672,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
-                 NearbyAirports, AircraftSystems, ArrivalData, TrafficIdentity, AiObjectAssigned, ModelList,
+                 NearbyAirports, AircraftSystems, ArrivalData, DeparturesData, TrafficIdentity, AiObjectAssigned, ModelList,
                  TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
                  OpsSnapshot, TerrainGrid, SimFrameRate]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]

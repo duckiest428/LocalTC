@@ -493,10 +493,10 @@ def test_they_say_when_boarding_runs_past_off_block_and_how_long_it_has_to_go():
     out = [o for t in range(40, 100, 5) for o in at_gate(cabin, float(t), -600.0, board=5)]
     out = [o for t in range(100, 160, 5) for o in at_gate(cabin, float(t), 30.0, board=5)]
     assert any("still boarding" in s.text and "minutes" in s.text for s in said(out, "interphone"))
-    out = [o for t in range(160, 260, 5) for o in at_gate(cabin, float(t), 700.0, board=5)]
+    out = [o for t in range(160, 260, 5) for o in at_gate(cabin, float(t), 960.0, board=5)]
     pa = said(out, "pa")
     assert any("delay" in s.text and "finishing the boarding" in s.text for s in pa)
-    out = [o for t in range(260, 320, 5) for o in at_gate(cabin, float(t), 800.0, board=6)]
+    out = [o for t in range(260, 320, 5) for o in at_gate(cabin, float(t), 1000.0, board=6)]
     assert any("minutes past" in s.text for s in said(out, "interphone"))
 
 
@@ -531,3 +531,29 @@ def test_ramp_words_are_the_ramps_even_with_the_cabin_listening():
 
     assert RAMP_CALL.match("ramp, how's the boarding") and RAMP_CALL.match("Ground crew, fuel please")
     assert not RAMP_CALL.match("the ramp agent's here") and not RAMP_CALL.match("cabin, start boarding")
+
+
+def test_can_we_get_boarding_started_starts_it():
+    from localtc.crew.cabin import ASKS_ABOUT, START_BOARDING
+
+    for said in ("hello there. can we get boarding started please?", "please begin deboarding", "start the boarding", "go ahead with the deboarding"):
+        assert START_BOARDING.search(said) and not ASKS_ABOUT.match(said), said
+    assert ASKS_ABOUT.match("has boarding started?")
+    assert not any(START_BOARDING.search(s) for s in ("how long for the boarding?", "any delay"))
+
+
+def test_gsxs_count_is_how_many_are_on_board():
+    from localtc.sim_api import GroundServiceState, GroundStatus
+
+    cabin = late_crew()
+    guess = cabin.passengers()
+    cabin.observe(GroundStatus(t=1.0, provider="gsx", connected=True, parking="", services=(
+        GroundServiceState(id="Boarding", name="Board", state="performing", waiting=False, status="bus in position\npax 23/133"),)))
+    assert cabin.passengers() == 133 != guess
+
+
+def test_an_a321_is_an_a321():
+    from localtc.crew.cabin_data import aircraft_facts
+
+    assert aircraft_facts("A321").name == "Airbus A321"
+    assert aircraft_facts("A320").name == "Airbus A320"

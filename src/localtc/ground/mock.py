@@ -124,6 +124,9 @@ class MockGsx:
             self._asking_for = ""
         self._changed()
 
+    async def select_gate(self, gate: str) -> Result:
+        return Result(False, "no_gate")
+
     async def trigger(self, service: str) -> Result:
         self.sent.append(("trigger", service))
         if not self.running:

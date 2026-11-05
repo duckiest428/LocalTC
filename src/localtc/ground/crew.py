@@ -42,10 +42,12 @@ GSX_STATE_VARS = {"Boarding": "L:FSDT_GSX_BOARDING_STATE", "Deboarding": "L:FSDT
 GSX_TOOK = (4.0, 5.0)  # requested, performing
 # Lines with a condition or a fact in them: a model rewording "parking brake first" said "parking brake set", and "the jetway
 # isn't running" said "jetway's down". Said as written.
-AS_WRITTEN = ("say_again", "brake_for_bridge", "brakes_set_first", "stopped_first", "engines_off_first", "on_stand_first", "fuel_engines",
+AS_WRITTEN = ("off", "cleaning_after", "say_again", "brake_for_bridge", "brakes_set_first", "stopped_first", "engines_off_first", "on_stand_first", "fuel_engines",
               "cancel_nothing", "off_nothing", "no_take", "no_gsx", "not_here", "parked_at", "parked_unknown")
 OURS_S = 120.0  # GSX's questions this soon after calling a service are about it
 CALL_GAP_S = 4.0  # between the crew's own calls
+READ_AGAIN_S = 60.0  # one of GSX's questions isn't read out again sooner than this
+GATE_AGAIN_S = 60.0
 CALL_WAIT_S = 45.0  # a call that couldn't be said this long (ATC talking, the pilot keyed): dropped
 DOOR_AGAIN_S = 120.0
 BRAKE_AGAIN_S = 20.0
@@ -73,6 +75,8 @@ class RampLink:
     pushback_cleared: Callable[[], bool] = lambda: False  # ATC has cleared the push
     atc_working: Callable[[], bool] = lambda: False  # a controller here who'd clear it (none: no waiting)
     gate: Callable[[], str] = lambda: ""  # the gate ATC gave
+    cleared_push_way: Callable[[], str] = lambda: ""  # the way ATC cleared the push: grammar.NOSE_LEFT, NOSE_RIGHT or ""
+    airline: Callable[[], str] = lambda: ""  # the flight's airline by name ("Delta"): the handler to ask for
     request_gate: Callable[[str], tuple[bool, str]] = lambda label: (False, "there's no ATC to ask.")
     locale: Callable[[str], str] = lambda airport: ""  # the crew's English, by the airport
     # The cabin crew's or the copilot's turn on boarding and deboarding: ("boarding_start", ...) -> what they say ([]: they'll
@@ -124,6 +128,9 @@ class RampCrew:
         self._offer: tuple[str, Any] | None = None  # asked the pilot: ("push", direction), ("finish", service)
         self._asking: Menu | None = None  # a question of GSX's read out, waiting for the pilot
         self._seen_question: Menu | None = None
+        self._read_out: dict[str, float] = {}  # GSX's questions read to the pilot, and when
+        self._cleaning_waits = False  # the cleaners asked for with passengers still on board: called once they're off
+        self._gate_sent: dict[str, float] = {}  # stands GSX has been told of, and when
         self._cancelled: set[str] = set()
         self._calls: list[tuple[float, int, str, dict]] = []
         self._call_t = -1e9
@@ -278,6 +285,9 @@ class RampCrew:
                 svc = self._service(service)
                 if svc is None:
                     out.append(self._speech("no_gsx" if not self.state.services else "not_here", t, name=self._name(service)))
+                elif service == "Cleaning" and self._deboarding() and not svc.active:
+                    self._cleaning_waits = True
+                    out.append(self._speech("cleaning_after", t))
                 elif svc.active or service in self._queue or self._bridge.get(service) is True:
                     out.append(self._speech("already", t, name=self._name(service)))
                 elif svc.state == "unavailable" or (not svc.can_trigger and svc.state != "completed"):
@@ -288,6 +298,10 @@ class RampCrew:
         if coming:
             out.insert(0, self._speech("ack", t, list=self._names(coming)))
         return out
+
+    def _deboarding(self) -> bool:
+        svc = self._service("Deboarding")
+        return "Deboarding" in self._queue or (svc is not None and svc.active)
 
     def _refused(self, service: str, t: float) -> RampSpeech | None:
         own = self.own
@@ -548,12 +562,18 @@ class RampCrew:
                 out.append(self._speech("release_brakes", t))
         if push.stage == "connecting" and not self.braked and "release" in push.told:
             push.stage = "pushing"
-            out.append(self._speech("pushing", t))
+            if "pushing" not in push.told:  # (once: GSX can stop to ask which way, and go on)
+                push.told.add("pushing")
+                out.append(self._speech("pushing", t))
         if push.stage == "pushing":
             if "start" not in push.told and own.gs_kt > 0.5:
                 push.told.add("start")
                 out.append(self._speech("cleared_start", t))
-            if "brake" in message or svc.state == "completing":
+            moved = "start" in push.told
+            # ("Release parking brake" is GSX's too: it had "Pushback complete" called before the aircraft moved. So had the
+            # service showing "available" while GSX waits on which way to go.)
+            if ("brake" in message and "release" not in message and moved) or svc.state == "completing" \
+                    or (moved and not svc.active and own.gs_kt < 0.5 and self.state.menu is None):
                 push.stage = "set_brake"
         if push.stage == "set_brake":
             if not self.braked and ("brake" not in push.told or t - push.brake_said_t >= BRAKE_AGAIN_S):
@@ -588,9 +608,20 @@ class RampCrew:
         if menu == self._seen_question or not self._is_ours(t):
             return []
         self._seen_question = menu
+        if has_words(menu.title, "interrupt"):
+            # "Interrupt pushback?": GSX's page while it's already doing what was asked. It went up and down four times in
+            # ten seconds, read out each time, and "yes" would have stopped the push. Put away; "stop the push" still stops it.
+            log.info("Ground crew: closing GSX's %r page", menu.title)
+            return [Close()]
+        if (said := self._read_out.get(menu.title)) is not None and t - said < READ_AGAIN_S:
+            self._asking = menu  # (the same question again: GSX's menu comes and goes. Still answerable)
+            return []
+        self._read_out[menu.title] = t
         if has_words(menu.title, "operator"):
             real = [(i, e) for i, e in real_entries(menu) if not (i < len(menu.disabled) and menu.disabled[i])]
-            choice = next((i for i, e in real if OPERATOR_CHOICE in norm(e)), real[0][0] if real else None)
+            airline = norm(self.link.airline())
+            own = next((i for i, e in real if airline and airline in norm(e)), None)
+            choice = own if own is not None else next((i for i, e in real if OPERATOR_CHOICE in norm(e)), real[0][0] if real else None)
             if choice is not None:
                 return [Pick(choice, menu.entries[choice])]
         if has_words(menu.title, "refueling level"):
@@ -662,7 +693,7 @@ class RampCrew:
 
     def _direction_question(self, menu: Menu, rows: dict, t: float) -> list[Any]:
         push = self._push
-        wanted = push.direction if push is not None else ""
+        wanted = (push.direction if push is not None else "") or self.link.cleared_push_way()  # "tail left" from ground, and nobody's said otherwise
         if wanted and rows[wanted].index is not None:
             return [Pick(rows[wanted].index, menu.entries[rows[wanted].index])]
         available = [self._said_direction(d).replace("，", ",").split(",")[0] for d, f in rows.items() if f.index is not None]
@@ -770,6 +801,10 @@ class RampCrew:
         self._ours.pop(service, None)
         if service not in self._finished:
             self._finished.append(service)
+        if service == "Deboarding" and self._cleaning_waits:
+            self._cleaning_waits = False
+            if "Cleaning" not in self._queue:
+                self._queue.append("Cleaning")
         if service == "GPU":
             return []  # (said when it connected: this is it going away)
         if service in RELAYED:
@@ -817,8 +852,21 @@ class RampCrew:
         out += self._once_braked(t)
         out += self._send_next(t)
         out += self._due_calls(t)
+        out += self._gate_to_gsx(t)
         out += self._parked_elsewhere(t)
         return out
+
+    def _gate_to_gsx(self, t: float) -> list[Any]:
+        """The gate ground gave, as GSX's parking too, so its services go there. Only where GSX says it can (``gate``, newer
+        versions), once on the ground at the airport; tried again now and then, its airport data may not be loaded yet."""
+        gate = self.link.gate()
+        own = self.own
+        if not gate or "gate" not in self.state.capabilities or own is None or not own.on_ground or self.parked:
+            return []
+        if _stand(gate) == _stand(self.state.parking) or t - self._gate_sent.get(gate, -1e9) < GATE_AGAIN_S:
+            return []
+        self._gate_sent[gate] = t
+        return [SelectGate(gate)]
 
     def _once_braked(self, t: float) -> list[Any]:
         """The jetway, stairs or push waiting on the brake: they come when it's set, as the crew said. Rolling away calls it off."""
@@ -864,6 +912,9 @@ class RampCrew:
                 self._sending = None
                 self._ours.pop(service, None)
                 out: list[Any] = [Close()] if self.state.menu is not None else []
+                if service == "Cleaning" and self._deboarding():  # GSX only cleans an empty aircraft, and says nothing about it
+                    self._cleaning_waits = True
+                    return [*out, self._speech("cleaning_after", t)]
                 return [*out, self._speech("no_take", t, name=self._name(service))]
             else:
                 return []
@@ -892,6 +943,13 @@ class Send:
     """Call this service."""
 
     service: str
+
+
+@dataclass(frozen=True)
+class SelectGate:
+    """Tell GSX which stand this is."""
+
+    gate: str
 
 
 def _plain(entry: str) -> str:

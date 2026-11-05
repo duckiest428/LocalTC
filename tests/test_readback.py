@@ -262,3 +262,40 @@ def test_a_fix_spelled_out_and_a_frequency_run_into_to():
     assert fixes(normalize("Direct. K, E, B, G, O. Air Transat 250."), "KEBGO") == ["KEBGO"]
     assert frequencies(normalize("121.02 Montreal Ground, when ready"), 121.0) == [121.0]  # "121.0 to Montreal Ground"
     assert frequencies(normalize("121.2 ground"), 121.0) == [121.2]
+
+
+def test_taxiways_named_by_a_number_alone():
+    """LaGuardia: "via C, B, A, 3, 5", right three times, and "negative" each time (the route stopped at A)."""
+    from localtc.atc_core.readback.extract import taxi_route_matches, taxi_routes
+    from localtc.atc_core.readback.normalize import normalize
+
+    want = ("C", "B", "A", "3", "5")
+    for said in ("Taxi to gate 26 via C, B, A 3 and 5, Delta 2321.", "C, B, A, 3 and 5 Delta 2321",
+                 "Taxi to gate two six via charlie, bravo, alpha, three, five, Delta twenty-three twenty-one."):
+        routes = taxi_routes(normalize(said), want)
+        assert routes and taxi_route_matches(routes[0], want), (said, routes)
+
+
+def test_a_callsign_with_a_letter_in_its_number_isnt_a_taxiway():
+    """Birmingham: "via V, D, A, Emirates ninety-eight papa" was route V, D, A98, P, and "negative"."""
+    from localtc.atc_core.readback.extract import callsigns, taxi_route_matches, taxi_routes, without_callsign
+    from localtc.atc_core.readback.normalize import normalize
+    from localtc.atc_core.values import Callsign
+
+    emirates = Callsign.named("UAE98P")
+    want = ("V", "D", "A")
+    for said in ("Holding point alpha runway one five via victor, delta, alpha, Emirates ninety-eight papa.", "Taxi via v, d, a, Emirates 98P"):
+        tokens = normalize(said)
+        assert callsigns(tokens, emirates) == [emirates], said
+        routes = taxi_routes(without_callsign(tokens, emirates), want)
+        assert routes and taxi_route_matches(routes[0], want), (said, routes)
+
+
+def test_a_clearance_just_given_with_a_guess_after_clear():
+    from localtc.atc_core.readback.extract import ELEMENTS
+    from localtc.atc_core.readback.normalize import normalize
+
+    assert ELEMENTS["cleared_for_takeoff"](normalize("Clear photograph runway 10R, Delta 2321."), True)
+    assert ELEMENTS["cleared_to_land"](normalize("Clear the line, runway 22, Delta 321."), True)
+    assert not ELEMENTS["cleared_for_takeoff"](normalize("Clear photograph runway 10R, Delta 2321."))  # nothing's waiting for it
+    assert not ELEMENTS["cleared_to_land"](normalize("Runway 22, Delta 321."), True)

@@ -120,6 +120,13 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\bon my discussion\b|\bat my discussion\b|\bat your discussion\b", "at my discretion"),
     (r"\b(?:factors|vectoring|vector's|victors)\b(?= (?:for|to|onto|as filed)\b)|\bsome (?:factors|victors)\b", "vectors"),
     (r"\b(?:taxi ?viate|taxi via it|taxiv[ie]a)\b", "taxi via"),
+    (r"\b(\d{3})[.,]? (?:decimal|point)[.,]? (\d{1,3})\b", r"\1.\2"),  # "119. Decimal 7" is 119.7
+    (r"\b(?:crime|climate|clime|climbed)(?: and| to)? maintain\b", "climb and maintain"),
+    (r"\bclimate(?= (?:\d|flight level))", "climb"),  # "Climate 17,000"
+    (r"^comment in(?= \d)", "climb and maintain"),  # "Comment in 230"
+    (r"\b(\d{3})\.(\d{4})\b", r"\1, \2"),  # "flight level 370.2321": the level, then the flight number; a frequency's never four decimals
+    (r"\btengo\b", "tango"),
+    (r"\b(?:runway|taxiway) (\d{1,2})[.,]? (r|l|c)(?:ight|eft|enter)\b[?,.]?", lambda m: f"runway {m[1]}{m[2].upper()}"),  # "Runway 10, right?"
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in FIXUPS]
 
@@ -133,7 +140,27 @@ def fixup(text: str) -> str:
         text = pattern.sub(replacement, text)
     while DIGIT_RUN.search(text):  # Whisper hyphenates digits said one by one: "1-2000", "0-6", "5-0-1-5"
         text = DIGIT_RUN.sub(r"\1\2", text)
-    return " ".join(text.split())
+    return _written(" ".join(text.split()))
+
+
+PHONETIC = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F", "golf": "G",
+            "hotel": "H", "india": "I", "juliet": "J", "juliett": "J", "kilo": "K", "lima": "L", "mike": "M", "november": "N",
+            "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R", "sierra": "S", "tango": "T", "uniform": "U", "victor": "V",
+            "whiskey": "W", "x-ray": "X", "xray": "X", "yankee": "Y", "zulu": "Z"}
+_NAME = "|".join(PHONETIC)
+# One name of a route: "Tango", "Hotel 4", "H4". Not a callsign's first word ("Delta 2321"): a taxiway has two digits at most.
+_ITEM = rf"(?:(?:{_NAME})(?:[ -]\d{{1,2}}(?![\d.,]\d))?(?![ -]?\d)|[a-z]\d{{0,2}}(?![a-z\d]))"
+_ROUTE = re.compile(rf"\b(via) ({_ITEM}(?:(?:,? and|,)? {_ITEM})*)", re.IGNORECASE)
+_ONE = re.compile(rf"\b({_NAME})(?:[ -](\d{{1,2}}))?\b", re.IGNORECASE)
+_STAND = re.compile(rf"\b(gate|stand) ({_NAME})[ -]?(\d{{1,3}})\b", re.IGNORECASE)
+
+
+def _written(text: str) -> str:
+    """A taxi route and a gate as they're written: "via Tango, Charlie, H4" is "via T, C, H4", "gate Delta 1" is "gate D1"."""
+    def route(m: re.Match) -> str:
+        return f"{m[1]} " + _ONE.sub(lambda n: PHONETIC[n[1].lower()] + (n[2] or ""), m[2])
+
+    return _STAND.sub(lambda m: f"{m[1]} {PHONETIC[m[2].lower()]}{m[3]}", _ROUTE.sub(route, text))
 
 
 # --- the flight's own names ------------------------------------------------------------------------------------------

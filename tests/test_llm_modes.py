@@ -736,3 +736,16 @@ def test_can_we_go_direct_isnt_ready_to_taxi_and_no_traffic_is_made_up():
     assert "ready_to_taxi" not in [m.intent for m in match_intents(normalize("center can we go direct boeing to save some time"))]
     with pytest.raises(PhraseError):
         check_reply('{"reply": "no traffic off your left"}', {"phase": "cruise"}, ("N172LT",), beyond_facts=True)
+
+
+def test_a_route_with_taxiways_named_by_a_number_in_a_models_words():
+    from localtc.atc_core.llm.phrase import check_reworded
+
+    said = check_reworded('{"reply": "taxi to Gate 26 via Charlie, Bravo, Alpha, Three, Five."}', "taxi to Gate 26 via C, B, A, 3, 5", ("DAL2321",))
+    assert "Five" in said or "5" in said
+
+
+def test_a_correction_keeps_its_negative():
+    from localtc.atc_core.llm.phrase import check_reworded
+
+    assert check_reworded('{"reply": "switch to 125.1"}', "negative, frequency 125.1", ("DAL2321",)).lower().startswith("negative")

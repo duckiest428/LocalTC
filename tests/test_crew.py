@@ -539,3 +539,15 @@ def test_the_pmdg_777_has_boeings_flaps_and_leaves_its_mcp_to_the_pilot():
     assert p.detent_index("5", 6) == 2 and p.detent_index("30", 6) == 6
     assert {"altitude", "heading", "seatbelt", "squawk"} <= set(p.cannot)
     assert max(profiles, key=lambda p: p.match_length("737 MAX 8", "B38M")).name != "PMDG 777"
+
+
+def test_right_alt_is_right_alt_under_either_of_its_names():
+    from types import SimpleNamespace
+
+    from localtc.stt.ptt import _same_vk
+
+    # (As pynput has them on Windows: alt_r and alt_gr, the same code, two members that don't compare equal.)
+    alt_r, alt_gr, alt_l = (SimpleNamespace(value=SimpleNamespace(vk=v)) for v in (165, 165, 164))
+    assert _same_vk(alt_gr, alt_r)
+    assert not _same_vk(alt_l, alt_r)
+    assert not _same_vk(SimpleNamespace(char="a"), alt_r)

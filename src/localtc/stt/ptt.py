@@ -28,6 +28,13 @@ def parse_key(name: str):
 MODIFIERS = ("alt", "ctrl", "shift", "cmd")
 
 
+def _same_vk(a, b) -> bool:
+    """The same physical key under two names: pressed, Right Alt comes as ``alt_gr`` on Windows, and ``alt_r`` (what the setting
+    says) never compared equal to it, so the key did nothing at all."""
+    a_vk, b_vk = (getattr(getattr(k, "value", k), "vk", None) for k in (a, b))
+    return a_vk is not None and a_vk == b_vk
+
+
 class KeyboardPtt:
     """A key held to talk. A modifier key (Alt, Ctrl ...) pressed together with another key is a shortcut, not talking:
     ``on_cancel`` then, instead of ``on_up`` (Alt+Tab with Left Alt as the intercom key made Whisper hear words in the
@@ -58,8 +65,8 @@ class KeyboardPtt:
             self._listener.stop()
 
     def _matches(self, key) -> bool:
-        return key == self.key or (hasattr(key, "char") and hasattr(self.key, "char") and key.char
-                                   and self.key.char and key.char.lower() == self.key.char)
+        return key == self.key or _same_vk(key, self.key) or (hasattr(key, "char") and hasattr(self.key, "char") and key.char
+                                                              and self.key.char and key.char.lower() == self.key.char)
 
     def _press(self, key) -> None:
         if self._matches(key):

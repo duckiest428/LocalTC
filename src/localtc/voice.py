@@ -56,8 +56,20 @@ def flight_hints(engine: AtcEngine) -> VocabularyHints:
         runways=tuple(dict.fromkeys(runways)),
         taxiways=tuple(taxiways[:20]),
         procedures=tuple(p.upper() for p in (engine.cfg.sid, engine.cfg.star) if p),
+        extra=_owed(engine),
         fixes=tuple(f.ident for f in engine.route.fixes) if engine.route else (),
     )
+
+
+def _owed(engine) -> tuple[str, ...]:
+    """The words a readback owed is made of, for Whisper to expect them: "Clear photograph runway 10R", "Clear the line", "Climate
+    17,000". Only the words: its values stay what the pilot says."""
+    pending = engine.state.pending
+    if pending is None:
+        return ()
+    words = {"cleared_for_takeoff": "Cleared for takeoff.", "cleared_to_land": "Cleared to land.", "line_up_and_wait": "Line up and wait.",
+             "hold_short": "Hold short.", "altitude": "Climb and maintain. Descend and maintain.", "taxi_route": "Taxi via.", "frequency": "Contact."}
+    return tuple(line for element, line in words.items() if element in pending.required)
 
 
 # --- re-transcribing a recording -------------------------------------------------------------------------

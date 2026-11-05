@@ -249,6 +249,7 @@ def _perf(data: dict[str, Any]) -> PlanPerf:
         takeoff_flaps=str(rwy.get("flap_setting") or ""), vref=_int(dry.get("speeds_vref")),
         landing_flaps=str(dry.get("flap_setting") or ""),
         sched_out_s=_int(times.get("sched_out")), sched_off_s=_int(times.get("sched_off")),
+        pax=_int(weights.get("pax_count")) if isinstance(weights, dict) else 0,
     )
 
 

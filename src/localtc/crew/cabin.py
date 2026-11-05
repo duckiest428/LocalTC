@@ -64,6 +64,7 @@ from localtc.sim_api import (
     CabinSound,
     CabinSpeech,
     FlightArrived,
+    GroundStatus,
     IntercomHeard,
     LlmExchange,
     OwnshipState,
@@ -103,6 +104,7 @@ class Facts:
     planned_s: float = 0.0  # the planned flight time (0: not known)
     cruise_ft: int = 0
     sched_out_s: int = 0  # the plan's off-block time (Unix seconds; 0: not planned)
+    pax: int = 0  # the plan's passengers (0: not known)
 
 
 # What says where the boarding is: GSX's own state where it's running (its manual's L:vars: 1 available, 3 skipped,
@@ -111,6 +113,12 @@ GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE = ("L:FSDT_GSX_BOARDING_STATE", "L:F
                                                "L:FSDT_GSX_DEPARTURE_STATE")
 DOORS = ("INTERACTIVE POINT OPEN:0", "INTERACTIVE POINT OPEN:1")
 WATCHED = (GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE, *DOORS)
+# "Can we get boarding started?", "start boarding", "board them", "go ahead with the deboarding". Not "has boarding started?".
+START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?board\s+(?:them|the\s+passengers)\b"
+                            r"|\b(de-?\s?)?boarding\s+(?:started|going|under\s?way)\b"
+                            r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b")
+ASKS_ABOUT = re.compile(r"\W*(?:\w+\W+)?(?:has|have|did|is|are|how|when|what|was|were)\b")
+GSX_PAX = re.compile(r"\bpax \d+/(\d+)")
 BOARDING_PA_S = 25.0  # after boarding begins: the boarding welcome
 ROLLING_S = 3.0  # moving for this long: moving
 # The announcements the language model may put in the crew member's own words, when it's a cloud one (never the safety
@@ -139,7 +147,7 @@ MIN_SERVICE_S = 25 * 60  # a flight shorter than this has no service
 BOARDING_S_PER_PAX = 7.6  # GSX's pace, about (130 on an A220 took 16 and a half minutes)
 NOT_BOARDING_S = 25 * 60  # this long before off-block with nobody on board: said
 READY_LATE_S = 5 * 60  # this late, boarded, and not pushing: said
-LATE_PA_S = (10 * 60, 30 * 60)  # this late: the passengers are told
+LATE_PA_S = (15 * 60, 30 * 60)  # this late: the passengers are told (ten minutes was thought too soon for it)
 SPEECH_S_PER_WORD = 0.42  # how long an announcement takes to say, about
 FACTS_EVERY_S = 10.0  # the flight's details asked for again this often
 
@@ -288,6 +296,7 @@ class CabinCrew:
         self.seed = seed
         self.talks_in = ""  # [crew] language: the captain's language, which they answer in ("" English)
         self.language_name = ""  # ... its name, for the language model
+        self._gsx_pax = 0  # the passengers GSX has for this flight
         self.ground_call: Any = None  # the ground crew, to start boarding and deboarding (ground.crew.RampCrew.called_by_cabin)
         self.backend: Any = None  # the cloud language model (None: the script's words)
         self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
@@ -383,6 +392,9 @@ class CabinCrew:
         return langs or ("en",)
 
     def passengers(self) -> int:
+        """How many are on board: what GSX is boarding, else the flight plan's, else about what the aircraft would carry."""
+        if self._gsx_pax or self.facts.pax:
+            return self._gsx_pax or self.facts.pax
         capacity = seats(self.facts.aircraft) or 150
         load = 0.72 + 0.26 * ((crc(f"load|{self.facts.callsign}|{self.seed}") % 1000) / 999)
         return max(1, int(capacity * load))
@@ -628,6 +640,10 @@ class CabinCrew:
             self._phase = ev.phase
         elif isinstance(ev, AircraftVars):
             self._vars.update(ev.values)
+        elif isinstance(ev, GroundStatus):
+            for service in ev.services:  # "pax 23/133"
+                if service.id in ("Boarding", "Deboarding") and (m := GSX_PAX.search(service.status)) and int(m[1]):
+                    self._gsx_pax = int(m[1])
         elif isinstance(ev, AircraftSystems):
             out += self._systems(ev)
         elif isinstance(ev, OwnshipState):
@@ -761,10 +777,13 @@ class CabinCrew:
                 if s.boarding_music and not ready:
                     self._mark("music", t)
                     out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000))
+            # (GSX's "requested" is the music; the welcome's for when somebody's walking on. It was said three minutes before anybody did.)
             if "boarding" not in self.done and "begun" in self.done and not ready and not finished \
-                    and t - self._at["begun"] >= BOARDING_PA_S:
+                    and (not gsx or board == 5) and t - self._at["begun"] >= BOARDING_PA_S:
                 out += self._moment("boarding", t, self.announce("boarding"))
-            if not pushing:
+            if pushing:
+                self.done.add("pushed")
+            if not pushing and "pushed" not in self.done:  # (off blocks is off blocks: stopped to start up, nobody's "running behind")
                 out += self._schedule(t, gsx=gsx)
             if "boarded" not in self.done and (finished or ready):
                 self._mark("boarded", t)
@@ -1159,8 +1178,8 @@ class CabinCrew:
     def _answer(self, body: str, t: float, *, asked: bool) -> list[Any]:  # noqa: C901 - one reading per kind of call
         low = body.lower()
         reply = self.reply
-        if self.ground_call is not None and (m := re.search(r"\b(?:start|begin|commence)\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?board\s+(?:them|the\s+passengers)\b", low)):
-            service = "Deboarding" if m.group(1) or m.group(2) else "Boarding"
+        if self.ground_call is not None and not ASKS_ABOUT.match(low) and (m := START_BOARDING.search(low)):
+            service = "Deboarding" if any(m.groups()) else "Boarding"
             if not self.ground_call(service, t):
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")

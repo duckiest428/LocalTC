@@ -362,3 +362,19 @@ def test_an_enforced_runway_the_airport_lacks_falls_back_to_the_atis():
     s.flight.dep_runway = "33X"
     s.atc.enforce_fpln_runways = True
     assert taxi_runway(run(s, FLIGHT, recording=FLIGHT)) == "06L"
+
+
+def clearance_line(result) -> str:
+    return next(line for line in atc(result.lines) if "cleared to" in line.lower())
+
+
+def test_a_sid_filed_for_another_runway_isnt_the_one_cleared():
+    """Without the sim's procedures (a recording before them) the plan's own runway says which runway its SID is for."""
+    s = scenario(copilot="full")
+    s.flight.sid, s.flight.dep_runway = "TEST1A", "06R"
+    line = clearance_line(run(s, FLIGHT, recording=FLIGHT))
+    assert "TEST1A" not in line and "06L" in line, line
+    s = scenario(copilot="full")
+    s.flight.sid, s.flight.dep_runway = "TEST1A", "06L"
+    line = clearance_line(run(s, FLIGHT, recording=FLIGHT))
+    assert "TEST1A" in line, line

@@ -120,6 +120,7 @@ from localtc.sim_api import (
     Airport,
     AirportData,
     ArrivalData,
+    DeparturesData,
     AtisReport,
     WeatherReport,
     AtcAlert,
@@ -414,6 +415,7 @@ NO_GREETING = ("say_again", "how_read", "read_back", "negative", "confirm", "tra
                "stopped_ahead", "give_way", "readback_correct", "did_you_copy", "common.info", "common.roger")
 TOWER_SWITCH_S = 60.0  # a flight sent to tower that read it back has this long to switch before being sent around
 ESTABLISHED_M = 600.0  # this close to a final's centreline, pointing down it, is established on it
+CHECK_IN_WAIT_S = 30.0  # the tower waits this long for an arrival's call before saying where it is in the sequence
 SIDESTEP_NM = 2.0  # lined up on a parallel runway closer in than this: that's the runway it's landing on
 # Starting down without a clearance this long or more before the top of descent: not the arrival begun early but
 # an aircraft leaving its level ("check altitude"); an A380 gliding down with its engines out, 270 nm from Dubai,
@@ -601,6 +603,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # The rest of an exchange with another flight, each line said in its turn (all at once, the radio log showed
         # the readback before the controller's words had been heard).
         self._later: list[RadioChatter] = []
+        self._tuned_t = -math.inf  # when the frequency last changed
+        self._departures: dict[str, tuple] = {}  # an airport's SIDs, from the sim
+        self.cleared_tail: str | None = None  # the way ground cleared the push: "left", "right"; None straight, or not yet
         self._greeted: set[str] = set()  # stations that have had their first word with the flight
         self._squawk_code: str | None = None  # the flight's code, once given (_squawk)
         self._reports: dict[str, WeatherReport] = {}  # each airport's latest METAR (WeatherReport)
@@ -734,6 +739,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # The airport's real NOTAMs: what the ATIS announces and ATC works to there, from the next ATIS on.
             self.atis.real[event.icao] = tuple(Notice(n.kind, n.subject, real=n.id or "NOTAM", detail=n.detail)
                                                 for n in event.notices)
+        elif isinstance(event, DeparturesData):
+            self._departures[event.airport.upper()] = event.departures
         elif isinstance(event, ArrivalData):
             if event.airport.upper() == (self.state.flight.destination or "").upper():
                 self._star_legs[event.name.upper()] = event.legs  # its published speeds: approach's work to them
@@ -812,7 +819,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return []
         due = [e for e in self._later if e.t <= t]
         self._later = [e for e in self._later if e.t > t]
-        return [msgspec.structs.replace(e, t=round(t, 1)) for e in due]
+        # (The rest of an exchange begun before the pilot tuned away: it isn't on what they're listening to now.)
+        tuned = self.state.comms.tuned
+        return [msgspec.structs.replace(e, t=round(t, 1)) for e in due if tuned is not None and e.station == tuned.station]
 
     def _paced(self, lines: list[RadioChatter]) -> list[RadioChatter]:
         """The first line now, the rest at their times (``_release_later``); all at once without a voice to wait for."""
@@ -1211,7 +1220,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         label, observed_t, zulu = info.source
         if zulu and own is not None and own.zulu_s is not None and zulu.isdigit():
             age = (int(own.zulu_s // 60) - (int(zulu[:2]) * 60 + int(zulu[2:]))) % 1440
-            return f"{label} {zulu}Z, {age} min old"
+            # (The sim's clock set hours before the real one's METAR: "1151 min old" was no age at all.)
+            return f"{label} {zulu}Z, {age} min old" if age < 720 else f"{label} {zulu}Z"
         if observed_t is not None and own is not None:
             return f"{label}, observed {max(0, round((own.t - observed_t) / 60))} min ago"
         return label
@@ -1301,6 +1311,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._ramp_tuned = st.comms.tuned is None and self._atis_tuned is None and self.ramp_mhz is not None \
             and on_ramp(own.tx_mhz, self.ramp_mhz)
         if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous or self._ramp_tuned != ramp_was:
+            self._tuned_t = own.t
             tuned = st.comms.tuned
             self._tuned_since = own.t
             if previous[1] is not None and tuned is not None and tuned.station != previous[1].station:
@@ -2752,6 +2763,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return False
         if P(st.phase) not in (P.APPROACH, P.LANDING) or ctx.final is None or ctx.final.distance_nm > SEQUENCE_NM:
             return False
+        last_pilot = st.comms.last_pilot_t if st.comms.last_pilot_t is not None else -math.inf
+        if last_pilot < self._tuned_t and t - self._tuned_t < CHECK_IN_WAIT_S:
+            return False  # the pilot checks in first: the tower called as the frequency was tuned, before a word to it
         runway = self._landing_runway(own)
         geo = self.geometry(st.flight.destination)
         end = geo.end(runway) if geo is not None and runway else None
@@ -4990,6 +5004,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # The runway to plan the departure for ("there should be an 'expect runway'").
             slots["runway_note"] = Phrase(f", expect runway {end.ident}", f", expect runway {speech.runway(end.ident)}")
         instruction = "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise"
+        filed = self.cfg.sid
+        self.cfg.sid = self._sid_from(end.ident if st.aircraft is not None and end is not None else None)
+        if filed and not self.cfg.sid and (first := self._after_sid(filed)) and "runway_note" in slots:
+            # Nothing from this runway goes that way: said, not left for the pilot to find out in the FMS.
+            slots["runway_note"] = Phrase(f"{slots['runway_note'].display}, radar vectors to {first}", f"{slots['runway_note'].spoken}, radar vectors to {first}")
         if self.cfg.sid:  # the flight plan files a SID: ATC clears the flight on it by name
             slots["procedure"] = self.cfg.sid
             instruction = "clearance.ifr_sid" if cruise > initial else "clearance.ifr_sid_at_cruise"
@@ -4997,6 +5016,30 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             t, instruction, slots, facility, clearance="ifr",
             on_issue=lambda: self._assign(squawk=squawk, altitude_ft=initial, cruise_ft=cruise, departure_mhz=departure.mhz),
         )
+
+    def _after_sid(self, filed: str | None) -> str | None:
+        """The filed route's first fix past the SID."""
+        sid = {f.ident for f in self.route.procedure(filed, "CLB")} if filed else set()
+        return next((f.ident for f in self.route.fixes if f.ident not in sid), None)
+
+    def _sid_from(self, runway: str | None) -> str | None:
+        """The SID for the clearance: the one filed if it leaves from the runway given, else the one that does and goes the same
+        way (``procedures.sid_for_runway``), else none at all. Without the sim's procedures, only the plan's own runway says
+        which runway the filed one is for."""
+        filed = self.cfg.sid or None
+        if runway is None:
+            return filed
+        known = self._departures.get((self.state.flight.origin or "").upper())
+        if known:
+            sid = self.route.procedure(filed, "CLB") if filed else ()
+            joins = (*filter(None, (self._after_sid(filed),)), *(f.ident for f in sid[-1:]))
+            chosen = procedures.sid_for_runway(known, runway, filed, joins=joins)
+        else:
+            chosen = None if filed and self.cfg.dep_runway and self.cfg.dep_runway.upper().lstrip("0") != runway.upper().lstrip("0") else filed
+        if chosen != filed:
+            logging.getLogger(__name__).info("ATC: runway %s given, not the plan's %s: departure procedure %s instead of %s", runway,
+                                             self.cfg.dep_runway, chosen, filed)
+        return chosen
 
     def _initial_altitude(self) -> int:
         """The altitude the clearance climbs a departure to: well clear of the field and its terrain (the sim has no
@@ -5032,6 +5075,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         they can see the gate, the stands beside it and the tug.
         """
         turn = tail if tail in ("left", "right") else self._pushback_turn(own)
+        self.cleared_tail = turn
         if turn is None:
             self._schedule(t, "ground.pushback_straight", {}, facility, clearance="pushback")
         else:

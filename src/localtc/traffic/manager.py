@@ -930,8 +930,9 @@ class TrafficManager:
         gear, landing, taxi, beacon, strobe, nav, logo = state
         out: list[Any] = [AiLights(object_id=plane.object_id, gear_down=gear, landing=landing, taxi=taxi, beacon=beacon,
                                    strobe=strobe, nav=nav, logo=logo, engines=beacon)]
-        if not was or was[0] != gear:
-            # The gear handle too: the key event alone left arrivals landing with their wheels up.
+        if not was or was[0] != gear or gear:
+            # The gear handle too: the key event alone left arrivals landing with their wheels up. Again at each change while
+            # it's meant to be down: aircraft were seen taxiing with it up, the first one not having taken.
             out.append(SetAiVar(object_id=plane.object_id, name="GEAR HANDLE POSITION", unit="Bool", value=float(gear)))
         return out
 

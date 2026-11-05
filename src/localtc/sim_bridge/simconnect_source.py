@@ -61,7 +61,7 @@ from localtc.sim_api import (
     TrafficTarget,
 )
 from localtc.sim_bridge import definitions as defs
-from localtc.sim_bridge import arrivals, facilities
+from localtc.sim_bridge import arrivals, departures, facilities
 from localtc.sim_bridge.knob import KnobTurn
 from localtc.sim_bridge.traffic_speed import TrafficSpeeds
 from localtc.sim_bridge.motion import Track
@@ -100,6 +100,7 @@ log = logging.getLogger(__name__)
 
 DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_AIRCRAFT_EXTRA, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 5, 10
 DEF_AIRCRAFT_MORE, DEF_FACILITY_ARRIVALS = 6, 11
+DEF_FACILITY_DEPARTURES = 12
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
 REQ_AIRCRAFT_MORE = 7
 REQ_INPUT_EVENTS = 8
@@ -209,6 +210,7 @@ class SimConnectSource:
         self._extra_raw: dict | None = None
         self._more_raw: dict | None = None
         self._arrival_assemblers: dict[int, arrivals.ArrivalAssembler] = {}
+        self._departure_assemblers: dict[int, departures.DepartureAssembler] = {}
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
         self._tx_choice: int | None = None  # the COM picked in the app's radio bar (SelectRadio)
         self._tx_sim: tuple[bool, bool] | None = None  # ... and the aircraft's own selector since
@@ -382,6 +384,14 @@ class SimConnectSource:
         except SimConnectError as exc:
             self._arrivals_ok = False
             log.warning("Arrival procedures not available from this sim: %s", exc)
+        self._departures_ok = True
+        try:  # the SIDs, for ATC to clear a flight on one from its runway: a sim that won't take it loses only these
+            for line in departures.definition_lines():
+                dll.add_to_facility_definition(handle, DEF_FACILITY_DEPARTURES, line)
+        except SimConnectError as exc:
+            self._departures_ok = False
+            log.warning("Departure procedures not available from this sim: %s", exc)
+        self._departure_assemblers.clear()
         self._arrival_assemblers.clear()
         self._assemblers.clear()
         self._fetched_airports.clear()
@@ -477,10 +487,16 @@ class SimConnectSource:
                 assembler.add(msg)
             elif (arrival := self._arrival_assemblers.get(msg.request_id)) is not None:
                 arrival.add(msg)
+            elif (leaving := self._departure_assemblers.get(msg.request_id)) is not None:
+                leaving.add(msg)
         elif isinstance(msg, FacilityDataEnd):
             if (arrival := self._arrival_assemblers.pop(msg.request_id, None)) is not None:
                 data = arrival.build(t)
                 log.info("Arrival %s at %s: %d legs", arrival.name, arrival.icao, len(data.legs))
+                self._emit(data)
+            elif (leaving := self._departure_assemblers.pop(msg.request_id, None)) is not None:
+                data = leaving.build(t)
+                log.info("Departures at %s: %d", leaving.icao, len(data.departures))
                 self._emit(data)
             else:
                 self._on_facility_end(msg, t)
@@ -930,6 +946,19 @@ class SimConnectSource:
         self._fetched_airports.add(icao)
         dll.request_facility_data(handle, DEF_FACILITY_AIRPORT, request_id, icao)
         log.info("Requesting airport data for %s", icao)
+        self._request_departures(dll, handle, icao)
+
+    def _request_departures(self, dll: SimConnectApi, handle: int, icao: str) -> None:
+        if not getattr(self, "_departures_ok", False):
+            return
+        request_id = self._next_facility_request
+        self._next_facility_request += 1
+        self._departure_assemblers[request_id] = departures.DepartureAssembler(icao, started_t=time.monotonic())
+        try:
+            dll.request_facility_data(handle, DEF_FACILITY_DEPARTURES, request_id, icao)
+        except SimConnectError as exc:
+            self._departure_assemblers.pop(request_id, None)
+            log.warning("Couldn't ask for the departures at %s: %s", icao, exc)
 
     def _request_arrival(self, dll: SimConnectApi, handle: int, icao: str, name: str) -> None:
         if not getattr(self, "_arrivals_ok", False) or not facilities.plausible_ident(icao) or not name:
@@ -986,6 +1015,10 @@ class SimConnectSource:
                 log.warning("Timed out waiting for airport data for %s", assembler.icao)
                 self._fetched_airports.discard(assembler.icao)
                 del self._assemblers[request_id]
+        for request_id, leaving in list(self._departure_assemblers.items()):
+            if now - leaving.started_t > FACILITY_TIMEOUT_S:
+                log.warning("Timed out waiting for the departures at %s", leaving.icao)
+                del self._departure_assemblers[request_id]
         for request_id, arrival in list(self._arrival_assemblers.items()):
             if now - arrival.started_t > FACILITY_TIMEOUT_S:
                 log.warning("Timed out waiting for arrival %s at %s", arrival.name, arrival.icao)

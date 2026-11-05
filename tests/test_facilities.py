@@ -128,7 +128,7 @@ def test_bridge_fetches_nearest_and_requested_airports():
     # The fake aircraft sits at KPAE, so KPAE is nearest; it's fetched once despite repeated list polls.
     assert [a.icao for a in nearest] == ["KPAE"]
     assert [a.icao for a in requested] == ["KBFI"]
-    assert fake.facility_requests.count("KPAE") == 1
+    assert fake.facility_requests.count("KPAE") == 2  # the airport, and its departure procedures
     assert "XXXX" in fake.facility_requests
     assert fake.facility_definition == fac.definition_lines()
 

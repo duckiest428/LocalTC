@@ -40,6 +40,7 @@ LINES = {
     "no_gsx": ("We've got no ground handling set up here: without GSX running I can't get you {name}.",
                "No GSX running, so no {name}, I'm afraid."),
     "gsx_says": ("They say: {message}", "Word from the ramp: {message}"),
+    "cleaning_after": ("The cleaners can't start with passengers on board. I'll get them on as soon as everyone's off.",),
     "no_take": ("I've called for {name}, nothing from GSX yet. If nothing turns up, ask me again.",
                 "No sign of {name} yet. If nothing turns up, ask me again."),
     "on_stand_first": ("Call us once you're stopped on the stand.", "Not until you're parked on the stand."),

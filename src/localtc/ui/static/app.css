@@ -385,7 +385,7 @@ tr.tunable:hover td { background: var(--panel-2); }
 @media (max-width: 860px) {
   .radios { gap: 8px; font-size: 12px; padding: 4px 8px; }
   .radios .rlabel { font-size: 10px; color: var(--text-2); }
-  .radio:has(#com2), .logo { display: none; }
+  .logo { display: none; }
   .btn.com { padding: 6px 9px; }
 }
 @media (max-width: 560px) {

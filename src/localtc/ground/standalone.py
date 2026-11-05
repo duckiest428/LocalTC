@@ -37,6 +37,9 @@ class SimServices:
     async def stop(self) -> None:
         pass
 
+    async def select_gate(self, gate: str) -> Result:
+        return Result(False, "no_gate")
+
     async def trigger(self, service: str) -> Result:
         event = EVENTS.get(service)
         if event is None:

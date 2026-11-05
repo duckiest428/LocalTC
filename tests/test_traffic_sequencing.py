@@ -1,5 +1,6 @@
 """Tower and the sim's own AI traffic: going around for an occupied runway, and the landing order."""
 
+import msgspec
 import pytest
 from helpers.airports import kbfi
 from test_phase import own
@@ -74,7 +75,9 @@ def test_traffic_ahead_on_the_same_final_gets_a_landing_order():
     ahead = TrafficTarget(object_id=2, atc_id="SWA123", atc_model="B737", lat=lat, lon=lon, alt_ft=900.0,
                           hdg_true=end.heading_true, gs_kt=130.0, on_ground=False)
     engine.handle(TrafficSnapshot(t=1.0, targets=(ahead,)))
-    out = engine.handle(approaching(engine, distance_nm=8.0))
+    first = approaching(engine, distance_nm=8.0)
+    assert "tower.sequence" not in said(engine, engine.handle(first))  # the pilot's call first: they've only just tuned it
+    out = engine.handle(msgspec.structs.replace(first, t=first.t + 31.0))
     assert "tower.sequence" in said(engine, out), said(engine, out)
     spoken = next(e.text for e in out if isinstance(e, AtcTransmission))
     assert "number two" in spoken and "737" in spoken, spoken

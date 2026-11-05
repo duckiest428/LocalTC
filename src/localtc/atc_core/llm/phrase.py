@@ -392,12 +392,20 @@ def digits_from_words(text: str) -> str:
     return _DIGIT_RUN.sub(join, text)
 
 
+PHONETIC = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ("Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India",
+                                                   "Juliett?", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra",
+                                                   "Tango", "Uniform", "Victor", "Whiskey", "X-?ray", "Yankee", "Zulu"), strict=True))
+
+
 def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     """The model's words for the script's reply ``scripted``, or PhraseError: something of it lost, or added."""
     text = digits_from_words(_reply_text(raw, callsigns).replace("**", ""))
     if not THANKS.search(scripted):
         text = without_thanks(text)
     said, got = _plain(scripted), _plain(text)
+    if said.startswith("negative") and "negative" not in got and not (NEGATIONS - {"negative"}) & set(got.split()):
+        # A correction whose word for it was left out ("switch to 125.1"): the model's words, opening with what they are.
+        text, got = f"Negative, {text}", f"negative, {got}"
     for phrase in KEPT_PHRASES:
         if phrase in said and phrase not in got:
             raise PhraseError(f'reply leaves out "{phrase}"; keep those words as they are')
@@ -411,7 +419,15 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
         raise PhraseError(f"reply is longer than {limit} words")
     # (The script's numbers in words too, "expect FL330 two six minutes after departure": the model keeping them was
     # turned away for adding 26.)
+    for ident in _idents(scripted):
+        # A one-letter taxiway in the phonetic alphabet is that taxiway ("via Charlie, Bravo" for "via C, B").
+        if len(ident) == 1 and not _has_word(text, ident) and (word := PHONETIC.get(ident.upper())):
+            text = re.sub(rf"\b{word}\b", ident.upper(), text, flags=re.IGNORECASE)
     scripted_numbers = numbers(digits_from_words(scripted))
+    for digit in scripted_numbers - numbers(text):
+        # A single one said as a word ("via Alpha, Three, Five", at LaGuardia, where 3 and 5 are taxiways).
+        if len(digit) == 1 and (word := next((w for w, d in _DIGIT_WORDS.items() if d == digit and w.isalpha()), None)):
+            text = re.sub(rf"\b{word}\b", digit, text, flags=re.IGNORECASE)
     if missing := sorted(scripted_numbers - numbers(text)):
         raise PhraseError(f"reply leaves out {', '.join(missing)}; keep every number")
     if added := sorted(numbers(text) - scripted_numbers):

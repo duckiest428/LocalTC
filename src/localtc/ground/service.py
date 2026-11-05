@@ -11,7 +11,7 @@ import msgspec
 
 from localtc.bus import EventBus
 from localtc.ground.api import GroundAdapter
-from localtc.ground.crew import Close, Open, Pick, RampCrew, Send
+from localtc.ground.crew import Close, Open, Pick, RampCrew, SelectGate, Send
 from localtc.ground.model import RampModel
 from localtc.sim_api import (
     AircraftVars,
@@ -137,7 +137,7 @@ class GroundService:
         if not read.asks:
             return crew.heard(text, t)
         out: list[Any] = []
-        for ask in read.asks:
+        for ask in _together(read.asks):
             out += crew.do(ask, t)
         return out
 
@@ -227,6 +227,9 @@ class GroundService:
                 if not result.ok:
                     log.info("Ground crew: %s refused: %s %s", output.service, result.code, result.message)
                     await self._out(self.crew.not_sent(output.service, result.code, self._now()))
+            elif isinstance(output, SelectGate):
+                result = await self.adapter.select_gate(output.gate)
+                log.info("Ground crew told GSX the stand is %s: %s", output.gate, result.code or "ok")
             elif isinstance(output, Pick):
                 result = await self.adapter.pick(output.index)
                 log.info("Ground crew picked %r: %s", output.label, result.code or "ok")
@@ -245,6 +248,21 @@ class GroundService:
                     output = _on_the_air(output)
                     log.info("Ramp (%s): %s", output.channel, output.text)
                 self.bus.publish(output)
+
+
+def _together(asks: Any) -> list[Any]:
+    """Several services asked for in one breath, as one request: a model's reading had four, and the crew answered four times."""
+    from dataclasses import replace
+
+    from localtc.ground import grammar as g
+
+    merged: list[Any] = []
+    for ask in asks:
+        if merged and ask.action == g.REQUEST and merged[-1].action == g.REQUEST:
+            merged[-1] = replace(merged[-1], services=tuple(dict.fromkeys((*merged[-1].services, *ask.services))))
+        else:
+            merged.append(ask)
+    return merged
 
 
 def _on_the_air(speech: RampSpeech) -> RampSpeech:

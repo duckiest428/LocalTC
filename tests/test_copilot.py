@@ -113,7 +113,7 @@ def test_the_service_carries_out_the_copilots_actions():
         return source.commands, [e async for e in heard]
 
     commands, events = asyncio.run(main())
-    assert [c.hz for c in commands][:2] == [127_250_000, 121_800_000]  # clearance delivery, then ground
+    assert [c.hz for c in commands if hasattr(c, "hz")][:2] == [127_250_000, 121_800_000]  # clearance delivery, then ground
     pilot = [e.text for e in events if isinstance(e, Transcript)]
     assert pilot[0] == "Paine Clearance, N172LT, IFR to Boeing Field, ready to copy"
     assert pilot[1].startswith("Cleared to Boeing Field as filed")

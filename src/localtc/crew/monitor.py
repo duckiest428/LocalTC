@@ -608,7 +608,10 @@ class Monitor(WatchMixin):
         if s.engines_running < was.engines_running and not own.on_ground and "engine" not in self.commanded:
             self._call("engine_failure", SAFETY, t, "Engine failure!", again_s=60)
             self._watch_emergency(t, "engine")
-        if s.engines_running < was.engines_running and own.on_ground and own.gs_kt > 40:
+        # On the takeoff roll only: landing at Denver, one reading of an engine fewer with the reversers out was
+        # "Engine failure! Below V1."
+        if s.engines_running < was.engines_running and own.on_ground and own.gs_kt > 40 \
+                and self.phase in ("TAKEOFF", "RUNWAY_HOLD") and self.f.landing_t is None:
             v1 = self.perf.v1
             below = v1 and own.ias_kt < v1
             self._call("engine_failure_roll", SAFETY, t, "Engine failure! Below V1." if below else "Engine failure!")
@@ -695,6 +698,10 @@ class Monitor(WatchMixin):
                 self._call("off_blocks", ROUTINE, t, "Off blocks, right on time.")
             else:
                 self.f.said.setdefault("off_blocks", t)
+            return
+        if self._said("off_blocks"):
+            # Off blocks already: stopped after the push (the phase back to "parked" while the tug went) is still off
+            # blocks, not "fifteen minutes late off block" all over again.
             return
         if to_go > 0:
             if to_go <= CLEARANCE_DUE_S and self._owes_clearance() and not self._said("schedule_clearance"):
@@ -1291,8 +1298,9 @@ class Monitor(WatchMixin):
         # roll) is shut down only once it's stopped with the brake set: "Shutdown checklist?" came taxiing in.
         stopped = own.on_ground and own.gs_kt < 1
         shut = s is not None and s.engines_running == 0 and stopped and (self.f.max_engines > 0 or own.parking_brake)
-        # At the gate, brake set (an add-on's own brake doesn't always show, so the engines shut down count too): the sign goes off.
-        if stopped and (own.parking_brake or shut) and self.hands and "seatbelt" not in self.c.dead and not self._said("seatbelt_gate") \
+        # At the gate with the engines shut down: the sign goes off. Not on a brake set while waiting on a taxiway, as it
+        # once did taxiing in.
+        if shut and self.hands and "seatbelt" not in self.c.dead and not self._said("seatbelt_gate") \
                 and (s is None or s.seatbelt or "seatbelt" in self.c.profile.unread):
             self._call("seatbelt_gate", ROUTINE, t, "Seatbelt sign off.", commands=(Command("seatbelt", "off"),))
         if shut and not own.parking_brake:

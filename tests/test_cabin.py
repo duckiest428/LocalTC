@@ -9,7 +9,7 @@ import pytest
 from localtc.crew.cabin import CabinCrew, CabinSettings, Facts, duration_in, fill, flight_words, words
 from localtc.crew.cabin_data import airline_of, city_of, describe, exits, seats
 from localtc.crew.cabin_lines import FOREIGN, LINES, PEOPLE, REPLIES
-from localtc.dsp.cabin import applause, boarding_music, chime, interphone_effect, made_chime, made_music, pa_effect
+from localtc.dsp.cabin import boarding_music, chime, interphone_effect, made_chime, made_music, pa_effect
 from localtc.sim_api import (
     AircraftSystems,
     AircraftVars,
@@ -95,7 +95,7 @@ def test_a_flight_goes_through_every_moment_in_order():
     assert "The local time is 10:13 pm" in landed and "9 degrees with some rain" in landed  # the OAT on the ground
     descent = next(t for t in english if "begun our descent into Munich" in t)
     assert "12 degrees with some rain" in descent  # the METAR's
-    assert any(isinstance(o, CabinSound) and o.sound == "applause" for o in out) == ("applause" in cabin.done)
+    assert not any(isinstance(o, CabinSound) and o.sound == "applause" for o in out)  # no clapping
 
 
 def test_a_bilingual_airline_announces_in_both_and_english_only_when_asked():
@@ -216,7 +216,7 @@ def test_the_crew_member_is_addressed_by_name():
 
 
 def test_off_switches_are_honoured():
-    quiet = CabinSettings(announcements=False, boarding_music=False, interphone=False, chime=False, applause=False)
+    quiet = CabinSettings(announcements=False, boarding_music=False, interphone=False, chime=False)
     out = flown(CabinCrew(quiet, lambda: facts(), seed=3))
     assert not [o for o in out if isinstance(o, (CabinSpeech, CabinSound))]
 
@@ -267,8 +267,6 @@ def test_the_cabins_sounds():
     assert len(made) == 16 * rate and np.max(np.abs(made)) <= 0.51
     assert np.array_equal(made, made_music(rate, seconds=16, seed=4))
     assert len(made_chime(rate, "pa")) / rate > 0.5
-    clap = applause(rate, seconds=4, people=10, seed=1)
-    assert len(clap) == 4 * rate and np.max(np.abs(clap)) <= 0.51
     voice = np.sin(np.linspace(0, 2000, rate)).astype(np.float32)
     assert np.max(np.abs(pa_effect(voice, rate))) <= 0.76 and np.max(np.abs(interphone_effect(voice, rate))) <= 0.81
 
@@ -557,3 +555,70 @@ def test_an_a321_is_an_a321():
 
     assert aircraft_facts("A321").name == "Airbus A321"
     assert aircraft_facts("A320").name == "Airbus A320"
+
+
+def test_every_line_for_the_moment_is_one_the_crew_can_fill():
+    """Each wording in cabin_when names only what the everyday lines do, and every key it adds to is one they say."""
+    import re
+
+    from localtc.crew.cabin_lines import LINES
+    from localtc.crew.cabin_when import MORE, WHEN
+
+    known = {n for wordings in LINES.values() for ways in wordings.values() for w in ways for n in re.findall(r"\{(\w+)\}", w)}
+    for key, by_condition in WHEN.items():
+        assert key in LINES, key
+        for condition, manners in by_condition.items():
+            assert condition in ("night", "morning", "late", "full", "quiet", "short", "long", "rain", "snow", "hot",
+                                 "cold", "bumpy"), condition
+            for manner, ways in manners.items():
+                for w in ways:
+                    assert set(re.findall(r"\{(\w+)\}", w)) <= known, (key, condition, manner, w)
+    for key, manners in MORE.items():
+        assert key in LINES and all(m in ("polished", "cheerful", "warm", "brisk", "storyteller") for m in manners)
+
+
+def test_a_night_flight_is_welcomed_as_one():
+    """ "Good afternoon" said at night; the moment's lines are chosen most of the time, the flight decides."""
+    from localtc.crew.cabin_when import WHEN
+
+    nights = WHEN["boarding"]["night"]["cheerful"] + WHEN["boarding"]["night"]["polished"]
+    picked = 0
+    for n in range(20):
+        cabin = CabinCrew(CabinSettings(crew="jamie"), lambda: facts(f"ACA{800 + n}"))
+        cabin.observe(own(0.0, zulu_s=4 * 3600.0, local_s=None))  # 04:00Z at Toronto: 11 pm
+        assert cabin._night() and "night" in cabin._conditions("boarding")
+        line = cabin._english("boarding")[0]
+        picked += any(line.startswith(w.split("{")[0][:12]) for w in nights)
+        assert "afternoon" not in line.lower() and "morning" not in line.lower(), line
+    assert 8 <= picked <= 20
+
+
+def test_sunny_is_never_said_in_the_dark():
+    from localtc.crew.cabin import sky, sun_elevation
+
+    assert sun_elevation(2 * 3600 + 26 * 60, 39.86, -104.67, 309) < -4  # Denver, 7:26 pm in November
+    assert sun_elevation(19 * 3600, 39.86, -104.67, 309) > 20  # and at noon
+    assert sky("KDEN 060226Z 14009KT 10SM CLR 04/M08 A3017", night=True) == " with clear skies"
+
+
+def test_the_model_cant_make_another_airline_or_the_wrong_time_of_day():
+    cabin = CabinCrew(CabinSettings(crew="jamie"), lambda: facts("FFT4990"))
+    cabin.observe(own(0.0, zulu_s=23 * 3600.0, local_s=16 * 3600.0))  # 4 pm local
+    assert "airline" in cabin._wrong_words("Welcome aboard United Airlines flight 4990!", "Welcome aboard flight 4990!",
+                                           to_captain=False)
+    assert "good morning" in cabin._wrong_words("Good morning, Captain! All set.", "All set.", to_captain=True)
+    assert cabin._wrong_words("Good afternoon, Captain! All set.", "All set.", to_captain=True) == ""
+    assert "passengers" in cabin._wrong_words("Alright folks, grab your stuff!", "Okay, opening up.", to_captain=True)
+
+
+def test_the_welcome_waits_for_half_the_passengers():
+    from localtc.sim_api import GroundStatus
+    from localtc.ground.api import Service
+
+    cabin = CabinCrew(CabinSettings(crew="jamie"), lambda: facts())
+    cabin.observe(GroundStatus(t=0.0, provider="gsx", connected=True,
+                               services=(Service(id="Boarding", name="Boarding", state="performing", status="pax 20/174"),)))
+    assert not cabin._half_aboard()
+    cabin.observe(GroundStatus(t=1.0, provider="gsx", connected=True,
+                               services=(Service(id="Boarding", name="Boarding", state="performing", status="pax 90/174"),)))
+    assert cabin._half_aboard() and cabin.passengers() == 174

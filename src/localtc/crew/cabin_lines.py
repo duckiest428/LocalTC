@@ -19,6 +19,8 @@ the flight, the aircraft). A manner without wordings of its own for a line says 
 
 from dataclasses import dataclass
 
+from localtc.crew.cabin_when import MORE, WHEN  # noqa: F401 - WHEN: the lines for the moment, chosen in cabin
+
 
 @dataclass(frozen=True)
 class Person:
@@ -537,10 +539,12 @@ for _key, _wordings in {
 }.items():
     for _manner, _more in _wordings.items():
         LINES[_key][_manner] = (*LINES[_key].get(_manner, ()), *_more)
+for _key, _wordings in MORE.items():  # (cabin_when: each manner's own wordings of the everyday lines)
+    for _manner, _more in _wordings.items():
+        LINES[_key][_manner] = (*LINES[_key].get(_manner, ()), *_more)
 
 # What the crew member says about the landing, on the way off (by how firm it was).
 LANDING_WORDS = {
-    "applauded": ("That landing was lovely, by the way. Some of them clapped!", "Did you hear the applause? Lovely landing."),
     "soft": ("That landing was lovely, by the way.", "Beautiful landing. I barely felt it."),
     "normal": ("Nice landing, too.", "Good landing."),
     "firm": ("That landing woke a few people up!", "A firm one today. Nobody spilled anything. Much."),

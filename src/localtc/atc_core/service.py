@@ -21,6 +21,7 @@ from localtc.sim_api import (
     PttPressed,
     PttReleased,
     RequestAirportData,
+    RequestApproaches,
     SetComFrequency,
     SimSource,
     Transcript,
@@ -109,6 +110,10 @@ class AtcService:
                 self.bus.publish(note)
 
     async def _fetch_airports(self, t: float) -> None:
+        while self.engine.approach_requests:
+            icao = self.engine.approach_requests.pop(0)
+            if self.source is not None:
+                await self.source.send(RequestApproaches(icao=icao))
         while self.engine.airport_requests:
             icao = self.engine.airport_requests.pop(0)
             cached = await asyncio.to_thread(self.cache.get, icao) if self.cache else None

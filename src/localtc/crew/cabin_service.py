@@ -48,6 +48,8 @@ async def answer(cabin: CabinCrew, event: IntercomHeard, bus: EventBus) -> None:
         log.exception("Cabin crew failed on the intercom")
         return
     for output in outputs:
+        if isinstance(output, CabinSpeech) and output.channel != "pa":
+            cabin.said_to_captain(output.text, output.t)
         bus.publish(output)
 
 
@@ -89,4 +91,6 @@ class CabinService:
                             self.bus.publish(record)
                         if words != output.text:
                             output = msgspec.structs.replace(output, text=words, spoken="")
+                if isinstance(output, CabinSpeech) and output.channel != "pa":
+                    self.cabin.said_to_captain(output.text, output.t)
                 self.bus.publish(output)

@@ -210,7 +210,7 @@ class SilentMic(FakeCapture):
         super().__init__(2.0, level=0.0)
         self.name, self.refreshed = "Line In (nothing connected)", 0
 
-    def refresh(self) -> str:
+    def refresh(self, *, another: bool = False) -> str:
         self.refreshed += 1
         self.name = "Headset Microphone"
         return self.name
@@ -402,7 +402,7 @@ class StalledMic(FakeCapture):
         super().__init__(2.0)
         self.name, self.refreshed, self.idle_s = "Microphone (K66)", 0, 600.0
 
-    def refresh(self) -> str:
+    def refresh(self, *, another: bool = False) -> str:
         self.refreshed += 1
         self.idle_s = 0.0
         return self.name

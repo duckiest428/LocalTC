@@ -188,6 +188,12 @@ id = "common.how_read"
 controller = "any"
 text = ["{callsign}, {station}, how do you read?", "{callsign}, did you copy?"]
 
+# A hold short not read back: asked for by name (a readback of it is required), not "how do you read?".
+[[template]]
+id = "common.read_back_hold_short"
+controller = "any"
+text = ["{callsign}, read back hold short instructions.", "{callsign}, I need a readback of the hold short."]
+
 # The language model is thinking it over (a question, something off the script): the answer follows.
 [[template]]
 id = "common.stand_by"

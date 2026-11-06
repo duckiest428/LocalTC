@@ -532,18 +532,21 @@ def test_the_headsets_calls_in_order_following_the_aircraft():
     assert any("right" in s and "hand signal" in s for s in said(out)) and c._push is None
 
 
-def test_a_good_start_answered_by_the_engines_or_by_the_pilot():
+def test_a_good_start_is_asked_and_answered_by_the_pilot():
+    """ "Confirm good engine start?", even with the engines running, and GSX told on the pilot's word ("yes" too)."""
     question = Menu("Confirm Good Engine Start", ("Good Engine Start", "Complete without waiting", "Abort service"))
     c = crew()
     c.heard("pushback, nose left", 0.0)
     c.tick(0.0)
     c.own = own(engines=True)
-    assert Pick(0, "Good Engine Start") in c.update(state_with(c, services=services(Departure="completing"), menu=question), 1.0)
+    out = c.update(state_with(c, services=services(Departure="completing"), menu=question), 1.0)
+    assert not any(isinstance(o, Pick) for o in out) and any("good engine start" in s.lower() for s in said(out))
+    assert Pick(0, "Good Engine Start") in c.heard("yes", 2.0)
     c = crew()
     c.heard("pushback", 0.0)
     c.tick(0.0)
     out = c.update(state_with(c, services=services(Departure="completing"), menu=question), 1.0)
-    assert any("good start" in s.lower() for s in said(out))
+    assert any("good engine start" in s.lower() for s in said(out))
     assert Pick(0, "Good Engine Start") in c.heard("good start", 2.0)
 
 
@@ -936,6 +939,10 @@ def test_the_push_on_the_stand_in_waits_goes_and_closes_out():
         assert gsx.services["Departure"].state == "completing" and "Cleared to start" in heard_all and "Set parking brake" in heard_all
         assert gsx.state.menu is not None  # GSX's good-start question, waiting
         c.own = own(brake=True, engines=True)
+        await _drive(service, clock, 3)
+        heard_all += " " + " ".join(lines(heard))
+        assert ("pick", "Good Engine Start") not in gsx.sent and "good engine start" in heard_all.lower()
+        await service._out(c.heard("good start", clock.t))
         await _drive(service, clock, 3)
         assert ("pick", "Good Engine Start") in gsx.sent
         assert "hand signal" in " ".join(lines(heard)) and c._push is None

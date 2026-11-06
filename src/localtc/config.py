@@ -357,7 +357,7 @@ class MixerConfig(_Section):
     chatter: float = 0.8  # other flights and ATC's calls to them
     copilot_radio: float = 1.0  # the copilot's own calls on the radio
     copilot: float = 1.0  # the copilot beside you, on the intercom
-    cabin: float = 0.7  # the cabin crew's announcements and calls, the chimes, the boarding music and the applause
+    cabin: float = 0.7  # the cabin crew's announcements and calls, the chimes and the boarding music
     effects: float = 0.6  # the radio's sounds: your push-to-talk's click and the squelch
     # You on the radio in your headset while you talk, as in a real aircraft. 0 off: with speakers the microphone
     # would hear it.
@@ -432,7 +432,6 @@ class CabinConfig(_Section):
     service: bool = True  # the drinks: a call to the flight deck first, then the trolley
     chime: bool = True  # the chimes before an announcement and when the seatbelt sign changes
     boarding_music: bool = True  # quietly in the cabin while people get on (and off), stopped at the doors
-    applause: bool = True  # the cabin clapping a touchdown gentler than 200 feet per minute
     english_too: bool = True  # a crew whose language isn't English repeats each announcement in English
     interphone: bool = True  # the crew call the flight deck: boarding complete, cabin secure, the service
     show_log: bool = True  # their words in the radio log (off: only heard)
@@ -611,7 +610,7 @@ def _migrate(data: dict) -> dict:
     # The schedule and NOTAM sources that needed an account of the pilot's own are gone, and their switches with them;
     # so are the traffic's limits, which LocalTC manages itself.
     for section, key in (("traffic", "scheduled"), ("ops", "notams"), ("traffic", "ground_nm"), ("traffic", "taxiing_out"),
-                         ("traffic", "mix"), ("traffic", "max_live"), ("traffic", "radius_nm")):
+                         ("traffic", "mix"), ("traffic", "max_live"), ("traffic", "radius_nm"), ("cabin", "applause")):
         if isinstance(data.get(section), dict) and key in data[section]:
             data = {**data, section: {k: v for k, v in data[section].items() if k != key}}
     tts = data.get("tts")

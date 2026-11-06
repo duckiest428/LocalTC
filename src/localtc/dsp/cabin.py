@@ -1,4 +1,4 @@
-"""The cabin's sounds, made here rather than recorded: the chimes, the boarding music, the applause, and the two ways the
+"""The cabin's sounds, made here rather than recorded: the chimes, the boarding music, and the two ways the
 cabin crew are heard on the flight deck.
 
 - The **address system** (``pa_effect``): the cabin's ceiling speakers, a narrow, boxy band with the cabin's short
@@ -12,7 +12,6 @@ cabin crew are heard on the flight deck.
 
 Both recordings come from ``tools/make_cabin_sounds.py`` and are decoded with PyAV (Whisper's own dependency); where
 they can't be, the chime is made from struck bars and the music from a soft progression on a piano and a pad.
-- The **applause** (``applause``): a cabin of people clapping, each at their own pace, starting and stopping raggedly.
 
 Pure numpy and deterministic for a given seed, like ``dsp.radio``.
 """
@@ -193,27 +192,3 @@ def made_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.ndarray
     out[-fade:] *= np.linspace(1, 0, fade)
     out = bandpass(out, rate, 180.0, 5000.0, presence_db=0.0)  # the cabin's ceiling speakers
     return (out / (np.max(np.abs(out)) or 1.0) * 0.5).astype(np.float32)
-
-
-def applause(rate: int, *, seconds: float = 6.0, people: int = 40, seed: int = 0) -> np.ndarray:
-    """A cabin clapping: each person at their own pace, joining in and stopping at their own moment, behind the
-    flight deck door. Peak 0.5."""
-    rng = np.random.default_rng(seed)
-    n = int(rate * seconds)
-    out = np.zeros(n, dtype=np.float32)
-    clap_n = int(rate * 0.03)
-    decay = np.exp(-np.linspace(0, 9, clap_n))
-    for _ in range(people):
-        start = rng.uniform(0.0, 0.9)
-        stop = rng.uniform(seconds * 0.45, seconds - 0.6)
-        pace = rng.uniform(3.0, 5.5)  # claps a second
-        loud = rng.uniform(0.3, 1.0)
-        t = start
-        while t < stop:
-            at = int(rate * t)
-            clap = rng.standard_normal(clap_n) * decay * loud * rng.uniform(0.7, 1.0)
-            out[at:at + clap_n] += clap[: n - at].astype(np.float32)
-            t += 1 / pace * rng.uniform(0.85, 1.15)
-    out = bandpass(out, rate, 600.0, 4000.0, presence_db=2.0, presence_hz=1500.0)  # hands, through a door
-    envelope = np.minimum(1.0, np.arange(n) / (rate * 0.4))
-    return (out * envelope / (np.max(np.abs(out)) or 1.0) * 0.5).astype(np.float32)

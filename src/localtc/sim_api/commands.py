@@ -15,6 +15,12 @@ class RequestAirportData(SimCommand, tag="request_airport_data"):
     icao: str
 
 
+class RequestApproaches(SimCommand, tag="request_approaches"):
+    """Fetch an airport's instrument approaches with their transitions; answered with ``ApproachesData``."""
+
+    icao: str
+
+
 class RequestArrival(SimCommand, tag="request_arrival"):
     """Fetch an airport's arrival procedure (STAR) by name, with its restrictions; answered with ``ArrivalData``."""
 
@@ -199,6 +205,6 @@ class GroundMarks(SimCommand, tag="ground_marks"):
     marks: tuple[tuple[str, str, float, float, float], ...] = ()
 
 
-AnySimCommand = Union[RequestAirportData, RequestArrival, SetComFrequency, SelectRadio, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
+AnySimCommand = Union[RequestAirportData, RequestArrival, RequestApproaches, SetComFrequency, SelectRadio, SendSimEvent, SetSimVar, SetInputEvent, TurnKnob, NudgeVar, SetAiVar,
                       ClickSequence, WatchVars, AiTrack, AiLights,
                       SpawnAiAircraft, RemoveAiAircraft, EnumerateModels, GroundMarks]

@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 
 from localtc.bus import EventBus
-from localtc.dsp.cabin import applause, boarding_music, chime, in_person_effect, interphone_effect, pa_effect
+from localtc.dsp.cabin import boarding_music, chime, in_person_effect, interphone_effect, pa_effect
 from localtc.dsp.clips import CLIPS, clip_id
 from localtc.dsp.radio import clean, intercom_effect, key_sound, radio_effect
 from localtc.sim_api import (
@@ -57,6 +57,9 @@ def _spread(key: str, span: tuple[float, float], salt: str) -> float:
     """A value in ``span`` decided by the name, the same every flight."""
     low, high = span
     return low + (high - low) * (zlib.crc32(f"{salt}|{key}".encode()) % 1000) / 999
+
+
+STREAM_CHARS = 90  # an ATC line this long is made and played a sentence at a time
 
 
 def sentences(text: str) -> list[str]:
@@ -219,6 +222,10 @@ class VoiceOut:
         async with self._lock:
             if not self.on_air(station) or (channel == "chatter" and self.keyed) or self.off_frequency(station, channel):
                 return None  # tuned away while it waited its turn, or another flight's line with the pilot on the air
+            pieces = sentences(text) if kind == "atc" and len(text) >= STREAM_CHARS else [text]
+            if len(pieces) > 1:
+                return await self._say_pieces(pieces, who, kind, manner, local, station=station, channel=channel,
+                                              strength=strength, cabin=cabin, urgent=urgent, keep=keep)
             clip = await asyncio.to_thread(self.render, text, who, kind, manner, local, strength=strength, cabin=cabin)
             if clip is not None and (not self.on_air(station) or (channel == "chatter" and self.keyed)):
                 return None  # ... or while it was being synthesized (Skywest's "ready to taxi" came through as the pilot
@@ -230,8 +237,34 @@ class VoiceOut:
                     await asyncio.to_thread(CLIPS.put, keep, clip.audio, clip.rate)
             return clip
 
+    async def _say_pieces(self, pieces: list[str], who: Persona | str, kind: str, manner: str | None, local: bool, *,
+                          station: str | None, channel: str, strength: float, cabin: float, urgent: bool,
+                          keep: str) -> Clip | None:
+        """A long transmission a sentence at a time: the first played as soon as it's made, the next made while it
+        plays. A 17-second clearance took 10 s to make whole, the pilot waiting 16 s from their call to its first
+        word. One transmission still: the squelch opens before the first and closes after the last."""
+        played: list[Clip] = []
+        for i, piece in enumerate(pieces):
+            if played and not self.on_air(station):
+                break  # tuned away: the rest isn't heard
+            clip = await asyncio.to_thread(self.render, piece, who, kind, manner, local, strength=strength, cabin=cabin,
+                                           opens=i == 0, closes=i == len(pieces) - 1)
+            if clip is None or (not played and (not self.on_air(station) or (channel == "chatter" and self.keyed))):
+                return None
+            clip.station, clip.channel, clip.urgent = station, channel, urgent
+            self.player.play(clip)
+            played.append(clip)
+        if not played:
+            return None
+        whole = Clip(np.concatenate([c.audio for c in played]), played[0].rate, kind)
+        whole.station, whole.channel, whole.urgent = station, channel, urgent
+        if keep and CLIPS.enabled:
+            await asyncio.to_thread(CLIPS.put, keep, whole.audio, whole.rate)
+        return whole
+
     def render(self, text: str, who: Persona | str, kind: str, manner: str | None = None,
-               local: bool = False, *, strength: float = 1.0, cabin: float = ATC_ROOM) -> Clip | None:
+               local: bool = False, *, strength: float = 1.0, cabin: float = ATC_ROOM, opens: bool = True,
+               closes: bool = True) -> Clip | None:
         """The line as heard: speakable words, the person's voice from the first provider that can, then the radio
         (or the intercom). None when there's nothing to say or nobody could say it (text only)."""
         if isinstance(who, str):
@@ -253,7 +286,7 @@ class VoiceOut:
             audio = radio_effect(speech.audio, speech.rate, static=0.0, seed=seed, squelch=False)
         else:
             audio = radio_effect(speech.audio, speech.rate, static=self.static * (0.6 if kind == "atis" else 1.0), seed=seed,
-                                 strength=strength, cabin=cabin)
+                                 strength=strength, cabin=cabin, opens=opens, closes=closes)
         log.info("Speaking %s as %s (%s %s, %.1f s, synthesized in %.0f ms)", kind, who.key, speech.provider,
                  speech.voice, len(speech.audio) / speech.rate, speech.latency_ms)
         return Clip(audio, speech.rate, kind)
@@ -309,8 +342,6 @@ class VoiceOut:
         rate = 22050
         if ev.sound == "chime":
             self.player.play(Clip(chime(rate, ev.detail or "pa"), rate, "chime"))
-        elif ev.sound == "applause":
-            self.player.play(Clip(applause(rate, seed=ev.seed), rate, "ambience"))
         elif ev.sound == "music":
             self._stop_music()
             self._music_task = asyncio.create_task(self._loop_music(ev.seed))

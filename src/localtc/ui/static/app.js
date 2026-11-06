@@ -592,7 +592,7 @@ const Mixer = {
       ["mixer", "copilot", "On the intercom", "The copilot beside you.", 1.5],
       ["mixer", "copilot_radio", "On the radio", "Its readbacks and calls to ATC.", 1.5],
     ]],
-    ["Cabin", [["mixer", "cabin", "Cabin crew", "Their announcements and calls, the chimes, the boarding music and the applause.", 1.5]]],
+    ["Cabin", [["mixer", "cabin", "Cabin crew", "Their announcements and calls, the chimes and the boarding music.", 1.5]]],
     ["Radio sounds", [["mixer", "effects", "Clicks and squelch", "Your push-to-talk's click and the receiver's rush when you let go.", 1.5]]],
   ],
   async open() {
@@ -2016,7 +2016,6 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-cabin-chime" ${st.cabin.chime ? "checked" : ""}> Cabin chime: before an announcement, and when the seatbelt sign changes</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-music" ${st.cabin.boarding_music ? "checked" : ""}> Boarding music: quietly in the cabin while people get on and off</label>
         <span class="hint" translate="no">"Airport Lounge" Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: "Airplane Chime Sound Effect" by Sharelk (CC0).</span>
-        <label class="check-row"><input type="checkbox" id="s-cabin-applause" ${st.cabin.applause ? "checked" : ""}> Applause on a soft landing (gentler than 200 feet per minute)</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-log" ${st.cabin.show_log !== false ? "checked" : ""}> Show their words in the radio log</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-english" ${st.cabin.english_too ? "checked" : ""}> Announcements in English too: a crew whose language isn't English repeats each one in English</label>
         </div>
@@ -2331,7 +2330,7 @@ const Settings = {
     on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
     for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],
       ["#s-cabin-service", "service"], ["#s-cabin-interphone", "interphone"], ["#s-cabin-chime", "chime"],
-      ["#s-cabin-music", "boarding_music"], ["#s-cabin-applause", "applause"], ["#s-cabin-log", "show_log"], ["#s-cabin-english", "english_too"]])
+      ["#s-cabin-music", "boarding_music"], ["#s-cabin-log", "show_log"], ["#s-cabin-english", "english_too"]])
       on(id, "change", (e) => this.save("cabin", key, e.target.checked));
     on("#s-cabin-hear", "click", async (e) => {
       e.target.disabled = true;

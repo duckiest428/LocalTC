@@ -78,13 +78,16 @@ class MockGsx:
         for service, at in list(self._done_at.items()):
             svc = self.services[service]
             if now >= at - DURATIONS[service] + ARRIVES_S and svc.state == "requested":
-                self.services[service] = Service(id=service, name=service, state="performing", status="in position", can_trigger=False)
+                # (GSX's own words for the push: the tug on the nose wheel, then moving)
+                status = "pushing back" if service == "Departure" else "in position"
+                self.services[service] = Service(id=service, name=service, state="performing", status=status, can_trigger=False)
                 self._changed()
             if now < at:
                 continue
             del self._done_at[service]
             if service == "Departure" and self._page is None:
-                self.services[service] = Service(id=service, name=service, state="completing", status="at the end of the push", can_trigger=False)
+                self.services[service] = Service(id=service, name=service, state="completing",
+                                                 status="waiting for engine-start confirmation", can_trigger=False)
                 self._page = Menu(ENGINE_TITLE, tuple(ENGINE_ROWS), (False,) * len(ENGINE_ROWS))
             elif service in ("GPU",):
                 self.services[service] = Service(id=service, name=service, state="performing", status="connected\nconnected", can_trigger=False)

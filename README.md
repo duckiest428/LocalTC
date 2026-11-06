@@ -724,8 +724,9 @@ does, on airline flights and in airliners. Boarding music and the welcome at the
 interphone when you switch the beacon on; the doors armed; the welcome (the flight time, the airline's loyalty members,
 who's running the cabin) and the safety demonstration with the aircraft's own exits during the taxi; "cabin secure for
 takeoff"; the seatbelt sign announced when you switch it off and back on; a call before the service, then the trolley;
-the descent with the destination's local time, weather and a word about the city; "cabin secure for landing"; applause
-for a touchdown under 200 fpm; the welcome to the city, the doors to manual, the goodbye. The crew is the airline's:
+the descent with the destination's local time, weather and a word about the city; "cabin secure for landing"; the
+welcome to the city, the doors to manual, the goodbye. Each crew member words them their own way, and for the moment:
+night or morning, a delay, a full or half-empty cabin, the weather, a short or long flight, a bumpy one. The crew is the airline's:
 names and English from its country, and the announcements in its languages (Air Canada English and French, Lufthansa
 German and English) with English repeated when `english_too` is on. `crew` picks who leads the cabin: claire
 (polished), jamie (cheerful), grace (warm), daniel (brisk), sophie (the storyteller), or auto.
@@ -734,7 +735,7 @@ On the intercom, start with "cabin", "cabin crew", "purser" or their name: "cabi
 "cabin, how many on board?", "cabin, prepare for landing", "cabin, turbulence in five minutes", "cabin, we've got a
 twenty minute delay", "cabin, tell the passengers we're number two for departure". Words starting "Ladies and
 gentlemen" are your own announcement. The copilot never answers what's for the cabin. The crew's announcements,
-calls, chimes, music and applause have their own slider on the mixer (Cabin).
+calls, chimes and music have their own slider on the mixer (Cabin).
 
 ## Live bridge setup (Windows)
 

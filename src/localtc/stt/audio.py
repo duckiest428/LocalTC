@@ -86,8 +86,9 @@ def input_devices() -> list[tuple[int, str, int]]:
             if d["max_input_channels"] > 0]
 
 
-def find_device(spec: str | int | None) -> int | None:
-    """``spec``: None/"" for the system default, an index, or part of a device name."""
+def find_device(spec: str | int | None, *, after: int | None = None) -> int | None:
+    """``spec``: None/"" for the system default, an index, or part of a device name. ``after``: the next device with
+    that name after this one (each of Windows's ways to it: MME, DirectSound, WASAPI), round to the first."""
     if spec in (None, ""):
         return None
     if isinstance(spec, int) or str(spec).isdigit():
@@ -95,6 +96,8 @@ def find_device(spec: str | int | None) -> int | None:
     matches = [i for i, name, _ in input_devices() if str(spec).lower() in name.lower()]
     if not matches:
         raise ValueError(f"no input device matching {spec!r}; see: localtc voice devices")
+    if after is not None:
+        return next((i for i in matches if i > after), matches[0])
     return matches[0]
 
 
@@ -159,15 +162,18 @@ class AudioCapture:
         except (sd.PortAudioError, ValueError):
             return "unknown microphone"
 
-    def refresh(self) -> str:
-        """Reopen the microphone. With the system default, this picks up a default changed since the
-        start (PortAudio only reads the device list once). Returns the microphone's name."""
+    def refresh(self, *, another: bool = False) -> str:
+        """Reopen the microphone, the device list read again (PortAudio reads it once): a default changed since the
+        start is picked up, and so is a named microphone Windows has just reconnected under a new number (it sent
+        only silence for the rest of a flight from the old one). ``another``: the same microphone by Windows's next
+        way to it. Returns the microphone's name."""
         import sounddevice as sd
 
         self.close()
-        if self.spec in (None, ""):
-            sd._terminate()
-            sd._initialize()
+        sd._terminate()
+        sd._initialize()
+        if self.spec not in (None, ""):
+            self.device = find_device(self.spec, after=self.device if another else None)
         self.rate = SAMPLE_RATE
         self.start()
         return self.name

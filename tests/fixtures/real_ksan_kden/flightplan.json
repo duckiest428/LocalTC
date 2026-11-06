@@ -1,0 +1,299 @@
+{
+ "source": "simbrief",
+ "callsign": "FFT4990",
+ "origin": "KSAN",
+ "destination": "KDEN",
+ "alternate": "KCOS",
+ "cruise_ft": 38000,
+ "route": "ZZOOO4 MTBAL DCT CADEZ DCT HAKMN Q73 LAKRR DCT DTA DCT KAMPR LONGZ3",
+ "aircraft": "A20N",
+ "registration": "N251SB",
+ "sid": "ZZOOO4",
+ "star": "LONGZ3",
+ "dep_runway": "27",
+ "arr_runway": "17R",
+ "origin_name": "SAN DIEGO INTL",
+ "destination_name": "DENVER INTL",
+ "fixes": [
+  {
+   "ident": "JETTI",
+   "lat": 32.76375,
+   "lon": -117.31455,
+   "alt_ft": 4700,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 146
+  },
+  {
+   "ident": "ZZOOO",
+   "lat": 32.631456,
+   "lon": -117.245828,
+   "alt_ft": 10500,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 246
+  },
+  {
+   "ident": "ANRMN",
+   "lat": 32.618622,
+   "lon": -117.104553,
+   "alt_ft": 13000,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 313
+  },
+  {
+   "ident": "JORRJ",
+   "lat": 32.666281,
+   "lon": -116.958697,
+   "alt_ft": 16000,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 393
+  },
+  {
+   "ident": "GRIDR",
+   "lat": 32.671136,
+   "lon": -116.753242,
+   "alt_ft": 19300,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 489
+  },
+  {
+   "ident": "PIEZZ",
+   "lat": 33.009414,
+   "lon": -116.587447,
+   "alt_ft": 25200,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 673
+  },
+  {
+   "ident": "NSHEE",
+   "lat": 33.399361,
+   "lon": -116.383111,
+   "alt_ft": 29600,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 854
+  },
+  {
+   "ident": "MTBAL",
+   "lat": 33.603314,
+   "lon": -116.042306,
+   "alt_ft": 32600,
+   "via": "ZZOOO4",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1011
+  },
+  {
+   "ident": "CADEZ",
+   "lat": 34.206564,
+   "lon": -115.342872,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1369
+  },
+  {
+   "ident": "TOC",
+   "lat": 34.222998,
+   "lon": -115.339601,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1377
+  },
+  {
+   "ident": "HAKMN",
+   "lat": 35.507864,
+   "lon": -115.079733,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2006
+  },
+  {
+   "ident": "ZZYZX",
+   "lat": 35.664867,
+   "lon": -114.865275,
+   "alt_ft": 39000,
+   "via": "Q73",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2112
+  },
+  {
+   "ident": "LAKRR",
+   "lat": 36.085478,
+   "lon": -114.285878,
+   "alt_ft": 39000,
+   "via": "Q73",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2390
+  },
+  {
+   "ident": "DTA",
+   "lat": 39.302261,
+   "lon": -112.505558,
+   "alt_ft": 39000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 4070
+  },
+  {
+   "ident": "KAMPR",
+   "lat": 40.672858,
+   "lon": -109.04775,
+   "alt_ft": 39000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5449
+  },
+  {
+   "ident": "GRAYZ",
+   "lat": 40.578072,
+   "lon": -107.675397,
+   "alt_ft": 39000,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5930
+  },
+  {
+   "ident": "BYYKE",
+   "lat": 40.487225,
+   "lon": -106.53065,
+   "alt_ft": 39000,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6322
+  },
+  {
+   "ident": "TOD",
+   "lat": 40.467743,
+   "lon": -106.313193,
+   "alt_ft": 39000,
+   "via": "LONGZ3",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 6395
+  },
+  {
+   "ident": "BIVVY",
+   "lat": 40.453369,
+   "lon": -106.155678,
+   "alt_ft": 36100,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6462
+  },
+  {
+   "ident": "VESTL",
+   "lat": 40.43175,
+   "lon": -105.909056,
+   "alt_ft": 31600,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6568
+  },
+  {
+   "ident": "LONGZ",
+   "lat": 40.386439,
+   "lon": -105.622536,
+   "alt_ft": 26300,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6693
+  },
+  {
+   "ident": "FLNEL",
+   "lat": 40.345292,
+   "lon": -105.366472,
+   "alt_ft": 21300,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6809
+  },
+  {
+   "ident": "BEOND",
+   "lat": 40.288781,
+   "lon": -104.951844,
+   "alt_ft": 13500,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6993
+  },
+  {
+   "ident": "SWAYN",
+   "lat": 40.276817,
+   "lon": -104.865025,
+   "alt_ft": 11900,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7031
+  },
+  {
+   "ident": "KAILE",
+   "lat": 40.263431,
+   "lon": -104.768436,
+   "alt_ft": 10300,
+   "via": "LONGZ3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7069
+  },
+  {
+   "ident": "KDEN",
+   "lat": 39.861667,
+   "lon": -104.673167,
+   "alt_ft": 7900,
+   "via": "LONGZ3",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 7495
+  }
+ ],
+ "simbrief_id": "1793921216",
+ "rules": "IFR",
+ "perf": {
+  "units": "kgs",
+  "block_fuel_lb": 15320.0,
+  "takeoff_fuel_lb": 14813.0,
+  "landing_fuel_lb": 4956.0,
+  "reserve_fuel_lb": 1927.0,
+  "zfw_lb": 133631.0,
+  "v1": 143,
+  "vr": 145,
+  "v2": 146,
+  "takeoff_flaps": "1",
+  "vref": 133,
+  "landing_flaps": "FULL",
+  "sched_out_s": 1793838000,
+  "sched_off_s": 1793839200,
+  "pax": 156,
+  "sched_in_s": 1793846400
+ }
+}

@@ -173,7 +173,6 @@ safety_demo = true
 service = true                # the drinks: a call to the flight deck first, then the trolley
 chime = true                  # before an announcement, and when the seatbelt sign changes
 boarding_music = true
-applause = true               # a touchdown gentler than 200 feet per minute
 english_too = true            # a crew whose language isn't English repeats each announcement in English
 interphone = true             # the crew call the flight deck: boarding complete, cabin secure, the service
 show_log = true               # their words in the radio log (false: only heard)

@@ -741,3 +741,61 @@ def test_gear_that_should_be_down_and_isnt_is_told_again():
     assert not manager._gear_again  # up, climbing away: meant to be
     TrafficManager._gear_seen(manager, TrafficSnapshot(t=40.0, targets=(target(0.0),)))
     assert manager._gear_again == [plane]  # on the ground it's down, whatever it was last told
+
+
+def test_taxiing_out_past_a_parked_user_it_doesnt_wait_forever():
+    """A Horizon jet stood 25 minutes beside the user's gate, holding up the line: a user standing at a stand beside
+    its way isn't in it, and one standing on it is waited for three minutes at most."""
+    from types import SimpleNamespace
+
+    from localtc.sim_api.geo import advance
+    from localtc.traffic.ground import Follower
+    from localtc.traffic.manager import GIVE_WAY_MAX_S, Local, TrafficManager
+
+    start = (32.7330, -117.1900)
+    ahead = [advance(*start, 270.0, 100.0 / 1852 * 3600, 0.0, 1.0)[:2], advance(*start, 270.0, 200.0 / 1852 * 3600, 0.0, 1.0)[:2]]
+    loc = Local(*start, 0.0, 270.0, 0.0, 0.0, True)
+    loc.follow = Follower([start, *ahead], gs_kt=0.0, exit_index=-1)
+    manager = SimpleNamespace(_closing=TrafficManager._closing, _route_passes=TrafficManager._route_passes)
+    beside = SimpleNamespace(gs_kt=0.0, lat=start[0] + 80 / 111_320, lon=start[1] - 0.0005, hdg_true=90.0)
+    assert not TrafficManager._user_in_way(manager, loc, beside, 0.0)
+    on_it = SimpleNamespace(gs_kt=0.0, lat=ahead[0][0], lon=ahead[0][1], hdg_true=90.0)
+    assert TrafficManager._user_in_way(manager, loc, on_it, 0.0)
+    assert TrafficManager._user_in_way(manager, loc, on_it, GIVE_WAY_MAX_S - 1)
+    assert not TrafficManager._user_in_way(manager, loc, on_it, GIVE_WAY_MAX_S + 1)
+
+
+def test_an_urgent_call_straight_after_the_users_is_break_break_and_waits_for_no_readback():
+    """Cleared for takeoff, and a go-around for the one on final: "break break", at once, the pilot's readback of the
+    first not waited for. The rest of the flow the pilot gets, the traffic gets too: "contact ground" off the runway,
+    "contact departure" once up."""
+    from pathlib import Path
+
+    import msgspec
+
+    from localtc.airports import load_airport_dir
+    from localtc.atc_core.engine import AtcEngine, EngineConfig
+    from localtc.atc_core.readback.interpreter import PendingReadback
+    from localtc.replay import Recording
+    from localtc.sim_api import AirportData, RadioChatter
+
+    fixtures = Path(__file__).parent / "fixtures"
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7, unscripted=False))
+    for airport in load_airport_dir(fixtures / "airports"):
+        engine.handle(AirportData(t=0.0, airport=airport))
+    own_ = next(e for e in Recording(fixtures / "ifr_kpae_kbfi").events() if isinstance(e, OwnshipState))
+    tower = engine.facility("tower")
+    engine.handle(msgspec.structs.replace(own_, com1_mhz=tower.mhz))
+    t = own_.t + 1
+    engine.state.comms.last_atc_t = t - 3
+    engine.state.pending = PendingReadback(instruction_id="tower.takeoff", controller="tower", expected={"runway": "16R"},
+                                           required=("runway",), issued_t=t - 3)
+    engine._radio_busy_until = t + 5  # ATC's own words to the pilot still going out
+    lines = [c for c in engine.traffic_call("UAL531", "go_around", tower.airport, "16R", t) if isinstance(c, RadioChatter)]
+    assert lines and lines[0].text.startswith("Break, break. United 531, go around"), lines
+    assert engine.state.pending is None
+    engine._later.clear()
+    engine._radio_busy_until = 0.0
+    engine.state.comms.last_atc_t = t - 600
+    vacate = engine.traffic_call("UAL532", "vacate", tower.airport, "16R", t + 120)
+    assert vacate and "contact" in vacate[-1].text and "Ground" in " ".join(c.text for c in vacate + engine._later)

@@ -58,6 +58,14 @@ OPERATOR_CHOICE = "gsx choice"
 # called (and ATC's cleared it); the pilots and crew are on board already, flying it.
 SETTLED = (("attach pushback tug", ("no",)), ("deboard crew", ("nobody",)), ("board crew", ("nobody",)))
 GOOD_START_ROW = ("good engine start", "good start", "confirm")
+# GSX's own words for where the push is (the Departure service's status): the tug on the nose wheel and lifting it, and
+# taking itself off again. "Tug connected" came with the tug still driving up, the brake let go too soon, and GSX never
+# moved until the pilot set it and let it go once more.
+TUG_ON = ("raising nose gear", "nose gear raised", "pushing back", "release parking brake", "release brake")
+TUG_OFF = ("lowering nose gear", "tug backing away", "removing bypass pin", "disconnect")
+ENGINE_WAIT = ("engine-start confirmation", "engine start confirmation")
+RELEASE_AGAIN_S = 25.0  # released before the tug was on, and still nothing: the pilot is told to set it and let it go
+ENGINE_OPEN_AGAIN_S = 20.0  # GSX waiting on the good start with its menu shut: opened again after this long
 DIRECTIONS = {g.NOSE_LEFT: ("nose left",), g.NOSE_RIGHT: ("nose right",), g.STRAIGHT: ("straight",)}
 SAID_DIRECTION = {g.NOSE_LEFT: "nose left, tail right", g.NOSE_RIGHT: "nose right, tail left", g.STRAIGHT: "straight back"}
 SIDE = {g.NOSE_LEFT: "right", g.NOSE_RIGHT: "left"}  # the headset's side: the side the tail went, clear of the engines
@@ -91,6 +99,7 @@ class Push:
     t: float = 0.0
     told: set[str] = field(default_factory=set)
     brake_said_t: float = 0.0
+    release_t: float = 0.0  # when the pilot was told to release the brake
 
 
 class RampCrew:
@@ -108,6 +117,7 @@ class RampCrew:
         self.keyed = False
         self.atc_until = 0.0
         self._t = 0.0
+        self._engine_open_t = -1e9  # when GSX's menu was last opened for its good-start question
         self._spoke_t = -1e9
         self._queue: list[str] = []
         self._sending: tuple[str, float] | None = None
@@ -442,6 +452,10 @@ class RampCrew:
             if offer[0] == "finish":
                 return self._finish(offer[1], t)
         menu = self.state.menu
+        if yes and self._asking is not None and menu is not None and self._is_engine_question(menu) \
+                and (found := find(menu, GOOD_START_ROW)).index is not None:
+            self._asking = None
+            return self._picked(menu, found.index, t)
         if self._asking is not None and menu is not None:
             word = ("yes", "confirm", "ok") if yes else ("no", "cancel", "back")
             found = find(menu, word)
@@ -554,17 +568,26 @@ class RampCrew:
         if own is None or svc is None:
             return out
         message = norm(self.state.message)
+        status = norm(svc.status)
         if push.stage in ("called", "asked") and svc.active:
             push.stage = "connecting"
-        if push.stage == "connecting" and "release" not in push.told and ("release" in message or svc.state == "performing"):
+        # The tug on: GSX says so (its status), or an older GSX that says nothing but "performing".
+        tug_on = any(w in status for w in TUG_ON) or (svc.state == "performing" and not status)
+        if push.stage == "connecting" and "release" not in push.told and ("release" in message or tug_on):
             push.told.add("release")
+            push.release_t = t
             if self.braked:
                 out.append(self._speech("release_brakes", t))
-        if push.stage == "connecting" and not self.braked and "release" in push.told:
+        moving = own.gs_kt > 0.5 or "pushing back" in status or not status
+        if push.stage == "connecting" and not self.braked and "release" in push.told and moving:
             push.stage = "pushing"
             if "pushing" not in push.told:  # (once: GSX can stop to ask which way, and go on)
                 push.told.add("pushing")
                 out.append(self._speech("pushing", t))
+        elif push.stage == "connecting" and not self.braked and "release" in push.told and "again" not in push.told \
+                and t - push.release_t >= RELEASE_AGAIN_S and self.state.menu is None:
+            push.told.add("again")  # let go before GSX was ready for it: it waits for the brake to come off again
+            out.append(self._speech("release_again", t))
         if push.stage == "pushing":
             if "start" not in push.told and own.gs_kt > 0.5:
                 push.told.add("start")
@@ -582,7 +605,7 @@ class RampCrew:
                 push.brake_said_t = t
             elif self.braked:
                 push.stage = "start"
-        if push.stage == "start" and not svc.active:
+        if push.stage == "start" and (not svc.active or any(w in status for w in TUG_OFF)):
             side = SIDE.get(push.direction)
             out.append(self._speech("disconnecting" if side else "disconnecting_no_side", t, side=side or ""))
             self._push = None
@@ -635,8 +658,7 @@ class RampCrew:
         if (gsx_choice := find(menu, (OPERATOR_CHOICE,))).index is not None:
             return [Pick(gsx_choice.index, menu.entries[gsx_choice.index])]  # GSX's own recommendation, whatever it's asking
         if self._is_engine_question(menu):
-            if self.own is not None and self.own.engine_running and (found := find(menu, GOOD_START_ROW)).index is not None:
-                return [Pick(found.index, menu.entries[found.index])]
+            # Asked, as a headset operator asks: "good engine start?", and put in GSX on the pilot's "yes".
             self._asking = menu
             return [self._speech("confirm_start", t)]
         self._asking = menu
@@ -681,15 +703,14 @@ class RampCrew:
         return [self._speech("fuel_noted", t, percent=str(percent))]
 
     def _engines_answer(self, t: float) -> list[Any]:
-        """The good-start question up and waiting, and now the engines are running: that's the answer."""
-        menu, own = self._asking, self.own
-        if menu is None or own is None or not own.engine_running or self.state.menu != menu or not self._is_engine_question(menu):
+        """GSX waiting on the good-start question with its menu shut (it asks only once the menu's open): opened, so the
+        question comes up and is put to the pilot. Answered only by the pilot."""
+        svc = self._service("Departure")
+        if svc is None or self.state.menu is not None or not any(w in norm(svc.status) for w in ENGINE_WAIT) \
+                or t - self._engine_open_t < ENGINE_OPEN_AGAIN_S or self._run is not None:
             return []
-        found = find(menu, GOOD_START_ROW)
-        if found.index is None:
-            return []
-        self._asking = None
-        return [Pick(found.index, menu.entries[found.index])]
+        self._engine_open_t = t
+        return [Open()]
 
     def _direction_question(self, menu: Menu, rows: dict, t: float) -> list[Any]:
         push = self._push

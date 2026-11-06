@@ -245,6 +245,10 @@ class CompanionHub:
         lat, lon = own.get("lat"), own.get("lon")
         if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
             return
+        if abs(lat) < 0.01 and abs(lon - 90) < 0.01:
+            return  # the sim's menu (0 N, 90 E): no aircraft anywhere yet
+        if self.trail and (abs(lat - self.trail[-1][0]) > 1 or abs((lon - self.trail[-1][1] + 540) % 360 - 180) > 2):
+            self.trail = []  # loaded somewhere else, or moved in the sim: the path starts again there
         ground = bool(own.get("ground"))
         if self.trail and ground == self._trail_ground:  # lifting off or touching down: always a point
             last = self.trail[-1]

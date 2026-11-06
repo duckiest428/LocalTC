@@ -5,7 +5,7 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.6] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+No changes to the website yet.
 
 ## [0.5.5] - 2026-11-02
 

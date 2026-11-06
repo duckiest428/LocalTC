@@ -6,67 +6,98 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.6] - Upcoming
 
-### Changed
-- **The ramp is always 119.990:** no longer a setting.
-- **The ground crew open every call in English "Ground to cockpit".**
-- **Asked which stand you're on, they say what GSX says,** and if they can't see it, they say so. A call they didn't catch stays "say again": a model
-  rewording it made up a gate and a clearance.
-- **They no longer tack on "let me know when you're ready".**
-
-### Fixed
-- **A jetway or stairs asked for before the brake is set** now comes once it's set. It used to be promised and then forgotten.
-- **A service GSX didn't take** is called once more before they give up. The jetway, stairs and push aren't, as a second call would undo them.
-
 ### Added
-- **RAMP in the frequency list at every airport**, and on the phone; click it to tune. Tuning it with the
-  ground crew off now says so, and where to turn them on.
-- **Every language gets what Spanish got, and the ground crew and cabin crew too:** in German, French, Spanish, Italian, Portuguese,
-  Dutch, Polish, Swedish, Russian and Mandarin, numbers said as words ("zehntausend Fuß", "deux cent cinquante"), feet, knots and flight
-  levels are understood, the copilot's common answers (fuel, altitude, speed, heading, time to go, what's assigned) come in your language
-  without a language model, the ground crew understand and answer you (the push's safety calls stay in aviation English), and the cabin
-  crew talk with you in it. A good translation is no longer thrown away over how it writes a number ("29,92", "une heure", "час двадцать").
-- **The copilot's Polish voice is Piper's:** the voice library's was hard to make out ("Pamy" for "Mamy"). The Polish pack downloads the first time it's needed.
-- **Speech recognition listens for the crew's words in your language:** "checklist" was heard as "Cake list", "Klappen" as "Captain". A number
-  as it's written down ("10.000", "10 000", "CAP270") is read as the number it is.
-- **Ground crew:** the turnaround and the push by voice, with no menus: on the worldwide ramp frequency, 119.990 ("tune ramp"
-  to the copilot), or on the intercom starting with "ramp". Off by default, in Settings → Ground crew. Fuel, catering, water,
-  lavatory, cleaning, de-icing, the GPU, the jetway and stairs, several in one call ("catering, fuel and a GPU please"), what's
-  still outstanding, and calling one off. They answer GSX's questions for you and tell you what it's waiting on. The cabin crew
-  look after boarding and deboarding. The push waits for ATC's clearance, the brake and the engines. With GSX through its own
-  Remote API, without it the sim's tug and jetway. Without a cloud language model they understand set phrases; with one, what
-  you say your own way.
+- **Ground crew:** the turnaround and the push by voice, with no menus. Call them on the ramp frequency, 119.990 at every
+  airport (RAMP in the frequency list, or "tune ramp" to the copilot), or on the intercom starting with "ramp". Off by
+  default, in Settings → Ground crew.
+- **What the ground crew do:** fuel, catering, water, lavatory, cleaning, de-icing, the GPU, the jetway and stairs, several
+  in one call ("catering, fuel and a GPU please"), what's still outstanding, and calling one off. They answer GSX's
+  questions for you and tell you what it's waiting on (GSX through its own Remote API; without it, the sim's own tug and
+  jetway). The push waits for ATC's clearance, the parking brake and the engines, and the cabin crew look after boarding.
+  Without a cloud language model they understand set phrases; with one, what you say your own way.
+- **Every language gets the full copilot, ground crew and cabin crew:** in German, French, Spanish, Italian, Portuguese,
+  Dutch, Polish, Swedish, Russian and Mandarin, numbers said as words ("zehntausend Fuß", "deux cent cinquante"), feet,
+  knots and flight levels are understood, and the copilot's common answers (fuel, altitude, speed, heading, time to go)
+  come in your language without a language model. The ground crew answer you in it (the push's safety calls stay in
+  aviation English), and so do the cabin crew.
 - **Your flight on Discord:** an option in Settings, off by default, shows your route, the phase and the frequency you're
   on, with a "Fly on LocalTC" button to localtc.tech.
 - **How the cabin crew use the language model:** Fully scripted, Semi, Mostly or Fully LLM, in Settings → Cabin crew.
-
-### Fixed
-- **The Daylight theme:** the box to type a transmission in was dark text on a dark background; buttons, hover colors, errors, the names in the radio log and the map's info panels are readable now too.
-- **Talking to ATC with the copilot in another language:** the radio was heard by a weaker model than in English
-  ("Frontier 603" as "Frontier 600 and 3"). It now has the English model, and the copilot's language a model of its own.
-- **Your own language on the radio:** heard as it's said, so the copilot can tell you ATC only works in English, instead of
-  ATC answering "say again" to words turned into nonsense.
-- **The copilot in Spanish:** altitudes, speeds, flight levels and whole numbers ("diez mil pies"), the parking brake, "por
-  favor" after a comma and more wordings are read without a language model. Its questions ("¿Confirmas rumbo 270?") are in
-  the language, and it no longer says "Copied" to what it couldn't read. Every language gets the comma fix, the set
-  question, and altitude, speed and heading asked about.
-- **The release notes in another language:** they stay as written, in English, instead of words being cut up ("button"
-  shown as "but a n" in Spanish).
-- **Arrivals and departures missing at busy airports:** the live aircraft were simply the nearest, so at a big airport
-  those on the ground took every place. Arrivals, departures and the gates now each have a share.
+- **ATC clears you on a SID that leaves from your runway,** read from the airport's procedures in the sim. A SID filed for
+  another runway is swapped for the one from your runway going the same way; with none, you're cleared with radar vectors
+  to your first fix. The runway is still ATC's choice, or the plan's with `enforce_fpln_runways`.
+- **COM2 works:** ATC, the ground crew and the copilot follow the radio selected to transmit on. Click COM1 or COM2 in
+  the radio bar to choose, also on aircraft whose own selector the sim can't see.
 
 ### Changed
-- **Many more real arrivals:** LocalTC starts with 75 real aircraft, not 40 (up to 120 with frames to spare, fewer if the
-  sim struggles), seen out to 60 nm, and arrivals have the biggest share. Flight school trainers and other light aircraft
-  no longer count as arrivals: near a busy airport they took most of those places from the airliners.
-- **The traffic manages itself:** how many real aircraft follows the sim's frame rate (fewer while it struggles, more with
-  frames to spare), and which follows where you are: at an airport, climbing out or coming in, or in the cruise.
-- **Static aircraft (Quick Settings → Traffic)** are Auto (was Realistic), Fixed or None, with an "Up to" limit of their own.
-- **Traffic is lighter on the frame rate:** real aircraft on the ground are shown within 8 nm of you, and the made-up ones
-  on the ramps are up to 12 by default. Six real departures taxi out at once, the next waiting on its stand.
-- **The cabin crew's language model is a cloud one only:** without a cloud model they use the script's words and the
-  choice is unavailable. Safety announcements are never reworded.
+- **Quick Settings comes in sections** (Voice & radio, ATC, Crew, Traffic, AI & models), with a box to find a setting.
+  The switches beside the radio box are now "ATC voice" and "Copilot radio", each with a light, and the X beside the
+  typing box is gone.
+- **Many more real arrivals:** 75 real aircraft to start with, not 40 (up to 120 with frames to spare, fewer if the sim
+  struggles), seen out to 60 nm. Arrivals, departures and the gates each get a share, so at a busy airport the aircraft
+  on the ground no longer take every place, and light aircraft no longer count as arrivals.
+- **The traffic manages itself:** how many real aircraft follows the sim's frame rate, and which follows where you are
+  (at an airport, climbing out or coming in, or in the cruise).
+- **Traffic is lighter on the frame rate:** real aircraft on the ground are shown within 8 nm of you, up to 12 made-up
+  ones on the ramps by default, no more than three of one model on a GA ramp, and six real departures taxiing at once.
+- **Static aircraft (Quick Settings → Traffic)** are Auto (was Realistic), Fixed or None, with an "Up to" limit of their
+  own.
+- **The Live Map draws the airports around you with or without a flight plan,** not only the plan's origin and
+  destination.
+- **ATC understands more of your own words, with a small local model too:** "good to go" at the runway, "can we go" at
+  the gate, "off the runway, where do you want us". A question about traffic gets an answer, and the destination's tower
+  frequency asked for in the cruise is told.
+- **ATC in an emergency acts on your intentions:** "we need to land at the nearest airport" gets vectors, souls and fuel
+  already given aren't asked again, a mayday on the old frequency is answered there, and an engine failure or "immediate
+  landing" counts as an emergency.
+- **The language model is kept from more wrong replies:** "clearance granted" for a clearance on request, "continue as
+  filed" at the gate, "unable" to a call that asked nothing, made-up traffic, emergency details left out. The crew's
+  refusals and facts ("Parking brake first") are always said as written.
+- **The copilot** turns the seatbelt sign off at the gate, takes "yes, please ask for it" as a yes, and says it doesn't
+  know instead of "say again". Its language model is on Fully LLM by default, and its Polish voice is Piper's (the voice
+  library's was hard to make out; the pack downloads the first time it's needed).
+- **The cabin crew's language model is a cloud one only:** without a cloud model they use the script's words. Safety
+  announcements are never reworded.
+- **Speech recognition hears the crew's words in your language** ("checklist" was heard as "Cake list", "Klappen" as
+  "Captain"), and numbers as they're written ("10.000", "10 000", "CAP270").
+- **Talking to ATC with the copilot in another language:** the radio is heard by the English speech model ("Frontier 603"
+  was "Frontier 600 and 3"), and your own language on the radio gets "ATC only works in English" from the copilot
+  instead of ATC's "say again".
+
+### Fixed
+- **Waiting for the parking brake:** a jetway, stairs or push asked for before it's set comes once it is, the way you
+  asked for it. The FSLabs' own brake is read, and where a brake can't be read at all, "it's set" is taken at your word.
+- **"Request jetway disconnection"** takes the jetway away instead of asking for it.
+- **GSX services called twice:** one GSX has taken is no longer called again or reported as not responding, and one it
+  didn't take is called once more (not the jetway, stairs or push, where a second call would undo them). When GSX stops
+  at its first menu page, the crew pick the row themselves.
+- **The push with GSX:** "Pushback complete" only once the aircraft has moved, GSX is told the way ground cleared, its
+  "Interrupt pushback?" page is closed instead of read out, and "until left" is heard as "tail left".
+- **The ground crew's answers:** several services asked for at once get one answer, cleaners come once the passengers are
+  off, the handler is your airline's where GSX lists it, and "which stand are we on?" gets GSX's answer or "I can't see
+  it", never a made-up gate.
+- **Cabin crew:** "can we get boarding started?" starts it, the welcome waits until people are walking on, the passenger
+  count is GSX's (else the plan's), an A321 is called an A321, and a delay is announced at 15 minutes, not after the push.
+- **Taxi readbacks:** a taxiway named by a number alone ("via C, B, A, 3, 5") and a callsign with a letter in it
+  ("Emirates 98P") no longer make a correct readback "negative".
+- **What you say, written properly:** "119. Decimal 7" is 119.7, "climate" and "crime and maintain" are climb, "via
+  Tango, Charlie" is "via T, C", "gate Delta 1" is "gate D1".
+- **ATC:** the tower waits up to 30 seconds for your call before the landing order; the rest of another flight's exchange
+  isn't shown once you've tuned away; a model's "Charlie, Bravo, three" for "C, B, 3" is accepted.
+- **The ATIS no longer invents mist:** 9999 in a METAR is 10 km or more, not "9 kilometres, mist", and only what the METAR
+  says is read. One runway for both is "arrival and departure runway 04". No more "1151 min old" with the sim's clock set
+  earlier than the real one.
+- **Traffic:** an aircraft with its gear up on the way down is told again until it's out, and an arrival taken over on
+  its rollout no longer swings round and slides off the runway.
+- **The Daylight theme:** the typing box, buttons, hover colours, errors, the radio log's names and the map's panels are
+  readable.
+- **Right Alt works as a key.** COM2 stays in the radio bar on a narrow window, the off-block time isn't lost while the sim
+  loads, and the plan's on-block time takes over once you've left the gate.
+- **The release notes in another language** stay in English as written, instead of words being cut up.
+- **A translation is no longer thrown away** over how it writes a number ("29,92", "une heure").
 
 ### Removed
+- **The ramp frequency setting:** it's always 119.990.
 - **The Center name and Center frequency settings:** the fallback for where no airport or airspace gives a centre stays
   as a hidden default.
 - **The ground crew read an add-on's own parking brake:** on the FSLabs the sim's own brake variable never shows it set, so the crew kept asking for a brake that was on. They now see it as the copilot does. Where an aircraft's brake can't be read at all, "it's set" is taken at your word.

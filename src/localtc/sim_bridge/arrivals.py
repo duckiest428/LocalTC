@@ -114,6 +114,11 @@ class ArrivalAssembler:
         wanted = self.name.upper()
         arrivals = {uid: n for uid, n in self.nodes.items() if n.kind == "arrival"
                     and (n.name.upper() == wanted or _same_procedure(n.name, wanted))}
+        if not arrivals:
+            # Another revision in the sim's navdata than the plan's (SimBrief's LONGZ3, the sim's LONGZ4): the one
+            # arrival of that name, whatever its number. Two of them: which it is isn't known, and none is taken.
+            again = {uid: n for uid, n in self.nodes.items() if n.kind == "arrival" and _same_procedure(n.name, wanted, any_number=True)}
+            arrivals = again if len({n.name for n in again.values()}) == 1 else {}
         legs: list[ArrivalLeg] = []
         for _, node in sorted(self.nodes.items(), key=lambda kv: kv[1].order):
             if node.kind != "leg" or node.leg is None:
@@ -139,9 +144,11 @@ def _printable(raw: bytes) -> bool:
     return bool(text) and all(48 <= c <= 57 or 65 <= c <= 90 for c in text)
 
 
-def _same_procedure(sim: str, plan: str) -> bool:
-    """SimBrief's "ANJLL4" and the sim's "ANJL4" (navdata names are cut to five characters, then the number)."""
+def _same_procedure(sim: str, plan: str, *, any_number: bool = False) -> bool:
+    """SimBrief's "ANJLL4" and the sim's "ANJL4" (navdata names are cut to five characters, then the number).
+    ``any_number``: the same name with another revision's number ("LONGZ3" and "LONGZ4")."""
     sim, plan = sim.upper(), plan.upper()
-    if len(plan) < 3 or len(sim) < 3 or not sim[-1].isdigit() or not plan[-1].isdigit() or sim[-1] != plan[-1]:
+    if len(plan) < 3 or len(sim) < 3 or not sim[-1].isdigit() or not plan[-1].isdigit() \
+            or (sim[-1] != plan[-1] and not any_number):
         return False
     return plan[:-1].startswith(sim[:-1]) or sim[:-1].startswith(plan[:-1])

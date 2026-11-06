@@ -27,3 +27,13 @@ def test_written_as_a_pilot_writes_it(heard, written):
 def test_a_frequency_keeps_its_decimals_and_a_callsign_its_name():
     assert fixup("contact tower 118.700") == "contact tower 118.700"
     assert "Delta 2321" in fixup("Delta 2321 request taxi")
+
+
+def test_a_frequency_after_the_station_and_a_route_after_a_full_stop():
+    from localtc.stt.vocabulary import VocabularyHints, fixup, match_names
+
+    assert fixup("Tower 118, 3, Frontier 4990.") == "Tower 118.3, Frontier 4990."
+    assert "via A. A3 B and B1" in fixup("Taxi runway 27 via at B1 via A. A3 Bravo and B1 Frontier 4990.")
+    hints = VocabularyHints(callsign="FFT4990", callsign_spoken="Frontier 4990", fixes=("JETTI", "ZZOOO", "CENZA"))
+    assert match_names("Cleared for takeoff runway 27, Frontier 4990 on F2 jet T.", hints).endswith("RNAV to JETTI.")
+    assert match_names("Cleared to land runway 27 on to the left", hints) == "Cleared to land runway 27 on to the left"

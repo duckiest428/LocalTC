@@ -131,6 +131,9 @@ GIVE_WAY_M = 90.0  # one taxiing that would come this close to the user on the g
 GIVE_WAY_AHEAD_S = 20.0  # ... looking this far ahead
 GIVE_WAY_CLEAR_M = 150.0  # ... and goes on once the user is this far away (or behind it)
 GIVE_WAY_AGAIN_S = 45.0  # ... and isn't stopped again for this long after it goes on
+HANDOFF_AGL = 600.0  # a departure this high: tower hands it to departure
+VACATE_KT = 70.0  # an arrival slowed to this on its rollout: tower sends it to ground
+USER_SPAN_M = 45.0  # one taxiing out whose route comes this close to the user standing still waits for them
 GIVE_WAY_MAX_S = 180.0  # ... or after this long at most
 # Taxiing, it stops this far (nose to nose) behind another of LocalTC's ahead going the same way: a line to the hold
 # short, not all of them piled onto it ("the aircraft ahead of me are all bundled up together").
@@ -281,6 +284,7 @@ class Local:
     push_to: tuple[float, float] | None = None  # where the push back ends (on the taxiway)
     roll_after: float = 0.0  # a departure lined up: rolls from here on (once tower's cleared it on the radio)
     behind: tuple[str, float, float, float] | None = None  # in line: the one ahead, since when, and where it was then
+    user_wait_t: float | None = None  # taxiing out: since when it's stood waiting for the user
 
 
 @dataclass
@@ -1511,6 +1515,9 @@ class TrafficManager:
                 continue
             if plane.mode not in ("go_around", "departing", "landing") or loc is None or plane.object_id is None:
                 continue
+            if plane.mode == "departing" and not loc.on_ground and plane.runway is not None \
+                    and loc.alt_ft - self._elev(loc.lat, loc.lon) > HANDOFF_AGL:
+                out += self._try_call(plane, "handoff_departure", plane.runway[0], plane.runway[1], now)
             if plane.mode == "departing" and plane.live and not loc.on_ground \
                     and loc.alt_ft - self._elev(loc.lat, loc.lon) > HANDBACK_AGL \
                     and (shown := self._shown(plane.key[5:], now)) is not None and not shown.on_ground \
@@ -1699,8 +1706,7 @@ class TrafficManager:
             own = self.own
             ahead = advance(loc.lat, loc.lon, loc.hdg, 40.0 / 0.5144, 0.0, 1.0)
             limit = None  # slowed to stop, not stopped dead
-            if own.on_ground and (closest := self._closing(loc.lat, loc.lon, loc.hdg, own, max(loc.follow.gs_kt, 8.0))) \
-                    is not None and closest < GIVE_WAY_M:
+            if own.on_ground and self._user_in_way(loc, own, now):
                 limit = 0.0  # the user ahead: it waits
             elif self._users_runway_at(geo, *ahead[:2], now):
                 limit = 0.0  # not across the runway the user has
@@ -1748,6 +1754,44 @@ class TrafficManager:
         loc.follow = Follower(rounded([(loc.lat, loc.lon), turn_in, lined], TURN_RADIUS_M), gs_kt=0.0, exit_index=-1, last_hdg=loc.hdg)
         loc.stage, loc.stage_t = "line_up", now
         return True
+
+    def _user_in_way(self, loc: Local, own: OwnshipState, now: float) -> bool:
+        """Taxiing out, the user in its way: moving towards it, or standing on (or beside) the next stretch of its
+        route. A user parked at a stand beside its way isn't: a Horizon jet pointed at the user's gate stood there for
+        25 minutes holding everyone up behind it. Never more than ``GIVE_WAY_MAX_S`` for one standing still."""
+        if own.gs_kt >= 2:
+            closest = self._closing(loc.lat, loc.lon, loc.hdg, own, max(loc.follow.gs_kt, 8.0))
+            waits = closest is not None and closest < GIVE_WAY_M
+        else:
+            waits = self._route_passes(loc, own.lat, own.lon) and (
+                loc.user_wait_t is None or now - loc.user_wait_t < GIVE_WAY_MAX_S)
+        if not waits:
+            loc.user_wait_t = None if own.gs_kt >= 2 or not self._route_passes(loc, own.lat, own.lon) else loc.user_wait_t
+        elif loc.user_wait_t is None:
+            loc.user_wait_t = now
+        return waits
+
+    @staticmethod
+    def _route_passes(loc: Local, lat: float, lon: float, ahead_m: float = 150.0, within_m: float = 0.0) -> bool:
+        """The next ``ahead_m`` of its route comes within ``within_m`` (``USER_SPAN_M``) of ``lat, lon``."""
+        within_m = within_m or USER_SPAN_M
+        follow = loc.follow
+        if follow is None:
+            return False
+        here, gone = (loc.lat, loc.lon), 0.0
+        for point in follow.points[follow.index:]:
+            seg = haversine_nm(*here, *point) * M_PER_NM
+            steps = max(1, int(seg // 10))
+            for k in range(steps + 1):
+                f = k / steps
+                p = (here[0] + (point[0] - here[0]) * f, here[1] + (point[1] - here[1]) * f)
+                if haversine_nm(*p, lat, lon) * M_PER_NM < within_m:
+                    return True
+            gone += seg
+            if gone > ahead_m:
+                return False
+            here = point
+        return False
 
     def _users_runway_at(self, geo: AirportGeometry, lat: float, lon: float, now: float) -> bool:
         """``lat, lon`` is on the runway the user has (cleared onto it, on it, landing on it), or had just now."""
@@ -1830,6 +1874,9 @@ class TrafficManager:
         follow = loc.follow
         if loc.runway is not None and follow.index > follow.exit_index:
             out_call = self._try_call(plane, "taxi_in", loc.runway[0], "", now, lat=loc.lat, lon=loc.lon)
+        elif loc.runway is not None and loc.gs_kt < VACATE_KT:
+            # Slowing on the runway: tower's "contact ground", as the pilot's own arrival gets it
+            out_call = self._try_call(plane, "vacate", loc.runway[0], loc.runway[1], now)
         else:
             out_call = []
         own = self.own

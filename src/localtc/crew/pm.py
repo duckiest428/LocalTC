@@ -1017,6 +1017,9 @@ class PilotMonitoring:
                 self.deck.want(cmd.value, t)
                 out.append(self._say(t, "Asking."))
             else:
+                # Asked for, as much as one said at once: "Flaps up." on a "yes" was followed by "Speed checked, flaps
+                # up." a second later, the copilot calling for what it had just done.
+                self.monitor.pilot_said(cmd, t)
                 out += self._do(t, cmd)
         return out
 

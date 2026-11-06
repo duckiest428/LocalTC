@@ -193,12 +193,15 @@ class TaxiGraph:
 
     def runway_exit(self, lat: float, lon: float, heading_true: float, *, ahead_m: float = 2500.0,
                     toward: tuple[float, float] | None = None, extra_m: float = 1200.0,
-                    min_ahead_m: float = 0.0) -> tuple[str, str] | None:
+                    min_ahead_m: float = 0.0, gs_kt: float = 0.0) -> tuple[str, str] | None:
         """The next taxiway off the runway ahead of an aircraft rolling out: (side, taxiway), "left"/"right" as the
         pilot sees it ("vacate left onto E4"), or None when none is named ahead. ``toward`` (lat, lon): where the
         aircraft goes next (its gate, the terminal): an exit on that side is taken over the very next one, when it's
         not much further down the runway (``extra_m``). Vacating left with every gate to the right only made a long
-        taxi back across. ``min_ahead_m``: still rolling, not one it can't slow down for."""
+        taxi back across. ``min_ahead_m``: still rolling, not one it can't slow down for. ``gs_kt``: the speed it's
+        rolling at, each exit as far ahead as it takes to slow for that one: a high-speed exit is taken at
+        ``FAST_EXIT_KT``, a square one at ``SQUARE_EXIT_KT``. Denver's M4, a high-speed exit 650 m on at 90 knots, was
+        passed over for M2 a kilometre further on."""
         here = self.geometry.xy(lat, lon)
         hx, hy = math.sin(math.radians(heading_true)), math.cos(math.radians(heading_true))
         found: list[tuple[float, str, str]] = []
@@ -213,6 +216,12 @@ class TaxiGraph:
                 if edge.runway or not edge.name or self._on_runway(edge.to):
                     continue
                 vx, vy = self.positions[edge.to][0] - nx, self.positions[edge.to][1] - ny
+                if gs_kt:
+                    cos = (vx * hx + vy * hy) / (math.hypot(vx, vy) or 1.0)
+                    turn_kt = FAST_EXIT_KT if cos > math.cos(math.radians(FAST_EXIT_DEG)) else SQUARE_EXIT_KT
+                    v, v_exit = gs_kt * 0.5144, turn_kt * 0.5144
+                    if along < max(0.0, v * v - v_exit * v_exit) / (2 * ROLLOUT_DECEL_MS2):
+                        continue  # too fast to make this one
                 side = "left" if hx * vy - hy * vx > 0 else "right"
                 found.append((along, side, edge.name))
         if not found:
@@ -246,6 +255,12 @@ class TaxiGraph:
         if start is None or not goals:
             return None
         return self.route(start, goals, heading=heading)
+
+
+FAST_EXIT_DEG = 45.0  # an exit leaving the runway at less than this: a high-speed one
+FAST_EXIT_KT = 55.0  # ... taken at this speed (one landing at Denver turned off M4 at 54 knots)
+SQUARE_EXIT_KT = 15.0  # a square one at this
+ROLLOUT_DECEL_MS2 = 2.5  # an airliner slowing for the exit it wants (autobrake medium, or the pedals)
 
 
 def _both_sides(runway, points: list[tuple[float, float]]) -> bool:

@@ -2,7 +2,7 @@
 
 Two channels, as in a headset: the radio (ATC, the other flights, the ATIS, your own side) and the intercom (the
 copilot beside you), each one line after another; and the radio's own sounds (your push-to-talk's click), which never
-wait for either. The cabin (crew.cabin) has two more: its crew and chimes, and the music and applause under them. Radio clips never overlap, as on a real frequency; the copilot talks over the radio when it has to,
+wait for either. The cabin (crew.cabin) has two more: its crew and chimes, and the music under them. Radio clips never overlap, as on a real frequency; the copilot talks over the radio when it has to,
 as a real one does. The radio can be cut: the ATIS when the pilot tunes away, everything from the old frequency the
 moment the pilot changes it, and whatever is being said when the pilot keys the microphone.
 
@@ -41,7 +41,7 @@ class Clip:
     rate: int
     kind: str = "atc"  # atc, atis, pilot (the copilot on the radio), intercom (the copilot beside you), effect,
     # the cabin's: pa (an announcement), interphone (a call to the flight deck), deck (in the flight deck), chime,
-    # ambience (the boarding music, the applause)
+    # ambience (the boarding music)
     done: threading.Event = field(default_factory=threading.Event)
     station: str | None = None  # who's on the radio saying it: cut when the pilot tunes away from them
     channel: str = ""  # the mixer's channel (CHANNELS); "" by its kind (another flight's exchange is "chatter")
@@ -142,7 +142,7 @@ class AudioPlayer:
         self.intercom = _Lane(self, "intercom")
         self.effects = _Lane(self, "effects")
         self.cabin = _Lane(self, "cabin")  # the cabin crew: announcements, calls to the flight deck, the chimes
-        self.ambience = _Lane(self, "ambience")  # the boarding music and the applause, under the rest
+        self.ambience = _Lane(self, "ambience")  # the boarding music, under the rest
         self._started = False
 
     def gain(self, channel: str) -> float:

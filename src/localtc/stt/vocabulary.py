@@ -126,6 +126,9 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^comment in(?= \d)", "climb and maintain"),  # "Comment in 230"
     (r"\b(\d{3})\.(\d{4})\b", r"\1, \2"),  # "flight level 370.2321": the level, then the flight number; a frequency's never four decimals
     (r"\btengo\b", "tango"),
+    # "Tower 118, 3": a frequency after the station's name, its decimal point heard as a pause
+    (r"\b(tower|ground|departure|approach|cent(?:er|re)|clearance|delivery|radio|director|control)(,? (?:on )?)"
+     r"(1[1-3]\d)[.,] (\d{1,3})\b(?![,.]?\d)", r"\1\2\3.\4"),
     (r"\b(?:runway|taxiway) (\d{1,2})[.,]? (r|l|c)(?:ight|eft|enter)\b[?,.]?", lambda m: f"runway {m[1]}{m[2].upper()}"),  # "Runway 10, right?"
 ]
 _COMPILED = [(re.compile(p, re.IGNORECASE), r) for p, r in FIXUPS]
@@ -150,7 +153,7 @@ PHONETIC = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D
 _NAME = "|".join(PHONETIC)
 # One name of a route: "Tango", "Hotel 4", "H4". Not a callsign's first word ("Delta 2321"): a taxiway has two digits at most.
 _ITEM = rf"(?:(?:{_NAME})(?:[ -]\d{{1,2}}(?![\d.,]\d))?(?![ -]?\d)|[a-z]\d{{0,2}}(?![a-z\d]))"
-_ROUTE = re.compile(rf"\b(via) ({_ITEM}(?:(?:,? and|,)? {_ITEM})*)", re.IGNORECASE)
+_ROUTE = re.compile(rf"\b(via) ({_ITEM}(?:(?:[.,]? and|[.,])? {_ITEM})*)", re.IGNORECASE)  # ("via A. A3 Bravo")
 _ONE = re.compile(rf"\b({_NAME})(?:[ -](\d{{1,2}}))?\b", re.IGNORECASE)
 _STAND = re.compile(rf"\b(gate|stand) ({_NAME})[ -]?(\d{{1,3}})\b", re.IGNORECASE)
 
@@ -179,6 +182,8 @@ LETTER_AND_NUMBER = re.compile(rf"\b({_LETTER})[ -]?(\d{{1,2}}[LRC]?)\b(?![.,]?\
 INFORMATION = re.compile(rf"\b(information)([.,]?\s+)({_LETTER})\b", re.I)
 VIA_LIST = re.compile(rf"\b(via\s+)((?:(?:{_LETTER}|[A-Z]\d{{0,2}})(?:,?\s+|$|(?=[.,])))+)", re.I)
 MIN_CALLSIGN_LIKE = 0.5
+# "RNAV to JETTI" heard as "on F2 jet T": the RNAV, the "to", and the fix in pieces.
+RNAV_TO = re.compile(r"\b(?:(?:on|an|are|in) )?(?:r ?nav|r-?nav|[fv])[ -]?(?:2|to|two)[ -]+([A-Za-z]+(?:[ -][A-Za-z]{1,4}){0,2})\b", re.I)
 
 
 def _sound(word: str) -> str:
@@ -260,4 +265,10 @@ def match_names(text: str, hints: VocabularyHints) -> str:
         return f"{m.group(1)} {named}" if named else m.group(0)
 
     text = FIX_SAID.sub(fix, text)
+
+    def rnav(m: re.Match) -> str:
+        named = _named("".join(re.split(r"[ -]", m.group(1))), tuple(f for f in hints.fixes if len(f) >= 4))
+        return f"RNAV to {named}" if named else m.group(0)
+
+    text = RNAV_TO.sub(rnav, text)
     return _letters(_callsign(text, hints), hints)

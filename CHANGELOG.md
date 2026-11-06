@@ -98,6 +98,20 @@ a new minor version adds features, a patch fixes them.
 - **COM2 stays in the radio bar on a narrow window,** and the off-block time isn't lost to a moment of speed while the sim loads. The plan's on-block time (IBT) takes over from it once you've left the gate.
 - **Traffic's gear:** the sim's own reading of each aircraft's gear is checked, and one on the ground or on the way down with its gear up is told again until it's out.
 - **Traffic turning off the runway:** an arrival LocalTC takes over on its rollout no longer swings round and slides sideways off the runway at the moment it's given its way to a stand.
+- **Approach clears you from the STAR's end onto the approach:** LocalTC reads each approach's transitions from the sim. Where a STAR ends at a fix the approach goes on from (Denver's LONGZ at KAILE, the ILS 17R's KAILE transition), you're cleared for the approach on the STAR, with no headings. A STAR filed under another revision than the sim's (LONGZ3 and LONGZ4) is still found. Approach says nothing more once it has handed you to tower.
+- **The runway exit tower gives is one you can make:** chosen by how fast you're rolling, a high-speed exit by the speed it's built for. Denver's M4 is no longer passed over for M2.
+- **Break break:** an urgent call (a go-around, a hold short) comes at once, even straight after ATC's words to you, with "break, break", and your readback of what went before isn't waited for.
+- **The traffic gets the calls you get:** tower sends an arrival to ground as it slows on the runway, and a departure to departure once it's up.
+- **Traffic no longer waits forever for you at your gate:** one taxiing out stopped for a parked aircraft beside its way and held up the line behind it. It waits only for you on its way, and three minutes at most for you standing still.
+- **A hold short not read back:** tower asks "read back hold short instructions" instead of "how do you read?".
+- **The ground crew on the push:** "Tug connected, release parking brake" waits until GSX has the nose wheel up. Let go too early, and you're told to set the brake and release it again. They ask "Confirm good engine start?" and tell GSX on your "yes", even with the engines already running, and "Disconnecting" comes as the tug lets go.
+- **The cabin crew:** each crew member has many more wordings of their own, and lines for the moment: night or morning, a delay, a full or a half-empty cabin, rain, snow, heat or cold, a short or a long flight, a bumpy one. The boarding announcement waits until half the passengers are on. Their words to you on the interphone are to you, not the passengers. They know what they just asked you, and they can't name another airline or say "good morning" in the evening. A second GSX boarding with the real passenger count is the one they announce. "We're up at flight level 380" waits until you are. "Sunny" is never said in the dark.
+- **No more clapping on landing:** the applause and its setting are gone.
+- **The copilot:** no "Engine failure, below V1" on the landing rollout. The seatbelt sign goes off at the gate once the engines are off, not at a stop on the taxiway. No "flaps up" call right after doing what you asked. No "late off block" again after the push, and the altimeter comes out of STD on the way down on the A320neo.
+- **What you say, written properly:** "Tower 118, 3" is 118.3, "via A. A3 Bravo" is "via A, A3, B", and "RNAV to JETTI" heard in pieces is written as that.
+- **Your microphone back after it drops out:** reconnected under a new number by Windows, it's found again, and if it stays silent the same microphone is tried another way.
+- **ATC's long lines start sooner:** a long transmission is played a sentence at a time, the first as soon as it's made. A clearance took 16 seconds from your call to its first word.
+- **Your aircraft on the Live Map:** the sim's menu position (0 N, 90 E) no longer starts the path, so your aircraft is drawn where it is, not a world away.
 
 ## [0.5.5] - 2026-11-02
 

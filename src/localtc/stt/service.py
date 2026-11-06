@@ -108,6 +108,7 @@ class VoiceService:
         self._radio = 1
         self._held: int | None = None  # the key being held (a radio, or INTERCOM): the other one waits for it
         self._cancelled = False  # the key was part of a shortcut (Alt+Tab): the clip is dropped
+        self._silent_presses = 0  # presses in a row the microphone sent only silence
 
     # Called from the push-to-talk source's thread. ``radio`` INTERCOM: the intercom key.
     def press(self, radio: int = 1) -> None:
@@ -189,11 +190,17 @@ class VoiceService:
         log.warning("Push-to-talk for %.1f s but %s heard nothing", audio_s, before)
         if not hasattr(self.capture, "refresh"):
             return
+        self._silent_presses += 1
         try:
-            after = await asyncio.to_thread(self.capture.refresh)
+            # Twice silent: the same microphone another way (Windows lists each one several times, and one can go
+            # quiet while the others still hear).
+            again = self._silent_presses >= 2
+            after = await asyncio.to_thread(self.capture.refresh, another=again) if again else \
+                await asyncio.to_thread(self.capture.refresh)
         except Exception as exc:  # a missing device: keep going, the next press tries again
             log.warning("Could not reopen the microphone: %s", exc)
             return
+        log.info("Microphone reopened as device %s", getattr(self.capture, "device", None))
         if after != before:
             log.warning("Microphone is now %s (the system default input)", after)
         else:
@@ -208,6 +215,7 @@ class VoiceService:
         if rms(audio) < SILENCE_RMS:
             await self._silent_microphone(audio_s)
             return self._heard("", None, None, 0.0)
+        self._silent_presses = 0
         ref = self.recorder.save_audio(to_pcm16(audio), sample_rate=SAMPLE_RATE) if self.recorder else None
         hints = self.hints() if (self.hints and self.vocabulary) else VocabularyHints()
         if self._radio <= INTERCOM:  # the words a pilot says to the crew, never ATC's names and numbers

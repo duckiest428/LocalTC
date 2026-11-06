@@ -32,6 +32,7 @@ from localtc.sim_api import (
     SessionClock,
     SessionInfo,
     RequestAirportData,
+    RequestApproaches,
     RequestArrival,
     SendSimEvent,
     SetInputEvent,
@@ -61,7 +62,7 @@ from localtc.sim_api import (
     TrafficTarget,
 )
 from localtc.sim_bridge import definitions as defs
-from localtc.sim_bridge import arrivals, departures, facilities
+from localtc.sim_bridge import approaches, arrivals, departures, facilities
 from localtc.sim_bridge.knob import KnobTurn
 from localtc.sim_bridge.traffic_speed import TrafficSpeeds
 from localtc.sim_bridge.motion import Track
@@ -101,6 +102,7 @@ log = logging.getLogger(__name__)
 DEF_OWNSHIP, DEF_IDENTITY, DEF_TRAFFIC, DEF_AIRCRAFT, DEF_AIRCRAFT_EXTRA, DEF_FACILITY_AIRPORT = 1, 2, 3, 4, 5, 10
 DEF_AIRCRAFT_MORE, DEF_FACILITY_ARRIVALS = 6, 11
 DEF_FACILITY_DEPARTURES = 12
+DEF_FACILITY_APPROACHES = 13
 REQ_OWNSHIP, REQ_IDENTITY, REQ_TRAFFIC, REQ_AIRPORT_LIST, REQ_AIRCRAFT, REQ_AIRCRAFT_EXTRA = 1, 2, 3, 4, 5, 6
 REQ_AIRCRAFT_MORE = 7
 REQ_INPUT_EVENTS = 8
@@ -211,6 +213,7 @@ class SimConnectSource:
         self._more_raw: dict | None = None
         self._arrival_assemblers: dict[int, arrivals.ArrivalAssembler] = {}
         self._departure_assemblers: dict[int, departures.DepartureAssembler] = {}
+        self._approach_assemblers: dict[int, approaches.ApproachAssembler] = {}
         self._copilot_events: dict[str, int] = {}  # key event name -> client event id, this connection
         self._tx_choice: int | None = None  # the COM picked in the app's radio bar (SelectRadio)
         self._tx_sim: tuple[bool, bool] | None = None  # ... and the aircraft's own selector since
@@ -391,6 +394,14 @@ class SimConnectSource:
         except SimConnectError as exc:
             self._departures_ok = False
             log.warning("Departure procedures not available from this sim: %s", exc)
+        self._approaches_ok = True
+        try:  # the approaches' transitions, for ATC to clear an approach from a STAR's end: lost alone if refused
+            for line in approaches.definition_lines():
+                dll.add_to_facility_definition(handle, DEF_FACILITY_APPROACHES, line)
+        except SimConnectError as exc:
+            self._approaches_ok = False
+            log.warning("Approach transitions not available from this sim: %s", exc)
+        self._approach_assemblers.clear()
         self._departure_assemblers.clear()
         self._arrival_assemblers.clear()
         self._assemblers.clear()
@@ -489,6 +500,8 @@ class SimConnectSource:
                 arrival.add(msg)
             elif (leaving := self._departure_assemblers.get(msg.request_id)) is not None:
                 leaving.add(msg)
+            elif (coming := self._approach_assemblers.get(msg.request_id)) is not None:
+                coming.add(msg)
         elif isinstance(msg, FacilityDataEnd):
             if (arrival := self._arrival_assemblers.pop(msg.request_id, None)) is not None:
                 data = arrival.build(t)
@@ -497,6 +510,11 @@ class SimConnectSource:
             elif (leaving := self._departure_assemblers.pop(msg.request_id, None)) is not None:
                 data = leaving.build(t)
                 log.info("Departures at %s: %d", leaving.icao, len(data.departures))
+                self._emit(data)
+            elif (coming := self._approach_assemblers.pop(msg.request_id, None)) is not None:
+                data = coming.build(t)
+                log.info("Approaches at %s: %d, %d with transitions", coming.icao, len(data.approaches),
+                         sum(1 for a in data.approaches if a.transitions))
                 self._emit(data)
             else:
                 self._on_facility_end(msg, t)
@@ -536,6 +554,8 @@ class SimConnectSource:
                 self._request_airport(dll, handle, command.icao.upper(), force=True)
             elif isinstance(command, RequestArrival):
                 self._request_arrival(dll, handle, command.icao.upper(), command.name.upper())
+            elif isinstance(command, RequestApproaches):
+                self._request_approaches(dll, handle, command.icao.upper())
             elif isinstance(command, SetComFrequency):
                 event_id = EVT_COM2_SET_HZ if command.radio == 2 else EVT_COM1_SET_HZ
                 try:
@@ -960,6 +980,18 @@ class SimConnectSource:
             self._departure_assemblers.pop(request_id, None)
             log.warning("Couldn't ask for the departures at %s: %s", icao, exc)
 
+    def _request_approaches(self, dll: SimConnectApi, handle: int, icao: str) -> None:
+        if not getattr(self, "_approaches_ok", False) or not facilities.plausible_ident(icao):
+            return
+        request_id = self._next_facility_request
+        self._next_facility_request += 1
+        self._approach_assemblers[request_id] = approaches.ApproachAssembler(icao, started_t=time.monotonic())
+        try:
+            dll.request_facility_data(handle, DEF_FACILITY_APPROACHES, request_id, icao)
+        except SimConnectError as exc:
+            self._approach_assemblers.pop(request_id, None)
+            log.warning("Couldn't ask for the approaches at %s: %s", icao, exc)
+
     def _request_arrival(self, dll: SimConnectApi, handle: int, icao: str, name: str) -> None:
         if not getattr(self, "_arrivals_ok", False) or not facilities.plausible_ident(icao) or not name:
             return
@@ -1019,6 +1051,10 @@ class SimConnectSource:
             if now - leaving.started_t > FACILITY_TIMEOUT_S:
                 log.warning("Timed out waiting for the departures at %s", leaving.icao)
                 del self._departure_assemblers[request_id]
+        for request_id, coming in list(self._approach_assemblers.items()):
+            if now - coming.started_t > FACILITY_TIMEOUT_S:
+                log.warning("Timed out waiting for the approaches at %s", coming.icao)
+                del self._approach_assemblers[request_id]
         for request_id, arrival in list(self._arrival_assemblers.items()):
             if now - arrival.started_t > FACILITY_TIMEOUT_S:
                 log.warning("Timed out waiting for arrival %s at %s", arrival.name, arrival.icao)

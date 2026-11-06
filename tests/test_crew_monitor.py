@@ -521,3 +521,30 @@ def test_the_777_is_the_triple_seven():
 
     assert _aircraft_name("777-200ER PW") == "triple seven"
     assert _aircraft_name("FSLabs A321-211 - Air Canada") == "A321" and _aircraft_name("A320neo V2") == "A320neo"
+
+
+def test_no_engine_failure_on_the_landing_rollout():
+    """Reversers out at Denver, one reading of an engine fewer: "Engine failure! Below V1." on the landing roll."""
+    pm = crew(perf=PlanPerf(v1=140, vr=145, v2=150), plan_source="simbrief")
+    pm.observe(PhaseChanged(t=0.5, previous="APPROACH", phase="LANDING"))
+    pm.monitor.f.landing_t = 0.6
+    pm.observe(own(1, ias_kt=110, gs_kt=110, on_runway=True))
+    pm.observe(systems(1.5))
+    out = pm.observe(systems(2, engines_running=1)) + fly(pm, [own(3, ias_kt=100, gs_kt=100, on_runway=True)])
+    assert not [w for w in said(out) if "Engine failure" in w]
+    pm = crew(perf=PlanPerf(v1=140, vr=145, v2=150), plan_source="simbrief")
+    pm.observe(PhaseChanged(t=0.5, previous="RUNWAY_HOLD", phase="TAKEOFF"))
+    pm.observe(own(1, ias_kt=110, gs_kt=110, on_runway=True))
+    pm.observe(systems(1.5))
+    out = pm.observe(systems(2, engines_running=1)) + fly(pm, [own(3, ias_kt=112, gs_kt=112, on_runway=True)])
+    assert any("Engine failure! Below V1." in w for w in said(out))
+
+
+def test_the_seatbelt_sign_stays_on_until_the_engines_are_off_at_the_gate():
+    """Stopped on a taxiway with the brake set, taxiing in: "Seatbelt sign off." It waits for the engines."""
+    pm = crew(hands="pm")
+    pm.monitor.f.landing_t = 1.0
+    pm.observe(PhaseChanged(t=1.5, previous="LANDING", phase="TAXI_IN"))
+    pm.observe(systems(2, seatbelt=True))
+    out = fly(pm, [own(3 + i, parking_brake=True) for i in range(5)])
+    assert not [w for w in said(out) if "Seatbelt sign off" in w]

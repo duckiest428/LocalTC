@@ -960,7 +960,7 @@ def cabin_settings(cfg: Config):
 
     c = cfg.cabin
     return CabinSettings(crew=c.crew, announcements=c.announcements, safety_demo=c.safety_demo, service=c.service,
-                         chime=c.chime, boarding_music=c.boarding_music, applause=c.applause,
+                         chime=c.chime, boarding_music=c.boarding_music,
                          english_too=c.english_too, interphone=c.interphone, captain=c.captain)
 
 

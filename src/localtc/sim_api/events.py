@@ -337,6 +337,30 @@ class DepartureProcedure(msgspec.Struct, frozen=True, kw_only=True):
     fixes: tuple[str, ...] = ()
 
 
+class ApproachFix(msgspec.Struct, frozen=True, kw_only=True):
+    ident: str
+    lat: float | None = None
+    lon: float | None = None
+
+
+class ApproachRoute(msgspec.Struct, frozen=True, kw_only=True):
+    """An instrument approach with its transitions (each the fixes from where it starts, its IAF, to the final) and its
+    final approach legs, from the sim's navdata."""
+
+    kind: str  # ils, rnav, ... (sim_bridge.facilities.APPROACH_KINDS)
+    runway: str = ""
+    suffix: str = ""
+    transitions: tuple[tuple[ApproachFix, ...], ...] = ()
+    final: tuple[ApproachFix, ...] = ()
+
+
+class ApproachesData(Event, tag="approaches_data"):
+    """An airport's instrument approaches and their transitions, from the sim's navdata."""
+
+    airport: str
+    approaches: tuple[ApproachRoute, ...] = ()
+
+
 class DeparturesData(Event, tag="departures_data"):
     """An airport's departure procedures, from the sim's navdata."""
 
@@ -447,11 +471,11 @@ class GroundStatus(Event, tag="ground_status"):
 
 class CabinSound(Event, tag="cabin_sound"):
     """The cabin's other sounds: ``sound`` chime (``detail`` its kind: seatbelt, pa, call), music (on), music_stop,
-    applause."""
+    music."""
 
     sound: str
     detail: str = ""
-    seed: int = 0  # the same music or applause for the same flight
+    seed: int = 0  # the same music for the same flight
 
 
 class CrewAction(Event, tag="crew_action"):
@@ -673,7 +697,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
-                 NearbyAirports, AircraftSystems, ArrivalData, DeparturesData, TrafficIdentity, AiObjectAssigned, ModelList,
+                 NearbyAirports, AircraftSystems, ArrivalData, DeparturesData, ApproachesData, TrafficIdentity, AiObjectAssigned, ModelList,
                  TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
                  OpsSnapshot, TerrainGrid, SimFrameRate]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]

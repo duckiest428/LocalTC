@@ -119,6 +119,7 @@ from localtc.sim_api import (
     TerrainGrid,
     Airport,
     AirportData,
+    ApproachesData,
     ArrivalData,
     DeparturesData,
     AtisReport,
@@ -148,7 +149,8 @@ from localtc.sim_api import (
 P = FlightPhase
 # The calls to LocalTC's real flights (``traffic_call``), and the controller who makes each.
 TRAFFIC_CALLS = {"clearance": "clearance", "pushback": "ground", "taxi_out": "ground", "taxi_in": "ground",
-                 "lineup": "tower", "takeoff": "tower", "land": "tower", "go_around": "tower", "hold_short": "tower"}
+                 "lineup": "tower", "takeoff": "tower", "land": "tower", "go_around": "tower", "hold_short": "tower",
+                 "vacate": "tower", "handoff_departure": "tower"}
 DEPARTURE_PHASES = {P.PARKED, P.PUSHBACK, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
 PHONETIC_LETTERS = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F",
                     "golf": "G", "hotel": "H", "india": "I", "juliet": "J", "juliett": "J", "kilo": "K", "lima": "L",
@@ -222,8 +224,7 @@ FINAL_OWNED_NM = 10.0  # this flight on final this close: tower isn't sending an
 EXIT_CALL_KT = 100.0  # landed and slowing through this: tower says which way off the runway (at 75 an A380 had
 # turned off before it was said)
 WELCOME_SHARE = 0.5  # how often tower's way off the runway starts "welcome to ..."
-EXIT_STOP_S = 8.0  # ... an exit at least this many seconds of the speed ahead (the room to slow down for it), ...
-EXIT_STOP_MAX_M = 900.0  # ... or this far, whichever is less
+EXIT_SIDE_EXTRA_M = 600.0  # an exit on the gates' side taken over the next one, when it's no further on than this
 RUNWAY_LOAD_S = 1200.0  # the flights given a runway in the last 20 minutes count against it when spreading them out
 MOVING_KT = 2.0  # traffic seen going this fast has somebody flying it
 AIRLINE_CALLSIGN = re.compile(r"[A-Z]{3}\d{1,4}[A-Z]{0,2}")  # "SKW5775": an AI flight, even before it moves
@@ -319,6 +320,7 @@ ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it 
 OWED_READBACK_S = 60.0  # the pilot's readback waited for this long before ATC talks to the other flights
 # The calls to LocalTC's traffic that can't wait for the pilot's readback (a go-around, a hold short for this flight).
 URGENT_TRAFFIC_CALLS = ("go_around", "hold_short")
+BREAK_S = 20.0  # an urgent call this soon after ATC's last words to the pilot: "break break", and no readback waited for
 # Of the other flights' calls that start with them (a clearance, a push, a taxi, ready for departure, a final), the
 # share where they call first: it was always the controller first ("why isn't the traffic asking for something?").
 PILOT_FIRST = 0.7
@@ -411,7 +413,7 @@ CLIMB_WAIT_S = (0.0, 20.0)  # ... after this long (each centre its own pace), so
 DEPARTURE_ENDS_FT = 15000.0  # above this the departure controller hands the climb to a centre
 DEPARTURE_ENDS_NM = 40.0  # or this far from the field, whichever comes first
 # Calls that never open with "good afternoon": repeats, corrections, alerts, handoffs.
-NO_GREETING = ("say_again", "how_read", "read_back", "negative", "confirm", "traffic", "handoff", "contact", "unable",
+NO_GREETING = ("say_again", "how_read", "read_back", "read_back_hold_short", "negative", "confirm", "traffic", "handoff", "contact", "unable",
                "stopped_ahead", "give_way", "readback_correct", "did_you_copy", "common.info", "common.roger")
 TOWER_SWITCH_S = 60.0  # a flight sent to tower that read it back has this long to switch before being sent around
 ESTABLISHED_M = 600.0  # this close to a final's centreline, pointing down it, is established on it
@@ -655,6 +657,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._gate_changed = False  # a gate asked for (Airport Ops) after the taxi in was given: a new route
         self._gate_asked = False  # a gate the pilot asked for and got (the gate map): theirs, shown
         self._star_legs: dict[str, tuple] = {}  # the destination's arrivals (the sim's navdata) by name
+        self._approach_routes: dict[str, tuple] = {}  # each airport's approaches with their transitions (ApproachesData)
+        self.approach_requests: list[str] = []  # airports whose approaches the engine needs; the service asks the sim
         self._rejoin: tuple | None = None  # the taxi arrows' way back onto the route: (from node, route, path)
         self._checked_in: set[str] = set()  # stations the pilot has checked in with (or that called first)
         self._left_at: dict[str, float] = {}  # stations the pilot tuned away from (to another controller), and when
@@ -741,6 +745,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                 for n in event.notices)
         elif isinstance(event, DeparturesData):
             self._departures[event.airport.upper()] = event.departures
+        elif isinstance(event, ApproachesData):
+            self._approach_routes[event.airport.upper()] = event.approaches
         elif isinstance(event, ArrivalData):
             if event.airport.upper() == (self.state.flight.destination or "").upper():
                 self._star_legs[event.name.upper()] = event.legs  # its published speeds: approach's work to them
@@ -1292,6 +1298,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
         self._find_origin(own, ctx.airport)
         dest = st.flight.destination
+        if dest and f"approaches:{dest}" not in self._requested:
+            self._requested.add(f"approaches:{dest}")
+            self.approach_requests.append(dest)  # its approaches' transitions: the way from the STAR to the final
         if dest and dest not in self.tracker.context_builder.airports and dest not in self._requested:
             self._requested.add(dest)
             self.airport_requests.append(dest)
@@ -1687,7 +1696,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             heading = landed.heading_true if landed is not None else own.hdg_true  # (not mid-turn off it)
             # (Still rolling at 100 knots: an exit it has the room to slow down for, 800 m on)
             way_off = self._taxi_graph(geo).runway_exit(own.lat, own.lon, heading, toward=self._where_to_park(geo),
-                                                        min_ahead_m=min(EXIT_STOP_MAX_M, own.gs_kt * EXIT_STOP_S))
+                                                        gs_kt=own.gs_kt, extra_m=EXIT_SIDE_EXTRA_M)
         if way_off is not None:
             # "Welcome to Dubai" now and then, at the end of the flight: the city as its stations are named
             city = ground.station.rsplit(" ", 1)[0] if " " in ground.station else ground.station
@@ -1803,9 +1812,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         airport's controller of that kind, when it's the frequency tuned and nothing else is being said."""
         facility = self.state.comms.tuned
         want = TRAFFIC_CALLS.get(kind)
-        if self.tracker.paused or self._transmitting(t) or t < self._radio_busy_until:
-            return []  # the sim paused (the world stands still), the pilot talking, or the radio busy: not now
         urgent = kind in URGENT_TRAFFIC_CALLS
+        if self.tracker.paused or self._transmitting(t) or (t < self._radio_busy_until and not urgent):
+            return []  # the sim paused (the world stands still), the pilot talking, or the radio busy: not now
         pending = self.state.pending
         if pending is not None and not urgent and t - pending.issued_t < OWED_READBACK_S:
             return []  # the pilot owes a readback: ATC waits for it (tower cleared another for takeoff over it)
@@ -1831,8 +1840,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         slots = {**slots, "callsign": callsign}
         shown = callsign.telephony + " " + callsign.flight_number if callsign.is_airline else callsign.ident
         atc = self.library.render(iid, slots, rng=random.Random(zlib.crc32(f"{ident}{kind}".encode())))
-        at = max(t, self._radio_busy_until)
+        at = max(t, self._radio_busy_until) if not urgent else t
         out: list[BusEvent] = []
+        last_atc = self.state.comms.last_atc_t if self.state.comms.last_atc_t is not None else -math.inf
+        if urgent and (pending is not None or t - last_atc < BREAK_S):
+            # Straight after ATC's words to the pilot: "break break", the urgent call at once, and the pilot's
+            # readback of what went before not waited for (a go-around can't wait for it).
+            atc = replace(atc, text=f"Break, break. {atc.text}", spoken=f"Break, break. {atc.spoken}")
+            if pending is not None:
+                self.state.pending = None
+                self._nudged.add(pending.instruction_id)
+                self._repeated.add(pending.instruction_id)
         if (first := self._traffic_request(kind, facility, callsign, shown, slots, rng)) is not None:
             text, spoken = first  # they call first: "O'Hare Ground, United 1921, request pushback"
             out.append(RadioChatter(t=round(at, 1), station=facility.station, frequency_mhz=facility.mhz, speaker="pilot",
@@ -1897,6 +1915,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return ("tower.land", {"runway": runway, "wind": self._wind(own)}) if own is not None else None
         if kind == "pushback":
             return "ground.pushback", {"turn": rng.choice(("left", "right"))}
+        if kind in ("vacate", "handoff_departure"):
+            # The flow the pilot gets: off the runway, "contact ground"; airborne, "contact departure".
+            want = "ground" if kind == "vacate" else "departure"
+            to = next((f for f in self.facilities if f.controller == want and (f.airport or "").upper() == icao.upper()), None)
+            if to is None and kind == "handoff_departure":
+                to = next((f for f in self.facilities if f.controller == "approach" and (f.airport or "").upper() == icao.upper()),
+                          None) or self._center()
+            if to is None:
+                return None
+            iid = "tower.exit_contact_ground" if kind == "vacate" else "tower.handoff_departure"
+            return iid, {"station": to.station, "frequency": to.mhz}
         if geo is None:
             return None
         if kind in ("taxi_out", "taxi_in") and lat is not None and lon is not None:
@@ -2178,7 +2207,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if pending.instruction_id not in self._nudged:
                 self._nudged.add(pending.instruction_id)
                 st.pending = replace(pending, nudged=True)
-                self._schedule(t, "common.how_read", {"station": issued.facility.station}, issued.facility, delay=False,
+                ask = "common.read_back_hold_short" if "hold_short" in pending.instruction_id else "common.how_read"
+                self._schedule(t, ask, {"station": issued.facility.station}, issued.facility, delay=False,
                                expects_readback=False)
             elif pending.instruction_id not in self._repeated:
                 self._repeated.add(pending.instruction_id)
@@ -3853,7 +3883,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if tuned is None or not self._works_approach(own) or self._holding():
             return False
         if "approach" in st.clearances:  # cleared: still slowing down until tower has it
-            return st.pending is None and self._speed_control(own, t, tuned)
+            sent_on = st.comms.expected is not None and st.comms.expected.station != tuned.station
+            # (Handed to tower already: not "reduce speed to 160" twelve seconds after "contact Denver Tower".)
+            return st.pending is None and not sent_on and self._speed_control(own, t, tuned)
         if (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
             return False  # wait for the check-in
         plan = self._arrival_plan(own)
@@ -3977,10 +4009,32 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return None
         join = procedures.star_join(geo, end, fixes)
         target = join if join is not None else fixes[-1]
+        # Ended off the final, at a fix the approach goes on from (Denver's LONGZ at KAILE, the ILS 17R's KAILE
+        # transition on to HOOPE): the approach clearance comes as for a STAR that runs onto the final, no headings.
+        onward = join is None and self._transition_from(target.ident, runway) is not None
         where = procedures.progress(geo, fixes[:fixes.index(target) + 1], own.lat, own.lon, target)
         if where is None or where.off_nm > procedures.ON_PATH_NM or (join is not None and where.left_nm <= 0):
             return None
-        return join is not None, where.left_nm
+        return join is not None or onward, where.left_nm
+
+    def _transition_from(self, fix: str, runway: str) -> tuple | None:
+        """The planned approach's transition (its fixes, from the sim's navdata) that starts at ``fix``, or None."""
+        plan = self._arrival_plan(self.state.aircraft) if self.state.aircraft is not None else None
+        approach = plan["approach"] if plan else None
+        routes = self._approach_routes.get((self.state.flight.destination or "").upper(), ())
+        if approach is None or not routes:
+            return None
+        family = {"ILS": ("ils",), "LOC": ("localizer",), "LOC/DME": ("localizer",), "RNAV": ("rnav", "gps"),
+                  "RNP": ("rnav", "gps"), "GPS": ("gps", "rnav"), "VOR": ("vor", "vordme"), "VOR/DME": ("vordme", "vor"),
+                  "NDB": ("ndb", "ndbdme"), "LDA": ("lda",), "SDF": ("sdf",)}.get(approach.kind.upper(), ())
+        for route in routes:
+            if route.kind not in family or route.runway.upper() != runway.upper() \
+                    or (approach.suffix and route.suffix and route.suffix != approach.suffix):
+                continue
+            for transition in route.transitions:
+                if transition and transition[0].ident.upper() == fix.upper():
+                    return transition
+        return None
 
     def _speed_control(self, own: OwnshipState, t: float, facility: Facility) -> bool:
         """ "Reduce speed to 210 knots": only worth saying to something fast enough to need it."""

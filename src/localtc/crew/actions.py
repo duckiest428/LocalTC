@@ -79,6 +79,9 @@ class Cockpit:
     # On ATC's vectors (a heading given, not on a "descend via"): off the flight plan's path, so a new altitude is flown
     # open (the knob pulled: OP CLB / OP DES), not managed (pushed: DES needs NAV, and the A321 sat level in ALT)
     vectored: bool = False
+    # The baro knobs pulled to STD by the copilot (an Airbus's input events): pushed back to QNH on the way down even
+    # when the sim's altimeter reading never showed 29.92 (the A320neo V2 keeps its QNH under STD).
+    baro_pulled: bool = False
 
     def watch(self) -> None:
         """Note which readings changed since the last look (``own`` and ``systems`` just replaced)."""
@@ -468,6 +471,7 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         elif std and (pull := p.actions.get("altimeter_std")) is not None and pull.input:
             writes = (SetInputEvent(name=pull.input, value=float(pull.on)),)  # an Airbus's baro knobs pulled: STD
             both = "," in pull.input
+            c.baro_pulled = True
         else:
             custom = p.actions.get("altimeter")
             writes = (_write(p, "altimeter", SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=2), hpa),)
@@ -477,9 +481,10 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
                 both = False
             own = c.own
             setting = (own.altimeter_setting_inhg or own.altimeter_inhg) if own is not None else 0.0
-            at_std = own is None or abs(setting - 29.92) < 0.005  # (a knob that's on QNH already isn't pushed again)
+            at_std = own is None or abs(setting - 29.92) < 0.005 or c.baro_pulled  # (on QNH already: not pushed again)
             if (push := p.actions.get("altimeter_qnh")) is not None and push.input and at_std:
                 writes = (SetInputEvent(name=push.input, value=float(push.on)), *writes)  # pushed out of STD first
+                c.baro_pulled = False
         side = (" both sides", ", both sides") if both else (" on my side", " on my side")
         return Plan(a, v, writes, lambda c2: None, said.replace(" set.", f" set{side[1]}."), spoken + side[0])
     if a == "parking_brake":

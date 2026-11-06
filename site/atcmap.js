@@ -203,7 +203,9 @@ const AtcMap = (() => {
       pts: [], ground: false,
       add(lat, lon, ground) {
         ground = !!ground;
-        const last = this.pts[this.pts.length - 1];
+        if (nowhere(lat, lon)) return false;  // the sim's menu: no aircraft anywhere yet
+        let last = this.pts[this.pts.length - 1];
+        if (last && jumped(lat, lon, last)) { this.pts = []; last = undefined; }  // a new flight, or moved: a new path
         if (last) lon = wrapNear(lon, last[1]);  // on across the date line, never back across the world
         if (last && ground === this.ground && Math.abs(last[0] - lat) + Math.abs(last[1] - lon) < (ground ? 0.0001 : 0.002)) return false;
         this.ground = ground;
@@ -217,8 +219,19 @@ const AtcMap = (() => {
         this.pts = simplify(joined, keep);
       },
       /** Where the aircraft is drawn: its longitude in the same copy of the world as the end of the path. */
-      lon(lon) { const last = this.pts[this.pts.length - 1]; return last ? wrapNear(lon, last[1]) : lon; },
+      lon(lon) {
+        const last = this.pts[this.pts.length - 1];
+        return last && !jumped(0, lon, [0, last[1]]) ? wrapNear(lon, last[1]) : lon;
+      },
     };
+  }
+  /* Where the sim puts the aircraft in its menus (0 N, 90 E, below the sea): no position. The path began there, the
+     airport's longitude was then taken in the copy of the world nearest 90 E, and the aircraft was drawn a world away
+     from San Diego, its own airport on the screen and no aircraft on it. */
+  function nowhere(lat, lon) { return Math.abs(lat) < 0.01 && Math.abs(lon - 90) < 0.01; }
+  /* Further than an aircraft goes between two readings: the flight loaded somewhere else, or moved in the sim. */
+  function jumped(lat, lon, last) {
+    return Math.abs(lat - last[0]) > 1 || Math.abs(((lon - last[1] + 540) % 360) - 180) > 2;
   }
 
   /* Traffic, as the app's Live Map shows it: each aircraft pointing its way, airborne cyan and on the ground grey,

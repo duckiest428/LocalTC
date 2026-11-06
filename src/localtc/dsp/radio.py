@@ -114,13 +114,14 @@ LIMIT = 2.2  # the receiver's limiting: a transmission's loudness close to its p
 
 
 def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: int = 0, squelch: bool = True,
-                 strength: float = 1.0, cabin: float = 0.0) -> np.ndarray:
+                 strength: float = 1.0, cabin: float = 0.0, opens: bool = True, closes: bool = True) -> np.ndarray:
     """``audio`` (mono float, any level) as a radio transmission at the same rate, peak 0.9.
 
     ``static``: the receiver's hiss and squelch (0 none: your own side). ``strength``: the signal, 1 a strong nearby
     station, toward 0 a distant one (more hiss, deeper and quicker fading, a crackle now and then). ``cabin``: the
     background behind the speaker (0 a quiet tower cab, 1 a jet's flight deck), lifted between the words by the
-    transmitter's level control as on a real radio."""
+    transmitter's level control as on a real radio. ``opens`` / ``closes``: the squelch opening before it and closing
+    after it (a long transmission played a sentence at a time: open before the first, closed after the last)."""
     rng = np.random.default_rng(seed)
     if len(audio) == 0:
         return audio.astype(np.float32)
@@ -130,6 +131,7 @@ def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: in
     pre = post = 0
     if squelch and static > 0:  # keyed a moment before the first word, let go a moment after the last
         pre, post = int(rng.uniform(0.08, 0.16) * rate), int(rng.uniform(0.05, 0.12) * rate)
+        pre, post = (pre if opens else 0), (post if closes else int(0.12 * rate))  # (a breath between sentences)
         voice = np.concatenate([np.zeros(pre, np.float32), voice, np.zeros(post, np.float32)])
     # The microphone: a boom mic's thin lows and forward middle, the speaker's surroundings behind them.
     mic = bandpass(voice, rate, 180.0, 4500.0, presence_db=2.5, presence_hz=2600.0)
@@ -163,7 +165,7 @@ def radio_effect(audio: np.ndarray, rate: int, *, static: float = 0.35, seed: in
         release = burst * np.exp(-np.linspace(0, 4, tail)) * (0.35 + 0.45 * static)
         opening = _click(rng, rate, loud=0.35 * static)
         closing = _click(rng, rate, loud=0.25 * static)
-        out = np.concatenate([opening, out, release, closing])
+        out = np.concatenate([opening if opens else out[:0], out, release if closes else out[:0], closing if closes else out[:0]])
     peak = np.max(np.abs(out)) or 1.0
     return (out / peak * 0.9).astype(np.float32)
 

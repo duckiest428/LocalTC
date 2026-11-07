@@ -1355,3 +1355,19 @@ body::after {
 .lost-radio .said { color: var(--text-2); overflow-wrap: anywhere; }
 .lost-radio i { font-style: normal; color: var(--text); }
 .lost-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 28px; }
+
+/* "Is there free ATC for MSFS?": the answer search engines quote */
+.answer { text-align: center; }
+.answer .answer-text { max-width: 820px; margin-inline: auto; }
+.answer-facts { list-style: none; padding: 0; margin: 28px auto 0; max-width: 900px; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.answer-facts li { padding: 16px 12px; border: 1px solid var(--line, rgba(127,127,127,.25)); border-radius: 14px; }
+.answer-facts b { display: block; font-size: 1.4rem; }
+.answer-facts span { opacity: .75; font-size: .9rem; }
+.answer-more { margin-top: 20px; }
+/* the comparison page */
+.compare-page { max-width: 1000px; margin: 0 auto; padding: 120px 16px 64px; }
+.compare-page h2 { margin-top: 48px; }
+.compare-wrap { overflow-x: auto; }
+.compare-page table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.compare-page th, .compare-page td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); vertical-align: top; }

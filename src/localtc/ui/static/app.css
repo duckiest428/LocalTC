@@ -701,3 +701,28 @@ html[data-theme="daylight"] .tag.differs, html[data-theme="daylight"] .tag.not-a
 html[data-theme="daylight"] .tag.in-progress { color: #fff; }
 html[data-theme="daylight"] .exp-badge { color: var(--amber); }
 html[data-theme="daylight"] .linkbtn:hover { color: var(--red); }
+
+/* Getting Started: the guide's sections on the left, the one chosen on the right */
+.dialog-guide { width: min(980px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px)); }
+.dialog-guide .dlg { display: flex; flex-direction: column; height: 100%; }
+.guide { display: grid; grid-template-columns: 210px 1fr; flex: 1; min-height: 0; }
+.guide-nav { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; border-right: 1px solid var(--line); background: var(--bg-2); overflow-y: auto; }
+.guide-nav button { text-align: left; background: none; border: 0; border-radius: 3px; color: var(--muted); padding: 7px 10px; font: inherit; cursor: pointer; }
+.guide-nav button:hover { color: var(--text); background: var(--panel-2); }
+.guide-nav button.active { color: var(--text); background: var(--panel-2); box-shadow: inset 3px 0 0 var(--cyan); }
+.guide-body { padding: 14px 22px 22px; overflow-y: auto; line-height: 1.5; }
+.guide-sec { display: none; max-width: 680px; }
+.guide-sec.active { display: block; }
+.guide-sec h3 { font-size: 18px; margin: 0 0 8px; }
+.guide-sec h4 { font-size: 14px; margin: 18px 0 6px; color: var(--cyan); }
+.guide-sec p, .guide-sec ul, .guide-sec ol { margin: 0 0 10px; }
+.guide-sec ul, .guide-sec ol { padding-left: 20px; }
+.guide-sec li { margin-bottom: 6px; }
+.guide-steps li::marker { color: var(--cyan); font-weight: 600; }
+.guide-sec .say { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; background: var(--field, var(--bg-2)); border-left: 3px solid var(--cyan); padding: 7px 10px; margin: 0 0 10px; border-radius: 2px; }
+.guide-tip { border: 1px solid var(--line-2); border-radius: 3px; padding: 8px 10px; background: var(--panel-2); }
+@media (max-width: 640px) {
+  .guide { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .guide-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .guide-nav button { white-space: nowrap; }
+}

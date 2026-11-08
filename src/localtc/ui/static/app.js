@@ -113,7 +113,10 @@ function setState(st) {
 
 function pttName(p) {
   if (!p) return "Right Ctrl";
-  if (p.mode === "joystick") return p.joystick;
+  if (p.mode === "joystick") {
+    const m = /^joystick:(\d+):button:(\d+)$/.exec(p.joystick || "");
+    return m ? `button ${m[2]} on controller ${m[1]}` : p.joystick;  // (not "joystick:0:button:0")
+  }
   if (p.mode === "enter") return "the headset button";
   return keyLabel(p.key);
 }
@@ -507,7 +510,22 @@ $("#btn-settings").onclick = () => {
 $("#dlg-settings-close").onclick = () => $("#dlg-settings").close();
 $("#dlg-settings").addEventListener("click", (e) => { if (e.target === $("#dlg-settings")) $("#dlg-settings").close(); });
 $("#btn-alerts").onclick = () => $("#dlg-alerts").showModal();
-$("#btn-help").onclick = () => $("#dlg-help").showModal();
+// Getting Started: a section at a time, the last one read opened again next time.
+function guideShow(name) {
+  if (!$(`.guide-sec[data-guide="${name}"]`)) name = "start";
+  document.querySelectorAll("#guide-nav button").forEach((b) => b.classList.toggle("active", b.dataset.guide === name));
+  document.querySelectorAll(".guide-sec").forEach((s) => s.classList.toggle("active", s.dataset.guide === name));
+  $("#guide-body").scrollTop = 0;
+  try { localStorage.setItem("guide", name); } catch (e) { /* not kept */ }
+}
+$("#guide-nav").addEventListener("click", (e) => { const b = e.target.closest("button[data-guide]"); if (b) guideShow(b.dataset.guide); });
+$("#btn-help").onclick = () => {
+  let last = "start";
+  try { last = localStorage.getItem("guide") || "start"; } catch (e) { /* the first section */ }
+  guideShow(last);
+  $("#dlg-help").showModal();
+};
+$("#dlg-help").addEventListener("click", (e) => { if (e.target === $("#dlg-help")) $("#dlg-help").close(); });
 // The welcome notes: shown once ever (existing installs included), seen for good once closed. This version's notes
 // count as seen with it: a new install has nothing to catch up on.
 $("#dlg-welcome")?.addEventListener("close", () => {

@@ -229,20 +229,233 @@
   </form>
 </dialog>
 
-<!-- Getting Started -->
-<dialog id="dlg-help" class="dialog">
+<!-- Getting Started: a guide in sections (the list on the left), each a short tutorial. The radio calls in it are
+     aviation English in every language (translate="no"), like the radio itself. -->
+<dialog id="dlg-help" class="dialog dialog-guide">
   <form method="dialog" class="dlg">
     <div class="dlghead"><h2>Getting Started</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
-    <div class="help">
-      <ol>
-        <li><b>Models.</b> In <b>Quick Settings</b>, pick a profile that suits your computer and press <b>Download</b> for anything not yet installed. Everything runs on this computer; after the downloads, flights work offline.</li>
-        <li><b>Flight plan.</b> <b>New Flight</b> imports your latest SimBrief plan, or type one in. ATC clears you to the destination at the cruise altitude, with your callsign.</li>
-        <li><b>Start.</b> Load the aircraft in MSFS 2020 or 2024 (cold and dark or ready to taxi), then press <b>Start</b>. The status turns green when the sim is connected.</li>
-        <li><b>Tune and talk.</b> Tune COM1 in the cockpit (or click a frequency above the radio log). Hold your push-to-talk key (<b id="help-ptt">Right Ctrl</b>) and speak, or type into the box at the bottom and press Enter.</li>
-        <li><b>The flow.</b> Clearance: "Request IFR to Boeing Field". Ground: "ready to taxi with information Alpha". Tower: "holding short runway 34L, ready for departure". Then read back each instruction and check in after every handoff: "Seattle Departure, N172LT, 2,000 climbing 5,000".</li>
-        <li><b>Copilot.</b> Flip the <b>Copilot</b> switch and it works the radio with ATC for you: every call, or only readbacks and frequency changes (Quick Settings).</li>
-      </ol>
-      <p class="muted small">Something went wrong? Turn on <b>Developer mode</b> in Settings (the gear). Every flight is then recorded with its audio. Press <b>Mark</b> at the moment it happens, then <b>Export session</b> and send the zip.</p>
+    <div class="guide">
+      <nav class="guide-nav" id="guide-nav" aria-label="Sections">
+        <button type="button" data-guide="start" class="active">Quick start</button>
+        <button type="button" data-guide="first">Your first flight</button>
+        <button type="button" data-guide="radio">Talking on the radio</button>
+        <button type="button" data-guide="copilot">The copilot</button>
+        <button type="button" data-guide="cabin">The cabin crew</button>
+        <button type="button" data-guide="ground">The ground crew</button>
+        <button type="button" data-guide="join">Joining a flight under way</button>
+        <button type="button" data-guide="tour">Around the app</button>
+        <button type="button" data-guide="models">Voices and models</button>
+        <button type="button" data-guide="phone">Phone and tracker</button>
+        <button type="button" data-guide="trouble">Troubleshooting</button>
+        <button type="button" data-guide="report">Reporting a problem</button>
+      </nav>
+      <div class="guide-body help" id="guide-body">
+
+        <section class="guide-sec active" data-guide="start">
+          <h3>Quick start</h3>
+          <p>Five steps from opening LocalTC to your first call. Each one has its own section in this guide if you want more.</p>
+          <ol class="guide-steps">
+            <li><b>Get the models.</b> Open Quick Settings and press Download on anything not installed yet. It's a one-time download; after it, LocalTC works offline.</li>
+            <li><b>File a flight plan.</b> Press New Flight and fetch your latest SimBrief plan, or type one in on the Manual tab. ATC clears you as filed, with your callsign, route and runways.</li>
+            <li><b>Load the aircraft.</b> Start MSFS 2020 or 2024 and load in at a gate or parking spot, cold and dark or ready to go.</li>
+            <li><b>Press Start.</b> The status at the top turns green when LocalTC is connected to the sim.</li>
+            <li><b>Make your first call.</b> Tune COM1 to the clearance or ground frequency (or click a frequency above the radio log), hold your push-to-talk key and speak.</li>
+          </ol>
+          <p class="guide-tip">Push-to-talk: <b id="help-ptt">Right Ctrl</b><br>Change it, or use a joystick button, in Quick Settings &rarr; Push-to-talk.</p>
+          <p>Not sure what to say? The next section, Your first flight, walks you through every call from the gate to the gate.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="first">
+          <h3>Your first flight, call by call</h3>
+          <p>An airline flight from the gate to the gate. Swap in your own callsign, airports and numbers. After every instruction, read it back.</p>
+          <h4>1. The clearance</h4>
+          <p>Tune Clearance Delivery (or Ground, if there's no clearance frequency). Listen to the ATIS first if you like, and note its letter.</p>
+          <div class="say" translate="no">"Boston Clearance, Speedbird 239, request IFR clearance to London Heathrow, information Alpha."</div>
+          <p>You get your route, the first altitude, a departure frequency and a squawk code. Read it all back and set the squawk.</p>
+          <h4>2. Push and start</h4>
+          <p>Tune Ground when you're ready to go.</p>
+          <div class="say" translate="no">"Boston Ground, Speedbird 239, stand 12, request pushback and start."</div>
+          <h4>3. Taxi</h4>
+          <div class="say" translate="no">"Boston Ground, Speedbird 239, ready to taxi."</div>
+          <p>Ground gives the runway and the taxiways to follow. The Live Map and the arrows in the sim show the way. Stop at the holding point if you're told to hold short.</p>
+          <h4>4. Takeoff</h4>
+          <p>Ground hands you to Tower near the runway. Tune it and call.</p>
+          <div class="say" translate="no">"Boston Tower, Speedbird 239, holding short runway 22R, ready for departure."</div>
+          <p>Wait for "cleared for takeoff" before you roll.</p>
+          <h4>5. Departure and the climb</h4>
+          <p>Shortly after takeoff, Tower sends you to Departure. Check in with your altitude.</p>
+          <div class="say" translate="no">"Boston Departure, Speedbird 239, passing 2,000 climbing 5,000."</div>
+          <p>Every new controller gets the same check-in: who you're calling, your callsign, your altitude. Center hands you on from sector to sector all the way across.</p>
+          <h4>6. Descent and approach</h4>
+          <p>Before the top of descent, Center clears you down and tells you the arrival and the runway. Approach then gives headings and speeds (vectors) onto the final, or clears the approach.</p>
+          <div class="say" translate="no">"Turn left heading 270, maintain 3,000 until established, cleared ILS runway 27L, Speedbird 239."</div>
+          <h4>7. Landing and taxi in</h4>
+          <p>Tower clears you to land. Once you're off the runway, call Ground.</p>
+          <div class="say" translate="no">"London Ground, Speedbird 239, clear of runway 27L."</div>
+          <p>Ground gives you a gate and the way there. Set the parking brake and shut down at the gate: the flight goes into your Logbook.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="radio">
+          <h3>Talking on the radio</h3>
+          <h4>Push-to-talk</h4>
+          <ul>
+            <li>Press the key a moment before you speak, and let go only once you've finished. The first and last words are easily lost.</li>
+            <li>Speak at your normal speed, as on a real radio. You don't need to shout or go slowly.</li>
+            <li>You can always type a call instead: the box at the bottom, then Enter.</li>
+            <li>You hear yourself while you hold the key, like a real headset (the sidetone, on the mixer).</li>
+          </ul>
+          <h4>Who you're talking to</h4>
+          <p>You talk to whoever is on the frequency your radio is tuned to and transmitting on. COM1 and COM2 at the top show both; click one to transmit on it. The frequencies for the airport are listed above the radio log, and clicking one tunes it.</p>
+          <h4>Readbacks</h4>
+          <p>Read back every clearance: the altitudes, headings, speeds, runways, frequencies and squawk codes, then your callsign. Get one wrong and the controller corrects you.</p>
+          <div class="say" translate="no">"Climb flight level 240, Speedbird 239."</div>
+          <h4>Useful calls</h4>
+          <ul>
+            <li translate="no">"Say again."</li>
+            <li translate="no">"Request direct DAYBO."</li>
+            <li translate="no">"Request higher, flight level 380."</li>
+            <li translate="no">"Unable, Speedbird 239."</li>
+            <li translate="no">"Mayday, mayday, mayday" or "Pan-pan" for an emergency.</li>
+          </ul>
+          <p class="guide-tip">You don't need perfect phraseology. Standard words work best, but ATC understands plain English too, especially with a cloud language model linked (Voices and models).</p>
+        </section>
+
+        <section class="guide-sec" data-guide="copilot">
+          <h3>The copilot</h3>
+          <p>Your first officer sits beside you, watches the flight and talks to you on the intercom, never on the radio unless you hand it the radios.</p>
+          <h4>Handing over the radios</h4>
+          <ul>
+            <li><b>Off:</b> you do all the talking to ATC.</li>
+            <li><b>Assist:</b> you make the calls; the copilot reads back instructions and changes frequencies when you're handed off.</li>
+            <li><b>Full:</b> the copilot makes every call too, from the clearance to the gate. Flip the Copilot radio switch at the bottom of the ATC tab.</li>
+          </ul>
+          <p>Choose between Assist and Full in Quick Settings &rarr; Copilot.</p>
+          <h4>Talking to the copilot</h4>
+          <p>Hold the intercom key (Right Alt unless you changed it), or the IC button, and speak. Typed words go to the copilot with the COPILOT button. Some things to try:</p>
+          <ul>
+            <li translate="no">"Gear up." "Flaps 2." "Landing lights on."</li>
+            <li translate="no">"Set heading 270." "Altitude 10,000." "Speed 250."</li>
+            <li translate="no">"Squawk 4521." "Tune 121.9." "Altimeter 29.92."</li>
+            <li translate="no">"Before start checklist." "Brief the arrival." "Status."</li>
+            <li translate="no">"Quiet please." "Normal callouts."</li>
+          </ul>
+          <p>It refuses what isn't safe (gear up on the ground, flaps above their speed) and says why. In aircraft it has no profile for, it calls things out but leaves the switches to you, and says so.</p>
+          <h4>What it says by itself</h4>
+          <p>Callouts on the takeoff and the approach, ten thousand feet, the transition, the ATIS at the destination, checklist prompts, and warnings for anything unsafe: an altitude off what ATC gave, a runway ahead without a clearance, low fuel, wind shear. How much it says is up to you: Quick Settings &rarr; Copilot &rarr; What it says by itself.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="cabin">
+          <h3>The cabin crew</h3>
+          <p>A cabin manager behind the door follows the flight from what the aircraft does: boarding music, the welcome, the safety demonstration on the taxi, cabin secure for takeoff and landing, the service in the cruise, the descent with the destination's weather and local time, and the goodbye at the gate.</p>
+          <p>They're the airline's own crew, with names from its country, and they announce in its languages: Air Canada in English and French, Lufthansa in German and English.</p>
+          <h4>Talking to them</h4>
+          <p>On the intercom, start with "cabin", "purser" or their name, or hold the cabin key if you've set one (Quick Settings &rarr; Push-to-talk).</p>
+          <ul>
+            <li translate="no">"Cabin, can you start boarding?"</li>
+            <li translate="no">"Cabin, a coffee please, white, one sugar."</li>
+            <li translate="no">"Cabin, how many on board?"</li>
+            <li translate="no">"Cabin, turbulence in five minutes."</li>
+            <li translate="no">"Cabin, prepare for landing."</li>
+          </ul>
+          <p>Start with "Ladies and gentlemen" and it's your own announcement to the passengers. Turn the crew, the music and the announcements on or off in Quick Settings &rarr; Cabin crew.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="ground">
+          <h3>The ground crew</h3>
+          <p>Run the turnaround and the push by voice, with no menus. With GSX installed, LocalTC asks GSX for each service; without it, the sim's own jetway and pushback are used.</p>
+          <ol class="guide-steps">
+            <li><b>Turn it on.</b> Quick Settings &rarr; Ground crew.</li>
+            <li><b>Call them.</b> Tune the ramp frequency, 119.990 at every airport, or start a call on the intercom with "ramp" or "ground crew".</li>
+            <li><b>Ask for what you need.</b> Several things in one call work.</li>
+          </ol>
+          <ul>
+            <li translate="no">"Ramp, jetway and ground power please."</li>
+            <li translate="no">"Ramp, catering and fuel."</li>
+            <li translate="no">"Ramp, what's still outstanding?"</li>
+            <li translate="no">"Ramp, ready for pushback, tail left."</li>
+            <li translate="no">"Ramp, disconnect the jetway."</li>
+          </ul>
+          <p>Boarding and deboarding belong to the cabin crew: ask them. The push waits for ATC's pushback approval when ATC is running. Before the push, set the parking brake and turn the engines off; the crew tells you what's missing.</p>
+          <p class="guide-tip">A real controller on 119.990 always comes first. If your aircraft's radio can't dial it, ask the copilot to "tune ramp".</p>
+        </section>
+
+        <section class="guide-sec" data-guide="join">
+          <h3>Joining a flight under way</h3>
+          <p>Started LocalTC late, or it closed in the air? You can carry on from where you are.</p>
+          <ol class="guide-steps">
+            <li><b>Open LocalTC.</b> Leave the flight going in the sim.</li>
+            <li><b>Press New Flight.</b> Load the same plan (SimBrief, or typed in).</li>
+            <li><b>Press Start.</b> LocalTC works out the phase of flight: climbing, cruising, descending, on approach or taxiing in.</li>
+          </ol>
+          <p>Your clearance and takeoff count as already given, your squawk as assigned and your level as cleared. ATC tells you who you should be talking to (Departure, the Center for where you are, Approach or Tower) and on what frequency. Tune it and check in. With the copilot on the radios, it does that for you.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="tour">
+          <h3>Around the app</h3>
+          <ul>
+            <li><b>ATC:</b> the radio log of everything said, the airport's frequencies and ATIS, and your flight's details: assigned squawk, altitude, runway, phase and what's next.</li>
+            <li><b>Quick Settings:</b> everything about the flight: ATC, the copilot, the cabin and ground crews, push-to-talk, voices and models, traffic, the real-world data.</li>
+            <li><b>Live Map:</b> your aircraft, the route, the traffic and who controls which airspace, so you can see the next handoff coming. VFR mode shows terrain and airspace classes.</li>
+            <li><b>EFB:</b> the briefing (METAR, TAF, NOTAMs), the plan and fuel, the airport and its gates, charts, checklists and a scratchpad.</li>
+            <li><b>Airport Lookup:</b> any airport's runways, frequencies and weather.</li>
+            <li><b>Logbook:</b> every flight with its landing rate. Replay one with the whole radio transcript, share a flight card, or see your year in Wrapped.</li>
+          </ul>
+          <p>At the top: the mixer (the volume of ATC, the copilot, the cabin, the music and your microphone), Settings (the gear: account, appearance, updates, support) and the alerts.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="models">
+          <h3>Voices and models</h3>
+          <p>Everything runs on your PC. These choices trade speed for quality; all of them are in Quick Settings &rarr; Models and Language models.</p>
+          <ul>
+            <li><b>Speech recognition (Whisper):</b> hears what you say. The bigger models (small.en, or medium.en with an NVIDIA card) hear you much better than base.en, if your PC can spare them alongside the sim.</li>
+            <li><b>Voices:</b> each controller speaks with the accent of where they are. Kokoro sounds the most natural; Piper is lighter. Preview any accent in Models.</li>
+            <li><b>Language model:</b> helps ATC understand calls in your own words and word its replies. A free cloud model (Mistral is recommended) with your own key understands the most. The local one works offline, more strictly.</li>
+          </ul>
+          <p class="guide-tip">Cloud models are optional and use your own key. Your calls go straight from your PC to the provider you picked, never through LocalTC.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="phone">
+          <h3>Phone and tracker</h3>
+          <p>Both are optional and need a free LocalTC account (Settings &rarr; Account).</p>
+          <ul>
+            <li><b>The iPhone companion:</b> COM1, COM2 and the copilot on your phone, the EFB and the ground crew's buttons. It finds LocalTC on your home network, or through your account.</li>
+            <li><b>The web tracker:</b> your flight live on localtc.tech, for friends to follow, with the radio transcript.</li>
+            <li><b>Your logbook online:</b> your flights copied to the website. Voice, recordings and settings are never sent.</li>
+          </ul>
+        </section>
+
+        <section class="guide-sec" data-guide="trouble">
+          <h3>Troubleshooting</h3>
+          <h4>ATC doesn't answer</h4>
+          <ul>
+            <li>Check you're transmitting on the right radio (COM1 or COM2 at the top) and that it's tuned to a controller's frequency.</li>
+            <li>Look at the radio log: if your words show there, ATC heard you. If they're wrong, see the microphone below.</li>
+            <li>An alert (the triangle at the top) says when nobody is on the frequency you called.</li>
+          </ul>
+          <h4>The microphone</h4>
+          <ul>
+            <li>Pick your microphone in Quick Settings &rarr; Push-to-talk, and check its level on the mixer.</li>
+            <li>If LocalTC says your microphone isn't sending any audio, unplug it and plug it back in, then press again.</li>
+            <li>Misheard words: a bigger Whisper model helps most (Voices and models).</li>
+          </ul>
+          <h4>No voices</h4>
+          <p>Check the ATC voice switch at the bottom of the ATC tab, the mixer, and that the voices are downloaded (Quick Settings &rarr; Models).</p>
+          <h4>The sim won't connect</h4>
+          <p>Load into the aircraft fully first (past the menus), then press Start. LocalTC keeps trying while the sim loads.</p>
+        </section>
+
+        <section class="guide-sec" data-guide="report">
+          <h3>Reporting a problem</h3>
+          <p>Each report makes ATC and the crews better. The best ones have the flight's recording, so the moment can be replayed exactly.</p>
+          <ol class="guide-steps">
+            <li><b>Turn on Developer mode.</b> It&apos;s in Settings (the gear). Every flight is then recorded, with its audio.</li>
+            <li><b>Press Mark.</b> Do it at the moment something goes wrong, and type a few words about it.</li>
+            <li><b>Press Export session.</b> After the flight, or during it.</li>
+            <li><b>Send the zip.</b> Through Settings &rarr; Support &amp; feedback, or on the Discord.</li>
+          </ol>
+        </section>
+
+      </div>
     </div>
   </form>
 </dialog>

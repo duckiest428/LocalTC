@@ -28,3 +28,4 @@ config/localtc.toml
 
 # Built by tools/build_installer.py (too big for git: it goes on the GitHub release)
 /installer/*.exe
+.claude/launch.json

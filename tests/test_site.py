@@ -35,7 +35,7 @@ def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
     assert site == app, f"copy site/{name} over src/localtc/ui/static/{name} (or the other way)"
 
 
-PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html", "blog.html"]
+PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html", "blog.html", "free-atc-msfs.html"]
 
 
 def test_every_page_has_the_same_header_links():
@@ -117,7 +117,7 @@ def test_the_sitemap_lists_the_public_pages_without_html():
     xml = (ROOT / "site" / "sitemap.xml").read_text(encoding="utf-8")
     urls = re.findall(r"<loc>([^<]+)</loc>", xml)
     assert urls[0] == "https://localtc.tech/" and all(".html" not in u for u in urls)
-    for name in ("pricing", "changelog", "blog", "privacy", "terms", "cookies"):
+    for name in ("free-atc-msfs", "pricing", "changelog", "blog", "privacy", "terms", "cookies"):
         assert f"https://localtc.tech/{name}" in urls
     assert "Sitemap: https://localtc.tech/sitemap.xml" in (ROOT / "site" / "robots.txt").read_text(encoding="utf-8")
 

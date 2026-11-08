@@ -1,0 +1,15 @@
+# LocalTC
+
+> LocalTC is free, open-source voice air traffic control (ATC) for Microsoft Flight Simulator 2020 and 2024 on Windows. It runs on the user's own PC and works offline, with an AI copilot, a voice-controlled ground crew (GSX supported) and a cabin crew. No subscription, account or usage limit. License: GNU AGPL v3.
+
+- Controllers from clearance delivery to the gate: SIDs, STARs, vectors, approaches, go-arounds, real traffic on the frequency, FAA and ICAO phraseology, checked readbacks.
+- Local by default: Whisper speech recognition, Piper voices, an Ollama language model. Optional cloud model with the user's own free key.
+- Copilot, ground crew and cabin crew in English and ten other languages.
+- Companion iPhone app, live web tracker, logbook with replays.
+
+## Links
+- [Home](https://localtc.tech/)
+- [Free ATC for MSFS: the options compared](https://localtc.tech/free-atc-msfs)
+- [Download](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)
+- [Changelog](https://localtc.tech/changelog)
+- [Source code](https://github.com/duckiest428/LocalTC)

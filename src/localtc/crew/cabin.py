@@ -320,6 +320,7 @@ class CabinCrew:
         self.settings = settings or CabinSettings()
         self.facts_of = facts or (lambda: Facts())
         self.seed = seed
+        self._music_seed = random.randrange(1000)  # a different track each flight (the callsign's was the same every time)
         self.talks_in = ""  # [crew] language: the captain's language, which they answer in ("" English)
         self.language_name = ""  # ... its name, for the language model
         self._gsx_pax = 0  # the passengers GSX has for this flight
@@ -888,7 +889,7 @@ class CabinCrew:
                 self._mark("begun", t)
                 if s.boarding_music and not ready:
                     self._mark("music", t)
-                    out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000))
+                    out.append(CabinSound(t=t, sound="music", seed=self._music_seed))
             # (GSX's "requested" is the music; the welcome's for when somebody's walking on. It was said three minutes before anybody did.)
             if "boarding" not in self.done and "begun" in self.done and not ready and not finished \
                     and (not gsx or (board == 5 and self._half_aboard())) and t - self._at["begun"] >= BOARDING_PA_S:
@@ -981,12 +982,12 @@ class CabinCrew:
             (engines == 0 or "arrived" in self._at or (sys is not None and not sys.light_beacon))
         if "doors_disarm" not in self.done and "after_landing" in self.done and parked:
             key = "doors_disarm_us" if self.locale().lower() == "en-us" else "doors_disarm"
-            out += self._moment("doors_disarm", t, self.announce(key))
+            out += self._moment("doors_disarm", t, self.announce(key, first_only=True))  # (the crew's order: once, not in French too)
         if "goodbye" not in self.done and "doors_disarm" in self.done \
                 and t >= self._at.get("doors_disarm_end", 0) + GOODBYE_AFTER_DOORS_S:
             out += self._moment("goodbye", t, self.announce("goodbye", landed=True))
             if s.boarding_music:
-                out.append(CabinSound(t=t, sound="music", seed=crc(self.facts.callsign) % 1000 + 1))
+                out.append(CabinSound(t=t, sound="music", seed=self._music_seed + 1))
                 self._at["music2"] = t
         off = self._var(GSX_DEBOARDING) == 6 if self._var(GSX_DEBOARDING) >= 1 and self._var(GSX_DEBOARDING) != 3 \
             else t - self._at.get("goodbye", t) >= DEBOARDED_S  # GSX's deboarding over, else a little while

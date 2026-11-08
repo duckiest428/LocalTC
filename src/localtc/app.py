@@ -631,6 +631,7 @@ async def run_session(
                 if cfg.atc.atis_source in ("real", "hybrid"):
                     atc_service.weather_source = MetarStore().get
                     atc_service.atis_source = AtisStore().get
+                    engine.real_weather_coming = True
             consumers.append(asyncio.create_task(atc_service.run()))
             cabin = None
             if cfg.cabin.enabled:  # the cabin crew: the announcements, the service, "cabin, ..." on the intercom

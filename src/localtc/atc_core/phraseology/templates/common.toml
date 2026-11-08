@@ -329,7 +329,15 @@ pilot_readback = "Hold at {fix}, inbound {heading}, {turn} turns, maintain {alti
 [[template]]
 id = "common.hold_update"
 controller = "any"
-text = ["{callsign}, {message}, expect further clearance {efc}.", "{callsign}, now {message}, revised expect further clearance {efc}."]
+text = ["{callsign}, now {message}, expect further clearance {efc}."]
+readback = { required = ["efc"] }
+pilot_readback = "Expect further clearance {efc}, {callsign_short}."
+
+# A new EFC (the old one come and gone).
+[[template]]
+id = "common.hold_revised"
+controller = "any"
+text = ["{callsign}, {message}, revised expect further clearance {efc}.", "{callsign}, now {message}, new expect further clearance time {efc}."]
 readback = { required = ["efc"] }
 pilot_readback = "Expect further clearance {efc}, {callsign_short}."
 

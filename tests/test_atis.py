@@ -344,3 +344,17 @@ def test_a_metars_9999_is_ten_kilometres_or_more_with_no_mist_made_up():
     weather = from_report(parse(row), 0.0)
     assert weather.visibility_sm == 10.0 and weather.phenomena == ()
     assert [p.kind for p in metar_weather("METAR EGLL 041620Z 02006KT 4000 -RA BR BKN010 07/05 Q1021 TEMPO SN")] == ["RA", "BR"]
+
+
+def test_the_real_atis_is_waited_for_only_when_its_being_fetched():
+    """Live, the real ATIS on its way: not the sim's in the meantime. Offline or replayed, nothing's coming: the sim's."""
+    engine, own = engine_at_kpae()
+    assert engine.current_atis("KPAE") is not None
+    engine = AtcEngine(EngineConfig(destination="KBFI", cruise_ft=5000, callsign="N172LT", seed=7))
+    engine.real_weather_coming = True
+    for airport in AIRPORTS.values():
+        engine.handle(AirportData(t=0.0, airport=airport))
+    engine.handle(parked())
+    assert engine.current_atis("KPAE") is None
+    engine.handle(msgspec.structs.replace(parked(), t=parked().t + 130))
+    assert engine.current_atis("KPAE") is not None  # two minutes and nothing real: the sim's after all

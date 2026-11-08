@@ -482,3 +482,42 @@ def test_a_cuda_library_missing_at_the_first_words_moves_whisper_to_the_cpu(monk
     stt = whisper.WhisperTranscriber("small.en", device="cuda", compute_type="float16", models_dir=tmp_path)
     result = stt.transcribe(np.zeros(16000, dtype=np.float32))
     assert result.text == "ready for departure" and stt.choice.device == "cpu"
+
+
+class DeadFromTheStart(FakeCapture):
+    """A microphone that sent nothing from the moment it was opened, one of Windows's ways to it working (or none)."""
+
+    def __init__(self, works_after: int | None) -> None:
+        super().__init__(2.0)
+        self.name, self.works_after, self.tries, self.idle_s = "Microphone (K66)", works_after, 0, 60.0
+
+    def refresh(self, *, another: bool = False) -> str:
+        self.tries += 1
+        self.idle_s = 0.0 if self.works_after is not None and self.tries >= self.works_after else 60.0
+        return self.name
+
+
+def _started(capture, monkeypatch) -> None:
+    import localtc.stt.service as service_module
+
+    monkeypatch.setattr(service_module, "START_CHECK_S", 0.02)
+    monkeypatch.setattr(service_module, "DEAD_CHECK_S", 0.005)
+
+    async def main():
+        bus = EventBus()
+        task = asyncio.create_task(VoiceService(bus, lambda: 0.0, FakeTranscriber(), capture, tail_s=0.0).run())
+        await asyncio.sleep(0.3)
+        bus.close()
+        await task
+
+    asyncio.run(main())
+
+
+def test_a_microphone_dead_from_the_start_is_found_then_not_at_the_first_press(caplog, monkeypatch):
+    """The K66 sent nothing for the whole flight, and the first word of it came 48 minutes in, at the first press."""
+    capture = DeadFromTheStart(works_after=2)
+    _started(capture, monkeypatch)
+    assert capture.tries == 2 and "isn't sending any audio" not in caplog.text  # the second way round heard it
+    capture = DeadFromTheStart(works_after=None)
+    _started(capture, monkeypatch)
+    assert capture.tries == 4 and "isn't sending any audio to Windows at all" in caplog.text

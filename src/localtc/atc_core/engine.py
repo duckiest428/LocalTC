@@ -197,6 +197,9 @@ VECTOR_GAP_S = 45.0  # quiet between one vector or speed instruction and the nex
 DESCEND_GAP_S = 120.0
 INTERCEPT_GAP_S = 15.0  # the intercept waits no longer than this after the last instruction
 STAR_CLEAR_NM = 25.0  # on a STAR that runs onto the final: cleared for the approach this far (along it) from the join
+STRAIGHT_IN_DEG = 30.0  # heading this near the way in to the final, straight in: cleared for the approach, no headings
+STRAIGHT_IN_CONE_DEG = 15.0  # ... and this near the extended centreline, seen from the runway
+STRAIGHT_IN_FROM_NM = 8.0  # ... and at least this far out (closer, the intercept heading that comes with the clearance)
 STAR_END_NM = 1.0  # on a STAR that ends off the final: vectors start this close to its last fix
 TOWER_AT_NM = 6.0  # cleared on the intercept, the arrival goes to tower about this far out (plus a margin)  # an altitude step on its own no more often than this
 CROSSING_CLEARANCE_M = 90.0  # how close to a hold-short point the clearance to cross comes (200 m came while still
@@ -666,6 +669,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._radar_seen: dict[str, Facility] = {}
         self._expected_runway: str | None = None  # the runway the IFR clearance said to expect
         self._real_wait: dict[str, float] = {}  # when an airport's ATIS was first wanted, waiting for the real one
+        # The real METARs and ATIS are being fetched (``app``, live): only then worth waiting for (offline, or in a
+        # replay, nothing is coming, and the sim's is used straight away).
+        self.real_weather_coming = False
         self._joining: P | None = None  # started with the flight already under way: its controller still to work out
         self.joined_to: Facility | None = None  # ... and the controller it's with, once worked out (the copilot calls it)  # every radar controller the flight has had, by station
         self._approach_routes: dict[str, tuple] = {}  # each airport's approaches with their transitions (ApproachesData)
@@ -1183,7 +1189,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             report = self._reports.get(icao)
             return self.weather.surface(icao, airports, report_first=True), None, \
                 ("METAR", None, (report.observed if report else "").rstrip("Z"))
-        if mode in ("real", "hybrid") and own.t - self._real_wait.setdefault(icao, own.t) < REAL_ATIS_WAIT_S:
+        if mode in ("real", "hybrid") and self.real_weather_coming \
+                and own.t - self._real_wait.setdefault(icao, own.t) < REAL_ATIS_WAIT_S:
             # The real ATIS or METAR on its way: nothing yet, rather than the sim's ATIS a minute before the real one
             # replaced it with another letter ("stop having the ATIS be from the sim before it grabs the real ATIS").
             return None
@@ -4035,6 +4042,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         leg = self._vector(own, runway)
         if leg is None:
             return False
+        if leg.leg in ("straight_in", "intercept") and self._vector_leg is None and plan is not None \
+                and self._nearly_in_line(own, runway):
+            # Coming in more or less down the final already: nothing to vector, just the approach clearance. Headings
+            # are for a turn onto the final ("if it's relatively straight in then no vectors and just cleared approach").
+            self._vector_t = t
+            self._schedule(t, "approach.cleared_star", {"approach": plan["approach"]}, tuned, delay=False,
+                           clearance="approach",
+                           on_issue=lambda: (self._assign(approach=plan["approach"].display,
+                                                          arrival_runway=plan["approach"].landing_runway),
+                                             setattr(self, "_going_around", False)))
+            return True
         # Room between instructions, except for the turn onto the final: that one can't wait.
         cutting_in = leg.leg == "intercept" and self._vector_leg != "intercept"
         if t - self._vector_t < (INTERCEPT_GAP_S if cutting_in else VECTOR_GAP_S):
@@ -4196,6 +4214,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if abs(difference) < MIN_TURN_DEG:
             return None
         return "right" if difference > 0 else "left"
+
+    def _nearly_in_line(self, own: OwnshipState, runway: str) -> bool:
+        """Coming down ``runway``'s final already: out on its extended centreline give or take ``STRAIGHT_IN_CONE_DEG``
+        (seen from the runway), far enough out to settle on it, and pointing within ``STRAIGHT_IN_DEG`` of the runway's
+        way."""
+        geo = self.geometry(self.state.flight.destination)
+        end = geo.end(runway) if geo is not None else None
+        if end is None:
+            return False
+        out, lateral = vectors.frame(geo, end, own.lat, own.lon)
+        along = abs(((end.heading_true - own.hdg_true + 540) % 360) - 180) <= STRAIGHT_IN_DEG
+        return along and out >= STRAIGHT_IN_FROM_NM and abs(lateral) <= out * math.tan(math.radians(STRAIGHT_IN_CONE_DEG))
 
     def _vector_heading(self, own: OwnshipState, runway: str) -> int | None:
         plan = self._vector_plan(own, runway)

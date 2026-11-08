@@ -56,6 +56,7 @@ class Hold:
     laps: int = 0
     entered_t: float | None = None
     last_said_position: int = 0
+    first_position: int = 0  # where it was when held: the sequence moves up no faster than the runway lands them
     tas_kt: float = 230.0
     history: list[tuple[float, str]] = field(default_factory=list)
 

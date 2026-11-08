@@ -28,6 +28,8 @@ MIN_CLIP_S = 0.3  # shorter: a click on the switch, not speech
 SILENCE_RMS = 0.003  # below this the mic heard nothing
 DEAD_CHECK_S = 0.5  # after reopening it, this long for its first audio
 STALLED_S = 1.0  # the microphone sent nothing for this long: it has stopped, reopen it before a press
+START_CHECK_S = 5.0  # this long into the flight, a microphone that has sent nothing at all is looked into
+START_TRIES = 4  # Windows lists a microphone up to four ways (MME, DirectSound, WASAPI, WDM-KS)
 NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignored
 # Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
 # key pressed for a shortcut, at 0.17-0.34): heard as nothing.
@@ -128,6 +130,15 @@ class VoiceService:
 
     async def run(self) -> None:
         self._loop = asyncio.get_running_loop()
+        check = self._loop.create_task(self._check_at_start()) \
+            if hasattr(self.capture, "refresh") and hasattr(self.capture, "idle_s") else None
+        try:
+            await self._listen()
+        finally:
+            if check is not None:
+                check.cancel()  # (the flight over: the microphone isn't reopened after it)
+
+    async def _listen(self) -> None:
         async for event in self._inputs:
             if isinstance(event, (PttPressed, IntercomPressed)):
                 radio = _radio_of(event)
@@ -163,6 +174,26 @@ class VoiceService:
                                  to=_to(self._radio))
         return Transcript(t=self.now(), text=text, radio=self._radio, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
                           source="voice")
+
+    async def _check_at_start(self) -> None:
+        """The microphone sending nothing from the start: found out then, not at the first press 48 minutes into the
+        flight. Each of Windows's ways to it tried (one can be stuck while the others hear); none: the pilot's told."""
+        await asyncio.sleep(START_CHECK_S)
+        if self.capture.idle_s < START_CHECK_S * 0.8 or self._held is not None:
+            return
+        name = getattr(self.capture, "name", "The microphone")
+        for _ in range(START_TRIES):
+            try:
+                await asyncio.to_thread(self.capture.refresh, another=True)
+            except Exception as exc:  # noqa: BLE001
+                log.info("Couldn't reopen the microphone: %s", exc)
+                break
+            await asyncio.sleep(DEAD_CHECK_S * 2)
+            if self.capture.idle_s < DEAD_CHECK_S * 1.6:
+                log.info("%s: hearing it now, another way round (it sent nothing at first)", name)
+                return
+        log.warning("%s isn't sending any audio to Windows at all: unplug it and plug it back in (or pick another in "
+                    "Quick Settings > Push-to-talk)", name)
 
     async def _stalled_microphone(self) -> None:
         """The microphone stopped sending audio without an error: reopened, so this press is heard."""

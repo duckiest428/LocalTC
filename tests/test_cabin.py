@@ -326,8 +326,12 @@ def test_the_chime_and_the_music_are_the_real_recordings():
         return np.argmax(spectrum) * rate / (rate // 4 * 2 // 2 * 2)
 
     assert pitch(pa) > pitch(belt)  # it starts on the high note; the seatbelt's is the low one
-    music = boarding_music(rate)
-    assert len(music) / rate > 300 and np.max(np.abs(music)) <= 0.51  # "Airport Lounge", five minutes
+    from localtc.dsp.cabin import music_tracks
+
+    tracks = music_tracks()
+    assert len(tracks) == 6 and "boarding.ogg" in tracks  # "Airport Lounge" and five more, one a flight
+    lengths = {round(len(music := boarding_music(rate, seed=i)) / rate) for i in range(len(tracks))}
+    assert len(lengths) == len(tracks) and min(lengths) > 100 and np.max(np.abs(music)) <= 0.51  # each a different one
 
 
 def test_no_clock_at_the_gate_nothing_happens_until_the_door_or_gsx_says():
@@ -632,3 +636,11 @@ def test_start_our_boarding_starts_it():
         assert m and not any(m.groups()), asked
     m = START_BOARDING.search("get everyone off please")
     assert m and any(m.groups())
+
+
+def test_doors_to_manual_is_said_once_not_in_both_languages():
+    """Air Canada Rouge at Orlando: "Cabin crew, doors to manual and cross-check", then the same in French. It's the
+    crew's order, not an announcement for the passengers."""
+    out = flown(CabinCrew(CabinSettings(crew="claire"), lambda: facts(), seed=3))
+    doors = [s for s in said(out, "pa") if "manual" in s.text.lower() or "manuel" in s.text.lower()]
+    assert len(doors) == 1 and not doors[0].language, [s.text for s in doors]

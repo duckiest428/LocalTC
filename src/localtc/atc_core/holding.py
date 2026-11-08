@@ -6,6 +6,7 @@ turn comes or the reason is gone. A hold asked for is given "as requested" and k
 from typing import TYPE_CHECKING, Any
 
 from localtc.atc_core.holds import (
+    ARRIVAL_RATE_PER_H,
     DEMAND_NM,
     HOLD_DEMAND,
     HOLD_FROM_NM,
@@ -38,6 +39,7 @@ WEATHER_EFC_MIN = 20
 MIN_DELAY_MIN = 4
 CAT3_VIS_SM, NON_PRECISION_VIS_SM, NON_PRECISION_CEILING_FT = 0.1, 1.0, 400
 MAX_HOLDS = 2  # a flight is held no more than this many times
+HOLD_AGAIN_S = 900.0  # out of a hold, not held again for this long (held, let out and held again inside a minute)
 
 
 class HoldsMixin:
@@ -117,7 +119,7 @@ class HoldsMixin:
                     t + efc_in_s, clock(own.zulu_s, efc_in_s), position=position, delay_min=int(delay),
                     entry=entry_for(bearing(own.lat, own.lon, lat, lon), inbound_true, "right"),
                     tas_kt=min(max(own.gs_kt, 180.0), 265.0))
-        hold.last_said_position = position
+        hold.last_said_position = hold.first_position = position
         hold.history.append((t, "cleared"))
         return hold
 
@@ -162,6 +164,8 @@ class HoldsMixin:
             return False
         if t - self._hold_checked_t < HOLD_CHECK_S or self._holds_given >= MAX_HOLDS:
             return False
+        if self.hold is not None and self.hold.history and t - self.hold.history[-1][0] < HOLD_AGAIN_S:
+            return False
         self._hold_checked_t = t
         if st.phase is None or P(st.phase) not in (P.CRUISE, P.ARRIVAL):
             return False
@@ -199,6 +203,10 @@ class HoldsMixin:
         still = why is not None and why[0] == hold.reason
         if hold.reason == "arrival traffic":
             position = why[1] if still else 1
+            # The aircraft ahead counted again (a snapshot with fewer of them, a turn) can't jump the flight from number
+            # six to two: the runway lands one every two minutes, and the sequence moves up no faster.
+            landed = int((t - hold.issued_t) * ARRIVAL_RATE_PER_H / 3600.0)
+            position = max(position, (hold.first_position or hold.position) - landed)
             if position <= LEAVE_POSITION:
                 return self._leave_hold(own, facility)
             if position != hold.position:
@@ -224,7 +232,8 @@ class HoldsMixin:
         self._ops_changed = True
         slots: dict[str, Any] = {"message": self._hold_message(hold)}
         if hold.efc_clock:
-            self._schedule(t, "common.hold_update", {**slots, "efc": hold.efc_clock}, facility, delay=False)
+            self._schedule(t, "common.hold_revised" if revise else "common.hold_update", {**slots, "efc": hold.efc_clock}, facility,
+                           delay=False)
         else:
             self._schedule(t, "common.hold_update_minutes",
                            {**slots, "minutes": max(1, int(round((hold.efc_t - t) / 60.0)))}, facility, delay=False)

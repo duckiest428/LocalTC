@@ -344,6 +344,8 @@ class Copilot(CallWords):
             after = None if here else self._push("tune", t, facility=joined).due
             self._push("checkin", t, facility=joined, after=after, pause=self._rng.uniform(*CHECKIN_AFTER_S))
             return
+        if phase == "PARKED" and getattr(engine, "_landed", False):
+            return  # in at the gate at the end of the flight: no clearance or taxi to ask for (it called "ready to taxi")
         if phase == "PARKED" and "ifr" not in st.clearances and st.flight.destination:
             if st.flight.origin:  # (not knowing where it is yet, it called the destination's Clearance for its clearance)
                 self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)

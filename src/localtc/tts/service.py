@@ -360,11 +360,12 @@ class VoiceOut:
     async def _loop_music(self, seed: int) -> None:
         """The boarding music, round and round until it's stopped."""
         rate = 22050
-        music = await asyncio.to_thread(boarding_music, rate, seed=seed)
-        while True:
+        while True:  # one track after another, from the flight's own
+            music = await asyncio.to_thread(boarding_music, rate, seed=seed)
             playing = Clip(music, rate, "ambience")
             self.player.play(playing)
             await asyncio.to_thread(playing.done.wait)
+            seed += 1
 
     def _stop_music(self) -> None:
         if self._music_task is not None:

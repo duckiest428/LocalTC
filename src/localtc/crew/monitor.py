@@ -585,8 +585,9 @@ class Monitor(WatchMixin):
         if previous is None and phase in JOINED_PHASES:
             # LocalTC started with the flight under way: the gate, the push and the climb are behind it. Not "off
             # blocks, 40 minutes late" in the cruise, nor "level at" for a level it's been at for an hour.
-            for key in ("off_blocks", "schedule_now", "toc", "greeting_fuel"):
+            for key in ("off_blocks", "schedule_now", "toc", "greeting", "greeting_fuel"):
                 self.f.said.setdefault(key, t)
+            self.joined = True
             return
         with regions.speaking(self._region()):
             if phase == "RUNWAY_HOLD":
@@ -655,8 +656,9 @@ class Monitor(WatchMixin):
 
     def _preflight(self, own: OwnshipState, t: float) -> None:
         st = self.engine.state if self.engine is not None else None
-        if not own.on_ground or self.f.takeoff_t is not None or st is None or self.first_t is None:
-            return
+        if not own.on_ground or self.f.takeoff_t is not None or st is None or self.first_t is None \
+                or getattr(self, "joined", False) or getattr(self.engine, "_landed", False):
+            return  # (joined in the air, or down at the destination: "Hey. All set on my side." on the landing roll)
         f = st.flight
         with regions.speaking(self._region()):
             if f.origin and t - self.first_t >= GREETING_AFTER_S and not self._said("greeting") and not self.ptt_down:

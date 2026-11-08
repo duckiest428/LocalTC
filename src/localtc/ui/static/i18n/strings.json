@@ -1,5 +1,4 @@
 [
-"\"Airport Lounge\" Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "(16 or over).",
 "(CC-BY-SA)",
 "(Class {0})",
@@ -585,6 +584,7 @@
 "Mostly LLM: the model also words their answers (recommended)",
 "Mostly LLM: the model reads and words most calls; the script takes the clearly routine ones (recommended)",
 "Mostly LLM: the model words their answers and longer announcements (recommended)",
+"Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "Mute",
 "My flying",
 "NOTAM {0}{1}",

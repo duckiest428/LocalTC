@@ -7,8 +7,9 @@ cabin crew are heard on the flight deck.
   telephone's band, no hiss and no squelch.
 - The **chimes** (``chime``): a real airliner's cabin chime (sounds/chime.ogg: "Airplane Chime Sound Effect" by
   Sharelk, CC0). ``pa`` and ``call`` are its high-low pair, ``seatbelt`` its low note alone, as the sign's is.
-- The **boarding music** (``boarding_music``): "Airport Lounge" by Kevin MacLeod (incompetech.com), licensed under
-  Creative Commons: By Attribution 3.0 (sounds/boarding.ogg), through the cabin speakers.
+- The **boarding music** (``boarding_music``): a different track each flight, all by Kevin MacLeod (incompetech.com),
+  licensed under Creative Commons: By Attribution 3.0: "Airport Lounge", "Lobby Time", "Local Forecast - Elevator",
+  "Bossa Antigua", "Smooth Lovin" and "Easy Lemon" (sounds/boarding*.ogg), through the cabin speakers.
 
 Both recordings come from ``tools/make_cabin_sounds.py`` and are decoded with PyAV (Whisper's own dependency); where
 they can't be, the chime is made from struck bars and the music from a soft progression on a piano and a pad.
@@ -29,7 +30,7 @@ SOUNDS = Path(__file__).with_name("sounds")
 CHIME_START_S, CHIME_LOW_S = 0.74, 1.78  # in chime.ogg: where the high note is struck, and the low one
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=3)
 def recording(name: str) -> tuple[np.ndarray, int] | None:
     """A recording in sounds/, mono float, and its rate; None where it can't be decoded."""
     try:
@@ -149,9 +150,10 @@ def _note(rate: int, freq: float, seconds: float, *, soft: bool) -> np.ndarray:
 
 
 def boarding_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.ndarray:
-    """The boarding music through the cabin's speakers, to loop under the boarding (the whole recording; ``seconds``
-    and ``seed`` only for the made one). Peak 0.5."""
-    found = recording("boarding.ogg")
+    """The boarding music through the cabin's speakers, under the boarding: the recording ``seed`` picks (the whole of
+    it; ``seconds`` only for the made one). Peak 0.5."""
+    tracks = music_tracks()
+    found = recording(tracks[seed % len(tracks)]) if tracks else None
     if found is not None:
         audio, at = found
         out = bandpass(resample(audio, at, rate), rate, 150.0, 7000.0, presence_db=0.0)
@@ -160,6 +162,11 @@ def boarding_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.nda
         out[-fade:] *= np.linspace(1, 0, fade)
         return (out / (np.max(np.abs(out)) or 1.0) * 0.5).astype(np.float32)
     return made_music(rate, seconds=seconds, seed=seed)
+
+
+def music_tracks() -> list[str]:
+    """The boarding music's recordings in sounds/, in a fixed order (a flight's seed picks one)."""
+    return sorted(p.name for p in SOUNDS.glob("boarding*.ogg"))
 
 
 def made_music(rate: int, *, seconds: float = 64.0, seed: int = 0) -> np.ndarray:

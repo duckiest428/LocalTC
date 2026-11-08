@@ -63,7 +63,10 @@ class TaxiGraph:
             if a not in self.positions or b not in self.positions:
                 continue
             length = math.dist(self.positions[a], self.positions[b])
-            cost = length * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0) * (
+            # (An unnamed lane costs more than a named taxiway: Montreal's route to 06R was 99 unnamed scenery lanes, and
+            # ground could only say "taxi to the runway".)
+            unnamed = UNNAMED_PENALTY if path.kind == "path" and not path.name else 1.0
+            cost = length * unnamed * (RUNWAY_EDGE_PENALTY if path.kind == "runway" else 1.0) * (
                 CLOSED_PENALTY if path.name and path.name in closed or index in closed_paths else 1.0) * _narrow(path, need_m)
             runway = path.runway if path.kind == "runway" else ""
             self.edges[a].append(_Edge(b, cost, length, path.name, runway))
@@ -284,6 +287,7 @@ def _narrow(path, need_m: float) -> float:
     return TOO_NARROW_PENALTY if path.width_m < need_m * TOO_NARROW else NARROW_PENALTY
 
 
+UNNAMED_PENALTY = 3.0  # an unnamed lane's length counts this much more than a named taxiway's
 STUB_M = 80.0  # a piece of another taxiway this short between two of the same is that taxiway (a link's stub)
 
 

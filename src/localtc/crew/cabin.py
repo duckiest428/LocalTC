@@ -116,7 +116,9 @@ GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE = ("L:FSDT_GSX_BOARDING_STATE", "L:F
 DOORS = ("INTERACTIVE POINT OPEN:0", "INTERACTIVE POINT OPEN:1")
 WATCHED = (GSX_BOARDING, GSX_DEBOARDING, GSX_DEPARTURE, *DOORS)
 # "Can we get boarding started?", "start boarding", "board them", "go ahead with the deboarding". Not "has boarding started?".
-START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?board\s+(?:them|the\s+passengers)\b"
+START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+|our\s+)?(de-?\s?)?boarding\b"
+                            r"|\b(de-?\s?)?board\s+(?:them|the\s+passengers|now|everyone|the\s+cabin)\b"
+                            r"|\b(?:let|get)\s+(?:them|the\s+passengers|everyone)\s+(?:on|(off))\b"
                             r"|\b(de-?\s?)?boarding\s+(?:started|going|under\s?way)\b"
                             r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b")
 ASKS_ABOUT = re.compile(r"\W*(?:\w+\W+)?(?:has|have|did|is|are|how|when|what|was|were)\b")

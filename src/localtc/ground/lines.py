@@ -55,6 +55,7 @@ LINES = {
     "warn_push": ("{List} still going. Push anyway?", "We've still got {list} on. Do you want to push regardless?"),
     "ask_direction": ("Which way do you want it: {choices}?", "Which way on the push? I can do {choices}."),
     "direction": ("Copy, {direction}.", "{Direction}, got it."),
+    "push_ack": ("Copy, tug's on its way.", "Roger, getting the tug over to you.", "Copy that, the tug's coming."),
     "no_direction": ("I can't push {direction} from this stand: only {choices}.",),
     "push_under_way": ("Tug's on it already.", "We're on the push already."),
     "no_push": ("There's no push going on.",),

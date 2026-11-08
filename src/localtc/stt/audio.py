@@ -9,6 +9,7 @@ ring buffer and nothing else): ``idle_s`` says how long since it last sent anyth
 before a press when it has gone quiet.
 """
 
+import logging
 import threading
 import time
 import wave
@@ -16,6 +17,10 @@ from collections import deque
 from pathlib import Path
 
 import numpy as np
+
+from localtc.dsp.portaudio import GATE
+
+log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
 
@@ -170,8 +175,9 @@ class AudioCapture:
         import sounddevice as sd
 
         self.close()
-        sd._terminate()
-        sd._initialize()
+        # (Only with no voice playing: restarted under one, the heap was corrupted and the app vanished.)
+        if not GATE.restart(sd):
+            log.info("Microphone reopened without reading the device list again: a voice was playing")
         if self.spec not in (None, ""):
             self.device = find_device(self.spec, after=self.device if another else None)
         self.rate = SAMPLE_RATE

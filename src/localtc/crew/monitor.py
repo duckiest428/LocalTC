@@ -67,6 +67,7 @@ from localtc.sim_api.geo import haversine_nm
 
 SAFETY, ROUTINE, CHATTER = 3, 2, 1
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
+JOINED_PHASES = ("DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH", "LANDING", "TAXI_IN")  # LocalTC started in these: joined in flight
 GAP_S = 8.0  # between two of the copilot's own routine calls: a person, not a feed
 ROLLING_S = 3.0  # moving for this long: moving
 QUIET_AFTER_RADIO_S = 6.0  # routine calls wait this long after anything said on the radio
@@ -320,6 +321,10 @@ class Monitor(WatchMixin):
             self.title = ev.title or ev.atc_model
         elif isinstance(ev, AircraftVars):
             self.vars.update(ev.values)
+        elif isinstance(ev, AtcAlert) and ev.kind == "joined" and self.engine is not None \
+                and (to := getattr(self.engine, "joined_to", None)) is not None and self.radio_mode() != "full":
+            # (The copilot on the radio calls them itself.)
+            self._call("joined", ROUTINE, t, f"We should be with {to.station}, {speech.frequency_display(to.mhz)}.")
         elif isinstance(ev, AtcAlert) and ev.kind == "emergency":
             self._call("emergency", ROUTINE, t, "Copy the emergency. Want me to squawk 7700?")
             self.offer = Offer("squawk", "7700", t + 20.0)
@@ -577,6 +582,12 @@ class Monitor(WatchMixin):
     def _on_phase(self, previous: str | None, phase: str, t: float) -> None:
         self.phase = phase
         st = self.engine.state if self.engine is not None else None
+        if previous is None and phase in JOINED_PHASES:
+            # LocalTC started with the flight under way: the gate, the push and the climb are behind it. Not "off
+            # blocks, 40 minutes late" in the cruise, nor "level at" for a level it's been at for an hour.
+            for key in ("off_blocks", "schedule_now", "toc", "greeting_fuel"):
+                self.f.said.setdefault(key, t)
+            return
         with regions.speaking(self._region()):
             if phase == "RUNWAY_HOLD":
                 self._prompt_checklist("line_up", t=t)
@@ -682,6 +693,13 @@ class Monitor(WatchMixin):
         if away is None or not self._said("greeting"):
             return
         to_go = off_block_in(self.perf.sched_out_s, own.zulu_s)
+        if getattr(self, "cabin_on_schedule", lambda: False)():
+            # The cabin crew say how the flight is doing against the plan. The copilot's one word: the clearance
+            # still to get, and when we're off blocks, once.
+            if to_go is not None and 0 < to_go <= CLEARANCE_DUE_S and self._owes_clearance() \
+                    and not self._said("schedule_clearance"):
+                self._call("schedule_clearance", ROUTINE, t, "We still need our clearance.")
+            return
         of_day = self.perf.sched_out_s % DAY_S
         when = f"{of_day // 3600:02d}{of_day % 3600 // 60:02d}"
         off = self.phase not in (None, "PARKED") or self._rolling(own)

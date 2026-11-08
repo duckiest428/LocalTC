@@ -31,6 +31,7 @@ class FlightPhase(enum.StrEnum):
 TRACK_BASELINE_M = 4.0  # ground covered before the direction of travel is recomputed
 MIN_JUMP_S = 1.0  # a position jump is measured over at least this long
 LEAVE_HOLD_M = 25.0  # farther than this from the runway than the aircraft has been since holding: it's taxiing away
+PUSH_AGAIN_MARGIN_KT = 1.0  # pushed and stopped: this much over "stopped" before it counts as moving again
 GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.PUSHBACK, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD,
                  FlightPhase.TAXI_IN}
 
@@ -113,10 +114,12 @@ class PhaseDetector:
         # up only gets closer; taxiing away gets farther.
         self._hold_runway: tuple[object, object] | None = None  # (airport geometry, runway geometry)
         self._hold_closest_m = float("inf")
+        self._pushed = False  # pushed back and stopped since the last flight began
 
     def reset(self) -> None:
         """Forget the phase; the next tick is classified from scratch (flight loaded, teleport)."""
         self.phase = None
+        self._pushed = False
         self._timers.clear()
         self._last = None
         self._track_from = self._track_deg = None
@@ -265,7 +268,10 @@ class PhaseDetector:
                 return FlightPhase.LANDING, "on the ground"
 
         if phase is FlightPhase.PARKED:
-            if self._held("pushback", self._moving_astern(own), t, th.pushback_s):
+            # Pushed already, and stopped: a reading creeping at 0.7 knots with the tug gone isn't another push
+            # (Montreal flipped between "parked" and "pushback" seven times, the speed sitting between the two).
+            again = self._pushed and own.gs_kt < th.stopped_kt + PUSH_AGAIN_MARGIN_KT
+            if not again and self._held("pushback", self._moving_astern(own), t, th.pushback_s):
                 return FlightPhase.PUSHBACK, "being pushed back"
             # Not while going backwards: a tug taking up the slack jerks the aircraft back at a few knots. Not with the
             # parking brake set: 3.8 kt at Montreal's gate, brake set and not a metre covered while GSX readied the push,
@@ -281,6 +287,7 @@ class PhaseDetector:
             if self._held("taxi", moving_off, t, th.taxi_start_s):
                 return FlightPhase.TAXI_OUT, "taxiing off the gate"
             if self._held("push_done", own.gs_kt < th.stopped_kt, t, th.parked_s):
+                self._pushed = True
                 return FlightPhase.PARKED, "pushback complete"
 
         elif phase is FlightPhase.TAXI_OUT:

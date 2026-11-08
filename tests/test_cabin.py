@@ -622,3 +622,13 @@ def test_the_welcome_waits_for_half_the_passengers():
     cabin.observe(GroundStatus(t=1.0, provider="gsx", connected=True,
                                services=(Service(id="Boarding", name="Boarding", state="performing", status="pax 90/174"),)))
     assert cabin._half_aboard() and cabin.passengers() == 174
+
+
+def test_start_our_boarding_starts_it():
+    from localtc.crew.cabin import START_BOARDING
+
+    for asked in ("can you start our boarding please?", "we can board now", "let them on please"):
+        m = START_BOARDING.search(asked)
+        assert m and not any(m.groups()), asked
+    m = START_BOARDING.search("get everyone off please")
+    assert m and any(m.groups())

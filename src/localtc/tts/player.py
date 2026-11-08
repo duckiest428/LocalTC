@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from localtc.dsp.portaudio import GATE
 from localtc.dsp.radio import resample
 
 log = logging.getLogger(__name__)
@@ -116,7 +117,8 @@ class _Lane:
             self.playing, audio = clip, resample(clip.audio, clip.rate, rate)
             self.cut_now.clear()
             try:
-                with sd.OutputStream(samplerate=rate, channels=1, dtype="float32", device=self.player.device) as stream:
+                with GATE.playing(), sd.OutputStream(samplerate=rate, channels=1, dtype="float32",
+                                                     device=self.player.device) as stream:
                     block = int(rate * BLOCK_S)
                     for start in range(0, len(audio), block):
                         if self.cut_now.is_set():
@@ -176,9 +178,10 @@ class AudioPlayer:
         return clip
 
     def atc_to_us(self) -> bool:
-        """ATC (or the copilot on the radio) talking to this flight now, not another flight's exchange."""
+        """ATC (or the copilot on the radio) talking to this flight now, not another flight's exchange, or the pilot
+        on the radio (Jamie talked over a clearance request: "should only be talking when I'm not")."""
         p = self.radio.playing
-        return p is not None and p.kind in RADIO and p.channel != "chatter"
+        return getattr(self, "pilot_talking", False) or (p is not None and p.kind in RADIO and p.channel != "chatter")
 
     @property
     def busy(self) -> bool:
@@ -229,6 +232,8 @@ class Sidetone:
 
         if self._stream is not None:
             return True
+        if not GATE.hold():
+            return False  # PortAudio restarting: no sidetone this moment
         try:
             out_rate = int(sd.query_devices(self.player.device, "output")["default_samplerate"])
             self._filter = SidetoneFilter(self.in_rate, out_rate)
@@ -238,6 +243,7 @@ class Sidetone:
         except Exception as exc:  # noqa: BLE001 - no sidetone is never a reason to stop the voice
             log.warning("Sidetone unavailable: %s", exc)
             self._stream = None
+            GATE.let_go()
             return False
         return True
 
@@ -285,3 +291,4 @@ class Sidetone:
             except Exception:  # noqa: BLE001 - a stream that died on its own may not stop cleanly
                 pass
             self._stream = None
+            GATE.let_go()

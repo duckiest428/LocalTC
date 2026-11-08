@@ -1443,3 +1443,18 @@ def test_gsx_is_told_the_gate_atc_gave_only_where_it_can_be():
     assert [o.gate for o in crew.update(able, 2.0) if isinstance(o, SelectGate)] == ["Gate 26"]
     assert not [o for o in crew.update(able, 3.0) if isinstance(o, SelectGate)]  # not again straight away
     assert not [o for o in crew.update(replace(able, parking="Gate 26"), 100.0) if isinstance(o, SelectGate)]  # it has it
+
+
+def test_disengage_the_jetway_takes_it_away_and_a_push_is_always_answered():
+    """ "Disengage the jetway ... actually the jetway will be all" was read as asking for it ("the jetway's already on
+    it", twice); "can we get a pushback and start up to the left?" went a minute without a word."""
+    from localtc.ground import grammar as g
+
+    asks = g.parse("Hello, can we please disengage the jetway and can we also, actually the jetway will be all. Thank you.")
+    assert [a.action for a in asks] == [g.OFF] and asks[0].services == ("OperateJetways",)
+    c = crew()
+    c.own = own()
+    assert said(c.heard("Hello, can we get a pushback and start up to the left please? Thank you.", 0.0)) == ["Copy, nose right, tail left."]
+    c = crew()
+    c.own = own()
+    assert said(c.heard("pushback please", 0.0))

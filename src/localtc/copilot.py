@@ -193,6 +193,7 @@ class Copilot(CallWords):
         self._checked_in: tuple[float, Facility, int] | None = None  # a check-in waiting for ATC's word, and the tries
         self._last_tuned: Facility | None = None  # the frequency before the last handoff (to go back to)
         self._assigned: tuple[int | None, float] = (None, 0.0)  # the cleared altitude, and since when
+        self._joined_called: Facility | None = None  # LocalTC started in the air: the controller already called
 
     @property
     def mode(self) -> CopilotMode:
@@ -335,6 +336,14 @@ class Copilot(CallWords):
             return
         tuned = st.comms.tuned
         phase = st.phase
+        joined = getattr(engine, "joined_to", None)
+        if joined is not None and joined is not self._joined_called and self.mode == "full":
+            # LocalTC started in the air: over to the controller the flight is with now, and the check-in there.
+            self._joined_called = joined
+            here = tuned is not None and tuned.station == joined.station
+            after = None if here else self._push("tune", t, facility=joined).due
+            self._push("checkin", t, facility=joined, after=after, pause=self._rng.uniform(*CHECKIN_AFTER_S))
+            return
         if phase == "PARKED" and "ifr" not in st.clearances and st.flight.destination:
             if st.flight.origin:  # (not knowing where it is yet, it called the destination's Clearance for its clearance)
                 self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)

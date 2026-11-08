@@ -1,0 +1,267 @@
+{
+ "source": "simbrief",
+ "callsign": "WZZ2314",
+ "origin": "LHBP",
+ "destination": "EGGW",
+ "alternate": "EGCC",
+ "cruise_ft": 38000,
+ "route": "BADO2L BADOV DCT MAVOR DCT KATQA DCT RAPET DCT RUNEN DCT MAPOX DCT NOGRO M40 RINIS RINI1N",
+ "aircraft": "A21N",
+ "registration": "N261SB",
+ "sid": "BADO2L",
+ "star": "RINI1N",
+ "dep_runway": "31L",
+ "arr_runway": "07",
+ "origin_name": "LISZT FERENC INTL",
+ "destination_name": "LUTON",
+ "fixes": [
+  {
+   "ident": "BP801",
+   "lat": 47.478528,
+   "lon": 19.172444,
+   "alt_ft": 2800,
+   "via": "BADO2L",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 135
+  },
+  {
+   "ident": "BP802",
+   "lat": 47.653417,
+   "lon": 18.957778,
+   "alt_ft": 11200,
+   "via": "BADO2L",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 304
+  },
+  {
+   "ident": "BP803",
+   "lat": 47.802528,
+   "lon": 19.164306,
+   "alt_ft": 15900,
+   "via": "BADO2L",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 444
+  },
+  {
+   "ident": "BADOV",
+   "lat": 48.021111,
+   "lon": 18.815833,
+   "alt_ft": 22200,
+   "via": "BADO2L",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 654
+  },
+  {
+   "ident": "MAVOR",
+   "lat": 48.821394,
+   "lon": 17.537503,
+   "alt_ft": 34300,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1263
+  },
+  {
+   "ident": "KATQA",
+   "lat": 49.02,
+   "lon": 17.241944,
+   "alt_ft": 36200,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 1409
+  },
+  {
+   "ident": "TOC",
+   "lat": 49.131906,
+   "lon": 16.817357,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1557
+  },
+  {
+   "ident": "RAPET",
+   "lat": 50.190489,
+   "lon": 12.338639,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3074
+  },
+  {
+   "ident": "RUNEN",
+   "lat": 50.585278,
+   "lon": 10.585556,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3629
+  },
+  {
+   "ident": "MAPOX",
+   "lat": 51.133611,
+   "lon": 8.813889,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4201
+  },
+  {
+   "ident": "NOGRO",
+   "lat": 51.965556,
+   "lon": 3.171944,
+   "alt_ft": 38000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5838
+  },
+  {
+   "ident": "LUSOR",
+   "lat": 51.932222,
+   "lon": 2.666944,
+   "alt_ft": 38000,
+   "via": "M40",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5987
+  },
+  {
+   "ident": "RINIS",
+   "lat": 51.908239,
+   "lon": 2.32245,
+   "alt_ft": 38000,
+   "via": "M40",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6090
+  },
+  {
+   "ident": "IDESI",
+   "lat": 51.897706,
+   "lon": 1.885578,
+   "alt_ft": 38000,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6216
+  },
+  {
+   "ident": "TOD",
+   "lat": 52.026128,
+   "lon": 1.637038,
+   "alt_ft": 38000,
+   "via": "RINI1N",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 6307
+  },
+  {
+   "ident": "WIQID",
+   "lat": 52.162297,
+   "lon": 1.370817,
+   "alt_ft": 33500,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6462
+  },
+  {
+   "ident": "MUCTE",
+   "lat": 52.175314,
+   "lon": 1.207064,
+   "alt_ft": 31500,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6533
+  },
+  {
+   "ident": "OFJES",
+   "lat": 52.217231,
+   "lon": 0.658269,
+   "alt_ft": 24600,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6772
+  },
+  {
+   "ident": "UDDIZ",
+   "lat": 52.251169,
+   "lon": 0.186508,
+   "alt_ft": 18800,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 6975
+  },
+  {
+   "ident": "COCCU",
+   "lat": 52.267872,
+   "lon": -0.056117,
+   "alt_ft": 15700,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7082
+  },
+  {
+   "ident": "JUMZI",
+   "lat": 52.328772,
+   "lon": -0.408419,
+   "alt_ft": 11300,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7237
+  },
+  {
+   "ident": "ZAGZO",
+   "lat": 52.303603,
+   "lon": -0.231261,
+   "alt_ft": 8900,
+   "via": "RINI1N",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 7320
+  },
+  {
+   "ident": "EGGW",
+   "lat": 51.874722,
+   "lon": -0.368333,
+   "alt_ft": 3000,
+   "via": "RINI1N",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 8071
+  }
+ ],
+ "simbrief_id": "1793979418",
+ "rules": "IFR",
+ "perf": {
+  "units": "kgs",
+  "block_fuel_lb": 16596.0,
+  "takeoff_fuel_lb": 16067.0,
+  "landing_fuel_lb": 5747.0,
+  "reserve_fuel_lb": 2110.0,
+  "zfw_lb": 146922.0,
+  "v1": 146,
+  "vr": 148,
+  "v2": 150,
+  "takeoff_flaps": "1",
+  "vref": 135,
+  "landing_flaps": "FULL",
+  "sched_out_s": 1793983800,
+  "sched_off_s": 1793985000
+ }
+}

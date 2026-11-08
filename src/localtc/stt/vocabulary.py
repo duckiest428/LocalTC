@@ -188,8 +188,9 @@ RNAV_TO = re.compile(r"\b(?:(?:on|an|are|in) )?(?:r ?nav|r-?nav|[fv])[ -]?(?:2|t
 
 def _sound(word: str) -> str:
     """A word's consonants, as it sounds: RADYR and "Raider", LUCKI and "Lucky" come out the same."""
-    word = word.lower().replace("ck", "k").replace("ph", "f").replace("c", "k")
-    head, rest = word[:1], re.sub(r"[aeiouyh]", "", word[1:])
+    # (w goes with the vowels and z is an s: "Fonz" for FAWNS)
+    word = word.lower().replace("ck", "k").replace("ph", "f").replace("c", "k").replace("z", "s")
+    head, rest = word[:1], re.sub(r"[aeiouyhw]", "", word[1:])
     return re.sub(r"(.)\1+", r"\1", head + rest)
 
 

@@ -517,7 +517,9 @@ class RampCrew:
         return self._begin_or_arm(direction, t)
 
     def _begin_or_arm(self, direction: str, t: float) -> list[Any]:
-        said = [self._speech("direction", t, direction=self._said_direction(direction))] if direction else []
+        # Always a word back: "can we get a pushback please?" went a minute unanswered until the tug was on.
+        said = [self._speech("direction", t, direction=self._said_direction(direction))] if direction else \
+            [self._speech("push_ack", t)]
         self._push = Push(direction=direction, t=t)
         if self.wait_for_clearance and self.link.atc_working() and not self.link.pushback_cleared():
             return [*said, self._speech("armed", t)]

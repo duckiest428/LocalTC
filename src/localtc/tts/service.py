@@ -59,6 +59,8 @@ def _spread(key: str, span: tuple[float, float], salt: str) -> float:
     return low + (high - low) * (zlib.crc32(f"{salt}|{key}".encode()) % 1000) / 999
 
 
+PA_GAP_S = 8.0  # between two of the cabin's announcements
+PA_GAP_OTHER_LANGUAGE_S = 1.5  # ... and before the same one in another language
 STREAM_CHARS = 90  # an ATC line this long is made and played a sentence at a time
 
 
@@ -143,6 +145,7 @@ class VoiceOut:
     def _key(self, down: bool) -> None:
         """The pilot's push-to-talk: its click (and the receiver's rush when it's let go), and the sidetone."""
         self.keyed = down
+        self.player.pilot_talking = down  # the cabin and the crew wait while you're on the radio
         if self.sidetone is not None:
             self.sidetone.key(down)
         if self.effect:
@@ -293,13 +296,19 @@ class VoiceOut:
 
     async def _cabin_crew(self) -> None:
         """The cabin crew's lines, one after another: each sentence made in turn with the radio's (a long announcement
-        is many sentences; ATC's next line goes between two of them, not after the whole safety demonstration)."""
+        is many sentences; ATC's next line goes between two of them, not after the whole safety demonstration). A
+        breath between two announcements (the welcome, the exit rows and the safety demonstration back to back felt
+        crammed), a short one before the same said in the airline's other language."""
+        last: CabinSpeech | None = None
         while True:
             ev = await self._cabin.get()
+            if isinstance(ev, CabinSpeech) and ev.channel == "pa" and last is not None and last.channel == "pa":
+                await asyncio.sleep(PA_GAP_OTHER_LANGUAGE_S if ev.language != last.language else PA_GAP_S)
             try:
                 await (self._say_ramp(ev) if isinstance(ev, RampSpeech) else self._say_cabin(ev))
             except Exception:  # noqa: BLE001 - a voice failing never stops the next line
                 log.exception("Cabin voice failed; carrying on")
+            last = ev if isinstance(ev, CabinSpeech) else last
 
     def _ramp_voice(self, ev: RampSpeech) -> Persona:
         return persona_for(f"ramp {ev.speaker}", "ground_crew", sex=ev.sex, locale=ev.locale if self.regional else "", language=ev.language)

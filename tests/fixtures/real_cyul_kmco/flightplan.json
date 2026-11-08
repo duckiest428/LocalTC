@@ -1,0 +1,429 @@
+{
+ "source": "simbrief",
+ "callsign": "ROU1638",
+ "origin": "CYUL",
+ "destination": "KMCO",
+ "alternate": "KJAX",
+ "cruise_ft": 36000,
+ "route": "DCT FAWNS DCT BUGSY DCT SYR J59 PSB Q71 EMNEM Q103 SLOJO DCT EFFAY Q83 ROYCO Q85 LPERD SNFLD3",
+ "aircraft": "A321",
+ "registration": "SL-FSL",
+ "sid": "",
+ "star": "SNFLD3",
+ "dep_runway": "06R",
+ "arr_runway": "35L",
+ "origin_name": "PIERRE ELLIOTT TRUDEAU INTL",
+ "destination_name": "ORLANDO INTL",
+ "fixes": [
+  {
+   "ident": "FAWNS",
+   "lat": 44.993456,
+   "lon": -74.090328,
+   "alt_ft": 22000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 694
+  },
+  {
+   "ident": "BUGSY",
+   "lat": 44.722653,
+   "lon": -74.141411,
+   "alt_ft": 25100,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CLB",
+   "time_s": 838
+  },
+  {
+   "ident": "TOC",
+   "lat": 43.543168,
+   "lon": -75.713546,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "ltlg",
+   "stage": "CLB",
+   "time_s": 1473
+  },
+  {
+   "ident": "SYR",
+   "lat": 43.160519,
+   "lon": -76.204558,
+   "alt_ft": 36000,
+   "via": "DCT",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 1724
+  },
+  {
+   "ident": "AUDIL",
+   "lat": 42.871872,
+   "lon": -76.443075,
+   "alt_ft": 36000,
+   "via": "J59",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 1885
+  },
+  {
+   "ident": "EXTOL",
+   "lat": 42.657692,
+   "lon": -76.618361,
+   "alt_ft": 36000,
+   "via": "J59",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2004
+  },
+  {
+   "ident": "CNTER",
+   "lat": 42.219733,
+   "lon": -76.972381,
+   "alt_ft": 36000,
+   "via": "J59",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2252
+  },
+  {
+   "ident": "ZUUCS",
+   "lat": 41.372144,
+   "lon": -77.641314,
+   "alt_ft": 36000,
+   "via": "J59",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 2728
+  },
+  {
+   "ident": "PSB",
+   "lat": 40.916258,
+   "lon": -77.992717,
+   "alt_ft": 36000,
+   "via": "J59",
+   "kind": "vor",
+   "stage": "CRZ",
+   "time_s": 2986
+  },
+  {
+   "ident": "PSYKO",
+   "lat": 40.143611,
+   "lon": -79.153611,
+   "alt_ft": 36000,
+   "via": "Q71",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 3581
+  },
+  {
+   "ident": "EMNEM",
+   "lat": 39.5242,
+   "lon": -80.074503,
+   "alt_ft": 36000,
+   "via": "Q71",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4056
+  },
+  {
+   "ident": "RICCS",
+   "lat": 38.920736,
+   "lon": -80.0838,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4340
+  },
+  {
+   "ident": "PERKS",
+   "lat": 38.661344,
+   "lon": -80.174822,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4470
+  },
+  {
+   "ident": "PERRI",
+   "lat": 38.297358,
+   "lon": -80.301419,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4660
+  },
+  {
+   "ident": "OAKLE",
+   "lat": 38.1205,
+   "lon": -80.362456,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4751
+  },
+  {
+   "ident": "ASBUR",
+   "lat": 37.823447,
+   "lon": -80.464289,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 4899
+  },
+  {
+   "ident": "DANCO",
+   "lat": 37.087708,
+   "lon": -80.712903,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 5287
+  },
+  {
+   "ident": "SLOJO",
+   "lat": 34.646197,
+   "lon": -80.657119,
+   "alt_ft": 36000,
+   "via": "Q103",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6481
+  },
+  {
+   "ident": "EFFAY",
+   "lat": 34.258519,
+   "lon": -80.510539,
+   "alt_ft": 37000,
+   "via": "DCT",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 6654
+  },
+  {
+   "ident": "JUSEE",
+   "lat": 33.514786,
+   "lon": -80.732025,
+   "alt_ft": 36000,
+   "via": "Q83",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 7083
+  },
+  {
+   "ident": "WURFL",
+   "lat": 32.529608,
+   "lon": -81.018908,
+   "alt_ft": 36000,
+   "via": "Q83",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 7605
+  },
+  {
+   "ident": "KONEY",
+   "lat": 32.283783,
+   "lon": -81.023275,
+   "alt_ft": 36000,
+   "via": "Q83",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 7728
+  },
+  {
+   "ident": "TAALN",
+   "lat": 31.998939,
+   "lon": -81.028308,
+   "alt_ft": 36000,
+   "via": "Q83",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 7867
+  },
+  {
+   "ident": "ROYCO",
+   "lat": 31.586217,
+   "lon": -81.039569,
+   "alt_ft": 36000,
+   "via": "Q83",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 8072
+  },
+  {
+   "ident": "GIPPL",
+   "lat": 31.381656,
+   "lon": -81.164917,
+   "alt_ft": 36000,
+   "via": "Q85",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 8196
+  },
+  {
+   "ident": "BEEGE",
+   "lat": 31.183328,
+   "lon": -81.282639,
+   "alt_ft": 36000,
+   "via": "Q85",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 8311
+  },
+  {
+   "ident": "LPERD",
+   "lat": 30.60255,
+   "lon": -81.281156,
+   "alt_ft": 36000,
+   "via": "Q85",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 8594
+  },
+  {
+   "ident": "NOOMN",
+   "lat": 29.707792,
+   "lon": -81.214247,
+   "alt_ft": 36000,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "CRZ",
+   "time_s": 9023
+  },
+  {
+   "ident": "TOD",
+   "lat": 29.541699,
+   "lon": -81.200001,
+   "alt_ft": 36000,
+   "via": "SNFLD3",
+   "kind": "ltlg",
+   "stage": "CRZ",
+   "time_s": 9102
+  },
+  {
+   "ident": "FORYU",
+   "lat": 29.296244,
+   "lon": -81.179033,
+   "alt_ft": 29800,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9256
+  },
+  {
+   "ident": "NICCK",
+   "lat": 29.187911,
+   "lon": -81.169489,
+   "alt_ft": 26900,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9328
+  },
+  {
+   "ident": "SNFLD",
+   "lat": 29.067497,
+   "lon": -81.117086,
+   "alt_ft": 23600,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9410
+  },
+  {
+   "ident": "GTOUT",
+   "lat": 28.973981,
+   "lon": -81.081594,
+   "alt_ft": 21100,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9471
+  },
+  {
+   "ident": "TUGLE",
+   "lat": 28.881919,
+   "lon": -81.070689,
+   "alt_ft": 18600,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9532
+  },
+  {
+   "ident": "HIGGZ",
+   "lat": 28.704711,
+   "lon": -81.144389,
+   "alt_ft": 14100,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9645
+  },
+  {
+   "ident": "VOSSS",
+   "lat": 28.543883,
+   "lon": -81.186236,
+   "alt_ft": 9900,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9748
+  },
+  {
+   "ident": "SUNDE",
+   "lat": 28.42655,
+   "lon": -81.187236,
+   "alt_ft": 7000,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9820
+  },
+  {
+   "ident": "CUBAL",
+   "lat": 28.310464,
+   "lon": -81.188106,
+   "alt_ft": 4100,
+   "via": "SNFLD3",
+   "kind": "wpt",
+   "stage": "DSC",
+   "time_s": 9892
+  },
+  {
+   "ident": "KMCO",
+   "lat": 28.429389,
+   "lon": -81.309,
+   "alt_ft": 2600,
+   "via": "SNFLD3",
+   "kind": "apt",
+   "stage": "DSC",
+   "time_s": 10273
+  }
+ ],
+ "simbrief_id": "1794095019",
+ "rules": "IFR",
+ "perf": {
+  "units": "kgs",
+  "block_fuel_lb": 25887.0,
+  "takeoff_fuel_lb": 25291.0,
+  "landing_fuel_lb": 7577.0,
+  "reserve_fuel_lb": 2648.0,
+  "zfw_lb": 142077.0,
+  "v1": 142,
+  "vr": 150,
+  "v2": 153,
+  "takeoff_flaps": "1",
+  "vref": 133,
+  "landing_flaps": "FULL",
+  "sched_out_s": 1794097800,
+  "sched_off_s": 1794099000,
+  "pax": 143,
+  "sched_in_s": 1794109800
+ }
+}

@@ -143,6 +143,13 @@ a new minor version adds features, a patch fixes them.
 - **Your microphone back after it drops out:** reconnected under a new number by Windows, it's found again, and if it stays silent the same microphone is tried another way.
 - **ATC's long lines start sooner:** a long transmission is played a sentence at a time, the first as soon as it's made. A clearance took 16 seconds from your call to its first word.
 - **Your aircraft on the Live Map:** the sim's menu position (0 N, 90 E) no longer starts the path, so your aircraft is drawn where it is, not a world away.
+- **Join a flight in progress:** start LocalTC (or restart it) in the air, or taxiing in, and press New Flight with your filed plan. The flight carries on from where it is: the clearance, takeoff and SID count as given, your squawk as assigned, your level as cleared. ATC works out who you should be talking to (departure, the centre for where you are, approach, tower) and tells you, and your first call there is the check-in. With the copilot on the radio, it tunes and checks in for you. No "off blocks, 40 minutes late" in the cruise.
+- **No more crash when the microphone drops out:** reopening it restarted the audio system while a voice was playing, and the app vanished. It now waits for the voices to finish, and reopens the microphone without the restart if they don't.
+- **A first call is a check-in:** "Budapest Departure, Airbus November Golf Alpha, good day" went unanswered, so departure never handed the flight on, and it was left on Budapest's frequencies all the way to Germany. A controller you've left behind now sends you on to the one working you, never back.
+- **The runway from your clearance is kept** while the ATIS still has it in use; when it's no longer in use, ground says "runway change". Ground prefers named taxiways, so a route through unnamed apron lanes no longer comes out as just "taxi to the runway".
+- **One push, not seven:** a reading of 0.7 knots after the push no longer flips the phase between parked and pushback.
+- **The cabin crew and ground crew:** Jamie waits while you're on the radio, and leaves a breath between announcements. "Can you start our boarding?" starts it. "Disengage the jetway" takes it away. A push request always gets an answer. The cabin crew talk about the off-block time; the copilot no longer says it too.
+- **The real ATIS, not the sim's first:** with the real ATIS chosen, LocalTC waits up to two minutes for it instead of reading the sim's weather in the meantime. "Direct Fonz" is heard as FAWNS.
 
 ## [0.5.5] - 2026-11-02
 

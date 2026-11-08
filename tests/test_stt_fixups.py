@@ -37,3 +37,10 @@ def test_a_frequency_after_the_station_and_a_route_after_a_full_stop():
     hints = VocabularyHints(callsign="FFT4990", callsign_spoken="Frontier 4990", fixes=("JETTI", "ZZOOO", "CENZA"))
     assert match_names("Cleared for takeoff runway 27, Frontier 4990 on F2 jet T.", hints).endswith("RNAV to JETTI.")
     assert match_names("Cleared to land runway 27 on to the left", hints) == "Cleared to land runway 27 on to the left"
+
+
+def test_fonz_is_fawns():
+    from localtc.stt.vocabulary import VocabularyHints, match_names
+
+    hints = VocabularyHints(callsign="ROU1638", callsign_spoken="Rouge 1638", fixes=("FAWNS", "BUGSY", "SYR"))
+    assert match_names("Direct Fonz. Rouge 1638.", hints) == "Direct FAWNS. Rouge 1638."

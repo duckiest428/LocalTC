@@ -44,13 +44,13 @@ _STATUS = re.compile(r"\bstatus\b|\boutstanding\b|\bwhat(?:'?s|\s+is)\s+(?:still
 _CANCEL = re.compile(r"\b(?:cancel|abort|scrub|forget(?:\s+about)?|never\s*mind|skip|call\s+off|don'?t\s+(?:need|want|bother(?:\s+with)?)|no\s+need\s+for)\b", re.I)
 _FINISH = re.compile(r"\b(?:complete|finish|wrap\s+up|end)\b[^.]*\bnow\b|\b(?:that'?s\s+enough|wrap\s+it\s+up|finish\s+(?:it\s+)?up)\b", re.I)
 _HURRY = re.compile(r"\bspeed\s+(?:it\s+|that\s+|things\s+)?up\b|\bhurry\b|\bexpedite\b|\bfaster\b|\bquicker\b|\brush\b", re.I)
-_OFF = re.compile(r"\b(?:disconnect(?:ion|ing)?|remov(?:e|al|ing)|dismiss|retract(?:ion)?|detach|pull(?:\s+\w+){0,2}\s+back|pull\s+back|take\s+(?:\w+\s+){0,2}away|send\s+(?:\w+\s+){0,2}away|get\s+rid\s+of|undock)\b|\b(?:off|away)\W*(?:please\W*)?$", re.I)
+_OFF = re.compile(r"\b(?:disconnect(?:ion|ing|ed)?|disengag(?:e|ed|ing)|unhook|remov(?:e|al|ing)|dismiss|retract(?:ion)?|detach|pull(?:\s+\w+){0,2}\s+back|pull\s+back|take\s+(?:\w+\s+){0,2}away|send\s+(?:\w+\s+){0,2}away|get\s+rid\s+of|undock)\b|\b(?:off|away)\W*(?:please\W*)?$", re.I)
 _FULL = re.compile(r"\b(?:full\s+(?:service|turn\s?around)|the\s+(?:whole\s+)?turn\s?around|do\s+the\s+turn\s?around|the\s+works|all\s+(?:the\s+)?services|everything\s+please)\b", re.I)
 _GATE = re.compile(r"\b(?:gate|stand|parking(?:\s+(?:spot|position))?)\s+([a-z]?\s?-?\s?\d{1,3}\s?[a-z]?|[a-z]{1,2}\s?\d{1,3})\b", re.I)
 _WHERE = re.compile(r"\b(?:what|which)\s+(?:gate|stand|bay|parking(?:\s+(?:spot|position))?)\b|\bwhere\s+are\s+we\s+parked\b|\bwhat(?:'?s|\s+is)\s+(?:our|my|this)\s+(?:gate|stand)\b", re.I)
 _GATE_CHANGE = re.compile(r"\b(?:change|move|switch|different|another|prefer|want|like|give|assign|need|request|can\s+(?:we|i)\s+have)\b", re.I)
 _NOSE = re.compile(r"\bnose\s+(left|right)\b|\bfac(?:e|ing)\s+(left|right)\b|\b(left|right)\s+nose\b", re.I)
-_TAIL = re.compile(r"\b(?:tail|until|till|tale)\s+(left|right)\b|\b(left|right)\s+tail\b|\bpush(?:\s?-?back)?\s+(?:to\s+the\s+)?(left|right)\b|^\W*(left|right)\W*(?:please\W*)?$", re.I)
+_TAIL = re.compile(r"\b(?:tail|until|till|tale)\s+(left|right)\b|\b(left|right)\s+tail\b|\bpush(?:\s?-?back)?\s+(?:to\s+the\s+)?(left|right)\b|\bto\s+the\s+(left|right)\b|^\W*(left|right)\W*(?:please\W*)?$", re.I)
 _STRAIGHT = re.compile(r"\bstraight(?:\s+(?:back|out))?\b", re.I)
 _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "one hundred": 100, "hundred": 100}
 _PERCENT = re.compile(r"\b(\d{1,3}|" + "|".join(_TENS) + r")(?:[\s-]+(five))?\s*(?:%|per\s?cent)", re.I)
@@ -160,6 +160,9 @@ def parse(text: str) -> tuple[Ask, ...]:
         for ask in _clause(clause.strip()) if clause.strip() else ():
             if ask.action == PUSH and asks and asks[-1].action == PUSH:  # "can we get a pushback? tail left please": one push
                 asks[-1] = Ask(PUSH, direction=ask.direction or asks[-1].direction)
+            elif ask.action == REQUEST and any(a.action == OFF and set(ask.services) <= set(a.services) for a in asks):
+                # "disengage the jetway ... actually the jetway will be all": the jetway named again, not asked for
+                continue
             else:
                 asks.append(ask)
     return tuple(asks)

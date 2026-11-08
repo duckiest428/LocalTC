@@ -37,6 +37,9 @@ class CrewService:
         """``cabin``: the cabin crew (crew.cabin.CabinCrew), whose words on the intercom ("cabin, ...") are theirs.
         ``ground``: the ground crew's service (ground.service.GroundService): so are "ramp, ..."."""
         self.pm, self.bus, self.source, self.cabin, self.ground = pm, bus, source, cabin, ground
+        # The cabin crew talk about the off-block time; the copilot doesn't say it too ("just have the cabin crew talk
+        # about off block").
+        pm.cabin_on_schedule = (lambda: bool(getattr(cabin, "active", False))) if cabin is not None else (lambda: False)
         # Subscribed now, not in run(): a fast source could publish before run() starts.
         # Everything the copilot watches to speak first (crew.monitor): ATC and the pilot on the radio (so it doesn't
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.

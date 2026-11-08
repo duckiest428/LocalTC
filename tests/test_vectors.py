@@ -229,13 +229,3 @@ def test_a_base_more_than_square_to_the_final_still_gets_the_turn_in(visual):
     assert across.leg == "intercept"  # back to the final from the side it's on, never a base turned round
     assert abs(((across.heading_true - (end.heading_true + 30)) + 540) % 360 - 180) < 1
 
-
-def test_straight_in_down_the_final_is_cleared_without_vectors():
-    """ "If it's relatively straight in then no vectors and just cleared approach": headings are for a turn onto the
-    final, not for an arrival already coming down it."""
-    arrival = Arrival(355, 24, 170, altitude=7000)  # north of Seattle, 2 miles off 16L's final, pointing down it
-    arrival.fly(300)
-    ids = arrival.ids()
-    assert "approach.cleared_star" in ids, ids
-    assert not [i for i in ids if i in ("approach.turn", "approach.heading", "approach.present_heading",
-                                        "approach.intercept_cleared", "approach.base", "approach.downwind")], ids

@@ -147,6 +147,13 @@ from localtc.sim_api import (
 )
 
 P = FlightPhase
+# "Cancel the emergency", "cancelling mayday", "no longer an emergency", "negative, cancel distress": over.
+CANCEL_EMERGENCY = re.compile(r"\b(?:cancel(?:l?ing|led)?|no longer|negative)\b[\w ,.]{0,25}?\b(?:emergency|mayday|distress"
+                              r"|pan[ -]?pan)\b", re.IGNORECASE)
+ROUTES_FROM_KEPT = 400  # other aircraft's routes from where they were, kept this many at most
+STAR_INTERCEPT_AGL_FT = 3000  # an ILS final joined about this high above the field, where nothing better is known
+KNOWN_FIX_RATIO = 0.6  # a misheard fix name this like a known one is that one ("knob" and NOBKE: 0.67)
+STAR_FLOOR_MAX_FT = 18000  # a plan's last arrival altitude above this is its predicted profile, not where a STAR ends
 # The calls to LocalTC's real flights (``traffic_call``), and the controller who makes each.
 TRAFFIC_CALLS = {"clearance": "clearance", "pushback": "ground", "taxi_out": "ground", "taxi_in": "ground",
                  "lineup": "tower", "takeoff": "tower", "land": "tower", "go_around": "tower", "hold_short": "tower",
@@ -3174,6 +3181,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, "common.contact", {"station": right.station, "frequency": right.mhz}, facility,
                            handoff_to=right)
             return []
+        if pending is not None and ".handoff_" in pending.instruction_id and own is not None and not own.on_ground                 and (to := st.comms.expected) is not None and to.station != facility.station                 and not frequencies(normalize(ev.text)) and "emergency" not in st.flags:
+            # Handed on, and the pilot calls with something else on the old frequency ("airborne" to the tower that
+            # said "contact Milan Radar Departure"): the handoff said again, not "say again".
+            st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+            self._schedule(t, "common.contact", {"station": to.station, "frequency": to.mhz}, facility, handoff_to=to)
+            return []
         if pending is None and self._handed_off_from(facility) is not None and "emergency" not in st.flags \
                 and not any(m.intent == "emergency" for m in match_intents(normalize(ev.text))) \
                 and not self._repeats_readback(ev.text, facility, mhz, t):  # ("Tower 119.9" once more: no reminder)
@@ -3320,6 +3333,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 # "Cleared to land 14R, can we make it a low approach?": the readback taken, then the request.
                 out += self._on_request(interp.then, facility, t)
             return out
+        if CANCEL_EMERGENCY.search(ev.text or ""):
+            return out + self._cancel_emergency(ev.text, facility, t)  # before "emergency": it names the word too
         if interp.intent == "emergency":
             return out + self._emergency(interp, facility, t)
         if interp.kind == "request":
@@ -3664,6 +3679,28 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 self._schedule(t, "common.info", {"message": answer}, facility, expects_readback=False)
         return out
 
+    def _level_report(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> bool:
+        """The pilot saying a level to a radar controller already working the flight ("maintaining FL150"): not left
+        unanswered. Another level than the one given gets the clearance said again ("descend 4,000 feet": the pilot
+        had missed it); the one given, a "roger". False: not that (a check-in, a thank-you), handled as before."""
+        st = self.state
+        stated = interp.values.get("altitude")
+        if not stated or own is None or own.on_ground or facility.station not in self._checked_in                 or facility.controller not in ("departure", "center", "approach") or st.pending is not None                 or self._scheduled:
+            return False
+        try:
+            stated = int(stated)
+        except (TypeError, ValueError):
+            return False
+        assigned = st.assignments.altitude_ft
+        if assigned and abs(stated - assigned) >= 500 and abs(own.alt_indicated_ft - assigned) >= 500:
+            self._schedule(t, "common.descend" if assigned < own.alt_indicated_ft else "common.climb",
+                           {"altitude": assigned}, facility)
+            return True
+        if interp.intent == "acknowledge":
+            self._schedule(t, "common.roger", {}, facility, expects_readback=False)
+            return True
+        return False
+
     def _request(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         st = self.state
         intent = interp.intent
@@ -3686,6 +3723,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 and not re.search(r"\b(?:request\w*|ready|can we|could we|may we|like to)\b", (interp.text or "").lower()):
             # "Push and start at discretion, tail right": the readback of the push just approved, not a new request
             # (answered with the approval again).
+            return []
+        if intent in ("acknowledge", "checkin") and self._level_report(interp, facility, t, own):
             return []
         if intent == "request_crossing":
             return self._crossing_request(interp, facility, t, own)
@@ -3952,12 +3991,33 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if dest and (words & {"airport", "field", "destination"} or str(fix).upper() == dest
                      or words & {w.lower() for w in name.split() if len(w) > 3}):
             fix = name  # "direct to the airport", "direct KBFI", "direct Boeing": the destination
+        elif (known := self._known_fixes()) and (found := _known_fix(str(fix), known)) is None:
+            # Not a fix of this flight (its route, procedures, approaches): a word misheard ("direct NOBKE" heard as
+            # "direct knob", cleared to a "Knob Itarrow" that doesn't exist). The fix said again, never invented.
+            self._schedule(t, "common.say_again", {}, facility)
+            return
+        elif known:
+            fix = found  # "knob" is NOBKE: the fix of the route it sounds like
         self._end_hold(t, f"direct {fix}")
         for a in self.amendments:
             if a.state == "active" and a.kind == "deviation":
                 a.state = "done"
                 self._ops_changed = True
         self._schedule(t, "common.direct", {"fix": str(fix)}, facility)
+
+    def _known_fixes(self) -> set[str]:
+        """The fixes this flight knows: its route's, its departure's and arrival's, the destination's approaches'."""
+        known = {f.ident.upper() for f in self.cfg.route if f.ident and f.ident.upper() not in ("TOC", "TOD")}
+        for legs in self._star_legs.values():
+            known |= {leg.fix.upper() for leg in legs if leg.fix}
+        for procedures in self._departures.values():
+            for procedure in procedures:
+                known |= {fix.upper() for fix in procedure.fixes}
+        for routes in self._approach_routes.values():
+            for route in routes:
+                for leg in (*route.transitions, route.final):
+                    known |= {fix.ident.upper() for fix in leg if fix.ident}
+        return known
 
     def _vectors(self, interp: Interpretation, facility: Facility, t: float, own: OwnshipState | None) -> None:
         st = self.state
@@ -3992,6 +4052,31 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                        on_issue=lambda: self._assign(heading=heading, approach=plan["approach"].display,
                                                      arrival_runway=plan["approach"].landing_runway))
 
+    def _star_intercept_altitude(self, own: OwnshipState, plan: dict[str, Any]) -> int | None:
+        """The altitude to join the final at from a STAR, said with the approach clearance: under the glideslope from
+        where the arrival meets the final when that's known, else about 3,000 ft above the field (where ILS finals
+        are joined), never below where the approach starts nor above what the STAR already cleared the flight to,
+        in whole thousands; None when
+        the flight is already at or below it (nothing to descend to)."""
+        geo = self.geometry(self.state.flight.destination)
+        if geo is None:
+            return None
+        elev = geo.airport.elev_ft
+        leg = self._vector(own, plan["final"])
+        if leg is not None and leg.join_nm is not None:
+            wanted = elev + leg.join_nm * 0.9 * vectors.GLIDESLOPE_FT_PER_NM
+        else:
+            wanted = elev + STAR_INTERCEPT_AGL_FT
+        # On a published STAR its altitudes are clear of the terrain: the sector minimum (Linate's, raised by the
+        # Prealps) is for vectors off it, not for a flight the arrival takes down to 3,000.
+        floor = plan["approach_alt"]
+        altitude = int(math.ceil(max(wanted, floor) / 1000.0) * 1000)
+        assigned = self.state.assignments.altitude_ft
+        if assigned and assigned < altitude:
+            # Cleared lower already (the STAR's 3,000): never back up to the glideslope's 8,000 from the join.
+            altitude = max(assigned, int(math.ceil(floor / 1000.0) * 1000))
+        return altitude if own.alt_indicated_ft > altitude + 500 else None
+
     def _radar_vectors(self, own: OwnshipState) -> bool:
         """Approach turning the aircraft onto the final and slowing it down, without being asked.
 
@@ -4017,6 +4102,20 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # on the way; where it ends off to one side, the vectors start at its end.
             joins, left_nm = on_star
             if joins and left_nm <= STAR_CLEAR_NM:
+                intercept = self._star_intercept_altitude(own, plan)
+                if self.region.icao and intercept is not None:
+                    tower = self.facility("tower")
+                    slots = {"approach": plan["approach"], "altitude": intercept}
+                    if tower is not None:  # "... contact Linate Tower 118.1 when established"
+                        slots |= {"station": tower.station, "frequency": tower.mhz}
+                    self._schedule(t, "approach.cleared_star_descend_tower" if tower is not None
+                                   else "approach.cleared_star_descend", slots,
+                                   tuned, delay=False, clearance="approach", handoff_to=tower,
+                                   on_issue=lambda: (self._assign(altitude_ft=intercept, approach=plan["approach"].display,
+                                                                  arrival_runway=plan["approach"].landing_runway),
+                                                     setattr(self, "_via_floor", None),
+                                                     setattr(self, "_going_around", False)))
+                    return True
                 self._schedule(t, "approach.cleared_star", {"approach": plan["approach"]}, tuned, delay=False,
                                clearance="approach",
                                on_issue=lambda: (self._assign(approach=plan["approach"].display,
@@ -4450,6 +4549,21 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, "common.roger", {}, facility)  # "looking" and "negative contact" need no answer
 
     # --- non-routine: emergencies, questions, requests without a procedure --------------------------------
+
+    def _cancel_emergency(self, text: str, facility: Facility, t: float) -> list[BusEvent]:
+        """"Cancel the emergency", "cancel mayday", "no longer an emergency": the emergency over (or never one: a
+        Mayday speech-to-text made up in the noise at the end of "copy information"). Back to the ordinary flight."""
+        st = self.state
+        if "emergency" not in st.flags:
+            self._schedule(t, "common.roger", {}, facility, expects_readback=False)
+            return []
+        for flag in ("emergency", "emergency_priority", "emergency_priority_due"):
+            st.flags.discard(flag)
+        self._emergency_told = {}
+        if getattr(self, "diversion", None) is not None:
+            self.diversion.offer_due_t = None
+        self._schedule(t, "common.emergency_cancelled", {}, facility, expects_readback=False)
+        return [self._alert(t, "emergency_cancelled", text)]
 
     def _emergency(self, interp: Interpretation, facility: Facility, t: float) -> list[BusEvent]:
         """An emergency declared, and everything that follows from it.
@@ -5404,7 +5518,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if assigned is not None and own is not None and own.alt_indicated_ft > assigned + 500:
                 # Checking in on the way down: "continue descent", not "maintain" an altitude still far below.
                 via = self._via_floor is not None and self.cfg.star
-                if via:
+                if via and self.region.icao:
+                    # An altitude said: read back, never "roger"-ed as though it were news.
+                    self._schedule(t, "center.checkin_descend_star", {"station": facility.station, "procedure": self.cfg.star,
+                                                                      "altitude": self._via_floor}, facility)
+                elif via:
                     self._schedule(t, "center.checkin_descend_via", {"station": facility.station,
                                                                      "procedure": self.cfg.star}, facility, expects_readback=False)
                 elif own.vs_fpm < -300:  # on the way down already
@@ -5457,9 +5575,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                    note=self._atis_note(st.flight.destination, st.assignments.arrival_atis)
                                    or self._altimeter_note(st.flight.destination))
                     return
-                self._schedule(t, "approach.checkin_descend_via", {"station": facility.station, "procedure": self.cfg.star,
-                                                                   "approach": plan["approach"]}, facility,
-                               expects_readback=False,
+                self._schedule(t, "approach.checkin_descend_star" if self.region.icao else "approach.checkin_descend_via",
+                               {"station": facility.station, "procedure": self.cfg.star, "approach": plan["approach"],
+                                "altitude": self._via_floor}, facility,
+                               expects_readback=bool(self.region.icao),  # ICAO says the altitude: read back
                                on_issue=lambda: self._assign(approach=plan["approach"].display,
                                                              arrival_runway=plan["approach"].landing_runway),
                                note=self._atis_note(st.flight.destination, st.assignments.arrival_atis)
@@ -5565,7 +5684,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return apply
 
         if self.cfg.star:
-            floor = self.route.arrival_floor_ft or plan["arrival_alt"]
+            planned = self.route.arrival_floor_ft
+            if planned is not None and planned > STAR_FLOOR_MAX_FT:
+                planned = None  # a plan's predicted level at the arrival's last fix (FL250 thirty miles out): no floor
+            floor = self._star_floor() or planned or plan["arrival_alt"]
+            if self.region.icao:  # "descend FL110, cleared TINI9W arrival": a level to stop at, as ICAO says it
+                # "When ready": the crew starts down at their own top of descent (the FMS's), not the plan's. Only a
+                # flight already on the way down (it started before the clearance) gets it without.
+                descending = late and own.vs_fpm < -500
+                self._schedule(t, "center.descend_star" if descending else "center.descend_star_pd",
+                               {"procedure": self.cfg.star, "approach": approach,
+                                                          "altitude": floor}, facility, delay=False,
+                               on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
+                return
             self._schedule(t, "center.descend_via", {"procedure": self.cfg.star, "approach": approach}, facility,
                            delay=False, on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
             return
@@ -5580,6 +5711,22 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return
         self._schedule(t, "center.descend_pd", {"altitude": altitude, "approach": approach}, facility, delay=False,
                        on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))
+
+    def _star_floor(self) -> int | None:
+        """The filed arrival's lowest published altitude (the sim's navdata: its restrictions, "between FL070 and
+        FL110" counting as FL110), on its common part and the landing runway's transition; None: not known."""
+        legs = self._star_legs.get((self.cfg.star or "").upper(), ())
+        runway = (self.state.assignments.arrival_runway or self.cfg.arr_runway or "").upper().lstrip("0")
+        found = []
+        for leg in legs:
+            transition = (leg.transition or "").upper()
+            if transition.startswith("RW") and runway and transition[2:].lstrip("0") != runway:
+                continue  # another runway's way in
+            if leg.altitude in ("at", "above", "below") and leg.alt1_ft > 0:
+                found.append(leg.alt1_ft)
+            elif leg.altitude == "between" and (leg.alt1_ft or leg.alt2_ft):
+                found.append(leg.alt1_ft or leg.alt2_ft)
+        return int(math.ceil(min(found) / 100.0) * 100) if found else None
 
     def _joining_final(self, own: OwnshipState) -> bool:
         """About to join the final approach course: the moment approach clears the approach.
@@ -6366,12 +6513,26 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if handed_from in matches and channel_khz(mhz) != channel_khz(expected.mhz):
                 return handed_from  # a frequency both work, and not the one ATC sent the pilot to: not switched yet
             return expected
+        if self._last_handoff is not None and self._last_handoff[1] in matches:
+            # Two of an airport's controllers on one frequency (Malpensa's 120.9 is its clearance and a tower), and
+            # one of them just sent the flight on: that one is who's still there, and says where to go ("airborne"
+            # on 120.9 after "contact Milan Radar" was answered by the clearance, "out of range").
+            return self._last_handoff[1]
         # Parked again after landing is at the destination: its frequencies, not the departure airport's (San Diego's
         # 123.9 was "Seattle Departure" once parked at the gate).
         arriving = self._arriving
         preferred_airport = self.state.flight.destination if arriving else self.state.flight.origin
-        ranked = sorted(matches, key=lambda f: (f.airport != preferred_airport, f.controller == ("departure" if arriving else "approach")))
+        ranked = sorted(matches, key=lambda f: (f.airport != preferred_airport, f.controller == ("departure" if arriving else "approach"),
+                                                self._shared_rank(f, own)))
         return ranked[0]
+
+    def _shared_rank(self, facility: Facility, own: OwnshipState | None) -> int:
+        """Of an airport's controllers sharing a frequency, who answers in the air: the tower (then departure, approach,
+        the centre), never its clearance or ground. On the ground the airport's own order stands (0 for all)."""
+        if own is None or own.on_ground:
+            return 0
+        order = ("tower", "departure", "approach", "center", "ground", "clearance")
+        return order.index(facility.controller) if facility.controller in order else len(order)
 
     def _out_of_reach(self, facility: Facility) -> bool:
         """An airport's controller far out of radio range of the aircraft in the air: Atlanta Center's 133.5 over
@@ -6552,11 +6713,33 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _fragments(self, elements: list[str], slots: dict[str, Any]) -> Phrase:
         parts = []
         for element in elements:
+            if element == "procedure" and "approach" in slots:
+                element = "procedure_arrival"  # a STAR ("via the TINI9W arrival"), not a SID's "departure"
             try:
                 parts.append(self.library.fragment(element, slots))
             except Exception:
                 parts.append(Phrase(element.replace("_", " "), element.replace("_", " ")))
         return sum(parts[1:], parts[0]) if parts else Phrase("", "")
+
+
+def _known_fix(said: str, known: set[str]) -> str | None:
+    """The known fix ``said`` names: itself, one of its words ("NOBKE Itarrow 1128"), or the one a misheard word
+    sounds closest to ("knob" for NOBKE), else None."""
+    import difflib
+
+    words = [w for w in re.split(r"[^A-Z0-9]+", said.upper()) if w]
+    for candidate in ("".join(words), *words):
+        if candidate in known:
+            return candidate
+    best, score = None, 0.0
+    for word in words:
+        if len(word) < 3:
+            continue
+        for fix in known:
+            ratio = difflib.SequenceMatcher(None, word, fix).ratio()
+            if ratio > score:
+                best, score = fix, ratio
+    return best if score >= KNOWN_FIX_RATIO else None
 
 
 def _distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

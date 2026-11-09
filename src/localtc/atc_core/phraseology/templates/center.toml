@@ -79,6 +79,30 @@ text = ["{callsign}, descend via the {procedure} arrival, expect {approach} appr
 readback = { required = ["descend_via"], optional = ["procedure"] }
 pilot_readback = "Descend via the {procedure} arrival, {callsign_short}."
 
+# ICAO: the descent on a STAR always with a level to stop at ("descend via" alone is the FAA's): the arrival's
+# lowest published one (atc_core.engine._star_floor).
+[[template]]
+id = "center.descend_star"
+controller = "center"
+text = ["{callsign}, descend {altitude}, cleared {procedure} arrival, expect {approach} approach."]
+readback = { required = ["altitude"], optional = ["procedure"] }
+pilot_readback = "Descend {altitude}, cleared {procedure} arrival, {callsign_short}."
+
+# ... given ahead of the top of descent: when ready, so the crew starts down at their own (the FMS's), not the plan's.
+[[template]]
+id = "center.descend_star_pd"
+controller = "center"
+text = ["{callsign}, when ready descend {altitude}, cleared {procedure} arrival, expect {approach} approach."]
+readback = { required = ["altitude"], optional = ["procedure"] }
+pilot_readback = "When ready descend {altitude}, cleared {procedure} arrival, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_star"
+controller = "center"
+text = ["{callsign}, {station}, roger, continue descent {altitude}, {procedure} arrival."]
+readback = { required = ["altitude"], optional = ["procedure"] }
+pilot_readback = "Continue descent {altitude}, {procedure} arrival, {callsign_short}."
+
 [[template]]
 id = "center.maintain"
 controller = "center"

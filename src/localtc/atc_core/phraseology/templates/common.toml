@@ -230,6 +230,7 @@ speed = "maintain {speed} knots"
 taxi_route = "taxi via {taxi_route}"
 approach = "cleared {approach} approach"
 procedure = "via the {procedure} departure"
+procedure_arrival = "via the {procedure} arrival"
 destination = "cleared to {destination}"
 cleared_for_takeoff = "cleared for takeoff"
 line_up_and_wait = "line up and wait"
@@ -247,6 +248,12 @@ controller = "any"
 text = ["{callsign}, {station}, read you five by five.", "{callsign}, {station}, loud and clear."]
 
 # --- an emergency: priority, then the shortest way to the ground ------------------------------------
+
+# "Cancel the emergency" (a Mayday speech-to-text heard in the noise, or the problem gone): ATC takes it back.
+[[template]]
+id = "common.emergency_cancelled"
+controller = "any"
+text = ["{callsign}, roger, emergency cancelled."]
 
 [[template]]
 id = "common.emergency_priority"

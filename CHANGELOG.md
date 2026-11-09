@@ -65,6 +65,19 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **The descent in Europe, as Europe does it** (from lorenzobusy-art): "when ready descend FL110, cleared TINI9W arrival"
+  ahead of the top of descent, so you start down at your own (not "descend via" alone, the FAA's); "continue descent
+  3,000 feet" from the next controller, read back like any altitude; and the approach clearance with the altitude to
+  join the final at, never above what the STAR already gave ("descend 3,000 feet, cleared ILS Y runway 35 approach,
+  contact Linate Tower 118.1 when established"). Where an arrival ends is its lowest published restriction from the
+  sim's navdata, not the plan's predicted level at its last fix.
+- **Smaller ATC fixes** (from lorenzobusy-art): an arrival said again is an arrival ("I say again, via the TINI9W
+  arrival", not "departure"); a level reported to radar is answered; on a frequency shared by a clearance and a tower
+  (Malpensa's 120.9) the tower answers in the air; a "direct" only to a fix that exists ("direct knob" is NOBKE).
+- **An emergency can be cancelled** (from lorenzobusy-art): "cancel the emergency", "cancel mayday" gets "roger, emergency
+  cancelled", and the copilot drops it too, instead of taking the words for another emergency.
+- **Taxi routes said as a controller says them** (from lorenzobusy-art): "G1, G2, G3" is "G"; a link on its own stays
+  ("C3, C, C1").
 - **QNH up in the flight levels:** the shipped settings put the transition at 18,000 ft everywhere, so outside North
   America approach gave the QNH at FL165 and the copilot called 9,000 ft "FL090". Each country's own transition now.
 - **An answer after you've switched:** a controller's reply still to come when you tune the next one isn't heard.

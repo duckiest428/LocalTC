@@ -325,6 +325,12 @@ class Monitor(WatchMixin):
                 and (to := getattr(self.engine, "joined_to", None)) is not None and self.radio_mode() != "full":
             # (The copilot on the radio calls them itself.)
             self._call("joined", ROUTINE, t, f"We should be with {to.station}, {speech.frequency_display(to.mhz)}.")
+        elif isinstance(ev, AtcAlert) and ev.kind == "emergency_cancelled":
+            # Over (or never one): no more "squawk 7700?", no diversion to offer.
+            self.offer = None
+            self.divert_due = None
+            self.queue = [q for q in self.queue if not q.key.startswith(("emergency", "divert", "nearest"))]
+            self._call("emergency_cancelled", ROUTINE, t, "Emergency cancelled, back to normal ops.", again_s=60.0)
         elif isinstance(ev, AtcAlert) and ev.kind == "emergency":
             self._call("emergency", ROUTINE, t, "Copy the emergency. Want me to squawk 7700?")
             self.offer = Offer("squawk", "7700", t + 20.0)

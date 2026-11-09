@@ -3,6 +3,7 @@
 import heapq
 import itertools
 import math
+import re
 from dataclasses import dataclass
 
 from localtc.atc_core.airport.aircraft_size import taxiway_width_m
@@ -134,7 +135,7 @@ class TaxiGraph:
         if path is None:
             return None
         edges = [edge for _, edge in path if edge is not None]
-        names = _named_runs(edges)
+        names = _simplified(_named_runs(edges))
         target = self.geometry.end(hold_short).runway if hold_short and self.geometry.end(hold_short) else None
         crossed = [self._hold_short_runway.get(node) for node, _ in path[1:-1]]
         crossed += [
@@ -289,6 +290,31 @@ def _narrow(path, need_m: float) -> float:
 
 UNNAMED_PENALTY = 3.0  # an unnamed lane's length counts this much more than a named taxiway's
 STUB_M = 80.0  # a piece of another taxiway this short between two of the same is that taxiway (a link's stub)
+
+
+NUMBERED = re.compile(r"([A-Z]{1,2})(\d{1,3}[A-Z]?)?")  # "G", "G1", "GE", "A12", "B3A": a letter and its numbers
+
+
+def _simplified(names: list[str]) -> list[str]:
+    """Numbered pieces of one taxiway one after another said as that taxiway: "G1, G2, G3" is "G" (and "G, G1, G2"
+    is "G"), as a controller says it. A link on its own stays: "C3, C, C1" leaves the stand on C3, follows C and
+    turns off onto C1."""
+
+    def root(name: str) -> str | None:
+        found = NUMBERED.fullmatch(name.upper())
+        return found.group(1) if found and found.group(2) else None  # numbered ones only
+
+    out: list[str] = []
+    i = 0
+    while i < len(names):
+        j = i
+        while j + 1 < len(names) and root(names[i]) is not None and root(names[j + 1]) == root(names[i]):
+            j += 1
+        name = root(names[i]) if j > i else names[i]
+        if not out or out[-1] != name:
+            out.append(name)
+        i = j + 1
+    return out
 
 
 def _named_runs(edges) -> list[str]:

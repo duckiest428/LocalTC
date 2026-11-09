@@ -73,7 +73,8 @@ def radio_line(ev: BusEvent) -> dict | None:
                 "text": ev.station or "no ATC on this frequency"}
     if isinstance(ev, AtcAlert):
         text = ALERTS.get(ev.kind, ev.kind.replace("_", " "))
-        if ev.detail and ev.kind in ("emergency", "copilot", "out_of_range", "llm_timeout", "llm_rejected"):
+        if ev.detail and ev.kind in ("emergency", "copilot", "out_of_range", "llm_timeout", "llm_rejected", "online",
+                                         "online_back", "online_gap"):
             text = f"Copilot: {ev.detail}" if ev.kind == "copilot" else f"{text}: {ev.detail}"
         return {"kind": "alert", "t": t, "text": text, "level": "error" if ev.kind == "emergency" else "warn",
                 "code": ev.kind}

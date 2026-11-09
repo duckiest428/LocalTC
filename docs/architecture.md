@@ -35,6 +35,7 @@ a small language model in Ollama for understanding, Piper for ATC's voice.
 | `copilot.py` | Works the radio for the pilot; reads the engine's state, never changes it | `atc_core` |
 | `app.py` | Wiring: config → source → bus → engine, voice, recorder. `run_session()` runs one flight. `LiveSession` holds the controls of a running flight. | everything (the only module that imports `sim_bridge`) |
 | `ui/` | The app window: `server.py` (HTTP + Server-Sent Events on 127.0.0.1), `controller.py` (settings, plan, flight start/stop, events → page), `static/` (HTML/CSS/JS, Leaflet) | `app` and below |
+| `online.py` | VATSIM/IVAO controllers from the networks' public feeds, each minute (`[atc] online_integration`); the ATC gets them as `OnlineAtc` events and works out coverage and its quiet in `atc_core/online.py` | `atc_core.online`, `ops.fetch` |
 | `flightplan.py` | SimBrief import and typed plans | `sim_api` types only |
 | `models.py` | The model catalog, hardware detection, profiles, downloads | `llm`, `stt`, `tts` |
 | `config.py` | `config/localtc.toml` + the app's `settings.toml` on top | nothing |

@@ -57,6 +57,9 @@ class Other:
     leg: str = ""
     heading: int = 0
     turn: str = ""
+    # Its own way to the runway from where it actually is (at a gate, taxiing out): the taxiways it's on, not a route
+    # from some other gate. Empty: not known (a route of the airport's is said then).
+    route: tuple[str, ...] = ()
     final_nm: float | None = None  # on the final already, this far out
 
 
@@ -170,7 +173,7 @@ class Chatter:
         # Its own runway where ATC has given it one (several in use: not everybody's the pilot's)
         runway, wind = (other.runway if other.doing != "landing" else "") or scene.runway, scene.wind
         routes = scene.routes_by_runway.get(runway) or scene.routes
-        route = rng.choice(routes) if routes else ()
+        route = other.route or (rng.choice(routes) if routes else ())
         if c == "ground":
             # A crew calls ground before it moves: pushed back once it asks, taxied once it says it's ready. One
             # already rolling had its taxi clearance before it moved: what's left to tell it is the hold short, or

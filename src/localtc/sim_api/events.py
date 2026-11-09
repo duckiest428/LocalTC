@@ -271,6 +271,28 @@ class TerrainGrid(Event, tag="terrain_grid"):
     source: str = ""
 
 
+class OnlineController(msgspec.Struct, frozen=True, kw_only=True):
+    """A controller connected to an online network (VATSIM or IVAO): ``kind`` DEL, GND, TWR, APP, CTR or FSS, where
+    they are and how far their frequency reaches (``range_nm``: the network's, or one for their kind)."""
+
+    callsign: str  # LIRF_TWR, EGTT_N_CTR
+    frequency_mhz: float
+    kind: str
+    lat: float
+    lon: float
+    range_nm: float = 0.0
+    name: str = ""  # the position's spoken name where the network gives one ("Roma Radar")
+
+
+class OnlineAtc(Event, tag="online_atc"):
+    """The controllers online on ``network`` (vatsim, ivao) around the flight and its route, as fetched (about once a
+    minute): ATC stays quiet while COM1 is on one of theirs that covers the aircraft (``atc_core.online``)."""
+
+    network: str
+    controllers: tuple[OnlineController, ...] = ()
+    error: str = ""  # why the network wasn't reached ("" fine): the last list known is kept
+
+
 class AtcOperations(Event, tag="atc_operations"):
     """What ATC is working the flight to beyond the clearances, as structured state for the app's and the
     companion's maps and the replay (JSON in ``data``): the conditions on its clearances (``atc_core.conditions``),
@@ -699,7 +721,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, DeparturesData, ApproachesData, TrafficIdentity, AiObjectAssigned, ModelList,
                  TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
-                 OpsSnapshot, TerrainGrid, SimFrameRate]
+                 OpsSnapshot, TerrainGrid, SimFrameRate, OnlineAtc]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived, AtcOperations]

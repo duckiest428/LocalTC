@@ -421,9 +421,23 @@ class PilotMonitoring:
             self._radio_queue.append(self.deck.submit("crew", "request", call.key, t, text=call.radio))
         return out
 
+    def _online(self) -> str:
+        """COM1 on an online network's controller (VATSIM, IVAO): the network's name, else "". The copilot never
+        transmits there: a real person is on that frequency."""
+        if not getattr(self.engine, "online_muted", False):
+            return ""
+        return {"vatsim": "VATSIM", "ivao": "IVAO"}.get(getattr(self.engine.cfg, "online_network", ""), "the network")
+
     def _radio_due(self, t: float) -> list[Any]:
         """The copilot's own radio calls, each once the frequency is free and if it's still right to make."""
         out: list[Any] = []
+        if (net := self._online()):
+            pending = [item for item in self._radio_queue if not (item.done or item.cancelled)]
+            self._radio_queue = []
+            if pending:
+                self.deck.cancel(t, f"on {net}", owner="crew", kinds=("request",))
+                return [self._say(t, f"We're on {net}, that call's yours: \"{pending[0].text}\".", "alert")]
+            return out
         waiting = []
         for item in self._radio_queue:
             if item.done or item.cancelled:
@@ -885,6 +899,8 @@ class PilotMonitoring:
         once the frequency's free."""
         from localtc.copilot import CallWords
 
+        if (net := self._online()):  # (and COM1 left where it is: on their frequency)
+            return [self._say(t, f"We're on {net}, you'll have to call them yourself.")]
         got = CallWords(self.engine).asked(call) if self.engine is not None else None
         if got is None:
             return [self._say(t, f"Your radios: {_radio_words(call, self._station(call))}.")]
@@ -1000,6 +1016,8 @@ class PilotMonitoring:
             self.deck.note("expired", t, f"{intent.question}: {changed}", utterance=uid)
             return [self._say(t, f"That was before {changed.replace('the ', 'the ', 1)}. Say it again if you still want it."
                               if not changed.startswith("we're") else f"Not now, {changed}.")]
+        if intent.kind == "send" and (net := self._online()):
+            return [self._say(t, f"We're on {net}, you'll have to call them yourself.")]
         if intent.kind == "send":
             self.deck.said_on_radio(intent.text, t)
             return [Transcript(t=t, text=intent.text, source="copilot")]

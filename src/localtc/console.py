@@ -50,6 +50,9 @@ ALERTS = {
     "out_of_range": "Out of radio range",
     "llm_timeout": "The language model timed out",
     "llm_rejected": "The language model's answer was turned away",
+    "online": "Online ATC",
+    "online_back": "Online ATC",
+    "online_gap": "Online ATC",
 }
 
 

@@ -183,6 +183,30 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
   border-radius: 1px; background: var(--line-2); opacity: 0; transition: opacity .15s; }
 .splitter:hover::after, .splitter.dragging::after { opacity: 1; }
 .panel.sized { overflow: auto; }
+.mapfreqs { position: absolute; left: 10px; top: 84px; z-index: 500; max-height: calc(100% - 150px); overflow: auto;
+  background: rgba(20, 23, 27, .9); border: 1px solid rgba(255, 255, 255, .12); border-radius: 3px; padding: 6px 8px;
+  font-size: 12px; max-width: min(420px, calc(100% - 20px)); }
+.mapfreqs[hidden] { display: none; }
+.mapfreqs .fq-fold { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.mapfreqs .fq-fold::after { content: "\25BE"; margin-left: auto; color: #8d959e; }
+.mapfreqs.folded .fq-fold::after { content: "\25B8"; }
+.mapfreqs.folded table { display: none; }
+.mapfreqs table { border-collapse: collapse; margin-top: 4px; width: 100%; }
+.mapfreqs th { text-align: left; color: var(--muted); font-weight: 500; padding: 2px 6px; }
+.mapfreqs td { padding: 2px 6px; white-space: nowrap; }
+.mapfreqs td.fq-mhz { font-family: var(--mono); }
+.mapfreqs tr.fq-part td { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; padding-top: 6px; }
+.mapfreqs .fq-local { color: var(--muted); }
+.mapfreqs .fq-online { color: var(--green); }
+.mapfreqs tr.fq-now td { background: rgba(95, 208, 104, .14); }
+html[data-theme="daylight"] .mapfreqs { background: rgba(255, 255, 255, .94); color: var(--text); }
+.online { padding: 8px 14px; flex: none; }
+.online-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.online .seg .btn[aria-pressed="true"] { background: var(--teal); border-color: #41807b; color: #fff; }
+.online-note-need { color: #e0b44c; }
+.online-rule { margin-top: 4px; max-width: 900px; }
+
 .log .empty { text-align: center; margin-top: 40px; }
 .line { padding: 3px 0; display: grid; grid-template-columns: 44px 1fr; gap: 8px; }
 .line .t { color: #6f7780; font-family: var(--mono); font-size: 11px; padding-top: 3px; }

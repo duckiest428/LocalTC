@@ -81,6 +81,19 @@
         </div>
         <div class="er-facts" id="er-facts"></div>
       </div>
+      <!-- VATSIM/IVAO beside LocalTC ([atc] online_integration): which ATC this flight is flown with, and who's online -->
+      <div class="panel online" id="online-box" hidden>
+        <div class="online-row">
+          <b>ATC for this flight</b>
+          <div class="seg" role="group" aria-label="ATC for this flight">
+            <button class="btn small" data-online="local">Only LocalTC</button>
+            <button class="btn small" data-online="vatsim">VATSIM hybrid (+ LocalTC)</button>
+            <button class="btn small" data-online="ivao">IVAO hybrid (+ LocalTC)</button>
+          </div>
+          <span class="small" id="online-note"></span>
+        </div>
+        <div class="muted small online-rule" id="online-rule" hidden></div>
+      </div>
       <div class="splitter" data-for="airport-box,status-box" title="Drag to resize; double-click for the usual size"></div>
 
       <div class="panel flightrow" id="flight-box">
@@ -129,6 +142,8 @@
       <div class="mapinfo" id="map-info"></div>
       <div class="mapinfo mapmva" id="map-mva" title="ATC's minimum altitude where you are (from the terrain)"></div>
       <div class="maplegend" id="map-legend"></div>
+      <!-- The flight's frequencies: each airspace, its frequency and who works it (LocalTC, or VATSIM / IVAO top-down) -->
+      <div class="mapfreqs" id="map-freqs" hidden></div>
     </section>
 
     <!-- EFB (efb.js): briefing, plan and fuel, airport and gates, charts, checklists, scratchpad, Ops, documents -->

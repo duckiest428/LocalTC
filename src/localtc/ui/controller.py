@@ -49,6 +49,7 @@ from localtc.sim_api.ramp import RAMP_MHZ, on_ramp
 from localtc.sim_api import (
     AirportData,
     AtcAlert,
+    AtcOperations,
     AtcThinking,
     AtcTransmission,
     BusEvent,
@@ -64,6 +65,7 @@ from localtc.sim_api import (
     PttReleased,
     RadioTuned,
     TrafficControlStatus,
+    OnlineAtc,
     TrafficSnapshot,
     encode_event,
 )
@@ -74,6 +76,7 @@ from localtc.ui.updates import Updates
 
 log = logging.getLogger(__name__)
 
+NETWORK_TRAFFIC_NM = 250.0  # the online network's pilots drawn on the Live Map this far around the flight
 RADIO_HISTORY = 400
 COMPONENTS = ("ollama", "gpu", "webview2")  # installed from the app (localtc.components), as the models are
 OWN_EVERY_S = 0.25
@@ -126,6 +129,8 @@ class AppController:
         self.flight: dict = {}
         self.jobs: dict[str, dict] = {}
         self.muted = False
+        self.online_view: dict = {}  # the online network's controllers, for the ATC tab (``_online``)
+        self._network_shown = False  # the network's pilots are on the Live Map (``_network_traffic``)
         self.account_prompt = False
         self._notes: str | None = None  # this version's CHANGELOG section, read once for "what's new"
         self.traffic_control: dict | None = None  # EXPERIMENTAL traffic control's last status  # show the one-time account suggestion (after the third flight)
@@ -295,6 +300,58 @@ class AppController:
             else:
                 self.companion.set_zones(None)
 
+    def _network_traffic(self) -> None:
+        """The online network's pilots around the flight for the Live Map, the ones the sim doesn't show already (the
+        pilot client puts the nearest in the sim: those are drawn as its traffic, where they are exactly)."""
+        store = getattr(self.live, "online_store", None) if self.live is not None else None
+        own = self.own
+        if store is None or own is None:
+            if self._network_shown:
+                self._network_shown = False
+                self.publish("network_traffic", [])
+            return
+        in_sim = {str(t.get("callsign") or "").replace(" ", "").upper() for t in self.traffic}
+        net = {"vatsim": "VATSIM", "ivao": "IVAO"}.get(store.network, store.network.upper())
+        shown = [{"id": f"net:{p['callsign']}", "callsign": p["callsign"], "type": f"{p['type']} {net}".strip(),
+                  "lat": p["lat"], "lon": p["lon"], "alt": p["alt"], "hdg": p["hdg"], "gs": p["gs"], "ground": p["ground"]}
+                 for p in store.pilots_near(own["lat"], own["lon"], NETWORK_TRAFFIC_NM) if p["callsign"] not in in_sim]
+        self._network_shown = bool(shown)
+        self.publish("network_traffic", shown)
+
+    def _online(self, error: str | None = None) -> None:
+        """The flight's frequencies for the Live Map (each airspace, its frequency and who works it: LocalTC, or VATSIM /
+        IVAO top-down), and with a network its controllers for the ATC tab: who covers the aircraft, who it should be
+        with, and whether COM1 is on one of theirs (LocalTC quiet)."""
+        engine = self.live.engine if self.live is not None else None
+        if engine is None:
+            return
+        try:
+            frequencies = engine.frequency_plan()
+        except Exception:  # noqa: BLE001 - a table for the map: never stops the flight
+            log.exception("The flight's frequency plan failed")
+            frequencies = []
+        if not engine.cfg.online_network:
+            self.online_view = {"frequencies": frequencies}
+            self.publish("online", self.online_view)
+            return
+        from localtc.atc_core import online as online_atc
+
+        own = engine.state.aircraft
+        here = {c.callsign for c in online_atc.covering(engine.online, own)} if own is not None else set()
+        best, tuned = engine.online_best, engine.online_tuned
+        self.online_view = {
+            "active": engine.cfg.online_network,
+            "error": error if error is not None else self.online_view.get("error", ""),
+            "controllers": [{"callsign": c.callsign, "mhz": c.frequency_mhz, "kind": c.kind, "covering": c.callsign in here,
+                             "best": best is not None and c.callsign == best.callsign,
+                             "tuned": tuned is not None and c.callsign == tuned.callsign}
+                            for c in sorted(engine.online, key=lambda c: (c.callsign not in here, c.callsign))
+                            if c.kind != "ATIS" or (tuned is not None and c.callsign == tuned.callsign)],
+            "muted": engine.online_muted,
+            "frequencies": frequencies,
+        }
+        self.publish("online", self.online_view)
+
     def state(self) -> dict:
         return {
             "status": self.status, "detail": self.status_detail,
@@ -322,6 +379,9 @@ class AppController:
             # that has seen the welcome already.
             "setup": not self.cfg.ui.setup_done and not self.cfg.ui.welcome_seen,
             "whats_new": self._whats_new(),
+            # VATSIM/IVAO beside LocalTC: on, the ATC tab asks which (``network`` "" until chosen); what's online.
+            "online": {"integration": self.cfg.atc.online_integration, "network": self.cfg.atc.online_network,
+                       **self.online_view},
         }
 
     def _whats_new(self) -> dict | None:
@@ -393,6 +453,10 @@ class AppController:
         cfg.source.kind = self.source_kind
         if self.plan is not None:
             apply_plan(self.plan, cfg.flight)
+        if online_network(cfg):
+            # VATSIM / IVAO hybrid: the network's aircraft are the traffic (the pilot client puts them in the sim, and
+            # ATC sees them there). LocalTC's real-world flights on top would be a second, different sky.
+            cfg.traffic.enabled = False
         return cfg
 
     @property
@@ -404,6 +468,9 @@ class AppController:
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
             raise HttpError(409, "a flight is already running")
+        if self.cfg.atc.online_integration and not self.cfg.atc.online_network:
+            raise HttpError(409, "Choose Only LocalTC, VATSIM hybrid or IVAO hybrid on the ATC tab before starting the flight")
+        self.online_view = {}
         if self.source_kind == "live" and next_shift(self.cfg.ui.last_flight_end, self.cfg.atc.shift, time.time()) != self.cfg.atc.shift:
             self.cfg.atc.shift += 1  # back after a break: other controllers on (saved with the flight count)
             log.info("ATC: a new shift (%d) since the last flight", self.cfg.atc.shift)
@@ -537,6 +604,7 @@ class AppController:
             try:
                 self.flight = self.flight_view()
                 self.publish("flight", self.flight)
+                self._network_traffic()
                 await self.pilot.live(self.companion_view())
             except Exception:
                 log.exception("Flight view failed")
@@ -664,6 +732,9 @@ class AppController:
                              "hdg": round(t.hdg_true), "gs": round(t.gs_kt), "ground": t.on_ground} for t in ev.targets]
             self.publish("traffic", self.traffic)
             return
+        if isinstance(ev, OnlineAtc | RadioTuned | PhaseChanged | AtcOperations) or (
+                isinstance(ev, AtcAlert) and ev.kind in ("online", "online_back", "online_gap")):
+            self._online(getattr(ev, "error", None))
         if isinstance(ev, TrafficControlStatus):  # LocalTC's traffic, for Quick Settings
             self.traffic_control = {"mode": ev.mode, "source": ev.source, "live": ev.live, "parked": ev.parked,
                                     "native": ev.native, "fsltl": ev.fsltl, "note": ev.note, "recent": list(ev.recent)}
@@ -1045,6 +1116,8 @@ class AppController:
             raise HttpError(400, "The intercom key can't be the push-to-talk key")
         if cfg.voice.cabin_key and cfg.voice.cabin_key in (cfg.voice.ptt_key, cfg.voice.intercom_key):
             raise HttpError(400, "The cabin key can't be the push-to-talk key or the intercom key")
+        if cfg.atc.online_integration and not self.cfg.atc.online_integration:
+            cfg.atc.online_network = ""  # turned on: the ATC tab asks which network before the next flight
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
         interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None
@@ -1065,7 +1138,8 @@ class AppController:
             if crew.model is not None:  # the copilot's model: its use and its checks from the next question
                 crew.model.mode = "off" if cfg.crew.llm == "off" else cfg.crew.mode
                 crew.model.beyond_facts = cfg.crew.beyond_facts
-        if cfg.traffic.enabled != self.cfg.traffic.enabled and self.live is not None:
+        hybrid = online_network(cfg)  # with a network, its aircraft are the traffic: LocalTC's never started then
+        if cfg.traffic.enabled != self.cfg.traffic.enabled and self.live is not None and not (cfg.traffic.enabled and hybrid):
             await self._traffic_on(cfg)
         if cfg.atc.taxi_guide and not self.cfg.atc.taxi_guide:
             from localtc import simpkg
@@ -1075,6 +1149,12 @@ class AppController:
                             "warn")
         if (guide := getattr(self.live, "guide", None) if self.live is not None else None) is not None:
             await guide.set_enabled(cfg.atc.taxi_guide)
+        if self.live is not None and online_network(cfg) != online_network(self.cfg):
+            self.live.set_online_network(online_network(cfg))  # Only LocalTC / VATSIM / IVAO hybrid: at once, in flight
+            if cfg.traffic.enabled:  # LocalTC's traffic off with a network (its aircraft are the traffic), back without
+                flying = msgspec.convert(msgspec.to_builtins(cfg), Config)
+                flying.traffic.enabled = not online_network(cfg)
+                await self._traffic_on(flying)
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()
@@ -1459,6 +1539,12 @@ class AppController:
 
 
 # --- views ----------------------------------------------------------------------------------------------------
+
+
+def online_network(cfg: Config) -> str:
+    """The network a flight is flown beside ("vatsim", "ivao"), or "": LocalTC only (the integration off, or chosen)."""
+    atc = cfg.atc
+    return atc.online_network if atc.online_integration and atc.online_network in ("vatsim", "ivao") else ""
 
 
 def own_view(ev: OwnshipState) -> dict:

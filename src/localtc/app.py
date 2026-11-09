@@ -90,6 +90,7 @@ def engine_config(flight: FlightConfig, atc: AtcConfig):
         arr_runway=flight.arr_runway or None,
         enforce_fpln_runways=atc.enforce_fpln_runways,
         traffic_runways=atc.traffic_runways,
+        online_network=atc.online_network if atc.online_integration and atc.online_network in ("vatsim", "ivao") else "",
         airport_fixes=str(data_dir() / "airport_fixes.toml"),
         route=tuple(RouteFix(ident=f.ident, lat=f.lat, lon=f.lon, alt_ft=f.alt_ft, stage=f.stage, time_s=f.time_s,
                              via=f.via) for f in flight.fixes),
@@ -574,6 +575,7 @@ async def run_session(
     guide = None
     ground = None
     engine = atc_service = None
+    online_store = None
     pm = None
     flight_log = None
     try:
@@ -632,6 +634,14 @@ async def run_session(
                     atc_service.weather_source = MetarStore().get
                     atc_service.atis_source = AtisStore().get
                     engine.real_weather_coming = True
+            if session.source_kind == "live" and engine.cfg.online_network:
+                from localtc.online import OnlineStore
+
+                # The online network's controllers ([atc] online_network), looked up each minute.
+                online_store = OnlineStore(engine.cfg.online_network)
+                atc_service.online_source = online_store.get
+                log.info("Online ATC: %s, LocalTC's ATC quiet on its controllers' frequencies",
+                         engine.cfg.online_network.upper(), extra=CONSOLE)
             consumers.append(asyncio.create_task(atc_service.run()))
             cabin = None
             if cfg.cabin.enabled:  # the cabin crew: the announcements, the service, "cabin, ..." on the intercom
@@ -725,7 +735,7 @@ async def run_session(
         if on_ready is not None:
             on_ready(LiveSession(cfg=cfg, bus=bus, source=source, session=session, engine=engine, atc=atc_service,
                                  voice=voice, speaker=speaker, recording=recorder.session_dir if recorder else None,
-                                 crew=pm, traffic=traffic, guide=guide, ground=ground))
+                                 crew=pm, traffic=traffic, guide=guide, ground=ground, online_store=online_store))
         waits = [asyncio.create_task(e.wait()) for e in (stop, arrived) if e is not None]
         await asyncio.wait({pump_task, *waits}, return_when=asyncio.FIRST_COMPLETED)
         for task in waits:
@@ -833,6 +843,7 @@ class LiveSession:
     traffic: object | None = None  # traffic.service.TrafficService (None when off)
     guide: object | None = None  # taxi_guidance.TaxiGuidance
     ground: object | None = None  # ground.service.GroundService (None when off)
+    online_store: object | None = None  # online.OnlineStore: the network's controllers and pilots (None: no network)
 
     def now(self) -> float:
         return self.source.clock.now()
@@ -841,6 +852,20 @@ class LiveSession:
         """A typed pilot transmission on COM1 (or COM2)."""
         if text.strip():
             self.bus.publish(Transcript(t=self.now(), text=text.strip(), radio=2 if radio == 2 else 1, source="typed"))
+
+    def set_online_network(self, network: str) -> None:
+        """Only LocalTC (""), VATSIM or IVAO hybrid, changed in flight: from now on, nothing restarted."""
+        if self.atc is None:
+            return
+        source = None
+        self.online_store = None
+        if network and self.session.source_kind == "live":
+            from localtc.online import OnlineStore
+
+            self.online_store = OnlineStore(network)
+            source = self.online_store.get
+        self.atc.set_online(network, source, self.now())
+        log.info("Online ATC: %s from now", network.upper() if network else "LocalTC only")
 
     def file_plan(self, plan) -> None:
         """A flight plan filed with the flight under way: ATC clears the flight with it from now on (a clearance
@@ -1167,6 +1192,9 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
                            vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
                            intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to)
+    if engine is not None:
+        # On a VATSIM/IVAO controller's frequency the pilot talks to them through the network's client: not transcribed.
+        service.skip_radio = lambda: getattr(engine, "online_muted", False)
     ptt = None
     if v.ptt == "keyboard":
         from localtc.stt.ptt import KeyboardPtt

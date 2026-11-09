@@ -7,6 +7,40 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
+- **VATSIM/IVAO controller integration:** turn it on in Quick Settings → ATC, and the ATC tab asks before each flight
+  whether it's flown with Only LocalTC, VATSIM hybrid (+ LocalTC) or IVAO hybrid (+ LocalTC), with the rule explained beside it (Start waits for the choice). With a network, its controllers around
+  the route are looked up each minute from its public data feed. Their sectors are LocalTC's own: a centre works its FIR
+  and an approach its approach area, the same outlines LocalTC hands flights between and the Live Map draws (one with
+  no outline, up to 60 nm round its airport and never across into the next FIR: Zurich's approach doesn't work
+  Milan); delivery,
+  ground and tower their own airport (a tower its zone too, never the next field's). The networks' top-down rule is
+  kept: a controller works the positions below theirs that nobody's on, in their own airspace, never one above (an
+  approach with no tower or ground does all three, a tower with no ground does ground, a centre with nobody below does
+  everything, a tower never works an approach). When one works your airspace for the phase you're in, the copilot says
+  "VATSIM connection for this airspace, set 121.800 on COM1"; when the one you're on can't work the next phase and
+  nobody online can (their ground, at the runway, with no tower, approach or centre), it gives you LocalTC's controller
+  and frequency for it. While COM1 is on
+  their frequency (or the network's ATIS), LocalTC's controllers and its other traffic stay quiet, nothing is said on
+  the radio for you, and your push-to-talk isn't recorded or transcribed: you're talking to a person through the
+  network's own client. The copilot carries on with its callouts, checklists and warnings on the intercom; a call it
+  would have made on the radio it hands to you. Off their frequency, or once they log off, LocalTC's ATC takes the
+  flight on from where it is. The choice can be changed in flight too: it applies at once, nothing restarted.
+  On their frequency LocalTC's last level, heading, speed and squawk are theirs: neither LocalTC nor the copilot holds
+  you to them, and the flight plan waits. Off it (their "contact unicom" too), the copilot says once which LocalTC
+  controller to call: the airspace after the one the network's controller worked, along the flight (released by an
+  online FIR, the next FIR, never LocalTC's version of the one you left), and LocalTC carries on from there with the
+  plan. LocalTC's own controllers hand you over too, saying only where, by the network's airspace ("contact Roma
+  Radar 124.2"); the copilot is the one who says it's VATSIM's or IVAO's, once a controller, after your readback (or
+  once you're on their frequency), never over the controller. An online controller that released you isn't
+  proposed again (nor any other sector of that airspace: Wien's other radar too) for twenty minutes or until you've
+  left it, and a route clipping it again along a border stays with the centre it's with. On an online controller's frequency a few miles before their
+  airspace (they asked on the network's chat), you're with them: no "nobody online" from the copilot; that's only for
+  a position below the one the flight needs (their ground, at the runway) with nobody above online.
+- **The flight's frequencies on the Live Map:** a table on the left with every airspace of the flight in the order it's
+  flown (the departure's delivery, ground, tower and departure, each FIR along the route, the arrival, tower and ground),
+  its frequency, and who works it: LocalTC's controller, or the online network's (marked where it's top-down, working a
+  position below its own that nobody's on). It's worked out by the ATC with the rule it flies by, and the row COM1 is on
+  is lit.
 - **Ground crew:** the turnaround and the push by voice, with no menus. Call them on the ramp frequency, 119.990 at every
   airport (RAMP in the frequency list, or "tune ramp" to the copilot), or on the intercom starting with "ramp". Off by
   default, in Settings → Ground crew.

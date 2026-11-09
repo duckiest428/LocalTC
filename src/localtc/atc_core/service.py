@@ -12,12 +12,14 @@ from typing import Any
 import msgspec
 
 from localtc.airports import AirportCache
+from localtc.atc_core import online as online_atc
 from localtc.atc_core.engine import AtcEngine
 from localtc.bus import EventBus
 from localtc.sim_api import (
     SIM_EVENT_TYPES,
     AirportData,
     AtcAlert,
+    OnlineAtc,
     PttPressed,
     PttReleased,
     RequestAirportData,
@@ -34,6 +36,8 @@ log = logging.getLogger(__name__)
 # way in, and it was the one fetched an hour before.
 ATIS_NEAR_NM, ATIS_NEAR_S = 300.0, 60.0
 WEATHER_CHECK_S = 30.0  # the airports' METARs looked at this often (session time); fetched in the background
+ONLINE_CHECK_S = 20.0  # the online network's controllers looked at this often (session time; the store fetches each minute) ...
+ONLINE_FIRST_S = 5.0  # ... and this often until its first list is in
 
 
 class AtcService:
@@ -57,6 +61,11 @@ class AtcService:
         self._weather_t = -WEATHER_CHECK_S
         self._weather_sent: dict[str, str] = {}  # icao: the METAR last published for it
         self.atis_source: Callable[[str], list | None] | None = None  # the real ATIS (the app's ``AtisStore.get``)
+        # The online network's controllers (``localtc.online.OnlineStore.get``: (list or None, error)), or None: no network.
+        self.online_source: Callable[[], tuple] | None = None
+        self.online_network = engine.cfg.online_network  # the network its lists are for (changed in flight: set_online)
+        self._online_t = -ONLINE_CHECK_S
+        self._online_sent: tuple | None = None
         # Subscribe now, not in run(): a fast source could publish everything before run() starts.
         # Only inputs: the engine's own outputs (AtcTransmission, PhaseChanged, ...) are not fed back in.
         self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased)
@@ -91,6 +100,7 @@ class AtcService:
                     log.exception("Copilot failed on %s", type(event).__name__)
             await self._fetch_airports(event.t)
             self._fetch_weather(event.t)
+            self._fetch_online(event.t)
 
     async def _copilot(self, event, outputs) -> None:
         for observed in (event, *outputs):
@@ -125,6 +135,42 @@ class AtcService:
                 await self.source.send(RequestAirportData(icao=icao))
             else:
                 log.warning("No airport data for %s", icao)
+
+    def _fetch_online(self, t: float) -> None:
+        """The online network's controllers around the flight and its route, published when they change (recorded, and
+        the engine works to them: ``OnlineAtc``)."""
+        network = self.online_network
+        if self.online_source is None or not network:
+            return
+        if t - self._online_t < (ONLINE_CHECK_S if self._online_sent is not None else ONLINE_FIRST_S):
+            return
+        self._online_t = t
+        try:
+            controllers, error = self.online_source()
+        except Exception:  # noqa: BLE001 - the network is a nicety: never stops ATC
+            log.exception("The online controllers failed")
+            return
+        if controllers is None:
+            return
+        engine = self.engine
+        own = engine.state.aircraft
+        points = [(own.lat, own.lon)] if own is not None else []
+        for icao in (engine.state.flight.origin, engine.state.flight.destination):
+            geo = engine.geometry(icao) if icao else None
+            if geo is not None:
+                points.append((geo.airport.lat, geo.airport.lon))
+        points += [(f.lat, f.lon) for f in engine.cfg.route]
+        kept = tuple(sorted(online_atc.relevant(controllers, points), key=lambda c: c.callsign)) if points else ()
+        if kept != self._online_sent:
+            self._online_sent = kept
+            self.bus.publish(OnlineAtc(t=t, network=network, controllers=kept, error=error))
+
+    def set_online(self, network: str, source: Callable[[], tuple] | None, t: float) -> None:
+        """Another network chosen in flight ("" LocalTC only): its lists from now on, and the engine told (an
+        ``OnlineAtc`` of it, recorded, with nobody in it yet: the next fetch fills it)."""
+        self.online_network, self.online_source = network, source
+        self._online_sent, self._online_t = None, -ONLINE_CHECK_S
+        self.bus.publish(OnlineAtc(t=t, network=network, controllers=()))
 
     def _near(self, icao: str) -> bool:
         """Within ``ATIS_NEAR_NM`` of ``icao``, the destination, in the air."""

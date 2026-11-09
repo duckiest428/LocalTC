@@ -66,6 +66,7 @@ from localtc.sim_api import (
 from localtc.sim_api.geo import haversine_nm
 
 SAFETY, ROUTINE, CHATTER = 3, 2, 1
+ONLINE_ALERT = re.compile(r"^(\S+) connection for this airspace: (\S+), set ([\d.]+) on COM1")  # atc_core's "online" alert
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
 JOINED_PHASES = ("DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH", "LANDING", "TAXI_IN")  # LocalTC started in these: joined in flight
 GAP_S = 8.0  # between two of the copilot's own routine calls: a person, not a feed
@@ -242,6 +243,7 @@ class Monitor(WatchMixin):
         self.checklist_setting = "offer"  # offer, run, off ([crew] checklists)
         self.checklist_events: list = []  # ChecklistState, for the app and the replay
         self.handoff: tuple[float, Any] | None = None  # (when, the facility ATC sent the flight to)
+        self._online_told_to: tuple[float, str] | None = None  # (when, the LocalTC station) said off an online network
         self.cleared_alt: int | None = None
         self._final_side: float | None = None  # which side of the final the aircraft was, cleared for the approach
         self.cleared_heading: tuple[int, float] | None = None
@@ -323,8 +325,32 @@ class Monitor(WatchMixin):
             self.vars.update(ev.values)
         elif isinstance(ev, AtcAlert) and ev.kind == "joined" and self.engine is not None \
                 and (to := getattr(self.engine, "joined_to", None)) is not None and self.radio_mode() != "full":
-            # (The copilot on the radio calls them itself.)
-            self._call("joined", ROUTINE, t, f"We should be with {to.station}, {speech.frequency_display(to.mhz)}.")
+            # (The copilot on the radio calls them itself.) Just off an online network, it's said already, with why.
+            told = self._online_told_to
+            if told is None or told[1] != to.station or t - told[0] > 15.0:
+                self._call("joined", ROUTINE, t, f"We should be with {to.station}, {speech.frequency_display(to.mhz)}.")
+        elif isinstance(ev, AtcAlert) and ev.kind == "online" and (heard := ONLINE_ALERT.search(ev.detail or "")):
+            # An online network's controller works the airspace (the ATC hands over to them, or the copilot says
+            # so first): the copilot is the one who says it's the network's, once a controller, whatever the verbosity.
+            net, callsign, mhz = heard.group(1), heard.group(2), float(heard.group(3))
+            self._call(f"online:{callsign}", SAFETY, t, f"{net} connection for this airspace, set "
+                                                       f"{speech.frequency_display(mhz)} on COM1.", again_s=600.0)
+        elif isinstance(ev, AtcAlert) and ev.kind == "online_gap" and self.engine is not None and (
+                (local := getattr(self.engine, "online_gap", None)) is not None):
+            # On the network's frequency, but nobody online works this phase: LocalTC's controller, and where.
+            self._call(f"online_gap:{local.station}", SAFETY, t, f"Nobody online for this, it's LocalTC's {local.station}, "
+                                                                 f"{speech.frequency_display(local.mhz)}.", again_s=600.0)
+        elif isinstance(ev, AtcAlert) and ev.kind == "online_back":
+            # Off the network's frequency (their "contact unicom" too): LocalTC's controller for where we are, once.
+            network = getattr(self.engine.cfg, "online_network", "") if self.engine is not None else ""
+            net = {"vatsim": "VATSIM", "ivao": "IVAO"}.get(network, "the network")
+            to = getattr(self.engine, "online_back_to", None) if self.engine is not None else None
+            if to is not None:
+                self._online_told_to = (t, to.station)
+                self._call(f"online_back:{to.station}", SAFETY, t, f"We're out of {net} coverage. LocalTC's {to.station}, "
+                                                                   f"{speech.frequency_display(to.mhz)}.", again_s=60.0)
+            else:
+                self._call("online_back", SAFETY, t, f"We're out of {net} coverage, LocalTC ATC is back.", again_s=60.0)
         elif isinstance(ev, AtcAlert) and ev.kind == "emergency_cancelled":
             # Over (or never one): no more "squawk 7700?", no diversion to offer.
             self.offer = None
@@ -1358,6 +1384,9 @@ class Monitor(WatchMixin):
     def _radio(self, own: OwnshipState, t: float) -> None:
         st = self.engine.state if self.engine is not None else None
         if st is None:
+            return
+        if getattr(self.engine, "online_muted", False):
+            self.handoff = None  # with an online controller: LocalTC's handoffs are no reminders to give
             return
         if self.handoff is not None:
             when, facility = self.handoff

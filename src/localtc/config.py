@@ -172,6 +172,12 @@ class AtcConfig(_Section):
     # flight isn't sent head-on into it; off: by the wind alone.
     traffic_runways: bool = True
     real_gates: bool = True  # the airports' real gate names and international gates, from OpenStreetMap
+    # VATSIM/IVAO controller integration: on, each flight is flown with "local" (LocalTC's ATC alone), "vatsim" or
+    # "ivao" (online_network, chosen on the ATC tab before the flight starts: "" not chosen yet). With a network, its
+    # controllers around the route are looked up each minute, the copilot says when one covers the airspace, and
+    # LocalTC's ATC is quiet while COM1 is on one of theirs; it takes the flight back where none is.
+    online_integration: bool = False
+    online_network: Literal["", "local", "vatsim", "ivao"] = ""
     callsign_check: bool = True  # another aircraft's callsign heard (or one digit off on a new call): "say again your callsign"
     # Each station a controller with a manner of their own (calm, formal, friendly, strict, hurried, dry, conversational):
     # their greetings, acknowledgements, corrections and pace, and how the language model words their replies. The

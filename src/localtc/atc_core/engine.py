@@ -23,6 +23,7 @@ import msgspec
 from localtc.sim_api.ramp import on_ramp
 from localtc.atc_core import chatter, disfluency, personality, procedures, radio_range, vectors
 from localtc.atc_core import region as regions
+from localtc.atc_core import online as online_atc
 from localtc.atc_core.airport import (
     AirportGeometry,
     TaxiGraph,
@@ -115,6 +116,8 @@ from localtc.sim_api import (
     AircraftIdentity,
     AtcOperations,
     NoticesReport,
+    OnlineAtc,
+    OnlineController,
     OpsSnapshot,
     TerrainGrid,
     Airport,
@@ -154,6 +157,10 @@ ROUTES_FROM_KEPT = 400  # other aircraft's routes from where they were, kept thi
 STAR_INTERCEPT_AGL_FT = 3000  # an ILS final joined about this high above the field, where nothing better is known
 KNOWN_FIX_RATIO = 0.6  # a misheard fix name this like a known one is that one ("knob" and NOBKE: 0.67)
 STAR_FLOOR_MAX_FT = 18000  # a plan's last arrival altitude above this is its predicted profile, not where a STAR ends
+# COM1 on an online network's controller: what LocalTC's ATC would have said, it doesn't (``AtcEngine.online_muted``).
+ONLINE_QUIET = (AtcTransmission, RadioChatter, AtcThinking, ReadbackEvaluated)
+ONLINE_RELEASED_S = 1200.0  # an online airspace that let the flight go isn't proposed again for this long
+ONLINE_TELL_AGAIN_S = 600.0  # a controller the pilot was told of and didn't call: said again after this long
 # The calls to LocalTC's real flights (``traffic_call``), and the controller who makes each.
 TRAFFIC_CALLS = {"clearance": "clearance", "pushback": "ground", "taxi_out": "ground", "taxi_in": "ground",
                  "lineup": "tower", "takeoff": "tower", "land": "tower", "go_around": "tower", "hold_short": "tower",
@@ -506,6 +513,9 @@ class EngineConfig:
     atis_source: str = "hybrid"  # sim, real, hybrid (``_atis_inputs``)
     destination_weather: bool = True  # a far airport's runway from its weather or calm; off: the wind here (older ones)
     gate_radius_m: float = 30.0  # this close to a gate or parking spot at the destination is parked at it (``arrived``)
+    # The online network flown beside LocalTC ("vatsim", "ivao"; "": LocalTC's ATC alone): with COM1 on one of its
+    # controllers covering the aircraft, LocalTC's ATC is quiet; the pilot is told when one covers the airspace.
+    online_network: str = ""
 
 
 @dataclass
@@ -669,6 +679,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._continued_t = -math.inf  # when tower last said "continue" for traffic on the runway
         self._gate_changed = False  # a gate asked for (Airport Ops) after the taxi in was given: a new route
         self._gate_asked = False  # a gate the pilot asked for and got (the gate map): theirs, shown
+        self._routes_from: dict[tuple, tuple[str, ...]] = {}  # other aircraft's taxi routes from where they were
         self._star_legs: dict[str, tuple] = {}  # the destination's arrivals (the sim's navdata) by name
         self._radar_seen: dict[str, Facility] = {}
         self._expected_runway: str | None = None  # the runway the IFR clearance said to expect
@@ -709,6 +720,21 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._arrived = False  # ... and said so (once a flight)
         self._landed = False  # landed and taxiing in, this session
         self._callsign_asked: tuple[Transcript, Facility] | None = None  # the call that got "say again your callsign"
+        # Online ATC ([atc] online_network): the network's controllers around the flight (``OnlineAtc``), the one it
+        # should be with (told to the pilot when it changes), the one COM1 is on (LocalTC quiet then).
+        self.online: tuple[OnlineController, ...] = ()
+        self.online_best: OnlineController | None = None
+        self.online_tuned: OnlineController | None = None
+        self.online_gap: Facility | None = None  # LocalTC's controller for what nobody online works now
+        self.online_back_to: Facility | None = None  # ... and the one to go to, just off the network's frequency
+        self._online_told: dict[str, float] = {}  # callsign: when the pilot was told to call them
+        # The airspaces whose online controllers released the flight ("contact unicom"): none of that airspace's
+        # controllers (Wien's other sector too) is proposed again until the flight has left it (their outline round
+        # the flight is a guess; their word that it's left is not). By ``online_atc.airspace_of``.
+        self._online_released: dict[str, float] = {}  # airspace: when released
+        # LocalTC's handovers to an online controller, by instruction: the copilot's "IVAO connection ..." waits for
+        # the pilot's readback (or the pilot on their frequency), never said over the controller.
+        self._online_after_readback: dict[str, tuple[str, str]] = {}  # instruction id: (callsign, the alert's words)
 
     # --- public ---------------------------------------------------------------------------
 
@@ -725,7 +751,36 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # Everything said in this step is worded for where the controller the pilot is talking to sits.
         self.region = self._region()
         with regions.speaking(self.region):
-            return self._handle(event)
+            out = self._handle(event)
+        if self._online_after_readback:
+            out += self._online_reminders(event, out)
+        if self.online_muted:
+            out = [self._as_online(e) for e in out if not isinstance(e, ONLINE_QUIET)]
+        return out
+
+    def _online_reminders(self, event: BusEvent, out: list[BusEvent]) -> list[BusEvent]:
+        """The copilot's "IVAO connection ..." for a handover LocalTC's controller made: once the pilot has read it
+        back, or is on the network controller's frequency already."""
+        said: list[BusEvent] = []
+        read = {e.instruction_id for e in out if isinstance(e, ReadbackEvaluated)}
+        tuned = self.online_tuned.callsign if self.online_tuned is not None else None
+        for iid, (callsign, words) in list(self._online_after_readback.items()):
+            if iid in read or callsign == tuned:
+                del self._online_after_readback[iid]
+                said.append(self._alert(event.t, "online", words))
+        return said
+
+    @property
+    def online_muted(self) -> bool:
+        """COM1 on an online network's controller covering the aircraft: LocalTC's ATC says nothing."""
+        return self.online_tuned is not None
+
+    def _as_online(self, event: BusEvent) -> BusEvent:
+        """COM1 tuned to the online controller: the radio log names them."""
+        if isinstance(event, RadioTuned) and (c := self.online_tuned) is not None:
+            return RadioTuned(t=event.t, radio=event.radio, frequency_mhz=event.frequency_mhz, controller="online",
+                              station=f"{c.callsign} ({online_atc.network_name(self.cfg.online_network)})")
+        return event
 
     def _region(self) -> regions.Region:
         """FAA or ICAO, and the transition altitude: from the facility tuned (its airport, or for a centre
@@ -818,6 +873,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 self._watch_runway_flow(event.t)
             self._seen_airborne.update(target.object_id for target in event.targets if not target.on_ground)
             self._note_wake(event.t)
+        elif isinstance(event, OnlineAtc):
+            if (event.network or "") != self.cfg.online_network:
+                out += self._online_switch(event.network)  # the pilot changed it in flight: from now on
+            self.online = event.controllers if self.cfg.online_network else ()
         elif isinstance(event, OwnshipState):
             out += self._on_ownship(event)
         elif isinstance(event, PttPressed):
@@ -833,8 +892,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._ptt_since = self._stt_since = None
             if event.source == "copilot":
                 self._radio_busy_until = max(self._radio_busy_until, event.t + self._speech_s(event.text))
-            if event.text.strip():  # an empty one: push-to-talk carried no speech, nothing to answer
-                out += self._on_pilot(event)
+            if event.text.strip() and not (self.online_muted and event.radio != 0):
+                out += self._on_pilot(event)  # (empty: push-to-talk carried no speech; online: theirs to answer)
             self._tx_mhz = None
         out += self._flush(event.t)
         out += self._release_later(event.t)
@@ -1328,6 +1387,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         change = self.tracker.handle(raw)
         ctx = self.tracker.context
         out: list[BusEvent] = []
+        if self.cfg.online_network:
+            out += self._online_update(own)
 
         self._find_origin(own, ctx.airport)
         dest = st.flight.destination
@@ -1390,8 +1451,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             out += self._on_phase_change(change, own)
         if self._joining is not None:
             out += self._joined_with(own)
-        if not self.tracker.paused:
-            out += self._monitor(own)  # paused, the world stands still: no calls of ATC's own
+        if not self.tracker.paused and not self.online_muted:
+            out += self._monitor(own)  # paused, the world stands still: no calls of ATC's own (online: none of LocalTC's)
         out += self._arrived_at_gate(own)
         out += self._pending_alerts
         self._pending_alerts = []
@@ -1447,6 +1508,233 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                  if math.dist(here, geo.xy(p.lat, p.lon)) <= max(p.radius_m, self.cfg.gate_radius_m)]
         return "parking" if spots else None
 
+    def _online_update(self, own: OwnshipState) -> list[BusEvent]:
+        """The online network beside LocalTC: the pilot told when one of its controllers works the airspace and phase
+        (top-down: ``atc_core.online``) and COM1 isn't on someone who does, told when nobody online does any more
+        (LocalTC's controller then, and its frequency), LocalTC quiet while COM1 is on one of theirs, back when not."""
+        out: list[BusEvent] = []
+        net = online_atc.network_name(self.cfg.online_network)
+        was = self.online_tuned
+        self.online_tuned = tuned = online_atc.tuned_to(self.online, own)
+        phase = self.state.phase or P.PARKED.value
+        self.online_best = best = online_atc.best(self.online, own, phase)
+        needed = online_atc.need(phase, own)
+        if was is None and tuned is not None:
+            self._online_quiet()
+            logging.getLogger(__name__).info("ATC: with %s %s, LocalTC quiet", net, tuned.callsign)
+        elif was is not None and tuned is None:
+            out += self._online_back(own, was, net)
+        # Out of a releasing controller's airspace now: theirs to propose again if the flight comes back in.
+        # A route along a border clips the airspace that let the flight go again a few minutes later (the tip of
+        # Austria between Slovenia and Italy): it stays released a while, whatever the outline says.
+        self._online_released = {a: when for a, when in self._online_released.items()
+                                 if own.t - when < ONLINE_RELEASED_S
+                                 or any(online_atc.airspace_of(o) == a and online_atc.covers(o, own) for o in self.online)}
+        if best is not None and online_atc.airspace_of(best) in self._online_released:
+            self.online_best = best = None  # they let the flight go: LocalTC's (the copilot says which)
+        # COM1 on someone doing this phase's job: in their airspace, or a few miles short of it on a position up to it
+        # (Wien Radar called before the boundary: they asked the pilot to, on the network's chat). Only a position
+        # below the one needed (their ground, at the runway) leaves the flight to LocalTC.
+        served = tuned is not None and (online_atc.works(tuned, needed, own) or online_atc.ranks_for(tuned, needed))
+        self.online_gap = None
+        if tuned is not None:
+            self.online_back_to = None
+        if best is not None and not served and not online_atc.same_mhz(own.tx_mhz, best.frequency_mhz) \
+                and own.t - self._online_told.get(best.callsign, -ONLINE_TELL_AGAIN_S) >= ONLINE_TELL_AGAIN_S:
+            # On one of LocalTC's controllers: they hand over, and the copilot says it's the network's after the
+            # readback. Nobody of LocalTC's to say it (unicom): the copilot, now.
+            if not self._online_handoff(own, best, needed) and self._online_tell(best.callsign, own.t):
+                out.append(self._alert(own.t, "online", f"{net} connection for this airspace: {best.callsign}, set "
+                                                        f"{online_atc.frequency_text(best.frequency_mhz)} on COM1"))
+        elif best is None and tuned is not None and not served:
+            # On a network frequency whose controller doesn't work this (ground, with the flight at the runway and no
+            # tower, approach or centre online): LocalTC's controller for it, and where.
+            self.online_gap = local = self._after_online(tuned) or self._local_for(needed, own)
+            if self._online_tell(f"gap:{needed}:{tuned.callsign}", own.t):
+                out.append(self._alert(own.t, "online_gap", f"No {net} controller for this from {tuned.callsign}: "
+                                                            f"LocalTC's {local.station}, set {local.mhz:.3f} on COM1"))
+        return out
+
+    def _online_handoff(self, own: OwnshipState, to: OnlineController, needed: str) -> bool:
+        """The LocalTC controller working the flight hands it to the network's, as a controller would: "Itarrow 1128,
+        contact Milano Radar 126.750, online on VATSIM" (the airspace by LocalTC's name for it). Only when the pilot
+        is on one of LocalTC's controllers and nothing else is being said to them."""
+        tuned = self.state.comms.tuned
+        if tuned is None or not tuned.matches(own.tx_mhz) or self.online_tuned is not None \
+                or online_atc.same_mhz(own.tx_mhz, to.frequency_mhz) \
+                or any(item.handoff_to is not None for item in self._scheduled):
+            return False  # (COM1 on unicom, just off the network: no LocalTC controller there to say anything)
+        local = self._local_for(needed, own)
+        station = local.station
+        if to.kind in ("CTR", "FSS") and (area := online_atc.area_of(to)) is not None:
+            station = area.name  # their airspace's name ("Roma Radar" for LIRR_NE_CTR), not the sector still flown
+        self._schedule(own.t, "common.contact", {"station": station, "frequency": to.frequency_mhz}, tuned,
+                       handoff_to=Facility(local.controller, station, to.frequency_mhz, local.airport))
+        return True
+
+    def _online_tell(self, key: str, t: float) -> bool:
+        """Once, and again after ``ONLINE_TELL_AGAIN_S`` if nothing came of it."""
+        if t - self._online_told.get(key, -ONLINE_TELL_AGAIN_S) < ONLINE_TELL_AGAIN_S:
+            return False
+        self._online_told[key] = t
+        return True
+
+    def _after_online(self, left: OnlineController) -> Facility | None:
+        """LocalTC's controller for the airspace after the ones ``left`` worked, along the flight (the frequency
+        plan): released by an online approach, the centre beyond it; by an online FIR, the next FIR, not LocalTC's
+        version of the one just left. None: nothing of theirs on the plan (or someone online has the next one too:
+        the pilot is told of them)."""
+        rows = self._airspaces()
+        theirs = [i for i, (_, _, c) in enumerate(rows) if c is not None and c.callsign == left.callsign]
+        if not theirs:
+            return None
+        # Their airspace on the way out, or on the way in (an approach can work both ends of a short flight).
+        runs = [[theirs[0]]]
+        for i in theirs[1:]:
+            if i == runs[-1][-1] + 1:
+                runs[-1].append(i)
+            else:
+                runs.append([i])
+        run = runs[-1] if self._arriving else runs[0]
+        for _, local, c in rows[run[-1] + 1:]:
+            if c is not None:
+                return None
+            if local is not None:
+                return local
+        return None
+
+    def _local_for(self, needed: str, own: OwnshipState) -> Facility:
+        """LocalTC's controller for a position the network has nobody on: in the air, the one LocalTC itself would
+        have the flight with where it is (as joining in flight works it out: at 24,000 ft over Malpensa that's the
+        centre, not departure); on the ground, the working airport's (the next one up it has), else the centre."""
+        phase = P(self.state.phase) if self.state.phase else P.PARKED
+        if not own.on_ground and phase in JOIN_PHASES and (to := self._join_target(own, phase)) is not None:
+            return to
+        airport = self._working_airport()
+        ladder = {"DEL": ("clearance", "ground", "tower"), "GND": ("ground", "tower"), "TWR": ("tower",),
+                  "APP": ("approach", "departure") if self._arriving else ("departure", "approach")}.get(needed, ())
+        for controller in ladder:
+            found = next((f for f in self.facilities if f.controller == controller and f.airport == airport), None)
+            if found is not None:
+                return found
+        return self._sector_candidate(own) or self._center()
+
+    def frequency_plan(self) -> list[dict[str, Any]]:
+        """The flight's airspaces in order, each with its frequency and who works it: the departure's delivery, ground,
+        tower and departure, the FIRs along the route, the destination's arrival, tower and ground. With an online
+        network, a position its controllers work (their own, or top-down one below theirs nobody's on) is theirs,
+        worked out as the flight will be (``online_atc.pick``); the rest is LocalTC's."""
+        return [row for row, _, _ in self._airspaces()]
+
+    def _airspaces(self) -> list[tuple[dict[str, Any], Facility | None, OnlineController | None]]:
+        """``frequency_plan``'s rows, each with LocalTC's controller for it and the online one working it (or None)."""
+        st = self.state
+        network = self.cfg.online_network
+        online = self.online if network else ()
+        net = online_atc.network_name(network) if network else ""
+        rows: list[tuple[dict[str, Any], Facility | None, OnlineController | None]] = []
+        taken = tuple(f.mhz for f in self.facilities if f.controller != "center")
+
+        def local_at(geo, *controllers: str) -> Facility | None:
+            for controller in controllers:
+                found = next((f for f in self.facilities if f.controller == controller and f.airport == geo.icao), None)
+                if found is not None:
+                    return found
+            return None
+
+        def row(space: str, part: str, needed: str, local: Facility | None, where: OwnshipState) -> None:
+            c = online_atc.pick(online, where, needed) if online else None
+            if c is not None:
+                rows.append(({"space": space, "part": part, "position": needed, "mhz": c.frequency_mhz, "who": net,
+                              "station": c.callsign, "online": True, "top_down": c.kind != needed}, local, c))
+            elif local is not None:
+                rows.append(({"space": space, "part": part, "position": needed, "mhz": local.mhz, "who": "LocalTC",
+                              "station": local.station, "online": False, "top_down": False}, local, None))
+
+        def airport_rows(geo, part: str, arriving: bool) -> None:
+            a = geo.airport
+            ground = online_atc.point(a.lat, a.lon, ground=True, alt_ft=a.elev_ft, agl_ft=0.0)
+            up = online_atc.point(a.lat, a.lon, ground=False, alt_ft=a.elev_ft + 6000, agl_ft=6000.0)
+            terminal = ("approach", "departure") if arriving else ("departure", "approach")
+            ordered = [("Delivery", "DEL", ("clearance", "ground", "tower"), ground),
+                       ("Ground", "GND", ("ground", "tower"), ground), ("Tower", "TWR", ("tower",), ground),
+                       ("Arrival" if arriving else "Departure", "APP", terminal, up)]
+            if arriving:
+                ordered = [ordered[3], ordered[2], ordered[1]]  # the way in: approach, tower, ground
+            for name, needed, controllers, where in ordered:
+                local = local_at(geo, *controllers)
+                if local is None and needed == "APP" and (area := self.airspace.center_at(a.lat, a.lon)) is not None:
+                    # No approach of its own in the sim's data (Linate): the centre works its arrivals and departures.
+                    nearby = [g.airport for g in self.tracker.context_builder.airports.values()
+                              if g.distance_nm(a.lat, a.lon) < SECTOR_NEAREST_NM]
+                    local = area_center(area.name, nearby, None, taken)
+                row(f"{geo.icao} {name}", part, needed, local, where)
+
+        origin, dest = self.geometry(st.flight.origin), self.geometry(st.flight.destination)
+        if origin is not None:
+            airport_rows(origin, "departure", False)
+        ends = [(g.airport.lat, g.airport.lon) for g in (origin, dest) if g is not None]
+        path = ends[:1] + [(f.lat, f.lon) for f in self.cfg.route] + ends[1:]
+        cruise = float(st.assignments.cruise_ft or st.flight.cruise_ft or 30000)
+        seen: list[str] = []
+        for lat, lon in online_atc.along(path) if len(path) >= 2 else path:
+            area = self.airspace.center_at(lat, lon)
+            if area is None or (seen and seen[-1] == area.id):
+                continue
+            seen.append(area.id)
+            nearby = [g.airport for g in self.tracker.context_builder.airports.values()
+                      if g.distance_nm(lat, lon) < SECTOR_NEAREST_NM]
+            row(f"{area.name} ({area.id})", "enroute", "CTR", area_center(area.name, nearby, None, taken),
+                online_atc.point(lat, lon, ground=False, alt_ft=cruise, agl_ft=cruise))
+        if dest is not None:
+            airport_rows(dest, "arrival", True)
+        return rows
+
+    def _online_quiet(self) -> None:
+        """With the online controller now: whatever LocalTC had to say, or waited for, is theirs, and so are the
+        level, heading, speed and squawk (theirs to give: LocalTC's last ones aren't checked, by it or the copilot).
+        The flight plan waits until LocalTC has the flight again."""
+        self._scheduled = []
+        self.state.pending = None
+        self._joining = None
+        a = self.state.assignments
+        a.altitude_ft = a.heading = a.speed_kt = a.squawk = None
+
+    def _online_switch(self, network: str) -> list[BusEvent]:
+        """The pilot chose another network in flight (Only LocalTC, VATSIM hybrid, IVAO hybrid): from now on, nothing
+        restarted. With COM1 on the old network's controller, LocalTC takes the flight on from where it is."""
+        was, old = self.online_tuned, self.cfg.online_network
+        self.cfg.online_network = network if network in online_atc.NETWORKS else ""
+        self.online, self.online_best, self.online_tuned, self.online_gap = (), None, None, None
+        self._online_told.clear()
+        logging.getLogger(__name__).info("ATC: online network now %s", self.cfg.online_network or "none")
+        own = self.state.aircraft
+        if was is None or own is None:
+            return []
+        now = online_atc.network_name(self.cfg.online_network) if self.cfg.online_network else "LocalTC only"
+        return self._online_back(own, was, online_atc.network_name(old), why=f"{now} now")
+
+    def _online_back(self, own: OwnshipState, left: OnlineController, net: str, *, why: str = "") -> list[BusEvent]:
+        """Off the online controller's frequency (retuned, they're gone, or the pilot left the network): LocalTC's ATC
+        takes the flight on from where it is, as if it had just joined it (what the network's controllers gave is taken
+        as given)."""
+        st, t = self.state, own.t
+        gone = all(c.callsign != left.callsign for c in self.online)
+        st.comms.last_atc_t = st.comms.last_pilot_t = t  # no "how do you read?" the moment it's back
+        phase = P(st.phase) if st.phase else P.PARKED
+        if phase in JOIN_PHASES:
+            self._join_in_progress(own, phase)
+        elif phase is not P.PARKED:
+            st.clearances.setdefault("ifr", Clearance("ifr", "clearance.ifr", "clearance", t, readback="correct"))
+        # Where the pilot goes now (the network's "contact unicom 122.8" isn't it): LocalTC's controller for here.
+        self.online_back_to = self._after_online(left) or self._local_for(online_atc.need(st.phase or P.PARKED.value,
+                                                                                           own), own)
+        logging.getLogger(__name__).info("ATC: off %s %s, LocalTC back", net, left.callsign)
+        if not gone:
+            self._online_released[online_atc.airspace_of(left)] = own.t  # sent on: their airspace isn't proposed again
+        why = why or (f"{left.callsign} has left {net}" if gone else f"off {left.callsign}")
+        return [self._alert(t, "online_back", f"{why}: LocalTC ATC is back")]
+
     def _join_in_progress(self, own: OwnshipState, phase: P) -> None:
         """LocalTC started with the flight already under way (the app restarted in the air, a flight loaded in the
         cruise): what happened before is taken as done, as it would have been. The IFR clearance, the takeoff and the
@@ -1481,11 +1769,27 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """Joined in flight: the controller the flight should be talking to, once the airports are known. It's where
         the pilot is sent (``comms.expected``), its first call there the check-in; the pilot is told where that is."""
         st, phase = self.state, self._joining
+        to = self.online_back_to or self._join_target(own, phase)
+        if to is None:
+            return []  # (its airport not loaded yet: asked again next second)
+        self._joining = None
+        if to.controller == "center":
+            self._sector, self._sector_since = to, own.t
+            self._radar_seen.setdefault(to.station, to)
+        st.comms.expected = to
+        self.joined_to = to
+        return [self._alert(own.t, "joined", f"Joined in flight, {phase.value.lower()}: call {to.station} on "
+                                             f"{to.mhz:.3f}. Your clearance, takeoff and squawk are taken as given.")]
+
+    def _join_target(self, own: OwnshipState, phase: P) -> Facility | None:
+        """The controller a flight joined in flight (or handed back from an online network) should be with where it
+        is: the destination's ground or tower once down or close in, its approach low near it, the departure's low
+        near the origin, else the centre for where it is. None until the airports it needs are loaded."""
+        st = self.state
         origin, dest = self.geometry(st.flight.origin), self.geometry(st.flight.destination)
         if (st.flight.origin and origin is None and phase is P.DEPARTURE) or (st.flight.destination and dest is None
                                                                              and phase is not P.DEPARTURE):
-            return []  # (its airport not loaded yet: asked again next second)
-        self._joining = None
+            return None
 
         def at(geo, controller: str) -> Facility | None:
             return next((f for f in self.facilities if f.controller == controller and geo is not None
@@ -1504,14 +1808,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             to = at(dest, "approach")
         elif phase is P.DEPARTURE and near(origin, JOIN_TERMINAL_NM) and low:
             to = at(origin, "departure")
-        if to is None:
-            to = self._sector_candidate(own) or self._center()
-            self._sector, self._sector_since = to, own.t
-            self._radar_seen.setdefault(to.station, to)
-        st.comms.expected = to
-        self.joined_to = to
-        return [self._alert(own.t, "joined", f"Joined in flight, {phase.value.lower()}: call {to.station} on "
-                                             f"{to.mhz:.3f}. Your clearance, takeoff and squawk are taken as given.")]
+        return to or self._sector_candidate(own) or self._center()
 
     def _on_phase_change(self, change: PhaseChanged, own: OwnshipState) -> list[BusEvent]:
         st, t = self.state, change.t
@@ -2099,6 +2396,20 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._radio_busy_until = max(self._radio_busy_until, at)  # ATC doesn't talk over its own other traffic
         return self._paced(out)
 
+    def _route_from(self, geo: AirportGeometry | None, target: TrafficTarget, runway: str) -> tuple[str, ...]:
+        """Another aircraft's taxi route to its runway from where it actually is (VATSIM's, IVAO's or the sim's own):
+        ground tells it the taxiways it'll take, not a route from another gate. Empty: none found."""
+        end = geo.end(runway) if geo is not None and runway else None
+        if end is None:
+            return ()
+        key = (target.object_id, round(target.lat, 4), round(target.lon, 4), runway)
+        if key not in self._routes_from:
+            if len(self._routes_from) > ROUTES_FROM_KEPT:
+                self._routes_from.clear()  # (taxiing aircraft move on: the old ones are no use)
+            route = self._taxi_graph(geo).departure_route(target.lat, target.lon, end)
+            self._routes_from[key] = route.taxiways if route is not None and route.taxiways else ()
+        return self._routes_from[key]
+
     def _chatter_routes(self, geo: AirportGeometry, end) -> list[tuple[str, ...]]:
         """Real taxi routes at this airport, from a few of its gates to the runway in use (the other way round
         for arrivals), worked out once: other flights taxi along the taxiways that are there."""
@@ -2158,7 +2469,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                                lat=target.lat, lon=target.lon, key=callsign.ident, t=own.t) or ""
                     if lined_up and lined_up not in by_runway and (end_for := geo.end(lined_up)) is not None:
                         by_runway[lined_up] = self._chatter_routes(geo, end_for)
-                other = chatter.Other(oid, callsign, doing, int(round(target.alt_ft / 1000) * 1000), lined_up)
+                route = self._route_from(geo, target, lined_up) if doing in ("at_gate", "taxiing_out") else ()
+                other = chatter.Other(oid, callsign, doing, int(round(target.alt_ft / 1000) * 1000), lined_up,
+                                      route=route)
                 if plan is not None and doing in ("descending", "level"):
                     other = self._other_arrival(other, target, geo, plan, own)
                 others.append(other)
@@ -6065,6 +6378,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         worded_by: str = "template",
         lead: Phrase | None = None,
     ) -> None:
+        if handoff_to is not None and self.cfg.online_network and "frequency" in slots \
+                and (online := self._online_for(handoff_to)) is not None:
+            # The next airspace is the network's: "contact Milano Radar 126.750", where they are. The controller says
+            # only where to go; the copilot says it's VATSIM's (an "online" alert, once a controller).
+            handoff_to = Facility(handoff_to.controller, handoff_to.station, online.frequency_mhz, handoff_to.airport)
+            slots = {**slots, "frequency": online.frequency_mhz}
+            net = online_atc.network_name(self.cfg.online_network)
+            if self._online_tell(online.callsign, t):
+                self._online_after_readback[instruction_id] = (
+                    online.callsign, f"{net} connection for this airspace: {online.callsign}, set "
+                                     f"{online_atc.frequency_text(online.frequency_mhz)} on COM1")
         due = t + (self._random().uniform(*self.cfg.response_delay_s) if delay else 0.0)
         if self._scheduled:
             # Replies decided together go out in the order they were decided: "equipment standing by" to the
@@ -6072,6 +6396,28 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             due = max(due, max(item.due for item in self._scheduled))
         self._scheduled.append(_Scheduled(due, instruction_id, slots, facility, clearance, handoff_to, expects_readback, on_issue,
                                           note, self._answering, worded_by, lead=lead))
+
+    def _online_for(self, facility: Facility) -> OnlineController | None:
+        """The online controller working the airspace of LocalTC's ``facility`` (top-down), or None: LocalTC's."""
+        own = self.state.aircraft
+        needed = {"clearance": "DEL", "ground": "GND", "tower": "TWR", "departure": "APP", "approach": "APP",
+                  "center": "CTR"}.get(facility.controller)
+        if needed is None or not self.online:
+            return None
+        released = set(self._online_released)
+        geo = self.geometry(facility.airport) if facility.airport else None
+        if needed == "CTR" or geo is None:
+            if own is None:
+                return None
+            where = online_atc.point(own.lat, own.lon, ground=False, alt_ft=max(own.alt_indicated_ft, 10000.0),
+                                     agl_ft=max(own.alt_agl_ft, 10000.0))
+        else:
+            a = geo.airport
+            ground = needed in ("DEL", "GND", "TWR")
+            where = online_atc.point(a.lat, a.lon, ground=ground, alt_ft=a.elev_ft + (0 if ground else 6000),
+                                     agl_ft=0.0 if ground else 6000.0)
+        found = online_atc.pick(self.online, where, needed)
+        return None if found is not None and online_atc.airspace_of(found) in released else found
 
     def _transmitting(self, t: float) -> bool:
         """True while the pilot holds push-to-talk.
@@ -6423,6 +6769,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         flight stays with the centre it is on. Never on the frequency of the centre the flight is talking to:
         Denver Center handing over to Los Angeles Center on its own 135.45 left the pilot "contacting" LA on the
         same frequency, and Denver answering."""
+        if self._online_released and self._sector is not None and own is not None                 and (area := self.center_area(own)) is not None and area.id in self._online_released:
+            # Clipping again an airspace whose online controller just let the flight go (the tip of Austria, between
+            # Slovenia and Italy): the centre it's with keeps it, as a controller would for a few minutes' worth.
+            return None
         here = self._sector_candidate_on(own, tuple(f.mhz for f in self.facilities if f.controller != "center"))
         now = self._sector
         if here is not None and now is not None and here.station != now.station and \

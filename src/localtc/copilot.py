@@ -238,6 +238,9 @@ class Copilot(CallWords):
         """Actions whose time has come; call after every event."""
         self._t = max(self._t, t)
         out: list[Action] = []
+        if getattr(self.engine, "online_muted", False):
+            self._queue.clear()  # COM1 on an online network's controller: the pilot talks to them, not the copilot
+            return out
         self._drop_cancelled()
         if not self._queue:
             self._catch_up(t)

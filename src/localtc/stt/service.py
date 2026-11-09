@@ -111,6 +111,10 @@ class VoiceService:
         self._held: int | None = None  # the key being held (a radio, or INTERCOM): the other one waits for it
         self._cancelled = False  # the key was part of a shortcut (Alt+Tab): the clip is dropped
         self._silent_presses = 0  # presses in a row the microphone sent only silence
+        # True while the radio's words aren't LocalTC's to hear (COM1 on a VATSIM/IVAO controller: the pilot is talking
+        # to a person through the network's own client). The radio key then records and transcribes nothing.
+        self.skip_radio: Callable[[], bool] | None = None
+        self._skipping = False
 
     # Called from the push-to-talk source's thread. ``radio`` INTERCOM: the intercom key.
     def press(self, radio: int = 1) -> None:
@@ -145,6 +149,9 @@ class VoiceService:
                 if self._held is not None:  # one microphone: the second key waits for the first to come up
                     continue
                 self._held = self._radio = radio
+                self._skipping = radio > INTERCOM and self.skip_radio is not None and self.skip_radio()
+                if self._skipping:
+                    continue  # (the microphone left alone: nothing recorded, nothing transcribed)
                 if getattr(self.capture, "idle_s", 0.0) > STALLED_S:
                     await self._stalled_microphone()
                 self.capture.begin()
@@ -153,6 +160,11 @@ class VoiceService:
                 if self._held != radio:
                     continue
                 self._held = None
+                if self._skipping:
+                    self._skipping = self._cancelled = False
+                    log.info("Push-to-talk on the online network's frequency: not transcribed")
+                    self.bus.publish(Transcript(t=self.now(), text="", radio=radio, source="cancelled"))
+                    continue
                 if self._cancelled:
                     self._cancelled = False
                     self.capture.end()

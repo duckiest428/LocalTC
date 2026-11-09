@@ -584,3 +584,18 @@ def test_the_copilot_says_its_the_networks_after_the_readback_of_the_handover_no
     assert transmissions(handover) and alerts(handover, "online") == []
     out = engine._online_reminders(own, [ReadbackEvaluated(t=8, instruction_id="common.contact", status="correct")])
     assert [a.kind for a in out] == ["online"] and engine._online_after_readback == {}
+
+
+def test_only_localtc_unless_a_network_is_picked(tmp_path, monkeypatch):
+    from localtc.config import Config
+    from localtc.ui.controller import AppController, online_network
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    cfg = Config()
+    assert cfg.atc.online_integration is False and cfg.atc.online_network == "local" and online_network(cfg) == ""
+    controller = AppController(cfg, plan_path=tmp_path / "flightplan.json", cache=None)
+    asyncio.run(controller.api_save_settings({"settings": {"atc": {"online_integration": True}}}))
+    assert controller.cfg.atc.online_integration and controller.cfg.atc.online_network == "local"
+    assert online_network(controller.cfg) == ""  # the box ticked: still LocalTC's ATC until VATSIM or IVAO is picked
+    controller.cfg.atc.online_network = ""  # (saved by the version that made you choose)
+    assert online_network(controller.cfg) == ""

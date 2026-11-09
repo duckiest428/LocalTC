@@ -379,8 +379,8 @@ class AppController:
             # that has seen the welcome already.
             "setup": not self.cfg.ui.setup_done and not self.cfg.ui.welcome_seen,
             "whats_new": self._whats_new(),
-            # VATSIM/IVAO beside LocalTC: on, the ATC tab asks which (``network`` "" until chosen); what's online.
-            "online": {"integration": self.cfg.atc.online_integration, "network": self.cfg.atc.online_network,
+            # VATSIM/IVAO beside LocalTC: on, the ATC tab has the choice (Only LocalTC unless changed); what's online.
+            "online": {"integration": self.cfg.atc.online_integration, "network": self.cfg.atc.online_network or "local",
                        **self.online_view},
         }
 
@@ -468,8 +468,6 @@ class AppController:
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
             raise HttpError(409, "a flight is already running")
-        if self.cfg.atc.online_integration and not self.cfg.atc.online_network:
-            raise HttpError(409, "Choose Only LocalTC, VATSIM hybrid or IVAO hybrid on the ATC tab before starting the flight")
         self.online_view = {}
         if self.source_kind == "live" and next_shift(self.cfg.ui.last_flight_end, self.cfg.atc.shift, time.time()) != self.cfg.atc.shift:
             self.cfg.atc.shift += 1  # back after a break: other controllers on (saved with the flight count)
@@ -1117,7 +1115,7 @@ class AppController:
         if cfg.voice.cabin_key and cfg.voice.cabin_key in (cfg.voice.ptt_key, cfg.voice.intercom_key):
             raise HttpError(400, "The cabin key can't be the push-to-talk key or the intercom key")
         if cfg.atc.online_integration and not self.cfg.atc.online_integration:
-            cfg.atc.online_network = ""  # turned on: the ATC tab asks which network before the next flight
+            cfg.atc.online_network = "local"  # turned on: still LocalTC alone until a network is picked on the ATC tab
         path = await asyncio.to_thread(save_settings, cfg, base=load_config(self.config_path, settings=None))
         live_now = self.live is not None
         interpreter = getattr(self.live.engine, "interpreter", None) if self.live is not None else None

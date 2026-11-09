@@ -488,21 +488,15 @@ $("#sw-copilot").onclick = async () => {
 
 $("#btn-startstop").onclick = async () => {
   const flying = S.state.status === "running" || S.state.status === "starting";
-  if (!flying && Online.unchosen()) {
-    showTab("atc");
-    toast("Choose Only LocalTC, VATSIM hybrid or IVAO hybrid for this flight first", true);
-    return;
-  }
   try { await api(flying ? "flight/stop" : "flight/start", {}); } catch (e) { fail(e); }
 };
 
 /* ---------- VATSIM/IVAO beside LocalTC ---------- */
 
-// [atc] online_integration on: the ATC tab asks which ATC the flight is flown with (Start waits for it; changed in
-// flight, it applies at once) and says where things stand. Who works what is on the Live Map's frequency table.
+// [atc] online_integration on: the ATC tab has which ATC the flight is flown with (Only LocalTC unless another is
+// chosen; changed in flight, it applies at once) and says where things stand. Who works what is on the Live Map's frequency table.
 const Online = {
   NAMES: { local: "LocalTC", vatsim: "VATSIM", ivao: "IVAO" },
-  unchosen() { const o = S.state?.online; return !!(o && o.integration && !o.network); },
   async choose(network) {
     try {
       await api("settings", { settings: { atc: { online_network: network } } });
@@ -518,12 +512,11 @@ const Online = {
     if (!box) return;
     box.hidden = !(o && o.integration);
     if (box.hidden) return;
-    $$("[data-online]", box).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.online === o.network)));
+    const network = o.network || "local";
+    $$("[data-online]", box).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.online === network)));
     const note = $("#online-note");
-    note.classList.toggle("online-note-need", !o.network);
     const net = this.NAMES[o.active] || "";
-    if (!o.network) note.textContent = "Choose one before you start the flight.";
-    else if (o.network === "local") note.textContent = "LocalTC's controllers for the whole flight.";
+    if (network === "local") note.textContent = "LocalTC's controllers for the whole flight.";
     else if (o.active && o.muted) note.textContent = `With ${net}: LocalTC's ATC is quiet.`;
     else if (o.active) note.textContent = o.error ? `${net} not reached: ${o.error}` : `Looking for ${net} controllers each minute.`;
     else if (S.state.status === "running" || S.state.status === "starting") note.textContent = `Looking for ${this.NAMES[o.network]} controllers each minute.`;
@@ -2449,10 +2442,9 @@ const Settings = {
     on("#s-real-gates", "change", (e) => this.save("atc", "real_gates", e.target.checked));
     on("#s-online", "change", async (e) => {
       if (!(await this.save("atc", "online_integration", e.target.checked))) return;
-      S.state.online = { ...(S.state.online || {}), integration: e.target.checked, ...(e.target.checked ? { network: "" } : {}) };
-      if (S.settings && e.target.checked) S.settings.settings.atc.online_network = "";
+      S.state.online = { ...(S.state.online || {}), integration: e.target.checked, ...(e.target.checked ? { network: "local" } : {}) };
+      if (S.settings && e.target.checked) S.settings.settings.atc.online_network = "local";
       Online.render();
-      if (e.target.checked) toast("Choose Only LocalTC, VATSIM hybrid or IVAO hybrid on the ATC tab before the next flight");
     });
     on("#s-traffic-rwy", "change", (e) => this.save("atc", "traffic_runways", e.target.checked));
     on("#s-range", "change", (e) => this.save("atc", "radio_range", e.target.checked));

@@ -1351,6 +1351,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._tuned_since = own.t
             if previous[1] is not None and tuned is not None and tuned.station != previous[1].station:
                 self._left_at[previous[1].station] = own.t  # off to another controller: back, it's a new check-in
+                # An answer still to come from the one left isn't heard: Zurich Ground's "contact Tower" came three
+                # seconds after the pilot had already switched to the tower.
+                self._scheduled = [s for s in self._scheduled
+                                   if not (s.reply and s.facility.station == previous[1].station)]
             expected = st.comms.expected
             if st.pending is not None and expected is not None and tuned == expected and st.pending.controller != tuned.controller:
                 # Switched to the new frequency without reading it back: that's the answer. It counts as

@@ -33,7 +33,10 @@ CHANNELS = ("atc", "atis", "chatter", "copilot_radio", "copilot", "cabin", "effe
 # A clip's channel when it doesn't say: by its kind.
 KIND_CHANNEL = {"atc": "atc", "atis": "atis", "pilot": "copilot_radio", "intercom": "copilot", "effect": "effects",
                 "pa": "cabin", "interphone": "cabin", "deck": "cabin", "chime": "cabin", "ambience": "cabin"}
-CABIN = ("pa", "interphone", "deck", "chime")  # the cabin crew and their chimes, one after another, never over ATC
+CABIN = ("pa", "interphone", "deck", "chime")  # the cabin crew and their chimes, one after another
+# What waits for ATC to finish: the crew talking to the flight deck. An announcement to the cabin carries on whoever's on
+# the radio (the cabin doesn't hear it), as it does on board.
+TO_THE_DECK = ("interphone", "deck")
 
 
 @dataclass
@@ -109,7 +112,7 @@ class _Lane:
         while (clip := self.queue.get()) is not None:
             if clip.done.is_set():
                 continue  # dropped while it waited
-            if (self is self.player.intercom or clip.kind in CABIN) and not clip.urgent:
+            if (self is self.player.intercom or clip.kind in TO_THE_DECK) and not clip.urgent:
                 waited = 0.0
                 while waited < INTERCOM_WAIT_S and self.player.atc_to_us() and not clip.done.is_set():
                     time.sleep(BLOCK_S)

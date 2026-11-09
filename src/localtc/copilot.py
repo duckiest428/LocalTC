@@ -50,6 +50,7 @@ CHECKIN_AFTER_S = (5.0, 10.0)  # listening on the new frequency before the check
 SPEECH_S_PER_CHAR = 0.065  # how long the copilot's words take to say
 STALE_S = 90.0  # anything of the copilot's not said this long after it was meant to: dropped, not said late
 LEVEL_STALE_S = 300.0  # cleared to another level this long ago and still level: checked in as level, not "climbing"
+TREND_S = 30.0  # climbing or descending: the altitude over this long, not the vertical speed of the moment
 UNANSWERED_S = 25.0  # a check-in with no word back from ATC this long: tried once more, then the captain is told
 
 
@@ -194,6 +195,7 @@ class Copilot(CallWords):
         self._last_tuned: Facility | None = None  # the frequency before the last handoff (to go back to)
         self._assigned: tuple[int | None, float] = (None, 0.0)  # the cleared altitude, and since when
         self._joined_called: Facility | None = None  # LocalTC started in the air: the controller already called
+        self._alts: list[tuple[float, float]] = []  # the last TREND_S of altitude: climbing or descending, overall
 
     @property
     def mode(self) -> CopilotMode:
@@ -214,6 +216,10 @@ class Copilot(CallWords):
         cleared = self.engine.state.assignments.altitude_ft
         if cleared != self._assigned[0]:
             self._assigned = (cleared, event.t)
+        if isinstance(event, OwnshipState):
+            self._alts.append((event.t, event.alt_indicated_ft))
+            while self._alts and event.t - self._alts[0][0] > TREND_S:
+                self._alts.pop(0)
         if isinstance(event, AircraftSystems):
             self._beacon, self._taxi_light, self._lights_known = event.light_beacon, event.light_taxi, True
             self._engines = event.engines_running
@@ -498,18 +504,27 @@ class Copilot(CallWords):
             # Sent back from tower: going around, and nothing about the ATIS (heard it once already).
             return f"{f.station}, {cs}, going around, {alt:,}" + (f" climbing {assigned:,}" if assigned and assigned > alt + 300 else "")
         star = self.engine.cfg.star
-        if getattr(self.engine, "_via_floor", None) is not None and star and own.vs_fpm < -300:
+        vs = self._trend_fpm(own.vs_fpm)
+        if getattr(self.engine, "_via_floor", None) is not None and star and vs < -300:
             return f"{f.station}, {cs}, {alt:,} descending via the {star}" + atis
         if assigned and abs(assigned - alt) > 300:
-            if assigned > alt and own.vs_fpm < -300:  # going down below an old clearance: say what it's doing
+            if assigned > alt and vs < -300:  # going down below an old clearance: say what it's doing
                 return f"{f.station}, {cs}, {alt:,} descending" + atis
             stale = self._t - self._assigned[1] > LEVEL_STALE_S
-            if stale and ((assigned > alt and own.vs_fpm < 300) or (assigned < alt and own.vs_fpm > -300)):
+            if stale and ((assigned > alt and vs < 300) or (assigned < alt and vs > -300)):
                 # Cleared higher and still level (five hours of "35,000 climbing 37,000" at 35,000): as it is.
                 return f"{f.station}, {cs}, level {alt:,}" + atis
             verb = "climbing" if assigned > alt else "descending"
             return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}" + atis
         return f"{f.station}, {cs}, level {alt:,}" + atis
+
+    def _trend_fpm(self, now: float) -> float:
+        """Feet a minute over the last TREND_S, not this instant's: "33,500 descending" was said to Milano climbing to
+        FL370, the vertical speed at -1,000 for the few seconds of a dip. ``now`` without the history."""
+        if len(self._alts) < 2 or self._alts[-1][0] - self._alts[0][0] < TREND_S / 2:
+            return now
+        (t0, a0), (t1, a1) = self._alts[0], self._alts[-1]
+        return (a1 - a0) / (t1 - t0) * 60.0
 
     # --- queue ------------------------------------------------------------------------------------------
 

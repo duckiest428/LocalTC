@@ -402,7 +402,7 @@ def test_door_messages_are_passed_on_not_repeated_and_not_over_atc():
     c = crew()
     c.atc_until = 5.0
     assert not said(c.update(state_with(c, message="Waiting for your action: open R4"), 0.0))  # ATC's talking
-    assert any("open R4" in s for s in said(c.tick(6.0)))
+    assert any("open the R4 door" in s for s in said(c.tick(6.0)))
     c.update(state_with(c, message=""), 7.0)
     c.update(state_with(c, message="Waiting for your action: open R4"), 8.0)
     assert not said(c.tick(15.0))  # (GSX repeats itself every 15 seconds)

@@ -93,6 +93,7 @@ class Casting:
     def __init__(self) -> None:
         self.given: dict[str, str] = {}  # person -> voice
         self.taken: dict[str, str] = {}  # voice -> person
+        self.roles: dict[str, str] = {}  # person -> role
 
     def cast(self, persona: Persona, pool: list[str]) -> str:
         if persona.key in self.given:
@@ -107,7 +108,16 @@ class Casting:
                 if candidate not in self.taken:
                     voice = candidate
                     break
+            else:
+                if persona.role != "chatter":
+                    # None free: shared with another flight's pilot, not with a controller or the crew (the purser
+                    # and Zurich Ground were one voice).
+                    voice = next((pool[(start + i) % len(pool)] for i in range(len(pool))
+                                  if self.roles.get(self.taken[pool[(start + i) % len(pool)]]) == "chatter"), voice)
         self.given[persona.key] = voice
+        self.roles[persona.key] = persona.role
+        if persona.role != "chatter" and self.roles.get(self.taken.get(voice, "")) == "chatter":
+            self.taken[voice] = persona.key  # it's this one's now: the next controller doesn't take it too
         self.taken.setdefault(voice, persona.key)
         return voice
 

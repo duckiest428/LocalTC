@@ -120,7 +120,11 @@ START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+|our\s+)?(de
                             r"|\b(de-?\s?)?board\s+(?:them|the\s+passengers|now|everyone|the\s+cabin)\b"
                             r"|\b(?:let|get)\s+(?:them|the\s+passengers|everyone)\s+(?:on|(off))\b"
                             r"|\b(de-?\s?)?boarding\s+(?:started|going|under\s?way)\b"
-                            r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b")
+                            r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b"
+                            # "Can we get the deboarding started", "please get deboarding please", "deboarding please"
+                            r"|\bget\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?boarding,?\s+please\b")
+# Whisper's spellings of it ("Can we get the deborings started please?").
+DEBOARDING_HEARD = re.compile(r"\bde-?\s?bor(?:d)?ings?\b")
 ASKS_ABOUT = re.compile(r"\W*(?:\w+\W+)?(?:has|have|did|is|are|how|when|what|was|were)\b")
 GSX_PAX = re.compile(r"\bpax (\d+)/(\d+)")
 GREETING = re.compile(r"\bgood (morning|afternoon|evening)\b", re.IGNORECASE)
@@ -148,6 +152,7 @@ SERVICE_CALL_S = 150.0  # after the seatbelt sign is off: the call to the flight
 SERVICE_PA_S = 70.0  # ... and the trolley this long after the call
 DRINK_S = (100.0, 170.0)  # a drink asked for arrives this long after
 ASKING_S = 40.0  # a question to the flight deck waits this long for its answer
+DESCENT_FROM_PEAK_FT = 2000.0  # the descent's announcement: this far below the highest yet (not a dip in the climb)
 NO_BELT_CLIMB_S = 120.0  # an aircraft without a seatbelt sign: free to move about this long after 10,000 ft
 LANDING_SECURE_S = 100.0  # after the approach announcement: the cabin secure for landing
 AFTER_LANDING_S = 35.0  # after touchdown at the latest: the welcome to the city
@@ -354,6 +359,7 @@ class CabinCrew:
         self._belt: bool | None = None
         self._belt_seen_on = False
         self._above_10k_t: float | None = None
+        self._peak_ft = 0.0  # the highest the flight has been: a descent is down from it
         self._phase = ""
         self._weather: dict[str, WeatherReport] = {}
         self._later: list[_Later] = []
@@ -787,6 +793,8 @@ class CabinCrew:
         self._airborne = airborne if airborne or own.on_ground or own.parking_brake else self._airborne
         if airborne and own.alt_msl_ft >= 10000 and self._above_10k_t is None:
             self._above_10k_t = own.t
+        if airborne:
+            self._peak_ft = max(self._peak_ft, own.alt_msl_ft)
         self._own = own
         return out
 
@@ -945,7 +953,10 @@ class CabinCrew:
             out += self.announce("seatbelt_off_generic")
         descending = "descent" not in self.done and "seatbelt_off" in self.done and (
             self._phase == "ARRIVAL" or (own.vs_fpm < -700 and self._remaining_s() < 45 * 60
-                                         and own.alt_msl_ft > 8000))
+                                         and own.alt_msl_ft > 8000
+                                         # (Down from the highest yet, not a dip in the climb: "we've begun our
+                                         # descent" came at FL307 climbing to FL370, -990 fpm for two seconds.)
+                                         and own.alt_msl_ft < self._peak_ft - DESCENT_FROM_PEAK_FT))
         # Once level at the cruise: "we're up at flight level 380" came climbing through 18,500.
         if "aircraft_talk" not in self.done and "seatbelt_off" in self.done and not descending and self._level_at_cruise(own) \
                 and t - self._at["seatbelt_off"] >= AIRCRAFT_TALK_S and self._remaining_s() >= MIN_SERVICE_S:
@@ -1297,8 +1308,10 @@ class CabinCrew:
     def _answer(self, body: str, t: float, *, asked: bool) -> list[Any]:  # noqa: C901 - one reading per kind of call
         low = body.lower()
         reply = self.reply
+        low = DEBOARDING_HEARD.sub("deboarding", low)
         if self.ground_call is not None and not ASKS_ABOUT.match(low) and (m := START_BOARDING.search(low)):
-            service = "Deboarding" if any(m.groups()) else "Boarding"
+            # (At the gate after the flight, "start boarding" is them getting off.)
+            service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"
             if not self.ground_call(service, t):
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")

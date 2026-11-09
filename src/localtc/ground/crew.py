@@ -810,6 +810,10 @@ class RampCrew:
         low = text.lower()
         if low.startswith("waiting for your action"):
             door = text.split(":", 1)[-1].strip()
+            if (m := re.match(r"(?i)(open|close)\s+(.+)$", door)) is not None:
+                # GSX's "open Forward Service": "open the forward service door", as someone would say it.
+                name = " ".join(w.lower() if w.isalpha() and len(w) > 2 else w for w in m.group(2).split())  # (R4 stays R4)
+                door = f"{m.group(1).lower()} the {name}{'' if 'door' in name else ' door'}"
             if t - self._door_t.get(door, -1e9) >= DOOR_AGAIN_S:
                 self._door_t[door] = t
                 self._calls.append((t, ROUTINE, "door", {"door": door}))

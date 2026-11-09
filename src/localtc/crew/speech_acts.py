@@ -50,7 +50,7 @@ CORRECTION = re.compile(r"^(?:no|negative|nope|correction|sorry|i said|i meant|i
 # (Speech-to-text's "just please" is "yes please": "Shall we do the before takeoff checklist?" "Just please." went to
 # the model, which said the checklist was done without a line of it read.)
 YES = re.compile(r"^(?:(?:yes|yeah|yep|yup|sure|ok|okay)[,\s]+)?(?:yes|yeah|yep|yup|affirm(?:ative)?|correct|confirm(?:ed)?|do it|(?:please )?(?:go ahead and )?ask (?:for it|them|atc)|(?:please )?request it|"
-                 r"go ahead|go for it|please do (?:it|that|them)|please do|let'?s do (?:it|that|them)|let'?s go|just please|sure|that's right|thats right|right|ok do it|okay do it|do (?:them |it )?both|"
+                 r"go ahead|go for it|(?:we )?can do (?:it|that)|please do (?:it|that|them)|please do|let'?s do (?:it|that|them)|let'?s go|just please|sure|that's right|thats right|right|ok do it|okay do it|do (?:them |it )?both|"
                  r"both(?: please)?|do that|please)\b[\s,.!]*(?:please|thanks)?[\s.!]*$")
 NO = re.compile(r"^(?:no|nope|negative|no thanks|not now|don't|leave it|cancel|never ?mind)\b[\s,.!]*(?:thanks)?[\s.!]*$")
 ACK_ONLY = re.compile(r"^(?:(?:check(?:ed)?|copy(?: that)?|roger(?: that)?|ok(?:ay)?|yep|yup|yeah|got it|gotcha|alright|"
@@ -134,7 +134,9 @@ def read(text: str, confidence: float | None = None, *, radio_call: bool = False
     if (corrected := CORRECTION.match(bare)) and len(bare) > corrected.end():
         commands = tuple(parse(bare[corrected.end():])) or commands  # "no, flaps two": what's said after the "no"
     actions = [c for c in commands if c.action not in ("yes", "no")]
-    if YES.match(bare):
+    last = [p.strip(" ,") for p in re.split(r"[.!?]+", bare) if p.strip(" ,")]
+    if YES.match(bare) or (not actions and len(last) > 1 and YES.match(last[-1]) and not NEGATION.search(lowered)):
+        # (The last sentence, after words that came out wrong: "Yeah, sure, how about. Yeah, we can do it.")
         return _spoken(Reading("answer", (Command("yes"),), sure, "yes"), spoken)
     if NO.match(bare) and not actions:
         return _spoken(Reading("answer", (Command("no"),), sure, "no"), spoken)

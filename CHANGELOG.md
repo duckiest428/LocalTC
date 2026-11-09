@@ -65,6 +65,25 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **QNH up in the flight levels:** the shipped settings put the transition at 18,000 ft everywhere, so outside North
+  America approach gave the QNH at FL165 and the copilot called 9,000 ft "FL090". Each country's own transition now.
+- **An answer after you've switched:** a controller's reply still to come when you tune the next one isn't heard.
+- **"K and a H three"** read back is K and H3, not a taxiway A.
+- **More voices in continental Europe:** eleven men's and seven women's voices instead of four each, so the purser,
+  ground and the other crews no longer share one. When a region's voices run out, a controller shares with another
+  flight's pilot, never with the crew or another controller.
+- **The cabin's announcements carry on while ATC talks;** only their calls to the flight deck wait.
+- **The descent announcement waits for the descent:** a dip of a few seconds in the climb isn't it, and the copilot
+  checks in "climbing" or "descending" by the last half minute, not the vertical speed of the moment.
+- **"Descent and approach checklist please"** runs the checklist (the "approach" in it was taken for a radio call), "yeah,
+  we can do it" at the end of a muddled answer is a yes, and the answer to a checklist line ("Cabin, ready") is the
+  copilot's, not the purser's.
+- **The Synaptic A220's checklists** say the altimeter and flap setting where they had "()".
+- **The copilot no longer says "set" for an altitude it couldn't set** ("initial FL090 set. I couldn't set 9,000").
+- **Deboarding** starts when asked for in more words ("get the deboarding started", Whisper's "deborings"), and "start
+  boarding" at the gate after the flight is the deboarding.
+- **The ground crew answer a call once** ("catering and water" got two replies) and say "open the forward service door"
+  instead of GSX's "open Forward Service".
 - **Waiting for the parking brake:** a jetway, stairs or push asked for before it's set comes once it is, the way you
   asked for it. The FSLabs' own brake is read, and where a brake can't be read at all, "it's set" is taken at your word.
 - **"Request jetway disconnection"** takes the jetway away instead of asking for it.

@@ -23,8 +23,12 @@ GB = {"F": ("bf_emma", "bf_isabella", "bf_emma+bf_isabella", "bf_isabella+bf_ali
       "M": ("bm_george", "bm_fable", "bm_george+bm_fable", "bm_fable+bm_lewis", "bm_george+bm_daniel", "bm_lewis")}
 
 # Continental Europe without a Kokoro voice of its own: its Romance voices and the British, blended.
-EUROPE = {"F": ("ff_siwis+if_sara", "bf_isabella+ff_siwis", "if_sara+bf_emma", "ef_dora+bf_isabella"),
-          "M": ("em_alex+bm_george", "bm_george+em_alex", "pm_alex+bm_george", "em_alex+bm_fable")}
+# (Four men's voices were too few: at Zurich the purser, ground and two other crews all had em_alex+bm_george.)
+EUROPE = {"F": ("ff_siwis+if_sara", "bf_isabella+ff_siwis", "if_sara+bf_emma", "ef_dora+bf_isabella", "bf_emma+ff_siwis",
+                "if_sara+bf_alice", "ff_siwis+bf_lily"),
+          "M": ("em_alex+bm_george", "bm_george+em_alex", "pm_alex+bm_george", "em_alex+bm_fable", "bm_lewis+em_alex",
+                "im_nicola+bm_george", "em_alex+bm_daniel", "bm_daniel+pm_alex", "em_santa+bm_fable",
+                "bm_fable+im_nicola", "pm_santa+bm_lewis")}
 # Kokoro's Mandarin voices speak English with an accent of their own, its women's hard to follow through the radio
 # alone (Whisper lost a third of the words, xiaoyi more): blended with an English voice they keep their timbre and come
 # through (a fifth or less).

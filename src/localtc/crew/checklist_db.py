@@ -169,12 +169,21 @@ def from_synaptic(path: Path, name: str) -> ChecklistSet | None:
     lists = []
     for c in data.get("normal") or []:
         title = str(c.get("name") or "").strip()
-        lines = tuple(Line(str(i.get("challenge") or "").strip(), str(i.get("response") or "").strip())
+        lines = tuple(Line(" ".join(str(i.get("challenge") or "").split()),
+                           _blank(str(i.get("challenge") or ""), str(i.get("response") or "")))
                       for i in c.get("items") or [] if i.get("challenge"))
         if title and lines:
             lists.append(Checklist(_slug(title), title, _phase_of(title) or "cockpit_prep", lines))
     return ChecklistSet(name, f"{name}'s own checklists ({data.get('name') or path.name})", "aircraft", tuple(lists)) \
         if lists else None
+
+
+def _blank(challenge: str, response: str) -> str:
+    """Synaptic's "() Set and cross-checked": the "()" is the value to say ("Altimeters, () set" was read aloud
+    as it is). The flight's own where the copilot knows it (the altimeter, the flaps), otherwise left out."""
+    key = "flaps" if re.search(r"\bFLAPS?\b", challenge.upper()) else sense_key(challenge)
+    value = f"{{{key}}}" if key in ("altimeter", "flaps") else ""
+    return " ".join(re.sub(r"\(\s*\)", value, response).split())
 
 
 def from_msfs(folder: Path, name: str) -> ChecklistSet | None:

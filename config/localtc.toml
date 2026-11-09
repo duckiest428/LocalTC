@@ -34,7 +34,7 @@ seed = 0                      # 0 = derived from callsign + date (squawk, ATIS l
 center_name = "Seattle"       # hidden: the first centre after departure, when no airport lists a CENTER
 center_mhz = 125.1            # frequency. Enroute, centres are named after the region flown over.
 strict_callsign = false       # true: a readback without the callsign is incomplete
-transition_ft = 18000         # at or above this, flight levels and no local altimeter (STD)
+transition_ft = 0             # 0 = the region's (18,000 ft in North America, the country's elsewhere); or this everywhere
 unscripted = true             # ATC starts things too: traffic calls, altitude checks, "how do you read?"
 notams = true                 # notices on the ATIS (a taxiway closed, an ILS out, birds ...); ATC works to them
 atis_source = "hybrid"        # the ATIS: "hybrid" (or "real", the same: the real ATIS, the FAA's in the US and ATIS.guru's

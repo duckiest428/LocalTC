@@ -47,6 +47,18 @@ class CrewService:
                                      PhaseChanged, ReadbackEvaluated, PttPressed, PttReleased, IntercomPressed,
                                      IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData)
 
+    def _checklist_answer(self, event: IntercomHeard) -> bool:
+        """The answer to the line of a checklist the copilot is reading: the copilot's, not the cabin's. "Cabin?" in
+        the before landing checklist, answered "Cabin, ready", went to the purser, and the checklist stopped there."""
+        progress = getattr(self.pm.monitor, "progress", None)
+        if event.to == "cabin" or progress is None or progress.paused or progress.index >= len(progress.checklist.lines):
+            return False
+        line = progress.checklist.lines[progress.index]
+        if "cabin" in line.challenge.lower():
+            return True
+        # Otherwise only what isn't said to them by name ("Jonas, ..."): the answer they were listening for is the line's.
+        return self.cabin is not None and self.cabin._address(event.text) is None
+
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
         async for event in self._inputs:
@@ -56,7 +68,7 @@ class CrewService:
             if isinstance(event, IntercomHeard) and self.ground is not None and self.ground.crew.claims(event.text, event.t, event.to):
                 asyncio.create_task(self.ground.answer(event.text, event.t))
                 continue  # for the ramp ("ramp, ...", or the answer to what they just asked), whoever else is listening
-            if isinstance(event, IntercomHeard) and self.cabin is not None and self.cabin.claims(event.text, event.t, event.to):
+            if isinstance(event, IntercomHeard) and self.cabin is not None and not self._checklist_answer(event)                     and self.cabin.claims(event.text, event.t, event.to):
                 from localtc.crew.cabin_service import answer
 
                 asyncio.create_task(answer(self.cabin, event, self.bus))

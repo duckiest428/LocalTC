@@ -365,6 +365,17 @@ def _is_route_token(token: Token, names: frozenset[str] | set[str] = frozenset()
         or (token.kind == "number" and token.text in names)
 
 
+def _article(tokens: list[Token], i: int, names: set[str] | frozenset[str]) -> bool:
+    """An "a" written as a word between taxiways ("K and a H three"), when the route given has no taxiway A or the
+    "a" follows "and"/"then": speech, not a name. Taxiway A is said "alpha" (a letter token)."""
+    token = tokens[i]
+    if token.kind != "word" or token.text not in ("a", "i") or i + 1 >= len(tokens):
+        return False
+    if not _is_route_token(tokens[i + 1], names):
+        return False
+    return token.text not in names or (i > 0 and tokens[i - 1].text in ("and", "then"))
+
+
 def _callsign_letter(tokens: list[Token], i: int) -> bool:
     """ "Delta 2543", "November 172": a letter then a long number is a callsign, not a taxiway."""
     return i + 1 < len(tokens) and tokens[i + 1].kind == "number" and len(tokens[i + 1].text) >= 3
@@ -398,6 +409,9 @@ def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] 
     i = start
     while i < len(tokens):
         token = tokens[i]
+        if filler and route and _article(tokens, i, names):
+            i += 1  # "via K and a H three": the "a" of speech, not taxiway A (that one's "alpha")
+            continue
         if not _is_route_token(token, names) or _callsign_letter(tokens, i):
             if filler and token.kind == "word" and token.text in ROUTE_FILLER and route:
                 i += 1

@@ -1206,6 +1206,12 @@ class PilotMonitoring:
             words = re.findall(r"[\w'/]+", p.done)
             if words:
                 text = re.sub(r"[\s,]*".join(re.escape(w) for w in words) + r"[.!]?", "", text, flags=re.I).strip(" ,.")
+            if p.action == "altitude":
+                # However the altitude was put ("initial FL090" for the plan's "9,000"): "Squawk 2103, initial FL090
+                # set. I couldn't set 9,000" said it had and hadn't.
+                text = re.sub(r"[\s,]*(?:initial\s+)?(?:FL\s?\d{2,3}|\d{1,2},\d{3}(?:\s+feet)?|\d{4,5}\s+feet)(?=[\s,.!]|$)", "", text,
+                              flags=re.I).strip(" ,.")
+                text = "" if text.lower() in ("set", "") else re.sub(r",\s*set$", " set", text, flags=re.I)
             text = f"{text}." if text and text[-1] not in ".!?" else text
             spoken = ""
         asks = [_ask_pilot(p, p.done.rstrip(".").replace(" set", "")) for p in held.failed
@@ -1265,6 +1271,8 @@ class PilotMonitoring:
         lowered = text.lower()
         if ASK_ATC.search(" ".join(lowered.split())):
             return False
+        if "checklist" in lowered or "check list" in lowered:
+            return False  # "Descent and approach checklist please": "approach" there is the checklist's, not a station
         stations = [f.station.lower() for f in getattr(self.engine, "facilities", [])] if self.engine is not None else []
         if any(s and s in lowered for s in stations):
             return True

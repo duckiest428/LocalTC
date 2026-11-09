@@ -36,7 +36,7 @@ a new minor version adds features, a patch fixes them.
   left it, and a route clipping it again along a border stays with the centre it's with. On an online controller's frequency a few miles before their
   airspace (they asked on the network's chat), you're with them: no "nobody online" from the copilot; that's only for
   a position below the one the flight needs (their ground, at the runway) with nobody above online.
-- **The flight's frequencies on the Live Map:** a table on the left with every airspace of the flight in the order it's
+- **The flight's frequencies on the Live Map:** a table at the top, beside the zoom buttons and folded until you open it (as the legend now is too), with every airspace of the flight in the order it's
   flown (the departure's delivery, ground, tower and departure, each FIR along the route, the arrival, tower and ground),
   its frequency, and who works it: LocalTC's controller, or the online network's (marked where it's top-down, working a
   position below its own that nobody's on). It's worked out by the ATC with the rule it flies by, and the row COM1 is on

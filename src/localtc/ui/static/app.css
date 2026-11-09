@@ -183,9 +183,10 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
   border-radius: 1px; background: var(--line-2); opacity: 0; transition: opacity .15s; }
 .splitter:hover::after, .splitter.dragging::after { opacity: 1; }
 .panel.sized { overflow: auto; }
-.mapfreqs { position: absolute; left: 10px; top: 84px; z-index: 500; max-height: calc(100% - 150px); overflow: auto;
+/* At the top, between the zoom buttons and the map's own buttons (.mapctl, right-anchored, about 480 wide). */
+.mapfreqs { position: absolute; left: 54px; top: 10px; z-index: 500; max-height: calc(100% - 30px); overflow: auto;
   background: rgba(20, 23, 27, .9); border: 1px solid rgba(255, 255, 255, .12); border-radius: 3px; padding: 6px 8px;
-  font-size: 12px; max-width: min(420px, calc(100% - 20px)); }
+  font-size: 12px; max-width: max(150px, min(420px, calc(100% - 554px))); }
 .mapfreqs[hidden] { display: none; }
 .mapfreqs .fq-fold { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; border: 0; background: none;
   color: inherit; font: inherit; font-weight: 600; cursor: pointer; }

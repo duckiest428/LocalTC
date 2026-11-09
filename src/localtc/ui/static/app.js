@@ -563,7 +563,8 @@ const FreqTable = {
     $$("#map-freqs tr[data-mhz]").forEach((tr) => tr.classList.toggle("fq-now", com1 != null && Math.abs(Number(tr.dataset.mhz) - com1) < 0.004));
   },
 };
-try { if (localStorage.getItem("map-freqs") === "folded") $("#map-freqs").classList.add("folded"); } catch { /* open */ }
+try { $("#map-freqs").classList.toggle("folded", localStorage.getItem("map-freqs") !== "open"); }
+catch { $("#map-freqs").classList.add("folded"); } // folded until it's opened
 
 /* ---------- tabs and dialogs ---------- */
 
@@ -2688,7 +2689,7 @@ const MapView = {
       legend.classList.toggle("folded", folded);
       legend.querySelector(".lg-fold").setAttribute("aria-expanded", String(!folded));
     };
-    try { fold(localStorage.getItem("map-legend") === "folded"); } catch { /* storage unavailable: open */ }
+    try { fold(localStorage.getItem("map-legend") !== "open"); } catch { fold(true); } // folded until it's opened
     legend.querySelector(".lg-fold").onclick = () => {
       const folded = !legend.classList.contains("folded");
       fold(folded);

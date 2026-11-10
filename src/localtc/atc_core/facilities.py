@@ -188,7 +188,9 @@ def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
     nearest sizeable airport and given a frequency of its own, derived from that name so the same
     place is always the same frequency. ``taken`` keeps it off a frequency another controller works.
     """
+    american = airport.icao[:1] in ("K", "C", "P")  # "Center" there; elsewhere an area control centre is "Control"
     if (published := _facility(airport, "center", ("center",))) is not None:
-        return Facility("center", published.station, published.mhz, None, published.alternates)
+        station = published.station if american else published.station.replace(" Center", " Control")
+        return Facility("center", station, published.mhz, None, published.alternates)
     place = sector_name(airport)
-    return Facility("center", f"{place} {'Center' if airport.icao[:1] in ('K', 'C', 'P') else 'Control'}", _band_frequency(place, taken))
+    return Facility("center", f"{place} {'Center' if american else 'Control'}", _band_frequency(place, taken))

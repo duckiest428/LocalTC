@@ -29,6 +29,11 @@ def norm(text: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
 
 
+def stand(name: str) -> str:
+    """A stand's name to compare: "Gate G 13", "G13" and "stand G13" are one."""
+    return norm(name).replace("gate", "").replace("stand", "").replace("parking", "").replace(" ", "")
+
+
 def has_words(text: str, words: str) -> bool:
     return f" {norm(words)} " in f" {norm(text)} "
 

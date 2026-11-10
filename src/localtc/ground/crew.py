@@ -17,10 +17,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from localtc.ground import grammar as g
-from localtc.ground.api import GroundState, Menu, Service
+from localtc.ground.api import SPEEDS_UP, GroundState, Menu, Service
 from localtc.ground import words as foreign
 from localtc.ground.lines import SPOKEN, Words, spoken_list
 from localtc.ground.menu import Close, MenuRun, Open, Pick, Want, find, has_words, is_question, norm, real_entries, row_of
+from localtc.ground.menu import stand as _stand
 from localtc.sim_api import OwnshipState, RampSpeech
 from localtc.sim_api.ramp import RAMP_MHZ, on_ramp
 
@@ -147,6 +148,7 @@ class RampCrew:
         self._door_t: dict[str, float] = {}
         self._said_differs = False
         self._gate_told = False
+        self._hurried: set[str] = set()  # sped up through GSX's settings: put back when the service is over
         self._fuel_wanted = 0  # the fuel asked for, in percent, for when GSX asks
         self._finished: list[str] = []  # done this turnaround (GSX shows "completed" for only a few seconds)
         self._bridge: dict[str, bool] = {}  # the jetway and stairs: on the aircraft or not, as GSX last said (one call moves them either way)
@@ -412,8 +414,26 @@ class RampCrew:
         svc = self._service(service)
         if svc is None or not svc.active:
             return [self._speech("cancel_nothing", t, name=self._name(service))]
+        if service in self._hurried:
+            return [self._speech("hurrying", t, name=self._name(service))]
+        if service in SPEEDS_UP and "settings" in self.state.capabilities:
+            return [SpeedUp(service)]  # (``hurried`` says how that went)
         self._offer = ("finish", service)
         return [self._speech("cant_hurry", t, name=self._name(service))]
+
+    def hurried(self, service: str, ok: bool, t: float) -> list[Any]:
+        """What came of asking GSX to speed it up (an older GSX, or no such setting: the offer to finish it instead)."""
+        if ok:
+            self._hurried.add(service)
+            return [self._speech("hurrying", t, name=self._name(service))]
+        self._offer = ("finish", service)
+        return [self._speech("cant_hurry", t, name=self._name(service))]
+
+    def _hurry_over(self) -> list[Any]:
+        """Boarding or deboarding hurried, and over: GSX's setting put back as it was."""
+        over = [s for s in self._hurried if (svc := self._service(s)) is None or not svc.active]
+        self._hurried.difference_update(over)
+        return [SlowDown(s) for s in over]
 
     def _off(self, service: str, t: float) -> list[Any]:
         svc = self._service(service)
@@ -878,6 +898,7 @@ class RampCrew:
         out += self._engines_answer(t)
         out += self._once_braked(t)
         out += self._send_next(t)
+        out += self._hurry_over()
         out += self._due_calls(t)
         out += self._gate_to_gsx(t)
         out += self._parked_elsewhere(t)
@@ -973,6 +994,20 @@ class Send:
 
 
 @dataclass(frozen=True)
+class SpeedUp:
+    """Hurry this service, through GSX's settings."""
+
+    service: str
+
+
+@dataclass(frozen=True)
+class SlowDown:
+    """Put back the setting that hurried it."""
+
+    service: str
+
+
+@dataclass(frozen=True)
 class SelectGate:
     """Tell GSX which stand this is."""
 
@@ -982,11 +1017,6 @@ class SelectGate:
 def _plain(entry: str) -> str:
     """A menu row as said aloud: without GSX's marks."""
     return " ".join(entry.replace("[GSX choice]", "").replace("▶", "").replace("↑", "").split()).rstrip("?. ")
-
-
-def _stand(name: str) -> str:
-    """A stand's name to compare by: "Gate B 37", "B37"."""
-    return norm(name).replace("gate", "").replace("stand", "").replace("parking", "").replace(" ", "")
 
 
 SPOKEN_ROW = {"GPU": "ground power", "Water": "water", "Lavatory": "lavatory", "Catering": "catering", "Refueling": "refueling",

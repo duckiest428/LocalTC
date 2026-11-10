@@ -40,6 +40,12 @@ class SimServices:
     async def select_gate(self, gate: str) -> Result:
         return Result(False, "no_gate")
 
+    async def speed_up(self, service: str) -> Result:
+        return Result(False, "no_setting")
+
+    async def slow_down(self, service: str) -> Result:
+        return Result(True)
+
     async def trigger(self, service: str) -> Result:
         event = EVENTS.get(service)
         if event is None:

@@ -11,7 +11,7 @@ import msgspec
 
 from localtc.bus import EventBus
 from localtc.ground.api import GroundAdapter
-from localtc.ground.crew import Close, Open, Pick, RampCrew, SelectGate, Send
+from localtc.ground.crew import Close, Open, Pick, RampCrew, SelectGate, Send, SlowDown, SpeedUp
 from localtc.ground.model import RampModel
 from localtc.sim_api import (
     AircraftVars,
@@ -241,6 +241,13 @@ class GroundService:
             elif isinstance(output, SelectGate):
                 result = await self.adapter.select_gate(output.gate)
                 log.info("Ground crew told GSX the stand is %s: %s", output.gate, result.code or "ok")
+            elif isinstance(output, SpeedUp):
+                result = await self.adapter.speed_up(output.service)
+                log.info("Ground crew hurried %s: %s", output.service, result.code or "ok")
+                await self._out(self.crew.hurried(output.service, result.ok, self._now()))
+            elif isinstance(output, SlowDown):
+                result = await self.adapter.slow_down(output.service)
+                log.info("Ground crew put %s's pace back: %s", output.service, result.code or "ok")
             elif isinstance(output, Pick):
                 result = await self.adapter.pick(output.index)
                 log.info("Ground crew picked %r: %s", output.label, result.code or "ok")

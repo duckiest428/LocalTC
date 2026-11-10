@@ -99,6 +99,9 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **The newer GSX, and the older one still:** with an updated GSX the gate ground gives you becomes GSX's stand on the taxi in,
+  matched to GSX's own name for it, and "speed up boarding" or deboarding really does: the passengers go as densely as GSX
+  allows, and its setting is put back when they're done. An older GSX works as before.
 - **The descent in Europe, as Europe does it** (from lorenzobusy-art): "when ready descend FL110, cleared TINI9W arrival"
   ahead of the top of descent, so you start down at your own (not "descend via" alone, the FAA's); "continue descent
   3,000 feet" from the next controller, read back like any altitude; and the approach clearance with the altitude to

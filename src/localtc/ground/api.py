@@ -8,6 +8,8 @@ from typing import Protocol
 SERVICES = ("GPU", "OperateJetways", "OperateStairs", "Deboarding", "Cleaning", "Catering", "Refueling", "Water", "Lavatory",
             "DeIce", "Boarding", "Departure")
 ACTIVE = ("requested", "performing", "completing")
+# What can be hurried, where GSX's settings allow it: how densely the passengers walk.
+SPEEDS_UP = ("Boarding", "Deboarding")
 # Under GSX's "Additional Services" page, not on its first one.
 ADDITIONAL = ("GPU", "DeIce", "Lavatory", "Water", "Cleaning")
 
@@ -53,6 +55,7 @@ class Result:
     ok: bool
     code: str = ""
     message: str = ""
+    payload: dict = field(default_factory=dict)  # what GSX sent back with it (settings.get: its settings)
 
 
 class GroundAdapter(Protocol):
@@ -68,6 +71,10 @@ class GroundAdapter(Protocol):
     async def trigger(self, service: str) -> Result: ...
 
     async def select_gate(self, gate: str) -> Result: ...
+
+    async def speed_up(self, service: str) -> Result: ...
+
+    async def slow_down(self, service: str) -> Result: ...
 
     async def open_menu(self) -> Result: ...
 

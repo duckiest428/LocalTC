@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from localtc.ground.api import GroundState, Menu, Result, Service
+from localtc.ground.menu import stand
 from localtc.ground.ws import WebSocket, WebSocketClosed
 
 log = logging.getLogger(__name__)
@@ -48,6 +49,25 @@ def port() -> int:
         return DEFAULT_PORT
 
 
+def parking_token(gate: str, handler_data: dict | None) -> str:
+    """The name GSX knows a stand by ("G13" is its "Gate G 13"), from its list of the airport's parkings; ``gate`` as it
+    is where the list isn't there or more than one fits (GSX's own search then answers for it)."""
+    airport = (handler_data or {}).get("airport") or {}
+    hits = {name for p in airport.get("parkings") or () if isinstance(p, dict)
+            and (name := p.get("uiGateName") or p.get("uiName")) and stand(str(name)) == stand(gate)}
+    return str(next(iter(hits))) if len(hits) == 1 else gate
+
+
+def setting(settings: dict | None, key: str) -> dict | None:
+    """One of GSX's settings, from the schema it sends (tabs, subtabs, fields)."""
+    for tab in (settings or {}).get("tabs") or ():
+        for sub in tab.get("subtabs") or (tab,):
+            for item in sub.get("fields") or ():
+                if item.get("key") == key:
+                    return item
+    return None
+
+
 def parse_service(raw: dict) -> Service:
     return Service(id=str(raw.get("id", "")), name=str(raw.get("displayName", "")), state=str(raw.get("state", "unknown")),
                    waiting=bool(raw.get("waiting")), operator=str(raw.get("operator") or ""),
@@ -69,12 +89,23 @@ def parse_state(model: dict, *, connected: bool, running: bool, capabilities: fr
                        prompt=model.get("prompt") or None)
 
 
+GATE_DONE = ("already_selected", "already_parked")  # gate.select: nothing to do, the stand is already the one
+# GSX's settings for how fast a service goes (its "Timings" tab).
+PACE = {"Boarding": "pax_density", "Deboarding": "pax_density_deboarding"}
+
+
 class GsxRemote:
     name = "gsx"
 
     def __init__(self, *, host: str = "127.0.0.1", port_of: Callable[[], int] = port, retry_s: float = RETRY_S,
-                 command_s: float = COMMAND_S) -> None:
+                 command_s: float = COMMAND_S, paces_file: Path | None = None) -> None:
         self.host, self.port_of, self.retry_s, self.command_s = host, port_of, retry_s, command_s
+        # GSX's settings outlive this program: what a hurry changed is written down first, and a run that ended before
+        # putting it back (a crash, the sim gone) has the next one do it.
+        self.paces_file = paces_file
+        self._paces: dict[str, int] = self._read_paces()  # setting -> the value to put back
+        self._owed: set[str] = set(self._paces)  # ... and those no service is hurrying any more
+        self._putting_back: asyncio.Task | None = None
         self._ws: WebSocket | None = None
         self._task: asyncio.Task | None = None
         self._model: dict = {}
@@ -94,6 +125,9 @@ class GsxRemote:
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        if self._ws is not None:
+            self._owed |= set(self._paces)
+            await self._put_back()
         if self._task is not None:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
@@ -113,6 +147,8 @@ class GsxRemote:
             self._ws = ws
             try:
                 await ws.send(json.dumps({"type": "subscribe", "channels": ["state"]}))
+                if self._owed:
+                    self._putting_back = asyncio.create_task(self._put_back())
                 while True:
                     self._frame(json.loads(await ws.receive()))
             except (WebSocketClosed, ConnectionError, OSError, ValueError) as exc:
@@ -148,7 +184,8 @@ class GsxRemote:
             future = self._waiting.pop(str(frame.get("id")), None)
             if future is not None and not future.done():
                 error = frame.get("error") or {}
-                future.set_result(Result(bool(frame.get("ok")), str(error.get("code") or ""), str(error.get("message") or "")))
+                future.set_result(Result(bool(frame.get("ok")), str(error.get("code") or ""), str(error.get("message") or ""),
+                                         frame.get("payload") or {}))
             return
         else:
             return
@@ -179,7 +216,78 @@ class GsxRemote:
         return await self._command("service.trigger", {"service": service})
 
     async def select_gate(self, gate: str) -> Result:
-        return await self._command("gate.select", {"gate": gate, "revokeServices": False, "force": False})
+        """Only where ``hello`` lists ``gate``. Already there counts as done (GSX answers it as a refusal); a stand GSX has
+        an AI aircraft on is taken all the same, ATC having given it. Services running at a stand are never revoked."""
+        args = {"gate": parking_token(gate, self._model.get("handlerData")), "revokeServices": False, "force": False}
+        result = await self._command("gate.select", args)
+        if result.code == "assigned_to_other":
+            result = await self._command("gate.select", {**args, "force": True})
+        return Result(True, result.code) if result.code in GATE_DONE else result
+
+    async def speed_up(self, service: str) -> Result:
+        """Passengers as dense as GSX goes, for this service. Only where ``hello`` lists ``settings``; the setting's name,
+        its values and where it stands are read from GSX each time, and a build without it just says no."""
+        key = PACE.get(service)
+        if key is None or "settings" not in self._capabilities:
+            return Result(False, "no_setting")
+        got = await self._command("settings.get", {})
+        if not got.ok:
+            return got
+        item = setting(got.payload.get("settings") or self._model.get("settings"), key)
+        values = [c[0] for c in (item or {}).get("choices") or () if isinstance(c, list | tuple) and c]
+        if item is None or not values or not isinstance(item.get("value"), int):
+            return Result(False, "no_setting")
+        if item["value"] >= max(values):
+            return Result(True, "at_most")
+        self._paces.setdefault(key, item["value"])
+        self._owed.discard(key)
+        self._write_paces()
+        result = await self._command("settings.set", {"key": key, "value": max(values)})
+        if not result.ok:
+            self._paces.pop(key, None)
+            self._write_paces()
+        return result
+
+    async def slow_down(self, service: str) -> Result:
+        key = PACE.get(service)
+        if key is None or key not in self._paces:
+            return Result(True)
+        self._owed.add(key)
+        await self._put_back()
+        return Result(key not in self._paces)
+
+    async def _put_back(self) -> None:
+        """The settings a hurry changed, as they were. What can't be done now stays owed, for the next connection."""
+        if not self._owed:
+            return
+        for _ in range(20):  # (just connected: its ``hello`` first)
+            if self._capabilities or self._ws is None:
+                break
+            await asyncio.sleep(0.1)
+        for key in sorted(self._owed):
+            if (await self._command("settings.set", {"key": key, "value": self._paces[key]})).ok:
+                self._paces.pop(key)
+                self._owed.discard(key)
+        self._write_paces()
+
+    def _read_paces(self) -> dict[str, int]:
+        try:
+            found = json.loads(self.paces_file.read_text(encoding="utf-8")) if self.paces_file else {}
+        except (OSError, ValueError):
+            return {}
+        return {k: v for k, v in found.items() if k in PACE.values() and isinstance(v, int)} if isinstance(found, dict) else {}
+
+    def _write_paces(self) -> None:
+        if self.paces_file is None:
+            return
+        try:
+            if self._paces:
+                self.paces_file.parent.mkdir(parents=True, exist_ok=True)
+                self.paces_file.write_text(json.dumps(self._paces), encoding="utf-8")
+            else:
+                self.paces_file.unlink(missing_ok=True)
+        except OSError:
+            log.exception("GSX's pace settings couldn't be noted down")
 
     async def open_menu(self) -> Result:
         return await self._command("menu.open")  # never menu.toggle: on a menu already up, it closes it

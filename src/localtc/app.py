@@ -334,7 +334,7 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
 
         adapter = SimServices(lambda command: asyncio.ensure_future(source.send(command)), source.clock.now)
     else:
-        adapter = gsx_remote.GsxRemote()
+        adapter = gsx_remote.GsxRemote(paces_file=data_dir() / "gsx_paces.json")
 
     def relay(what: str, t: float):
         cabin = get_cabin()

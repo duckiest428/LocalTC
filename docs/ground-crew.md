@@ -53,14 +53,23 @@ Recorded at Zurich on GSX Pro 4.0.5 (MSFS 2024, A350). `tests/fixtures/gsx/lszh.
 
 ### Newer GSX
 
-This GSX's `hello` lists `state, services, menu, prompts, billing`. Later builds add `gate`, `handlerData`, `handlerSet` and
-`settings`. Those aren't used yet: older builds must keep working, and these get added once they can be tried.
+What `hello` lists decides what's used, so an older GSX (`state, services, menu, prompts, billing`) goes the way it always has.
+Tried live on the update of 2026-11-09 at KFLL, Gate G 13 (Fenix A319), where `hello` adds `gate`, `handlerData`, `handlerSet`
+and `settings`. The menus' words hadn't changed, but for "Request GPU" (was "Request Ground Power Unit"). Its first snapshot on a
+fresh connection can be empty, with the state coming as patches.
 
-- **`gate.select`**: LocalTC's gate kept in step with GSX. Until then, a gate change goes through ATC and the crew say once that
-  GSX can't follow it.
-- **`settings.set`** (Passengers Density): a real "speed up boarding". Until then the crew say they can't hurry them, and offer
-  "complete now".
-- **`handler.set`** `autoSelectOperator`: not needed while the questions are answered.
+- **`gate.select`** (`gate`): the gate ground gives, sent on the taxi in. The stand is said as GSX names it, from
+  `handlerData.airport.parkings[].uiGateName` ("G13" is its "Gate G 13"); not on the list, or more than one fits, LocalTC's name goes
+  as it is and GSX's search answers. `already_parked` and `already_selected` come as refusals and count as done;
+  `assigned_to_other` (an AI aircraft on it) is sent again with `force`; `services_active` is left alone, nothing is revoked. Others
+  (`not_found`, `no_airport`) try again after a minute.
+- **`settings.set`** (`settings`): "speed up boarding" or deboarding sets `pax_density` / `pax_density_deboarding` to the highest
+  choice in the schema from `settings.get`, and puts it back when the service is over. GSX keeps its settings, so the old value is
+  written to `gsx_paces.json` first, and if LocalTC ends before putting it back the next run does it. Without the setting, the
+  crew offer "complete now" as before. Whether it changes a boarding already under way hasn't been seen: the round trip has, not the
+  passengers.
+- **`handler.set`** `autoSelectOperator`: not used. The crew answer the operator question themselves, with the airline's own
+  operator where it's listed, which GSX's auto-select wouldn't.
 
 ## The ramp frequency
 

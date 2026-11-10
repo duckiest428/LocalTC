@@ -99,6 +99,23 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **Taxi out:** ground now clears you across a runway on your route at airports whose data has few hold lines, answers "request
+  to cross" even when the runway number comes out wrong, and sends you to tower when you get there.
+- **The descent left undone:** past the top of descent and still level, the copilot says so and keeps saying so, and ATC tells you to
+  start down and then asks your intentions. A flight still up at cruise isn't sent to a hold thousands of feet below it. Over the
+  ocean toward a destination with no FIR in the data, its own centre takes you, in its own phraseology and named "Control" outside North America.
+- **Live Map NOTAMs:** "TWY N CLSD BTN TWY Z AND TWY M2" closes that stretch, not all of N and Z, so a whole airport's taxiways no
+  longer go red. A closure only for some aircraft is left out.
+- **Headwind A330neo:** the parking brake is read from the aircraft, so the ramp no longer says to set one that's set; "standard" pulls
+  both baro knobs instead of leaving QNH 1013.
+- **Speed up boarding** said to the cabin crew goes to the ramp and GSX.
+- **The copilot leaves the transponder's mode to you** (no TA/RA at takeoff, nor in a checklist): it only sets the code.
+- **The cabin crew member you pick keeps their name;** their accent follows the airline. On Auto the name does too.
+- **The radio log** shows an announcement in a few words ("Safety briefing", the whole text on hover) and once, however many languages
+  it's said in. The voice still says all of it.
+- **Voices start sooner:** long radio lines are made and played a phrase at a time, and the copilot's fixed callouts are made ahead.
+- The flight details row goes away while the flight status with the bar is showing. Visibility is said in metres outside North
+  America, the ATIS says all of a runway list and "short", and TAP's boarding welcome no longer says good morning at night.
 - **The newer GSX, and the older one still:** with an updated GSX the gate ground gives you becomes GSX's stand on the taxi in,
   matched to GSX's own name for it, and "speed up boarding" or deboarding really does: the passengers go as densely as GSX
   allows, and its setting is put back when they're done. An older GSX works as before.

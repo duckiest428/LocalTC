@@ -24,7 +24,7 @@ CONTRACTIONS = {
     "MM": "middle marker", "MULT": "multiple", "NM": "miles", "NOTAMS": "NOTAMs", "OM": "outer marker",
     "OPS": "operations", "OTS": "out of service", "OVR": "over", "PARL": "parallel", "PRCDS": "procedures",
     "PROC": "procedure", "REIL": "runway end identifier lights", "RWY": "runway", "RWYS": "runways",
-    "SFC": "surface", "SIMUL": "simultaneous", "TFR": "temporary flight restriction", "THLD": "threshold",
+    "SFC": "surface", "SHRT": "short", "SIMUL": "simultaneous", "TFR": "temporary flight restriction", "THLD": "threshold",
     "TWR": "tower", "TWY": "taxiway", "TWYS": "taxiways", "U/S": "unserviceable", "VCNTY": "vicinity",
     "VEH": "vehicles", "WIP": "work in progress", "WI": "within", "READBACK": "read back", "NUMEROUS": "numerous",
 }
@@ -45,6 +45,7 @@ def say(remark: str) -> tuple[str, str]:
     said: list[str] = []
     before = ""
     in_list = False  # a taxiway list ("TWY Y, S, D"): every name in it a taxiway
+    runways_on = False  # a runway list ("RWYS 8L, 26R CLSD"): the second a runway too
     for i, tok in enumerate(tokens):
         nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
         if tok in ",;:":
@@ -52,7 +53,7 @@ def say(remark: str) -> tuple[str, str]:
                 shown[-1] += tok
                 said[-1] += tok
             continue
-        if before in RUNWAY_WORDS and re.fullmatch(r"\d{1,2}[LRC]?", tok):
+        if (before in RUNWAY_WORDS or runways_on) and re.fullmatch(r"\d{1,2}[LRC]?", tok):
             number = tok.rstrip("LRC")
             ident = f"{int(number):02d}{tok[len(number):]}"
             shown.append(tok)
@@ -80,6 +81,7 @@ def say(remark: str) -> tuple[str, str]:
             shown.append(tok.lower())
             said.append(tok.lower())
         in_list = (before in TAXIWAY_WORDS or in_list) and i + 1 < len(tokens) and tokens[i + 1] == ","
+        runways_on = (before in RUNWAY_WORDS or runways_on) and bool(re.fullmatch(r"\d{1,2}[LRC]?", tok)) and nxt == ","
         before = tok
     line = " ".join(shown)
     return line[:1].upper() + line[1:], " ".join(said)

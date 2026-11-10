@@ -182,7 +182,7 @@ function addLine(l) {
     case "crew":  // the copilot, to you
       body = `<span class="who">COPILOT</span><span class="ic">intercom</span><span class="body">${esc(l.text)}</span>`; break;
     case "cabin":  // the cabin crew: an announcement, or to you on the interphone
-      body = `<span class="who">${esc((l.who || "Cabin").toUpperCase())}</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="body">${esc(l.text)}</span>`; break;
+      body = `<span class="who">${esc((l.who || "Cabin").toUpperCase())}</span><span class="ic">${l.channel === "pa" ? "PA" : "interphone"}</span><span class="body"${l.summary ? ` title="${esc(l.text)}"` : ""}>${esc(l.summary || l.text)}</span>`; break;
     case "ramp":  // the ground crew: on their frequency, or the headset
       body = `<span class="who">RAMP</span><span class="ic">${l.channel === "radio" ? "radio" : "interphone"}</span><span class="body">${esc(l.text)}</span>`; break;
     case "chatter":  // somebody else on the frequency
@@ -390,6 +390,7 @@ function setFlight(f) {
 function enRoute(s) {
   $("#airport-box").hidden = !!s;
   $("#status-box").hidden = !s;
+  $("#flight-box").hidden = $('.splitter[data-for="flight-box"]').hidden = !!s;  // (all of it's in the status, or a tab away)
   if (!s) return;
   const logo = $("#er-logo"), badge = $("#er-badge");
   if (logo.dataset.src !== s.logo) {
@@ -1233,7 +1234,7 @@ const Setup = {
         <button type="button" class="wcard ${on ? "" : "current"}" data-wcabin="off"><b>No cabin crew</b>
           <span class="muted small">A quiet cabin. You can bring them in any time in Quick Settings.</span></button>
       </div>
-      ${on ? `<p class="small">Who leads the cabin? Their name and accent follow the airline: on Lufthansa, a German crew.</p>
+      ${on ? `<p class="small">Who leads the cabin? Their accent follows the airline: on Lufthansa, a German crew. Auto gives them a local name too.</p>
         <div class="wpeople">${[{ id: "auto", name: "A different one each flight", brief: "One of them, chosen for each flight", sample: "" },
           ...(S.settings.cabin_crew || [])].map((p) => `<div class="wcard person ${p.id === (c.crew || "auto") ? "current" : ""}" data-cabin-person="${esc(p.id)}" role="button" tabindex="0">
           <b translate="no">${esc(p.name)}</b><span class="muted small">${esc(p.brief)}</span>${p.sample ? `<i class="small" translate="no">&ldquo;${esc(p.sample)}&rdquo;</i>

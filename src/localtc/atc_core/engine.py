@@ -448,6 +448,14 @@ SECTOR_NEAREST_NM = 150.0  # an airport further away than this names no centre f
 SECTOR_MIN_S = 1200.0  # shortest time on one enroute centre before being handed to the next
 SECTOR_LAST_NM = 250.0  # inside this of the destination the arrival takes over; no more sector changes
 SECTOR_DWELL_S = 30.0  # across a real centre boundary this long before the handoff: not skimming it
+CROSSING_LINE_NEAR_M = 300.0  # a runway's hold line within this is the one to go by
+CROSSING_STRIP_M = 100.0  # this close to a runway's pavement, with no hold line in the airport's data: at the runway
+REGION_ARRIVAL_NM = 400.0  # in no FIR we know of, this near the destination: its phraseology
+SECTOR_DESTINATION_NM = 400.0  # ... and its centre next
+SECTOR_ARRIVAL_NM = 120.0  # ... which still takes the flight this close in
+DESCENT_PAST_NM = 15.0  # this far past where it should have started down: ATC says something
+DESCENT_TOLD_EVERY_S = 150.0
+DESCENT_TOLD_MOST = 3
 CROSSING_TREND_S = 2.0  # how far apart two looks at the distance to a runway's hold short line are ...
 CROSSING_CLOSING_M = 3.0  # ... and how much closer the second has to be: heading for it
 SECTOR_BACK_S = 1800.0  # back into the centre left less than this long ago ...
@@ -602,6 +610,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._tuned_since = 0.0
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._crossings: tuple[str, ...] = ()  # runways the taxi route goes across
+        self._ran_onto: str | None = None  # the runway taxied onto without a clearance, not yet left
+        self._descent_told = 0  # times told to start down
+        self._descent_told_t = -math.inf
         self._crossing_seen: dict[str, tuple[float, float]] = {}  # runway: (t, metres to its hold short line) lately
         self._crossed: set[str] = set()  # ... and the ones already cleared to cross (full names, "09/27")
         self._crossing: str | None = None  # the runway cleared across and not yet left behind
@@ -798,6 +809,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             code = area.id
         elif own is not None and own.on_ground:
             code = st.flight.destination if self._arriving else st.flight.origin
+        elif (near := self.tracker.context.destination_distance_nm) is not None and near <= REGION_ARRIVAL_NM:
+            code = st.flight.destination  # (Lisbon's descent said the American way: no FIR in the data there, and so Miami's)
         code = code or st.flight.origin or st.flight.destination
         found = regions.region_for(code)
         if self.cfg.transition_ft:
@@ -1878,11 +1891,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if self._crossing is not None and not on_runway_now and self._was_crossing:
             self._crossing = None  # over it and off the other side: the clearance to cross is used up
         self._was_crossing = on_runway_now and self._crossing is not None
+        if self._ran_onto is not None and not on_runway_now:
+            self._crossed.add(self._ran_onto)  # across it, cleared or not: nothing still to wait for (tower never came)
+            self._ran_onto = None
         if entered_runway and own.on_ground and st.phase in (P.TAXI_OUT, P.RUNWAY_HOLD):
             crossing = ctx.runway is not None and ctx.runway.name == self._crossing
             if not ({"takeoff", "line_up"} & st.clearances.keys()) and not crossing:
                 where = f"runway {ctx.runway.name}" if ctx.runway else "a runway"
                 out.append(self._alert(t, "runway_incursion", f"entered {where} without clearance"))
+                self._ran_onto = ctx.runway.name if ctx.runway is not None else None
 
         if (entered := self._vfr_class_b_watch(own)) is not None:
             out.append(entered)
@@ -2019,6 +2036,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 and (phase is P.CRUISE or own.alt_indicated_ft >= 18000) and self._descent_due(own) \
                 and (plan := self._arrival_plan(own)) is not None:
             self._clear_descent(t, own, st.comms.tuned, plan)
+        elif phase in (P.CRUISE, P.ARRIVAL) and tuned in ("center", "approach") and "descend" in st.flags \
+                and st.pending is None and not self._going_around and self.diversion.target is None and self._descent_ignored(own):
+            self._descent_told, self._descent_told_t = self._descent_told + 1, t
+            self._schedule(t, "common.descend_now" if self._descent_told == 1 else "common.descend_intentions", {}, st.comms.tuned,
+                           delay=False, expects_readback=False)
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure") and self._holding():
             pass  # in the hold: the descent and approach come after it
         elif phase in (P.ARRIVAL, P.APPROACH) and tuned in ("center", "departure"):
@@ -4188,6 +4210,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if geo is not None and asked:
             end = geo.end(asked)
             runway = end.runway.name if end is not None else None
+            asked = asked if end is not None else ""  # (a runway no airport has: which one is plain from where they are)
+        if runway is None and own is not None and (near := self._crossing_near(own)) is not None:
+            runway = near[0]
+        if runway is None and (todo := [r for r in self._crossings if r not in self._crossed]):
+            runway = todo[0]  # the next one on the way
         if runway is None and ctx.hold_short is not None:
             runway = ctx.hold_short.runway.name
         departure = st.assignments.departure_runway
@@ -5983,6 +6010,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         start_nm = self.route.descent_distance_nm(geo.airport.lat, geo.airport.lon, level, geo.airport.elev_ft)
         return geo.distance_nm(own.lat, own.lon) <= start_nm + own.gs_kt / 60 * max(lead_min, DESCENT_LEAD_MIN)
 
+    def _descent_ignored(self, own: OwnshipState) -> bool:
+        """Cleared down, well past where the descent should have begun, and still up there, not descending."""
+        st, geo = self.state, self.geometry(self.state.flight.destination)
+        target = st.assignments.altitude_ft
+        if geo is None or target is None or self._descent_told >= DESCENT_TOLD_MOST or own.vs_fpm < -300 \
+                or own.alt_indicated_ft < target + 3000 or own.t - self._descent_told_t < DESCENT_TOLD_EVERY_S:
+            return False
+        needed = self.route.descent_distance_nm(geo.airport.lat, geo.airport.lon, int(own.alt_indicated_ft), geo.airport.elev_ft)
+        return geo.distance_nm(own.lat, own.lon) <= needed - DESCENT_PAST_NM
+
     def _clear_descent(self, t: float, own: OwnshipState, facility: Facility, plan: dict[str, Any], *, late: bool = False) -> None:
         """The descent from cruise, ahead of the top of descent: "descend via" the filed arrival when there is
         one, otherwise at pilot's discretion to the arrival altitude."""
@@ -6580,25 +6617,41 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         Being routed over a runway and never cleared across it leaves the pilot either stopping for a
         clearance that never comes or being blamed for crossing. The clearance comes as they reach it.
         """
-        ctx = self.tracker.context
-        if not self._crossings or ctx.hold_short is None or ctx.hold_short_distance_m is None:
+        if not self._crossings or not ({"taxi", "taxi_in"} & set(self.state.clearances)):
             return None
-        if ctx.hold_short_distance_m > CROSSING_CLEARANCE_M or not ({"taxi", "taxi_in"} & set(self.state.clearances)):
+        near = self._crossing_near(own)
+        if near is None:
             return None
-        runway = ctx.hold_short.runway.name
-        if runway not in self._crossings or runway in self._crossed:
-            return None
+        runway, metres = near
         # Closing on it, not taxiing away from it: just off the runway landed on, the same runway further along the
         # way in is to be crossed later (Heathrow's 09R, cleared across at the 27L exit, three minutes early).
         seen = self._crossing_seen.get(runway)
-        now = (own.t, ctx.hold_short_distance_m)
+        now = (own.t, metres)
         if seen is None or now[0] - seen[0] > CROSSING_TREND_S * 4:
             self._crossing_seen[runway] = now
             return None
         if now[0] - seen[0] < CROSSING_TREND_S:
             return None
         self._crossing_seen[runway] = now
-        return runway if seen[1] - now[1] >= CROSSING_CLOSING_M else None
+        waiting = own.gs_kt < 1.0 and self.state.phase is not None and P(self.state.phase) is P.TAXI_OUT  # stopped there, for it
+        return runway if waiting or seen[1] - now[1] >= CROSSING_CLOSING_M else None
+
+    def _crossing_near(self, own: OwnshipState) -> tuple[str, float] | None:
+        """The runway on the taxi route the aircraft has come to, and how far off: by its hold line, or where the airport
+        has none there, by the runway itself. Miami's data has next to none: nothing ever came up, so no clearance across
+        and never "contact tower"."""
+        ctx = self.tracker.context
+        todo = [r for r in self._crossings if r not in self._crossed]
+        if ctx.hold_short is not None and ctx.hold_short_distance_m is not None \
+                and ctx.hold_short_distance_m <= CROSSING_CLEARANCE_M and ctx.hold_short.runway.name in todo:
+            return ctx.hold_short.runway.name, ctx.hold_short_distance_m
+        if ctx.airport is None or ctx.on_runway:
+            return None
+        xy = ctx.airport.xy(own.lat, own.lon)
+        # (Where there is a hold line of its own coming up, that's the place: the clearance doesn't come 100 m early.)
+        lined = {h.runway.name for h in ctx.airport.hold_shorts if math.dist(h.xy, xy) <= CROSSING_LINE_NEAR_M}
+        best = min(((r.distance_to(xy), r.name) for r in ctx.airport.runways if r.name in todo and r.name not in lined), default=None)
+        return (best[1], best[0]) if best is not None and best[0] <= CROSSING_STRIP_M else None
 
     def _climb_step(self, facility: Facility, own: OwnshipState | None, cruise: int) -> int:
         """The next altitude of the climb. Departure's is the top of its airspace; a centre's is its usual step
@@ -6790,6 +6843,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # the international airport beside it.
         in_range = [g.airport for g in self.tracker.context_builder.airports.values()
                     if is_sector_airport(g.airport) and g.distance_nm(own.lat, own.lon) < SECTOR_NEAREST_NM]
+        # (Coming in from the ocean with no FIR in the data: the destination's own centre, or Santa Maria kept the flight to the coast.)
+        home = self.geometry(self.state.flight.destination) if self.state.flight.destination else None
+        if home is not None and is_sector_airport(home.airport) and all(a.icao != home.airport.icao for a in in_range) \
+                and home.distance_nm(own.lat, own.lon) < SECTOR_DESTINATION_NM:
+            in_range.append(home.airport)
         best = max(in_range, key=lambda a: (max(r.length_m for r in a.runways), a.icao), default=None)
         if best is None:
             return None
@@ -6823,7 +6881,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # Close to the destination the arrival takes over; no point changing centre first.
         destination_nm = self.tracker.context.destination_distance_nm
         if destination_nm is not None and destination_nm <= SECTOR_LAST_NM:
-            return None
+            home = self.geometry(self.state.flight.destination)
+            theirs = home is not None and candidate.station == sector_center(home.airport).station
+            if not theirs or destination_nm <= SECTOR_ARRIVAL_NM:
+                return None
         return candidate
 
     def _facility_for(self, mhz: float | None) -> Facility | None:

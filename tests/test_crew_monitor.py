@@ -193,8 +193,8 @@ def test_an_aircraft_without_a_checklist_gets_none_made_up():
 
 
 def test_the_airbus_line_up_checklist_is_its_real_one_challenge_and_response():
-    """The A320's own normal checklist (the QRH's): its items read in order, the captain's asked and waited for, the
-    copilot's own (TCAS) answered and set by itself."""
+    """The A320's own normal checklist (the QRH's): its items read in order, the captain's asked and waited for
+    (the transponder's mode too: the copilot only does its code)."""
     pm = crew(perf=PlanPerf(takeoff_flaps="1+F"))
     pm.observe(PhaseChanged(t=0.5, previous="TAXI_OUT", phase="RUNWAY_HOLD"))
     pm.observe(systems(0.6))
@@ -204,9 +204,9 @@ def test_the_airbus_line_up_checklist_is_its_real_one_challenge_and_response():
     states = [o for o in out if isinstance(o, ChecklistState)]
     assert states and states[0].status == "started" and "QRH" in states[0].source
     out = pm.observe(IntercomHeard(t=3, text="one six right, both"))
-    words = " ".join(said(out))
-    assert words.startswith("TCAS, TA or TA/RA, set.") and words.endswith("Packs 1 and 2?")
-    assert [o for o in out if isinstance(o, SetSimVar) and o.name == "TRANSPONDER STATE:1"]  # TA/RA set by the copilot
+    assert " ".join(said(out)) == "TCAS?"
+    assert not [o for o in out if isinstance(o, SetSimVar) and o.name == "TRANSPONDER STATE:1"]
+    assert said(pm.observe(IntercomHeard(t=3.5, text="TA RA"))) == ["Packs 1 and 2?"]
     out = pm.observe(IntercomHeard(t=4, text="on"))
     assert said(out) == ["Line-up checklist complete."]
     assert [o.status for o in out if isinstance(o, ChecklistState)][-1] == "completed"

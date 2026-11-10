@@ -663,6 +663,7 @@ async def run_session(
                     engine.ramp_mhz = RAMP_MHZ
                     if cabin is not None:
                         cabin.ground_call = ground.crew.called_by_cabin
+                        cabin.ground_hurry = ground.crew.hurry_by_cabin
                     consumers.append(asyncio.create_task(ground.run()))
             if cfg.crew.enabled:  # the copilot on the intercom: hears the pilot, works the aircraft
                 from localtc.crew.pm import PilotMonitoring

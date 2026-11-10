@@ -446,6 +446,9 @@ class CrewSpeech(Event, tag="crew_speech"):
     language: str = ""  # said in the pilot's language ("de"), not English: a voice of that language speaks it
 
 
+REPEATED = "-"  # CabinSpeech.summary: the announcement just made, in the airline's other language
+
+
 class CabinSpeech(Event, tag="cabin_speech"):
     """A cabin crew member speaking (crew.cabin): ``channel`` "pa" on the address system to the passengers, or
     "interphone" on the handset to the flight deck. ``chime`` the chime before it ("pa", "call"; "" none)."""
@@ -458,6 +461,7 @@ class CabinSpeech(Event, tag="cabin_speech"):
     locale: str = ""  # their English ("fr-FR": a French crew speaking English)
     language: str = ""  # said in another language ("fr"): a voice of that language speaks it
     spoken: str = ""  # the words for speech, if they differ from the text
+    summary: str = ""  # the radio log's few words for an announcement ("Safety briefing"; REPEATED: said again in another language)
 
 
 class RampSpeech(Event, tag="ramp_speech"):

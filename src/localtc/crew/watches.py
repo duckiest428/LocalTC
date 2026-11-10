@@ -647,7 +647,7 @@ class WatchMixin:
         if w is not None:  # only an airport's own observation; one borrowed from somewhere else isn't its weather
             bad = []
             if w.visibility_sm is not None and w.visibility_sm < 3:
-                bad.append(f"visibility {w.visibility_sm:g} miles")
+                bad.append(f"visibility {visibility_words(w.visibility_sm, d.icao)}")
             if w.ceiling_ft is not None and w.ceiling_ft < 1000:
                 bad.append(f"ceiling {w.ceiling_ft:,} feet")
             parts.append(", ".join(bad) if bad else "weather good")
@@ -684,7 +684,7 @@ class WatchMixin:
             info = self._atis(icao) if icao else None
             if info is None:
                 continue
-            hazards = _hazards(info.weather)
+            hazards = _hazards(info.weather, icao)
             key = (info.letter, *hazards)
             if self.weather_said.get(icao) == key:
                 continue
@@ -703,13 +703,20 @@ class WatchMixin:
         return Offer(kind, value, until)
 
 
-def _hazards(w: Any) -> tuple[str, ...]:
+def visibility_words(miles: float, icao: str = "") -> str:
+    """A visibility as the place reports it: miles in North America, metres elsewhere (Lisbon's "2.49 miles" was 4,000 m)."""
+    if icao[:1] in ("K", "C", "P", ""):
+        return f"{miles:g} miles"
+    return f"{round(miles * 1609.34, -2):,.0f} metres"
+
+
+def _hazards(w: Any, icao: str = "") -> tuple[str, ...]:
     """What in a weather report a crew plans around: gusts, low visibility, a low ceiling, freezing precipitation."""
     out = []
     if w.gust_kt and w.gust_kt >= 20:
         out.append(f"gusting {w.gust_kt}")
     if w.visibility_sm is not None and w.visibility_sm < 3:
-        out.append(f"visibility {w.visibility_sm:g} miles" if w.visibility_sm >= 1 else "low visibility")
+        out.append(f"visibility {visibility_words(w.visibility_sm, icao)}" if w.visibility_sm >= 1 else "low visibility")
     if w.ceiling_ft is not None and w.ceiling_ft < 1000:
         out.append(f"ceiling {w.ceiling_ft:,} feet")
     if w.precip and w.temperature_c is not None and w.temperature_c <= 2:

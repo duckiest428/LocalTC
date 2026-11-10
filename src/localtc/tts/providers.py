@@ -18,11 +18,12 @@ words) before it's used. A provider that fails steps aside for a while, the same
 When every provider fails, the chain answers None and ATC carries on as text: a voice failing never stops ATC.
 """
 
+import dataclasses
 import logging
 import statistics
 import threading
 import time
-from collections import Counter, deque
+from collections import Counter, OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -117,6 +118,10 @@ class ProviderState:
     rtf: deque = field(default_factory=lambda: deque(maxlen=50))
 
 
+KEEP_CHARS = 48  # a line this short ("Gear up", "V1") is kept once made ...
+KEEP_LINES = 200  # ... this many of them
+
+
 class VoiceChain:
     """``providers`` in fallback order (the first is the one chosen). ``timeout_s``: the longest one may take for a
     line before the next is asked."""
@@ -132,6 +137,7 @@ class VoiceChain:
         self._abandoned: set[str] = set()  # providers still on a line they ran out of time for
         self.last_via = ""  # who spoke the last line ("" none: text only)
         self.text_only = 0  # lines nobody could speak
+        self._kept: OrderedDict[tuple[str, Persona], Speech] = OrderedDict()  # the short lines said before
 
     @property
     def selected(self) -> Any:
@@ -141,6 +147,9 @@ class VoiceChain:
         """The first provider's good audio for ``text``, or None (text only). ``local``: only those on this PC (none
         there: the cloud's after all)."""
         providers = [p for p in self.providers if getattr(p, "local", True)] if local else self.providers
+        key = (text, persona)
+        if len(text) <= KEEP_CHARS and (kept := self._kept.get(key)) is not None:
+            return dataclasses.replace(kept, audio=kept.audio.copy(), latency_ms=0.0)
         for provider in providers or self.providers:
             st = self.states[provider.id]
             if self._resting(provider, st):
@@ -165,6 +174,10 @@ class VoiceChain:
                     log.info("Voices: %s speaking%s", provider.name,
                              "" if provider is self.selected else f" in place of {self.selected.name}")
                 self.last_via = provider.id
+            if len(text) <= KEEP_CHARS:
+                self._kept[key] = dataclasses.replace(speech, audio=speech.audio.copy())
+                while len(self._kept) > KEEP_LINES:
+                    self._kept.popitem(last=False)
             return speech
         if self.last_via:
             log.warning("Voices: no provider could speak; ATC is text only until one can")

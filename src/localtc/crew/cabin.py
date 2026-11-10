@@ -75,6 +75,7 @@ from localtc.sim_api import (
     SimLifecycle,
     WeatherReport,
 )
+from localtc.sim_api.events import REPEATED
 from localtc.sim_api.geo import haversine_nm
 
 
@@ -125,6 +126,17 @@ START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+|our\s+)?(de
                             r"|\bget\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?boarding,?\s+please\b")
 # Whisper's spellings of it ("Can we get the deborings started please?").
 DEBOARDING_HEARD = re.compile(r"\bde-?\s?bor(?:d)?ings?\b")
+ANNOUNCED = {  # what the radio log shows of an announcement (the voice says all of it)
+    "boarding": "Boarding announcement", "welcome": "Welcome aboard", "safety": "Safety briefing", "safety_more": "Safety briefing",
+    "exit_row": "Exit row briefing", "doors": "Doors to automatic", "night": "Cabin lights dimmed", "service": "Cabin service",
+    "service_sale": "Cabin service", "seatbelt_off": "Seatbelt sign off", "seatbelt_off_generic": "Seatbelt sign off",
+    "seatbelt_again_off": "Seatbelt sign off", "turbulence": "Turbulence: seats, please", "turbulence_service": "Turbulence: service stopped",
+    "aircraft_talk": "About the aircraft", "descent": "Preparing for descent", "landing": "Preparing for landing",
+    "after_landing": "After landing", "goodbye": "Goodbye", "delay": "Delay",
+}
+# "Can we speed up boarding?", "get them on faster": the ramp's to do, not a cheerful word from the cabin
+SPEED_UP = re.compile(r"\b(?:speed(?:ing)?\s+up|hurry(?:ing)?(?:\s+up)?|quicken|rush)\b[^.?!]*?\b(de-?boarding|boarding|passengers|pax)\b"
+                      r"|\b(de-?boarding|boarding|passengers|pax)\b[^.?!]*?\b(?:faster|quicker|speed(?:ed)?\s+up|hurry)\b")
 ASKS_ABOUT = re.compile(r"\W*(?:\w+\W+)?(?:has|have|did|is|are|how|when|what|was|were)\b")
 GSX_PAX = re.compile(r"\bpax (\d+)/(\d+)")
 GREETING = re.compile(r"\bgood (morning|afternoon|evening)\b", re.IGNORECASE)
@@ -333,6 +345,7 @@ class CabinCrew:
         self._last_said: tuple[float, str] | None = None  # their last words to the captain
         self._ran_late = False  # the departure was a quarter of an hour late or more: said so for the rest of the flight
         self.ground_call: Any = None  # the ground crew, to start boarding and deboarding (ground.crew.RampCrew.called_by_cabin)
+        self.ground_hurry: Any = None  # ... and to speed it up (ground.crew.RampCrew.hurry_by_cabin)
         self.backend: Any = None  # the cloud language model (None: the script's words)
         self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
         self._to_word: set[str] = set()  # the announcements it may word
@@ -415,7 +428,9 @@ class CabinCrew:
                 chosen = PEOPLE[crc(f"{self.facts.callsign}|{self.seed}") % len(PEOPLE)]
             locale = self.locale()
             english_names = locale.lower().startswith("en") and locale.lower() not in ("en-in", "en-sg", "en-hk")
-            name = chosen.name if english_names else crew_name(locale, chosen.sex, f"{self.facts.callsign}|{chosen.id}")
+            # (The one the pilot picked stays who they picked: "why did Jamie just switch to Pedro?". Their accent follows the airline.)
+            picked = self.settings.crew in BY_ID
+            name = chosen.name if english_names or picked else crew_name(locale, chosen.sex, f"{self.facts.callsign}|{chosen.id}")
             self._crew = (chosen, name, locale, chosen.sex)
         return self._crew
 
@@ -617,11 +632,11 @@ class CabinCrew:
             return None
         return text, said
 
-    def _speech(self, text: str, spoken: str, channel: str, *, chime: str = "", language: str = "") -> CabinSpeech:
+    def _speech(self, text: str, spoken: str, channel: str, *, chime: str = "", language: str = "", summary: str = "") -> CabinSpeech:
         person, name, english, sex = self.crew()
         return CabinSpeech(t=self._t, text=text, spoken=spoken if spoken != text else "", speaker=name,
                            channel=channel, chime=chime if self.settings.chime else "", sex=sex, locale=english,
-                           language="" if language == "en" else language)
+                           language="" if language == "en" else language, summary=summary)
 
     def announce(self, key: str, *, landed: bool = False, chime: bool = True, first_only: bool = False,
                  extra: dict[str, str] | None = None) -> list[Any]:
@@ -643,7 +658,9 @@ class CabinCrew:
                 if text is None:
                     continue
                 spoken = text
-            out.append(self._speech(text, spoken, "pa", chime="pa" if chime and not out else "", language=lang))
+            # (The log's one line for it, however many languages it's said in: REPEATED for the others.)
+            summary = (ANNOUNCED.get(key, "") if not out else REPEATED) if key in ANNOUNCED else ""
+            out.append(self._speech(text, spoken, "pa", chime="pa" if chime and not out else "", language=lang, summary=summary))
             if lang == "en" and self._worded(key):
                 self._to_word.add(text)
         return out
@@ -1309,6 +1326,9 @@ class CabinCrew:
         low = body.lower()
         reply = self.reply
         low = DEBOARDING_HEARD.sub("deboarding", low)
+        if self.ground_hurry is not None and not ASKS_ABOUT.match(low) and (m := SPEED_UP.search(low)):
+            off = "deboarding" in (m.group(1) or m.group(2) or "") or self._landed_t is not None
+            return reply("ground_hurry" if self.ground_hurry("Deboarding" if off else "Boarding", t) else "ground_not_yet")
         if self.ground_call is not None and not ASKS_ABOUT.match(low) and (m := START_BOARDING.search(low)):
             # (At the gate after the flight, "start boarding" is them getting off.)
             service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"

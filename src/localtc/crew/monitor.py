@@ -79,6 +79,8 @@ SPEECH_S_PER_CHAR = 0.065  # how long ATC's words take; the frequency is busy me
 AFTER_ATC_S = 1.5  # and a moment after, for the readback to start
 READBACK_GRACE_S = 7.0  # an instruction that wants a readback: the pilot's turn first
 STERILE_FT = 10000.0
+TOD_PAST_MIN = 2.0  # this far past the top of descent and still level: said
+TOD_PAST_EVERY_S = 120.0  # ... and again
 LONG_CRUISE_MIN = 40.0  # a cruise this long before the descent: time for a chatty copilot's offer
 MOMENT_S = 4.0  # a callout of the moment ("seventy knots", "minimums"): said within this, over the radio if need
 # be, or not at all (38 seconds late behind a go-around call, "seventy knots" was worse than nothing)
@@ -591,12 +593,6 @@ class Monitor(WatchMixin):
                 if parts:
                     self._call("clearance_set", ROUTINE, t, f"{_cap(', '.join(parts))} set." if self.hands
                                else f"Don't forget {' and '.join(parts)}.", commands=tuple(cmds))
-            elif iid in ("tower.luaw", "tower.takeoff", "tower.takeoff_rnav", "tower.takeoff_sid"):
-                own = self.c.own
-                if own is not None and own.xpdr_mode not in ("alt",):
-                    # Set, not only said ("it didn't do any of what it said"): the transponder's state, checked.
-                    self._call("tara", ROUTINE, t + 2, "Transponder TA/RA." if self.hands else "Transponder TA/RA, your side.",
-                               commands=(Command("transponder", "alt"),) if self.hands else ())
             elif iid.startswith("approach.cleared") or iid == "approach.intercept_cleared":
                 self.f.said.setdefault("approach_cleared_t", t)
             if iid == "clearance.readback_correct_ground" or iid.startswith("ground.pushback") \
@@ -1145,8 +1141,14 @@ class Monitor(WatchMixin):
         descending = st.assignments.altitude_ft is not None and st.assignments.altitude_ft < level - 500
         if self.phase == "CRUISE" and 0 < minutes <= TOD_WARN_MIN:
             self._call("tod_soon", ROUTINE, t, "Top of descent in about ten minutes.")
-        if self.phase == "CRUISE" and minutes <= 0 and to_go > 20:
+        level_now = own.alt_indicated_ft >= level - 500 and own.vs_fpm > -300  # still up at the cruise level
+        if self.phase in ("CRUISE", "ARRIVAL") and minutes <= 0 and to_go > 20 and level_now:
             self._call("tod", ROUTINE, t, "That's top of descent." + ("" if descending else " No descent clearance yet."))
+        if self.phase in ("CRUISE", "ARRIVAL") and level_now and descending and minutes <= -TOD_PAST_MIN and to_go > 20:
+            # Nobody's started down: said, and said again, with the runway getting closer. (A flight left to the autopilot
+            # flew over its destination at FL350 and on out to sea, with the copilot quiet.)
+            self._call("tod_past", ROUTINE, t, "We're past the top of descent, and still level. We need to start down.",
+                       again_s=TOD_PAST_EVERY_S)
         if self.personality.offers_weather and self.phase == "CRUISE" and minutes > LONG_CRUISE_MIN                 and t - self.f.said.get("toc", t) > 600 and self.offer is None and self.verbosity != "quiet"                 and self._call("offer_wx", ROUTINE, t, "We've got a while. Want the weather at the destination?"):
             self.offer = Offer("weather", st.flight.destination or "", t + 45.0)  # a chatty companion's question
         # Fuel against the plan and the reserve: only from a steady cruise burn, measured over minutes. The burn in

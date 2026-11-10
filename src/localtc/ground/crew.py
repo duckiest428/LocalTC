@@ -149,6 +149,7 @@ class RampCrew:
         self._said_differs = False
         self._gate_told = False
         self._hurried: set[str] = set()  # sped up through GSX's settings: put back when the service is over
+        self._hurry_asked: list[str] = []  # the cabin crew asked for it
         self._fuel_wanted = 0  # the fuel asked for, in percent, for when GSX asks
         self._finished: list[str] = []  # done this turnaround (GSX shows "completed" for only a few seconds)
         self._bridge: dict[str, bool] = {}  # the jetway and stairs: on the aircraft or not, as GSX last said (one call moves them either way)
@@ -345,6 +346,14 @@ class RampCrew:
             return False
         if not svc.active and service not in self._queue:
             self._queue.append(service)
+        return True
+
+    def hurry_by_cabin(self, service: str, t: float) -> bool:
+        """The cabin crew told to speed up boarding or deboarding: the same as asking the ramp. False: it isn't under way."""
+        svc = self._service(service)
+        if svc is None or not svc.active:
+            return False
+        self._hurry_asked.append(service)
         return True
 
     def ask_for(self, service: str, t: float) -> list[Any]:
@@ -898,6 +907,9 @@ class RampCrew:
         out += self._engines_answer(t)
         out += self._once_braked(t)
         out += self._send_next(t)
+        asked, self._hurry_asked = self._hurry_asked, []
+        for service in asked:
+            out += self._hurry(service, t)
         out += self._hurry_over()
         out += self._due_calls(t)
         out += self._gate_to_gsx(t)

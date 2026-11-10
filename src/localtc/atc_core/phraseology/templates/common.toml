@@ -10,6 +10,16 @@ readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 
 [[template]]
+id = "common.descend_now"
+controller = "any"
+text = ["{callsign}, start your descent now.", "{callsign}, you're past your descent point, start down now."]
+
+[[template]]
+id = "common.descend_intentions"
+controller = "any"
+text = ["{callsign}, well above the descent profile, say intentions."]
+
+[[template]]
 id = "common.say_again"
 controller = "any"
 text = ["{callsign}, say again."]

@@ -61,7 +61,12 @@ def _spread(key: str, span: tuple[float, float], salt: str) -> float:
 
 PA_GAP_S = 8.0  # between two of the cabin's announcements
 PA_GAP_OTHER_LANGUAGE_S = 1.5  # ... and before the same one in another language
-STREAM_CHARS = 90  # an ATC line this long is made and played a sentence at a time
+STREAM_CHARS = 60  # a radio line this long is made and played a phrase at a time
+CLAUSE_CHARS = 40  # ... of at least this much
+WARM_AFTER_S = 25.0  # the copilot's fixed callouts made this long after the start, with nothing else going on
+CALLOUTS = ("One hundred knots.", "V1.", "Rotate.", "Positive rate.", "Gear up.", "Gear down.", "Eighty knots.", "Ten thousand.",
+            "Spoilers.", "Reversers green.", "Decel.", "Flaps up.", "Speed checked.", "Minimums.", "Approaching minimums.",
+            "Go around.", "Thrust set.", "Autopilot disconnected.")
 
 
 def sentences(text: str) -> list[str]:
@@ -73,6 +78,25 @@ def sentences(text: str) -> list[str]:
             out[-1] = f"{out[-1]} {part}"
         elif part:
             out.append(part)
+    return out
+
+
+def clauses(text: str) -> list[str]:
+    """``text`` cut for speaking as it's made: at its sentences, and within those at commas once there's enough to say.
+    A 14-second taxi clearance takes 5.5 s to make whole (more with the sim running), its first phrase 1.4 s, and
+    the rest gets made while that's being said."""
+    out: list[str] = []
+    for sentence in sentences(text):
+        piece = ""
+        for part in re.split(r"(?<=,)\s+", sentence):
+            piece = f"{piece} {part}".strip()
+            if len(piece) >= CLAUSE_CHARS:
+                out.append(piece)
+                piece = ""
+        if piece and out and len(piece) < CLAUSE_CHARS / 2:  # nothing left worth a piece of its own
+            out[-1] = f"{out[-1]} {piece}"
+        elif piece:
+            out.append(piece)
     return out
 
 
@@ -164,6 +188,7 @@ class VoiceOut:
     async def run(self) -> None:
         watcher = asyncio.create_task(self._watch_radio())
         cabin = asyncio.create_task(self._cabin_crew())
+        warm = asyncio.create_task(self._warm_callouts())
         try:
             async for ev in self._events:
                 try:
@@ -173,8 +198,24 @@ class VoiceOut:
         finally:
             watcher.cancel()
             cabin.cancel()
+            warm.cancel()
             self._stop_atis()
             self._stop_music()
+
+    async def _warm_callouts(self) -> None:
+        """The copilot's fixed callouts made ahead of when they're wanted (V1 can't wait a second for its voice): kept by
+        the voices (``VoiceChain``), one at a time and never in the way of a line that's due."""
+        if not self.copilot:
+            return
+        await asyncio.sleep(WARM_AFTER_S)
+        who = self.persona("", "copilot", language=self.crew_language)
+        for line in CALLOUTS:
+            try:
+                async with self._lock:
+                    await asyncio.to_thread(self.voices.speak, speakable(line), who, local=True)
+            except Exception:  # noqa: BLE001 - only a head start
+                log.debug("Couldn't make %r ahead", line, exc_info=True)
+            await asyncio.sleep(0.5)
 
     async def _speak(self, ev: Any) -> None:
         locale = getattr(ev, "locale", "")
@@ -225,7 +266,7 @@ class VoiceOut:
         async with self._lock:
             if not self.on_air(station) or (channel == "chatter" and self.keyed) or self.off_frequency(station, channel):
                 return None  # tuned away while it waited its turn, or another flight's line with the pilot on the air
-            pieces = sentences(text) if kind == "atc" and len(text) >= STREAM_CHARS else [text]
+            pieces = clauses(text) if kind in ("atc", "pilot") and len(text) >= STREAM_CHARS else [text]
             if len(pieces) > 1:
                 return await self._say_pieces(pieces, who, kind, manner, local, station=station, channel=channel,
                                               strength=strength, cabin=cabin, urgent=urgent, keep=keep)

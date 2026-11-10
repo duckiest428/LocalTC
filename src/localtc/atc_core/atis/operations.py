@@ -127,9 +127,21 @@ def read_notices(text: str) -> list[tuple[str, str, str]]:
     if m := re.search(rf"\bRWY {NOTAM_RUNWAY}/{NOTAM_RUNWAY}\b[^.]*?\bCLSD\b", t):
         if not re.search(r"\b(?:EXC|EXCEPT|BTN|BETWEEN|TWY|TAXIING)\b", t[:m.start()]) and "CLSD TO" not in t:
             out.append(("runway_closed", f"{_rwy(m.group(1))}/{_rwy(m.group(2))}", ""))
+    # "TWY N CLSD BTN TWY Z AND TWY M2" (as Miami's ATIS has it): the ends after the word closed. Read as "TWY N CLSD", all of
+    # N was closed, and then "TWY Z AND TWY M2, TWY P CLSD" all of Z too: nearly every taxiway at the airport red on the map.
+    def stretch(m: re.Match) -> str:
+        if not m.group(8):  # (only for some: "... FOR AIRCRAFT ADG GROUP 6")
+            ref = lambda kind, name: f"RWY {_rwy(name)}" if kind == "RWY" else name
+            out.append(("taxiway_closed", m.group(1), f"{ref(m.group(2), m.group(3))}/{ref(m.group(5), m.group(6))}"))
+        return " . "
+
+    t = re.sub(rf"\bTWY ({TAXIWAY_NAME}) CLSD (?:BTN|BETWEEN) (?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME}) AND "
+               rf"(?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME})( (?:FOR|TO) (?:AIRCRAFT|ACFT)\b[^,.]*)?", stretch, t)
     for m in re.finditer(r"\bTWYS? (.+?)\bCLSD\b", t):
         if "RWY" in t[max(0, m.start() - 12):m.start()]:
             continue  # "RWY 22 TWY ... CLSD": a runway's
+        if re.match(r"\s*(?:FOR|TO) (?:AIRCRAFT|ACFT)\b", t[m.end():]):
+            continue  # closed only to some ("FOR ACFT WINGSPAN MORE THAN 214 FT")
         words = m.group(1).strip()
         if seg := re.fullmatch(rf"({TAXIWAY_NAME}) (?:BTN|BETWEEN) (?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME}) AND "
                                rf"(?:(TWY|RWY) )?({NOTAM_RUNWAY}|{TAXIWAY_NAME})", words):

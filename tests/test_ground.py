@@ -1602,3 +1602,13 @@ def test_the_newer_gsxs_menus_are_still_read():
     assert not is_question(top) and not is_question(more)
     for service in SERVICES:
         assert find(more if service in ADDITIONAL else top, row_of(service).words).index is not None, service
+
+
+def test_the_cabin_asking_to_speed_up_boarding_is_the_ramp_speeding_it_up():
+    from localtc.ground.crew import SpeedUp
+
+    newer = crew()
+    newer.state = msgspec_free_replace(state_with(newer, services=services(Boarding="performing")), frozenset(("gate", "settings")))
+    assert newer.hurry_by_cabin("Boarding", 1.0)
+    assert [o for o in newer.tick(2.0) if isinstance(o, SpeedUp)] == [SpeedUp("Boarding")]
+    assert not crew().hurry_by_cabin("Boarding", 1.0)  # nothing under way

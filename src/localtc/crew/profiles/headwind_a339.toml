@@ -24,7 +24,17 @@ landing_detent = "3"
 reversers = true
 ceiling_ft = 41450
 cannot = ["spoilers"]   # only a toggle (SPOILERS_ARM_TOGGLE), and nothing the copilot reads follows it
-unread = ["parking_brake"]
+
+[reads]
+parking_brake = "L:A32NX_PARK_BRAKE_LEVER_POS >= 0.5"   # (BRAKE PARKING POSITION reads 0 with it set)
+
+# Both baro knobs pulled for STD, pushed back for QNH: KOHLSMAN_SET alone left them on QNH 1013. FlyByWire's own events
+# (the model's PULL_CODE and PUSH_CODE, ModelBehaviorDefs/A339X/generated/A32NX_Interior_EFIS.xml). Not yet seen in the sim.
+[actions.altimeter_std]
+event = "A32NX.FCU_EFIS_L_BARO_PULL, A32NX.FCU_EFIS_R_BARO_PULL"
+
+[actions.altimeter_qnh]
+event = "A32NX.FCU_EFIS_L_BARO_PUSH, A32NX.FCU_EFIS_R_BARO_PUSH"
 
 [actions.heading]
 event = "A32NX.FCU_HDG_SET"

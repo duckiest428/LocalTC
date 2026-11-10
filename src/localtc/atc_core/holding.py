@@ -39,6 +39,7 @@ WEATHER_EFC_MIN = 20
 MIN_DELAY_MIN = 4
 CAT3_VIS_SM, NON_PRECISION_VIS_SM, NON_PRECISION_CEILING_FT = 0.1, 1.0, 400
 MAX_HOLDS = 2  # a flight is held no more than this many times
+HOLD_FT_PER_NM = 500.0  # a hold further below than this per mile to its fix can't be got down to
 HOLD_AGAIN_S = 900.0  # out of a hold, not held again for this long (held, let out and held again inside a minute)
 
 
@@ -177,7 +178,11 @@ class HoldsMixin:
         why = self._hold_reason(own)
         if why is None:
             return False
-        return self._give_hold(own, facility, why[0], why[1], t)
+        fix = self._hold_fix(own)
+        level = st.assignments.altitude_ft or own.alt_indicated_ft
+        if fix is not None and own.vs_fpm > -300 and own.alt_indicated_ft - level > nm(own.lat, own.lon, fix[1], fix[2]) * HOLD_FT_PER_NM:
+            return False  # still at the cruise level: "hold at COCUN, maintain 3,000" to a flight at FL350 twenty miles from it
+        return self._give_hold(own, facility, why[0], why[1], t, fix=fix)
 
     def _watch_hold(self, own: OwnshipState, facility: "Facility | None") -> bool:
         hold, t = self.hold, own.t

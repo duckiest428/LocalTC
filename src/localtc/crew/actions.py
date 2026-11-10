@@ -56,7 +56,14 @@ GEAR_CHECK_S = 10.0  # some airliners' handles take seconds to show it (the A330
 # Whose hands: the pilot flying's side of the cockpit (the captain's seat, the thrust and the speedbrake levers, the
 # parking brake, the autopilot's engagement, the exterior lights). The copilot works its own side and the shared
 # panels on request; these it leaves, saying so in a word. ("spoilers": the speedbrake lever, armed or out.)
-PILOT_SIDE = frozenset({"parking_brake", "spoilers", "autothrottle", "autopilot", "light"})
+PILOT_SIDE = frozenset({"parking_brake", "spoilers", "autothrottle", "autopilot", "light", "transponder"})
+
+
+def _knobs(w: Any) -> tuple[Any, ...]:
+    """Baro knobs pulled or pushed: an input event, or a key event for each ("A, B")."""
+    if w.input:
+        return (SetInputEvent(name=w.input, value=float(w.on)),)
+    return tuple(SendSimEvent(name=name.strip()) for name in w.event.split(","))
 
 
 @dataclass
@@ -468,9 +475,11 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
         if w is not None and w.clicks:
             writes = _baro(w, c, hpa, std=std)
             both = False  # an add-on's first-officer knob
-        elif std and (pull := p.actions.get("altimeter_std")) is not None and pull.input:
-            writes = (SetInputEvent(name=pull.input, value=float(pull.on)),)  # an Airbus's baro knobs pulled: STD
-            both = "," in pull.input
+        elif std and (pull := p.actions.get("altimeter_std")) is not None and (pull.input or pull.event):
+            writes = _knobs(pull)  # an Airbus's baro knobs pulled: STD
+            if pull.event:  # ... and the sim's own altimeters at 29.92, which the indicated altitude is read from
+                writes += tuple(SendSimEvent(name="KOHLSMAN_SET", value=round(hpa * 16), index=i) for i in (1, 2))
+            both = "," in (pull.input or pull.event)
             c.baro_pulled = True
         else:
             custom = p.actions.get("altimeter")
@@ -482,8 +491,8 @@ def _plan(cmd: Command, c: Cockpit) -> Plan | str:  # noqa: C901 - one branch pe
             own = c.own
             setting = (own.altimeter_setting_inhg or own.altimeter_inhg) if own is not None else 0.0
             at_std = own is None or abs(setting - 29.92) < 0.005 or c.baro_pulled  # (on QNH already: not pushed again)
-            if (push := p.actions.get("altimeter_qnh")) is not None and push.input and at_std:
-                writes = (SetInputEvent(name=push.input, value=float(push.on)), *writes)  # pushed out of STD first
+            if (push := p.actions.get("altimeter_qnh")) is not None and (push.input or push.event) and at_std:
+                writes = (*_knobs(push), *writes)  # pushed out of STD first
                 c.baro_pulled = False
         side = (" both sides", ", both sides") if both else (" on my side", " on my side")
         return Plan(a, v, writes, lambda c2: None, said.replace(" set.", f" set{side[1]}."), spoken + side[0])

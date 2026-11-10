@@ -119,7 +119,9 @@ def test_each_announcement_chimes_once_before_its_first_language():
 def test_a_crew_of_another_country_has_its_names_and_its_english():
     cabin = CabinCrew(CabinSettings(crew="claire"), lambda: facts("AFR22"))
     person, name, english, sex = cabin.crew()
-    assert english == "fr-FR" and sex == "F" and name in ("Camille", "Chloé", "Élodie", "Manon", "Julie", "Céline")
+    assert english == "fr-FR" and sex == "F" and name == "Claire"  # the one picked stays who was picked
+    person, name, english, _ = CabinCrew(CabinSettings(), lambda: facts("AFR22")).crew()
+    assert english == "fr-FR" and name != person.name  # left to the flight: a name from there
     assert CabinCrew(CabinSettings(crew="claire"), lambda: facts("ACA1")).crew()[1] == "Claire"
 
 

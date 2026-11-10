@@ -190,5 +190,5 @@ def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
     """
     if (published := _facility(airport, "center", ("center",))) is not None:
         return Facility("center", published.station, published.mhz, None, published.alternates)
-    name = f"{sector_name(airport)} Center"
-    return Facility("center", name, _band_frequency(name.removesuffix(" Center"), taken))
+    place = sector_name(airport)
+    return Facility("center", f"{place} {'Center' if airport.icao[:1] in ('K', 'C', 'P') else 'Control'}", _band_frequency(place, taken))

@@ -26,7 +26,9 @@ reversers = true
 ceiling_ft = 43000
 # Spoilers arm only by a toggle (SPOILERS_ARM_TOGGLE) and nothing the sim reads follows it; COM standby is the RMP's.
 cannot = ["spoilers", "com_standby"]
-unread = ["parking_brake"]
+
+[reads]
+parking_brake = "L:A32NX_PARK_BRAKE_LEVER_POS >= 0.5"   # (BRAKE PARKING POSITION reads 0 with it set)
 
 [actions.heading]
 event = "A32NX.FCU_HDG_SET"

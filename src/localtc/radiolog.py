@@ -5,6 +5,7 @@ flight's transcript, so the two always read the same.
 """
 
 from localtc.console import ALERTS, PHASES
+from localtc.sim_api.events import REPEATED
 from localtc.sim_api import (
     AtcAlert,
     AtcTransmission,
@@ -48,7 +49,9 @@ def radio_line(ev: BusEvent) -> dict | None:
     if isinstance(ev, CrewSpeech):
         return {"kind": "crew", "t": t, "text": ev.text, "level": "warn" if ev.kind in ("refused", "alert") else ""}
     if isinstance(ev, CabinSpeech):  # the cabin crew: to the passengers, or to you
-        return {"kind": "cabin", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel}
+        if ev.summary == REPEATED:
+            return None  # the same announcement in the airline's other language: one line in the log is enough
+        return {"kind": "cabin", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel, "summary": ev.summary}
     if isinstance(ev, RampSpeech):  # the ground crew: on their frequency, or the headset
         return {"kind": "ramp", "t": t, "text": ev.text, "who": ev.speaker, "channel": ev.channel}
     if isinstance(ev, CrewAction):

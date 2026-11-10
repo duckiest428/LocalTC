@@ -14,6 +14,7 @@
 Everything it says is a message from "Airport Ops" in the EFB (never on the ATC frequency), with its time.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 
@@ -57,6 +58,8 @@ class OpsState:
 
 
 class AirportOps:
+    turnaround: dict | None = None  # the timeline (turnaround_plan)
+
     def __init__(self, engine=None, clock=time.time) -> None:
         self.engine = engine
         self.clock = clock
@@ -71,9 +74,23 @@ class AirportOps:
     # --- what it's told ---------------------------------------------------------------------------------------
 
     def observe(self, ev) -> None:
-        from localtc.sim_api import AircraftVars, FlightArrived, GroundStatus, NoticesReport, OwnshipState, PhaseChanged
+        from localtc.sim_api import (
+            AircraftVars,
+            CabinIncident,
+            FlightArrived,
+            GroundStatus,
+            NoticesReport,
+            OwnshipState,
+            PhaseChanged,
+            TurnaroundState,
+        )
 
-        if isinstance(ev, GroundStatus):
+        if isinstance(ev, TurnaroundState):
+            self.turnaround = json.loads(ev.data)
+            self._changed()
+        elif isinstance(ev, CabinIncident):
+            self._incident(ev)
+        elif isinstance(ev, GroundStatus):
             self.ground = {"provider": ev.provider, "connected": ev.connected, "parking": ev.parking,
                            "services": [{"id": s.id, "name": s.name, "state": s.state, "waiting": s.waiting, "status": s.status}
                                         for s in ev.services]}
@@ -92,6 +109,19 @@ class AirportOps:
                 self.s.deice.pop("position", None)
         elif isinstance(ev, FlightArrived):
             self._arrived(ev)
+
+    def _incident(self, ev) -> None:
+        """A problem in the cabin: the airport's part in it, kept with the flight."""
+        from localtc.crew.cabin_incidents import PLAYS
+
+        play = PLAYS.get(ev.kind)
+        if play is None:
+            return
+        if ev.stage == "decided" and ev.decision in ("assist", "escalate", "divert"):
+            verb = {"assist": "requested", "escalate": "alerted: emergency declared", "divert": "alerted: the flight is diverting"}[ev.decision]
+            self._say(f"{play['what'].capitalize()}: {play['services']} {verb}.", "warning", key=f"incident:{ev.incident}:{ev.decision}")
+        elif ev.stage == "resolved":
+            self._say(f"{play['what'].capitalize()}: {ev.outcome}.", "service", key=f"incident:{ev.incident}:end")
 
     def _gsx(self, values: dict) -> None:
         changed = False
@@ -249,4 +279,4 @@ class AirportOps:
         s = self.s
         return {"icao": s.icao, "role": s.role, "services": {k: v.to_json() for k, v in s.services.items()},
                 "gsx": bool(self.gsx), "deice": s.deice, "messages": s.messages[-30:], "requests": s.requests[-10:],
-                "closures": s.closures, "notes": s.notes[-20:], "ground": self.ground}
+                "closures": s.closures, "notes": s.notes[-20:], "ground": self.ground, "turnaround": self.turnaround}

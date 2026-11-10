@@ -159,6 +159,10 @@ checklists = "offer"          # the checklists (the aircraft's own, else its fam
                               # each when it's due, "run" it straight away, "off" only when you ask for one
 checklist_mode = "challenge"  # challenge (it asks, you answer) | read (it reads and checks) | auto (it also sets what it can)
 
+[turnaround]                  # the turnaround as a timeline, against the plan's off-block time
+mode = "realistic"            # off | advisory (times, reasons, reminders) | realistic (services keep to their slots too)
+profile = "auto"              # auto (from the airline) | full_service | low_cost | regional | cargo
+
 [ground]                      # the ground crew: the turnaround and the push by voice, through GSX where it's installed
 enabled = false
 verbosity = "standard"        # what they say by themselves: quiet | standard | chatty
@@ -169,6 +173,7 @@ adapter = "auto"              # auto | gsx | standalone | mock (a stand-in, for 
 
 [cabin]                       # the cabin crew: announcements, the safety demo, the service, and "cabin, ..." on the intercom
 enabled = false               # only on an airline's flight or in an airliner
+incidents = "off"             # problems in the cabin for you to decide on: off | rare | normal | frequent
 crew = "auto"                 # who leads the cabin: claire | jamie | grace | daniel | sophie | auto (a different one each flight)
 announcements = true          # boarding, the welcome, the seatbelt sign, the descent, the arrival
 safety_demo = true

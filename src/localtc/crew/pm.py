@@ -216,6 +216,7 @@ class PilotMonitoring:
         self.monitor.personality = self.personality
         self.monitor.checklist_mode = s["checklist_mode"]
         self.monitor.cabin_on_schedule = lambda: getattr(self, "cabin_on_schedule", lambda: False)()
+        self.monitor.turnaround_of = self.picture.turnaround_of = lambda: getattr(self, "turnaround", None)
         self.monitor.set_checklists(getattr(self, "_book", None))
         self._waiting: list[_Waiting] = []
         self.intent: Intent | None = None

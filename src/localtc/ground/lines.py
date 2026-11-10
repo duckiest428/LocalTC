@@ -67,6 +67,7 @@ LINES = {
     "off": ("Okay, taking away {name}.", "{Name} coming off now."),
     "off_nothing": ("{Name} isn't on.", "{Name} isn't connected."),
     "off_failed": ("I couldn't take off {name}: {why}",),
+    "slot": ("{why} I'll call them as soon as they can come.",),
     "hurrying": ("Copy, I've told them to get a move on with {name}.", "Will do, we'll move {name} along."),
     "cant_hurry": ("They're going as fast as they can, I can't hurry them from here. Want me to finish {name} now instead?",
                    "No way to speed up {name} from here. Shall I wrap it up early?"),

@@ -25,6 +25,10 @@ MSA_NM = 25.0
 CORRIDOR_WIDTH_NM = 3.0
 CORRIDOR_STEP_NM = 3.0
 MAX_GRIDS = 12
+ENROUTE_FAA_NM = 3.5  # 4 statute miles
+ENROUTE_ICAO_NM = 4.3  # 8 km
+MOUNTAIN_LOOK_NM = 25.0
+HEADING_STEP_DEG = 10
 
 
 @dataclass(frozen=True)
@@ -115,6 +119,54 @@ class TerrainModel:
                 return None
             worst = here if worst is None else max(worst, here)
         return worst
+
+
+    def sample_ft(self, lat: float, lon: float) -> int | None:
+        """The ground's height at a point (the highest in its cell); None: not known."""
+        return self.highest_ft(lat, lon, 0.1)
+
+    def clearance_ft(self, lat: float, lon: float, altitude_ft: float) -> float | None:
+        """How far above the ground an altitude is here."""
+        ground = self.sample_ft(lat, lon)
+        return None if ground is None else altitude_ft - ground
+
+    def route_corridor_ft(self, points: list[tuple[float, float]]) -> int | None:
+        """The highest minimum along a route's legs (each point (lat, lon)), 3 miles either side; None: not all known."""
+        worst = None
+        for (a_lat, a_lon), (b_lat, b_lon) in zip(points, points[1:], strict=False):
+            miles = _nm(a_lat, a_lon, b_lat, b_lon)
+            steps = max(1, int(math.ceil(miles / CORRIDOR_STEP_NM)))
+            for i in range(steps + 1):
+                f = i / steps
+                here = self.minimum_ft(a_lat + (b_lat - a_lat) * f, a_lon + (b_lon - a_lon) * f, CORRIDOR_WIDTH_NM)
+                if here is None:
+                    return None
+                worst = here if worst is None else max(worst, here)
+        return worst
+
+    def minimum_safe_ft(self, lat: float, lon: float, *, phase: str = "terminal", icao: bool = False,
+                        airport_nm: float | None = None) -> int | None:
+        """The lowest safe altitude here, by phase and region: in the terminal area the minimum vectoring altitude; en
+        route, 1,000 ft over the ground (2,000 over mountains) within 4 statute miles (the FAA) or 8 km (ICAO)."""
+        if phase == "enroute":
+            return self.minimum_ft(lat, lon, ENROUTE_ICAO_NM if icao else ENROUTE_FAA_NM)
+        return self.mva_ft(lat, lon, airport_nm)
+
+    def mountainous(self, lat: float, lon: float) -> bool:
+        """Ground of 3,000 ft or more around here: the 2,000 ft margin applies, and it's worth saying so."""
+        high = self.highest_ft(lat, lon, MOUNTAIN_LOOK_NM)
+        return high is not None and high >= MOUNTAIN_FT
+
+    def safe_heading(self, lat: float, lon: float, wanted_true: float, altitude_ft: float, miles: float = 15.0) -> float | None:
+        """The heading nearest ``wanted_true`` with a clear corridor at ``altitude_ft``; None when none within 90 degrees is.
+        Ground that isn't known isn't held against a heading (``wanted_true`` itself, then)."""
+        for off in range(0, 91, HEADING_STEP_DEG):
+            for side in (1, -1) if off else (1,):
+                heading = (wanted_true + side * off) % 360.0
+                floor = self.corridor_ft(lat, lon, heading, miles)
+                if floor is None or altitude_ft >= floor:
+                    return heading
+        return None
 
 
 def minimum_over(highest_ft: float) -> int:

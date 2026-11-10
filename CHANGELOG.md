@@ -7,6 +7,25 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
+- **The turnaround as a timeline:** twelve milestones from parked to ready for departure, each with its time and the reason for it (the
+  passengers and doors, the fuel still to load, the seats, the airline's kind of operation, the airport), what it waits on, and how it
+  stands against the plan's off-block time. Too early, the ramp tells you when a service's slot opens and calls it then (ask twice
+  and they come anyway); the copilot reminds you when something's late and what it does to the push; the ramp, the cabin and the
+  copilot each answer how it's going; the EFB's Airport Ops shows it. Quick Settings → Ground crew: off, times and reminders only, or
+  realistic, and an airline profile (full service, low cost, regional, cargo, or from the airline).
+- **Cabin incidents** (off unless you turn them on: rare, normal, frequent): a medical event, an unruly passenger, smoke or a smell, a
+  security concern, a cabin system fault, or a passenger needing help at the gate, played by the cabin crew. You decide: carry on, get
+  assistance, divert or declare, and ATC, Airport Ops and the emergency services follow. When they come depends on the flight (its
+  length, the passengers, the weather, how late it is), never in a critical phase, one at a time and an hour apart, and a replay has the
+  same ones. Each ends with its outcome recorded.
+- **ATC's conditions:** "behind the departing ..., line up and wait behind", "follow the ..." on the taxi (and "slow down" when
+  catching it), and each condition records what it needed next.
+- **Dynamic routing:** vectors for descent when well above the profile, "reduce to 250 for spacing" behind a slower arrival and
+  "resume normal speed" after, a turn for traffic that's still coming after it's been called, the descent held at FL240 when
+  arrivals are stacked ahead, and every direct, heading and altitude checked against the route, hazards and terrain.
+- **Terrain:** minimum safe altitudes by phase and region, route corridors, a caution in mountains, a descent kept high until the
+  way to the arrival is clear of the ground, a vector into rising ground turned to a safe heading, and an altitude below the
+  minimum refused.
 - **VATSIM/IVAO controller integration:** off by default, so a flight is LocalTC's ATC alone. Turn it on in Quick Settings → ATC, and the ATC tab has the choice
   whether it's flown with Only LocalTC, VATSIM hybrid (+ LocalTC) or IVAO hybrid (+ LocalTC), with the rule explained beside it (Only LocalTC until you pick another). With a network, its controllers around
   the route are looked up each minute from its public data feed. Their sectors are LocalTC's own: a centre works its FIR

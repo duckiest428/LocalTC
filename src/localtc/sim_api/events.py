@@ -464,6 +464,29 @@ class CabinSpeech(Event, tag="cabin_speech"):
     summary: str = ""  # the radio log's few words for an announcement ("Safety briefing"; REPEATED: said again in another language)
 
 
+class CabinIncident(Event, tag="cabin_incident"):
+    """A problem in the cabin (crew.cabin_incidents), each step recorded: ``stage`` reported, decided (the captain's
+    ``decision``: continue, assist, divert, escalate), update, resolved (with its ``outcome``). ``why``: what made it come up
+    on this flight. ``delay_s``: what it costs the boarding. Heard by ATC and Airport Ops."""
+
+    incident: str
+    kind: str  # medical, unruly, smoke, suspicious, lavatory, gate_assist
+    severity: str = ""
+    stage: str = "reported"
+    decision: str = ""
+    outcome: str = ""
+    why: str = ""
+    phase: str = ""
+    delay_s: float = 0.0
+    airborne: bool = True
+
+
+class TurnaroundState(Event, tag="turnaround_state"):
+    """The turnaround's timeline as JSON (turnaround_plan.Turnaround.to_json), for the EFB and the replay."""
+
+    data: str = ""
+
+
 class RampSpeech(Event, tag="ramp_speech"):
     """The ground crew speaking (localtc.ground): ``channel`` "radio" on the ramp's frequency, or "interphone", the headset
     to the flight deck."""
@@ -730,7 +753,7 @@ RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,
                  AtcThinking, AtcDecision, FlightArrived, AtcOperations]
 AppEvent = Union[SessionNote]
-CrewEvent = Union[IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
+CrewEvent = Union[CabinIncident, TurnaroundState, IntercomPressed, IntercomReleased, IntercomHeard, CrewSpeech, CrewAction, CopilotEvent,
                   ChecklistState, CabinSpeech, CabinSound, RampSpeech, GroundStatus]
 BusEvent = Union[SimEvent, RadioEvent, AtcEvent, AppEvent, CrewEvent]
 

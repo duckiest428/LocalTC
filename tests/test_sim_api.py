@@ -57,11 +57,11 @@ def test_xpdr_mode_names():
 def test_event_tags_are_stable():
     assert sorted(t.__struct_config__.tag for t in BUS_EVENT_TYPES) == [
         "ai_object_assigned", "aircraft_identity", "aircraft_input_events", "aircraft_systems", "aircraft_vars", "airport_data", "approaches_data", "arrival_data", "atc_alert", "atc_decision", "atc_operations", "atc_thinking",
-        "atc_transmission", "atis_broadcast", "atis_report", "cabin_sound", "cabin_speech", "checklist_state", "connection_status", "copilot_event", "crew_action", "crew_speech", "departures_data", "flight_arrived", "ground_status",
+        "atc_transmission", "atis_broadcast", "atis_report", "cabin_incident", "cabin_sound", "cabin_speech", "checklist_state", "connection_status", "copilot_event", "crew_action", "crew_speech", "departures_data", "flight_arrived", "ground_status",
         "intercom_heard", "intercom_pressed", "intercom_released", "llm_exchange", "model_list", "nearby_airports", "notices_report",
         "online_atc", "ops_snapshot",
         "ownship_state", "phase_changed", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "ramp_speech", "readback_evaluated",
-        "sim_frame_rate", "sim_lifecycle", "terrain_grid", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "weather_report",
+        "sim_frame_rate", "sim_lifecycle", "terrain_grid", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "turnaround_state", "weather_report",
     ]
 
 

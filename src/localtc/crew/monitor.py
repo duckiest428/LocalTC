@@ -708,6 +708,7 @@ class Monitor(WatchMixin):
                 self.atis_seen[f.origin or ""] = info.letter
             # (No "call for the clearance when you're ready": the captain calls when the captain's ready.)
             self._schedule(own, t)
+            self._turnaround_late(t)
             if self.phase == "PUSHBACK":
                 self.f.said.setdefault("pushed", t)  # pushed back: the brake set after it is the end of the push
             if self._cleared("pushback") and own.parking_brake and own.gs_kt < 0.5 and not self._said("push_brake") \
@@ -770,6 +771,12 @@ class Monitor(WatchMixin):
                     self.f.said.setdefault(f"schedule_late:{m}", t)
             self.f.said.pop(key, None)
             self._call(key, ROUTINE, t, f"{due[1]} late off block.{self._holding_up()}")
+
+    def _turnaround_late(self, t: float) -> None:
+        """A milestone gone by its latest start: the reason and what it does to the push (``turnaround_plan``)."""
+        turnaround = getattr(self, "turnaround_of", lambda: None)()
+        if turnaround is not None and (late := turnaround.reminder(t)) is not None:
+            self._call(f"turnaround:{late[0]}", ROUTINE, t, late[1], again_s=1.0)
 
     def _owes_clearance(self) -> bool:
         return not self._cleared("ifr") and not getattr(self.engine, "_vfr", False)

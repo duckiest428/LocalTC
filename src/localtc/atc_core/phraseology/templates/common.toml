@@ -10,6 +10,57 @@ readback = { required = ["frequency"] }
 pilot_readback = "{station} {frequency}, {callsign_short}."
 
 [[template]]
+id = "common.vectors_descent"
+controller = "any"
+text = ["{callsign}, turn {turn} heading {heading}, vectors for descent."]
+readback = { required = ["heading"] }
+pilot_readback = "{turn} heading {heading}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing"
+controller = "any"
+text = ["{callsign}, reduce speed to {speed} knots for spacing, {message}."]
+readback = { required = ["speed"] }
+pilot_readback = "Speed {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing_again"
+controller = "any"
+text = ["{callsign}, reduce speed to {speed} knots now, you're closing on the traffic ahead."]
+readback = { required = ["speed"] }
+pilot_readback = "Speed {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_resume"
+controller = "any"
+text = ["{callsign}, resume normal speed."]
+
+[[template]]
+id = "common.turn_for_traffic"
+controller = "any"
+text = ["{callsign}, turn {message} for traffic."]
+
+[[template]]
+id = "common.terrain_caution"
+controller = "any"
+text = ["{callsign}, caution, mountainous terrain, the minimum altitude in your area is {altitude}."]
+
+[[template]]
+id = "common.unable_terrain"
+controller = "any"
+text = ["{callsign}, unable, terrain, the minimum altitude in your area is {altitude}."]
+
+[[template]]
+id = "common.traffic_gone"
+controller = "any"
+text = ["{callsign}, the traffic you were following is no longer a factor."]
+
+[[template]]
+id = "common.cabin_assist"
+controller = "any"
+text = ["{callsign}, roger, {message}."]
+
+[[template]]
 id = "common.descend_now"
 controller = "any"
 text = ["{callsign}, start your descent now.", "{callsign}, you're past your descent point, start down now."]

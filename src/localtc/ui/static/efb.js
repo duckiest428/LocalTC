@@ -267,6 +267,19 @@ const Efb = {
     $$("[data-del]", body).forEach((b) => (b.onclick = () => api("efb/scratchpad", { op: "delete", id: b.dataset.del }).then(() => this.show()).catch(fail)));
   },
 
+  /* The turnaround's timeline (turnaround_plan): what's left, when it'll be done and why */
+  turnaround_card(t) {
+    const names = { parked: "Parked, doors available", deboarding: "Deboarding", cleaning: "Cabin cleaning", catering: "Catering", fueling: "Fueling",
+      baggage: "Baggage and cargo", crew: "Crew arrival", boarding: "Boarding", doors: "Doors closed", clearance: "Pushback clearance",
+      deicing: "De-icing", ready: "Ready for departure" };
+    const states = { pending: "Not started", in_progress: "Under way", done: "Done" };
+    const verdict = { on_time: "On time", tight: "Tight", late: "Late", unheld: "No schedule to keep" }[t.status] || "";
+    return `<div class="panel efbcard"><h3>Turnaround</h3>
+      <div class="opsrow"><b>${verdict}</b><span class="muted small" translate="no">${esc(t.off_block || "")} → ${esc(t.forecast || "")}</span><span class="muted small">${esc(t.profile_label || "")}</span></div>
+      ${t.milestones.filter((m) => m.state !== "skipped").map((m) => `<div class="opsrow" title="${esc(m.reason || m.why || "")}"><span>${names[m.id] || esc(m.id)}</span>
+        <span class="tag ${m.late ? "late" : m.state.replace("_", "-")}">${m.late ? "Late" : states[m.state] || ""}</span><span class="muted small" translate="no">${esc(m.state === "done" ? "" : m.eta || "")}</span></div>`).join("")}</div>`;
+  },
+
   /* --- Airport Ops, and ATC's conditions and hold --- */
   render_ops(body) {
     const o = this.state.ops, atc = this.state.atc;
@@ -279,6 +292,7 @@ const Efb = {
         ${o.gsx ? "" : `<div class="muted small">GSX isn't running: boarding, catering and cleaning aren't tracked (the fuel is, from the sim).</div>`}
         ${o.deice?.required ? `<div class="opsrow deice">De-icing: number ${o.deice.position}, about ${o.deice.wait_min} min (${esc(o.deice.why)}) <span class="tag">${esc(o.deice.state)}</span></div>` : ""}
         ${(o.closures || []).map((c) => `<div class="small">⚠ ${esc(c)}</div>`).join("")}` : `<div class="muted">Start a flight.</div>`}</div>
+      ${o?.turnaround ? this.turnaround_card(o.turnaround) : ""}
       <div class="panel efbcard"><h3>Messages</h3>${(o?.messages || []).slice().reverse().map((m) =>
         `<div class="opsmsg"><span class="muted small">${new Date(m.t * 1000).toLocaleTimeString()}</span> ${esc(m.text)}</div>`).join("") || `<div class="muted">None yet.</div>`}
         <div class="row"><select id="ops-kind"><option>maintenance</option><option>dispatch</option><option>other</option></select>

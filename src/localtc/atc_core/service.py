@@ -16,6 +16,7 @@ from localtc.atc_core import online as online_atc
 from localtc.atc_core.engine import AtcEngine
 from localtc.bus import EventBus
 from localtc.sim_api import (
+    CabinIncident,
     SIM_EVENT_TYPES,
     AirportData,
     AtcAlert,
@@ -68,7 +69,7 @@ class AtcService:
         self._online_sent: tuple | None = None
         # Subscribe now, not in run(): a fast source could publish everything before run() starts.
         # Only inputs: the engine's own outputs (AtcTransmission, PhaseChanged, ...) are not fed back in.
-        self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased)
+        self._inputs = bus.subscribe(*SIM_EVENT_TYPES, Transcript, PttPressed, PttReleased, CabinIncident)
 
     async def run(self) -> None:
         async for event in self._inputs:

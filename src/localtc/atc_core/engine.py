@@ -44,6 +44,7 @@ from localtc.atc_core.airport.approaches import (
 )
 from localtc.atc_core.airport.approaches import options as approach_options
 from localtc.atc_core.airspace import Airspace, Area
+from localtc.atc_core.flow import FlowMixin
 from localtc.atc_core.diversion import DiversionMixin, DiversionState
 from localtc.atc_core.facilities import (
     Facility,
@@ -120,6 +121,7 @@ from localtc.sim_api import (
     OnlineController,
     OpsSnapshot,
     TerrainGrid,
+    CabinIncident,
     Airport,
     AirportData,
     ApproachesData,
@@ -375,6 +377,9 @@ def _emergency_details(text: str | None) -> dict[str, str]:
         out["fuel"] = fuel.group(1)
     return out
 
+INCIDENTS = {"medical": ("a medical emergency on board", "paramedics"), "unruly": ("a disruptive passenger", "police"),
+             "smoke": ("smoke in the cabin", "the fire crews"), "suspicious": ("a security concern on board", "security"),
+             "lavatory": ("a cabin system fault", "maintenance"), "gate_assist": ("a passenger needing assistance", "the assistance team")}
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 175.0  # slower than this and there is nothing to manage
@@ -543,7 +548,7 @@ class _Scheduled:
     lead: Phrase | None = None  # said first, after the callsign: "sorry, Gate 403 is occupied"
 
 
-class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMixin, GateRequestsMixin):
+class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMixin, FlowMixin, GateRequestsMixin):
     def __init__(
         self,
         config: EngineConfig | None = None,
@@ -672,6 +677,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # The ground's height from the ``TerrainGrid`` events (the app's terrain tiles, recorded for the replay): the
         # minimum altitudes ATC vectors and clears to (atc_core/terrain.py). Empty: its usual minimums.
         self.terrain = TerrainModel()
+        self._flow_t: dict[str, float] = {}  # dynamic routing's last times (atc_core/flow.py)
         self.conditions = ConditionBook()  # the conditions on its clearances (atc_core/conditions.py)
         self._wake_departures: dict[str, tuple[float, str, str]] = {}  # runway: (when, category, type) of a heavy's takeoff
         self._wake_landings: dict[str, tuple[float, str, str]] = {}  # ... and landing
@@ -825,6 +831,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._rebuild_facilities()
         elif isinstance(event, TerrainGrid):
             self.terrain.add(event)
+        elif isinstance(event, CabinIncident):
+            out += self._cabin_incident(event)
         elif isinstance(event, OpsSnapshot) and event.kind == "hazards":
             self.hazards = hazards_from(event)
             self._ops_changed = True
@@ -1931,6 +1939,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     or self._sequence_on_final(own) \
                     or (ifr and self._holds(own, tuned_facility)) \
                     or (ifr and self._watch_amendments(own, tuned_facility)) \
+                    or (ifr and self.cfg.unscripted and self._flow_watch(own, tuned_facility)) \
                     or (ifr and self._hazards_ahead(own, tuned_facility) if tuned_facility is not None else False) \
                     or (ifr and self._radar_vectors(own)) or self._traffic_advisory(own) \
                     or (ifr and self._altitude_check(own)) or (ifr and self._heading_check(own)):
@@ -2135,6 +2144,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                             "city": city}, st.comms.tuned, handoff_to=ground)
         else:
             self._handoff(t, "tower.exit_contact_ground", st.comms.tuned, ground)
+
+    def _cabin_incident(self, ev: CabinIncident) -> list[BusEvent]:
+        """The captain's decision on a problem in the cabin, where ATC comes into it: the help asked for, a diversion, an
+        emergency declared."""
+        st, own, facility = self.state, self.state.aircraft, self.state.comms.tuned
+        if ev.stage != "decided" or ev.decision == "continue" or own is None or facility is None \
+                or facility.controller in ("atis", "ramp"):
+            return []
+        what, help_is = INCIDENTS.get(ev.kind, ("a problem in the cabin", "assistance"))
+        if ev.decision == "assist":
+            where = "at the gate" if own.on_ground else "on arrival"
+            words = f"{help_is} will meet you {where}, advise if you need priority"
+            self._schedule(ev.t, "common.cabin_assist", {"message": Phrase(words, words)}, facility, delay=False, expects_readback=False)
+        elif ev.decision == "divert" and not own.on_ground:
+            self._divert(Interpretation(kind="request", intent="request_diversion", text=f"request diversion, {what}"), facility, ev.t, own)
+        elif ev.decision == "escalate":
+            return self._emergency(Interpretation(kind="request", intent="emergency", text=f"pan pan, {what}"), facility, ev.t)
+        return []
 
     def _cross(self, t: float, own: OwnshipState, crossing: str, side: str) -> None:
         """Across a runway on the taxi: straight away, or with landing traffic close in, behind it (ICAO) or held short
@@ -2821,6 +2848,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 self._gave_way_t = t
                 self._gave_way_to.add(oid)
                 kind = self._aircraft(target) or Phrase("traffic", "traffic")
+                from localtc.atc_core.conditions import Condition
+
+                self.conditions.add(Condition("taxi_follow", t, "ground.follow", oid, kind.display, until_t=t + 900.0))
                 self._schedule(t, "ground.follow", {"message": kind}, tuned, delay=False, expects_readback=False)
                 return True
             self._gave_way_t = t
@@ -2962,6 +2992,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return  # lined up already: it goes the moment the runway is free, not back to the hold line
         if self._takeoff_wait == runway and self._takeoff_hold == reason and not answering:
             return  # already told; still waiting for it to clear
+        if reason == "occupied" and self._conditional_behind_departure(t, facility, runway, target, answering=answering):
+            return  # ICAO: "behind the departing ..., line up and wait behind"
         if reason == "arrival" and self._conditional_line_up(t, facility, runway, target, miles, answering=answering):
             return  # ICAO: "behind the landing ..., line up and wait behind"
         self._takeoff_wait, self._takeoff_hold = runway, reason
@@ -4338,6 +4370,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return
         elif known:
             fix = found  # "knob" is NOBKE: the fix of the route it sounds like
+        if own is not None and str(fix) != name and not self.validate(own, fix=str(fix)).ok:
+            self._schedule(t, "common.unable", {}, facility)  # (no fix of this flight's, through a hazard, or into the ground)
+            return
         self._end_hold(t, f"direct {fix}")
         for a in self.amendments:
             if a.state == "active" and a.kind == "deviation":
@@ -4509,7 +4544,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 self._assign(altitude_ft=level)  # what it's at, until the next step down
         step = self._step_altitude(own, plan) if plan else None
         gap = 1000 if new_heading else 2000
-        if step is not None and (floor := self._terrain_floor(own, leg.heading_true)) is not None:
+        floor = self._terrain_floor(own, leg.heading_true)
+        if new_heading and floor is not None and level < floor:
+            # The turn asked for goes into rising ground at this altitude: the nearest heading that doesn't, or none at all.
+            safe = self._safe_heading(own, leg.heading_true, level)
+            if safe is None:
+                return False
+            magvar = ((own.hdg_true - own.hdg_mag + 180) % 360) - 180
+            heading = int(round((safe - magvar) % 360)) % 360 or 360
+            turn = "right" if ((heading - own.hdg_mag) % 360) < 180 else "left"
+            floor = self._terrain_floor(own, safe)
+        if step is not None and floor is not None:
             step = max(step, floor)  # never below the minimum vectoring altitude along the new heading
         descend = step if step is not None and step <= level - gap and own.alt_indicated_ft > step + 300 else None
         if descend is not None and not new_heading and t - self._descend_t < DESCEND_GAP_S:
@@ -5301,6 +5346,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, "common.unable", {}, facility)
             return
         climbing = wanted > own.alt_indicated_ft
+        if not climbing and (minimum := self._minimum_here(own)) is not None and wanted < minimum:
+            self._schedule(t, "common.unable_terrain", {"altitude": minimum}, facility, expects_readback=False)
+            return
         if not climbing and "descend" not in st.flags and st.phase in (P.DEPARTURE, P.CRUISE) \
                 and own.alt_indicated_ft >= 10000 and self._descent_due(own, lead_min=DESCENT_ASK_MIN) \
                 and (plan := self._arrival_plan(own)) is not None:
@@ -6051,6 +6099,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                            delay=False, on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
             return
         altitude, instruction = self._arrival_altitude(plan["center_alt"], own, "center")
+        if instruction == "center.descend":
+            # Kept high until the way there is clear of the terrain, and held up first when the arrivals are stacked.
+            if (route_floor := self._route_floor(own)) is not None and route_floor > altitude:
+                altitude = route_floor
+            altitude = self._flow_level(own, altitude)
         if not late and instruction == "center.descend" and (fix := self._crossing_restriction(own, altitude)) is not None:
             self._schedule(t, "center.descend_cross", {"fix": fix, "altitude": altitude, "approach": approach}, facility,
                            delay=False, on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))

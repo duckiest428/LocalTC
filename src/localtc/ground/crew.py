@@ -43,7 +43,8 @@ GSX_STATE_VARS = {"Boarding": "L:FSDT_GSX_BOARDING_STATE", "Deboarding": "L:FSDT
 GSX_TOOK = (4.0, 5.0)  # requested, performing
 # Lines with a condition or a fact in them: a model rewording "parking brake first" said "parking brake set", and "the jetway
 # isn't running" said "jetway's down". Said as written.
-AS_WRITTEN = ("off", "cleaning_after", "say_again", "brake_for_bridge", "brakes_set_first", "stopped_first", "engines_off_first", "on_stand_first", "fuel_engines",
+BAGS_ASKED = re.compile(r"\b(?:how long|when|status|eta|how are|how's|where are)\b.*\b(?:bags?|baggage|luggage|cargo)\b", re.I)
+AS_WRITTEN = ("slot", "status", "off", "cleaning_after", "say_again", "brake_for_bridge", "brakes_set_first", "stopped_first", "engines_off_first", "on_stand_first", "fuel_engines",
               "cancel_nothing", "off_nothing", "no_take", "no_gsx", "not_here", "parked_at", "parked_unknown")
 OURS_S = 120.0  # GSX's questions this soon after calling a service are about it
 CALL_GAP_S = 4.0  # between the crew's own calls
@@ -150,6 +151,8 @@ class RampCrew:
         self._gate_told = False
         self._hurried: set[str] = set()  # sped up through GSX's settings: put back when the service is over
         self._hurry_asked: list[str] = []  # the cabin crew asked for it
+        self.turnaround: Any = None  # the turnaround's timeline (turnaround_plan.Turnaround), wired by the app
+        self._slot_wait: list[str] = []  # asked for ahead of their slot, or of what they wait on: called when they can come
         self._fuel_wanted = 0  # the fuel asked for, in percent, for when GSX asks
         self._finished: list[str] = []  # done this turnaround (GSX shows "completed" for only a few seconds)
         self._bridge: dict[str, bool] = {}  # the jetway and stairs: on the aircraft or not, as GSX last said (one call moves them either way)
@@ -223,6 +226,8 @@ class RampCrew:
     def heard(self, text: str, t: float) -> list[Any]:
         """The pilot's words (on the ramp's frequency, or claimed on the intercom)."""
         self._t = t
+        if self.turnaround is not None and BAGS_ASKED.search(text):
+            return [self._speech("status", t, report=self.turnaround.answer("ramp", text))]
         asks = g.parse(self.read(text))
         if not asks:
             if (said := self._by_label(text, t)) is not None:
@@ -305,11 +310,32 @@ class RampCrew:
                     out.append(self._speech("already", t, name=self._name(service)))
                 elif svc.state == "unavailable" or (not svc.can_trigger and svc.state != "completed"):
                     out.append(self._speech("not_here", t, name=self._name(service)))
+                elif (why := self._held(service, t)) is not None:
+                    out.append(self._speech("slot", t, why=why))
+                    if service not in self._slot_wait:
+                        self._slot_wait.append(service)
                 else:
+                    if service in self._slot_wait:
+                        self._slot_wait.remove(service)
                     self._queue.append(service)
                     coming.append(self._name(service))
         if coming:
             out.insert(0, self._speech("ack", t, list=self._names(coming)))
+        return out
+
+    def _held(self, service: str, t: float, *, ask: bool = True) -> str | None:
+        return self.turnaround.hold(service, t, ask=ask) if self.turnaround is not None else None
+
+    def _slots_open(self, t: float) -> list[Any]:
+        """A service that had to wait its slot, or for what it depends on, called now it can come."""
+        out: list[Any] = []
+        for service in list(self._slot_wait):
+            if self._held(service, t, ask=False) is None:
+                self._slot_wait.remove(service)
+                svc = self._service(service)
+                if svc is not None and not svc.active and service not in self._queue:
+                    self._queue.append(service)
+                    out.append(self._speech("ack", t, list=self._name(service)))
         return out
 
     def _deboarding(self) -> bool:
@@ -344,6 +370,10 @@ class RampCrew:
         svc = self._service(service)
         if not self.parked or svc is None or svc.state == "unavailable":
             return False
+        if self._held(service, t) is not None:
+            if service not in self._slot_wait:
+                self._slot_wait.append(service)
+            return False
         if not svc.active and service not in self._queue:
             self._queue.append(service)
         return True
@@ -364,6 +394,9 @@ class RampCrew:
         return self._request((service,), t) if self.parked else [self._speech("on_stand_first", t)]
 
     def _status(self, named: tuple[str, ...], t: float) -> list[Any]:
+        if self.turnaround is not None and self.turnaround.role == "departure":
+            words = " ".join(n.lower() for n in named)  # (a service named: when it'll be done, and why)
+            return [self._speech("status", t, report=self.turnaround.answer("ramp", words))]
         services = self.state.services
         if named:
             parts = []
@@ -906,6 +939,7 @@ class RampCrew:
         out += self._push_moves(t)
         out += self._engines_answer(t)
         out += self._once_braked(t)
+        out += self._slots_open(t)
         out += self._send_next(t)
         asked, self._hurry_asked = self._hurry_asked, []
         for service in asked:

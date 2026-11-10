@@ -442,6 +442,7 @@ class CabinConfig(_Section):
     interphone: bool = True  # the crew call the flight deck: boarding complete, cabin secure, the service
     show_log: bool = True  # their words in the radio log (off: only heard)
     captain: str = ""  # your name, for the welcome ("on behalf of Captain Reyes"); blank: "the captain"
+    incidents: Literal["off", "rare", "normal", "frequent"] = "off"  # problems in the cabin for you to decide on
     # How much they lean on the language model, a cloud one only (without one, the script's words): scripted, semi (only
     # what the script can't answer), mostly_llm (their answers and longer announcements), llm (all but the safety ones).
     llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
@@ -458,6 +459,14 @@ class GroundConfig(_Section):
     llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
     wait_for_clearance: bool = True  # the push waits for ATC, when there's a controller who'd clear it
     adapter: Literal["auto", "gsx", "standalone", "mock"] = "auto"  # who does the work (mock: a stand-in, for working without a sim)
+
+
+class TurnaroundConfig(_Section):
+    """The turnaround as a timeline (turnaround_plan.py): the milestones, what each waits on, and the off-block time."""
+
+    # off; advisory: the times, the reasons and the copilot's reminders; realistic: and services keep to their slots.
+    mode: Literal["off", "advisory", "realistic"] = "realistic"
+    profile: Literal["auto", "full_service", "low_cost", "regional", "cargo"] = "auto"  # auto: from the airline
 
 
 class SessionConfig(_Section):
@@ -527,6 +536,7 @@ class Config(_Section):
     crew: CrewConfig = msgspec.field(default_factory=CrewConfig)
     cabin: CabinConfig = msgspec.field(default_factory=CabinConfig)
     ground: GroundConfig = msgspec.field(default_factory=GroundConfig)
+    turnaround: TurnaroundConfig = msgspec.field(default_factory=TurnaroundConfig)
     voice: VoiceConfig = msgspec.field(default_factory=VoiceConfig)
     tts: TtsConfig = msgspec.field(default_factory=TtsConfig)
     mixer: MixerConfig = msgspec.field(default_factory=MixerConfig)

@@ -2098,6 +2098,9 @@ const Settings = {
           ${(S.settings.cabin_crew || []).map((p) =>  // (translate="no": put together here, its manner in the language)
             `<option value="${esc(p.id)}" translate="no" ${st.cabin.crew === p.id ? "selected" : ""}>${esc(p.name)} (${I18n.t(p.sex === "F" ? "she" : "he")}) · ${esc(I18n.t(p.brief))}</option>`).join("")}</select></label>
           <button type="button" class="btn small" id="s-cabin-hear">Hear them</button></div>
+        <div class="row"><label>Cabin incidents<select id="s-cabin-incidents" title="Occasional problems in the cabin for you to decide on, played by the cabin crew. When they come depends on the flight, and a replay has the same ones.">${[
+          ["off", "Off"], ["rare", "Rare"], ["normal", "Normal"], ["frequent", "Frequent"]]
+          .map(([v, t]) => `<option value="${v}" ${(st.cabin.incidents || "off") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <div class="row"><label>How they use the language model<select id="s-cabin-llm" ${this.hasCloud(st) ? "" : "disabled"}>${[
           ["scripted", "Fully scripted: the script's words only"],
           ["semi", "Semi script/LLM: the model answers only what the script can't"],
@@ -2143,6 +2146,12 @@ const Settings = {
           ["llm", "Fully LLM: the model reads and words everything, except the push's safety calls"]]
           .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.ground.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they understand the grammar's phrases only.</span>
+        <div class="row"><label>Turnaround schedule<select id="s-turn-mode">${[
+          ["off", "Off"], ["advisory", "Times and reminders only"], ["realistic", "Realistic: services keep to their slots"]]
+          .map(([v, t]) => `<option value="${v}" ${(st.turnaround?.mode || "realistic") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          <label>Airline turnaround profile<select id="s-turn-profile">${[
+          ["auto", "From the airline"], ["full_service", "Full service"], ["low_cost", "Low cost"], ["regional", "Regional"], ["cargo", "Cargo"]]
+          .map(([v, t]) => `<option value="${v}" ${(st.turnaround?.profile || "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <label class="check-row"><input type="checkbox" id="s-ground-clearance" ${st.ground.wait_for_clearance ? "checked" : ""}> Hold the push until ATC has cleared it</label>
         </div>
       </div>
@@ -2426,6 +2435,9 @@ const Settings = {
     on("#s-ground-llm", "change", () => this.save("ground", "llm", val("#s-ground-llm")));
     on("#s-ground-clearance", "change", (e) => this.save("ground", "wait_for_clearance", e.target.checked));
     on("#s-cabin-llm", "change", () => this.save("cabin", "llm", val("#s-cabin-llm")));
+    on("#s-cabin-incidents", "change", () => this.save("cabin", "incidents", val("#s-cabin-incidents")));
+    on("#s-turn-mode", "change", () => this.save("turnaround", "mode", val("#s-turn-mode")));
+    on("#s-turn-profile", "change", () => this.save("turnaround", "profile", val("#s-turn-profile")));
     on("#s-cabin-captain", "change", () => this.save("cabin", "captain", val("#s-cabin-captain").trim()));
     for (const [id, key] of [["#s-cabin-announcements", "announcements"], ["#s-cabin-safety", "safety_demo"],
       ["#s-cabin-service", "service"], ["#s-cabin-interphone", "interphone"], ["#s-cabin-chime", "chime"],

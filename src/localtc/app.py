@@ -309,6 +309,23 @@ RAMP_STYLE = ("Ramp, catering, fuel and a GPU please. Pushback, nose left. Tail 
               "De-icing. Brakes set. Brakes released. Good start. Change to gate B40.")
 
 
+def start_turnaround(cfg: Config, engine, bus, consumers: list):
+    """The turnaround's timeline for this flight; None with ``[turnaround] mode = "off"``."""
+    if cfg.turnaround.mode == "off":
+        return None
+    from localtc.turnaround_plan import Facts, Turnaround, TurnaroundService
+
+    def facts() -> Facts:
+        known = cabin_facts(engine, cfg)
+        perf = cfg.flight.perf
+        return Facts(callsign=known.callsign, aircraft=known.aircraft, pax=perf.pax, block_fuel_lb=perf.block_fuel_lb,
+                     sched_out_s=perf.sched_out_s, sched_in_s=perf.sched_in_s, seed=cfg.atc.seed)
+
+    tracker = Turnaround(facts(), mode=cfg.turnaround.mode, profile=cfg.turnaround.profile)
+    consumers.append(asyncio.create_task(TurnaroundService(tracker, bus, make=facts).run()))
+    return tracker
+
+
 def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
     """The ground crew, and who does their work: GSX where it's installed, else the sim's own services (None: no crew)."""
     from localtc.atc_core.region import accent
@@ -657,9 +674,14 @@ async def run_session(
                 cabin.model_wait_s = max(cfg.crew.timeout_s, cfg.cloud.timeout_s)
                 consumers.append(asyncio.create_task(CabinService(cabin, bus, intercom=not cfg.crew.enabled,
                                                                   source=source).run()))
+            turnaround = start_turnaround(cfg, engine, bus, consumers) if session.source_kind == "live" else None
+            if cabin is not None:
+                cabin.turnaround = turnaround
+                cabin.critical = lambda: "emergency" in engine.state.flags
             if cfg.ground.enabled and session.source_kind == "live":  # the ramp: their frequency, and "ramp, ..." on the intercom
                 ground = start_ground(cfg, engine, source, bus, backend, lambda: cabin)
                 if ground is not None:
+                    ground.crew.turnaround = turnaround
                     engine.ramp_mhz = RAMP_MHZ
                     if cabin is not None:
                         cabin.ground_call = ground.crew.called_by_cabin
@@ -986,7 +1008,7 @@ def cabin_settings(cfg: Config):
     from localtc.crew.cabin import CabinSettings
 
     c = cfg.cabin
-    return CabinSettings(crew=c.crew, announcements=c.announcements, safety_demo=c.safety_demo, service=c.service,
+    return CabinSettings(crew=c.crew, incidents=c.incidents, announcements=c.announcements, safety_demo=c.safety_demo, service=c.service,
                          chime=c.chime, boarding_music=c.boarding_music,
                          english_too=c.english_too, interphone=c.interphone, captain=c.captain)
 

@@ -59,6 +59,7 @@ from localtc.crew.commands import parse as copilot_command
 from localtc.ground import words as ramp_words
 from localtc.crew.turnaround import off_block_in
 from localtc.crew import cabin_words
+from localtc.crew.cabin_incidents import PLAYS, IncidentDirector, Inputs as IncidentInputs, decision_in
 from localtc.crew.cabin_lines import BY_ID, FOREIGN, LANDING_WORDS, LINES, PEOPLE, REPLIES, WHEN, Person
 from localtc.sim_api import (
     AircraftIdentity,
@@ -82,6 +83,7 @@ from localtc.sim_api.geo import haversine_nm
 @dataclass(frozen=True)
 class CabinSettings:
     crew: str = "auto"  # who leads the cabin: one of cabin_lines.PEOPLE, or "auto" (a different one each flight)
+    incidents: str = "off"  # problems in the cabin for the captain to decide on: off, rare, normal, frequent
     announcements: bool = True
     safety_demo: bool = True
     service: bool = True
@@ -346,6 +348,8 @@ class CabinCrew:
         self._ran_late = False  # the departure was a quarter of an hour late or more: said so for the rest of the flight
         self.ground_call: Any = None  # the ground crew, to start boarding and deboarding (ground.crew.RampCrew.called_by_cabin)
         self.ground_hurry: Any = None  # ... and to speed it up (ground.crew.RampCrew.hurry_by_cabin)
+        self.turnaround: Any = None  # the turnaround's timeline (turnaround_plan.Turnaround), wired by the app
+        self.critical: Any = None  # True while nothing's to be started: an emergency running (wired by the app)
         self.backend: Any = None  # the cloud language model (None: the script's words)
         self.llm_mode = "mostly_llm"  # how much it's asked ([cabin] llm)
         self._to_word: set[str] = set()  # the announcements it may word
@@ -356,6 +360,9 @@ class CabinCrew:
     # ---- the flight ----
 
     def _new_flight(self) -> None:
+        self.incidents = IncidentDirector(self.settings.incidents, self.seed)
+        self._level_since: float | None = None
+        self._busy_service: dict[str, float] = {}  # boarding or deboarding going on since
         self._rng = random.Random(self.seed)
         self.done: set[str] = set()
         self._at: dict[str, float] = {}  # when each moment happened
@@ -737,6 +744,12 @@ class CabinCrew:
         elif isinstance(ev, AircraftVars):
             self._vars.update(ev.values)
         elif isinstance(ev, GroundStatus):
+            for service in ev.services:
+                if service.id in ("Boarding", "Deboarding"):
+                    if service.state in ("performing", "completing"):
+                        self._busy_service.setdefault(service.id, ev.t)
+                    else:
+                        self._busy_service.pop(service.id, None)
             for service in ev.services:  # "pax 23/133"
                 if service.id in ("Boarding", "Deboarding") and (m := GSX_PAX.search(service.status)) and int(m[2]):
                     total = int(m[2])
@@ -752,10 +765,59 @@ class CabinCrew:
             out += self._ownship(ev)
         elif isinstance(ev, FlightArrived):
             self._at.setdefault("arrived", ev.t)
+            out += self._incident_said(self.incidents.arrived(ev.t))
         if self._own is not None and self.active:
             out += self._moments(ev.t)
             out += self._due(ev.t)
+            if isinstance(ev, OwnshipState):
+                out += self._incident_tick(ev)
         return out
+
+    # --- incidents (cabin_incidents) ---------------------------------------------------------------------------------
+
+    def _incident_inputs(self, own: OwnshipState) -> IncidentInputs:
+        if self._phase == "CRUISE" and self._level_since is None:
+            self._level_since = own.t
+        elif self._phase != "CRUISE":
+            self._level_since = None
+        f = self.facts
+        to_go = haversine_nm(own.lat, own.lon, f.dest_lat, f.dest_lon) if f.dest_lat is not None and f.dest_lon is not None else None
+        rough = any((w.gust_kt or 0) >= 25 or " TS" in w.raw or "+RA" in w.raw for w in self._weather.values())
+        away = self._to_off_block()
+        late = -away / 60.0 if away is not None and away < 0 and not self._rolling(own, own.t) else (20.0 if self._ran_late else 0.0)
+        return IncidentInputs(phase=self._phase or "", planned_min=self._planned_s() / 60.0, seats=seats(f.aircraft), pax=self.passengers(),
+                              rough=rough, late_min=late, boarding="Boarding" in self._busy_service, deboarding="Deboarding" in self._busy_service,
+                              level_for_s=own.t - self._level_since if self._level_since is not None else 0.0, to_go_nm=to_go,
+                              busy=bool(self.critical()) if self.critical is not None else False)
+
+    def _incident_tick(self, own: OwnshipState) -> list[Any]:
+        self.incidents.callsign = self.facts.callsign
+        inputs = self._incident_inputs(own)
+        since = min(self._busy_service.values(), default=own.t)
+        return self._incident_said(self.incidents.tick(inputs, own.t, own.t - since))
+
+    def _incident_said(self, steps: list[tuple[str, Any]]) -> list[Any]:
+        """What the director decided, in the cabin manager's voice on the interphone, with its record."""
+        out: list[Any] = []
+        for words, record in steps:
+            first = record is not None and record.stage == "reported"
+            out.append(self._speech(words, words, "interphone", chime="call" if first else ""))
+            if record is not None:
+                out.append(record)
+        return out
+
+    def _incident_answer(self, body: str, t: float) -> list[Any] | None:
+        """The captain on a problem that's running: their decision, or how it's going. None: nothing to do with it."""
+        current = self.incidents.current
+        if current is None or self._own is None:
+            return None
+        if self.incidents.waiting_for_captain and (decision := decision_in(body)) is not None:
+            return self._incident_said(self.incidents.decide(decision, t, self._incident_inputs(self._own)))
+        if re.search(r"\b(?:how(?:'s| is| are)|update|status|what's happening|what's going on)\b", body, re.I):
+            words = PLAYS[current.kind]["report"][current.severity].format(row=current.row)
+            words = f"Still as I said, Captain: {words[len('Captain, '):]}" if words.startswith("Captain, ") else words
+            return [self._speech(words, words, "interphone")]
+        return None
 
     def _systems(self, ev: AircraftSystems) -> list[Any]:
         out: list[Any] = []
@@ -1099,6 +1161,8 @@ class CabinCrew:
             return False
         if to == "cabin":
             return True
+        if self.incidents.waiting_for_captain and decision_in(text) is not None and not copilot_command(text):
+            return True
         if RAMP_CALL.match(ramp_words.as_english(text, self.talks_in)):
             return False  # for the ground crew, even with the cabin still listening
         text = cabin_words.as_english(text, self.talks_in)
@@ -1326,6 +1390,12 @@ class CabinCrew:
         low = body.lower()
         reply = self.reply
         low = DEBOARDING_HEARD.sub("deboarding", low)
+        if (said := self._incident_answer(body, t)) is not None:
+            return said
+        if self.turnaround is not None and self.turnaround.role == "departure" and re.search(
+                r"\b(?:how long|when|status|eta|how's|how is|are we|are the)\b.*\b(?:boarding|doors?|crew|on board|on time|schedule)\b", low):
+            timing = self.turnaround.answer("cabin", low)
+            return [self._speech(timing, timing, "interphone")]
         if self.ground_hurry is not None and not ASKS_ABOUT.match(low) and (m := SPEED_UP.search(low)):
             off = "deboarding" in (m.group(1) or m.group(2) or "") or self._landed_t is not None
             return reply("ground_hurry" if self.ground_hurry("Deboarding" if off else "Boarding", t) else "ground_not_yet")

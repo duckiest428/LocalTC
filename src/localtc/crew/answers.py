@@ -30,6 +30,7 @@ class Picture:
     burn_pph: float | None = None  # the cruise burn measured from the fuel used (the monitor's), pounds an hour
     fuel_doubted: bool = False  # the pilot said the fuel projections are off: none until told otherwise
     perf: Any = None  # the plan's (config.PlanPerf): its speeds and fuel, and its scheduled times
+    turnaround_of: Any = None  # the turnaround's timeline (turnaround_plan.Turnaround), or None
 
     @property
     def destination(self) -> str | None:
@@ -226,12 +227,18 @@ QUESTIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+TURNAROUND_ASKED = re.compile(r"turn ?around|on (?:time|schedule)|running late|are we late|off.?block|\bpush\b.*\b(?:when|time)\b|(?:how long|when|status|eta).*\b(?:catering|cleaning|bags?|baggage|boarding|fueling|fuelling|de-?ic\w*|crew)\b")
+
+
 def answer(text: str, p: Picture) -> str | None:
     """The answer to one of the common questions, from the facts; None when it isn't one of them."""
     lowered = text.lower()
     if not ("?" in text or re.match(r"^\s*(?:[a-z']+[,\s]+){0,2}(?:what|how|when|where|which|who|do|did|are|is|can you tell|tell me)\b",
                                     lowered)):
         return None
+    turnaround = p.turnaround_of() if p.turnaround_of is not None else None
+    if turnaround is not None and turnaround.role == "departure" and turnaround.phase in ("", "PARKED") and TURNAROUND_ASKED.search(lowered):
+        return turnaround.answer("flight", text)
     kind = next((k for pattern, k in QUESTIONS if re.search(pattern, lowered)), None)
     if kind is None:
         return None

@@ -82,7 +82,7 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "request_altitude": (REQUEST_WORDS, ALTITUDE_WORDS),
     "request_ifr_clearance": ({"ifr", "clearance", "copy", "cleared", "plan"},),
     "request_pushback": ({"push", "pushback", "pushing", "start", "startup"},),
-    "ready_to_taxi": ({"taxi", "ready", "go", "done", "move", "moving"},),  # (not "push back": that's request_pushback, Phoenix's gate F4)
+    "ready_to_taxi": ({"taxi", "ready", "go", "done", "move", "moving", "departure", "depart", "departing", "vfr"},),  # (not "push back": that's request_pushback, Phoenix's gate F4)
     "ready_for_departure": ({"ready", "holding", "hold", "departure", "takeoff", "go", "short"},),
     "report_final": ({"final", "mile", "miles", "out", "inbound", "ils", "approach", "established", "localizer"},),
     "clear_of_runway": ({"clear", "vacated", "off", "exited"},),
@@ -108,6 +108,9 @@ INTENT_CUES: dict[str, tuple[set[str], ...]] = {  # every set needs at least one
     "report_standard": ({"standard", "std", "qne"},),
     "request_flight_following": ({"following", "advisories", "service"},),
     "request_class_b": ({"class", "bravo", "airspace", "b"},),
+    "request_frequency_change": ({"frequency", "leave", "leaving", "zone", "change"},),
+    "request_transition": ({"transition", "through", "zone", "transit", "overfly", "cross", "crossing"},),
+    "request_closed_traffic": ({"circuit", "circuits", "pattern", "closed", "touch", "goes", "lap"},),
     "radio_check": ({"radio", "check", "read", "hear"},),
     # Asking for a repeat says so: a question the model filed as "say again" got the last transmission repeated.
     "say_again": ({"say", "again", "repeat", "missed", "pardon", "come", "didn't", "didnt", "last", "garbled", "broken",

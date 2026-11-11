@@ -1600,5 +1600,7 @@
 "Under way": "Bezig",
 "LocalTC isn't running": "LocalTC draait niet",
 "No flight running": "Geen vlucht bezig",
-"Waiting for LocalTC on this PC...": "Wachten op LocalTC op deze pc..."
+"Waiting for LocalTC on this PC...": "Wachten op LocalTC op deze pc...",
+"VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: alleen waar u heen gaat, als u ergens heen gaat. Bestemming leeg = een lokale vlucht, terug hierheen. De rest zegt u ATC over de radio (de uitvliegroute, flight following, het circuit).",
+"blank = a local flight": "leeg = een lokale vlucht"
 }

@@ -44,6 +44,7 @@ STRAIGHT_IN_NM = 12.0
 STRAIGHT_IN_OFFSET_NM = 1.5
 STRAIGHT_IN_HEADING_DEG = 30.0
 VFR_LIMIT_FT = 4500  # "at or below" when nothing better is known
+TRANSIT_OUT_NM = 6.0  # through a zone: this far from the field, out of it
 AIRBORNE_CONTROLLERS = ("departure", "center", "approach")
 
 
@@ -53,6 +54,7 @@ class VfrState:
     following: bool = False  # flight following asked for (or implied by calling a radar controller)
     identified: bool = False  # "radar contact" given
     want_class_b: bool = False  # asked for Class B before being identified: cleared right after
+    transit: str | None = None  # through a zone: the tower airport it's crossing (told to change frequency once out)
     class_b_cleared: bool = False
     option: str | None = None  # "touch_and_go", "option" or "full_stop"
     pattern_side: str = "left"
@@ -121,6 +123,36 @@ class VfrMixin:
             else:
                 self._vfr_departure_clearance(t, facility)
             return True
+        if intent == "request_frequency_change" and airborne:
+            self._vfr_frequency_change(t, facility)
+            return True
+        if intent == "request_transition" and airborne and facility.controller == "tower":
+            self._vfr_transition(t, facility, own, values.get("altitude"))
+            return True
+        if intent == "request_closed_traffic":
+            self.vfr.direction = "closed-traffic"
+            if not airborne:
+                # On the ground: ground's taxi, or tower's takeoff into closed traffic (as "ready, closed traffic").
+                wanted = "ready_for_departure" if facility.controller == "tower" else "ready_to_taxi"
+                from dataclasses import replace as _replace
+
+                self._on_request(_replace(interp, intent=wanted, values={**values, "direction": "closed-traffic"}), facility, t)
+            elif facility.controller == "tower":
+                runway = self.state.assignments.arrival_runway or self._landing_runway(own) or self._runway_in_use(own)
+                if runway:
+                    self._assign(arrival_runway=runway)
+                    self._schedule(t, "vfr.closed_traffic", {"turn": self.vfr.pattern_side, "runway": runway}, facility)
+                else:
+                    self._schedule(t, "common.roger", {}, facility, expects_readback=False)
+            else:
+                self._schedule(t, "common.unable", {}, facility)
+            return True
+        if intent == "request_runway" and airborne and facility.controller == "tower" and "straight" in (interp.text or "").lower():
+            runway = values.get("runway") or self.state.assignments.arrival_runway or self._runway_in_use(own)
+            if runway:
+                self._schedule(t, "vfr.straight_in", {"station": facility.station, "runway": runway}, facility,
+                               on_issue=lambda: self._assign(arrival_runway=runway))
+                return True
         if intent == "request_class_b":
             if airborne:
                 self._vfr_class_b(t, facility, own)
@@ -129,6 +161,8 @@ class VfrMixin:
         if intent == "request_flight_following":
             if airborne and facility.controller in AIRBORNE_CONTROLLERS:
                 self._vfr_follow(t, facility, own)
+            elif not airborne and facility.controller in ("ground", "clearance", "tower"):
+                self._vfr_following_on_ground(t, facility)
             else:
                 self._schedule(t, "common.roger", {}, facility, expects_readback=False)
             return True
@@ -197,6 +231,40 @@ class VfrMixin:
             on_issue=lambda: self._assign(squawk=squawk, altitude_ft=limit, departure_mhz=departure.mhz),
         )
         self.vfr.following = True  # out of Class B the flight is on departure's radar
+
+    def _vfr_frequency_change(self, t: float, facility: "Facility") -> None:
+        """ "Request frequency change" (leaving the zone, done with the service): approved; with flight following, the
+        service ends first."""
+        if facility.controller in AIRBORNE_CONTROLLERS and self.vfr.following:
+            self.vfr.following = self.vfr.identified = False
+            self._assign(squawk=None)
+            words = "radar service terminated, squawk VFR, frequency change approved"
+            self._schedule(t, "common.info", {"message": Phrase(words, words)}, facility, expects_readback=False)
+            return
+        self.state.flags.add("vfr_departed")
+        self.vfr.transit = None
+        self._schedule(t, "vfr.frequency_change", {}, facility, expects_readback=False)
+
+    def _vfr_transition(self, t: float, facility: "Facility", own: OwnshipState, altitude: Any) -> None:
+        """Through the zone: approved the way asked, at or below the altitude said (or where it is), and "report
+        leaving the zone"; once out, the frequency change."""
+        level = int(altitude) if isinstance(altitude, (int, float)) and 500 <= altitude <= 12500 \
+            else int(round(own.alt_indicated_ft / 500) * 500) or 2500
+        self.vfr.transit = facility.airport
+        self._schedule(t, "vfr.transition", {"direction": self.vfr.direction if self.vfr.direction not in (None, "closed-traffic", "straight-out")
+                                             else "as requested", "altitude": level}, facility)
+
+    def _vfr_following_on_ground(self, t: float, facility: "Facility") -> None:
+        """Flight following asked for before departure: the code now, and departure's frequency for once airborne
+        ("squawk 4521, departure frequency 124.65"); tower hands it over after takeoff. It got "roger" at St-Hubert."""
+        self.vfr.following = True
+        squawk = self.state.assignments.squawk or self._squawk()
+        departure = self.facility("departure") or self._center()
+        if departure is None:
+            self._schedule(t, "vfr.squawk", {"squawk": squawk}, facility, on_issue=lambda: self._assign(squawk=squawk))
+            return
+        self._schedule(t, "vfr.following_ground", {"squawk": squawk, "frequency": departure.mhz}, facility,
+                       on_issue=lambda: self._assign(squawk=squawk, departure_mhz=departure.mhz))
 
     def _vfr_follow(self, t: float, facility: "Facility", own: OwnshipState) -> None:
         """Flight following: a code first, then "radar contact" once the transponder shows it."""
@@ -303,6 +371,13 @@ class VfrMixin:
         """ATC's own VFR calls. True when this step belongs to VFR (the IFR flow is skipped); False to let the
         shared calls run: landing clearance and taxi-in at the destination."""
         st = self.state
+        if self.vfr.transit is not None and tuned == "tower" and not own.on_ground:
+            geo = self.geometry(self.vfr.transit)
+            if geo is None or geo.distance_nm(own.lat, own.lon) >= TRANSIT_OUT_NM:
+                self.vfr.transit = None
+                if st.pending is None:
+                    self._schedule(t, "vfr.frequency_change", {}, st.comms.tuned, delay=False, expects_readback=False)
+            return True
         if tuned == "tower" and self._vfr_in_pattern and phase in (P.CRUISE, P.ARRIVAL, P.APPROACH) and not own.on_ground:
             # Around the pattern the landing clearance waits for the pilot's report ("midfield downwind"); a
             # pilot who never reports gets it on a two-mile final for the runway being used.

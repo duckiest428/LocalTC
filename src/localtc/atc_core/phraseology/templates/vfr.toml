@@ -92,3 +92,21 @@ controller = "tower"
 text = ["{callsign}, runway {runway}, wind {wind}, cleared touch and go."]
 readback = { required = ["runway"] }
 pilot_readback = "Cleared touch and go runway {runway}, {callsign_short}."
+
+# Flight following asked for on the ground (vfr.py): the code now, departure's frequency for after takeoff.
+[[template]]
+id = "vfr.following_ground"
+controller = "any"
+text = ["{callsign}, squawk {squawk}, departure frequency {frequency}.",
+        "{callsign}, flight following, squawk {squawk}, departure will be {frequency}."]
+readback = { required = ["squawk"] }
+pilot_readback = "Squawk {squawk}, departure {frequency}, {callsign_short}."
+
+# Through a tower's zone (vfr.py): the way and the level, and a report once out.
+[[template]]
+id = "vfr.transition"
+controller = "tower"
+text = ["{callsign}, transition approved {direction}, maintain VFR at or below {altitude}, report leaving the zone.",
+        "{callsign}, cleared through the zone {direction}, at or below {altitude}, report clear."]
+readback = { required = ["altitude"] }
+pilot_readback = "Transition approved, at or below {altitude}, wilco, {callsign_short}."

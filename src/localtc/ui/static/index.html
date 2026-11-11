@@ -225,15 +225,16 @@
     </div>
     <div class="sub" id="sub-manual">
       <div class="grid2">
+        <label>Flight rules <select id="mp-rules"><option value="IFR">IFR</option><option value="VFR">VFR</option></select></label>
         <label>Callsign <input id="mp-callsign" placeholder="blank = the sim's" autocomplete="off"></label>
         <label>Aircraft <input id="mp-aircraft" placeholder="e.g. C172, B738" autocomplete="off"></label>
         <label>Origin <input id="mp-origin" placeholder="blank = where you are" autocomplete="off"></label>
         <label>Destination <input id="mp-destination" placeholder="e.g. KBFI" autocomplete="off" required></label>
-        <label>Cruise altitude <input id="mp-cruise" placeholder="e.g. 5500 or FL350" autocomplete="off"></label>
-        <label>Alternate <input id="mp-alternate" autocomplete="off"></label>
-        <label>Flight rules <select id="mp-rules"><option value="IFR">IFR</option><option value="VFR">VFR</option></select></label>
+        <label class="ifr-only">Cruise altitude <input id="mp-cruise" placeholder="e.g. 5500 or FL350" autocomplete="off"></label>
+        <label class="ifr-only">Alternate <input id="mp-alternate" autocomplete="off"></label>
       </div>
-      <label>Route <textarea id="mp-route" rows="2" placeholder="e.g. DCT SEA J5 MWH (shown only; ATC clears you 'as filed')"></textarea></label>
+      <label class="ifr-only">Route <textarea id="mp-route" rows="2" placeholder="e.g. DCT SEA J5 MWH (shown only; ATC clears you 'as filed')"></textarea></label>
+      <p class="muted small vfr-only" hidden>VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).</p>
     </div>
     <div class="error" id="plan-error" hidden></div>
     <div class="dlgfoot">

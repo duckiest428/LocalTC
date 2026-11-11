@@ -146,6 +146,14 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **VFR, as pilots actually say it:** "we'd like to pick up a departure to the west" at the ramp is the taxi request (it got
+  "unable"), "request VFR departure" and "we'd like to do some touch and goes" too; flight following asked for on the
+  ground gets a code and departure's frequency (it got "roger"); "request frequency change" and "leave the zone to the
+  west" are approved; a zone transition gets "transition approved, report leaving the zone" (it was taken for an
+  inbound call); "request straight in" gets the straight-in; "abeam the numbers" and "staying in the circuit" are
+  understood.
+- **A VFR plan asks for little:** the rules first, and with VFR no cruise, route or alternate, and the destination may be
+  blank for a local flight (back where it left); the copilot calls it "a local VFR flight", not "Montreal to Montreal".
 - **Taxi out:** ground now clears you across a runway on your route at airports whose data has few hold lines, answers "request
   to cross" even when the runway number comes out wrong, and sends you to tower when you get there.
 - **The descent left undone:** past the top of descent and still level, the copilot says so and keeps saying so, and ATC tells you to

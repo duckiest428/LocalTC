@@ -1368,6 +1368,7 @@ const Flight = {
     $("#plan-save").classList.toggle("primary", this.filing);
     $("#sb-user").value = S.state.simbrief_user || S.settings?.settings?.ui?.simbrief_user || localStorage.getItem("sbUser") || "";
     if (plan && plan.source === "manual") this.fill(plan);
+    this.rules();
     this.fetched = null;
     $("#sb-result").hidden = true;
     this.sub(plan?.source === "manual" ? "manual" : "simbrief");
@@ -1380,6 +1381,15 @@ const Flight = {
     for (const k of ["callsign", "aircraft", "origin", "destination", "alternate", "route"]) $(`#mp-${k}`).value = p[k] || "";
     $("#mp-rules").value = p.rules || "IFR";
     $("#mp-cruise").value = p.cruise_ft || "";
+    this.rules();
+  },
+  /** VFR asks for less: no cruise, alternate or route, and the destination may be blank (a local flight). */
+  rules() {
+    const vfr = $("#mp-rules").value === "VFR";
+    $$("#sub-manual .ifr-only").forEach((el) => { el.hidden = vfr; });
+    $$("#sub-manual .vfr-only").forEach((el) => { el.hidden = !vfr; });
+    $("#mp-destination").required = !vfr;
+    $("#mp-destination").placeholder = vfr ? "blank = a local flight" : "e.g. KBFI";
   },
   sub(name) {
     this.mode = name;
@@ -1435,6 +1445,7 @@ $$(".subtab").forEach((b) => (b.onclick = () => Flight.sub(b.dataset.sub)));
 $("#sb-fetch").onclick = () => Flight.fetch();
 $("#sb-user").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); Flight.fetch(); } });
 $("#plan-save").onclick = () => Flight.save(false);
+$("#mp-rules").onchange = () => Flight.rules();
 $("#plan-start").onclick = () => Flight.save(true);
 
 /* ---------- Dev mode ---------- */

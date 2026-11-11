@@ -694,7 +694,12 @@ class Monitor(WatchMixin):
                 # are often filled after the flight loads), the briefings and the ATIS when asked.
                 callsign = speech.callsign_display(f.callsign) if f.callsign else ""
                 aircraft = _aircraft_name(self.title) or (speech.aircraft_type(f.aircraft_type)[0] if f.aircraft_type else "")
-                route = f"{self._name(f.origin)} to {self._name(f.destination)}" if f.destination else f"out of {self._name(f.origin)}"
+                local = not f.destination or f.destination == f.origin
+                vfr = (f.rules or "").upper() == "VFR"
+                # Out and back to the same field ("Montreal to Montreal" for a VFR flight round St-Hubert): a local flight.
+                route = (f"a local VFR flight out of {self._name(f.origin)}" if vfr else f"out of {self._name(f.origin)}") if local \
+                    else (f"VFR, {self._name(f.origin)} to {self._name(f.destination)}" if vfr
+                          else f"{self._name(f.origin)} to {self._name(f.destination)}")
                 lines = [self.rng.choice(["Hi, I'm with you.", "Hey. All set on my side."]),
                          ", ".join(x for x in (callsign, route, f"in the {aircraft}" if aircraft else "") if x) + "."]
                 if not self.plan_source:

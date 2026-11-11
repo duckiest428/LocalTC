@@ -1600,5 +1600,7 @@
 "Under way": "Pågår",
 "LocalTC isn't running": "LocalTC körs inte",
 "No flight running": "Ingen flygning pågår",
-"Waiting for LocalTC on this PC...": "Väntar på LocalTC på den här datorn..."
+"Waiting for LocalTC on this PC...": "Väntar på LocalTC på den här datorn...",
+"VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: bara vart du ska, om någonstans. Tom destination = en lokal flygning, tillbaka hit. Resten säger du till ATC på radion (utflygningen, flight following, varvet).",
+"blank = a local flight": "tomt = en lokal flygning"
 }

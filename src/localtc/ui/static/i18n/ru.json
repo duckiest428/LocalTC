@@ -1600,5 +1600,7 @@
 "Under way": "Идёт",
 "LocalTC isn't running": "LocalTC не запущен",
 "No flight running": "Полёт не идёт",
-"Waiting for LocalTC on this PC...": "Ожидание LocalTC на этом ПК..."
+"Waiting for LocalTC on this PC...": "Ожидание LocalTC на этом ПК...",
+"VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "ПВП: только куда летите, если куда-то. Пустой пункт назначения = местный полёт, обратно сюда. Остальное сообщите диспетчеру по радио (направление выхода, сопровождение, круг).",
+"blank = a local flight": "пусто = местный полёт"
 }

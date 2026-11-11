@@ -1600,5 +1600,7 @@
 "Under way": "Läuft",
 "LocalTC isn't running": "LocalTC läuft nicht",
 "No flight running": "Kein Flug aktiv",
-"Waiting for LocalTC on this PC...": "Warte auf LocalTC auf diesem PC..."
+"Waiting for LocalTC on this PC...": "Warte auf LocalTC auf diesem PC...",
+"VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: nur wohin es geht, falls irgendwohin. Ziel leer = ein lokaler Flug, zurück hierher. Den Rest sagen Sie ATC über Funk (der Abflugweg, Flight Following, die Platzrunde).",
+"blank = a local flight": "leer = ein lokaler Flug"
 }

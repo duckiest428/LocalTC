@@ -1325,6 +1325,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return  # the plan's on its way
         if nearest is not None:
             st.flight.origin = nearest.icao
+            if self._vfr and not st.flight.destination:
+                st.flight.destination = nearest.icao  # a local VFR flight: back where it started
             self._rebuild_facilities()
             return
         # The nearest has no runways (a heliport, a Coast Guard station): the next ones around, the sim sends only that one.

@@ -1600,5 +1600,7 @@
 "Under way": "进行中",
 "LocalTC isn't running": "LocalTC 未运行",
 "No flight running": "没有进行中的飞行",
-"Waiting for LocalTC on this PC...": "正在等待本机上的 LocalTC..."
+"Waiting for LocalTC on this PC...": "正在等待本机上的 LocalTC...",
+"VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR：只填目的地（如果有）。目的地留空 = 本场飞行，返回此处。其余的通过无线电告诉管制（离场方向、飞行跟踪、起落航线）。",
+"blank = a local flight": "留空 = 本场飞行"
 }

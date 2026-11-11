@@ -71,7 +71,9 @@ class FlightPlan(msgspec.Struct, kw_only=True):
     perf: PlanPerf = PlanPerf()  # SimBrief's fuel, weights and V-speeds (empty for a typed plan)
 
     def summary(self) -> str:
-        parts = [self.callsign or "(sim callsign)", f"{self.origin or '?'}-{self.destination or '?'}"]
+        local = self.rules == "VFR" and (not self.destination or self.destination == self.origin)
+        parts = [self.callsign or "(sim callsign)",
+                 f"VFR local{' ' + self.origin if self.origin else ''}" if local else f"{self.origin or '?'}-{self.destination or '?'}"]
         if self.cruise_ft:
             parts.append(f"FL{self.cruise_ft // 100:03d}" if self.cruise_ft >= 18000 else f"{self.cruise_ft:,} ft")
         return " ".join(parts)
@@ -117,8 +119,13 @@ def manual_plan(*, callsign: str = "", origin: str = "", destination: str, cruis
         raise FlightPlanError(f"callsign {callsign!r}: letters and digits only, e.g. N172LT or DAL123")
     route = " ".join(route.upper().split())
     sid, star = route_procedures(route)
+    vfr = str(rules).upper() == "VFR"
+    # VFR needs little: a local flight has no destination (it comes back where it left), and no route, no alternate.
+    if vfr:
+        route, alternate, sid, star = "", "", "", ""
+    there = icao(destination, "destination", required=not vfr) or (icao(origin, "origin") if vfr else "")
     return FlightPlan(source="manual", callsign=sign, sid=sid, star=star, origin=icao(origin, "origin"),
-                      destination=icao(destination, "destination", required=True), alternate=icao(alternate, "alternate"),
+                      destination=there, alternate=icao(alternate, "alternate"),
                       cruise_ft=parse_altitude(cruise), route=route,
                       aircraft=aircraft.strip().upper(), rules="VFR" if str(rules).upper() == "VFR" else "IFR")
 

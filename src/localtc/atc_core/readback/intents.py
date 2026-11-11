@@ -244,11 +244,13 @@ FOLLOWING_WORDS = (("flight", "following"), ("vfr", "advisories"), ("traffic", "
                    ("radar", "service"))
 OPTION_WORDS = {("touch", "and", "go"): "touch_and_go", ("touch", "go"): "touch_and_go", ("the", "option"): "option",
                 ("stop", "and", "go"): "option", ("low", "approach"): "option", ("full", "stop"): "full_stop"}
-PATTERN_LEGS = (("midfield",), ("downwind",), ("base",), ("crosswind",), ("upwind",))
+PATTERN_LEGS = (("midfield",), ("downwind",), ("base",), ("crosswind",), ("upwind",), ("abeam",))
 PATTERN_WORDS = (*PATTERN_LEGS, ("in", "the", "pattern"), ("in", "the", "circuit"))  # "remaining in the pattern" asks
 CLOSED_WORDS = (("closed", "traffic"), ("remain", "in", "the", "pattern"), ("remaining", "in", "the", "pattern"),
                 ("staying", "in", "the", "pattern"), ("pattern", "work"), ("remain", "in", "the", "circuit"),
-                ("remaining", "in", "the", "circuit"), ("circuit", "work"), ("circuits",))
+                ("remaining", "in", "the", "circuit"), ("circuit", "work"), ("circuits",), ("staying", "in", "the", "circuit"),
+                ("touch", "and", "goes"), ("touch", "and", "go's"), ("touch", "goes"), ("pattern", "work"), ("another", "circuit"),
+                ("another", "lap"), ("in", "the", "pattern", "for"), ("closed", "pattern"))
 COMPASS = ("north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest")
 
 
@@ -342,6 +344,12 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
                   ("request", "ifr", "taxi"), ("taxi", "to", "runway"), ("taxi", "to", "active"), ("taxi", "to", "the", "active"),
                   ("taxi", "to", "the", "runway")):
         add("ready_to_taxi", atis=_atis(tokens), **vfr)
+    elif direction is not None and _has_any(tokens, ("departure",), ("depart",), ("departing",)) \
+            and _has_any(tokens, *REQUEST_WORDS, ("pick", "up"), ("we'd",), ("with", "information")) \
+            and not _has_any(tokens, ("ready", "for"), ("holding", "short"), ("hold", "short"), ("runway",)):
+        # "At the eastern ramp, we'd like to pick up a departure to the west with information Foxtrot": a VFR flight
+        # asking ground for its taxi, the way out said instead of "ready to taxi" (it got "unable" at St-Hubert).
+        add("ready_to_taxi", atis=_atis(tokens), **vfr)
     taxi_asked = _has_any(tokens, ("a", "taxi"), ("request", "taxi"), ("get", "taxi"), ("taxi", "for")) \
         and not _has_any(tokens, ("ready", "for", "departure"), ("ready", "for", "takeoff"))
     # Asking about the departure ("what runway can we expect to depart from?", "we're just asking for the departure
@@ -431,6 +439,24 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
         add("checkin", altitude=reported[0] if reported else None, assigned=reported[1] if len(reported) > 1 else None,
             atis=_atis(tokens), **vfr)
     carried = {"request_ifr_clearance", "ready_to_taxi", "ready_for_departure", "checkin"}
+    asks = _has_any(tokens, *REQUEST_WORDS, ("we'd",), ("we", "would"), ("like",))
+    if not matches and asks and _has_any(tokens, ("frequency", "change"), ("leave", "the", "zone"), ("leaving", "the", "zone"),
+                                         ("leave", "the", "frequency"), ("leave", "the", "control", "zone"), ("leave", "your", "frequency")):
+        add("request_frequency_change", direction=vfr["direction"])  # "request frequency change", "request to leave the zone westbound"
+    transiting = _has_any(tokens, ("transition",), ("through", "the", "zone"), ("through", "your", "airspace"),
+                          ("through", "the", "class"), ("cross", "the", "zone"), ("crossing", "the", "zone"), ("overfly",),
+                          ("zone", "transit"), ("transit",))
+    if transiting and all(m.intent == "checkin" for m in matches):
+        matches.clear()  # "request transition through the zone northbound": not a check-in ("through" is one of its words)
+    if not matches and _has_any(tokens, ("transition",), ("through", "the", "zone"), ("through", "your", "airspace"),
+                                ("through", "the", "class"), ("cross", "the", "zone"), ("crossing", "the", "zone"),
+                                ("overfly",), ("over", "the", "field"), ("zone", "transit"), ("transit",)):
+        add("request_transition", direction=vfr["direction"], altitude=next(iter(altitudes(tokens) or _reported_altitudes(tokens)), None))
+    if not matches and vfr["direction"] == "closed-traffic" and asks:
+        add("request_closed_traffic")  # "we'd like to do some touch and goes": on the ground the taxi, in the air closed traffic
+    if not matches and _has_any(tokens, ("vfr", "departure"), ("vfr", "flight"), ("depart", "vfr")) and asks \
+            and not _has_any(tokens, ("ready", "for"), ("holding", "short")):
+        add("ready_to_taxi", atis=_atis(tokens), **vfr)  # "request VFR departure" from the ramp
     if not any(m.intent in carried for m in matches):
         if following:
             add("request_flight_following", direction=direction)

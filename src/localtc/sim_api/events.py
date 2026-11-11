@@ -44,6 +44,7 @@ class OwnshipState(Event, tag="ownship_state"):
     xpdr_ident: bool = False
     com1_tx: bool = False
     com2_tx: bool = False
+    com2_rx: bool = False  # COM2 being listened to (its receive switch): the other traffic heard on it too
     com1_type: str = ""
     com1_ident: str = ""
     gear_down: bool = True
@@ -206,6 +207,29 @@ class WeatherReport(Event, tag="weather_report"):
     altimeter_inhg: float | None = None
     temperature_c: float | None = None
     dewpoint_c: float | None = None
+
+
+class PilotReport(msgspec.Struct, frozen=True, kw_only=True):
+    """One pilot report (PIREP or AIREP): where, at what level, and the ride, icing and cloud tops it gives."""
+
+    lat: float
+    lon: float
+    alt_ft: int
+    turbulence: str = ""  # NEG, LGT, LGT-MOD, MOD, MOD-SEV, SEV, EXTRM ("" not reported)
+    icing: str = ""  # the same scale, TRC as well
+    tops_ft: int | None = None  # the cloud tops reported
+    aircraft: str = ""  # its type designator
+    age_min: float = 0.0  # how old it was when fetched
+    raw: str = ""
+    own: bool = False  # this flight's own report, to ATC
+
+
+class PilotReports(Event, tag="pilot_reports"):
+    """The pilot reports around the flight (aviationweather.gov's public PIREP feed), and this flight's own: what ATC
+    answers a ride question from. Recorded, so a replay hears the same reports."""
+
+    area: str  # the airport they're around
+    reports: tuple[PilotReport, ...] = ()
 
 
 class AtisReport(Event, tag="atis_report"):
@@ -673,6 +697,7 @@ class RadioChatter(Event, tag="radio_chatter"):
     controller: str = ""  # tower, ground, ... (the controller's manner of speaking)
     locale: str = ""  # the region's English, for the voices
     ident: str = ""  # the other aircraft's callsign as filed ("RYR123"), for its airline's colour in the log
+    radio: int = 1  # heard on COM1, or on COM2 being monitored
 
 
 class SessionNote(Event, tag="session_note"):
@@ -747,7 +772,7 @@ class TrafficControlStatus(Event, tag="traffic_control_status"):
 
 SimEvent = Union[OwnshipState, AircraftIdentity, TrafficSnapshot, SimLifecycle, ConnectionStatus, AirportData,
                  NearbyAirports, AircraftSystems, ArrivalData, DeparturesData, ApproachesData, TrafficIdentity, AiObjectAssigned, ModelList,
-                 TrafficControlStatus, AircraftInputEvents, WeatherReport, AtisReport, AircraftVars, NoticesReport,
+                 TrafficControlStatus, AircraftInputEvents, WeatherReport, PilotReports, AtisReport, AircraftVars, NoticesReport,
                  OpsSnapshot, TerrainGrid, SimFrameRate, OnlineAtc]
 RadioEvent = Union[PttPressed, PttReleased, Transcript, AtcTransmission]
 AtcEvent = Union[PhaseChanged, ReadbackEvaluated, AtcAlert, RadioTuned, LlmExchange, AtisBroadcast, RadioChatter,

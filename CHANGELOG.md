@@ -7,6 +7,34 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.6] - Upcoming
 
 ### Added
+- **The arrival sequence:** approach tells you where you are in the landing order ("number three for runway 28R"), stretches
+  the downwind to the gap behind the one ahead (its wake spacing, and "extend downwind, I'll call your base"), and a direct
+  asked for with arrivals stacked ahead waits for the sequence ("unable direct for sequencing, expect it in about four
+  minutes"), given unasked once it fits.
+- **Side-steps:** on final to a runway with an aircraft stopped on it, a free parallel beside it in visual weather: tower moves
+  you across and clears you there; asked for ("request side-step to 28L") on the approach, the same.
+- **Landing after a departure:** on final with a departure starting its roll, the landing clearance comes with it ("traffic
+  A320 departing ahead"; ICAO "behind the departing ..."), watched: still there on short final, a go-around.
+- **Below visual minimums:** a visual approach expected and the weather going under it before the clearance: the
+  instrument approach to that runway instead, and said why.
+- **Named visual approaches:** the FAA's 49 charted visuals at 34 airports (the River Visual at Washington, Quiet Bridge
+  and Tipp Toe at San Francisco ...), given by name in the weather for their landmarks, or asked for by name.
+- **The push and the taxi congestion:** ground holds the push for an aircraft taxiing behind you, or at the gate for a while
+  when the line at the runway is long, and calls you when it's time; GSX waits armed until then.
+- **Say again in other words:** a clearance asked for again is "I say again" and another of its wordings, not the same
+  recording.
+- **Ride reports:** "any reports of turbulence?" is answered from the real pilot reports around the flight (aviationweather.gov's
+  free feed) and your own ("moderate chop at 350", tops, icing), and "request a smoother ride" gets the level with the
+  least reported, checked against the terrain; "what's our clearance?" is answered from what you're cleared for.
+- **Traffic:** departures wait two minutes behind a heavy (three behind a super), a longer line for the runway while
+  you're on the ground, landings with a flare, the nose lowered and spoilers out, takeoffs with a rotation; light
+  aircraft heard in the circuit (touch and goes, the option) and on flight following; other pilots heard on COM2 too
+  when it's being listened to, and never on clearance delivery.
+- **Sights from the cabin:** in the cruise the cabin crew points out a famous landmark by day, or a big city (its lights at
+  night), on the side you'll see it.
+- **The sim's toolbar panel (VR):** a LocalTC button on the sim's toolbar showing the radio log and the radios inside the
+  sim, from the app on this PC (port 47810). Built once with the MSFS 2024 SDK (`tools/build_sim_panel.py`, the sim
+  running), then put in the Community folders by the app.
 - **The turnaround as a timeline:** twelve milestones from parked to ready for departure, each with its time and the reason for it (the
   passengers and doors, the fuel still to load, the seats, the airline's kind of operation, the airport), what it waits on, and how it
   stands against the plan's off-block time. Too early, the ramp tells you when a service's slot opens and calls it then (ask twice

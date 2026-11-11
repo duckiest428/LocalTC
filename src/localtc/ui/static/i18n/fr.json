@@ -1597,5 +1597,8 @@
 "Times and reminders only": "Horaires et rappels seulement",
 "Turnaround": "Escale",
 "Turnaround schedule": "Horaire d'escale",
-"Under way": "En cours"
+"Under way": "En cours",
+"LocalTC isn't running": "LocalTC n'est pas lancé",
+"No flight running": "Aucun vol en cours",
+"Waiting for LocalTC on this PC...": "En attente de LocalTC sur ce PC..."
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SimBase.Document Type="InGamePanels" version="1.0">
+    <Filename>localtc-panel.spb</Filename>
+    <InGamePanels.InGamePanelDefinition
+        id="PANEL_LOCALTC"
+        Name="LocalTC"
+        url="html_ui/InGamePanels/LocalTCPanel/LocalTCPanel.html"
+        resizeDirections="Both"
+        minWidth="10"
+        minHeight="8"
+        defaultWidth="30"
+        defaultHeight="40"
+        defaultTop="20"
+        defaultRight="2"
+        icon="ICON_TOOLBAR_LOCALTC"
+        buttonVisible="true"
+    >
+    </InGamePanels.InGamePanelDefinition>
+</SimBase.Document>

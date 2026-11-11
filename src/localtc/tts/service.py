@@ -143,6 +143,7 @@ class VoiceOut:
         self._radio = bus.subscribe(RadioTuned, PttPressed, PttReleased)  # at once, not behind the lines being made
         self.sidetone = None  # player.Sidetone: you on the radio while you hold the key (with a microphone)
         self.tuned: str | None = None  # the station tuned now
+        self.monitored: set[str] = set()  # stations heard on COM2 (its chatter is let through as well)
         self.keyed = False  # the pilot holding the push-to-talk: the other flights aren't heard (nor talked over)
         self._tunes_seen = self._tunes_reached = 0  # changes of frequency: seen at once, and reached in the line order
 
@@ -183,7 +184,7 @@ class VoiceOut:
 
     def off_frequency(self, station: str | None, channel: str) -> bool:
         """Another flight's exchange from a frequency no longer tuned (a chatter goes on after you've left it)."""
-        return channel == "chatter" and self.tuned is not None and station != self.tuned
+        return channel == "chatter" and self.tuned is not None and station != self.tuned and station not in self.monitored
 
     async def run(self) -> None:
         watcher = asyncio.create_task(self._watch_radio())
@@ -224,6 +225,8 @@ class VoiceOut:
                            manner=ev.manner or ev.controller or "atc", locale=locale), "atc", keep=clip_id(ev),
                            station=ev.station)
         elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
+            if ev.radio == 2:
+                self.monitored = {ev.station}  # COM2's station: heard while it's monitored
             if ev.speaker == "atc":
                 who = self.persona(shift_key(ev.station, self.shift), "atc", manner=ev.controller or "atc", locale=locale)
                 await self.say(ev.spoken or ev.text, who, "atc", keep=clip_id(ev), station=ev.station, channel="chatter")

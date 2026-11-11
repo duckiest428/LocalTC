@@ -12,7 +12,7 @@ from localtc.atc_core.readback.normalize import Token, normalize
 QUESTION_OPENERS = {"what", "what's", "whats", "which", "when", "where", "how", "who", "why", "is", "are", "can", "could",
                     "may", "do", "does", "did", "will", "would", "confirm", "any"}
 QUESTION_TOPICS = {"altimeter", "wind", "winds", "weather", "metar", "time", "visibility", "ceiling", "active",
-                   "baro", "barometer", "qnh", "barrow"}  # "barrow": what speech-to-text makes of "baro"
+                   "baro", "barometer", "qnh", "barrow", "pirep", "pireps"}  # (not "chop": "light chop at 5,000" is a report)  # "barrow": what speech-to-text makes of "baro"
 # Asking, wherever it comes in the call: "..., and can we also get an updated altimeter?"
 QUESTION_CUES = (("what",), ("what's",), ("whats",), ("which",), ("any", "idea"), ("do", "you", "have"),
                  ("do", "you", "know"), ("can", "we", "get"), ("could", "we", "get"), ("can", "i", "get"),
@@ -23,9 +23,13 @@ QUESTION_CUES = (("what",), ("what's",), ("whats",), ("which",), ("any", "idea")
 TOPIC_WORDS = {"altimeter": "altimeter", "altimeters": "altimeter", "altimator": "altimeter", "baro": "altimeter",
                "barometer": "altimeter", "qnh": "altimeter", "barrow": "altimeter", "wind": "wind", "winds": "wind",
                "weather": "weather", "metar": "weather", "runway": "runway", "squawk": "squawk", "code": "squawk",
-               "altitude": "altitude", "frequency": "frequency", "atis": "atis", "information": "atis"}
+               "altitude": "altitude", "frequency": "frequency", "atis": "atis", "information": "atis",
+               "turbulence": "ride", "chop": "ride", "ride": "ride", "rides": "ride", "bumpy": "ride", "pirep": "ride",
+               "pireps": "ride", "icing": "ride", "tops": "ride"}
 # ... and from two, the way speech-to-text breaks "altimeter" up: "alt-terminator", "all timer".
-TOPIC_PHRASES = {("alt", "terminator"): "altimeter", ("all", "timer"): "altimeter", ("alti", "meter"): "altimeter",
+# (The clearance asked about, never the word alone: "Clearance, how's the weather?" calls clearance delivery.)
+TOPIC_PHRASES = {("our", "clearance"): "clearance", ("my", "clearance"): "clearance", ("we", "cleared"): "clearance",
+                 ("alt", "terminator"): "altimeter", ("all", "timer"): "altimeter", ("alti", "meter"): "altimeter",
                  ("alt", "meter"): "altimeter", ("ultimate", "er"): "altimeter"}
 
 

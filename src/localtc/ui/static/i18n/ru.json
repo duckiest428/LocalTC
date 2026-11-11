@@ -1597,5 +1597,8 @@
 "Times and reminders only": "Только время и напоминания",
 "Turnaround": "Обслуживание",
 "Turnaround schedule": "График обслуживания",
-"Under way": "Идёт"
+"Under way": "Идёт",
+"LocalTC isn't running": "LocalTC не запущен",
+"No flight running": "Полёт не идёт",
+"Waiting for LocalTC on this PC...": "Ожидание LocalTC на этом ПК..."
 }

@@ -60,7 +60,7 @@ def test_event_tags_are_stable():
         "atc_transmission", "atis_broadcast", "atis_report", "cabin_incident", "cabin_sound", "cabin_speech", "checklist_state", "connection_status", "copilot_event", "crew_action", "crew_speech", "departures_data", "flight_arrived", "ground_status",
         "intercom_heard", "intercom_pressed", "intercom_released", "llm_exchange", "model_list", "nearby_airports", "notices_report",
         "online_atc", "ops_snapshot",
-        "ownship_state", "phase_changed", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "ramp_speech", "readback_evaluated",
+        "ownship_state", "phase_changed", "pilot_reports", "ptt_pressed", "ptt_released", "radio_chatter", "radio_tuned", "ramp_speech", "readback_evaluated",
         "sim_frame_rate", "sim_lifecycle", "terrain_grid", "traffic_control_status", "traffic_identity", "traffic_snapshot", "transcript", "turnaround_state", "weather_report",
     ]
 

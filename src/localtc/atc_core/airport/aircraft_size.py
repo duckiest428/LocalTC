@@ -118,3 +118,27 @@ def heavier(leader: str, follower: str) -> bool:
     """Whether ``leader``'s wake is one ``follower`` is separated from (a heavier category: J > H > M > L)."""
     order = {"J": 3, "H": 2, "M": 1, "L": 0}
     return leader in order and follower in order and order[leader] > order[follower] and order[leader] >= 2
+
+
+# Radar wake spacing on final, nautical miles, leader then follower (ICAO Doc 4444 8.7.3.4 with the super's own; the
+# FAA's 7110.65 5-5-4 is close: 3 miles between the rest).
+WAKE_MILES = {("J", "J"): 4.0, ("J", "H"): 6.0, ("J", "M"): 7.0, ("J", "L"): 8.0,
+              ("H", "H"): 4.0, ("H", "M"): 5.0, ("H", "L"): 6.0, ("M", "L"): 5.0}
+MIN_MILES = 3.0
+
+
+def wake_miles(leader: str, follower: str) -> float:
+    """The spacing behind ``leader`` (a wake category, "J", "H", "M", "L") for ``follower``: 3 miles unless the wake says more."""
+    return WAKE_MILES.get(((leader or "M")[:1].upper(), (follower or "M")[:1].upper()), MIN_MILES)
+
+
+# Departures from one runway, seconds between them by wake (ICAO 8.7.3.10: two minutes behind a heavy, three behind a
+# super; otherwise the runway's own pace).
+WAKE_DEPARTURE_S = {"J": 180.0, "H": 120.0}
+
+
+def departure_gap_s(leader: str, follower: str, base_s: float) -> float:
+    gap = WAKE_DEPARTURE_S.get((leader or "")[:1].upper(), 0.0)
+    if (follower or "")[:1].upper() == (leader or "")[:1].upper() and leader[:1].upper() == "H":
+        gap = 90.0  # heavy behind heavy: the runway's pace with a little more
+    return max(base_s, gap)

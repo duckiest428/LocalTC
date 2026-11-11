@@ -426,3 +426,53 @@ pilot_readback = "Leaving the hold, direct {fix}, {callsign_short}."
 id = "common.low_altitude"
 controller = "any"
 text = ["{callsign}, low altitude alert, check your altitude immediately, the minimum altitude in your area is {altitude}."]
+
+# A direct asked for with arrivals stacked ahead (sequencing.py), and given once the sequence allows it.
+[[template]]
+id = "common.unable_direct_sequence"
+controller = "any"
+text = ["{callsign}, unable direct for sequencing, expect it in about {minutes}.",
+        "{callsign}, I can't give you that yet for the sequence, expect direct in about {minutes}."]
+
+[[template]]
+id = "common.direct_now"
+controller = "any"
+text = ["{callsign}, the sequence allows it now, proceed direct {fix}.", "{callsign}, now cleared direct {fix}."]
+readback = { required = ["fix"] }
+pilot_readback = "Direct {fix}, {callsign_short}."
+
+# Ride reports and a smoother level (rides.py).
+[[template]]
+id = "common.ride_report"
+controller = "any"
+text = ["{callsign}, {message}.", "{callsign}, the latest reports, {message}."]
+
+[[template]]
+id = "common.ride_none"
+controller = "any"
+text = ["{callsign}, no ride reports near you recently, {message}.", "{callsign}, nothing reported along your route recently, {message}."]
+
+[[template]]
+id = "common.smoother_climb"
+controller = "any"
+text = ["{callsign}, {message}, climb and maintain {altitude}.", "{callsign}, {message}, climb {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Climb {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_descend"
+controller = "any"
+text = ["{callsign}, {message}, descend and maintain {altitude}.", "{callsign}, {message}, descend {altitude}."]
+readback = { required = ["altitude"] }
+pilot_readback = "Descend {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_none"
+controller = "any"
+text = ["{callsign}, {message}.", "{callsign}, unable a better level, {message}."]
+
+# What the pilot is cleared for, asked to confirm (answers.py-style, from the state).
+[[template]]
+id = "common.confirm_clearance"
+controller = "any"
+text = ["{callsign}, affirm, {message}.", "{callsign}, you're {message}."]

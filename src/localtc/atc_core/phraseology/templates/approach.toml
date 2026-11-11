@@ -225,3 +225,32 @@ controller = "approach"
 text = ["{callsign}, maintain {speed} knots until five mile final.", "{callsign}, reduce speed to {speed} knots, maintain until five mile final."]
 readback = { required = ["speed"] }
 pilot_readback = "{speed} knots until five mile final, {callsign_short}."
+
+# Where an arrival fits in the landing order, inside 40 miles with others ahead to the same runway (sequencing.py).
+[[template]]
+id = "approach.sequence"
+controller = "approach"
+text = ["{callsign}, you're {message}.", "{callsign}, {message}, the vectors are for the sequence."]
+
+# The downwind stretched to the gap behind the one ahead: the base turn comes when there's room.
+[[template]]
+id = "approach.extend_downwind"
+controller = "approach"
+text = ["{callsign}, extend downwind, {message}, I'll call your base.",
+        "{callsign}, continue on the downwind, {message}, expect your base turn shortly."]
+
+[[template]]
+id = "approach.sidestep"
+controller = "approach"
+text = ["{callsign}, side-step to runway {runway} approved.", "{callsign}, roger, side-step to runway {runway} approved."]
+readback = { required = ["runway"] }
+pilot_readback = "Side-step runway {runway}, {callsign_short}."
+
+# A visual to expect, and the weather's gone below the visual's minimums before the clearance.
+[[template]]
+id = "approach.weather_change"
+controller = "approach"
+text = ["{callsign}, the weather's gone below visual minimums, expect {approach} approach.",
+        "{callsign}, change of approach, field's now IFR, expect {approach} approach."]
+readback = { required = ["approach"] }
+pilot_readback = "Expect {approach}, {callsign_short}."

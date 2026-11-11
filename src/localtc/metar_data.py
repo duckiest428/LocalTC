@@ -22,7 +22,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from localtc.sim_api import AtisReport, WeatherReport
+from localtc.sim_api import AtisReport, PilotReport, PilotReports, WeatherReport
 
 log = logging.getLogger(__name__)
 
@@ -208,6 +208,9 @@ class MetarStore:
                     self._reports.pop(icao, None)  # no recent one any more
                 return
             self._reports[icao] = (time.monotonic(), report)
+        if isinstance(report, PilotReports):
+            log.info("PIREPs around %s: %d", icao, len(report.reports))
+            return
         log.info("%s for %s: %s", "METAR" if isinstance(report, WeatherReport) else "ATIS", icao,
                  report.raw if isinstance(report, WeatherReport)
                  else " / ".join(f"{a.kind} {a.letter}{' (VATSIM)' if a.source == 'vatsim' else ''}" for a in report))
@@ -222,3 +225,50 @@ class AtisStore(MetarStore):
     def __init__(self, *, fetcher=fetch_atis, background: bool = True) -> None:
         super().__init__(fetcher=fetcher, background=background)
         self.refresh_s = ATIS_REFRESH_S
+
+
+# --- pilot reports ------------------------------------------------------------------------------------------------
+
+PIREP_URL = "https://aviationweather.gov/api/data/pirep"
+PIREP_RADIUS_NM = 250
+PIREP_AGE_H = 3
+PIREP_REFRESH_S = 900.0
+TOPS = re.compile(r"\bTOPS?\s?(\d{3})(?:\s?-\s?(\d{3}))?\b")
+
+
+def parse_pirep(row: dict, now_s: float) -> PilotReport | None:
+    """One aviationweather.gov PIREP row (``format=json``) as a ``PilotReport``; None without a place and a level."""
+    lat, lon, level = row.get("lat"), row.get("lon"), row.get("fltLvl")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)) or not isinstance(level, (int, float)):
+        return None
+    raw = str(row.get("rawOb") or "")
+    tops = TOPS.search(raw)
+    observed = row.get("obsTime")
+    age = (now_s - float(observed)) / 60.0 if isinstance(observed, (int, float)) else 0.0
+    return PilotReport(lat=float(lat), lon=float(lon), alt_ft=int(level) * 100,
+                       turbulence=str(row.get("tbInt1") or "").upper(), icing=str(row.get("icgInt1") or "").upper(),
+                       tops_ft=int(tops.group(2) or tops.group(1)) * 100 if tops else None,
+                       aircraft=str(row.get("acType") or ""), age_min=max(0.0, age), raw=raw)
+
+
+def fetch_pireps(icao: str, *, timeout_s: float = TIMEOUT_S) -> PilotReports | None:
+    """The pilot reports of the last few hours within ``PIREP_RADIUS_NM`` of ``icao`` (empty: none; None: failed)."""
+    query = urllib.parse.urlencode({"id": icao.upper(), "distance": PIREP_RADIUS_NM, "age": PIREP_AGE_H, "format": "json"})
+    request = urllib.request.Request(f"{PIREP_URL}?{query}", headers={"User-Agent": "LocalTC"})
+    with urllib.request.urlopen(request, timeout=timeout_s) as response:
+        body = response.read()
+    rows = json.loads(body) if body.strip() else []
+    now = time.time()
+    reports = tuple(r for r in (parse_pirep(row, now) for row in rows if isinstance(row, dict)) if r is not None)
+    return PilotReports(t=0.0, area=icao.upper(), reports=reports)
+
+
+class PirepStore(MetarStore):
+    """The pilot reports around an airport (``fetch_pireps``), the same way: at once from memory, fetched in the
+    background every ``PIREP_REFRESH_S``."""
+
+    what = "PIREPs"
+
+    def __init__(self, *, fetcher=fetch_pireps, background: bool = True) -> None:
+        super().__init__(fetcher=fetcher, background=background)
+        self.refresh_s = PIREP_REFRESH_S

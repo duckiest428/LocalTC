@@ -486,6 +486,7 @@ class UiConfig(_Section):
     dev_mode: bool = False  # record every flight (with audio) and show the tools for sending one in
     discord: bool = False  # the flight and its frequency on the pilot's Discord profile (discord_rpc.py)
     port: int = 0  # 0 = any free port on 127.0.0.1
+    panel_port: int = 47810  # the sim's toolbar panel (VR) reads LocalTC here; 0: no panel server
     window: bool = True  # a window of its own (pywebview); false = the default browser
     simbrief_user: str = ""  # SimBrief username or pilot ID, remembered for "New flight"
     # A flight starts with its plan ("New Flight": the plan, then the flight). Off: Start flies without one, and "File

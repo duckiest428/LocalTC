@@ -1597,5 +1597,8 @@
 "Times and reminders only": "Alleen tijden en herinneringen",
 "Turnaround": "Turnaround",
 "Turnaround schedule": "Turnaroundschema",
-"Under way": "Bezig"
+"Under way": "Bezig",
+"LocalTC isn't running": "LocalTC draait niet",
+"No flight running": "Geen vlucht bezig",
+"Waiting for LocalTC on this PC...": "Wachten op LocalTC op deze pc..."
 }

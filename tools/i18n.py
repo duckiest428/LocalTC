@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "src" / "localtc" / "ui" / "static"
 OUT = STATIC / "i18n"
-SCRIPTS = ("app.js", "efb.js", "atcmap.js", "flightsmap.js", "replayplayer.js", "wrapped.js", "sharecard.js", "cardmodel.js")
+SCRIPTS = ("app.js", "efb.js", "atcmap.js", "flightsmap.js", "replayplayer.js", "wrapped.js", "sharecard.js", "cardmodel.js", "panel.js")
 ATTRS = ("title", "placeholder", "aria-label")
 HOLE = "\x00"  # where a template's ${...} was
 

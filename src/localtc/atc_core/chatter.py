@@ -19,11 +19,13 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from localtc.atc_core.phraseology import TemplateLibrary, speech
-from localtc.atc_core.values import Callsign, Wind
+from localtc.atc_core.values import Callsign, Phrase, Wind
 
 # How often each kind of controller is heard talking to somebody else: (shortest, longest) gap, seconds.
+# (Never clearance delivery's, nor the ramp's: a delivery frequency is one aircraft at a time copying a clearance, and
+# a ramp's isn't ATC's.)
 GAP_S: dict[str, tuple[float, float]] = {
-    "clearance": (120.0, 300.0), "ground": (45.0, 110.0), "tower": (35.0, 90.0), "departure": (45.0, 100.0),
+    "ground": (45.0, 110.0), "tower": (35.0, 90.0), "departure": (45.0, 100.0),
     "approach": (40.0, 95.0), "center": (70.0, 170.0),
 }
 
@@ -38,7 +40,8 @@ class Line:
 
 
 # What another aircraft is doing, as the engine sees it in the sim's traffic.
-DOINGS = ("at_gate", "taxiing_out", "taxiing_in", "holding", "landing", "climbing", "descending", "level")
+DOINGS = ("at_gate", "taxiing_out", "taxiing_in", "holding", "landing", "climbing", "descending", "level",
+          "pattern", "vfr")  # a light aircraft in the circuit (tower), or going somewhere VFR (radar's flight following)
 
 
 @dataclass(frozen=True)
@@ -187,6 +190,18 @@ class Chatter:
                 out.append(("request", "ground.taxi_out", {"runway": runway, "taxi_route": route}))
             elif doing == "taxiing_in" and route:
                 out.append(("request", "ground.taxi_in", {"taxi_route": tuple(reversed(route))}))  # the way back in
+        elif c == "tower" and runway and doing == "pattern" and wind is not None:
+            # Training in the circuit: the touch and go, the option, the next circuit.
+            out.append(("atc", "vfr.touch_and_go", {"runway": runway, "wind": wind}))
+            out.append(("atc", "vfr.option", {"runway": runway, "wind": wind}))
+            out.append(("atc", "vfr.closed_traffic", {"turn": rng.choice(("left", "left", "right")), "runway": runway}))
+        elif c in ("departure", "approach", "center") and doing == "vfr":
+            # Flight following on a cross-country: picked up, or let go at the edge of the airspace.
+            out.append(("atc", "vfr.radar_contact", {"station": scene.station,
+                                                     "message": Phrase("maintain VFR", "maintain VFR")}))
+            if scene.handoff is not None:
+                station, mhz = scene.handoff
+                out.append(("atc", "vfr.service_terminated", {"station": station, "frequency": mhz}))
         elif c == "tower" and runway:
             if doing == "holding":
                 out.append(("request", "tower.takeoff", {"runway": runway}))

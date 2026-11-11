@@ -78,6 +78,7 @@ log = logging.getLogger(__name__)
 
 NETWORK_TRAFFIC_NM = 250.0  # the online network's pilots drawn on the Live Map this far around the flight
 RADIO_HISTORY = 400
+PANEL_LINES = 60  # the radio log's lines the sim's panel shows
 COMPONENTS = ("ollama", "gpu", "webview2")  # installed from the app (localtc.components), as the models are
 OWN_EVERY_S = 0.25
 FLIGHT_EVERY_S = 1.0
@@ -169,6 +170,7 @@ class AppController:
         get, post = "GET", "POST"
         return {
             (get, "state"): self.api_state,
+            (get, "panel"): self.api_panel,
             (post, "flight/start"): self.api_start,
             (post, "window/show"): self.api_window_show,
             (post, "flight/stop"): self.api_stop,
@@ -914,6 +916,18 @@ class AppController:
 
     async def api_state(self, args: dict) -> dict:
         return self.state()
+
+    async def api_panel(self, args: dict) -> dict:
+        """What the sim's toolbar panel shows (``static/panel.html``, for VR): the radio log's last lines and the radios.
+        ``after``: only the lines newer than this time."""
+        after = float(args.get("after") or -1e18)
+        lines = [line for line in list(self.radio)[-PANEL_LINES:] if float(line.get("t") or 0.0) > after]
+        own = self.own or {}
+        out = {"radio": lines, "com1": own.get("com1"), "com2": own.get("com2"), "squawk": own.get("squawk"),
+               "flying": self.live is not None}
+        if after < -1e17:
+            out["language"] = self.state().get("language") or "en"  # (the first call: the page's words in it)
+        return out
 
     async def api_window_show(self, args: dict) -> dict:
         """LocalTC started again while it's running: this one's window comes up instead (ui/instance.py)."""

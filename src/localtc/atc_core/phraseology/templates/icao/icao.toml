@@ -267,3 +267,8 @@ hold_short = "hold short of runway {hold_short}"
 id = "approach.cleared"
 text = ["{callsign}, cleared {approach} approach, contact {station} {frequency} when established."]
 pilot_readback = "Cleared {approach} approach, {station} {frequency} when established, {callsign_short}."
+
+[[template]]
+id = "tower.land_after_departure"
+text = ["{callsign}, behind the departing {message}, runway {runway}, wind {wind}, cleared to land."]
+pilot_readback = "Behind the departing traffic, cleared to land runway {runway}, {callsign_short}."

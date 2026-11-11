@@ -49,6 +49,19 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
         await server.start(port if port is not None else controller.cfg.ui.port)
         box["url"] = server.url
         instance.publish(server.url)
+        panel = None
+        if controller.cfg.ui.panel_port:
+            # The sim's toolbar panel (simpkg/localtc-panel, for VR) looks for LocalTC here: a fixed port, 127.0.0.1 only.
+            panel = AppServer(controller.routes(), controller.stream, controller.on_connect)
+            try:
+                await panel.start(controller.cfg.ui.panel_port)
+                log.info("The sim's LocalTC panel at %sstatic/panel.html", panel.url)
+                from localtc import simpkg
+
+                await asyncio.to_thread(simpkg.install_panel)  # its button on the sim's toolbar (from the sim's next start)
+            except OSError as exc:
+                log.warning("The sim's LocalTC panel has no port %d (%s): it shows nothing", controller.cfg.ui.panel_port, exc)
+                panel = None
         stopped = asyncio.Event()
         stop["set"] = lambda: loop.call_soon_threadsafe(stopped.set)
         ready.set()
@@ -58,6 +71,8 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
         finally:
             await controller.shutdown()
             await server.close()
+            if panel is not None:
+                await panel.close()
 
     thread = threading.Thread(target=lambda: asyncio.run(serve()), name="localtc-app", daemon=True)
     thread.start()

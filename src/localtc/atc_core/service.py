@@ -62,6 +62,7 @@ class AtcService:
         self._weather_t = -WEATHER_CHECK_S
         self._weather_sent: dict[str, str] = {}  # icao: the METAR last published for it
         self.atis_source: Callable[[str], list | None] | None = None  # the real ATIS (the app's ``AtisStore.get``)
+        self.pirep_source: Callable[[str], Any] | None = None  # pilot reports around an airport (``PirepStore.get``)
         # The online network's controllers (``localtc.online.OnlineStore.get``: (list or None, error)), or None: no network.
         self.online_source: Callable[[], tuple] | None = None
         self.online_network = engine.cfg.online_network  # the network its lists are for (changed in flight: set_online)
@@ -180,7 +181,7 @@ class AtcService:
 
     def _fetch_weather(self, t: float) -> None:
         """A new METAR for the departure or the destination: published (recorded, and the engine takes it in)."""
-        if (self.weather_source is None and self.atis_source is None) or t - self._weather_t < WEATHER_CHECK_S:
+        if (self.weather_source is None and self.atis_source is None and self.pirep_source is None) or t - self._weather_t < WEATHER_CHECK_S:
             return
         self._weather_t = t
         flight = self.engine.state.flight
@@ -191,6 +192,13 @@ class AtcService:
             except Exception:  # noqa: BLE001 - the weather is a nicety: never stops ATC
                 log.exception("METAR or ATIS for %s failed", icao)
                 continue
+            try:
+                pireps = self.pirep_source(icao) if self.pirep_source is not None else None
+            except Exception:  # noqa: BLE001 - a nicety, as the weather
+                pireps = None
+            if pireps is not None and self._weather_sent.get(f"{icao}/pireps") != (key := str(hash(tuple(r.raw for r in pireps.reports)))):
+                self._weather_sent[f"{icao}/pireps"] = key
+                self.bus.publish(msgspec.structs.replace(pireps, t=t))
             if report is not None and self._weather_sent.get(icao) != report.raw:
                 self._weather_sent[icao] = report.raw
                 self.bus.publish(msgspec.structs.replace(report, t=t))

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LocalTC</title>
+<!-- The sim's toolbar panel (simpkg/localtc-panel shows this in an iframe, for VR): the radio log and the radios, large
+     and plain. Old-fashioned script on purpose: the sim's own browser is no modern one. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #10151c; color: #e8edf3; font-family: "Segoe UI", Arial, sans-serif; }
+  #top { display: flex; gap: 14px; align-items: baseline; padding: 8px 12px; background: #18202b; border-bottom: 1px solid #2a3442;
+         font-size: 15px; }
+  #top b { color: #8fd3ff; font-size: 17px; }
+  #top .radio { color: #c9d4e0; }
+  #top .radio span { color: #ffffff; font-weight: 600; }
+  #state { margin-left: auto; color: #8a96a6; font-size: 13px; }
+  #log { position: absolute; top: 40px; bottom: 0; left: 0; right: 0; overflow-y: auto; padding: 6px 12px 12px; font-size: 17px; line-height: 1.35; }
+  .line { margin: 6px 0; }
+  .who { font-weight: 600; margin-right: 6px; }
+  .atc .who { color: #8fd3ff; }
+  .pilot .who, .copilot .who { color: #ffd479; }
+  .chatter { color: #8a96a6; font-size: 15px; }
+  .crew .who, .intercom .who { color: #b6f09c; }
+  .cabin .who, .ramp .who { color: #f3a6ff; }
+  .system { color: #ffb4a6; font-size: 14px; }
+  .readback { display: none; }
+  #empty { color: #8a96a6; padding: 30px 12px; font-size: 17px; }
+</style>
+</head>
+<body>
+<div id="top">
+  <b>LocalTC</b>
+  <span class="radio">COM1 <span id="com1">---.---</span></span>
+  <span class="radio">COM2 <span id="com2">---.---</span></span>
+  <span id="state"></span>
+</div>
+<div id="log"><div id="empty">Waiting for LocalTC on this PC...</div></div>
+<script src="panel.js"></script>
+</body>
+</html>

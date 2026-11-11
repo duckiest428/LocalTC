@@ -208,7 +208,7 @@ class TemplateLibrary:
             spoken[name] = slot_type.spoken(value)
         shown, said = text.format_map(display), text.format_map(spoken)
         approach = slots.get("approach")
-        if "approach" in display and isinstance(approach, Approach) and approach.kind == "VISUAL":
+        if "approach" in display and isinstance(approach, Approach) and approach.kind == "VISUAL" and not approach.charted:
             # "Cleared visual approach runway 34R", not "cleared VISUAL RWY 34R approach".
             shown = shown.replace(f"{display['approach']} approach", f"visual approach runway {approach.runway}")
             said = said.replace(f"{spoken['approach']} approach", f"visual approach {spoken['approach'][len('visual '):]}")

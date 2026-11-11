@@ -42,7 +42,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from localtc.atc_core.airport.aircraft_size import wingspan_m
+from localtc.atc_core.airport.aircraft_size import departure_gap_s, wake_category, wingspan_m
 from localtc.atc_core.airport.geometry import AirportGeometry
 from localtc.atc_core.airport.taxi_route import TaxiGraph
 from localtc.sim_api import (
@@ -85,6 +85,8 @@ MIXES = {"ground": (("arrival", 0.45), ("departure", 0.15), ("gate", 0.3), ("oth
 CRUISE_AGL_FT = 18000.0
 GROUND_NM = 8.0  # one on the ground further from the user than this can't be seen: not made
 TAXIING_OUT = 0.1  # of the places, 3 at least: the next real one stays on its stand (a dozen in line cost frames for little)
+TAXIING_OUT_USER_ON_GROUND = 0.2  # ... twice that with the user on the ground: the line for the runway is the one they're in
+                                  # (the frame-rate limit still shrinks the places, so a struggling sim gets a shorter line)
 # How many real ones the sim is given, by what it can draw: fewer while it struggles, more when it has frames to spare.
 START_LIVE, FEWEST_LIVE, LIVE_STEP = 75, 20, 10
 LOW_FPS, HIGH_FPS = 20.0, 35.0
@@ -170,6 +172,14 @@ GEAR_DOWN = 0.9  # the share of the gear out that counts as down
 GEAR_AGAIN_S = 5.0
 CATCH_UP = 0.1  # a correction eased out over long enough that it's never more than this share of its speed ...
 BLEND_MIN_S, BLEND_MAX_S = 3.0, 20.0  # ... within these
+# How LocalTC's own landings and takeoffs look (``_attitude``): a rotation, a flare, the nose lowered, spoilers.
+ROTATE_PITCH, ROTATE_DPS, LIFT_OFF_PITCH = 9.0, 3.0, 7.5
+CLIMB_PITCH = 14.0
+APPROACH_PITCH, FLARE_PITCH = 2.5, 5.5
+DEROTATE_DPS = 1.2  # the nose coming down after touchdown
+FLARE_FT = 30.0
+FLARE_FPM, TOUCHDOWN_FPM = 700.0, 180.0
+SPOILERS_IN_KT = 45.0
 PATH_MIN_M = 8.0  # on the ground, moved this far between two reports: its track is the way it went
 # A real one taxiing, as shown: its speed changed at most this much a second, and never faster than this off a runway
 GROUND_ACCEL_KT_S, GROUND_BRAKE_KT_S, TAXI_MAX_KT = 1.0, 2.5, 30.0
@@ -285,6 +295,8 @@ class Local:
     roll_after: float = 0.0  # a departure lined up: rolls from here on (once tower's cleared it on the radio)
     behind: tuple[str, float, float, float] | None = None  # in line: the one ahead, since when, and where it was then
     user_wait_t: float | None = None  # taxiing out: since when it's stood waiting for the user
+    pitch: float = 0.0  # the attitude shown, eased towards what it's doing (rotation, the flare, the nose lowered)
+    spoilers: bool = False  # out on the landing roll
 
 
 @dataclass
@@ -303,6 +315,7 @@ class Plane:
     turn_dps: float = 0.0
     last_track: tuple[float, float] | None = None  # (track, when): the turn worked out from the next one
     lights: tuple = ()
+    spoilers_shown: bool = False  # what the sim was last told of its spoilers
     gear_told_t: float = -1e9  # when it was last told again that its gear should be down
     created_t: float = 0.0
     note: str = ""  # what ATC did with it, said once
@@ -372,6 +385,7 @@ class TrafficManager:
         self._user_runway: tuple[str, str, str] | None = None
         self._user_runway_t = 0.0  # when the user last had a runway
         self._released_t = -1e9  # the last held departure sent on its way
+        self._released_wake = ""  # ... its wake category: the next one waits two minutes behind a heavy
         self._call_t = -1e9  # the last time tower told one to hold short
         self._graphs: dict[str, tuple[tuple, TaxiGraph]] = {}  # airport: (its closures, the graph around them)
         self._own_stand: tuple[float, float] | None = None  # where the user was parked: nobody's put there as they push
@@ -625,7 +639,7 @@ class TrafficManager:
                                               destination=route.destination_name or route.destination)
                 shown = self._shown(f.hex, now) if f is not None else None
                 if plane.object_id is not None and plane.spot is not None and self._pushing(plane, f, shown, now) \
-                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < max(3, round(self.live_limit * TAXIING_OUT)):
+                        and sum(p.mode == "taxi_out" for p in self.planes.values()) < self._taxi_out_places():
                     out += self._start_taxi_out(plane, now)  # the real one's pushing: so does LocalTC's, its own way
                     continue
                 lat, lon = self._spot_latlon(plane.spot) if plane.spot is not None else \
@@ -1274,8 +1288,8 @@ class TrafficManager:
         held = sorted((p for p in self.planes.values() if p.mode == "hold"), key=lambda p: p.local.started if p.local else 0)
         if user is None:
             # One at a time: the first held goes once the user's been off the runway a while, the next spaced after.
-            if held and now - self._user_runway_t >= HELD_RELEASE_S and now - self._released_t >= DEPARTURE_GAP_S:
-                self._released_t = now
+            if held and now - self._user_runway_t >= HELD_RELEASE_S and now - self._released_t >= self._wake_gap(held[0], DEPARTURE_GAP_S):
+                self._released_t, self._released_wake = now, self._wake_of(held[0])
                 out += self._release(held[0], now)
             return out
         icao, end_ident, kind = user
@@ -1498,12 +1512,49 @@ class TrafficManager:
             path = elev + 50 + max(0.0, before) / 0.3048 * GLIDE  # 50 ft over the threshold, 3 degrees
             loc.vs_fpm = max(-1500.0, min(0.0, (path - loc.alt_ft) * 6 - loc.gs_kt * KT_TO_FPM * GLIDE))
             loc.gs_kt = max(loc.target_kt, loc.gs_kt - 1.0)
-            if before < -250 or loc.alt_ft <= elev + 5:
+            height = loc.alt_ft - elev
+            if height < FLARE_FT:
+                # The flare: the descent rounded off to a couple of hundred feet a minute over the last 30 ft, and the
+                # speed bleeding off a little, the touchdown a few hundred metres past the threshold.
+                loc.vs_fpm = max(loc.vs_fpm, -TOUCHDOWN_FPM - (FLARE_FPM - TOUCHDOWN_FPM) * height / FLARE_FT)
+                loc.gs_kt = max(loc.target_kt - 8.0, loc.gs_kt - 1.5)
+            if before < -250 or height <= 1.0:
                 loc.on_ground, loc.vs_fpm, loc.alt_ft = True, 0.0, elev
+                loc.spoilers = True
         elif loc.follow is None:
             loc.gs_kt = max(20.0, loc.gs_kt - 4.0)  # braking to taxi speed
+            if loc.gs_kt <= SPOILERS_IN_KT:
+                loc.spoilers = False
             if loc.gs_kt <= 60.0:
                 loc.follow = self._way_in(plane, geo, loc)
+
+    @staticmethod
+    def _attitude(plane: Plane, loc: Local) -> float:
+        """The pitch to show a second on, eased: the rotation at ``rotate_kt`` (3 degrees a second, off at 8), the climb,
+        the approach's 2.5, the flare's 5, the nose lowered over a few seconds after the mains are on."""
+        if loc.on_ground:
+            rotating = plane.mode in ("departing", "go_around") and loc.rotate_kt and loc.gs_kt >= loc.rotate_kt - 3
+            wanted = ROTATE_PITCH if rotating else 0.0
+            rate = ROTATE_DPS if rotating else DEROTATE_DPS
+        elif loc.vs_fpm > 300:
+            wanted, rate = CLIMB_PITCH, 2.0
+        elif plane.mode == "landing" and loc.vs_fpm > -FLARE_FPM - 50:
+            wanted, rate = FLARE_PITCH, 1.5  # in the flare
+        else:
+            wanted, rate = APPROACH_PITCH, 1.0
+        step = max(-rate, min(rate, wanted - loc.pitch))
+        loc.pitch += step
+        return loc.pitch
+
+    def _surfaces(self, plane: Plane, loc: Local) -> list[Any]:
+        """The spoilers when they change: out at touchdown, in as it slows to the turn off."""
+        shown = plane.spoilers_shown
+        if plane.object_id is None or loc.spoilers == shown:
+            return []
+        plane.spoilers_shown = loc.spoilers
+        value = 1.0 if loc.spoilers else 0.0
+        return [SetAiVar(object_id=plane.object_id, name=name, unit="percent over 100", value=value)
+                for name in ("SPOILERS HANDLE POSITION", "SPOILERS LEFT POSITION", "SPOILERS RIGHT POSITION")]
 
     def _local(self, now: float) -> list[Any]:
         """The flights LocalTC is flying itself, a second on (go-arounds, released departures, quiet arrivals)."""
@@ -1544,8 +1595,8 @@ class TrafficManager:
                 loc.gs_kt = 0.0  # lined up, cleared on the radio first
             else:  # climbing away: a go-around, or a departure off the runway
                 loc.gs_kt = min(loc.target_kt, loc.gs_kt + loc.accel * dt)
-                if loc.on_ground and loc.rotate_kt and loc.gs_kt >= loc.rotate_kt:
-                    loc.on_ground, loc.vs_fpm = False, 2000.0
+                if loc.on_ground and loc.rotate_kt and loc.gs_kt >= loc.rotate_kt and loc.pitch >= LIFT_OFF_PITCH:
+                    loc.on_ground, loc.vs_fpm = False, 2000.0  # rotated, and off
                 if not loc.on_ground:
                     if loc.alt_ft >= loc.target_alt:
                         loc.vs_fpm = 0.0
@@ -1554,7 +1605,8 @@ class TrafficManager:
             d = loc.gs_kt * dt / 3600.0 * M_PER_NM
             loc.lat += u[1] * d / 111_320.0
             loc.lon += u[0] * d / (111_320.0 * math.cos(math.radians(loc.lat)))
-            pitch = 0.0 if loc.on_ground else (12.0 if loc.vs_fpm > 0 else 2.5)
+            pitch = self._attitude(plane, loc)
+            out += self._surfaces(plane, loc)
             if plane.mode == "landing":
                 plane.used_t = plane.flight.t if plane.flight is not None else plane.used_t
             out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
@@ -1652,6 +1704,11 @@ class TrafficManager:
         here = plane.spot[0] if plane.spot is not None else ""
         return route is None or route.origin == here or route.destination != here
 
+    def _taxi_out_places(self) -> int:
+        """How many may be taxiing out at once: a longer line while the user is on the ground and can see it."""
+        share = TAXIING_OUT_USER_ON_GROUND if self.own is not None and self.own.on_ground else TAXIING_OUT
+        return max(3, round(self.live_limit * share))
+
     def _start_taxi_out(self, plane: Plane, now: float) -> list[Any]:
         """The real one's pushing back: LocalTC's is pushed off its stand onto the taxiway, starts, and taxies its
         own route to the runway."""
@@ -1722,8 +1779,8 @@ class TrafficManager:
             end = geo.end(ident)
             busy = end is not None and self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
             waited = now - loc.stage_t >= HOLD_SHORT_MAX_S
-            if (rolling or waited) and not busy and now - self._released_t >= TAKEOFF_GAP_S:
-                self._released_t = now
+            if (rolling or waited) and not busy and now - self._released_t >= self._wake_gap(plane, TAKEOFF_GAP_S):
+                self._released_t, self._released_wake = now, self._wake_of(plane)
                 if not rolling and plane.live:
                     self._kept_off[plane.key] = now + EARLY_KEPT_OFF_S  # gone before its real one: not made again
                 if not self._line_up(plane, geo, ident, now):
@@ -1738,6 +1795,14 @@ class TrafficManager:
                                              hdg=loc.hdg, gs_kt=gs, on_ground=True, blend_s=1.5), now))
         return out + self._lights(plane, on_ground=True, gs=abs(gs) if loc.stage != "push" else 0.0, agl=0.0,
                                   lat=loc.lat, lon=loc.lon)
+
+    @staticmethod
+    def _wake_of(plane: Plane) -> str:
+        return wake_category(plane.flight.type if plane.flight is not None else "") or "M"
+
+    def _wake_gap(self, plane: Plane, base_s: float) -> float:
+        """Behind the last departure off this runway: the runway's pace, or the wake time behind a heavy (a super)."""
+        return departure_gap_s(self._released_wake, self._wake_of(plane), base_s)
 
     def _line_up(self, plane: Plane, geo: AirportGeometry, ident: str, now: float) -> bool:
         """From the hold short onto the runway on its wheels, a curve round to the centreline: it was slid there

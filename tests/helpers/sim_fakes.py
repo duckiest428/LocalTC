@@ -39,7 +39,7 @@ OWNSHIP_VALUES = {
     "lat": 47.9005123456, "lon": -122.2790987654, "alt_msl_ft": 606.04, "alt_indicated_ft": 626.0,
     "alt_agl_ft": 0.0, "altimeter_inhg": 30.1234, "hdg_mag": 324.04, "hdg_true": 340.0, "ias_kt": 0.0,
     "gs_kt": 0.0, "vs_fpm": 0.0, "on_ground": 1, "xpdr_code": 0x1200, "xpdr_state": 4, "xpdr_ident": 0,
-    "com1_mhz": 118.30000305, "com2_mhz": 121.5, "com1_tx": 0, "com2_tx": 0, "com1_type": "TWR",
+    "com1_mhz": 118.30000305, "com2_mhz": 121.5, "com1_tx": 0, "com2_tx": 0, "com2_rx": 0, "com1_type": "TWR",
     "com1_ident": "KPAE", "gear_down": 1, "flaps_index": 1, "parking_brake": 1, "engine_running": 1,
     "on_runway": 0, "fuel_lb": 318.0, "fuel_flow_pph": 0.0, "gross_weight_lb": 2320.0,
     "wind_dir_true": 330.0, "wind_kt": 8.0, "magvar": 15.6, "altimeter_setting_inhg": 30.12,

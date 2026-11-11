@@ -109,7 +109,8 @@ request_class_b, radio_check, pleasantry (small talk), report_problem (a failure
 request_hold (holding asked for; fix), report_holding (established in the hold), request_deviation (for weather: \
 side, degrees), report_back_on_course, \
 say_again (asks ATC to repeat, even naming what), acknowledge (roger, wilco, thanks), emergency (mayday, pan-pan, smoke, fire, medical), other.
-topic: altimeter, wind (winds, gusts), weather, runway, squawk, altitude, frequency, atis, other."""
+topic: altimeter, wind (winds, gusts), weather, runway, squawk, altitude, frequency, atis, ride (turbulence, chop, \
+icing, cloud tops, pilot reports), clearance (what the flight is cleared for, asked to confirm), other."""
 
 KINDS = ["readback", "request", "question", "unintelligible"]
 EXPECT_WORDS = {"expect", "expected", "expecting"}
@@ -120,7 +121,7 @@ INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "reques
            "report_standard", "request_flight_following", "request_class_b", "radio_check", "pleasantry",
            "report_problem", "say_again", "acknowledge", "emergency", "request_hold", "report_holding",
            "request_deviation", "report_back_on_course", "other"]
-TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "other"]
+TOPICS = ["altimeter", "wind", "weather", "runway", "squawk", "altitude", "frequency", "atis", "ride", "clearance", "other"]
 # Readback elements the model reports; the rest (taxi route, destination, callsign) stay with the grammar.
 VALUE_ELEMENTS = ("runway", "hold_short", "altitude", "cruise", "frequency", "squawk", "heading", "approach")
 PHRASE_ELEMENTS = tuple(PHRASE_STEMS)

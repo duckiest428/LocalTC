@@ -96,11 +96,14 @@ class Approach:
     circle_side: str = ""
     circle_pattern: str = ""
     minima: str = ""
+    charted: str = ""  # a named visual: "River" for the River Visual (airport.charted_visuals)
 
     @property
     def name(self) -> str:
         """The chart's name without the runway: "ILS Z", "RNAV (RNP) Y", "VOR-A"."""
         kind = {"RNP": "RNAV (RNP)"}.get(self.kind, self.kind)
+        if self.charted:
+            return f"{self.charted} Visual"
         if not self.runway:
             return f"{kind}-{self.suffix or 'A'}"
         return f"{kind} {self.suffix}" if self.suffix else kind
@@ -125,6 +128,8 @@ class Approach:
         if not text:
             return None
         head, _, runway = text.partition(" RWY ")
+        if runway and head.lower().endswith(" visual") and head.upper() != "VISUAL":
+            return cls("VISUAL", runway.strip(), charted=head[: -len(" visual")].strip())  # "River Visual RWY 19"
         head = head.replace("RNAV (RNP)", "RNP")
         if not runway:
             kind, _, letter = head.rpartition("-")

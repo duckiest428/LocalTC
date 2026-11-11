@@ -644,13 +644,14 @@ async def run_session(
             atc_service = AtcService(engine, bus, source, AirportCache(), copilot=copilot)
             atc_service.deck = deck
             if session.source_kind == "live" and os.environ.get("LOCALTC_METAR", "1"):
-                from localtc.metar_data import AtisStore, MetarStore
+                from localtc.metar_data import AtisStore, MetarStore, PirepStore
 
                 # The departure's and destination's real METARs and ATIS, as [atc] atis_source uses them.
                 if cfg.atc.atis_source in ("real", "hybrid"):
                     atc_service.weather_source = MetarStore().get
                     atc_service.atis_source = AtisStore().get
                     engine.real_weather_coming = True
+                atc_service.pirep_source = PirepStore().get  # the ride reports ATC gives (atc_core/rides.py)
             if session.source_kind == "live" and engine.cfg.online_network:
                 from localtc.online import OnlineStore
 

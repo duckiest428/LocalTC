@@ -230,6 +230,8 @@ APPROACH_SPOKEN = {"ILS": "I L S", "RNAV": "R-NAV", "RNP": "R-NAV", "GPS": "G P 
 
 def approach(value: Approach) -> str:
     """ "I L S zulu runway three four right", "localizer back course runway two six", "V O R alpha"."""
+    if value.charted:
+        return f"{value.charted.lower()} visual runway {runway(value.runway)}"
     kind = APPROACH_SPOKEN.get(value.kind, value.kind.lower())
     suffix = f" {PHONETIC[value.suffix.upper()]}" if value.suffix and value.suffix.upper() in PHONETIC else ""
     if not value.runway:

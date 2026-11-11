@@ -25,6 +25,9 @@ The conditions:
 - ``behind_departure``: "behind the departing Airbus A320, line up and wait behind" (ICAO).
 - ``taxi_follow``: on the ground, "follow the Boeing 737", until it's gone its way; catching it up, told to slow.
 - ``spacing``: "reduce to 250 for spacing" behind an arrival being caught (``flow``), until the gap's back.
+- ``after_departure``: on final with a departure lined up on the runway, far enough out for it to be gone in time: the
+  landing clearance with it ("traffic Airbus A320 departing ahead"; ICAO "behind the departing ..."), and watched: gone,
+  it's met; still there on short final, the go-around comes as for any occupied runway.
 
 A condition that runs out with ATC still owing the pilot something ends ``needs_instruction``; ``next_instruction`` is the
 one that followed each.
@@ -439,6 +442,41 @@ class ConditionsMixin:
             return True
         return False
 
+    def _departing_ahead(self, own: OwnshipState, runway: str | None, target: TrafficTarget) -> bool:
+        """``target``, on the runway this flight's landing on, is a departure at its start, and there's time for it to
+        go: the landing clearance can come now, with it."""
+        ctx = self.tracker.context
+        if runway is None or ctx.final is None or ctx.final.distance_nm < AFTER_DEPARTURE_NM                 or self.conditions.active("after_departure") is not None or "emergency" in self.state.flags:
+            return False
+        geo = self.geometry(self.state.flight.destination)
+        end = geo.end(runway) if geo is not None else None
+        if end is None:
+            return False
+        x, y = geo.xy(target.lat, target.lon)
+        ux, uy = math.sin(math.radians(end.heading_true)), math.cos(math.radians(end.heading_true))
+        along = (x - end.threshold[0]) * ux + (y - end.threshold[1]) * uy
+        aligned = abs(((target.hdg_true - end.heading_true + 540) % 360) - 180) < 30
+        return aligned and -100 <= along <= DEPARTURE_START_M
+
+    def _clear_after_departure(self, t: float, own: OwnshipState, facility: "Facility", runway: str, target: TrafficTarget) -> None:
+        kind = self._aircraft(target)
+        message = Phrase(kind.display, kind.spoken) if kind is not None else Phrase("traffic", "traffic")
+        self.conditions.add(Condition("after_departure", t, "tower.land_after_departure", target.object_id,
+                                      self._described(target, "departing").display, runway, until_t=t + CONDITION_S))
+        self._schedule(t, "tower.land_after_departure", {"runway": runway, "message": message,
+                                                         "wind": self._surface_wind(own, self.state.flight.destination)},
+                       facility, delay=False, clearance="landing", on_issue=lambda: self._assign(arrival_runway=runway))
+
+    def _watch_after_departure(self, c: Condition, own: OwnshipState) -> bool:
+        target = self._traffic.get(c.target) if c.target is not None else None
+        if target is None or not target.on_ground or target.gs_kt > 100:
+            self.conditions.end(c, "satisfied", own.t, "the departure's gone")
+        elif self._going_around:
+            self.conditions.end(c, "contradicted", own.t, "still on the runway: sent around", next_instruction="tower.go_around_traffic")
+        elif own.on_ground:
+            self.conditions.end(c, "expired", own.t, "landed")
+        return False
+
     def _watch_vacate(self, c: Condition, own: OwnshipState) -> bool:
         if "landing" in self.state.clearances:
             self.conditions.end(c, "satisfied", own.t, "the runway's clear: cleared to land")
@@ -478,6 +516,8 @@ class ConditionsMixin:
         return False
 
 
+AFTER_DEPARTURE_NM = 3.0  # on final this far out at least, with a departure starting its roll: cleared with it
+DEPARTURE_START_M = 900.0  # ... on the runway's first part, lined up
 LANDING_OR_ROLL_KT = 200.0  # (on the ground at all: landed)
 
 

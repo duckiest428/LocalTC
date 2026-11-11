@@ -56,6 +56,7 @@ from localtc.crew.cabin_data import (
     seats,
 )
 from localtc.crew.commands import parse as copilot_command
+from localtc.crew import sights
 from localtc.ground import words as ramp_words
 from localtc.crew.turnaround import off_block_in
 from localtc.crew import cabin_words
@@ -362,6 +363,8 @@ class CabinCrew:
     def _new_flight(self) -> None:
         self.incidents = IncidentDirector(self.settings.incidents, self.seed)
         self._level_since: float | None = None
+        self._sights_seen: set[str] = set()  # the sights already pointed out on this flight (crew/sights.py)
+        self._sight_t = -1e9
         self._busy_service: dict[str, float] = {}  # boarding or deboarding going on since
         self._rng = random.Random(self.seed)
         self.done: set[str] = set()
@@ -1049,6 +1052,8 @@ class CabinCrew:
                 out += self.call("service_call")
                 self._asking = ("drink", t)
             self._later.append(_Later(t + SERVICE_PA_S, "service"))
+        if not out and not descending and "aircraft_talk" in self.done and self._level_at_cruise(own):
+            out += self._sight(t, own)
         if descending:
             self._mark("descent", t)
             self._service_paused = False
@@ -1058,6 +1063,20 @@ class CabinCrew:
             out += self._moment("landing", t, self.announce("landing"))
             self._later.append(_Later(t + LANDING_SECURE_S, "secure_landing"))
         return out
+
+    def _sight(self, t: float, own: OwnshipState) -> list[Any]:
+        """Something to see out of the window on the way: a landmark by day, a big city by day or by its lights at night."""
+        if not self.settings.announcements or t - self._sight_t < sights.EVERY_S or self._service_paused:
+            return []
+        hour = (own.local_s / 3600.0) % 24 if own.local_s is not None else None
+        found = sights.sight(own.lat, own.lon, own.hdg_true, local_hour=hour, in_cloud=own.in_cloud, seen=self._sights_seen)
+        if found is None:
+            return []
+        self._sights_seen.add(found.key)
+        self._sight_t = t
+        night = hour is not None and not sights.DAY[0] <= hour <= sights.DAY[1]
+        text = sights.wording(found, night=night)
+        return [self._speech(text, text, "pa", chime="pa", language="en", summary=f"Out of the window: {found.name}")]
 
     def _arrival(self, t: float) -> list[Any]:
         own, sys, s = self._own, self._sys, self.settings

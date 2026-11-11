@@ -1597,5 +1597,8 @@
 "Times and reminders only": "仅时间和提醒",
 "Turnaround": "过站",
 "Turnaround schedule": "过站时刻",
-"Under way": "进行中"
+"Under way": "进行中",
+"LocalTC isn't running": "LocalTC 未运行",
+"No flight running": "没有进行中的飞行",
+"Waiting for LocalTC on this PC...": "正在等待本机上的 LocalTC..."
 }

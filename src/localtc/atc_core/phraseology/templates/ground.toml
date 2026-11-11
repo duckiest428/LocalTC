@@ -187,3 +187,18 @@ controller = "ground"
 text = ["{callsign}, cross runway {runway}, expedite, {message}.", "{callsign}, cross runway {runway} without delay, {message}."]
 readback = { required = ["runway"] }
 pilot_readback = "Cross runway {runway}, expediting, {callsign_short}."
+
+# The push held at the gate (sequencing.py): traffic taxiing behind, or a long line at the departure runway.
+[[template]]
+id = "ground.push_hold_traffic"
+controller = "ground"
+text = ["{callsign}, hold your push, {message}, I'll call you.",
+        "{callsign}, standby for push, {message}, expect it in a minute or two."]
+pilot_readback = "Holding the push, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_queue"
+controller = "ground"
+text = ["{callsign}, expect about a {minutes} delay at the gate for the departure queue, I'll call you for push.",
+        "{callsign}, there's a line at the runway, hold at the gate, about {minutes}, I'll call you back."]
+pilot_readback = "Holding at the gate, {callsign_short}."

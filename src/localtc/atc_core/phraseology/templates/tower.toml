@@ -197,3 +197,21 @@ text = ["{callsign}, reduce to final approach speed, {message}."]
 id = "tower.continue_traffic"
 controller = "tower"
 text = ["{callsign}, continue, {message}.", "{callsign}, continue, expect late landing clearance, {message}."]
+
+# On final to an occupied runway, a free parallel beside it in visual weather: moved across and cleared (sequencing.py).
+[[template]]
+id = "tower.sidestep_land"
+controller = "tower"
+text = ["{callsign}, side-step to runway {runway}, runway {runway}, wind {wind}, cleared to land.",
+        "{callsign}, traffic on your runway, side-step to runway {runway}, wind {wind}, cleared to land runway {runway}."]
+readback = { required = ["runway", "cleared_to_land"] }
+pilot_readback = "Side-step, cleared to land runway {runway}, {callsign_short}."
+
+# The landing clearance with a departure starting its roll ahead (conditions.py, after_departure).
+[[template]]
+id = "tower.land_after_departure"
+controller = "tower"
+text = ["{callsign}, runway {runway}, cleared to land, wind {wind}, traffic {message} departing ahead.",
+        "{callsign}, traffic {message} departing runway {runway}, wind {wind}, runway {runway}, cleared to land."]
+readback = { required = ["runway", "cleared_to_land"] }
+pilot_readback = "Cleared to land runway {runway}, {callsign_short}."

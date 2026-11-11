@@ -11,6 +11,7 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 PACKAGE = Path(__file__).with_name("localtc-taxi-guidance")
+PANEL = Path(__file__).with_name("localtc-panel")  # the toolbar panel (tools/sim_panel, built by tools/build_sim_panel.py)
 FILETIME_EPOCH_S = 11_644_473_600  # 1601 to 1970: layout.json's dates are Windows file times
 
 
@@ -40,25 +41,32 @@ def _layout(package: Path) -> None:
     (package / "layout.json").write_text(json.dumps({"content": content}, indent=2), encoding="utf-8")
 
 
-def install(roots: list[Path] | None = None) -> list[Path]:
+def install(roots: list[Path] | None = None, package: Path = PACKAGE, what: str = "Taxi guidance") -> list[Path]:
     """The package in each Community folder that hasn't this version of it; the folders it was put in (the sim needs
     a restart to see it there)."""
     put = []
+    if not (package / "manifest.json").exists():
+        return put  # (not built: the toolbar panel, before tools/build_sim_panel.py has made it)
     for community in community_folders(roots):
-        target = community / PACKAGE.name
-        if target.is_dir() and _version(target) == _version(PACKAGE) and (target / "layout.json").exists():
+        target = community / package.name
+        if target.is_dir() and _version(target) == _version(package) and (target / "layout.json").exists():
             continue
         try:
             if target.exists():
                 shutil.rmtree(target)
-            shutil.copytree(PACKAGE, target, ignore=shutil.ignore_patterns("__pycache__"))
+            shutil.copytree(package, target, ignore=shutil.ignore_patterns("__pycache__"))
             _layout(target)
         except OSError as exc:
-            log.warning("Taxi guidance: couldn't put its package in %s: %s", community, exc)
+            log.warning("%s: couldn't put its package in %s: %s", what, community, exc)
             continue
-        log.info("Taxi guidance: its package is in %s (shown from the sim's next start)", target)
+        log.info("%s: its package is in %s (shown from the sim's next start)", what, target)
         put.append(target)
     return put
+
+
+def install_panel(roots: list[Path] | None = None) -> list[Path]:
+    """The sim's LocalTC toolbar panel (for VR: the radio log in the sim), in every Community folder, once built."""
+    return install(roots, PANEL, "The sim's LocalTC panel")
 
 
 def installed(roots: list[Path] | None = None) -> bool:

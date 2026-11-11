@@ -1,0 +1,7 @@
+<Project Version="2" Name="localtc-panel" FolderName="Packages">
+	<OutputDirectory>.</OutputDirectory>
+	<TemporaryOutputDirectory>_PackageInt</TemporaryOutputDirectory>
+	<Packages>
+		<Package>PackageDefinitions\localtc-panel.xml</Package>
+	</Packages>
+</Project>

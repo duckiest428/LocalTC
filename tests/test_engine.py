@@ -68,7 +68,7 @@ def test_say_again_repeats_the_last_instruction():
     (clearance,) = transmissions(say(engine, own, 5, "Paine Clearance, 172LT, IFR to Boeing Field, ready to copy"))
     assert re.search(r"climb and maintain \d,000, expect 12,000", clearance.text), clearance.text
     (repeat,) = transmissions(say(engine, own, 20, "say again for 2LT"))
-    assert repeat.instruction_id == "clearance.ifr" and repeat.text.startswith("Cessna 2LT, cleared to Boeing Field")
+    assert repeat.instruction_id == "clearance.ifr" and repeat.text.startswith("Cessna 2LT, I say again, cleared to Boeing Field")
 
 
 def test_emergency_alert_and_reply():

@@ -1597,5 +1597,8 @@
 "Times and reminders only": "Tylko czasy i przypomnienia",
 "Turnaround": "Obsługa naziemna",
 "Turnaround schedule": "Harmonogram obsługi",
-"Under way": "W toku"
+"Under way": "W toku",
+"LocalTC isn't running": "LocalTC nie jest uruchomiony",
+"No flight running": "Brak trwającego lotu",
+"Waiting for LocalTC on this PC...": "Oczekiwanie na LocalTC na tym komputerze..."
 }

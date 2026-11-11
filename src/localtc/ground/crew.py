@@ -365,15 +365,16 @@ class RampCrew:
             return [self._speech("relay_boarding", t), *said]
         return [self._speech("ack", t, list=self._name(service))]
 
-    def called_by_cabin(self, service: str, t: float) -> bool:
-        """The cabin crew told to start boarding or deboarding: called without a word from the ramp. False: it can't be."""
+    def called_by_cabin(self, service: str, t: float) -> bool | str:
+        """The cabin crew told to start boarding or deboarding: called without a word from the ramp. False: it can't be;
+        a reason (the turnaround's: "Boarding's slot ... opens about 22:40."): not yet, and asked again, it comes."""
         svc = self._service(service)
         if not self.parked or svc is None or svc.state == "unavailable":
             return False
-        if self._held(service, t) is not None:
+        if (reason := self._held(service, t)) is not None:
             if service not in self._slot_wait:
                 self._slot_wait.append(service)
-            return False
+            return reason
         if not svc.active and service not in self._queue:
             self._queue.append(service)
         return True

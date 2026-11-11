@@ -203,6 +203,7 @@ def _sys(attr: str, want) -> Check:
 
 
 APU_RUNNING = 0.95  # the APU's speed up to this: running
+APU_STUCK_S = 1200.0  # "running" this long in the cruise: the aircraft's reading is stuck, not its APU
 
 
 def _own(get: Callable[[OwnshipState], bool]) -> Check:

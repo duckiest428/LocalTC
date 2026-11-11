@@ -57,7 +57,9 @@ const AtcMap = (() => {
       if (r.lat == null || r.lon == null || !r.length_m) continue;
       const half = r.length_m / 2, h = (r.heading_true * Math.PI) / 180;
       const dLat = (half * Math.cos(h)) / 111320, dLon = (half * Math.sin(h)) / (111320 * Math.cos((r.lat * Math.PI) / 180));
-      L.polyline([[r.lat - dLat, r.lon - dLon + shift], [r.lat + dLat, r.lon + dLon + shift]], { color: "#d9dde2", weight: 4, opacity: 0.9 })
+      // (closed by its ATIS: red and broken, as a NOTAM's closure is drawn)
+      L.polyline([[r.lat - dLat, r.lon - dLon + shift], [r.lat + dLat, r.lon + dLon + shift]],
+        r.closed ? { color: "#ff3b30", weight: 5, opacity: 0.9, dashArray: "10 6" } : { color: "#d9dde2", weight: 4, opacity: 0.9 })
         .addTo(layer).bindTooltip(`${esc(a.icao)} ${esc(r.name)}`);
     }
     L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", html: `<div class="tfc-label" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
@@ -81,9 +83,21 @@ const AtcMap = (() => {
       L.polyline(shut, { ...quiet, color: "#ff4d4d", weight: 6, opacity: 0.9, lineCap: "butt", dashArray: "6 5" }).addTo(g.base);
     }
     for (const rw of a.runways || []) {
-      L.polygon(ring(rw.outline), { ...quiet, color: "#eef1f4", weight: 1.4, fillColor: "#2f343a", fillOpacity: 0.97 }).addTo(g.base);
+      L.polygon(ring(rw.outline), { ...quiet, color: rw.closed ? "#ff4d4d" : "#eef1f4", weight: rw.closed ? 2.2 : 1.4,
+        fillColor: "#2f343a", fillOpacity: 0.97 }).addTo(g.base);
       const [p, q] = rw.ends.map((e) => at(e.at[0], e.at[1]));
-      L.polyline([p, q], { ...quiet, color: "#eef1f4", weight: 1.2, opacity: 0.8, dashArray: "10 10" }).addTo(g.base);
+      if (rw.closed) {
+        // Closed (its ATIS or a NOTAM): crossed out along its length, as a chart marks one
+        const o = ring(rw.outline), lerp = (u, v, f) => [u[0] + (v[0] - u[0]) * f, u[1] + (v[1] - u[1]) * f];
+        const crosses = [];
+        for (const f of [0.2, 0.5, 0.8]) {
+          const a0 = lerp(o[0], o[1], f - 0.06), a1 = lerp(o[0], o[1], f + 0.06), b0 = lerp(o[3], o[2], f - 0.06), b1 = lerp(o[3], o[2], f + 0.06);
+          crosses.push([a0, b1], [b0, a1]);
+        }
+        L.polyline(crosses, { ...quiet, color: "#ff4d4d", weight: 3, opacity: 0.95 }).addTo(g.base);
+      } else {
+        L.polyline([p, q], { ...quiet, color: "#eef1f4", weight: 1.2, opacity: 0.8, dashArray: "10 10" }).addTo(g.base);
+      }
       for (const e of rw.ends) {
         // upright: read at a glance; the ATIS's runways in use marked ARR, DEP or ARR/DEP under the number
         const use = { arr: "ARR", dep: "DEP", both: "ARR/DEP" }[e.use] || "";

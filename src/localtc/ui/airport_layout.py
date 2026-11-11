@@ -37,9 +37,10 @@ def _round(p: tuple[float, float]) -> list[float]:
     return [round(p[0], 6), round(p[1], 6)]
 
 
-def runways(airport: Airport, use: dict[str, str] | None = None) -> list[dict[str, Any]]:
+def runways(airport: Airport, use: dict[str, str] | None = None, closed: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
     """Each runway's outline (four corners) and its two numbers at their thresholds; ``use``: each end in use, "arr",
-    "dep" or "both" (the ATIS's), shown on its number."""
+    "dep" or "both" (the ATIS's), shown on its number; ``closed``: the ends the ATIS or a NOTAM closes (the runway is
+    drawn closed)."""
     use = use or {}
     out = []
     for rw in airport.runways:
@@ -52,6 +53,7 @@ def runways(airport: Airport, use: dict[str, str] | None = None) -> list[dict[st
                    _offset(*end, rw.heading_true + 90, width), _offset(*start, rw.heading_true + 90, width)]
         inset = min(120.0, half * 0.25)  # the number painted a little in from the threshold
         out.append({"name": f"{rw.primary.ident}/{rw.secondary.ident}", "outline": [_round(c) for c in corners],
+                    "closed": rw.primary.ident in closed or rw.secondary.ident in closed,
                     "ends": [{"ident": rw.primary.ident, "at": _round(_offset(*start, rw.heading_true, inset)),
                               "heading": round(rw.heading_true), "use": use.get(rw.primary.ident, "")},
                              {"ident": rw.secondary.ident, "at": _round(_offset(*end, rw.heading_true + 180, inset)),
@@ -119,10 +121,12 @@ def gates(airport: Airport, gate_map: dict | None = None) -> list[dict[str, Any]
 
 
 def layout(airport: Airport, gate_map: dict | None = None, *, use: dict[str, str] | None = None,
-           closed: tuple[frozenset[str], frozenset[int]] | None = None) -> dict[str, Any]:
-    """``use``: the runway ends in use (``runways``); ``closed``: the closed taxiways (``taxiways``)."""
+           closed: tuple[frozenset[str], frozenset[int]] | None = None,
+           closed_runways: frozenset[str] = frozenset()) -> dict[str, Any]:
+    """``use``: the runway ends in use (``runways``); ``closed``: the closed taxiways (``taxiways``); ``closed_runways``:
+    the runway ends closed."""
     segments, labels, holds = taxiways(airport, closed)
-    return {"icao": airport.icao, "runways": runways(airport, use), "taxiways": segments, "taxiway_labels": labels,
+    return {"icao": airport.icao, "runways": runways(airport, use, closed_runways), "taxiways": segments, "taxiway_labels": labels,
             "holds": holds, "gates": gates(airport, gate_map)}
 
 

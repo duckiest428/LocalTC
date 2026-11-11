@@ -1116,8 +1116,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 if inputs is None:
                     continue
                 weather, real, source = inputs
+                # The real ATIS out of date (ATIS.guru still had Zurich's from the afternoon before): LocalTC's own from
+                # the METAR, on the runways the airport was working, where the wind still allows them. It landed and
+                # departed 14, and that "seemed simulator made".
+                layout = self.real_layout(icao, kind) if real is None and self.cfg.atis_source in ("real", "hybrid") else None
                 info = self.atis.update(icao, geo, weather, own.zulu_s, self._airport_name(icao), own.t, kind=kind,
-                                        real=real, source=source)
+                                        real=real, source=source, layout=layout)
                 atis_reach = self._reach(Facility("atis", "ATIS", 0.0, icao), own)
                 tuned_here = icao == self._atis_tuned and (kind == "both" or channel_khz(mhz) == channel_khz(own.tx_mhz))
                 if key in self.atis.current:
@@ -1335,6 +1339,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     and _distance_nm(own.lat, own.lon, near.lat, near.lon) <= ORIGIN_NEAR_NM:
                 self._requested.add(near.icao)
                 self.airport_requests.append(near.icao)
+
+    def real_layout(self, icao: str, kind: str) -> real_atis.RealAtis | None:
+        """The airport's last real ATIS however old: the way it works its runways (Zurich lands 14 and departs 28),
+        for LocalTC's own ATIS when the real one is out of date. Its letter and weather are not used."""
+        def latest(which: str) -> real_atis.RealAtis | None:
+            return self._real_atis.get((icao, which))
+
+        if kind == "both" and (one := latest("both")) is not None:
+            return one
+        arriving = icao == self.state.flight.destination and icao != self.state.flight.origin
+        mine = kind if kind != "both" else "arrival" if arriving else "departure"
+        first, other = latest(mine), latest("departure" if mine == "arrival" else "arrival")
+        return real_atis.combined(first, other) if first is not None and other is not None else first or other
 
     def _real_for(self, icao: str, kind: str, own: OwnshipState) -> real_atis.RealAtis | None:
         """The airport's real ATIS for a broadcast of ``kind``: its arrival and departure ones read as one, the letter

@@ -140,3 +140,32 @@ def test_how_do_you_read_after_an_unread_handoff_gets_the_readback_alone():
                                     instruction_id="common.how_read"))
     said = [a.text for a in copilot.due(60.0) if isinstance(a, Say)]
     assert len(said) == 1 and "Seattle Departure" in said[0]  # the readback, and only that
+
+
+def test_back_with_a_controller_left_earlier_the_copilot_checks_in_again():
+    """Boston sent the flight back to New York: the copilot skipped the check-in (it had talked to New York before), and
+    the flight crossed the Atlantic unannounced."""
+    engine = AtcEngine(EngineConfig(callsign="SWR9"))
+    copilot = Copilot(engine, mode="full")
+    engine._checked_in = {"New York Center"}
+    engine._checkin_t = {"New York Center": 7475.0}
+    engine._left_at = {"New York Center": 7850.0}
+    assert not copilot._still_checked_in("New York Center")
+    engine._checkin_t["New York Center"] = 10230.0
+    assert copilot._still_checked_in("New York Center")
+
+
+def test_contact_tower_when_established_waits_for_the_localiser():
+    """ "... contact Zurich Tower when established": not called straight after the readback, 30 miles out."""
+    from localtc.atc_core.facilities import Facility
+
+    engine = AtcEngine(EngineConfig(callsign="SWR9"))
+    copilot = Copilot(engine, mode="full")
+    assert copilot._on_establishing("approach.cleared_star_descend_tower")
+    assert not copilot._on_establishing("approach.handoff_tower")
+    tower = Facility("tower", "Zurich Tower", 127.755, "LSZH")
+    copilot._when_established = (tower, 100.0)
+    copilot._established_handoff(200.0)  # no final yet
+    assert copilot._when_established is not None and not copilot._queue
+    copilot._established_handoff(800.0)  # never established, ten minutes on: over to tower anyway
+    assert copilot._when_established is None and [q.kind for q in copilot._queue] == ["tune", "checkin"]

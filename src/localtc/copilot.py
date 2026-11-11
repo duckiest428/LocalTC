@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from localtc.atc_core.airport import gates as stands
+from localtc.atc_core.airport.classes import bearing_words
 from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
 from localtc.atc_core.phraseology import speech
@@ -52,6 +53,13 @@ STALE_S = 90.0  # anything of the copilot's not said this long after it was mean
 LEVEL_STALE_S = 300.0  # cleared to another level this long ago and still level: checked in as level, not "climbing"
 TREND_S = 30.0  # climbing or descending: the altitude over this long, not the vertical speed of the moment
 UNANSWERED_S = 25.0  # a check-in with no word back from ATC this long: tried once more, then the captain is told
+VFR_AWAY_NM = 8.0  # a VFR flight this far from its airport has been away: coming back in, it calls tower inbound
+VFR_INBOUND_NM = 12.0  # ... from this far out
+DOWNWIND_ACROSS_NM = (0.3, 2.5)  # abeam the runway, this far to the side and flying the other way: on the downwind
+DOWNWIND_HEADING_DEG = 35.0
+VFR_SETTLE_S = 30.0  # a VFR flight with no light switches to go by: ready to taxi this long after the start
+ESTABLISHED_M = 600.0  # "contact tower when established": this close to the final's centreline is established on it
+ESTABLISHED_WAIT_S = 600.0  # never established by this long after (vectored off, a visual): over to tower anyway
 
 
 @dataclass(frozen=True)
@@ -120,7 +128,7 @@ class CallWords:
         if call == "pushback":
             return f, self._pushback_request(f)
         if call == "taxi":
-            return f, f"{f.station}, {self._callsign()}, ready to taxi" + self._with_atis(engine.state.flight.origin)
+            return f, self._taxi_request(f)
         if call == "clearance":
             return f, self._ifr_request(f)
         if call == "departure":
@@ -144,12 +152,73 @@ class CallWords:
         return f", with information {speech.letter(info.letter).capitalize()}" if info is not None else ""
 
     def _ifr_request(self, f: Facility) -> str:
+        if self._vfr():
+            # A VFR flight out of Class B or a control zone asks for its VFR clearance; never "IFR to ..., ready to
+            # copy" (the copilot asked St-Hubert Ground for an IFR clearance on a local VFR flight).
+            return f"{f.station}, {self._callsign()}{self._vfr_way()}, request VFR departure clearance"
         return f"{f.station}, {self._callsign()}, IFR to {self._destination()}, ready to copy"
+
+    def _taxi_request(self, f: Facility) -> str:
+        """ "Ready to taxi, with information Charlie"; VFR, the way the flight is going first ("VFR to Lachute,
+        westbound", "VFR local", "closed traffic"), as ground needs it for the runway."""
+        way = self._vfr_way() if self._vfr() else ""
+        return f"{f.station}, {self._callsign()}{way}, ready to taxi" + self._with_atis(self.engine.state.flight.origin)
 
     def _ready_for_departure(self, f: Facility) -> str:
         runway = self.engine.state.assignments.departure_runway
         where = f"holding short runway {runway}" if runway else "holding short"
-        return f"{f.station}, {self._callsign()}, {where}, ready for departure"
+        said = f"{f.station}, {self._callsign()}, {where}, ready for departure"
+        if self._vfr():
+            direction = self._vfr_direction()
+            if direction == "closed-traffic":
+                said += ", closed traffic"
+            elif direction and direction != "straight-out":
+                said += f", VFR {direction}"
+        return said
+
+    # --- VFR ----------------------------------------------------------------------------------------------
+
+    def _vfr(self) -> bool:
+        return bool(getattr(self.engine, "_vfr", False))
+
+    def _vfr_local(self) -> bool:
+        st = self.engine.state
+        return not st.flight.destination or st.flight.destination == st.flight.origin
+
+    def _vfr_direction(self) -> str | None:
+        """Which way the VFR flight leaves: what the pilot said, else towards the destination ("westbound"); None for a
+        local flight nobody has said anything about."""
+        engine, st = self.engine, self.engine.state
+        said = getattr(getattr(engine, "vfr", None), "direction", None)
+        if said:
+            return said
+        if self._vfr_local() or not st.flight.origin:
+            return None
+        origin, dest = engine.geometry(st.flight.origin), engine.geometry(st.flight.destination)
+        if origin is None or dest is None:
+            return None
+        return bearing_words(origin.airport.lat, origin.airport.lon, dest.airport.lat, dest.airport.lon) + "bound"
+
+    def _vfr_way(self) -> str:
+        """ ", VFR to Lachute, westbound", ", VFR local", ", closed traffic" """
+        direction = self._vfr_direction()
+        if direction == "closed-traffic":
+            return ", closed traffic"
+        where = "VFR local" if self._vfr_local() else f"VFR to {self._destination()}"
+        return f", {where}" + (f", {direction}" if direction and direction != "straight-out" else "")
+
+    def _vfr_needs_clearance(self) -> bool:
+        """Out of Class B or a control zone, a VFR flight is cleared out (ATC's ``_vfr_departure_clearance``)."""
+        engine, st = self.engine, self.engine.state
+        zone = getattr(engine, "_zone", None)
+        return bool(st.flight.origin) and zone is not None and zone(st.flight.origin).kind in ("B", "CTR") \
+            and engine.facility("clearance") is not None
+
+    def _departure_cleared(self) -> bool:
+        """Cleared to go: IFR, its clearance read back; VFR, its VFR clearance where it needs one, else nothing to wait for."""
+        if not self._vfr():
+            return self._cleared("ifr")
+        return self._cleared("vfr_departure") if self._vfr_needs_clearance() else True
 
     def _callsign(self) -> str:
         callsign = self.engine.state.flight.callsign
@@ -196,6 +265,9 @@ class Copilot(CallWords):
         self._assigned: tuple[int | None, float] = (None, 0.0)  # the cleared altitude, and since when
         self._joined_called: Facility | None = None  # LocalTC started in the air: the controller already called
         self._alts: list[tuple[float, float]] = []  # the last TREND_S of altitude: climbing or descending, overall
+        self._when_established: tuple[Facility, float] | None = None  # "contact tower when established": who, since when
+        self._vfr_away = False  # a VFR flight has been out of its airport's zone (coming back in is the inbound call)
+        self._started_t = self._t  # this flight's start, as the copilot saw it
 
     @property
     def mode(self) -> CopilotMode:
@@ -242,6 +314,8 @@ class Copilot(CallWords):
             self._queue.clear()  # COM1 on an online network's controller: the pilot talks to them, not the copilot
             return out
         self._drop_cancelled()
+        if self.engine.state.pending is None and self.engine.idle:
+            self._established_handoff(t)
         if not self._queue:
             self._catch_up(t)
         if not self._queue:
@@ -317,10 +391,42 @@ class Copilot(CallWords):
                               answers=pending.instruction_id, heard_on=issued.facility)
         handoff = st.comms.expected
         if handoff is not None and "frequency" in issued.slots and handoff.matches(float(issued.slots["frequency"])):
+            if self._on_establishing(pending.instruction_id):
+                # "... contact Zurich Tower when established": tower is called on the localiser, not straight after the
+                # readback at 11,000 feet, 30 miles out.
+                self._when_established = (handoff, tx.t)
+                return
             said = readback.due + len(readback.text) * SPEECH_S_PER_CHAR
             tune = self._push("tune", tx.t, facility=handoff, after=said, pause=self._rng.uniform(*TUNE_AFTER_S))
             if self.mode == "full":
                 self._push("checkin", tx.t, facility=handoff, after=tune.due, pause=self._rng.uniform(*CHECKIN_AFTER_S))
+
+    def _on_establishing(self, instruction_id: str) -> bool:
+        """The instruction's handoff is for later: "contact tower when established"."""
+        try:
+            words = " ".join(self.engine.library.get(instruction_id).text).lower()
+        except Exception:
+            return False
+        return "when established" in words
+
+    def _established_handoff(self, t: float) -> None:
+        """The handoff waiting for the localiser: made once on it (or after a long while, or once landing)."""
+        if self._when_established is None:
+            return
+        facility, since = self._when_established
+        st = self.engine.state
+        tuned = st.comms.tuned
+        if tuned is not None and tuned.matches(facility.mhz):
+            self._when_established = None  # the pilot changed over themselves: theirs to call
+            return
+        final = self.engine.tracker.context.final
+        established = final is not None and abs(final.lateral_m) <= ESTABLISHED_M
+        if not (established or t - since >= ESTABLISHED_WAIT_S or st.phase == "LANDING"):
+            return
+        self._when_established = None
+        tune = self._push("tune", t, facility=facility, pause=self._rng.uniform(*TUNE_AFTER_S))
+        if self.mode == "full":
+            self._push("checkin", t, facility=facility, after=tune.due, pause=self._rng.uniform(*CHECKIN_AFTER_S))
 
     def _correction(self, instruction_id: str, slots: dict) -> str | None:
         """Told "negative" or "read back ...", answer with the part ATC picked out rather than saying the
@@ -355,10 +461,13 @@ class Copilot(CallWords):
             return
         if phase == "PARKED" and getattr(engine, "_landed", False):
             return  # in at the gate at the end of the flight: no clearance or taxi to ask for (it called "ready to taxi")
-        if phase == "PARKED" and "ifr" not in st.clearances and st.flight.destination:
+        if phase == "PARKED" and self._vfr() and self._vfr_needs_clearance() and "vfr_departure" not in st.clearances:
+            if st.flight.origin:
+                self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)
+        elif phase == "PARKED" and not self._vfr() and "ifr" not in st.clearances and st.flight.destination:
             if st.flight.origin:  # (not knowing where it is yet, it called the destination's Clearance for its clearance)
                 self._call_once("ifr", engine.facility("clearance"), t, self._ifr_request)
-        elif phase == "PARKED" and self._cleared("ifr") and "taxi" not in st.clearances:
+        elif phase == "PARKED" and self._departure_cleared() and "taxi" not in st.clearances:
             # At a gate: push and start first, and only once the crew is ready (the beacon on, or asked for on the
             # intercom). It called "ready to taxi" straight after the clearance, at the gate, not pushed back.
             # Nothing to tell readiness by (no light switches from the sim), or pushed back already: ready.
@@ -369,23 +478,90 @@ class Copilot(CallWords):
             # after-start flow), not while still being pushed.
             started = self._engines is None or self._engines > 0
             ready = not self._lights_known or (pushed and started and t - (self._pushed_t or t) >= AFTER_PUSH_S)
-            if self._needs_pushback() and "pushback" not in st.clearances and not pushed:
+            if self._vfr() and not (self._needs_pushback() and "pushback" not in st.clearances and not pushed):
+                # No clearance to wait for first: the taxi call once the engine's going (the beacon on with it), or asked
+                # for, not the moment LocalTC connects to a light aircraft with its lights left on. (Nothing to tell by:
+                # after a moment to settle in.)
+                if (self._lights_known and self._beacon and self._engines is not None and self._engines > 0) \
+                        or (not self._lights_known and t - self._started_t >= VFR_SETTLE_S) or self.deck.take_want("taxi", t):
+                    self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
+            elif self._needs_pushback() and "pushback" not in st.clearances and not pushed:
                 if ready or self._beacon or self.deck.take_want("pushback", t):
                     self._call_once("pushback", engine.facility("ground"), t, self._pushback_request)
             elif ready or self._taxi_light or self.deck.take_want("taxi", t) or (
                     self._beacon and ("pushback" in st.clearances or not self._needs_pushback())):
-                self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
-                                + self._with_atis(st.flight.origin))
-        elif (phase == "TAXI_OUT" or (phase == "PUSHBACK" and "pushback" not in st.clearances)) and self._cleared("ifr") \
+                self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
+        elif (phase == "TAXI_OUT" or (phase == "PUSHBACK" and "pushback" not in st.clearances)) and self._departure_cleared() \
                 and "taxi" not in st.clearances:
             # Moving already without a taxi clearance (pushed on the captain's own word): the crew is ready. Being
             # pushed with the push approved is no time to ask for taxi: after it.
-            self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
-                            + self._with_atis(st.flight.origin))
+            self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
         elif phase == "RUNWAY_HOLD" and not ({"takeoff", "line_up"} & st.clearances.keys()):
             if tuned is not None and tuned.controller == "ground" and engine.facility("tower") is not None:
                 return  # ground hands off to tower on its own at the hold short line
             self._call_once("departure", engine.facility("tower"), t, self._ready_for_departure)
+        elif self._vfr() and st.aircraft is not None and not st.aircraft.on_ground:
+            self._vfr_calls(t, st.aircraft)
+
+    def _vfr_calls(self, t: float, own: OwnshipState) -> None:
+        """A VFR flight's own calls in the air, in full mode: tower inbound when it comes back to its airport (nobody hands
+        a local flight back to tower), and the downwind report in the pattern."""
+        engine, st = self.engine, self.engine.state
+        dest = st.flight.destination or st.flight.origin
+        geo = engine.geometry(dest) if dest else None
+        tower = next((f for f in engine.facilities if f.airport == dest and f.controller == "tower"), None) \
+            if dest else None
+        if geo is None or tower is None:
+            return
+        miles = geo.distance_nm(own.lat, own.lon)
+        if miles >= VFR_AWAY_NM:
+            self._vfr_away = True
+        vfr = getattr(engine, "vfr", None)
+        tuned = st.comms.tuned
+        on_tower = tuned is not None and tuned.matches(tower.mhz)
+        runway = st.assignments.arrival_runway
+        if on_tower and runway and "landing" not in st.clearances:
+            # In the pattern ("enter left downwind, report midfield", or closed traffic): the downwind report, once a
+            # circuit, which is what the landing clearance waits for.
+            if (side := self._on_downwind(geo, own)) is not None:
+                option = {"touch_and_go": ", touch and go", "option": ", for the option", "full_stop": ", full stop"}.get(
+                    getattr(vfr, "option", None) or "", "")
+                self._call_once(f"downwind_{getattr(vfr, 'circuits', 0)}", tower, t,
+                                lambda f: f"{f.station}, {self._callsign()}, {side} downwind runway {runway}{option}")
+            return
+        if getattr(engine, "_vfr_in_pattern", False):
+            return
+        following = vfr is not None and vfr.following and vfr.identified
+        if self._vfr_away and miles <= VFR_INBOUND_NM and "landing" not in st.clearances and not following \
+                and not (on_tower and st.assignments.arrival_runway):  # (tower has it already: "enter left downwind")
+            # Back from the local flight, or arriving without flight following: tower, from ten miles out.
+            self._call_once("vfr_inbound", tower, t, lambda f: self._vfr_inbound_words(f, own))
+
+    def _vfr_inbound_words(self, f: Facility, own: OwnshipState) -> str:
+        """ "St-Hubert Tower, CPWL, 10 miles west of St-Hubert, 2,500, inbound for landing, with information Golf" """
+        where = self.engine._vfr_position(own).display if hasattr(self.engine, "_vfr_position") else ""
+        alt = int(round(own.alt_indicated_ft / 100.0) * 100)
+        dest = self.engine.state.flight.destination or self.engine.state.flight.origin
+        return f"{f.station}, {self._callsign()}, " + (f"{where}, " if where else "") + f"{alt:,}, inbound for landing" \
+            + self._with_atis(dest)
+
+    def _on_downwind(self, geo, own: OwnshipState) -> str | None:
+        """ "left" or "right": abeam the landing runway on its downwind, flying the other way; None elsewhere."""
+        from localtc.sim_api.geo import unit
+
+        runway = self.engine.state.assignments.arrival_runway
+        end = geo.end(runway) if runway else None
+        if end is None:
+            return None
+        x, y = geo.xy(own.lat, own.lon)
+        ux, uy = unit(end.heading_true)
+        dx, dy = x - end.threshold[0], y - end.threshold[1]
+        along, across = (dx * ux + dy * uy) / 1852.0, (dx * uy - dy * ux) / 1852.0
+        length_nm = end.runway.runway.length_m / 1852.0
+        opposite = abs((own.hdg_true - end.heading_true) % 360 - 180) <= DOWNWIND_HEADING_DEG
+        if opposite and DOWNWIND_ACROSS_NM[0] <= abs(across) <= DOWNWIND_ACROSS_NM[1] and 0.0 <= along <= length_nm:
+            return "right" if across > 0 else "left"
+        return None
 
     def _asked(self, t: float) -> None:
         """Calls the captain asked for on the intercom ("request pushback", "get us taxi", "going around"): made now,
@@ -401,8 +577,7 @@ class Copilot(CallWords):
             self._call_once("pushback", engine.facility("ground"), t, self._pushback_request)
         elif self.deck.take_want("taxi", t) and "taxi" not in st.clearances:
             self._done.discard("taxi")
-            self._call_once("taxi", engine.facility("ground"), t, lambda f: f"{f.station}, {self._callsign()}, ready to taxi"
-                            + self._with_atis(st.flight.origin))
+            self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
         elif self.deck.take_want("departure", t) and not ({"takeoff", "line_up"} & st.clearances.keys()):
             self._done.discard("departure")
             self._call_once("departure", engine.facility("tower"), t, self._ready_for_departure)
@@ -478,9 +653,12 @@ class Copilot(CallWords):
             if st.phase == "PARKED" and ("taxi" not in st.clearances) and self._lights_known and (
                     (self._needs_pushback() and "pushback" not in st.clearances) or not (self._taxi_light or self._beacon)):
                 return None  # "contact ground when ready": the crew says when (the push, then the taxi)
-            return f"{f.station}, {cs}, ready to taxi" + self._with_atis(st.flight.origin)
+            return self._taxi_request(f)
         if f.controller == "tower" and st.phase in ("RUNWAY_HOLD", "TAXI_OUT"):
             return self._ready_for_departure(f)
+        if f.controller == "tower" and self._vfr() and own is not None and not own.on_ground \
+                and not getattr(self.engine, "_vfr_in_pattern", False) and "landing" not in st.clearances:
+            return self._vfr_inbound_words(f, st.aircraft or own)
         if f.controller == "tower":
             final = self.engine.tracker.context.final
             # Report the runway being flown to, not the one expected earlier. Being on a runway's final at
@@ -583,11 +761,12 @@ class Copilot(CallWords):
         if item.kind == "checkin":
             assert item.facility is not None
             if self._pilot_said_t > item.created:
-                return []  # the pilot called them already: a second call-up on top of theirs is noise
-            if item.facility.station in getattr(self.engine, "_checked_in", ()):
+                return self._skip(item, t, "the pilot called them already")  # a second call-up on top of theirs is noise
+            if self._still_checked_in(item.facility.station):
                 # Heard already (London answered, then a second check-in went out, wasn't answered, and the copilot
-                # said "no answer" and went back to departure).
-                return []
+                # said "no answer" and went back to departure). Back to a controller left earlier (Boston, then New
+                # York again) is a new check-in: it was skipped, and the flight sat unannounced for six hours.
+                return self._skip(item, t, f"{item.facility.station} heard us already")
             text = self._checkin_text(item.facility, st.aircraft) or ""
             if item.item is not None:
                 item.item.text = text
@@ -625,6 +804,20 @@ class Copilot(CallWords):
         if item.kind == "checkin" and item.facility is not None and self.mode == "full":
             self._checked_in = (t, item.facility, 1)
         return [Say(t, text)]
+
+    def _skip(self, item: _Queued, t: float, why: str) -> list[Action]:
+        """Not said after all: off the flight deck too (left there, it was "cancelled" hours later by a tune)."""
+        if item.item is not None and not item.item.done and not item.item.cancelled:
+            self.deck._drop(item.item, t, why)
+        return []
+
+    def _still_checked_in(self, station: str) -> bool:
+        """Checked in with ``station`` and not left it since."""
+        engine = self.engine
+        if station not in getattr(engine, "_checked_in", ()):
+            return False
+        left = getattr(engine, "_left_at", {}).get(station, float("-inf"))
+        return left <= getattr(engine, "_checkin_t", {}).get(station, float("-inf"))
 
     def _cleared(self, kind: str) -> bool:
         clearance = self.engine.state.clearances.get(kind)

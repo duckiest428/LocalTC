@@ -548,3 +548,20 @@ def test_the_seatbelt_sign_stays_on_until_the_engines_are_off_at_the_gate():
     pm.observe(systems(2, seatbelt=True))
     out = fly(pm, [own(3 + i, parking_brake=True) for i in range(5)])
     assert not [w for w in said(out) if "Seatbelt sign off" in w]
+
+
+def test_an_apu_reading_stuck_at_full_all_through_the_cruise_isnt_taken_for_a_running_apu():
+    """The iniBuilds A330's read 100% from gate to gate: "APU's running" was said at the stand with it off."""
+    engine = FakeEngine()
+    pm = crew(engine)
+    pm.observe(PhaseChanged(t=0.5, previous="DEPARTURE", phase="CRUISE"))
+    pm.observe(systems(0.6, apu_pct=1.0))
+    fly(pm, [own(1 + i * 60, on_ground=False, alt_agl_ft=35000, alt_indicated_ft=37000, ias_kt=260, gs_kt=480,
+                 gear_down=False, flaps_index=0) for i in range(25)])
+    pm.observe(PhaseChanged(t=2000, previous="LANDING", phase="TAXI_IN"))
+    engine.assigned_gate_position = lambda: (47.0, -121.996)
+    out = fly(pm, [own(2001 + i * 5, on_ground=True, gs_kt=15.0, alt_agl_ft=0.0) for i in range(12)])
+    assert set(ways_of("Starting the APU.")) & set(said(out))
+    out = fly(pm, [own(2100 + i * 10, on_ground=True, gs_kt=10.0, alt_agl_ft=0.0) for i in range(30)])
+    assert "APU's running. APU bleed on." not in said(out)
+    assert any("can't read it" in w for w in said(out)), said(out)

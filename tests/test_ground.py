@@ -1612,3 +1612,12 @@ def test_the_cabin_asking_to_speed_up_boarding_is_the_ramp_speeding_it_up():
     assert newer.hurry_by_cabin("Boarding", 1.0)
     assert [o for o in newer.tick(2.0) if isinstance(o, SpeedUp)] == [SpeedUp("Boarding")]
     assert not crew().hurry_by_cabin("Boarding", 1.0)  # nothing under way
+
+
+def test_boarding_held_for_its_slot_gives_the_reason_to_the_cabin():
+    """ "Can we get boarding started?" got "the ramp can't do that now" (worded "waiting for the ramp to clear"), and
+    the ramp started it fifteen seconds later on the radio: now the turnaround's reason, and asked again it starts."""
+    c = crew()
+    c.turnaround = type("T", (), {"hold": staticmethod(lambda service, t, ask=True: "Boarding's slot opens about 22:40.")})()
+    said = c.called_by_cabin("Boarding", 0.0)
+    assert said == "Boarding's slot opens about 22:40."

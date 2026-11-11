@@ -146,6 +146,24 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **The copilot flies VFR as VFR:** no more "IFR to Montreal, ready to copy" on a VFR flight. It asks ground for the taxi
+  the VFR way ("VFR to Lachute, westbound, ready to taxi, with information Foxtrot", "VFR local", "closed traffic") once
+  the engine's running, says which way at the hold short line, asks for a VFR clearance only out of Class B or a control
+  zone, calls tower inbound from about ten miles with its position and altitude (nobody hands a VFR flight back to tower),
+  and reports the downwind in the pattern.
+- **"Contact tower when established"** is done on the localiser, not straight after the readback 30 miles out.
+- **Back with a controller left earlier** (Boston sending the flight back to New York), the copilot checks in again; it
+  stayed silent, and the call it meant to make was still waiting six hours later.
+- **The ATIS when the real one is out of date:** LocalTC's own from the METAR keeps the runways the airport was using
+  (Zurich landing 14 and departing 28) where the wind still allows them; it had one runway for everything.
+- **An APU reading stuck at 100%** all through the cruise (the iniBuilds A330's) is no longer taken for a running APU at
+  the gate: the copilot starts it and says it can't read it.
+- **Boarding asked for early** gets the turnaround's reason from the cabin ("boarding's slot opens about 22:40"), and
+  asked again it starts; it got "the ramp can't do that now".
+- **Closed runways on the live map:** the ones the ATIS closes are drawn crossed out on the airport and red on the
+  overview, as a NOTAM's are.
+- **"Foxtruck"** is heard as Foxtrot, and the airport cache no longer fails with "Access is denied" when an airport is
+  written twice at once.
 - **VFR, as pilots actually say it:** "we'd like to pick up a departure to the west" at the ramp is the taxi request (it got
   "unable"), "request VFR departure" and "we'd like to do some touch and goes" too; flight following asked for on the
   ground gets a code and departure's frequency (it got "roger"); "request frequency change" and "leave the zone to the

@@ -31,11 +31,32 @@ def load_airport(path: str | Path) -> Airport:
 
 
 def dump_airport(airport: Airport, path: str | Path) -> None:
+    """Written whole or not at all. Each write has its own temporary file, and the swap is tried again for a moment
+    while Windows has the file open (two writes of one airport at once, or a read of it: "Access is denied" at
+    Chicago, and the cache kept the old one)."""
+    import os
+    import threading
+    import time
+
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    tmp = path.with_name(f"{path.stem}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_bytes(msgspec.json.format(_encoder.encode(airport), indent=1))
-    tmp.replace(path)
+    try:
+        for attempt in range(REPLACE_TRIES):
+            try:
+                tmp.replace(path)
+                return
+            except PermissionError:
+                if attempt == REPLACE_TRIES - 1:
+                    raise
+                time.sleep(REPLACE_WAIT_S)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+REPLACE_TRIES = 10  # the cache file held open by another reader or writer: tried this many times ...
+REPLACE_WAIT_S = 0.1  # ... this far apart
 
 
 def load_airport_dir(directory: str | Path) -> list[Airport]:

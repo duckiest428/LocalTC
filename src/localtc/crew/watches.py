@@ -517,15 +517,26 @@ class WatchMixin:
     def _watch_apu(self: Any, own: OwnshipState, t: float) -> None:
         """Taxiing in, near the gate: the APU started, then its bleed on once it's running (the cabin kept cool when
         the engines go off at the stand). Watched: one that hasn't come up is said."""
-        from localtc.crew.actions import APU_RUNNING
+        from localtc.crew.actions import APU_RUNNING, APU_STUCK_S
         from localtc.crew.commands import Command
 
         s = self.c.systems
         if s is not None and s.apu_pct > 0:
             self.f.said["apu_seen"] = t  # the aircraft shows its APU (the FSLabs A321's reads 0 whatever it's doing)
+        if s is not None and s.apu_pct >= APU_RUNNING and self.phase == "CRUISE" and not own.on_ground:
+            # Running all through the cruise: a reading stuck at 100% (the iniBuilds A330's, from the gate to the gate),
+            # not an APU. "APU's running" was said at the gate with it off.
+            since = self.f.said.setdefault("apu_in_cruise", t)
+            if t - since >= APU_STUCK_S:
+                self.f.said.setdefault("apu_stuck", t)
+        elif self.phase == "CRUISE":
+            self.f.said.pop("apu_in_cruise", None)
         if self.phase != "TAXI_IN" or not own.on_ground or not self.hands or "apu" in self.c.dead:
             return
-        running = s is not None and s.apu_pct >= APU_RUNNING
+        stuck = self._said("apu_stuck")
+        if stuck:
+            self.f.said.pop("apu_seen", None)  # as good as an aircraft that never shows it
+        running = s is not None and s.apu_pct >= APU_RUNNING and not stuck
         if not self._said("apu_start"):
             # Coming up to the gate: with one given, as it's close; without, as the aircraft nears the stands. Never
             # on a timer from the landing (it started a minute and a half after touchdown, nowhere near the gate).
@@ -549,7 +560,8 @@ class WatchMixin:
         elif t - self.f.said["apu_start"] > APU_START_S and not self._said("apu_seen"):
             # An aircraft that never shows its APU: up by now, as far as anyone can tell from here ("APU hasn't come
             # up" was said with it running)
-            self._call("apu_bleed", ROUTINE, t, "APU should be up. APU bleed on.", commands=(Command("apu_bleed", "on"),))
+            self._call("apu_bleed", ROUTINE, t, "APU should be up, I can't read it on this one. APU bleed on." if stuck
+                       else "APU should be up. APU bleed on.", commands=(Command("apu_bleed", "on"),))
         elif t - self.f.said["apu_start"] > APU_START_S:
             self.f.said["apu_bleed"] = t
             self._call("apu_slow", ROUTINE, t, "APU hasn't come up. Check it, the bleed's off for now.")

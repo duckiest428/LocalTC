@@ -228,3 +228,44 @@ def test_a_local_vfr_plan_needs_no_destination():
     assert plan.destination == "CYHU" and not plan.route and not plan.alternate and "VFR local" in plan.summary()
     with pytest.raises(Exception):
         manual_plan(origin="CYHU", destination="", rules="IFR")
+
+
+
+# --- the copilot flying VFR --------------------------------------------------------------------------------------
+
+def vfr_copilot_lines(end_t: float) -> list[str]:
+    import msgspec
+
+    from localtc.scenario import Scenario, run
+
+    fixtures = Path(__file__).parent / "fixtures"
+    scenario = msgspec.convert({
+        "scenario": {"recording": str(fixtures / "ifr_kpae_kbfi"), "airports": [str(fixtures / "airports")], "end_t": end_t},
+        "flight": {"destination": "KBFI", "callsign": "N172LT", "rules": "VFR"},
+        "atc": {"seed": 7},
+    }, Scenario)
+    return run(scenario, Path.cwd(), copilot="full").lines
+
+
+def test_the_copilot_makes_a_vfr_flights_calls_and_never_asks_for_an_ifr_clearance():
+    lines = vfr_copilot_lines(1900)
+    pilot = [line.split(": ", 1)[1] for line in lines if " PILOT " in line]
+    assert not any("IFR" in p or "ready to copy" in p for p in pilot), pilot
+    assert "Paine Ground, N172LT, VFR to Boeing Field, southbound, ready to taxi, with information Oscar" in pilot
+    assert "Paine Tower, N172LT, holding short runway 34L, ready for departure, VFR southbound" in pilot
+    assert any(p.startswith("Boeing Tower, N172LT, 12 miles northwest of Boeing Field") and "inbound for landing" in p
+               for p in pilot), pilot  # nobody hands a VFR flight to tower: it calls in itself
+    assert any("enter left downwind runway 14R" in line for line in lines)
+
+
+def test_the_copilots_vfr_words_for_a_local_flight_and_closed_traffic():
+    from localtc.copilot import Copilot
+    from test_engine import parked_engine
+
+    engine, _ = parked_engine(com1=121.8, destination="KPAE", rules="VFR", callsign="N172LT")
+    copilot = Copilot(engine, mode="full")
+    ground = engine.facility("ground")
+    assert copilot._taxi_request(ground).startswith("Paine Ground, N172LT, VFR local, ready to taxi")
+    engine.vfr.direction = "closed-traffic"
+    assert copilot._taxi_request(ground).startswith("Paine Ground, N172LT, closed traffic, ready to taxi")
+    assert copilot._ready_for_departure(engine.facility("tower")).endswith("ready for departure, closed traffic")

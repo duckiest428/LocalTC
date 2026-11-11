@@ -103,7 +103,7 @@ FIXUPS: list[tuple[str, str]] = [
     # "expect 37022 minutes after departure": the level and the minutes run together into one number.
     (r"\bexpect (flight level )?(\d{3})(\d{1,2}) minutes", r"expect \1\2 \3 minutes"),
     (r"^(?:to|toe|tell|till) (left|right)\b", r"tail \1"),  # "To left, EDW87": the pushback's turn read back
-    (r"\bfo(?:ck|x)?(?:s)?trap\b|\bfox ?trot\b|\bfoxtrop\b|\bfoxstrot\b", "foxtrot"),
+    (r"\bfo(?:ck|x)?(?:s)?trap\b|\bfox ?trot\b|\bfoxtrop\b|\bfoxstrot\b|\bfox ?tr(?:uck|ucks|ock)\b", "foxtrot"),
     (r"\bcleared for the takeoff\b", "cleared for takeoff"),
     (r"\bi\.l\.s\.?", "ILS"),
     (r"\bready for departures\b", "ready for departure"),

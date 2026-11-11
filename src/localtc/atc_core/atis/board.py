@@ -113,9 +113,11 @@ class AtisBoard:
         return self._notices[icao]
 
     def update(self, icao: str, geo: AirportGeometry, weather: Weather, zulu_s: float | None, name: str,
-               t: float = 0.0, *, kind: str = "both", real=None, source: tuple = ("simulator", None, "")) -> AtisInfo | None:
+               t: float = 0.0, *, kind: str = "both", real=None, source: tuple = ("simulator", None, ""),
+               layout=None) -> AtisInfo | None:
         """Refresh an airport's ATIS; returns it if it's new or its letter changed. ``real``: the airport's real ATIS
-        (``atis.real.RealAtis``): its letter, and its runways where the wind allows them. ``source``: where it's from."""
+        (``atis.real.RealAtis``): its letter, and its runways where the wind allows them. ``layout``: an out-of-date
+        real ATIS, for its runways alone (where the wind allows them). ``source``: where it's from."""
         key = icao if kind == "both" else f"{icao}/{kind}"
         old = self.current.get(key)
         since = t - self._issued.get(key, -math.inf)
@@ -133,10 +135,11 @@ class AtisBoard:
         # departures.)
         allowed = lambda e: components(e, weather)[0] >= -MAX_TAILWIND_KT
         real_ok = lambda e: components(e, weather)[0] >= -FLOW_TAILWIND_KT
-        real_landing = [e for e in runway_use.expand(geo, real.landing, closed) if real_ok(e)] if real is not None else []
-        real_departing = [e for e in runway_use.expand(geo, real.departing, closed) if real_ok(e)] \
-            if real is not None else []
-        if real is not None:
+        runways = real if real is not None else layout
+        real_landing = [e for e in runway_use.expand(geo, runways.landing, closed) if real_ok(e)] if runways is not None else []
+        real_departing = [e for e in runway_use.expand(geo, runways.departing, closed) if real_ok(e)] \
+            if runways is not None else []
+        if runways is not None:
             # The real ATIS's runway, while the wind here allows it ("RWYS 4/8": Honolulu's 4L, 4R, 8L and 8R).
             wanted = real_departing if kind == "departure" else real_landing or real_departing
             end = wanted[0] if wanted else end

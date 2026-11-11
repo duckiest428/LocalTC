@@ -358,3 +358,19 @@ def test_the_real_atis_is_waited_for_only_when_its_being_fetched():
     assert engine.current_atis("KPAE") is None
     engine.handle(msgspec.structs.replace(parked(), t=parked().t + 130))
     assert engine.current_atis("KPAE") is not None  # two minutes and nothing real: the sim's after all
+
+
+def test_an_out_of_date_real_atis_still_gives_its_runways_where_the_wind_allows():
+    """ATIS.guru's Zurich ATIS was from the afternoon before: LocalTC's own from the METAR landed and departed 14 (it
+    "seemed simulator made"). The airport's way of working its runways is kept, with LocalTC's letter and the METAR."""
+    from localtc.airports import load_airport
+    from localtc.atc_core.atis.real import RealAtis
+
+    cyul = AirportGeometry(load_airport(FIXTURES / "airports_real" / "CYUL.json"))
+    own = AtisBoard(seed=1).update("CYUL", cyul, weather(240, 5), 63180.0, "Montreal", t=0.0)
+    assert set(own.operations.departing) == {"24R", "24L"}
+    layout = RealAtis(letter="D", zulu="1450", kind="both", landing=("24R",), departing=("24L",))
+    kept = AtisBoard(seed=1).update("CYUL", cyul, weather(240, 5), 63180.0, "Montreal", t=0.0, layout=layout)
+    assert kept.operations.landing == ("24R",) and kept.operations.departing == ("24L",) and kept.letter != "D"
+    turned = AtisBoard(seed=1).update("CYUL", cyul, weather(60, 12), 63180.0, "Montreal", t=0.0, layout=layout)
+    assert turned.operations.landing[0].startswith("06")  # the wind has turned: not those runways any more

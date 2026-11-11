@@ -1421,7 +1421,13 @@ class CabinCrew:
         if self.ground_call is not None and not ASKS_ABOUT.match(low) and (m := START_BOARDING.search(low)):
             # (At the gate after the flight, "start boarding" is them getting off.)
             service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"
-            if not self.ground_call(service, t):
+            called = self.ground_call(service, t)
+            if isinstance(called, str):
+                # Waiting its slot in the turnaround: why, and that asking again starts it. ("Not from here just yet:
+                # the ramp can't do that now" became "we're still waiting for the ramp to clear", and the ramp started it
+                # fifteen seconds later when asked on the radio.)
+                return reply("ground_held", {"reason": called})
+            if not called:
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")
         drink = _drink(body)

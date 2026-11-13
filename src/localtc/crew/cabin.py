@@ -126,9 +126,10 @@ START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+|our\s+)?(de
                             r"|\b(de-?\s?)?boarding\s+(?:started|going|under\s?way)\b"
                             r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b"
                             # "Can we get the deboarding started", "please get deboarding please", "deboarding please"
-                            r"|\bget\s+(?:the\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?boarding,?\s+please\b")
+                            r"|\bget\s+(?:the\s+|a\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?boarding,?\s+please\b"
+                            r"|\b(de-?\s?)?boarding\s+start(?:ed|er|ing)?\b")  # ("can we get a boarding starter please?")
 # Whisper's spellings of it ("Can we get the deborings started please?").
-DEBOARDING_HEARD = re.compile(r"\bde-?\s?bor(?:d)?ings?\b")
+DEBOARDING_HEARD = re.compile(r"\bde-?\s?bor(?:d)?ings?\b|\b(?:deep|dee|d)[\s-]boarding\b")  # ("deep boarding")
 ANNOUNCED = {  # what the radio log shows of an announcement (the voice says all of it)
     "boarding": "Boarding announcement", "welcome": "Welcome aboard", "safety": "Safety briefing", "safety_more": "Safety briefing",
     "exit_row": "Exit row briefing", "doors": "Doors to automatic", "night": "Cabin lights dimmed", "service": "Cabin service",
@@ -152,6 +153,7 @@ LATE_S = 15 * 60.0  # this far behind the plan's off-block time: "late", for the
 ARRIVAL_KEYS = ("descent", "landing", "after_landing", "goodbye", "deboarded", "secure_landing")
 BOARDING_PA_S = 25.0  # after boarding begins: the boarding welcome
 ROLLING_S = 3.0  # moving for this long: moving
+BEACON_STEADY_S = 10.0  # the beacon on this long: on (the sim's first reading as a flight loads has every light on)
 # The announcements the language model may put in the crew member's own words, when it's a cloud one (never the safety
 # ones, whose words are what the rules ask for, nor an order to the crew).
 OWN_WORDS = ("boarding", "welcome", "aircraft_talk", "service", "descent", "landing", "after_landing", "goodbye", "seatbelt_off")
@@ -824,6 +826,10 @@ class CabinCrew:
 
     def _systems(self, ev: AircraftSystems) -> list[Any]:
         out: list[Any] = []
+        if not ev.light_beacon:
+            self._beacon_on_t = None
+        elif getattr(self, "_beacon_on_t", None) is None:
+            self._beacon_on_t = ev.t
         before, self._sys = self._belt, ev
         self._belt = ev.seatbelt
         if ev.seatbelt:
@@ -959,7 +965,10 @@ class CabinCrew:
         out: list[Any] = []
         s = self.settings
         engines = (sys.engines_running if sys is not None else 0) or (1 if own.engine_running else 0)
-        beacon = sys.light_beacon if sys is not None else False
+        # (A beacon on for a moment as the flight loads isn't the crew ready: "everyone's on, 188 passengers" was said a
+        # second in, with nobody boarded.)
+        since = getattr(self, "_beacon_on_t", None)
+        beacon = sys is not None and sys.light_beacon and since is not None and t - since >= BEACON_STEADY_S
         moving = self._rolling(own, t)
         before_departure = not self._was_airborne
         if before_departure and own.on_ground:
@@ -1422,11 +1431,9 @@ class CabinCrew:
             # (At the gate after the flight, "start boarding" is them getting off.)
             service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"
             called = self.ground_call(service, t)
-            if isinstance(called, str):
-                # Waiting its slot in the turnaround: why, and that asking again starts it. ("Not from here just yet:
-                # the ramp can't do that now" became "we're still waiting for the ramp to clear", and the ramp started it
-                # fifteen seconds later when asked on the radio.)
-                return reply("ground_held", {"reason": called})
+            if isinstance(called, str) and service == "Boarding":
+                # Ahead of the turnaround's plan: started all the same, and what it would have waited for said.
+                return reply("ground_early", {"reason": called})
             if not called:
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")

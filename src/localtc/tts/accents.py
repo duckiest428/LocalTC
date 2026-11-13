@@ -74,6 +74,11 @@ ACCENTS: dict[str, Accent] = {a.id: a for a in (
                                ("h", "x"), (S_CLUSTER, "e")], "es"),
     _a("latam", "Latin American", "us", [*TH_TD, ("v", "b"), ("z", "s"), ("ɹ", "ɾ"), ("ɚ", "eɾ"), *FULL,
                                          ("æ", "a"), ("ʌ", "a"), (S_CLUSTER, "e")], "es"),
+    # The Spanish Caribbean (Puerto Rico, the Dominican Republic, Cuba): the Latin American, with an s before a
+    # consonant breathed out ("ehtablished") and an r before one said nearly as an l ("Puelto Rico").
+    _a("carib", "Caribbean", "us", [*TH_TD, ("v", "b"), ("z", "s"),
+                                    (r"(?<=[" + VOWEL + r"ː])s(?=[ptkfmnl])", "h"), (r"ɹ(?=[ptkbdɡmnfsʃ])", "l"),
+                                    ("ɹ", "ɾ"), ("ɚ", "eɾ"), *FULL, ("æ", "a"), ("ʌ", "a"), (S_CLUSTER, "e")], "es"),
     _a("pt", "Portuguese", "gb", [*TH_TD, ("ɹ", "ʁ"), *FULL[:2], ("æ", "ɛ")], "pt"),
     _a("br", "Brazilian", "us", [*TH_TD, (START + r"([ˈˌ]?)ɹ", r"\1h"), ("ɹ", "ɾ"), *FULL[:2], ("æ", "ɛ")], "pt"),
     _a("it", "Italian", "gb", [("h", ""), *TH_TD, ("ɹ", "r"), *FULL[:2], ("æ", "ɛ"), (r"([dɡ])" + END, r"\1ə")],
@@ -98,7 +103,11 @@ ACCENTS: dict[str, Accent] = {a.id: a for a in (
                                 (r"d" + END, "do")], "ja"),
     _a("ko", "Korean", "us", [("f", "p"), ("v", "b"), *NO_TH[:1], ("ð", "d"), ("ɹ", "ɾ"), *FULL[:2], ("æ", "ɛ"),
                               (r"(ʃ|tʃ|dʒ)" + END, r"\1ɯ")], "ko"),
-    _a("sea", "Southeast Asian", "gb", [*TH_TD, ("v", "w"), ("z", "s"), *FULL[:2], ("ː", "")], "th"),
+    _a("sea", "Southeast Asian", "gb", [*TH_TD, ("v", "w"), ("z", "s"), *FULL[:2], ("ː", "")], "vi"),
+    # Thai: "w" for "v", "ch" for "sh" and "j", a word ending in l ending in n, a tapped r, no long vowels. (Every r
+    # said l, as many do, made "runway" "memory" through the radio: half the words lost.)
+    _a("th", "Thai", "gb", [*TH_TD, ("v", "w"), ("z", "s"), ("ɹ", "ɾ"), ("ʃ", "tʃ"), ("dʒ", "tʃ"), (r"l" + END, "n"),
+                            *FULL[:2], ("ː", "")], "th"),
     _a("id", "Indonesian", "gb", [*TH_TD, ("z", "s"), ("ɹ", "r"), *FULL[:2], ("æ", "e"), ("ː", "")], "id"),
 )}
 
@@ -106,7 +115,7 @@ ACCENTS: dict[str, Accent] = {a.id: a for a in (
 BY_LOCALE = {
     "en-us": "us", "en-ca": "ca", "en-gb": "gb", "en-ie": "ie", "en-au": "au", "en-nz": "au", "en-za": "za",
     "en-in": "in", "en-sg": "sg", "en-hk": "gb", "en-ph": "ph", "en-ke": "eaf", "en-tz": "eaf", "en-ng": "waf",
-    "pt-br": "br", "fr-ca": "fr",
+    "pt-br": "br", "fr-ca": "fr", "es-pr": "carib", "es-do": "carib", "es-cu": "carib",
 }
 BY_LANGUAGE = {
     "fr": "fr", "de": "de", "nl": "nl", "da": "nordic", "sv": "nordic", "nb": "nordic", "no": "nordic",
@@ -114,7 +123,7 @@ BY_LANGUAGE = {
     "az": "ru", "ka": "ru", "hy": "ru", "pl": "cee", "cs": "cee", "sk": "cee", "sl": "cee", "hr": "cee",
     "sr": "cee", "bs": "cee", "mk": "cee", "bg": "cee", "lt": "cee", "lv": "cee", "et": "cee", "hu": "cee",
     "ro": "cee", "sq": "cee", "el": "gr", "tr": "tr", "ar": "me", "fa": "fa", "he": "il", "ur": "in", "bn": "in",
-    "ne": "in", "si": "in", "hi": "in", "zh": "zh", "ja": "ja", "ko": "ko", "th": "sea", "vi": "sea", "km": "sea",
+    "ne": "in", "si": "in", "hi": "in", "zh": "zh", "ja": "ja", "ko": "ko", "th": "th", "vi": "sea", "km": "sea",
     "lo": "sea", "my": "sea", "ms": "sg", "id": "id", "tl": "ph", "am": "eaf", "sw": "eaf",
 }
 

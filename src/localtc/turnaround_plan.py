@@ -533,6 +533,13 @@ class Turnaround:
                 return m, f"{_cap(SAID[m])} should have started {behind} minutes ago.{wait} At this rate we push about {self.clock(self.forecast())}."
         return None
 
+    def waive(self, service: str) -> None:
+        """The captain wants ``service`` now: its slot and what it waits on are theirs to overrule."""
+        m = GSX_SERVICE.get(service)
+        if m is not None and m not in self._waived:
+            self._waived.add(m)
+            self.changed = True
+
     def hold(self, service: str, t: float, *, ask: bool = True) -> str | None:
         """Why the ramp can't bring ``service`` now, or None. Asked again soon after, they come anyway (``ask`` False: only
         looking, for a service waiting its turn)."""

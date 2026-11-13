@@ -61,7 +61,7 @@ def region_for(code: str | None) -> Region:
 # controller in London sounds British, one in Sydney Australian. Longest prefix wins; elsewhere none in particular.
 ACCENTS: dict[str, str] = {
     "K": "en-US", "PA": "en-US", "PH": "en-US", "PG": "en-US", "PF": "en-US", "PO": "en-US", "PP": "en-US",
-    "TJ": "en-US", "C": "en-CA", "EG": "en-GB", "EI": "en-IE", "Y": "en-AU", "NZ": "en-NZ", "VA": "en-IN",
+    "TJ": "es-PR", "C": "en-CA", "EG": "en-GB", "EI": "en-IE", "Y": "en-AU", "NZ": "en-NZ", "VA": "en-IN",
     "VE": "en-IN", "VI": "en-IN", "VO": "en-IN", "FA": "en-ZA", "WS": "en-SG", "VH": "en-HK", "RP": "en-PH",
     "HK": "en-KE", "HU": "en-KE", "DN": "en-NG", "DG": "en-NG", "HT": "en-TZ", "LM": "en-GB", "LX": "en-GB",
     "TX": "en-US", "MY": "en-US", "MK": "en-US", "TF": "fr-FR",

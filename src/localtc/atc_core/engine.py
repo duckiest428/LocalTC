@@ -2106,6 +2106,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 and ctx.final is not None and ctx.final.distance_nm <= TOWER_AT_NM + 4 and (tower := self.facility("tower")) is not None \
                 and once("approach_tower"):
             self._handoff(t, "approach.handoff_tower", st.comms.tuned, tower)  # established: over to tower
+        elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "approach" and "approach" in st.clearances \
+                and self._untowered_arrival() and ctx.final is not None and ctx.final.distance_nm <= TOWER_AT_NM + 4 \
+                and st.pending is None and once("approach_advisory"):
+            self._advisory(t, own, st.comms.tuned)  # no tower to send it to: the field's radio, or the advisory frequency
         elif phase in (P.ARRIVAL, P.APPROACH, P.LANDING) and tuned == "approach" and "approach" not in st.clearances:
             # The approach is cleared well before the aircraft is established, not as it crosses the
             # threshold of the approach phase: a pilot flying an ILS wants the clearance before
@@ -3303,6 +3307,42 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                            on_issue=lambda: self._assign(altitude_ft=altitude))
         return True
 
+    def _untowered_arrival(self) -> bool:
+        """Arriving at a field with no tower: its pilots announce themselves (a CTAF, or the field's radio station)."""
+        dest = self.state.flight.destination
+        return bool(dest) and self._arriving and self.geometry(dest) is not None and not self._staffed(dest, "tower")
+
+    @staticmethod
+    def _asks_to_land(interp: Interpretation) -> bool:
+        words = (interp.text or "").lower()
+        return interp.intent in ("report_final", "request_landing") or (
+            "land" in words and interp.intent in ("request_runway", "request_ifr_clearance", "other", "checkin"))
+
+    def _field_radio(self) -> Facility | None:
+        """The destination's own radio (Tarama Radio 118.6: a flight service station, an AFIS), from the sim's data."""
+        dest = self.state.flight.destination
+        geo = self.geometry(dest)
+        if geo is None:
+            return None
+        freqs = [f for f in geo.airport.frequencies if f.kind in ("fss", "afis", "unicom", "ctaf")]
+        if not freqs:
+            return None
+        f = freqs[0]
+        name = self._airport_name(dest)
+        return Facility("radio", f"{name} Radio", f.mhz, dest)
+
+    def _advisory(self, t: float, own: OwnshipState, facility: Facility) -> None:
+        """Established for a field with no tower: the wind, and the pilot sent to the field's radio where it has one,
+        else the advisory frequency, to land on their own say."""
+        wind = self._surface_wind(own, self.state.flight.destination)
+        radio = self._field_radio()
+        self.state.flags.add("advisory")
+        if radio is not None:
+            self._schedule(t, "approach.handoff_radio", {"wind": wind, "station": radio.station, "frequency": radio.mhz},
+                           facility, delay=True)
+        else:
+            self._schedule(t, "approach.advisory", {"wind": wind}, facility, delay=True, expects_readback=False)
+
     def _not_with_tower(self, own: OwnshipState) -> bool:
         """Short final, still on approach's frequency, no landing clearance: told to contact tower and didn't, or
         never told. Approach sends the flight around rather than let it land unannounced (a flight that flew its own
@@ -3311,6 +3351,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         tuned = st.comms.tuned
         if tuned is None or not self._works_approach(own) or own.on_ground or self._going_around or "emergency" in st.flags:
             return False
+        if self._untowered_arrival():
+            return False  # no tower there: nobody clears anyone to land (Tarama: "go around, you're not cleared to land", twice)
         if P(st.phase) is not P.LANDING or "landing" in st.clearances or ctx.final is None \
                 or ctx.final.distance_nm > GO_AROUND_NM or "not_with_tower" in st.flags:
             return False
@@ -3426,6 +3468,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._altitude_checked_t = t
         checks = self._altitude_checks.get(assigned, 0)
         self._altitude_checks[assigned] = checks + 1
+        if P(st.phase) is P.ARRIVAL and own.alt_indicated_ft < assigned and self._works_approach(own) \
+                and (plan := self._arrival_plan(own)) is not None:
+            # Under the altitude approach gave, on the way in: the descent it would have given (where the ground
+            # allows), not "check altitude" to climb back. San Juan held a flight at 11,000 thirty miles out and told it
+            # twice to go back up.
+            floor = max(plan["approach_alt"], self._terrain_floor(own, own.hdg_true) or 0)
+            lower = max(floor, int(math.ceil(own.alt_indicated_ft / 1000.0) * 1000))
+            if lower <= assigned - 1000:
+                self._schedule(t, "common.descend", {"altitude": lower}, st.comms.tuned, delay=False,
+                               on_issue=lambda: self._assign(altitude_ft=lower))
+                return True
         if checks < ALTITUDE_CHECKS:
             self._schedule(t, "common.check_altitude", {"altitude": assigned}, st.comms.tuned, delay=False)
             return True
@@ -4233,6 +4286,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # that" and the hold stayed; "we're back on track, can we continue the course" got the hold said again.
             self._leave_hold(own, facility, answering=True)
             return []
+        if own is not None and not own.on_ground and facility.controller in ("approach", "center", "departure") \
+                and self._untowered_arrival() and self._asks_to_land(interp)                 and ("approach" in st.clearances or "advisory" in st.flags):
+            # "Request clearance for landing" at a field with no tower: there's no landing clearance to give. The wind,
+            # and over to the field's frequency. (Tarama got "unable", then "unable, continue as filed".)
+            self._advisory(t, own, facility)
+            return []
         if intent in ("other", "report_problem"):  # (a problem it couldn't place: "our managed speed isn't working" went unanswered)
             return self._decline(interp, facility, t)
         if self._vfr and self._vfr_request(interp, facility, t, own):
@@ -4839,12 +4898,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         return max(plan["approach_alt"], int(under // 500 * 500))
 
     def _step_altitude(self, own: OwnshipState, plan: dict[str, Any]) -> int:
-        """Where approach wants the arrival now: down with the miles still to fly (vectors.step_altitude)."""
+        """Where approach wants the arrival now: down with the miles still to fly (vectors.step_altitude), and never
+        held up by a long way round for the sequence: no higher than the miles to the field call for, plus a thousand
+        (San Juan kept a flight at 11,000 at thirty miles, its vectors stretched behind three others)."""
         leg = self._vector(own, plan["final"])
         geo = self.geometry(self.state.flight.destination)
         if leg is None or geo is None:
             return plan["approach_alt"]
-        return vectors.step_altitude(leg.track_nm, geo.airport.elev_ft, plan["approach_alt"])
+        by_track = vectors.step_altitude(leg.track_nm, geo.airport.elev_ft, plan["approach_alt"])
+        by_distance = vectors.step_altitude(geo.distance_nm(own.lat, own.lon), geo.airport.elev_ft, plan["approach_alt"]) + 1000
+        return min(by_track, by_distance)
 
     def _set_arrival(self, runway: str | None, kind: str | None, own: OwnshipState | None) -> Approach | None:
         """The pilot's choice of arrival runway and approach, if the airport and the weather allow it."""
@@ -6144,7 +6207,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _expect_visual(self, t: float, own: OwnshipState, facility: Facility) -> None:
         """The field in sight, not yet placed for it: expect the visual, vectors on; the turn onto the final clears it."""
         plan = self._arrival_plan(own)
-        if plan is None:
+        if plan is None or not self._visual_weather():
+            # (Under the visual's minimums: the instrument approach stays. "Inbound for landing" at Tarama got "expect
+            # the visual", then "the weather's gone below visual minimums" two minutes later.)
             self._schedule(t, "common.roger", {}, facility, expects_readback=False)
             return
         plan["approach"] = Approach("VISUAL", plan["final"])  # the field in sight: the visual, at the turn in
@@ -6157,6 +6222,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _clear_approach(self, t: float, own: OwnshipState, facility: Facility, *, delay: bool) -> None:
         plan = self._arrival_plan(own)
         tower = self.facility("tower")
+        if plan is not None and tower is None and self._untowered_arrival():
+            # No tower there: the approach cleared on its own (the field's frequency follows, once established).
+            self._schedule(t, "approach.cleared_star", {"approach": plan["approach"]}, facility, delay=delay,
+                           clearance="approach",
+                           on_issue=lambda: (self._assign(approach=plan["approach"].display,
+                                                          arrival_runway=plan["approach"].landing_runway),
+                                             setattr(self, "_going_around", False)))
+            return
         if plan is None or tower is None:
             self._schedule(t, "common.roger", {}, facility)
             return

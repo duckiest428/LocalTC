@@ -163,6 +163,23 @@ text = ["{callsign}, turn {turn} heading {heading}, cleared {approach} approach.
 readback = { required = ["heading"], optional = ["approach"] }
 pilot_readback = "Turn {turn} heading {heading}, cleared {approach} approach, {callsign_short}."
 
+# A field with no tower: the wind, and over to the advisory frequency (FAA 7110.65 4-8-8) ...
+[[template]]
+id = "approach.advisory"
+controller = "approach"
+text = ["{callsign}, no reported traffic, wind {wind}, change to advisory frequency approved.",
+        "{callsign}, wind {wind}, no traffic observed, change to advisory frequency approved."]
+pilot_readback = "Change to advisory, {callsign_short}."
+
+# ... or to the field's own radio station where it has one (Tarama Radio).
+[[template]]
+id = "approach.handoff_radio"
+controller = "approach"
+text = ["{callsign}, no reported traffic, wind {wind}, contact {station} {frequency}.",
+        "{callsign}, wind {wind}, contact {station} on {frequency}."]
+readback = { required = ["frequency"] }
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
 [[template]]
 id = "approach.handoff_tower"
 controller = "approach"

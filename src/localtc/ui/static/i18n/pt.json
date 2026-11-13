@@ -1,5 +1,5 @@
 {
-"Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
+"Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "(16 or over).": "(16 anos ou mais).",
 "(CC-BY-SA)": "(CC-BY-SA)",
 "(Class {0})": "(Classe {0})",
@@ -1602,5 +1602,7 @@
 "No flight running": "Nenhum voo em andamento",
 "Waiting for LocalTC on this PC...": "Aguardando o LocalTC neste PC...",
 "VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: só para onde vai, se for a algum lugar. Destino em branco = um voo local, de volta aqui. O resto diga ao ATC pelo rádio (a saída, o acompanhamento de voo, o circuito).",
-"blank = a local flight": "em branco = um voo local"
+"blank = a local flight": "em branco = um voo local",
+"Caribbean": "Caribenho",
+"Thai": "Tailandês"
 }

@@ -4,7 +4,7 @@
   Wikimedia Commons). Kept as it is.
 - boarding*.ogg: the boarding music, a different track each flight. All by Kevin MacLeod (incompetech.com), licensed
   under Creative Commons: By Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/), from Wikimedia Commons:
-  "Airport Lounge" (boarding.ogg), "Lobby Time", "Local Forecast - Elevator", "Bossa Antigua", "Smooth Lovin" and
+  "Airport Lounge" (boarding.ogg), "Lobby Time", "Bossa Antigua", "Smooth Lovin" and
   "Easy Lemon". Made mono and smaller (Opus: 48 kbit/s for the first, 32 for the rest; the cabin's speakers don't need more).
 
     python tools/make_cabin_sounds.py            # everything
@@ -28,7 +28,6 @@ COMMONS = "https://upload.wikimedia.org/wikipedia/commons/"
 MUSIC = (
     ("boarding.ogg", COMMONS + "0/05/Airport_Lounge_%28ISRC_USUAN1100806%29.mp3", 48000),
     ("boarding-lobby-time.ogg", COMMONS + "e/e9/Lobby_Time_%28ISRC_USUAN1600054%29.mp3", 32000),
-    ("boarding-local-forecast.ogg", COMMONS + "9/9f/Local_Forecast_-_Elevator_%28ISRC_USUAN1300012%29.mp3", 32000),
     ("boarding-bossa-antigua.ogg", COMMONS + "6/60/Bossa_Antigua_%28ISRC_USUAN1700069%29.mp3", 32000),
     ("boarding-smooth-lovin.ogg", COMMONS + "9/99/Smooth_Lovin_%28ISRC_USUAN1700077%29.mp3", 32000),
     ("boarding-easy-lemon.ogg", COMMONS + "0/0c/Easy_Lemon_%28ISRC_USUAN1200076%29.mp3", 32000),

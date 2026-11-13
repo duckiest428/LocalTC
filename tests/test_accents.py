@@ -34,7 +34,8 @@ def test_every_region_of_the_world_has_an_accent():
     ("ENGM", "nordic"), ("EFHK", "fi"), ("LEMD", "es"), ("MMMX", "latam"), ("SCEL", "latam"), ("LPPT", "pt"),
     ("SBGR", "br"), ("LIRF", "it"), ("UUEE", "ru"), ("EPWA", "cee"), ("LHBP", "cee"), ("LGAV", "gr"), ("LTFM", "tr"),
     ("OMDB", "me"), ("HECA", "me"), ("GMMN", "me"), ("OIII", "fa"), ("LLBG", "il"), ("ZBAA", "zh"), ("RCTP", "zh"),
-    ("RJTT", "ja"), ("RKSI", "ko"), ("VTBS", "sea"), ("VVNB", "sea"), ("WIII", "id"), ("WMKK", "sg"),
+    ("RJTT", "ja"), ("RKSI", "ko"), ("VTBS", "th"), ("VVNB", "sea"), ("TJSJ", "carib"), ("MDSD", "carib"),
+    ("MUHA", "carib"), ("WIII", "id"), ("WMKK", "sg"),
 ])
 def test_each_airport_speaks_its_regions_accent(icao, accent_id):
     assert accent_for(accent(icao)).id == accent_id
@@ -70,6 +71,9 @@ def test_the_english_speaking_worlds_own_english_is_left_as_it_is():
     ("in", "tˈuː", "ʈˈuː"),  # retroflex
     ("it", "lˈand", "lˈandə"),
     ("ru", "wˈɪnd", "vˈint"),
+    ("carib", "pˈɔːɹt", "pˈɔːlt"),  # an r before a consonant nearly an l
+    ("carib", "ɪstˈæblɪʃt", "ihtˈabliʃt"),  # an s before one breathed out ("ehtablished")
+    ("th", "ɹˈʌnweɪ", "ɾˈʌnwei"),  # a tapped r
 ])
 def test_an_accent_moves_english_onto_its_languages_sounds(accent_id, english, said):
     assert accented(english, ACCENTS[accent_id]) == said

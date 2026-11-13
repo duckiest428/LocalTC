@@ -146,6 +146,27 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **Arriving where there's no tower:** approach no longer sends you around "not cleared to land" at a field with no
+  tower. Once you're established it gives the wind and sends you to the field's radio where it has one ("contact Tarama
+  Radio 118.6"), else to the advisory frequency, and a landing clearance asked for gets the same, not "unable". The
+  approach is cleared there too, and the visual's "below minimums" is judged by the field's weather, not a cloud
+  you fly through.
+- **Approach's descent on the vectors:** no longer held high by a long way round for the sequence (San Juan kept a
+  flight at 11,000 thirty miles out), and a flight under its altitude on the way in is cleared lower where the ground
+  allows, not told twice to check its altitude and climb back.
+- **Traffic in your way:** a real flight from the live feed flying on top of you (JetBlue on San Juan's final, a tenth
+  of a mile off, level) is sent around if it's behind you on your final, else taken away; LocalTC's own arrivals
+  taxiing in hold short of the runway you're cleared onto (one crossed O'Hare's 27L in front of a takeoff).
+- **Boarding when you ask:** the captain's call starts it, ahead of the turnaround's plan or not (it was refused twice
+  first), and the cabin says if it's early and why; "a boarding starter" and "deep boarding" are heard as what was
+  meant. Speeding up boarding through the cabin no longer gets the ramp answering too.
+- **The flight loading:** the cabin no longer says everyone's on board, nor the copilot asks for the before start
+  checklist, a second in, when the sim's first reading shows every light on; the beacon has to stay on.
+- **The copilot** doesn't set and call out the altitude it already set at the clearance again after takeoff.
+- **A frequency read back with a digit said twice** ("120.555" for 120.55, speech-to-text's) is taken as said.
+- **Accents:** San Juan and the Spanish Caribbean (Puerto Rico, the Dominican Republic, Cuba) have a Caribbean
+  accent, not American, and Thailand a Thai one of its own.
+- **Boarding music:** "Local Forecast - Elevator" is gone; it was lift music.
 - **The copilot flies VFR as VFR:** no more "IFR to Montreal, ready to copy" on a VFR flight. It asks ground for the taxi
   the VFR way ("VFR to Lachute, westbound, ready to taxi, with information Foxtrot", "VFR local", "closed traffic") once
   the engine's running, says which way at the hold short line, asks for a VFR clearance only out of Class B or a control

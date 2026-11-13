@@ -64,7 +64,9 @@ VOICES: dict[str, dict[str, tuple[str, ...]]] = {
     "it": {"F": ("if_sara", "if_sara+ef_dora", "if_sara+ff_siwis"), "M": ("im_nicola", "im_nicola+em_alex",
                                                                          "im_nicola+pm_alex")},
     "tr": MIDDLE_EAST, "me": MIDDLE_EAST, "fa": MIDDLE_EAST, "il": EUROPE,
-    "zh": CHINESE, "ja": JAPANESE, "ko": EAST_ASIAN, "sea": SOUTHEAST_ASIAN, "id": SOUTHEAST_ASIAN,
+    "zh": CHINESE, "ja": JAPANESE, "ko": EAST_ASIAN, "sea": SOUTHEAST_ASIAN, "th": SOUTHEAST_ASIAN, "id": SOUTHEAST_ASIAN,
+    "carib": {"F": ("ef_dora", "ef_dora+af_kore", "ef_dora+pf_dora"),
+              "M": ("em_alex", "em_santa+am_michael", "em_alex+pm_santa")},
 }
 
 # The copilot in your language, by Kokoro: its voices for that language and espeak's name for it (others: Piper).
@@ -100,7 +102,8 @@ SAMPLES: dict[str, tuple[str, str, str]] = {
     "tr": ("Istanbul Tower", "tr-TR", "Turkish one niner"), "me": ("Dubai Tower", "ar-AE", "Emirates two zero one"),
     "fa": ("Tehran Tower", "fa-IR", "Iran Air seven one"), "il": ("Ben Gurion Tower", "he-IL", "El Al zero one"),
     "zh": ("Beijing Tower", "zh-CN", "Air China niner eight one"), "ja": ("Haneda Tower", "ja-JP", "Japan Air one one"),
-    "ko": ("Incheon Tower", "ko-KR", "Korean Air zero one seven"), "sea": ("Suvarnabhumi Tower", "th-TH", "Thai six one five"),
+    "ko": ("Incheon Tower", "ko-KR", "Korean Air zero one seven"), "sea": ("Noi Bai Tower", "vi-VN", "Vietnam Airlines two five four"),
+    "th": ("Suvarnabhumi Tower", "th-TH", "Thai six one five"), "carib": ("San Juan Tower", "es-PR", "JetBlue one five one"),
     "id": ("Soekarno-Hatta Tower", "id-ID", "Garuda eight seven"),
 }
 

@@ -1,5 +1,5 @@
 {
-"Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
+"Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "(16 or over).": "(16 jaar of ouder).",
 "(CC-BY-SA)": "(CC-BY-SA)",
 "(Class {0})": "(Klasse {0})",
@@ -1602,5 +1602,7 @@
 "No flight running": "Geen vlucht bezig",
 "Waiting for LocalTC on this PC...": "Wachten op LocalTC op deze pc...",
 "VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: alleen waar u heen gaat, als u ergens heen gaat. Bestemming leeg = een lokale vlucht, terug hierheen. De rest zegt u ATC over de radio (de uitvliegroute, flight following, het circuit).",
-"blank = a local flight": "leeg = een lokale vlucht"
+"blank = a local flight": "leeg = een lokale vlucht",
+"Caribbean": "Caribisch",
+"Thai": "Thais"
 }

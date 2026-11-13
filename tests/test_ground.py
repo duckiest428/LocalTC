@@ -1614,10 +1614,12 @@ def test_the_cabin_asking_to_speed_up_boarding_is_the_ramp_speeding_it_up():
     assert not crew().hurry_by_cabin("Boarding", 1.0)  # nothing under way
 
 
-def test_boarding_held_for_its_slot_gives_the_reason_to_the_cabin():
-    """ "Can we get boarding started?" got "the ramp can't do that now" (worded "waiting for the ramp to clear"), and
-    the ramp started it fifteen seconds later on the radio: now the turnaround's reason, and asked again it starts."""
+def test_boarding_asked_for_ahead_of_the_plan_starts_with_the_reason_for_the_cabin():
+    """ "Can we get boarding started?" was refused twice ("catering's still rolling") before it started: the captain's
+    call starts it, and the reason it would have waited is the cabin's to mention."""
     c = crew()
-    c.turnaround = type("T", (), {"hold": staticmethod(lambda service, t, ask=True: "Boarding's slot opens about 22:40.")})()
+    waived = []
+    c.turnaround = type("T", (), {"hold": staticmethod(lambda service, t, ask=True: "Boarding has to wait for catering."),
+                                  "waive": staticmethod(waived.append)})()
     said = c.called_by_cabin("Boarding", 0.0)
-    assert said == "Boarding's slot opens about 22:40."
+    assert said == "Boarding has to wait for catering." and c._queue == ["Boarding"] and waived == ["Boarding"]

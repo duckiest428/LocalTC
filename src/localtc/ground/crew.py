@@ -151,6 +151,7 @@ class RampCrew:
         self._gate_told = False
         self._hurried: set[str] = set()  # sped up through GSX's settings: put back when the service is over
         self._hurry_asked: list[str] = []  # the cabin crew asked for it
+        self._hurry_quiet: set[str] = set()  # ... and said so to the captain: the ramp says nothing more
         self.turnaround: Any = None  # the turnaround's timeline (turnaround_plan.Turnaround), wired by the app
         self._slot_wait: list[str] = []  # asked for ahead of their slot, or of what they wait on: called when they can come
         self._fuel_wanted = 0  # the fuel asked for, in percent, for when GSX asks
@@ -366,15 +367,20 @@ class RampCrew:
         return [self._speech("ack", t, list=self._name(service))]
 
     def called_by_cabin(self, service: str, t: float) -> bool | str:
-        """The cabin crew told to start boarding or deboarding: called without a word from the ramp. False: it can't be;
-        a reason (the turnaround's: "Boarding's slot ... opens about 22:40."): not yet, and asked again, it comes."""
+        """The cabin crew told to start boarding or deboarding: called without a word from the ramp. False: it can't be.
+        Ahead of the turnaround's plan, it starts all the same (the captain's call: asked three times at O'Hare before it
+        did), and the reason it would have waited is returned for the cabin to mention."""
         svc = self._service(service)
         if not self.parked or svc is None or svc.state == "unavailable":
             return False
-        if (reason := self._held(service, t)) is not None:
-            if service not in self._slot_wait:
-                self._slot_wait.append(service)
-            return reason
+        early = self._held(service, t, ask=False)
+        if early is not None and self.turnaround is not None:
+            self.turnaround.waive(service)
+        if service in self._slot_wait:
+            self._slot_wait.remove(service)
+        if not svc.active and service not in self._queue:
+            self._queue.append(service)
+        return early if early is not None else True
         if not svc.active and service not in self._queue:
             self._queue.append(service)
         return True
@@ -385,6 +391,7 @@ class RampCrew:
         if svc is None or not svc.active:
             return False
         self._hurry_asked.append(service)
+        self._hurry_quiet.add(service)
         return True
 
     def ask_for(self, service: str, t: float) -> list[Any]:
@@ -458,17 +465,23 @@ class RampCrew:
         if svc is None or not svc.active:
             return [self._speech("cancel_nothing", t, name=self._name(service))]
         if service in self._hurried:
-            return [self._speech("hurrying", t, name=self._name(service))]
+            quiet = service in self._hurry_quiet
+            self._hurry_quiet.discard(service)
+            return [] if quiet else [self._speech("hurrying", t, name=self._name(service))]
         if service in SPEEDS_UP and "settings" in self.state.capabilities:
             return [SpeedUp(service)]  # (``hurried`` says how that went)
         self._offer = ("finish", service)
         return [self._speech("cant_hurry", t, name=self._name(service))]
 
     def hurried(self, service: str, ok: bool, t: float) -> list[Any]:
-        """What came of asking GSX to speed it up (an older GSX, or no such setting: the offer to finish it instead)."""
+        """What came of asking GSX to speed it up (an older GSX, or no such setting: the offer to finish it instead).
+        Asked through the cabin crew, who answered the captain already: nothing from the ramp as well ("why did this even
+        reach the ramp?")."""
+        quiet = service in self._hurry_quiet
+        self._hurry_quiet.discard(service)
         if ok:
             self._hurried.add(service)
-            return [self._speech("hurrying", t, name=self._name(service))]
+            return [] if quiet else [self._speech("hurrying", t, name=self._name(service))]
         self._offer = ("finish", service)
         return [self._speech("cant_hurry", t, name=self._name(service))]
 

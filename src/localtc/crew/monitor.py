@@ -69,6 +69,7 @@ SAFETY, ROUTINE, CHATTER = 3, 2, 1
 ONLINE_ALERT = re.compile(r"^(\S+) connection for this airspace: (\S+), set ([\d.]+) on COM1")  # atc_core's "online" alert
 VERBOSITY = {"quiet": SAFETY, "standard": ROUTINE, "chatty": CHATTER}
 JOINED_PHASES = ("DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH", "LANDING", "TAXI_IN")  # LocalTC started in these: joined in flight
+BEACON_STEADY_S = 10.0  # the beacon on this long: on (not the sim's every-light-on first reading as a flight loads)
 GAP_S = 8.0  # between two of the copilot's own routine calls: a person, not a feed
 ROLLING_S = 3.0  # moving for this long: moving
 QUIET_AFTER_RADIO_S = 6.0  # routine calls wait this long after anything said on the radio
@@ -590,6 +591,7 @@ class Monitor(WatchMixin):
                 if a.altitude_ft and self.c.systems is not None and abs(self.c.systems.ap_altitude_sel - a.altitude_ft) > 50:
                     parts.append(f"initial {speech.altitude_display(a.altitude_ft)}")
                     cmds.append(Command("altitude", str(a.altitude_ft)))
+                    self.f.said["alt_set_to"] = float(a.altitude_ft)  # (set once: not again after takeoff)
                 if parts:
                     self._call("clearance_set", ROUTINE, t, f"{_cap(', '.join(parts))} set." if self.hands
                                else f"Don't forget {' and '.join(parts)}.", commands=tuple(cmds))
@@ -655,8 +657,17 @@ class Monitor(WatchMixin):
             v1 = self.perf.v1
             below = v1 and own.ias_kt < v1
             self._call("engine_failure_roll", SAFETY, t, "Engine failure! Below V1." if below else "Engine failure!")
-        if s.light_beacon and not was.light_beacon and own.on_ground and s.engines_running == 0                 and self.phase in (None, "PARKED") and self.f.landing_t is None:
-            self._prompt_checklist("before_start", t=t + 2)  # the beacon on: ready to push and start
+        if s.light_beacon and not was.light_beacon:
+            self.f.said["beacon_on"] = t
+        elif not s.light_beacon:
+            self.f.said.pop("beacon_on", None)
+        on_since = self.f.said.get("beacon_on")
+        if on_since is not None and t - on_since >= BEACON_STEADY_S and own.on_ground and s.engines_running == 0 \
+                and self.phase in (None, "PARKED") and self.f.landing_t is None:
+            # The beacon on, and staying on: ready to push and start. (The sim's first reading as a flight loads has
+            # every light on for a second: "before start checklist?" was asked six seconds in.)
+            self.f.said.pop("beacon_on", None)
+            self._prompt_checklist("before_start", t=t + 2)
         if s.engines_running > was.engines_running and own.on_ground and self.phase in (None, "PARKED", "PUSHBACK"):
             self._prompt_checklist("after_start", t=t + 20.0)
             self.fuel_check_from = t  # checked once the fuel stops going up (a refuel still running isn't "under")
@@ -1017,7 +1028,12 @@ class Monitor(WatchMixin):
         if target != self.cleared_alt:
             self.cleared_alt, self.captured, self.off_since = target, None, None
             self.cleared_alt_t = t
-            if target and self.hands and s is not None and abs(s.ap_altitude_sel - target) > 50 and self.f.takeoff_t is not None:
+            # Set already for this clearance (the initial altitude, at the clearance): not again. An aircraft whose
+            # selector reads 0 (the A321's) had "6,000 set" said a second time after takeoff.
+            already = self.f.said.get("alt_set_to") == float(target or 0)
+            if target and self.hands and s is not None and abs(s.ap_altitude_sel - target) > 50 and self.f.takeoff_t is not None \
+                    and not already:
+                self.f.said["alt_set_to"] = float(target)
                 self._call(f"set_alt:{target}", ROUTINE, t, f"{speech.altitude_display(target)} set.",
                            commands=(Command("altitude", str(target)),),
                            valid=lambda: st.assignments.altitude_ft == target)  # (another since: that one instead)

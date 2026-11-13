@@ -799,3 +799,20 @@ def test_an_urgent_call_straight_after_the_users_is_break_break_and_waits_for_no
     engine.state.comms.last_atc_t = t - 600
     vacate = engine.traffic_call("UAL532", "vacate", tower.airport, "16R", t + 120)
     assert vacate and "contact" in vacate[-1].text and "Ground" in " ".join(c.text for c in vacate + engine._later)
+
+
+def test_a_real_flight_flying_on_top_of_the_user_is_taken_out_of_the_way():
+    """JetBlue 1903 flew San Juan's final a tenth of a mile from the user, level with it, to the runway."""
+    import msgspec
+
+    atc = Atc()
+    m = manager(atc.link())
+    m.on_own(msgspec.structs.replace(own(), lat=0.3, on_ground=False, alt_msl_ft=3000.0, alt_indicated_ft=3000.0, alt_agl_ft=2900.0,
+                     gs_kt=180.0))
+    m.on_feed([flight(lat=0.301, lon=0.0, alt=3100, track=180.0)], "adsb.lol", NOW)
+    out = []
+    for i in range(3):
+        out += m.tick(NOW + i)
+        assign(m, out, NOW + i)
+    assert not [p for p in m.planes.values() if p.mode == "live" and p.object_id is not None]
+    assert of(RemoveAiAircraft, out)

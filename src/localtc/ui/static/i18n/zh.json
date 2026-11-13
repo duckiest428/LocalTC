@@ -1,5 +1,5 @@
 {
-"Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
+"Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "(16 or over).": "（16 岁及以上）。",
 "(CC-BY-SA)": "(CC-BY-SA)",
 "(Class {0})": "（{0} 类）",
@@ -1602,5 +1602,7 @@
 "No flight running": "没有进行中的飞行",
 "Waiting for LocalTC on this PC...": "正在等待本机上的 LocalTC...",
 "VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR：只填目的地（如果有）。目的地留空 = 本场飞行，返回此处。其余的通过无线电告诉管制（离场方向、飞行跟踪、起落航线）。",
-"blank = a local flight": "留空 = 本场飞行"
+"blank = a local flight": "留空 = 本场飞行",
+"Caribbean": "加勒比口音",
+"Thai": "泰国口音"
 }

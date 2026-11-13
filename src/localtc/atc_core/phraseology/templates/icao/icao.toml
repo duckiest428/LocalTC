@@ -272,3 +272,9 @@ pilot_readback = "Cleared {approach} approach, {station} {frequency} when establ
 id = "tower.land_after_departure"
 text = ["{callsign}, behind the departing {message}, runway {runway}, wind {wind}, cleared to land."]
 pilot_readback = "Behind the departing traffic, cleared to land runway {runway}, {callsign_short}."
+
+# A field with no tower, no radio of its own: ICAO has no "advisory frequency", only the change approved.
+[[template]]
+id = "approach.advisory"
+text = ["{callsign}, no reported traffic, wind {wind}, frequency change approved."]
+pilot_readback = "Frequency change approved, {callsign_short}."

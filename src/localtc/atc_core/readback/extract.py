@@ -256,6 +256,19 @@ def _dropped_digit(text: str, expected: Any) -> bool:
     return any(want[:i] + want[i + 1:] == heard for i in range(len(want)))
 
 
+def _doubled_digit(text: str, expected: Any) -> bool:
+    """ "120.555" for 120.55: speech-to-text saying one digit of the expected frequency twice ("O'Hare Tower on 120.555"
+    got "switch to 120.55", and the pilot had said it right)."""
+    try:
+        want = f"{float(expected):.3f}".rstrip("0").rstrip(".").replace(".", "")
+    except (TypeError, ValueError):
+        return False
+    heard = text.replace(".", "").replace(",", "")
+    if not heard.isdigit() or len(heard) != len(want) + 1:
+        return False
+    return any(heard[:i] + heard[i + 1:] == want and heard[i] == heard[i - 1] for i in range(1, len(heard)))
+
+
 def _with_to(text: str, expected: Any) -> bool:
     """ "121.02" for 121.0: the frequency and the "to" after it ("121.0 to Montreal Ground") run together; "121.01"
     the same with "one" or "on" ("121.0, on ground, ready")."""
@@ -274,6 +287,8 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
         if i > 0 and tokens[i - 1].text in ("squawk", "code", "runway", "maintain", "heading", "expect", "level", "climbing"):
             continue
         if expected is not None and _with_to(token.text, expected):
+            found.append(float(expected))
+        elif "." in token.text and expected is not None and _doubled_digit(token.text, expected):
             found.append(float(expected))
         elif (value := _as_frequency(token.text)) is not None:
             found.append(value)

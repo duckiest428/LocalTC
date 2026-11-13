@@ -331,7 +331,7 @@ def test_the_chime_and_the_music_are_the_real_recordings():
     from localtc.dsp.cabin import music_tracks
 
     tracks = music_tracks()
-    assert len(tracks) == 6 and "boarding.ogg" in tracks  # "Airport Lounge" and five more, one a flight
+    assert len(tracks) == 5 and "boarding.ogg" in tracks  # "Airport Lounge" and four more, one a flight
     lengths = {round(len(music := boarding_music(rate, seed=i)) / rate) for i in range(len(tracks))}
     assert len(lengths) == len(tracks) and min(lengths) > 100 and np.max(np.abs(music)) <= 0.51  # each a different one
 

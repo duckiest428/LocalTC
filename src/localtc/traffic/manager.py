@@ -217,6 +217,8 @@ TAKEOVER_AGL = 1200.0
 HANDBACK_AGL = 1500.0
 HANDBACK_NM = 3.0
 KEPT_OFF_S = 180.0  # a live flight taken off the user's runway isn't made again for this long (it's moved on by then)
+CONFLICT_NM = 1.0  # a live flight this close to the user in the air ...
+CONFLICT_FT = 1000.0  # ... and this close in height is in the user's way: sent around on their final, else taken away
 SPOT_LEAVE_M = 20.0  # one on its stand leaves it (pushed back) only when the real one is this far off it and moving
 # An arrival stays on its stand this long whatever the real one does: still taxiing in behind LocalTC's (it was parked
 # first), stopping and going again on the way, its position wandering at the gate. Every one of them was a pushback.
@@ -1280,7 +1282,7 @@ class TrafficManager:
 
     def _atc(self, now: float) -> list[Any]:
         """The user has the runway: real flights about to use it are sent around or held short."""
-        out: list[Any] = []
+        out: list[Any] = self._in_the_way(now)
         user = self.atc.user_runway()
         if user is not None:
             self._user_runway, self._user_runway_t = user, now
@@ -1328,6 +1330,39 @@ class TrafficManager:
         for plane in [p for p in self.planes.values() if p.mode == "hold" and p.local is not None]:
             if runway.contains(geo.xy(plane.local.lat, plane.local.lon), 5.0):
                 self._did(f"{plane.callsign} taken off your runway {end.ident}")
+                self._kept_off[plane.key] = now + KEPT_OFF_S
+                out += self._remove(plane)
+        return out
+
+    def _in_the_way(self, now: float) -> list[Any]:
+        """A real flight flying where the user is: JetBlue 1903 flew San Juan's final a tenth of a mile from the user,
+        level with it, all the way to the runway (the real one landing at the same moment). Real positions can't be
+        moved: on the user's final behind it, sent around; anywhere else, taken away (back from the live data once
+        it's clear)."""
+        own = self.own
+        out: list[Any] = []
+        if own is None or own.on_ground:
+            return out
+        for plane in list(self.planes.values()):
+            if plane.mode not in ("live", "landing") or plane.flight is None or plane.object_id is None:
+                continue
+            loc = plane.local
+            lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if plane.mode == "landing" and loc is not None \
+                else self._where(plane, now)
+            if (plane.mode == "landing" and loc is not None and loc.on_ground) or plane.flight.on_ground:
+                continue
+            if haversine_nm(lat, lon, own.lat, own.lon) > CONFLICT_NM or abs(alt - own.alt_msl_ft) > CONFLICT_FT:
+                continue
+            icao = self._near_airport(lat, lon, FINAL_NM + 3)
+            geo = self._geo(icao) if icao else None
+            final = geo.final_approach(lat, lon, hdg, max_distance_nm=FINAL_NM) if geo is not None else None
+            mine = geo.final_approach(own.lat, own.lon, own.hdg_true, max_distance_nm=FINAL_NM) if geo is not None else None
+            behind = final is not None and mine is not None and final.end.runway is mine.end.runway \
+                and final.distance_nm >= mine.distance_nm
+            if behind:
+                out += self._go_around(plane, geo, mine.end, now)
+            else:
+                self._did(f"{plane.callsign or 'A flight'} taken away: in your way")
                 self._kept_off[plane.key] = now + KEPT_OFF_S
                 out += self._remove(plane)
         return out
@@ -1946,9 +1981,16 @@ class TrafficManager:
             out_call = []
         own = self.own
         limit = None
+        geo = self._geo(loc.runway[0]) if loc.runway is not None else None
         if own.on_ground and follow.index > follow.exit_index and (closest := self._closing(
                 loc.lat, loc.lon, loc.hdg, own, max(loc.gs_kt, 8.0))) is not None and closest < GIVE_WAY_M:
             limit = 0.0  # the user ahead: it slows and waits
+        elif geo is not None and follow.index > follow.exit_index:
+            # Off its own runway, its way in crossing the one the user has (cleared for takeoff, lined up, landing):
+            # held short of it. United's taxi in crossed O'Hare's 27L in front of a departure cleared for takeoff.
+            ahead = advance(loc.lat, loc.lon, loc.hdg, 40.0 / 0.5144, 0.0, 1.0)
+            if self._users_runway_at(geo, *ahead[:2], now) and not self._users_runway_at(geo, loc.lat, loc.lon, now):
+                limit = 0.0
         loc.lat, loc.lon, loc.hdg, loc.gs_kt = follow.step(loc.lat, loc.lon, limit_kt=limit)
         loc.on_ground, loc.vs_fpm = True, 0.0
         loc.alt_ft = self._elev(loc.lat, loc.lon)

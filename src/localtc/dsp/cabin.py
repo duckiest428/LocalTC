@@ -8,8 +8,9 @@ cabin crew are heard on the flight deck.
 - The **chimes** (``chime``): a real airliner's cabin chime (sounds/chime.ogg: "Airplane Chime Sound Effect" by
   Sharelk, CC0). ``pa`` and ``call`` are its high-low pair, ``seatbelt`` its low note alone, as the sign's is.
 - The **boarding music** (``boarding_music``): a different track each flight, all by Kevin MacLeod (incompetech.com),
-  licensed under Creative Commons: By Attribution 3.0: "Airport Lounge", "Lobby Time", "Local Forecast - Elevator",
-  "Bossa Antigua", "Smooth Lovin" and "Easy Lemon" (sounds/boarding*.ogg), through the cabin speakers.
+  licensed under Creative Commons: By Attribution 3.0: "Airport Lounge", "Lobby Time", "Bossa Antigua", "Smooth Lovin"
+  and "Easy Lemon" (sounds/boarding*.ogg), through the cabin speakers. ("Local Forecast - Elevator" went: lift music,
+  it didn't suit a cabin.)
 
 Both recordings come from ``tools/make_cabin_sounds.py`` and are decoded with PyAV (Whisper's own dependency); where
 they can't be, the chime is made from struck bars and the music from a soft progression on a piano and a pad.

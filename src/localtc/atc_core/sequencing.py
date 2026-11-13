@@ -224,10 +224,11 @@ class SequenceMixin:
 
     # --- side-step --------------------------------------------------------------------------------------------------
 
-    def _visual_weather(self: Any) -> bool:
+    def _visual_weather(self: Any, *, aboard: bool = True) -> bool:
+        """The destination's weather good enough for a visual; ``aboard``: and the aircraft out of cloud now."""
         weather = self.weather.surface(self.state.flight.destination or "", self.tracker.context_builder.airports)
         own = self.state.aircraft
-        if own is not None and own.in_cloud:
+        if aboard and own is not None and own.in_cloud:
             return False
         if weather is None:
             return True
@@ -303,7 +304,9 @@ class SequenceMixin:
         if given is None or given.kind != "VISUAL" or "approach" in st.clearances or not self._works_approach(own):
             return False
         distance = self.tracker.context.destination_distance_nm
-        if distance is None or distance > 60 or self._visual_weather():
+        # (The field's weather, not a cloud the aircraft passes through: Tarama's "gone below visual minimums" was a
+        # cloud at 3,000 feet.)
+        if distance is None or distance > 60 or self._visual_weather(aboard=False):
             return False
         geo = self.geometry(st.flight.destination)
         end = geo.end(given.runway) if geo is not None else None

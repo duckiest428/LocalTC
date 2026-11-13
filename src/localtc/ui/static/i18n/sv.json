@@ -1,5 +1,5 @@
 {
-"Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Local Forecast - Elevator\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
+"Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).": "Music: \"Airport Lounge\", \"Lobby Time\", \"Bossa Antigua\", \"Smooth Lovin\", \"Easy Lemon\", Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0. Chime: \"Airplane Chime Sound Effect\" by Sharelk (CC0).",
 "(16 or over).": "(16 år eller äldre).",
 "(CC-BY-SA)": "(CC-BY-SA)",
 "(Class {0})": "(Klass {0})",
@@ -1602,5 +1602,7 @@
 "No flight running": "Ingen flygning pågår",
 "Waiting for LocalTC on this PC...": "Väntar på LocalTC på den här datorn...",
 "VFR: only where you're going, if anywhere. Blank destination = a local flight, back here. Tell ATC the rest on the radio (the way out, flight following, the pattern).": "VFR: bara vart du ska, om någonstans. Tom destination = en lokal flygning, tillbaka hit. Resten säger du till ATC på radion (utflygningen, flight following, varvet).",
-"blank = a local flight": "tomt = en lokal flygning"
+"blank = a local flight": "tomt = en lokal flygning",
+"Caribbean": "Karibisk",
+"Thai": "Thailändsk"
 }

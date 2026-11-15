@@ -326,6 +326,31 @@ def test_a_shortcut_is_never_to_the_destination_or_into_the_filed_star():
     assert fix in ("CHRLY", "DELTA") and engine._scheduled[-1].instruction_id == "common.direct"
 
 
+def test_turned_back_in_the_cruise_no_direct_to_a_fix_behind_and_asked_for_intentions():
+    """An A350's autopilot went over the Atlantic and it flew back west: the centres gave "direct EBMOS" and "direct
+    MOBUB", the route's first fixes, and never asked what it was doing."""
+    from localtc.atc_core.route import RouteFix
+
+    engine = engine_at_kbfi()
+    engine.state.flight.destination = "KBFI"
+    engine.route = type(engine.route)((
+        RouteFix("ALPHA", 45.0, -122.0, via="DCT"), RouteFix("BRAVO", 46.0, -118.0, via="DCT"),
+        RouteFix("CHRLY", 47.0, -114.0, via="DCT"), RouteFix("DELTA", 48.0, -110.0, via="DCT")))
+    engine.state.phase = "CRUISE"
+    engine._checked_in.add(CENTER.station)
+    east = _own(engine, 50.0, lat=46.6, lon=-115.5, hdg_true=70.0, on_ground=False, alt=36000.0)
+    engine.state.aircraft = east
+    points = engine._route_points()
+    assert points[engine._next_fix(east, points)][0] == "CHRLY"
+    back = _own(engine, 60.0, lat=46.5, lon=-117.0, hdg_true=250.0, on_ground=False, alt=36000.0)
+    assert points[engine._next_fix(back, points)][0] != "ALPHA"  # turned round: ALPHA is ahead, but long flown
+    off = _own(engine, 70.0, lat=48.5, lon=-117.0, hdg_true=250.0, on_ground=False, alt=36000.0)  # 100 miles north
+    engine.state.aircraft = off
+    assert engine._off_course(off, CENTER)
+    assert engine._scheduled[-1].instruction_id == "center.off_course"
+    assert not engine._off_course(off, CENTER)  # (not again straight away)
+
+
 def test_approachs_speeds_go_by_the_stars_published_ones():
     """Speeds were given on every approach. Not while flying the STAR (its own speeds), and on vectors never faster
     than the STAR's last published speed (the sim's navdata)."""

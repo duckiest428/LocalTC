@@ -54,6 +54,7 @@ from localtc.sim_api import (
     AircraftVars,
     AtcTransmission,
     CopilotEvent,
+    GroundStatus,
     CrewAction,
     CrewSpeech,
     IntercomHeard,
@@ -320,6 +321,8 @@ class PilotMonitoring:
                 self.cockpit.systems = self._as_read(self._raw_systems)
                 self.monitor.observe(self.cockpit.systems)  # the monitor sees the switches move too
             self.cockpit.watch()
+        elif isinstance(ev, GroundStatus):
+            self.monitor.gsx = ev.provider == "gsx" and ev.connected  # (the push's brake calls are the ramp's then)
         elif isinstance(ev, PhaseChanged):
             self._note(ev.t, f"phase now {ev.phase.lower().replace('_', ' ')}")
         elif isinstance(ev, AircraftIdentity):

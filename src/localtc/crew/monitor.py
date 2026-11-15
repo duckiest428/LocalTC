@@ -98,6 +98,7 @@ ALTIMETER_SAID = re.compile(r"\baltimeter (\d{2})\.?(\d{2})\b|\bQNH (\d{3,4})\b"
 HANDOFF_LATE_S = 180.0  # not on the new frequency this long after a handoff: said (after a minute, it nagged)
 READBACK_LATE_S = 18.0
 TAXI_SPEED_MARGIN_KT = 5.0  # a knot or two over the taxi limit isn't worth a word
+TAXI_SPEED_REAL_KT = 60.0  # faster than this off a runway is the aircraft being moved (GSX, a slew), not the taxi
 TAXI_RUNWAY_M = 60.0  # this close to a runway's edge, closing on it: hold short
 TOD_WARN_MIN = 10.0
 FUEL_WINDOW_S = 900.0  # the cruise burn: fuel used over this long
@@ -112,6 +113,9 @@ FUEL_LAST_H = 1.0  # the projections to landing only this close to the destinati
 # ... unless the shortfall is past any guess: short by more than this share of the fuel still to burn (an A380 that
 # left Seattle without the fuel for Dubai heard of it with 10,000 pounds left, an hour from running dry)
 FUEL_FAR_DOUBT = 0.08
+# Each hour still to fly, the projection is that much more doubtful: the burn falls as the fuel goes (some 3% an hour on
+# a long haul), so the early cruise's burn carried over eleven hours had an A350 out of Montreal "landing with 0".
+FUEL_DOUBT_PER_H = 0.03
 STALL_BELIEF = 1.15  # the sim's stall warning taken for one below this many times the design stall speed
 SPEED_AGAIN_S = 45.0  # a flap or gear overspeed said again this often while it lasts
 LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
@@ -727,8 +731,10 @@ class Monitor(WatchMixin):
             self._turnaround_late(t)
             if self.phase == "PUSHBACK":
                 self.f.said.setdefault("pushed", t)  # pushed back: the brake set after it is the end of the push
+            # Not with GSX doing the push: its brake stays set until the tug's on, and the ramp says when to let it go
+            # (at Montreal the copilot's "parking brake's still set" came with the tug minutes away).
             if self._cleared("pushback") and own.parking_brake and own.gs_kt < 0.5 and not self._said("push_brake") \
-                    and self.phase in (None, "PARKED") and "pushed" not in self.f.said:
+                    and self.phase in (None, "PARKED") and "pushed" not in self.f.said and not getattr(self, "gsx", False):
                 when = self.f.said.get("pushback_seen") or self.f.said.setdefault("pushback_seen", t)
                 if t - when > PUSH_BRAKE_S:  # a tug takes its time (GSX: minutes): not a nag 10 s after the approval
                     self._call("push_brake", ROUTINE, t, "We're cleared to push; parking brake's still set.")
@@ -908,7 +914,8 @@ class Monitor(WatchMixin):
         if self.phase == "TAXI_IN" and "rolled_out" in self.f.said and not own.on_runway and not self._said("after_landing"):
             self._after_landing(t)
         # Taxiing.
-        if self.phase in ("TAXI_OUT", "TAXI_IN") and own.gs_kt > p.taxi_max_kt + TAXI_SPEED_MARGIN_KT and not own.on_runway:
+        if self.phase in ("TAXI_OUT", "TAXI_IN") and p.taxi_max_kt + TAXI_SPEED_MARGIN_KT < own.gs_kt < TAXI_SPEED_REAL_KT \
+                and not own.on_runway:  # (234 knots at the gate was GSX moving it, not the taxi)
             self._call("taxi_speed", ROUTINE, t, [f"Watch the speed, {own.gs_kt:.0f} knots.", f"Bit quick, {own.gs_kt:.0f} knots."], again_s=60)
         if self.phase in ("TAXI_OUT", "TAXI_IN", "PUSHBACK") and own.gs_kt > 3:
             self._runway_ahead(own, t)
@@ -918,7 +925,9 @@ class Monitor(WatchMixin):
             rwy = geo.runway_at(own.lat, own.lon) if geo is not None else None
             end = rwy.end_for_heading(own.hdg_true, 15.0) if rwy is not None else None
             cleared = st.assignments.departure_runway
-            if end is not None and cleared and end.ident != cleared and (self._cleared("takeoff") or self._cleared("line_up")):
+            turning = abs(((own.hdg_true - prev.hdg_true + 540) % 360) - 180) / max(own.t - prev.t, 0.1) > 2.5
+            if end is not None and cleared and end.ident != cleared and not turning \
+                    and (self._cleared("takeoff") or self._cleared("line_up")):  # (not swinging through it onto the right one)
                 self._call(f"wrong_runway:{end.ident}", SAFETY, t, f"Wrong runway! We're on {end.ident}, cleared for {cleared}.")
             elif end is not None and end.ident == cleared and own.gs_kt < 15:
                 self._call(f"lined_up:{end.ident}", ROUTINE, t, f"Runway {end.ident}, checked.")
@@ -1196,7 +1205,8 @@ class Monitor(WatchMixin):
             to_burn = landing_burn(burn, to_go, tod_nm, own.gs_kt)
             at_landing = own.fuel_lb - to_burn
             reserve = self.perf.reserve_fuel_lb or burn * FINAL_RESERVE_H
-            if at_landing < reserve and (last_hour or at_landing + FUEL_FAR_DOUBT * to_burn < reserve):
+            doubt = FUEL_FAR_DOUBT + FUEL_DOUBT_PER_H * to_go / own.gs_kt
+            if at_landing < reserve and (last_hour or at_landing + doubt * to_burn < reserve):
                 landing, final = self._fuel(max(at_landing, 0)), self._fuel(reserve)
                 where = "right at" if landing == final else "under"  # "2,500 kilos, under the final reserve of 2,500"
                 self._call("fuel_reserve", SAFETY, t, f"Fuel: at this burn we'd land with about {landing}, "

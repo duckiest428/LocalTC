@@ -34,6 +34,10 @@ SHORTCUT_MAX_NM = 250.0  # the fix given direct is no further than this
 SHORTCUT_EVERY_S = 900.0
 SHORTCUT_MIN_FIXES = 2  # the fix skipped to is at least this many down the route
 HAZARD_AHEAD_NM = 150.0  # hazards on the route this far ahead are told
+FIX_REACHED_NM = 20.0  # this close to one of the route's fixes in the air: reached, the route's progress past it
+OFF_COURSE_NM = 30.0  # this far off the route in the cruise, nothing given to explain it: "say intentions"
+OFF_COURSE_AGAIN_S = 600.0
+OFF_COURSE_MAX = 3  # times one controller asks
 HAZARD_LEVEL_MARGIN_FT = 2000
 AVOID_KINDS = ("tfr", "restricted", "prohibited", "danger")
 CONVECTIVE = ("TS", "CONVECTIVE", "TC", "CB")
@@ -146,16 +150,66 @@ class RoutingMixin:
         return fixes
 
     def _next_fix(self, own: OwnshipState, points: list[tuple[str, float, float]]) -> int | None:
-        """The route's next fix ahead of the aircraft (the first one not behind it)."""
+        """The route's next fix ahead of the aircraft (the first one not behind it), never one before a fix it has
+        already had ahead of it in the air: an A350 turned back over the Atlantic (its autopilot gone) was given
+        "direct EBMOS" and "direct MOBUB", the route's first fixes, back over Quebec."""
         if not points:
             return None
+        floor = self._track_route(own, points)
         best, best_d = None, math.inf
         for i, (_, lat, lon) in enumerate(points):
+            if i < floor:
+                continue
             d = _nm(own.lat, own.lon, lat, lon)
             ahead = abs(((_bearing(own.lat, own.lon, lat, lon) - own.hdg_true + 540) % 360) - 180) < 100
             if ahead and d < best_d:
                 best, best_d = i, d
-        return best
+        return best if best is None or best >= floor else None
+
+    def _track_route(self, own: OwnshipState, points: list[tuple[str, float, float]] | None = None) -> int:
+        """The route's progress: the last of its fixes the aircraft has flown within ``FIX_REACHED_NM`` of, in the air
+        (only fixes really reached: the nearest "ahead" while turning was 1,400 miles down the route). Kept up every
+        second (``_monitor``), so none is flown by unseen; on the ground, 0."""
+        if own.on_ground:
+            return 0
+        points = self._route_points() if points is None else points
+        floor = getattr(self, "_route_reached", 0)
+        for i in range(floor, len(points)):
+            if _nm(own.lat, own.lon, points[i][1], points[i][2]) < FIX_REACHED_NM:
+                floor = i
+        self._route_reached = floor
+        return floor
+
+    def _off_route_nm(self, own: OwnshipState) -> float | None:
+        """How far the aircraft is from the rest of its route (the leg before the next fix and every one after), or
+        None with no route to go by."""
+        points = self._route_points()
+        floor = getattr(self, "_route_reached", 0)
+        legs = points[floor:]
+        if len(legs) < 2:
+            return None
+        return min(_leg_nm(own.lat, own.lon, a[1], a[2], b[1], b[2]) for a, b in zip(legs, legs[1:]))
+
+    def _off_course(self, own: OwnshipState, facility: "Facility") -> bool:
+        """In the cruise, well off the route with nothing given to explain it (no heading, direct, deviation or
+        reroute): "say intentions", and again every ``OFF_COURSE_AGAIN_S`` while it stays off."""
+        st, t = self.state, own.t
+        if facility.controller != "center" or st.pending is not None or P(st.phase) is not P.CRUISE or self._vfr \
+                or st.assignments.heading is not None or self._holding() or self.diversion.target is not None \
+                or any(a.state == "active" for a in self.amendments) \
+                or t - getattr(self, "_off_course_t", -math.inf) < OFF_COURSE_AGAIN_S:
+            return False
+        off = self._off_route_nm(own)
+        if off is None or off < OFF_COURSE_NM:
+            return False
+        told = self.__dict__.setdefault("_off_course_told", {})
+        if told.get(facility.station, 0) >= OFF_COURSE_MAX:
+            return False  # asked three times, nothing heard: left (it went on for hours)
+        told[facility.station] = told.get(facility.station, 0) + 1
+        self._off_course_t = t
+        self._schedule(t, "center.off_course", {"distance": int(round(off))}, facility, delay=False,
+                       expects_readback=False)
+        return True
 
     def _fix_passed(self, own: OwnshipState, fix: str) -> bool:
         """The route's ``fix`` is behind the aircraft now (or it's over it)."""
@@ -415,6 +469,17 @@ def _segments_cross(p1, p2, q1, q2) -> bool:
     d1, d2 = orient(q1, q2, p1), orient(q1, q2, p2)
     d3, d4 = orient(p1, p2, q1), orient(p1, p2, q2)
     return (d1 > 0) != (d2 > 0) and (d3 > 0) != (d4 > 0)
+
+
+def _leg_nm(lat: float, lon: float, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance from a point to the leg between two others (flat, around the point: plenty for tens of miles)."""
+    k = math.cos(math.radians(lat))
+    ax, ay = (lon1 - lon) * 60 * k, (lat1 - lat) * 60
+    bx, by = (lon2 - lon) * 60 * k, (lat2 - lat) * 60
+    dx, dy = bx - ax, by - ay
+    length = dx * dx + dy * dy
+    u = 0.0 if length == 0 else max(0.0, min(1.0, -(ax * dx + ay * dy) / length))
+    return math.hypot(ax + u * dx, ay + u * dy)
 
 
 def _nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

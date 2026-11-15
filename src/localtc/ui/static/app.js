@@ -400,8 +400,10 @@ function clearWhite(img) {
       const i = stack.pop();
       if (seen[i]) continue;
       seen[i] = 1;
-      if (!white(i)) continue;
-      px[i * 4 + 3] = 0;
+      if (px[i * 4 + 3] > 0) {  // (see-through already: passed through to the white beyond it)
+        if (!white(i)) continue;
+        px[i * 4 + 3] = 0;
+      }
       const x = i % w, y = (i - x) / w;
       if (x > 0) stack.push(i - 1);
       if (x < w - 1) stack.push(i + 1);

@@ -41,6 +41,7 @@ from localtc.sim_api import (
 CopilotMode = Literal["assist", "full"]
 QUIET_S = 4.0  # radio silence before the copilot starts a call of its own
 AFTER_PUSH_S = 45.0  # pushed back and stopped: this long (engines going) before "ready to taxi"
+STARTED_AT_GATE_S = 20.0  # started up at the gate without a push: this long after, "ready to taxi" all the same
 MAX_REPEATS = 2  # the same words twice in a row; a third time won't go better
 REPEAT_WINDOW_S = 120.0  # the same words again after this long are a new call, not a repeat
 CORRECTING = ("common.negative", "common.read_back", "common.confirm")  # ATC named what was wrong
@@ -259,6 +260,7 @@ class Copilot(CallWords):
         self._beacon = self._taxi_light = False  # the crew's own signs they're ready: push and start, then taxi
         self._lights_known = False  # no light switches from the sim (an older recording): ready when cleared
         self._engines: int | None = None  # engines running (None: not reported)
+        self._engines_on_t: float | None = None  # when they last came on
         self._pushed_t: float | None = None  # when the pushback ended (stopped after it)
         self._checked_in: tuple[float, Facility, int] | None = None  # a check-in waiting for ATC's word, and the tries
         self._last_tuned: Facility | None = None  # the frequency before the last handoff (to go back to)
@@ -294,6 +296,8 @@ class Copilot(CallWords):
                 self._alts.pop(0)
         if isinstance(event, AircraftSystems):
             self._beacon, self._taxi_light, self._lights_known = event.light_beacon, event.light_taxi, True
+            if event.engines_running and not self._engines:
+                self._engines_on_t = event.t  # (when they came on: started at the gate, the taxi follows)
             self._engines = event.engines_running
         elif isinstance(event, ReadbackEvaluated):
             self._evaluated[event.instruction_id] = event
@@ -488,9 +492,13 @@ class Copilot(CallWords):
             elif self._needs_pushback() and "pushback" not in st.clearances and not pushed:
                 if ready or self._beacon or self.deck.take_want("pushback", t):
                     self._call_once("pushback", engine.facility("ground"), t, self._pushback_request)
-            elif ready or self._taxi_light or self.deck.take_want("taxi", t) or (
-                    self._beacon and ("pushback" in st.clearances or not self._needs_pushback())):
-                self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
+            elif (wanted := self.deck.take_want("taxi", t)) or not (self._needs_pushback() and not pushed) \
+                    or (self._engines and self._engines_on_t is not None and t - self._engines_on_t >= STARTED_AT_GATE_S) \
+                    or not self._lights_known:  # (nothing to tell a push by: as before)
+                # (The push approved and not yet pushed: the taxi after it, unless asked for. Montreal got "ready to
+                # taxi" with the tug still coming.)
+                if wanted or ready or self._taxi_light or (self._beacon and not self._needs_pushback()):
+                    self._call_once("taxi", engine.facility("ground"), t, self._taxi_request)
         elif (phase == "TAXI_OUT" or (phase == "PUSHBACK" and "pushback" not in st.clearances)) and self._departure_cleared() \
                 and "taxi" not in st.clearances:
             # Moving already without a taxi clearance (pushed on the captain's own word): the crew is ready. Being

@@ -1936,6 +1936,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """Automatic ATC calls and alerts that don't wait for the pilot."""
         st, ctx, t = self.state, self._dest_context(), own.t  # (a final at another airfield is not the approach)
         out: list[BusEvent] = []
+        if self.route and self.route.fixes:
+            self._track_route(own)  # the fixes flown by, every second (``_next_fix`` never offers one before them)
         if own.squawk == "7700" and "squawk_7700" not in st.flags:
             st.flags.add("squawk_7700")
             out.append(self._alert(t, "emergency", "squawking 7700"))
@@ -1994,6 +1996,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     or (ifr and self._watch_amendments(own, tuned_facility)) \
                     or (ifr and self.cfg.unscripted and self._flow_watch(own, tuned_facility)) \
                     or (ifr and self._hazards_ahead(own, tuned_facility) if tuned_facility is not None else False) \
+                    or (ifr and self._off_course(own, tuned_facility) if tuned_facility is not None else False) \
                     or (ifr and self._radar_vectors(own)) or self._traffic_advisory(own) \
                     or (ifr and self._altitude_check(own)) or (ifr and self._heading_check(own)):
                 return out

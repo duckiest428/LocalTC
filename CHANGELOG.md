@@ -146,6 +146,22 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **A flight that turns back:** the centres no longer give "direct" to fixes the flight has already flown (an
+  autopilot lost over the Atlantic brought "direct EBMOS" and "direct MOBUB", the route's first fixes), and a flight
+  30 miles off its route in the cruise with nothing given to explain it is asked for its intentions.
+- **The push that never came:** once the push is called, GSX's "attach pushback tug?" is answered yes (it was
+  answered no, as while boarding, and the aircraft sat at the gate until the pilot pushed in GSX by hand); GSX's
+  questions and the crew's answers are in the log.
+- **The taxi after the push:** with a pushback to come, the copilot asks for taxi once pushed, not as soon as the
+  push is approved; and with GSX doing the push it no longer says the parking brake's still set (GSX wants it set
+  until the tug's on, and the ramp says when).
+- **The cabin's announcements, spread out again:** the exit rows on their own, a while after the welcome; the
+  safety demonstration once the aircraft really moves (GSX's push called isn't moving) and a while after that.
+- **Moved at the gate:** GSX moving the aircraft in jumps isn't the taxi ("watch the speed, 234 knots" at the
+  stand), and a U-turn onto the runway at 30 knots isn't a takeoff roll, nor the copilot's "wrong runway".
+- **Fuel a long way out:** the projection to landing allows for the burn falling as the fuel goes; an A350 ten
+  hours from Dubai was told it would land with nothing.
+- **The airline's logo** has no white card behind it.
 - **No instruction before the check-in:** departure and the centres give the next climb only once you've called them
   (one gave "climb and maintain 11,000" the moment you tuned in); a flight quiet on a centre's frequency is called by
   it after 45 seconds, as departure and approach already did. That also stops a flight being kept at 17,000 with no

@@ -136,6 +136,13 @@ text = ["{callsign}, turn {turn} heading {heading}, {message}, when able proceed
 readback = { required = ["heading"], optional = ["fix"] }
 pilot_readback = "Turn {turn} heading {heading}, then direct {fix}, {callsign_short}."
 
+# Well off the route in the cruise, with nothing given that would explain it.
+[[template]]
+id = "center.off_course"
+controller = "center"
+text = ["{callsign}, I show you {distance} miles off your route, say intentions.",
+        "{callsign}, you appear to be off course, {distance} miles from your route, verify your routing."]
+
 # A deviation for weather going on a long time.
 [[template]]
 id = "center.advise_direct"

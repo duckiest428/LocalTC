@@ -742,13 +742,21 @@ class RampCrew:
                 return [Pick(choice, menu.entries[choice])]
         if has_words(menu.title, "refueling level"):
             return self._fuel_question(menu, t)
+        if has_words(menu.title, "pushback tug") and self._push is not None and self._push.stage != "armed" \
+                and (found := find(menu, ("yes",))).index is not None:
+            # The push called: the tug's wanted now. "No" to it (right while boarding) left an A350 at Montreal's gate
+            # nine minutes, until the pilot pushed through GSX by hand.
+            log.info("Ground crew: %r: yes, the push is called", menu.title)
+            return [Pick(found.index, menu.entries[found.index])]
         for words, answer in SETTLED:
             if has_words(menu.title, words) and (found := find(menu, answer)).index is not None:
+                log.info("Ground crew: %r: %s", menu.title, menu.entries[found.index])
                 return [Pick(found.index, menu.entries[found.index])]
         rows = {d: find(menu, words) for d, words in DIRECTIONS.items()}
         if any(f.index is not None for f in rows.values()):
             return self._direction_question(menu, rows, t)
         if (gsx_choice := find(menu, (OPERATOR_CHOICE,))).index is not None:
+            log.info("Ground crew: %r: GSX's own choice, %s", menu.title, menu.entries[gsx_choice.index])
             return [Pick(gsx_choice.index, menu.entries[gsx_choice.index])]  # GSX's own recommendation, whatever it's asking
         if self._is_engine_question(menu):
             # Asked, as a headset operator asks: "good engine start?", and put in GSX on the pilot's "yes".

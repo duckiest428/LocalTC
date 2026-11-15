@@ -1354,6 +1354,15 @@ def test_until_left_is_tail_left():
     assert [a.direction for a in asks if a.action == g.PUSH] == [g.NOSE_RIGHT]
 
 
+def test_the_tug_is_wanted_once_the_push_is_called():
+    """GSX's "attach pushback tug?" is "no" while boarding, "yes" once the push is called: answered no, an A350 sat at
+    Montreal's gate nine minutes until the pilot pushed by hand in GSX."""
+    crew = _push_crew()
+    crew.observe(_own())
+    out = crew.update(_gsx_state(menu=Menu("Attach pushback tug?", ("Yes", "No [GSX choice]"), (False, False))), 1.0)
+    assert Pick(0, "Yes") in out
+
+
 def test_interrupt_pushback_opened_by_the_pilot_is_left_to_them():
     """The pilot's own look at GSX's menu mid-push isn't shut on them (it was, every few seconds, at Miami)."""
     crew = _push_crew()

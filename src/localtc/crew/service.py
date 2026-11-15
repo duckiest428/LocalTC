@@ -11,6 +11,7 @@ from localtc.sim_api import (
     AircraftVars,
     ArrivalData,
     AtcAlert,
+    GroundStatus,
     AtcTransmission,
     CrewSpeech,
     FlightArrived,
@@ -45,7 +46,8 @@ class CrewService:
         # talk over them), the phases, the readbacks, the traffic, the arrival at the gate.
         self._inputs = bus.subscribe(OwnshipState, AircraftSystems, AircraftVars, AircraftIdentity, IntercomHeard, AtcTransmission,
                                      PhaseChanged, ReadbackEvaluated, PttPressed, PttReleased, IntercomPressed,
-                                     IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData)
+                                     IntercomReleased, Transcript, AtcAlert, TrafficSnapshot, FlightArrived, ArrivalData,
+                                     GroundStatus)
 
     def _checklist_answer(self, event: IntercomHeard) -> bool:
         """The answer to the line of a checklist the copilot is reading: the copilot's, not the cabin's. "Cabin?" in

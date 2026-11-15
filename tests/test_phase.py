@@ -78,6 +78,21 @@ def test_takeoff_without_airport_data_uses_sim_runway_flag():
     assert [p for _, p in run(det, ticks)] == [P.TAXI_OUT, P.TAKEOFF, P.DEPARTURE]
 
 
+def test_a_u_turn_onto_the_runway_at_30_knots_is_not_a_takeoff_roll():
+    """Montreal: swinging onto 06L at 30 knots through 24R's heading was a takeoff roll, then "rejected takeoff"."""
+    det = PhaseDetector()
+    ticks = [own(0, gs_kt=10), own(1, gs_kt=12)]
+    ticks += [own(2 + i * 0.25, gs_kt=31, on_runway=True, hdg_true=(260 - 4 * i) % 360) for i in range(12)]
+    assert [p for _, p in run(det, ticks)] == [P.TAXI_OUT]
+
+
+def test_moved_at_the_gate_faster_than_any_taxi_is_not_the_taxi():
+    """GSX moved an A350 at its gate in jumps "at 245 knots": not taxiing (nor "watch the speed, 234 knots")."""
+    det = PhaseDetector()
+    ticks = [own(0), own(1)] + [own(2 + i * 0.25, gs_kt=245, lat=47.9 + i * 1e-5) for i in range(16)]
+    assert [p for _, p in run(det, ticks)] == [P.PARKED]
+
+
 def test_rejected_takeoff_returns_to_runway_hold():
     det = PhaseDetector()
     ticks = [own(0, gs_kt=10), own(1, gs_kt=35, on_runway=True), own(2, gs_kt=45, on_runway=True)]

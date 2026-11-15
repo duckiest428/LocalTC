@@ -1012,10 +1012,16 @@ class CabinCrew:
             if "welcome" not in self.done and "doors_arm" in self.done \
                     and t >= self._at.get("doors_arm_end", 0) + WELCOME_AFTER_DOORS_S:
                 out += self._moment("welcome", t, self.announce("welcome"))
-            if "safety" not in self.done and "welcome" in self.done and s.safety_demo \
-                    and (pushing or (engines > 0 and (moving or self._phase == "TAXI_OUT"))) \
-                    and t >= self._at.get("welcome_end", 0) + SAFETY_AFTER_WELCOME_S:  # the push or the taxi out
-                out += self._moment("safety", t, self.announce("exit_row") + self.announce("safety") + self.announce("safety_more"))
+            # Each with room around it: the exit rows a while after the welcome, at the gate; the demonstration once the
+            # aircraft really moves (GSX's push called isn't moving: at Montreal it all came nine minutes before the tug),
+            # a while after the exit rows. Five announcements in two minutes, twice reported.
+            if "exit_row" not in self.done and "welcome" in self.done and s.safety_demo \
+                    and t >= self._at.get("welcome_end", 0) + SAFETY_AFTER_WELCOME_S:
+                out += self._moment("exit_row", t, self.announce("exit_row"))
+            if "safety" not in self.done and "exit_row" in self.done and s.safety_demo \
+                    and (moving or self._phase in ("PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD")) \
+                    and t >= self._at.get("exit_row_end", 0) + SAFETY_AFTER_WELCOME_S:
+                out += self._moment("safety", t, self.announce("safety") + self.announce("safety_more"))
             at_runway = own.on_runway or self._phase == "RUNWAY_HOLD"
             done_talking = t >= max(self._at.get("safety_end", 0), self._at.get("welcome_end", 0)) + SECURE_AFTER_SAFETY_S
             taxiing = engines > 0 and (moving or self._phase == "TAXI_OUT")

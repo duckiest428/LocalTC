@@ -32,6 +32,8 @@ TRACK_BASELINE_M = 4.0  # ground covered before the direction of travel is recom
 MIN_JUMP_S = 1.0  # a position jump is measured over at least this long
 LEAVE_HOLD_M = 25.0  # farther than this from the runway than the aircraft has been since holding: it's taxiing away
 PUSH_AGAIN_MARGIN_KT = 1.0  # pushed and stopped: this much over "stopped" before it counts as moving again
+ROLL_TURN_DPS = 2.5  # turning faster than this (degrees a second) isn't a takeoff roll
+GROUND_MAX_KT = 60.0  # off a runway, faster than this on the ground isn't taxiing (the sim or GSX moving it)
 GROUND_PHASES = {FlightPhase.PARKED, FlightPhase.PUSHBACK, FlightPhase.TAXI_OUT, FlightPhase.RUNWAY_HOLD,
                  FlightPhase.TAXI_IN}
 
@@ -105,6 +107,7 @@ class PhaseDetector:
         self.since_t = 0.0
         self._timers: dict[str, float] = {}
         self._last: OwnshipState | None = None
+        self._turn_dps = 0.0  # how fast the heading is changing (degrees a second)
         self._min_agl_in_phase = float("inf")
         self._track_from: tuple[float, float] | None = None
         self._track_deg: float | None = None
@@ -133,6 +136,9 @@ class PhaseDetector:
 
     def update(self, own: OwnshipState, ctx: PositionContext) -> PhaseChanged | None:
         last, self._last = self._last, own
+        if last is not None and own.t > last.t:
+            turned = abs(((own.hdg_true - last.hdg_true + 540) % 360) - 180)
+            self._turn_dps = turned / max(own.t - last.t, 0.1)
         if last is not None and own.t > last.t:
             # Over at least a second: two samples a fraction of a millisecond apart (the sim sends them) put a
             # metre of taxiing at thousands of knots. Taken as a teleport, that put an aircraft taxiing in at
@@ -240,7 +246,10 @@ class PhaseDetector:
 
     def _takeoff_roll(self, own: OwnshipState, ctx: PositionContext, min_kt: float | None = None) -> bool:
         kt = self.th.takeoff_gs_kt if min_kt is None else min_kt
-        return self._held("takeoff", own.on_ground and ctx.aligned_on_runway and own.gs_kt >= kt, own.t, self.th.takeoff_s)
+        # Not while turning: a U-turn onto Montreal's 06L at 30 knots swung through 24R's heading and was a takeoff roll
+        # (then "rejected takeoff", and the copilot's "wrong runway").
+        rolling = own.on_ground and ctx.aligned_on_runway and own.gs_kt >= kt and self._turn_dps < ROLL_TURN_DPS
+        return self._held("takeoff", rolling, own.t, self.th.takeoff_s)
 
     def _arrival_due(self, own: OwnshipState, ctx: PositionContext) -> str | None:
         th = self.th
@@ -276,7 +285,9 @@ class PhaseDetector:
             # Not while going backwards: a tug taking up the slack jerks the aircraft back at a few knots. Not with the
             # parking brake set: 3.8 kt at Montreal's gate, brake set and not a metre covered while GSX readied the push,
             # was taken for taxiing without a clearance.
-            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own)                 and not own.parking_brake
+            # Nor at a speed no taxi goes off a runway: GSX moved an A350 at Montreal's gate in jumps "at 245 knots".
+            moving_off = own.on_ground and own.gs_kt > th.taxi_start_kt and not self._moving_astern(own) \
+                and not own.parking_brake and (own.gs_kt < GROUND_MAX_KT or ctx.on_runway)
             if self._held("taxi", moving_off, t, th.taxi_start_s):
                 if self._arrived:  # stopped on the way in (waiting for a gate), now moving on
                     return FlightPhase.TAXI_IN, "taxiing in again"

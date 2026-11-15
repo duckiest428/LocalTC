@@ -153,7 +153,7 @@ main { flex: 1 1 auto; min-height: 0; position: relative; background: var(--pane
 .enroute { padding: 10px 14px; flex: none; }
 .er-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
 .er-airline { display: flex; gap: 10px; align-items: center; min-width: 0; }
-.er-airline img { height: 30px; max-width: 120px; object-fit: contain; background: #fff; border-radius: 3px; padding: 2px 4px; }
+.er-airline img { height: 30px; max-width: 120px; object-fit: contain; border-radius: 3px; }  /* (no white card behind it: it sits on the panel) */
 .er-badge { display: inline-grid; place-items: center; min-width: 42px; height: 30px; border-radius: 3px; font-weight: 700;
   color: #fff; font-size: 13px; padding: 0 6px; }
 .er-badge:empty { display: none; }

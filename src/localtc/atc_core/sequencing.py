@@ -390,8 +390,14 @@ class SequenceMixin:
             return True
         minutes = self.push_delay_min(own)
         if minutes and held is None:
+            # With what it's for: the line at the runway, counted ("12 minutes for the departure queue" sounded made up).
             self.push_hold = PushHold("queue", t, t + minutes * 60, tail)
-            self._schedule(t, "ground.push_hold_queue", {"minutes": minutes}, facility)
+            end = self._runway_end(self.state.flight.origin, own)
+            queue = self._departure_queue(own)
+            where = f" for runway {end.ident}" if end is not None else ""
+            said = f" for runway {speech.runway(end.ident)}" if end is not None else ""
+            line = Phrase(f"{queue} in line{where}", f"{speech.number_words(queue)} in line{said}")
+            self._schedule(t, "ground.push_hold_queue", {"minutes": minutes, "message": line}, facility)
             return True
         return False
 
@@ -413,8 +419,8 @@ class SequenceMixin:
                 or self._taxiing_behind(own) is None
             if not gone and t < held.until_t:
                 return False
-        elif t < held.until_t:
-            return False
+        elif t < held.until_t and self.push_delay_min(own) > 0:
+            return False  # (the line gone shorter: the push now, not at the time first said)
         self.push_hold = None
         self._pushback(t, facility, own, tail=held.tail, released=True)
         return True

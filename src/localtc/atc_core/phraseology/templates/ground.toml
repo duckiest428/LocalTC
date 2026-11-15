@@ -199,6 +199,6 @@ pilot_readback = "Holding the push, {callsign_short}."
 [[template]]
 id = "ground.push_hold_queue"
 controller = "ground"
-text = ["{callsign}, expect about a {minutes} delay at the gate for the departure queue, I'll call you for push.",
-        "{callsign}, there's a line at the runway, hold at the gate, about {minutes}, I'll call you back."]
+text = ["{callsign}, expect about a {minutes} delay at the gate, {message}, I'll call you for push.",
+        "{callsign}, hold at the gate, {message}, about {minutes}, I'll call you back."]
 pilot_readback = "Holding at the gate, {callsign_short}."

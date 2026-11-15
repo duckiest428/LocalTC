@@ -1262,6 +1262,7 @@
 "{0} MB": "{0} MB",
 "{0} NOTAMs": "{0} NOTAMs",
 "{0} at {1}: where ground sent you": "{0} bei {1}: wohin Ground dich geschickt hat",
+"{0} at {1}: the gate you asked for": "{0} bei {1}: das Gate, das du angefragt hast",
 "{0} calls · click one to go there": "Funksprüche: {0} · klicke einen an, um dorthin zu springen",
 "{0} can't be a push-to-talk key": "{0} kann keine Push-to-Talk-Taste sein",
 "{0} checklist": "Checkliste {0}",

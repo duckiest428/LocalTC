@@ -68,6 +68,8 @@ TUG_OFF = ("lowering nose gear", "tug backing away", "removing bypass pin", "dis
 ENGINE_WAIT = ("engine-start confirmation", "engine start confirmation")
 RELEASE_AGAIN_S = 25.0  # released before the tug was on, and still nothing: the pilot is told to set it and let it go
 ENGINE_OPEN_AGAIN_S = 20.0  # GSX waiting on the good start with its menu shut: opened again after this long
+OURS_OPEN_S = 5.0  # a menu page this soon after the crew opened GSX's menu is the crew's
+ENGINE_OPENS_MAX = 2  # opened this often for the good start and shown "Interrupt pushback?": left to the pilot
 DIRECTIONS = {g.NOSE_LEFT: ("nose left",), g.NOSE_RIGHT: ("nose right",), g.STRAIGHT: ("straight",)}
 SAID_DIRECTION = {g.NOSE_LEFT: "nose left, tail right", g.NOSE_RIGHT: "nose right, tail left", g.STRAIGHT: "straight back"}
 SIDE = {g.NOSE_LEFT: "right", g.NOSE_RIGHT: "left"}  # the headset's side: the side the tail went, clear of the engines
@@ -120,6 +122,7 @@ class RampCrew:
         self.atc_until = 0.0
         self._t = 0.0
         self._engine_open_t = -1e9  # when GSX's menu was last opened for its good-start question
+        self._engine_opens_wasted = 0  # opened for it and GSX showed "Interrupt pushback?" instead
         self._spoke_t = -1e9
         self._queue: list[str] = []
         self._sending: tuple[str, float] | None = None
@@ -711,9 +714,21 @@ class RampCrew:
         self._seen_question = menu
         if has_words(menu.title, "interrupt"):
             # "Interrupt pushback?": GSX's page while it's already doing what was asked. It went up and down four times in
-            # ten seconds, read out each time, and "yes" would have stopped the push. Put away; "stop the push" still stops it.
-            log.info("Ground crew: closing GSX's %r page", menu.title)
-            return [Close()]
+            # ten seconds, read out each time, and "yes" would have stopped the push. Never read out. Put away only when the
+            # crew opened the menu itself (for the good start); one the pilot opened is theirs: closing it every few
+            # seconds kept the pilot from GSX's good-start page at Miami and Fort Lauderdale.
+            if t - self._engine_open_t <= OURS_OPEN_S:
+                self._engine_opens_wasted += 1
+                log.info("Ground crew: closing GSX's %r page (opened for the good start)", menu.title)
+                return [Close()]
+            return []
+        if self._is_engine_question(menu) and self.own is not None and self.own.engine_running \
+                and (found := find(menu, GOOD_START_ROW)).index is not None:
+            # The engines are running and the headset sees them: the good start put in, not asked and waited on (the
+            # pilot was left looking for it in GSX).
+            self._asking = None
+            self._seen_question = None
+            return [Pick(found.index, menu.entries[found.index]), self._speech("good_start", t)]
         if (said := self._read_out.get(menu.title)) is not None and t - said < READ_AGAIN_S:
             self._asking = menu  # (the same question again: GSX's menu comes and goes. Still answerable)
             return []
@@ -782,10 +797,22 @@ class RampCrew:
 
     def _engines_answer(self, t: float) -> list[Any]:
         """GSX waiting on the good-start question with its menu shut (it asks only once the menu's open): opened, so the
-        question comes up and is put to the pilot. Answered only by the pilot."""
+        question comes up and is put to the pilot. Answered by the pilot, or put in once the engines are seen running."""
+        menu = self.state.menu
+        if menu is not None and self._asking == menu and self._is_engine_question(menu) and self.own is not None \
+                and self.own.engine_running and (found := find(menu, GOOD_START_ROW)).index is not None:
+            # Asked before they were started, and now they're running: put in, as when they're seen first.
+            self._asking = None
+            self._seen_question = None
+            return [Pick(found.index, menu.entries[found.index]), self._speech("good_start", t)]
         svc = self._service("Departure")
         if svc is None or self.state.menu is not None or not any(w in norm(svc.status) for w in ENGINE_WAIT) \
                 or t - self._engine_open_t < ENGINE_OPEN_AGAIN_S or self._run is not None:
+            return []
+        if self._engine_opens_wasted >= ENGINE_OPENS_MAX:
+            if self._engine_opens_wasted == ENGINE_OPENS_MAX:
+                self._engine_opens_wasted += 1
+                return [self._speech("start_in_gsx", t)]  # once: it's the pilot's to put in, in GSX's menu
             return []
         self._engine_open_t = t
         return [Open()]

@@ -1262,6 +1262,7 @@
 "{0} MB": "{0} MB",
 "{0} NOTAMs": "{0} NOTAM",
 "{0} at {1}: where ground sent you": "{0} en {1}: adonde te mandó rodadura",
+"{0} at {1}: the gate you asked for": "{0} en {1}: la puerta que pediste",
 "{0} calls · click one to go there": "Llamadas: {0} · haz clic en una para ir allí",
 "{0} can't be a push-to-talk key": "{0} no puede ser una tecla de PTT",
 "{0} checklist": "Lista {0}",

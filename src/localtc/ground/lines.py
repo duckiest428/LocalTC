@@ -22,6 +22,8 @@ FIXED = {
     "set_brake": ("Pushback complete. Set parking brake.",),
     "brake_again": ("Set parking brake, please confirm when set.",),
     "confirm_start": ("Confirm good engine start?",),
+    "good_start": ("Good start, I see the engines running.",),
+    "start_in_gsx": ("GSX is waiting on the good engine start: confirm it in its menu.",),
     "release_again": ("Tug's not moving us: set the parking brake, then release it again.",),
     "disconnecting": ("Disconnecting. Watch for my hand signal on the {side}.",),
     "disconnecting_no_side": ("Disconnecting. Watch for my hand signal.",),

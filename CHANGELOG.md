@@ -146,6 +146,38 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **No instruction before the check-in:** departure and the centres give the next climb only once you've called them
+  (one gave "climb and maintain 11,000" the moment you tuned in); a flight quiet on a centre's frequency is called by
+  it after 45 seconds, as departure and approach already did. That also stops a flight being kept at 17,000 with no
+  further climb: it's handed on to the centre.
+- **The STAR flown as filed:** approach no longer vectors you off a STAR that still has fixes to fly (San Juan's BEANO3
+  was read from its second fix, so the flight looked 36 miles off it); a flight on its way to the STAR's first fix is
+  on it.
+- **Procedure names heard in pieces:** "F falls three" is FOLZZ3, "FOL ZZ 3" too, "this NAPR 2" SNAPR2, and "beano
+  three" BEANO3, for the flight's own SID and STAR; a runway said "2, 6, left" is 26L, and "Poppa" is Papa.
+  "Request taxiways" after landing is the taxi in, not a question.
+- **The push held, and why:** a push held for the line at the runway says how many are in it and for which runway,
+  and comes as soon as the line's shorter, not at the time first said.
+- **Weather on the route:** a convective SIGMET is told within 150 miles of it ("about 840 miles ahead" was said),
+  once for the deviations it brings, not again for the next SIGMET along the same way, and the "advise when able
+  direct" reminder comes once.
+- **The good engine start:** with the engines running, the ground crew put GSX's "good engine start" in themselves;
+  GSX's "Interrupt pushback?" page you open isn't closed on you any more (it was, every few seconds), and the crew
+  stop opening GSX's menu for it when GSX only shows that page.
+- **Your arrival gate stays at the arrival:** the gate picked for the destination is no longer sent to GSX at the
+  departure gate ("we've got you at B5, not C9"), and the live map says "the gate you asked for" until ground gives
+  it.
+- **Your traffic asks first:** LocalTC's departures wait for their pushback call when the frequency's busy, rather
+  than pushing without a word.
+- **Flights over the ocean:** a flight in the cruise that drops out of the live feed (few receivers at sea) carries on
+  along its track for up to 15 minutes, not gone on the spot.
+- **The cabin's announcements spread out:** the welcome a minute after the doors, the safety demonstration well after
+  it with the push or the taxi, not five announcements in two minutes. The purser keeps their own voice in the
+  second language (Swiss's German was in another person's voice).
+- **The ATIS out of range:** tuned too far away to hear it, LocalTC says how far it is and how far it reaches.
+- **San Juan's voices:** more Caribbean voices, so its four stations aren't two of the same.
+- **V1 and rotate the same speed:** the copilot says "Rotate" alone.
+- **The airline's logo** sits on the app's colours, its white background cleared.
 - **Arriving where there's no tower:** approach no longer sends you around "not cleared to land" at a field with no
   tower. Once you're established it gives the wind and sends you to the field's radio where it has one ("contact Tarama
   Radio 118.6"), else to the advisory frequency, and a landing clearance asked for gets the same, not "unable". The

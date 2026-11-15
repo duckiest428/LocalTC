@@ -362,7 +362,8 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
 
     link = RampLink(pushback_cleared=lambda: "pushback" in engine.state.clearances,
                     atc_working=lambda: engine.facility("ground") is not None or engine.facility("tower") is not None,
-                    gate=lambda: engine.gate_given() or "",
+                    # The arrival's gate, once there: the one picked for San Juan was told to GSX at Fort Lauderdale.
+                    gate=lambda: (engine.gate_given() or "") if engine._landed else "",
                     cleared_push_way=lambda: {"left": "nose_right", "right": "nose_left"}.get(engine.cleared_tail or "", ""),  # tail left: nose right
                     airline=lambda: _airline_name(engine),
                     request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),

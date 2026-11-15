@@ -244,10 +244,15 @@ class RoutingMixin:
             for h in self._hazards_on(a, b, level):
                 if h.id in self._hazards_told:
                     continue
+                if travelled + _nm(a[0], a[1], *_entry(h, a, b)) > HAZARD_AHEAD_NM:
+                    continue  # on a long leg, but far down it: "about 840 miles ahead" was said over Florida
                 if h.kind in AVOID_KINDS:
                     return self._reroute(own, facility, h, points, i)
                 if h.kind in ("sigmet",) and h.hazard.upper() in CONVECTIVE:
-                    return self._weather_ahead(own, facility, h, points, i, travelled + _nm(a[0], a[1], *h.centre()))
+                    if any(x.kind == "deviation" and x.state == "active" for x in self.amendments):
+                        self._hazards_told.add(h.id)  # deviations already approved: the next SIGMET along it isn't news
+                        continue
+                    return self._weather_ahead(own, facility, h, points, i, travelled + _nm(a[0], a[1], *_entry(h, a, b)))
             travelled += _nm(a[0], a[1], b[0], b[1])
             if travelled > HAZARD_AHEAD_NM:
                 break
@@ -422,3 +427,11 @@ def _bearing(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dy = lat2 - lat1
     dx = (lon2 - lon1) * math.cos(math.radians((lat1 + lat2) / 2))
     return math.degrees(math.atan2(dx, dy)) % 360
+
+def _entry(h: Hazard, a: tuple[float, float], b: tuple[float, float], steps: int = 60) -> tuple[float, float]:
+    """Where the leg a-b first goes into the hazard (its centre if no sample of the leg falls inside it)."""
+    for k in range(steps + 1):
+        lat, lon = a[0] + (b[0] - a[0]) * k / steps, a[1] + (b[1] - a[1]) * k / steps
+        if h.contains(lat, lon):
+            return lat, lon
+    return h.centre()

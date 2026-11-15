@@ -95,6 +95,15 @@ def test_the_takeoff_speed_calls_v1_and_rotate():
     assert any(w.startswith(ways_of("V1.")) for w in words) and any(w.startswith(ways_of("Rotate.")) for w in words)
 
 
+def test_v1_and_rotate_the_same_is_called_rotate_alone():
+    pm = crew(perf=PlanPerf(v1=140, vr=141, v2=150), plan_source="simbrief")
+    pm.observe(PhaseChanged(t=0.5, previous="RUNWAY_HOLD", phase="TAKEOFF"))
+    pm.observe(systems(0.6))
+    words = said(fly(pm, [own(1 + i, on_runway=True, ias_kt=ias, gs_kt=ias) for i, ias in enumerate(range(20, 160, 10))]))
+    assert any(w.startswith(ways_of("Rotate.")) for w in words)
+    assert not any("V1" in w for w in words)
+
+
 def test_positive_rate_then_the_copilot_raises_the_gear_itself():
     pm = crew()
     pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))

@@ -71,6 +71,8 @@ M_PER_NM = 1852.0
 LEAVE = 1.15  # beyond the radius by this much: taken away (a little past, so one on the edge doesn't flicker)
 STALE_S = 40.0  # no position for this long: lost (or, standing at a gate, parked there for good)
 LOST_S = 75.0  # carried on this long without a position at most
+RECKON_FT = 20000  # a cruise this high or higher, lost to the feed, is carried on along its track...
+RECKON_MAX_S = 900.0  # ...for this long at most after its last real move
 POP_IN_NM = 6.0  # a new airborne flight isn't created closer than this to the user once the first lot is in
 FIRST_LOT_S = 30.0  # the first lot: everything around when the traffic comes on, made over this long
 SNAP_M = 45.0  # a live aircraft standing this close to a parking spot is put on it
@@ -364,6 +366,7 @@ class TrafficManager:
         self.own: OwnshipState | None = None
         self.flights: dict[str, Flight] = {}  # by hex: the newest position of each
         self.history: dict[str, list[Flight]] = {}  # by hex: its positions over the last few minutes, oldest first
+        self._moved_t: dict[str, float] = {}  # by hex: when its reported position last really moved
         self._calls_t: dict[str, float] = {}  # by airport: the last call to one of the real flights there
         # The calls made to each real flight, kept when it's taken away and made again (out of the nearest few, back
         # in): N711UW was cleared to taxi twice, the same long route four minutes apart.
@@ -422,18 +425,37 @@ class TrafficManager:
         fresh = {f.hex: f for f in flights if f.hex and not (mine and "".join(f.callsign.split()).upper() == mine)}
         for hex_, f in fresh.items():
             old = self.flights.get(hex_)
-            if old is not None and stuck(old, f):
+            if old is not None and (stuck(old, f) or _still(old, f)) and self._reckons(hex_, old, f.t):
+                f = reckoned(old, f.t)  # out of the receivers' sight in the cruise: on along its track (see ``reckoned``)
+            elif old is not None and stuck(old, f):
                 continue  # the same spot again, moving: a stale record re-sent (held AAL1138 at 7,000 ft 11 minutes)
+            else:
+                self._moved_t[hex_] = f.t
             if old is None or f.t > old.t:
                 self.flights[hex_] = f
                 seen = self.history.setdefault(hex_, [])
                 seen.append(f)
                 while len(seen) > 2 and now - seen[1].t > HISTORY_S:
                     seen.pop(0)
+        for hex_, f in list(self.flights.items()):
+            if now - f.t > STALE_S and self._reckons(hex_, f, now):
+                self.flights[hex_] = carried = reckoned(f, now)  # gone from the feed altogether, over the sea
+                seen = self.history.setdefault(hex_, [])
+                seen.append(carried)
+                while len(seen) > 2 and now - seen[1].t > HISTORY_S:
+                    seen.pop(0)
         for hex_ in [h for h, f in self.flights.items() if now - f.t > LOST_S * 2]:
             del self.flights[hex_]
+            self._moved_t.pop(hex_, None)
             self.history.pop(hex_, None)
             self._said.pop(f"live:{hex_}", None)
+
+    def _reckons(self, hex_: str, f: Flight, now: float) -> bool:
+        """A flight in the cruise (high, level, at an airliner's speed) whose position stopped: carried on, for
+        ``RECKON_MAX_S`` from its last real move. Air Canada Rouge vanished mid-ocean between Florida and San Juan
+        ("these planes just be disappearing"): the receivers there are few, and the feed lost it."""
+        cruising = not f.on_ground and (f.alt_ft or 0) >= RECKON_FT and abs(f.vs_fpm) < 1000 and f.gs_kt >= 250
+        return cruising and now - self._moved_t.get(hex_, f.t) <= RECKON_MAX_S
 
     def _shown(self, hex_: str, now: float) -> Flight | None:
         """Where a live one is shown now: where it was ``LIVE_DELAY_S`` ago, between the two positions either side
@@ -1760,13 +1782,19 @@ class TrafficManager:
         if nodes[0][0] == "parking":
             points = points[1:]  # the stand itself: where it is
         push_to = points[0]
+        said = self._try_call(plane, "pushback", icao, "", now)
+        if not said and self._call_waits(plane, "pushback", now):
+            # Its push asked for first, as a pilot does: Allegiant pushed at Fort Lauderdale with the frequency busy and
+            # never a word. It waits for a gap (the call's window), then goes whatever.
+            plane.push_due = True
+            return []
         loc = Local(stand.lat, stand.lon, geo.airport.elev_ft, stand.heading_true, 0.0, 0.0, True, started=now,
                     runway=(icao, end.ident), owned=True, stage="push", stage_t=now, push_to=push_to)
         loc.follow = Follower(points, gs_kt=0.0, exit_index=-1)
         plane.mode, plane.local, plane.spot, plane.left_stand, plane.push_due = "taxi_out", loc, None, True, False
         plane.runway = (icao, end.ident)
         self._did(f"{plane.callsign or 'A departure'} pushing back, out to {end.ident}")
-        return self._try_call(plane, "pushback", icao, "", now)
+        return said
 
     def _taxi_out(self, plane: Plane, now: float) -> list[Any]:
         """A second of its taxi out: the push, the start, the taxi (giving way to the user, never onto the user's
@@ -1900,6 +1928,12 @@ class TrafficManager:
             return False
         end = geo.end(user[1])
         return end is not None and end.runway.contains(geo.xy(lat, lon), 30.0)
+
+    def _call_waits(self, plane: Plane, kind: str, now: float) -> bool:
+        """The move waits for its call: one tried and not said yet (the frequency busy), still inside its window."""
+        if not self.s.atc_control or not plane.callsign or kind in plane.said:
+            return False
+        return now - plane.call_due.get(kind, now) <= CALL_WINDOW_S
 
     def _try_call(self, plane: Plane, kind: str, icao: str, runway: str, now: float, **extra: Any) -> list[Any]:
         """A controller's call to one LocalTC moves on the ground, once, when the frequency's free (spaced at an
@@ -2169,6 +2203,21 @@ def _liveried(model: tuple[str, str]) -> bool:
 def f_real_on_ground(f: Flight | None) -> bool:
     """The newest report has it on the ground (shown 30 s behind, still in the air: about to land, not made)."""
     return f is not None and f.on_ground
+
+
+def _still(old: Flight, new: Flight) -> bool:
+    """A newer report of a flying aircraft within a few metres of the last: its position hasn't really moved."""
+    return new.t > old.t and not new.on_ground and new.gs_kt >= 50 \
+        and haversine_nm(old.lat, old.lon, new.lat, new.lon) * M_PER_NM < 50
+
+
+def reckoned(f: Flight, t: float) -> Flight:
+    """``f`` carried on to ``t`` along its track at its ground speed, level (dead reckoning)."""
+    d_nm = f.gs_kt * max(0.0, t - f.t) / 3600.0
+    h = math.radians(f.track)
+    lat = f.lat + d_nm / 60.0 * math.cos(h)
+    lon = f.lon + d_nm / 60.0 * math.sin(h) / max(0.05, math.cos(math.radians(f.lat)))
+    return replace(f, lat=lat, lon=lon, vs_fpm=0.0, t=t)
 
 
 def stuck(old: Flight, new: Flight) -> bool:

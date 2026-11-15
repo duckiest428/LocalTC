@@ -65,8 +65,10 @@ VOICES: dict[str, dict[str, tuple[str, ...]]] = {
                                                                          "im_nicola+pm_alex")},
     "tr": MIDDLE_EAST, "me": MIDDLE_EAST, "fa": MIDDLE_EAST, "il": EUROPE,
     "zh": CHINESE, "ja": JAPANESE, "ko": EAST_ASIAN, "sea": SOUTHEAST_ASIAN, "th": SOUTHEAST_ASIAN, "id": SOUTHEAST_ASIAN,
-    "carib": {"F": ("ef_dora", "ef_dora+af_kore", "ef_dora+pf_dora"),
-              "M": ("em_alex", "em_santa+am_michael", "em_alex+pm_santa")},
+    # (Three men's voices for San Juan's four stations: Control and Ground were the same man.)
+    "carib": {"F": ("ef_dora", "ef_dora+af_kore", "ef_dora+pf_dora", "ef_dora+af_heart", "pf_dora+af_bella"),
+              "M": ("em_alex", "em_santa+am_michael", "em_alex+pm_santa", "em_santa", "em_alex+am_eric",
+                    "pm_santa+am_puck", "em_alex+am_onyx")},
 }
 
 # The copilot in your language, by Kokoro: its voices for that language and espeak's name for it (others: Piper).

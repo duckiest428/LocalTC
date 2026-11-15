@@ -938,10 +938,10 @@ class Monitor(WatchMixin):
             if prev.ias_kt < check <= own.ias_kt:
                 self._call("speed_check", ROUTINE, t, f"{speech.miles(check).capitalize()} knots.", moment=True)
             # V1 and rotate, from the plan's speeds (the pilots asked for them; "one hundred knots" alone sounded as if
-            # nobody was watching the speed). One call when they're the same.
+            # nobody was watching the speed). When they're the same, "Rotate." alone: "V1, rotate" ran the two together.
             v1, vr = self.perf.v1, self.perf.vr
             if v1 and vr and prev.ias_kt < min(v1, vr) <= own.ias_kt:
-                self._call("v1", ROUTINE, t, "V1, rotate." if abs(v1 - vr) <= 2 else "V1.", moment=True)
+                self._call("v1", ROUTINE, t, "Rotate." if abs(v1 - vr) <= 2 else "V1.", moment=True)
             elif vr and abs(v1 - vr) > 2 and prev.ias_kt < vr <= own.ias_kt:
                 self._call("rotate", ROUTINE, t, "Rotate.", moment=True)
         # Parked at the destination.

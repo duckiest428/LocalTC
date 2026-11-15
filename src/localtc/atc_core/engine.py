@@ -20,6 +20,7 @@ from typing import Any
 
 import msgspec
 
+from localtc.sim_api.geo import bearing_deg, haversine_nm
 from localtc.sim_api.ramp import on_ramp
 from localtc.atc_core import chatter, disfluency, personality, procedures, radio_range, vectors
 from localtc.atc_core import region as regions
@@ -554,6 +555,14 @@ class _Scheduled:
     worded: Phrase | None = None  # ... without the callsign, which the template gives
     lead: Phrase | None = None  # said first, after the callsign: "sorry, Gate 403 is occupied"
     repeat: bool = False  # said again when asked: in other words than the first time
+
+
+def t_told(told: dict[str, float], key: str, t: float) -> bool:
+    """Whether ``key`` may be told now (``RANGE_TOLD_S`` since the last time), marking it told if so."""
+    if t - told.get(key, -math.inf) < RANGE_TOLD_S:
+        return False
+    told[key] = t
+    return True
 
 
 class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMixin, FlowMixin, SequenceMixin, RideMixin, GateRequestsMixin):
@@ -1128,6 +1137,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     # An AWOS or ASOS and no ATIS: an automated observation (the field's real METAR, as an ATIS has),
                     # read as one. A real ATIS for it (ATIS.guru's) is read as the ATIS it is.
                     self.atis.current[key].automated = automated_only(geo) and real is None
+                if tuned_here and atis_reach is not None and not atis_reach.in_range \
+                        and t_told(self._range_told, key, own.t):
+                    # Tuned and nothing to hear (San Juan's at FL390, 150 miles out: "no ATIS?"): why, once a minute.
+                    out.append(self._alert(own.t, "out_of_range", f"{self._airport_name(icao)} ATIS is "
+                                           f"{atis_reach.distance_nm:.0f} nm away; it reaches about {atis_reach.range_nm:.0f} nm"))
                 if tuned_here and (info is not None or force) and (atis_reach is None or atis_reach.in_range):
                     current = self.atis.current[key]
                     out.append(AtisBroadcast(t=own.t, airport=icao, station=current.name, frequency_mhz=mhz or own.tx_mhz,
@@ -2808,7 +2822,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             _, _, new = self._last_handoff
             tuned = st.comms.tuned
             if tuned == new and last_pilot < self._tuned_since and t - self._tuned_since >= MISSED_CHECKIN_S \
-                    and new.controller in ("departure", "approach"):
+                    and new.controller in ("departure", "center", "approach"):
                 self._last_handoff = None  # on frequency but quiet: the new controller calls first
                 st.comms.contacted.add(new.controller)
                 self._checkin(t, new, own)
@@ -4771,6 +4785,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         geo = self.geometry(self.state.flight.destination)
         end = geo.end(runway) if geo is not None else None
         fixes = self.route.procedure(self.cfg.star, "DSC")
+        if fixes and (entry := self._star_entry(fixes[0])) is not None:
+            # From where it starts ("BEANO BEANO3": BEANO), not its second fix: flying BEANO to MYLET, San Juan saw the
+            # flight 36 miles off the arrival and vectored it off with the STAR's fixes still ahead.
+            fixes = (entry, *fixes)
         if geo is None or end is None or len(fixes) < 2:
             return None
         join = procedures.star_join(geo, end, fixes)
@@ -4779,9 +4797,30 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         # transition on to HOOPE): the approach clearance comes as for a STAR that runs onto the final, no headings.
         onward = join is None and self._transition_from(target.ident, runway) is not None
         where = procedures.progress(geo, fixes[:fixes.index(target) + 1], own.lat, own.lon, target)
+        if where is not None and where.off_nm > procedures.ON_PATH_NM and self._heading_for(own, fixes[0]):
+            # Still on the way in to where it starts, pointed at it: on the arrival as filed, its miles from here.
+            return join is not None or onward, where.left_nm + where.off_nm
         if where is None or where.off_nm > procedures.ON_PATH_NM or (join is not None and where.left_nm <= 0):
             return None
         return join is not None or onward, where.left_nm
+
+    @staticmethod
+    def _heading_for(own: OwnshipState, fix) -> bool:
+        """Flying towards ``fix`` (within 30 degrees of it) and no more than 60 miles from it."""
+        if fix is None or haversine_nm(own.lat, own.lon, fix.lat, fix.lon) > 60.0:
+            return False
+        to = bearing_deg(own.lat, own.lon, fix.lat, fix.lon)
+        return abs(((to - own.hdg_true + 540) % 360) - 180) <= 30.0
+
+    def _star_entry(self, first):
+        """The plan's fix just before the STAR's first, where the STAR begins (its name's fix: BEANO for BEANO3), or None."""
+        plan = list(self.route.fixes)
+        i = next((k for k, f in enumerate(plan) if f is first), None)
+        if not i:
+            return None
+        before = plan[i - 1]
+        star = re.sub(r"\d+[A-Z]?$", "", (self.cfg.star or "").upper())  # BEANO3: BEANO, BLM3G: BLM
+        return before if star and before.ident.upper() == star else None
 
     def _transition_from(self, fix: str, runway: str) -> tuple | None:
         """The planned approach's transition (its fixes, from the sim's navdata) that starts at ``fix``, or None."""
@@ -6957,6 +6996,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if tuned is None or tuned.controller not in ("center", "departure") or not cruise or assigned is None \
                 or assigned >= cruise or (tuned.controller == "departure" and assigned >= min(cruise, DEPARTURE_TOP_FT)):
             return None
+        if tuned.station not in self._checked_in:
+            return None  # not heard from yet: Miami Departure gave a climb the second the pilot tuned in, unannounced
         if tuned.controller == "departure":
             if "descend" in st.flags or "emergency" in st.flags or own.vs_fpm < 300:
                 return None  # only a flight on its way up gets the next step

@@ -385,6 +385,36 @@ function setFlight(f) {
   markTuned();
 }
 
+/* A logo's white background made see-through, so it sits on the app's own colours: the white joined to the
+   picture's edges goes (flood fill), the white inside the letters stays. */
+function clearWhite(img) {
+  try {
+    const c = document.createElement("canvas"), w = (c.width = img.naturalWidth), h = (c.height = img.naturalHeight);
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, w, h), px = d.data, seen = new Uint8Array(w * h), stack = [];
+    const white = (i) => px[i * 4 + 3] > 0 && px[i * 4] > 235 && px[i * 4 + 1] > 235 && px[i * 4 + 2] > 235;
+    for (let x = 0; x < w; x++) stack.push(x, (h - 1) * w + x);
+    for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+    while (stack.length) {
+      const i = stack.pop();
+      if (seen[i]) continue;
+      seen[i] = 1;
+      if (!white(i)) continue;
+      px[i * 4 + 3] = 0;
+      const x = i % w, y = (i - x) / w;
+      if (x > 0) stack.push(i - 1);
+      if (x < w - 1) stack.push(i + 1);
+      if (y > 0) stack.push(i - w);
+      if (y < h - 1) stack.push(i + w);
+    }
+    g.putImageData(d, 0, 0);
+    return c.toDataURL("image/png");
+  } catch (e) {
+    return img.src;  // (unreadable: as it came)
+  }
+}
+
 /* En route (``flight.status``): the flight's status in place of the airport box, the airline's logo (else its
    colour), the way along the route, and how it's going. */
 function enRoute(s) {
@@ -396,7 +426,12 @@ function enRoute(s) {
   if (logo.dataset.src !== s.logo) {
     logo.dataset.src = s.logo || "";
     logo.hidden = true;
-    if (s.logo) { logo.onload = () => { logo.hidden = false; badge.textContent = ""; }; logo.onerror = () => { logo.hidden = true; }; logo.src = s.logo; }
+    if (s.logo) {
+      const img = new Image();
+      img.onload = () => { logo.src = clearWhite(img); logo.hidden = false; badge.textContent = ""; };
+      img.onerror = () => { logo.hidden = true; };
+      img.src = s.logo;
+    }
   }
   if (logo.hidden) {
     badge.textContent = s.iata || s.airline_icao || "";

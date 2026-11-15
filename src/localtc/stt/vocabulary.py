@@ -105,6 +105,8 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^(?:to|toe|tell|till) (left|right)\b", r"tail \1"),  # "To left, EDW87": the pushback's turn read back
     (r"\bfo(?:ck|x)?(?:s)?trap\b|\bfox ?trot\b|\bfoxtrop\b|\bfoxstrot\b|\bfox ?tr(?:uck|ucks|ock)\b", "foxtrot"),
     (r"\bcleared for the takeoff\b", "cleared for takeoff"),
+    (r"\bpoppa\b|\bpopa\b|\bpopper\b", "papa"),  # "information Poppa"
+    (r"\b([0-3]),? ([0-9]),? (left|right|cent(?:er|re))\b", r"\1\2 \3"),  # "2, 6, left": runway 26L
     (r"\bi\.l\.s\.?", "ILS"),
     (r"\bready for departures\b", "ready for departure"),
     (r"\b(\d{1,2}),000,000 minutes\b", r"\1,000, 10 minutes"),  # "expect 12,000 one zero minutes" run together
@@ -177,6 +179,13 @@ PHONETIC = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D
 _LETTER = "|".join(sorted(map(re.escape, PHONETIC), key=len, reverse=True))
 SPELLED = re.compile(r"\b[A-Za-z0-9]{1,3}(?:-[A-Za-z0-9]{1,3}){1,6}\b")
 PROCEDURE_SAID = re.compile(r"\b([A-Za-z]{3,})[ -]?(\d)\b")
+# A procedure's name heard in pieces, its number said or written: "F falls three" FOLZZ3, "FOL ZZ 3", "this NAPR 2" SNAPR2.
+DIGIT_WORDS = {"one": "1", "two": "2", "three": "3", "tree": "3", "four": "4", "five": "5", "fife": "5", "six": "6",
+               "seven": "7", "eight": "8", "nine": "9", "niner": "9"}
+PROCEDURE_PIECES = re.compile(
+    r"\b((?:[A-Za-z]+[ -]+){0,3}[A-Za-z]+)[ -]+(\d|one|two|three|tree|four|five|fife|six|seven|eight|nine|niner)\b(?![.,]?\d)",
+    re.I)
+MIN_PIECES_SOUND = 3  # a name put together from pieces sounds like this many consonants at least
 FIX_SAID = re.compile(r"\b(direct(?: to)?|via|at|to|hold(?:ing)?(?: at)?)\s+([A-Za-z]{4,})\b", re.I)
 LETTER_AND_NUMBER = re.compile(rf"\b({_LETTER})[ -]?(\d{{1,2}}[LRC]?)\b(?![.,]?\d)", re.I)
 INFORMATION = re.compile(rf"\b(information)([.,]?\s+)({_LETTER})\b", re.I)
@@ -198,6 +207,28 @@ def _named(said: str, names: tuple[str, ...]) -> str | None:
     key = _sound(said)
     found = {n for n in names if _sound(n) == key} if len(key) >= 2 else set()
     return found.pop() if len(found) == 1 else None  # (two names that sound alike: which it was isn't known)
+
+
+def _pieces(m: re.Match, procedures: tuple[str, ...]) -> str:
+    """The words before a number, as few as make a name, read as the flight's own procedure: one word, or two to four
+    joined ("F falls": FOLZZ's sound), or the last with the end of the one before ("this NAPR": SNAPR). Only where
+    exactly one of its procedures sounds so and has that number."""
+    words = re.split(r"[ -]+", m.group(1))
+    digit = DIGIT_WORDS.get(m.group(2).lower(), m.group(2))
+    wanted = tuple(p[:-1] for p in procedures if p[-1:] == digit and p[:-1].isalpha())
+    if not wanted:
+        return m.group(0)
+    tries: list[tuple[int, str]] = [(n, "".join(words[-n:])) for n in range(min(4, len(words)), 1, -1)]  # most first
+    if len(words) >= 2:
+        tries += [(2, words[-2][-k:] + words[-1]) for k in (1, 2) if len(words[-2]) > k]
+    tries.append((1, words[-1]))
+    for n, said in tries:
+        if len(said) < (3 if n == 1 else 4) or n > 1 and len(_sound(said)) < MIN_PIECES_SOUND:
+            continue
+        if (named := _named(said, wanted)) is not None:
+            kept = " ".join(words[:-n])
+            return (kept + " " if kept else "") + f"{named}{digit}"
+    return m.group(0)
 
 
 def _letters(text: str, hints: VocabularyHints) -> str:
@@ -260,6 +291,7 @@ def match_names(text: str, hints: VocabularyHints) -> str:
             f"{_named(m.group(1), tuple(p[:-1] for p in wanted))}{m.group(2)}" or m.group(0)
 
     text = PROCEDURE_SAID.sub(procedure, text)
+    text = PROCEDURE_PIECES.sub(lambda m: _pieces(m, hints.procedures), text)
 
     def fix(m: re.Match) -> str:
         named = _named(m.group(2), hints.fixes)

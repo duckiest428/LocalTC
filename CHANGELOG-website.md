@@ -5,7 +5,9 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.6] - Upcoming
 
-No changes to the website yet.
+### Fixed
+- **The live map's gate:** a gate you asked for at the destination is shown as that, "where ground sent you" once
+  ground has.
 
 ## [0.5.5] - 2026-11-02
 

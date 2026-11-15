@@ -816,3 +816,20 @@ def test_a_real_flight_flying_on_top_of_the_user_is_taken_out_of_the_way():
         assign(m, out, NOW + i)
     assert not [p for p in m.planes.values() if p.mode == "live" and p.object_id is not None]
     assert of(RemoveAiAircraft, out)
+
+
+def test_a_cruise_lost_to_the_feed_flies_on_along_its_track():
+    """Over the sea the receivers are few: a flight at FL390 gone from the feed is carried on (Air Canada Rouge vanished
+    between Florida and San Juan), for a while; one low down is still let go."""
+    from localtc.traffic.manager import RECKON_MAX_S
+
+    m = manager()
+    high = flight(hex_="b1", callsign="ROU1845", alt=39000.0, gs=460.0, track=90.0, vs=0.0)
+    low = flight(hex_="b2", callsign="UAL9", alt=3000.0, gs=200.0, track=90.0, vs=0.0)
+    m.on_feed([high, low], "adsb.lol", NOW)
+    m.on_feed([], "adsb.lol", NOW + 300)
+    carried = m.flights["b1"]
+    assert carried.t == NOW + 300 and carried.lon > high.lon + 0.5  # 38 miles on, east
+    assert "b2" not in m.flights
+    m.on_feed([], "adsb.lol", NOW + RECKON_MAX_S + 200)
+    assert "b1" not in m.flights or m.flights["b1"].t < NOW + RECKON_MAX_S + 200

@@ -162,7 +162,8 @@ NUMBER = re.compile(r"\d[\d:,.]*|\b(?:one|two|three|four|five|six|seven|eight|ni
                     r"forty|fifty|sixty|hour|hours|minutes?)\b", re.I)
 AIRCRAFT_TALK_S = 600.0  # after the seatbelt sign is off: a word about the aircraft
 GAP_S = 1.5  # between one thing said and the next
-WELCOME_AFTER_DOORS_S = 20.0
+WELCOME_AFTER_DOORS_S = 60.0  # (20 s: doors, welcome, exit rows and the demo ran into each other in two minutes)
+SAFETY_AFTER_WELCOME_S = 45.0  # the safety demonstration this long after the welcome ends, with the push or the taxi
 SECURE_AFTER_SAFETY_S = 25.0
 LISTENING_S = 30.0  # after their call to the flight deck: the pilot's answer is theirs (unless it's a command)
 SERVICE_CALL_S = 150.0  # after the seatbelt sign is off: the call to the flight deck before the service
@@ -1011,8 +1012,9 @@ class CabinCrew:
             if "welcome" not in self.done and "doors_arm" in self.done \
                     and t >= self._at.get("doors_arm_end", 0) + WELCOME_AFTER_DOORS_S:
                 out += self._moment("welcome", t, self.announce("welcome"))
-            if "safety" not in self.done and "welcome" in self.done and s.safety_demo and pushing \
-                    and t >= self._at.get("welcome_end", 0):  # with the push, as the crew stand in the aisles
+            if "safety" not in self.done and "welcome" in self.done and s.safety_demo \
+                    and (pushing or (engines > 0 and (moving or self._phase == "TAXI_OUT"))) \
+                    and t >= self._at.get("welcome_end", 0) + SAFETY_AFTER_WELCOME_S:  # the push or the taxi out
                 out += self._moment("safety", t, self.announce("exit_row") + self.announce("safety") + self.announce("safety_more"))
             at_runway = own.on_runway or self._phase == "RUNWAY_HOLD"
             done_talking = t >= max(self._at.get("safety_end", 0), self._at.get("welcome_end", 0)) + SECURE_AFTER_SAFETY_S

@@ -206,6 +206,7 @@ class AppController:
             (get, "zones"): self.api_zones,
             (get, "airport/layout"): self.api_layout,
             (get, "clip"): self.api_clip,
+            (get, "logo"): self.api_logo,
             (get, "airports/search"): self.api_search,
             (get, "airports/around"): self.api_airports_around,
             (post, "dev/note"): self.api_note,
@@ -695,7 +696,7 @@ class AppController:
         name = lambda g: (self.airports.get(g.airport.icao).name if self.airports.get(g.airport.icao) else g.airport.name)  # noqa: E731
         return {
             "airline": TELEPHONY.get(code, "") if code else "", "airline_icao": code, "iata": iata,
-            "logo": f"https://pics.avs.io/200/60/{iata}.png" if iata else "",
+            "logo": f"/api/logo?iata={iata}" if iata else "",  # (through the app: the page clears its white)
             "flight": f"{iata or code} {number}".strip() if code else callsign, "callsign": callsign,
             "aircraft": speech.aircraft_type(kind)[0] or kind, "type": kind,
             "origin": snap.origin, "origin_name": name(origin) if origin is not None else "",
@@ -790,6 +791,27 @@ class AppController:
         if isinstance(ev, IntercomHeard):
             return bool(ev.text) and ev.source == "voice"
         return False
+
+    async def api_logo(self, args: dict) -> Raw:
+        """An airline's logo (pics.avs.io's PNG by its IATA code), passed through, so the page can clear the white round
+        it (a picture from another site can't be read). Kept for the session."""
+        import re
+        import urllib.request
+
+        iata = str(args.get("iata", "")).upper()
+        if not re.fullmatch(r"[A-Z0-9]{2}", iata):
+            raise HttpError(404, "No such airline code.")
+        cache = self.__dict__.setdefault("_logos", {})
+        if iata not in cache:
+            def fetch() -> bytes:
+                req = urllib.request.Request(f"https://pics.avs.io/200/60/{iata}.png", headers={"User-Agent": "LocalTC"})
+                with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 - a fixed https host
+                    return r.read(500_000)
+            try:
+                cache[iata] = await asyncio.to_thread(fetch)
+            except Exception as exc:  # noqa: BLE001 - no logo, no harm: the badge shows instead
+                raise HttpError(404, f"No logo: {exc}") from exc
+        return Raw("image/png", cache[iata])
 
     async def api_clip(self, args: dict) -> Raw:
         """A kept transmission's audio (8 kHz WAV), by its radio line's ``audio`` id."""

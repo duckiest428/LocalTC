@@ -54,3 +54,26 @@ def test_traffic_the_bridge_moves_has_its_real_speed_and_isnt_flying_on_the_grou
     assert flying.gs_kt > 150 and not flying.on_ground
     [own_speed] = speeds.apply((target(36.1, gs=250.0),), 9.0)  # the sim's own number, when it has one
     assert own_speed.gs_kt == 250.0 and not own_speed.on_ground
+
+
+SID_STAR = VocabularyHints(callsign_spoken="Swiss 67", procedures=("FOLZZ3", "SNAPR2", "BEANO3"))
+
+
+@pytest.mark.parametrize("heard, written", [
+    ("Clear to Zurich via the F falls three departure.", "Clear to Zurich via the FOLZZ3 departure."),
+    ("Could view the FOL ZZ 3 Departures Swiss 67.", "Could view the FOLZZ3 Departures Swiss 67."),
+    ("Good to Luis Mino via this NAPR 2, then is filed.", "Good to Luis Mino via SNAPR2, then is filed."),
+    ("Descend via the beano three arrival", "Descend via the BEANO3 arrival"),
+    ("climb and maintain 5,000, expect 3", "climb and maintain 5,000, expect 3"),  # not a procedure
+    ("we are number 2 for the runway", "we are number 2 for the runway"),
+])
+def test_a_procedure_heard_in_pieces_is_the_flights_own(heard, written):
+    """ "F falls three" for FOLZZ3 was read back as FFALLS3 and turned down; "this NAPR 2" for SNAPR2."""
+    assert match_names(heard, SID_STAR) == written
+
+
+def test_a_runway_said_digit_by_digit_and_papa_as_poppa():
+    from localtc.stt.vocabulary import fixup
+
+    assert fixup("Taxiways 2, 6, left at Mike 11") == "Taxiways 26 left at Mike 11"
+    assert "papa" in fixup("We have information. Poppa.").lower()

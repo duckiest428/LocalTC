@@ -24,7 +24,7 @@ def test_en_route_the_airport_box_is_the_flights_status():
     ctl = AppController.__new__(AppController)
     ctl.airports = {}
     s = ctl._en_route(engine, snap)
-    assert s["flight"] == "DL 328" and s["airline"] == "Delta" and "pics.avs.io" in s["logo"] and s["aircraft"].startswith("Airbus")
+    assert s["flight"] == "DL 328" and s["airline"] == "Delta" and s["logo"] == "/api/logo?iata=DL" and s["aircraft"].startswith("Airbus")
     assert 0.3 < s["progress"] < 0.7 and s["altitude"] == "FL330" and s["with"] == "Denver Center 133.5"
     import msgspec
 

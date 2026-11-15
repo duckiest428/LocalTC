@@ -532,13 +532,19 @@ def test_the_headsets_calls_in_order_following_the_aircraft():
     assert any("right" in s and "hand signal" in s for s in said(out)) and c._push is None
 
 
-def test_a_good_start_is_asked_and_answered_by_the_pilot():
-    """ "Confirm good engine start?", even with the engines running, and GSX told on the pilot's word ("yes" too)."""
+def test_a_good_start_is_put_in_with_the_engines_running_and_asked_without():
+    """The engines running: GSX's "Confirm good engine start" put in by the headset, who sees them. Not running (or not
+    read): asked, and GSX told on the pilot's word ("yes" too)."""
     question = Menu("Confirm Good Engine Start", ("Good Engine Start", "Complete without waiting", "Abort service"))
     c = crew()
     c.heard("pushback, nose left", 0.0)
     c.tick(0.0)
     c.own = own(engines=True)
+    out = c.update(state_with(c, services=services(Departure="completing"), menu=question), 1.0)
+    assert Pick(0, "Good Engine Start") in out and any("good start" in s.lower() for s in said(out))
+    c = crew()
+    c.heard("pushback, nose left", 0.0)
+    c.tick(0.0)
     out = c.update(state_with(c, services=services(Departure="completing"), menu=question), 1.0)
     assert not any(isinstance(o, Pick) for o in out) and any("good engine start" in s.lower() for s in said(out))
     assert Pick(0, "Good Engine Start") in c.heard("yes", 2.0)
@@ -943,11 +949,10 @@ def test_the_push_on_the_stand_in_waits_goes_and_closes_out():
         c.own = own(brake=True, engines=True)
         await _drive(service, clock, 3)
         heard_all += " " + " ".join(lines(heard))
-        assert ("pick", "Good Engine Start") not in gsx.sent and "good engine start" in heard_all.lower()
-        await service._out(c.heard("good start", clock.t))
+        assert ("pick", "Good Engine Start") in gsx.sent and "good start" in heard_all.lower()  # the engines seen running
         await _drive(service, clock, 3)
-        assert ("pick", "Good Engine Start") in gsx.sent
-        assert "hand signal" in " ".join(lines(heard)) and c._push is None
+        heard_all += " " + " ".join(lines(heard))
+        assert "hand signal" in heard_all and c._push is None
     run(scenario())
 
 
@@ -1349,12 +1354,22 @@ def test_until_left_is_tail_left():
     assert [a.direction for a in asks if a.action == g.PUSH] == [g.NOSE_RIGHT]
 
 
+def test_interrupt_pushback_opened_by_the_pilot_is_left_to_them():
+    """The pilot's own look at GSX's menu mid-push isn't shut on them (it was, every few seconds, at Miami)."""
+    crew = _push_crew()
+    crew.observe(_own(brake=False))
+    out = crew.update(_gsx_state(menu=Menu("Interrupt pushback?", ("Yes", "No", "Cameras"), (False, False, False))), 1.0)
+    assert not [o for o in out if isinstance(o, Close)]
+    assert not [o for o in out if hasattr(o, "text") and "Interrupt" in o.text]
+
+
 def test_interrupt_pushback_is_put_away_not_read_out():
     from localtc.ground.api import Menu
     from localtc.ground.crew import Close
 
     crew = _push_crew()
     crew.observe(_own(brake=False))
+    crew._engine_open_t = 0.5  # the crew opened the menu itself, for the good start
     out = crew.update(_gsx_state(menu=Menu("Interrupt pushback?", ("Yes", "No", "Cameras"), (False, False, False))), 1.0)
     assert any(isinstance(o, Close) for o in out)
     assert not [o for o in out if hasattr(o, "text") and "Interrupt" in o.text]

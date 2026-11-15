@@ -193,7 +193,9 @@ class KokoroVoices:
         speed = float(np.clip(self.rate * persona.pace / shift, 0.6, 1.8))
         if persona.foreign:  # the copilot in your language: Kokoro's voice for it, reading it as it's written
             espeak, voices = NATIVE[persona.language.split("-")[0].lower()]
-            voice = voices["F" if persona.sex == "F" else "M"]
+            # The cabin crew and the ramp keep their own voice in the other language: Swiss's purser read the
+            # German PA in the copilot's German voice, the English in their own, one after the other.
+            voice = voices["F" if persona.sex == "F" else "M"] if persona.role == "copilot" else self.voice_for(persona)[1]
             # (At its natural pace, as Piper's packs: ATC's brisk rate made another language hard to follow.)
             speed = float(np.clip(persona.pace / shift, 0.6, 1.8))
             audio, rate = self.engine.create(text, self.style(voice), speed=speed, lang=espeak)

@@ -263,8 +263,8 @@ def test_asking_for_the_tower_is_a_frequency_change():
 
 
 def test_the_exit_is_said_as_a_taxiway(flight):
-    vacate = next(line for line in flight if "vacate" in line and " ATC " in line)
-    assert "vacate right C1," in vacate, vacate
+    vacate = next(line for line in flight if " ATC " in line and ("vacate" in line or "onto C1" in line))
+    assert "vacate right C1," in vacate or "turn right onto C1" in vacate, vacate  # (either of tower's ways to say it)
     readback = next(line for line in flight if " PILOT " in line and "Vacate" in line)
     assert "charlie one" in readback and "hotel alpha romeo" not in readback, readback
 

@@ -95,12 +95,14 @@ def test_the_check_in_gets_radar_contact_and_the_climb(replay):
     assert climbs, "departure gives the next step on the way up"
 
 
-def test_an_unreadable_first_call_to_a_new_controller_is_the_check_in(replay):
-    """Whatever speech-to-text makes of the first call on a new frequency, it's the check-in: the controller
-    has the flight on radar from the handoff. "A from Frontier 2084" was the first word Seattle heard."""
-    answer = after(replay, "A from Frontier 2084")[0]
-    # "Radar contact" or "roger": a flight handed over between radar controllers is identified already.
-    assert ("radar contact" in answer or "roger" in answer) and "say again" not in answer, answer
+def test_a_flight_quiet_on_the_new_centre_is_called_by_it(replay):
+    """Handed to Los Angeles Center and nothing said on it for thirteen minutes: the centre calls the flight itself
+    (radar contact, the next climb), as departure and approach do, and gives no climb before that. ("A from Frontier
+    2084" came long after: not the first call any more.)"""
+    center = [line for line in replay if "ATC       Los Angeles Center" in line]
+    assert "radar contact" in center[0], center[0]
+    handed = next(line for line in replay if "contact Los Angeles Center" in line)
+    assert float(center[0][1:center[0].index("]")]) - float(handed[1:handed.index("]")]) >= 45.0
 
 
 def test_asking_for_a_climb_without_a_number():

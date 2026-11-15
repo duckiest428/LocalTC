@@ -155,7 +155,8 @@ const AtcMap = (() => {
     }
     if (z.gate && z.gate.lat != null) {
       L.circleMarker(at(z.gate.lat, z.gate.lon), { radius: 6, color: "#fff", weight: 2, fillColor: "#8a6cf0", fillOpacity: 1 }).addTo(layer)
-        .bindTooltip(`${esc(z.gate.name)} at ${esc(z.gate.icao)}: where ground sent you`, { permanent: true, direction: "right", className: "atc-gate" });
+        .bindTooltip(z.gate.sent !== false ? `${esc(z.gate.name)} at ${esc(z.gate.icao)}: where ground sent you`
+          : `${esc(z.gate.name)} at ${esc(z.gate.icao)}: the gate you asked for`, { permanent: true, direction: "right", className: "atc-gate" });
     }
     const KIND = { clearance: ["D", "b-clearance"], ground: ["G", "b-ground"], tower: ["T", "b-tower"], departure: ["A", "b-terminal"], approach: ["A", "b-terminal"] };
     for (const ap of z.airports || []) {

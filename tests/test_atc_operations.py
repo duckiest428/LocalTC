@@ -279,6 +279,7 @@ def test_the_next_climb_comes_before_the_level_is_reached():
     engine = engine_at_kbfi()
     st = engine.state
     st.comms.tuned, st.assignments.altitude_ft, st.assignments.cruise_ft = CENTER, 17000, 40000
+    engine._checked_in.add(CENTER.station)  # (checked in: a climb isn't given before)
     far = _own(engine, 10.0, on_ground=False, alt=13000.0)
     assert engine._climb_due(far) is None  # 4,000 ft to go
     near = _own(engine, 20.0, on_ground=False, alt=14500.0)

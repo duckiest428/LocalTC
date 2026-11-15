@@ -267,6 +267,133 @@ def test_an_arrival_on_short_final_goes_around_when_the_user_is_on_the_runway():
     assert tracks[-1].alt_ft > tracks[0].alt_ft + 500 and not tracks[-1].on_ground  # climbing away
 
 
+class RunwayAtc(Atc):
+    """ATC with an ATIS: landing and departing ``runway`` (the test's), and the calls it makes to the traffic."""
+
+    def __init__(self, runway="09"):
+        super().__init__()
+        self.landing = runway
+        self.calls = []
+
+    def link(self) -> AtcLink:
+        link = super().link()
+        link.runway_for = lambda icao, landing, **kw: self.landing
+        link.runway_in_use = lambda icao: self.landing
+        link.call = lambda **kw: self.calls.append((kw["callsign"], kw["kind"], kw["runway"])) or ["said"]
+        return link
+
+
+def _fly(m, real_at, start, seconds, until=None):
+    """``seconds`` of ticks, the real one reported where ``real_at(t)`` has it (None: not heard)."""
+    out = []
+    for k in range(seconds):
+        t = start + k
+        f = real_at(t)
+        m.on_feed([f] if f is not None else [], "adsb.lol", t)
+        out += m.tick(t)
+        if until is not None and until():
+            break
+    return out
+
+
+def test_an_arrival_lands_on_the_runway_atc_gives_it_not_the_real_ones():
+    """The live data is where it roughly is and who it is: the real one landing on 27, ATC's ATIS landing on 09,
+    it's flown round by LocalTC and lands on 09 (an Air Transat came down on 06L with only 06R in use)."""
+    atc = RunwayAtc("09")
+    m = manager(atc.link())
+    # 15 nm east, coming in for 27 (heading west), 5,000 ft and descending.
+    def real_at(t):
+        nm = max(0.0, 15.0 - (t - NOW) * 200 / 3600)
+        return flight(lat=0.0, lon=(1500 + nm * 1852) / 111_320, alt=100 + nm * 318, track=270.0, gs=200, vs=-1000, t=t)
+    m.on_feed([real_at(NOW)], "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    plane = m.planes["live:a1"]
+    seen, touched = set(), []
+
+    def watch():
+        seen.add(plane.mode)
+        loc = plane.local
+        if loc is not None and loc.on_ground and plane.mode == "landing" and not touched:
+            touched.append((loc.hdg, loc.lat, loc.lon))
+        return plane.mode == "parked" or bool(touched)
+
+    _fly(m, real_at, NOW + 1, 1500, until=watch)
+    assert "approach" in seen and touched, (seen, plane.mode)
+    hdg, lat, lon = touched[0]
+    assert abs(((hdg - 90.0) + 180) % 360 - 180) < 15  # down on 09, landing east
+    assert abs(lat) < 0.001 and abs(lon) < 0.02  # on the runway
+    assert ("UAL123", "land", "09") in atc.calls
+
+
+def test_two_arrivals_for_one_runway_are_spaced_on_its_final():
+    from dataclasses import replace
+
+    atc = RunwayAtc("09")
+    m = manager(atc.link())
+    # Both straight in for 09 from the west, a mile apart (the real ones were for two parallels).
+    def two(t):
+        out = []
+        for hex_, cs, start_nm in (("a1", "UAL1", 14.0), ("a2", "UAL2", 15.0)):
+            nm = max(1.0, start_nm - (t - NOW) * 200 / 3600)
+            out.append(replace(flight(hex_=hex_, callsign=cs, lat=0.0, lon=-(1500 + nm * 1852) / 111_320,
+                                      alt=100 + nm * 318, track=90.0, gs=200, vs=-1000, t=t), registration=f"N{hex_}"))
+        return out
+    m.on_feed(two(NOW), "adsb.lol", NOW)
+    assign(m, m.tick(NOW))
+    down = {}
+    for k in range(1, 1500):
+        t = NOW + k
+        m.on_feed(two(t), "adsb.lol", t)
+        m.tick(t)
+        for p in m.planes.values():
+            if p.local is not None and p.local.on_ground and p.mode == "landing":
+                down.setdefault(p.callsign, t)
+        if len(down) == 2:
+            break
+    assert len(down) == 2, down
+    assert abs(down["UAL1"] - down["UAL2"]) >= 60  # a turn round for one of them: not landing on top of each other
+
+
+def test_a_departure_taxies_to_atcs_runway_and_joins_the_real_ones_track_after():
+    from localtc.atc_core.airport.geometry import AirportGeometry
+    from localtc.traffic.manager import Local, Plane
+
+    atc = RunwayAtc("09")
+    m = manager(atc.link())
+    geo = AirportGeometry(APT)
+    real = flight(lat=0.0, lon=0.005, ground=True, gs=40, track=270.0)  # rolling on 27 for real
+    m.flights["a1"] = real
+    plane = Plane("live:a1", 9, "FSLTL_B738_ZZZZ", "", callsign="UAL123", object_id=109, flight=real, spot=("KTST", 0))
+    assert m._departure_end(plane, geo).ident == "09"
+    # Off 09 and up (east), the real one 6 nm west of the field going west at 6,000 ft: flown round to it.
+    plane.mode, plane.runway = "departing", ("KTST", "09")
+    plane.local = Local(0.0, 0.03, 2200.0, 90.0, 220.0, 2000.0, False, target_alt=5100.0, target_kt=250.0,
+                        accel=2.5, started=NOW)
+    m.planes[plane.key] = plane
+    def west(t):
+        return flight(lat=0.0, lon=-(6 + (t - NOW) * 250 / 3600) / 60, alt=6000 + (t - NOW) * 10, track=270.0, gs=250,
+                      vs=600, t=t)
+    m.on_feed([west(NOW)], "adsb.lol", NOW)
+    _fly(m, west, NOW, 900, until=lambda: plane.mode == "live")
+    assert plane.mode == "live" and plane.departed  # alongside it: the live data again
+
+
+def test_a_departure_waits_for_one_of_localtcs_arrivals_close_in():
+    from localtc.atc_core.airport.geometry import AirportGeometry
+    from localtc.traffic.manager import Local, Plane
+
+    m = manager(RunwayAtc("09").link())
+    geo = AirportGeometry(APT)
+    end = geo.end("09")
+    arrival = Plane("live:b1", 8, "FSLTL_B738_ZZZZ", "", callsign="DAL1", object_id=108, mode="landing",
+                    local=Local(0.0, -(1500 + 3 * 1852) / 111_320, 1050.0, 90.0, 140.0, -700.0, False,
+                                runway=("KTST", "09"), owned=True))
+    m.planes[arrival.key] = arrival
+    assert m._arrival_close(geo, end)
+    arrival.local.lon = -(1500 + 9 * 1852) / 111_320
+    assert not m._arrival_close(geo, end)
+
+
 
 
 def test_an_arrival_gone_quiet_on_final_is_landed_and_kept_on_the_ground_when_heard_again():

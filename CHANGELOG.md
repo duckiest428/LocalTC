@@ -111,6 +111,13 @@ a new minor version adds features, a patch fixes them.
   the radio bar to choose, also on aircraft whose own selector the sim can't see.
 
 ### Changed
+- **ATC runs the live traffic's runways:** the live feed now only says roughly where a real flight is and who it is.
+  From about 25 miles out, LocalTC flies each arrival itself to the runway ATC gives it, one of the ATIS's landing
+  runways, never the one the real flight used (an Air Transat landed on 06L with only 06R in use). It comes straight
+  in, by a base, or round by a downwind from the wrong side, spaced on the final behind the one ahead (or you), with a
+  turn round when it's too close or too high. Tower clears it to land on that runway. A runway still taken sends it
+  around, then round for another approach. Departures taxi to ATC's departure runway, wait for an arrival close in,
+  and fly to the real flight's track after takeoff before following it again.
 - **Quick Settings comes in sections** (Voice & radio, ATC, Crew, Traffic, AI & models), with a box to find a setting.
   The switches beside the radio box are now "ATC voice" and "Copilot radio", each with a light, and the X beside the
   typing box is gone.
@@ -146,6 +153,15 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **Readbacks heard oddly but said right:** every readback ATC asks for, said right and written the ways speech
+  recognition writes it (tens of thousands of variations), is now taken as right. Among them: "climbing to 8,000",
+  "descending to 6,000", "descending 6,500" for the altitude you were given, "climbing and maintaining",
+  "squawking 4636", "210 knot", "lining up and waiting", "runway 1, 5", "flight level 6, 0", "1 4,500", "are nav",
+  "squad 4521", "hitting 270", and "expect 14,010 minutes" for the level and the 10 minutes run together. A frequency
+  followed by the callsign after a full stop ("134 decimal 05. 2LT") is no longer one number. "Juliett" spelled with
+  two t's no longer breaks the taxi route, the callsign after the last taxiway ("via Echo 7, 2LT") no longer runs into
+  it, and "runway 17, 2LT" is no longer read as N172LT. With the MONTN2 departure filed, "climb and maintain 2,000" is
+  no longer heard as "climb and MONTN2,000" (ATC's own words are never a procedure or a fix).
 - **A flight that turns back:** the centres no longer give "direct" to fixes the flight has already flown (an
   autopilot lost over the Atlantic brought "direct EBMOS" and "direct MOBUB", the route's first fixes), and a flight
   30 miles off its route in the cruise with nothing given to explain it is asked for its intentions.

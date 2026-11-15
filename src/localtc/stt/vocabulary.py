@@ -101,7 +101,8 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\btake-off\b", "takeoff"),
     (r"\bfl ?(\d{2,3})\b", r"flight level \1"),
     # "expect 37022 minutes after departure": the level and the minutes run together into one number.
-    (r"\bexpect (flight level )?(\d{3})(\d{1,2}) minutes", r"expect \1\2 \3 minutes"),
+    (r"\b(expect(?:ing)? )(flight level )?(\d\d[05])(\d{1,2}) minutes", r"\1\2\3 \4 minutes"),  # (a level ends in 0 or 5)
+    (r"\b(expect(?:ing)? )(?:flight level |fl ?)(\d\d)(\d{2}) minutes", r"\1flight level \2 \3 minutes"),  # FL60, 10
     (r"^(?:to|toe|tell|till) (left|right)\b", r"tail \1"),  # "To left, EDW87": the pushback's turn read back
     (r"\bfo(?:ck|x)?(?:s)?trap\b|\bfox ?trot\b|\bfoxtrop\b|\bfoxstrot\b|\bfox ?tr(?:uck|ucks|ock)\b", "foxtrot"),
     (r"\bcleared for the takeoff\b", "cleared for takeoff"),
@@ -112,8 +113,11 @@ FIXUPS: list[tuple[str, str]] = [
     (r"\b(\d{1,2}),000,000 minutes\b", r"\1,000, 10 minutes"),  # "expect 12,000 one zero minutes" run together
     (r"(\d)er\b", r"\1"),  # "6-9er"
     (r"\b(\d),? (\d),?000\b", r"\1\g<2>000"),  # "level 1 2000", "1, 2000": one two thousand
+    (r"\b([1-9]),? (\d),([1-9])00\b", r"\1\2,\g<3>00"),  # "1 4,500": one four thousand five hundred
     (r"\bshort (?:file|finale|fine|find)\b", "short final"),
-    (r"\b(?:r-?naf|r-?nav|rnf|rna)\b", "RNAV"),
+    (r"\b(?:r-?naf|r-?nav|rnf|rna|(?:are|our|r) nav)\b", "RNAV"),  # ("are nav": R-NAV said as it's spelled)
+    # "Runway 1, 5", "runway 2, 8 at Kilo": a runway's two digits said one by one, a comma between them
+    (r"\b(runway) ([0-3]),? ([0-9])\b(?![.,]?\d)(?![.,]? (?:mile|miles|nm|nautical)\b)", r"\1 \2\3"),  # (not "3 mile final")
     (r"\btime (?:and )?maintain\b", "climb and maintain"),
     (r"\btail ?(?:rite|write|wright)\b|\btill right\b|\btale right\b", "tail right"),  # a pushback turn
     (r"\btail ?lift\b|\btill left\b|\btale left\b", "tail left"),
@@ -128,6 +132,13 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^comment in(?= \d)", "climb and maintain"),  # "Comment in 230"
     (r"\b(\d{3})\.(\d{4})\b", r"\1, \2"),  # "flight level 370.2321": the level, then the flight number; a frequency's never four decimals
     (r"\btengo\b", "tango"),
+    # Readbacks misheard around their numbers: "squad 4521", "220 nots", "hitting 270", "flight lever 350"
+    (r"\bsquad\b(?=,? \d)", "squawk"),
+    (r"(\d),? (?:nots|notes|knot's|nuts)\b", r"\1 knots"),
+    (r"\b(?:hitting|heating|heeding|heading's)(?=,? \d{3}\b)", "heading"),
+    (r"\b(?:flight lever|fly level|flightlevel|flight-level|fight level)\b", "flight level"),
+    (r"\bthe (?:sent|send|scent) and maintain\b", "descend and maintain"),
+    (r"\b(climb|descend)(?:ed)? in maintain\b", r"\1 and maintain"),
     # "Tower 118, 3": a frequency after the station's name, its decimal point heard as a pause
     (r"\b(tower|ground|departure|approach|cent(?:er|re)|clearance|delivery|radio|director|control)(,? (?:on )?)"
      r"(1[1-3]\d)[.,] (\d{1,3})\b(?![,.]?\d)", r"\1\2\3.\4"),
@@ -145,14 +156,26 @@ def fixup(text: str) -> str:
         text = pattern.sub(replacement, text)
     while DIGIT_RUN.search(text):  # Whisper hyphenates digits said one by one: "1-2000", "0-6", "5-0-1-5"
         text = DIGIT_RUN.sub(r"\1\2", text)
+    for pattern, replacement in _AFTER_DIGITS:
+        text = pattern.sub(replacement, text)
     return _written(" ".join(text.split()))
+
+
+# Once the hyphenated digits are joined ("expect 1-7,010 minutes")
+_AFTER_DIGITS = [(re.compile(p, re.IGNORECASE), r) for p, r in [
+    # "expect 14,010 minutes after": one four thousand, one zero minutes, run together
+    (r"\b(expect(?:ing)? )(\d{1,2}),0(\d{2}) minutes\b", r"\g<1>\2,000, \3 minutes"),
+    # "expect 6010 minutes": six thousand, one zero minutes (601 is no flight level)
+    (r"\b(expect(?:ing)? )([1-9])0([1-9]\d) minutes\b", r"\g<1>\2,000, \3 minutes"),
+    (r"\b(expect(?:ing)? )(?:flight level |fl ?)(\d\d)(\d{2}) minutes", r"\1flight level \2 \3 minutes"),  # "8-0-1-0"
+]]
 
 
 PHONETIC = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D", "echo": "E", "foxtrot": "F", "golf": "G",
             "hotel": "H", "india": "I", "juliet": "J", "juliett": "J", "kilo": "K", "lima": "L", "mike": "M", "november": "N",
             "oscar": "O", "papa": "P", "quebec": "Q", "romeo": "R", "sierra": "S", "tango": "T", "uniform": "U", "victor": "V",
             "whiskey": "W", "x-ray": "X", "xray": "X", "yankee": "Y", "zulu": "Z"}
-_NAME = "|".join(PHONETIC)
+_NAME = "|".join(sorted(PHONETIC, key=len, reverse=True))  # ("juliett" before "juliet": "Jt" was left of it)
 # One name of a route: "Tango", "Hotel 4", "H4". Not a callsign's first word ("Delta 2321"): a taxiway has two digits at most.
 _ITEM = rf"(?:(?:{_NAME})(?:[ -]\d{{1,2}}(?![\d.,]\d))?(?![ -]?\d)|[a-z]\d{{0,2}}(?![a-z\d]))"
 _ROUTE = re.compile(rf"\b(via) ({_ITEM}(?:(?:[.,]? and|[.,])? {_ITEM})*)", re.IGNORECASE)  # ("via A. A3 Bravo")
@@ -178,7 +201,14 @@ PHONETIC = {"alpha": "A", "alfa": "A", "bravo": "B", "charlie": "C", "delta": "D
             "uniform": "U", "victor": "V", "whiskey": "W", "x-ray": "X", "xray": "X", "yankee": "Y", "zulu": "Z"}
 _LETTER = "|".join(sorted(map(re.escape, PHONETIC), key=len, reverse=True))
 SPELLED = re.compile(r"\b[A-Za-z0-9]{1,3}(?:-[A-Za-z0-9]{1,3}){1,6}\b")
-PROCEDURE_SAID = re.compile(r"\b([A-Za-z]{3,})[ -]?(\d)\b")
+# (Not a number's first digit: "maintain 2,000" was MONTN2,000 with the MONTN2 departure filed.)
+PROCEDURE_SAID = re.compile(r"\b([A-Za-z]{3,})[ -]?(\d)\b(?![.,]?\d)")
+# ATC's own words, never a procedure or a fix however they sound: "maintain" is MONTN, "heading" HDNG.
+NEVER_A_NAME = {"maintain", "maintaining", "climb", "climbing", "descend", "descending", "heading", "runway", "squawk",
+                "contact", "cleared", "expect", "flight", "level", "turn", "left", "right", "taxi", "via", "hold",
+                "holding", "direct", "approach", "departure", "arrival", "tower", "ground", "center", "centre", "speed",
+                "knots", "thousand", "hundred", "decimal", "point", "until", "established", "after", "minutes", "then",
+                "filed", "cross", "inbound", "outbound", "radial", "frequency", "altitude", "wind", "information"}
 # A procedure's name heard in pieces, its number said or written: "F falls three" FOLZZ3, "FOL ZZ 3", "this NAPR 2" SNAPR2.
 DIGIT_WORDS = {"one": "1", "two": "2", "three": "3", "tree": "3", "four": "4", "five": "5", "fife": "5", "six": "6",
                "seven": "7", "eight": "8", "nine": "9", "niner": "9"}
@@ -225,6 +255,8 @@ def _pieces(m: re.Match, procedures: tuple[str, ...]) -> str:
     for n, said in tries:
         if len(said) < (3 if n == 1 else 4) or n > 1 and len(_sound(said)) < MIN_PIECES_SOUND:
             continue
+        if any(w.lower() in NEVER_A_NAME or w.lower() in DIGIT_WORDS for w in words[-n:]):
+            continue  # never across ATC's words or a number said: "maintain one two thousand" was MONTN2 thousand
         if (named := _named(said, wanted)) is not None:
             kept = " ".join(words[:-n])
             return (kept + " " if kept else "") + f"{named}{digit}"
@@ -241,7 +273,9 @@ def _letters(text: str, hints: VocabularyHints) -> str:
 
     def listed(m: re.Match) -> str:
         words = re.findall(r"[A-Za-z-]+\d*[LRC]?", m.group(2))
-        return m.group(1) + ", ".join(PHONETIC.get(w.lower(), w) for w in words) + (" " if m.group(2)[-1:].isspace() else "")
+        # (the comma after the last kept: "via E7, 2LT" ran into taxiway E72)
+        tail = re.search(r"[,\s]*$", m.group(2)).group(0)
+        return m.group(1) + ", ".join(PHONETIC.get(w.lower(), w) for w in words) + tail
 
     text = LETTER_AND_NUMBER.sub(number, text)
     text = INFORMATION.sub(lambda m: f"{m.group(1)} {PHONETIC[m.group(3).lower()]}", text)
@@ -286,6 +320,8 @@ def match_names(text: str, hints: VocabularyHints) -> str:
     text = SPELLED.sub(spelled, text)
 
     def procedure(m: re.Match) -> str:
+        if m.group(1).lower() in NEVER_A_NAME:
+            return m.group(0)
         wanted = [p for p in hints.procedures if p[-1:] == m.group(2)]
         return _named(m.group(1), tuple(p[:-1] for p in wanted)) and \
             f"{_named(m.group(1), tuple(p[:-1] for p in wanted))}{m.group(2)}" or m.group(0)
@@ -294,7 +330,7 @@ def match_names(text: str, hints: VocabularyHints) -> str:
     text = PROCEDURE_PIECES.sub(lambda m: _pieces(m, hints.procedures), text)
 
     def fix(m: re.Match) -> str:
-        named = _named(m.group(2), hints.fixes)
+        named = _named(m.group(2), hints.fixes) if m.group(2).lower() not in NEVER_A_NAME else None
         return f"{m.group(1)} {named}" if named else m.group(0)
 
     text = FIX_SAID.sub(fix, text)

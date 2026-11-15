@@ -67,8 +67,12 @@ def normalize(text: str) -> list[Token]:
             after_fl = len(tokens) >= 2 and tokens[-1].text == "level" and tokens[-2].text == "flight"
             if after_fl and numbers and len(numbers[0].split(".")[0]) > 3 and not any(w in MULTIPLIERS for w in run):
                 lead = 0
-                while lead < min(3, len(run)) and run[lead] in DIGIT_WORDS:
+                while lead < min(3, len(run)) and _single_digit(run[lead]):
                     lead += 1
+                if lead == 3 and _digit_string(run[2]) not in ("0", "5") and len(run) > 3:
+                    lead = 2  # "flight level six zero, one zero minutes": FL60 (no level ends in a 1)
+                if lead == 0 and run[0].isdigit() and 2 <= len(run[0]) <= 3:
+                    lead = 1  # "flight level 80 10 minutes": the level written, then the minutes
                 if 0 < lead < len(run):
                     numbers = _numbers(run[:lead]) + _numbers(run[lead:])
             tokens.extend(Token("number", n) for n in numbers)
@@ -122,6 +126,8 @@ def _digit_list(run: list[str], raw: list[str], comma: int) -> bool:
     "one two three four, two lima tango" (a group, then a new number)."""
     if not run or not _single_digit(raw[comma - 1]) or comma + 1 >= len(raw):
         return False
+    if len(run) == 1 and comma >= 2 and raw[comma - 2] == "level" and _single_digit(raw[comma + 1]):
+        return True  # "flight level 6, 0": a level's digits one by one, two of them (not "runway 8, 3 mile final")
     if _last_digit_with_decimals(raw[comma + 1]):
         return len(run) >= 2 and all(_single_digit(w) for w in run)  # "1, 2, 5.15"
     if not _single_digit(raw[comma + 1]):
@@ -152,6 +158,8 @@ def _decimal_point(run: list[str], following: str) -> bool:
     one piece, so a "." standing alone had a space after it: usually the end of a sentence. It is only
     read as a point where the two sides make a frequency ("121. 7"), which a callsign followed by an
     altitude ("2084. 1300") never does."""
+    if any(w in POINT_WORDS or "." in w for w in run):
+        return False  # one decimal point already: "134 decimal 05. 12K" is the frequency, then the callsign
     if not run or not all(w[0].isdigit() for w in run):
         return True  # spoken digits ("one two one . seven"): speech-to-text doesn't end sentences there
     whole, fraction = "".join(run).replace(",", ""), following.replace(",", "")

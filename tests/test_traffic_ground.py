@@ -486,3 +486,52 @@ def test_taken_over_rolling_out_it_doesnt_go_back_for_where_it_was():
         lat, lon, hdg, gs = follower.step(lat, lon)
         assert abs((hdg - end.heading_true + 180) % 360 - 180) < 10.0, hdg
         assert gs <= 57.0
+
+
+def test_an_arrival_coming_in_for_another_runway_is_flown_round_to_atcs_and_taxied_in():
+    """Haneda landing 34L and 34R: a real one coming in for 22 from the north east is flown round by LocalTC (a
+    downwind, a base), lands on the runway ATC gave it and taxies to a stand. Never below 1,000 ft before its final,
+    never turning harder than rate one, and never climbing on the way in."""
+    calls: list = []
+    m = manager(calls)
+    m.atc.runway_for = lambda icao, landing, **kw: "34L" if landing else "34R"
+    m.atc.runway_in_use = lambda icao: "34R"
+    m.on_own(own_at(35.58, 139.80))  # (not standing in its way in)
+    geo = AirportGeometry(RJTT)
+    end22 = geo.end("22")
+
+    def real_at(t: float) -> Flight:
+        nm = max(0.5, 18.0 - (t - NOW) * 210 / 3600)
+        u = (math.sin(math.radians(end22.heading_true)), math.cos(math.radians(end22.heading_true)))
+        lat, lon = geo.frame.to_latlon(end22.threshold[0] - u[0] * nm * 1852, end22.threshold[1] - u[1] * nm * 1852)
+        return replace(real("0a", "ANA22", lat, lon, ground=False, alt=30 + nm * 318, track=end22.heading_true, t=t),
+                       gs_kt=210.0, vs_fpm=-1100.0)
+
+    t = NOW
+    m.on_feed([real_at(t)], "test", t)
+    for c in [c for c in m.tick(t) if isinstance(c, SpawnAiAircraft)]:
+        m.on_assigned(AiObjectAssigned(t=0.0, request_id=c.request_id, object_id=705), t)
+    plane = m.planes["live:0a"]
+    touched, last = None, None
+    for k in range(1, 4800):
+        t = NOW + k
+        m.on_feed([real_at(t)], "test", t)
+        out = m.tick(t)
+        loc = plane.local
+        if plane.mode == "approach":
+            tr = [c for c in out if isinstance(c, AiTrack)]
+            if tr and last is not None:
+                assert abs(((tr[-1].hdg - last.hdg) + 180) % 360 - 180) <= 3.01
+                assert tr[-1].alt_ft <= last.alt_ft + 0.01
+                assert tr[-1].alt_ft > 1000 or loc.path == []
+            last = tr[-1] if tr else last
+        if plane.mode == "landing" and loc.on_ground and touched is None:
+            touched = (loc.lat, loc.lon, loc.hdg)
+        if plane.mode == "parked":
+            break
+    assert touched is not None
+    runway = geo.runway_at(touched[0], touched[1], 10.0)
+    assert runway is not None and geo.end("34L").runway is runway
+    assert abs(((touched[2] - geo.end("34L").heading_true) + 180) % 360 - 180) < 15
+    assert plane.mode == "parked" and plane.spot is not None
+    assert any(c["kind"] == "land" and c["runway"] == "34L" for c in calls)

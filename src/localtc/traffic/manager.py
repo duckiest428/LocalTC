@@ -11,12 +11,17 @@ service (service.py) does the waiting and the network.
   in the air. **On the ground everything is LocalTC's** (as MSFS's own live traffic does it): the real one's ground
   positions only say when. One heard standing is put on a stand LocalTC picks (the sim's spot under the real one,
   else a free gate near its airline's); one first heard taxiing out starts at a stand. When the real one pushes, it's
-  pushed back off its stand, starts and taxies LocalTC's own route to the runway, holds short until the real one has
-  gone (and while the user has that runway), lines up and takes off, and once up near the real one follows it again
-  (``_taxi_out``). An arrival low on final is landed by LocalTC, turned off and taxied to a free stand (``_take_over``),
-  and stays there (``PARKED_STAY_S``) until the real one pushes for its next flight. Nothing is ever made where a
-  real one is on the ground: a SkyWest made on the user's runway at its reported position had tower stopping the
-  user's takeoff for it.
+  pushed back off its stand, starts and taxies LocalTC's own route to the runway ATC gives it (one of the ATIS's
+  departure runways, never the real one's own), holds short until the real one has gone (and while the user, or one of
+  LocalTC's arrivals close in, has that runway), lines up and takes off, and flies to the real one's track until it's
+  alongside, then follows it again (``_taxi_out``, ``_rejoin``). **The arrivals are LocalTC's too** from
+  ``APPROACH_NM`` out: the live data says only roughly where one is and who it is. ATC gives it a runway, one of the
+  ATIS's landing runways, and LocalTC flies it there (``_approach``, ``_fly_approach``): straight in, by a base, or
+  round by a downwind from the wrong side, down a 3 degree profile, spaced on the final behind the one ahead (a turn
+  round when it would be too close, or too high), sent around when the runway's still taken (and round again for
+  another approach), landed, turned off and taxied to a free stand. It stays there (``PARKED_STAY_S``) until the real
+  one pushes for its next flight. Nothing is ever made where a real one is on the ground: a SkyWest made on the
+  user's runway at its reported position had tower stopping the user's takeoff for it.
 - **Parked aircraft** at the airport the user is on the ground at, on the sim's cargo and GA ramps (the gates have
   the real ones): as many as that airport has at that hour. The gate ATC gave the user (and wherever the user is
   parked) is kept clear: anything there is taken away.
@@ -101,7 +106,7 @@ LOW_LEVEL_FT = 8000.0  # level below this: on its way in
 LIGHT_CATEGORIES = ("A1", "A7", "B1", "B2", "B3", "B4", "B6", "B7")
 HIGH_CLIMB_FT = 18000.0  # climbing above this: on its way through
 SHOWN_ALREADY = 0.6  # one already in the sim counts as this much nearer, so two about as near don't swap places
-FLOWN_IN = ("landing", "go_around")
+FLOWN_IN = ("approach", "landing", "go_around")
 FLOWN_OUT = ("departing", "hold", "give_way", "taxi_out")
 OWN_STAND_CLEAR_M = 1500.0  # the stand the user left is kept empty until they're this far away (or off the ground)
 LINE_UP_IN_M, LINE_UP_ON_M = 60.0, 70.0  # a held departure joins the centreline this far along, and rolls on this far
@@ -218,6 +223,33 @@ TAKEOVER_NM = 3.0
 TAKEOVER_AGL = 1200.0
 HANDBACK_AGL = 1500.0
 HANDBACK_NM = 3.0
+HANDBACK_FT = 2000.0  # ... and this close in height
+UNSEEN_NM = 10.0  # ... or both this far from the user
+GO_AROUND_CLIMB_S = 60.0  # a go-around climbs away this long at least before it's flown round again
+# An arrival is LocalTC's from this far out and this low: the live data says only roughly where it is and who it is,
+# and ATC gives it its runway, one of the ATIS's in use (the real one landed where its own controller put it: an Air
+# Transat came down on 06L with only 06R in use). It's flown to that runway's final (round by a downwind and a base
+# when it's on the wrong side), spaced behind the one ahead, and landed.
+APPROACH_NM = 25.0
+APPROACH_AGL = 10000.0
+JOIN_NM, JOIN_LIGHT_NM = 8.0, 3.0  # the final, joined about this far out (a light aircraft: a circuit's)
+DOWNWIND_NM, DOWNWIND_LIGHT_NM = 4.0, 1.5  # the downwind and the base turn this far from the centreline
+FINAL_KT, FINAL_LIGHT_KT = 140.0, 70.0
+APPROACH_TURN_DPS = 3.0  # a rate one turn
+APPROACH_DESCENT_FPM = 2500.0
+GLIDE_FT_NM = 318.0  # 3 degrees
+SPACING_NM, SPACING_LIGHT_NM = 4.0, 2.0  # on one final, this far behind the one ahead at least: else a turn round first
+TOO_HIGH_FT = 1000.0  # this much over the glide path turning final: a turn round to lose it
+ORBITS_MAX = 3
+ESTABLISHED_M = 150.0  # this close to the centreline, and lined up with it: on the final (``_fly_landing`` from here)
+APPROACH_TTL_S = 25 * 60.0
+APPROACH_TRIES = 2  # sent around, it comes round for another approach this many times at most
+RUNWAY_SHORT_M = 1500.0  # an airliner's airport has a runway this long at least (not the strip beside the hub)
+LINE_UP_CLEAR_NM = 5.0  # a departure doesn't line up with one of LocalTC's arrivals this close in on that runway
+OCCUPIED_NM = 1.0  # an arrival this close in with another of LocalTC's on the runway: sent around
+REJOIN_TTL_S = 15 * 60.0  # a departure off ATC's runway flies to the real one's track this long at most
+REJOIN_LEAD_S = 60.0  # ... steering for where the real one will be this far ahead
+NO_RUNWAY_AGAIN_S = 30.0  # ATC with no runway for an airport (no ATIS for it): asked again after this long
 KEPT_OFF_S = 180.0  # a live flight taken off the user's runway isn't made again for this long (it's moved on by then)
 CONFLICT_NM = 1.0  # a live flight this close to the user in the air ...
 CONFLICT_FT = 1000.0  # ... and this close in height is in the user's way: sent around on their final, else taken away
@@ -301,6 +333,14 @@ class Local:
     user_wait_t: float | None = None  # taxiing out: since when it's stood waiting for the user
     pitch: float = 0.0  # the attitude shown, eased towards what it's doing (rotation, the flare, the nose lowered)
     spoilers: bool = False  # out on the landing roll
+    path: list[tuple[float, float]] = field(default_factory=list)  # flying an approach: the points still ahead
+    light: bool = False  # a light aircraft: a circuit's approach, and slower
+    orbit: float = 0.0  # degrees of a turn round still to go (spaced behind the one ahead, or too high)
+    orbits: int = 0
+    checked: bool = False  # on its way onto the final: the spacing behind the one ahead looked at
+    turn: float = 0.0  # degrees a second it's turning now (its bank)
+    tries: int = 0  # approaches flown (sent around: another, up to APPROACH_TRIES)
+    rejoin: bool = False  # a departure off ATC's runway, flying to the real one's track
 
 
 @dataclass
@@ -338,6 +378,7 @@ class Plane:
     left_stand: bool = False  # pushed back off a stand: a departure, never put on one again
     stood_t: float = 0.0  # on its stand, when the real one was last seen standing still (its next move is its push)
     push_due: bool = False  # first heard taxiing out: pushed back as soon as it's made
+    departed: bool = False  # took off by LocalTC and handed back to the live data: not an arrival where it took off
 
     @property
     def live(self) -> bool:
@@ -357,6 +398,7 @@ class TrafficManager:
                  types: Callable[[str], str] | None = None, seed: int = 0) -> None:
         self.s = settings or TrafficSettings()
         self._kept_off: dict[str, float] = {}  # live flights taken off the user's runway: not made again until then
+        self._no_runway: dict[str, float] = {}  # airports ATC had no runway for: not asked again until then
         self.atc = atc or AtcLink()
         self.picker = picker or ModelPicker()
         self.routes = routes or (lambda callsign: None)
@@ -644,7 +686,8 @@ class TrafficManager:
                 plane.mode, plane.local, plane.flight = "live", None, f
                 out += self._track(plane, now, blend_s=8.0)
                 continue
-            if not plane.live or plane.mode in ("go_around", "departing", "hold", "landing", "give_way", "taxi_out"):
+            if not plane.live or plane.mode in ("go_around", "departing", "hold", "approach", "landing", "give_way",
+                                                "taxi_out"):
                 continue
             # Only one close enough to be flown down here (one further off was landed, taken away for the distance and
             # made again from the next report, every 2 s).
@@ -692,6 +735,10 @@ class TrafficManager:
                 if plane.mode == "live" and shown is not None and plane.object_id is not None:
                     plane.flight = shown
                     plane.airborne_seen = plane.airborne_seen or not shown.on_ground
+                    if (to := self._arrival_runway(plane, shown, now)) is not None:
+                        out += self._approach(plane, *to, now)  # LocalTC's from here, to the runway ATC gives it
+                        if plane.mode != "live":
+                            continue
                     if self._touching_down(plane, shown):
                         out += self._take_over(plane, now)
                         if plane.mode != "live":
@@ -1323,16 +1370,16 @@ class TrafficManager:
             return out
         runway = end.runway
         for plane in list(self.planes.values()):
-            if plane.mode not in ("live", "landing") or plane.flight is None or plane.object_id is None \
+            if plane.mode not in ("live", "approach", "landing") or plane.flight is None or plane.object_id is None \
                     or not plane.callsign:
                 continue
             loc = plane.local
-            lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if plane.mode == "landing" and loc is not None \
-                else self._where(plane, now)
+            flown = plane.mode in ("approach", "landing") and loc is not None
+            lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if flown else self._where(plane, now)
             f = plane.flight
-            if plane.mode == "landing" and loc is not None and loc.on_ground:
+            if flown and loc.on_ground:
                 continue
-            if not f.on_ground:
+            if flown or not f.on_ground:
                 final = geo.final_approach(lat, lon, hdg, max_distance_nm=SHORT_FINAL_NM)
                 if final is not None and final.end.runway is runway and alt - geo.airport.elev_ft < SHORT_FINAL_AGL \
                         and kind in ("takeoff", "on"):
@@ -1366,12 +1413,12 @@ class TrafficManager:
         if own is None or own.on_ground:
             return out
         for plane in list(self.planes.values()):
-            if plane.mode not in ("live", "landing") or plane.flight is None or plane.object_id is None:
+            if plane.mode not in ("live", "approach", "landing") or plane.flight is None or plane.object_id is None:
                 continue
             loc = plane.local
-            lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if plane.mode == "landing" and loc is not None \
-                else self._where(plane, now)
-            if (plane.mode == "landing" and loc is not None and loc.on_ground) or plane.flight.on_ground:
+            flown = plane.mode in ("approach", "landing") and loc is not None
+            lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if flown else self._where(plane, now)
+            if (flown and loc.on_ground) or (not flown and plane.flight.on_ground):
                 continue
             if haversine_nm(lat, lon, own.lat, own.lon) > CONFLICT_NM or abs(alt - own.alt_msl_ft) > CONFLICT_FT:
                 continue
@@ -1522,16 +1569,36 @@ class TrafficManager:
                                          hdg=end.heading_true, on_ground=True, blend_s=3.0), now)]
         return out + self._say(plane.callsign, "takeoff", geo.icao, end.ident, now)
 
-    def _go_around(self, plane: Plane, geo: AirportGeometry, end, now: float) -> list[Any]:
+    def _go_around(self, plane: Plane, geo: AirportGeometry, end, now: float, why: str = "") -> list[Any]:
+        """Sent around: climbing away on the runway heading to 3,000 ft, then (LocalTC's arrivals) flown round for
+        another approach, to the runway ATC gives it then."""
         loc = plane.local
-        lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if plane.mode == "landing" and loc is not None \
-            else self._where(plane, now)
+        flown = plane.mode in ("approach", "landing") and loc is not None
+        lat, lon, alt, hdg = (loc.lat, loc.lon, loc.alt_ft, loc.hdg) if flown else self._where(plane, now)
         f = plane.flight
+        gs = loc.gs_kt if flown else f.gs_kt
+        light = loc.light if flown else f is not None and f.category in LIGHT_CATEGORIES
+        tries = (loc.tries if flown else 0) + 1
         plane.mode = "go_around"
-        plane.local = Local(lat, lon, alt, end.heading_true, max(f.gs_kt, 140.0), 1800.0, False,
-                            target_alt=geo.airport.elev_ft + 3000, target_kt=200.0, accel=1.0, started=now)
-        self._did(f"{plane.callsign} sent around: you had {end.ident}")
+        plane.local = Local(lat, lon, alt, end.heading_true, max(gs, 70.0 if light else 140.0),
+                            700.0 if light else 1800.0, False, target_alt=geo.airport.elev_ft + (1500 if light else 3000),
+                            target_kt=90.0 if light else 200.0, accel=1.0, started=now, runway=(geo.icao, end.ident),
+                            owned=True, light=light, tries=tries)
+        self._did(f"{plane.callsign} sent around: {why or f'you had {end.ident}'}")
         return self._say(plane.callsign, "go_around", geo.icao, end.ident, now)
+
+    def _approach_from(self, plane: Plane, loc: Local, geo: AirportGeometry, ident: str, now: float) -> list[Any]:
+        """A go-around flown round for another approach, from where it is."""
+        end = geo.end(ident)
+        if end is None:
+            return self._remove(plane)
+        again = Local(loc.lat, loc.lon, loc.alt_ft, loc.hdg, loc.gs_kt, 0.0, False,
+                      target_kt=FINAL_LIGHT_KT if loc.light else FINAL_KT, started=now, runway=(geo.icao, end.ident),
+                      owned=True, light=loc.light, tries=loc.tries, pitch=loc.pitch)
+        again.path = self._approach_path(geo, end, loc.lat, loc.lon, loc.hdg, loc.light)
+        plane.mode, plane.local = "approach", again
+        self._did(f"{plane.callsign or 'An arrival'} round for another approach, runway {end.ident}")
+        return []
 
     def _landing(self, plane: Plane, now: float) -> list[Any]:
         """A real arrival gone quiet on final (low, out of the receivers' sight): LocalTC flies it down the glide path,
@@ -1540,6 +1607,8 @@ class TrafficManager:
         lat, lon, alt, hdg = shown[:4] if shown is not None else self._where(plane, now)
         icao = self._near_airport(lat, lon, FINAL_NM + 3)
         geo = self._geo(icao) if icao else None
+        if geo is not None and (ident := self._atc_landing(plane, geo, lat, lon, now)) is not None:
+            return self._approach(plane, geo, ident, now)  # the runway ATC gives it, not the one it was lined up on
         final = geo.final_approach(lat, lon, hdg, max_distance_nm=FINAL_NM) if geo is not None else None
         if final is None:
             return []
@@ -1549,6 +1618,272 @@ class TrafficManager:
         self._did(f"{plane.callsign or 'An arrival'} out of the receivers' sight on final {final.end.ident}: "
                   "LocalTC lands it")
         return []
+
+    # --- arrivals, LocalTC's -----------------------------------------------------------------------------------
+
+    def _atc_landing(self, plane: Plane, geo: AirportGeometry, lat: float, lon: float, now: float) -> str | None:
+        """The runway ATC gives this arrival at ``geo``: one of the ATIS's landing runways, by its size and where it
+        is (None: ATC has none there, and the real one's own is kept)."""
+        if not self.s.atc_control or self._no_runway.get(geo.icao, -1e9) > now:
+            return None
+        f = plane.flight
+        kind = (f.type or self.types(f.hex)) if f is not None else ""
+        key = plane.callsign or plane.key
+        ident = self.atc.runway_for(geo.icao, landing=True, aircraft_type=kind, lat=lat, lon=lon, key=key)
+        if ident is None and (in_use := self.atc.runway_in_use(geo.icao)) is not None:
+            # Nobody had asked for its ATIS yet: made now, and asked again
+            ident = self.atc.runway_for(geo.icao, landing=True, aircraft_type=kind, lat=lat, lon=lon, key=key) or in_use
+        if ident is None or geo.end(ident) is None:
+            self._no_runway[geo.icao] = now + NO_RUNWAY_AGAIN_S
+            return None
+        return ident
+
+    def _arrival_airport(self, plane: Plane, f: Flight) -> str | None:
+        """The airport a flight in the air is coming in to, once it's within ``APPROACH_NM`` of it and below
+        ``APPROACH_AGL``: its route's destination, else the airport it's descending towards (one with an airliner's
+        runway, for an airliner). None: not one coming in here (yet). A light aircraft without a route only once it's
+        low and close in (the trainers going round stay with the live data until they land)."""
+        if f.on_ground or f.alt_ft is None or f.alt_ft > APPROACH_AGL + 14000:
+            return None  # (up in the cruise: no airport to look for)
+        alt = self._true_alt(f.alt_ft)
+        light = f.category in LIGHT_CATEGORIES
+        took_off = plane.runway[0] if plane.departed and plane.runway else ""
+        route = self.routes(plane.callsign)
+        if route is not None and route.destination:
+            icao = route.destination
+            a = self.airports.get(icao)
+            if a is None or icao == took_off or f.vs_fpm > 500:
+                return None  # bound somewhere else (or climbing away)
+            close = haversine_nm(f.lat, f.lon, a.lat, a.lon) <= APPROACH_NM and alt - a.elev_ft <= APPROACH_AGL
+            return icao if close else None
+        if f.vs_fpm > 300:
+            return None
+        best = None
+        for icao, a in self.airports.items():
+            if icao == took_off or not a.runways:
+                continue
+            d = haversine_nm(f.lat, f.lon, a.lat, a.lon)
+            agl = alt - a.elev_ft
+            if d > APPROACH_NM or agl > APPROACH_AGL or (agl > d * GLIDE_FT_NM * 1.4 + 1000 and not (d <= 10 and agl < 3000)):
+                continue  # too far, or too high to be coming down to it (on its way down to the next one along)
+            if not light and max(r.length_m for r in a.runways) < RUNWAY_SHORT_M:
+                continue  # the strip beside the hub
+            toward = abs(((bearing_deg(f.lat, f.lon, a.lat, a.lon) - f.track + 540) % 360) - 180) < 90
+            if light:
+                if not (d <= 6.0 and agl < 2500 and f.vs_fpm < -300):
+                    continue
+            elif not ((f.vs_fpm < -300 and toward) or (d <= 10.0 and agl < 3000)):
+                continue
+            fit = abs(agl - d * GLIDE_FT_NM)  # the one it's on a 3 degree path to, not just the nearest
+            if best is None or fit < best[0]:
+                best = (fit, icao)
+        return best[1] if best is not None else None
+
+    def _arrival_runway(self, plane: Plane, f: Flight, now: float) -> tuple[AirportGeometry, str] | None:
+        """A live arrival LocalTC takes from here: the airport it's coming in to and the runway ATC gives it."""
+        if plane.mode != "live" or plane.object_id is None or not self.s.atc_control:
+            return None
+        icao = self._arrival_airport(plane, f)
+        geo = self._geo(icao) if icao else None
+        if geo is None:
+            return None
+        ident = self._atc_landing(plane, geo, f.lat, f.lon, now)
+        return (geo, ident) if ident is not None else None
+
+    def _approach(self, plane: Plane, geo: AirportGeometry, ident: str, now: float, tries: int = 0) -> list[Any]:
+        """LocalTC flies it from where it's shown to ``ident``'s final (``_fly_approach``), then lands it."""
+        end = geo.end(ident)
+        shown = self._shown_now(plane, now)
+        f = plane.flight
+        if shown is not None:
+            lat, lon, alt, hdg, gs = shown
+        else:
+            lat, lon, alt, hdg = self._where(plane, now)
+            gs = f.gs_kt if f is not None else 180.0
+        light = f is not None and f.category in LIGHT_CATEGORIES
+        loc = Local(lat, lon, alt, hdg, max(gs, 60.0 if light else 120.0), min(0.0, f.vs_fpm if f is not None else 0.0),
+                    False, target_kt=FINAL_LIGHT_KT if light else FINAL_KT, started=now, runway=(geo.icao, end.ident),
+                    owned=True, light=light, tries=tries)
+        loc.path = self._approach_path(geo, end, lat, lon, hdg, light)
+        plane.mode, plane.local = "approach", loc
+        self._did(f"{plane.callsign or 'An arrival'} flown in by LocalTC to {geo.icao} runway {end.ident}"
+                  f"{'' if not loc.path else ' by a downwind' if len(loc.path) > 1 else ' by a base'}")
+        return []
+
+    @staticmethod
+    def _approach_path(geo: AirportGeometry, end, lat: float, lon: float, hdg: float, light: bool) -> list[tuple[float, float]]:
+        """The points to fly through to join ``end``'s final: none in front of it (a straight in, joined at 45
+        degrees), a base turn out to the side of it, or a downwind first from beside or beyond the airport."""
+        join = JOIN_LIGHT_NM if light else JOIN_NM
+        wide = DOWNWIND_LIGHT_NM if light else DOWNWIND_NM
+        base_at = join + (1.5 if light else 3.0)
+        u = unit(end.heading_true)
+        right = (u[1], -u[0])
+        xy = geo.xy(lat, lon)
+        dx, dy = xy[0] - end.threshold[0], xy[1] - end.threshold[1]
+        before = -(dx * u[0] + dy * u[1]) / M_PER_NM
+        lateral = (dx * right[0] + dy * right[1]) / M_PER_NM
+        h = unit(hdg)
+        side = math.copysign(1.0, lateral if abs(lateral) > 0.5 else (h[0] * right[0] + h[1] * right[1]) or 1.0)
+
+        def at(along: float, across: float) -> tuple[float, float]:
+            return geo.frame.to_latlon(end.threshold[0] - u[0] * along * M_PER_NM + right[0] * across * M_PER_NM,
+                                       end.threshold[1] - u[1] * along * M_PER_NM + right[1] * across * M_PER_NM)
+
+        if before >= join and abs(lateral) <= before - join:
+            return []
+        if before >= base_at:
+            return [at(base_at, side * wide)]
+        points = []
+        if before < 0 or abs(lateral) < wide * 0.7:
+            points.append(at(max(before, -6.0), side * wide))  # out to the downwind
+        points.append(at(base_at, side * wide))
+        return points
+
+    def _togo_nm(self, geo: AirportGeometry, end, loc: Local) -> float:
+        """How far it still has to fly to the threshold: through the points left, then down the final."""
+        u = unit(end.heading_true)
+        here, togo = (loc.lat, loc.lon), 0.0
+        for p in loc.path:
+            togo += haversine_nm(*here, *p)
+            here = p
+        x, y = geo.xy(*here)
+        before = -((x - end.threshold[0]) * u[0] + (y - end.threshold[1]) * u[1]) / M_PER_NM
+        lateral = ((x - end.threshold[0]) * u[1] - (y - end.threshold[1]) * u[0]) / M_PER_NM
+        return togo + math.hypot(max(before, 0.0), abs(lateral) * 0.5)
+
+    def _fly_approach(self, plane: Plane, loc: Local, now: float) -> None:
+        """A second along its approach: through the points, onto the final by turning in at up to 45 degrees (as a
+        localiser is joined), down a 3 degree profile of the way still to go, slowing; a turn round first when it
+        would be too close behind another on that final (or the user), or too high. Established on the final:
+        ``_fly_landing`` lands it."""
+        icao, ident = loc.runway
+        geo = self._geo(icao)
+        end = geo.end(ident) if geo is not None else None
+        if end is None:
+            return
+        elev = end.runway.runway.elev_ft or geo.airport.elev_ft
+        u = unit(end.heading_true)
+        x, y = geo.xy(loc.lat, loc.lon)
+        before = -((x - end.threshold[0]) * u[0] + (y - end.threshold[1]) * u[1])
+        lateral = (x - end.threshold[0]) * u[1] - (y - end.threshold[1]) * u[0]
+        togo = self._togo_nm(geo, end, loc)
+        profile = elev + 50 + togo * GLIDE_FT_NM
+        want: float | None = None
+        if loc.orbit:
+            step = math.copysign(min(APPROACH_TURN_DPS, abs(loc.orbit)), loc.orbit)
+            loc.orbit -= step
+        elif loc.path:
+            target = loc.path[0]
+            d = haversine_nm(loc.lat, loc.lon, *target)
+            radius_nm = loc.gs_kt / 3600.0 / math.radians(APPROACH_TURN_DPS)
+            if d < max(0.3, radius_nm * 0.7):  # the turn led, as a pilot leads it
+                if len(loc.path) == 1 and self._turned_round(plane, loc, geo, end, togo, profile, lateral):
+                    pass
+                else:
+                    loc.path.pop(0)
+                    loc.checked = not loc.path  # (the final ahead now: checked here)
+            want = bearing_deg(loc.lat, loc.lon, *target)
+        elif not loc.checked and self._turned_round(plane, loc, geo, end, togo, profile, lateral):
+            want = None  # straight in, too close behind another: round once first
+            step = 0.0
+        else:
+            loc.checked = True
+            want = (end.heading_true - max(-45.0, min(45.0, lateral / 30.0))) % 360
+            lined = abs(((loc.hdg - end.heading_true + 540) % 360) - 180) < 10
+            if (abs(lateral) < ESTABLISHED_M and lined) or 0 < before < 2 * M_PER_NM:
+                plane.mode, loc.turn = "landing", 0.0
+                return
+        if want is not None:
+            step = max(-APPROACH_TURN_DPS, min(APPROACH_TURN_DPS, ((want - loc.hdg + 540) % 360) - 180))
+        loc.hdg, loc.turn = (loc.hdg + step) % 360, step
+        if loc.light:
+            want_kt = 90.0 if loc.path else 80.0
+        else:
+            want_kt = 250.0 if loc.alt_ft - elev > 9000 else 220.0 if togo > 15 else 190.0 if loc.path else 170.0
+        loc.gs_kt += max(-1.0, min(1.0, want_kt - loc.gs_kt))
+        loc.vs_fpm = max(-APPROACH_DESCENT_FPM, min(0.0, (profile - loc.alt_ft) * 2.0 - loc.gs_kt * KT_TO_FPM * GLIDE))
+
+    def _turned_round(self, plane: Plane, loc: Local, geo: AirportGeometry, end, togo: float, profile: float,
+                      lateral: float) -> bool:
+        """Turning onto the final (or starting straight in): a turn round first when it should (``_delay``), away
+        from the centreline; checked again once round."""
+        why = self._delay(plane, loc, geo, end, togo, profile)
+        if not why:
+            return False
+        loc.orbit, loc.orbits, loc.checked = 360.0 * (1 if lateral >= 0 else -1), loc.orbits + 1, False
+        self._did(f"{plane.callsign or 'An arrival'} turned round before the final: {why}")
+        return True
+
+    def _delay(self, plane: Plane, loc: Local, geo: AirportGeometry, end, togo: float, profile: float) -> str:
+        """Why it turns round before the final ("" if it needn't): too high, or too close behind another on that
+        final (or beside one already established on it, which can't turn round itself)."""
+        if loc.orbits >= ORBITS_MAX:
+            return ""
+        if loc.alt_ft - profile > TOO_HIGH_FT:
+            return "too high"
+        spacing = SPACING_LIGHT_NM if loc.light else SPACING_NM
+        for other in self.planes.values():
+            there = other.local
+            if other is plane or there is None or there.on_ground or there.runway is None or there.runway[0] != geo.icao \
+                    or other.mode not in ("approach", "landing") or (other.mode == "approach" and there.path):
+                continue
+            theirs = geo.end(there.runway[1])
+            if theirs is None or theirs.runway is not end.runway:
+                continue
+            gap = togo - self._togo_nm(geo, theirs, there)
+            if 0 <= gap < spacing or (other.mode == "landing" and abs(gap) < spacing):
+                return f"{other.callsign or 'another'} on the final"
+        own = self.own
+        if own is not None and not own.on_ground:
+            mine = geo.final_approach(own.lat, own.lon, own.hdg_true, max_distance_nm=FINAL_NM)
+            if mine is not None and mine.end.runway is end.runway and abs(togo - mine.distance_nm) < spacing + 1:
+                return "you on the final"
+        return ""
+
+    def _arrival_close(self, geo: AirportGeometry, end) -> bool:
+        """One of LocalTC's arrivals close in on ``end``'s runway (or still rolling out on it): a departure waits."""
+        for p in self.planes.values():
+            loc = p.local
+            if p.mode not in ("approach", "landing") or loc is None or loc.runway is None or loc.runway[0] != geo.icao \
+                    or (p.mode == "approach" and loc.path):
+                continue
+            theirs = geo.end(loc.runway[1])
+            if theirs is None or theirs.runway is not end.runway:
+                continue
+            if loc.on_ground:
+                if loc.follow is None or loc.follow.index <= loc.follow.exit_index:
+                    return True
+                continue
+            if self._togo_nm(geo, theirs, loc) <= LINE_UP_CLEAR_NM:
+                return True
+        return False
+
+    def _runway_taken(self, plane: Plane, geo: AirportGeometry, end) -> bool:
+        """Another of LocalTC's on ``end``'s runway: lined up, rolling, or not off it yet after landing."""
+        for p in self.planes.values():
+            loc = p.local
+            if p is plane or loc is None or not loc.on_ground or p.object_id is None:
+                continue
+            if (p.mode == "taxi_out" and loc.stage == "line_up") or p.mode == "departing" \
+                    or (p.mode == "landing" and (loc.follow is None or loc.follow.index <= loc.follow.exit_index)):
+                if end.runway.contains(geo.xy(loc.lat, loc.lon), 5.0):
+                    return True
+        return False
+
+    def _rejoin(self, loc: Local, real: Flight, now: float) -> None:
+        """Off ATC's runway and up: towards where the real one will be a minute on, climbing (or down) to its height,
+        a little faster than it, until it's alongside (and the live data again)."""
+        ahead = reckoned(real, now + REJOIN_LEAD_S)
+        want = bearing_deg(loc.lat, loc.lon, ahead.lat, ahead.lon)
+        step = max(-APPROACH_TURN_DPS, min(APPROACH_TURN_DPS, ((want - loc.hdg + 540) % 360) - 180))
+        loc.hdg, loc.turn = (loc.hdg + step) % 360, step
+        elev = self._elev(loc.lat, loc.lon)
+        height = self._true_alt(real.alt_ft) if real.alt_ft is not None else loc.target_alt
+        loc.target_alt = max(elev + 3000.0, height)
+        loc.vs_fpm = 2000.0 if loc.alt_ft < loc.target_alt - 50 else -1500.0 if loc.alt_ft > loc.target_alt + 300 else 0.0
+        loc.target_kt = min(250.0 if loc.alt_ft < 10000 else 340.0, max(200.0, real.gs_kt + 40.0))
+        loc.rejoin = True
 
     def _fly_landing(self, plane: Plane, loc: Local) -> None:
         """A second down the glide path to the threshold, the flare, the rollout to taxi speed."""
@@ -1621,31 +1956,62 @@ class TrafficManager:
             if plane.mode == "taxi_out" and loc is not None and plane.object_id is not None:
                 out += self._taxi_out(plane, now)
                 continue
-            if plane.mode not in ("go_around", "departing", "landing") or loc is None or plane.object_id is None:
+            if plane.mode not in ("go_around", "departing", "approach", "landing") or loc is None \
+                    or plane.object_id is None:
                 continue
-            if plane.mode == "departing" and not loc.on_ground and plane.runway is not None \
-                    and loc.alt_ft - self._elev(loc.lat, loc.lon) > HANDOFF_AGL:
+            agl_now = loc.alt_ft - self._elev(loc.lat, loc.lon)
+            if plane.mode == "departing" and not loc.on_ground and plane.runway is not None and agl_now > HANDOFF_AGL:
                 out += self._try_call(plane, "handoff_departure", plane.runway[0], plane.runway[1], now)
-            if plane.mode == "departing" and plane.live and not loc.on_ground \
-                    and loc.alt_ft - self._elev(loc.lat, loc.lon) > HANDBACK_AGL \
-                    and (shown := self._shown(plane.key[5:], now)) is not None and not shown.on_ground \
-                    and haversine_nm(shown.lat, shown.lon, loc.lat, loc.lon) <= HANDBACK_NM:
-                plane.mode, plane.local, plane.flight = "live", None, shown  # up and near the real one: the live data
-                out += self._track(plane, now, blend_s=20.0)
+            if plane.mode == "departing" and plane.live and not loc.on_ground and agl_now > HANDBACK_AGL \
+                    and (shown := self._shown(plane.key[5:], now)) is not None and not shown.on_ground:
+                height = self._true_alt(shown.alt_ft) if shown.alt_ft is not None else loc.alt_ft
+                alongside = haversine_nm(shown.lat, shown.lon, loc.lat, loc.lon) <= HANDBACK_NM \
+                    and abs(height - loc.alt_ft) <= HANDBACK_FT
+                # (or both well out of the user's sight: one that went long after its real one never catches it up)
+                unseen = self._dist_nm(loc.lat, loc.lon) > UNSEEN_NM and self._dist_nm(shown.lat, shown.lon) > UNSEEN_NM
+                if alongside or unseen:
+                    # Up and alongside the real one: the live data from here
+                    plane.mode, plane.local, plane.flight, plane.departed = "live", None, shown, True
+                    out += self._track(plane, now, blend_s=20.0)
+                    continue
+                self._rejoin(loc, shown, now)  # off another runway than the real one's: flown to its track
+            if plane.mode == "go_around" and plane.live and loc.runway is not None and loc.tries < APPROACH_TRIES \
+                    and now - loc.started >= GO_AROUND_CLIMB_S and loc.alt_ft >= loc.target_alt - 100 \
+                    and (geo := self._geo(loc.runway[0])) is not None \
+                    and (ident := self._atc_landing(plane, geo, loc.lat, loc.lon, now) or loc.runway[1]) is not None:
+                # Round for another approach, to the runway ATC gives it now
+                out += self._approach_from(plane, loc, geo, ident, now)
                 continue
+            if plane.mode == "approach":
+                self._fly_approach(plane, loc, now)
             if plane.mode == "landing":
                 if loc.follow is not None:
                     out += self._taxi_in(plane, loc, now)
                     continue
-                if now - loc.started > LOCAL_TTL_S / 2:
+                if now - loc.started > (APPROACH_TTL_S if loc.owned else LOCAL_TTL_S / 2) \
+                        or (loc.owned and loc.on_ground and loc.follow is None and loc.gs_kt <= 20.5):
                     out += self._remove(plane)  # never heard again, and nowhere to taxi it: gone
                     continue
+                geo = self._geo(loc.runway[0]) if loc.runway is not None else None
+                end = geo.end(loc.runway[1]) if geo is not None else None
+                if end is not None and not loc.on_ground:
+                    togo = self._togo_nm(geo, end, loc)
+                    if togo <= FINAL_CALL_NM:
+                        out += self._try_call(plane, "land", geo.icao, end.ident, now)
+                    if togo <= OCCUPIED_NM and loc.owned and self._runway_taken(plane, geo, end):
+                        out += self._go_around(plane, geo, end, now, why="the runway still taken")
+                        continue
                 self._fly_landing(plane, loc)
-            if now - loc.started > LOCAL_TTL_S or self._dist_nm(loc.lat, loc.lon) > min(15.0, self.s.radius_nm):
+                if loc.follow is not None:
+                    loc.started = now  # its taxi in timed from here (a long way round to its final took its time)
+            owned = loc.owned and plane.mode in ("approach", "landing")
+            ttl = APPROACH_TTL_S if owned else REJOIN_TTL_S if loc.rejoin else LOCAL_TTL_S
+            far = self.s.radius_nm * LEAVE if owned or loc.rejoin or loc.runway is not None else min(15.0, self.s.radius_nm)
+            if now - loc.started > ttl or self._dist_nm(loc.lat, loc.lon) > far:
                 out += self._remove(plane)
                 continue
             dt = 1.0
-            if plane.mode == "landing":
+            if plane.mode in ("approach", "landing"):
                 if not loc.on_ground:
                     loc.alt_ft += loc.vs_fpm * dt / 60
             elif loc.on_ground and now < loc.roll_after:
@@ -1654,7 +2020,9 @@ class TrafficManager:
                 loc.gs_kt = min(loc.target_kt, loc.gs_kt + loc.accel * dt)
                 if loc.on_ground and loc.rotate_kt and loc.gs_kt >= loc.rotate_kt and loc.pitch >= LIFT_OFF_PITCH:
                     loc.on_ground, loc.vs_fpm = False, 2000.0  # rotated, and off
-                if not loc.on_ground:
+                if not loc.on_ground and loc.vs_fpm < 0:
+                    loc.alt_ft = max(loc.target_alt, loc.alt_ft + loc.vs_fpm * dt / 60)  # down to the real one's height
+                elif not loc.on_ground:
                     if loc.alt_ft >= loc.target_alt:
                         loc.vs_fpm = 0.0
                     loc.alt_ft = min(loc.target_alt, loc.alt_ft + loc.vs_fpm * dt / 60)
@@ -1664,11 +2032,13 @@ class TrafficManager:
             loc.lon += u[0] * d / (111_320.0 * math.cos(math.radians(loc.lat)))
             pitch = self._attitude(plane, loc)
             out += self._surfaces(plane, loc)
-            if plane.mode == "landing":
+            if plane.mode in ("approach", "landing"):
                 plane.used_t = plane.flight.t if plane.flight is not None else plane.used_t
+            turn = loc.turn if not loc.on_ground and plane.mode in ("approach", "departing") else 0.0
+            bank = max(-30.0, min(30.0, math.degrees(math.atan(loc.gs_kt * 0.5144 * math.radians(turn) / 9.81))))
             out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
                                                  hdg=loc.hdg, gs_kt=loc.gs_kt, vs_fpm=loc.vs_fpm, on_ground=loc.on_ground,
-                                                 pitch=pitch, blend_s=1.5), now))
+                                                 turn_dps=turn, pitch=pitch, bank=bank, blend_s=1.5), now))
             agl = 0.0 if loc.on_ground else max(0.0, loc.alt_ft - self._elev(loc.lat, loc.lon))
             out += self._lights(plane, on_ground=loc.on_ground, gs=loc.gs_kt, agl=agl, lat=loc.lat, lon=loc.lon,
                                 climbing=loc.vs_fpm > 300)
@@ -1721,27 +2091,32 @@ class TrafficManager:
             final = geo.final_approach(lat, lon, hdg, max_distance_nm=TAKEOVER_NM)
             if final is None:
                 return []
+            ident = self._atc_landing(plane, geo, lat, lon, now)
+            if ident is not None and ident != final.end.ident:
+                return self._approach(plane, geo, ident, now)  # lined up on another: round to ATC's
             plane.local = Local(lat, lon, alt, final.end.heading_true, f.gs_kt, f.vs_fpm, False, target_kt=140.0,
                                 started=now, runway=(geo.icao, final.end.ident), owned=True)
         plane.mode = "landing"
         return []
 
     def _departure_end(self, plane: Plane, geo: AirportGeometry):
-        """The runway it's taxiing out to: the one the real one's on now (lined up or rolling), else ATC's runway in
-        use, else the longest."""
-        real = self.flights.get(plane.key[5:]) if plane.live else None
-        if real is not None and real.on_ground and real.gs_kt >= 5:
-            runway = geo.runway_at(real.lat, real.lon, 10.0)
-            if runway is not None and (end := runway.end_for_heading(real.track, 20)) is not None:
-                return end
+        """The runway it's taxiing out to: the one ATC gives it (one of the ATIS's departure runways), else the one
+        the real one's on now (lined up or rolling), else the longest. The real one's was taken first, and the
+        departures went off whatever runway their own tower gave them."""
         f = plane.flight
         spots = geo.airport.parking
         stand = spots[plane.spot[1]] if plane.spot is not None and plane.spot[1] < len(spots) else None
         kind = (f.type or self.types(f.hex)) if f is not None else ""
         ident = self.atc.runway_for(geo.icao, landing=False, aircraft_type=kind, lat=stand.lat if stand else None,
                                     lon=stand.lon if stand else None, key=plane.callsign or plane.key)
-        if (ident or (ident := self.atc.runway_in_use(geo.icao))) and (end := geo.end(ident)) is not None:
+        if self.s.atc_control and (ident or (ident := self.atc.runway_in_use(geo.icao))) \
+                and (end := geo.end(ident)) is not None:
             return end
+        real = self.flights.get(plane.key[5:]) if plane.live else None
+        if real is not None and real.on_ground and real.gs_kt >= 5:
+            runway = geo.runway_at(real.lat, real.lon, 10.0)
+            if runway is not None and (end := runway.end_for_heading(real.track, 20)) is not None:
+                return end
         return max(geo.ends, key=lambda e: e.runway.runway.length_m, default=None)
 
     def _pushing(self, plane: Plane, f: Flight | None, shown: Flight | None, now: float) -> bool:
@@ -1840,7 +2215,8 @@ class TrafficManager:
             rolling = real is None or now - real.t > LOST_S or not real.on_ground or (
                 real.gs_kt >= 30 and geo.runway_at(real.lat, real.lon, 10.0) is not None)
             end = geo.end(ident)
-            busy = end is not None and self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
+            busy = end is not None and (self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
+                                        or self._arrival_close(geo, end))  # (one of LocalTC's coming in to it)
             waited = now - loc.stage_t >= HOLD_SHORT_MAX_S
             if (rolling or waited) and not busy and now - self._released_t >= self._wake_gap(plane, TAKEOFF_GAP_S):
                 self._released_t, self._released_wake = now, self._wake_of(plane)

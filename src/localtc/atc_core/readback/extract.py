@@ -187,12 +187,20 @@ def _bare_flight_level(value: int, expected: Any) -> int:
 
 def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
-    starts = _find_phrase(tokens, ("maintain",)) + [  # "climb to 3,200", "descend 3,000"
-        i for word in ("climb", "descend")  # not "climbing 5,000": that's a check-in report
+    starts = _find_phrase(tokens, ("maintain",)) + _find_phrase(tokens, ("maintaining",)) + [
+        i for word in ("climb", "descend", "descent")  # "climb to 3,200", "descend 3,000" (not "climbing 5,000": a check-in)
         for i in _find_phrase(tokens, (word, "to")) + _find_phrase(tokens, (word,))
+    ] + [  # "climbing to 8,000", "descending to 6,000", "down to 4,000": the readback as pilots say it
+        i for phrase in (("climbing", "to"), ("descending", "to"), ("down", "to")) for i in _find_phrase(tokens, phrase)
     ] + [  # VFR limits: "at or below 4,500" (FAA), "not above 3,000 feet" (ICAO)
         i for phrase in (("at", "or", "below"), ("not", "above")) for i in _find_phrase(tokens, phrase)
     ]
+    if expected is not None:
+        # "Descending 6,500", "climbing one two thousand", "out of 4,000 for 8,000": the altitude given, said as
+        # the pilot goes for it. Only that one: "climbing 5,000" is otherwise where the aircraft is.
+        starts += [i for word in ("climbing", "descending", "for") for i in _find_phrase(tokens, (word,))
+                   if _altitude_value(tokens, i) is not None
+                   and _bare_flight_level(_altitude_value(tokens, i), expected) == _int(expected)]
 
     for i in sorted(set(starts)):
         if (value := _altitude_value(tokens, i)) is not None:
@@ -221,10 +229,19 @@ def altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     return found
 
 
+def _int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def cruise_altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
     found = []
-    for i in _find_phrase(tokens, ("expect",)):
+    for i in _find_phrase(tokens, ("expect",)) + _find_phrase(tokens, ("expecting",)):
         if (value := _altitude_value(tokens, i)) is not None:
+            if 100 <= value < 1000 and _int(expected) == value * 100:
+                value = _int(expected)  # "expect 110, 10 minutes after": the hundreds of feet ("11010 minutes")
             if (value := _bare_flight_level(value, expected)) not in found:
                 found.append(value)
     return found
@@ -303,14 +320,16 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
 
 def squawks(tokens: list[Token], expected: Any = None) -> list[str]:
     found = []
-    for i in _find_phrase(tokens, ("squawk",)) + _find_phrase(tokens, ("code",)) + _find_phrase(tokens, ("transponder",)):
+    for i in _find_phrase(tokens, ("squawk",)) + _find_phrase(tokens, ("squawking",)) + _find_phrase(tokens, ("code",)) \
+            + _find_phrase(tokens, ("transponder",)):
         num = _number(tokens, i)
         if num and len(num) == 4 and all(c in "01234567" for c in num):
             found.append(num)
     return found
 
 
-SPEED_WORDS = (("speed",), ("knots",), ("kts",), ("slow",), ("maintain",), ("reduce",), ("increase",))
+SPEED_WORDS = (("speed",), ("knots",), ("knot",), ("kts",), ("slow",), ("maintain",), ("maintaining",), ("reduce",),
+               ("reducing",), ("increase",), ("increasing",), ("slowing",))
 
 
 def speeds(tokens: list[Token], expected: Any = None) -> list[int]:
@@ -697,6 +716,9 @@ def _flight_number_end(tokens: list[Token], start: int, number: str) -> int | No
     return None
 
 
+VALUE_WORDS = {"runway", "heading", "level", "squawk", "maintain", "speed", "inbound", "radial", "qnh", "altimeter"}
+
+
 def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Token]:
     """The tokens with the callsign taken out, so its letters can't be read as taxiways
     ("taxi via alpha four, delta papa six niner" is route A4 from DP69, not A4, D, P69)."""
@@ -716,7 +738,7 @@ def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Tok
         return tokens
     ident = callsign.ident.lower().replace("-", "")
     forms = {ident, callsign.suffix.lower()} | ({ident[1:]} if len(ident) > 4 else set())
-    best: tuple[int, int] | None = None  # the longest span that spells the callsign; the last one on a tie
+    spans: list[tuple[int, int]] = []
     for first in range(len(tokens)):
         if tokens[first].kind not in ("letter", "number") and len(tokens[first].text) > 2:
             continue
@@ -725,8 +747,13 @@ def without_callsign(tokens: list[Token], callsign: Callsign | None) -> list[Tok
             compact += tokens[last].text.replace(".", "")
             if len(compact) > len(ident):
                 break
-            if compact in forms and (best is None or last - first >= best[1] - best[0]):
-                best = (first, last)
+            if compact in forms:
+                spans.append((first, last))
+    # "Runway 17, 2LT" spells N172LT from the runway's number on: a span that doesn't start with a value's number,
+    # when there's one, then the longest (the last one on a tie).
+    after_value = [s for s in spans if tokens[s[0]].kind == "number" and s[0] > 0 and tokens[s[0] - 1].text in VALUE_WORDS]
+    spans = [s for s in spans if s not in after_value] or spans
+    best = max(spans, key=lambda s: (s[1] - s[0], s[0]), default=None)
     return tokens if best is None else tokens[: best[0]] + tokens[best[1] + 1 :]
 
 
@@ -858,7 +885,10 @@ ELEMENTS: dict[str, Extractor] = {
                                  ("clear", "for", "takeoff"), ("clear", "takeoff"), ("clear", "for", "take", "off"),
                                  ("great", "for", "takeoff"), ("clean", "for", "takeoff"), ("cleat", "for", "takeoff"),
                                  ("cleared", "for", "departure")),
-    "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"), ("position", "and", "hold")),
+    "line_up_and_wait": phrase(("line", "up", "and", "wait"), ("line", "up", "wait"), ("lineup", "and", "wait"),
+                               ("lining", "up", "and", "wait"), ("lining", "up", "and", "waiting"),
+                               ("line", "up", "and", "waiting"), ("lining", "up", "wait"), ("lining", "up"),
+                               ("lined", "up", "and", "wait"), ("position", "and", "hold")),
     "cleared_to_land": clearance(("cleared", "to", "land"), ("cleared", "land"), ("clear", "to", "land"), ("cut", "to", "land"),
                               ("great", "to", "land"), ("clean", "to", "land"), ("cleat", "to", "land"), ("clear", "land"),
                               ("cleared", "for", "landing"), ("clear", "for", "landing")),

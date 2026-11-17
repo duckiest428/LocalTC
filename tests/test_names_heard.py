@@ -87,6 +87,12 @@ def heard_as(flight: dict, instruction: str, slots: dict, said: str):
      "Hold a carob inbound 270. Right turns. Maintain flight level 120. Alaska 123."),
     (ATL, "common.hold_minutes", {"fix": "JJEDI", "altitude": 12000},
      "Older Jedi, inbound 270, right turns, maintain flight level 120, Delta 1123."),
+    (US, "common.hold_minutes", {"fix": "DYAMD", "altitude": 12000},
+     "Halter Diamond, inbound 270, right turns. Maintain flight level 120, Southwest 2201."),
+    (SEA, "clearance.ifr_sid", {"procedure": "MONTN2", "altitude": 5000, "destination": "Phoenix"},
+     "Cleared to Phoenix, mountain 2 departure, 5350 in 10, 124.675. Isquark 4521, Alaska 123."),
+    (KSFO, "clearance.ifr_sid", {"procedure": "SSTIK5", "altitude": 5000, "destination": "Los Angeles"},
+     "Cleared to Los Angeles, stick 5 Departure, 5350 and 10, 124.675, squawk 4521, United 1549."),
     # Levels through an accent
     (FRA, "departure.radar_contact_direct", {"fix": "TOBAK", "altitude": 10000}, "Climb flight level 1 under the direct towback. Lufthansa 1112."),
     (ATL, "departure.radar_contact_direct", {"fix": "LBSTA", "altitude": 12000}, "Climb flight level 1 to 0, direct lobster, Delta 1123."),

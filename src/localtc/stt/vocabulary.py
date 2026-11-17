@@ -149,7 +149,11 @@ FIXUPS: list[tuple[str, str]] = [
     # A level in an accent: "flight level 1 under" (one hundred), "flight level 1 to 0" (one two zero)
     (r"\b(flight level) ([1-4]) (?:under|onder|hunder|hundred)(?: the)?\b", r"\1 \g<2>00"),
     (r"\b(flight level|heading|inbound) ([0-4]) (?:to|too) ([0-9])\b", r"\1 \g<2>2\3"),
-    (r"\bes(?:quok|quark|quawk|quak|kwak|quack)\b", "squawk"),  # (a Spanish "s" before a consonant)
+    (r"\b(?:es|is|e)(?:quok|quark|quawk|quak|kwak|quack)\b", "squawk"),  # (an "s" before a consonant: "Esquark", "Isquark")
+    (r"\bis (?=squawk\b)", ""),  # "is squawk 4521"
+    (r"\bfly,? level\b", "flight level"),  # "Down to fly, level 120"
+    # "5350 in 10": five thousand, then the level expected (three five zero) in ten minutes, run together
+    (r"\b([1-9]|1\d)([1-5]\d0) (?:in|and) (\d{1,2})\b(?! ?(?:knots|degrees|miles))", r"\1,000, \2 in \3"),
     # "zero" said "tsero": "flight level 12-Z-Hoe", "inbound 27Z"
     (r"(\d)-?Z-(?:A-)?Hoe\b", r"\g<1>0"),
     (r"\b(flight level|heading|inbound) (\d{1,2})Z\b", r"\1 \g<2>0"),
@@ -373,12 +377,12 @@ def _homophone(m: re.Match, procedures: tuple[str, ...], fixes: tuple[str, ...] 
 # "older"), "cross". Then the next word or two, the callsign's own words never among them.
 FIX_SOUNDS = re.compile(
     r"\b(direct(?: to)?|proceed(?:ing)? direct(?: to)?|hold(?:ing)? (?:at|over)|hold (?:a|it|ad|that)|holt at|halt at|"
-    r"older|cross(?:ing)?)[ ,-]+((?:the )?([A-Za-z][A-Za-z'-]*)(?:[ -]([A-Za-z][A-Za-z']*))?)", re.I)
+    r"older|halter(?:ed)?|halted(?: at)?|holder|cross(?:ing)?)[ ,-]+((?:the )?([A-Za-z][A-Za-z'-]*)(?:[ -]([A-Za-z][A-Za-z']*))?)", re.I)
 # Where "direct" goes that isn't a fix: "direct to the airport", "proceed direct on course".
 NOT_A_FIX = {"airport", "field", "destination", "course", "navigation", "own", "waypoint", "fix", "next", "present",
              "position", "final", "localizer", "outer", "marker", "vor", "ndb", "please", "request", "requesting",
              "now", "when", "if", "for", "we", "i", "is", "it", "that", "this", "there", "here"}
-HOLD_HEARD = re.compile(r"^(?:hold (?:a|it|ad|that)|holt at|halt at|older)$", re.I)
+HOLD_HEARD = re.compile(r"^(?:hold (?:a|it|ad|that)|holt at|halt at|older|halter(?:ed)?|halted(?: at)?|holder)$", re.I)
 
 
 def _fix_sounding(m: re.Match, hints: VocabularyHints) -> str:

@@ -192,10 +192,12 @@ a new minor version adds features, a patch fixes them.
   Europe's said as their whole fix with their letter ("Lazet one alpha" LAZE1A, "Vuteb three echo" VUTE3E). Only where
   it sounds clearly more like that name than any other of the flight's, so a wrong fix or procedure said clearly is still
   caught. Found by LocalTC's voices reading correct readbacks in ten accents to Whisper: 209 of 324 were taken as right
-  before, 300 now.
+  before, 302 now (297 of another 324 not tuned on). The flight's names in Whisper's prompt were tried and left out:
+  long readbacks came back cut short (11 of 30 clearances).
 - **Accents on the radio:** "direct" heard as "Dehect", "Dishect", "They hacked" or "Directs"; "hold at" as "hold a",
   "hold it", "holt at" or "older"; "flight level 1 under" (one hundred), "1 to 0" (one two zero), "12-Z-Hoe" (a
-  "tsero"); "Esquark" for squawk; "then as filed" heard "Dennis filed"; "climb under maintain".
+  "tsero"); "Esquark", "Isquark" and "is squawk"; "fly, level"; "then as filed" heard "Dennis filed"; "climb under
+  maintain"; "5350 in 10" (five thousand, three five zero in ten); "hold at" heard "halter".
 - **The live map** no longer piles labels on one another: where an airport's code, a centre's name, a fix or a badge
   would cover another, the less important is hidden until you zoom in (your controllers, your route and its centres
   first), and they're kept further apart zoomed far out.

@@ -721,6 +721,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._gate_asked = False  # a gate the pilot asked for and got (the gate map): theirs, shown
         self._routes_from: dict[tuple, tuple[str, ...]] = {}  # other aircraft's taxi routes from where they were
         self._star_legs: dict[str, tuple] = {}  # the destination's arrivals (the sim's navdata) by name
+        self._arrivals_at: dict[str, tuple] = {}  # every arrival at an airport (ArrivalProcedure), from the sim
         self._radar_seen: dict[str, Facility] = {}
         self._expected_runway: str | None = None  # the runway the IFR clearance said to expect
         self._real_wait: dict[str, float] = {}  # when an airport's ATIS was first wanted, waiting for the real one
@@ -873,6 +874,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         elif isinstance(event, ArrivalData):
             if event.airport.upper() == (self.state.flight.destination or "").upper():
                 self._star_legs[event.name.upper()] = event.legs  # its published speeds: approach's work to them
+            if event.others:
+                self._arrivals_at[event.airport.upper()] = event.others
         elif isinstance(event, AtisReport):
             if self.cfg.atis_source in ("real", "hybrid") and (parsed := real_atis.parse(
                     event.text, event.kind, source=event.source, zulu=event.zulu)) is not None:
@@ -1298,7 +1301,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # ATIS.guru's (each country words its observation differently), or one with no observation in it: its
             # letter, runways and approaches, the real METAR's weather
             label = f"{'VATSIM' if real.source == 'vatsim' else 'real'} ATIS"
-            return self.weather.surface(icao, airports, report_first=True), real, (label, None, real.zulu)
+            weather = self.weather.surface(icao, airports, report_first=True)
+            if weather is not None and real.wind is not None:
+                # The ATIS's own wind (its touchdown zone's, magnetic) and how it varies, over the METAR's
+                variable = real.variable if real.variable not in (None, (0, 360)) else (None, None)
+                weather = replace(weather, wind=real.wind, wind_dir_true=(real.wind.direction_mag + geo.airport.magvar) % 360,
+                                  variable_from=variable[0], variable_to=variable[1])
+            if weather is not None and real.cavok and not weather.sky:
+                weather = replace(weather, sky=(), clear_below_ft=max(weather.clear_below_ft or 0, 5000),
+                                  visibility_sm=max(weather.visibility_sm or 0.0, 10.0))
+            return weather, real, (label, None, real.zulu)
         if real is not None and real.weather is not None:
             weather = with_magvar(real.weather, geo.airport.magvar)
             weather = replace(weather, t=own.t, elevation_ft=geo.airport.elev_ft,
@@ -2299,8 +2311,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return None
         if heading_true is None:
             geo = self.geometry(self.state.flight.destination)
-            return self.terrain.mva_ft(own.lat, own.lon, geo.distance_nm(own.lat, own.lon) if geo is not None else None)
-        return self.terrain.corridor_ft(own.lat, own.lon, heading_true, miles)
+            floor = self.terrain.mva_ft(own.lat, own.lon, geo.distance_nm(own.lat, own.lon) if geo is not None else None)
+        else:
+            floor = self.terrain.corridor_ft(own.lat, own.lon, heading_true, miles)
+        # In whole five hundreds, up: "descend and maintain 3,100" isn't an altitude a controller gives
+        return int(math.ceil(floor / 500.0) * 500) if floor is not None else None
 
     # --- LocalTC's traffic (localtc.traffic) ----------------------------------------------------------------------
 
@@ -4713,13 +4728,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             assigned is not None and abs(((heading - assigned + 540) % 360) - 180) < REVECTOR_DEG)  # still turning onto it
         # Down with the miles left to fly, never a climb. On its own (no turn to go with it) only a real step.
         level = st.assignments.altitude_ft or int(round(own.alt_indicated_ft, -2))
+        via_ended = False
         if self._via_floor is not None and st.assignments.altitude_ft == self._via_floor:
-            # Vectored off the arrival it was descending via: that clearance is over, the altitude it's at is where it
-            # is (Bozeman: "descend via" to 7,000 made 12,000 look cleared down already, and no descent ever came).
-            level = int(round(own.alt_indicated_ft, -2))
+            # Vectored off the arrival it was descending via: that clearance is over, and the vector says the altitude
+            # to keep to (Bozeman: "descend via" to 7,000 made 12,000 look cleared down already, and no descent ever
+            # came), a round one at or below where it is.
+            level = int(own.alt_indicated_ft // 1000 * 1000)
             if new_heading:
                 self._via_floor = None
-                self._assign(altitude_ft=level)  # what it's at, until the next step down
+                via_ended = True
         step = self._step_altitude(own, plan) if plan else None
         gap = 1000 if new_heading else 2000
         floor = self._terrain_floor(own, leg.heading_true)
@@ -4737,6 +4754,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         descend = step if step is not None and step <= level - gap and own.alt_indicated_ft > step + 300 else None
         if descend is not None and not new_heading and t - self._descend_t < DESCEND_GAP_S:
             descend = None
+        if via_ended and descend is None:
+            descend = level  # said with the heading, never assigned unsaid
         if not new_heading and descend is None:
             return False
         self._vector_t = t
@@ -4744,8 +4763,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._descend_t = t
         if new_heading:
             self._vector_leg = leg.leg
-            if self._vector_side is None and leg.leg in ("join", "downwind", "base"):
-                self._vector_side = leg.side
+            if leg.leg in ("join", "downwind", "base"):
+                self._vector_side = leg.side  # (it moves over with a pattern that crossed the final: ``vectors.vector``)
         if new_heading and leg.leg == "intercept" and plan is not None:
             # "Turn left heading 190, maintain 4,000 until established on the localizer, cleared ILS 16L approach."
             altitude = min(level, self._intercept_altitude(own, plan))
@@ -4823,7 +4842,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return None
         before = plan[i - 1]
         star = re.sub(r"\d+[A-Z]?$", "", (self.cfg.star or "").upper())  # BEANO3: BEANO, BLM3G: BLM
-        return before if star and before.ident.upper() == star else None
+        # (a five-letter fix's STAR is named by four of them: VUTEB's is VUTE3E)
+        named = before.ident.upper() == star or (len(star) == 4 and len(before.ident) == 5 and before.ident.upper().startswith(star))
+        return before if star and named else None
 
     def _transition_from(self, fix: str, runway: str) -> tuple | None:
         """The planned approach's transition (its fixes, from the sim's navdata) that starts at ``fix``, or None."""
@@ -6334,6 +6355,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 self._assign(altitude_ft=altitude, approach=approach.display, arrival_runway=approach.landing_runway)
             return apply
 
+        self._star_for_runway(approach.landing_runway)
         if self.cfg.star:
             planned = self.route.arrival_floor_ft
             if planned is not None and planned > STAR_FLOOR_MAX_FT:
@@ -6343,10 +6365,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 # "When ready": the crew starts down at their own top of descent (the FMS's), not the plan's. Only a
                 # flight already on the way down (it started before the clearance) gets it without.
                 descending = late and own.vs_fpm < -500
+                # (A level to stop at, cleared: vectored off the arrival, it still is. Taken as the STAR's floor, Dubai's
+                # vectors put the flight at the 11,100 it was passing, unsaid, and the copilot called it 2,000 low.)
                 self._schedule(t, "center.descend_star" if descending else "center.descend_star_pd",
                                {"procedure": self.cfg.star, "approach": approach,
                                                           "altitude": floor}, facility, delay=False,
-                               on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
+                               on_issue=assigned(floor, False), note=self._altimeter_note(st.flight.destination))
                 return
             self._schedule(t, "center.descend_via", {"procedure": self.cfg.star, "approach": approach}, facility,
                            delay=False, on_issue=assigned(floor, True), note=self._altimeter_note(st.flight.destination))
@@ -6367,6 +6391,42 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return
         self._schedule(t, "center.descend_pd", {"altitude": altitude, "approach": approach}, facility, delay=False,
                        on_issue=assigned(altitude, False), note=self._altimeter_note(st.flight.destination))
+
+    def _star_for_runway(self, runway: str | None) -> None:
+        """The filed STAR doesn't go to the runway landing on (the sim's navdata knows its runway transitions): the one
+        from the same place that does is given instead, its fixes in the route in place of the filed one's; with none,
+        no STAR, and vectors. Dubai landing 30L: "cleared VUTE3E arrival", an arrival for 12L and 12R only, and the
+        vectors started before the flight reached it."""
+        dest = (self.state.flight.destination or "").upper()
+        known, filed = self._arrivals_at.get(dest), self.cfg.star
+        if not known or not filed or not runway:
+            return
+        old = list(self.route.fixes)
+        star_fixes = [f for f in old if (f.via or "").upper() == filed.upper()]
+        first = star_fixes[0] if star_fixes else None
+        entry = self._star_entry(first) if first is not None else None
+        before = old[old.index(first) - 1] if first is not None and old.index(first) > 0 else None
+        idents = tuple(f.ident for f in (entry, before, first) if f is not None)
+        chosen = procedures.star_for_runway(known, runway, filed, idents)
+        if chosen is not None and (chosen.name.upper() == filed.upper() or procedures._same_sid(chosen.name, filed)):
+            return
+        start = old.index(first) if first is not None else len(old)
+        head = [f for f in old[:start] if (f.via or "").upper() != filed.upper()]
+        tail = [f for f in old[start:] if (f.via or "").upper() != filed.upper()]
+        new: list[RouteFix] = []
+        if chosen is not None:
+            have = {f.ident.upper() for f in head[-3:]}
+            entry_name = head[-1].ident if head else ""
+            for leg in procedures.star_route(chosen, runway, entry_name):
+                if leg.lat is None or leg.lon is None or leg.fix.upper() in have:
+                    continue
+                new.append(RouteFix(leg.fix, leg.lat, leg.lon, stage="DSC", via=chosen.name))
+            self._star_legs[chosen.name.upper()] = chosen.legs
+        logging.getLogger(__name__).info("ATC: runway %s in use, the filed %s doesn't go to it: %s", runway, filed,
+                                         f"the {chosen.name} instead" if chosen is not None else "vectors, no STAR")
+        self.route = Route(tuple(head + new + tail))
+        self.cfg = replace(self.cfg, star=chosen.name if chosen is not None else "")
+        self._route_reached = 0 if not hasattr(self, "_route_reached") else min(self._route_reached, len(head))
 
     def _star_floor(self) -> int | None:
         """The filed arrival's lowest published altitude (the sim's navdata: its restrictions, "between FL070 and
@@ -6689,7 +6749,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # jet up in the flight levels (Seattle: 11,000), the arrival altitude on a short, low flight.
             "center_alt": int(max(3000, math.ceil((elev + 10000) / 1000) * 1000)) if cruise >= 18000
             else int(min(cruise, max(3000, math.ceil((elev + 2500) / 1000) * 1000))),
-            "approach_alt": int(math.ceil((elev + 2000) / 100) * 100),
+            "approach_alt": round_altitude(elev + 2000),
         } | self._terrain_plan(geo, cruise)
 
     def _terrain_plan(self, geo: AirportGeometry, cruise: int) -> dict[str, int]:
@@ -7473,6 +7533,15 @@ def _known_fix(said: str, known: set[str]) -> str | None:
             if ratio > score:
                 best, score = fix, ratio
     return best if score >= KNOWN_FIX_RATIO else None
+
+
+def round_altitude(feet: float) -> int:
+    """An altitude as ATC gives one: the thousand when it's no more than 150 ft above it (2,062 is 2,000), else up to
+    the next five hundred (3,135 is 3,500). Dubai's approach gave 2,100 and 3,100: "weird altitude for one hundred feet"."""
+    thousand = int(feet // 1000 * 1000)
+    if feet - thousand <= 150:
+        return thousand
+    return int(math.ceil(feet / 500.0) * 500)
 
 
 def _distance_nm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:

@@ -64,9 +64,11 @@ def test_takeoff_and_touchdown_are_both_sides_of_the_moment(replay):
 
 
 def test_every_call_on_the_radio_is_there_in_order(replay):
+    from localtc.radiolog import written  # (the copilot's words as written: "Emirates 98", not "ninety-eight")
+
     events = list(Recording(FLIGHT).events())
     atc = [e.text for e in events if isinstance(e, AtcTransmission)]
-    said = [e.text for e in events if isinstance(e, Transcript) and e.text]
+    said = [written(e.text) if e.source == "copilot" else e.text for e in events if isinstance(e, Transcript) and e.text]
     assert [line["text"] for line in replay["radio"] if line["kind"] == "atc"] == atc
     assert [line["text"] for line in replay["radio"] if line["kind"] in ("pilot", "copilot")] == said
     times = [line["t"] for line in replay["radio"]]

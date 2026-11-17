@@ -362,8 +362,23 @@ class Copilot(CallWords):
         if any(key[0] == pending.instruction_id for key in self._answered):
             return  # already answered this one; ATC is waiting on a correction, not on silence
         self._answered.add((pending.instruction_id, pending.issued_t))
-        self._push("say", t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots),
-                   answers=pending.instruction_id, heard_on=issued.facility)
+        readback = self._push("say", t, text=self.engine.library.pilot_readback(pending.instruction_id, issued.slots),
+                              answers=pending.instruction_id, heard_on=issued.facility)
+        self._follow_handoff(pending.instruction_id, issued, readback, t)
+
+    def _follow_handoff(self, instruction_id: str, issued, readback: "_Queued", t: float) -> None:
+        """A handoff read back: over to the new frequency, and (working the whole radio) the check-in. Switched on just
+        after tower's "contact Roma Departure", the copilot read it back and then sat there: the readback only."""
+        handoff = self.engine.state.comms.expected
+        if handoff is None or "frequency" not in issued.slots or not handoff.matches(float(issued.slots["frequency"])):
+            return
+        if self._on_establishing(instruction_id):
+            self._when_established = (handoff, t)
+            return
+        said = readback.due + len(readback.text) * SPEECH_S_PER_CHAR
+        tune = self._push("tune", t, facility=handoff, after=said, pause=self._rng.uniform(*TUNE_AFTER_S))
+        if self.mode == "full":
+            self._push("checkin", t, facility=handoff, after=tune.due, pause=self._rng.uniform(*CHECKIN_AFTER_S))
 
     # --- reacting to ATC --------------------------------------------------------------------------------
 

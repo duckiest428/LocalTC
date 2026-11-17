@@ -153,6 +153,25 @@ a new minor version adds features, a patch fixes them.
   instead of ATC's "say again".
 
 ### Fixed
+- **The real ATIS read as published:** Europe's spelled-out wind ("WIND TDZ 040/5KT VRB BTN 010 AND 080") is the
+  ATIS's wind, not the METAR's "calm"; CAVOK and the METAR's clouds are said; a "notice for pilots" and "when ready
+  contact ... ramp" are put back together across datalink's line ends and read out.
+- **The arrival for the runway in use:** a filed STAR that doesn't go to the runway landing on (the sim's navdata) is
+  swapped for the one that does from the same place, or none and vectors; no vectors before the flight is on it.
+- **Vectors:** the base turn is towards the final from the side the aircraft is really on; vectored off the STAR, the
+  level cleared stays (no unsaid 11,100); altitudes in round numbers (2,000, not 2,100); no hold once vectored; hold
+  updates and the landing number said less often, the number only when it gets better.
+- **Directs:** never the same fix twice, never onto the STAR, only when they save 15 miles or more.
+- **Tower:** a go-around of the traffic to line up behind lets the takeoff clearance come; a conditional line-up no
+  longer sends LocalTC's arrival around.
+- **The copilot:** off the radio at the start of every flight; switched on after a handoff, it changes frequency and
+  calls; never sets the altimeter by itself; "Altitude!" three times at most; no "off the taxi route" on the runway;
+  its calls written as numbers in the radio log.
+- **ICAO clearances** without the FAA's "expect FL390 ... minutes after departure"; the model's words must keep
+  "cleared to" the destination, and no "no problem" or "looking good".
+- **Speech:** "Inflammation" is information, "mic" Mike, "Bravo Tango" taxiway BT where the airport has it; a long call
+  heard as a few words is heard again with a shorter prompt.
+- **The app** opens without the last flight's plan once that flight has parked.
 - **Readbacks heard oddly but said right:** every readback ATC asks for, said right and written the ways speech
   recognition writes it (tens of thousands of variations), is now taken as right. Among them: "climbing to 8,000",
   "descending to 6,000", "descending 6,500" for the altitude you were given, "climbing and maintaining",

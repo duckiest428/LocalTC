@@ -29,7 +29,7 @@ CONTRACTIONS = {
     "VEH": "vehicles", "WIP": "work in progress", "WI": "within", "READBACK": "read back", "NUMEROUS": "numerous",
 }
 # Words that keep their letters: said as they're written ("ILS", "TACAN")
-KEEP = {"ILS", "RNAV", "GPS", "VOR", "DME", "TACAN", "NDB", "SIGMET", "AIRMET", "PAPI", "VASI", "NOTAMS", "VFR", "IFR",
+KEEP = {"ILS", "RNAV", "GPS", "VOR", "DME", "TACAN", "NDB", "SIGMET", "AIRMET", "PAPI", "VASI", "NOTAMS", "VFR", "IFR", "AIP",
         "STAR", "SID", "RVR", "ATIS", "ASDE", "LAHSO", "UNICOM", "CTAF", "PIREP", "PIREPS", "MSL"}
 # The words a single letter after them is a taxiway (or a SIGMET) by
 LETTER_AFTER = {"SIGMET", "AIRMET", "INFO", "AND", "OR", "BTN", "EXIT", "TO"}
@@ -58,6 +58,9 @@ def say(remark: str) -> tuple[str, str]:
             ident = f"{int(number):02d}{tok[len(number):]}"
             shown.append(tok)
             said.append(speech.runway(ident))
+        elif re.fullmatch(r"\d{1,3}/\d{1,3}", tok) and before in ("SUPPLEMENT", "SUP", "AIC"):
+            shown.append(tok)  # "AIP supplement 55/26": fifty-five slash twenty-six
+            said.append(" slash ".join(speech.number_words(int(p)) for p in tok.split("/")))
         elif tok.isdigit() and nxt == "FT":
             shown.append(f"{int(tok):,}")
             said.append(speech.feet(int(tok)))

@@ -579,7 +579,10 @@ class WatchMixin:
             self.hdg_hist.popleft()
         path = getattr(self.engine, "_taxi_path", None)
         st = self.engine.state if self.engine is not None else None
-        if path is None or st is None or not own.on_ground or self.phase not in ("TAXI_OUT", "TAXI_IN") or own.on_runway:
+        if path is None or st is None or not own.on_ground or self.phase not in ("TAXI_OUT", "TAXI_IN") or own.on_runway \
+                or (self.phase == "TAXI_OUT" and ("takeoff" in st.clearances or "line_up" in st.clearances)):
+            # (Lined up or cleared for takeoff: off the route onto the runway is where it's going. Fiumicino's line-up
+            # got "We're off the taxi route, cleared via M S H BT B A AA".)
             self.taxi_off_since = None
             return
         here = st.flight.destination if self.phase == "TAXI_IN" else st.flight.origin
@@ -597,7 +600,7 @@ class WatchMixin:
             self.taxi_off_since = None
             return
         cleared = [w for w in (st.assignments.taxi_route or ()) if w]
-        via = f", cleared via {' '.join(cleared)}" if cleared else ""
+        via = f", cleared via {', '.join(speech.taxiway(w).title() for w in cleared)}" if cleared else ""
         if d > TAXI_OFF_M:
             self.taxi_off_since = self.taxi_off_since if self.taxi_off_since is not None else t
             if t - self.taxi_off_since >= TAXI_OFF_S:

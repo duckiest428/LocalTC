@@ -132,6 +132,9 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^comment in(?= \d)", "climb and maintain"),  # "Comment in 230"
     (r"\b(\d{3})\.(\d{4})\b", r"\1, \2"),  # "flight level 370.2321": the level, then the flight number; a frequency's never four decimals
     (r"\btengo\b", "tango"),
+    (r"\b(?:inflammation|in formation|informations)\b", "information"),  # "We have Inflammation Golf"
+    (r"\b(via|then) (?:mic|mic's|mics|mikes)\b", r"\1 Mike"),  # "via mic, Sierra Hotel ..."
+    (r"(?<=, )(?:mic|mics|mikes)\b(?=,)", "Mike"),
     # Readbacks misheard around their numbers: "squad 4521", "220 nots", "hitting 270", "flight lever 350"
     (r"\bsquad\b(?=,? \d)", "squawk"),
     (r"(\d),? (?:nots|notes|knot's|nuts)\b", r"\1 knots"),
@@ -271,11 +274,21 @@ def _letters(text: str, hints: VocabularyHints) -> str:
     def number(m: re.Match) -> str:
         return m.group(0) if m.group(1).lower() == own else PHONETIC[m.group(1).lower()] + m.group(2).upper()
 
+    taxiways = {w.upper() for w in hints.taxiways}
+
     def listed(m: re.Match) -> str:
-        words = re.findall(r"[A-Za-z-]+\d*[LRC]?", m.group(2))
+        found = list(re.finditer(r"[A-Za-z-]+\d*[LRC]?", m.group(2)))
+        names: list[str] = []
+        for k, w in enumerate(found):
+            letter = PHONETIC.get(w.group(0).lower(), w.group(0))
+            gap = m.group(2)[found[k - 1].end():w.start()] if k else ","
+            if names and "," not in gap and (names[-1] + letter).upper() in taxiways and len(names[-1]) == 1:
+                names[-1] += letter  # "Bravo Tango" is taxiway BT at Fiumicino, said without a pause
+            else:
+                names.append(letter)
         # (the comma after the last kept: "via E7, 2LT" ran into taxiway E72)
         tail = re.search(r"[,\s]*$", m.group(2)).group(0)
-        return m.group(1) + ", ".join(PHONETIC.get(w.lower(), w) for w in words) + tail
+        return m.group(1) + ", ".join(names) + tail
 
     text = LETTER_AND_NUMBER.sub(number, text)
     text = INFORMATION.sub(lambda m: f"{m.group(1)} {PHONETIC[m.group(3).lower()]}", text)

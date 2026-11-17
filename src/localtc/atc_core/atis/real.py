@@ -43,6 +43,12 @@ class RealAtis:
     remarks: tuple[str, ...] = ()
     notices: tuple[tuple[str, str, str], ...] = ()  # what ATC works to in them (``operations.read_notices``)
     source: str = ""  # "": the FAA's digital ATIS; "vatsim": a VATSIM controller's
+    # Europe's observation spelled out ("WIND TDZ 040/5KT VRB BTN 010/ AND 080/ CAVOK"): its own wind (magnetic, the
+    # touchdown zone's), the range it varies over, and CAVOK. The METAR's weather has the rest; this wins over its
+    # wind (Fiumicino's ATIS had 040/5 varying 010 to 080, and LocalTC's said "wind calm" from the METAR's VRB01KT).
+    wind: Wind | None = None
+    variable: tuple[int, int] | None = None
+    cavok: bool = False
 
 
 def parse(text: str, kind: str = "both", *, source: str = "", zulu: str = "") -> RealAtis | None:
@@ -84,10 +90,52 @@ def parse(text: str, kind: str = "both", *, source: str = "", zulu: str = "") ->
     found = _remarks(upper)
     if source == "atis.guru":  # (wrapped by datalink, each country's its own: what's safely read out, the closures)
         found = tuple(r for r in found if NEWS.search(r))
+    found = tuple(dict.fromkeys((*found, *_wrapped_remarks(upper))))
+    # (a line datalink cut short, "NOTICE FOR PILOTS", is in the whole one put together)
+    found = tuple(r for r in found if not any(o != r and o.startswith(r.rstrip(".,")) for o in found))
     notices = tuple(dict.fromkeys(n for r in found for n in read_notices(r)))
+    wind, variable = _spelled_wind(upper)
     return RealAtis(letter=letter, zulu=zulu, kind=kind, landing=landing, departing=departing, approach=approach,
                     approaches=by_runway, offered=tuple(offered), weather=_weather(upper), text=" ".join(text.split()),
-                    remarks=found, notices=notices, source=source)
+                    remarks=found, notices=notices, source=source, wind=wind, variable=variable,
+                    cavok=bool(re.search(r"\bCAVOK\b", upper)))
+
+
+def _unwrapped(upper: str) -> str:
+    """The published text without datalink's line ends (written as ". " where a line ran out, mid-sentence)."""
+    return " ".join(re.sub(r"(?<=\S)\.(?=\s)", " ", upper).split())
+
+
+def _spelled_wind(upper: str) -> tuple[Wind | None, tuple[int, int] | None]:
+    """The wind as Europe's ATIS spells it: "WIND TDZ 040/5KT VRB BTN 010/ AND 080/", "WIND 330/08KT", "SURFACE WIND
+    VRB2KT": (magnetic wind, (from, to) it varies between) or (None, None)."""
+    text = _unwrapped(upper)
+    m = re.search(r"\bWIND\s+(?:(?:TDZ|SFC|SURFACE|END|MID|RWY\s*\d{1,2}[LRC]?)\s+)?(\d{3}|VRB)\s*/?\s*(\d{1,3})\s*(?:G\s*(\d{1,3}))?\s*KTS?\b"
+                  r"(?:\s+(?:VRB|VRBL|VARIABLE|VARYING)\s+(?:BTN|BETWEEN)\s+(\d{3})\s*/?\s*(?:AND|-)\s*(\d{3}))?", text)
+    if m is None:
+        return None, None
+    speed = int(m.group(2))
+    direction = int(m.group(1)) if m.group(1) != "VRB" else 0
+    wind = Wind(direction_mag=direction % 360 or (360 if direction else 0), speed_kt=speed)
+    variable = (int(m.group(4)), int(m.group(5))) if m.group(4) else ((0, 360) if m.group(1) == "VRB" and speed else None)
+    return wind, variable
+
+
+def _wrapped_remarks(upper: str) -> tuple[str, ...]:
+    """What Europe's ATIS tells pilots across datalink's line ends, put back together: "NOTICE FOR PILOTS. AERONAUTICAL
+    INFORMATION. PUBLICATION SUPPLEMENT. 55 26 PHASE 2 IS ACTIVE" (Fiumicino's, read out as one notice), "WHEN READY
+    CONTACT FIUME RAMP 121.725"."""
+    text = _unwrapped(upper)
+    out = []
+    ends = r"(?=\s+(?:WHEN READY|ACKNOWLEDGE|ACK|ADVISE|INFORM|END OF|NOTICE FOR)\b|$)"
+    for m in re.finditer(rf"\bNOTICE (?:FOR|TO) (?:PILOTS|AIRMEN)\s+(.*?){ends}", text):
+        notice = m.group(1).replace("AERONAUTICAL INFORMATION PUBLICATION", "AIP")
+        notice = re.sub(r"\b(SUPPLEMENT|SUP|AIC)\s+(\d{1,3})\s+(\d{2})\b", r"\1 \2/\3", notice)
+        if notice:
+            out.append(f"NOTICE FOR PILOTS, {notice}")
+    if (m := re.search(r"\b(WHEN READY CONTACT [A-Z ]+? \d{3}\.\d{1,3})\b", text)) is not None:
+        out.append(m.group(1))
+    return tuple(out)
 
 
 def combined(first: RealAtis, other: RealAtis) -> RealAtis:
@@ -129,7 +177,7 @@ NETWORK = re.compile(r"VATS|DISCORD|HTTPS?\b|WWW\.|\.(?:COM|NET|ORG|IM)\b|\bTOBT
 
 
 NEWS = re.compile(r"^(?:TWYS?|TAXIWAYS?|RWYS?|RUNWAYS?|GATE|STAND|APRON|EXIT|ILS|LOC|GP)\b.*\b(?:CLSD|CLOSED|U/S|WIP|OUT OF SERVICE)\b|"
-                  r"\b(?:BIRD|WILDLIFE|CAUTION)\b")
+                  r"\b(?:BIRD|WILDLIFE|CAUTION)\b|^NOTICE FOR PILOTS\b|^WHEN READY CONTACT\b")
 
 
 def _remarks(upper: str) -> tuple[str, ...]:

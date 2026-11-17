@@ -14,7 +14,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Any
 
-from localtc.sim_api import ArrivalData, ArrivalLeg
+from localtc.sim_api import ArrivalData, ArrivalLeg, ArrivalProcedure
 from localtc.sim_api.airport import FEET_PER_METER
 from localtc.sim_bridge.facilities import RUNWAY_DESIGNATORS
 from localtc.sim_bridge.protocol import FacilityData
@@ -130,7 +130,20 @@ class ArrivalAssembler:
                 legs.append(node.leg)
             elif owner.kind in ("runway", "enroute") and owner.parent in arrivals:
                 legs.append(_with(node.leg, transition=owner.name))
-        return ArrivalData(t=t, airport=self.icao, name=self.name, legs=tuple(legs))
+        return ArrivalData(t=t, airport=self.icao, name=self.name, legs=tuple(legs), others=self._all())
+
+    def _all(self) -> tuple[ArrivalProcedure, ...]:
+        """Every arrival given, with its legs (each with its transition), in the sim's order."""
+        legs: dict[int, list[ArrivalLeg]] = {uid: [] for uid, n in self.nodes.items() if n.kind == "arrival"}
+        for _, node in sorted(self.nodes.items(), key=lambda kv: kv[1].order):
+            owner = self.nodes.get(node.parent) if node.kind == "leg" and node.leg is not None else None
+            if owner is None:
+                continue
+            if owner.kind == "arrival" and node.parent in legs:
+                legs[node.parent].append(node.leg)
+            elif owner.kind in ("runway", "enroute") and owner.parent in legs:
+                legs[owner.parent].append(_with(node.leg, transition=owner.name))
+        return tuple(ArrivalProcedure(name=self.nodes[uid].name, legs=tuple(found)) for uid, found in legs.items())
 
 
 def _with(leg: ArrivalLeg, **changes: Any) -> ArrivalLeg:

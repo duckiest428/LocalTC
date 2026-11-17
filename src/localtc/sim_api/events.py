@@ -365,13 +365,22 @@ class ArrivalLeg(msgspec.Struct, frozen=True, kw_only=True):
     transition: str = ""
 
 
+class ArrivalProcedure(msgspec.Struct, frozen=True, kw_only=True):
+    """One of an airport's arrivals (STARs) in the sim's navdata: its name and legs, each with its transition."""
+
+    name: str
+    legs: tuple[ArrivalLeg, ...] = ()
+
+
 class ArrivalData(Event, tag="arrival_data"):
     """An arrival procedure's legs, from the sim's navdata: the copilot checks its altitude and speed restrictions.
-    ``legs`` empty: the sim has no such arrival (or nothing published on it)."""
+    ``legs`` empty: the sim has no such arrival (or nothing published on it). ``others``: every arrival at the airport
+    (ATC gives the one for the runway in use when the filed one doesn't go to it)."""
 
     airport: str
     name: str
     legs: tuple[ArrivalLeg, ...] = ()
+    others: tuple[ArrivalProcedure, ...] = ()
 
 
 class DepartureProcedure(msgspec.Struct, frozen=True, kw_only=True):

@@ -112,6 +112,59 @@ def _same_runway(a: str, b: str) -> bool:
     return a.upper().lstrip("0") == b.upper().lstrip("0")
 
 
+def _serves(legs, runway: str, *, any_runway: bool = True) -> bool:
+    """An arrival's legs go to ``runway``: one of its runway transitions is for it ("RW30L"; "RW30B" both 30L and
+    30R). With no runway transitions at all, any runway (``any_runway``)."""
+    runways = {leg.transition[2:].upper() for leg in legs if leg.transition.upper().startswith("RW")}
+    if not runways:
+        return any_runway
+    want = runway.upper().lstrip("0")
+    for r in runways:
+        r = r.lstrip("0")
+        if r == want or (r.endswith("B") and r[:-1] == want.rstrip("LRC")) or (r.isdigit() and r == want.rstrip("LRC")):
+            return True
+    return False
+
+
+def star_for_runway(arrivals, runway: str, filed: str | None, entry: tuple[str, ...] = ()):
+    """The STAR to clear an arrival to ``runway`` by, from the sim's ``arrivals`` (``ArrivalProcedure``): the one filed
+    if it goes to that runway; otherwise one that does, from where the filed one starts (a fix of ``entry``: its first
+    fixes), or with the filed one's waypoint in its name. None: there's none, and the flight is vectored.
+
+    Dubai, filed VUTE3E for 12R with 30L in use: "cleared VUTE3E arrival, expect ILS runway 30L", an arrival that only
+    goes to runways 12L and 12R, and vectors that started before the flight was on it."""
+    found = [p for p in arrivals if filed and (p.name.upper() == filed.upper() or _same_sid(p.name, filed))]
+    if found and any(_serves(p.legs, runway) for p in found):
+        return found[0]
+    candidates = sorted((p for p in arrivals if _serves(p.legs, runway, any_runway=False)), key=lambda p: p.name)
+    wanted = {e.upper() for e in entry}
+    if wanted and (hit := next((p for p in candidates if wanted & {leg.fix.upper() for leg in p.legs}), None)) is not None:
+        return hit
+    stem = _stem(filed or "")
+    if len(stem) >= 3 and (hit := next((p for p in candidates if _stem(p.name) == stem), None)) is not None:
+        return hit
+    return None
+
+
+def star_route(procedure, runway: str, entry: str = "") -> list:
+    """An arrival's legs as flown to ``runway``: the enroute transition from ``entry`` (when it has one), the common
+    part, and the transition to that runway; each fix once, in order."""
+    legs = list(procedure.legs)
+    enroute = [leg for leg in legs if leg.transition and not leg.transition.upper().startswith("RW")
+               and leg.transition.upper() == entry.upper()]
+    common = [leg for leg in legs if not leg.transition]
+    to_runway = [leg for leg in legs if leg.transition.upper().startswith("RW") and _serves([leg], runway, any_runway=False)]
+    if to_runway:
+        first = to_runway[0].transition
+        to_runway = [leg for leg in to_runway if leg.transition == first]
+    out, seen = [], set()
+    for leg in (*enroute, *common, *to_runway):
+        if leg.fix and leg.fix.upper() not in seen:
+            seen.add(leg.fix.upper())
+            out.append(leg)
+    return out
+
+
 def sid_for_runway(departures, runway: str, filed: str | None, *, joins: tuple[str, ...] = ()) -> str | None:
     """The SID to clear a flight on from ``runway``, from the sim's ``departures``. The one filed if it's flown from that runway;
     otherwise the one from that runway going the same way: it reaches a fix of ``joins`` (where the filed route goes next), or

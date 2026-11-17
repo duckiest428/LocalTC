@@ -134,6 +134,9 @@ def seen(line: Line, c: Cockpit, values: dict[str, str]) -> tuple[str, bool | No
     return None
 
 
+ALTIMETER_BY_ITSELF = False  # the copilot sets the altimeter only when asked to
+
+
 def fix_for(line: Line, c: Cockpit, values: dict[str, str]) -> Command | None:
     """What the copilot sends to set a line of its own side that isn't right."""
     key = sense_key(line.challenge)
@@ -141,6 +144,8 @@ def fix_for(line: Line, c: Cockpit, values: dict[str, str]) -> Command | None:
     if key == "seatbelt":
         on = wanted_on(response)
         return Command("seatbelt", "on" if on else "off") if on is not None else None
+    if key == "altimeter" and not ALTIMETER_BY_ITSELF:
+        return None  # read, never set by the copilot (the knobs differ on every aircraft)
     if key == "altimeter":
         wanted = values.get("altimeter", "")
         if wanted.upper() in ("STD", "STANDARD"):

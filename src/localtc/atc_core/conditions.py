@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
 STATES = ("active", "satisfied", "expired", "contradicted", "needs_instruction", "cancelled")
 OWES_INSTRUCTION = ("behind_landing", "behind_departure", "cross_behind", "follow", "vacate")  # run out, the pilot's still waiting
+LANDING_GONE_AGL = 800.0  # the traffic to line up behind, climbing up here: it's gone around
 TAXI_FOLLOW_CLOSE_M = 60.0  # catching the one followed on the taxiway inside this
 TAXI_FOLLOW_OVER_M = 1500.0  # it's gone its own way this far off
 CONDITION_S = 300.0  # a condition still waiting this long has outlived itself
@@ -300,11 +301,14 @@ class ConditionsMixin:
             self.conditions.end(c, "satisfied", own.t, "the traffic has landed")
             self._takeoff_hold = "occupied"  # lining up: the takeoff clearance once it's off the runway
             return False
-        if self._climbing(target) and target.object_id in self._wake_seen_low:
+        geo = self.geometry(self.state.flight.origin)
+        high = geo is not None and target.alt_ft - geo.airport.elev_ft > LANDING_GONE_AGL
+        if self._climbing(target) and (target.object_id in self._wake_seen_low or high):
+            # Gone around (from short final too, not only down low: Fiumicino's line-up waited the five minutes out
+            # behind an A321 that had gone round, and the takeoff clearance never came)
             self.conditions.end(c, "expired", own.t, "the traffic went around")
             self._takeoff_hold = None
             return False
-        geo = self.geometry(self.state.flight.origin)
         if geo is not None and target.alt_ft - geo.airport.elev_ft < 500:
             self._wake_seen_low.add(target.object_id)
         if own.on_ground and own.on_runway and self._lined_up(c.runway) and (tuned := self.state.comms.tuned) is not None:

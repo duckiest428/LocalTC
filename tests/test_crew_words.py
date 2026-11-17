@@ -73,7 +73,7 @@ def test_asked_to_ask_atc_the_copilot_asks_on_the_radio():
     assert calls and calls[0].startswith("Seattle Clearance") and calls[0].endswith("request radio check.")
 
 
-def test_the_altimeter_atc_gives_is_set_and_none_at_the_gate_by_itself():
+def test_the_altimeter_atc_gives_is_left_to_the_pilot():
     pm = crew()
     pm.observe(systems(0.6))
     out = fly(pm, [own(1 + i, altimeter_inhg=29.92, altimeter_setting_inhg=29.92) for i in range(30)])
@@ -82,7 +82,7 @@ def test_the_altimeter_atc_gives_is_set_and_none_at_the_gate_by_itself():
                                      "runway 16L via B and C, information Bravo is current, altimeter 29.99.",
                                      instruction_id="ground.taxi_out_at"))
     out += fly(pm, [own(41 + i, altimeter_inhg=29.92, altimeter_setting_inhg=29.92) for i in range(30)])
-    assert [o for o in out if isinstance(o, SendSimEvent) and o.name == "KOHLSMAN_SET" and o.value == round(29.99 * 33.8639 * 16)]
+    assert not [o for o in out if isinstance(o, SendSimEvent) and o.name == "KOHLSMAN_SET"]  # (never unasked)
 
 
 def test_the_sims_stall_warning_on_final_at_151_knots_isnt_speed_speed():

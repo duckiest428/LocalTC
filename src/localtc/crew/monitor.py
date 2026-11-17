@@ -118,6 +118,7 @@ FUEL_FAR_DOUBT = 0.08
 FUEL_DOUBT_PER_H = 0.03
 STALL_BELIEF = 1.15  # the sim's stall warning taken for one below this many times the design stall speed
 SPEED_AGAIN_S = 45.0  # a flap or gear overspeed said again this often while it lasts
+ALTITUDE_DEV_MOST = 3  # "Altitude!" for one cleared altitude, at most
 LEVEL_BELOW_S = 120.0  # cleared higher (or lower) and still level this long: said
 PUSH_BRAKE_S = 150.0  # cleared to push and the parking brake still set this long: a word
 # The transition: seen this far below it (or above the level), then this far past it, climbing (or descending).
@@ -395,8 +396,8 @@ class Monitor(WatchMixin):
         the old one after the taxi clearance gave a new one)."""
         own = self.c.own
         found = ALTIMETER_SAID.search(ev.text)
-        if found is None or own is None or not self.hands:
-            return
+        if found is None or own is None or not self.hands or not run.ALTIMETER_BY_ITSELF:
+            return  # (never set unasked: ``transition_climb``)
         if not own.on_ground and self._altitude(own) > self._region().transition_ft - 500:
             return  # up in the flight levels: standard, until the transition (``transition_descent``)
         if found.group(1):
@@ -1070,11 +1071,16 @@ class Monitor(WatchMixin):
                     # Twice for each thousand feet off, and again as it gets worse: "1,200 low" and then nothing, all
                     # the way from FL330 to 8,000 with the captain asleep, was no pilot monitoring.
                     band = int(abs(alt - target) // 1000)
-                    self._nag(f"altitude_dev:{target}:{band}", SAFETY, t,
-                              f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}." if band < 2 else
-                              f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}, we're cleared "
-                              f"{speech.altitude_display(target)}.",
-                              every_s=45, valid=lambda: st.assignments.altitude_ft == target and not self._on_approach())
+                    # Three times at most for one cleared altitude, a minute and a half apart: on Dubai's approach it was
+                    # "Altitude!" nine times in six minutes ("he is just adding to the stress").
+                    told = sum(int(self.f.said.get(f"altitude_dev:{target}:{b}#", 0)) for b in range(band + 3))
+                    if told < ALTITUDE_DEV_MOST:
+                        self._nag(f"altitude_dev:{target}:{band}", SAFETY, t,
+                                  f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}." if band < 2 else
+                                  f"Altitude! {off:,.0f} {'high' if alt > target else 'low'}, we're cleared "
+                                  f"{speech.altitude_display(target)}.",
+                                  every_s=90, most=1,
+                                  valid=lambda: st.assignments.altitude_ft == target and not self._on_approach())
             else:
                 self.off_since = None
         heading = st.assignments.heading if st is not None else None
@@ -1121,8 +1127,9 @@ class Monitor(WatchMixin):
         if alt >= ta + TRANSITION_PAST_FT and own.vs_fpm > 300 and climbing_out and "below_ta" in self.f.said:
             # Set whatever the altimeter reads: a QNH of 1013 reads 29.92 and isn't standard (it was taken for set,
             # and nothing was).
-            self._call("transition_climb", ROUTINE, t, "Transition, standard set." if self.hands else "Transition, standard.",
-                       commands=(Command("altimeter", "29.92"),) if self.hands else ())
+            # Said, never set: the altimeter knobs answer differently on every aircraft ("just get rid of all altimeter
+            # actions because it's so inconsistent on these planes"). The pilot asks for it in so many words if wanted.
+            self._call("transition_climb", ROUTINE, t, "Transition, standard.")
         tl = ta + (1000 if region.icao else 0)
         if max(alt, prev_alt) > tl + TRANSITION_BAND_FT:
             self.f.said["above_tl"] = t
@@ -1131,8 +1138,7 @@ class Monitor(WatchMixin):
             if info is not None and info.weather.altimeter_inhg:
                 q = info.weather.altimeter_inhg
                 word = "QNH" if region.icao else "altimeter"
-                self._call("transition_descent", ROUTINE, t, f"Transition level, {word} {speech.altimeter_display(q)}"
-                           + (" set." if self.hands else "."), commands=(Command("altimeter", f"{q:.2f}"),))
+                self._call("transition_descent", ROUTINE, t, f"Transition level, {word} {speech.altimeter_display(q)}.")
             else:
                 self._call("transition_descent", ROUTINE, t, "Transition level, local altimeter.")
             self._prompt_checklist("descent", t=t + 3)

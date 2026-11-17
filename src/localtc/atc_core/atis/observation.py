@@ -376,9 +376,29 @@ def from_report(report, magvar: float, t: float = 0.0) -> Weather:
     gust = int(round(report.gust_kt)) if report.gust_kt else None
     temperature = int(round(report.temperature_c)) if report.temperature_c is not None else None
     dewpoint = int(round(report.dewpoint_c)) if report.dewpoint_c is not None else None
+    sky, clear_below = metar_sky(report.raw)
+    visibility = report.visibility_sm
+    if clear_below and re.search(r"\bCAVOK\b", report.raw or ""):
+        visibility = max(visibility or 0.0, 10.0)  # CAVOK: 10 km or more
     return Weather(wind=Wind(direction_mag=mag if true is not None and speed else 0, speed_kt=speed), gust_kt=gust,
-                   visibility_sm=report.visibility_sm, temperature_c=temperature, altimeter_inhg=report.altimeter_inhg,
-                   t=t, wind_dir_true=true if true is not None else 0.0, dewpoint_c=dewpoint, reported=metar_weather(report.raw))
+                   visibility_sm=visibility, temperature_c=temperature, altimeter_inhg=report.altimeter_inhg,
+                   t=t, wind_dir_true=true if true is not None else 0.0, dewpoint_c=dewpoint, reported=metar_weather(report.raw),
+                   sky=sky, clear_below_ft=clear_below)
+
+
+def metar_sky(raw: str) -> tuple[tuple[Layer, ...] | None, int | None]:
+    """A METAR's clouds: its layers ("FEW030 BKN080", heights in feet), and how high it's clear for certain (CAVOK: no
+    cloud below 5,000 ft; CLR, SKC, NSC, NCD: none seen). (None, None): it says nothing of them. The METAR's clouds
+    were never read: Fiumicino's CAVOK came out as "visibility 10 kilometres or more" and no word of the sky."""
+    if not raw:
+        return None, None
+    now = re.split(r"\b(?:RMK|NOSIG|TEMPO|BECMG)\b", raw, maxsplit=1)[0]
+    layers = tuple(Layer(cover, int(height) * 100) for cover, height in re.findall(r"\b(FEW|SCT|BKN|OVC|VV)(\d{3})", now))
+    if re.search(r"\bCAVOK\b", now):
+        return layers, 5000
+    if re.search(r"\b(?:CLR|SKC|NSC|NCD)\b", now):
+        return layers, 12000
+    return (layers, None) if layers else (None, None)
 
 
 METAR_WEATHER = re.compile(r"(?:^|\s)([-+]?)(TS|FZ|SH)?(RA|DZ|SN|SG|FG|BR|HZ|FU)(?=\s|$)")

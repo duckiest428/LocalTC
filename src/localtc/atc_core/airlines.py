@@ -43,23 +43,25 @@ TELEPHONY: dict[str, str] = {
     "GEC": "Lufthansa Cargo", "DHK": "World Express", "BCI": "Blue Islands", "LOF": "Trans States",
     "AHY": "Azal", "KZR": "Astanaline", "BRU": "Belarus Avia", "EZS": "Topswiss", "EJU": "Alpine",
     # Eastern Europe, Russia, Central Asia
-    "AFL": "Aeroflot", "AZA": "Alitalia", "BTK": "Bektas", "CSA": "CSA", "ELY": "Elal", "FPO": "Askair",
+    "AFL": "Aeroflot", "AZA": "Alitalia", "BTK": "Bektas", "CSA": "CSA", "ELY": "El Al", "FPO": "Askair",
 "PBD": "Pobeda", "SBI": "Siberian", "SVR": "Sverdlovsk", "SWN": "Sunwing",
     "UTA": "Utair", "AUI": "Ukraine International", "TSO": "Transo",
     # Middle East
-    "ABY": "Arabia", "ETD": "Etihad", "FDB": "Skydubai", "GFA": "Gulf Air", "IRA": "Iranair",
+    "ABY": "Arabia", "ETD": "Etihad", "FDB": "Sky Dubai", "GFA": "Gulf Air", "IRA": "Iranair",
     "KAC": "Kuwaiti", "MEA": "Cedar Jet", "OMA": "Oman Air", "QTR": "Qatari", "RJA": "Jordanian",
-    "SVA": "Saudia", "THY": "Turkish", "UAE": "Emirates", "JZR": "Jazeera",
+    "SVA": "Saudia", "THY": "Turkish", "UAE": "Emirates", "JZR": "Jazeera", "KNE": "Nas Express", "ISR": "Israir",
+    "IAW": "Iraqi", "LMU": "Almasria", "IRM": "Mahan Air", "FAD": "Flyadeal", "SDM": "Rossiya",
     # Africa
     "ETH": "Ethiopian", "KQA": "Kenya", "SAA": "Springbok", "TUN": "Tunair", "DAH": "Air Algerie",
     "MAU": "Airmauritius", "AMC": "Afrigiya",
     # South and East Asia
-    "AAR": "Asiana", "AIC": "Airindia", "ANA": "All Nippon", "APJ": "Air Peach", "BBC": "Bangladesh",
+    "AAR": "Asiana", "AIC": "Air India", "ANA": "All Nippon", "APJ": "Air Peach", "BBC": "Bangladesh",
     "CAL": "Dynasty", "CCA": "Air China", "CES": "China Eastern", "CSN": "China Southern", "CSZ": "Shenzhen Air",
     "CXA": "Xiamen Air", "EVA": "Eva", "HVN": "Viet Nam Airlines", "IGO": "Ifly", "JAL": "Japanair",
     "JJP": "Orange Liner", "KAL": "Koreanair", "MAS": "Malaysian", "PAL": "Philippine", "SIA": "Singapore",
     "SJX": "Starjet", "THA": "Thai", "TGW": "Go Cat", "TWB": "Teeway", "VJC": "Vietjet",
-    "AKX": "Air Asia", "AXM": "Asian Express", "SEJ": "Spicejet", "AIQ": "Red Phoenix",
+    "AKX": "Air Asia", "AXM": "Asian Express", "SEJ": "Spicejet", "AIQ": "Red Phoenix", "AXB": "Express India",
+    "PIA": "Pakistan", "ALK": "Srilankan",
     # Oceania
     "ANZ": "New Zealand", "JST": "Jetstar", "QFA": "Qantas", "FJI": "Fiji",
     # Cargo and charter often seen in the sim
@@ -67,7 +69,9 @@ TELEPHONY: dict[str, str] = {
     "SQC": "Singcargo", "ATN": "Air Transport", "ABX": "Abex", "LTG": "Longtail",
 }
 
-CALLSIGN_RE = re.compile(r"^([A-Z]{3})(\d{1,4}[A-Z]?)$")
+# The number: a digit, then up to three more letters or digits ("216", "48K", "9SY", "18AB"). Only a digit and one
+# letter counted: Ryanair's "RYR9SY", Turkish "THY 1YH" and Etihad "ETD 1UH" were spelled out as codes.
+CALLSIGN_RE = re.compile(r"^([A-Z]{3})(\d[A-Z\d]{0,3})$")
 
 
 def split(ident: str) -> tuple[str, str, str] | None:
@@ -76,7 +80,7 @@ def split(ident: str) -> tuple[str, str, str] | None:
     Only codes in the table count. "N172LT" and "DP32" must stay registrations, and a three-letter
     code nobody knows is better spelled out than given a name that was guessed.
     """
-    match = CALLSIGN_RE.match(ident.strip().upper())
+    match = CALLSIGN_RE.match(ident.strip().upper().replace(" ", ""))  # ("RYR 9CC" as some feeds write it)
     if match is None:
         return None
     code, number = match.groups()

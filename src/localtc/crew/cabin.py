@@ -1440,8 +1440,9 @@ class CabinCrew:
             service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"
             called = self.ground_call(service, t)
             if isinstance(called, str) and service == "Boarding":
-                # Ahead of the turnaround's plan: started all the same, and what it would have waited for said.
-                return reply("ground_early", {"reason": called})
+                # Ahead of the turnaround's plan: started all the same, and nothing said of the plan (the passengers
+                # are a different number every flight: "let's not have ahead of plan")
+                return reply("ground_boarding")
             if not called:
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")

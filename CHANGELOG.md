@@ -172,6 +172,20 @@ a new minor version adds features, a patch fixes them.
 - **Speech:** "Inflammation" is information, "mic" Mike, "Bravo Tango" taxiway BT where the airport has it; a long call
   heard as a few words is heard again with a shorter prompt.
 - **The app** opens without the last flight's plan once that flight has parked.
+- **Other flights on the radio:** told to climb or descend from where they really are (their flight level, not their
+  true altitude: one at FL410 was told "climb to FL390"); they always ask for their clearance, push and taxi first;
+  callsigns with letters in their number said as the airline ("Ryanair 9SY", "Turkish 1YH", "Nas Express 660",
+  "El Al", "Air India", "Sky Dubai"); none in a controller's voice; no controller handing one to itself.
+- **Traffic calls** in good time (from 8 miles), one a minute at most, and the same aircraft never called twice.
+- **"Start your descent now"** no sooner than two minutes after the descent was given; no mountain caution on a
+  cleared approach or where the minimum is low.
+- **Gates for the biggest aircraft:** where the scenery lists no gate big enough (Dubai's say 32 m for an A380), its
+  biggest gates take it, in the gate list and when asked for; "taxi to Gate A3", not "stand Gate A3".
+- **GSX:** its parking page (asked for the jetway before it has you parked) is put away with a word, never read out;
+  its handler matched by any of the airline's names and codes.
+- **The cabin** starts boarding early without talk of being ahead of the plan.
+- **LocalTC's traffic** settles onto the runway at touchdown instead of dropping, and the sim is told how fast each
+  one is turning as it taxies.
 - **Readbacks heard oddly but said right:** every readback ATC asks for, said right and written the ways speech
   recognition writes it (tens of thousands of variations), is now taken as right. Among them: "climbing to 8,000",
   "descending to 6,000", "descending 6,500" for the altitude you were given, "climbing and maintaining",

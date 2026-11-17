@@ -234,7 +234,21 @@ class Chatter:
             if scene.handoff is not None:
                 station, mhz = scene.handoff
                 out.append(("atc", "common.contact", {"station": station, "frequency": mhz}))
-        return [(kind, iid, slots) for kind, iid, slots in out if "altitude" not in slots or slots["altitude"] >= 1000]
+        # Never "climb" to where it is or below, nor "descend" to where it is or above
+        def sensible(iid: str, slots: dict[str, Any]) -> bool:
+            if slots.get("station") and slots["station"] == scene.station and iid in ("common.contact",):
+                return False  # ("Emirates 17K, contact Dubai Approach", said by Dubai Approach)
+            if "altitude" not in slots:
+                return True
+            if slots["altitude"] < 1000:
+                return False
+            if iid == "common.climb":
+                return slots["altitude"] > other.level_ft
+            if iid == "common.descend":
+                return slots["altitude"] < other.level_ft
+            return True
+
+        return [(kind, iid, slots) for kind, iid, slots in out if sensible(iid, slots)]
 
     def _arrival(self, scene: Scene, other: Other) -> list[tuple[str, str, dict[str, Any]]]:
         """An arrival on approach's frequency, worked the way the pilot's own flight is: checked in with the approach to

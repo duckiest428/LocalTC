@@ -74,8 +74,8 @@ pilot_readback = "Taxi to the general aviation apron via {taxi_route}, hold shor
 
 [[template]]
 id = "ground.taxi_to_gate"
-text = ["{callsign}, taxi to stand {gate} via {taxi_route}."]
-pilot_readback = "Stand {gate} via {taxi_route}, {callsign_short}."
+text = ["{callsign}, taxi to {gate} via {taxi_route}."]  # (the gate says what it is: "Gate A3", "Stand 214")
+pilot_readback = "{gate} via {taxi_route}, {callsign_short}."
 
 [[template]]
 id = "ground.taxi_in_no_route"

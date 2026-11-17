@@ -242,6 +242,9 @@ def cruise_altitudes(tokens: list[Token], expected: Any = None) -> list[int]:
         if (value := _altitude_value(tokens, i)) is not None:
             if 100 <= value < 1000 and _int(expected) == value * 100:
                 value = _int(expected)  # "expect 110, 10 minutes after": the hundreds of feet ("11010 minutes")
+            elif 1000 <= value < 10000 and _int(expected) == value * 10 and _int(expected) >= TRANSITION_FT:
+                # "Expect flight level 39 20 minutes after": FL390's zero run into the "two zero" minutes that follow
+                value = _int(expected)
             if (value := _bare_flight_level(value, expected)) not in found:
                 found.append(value)
     return found

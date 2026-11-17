@@ -494,7 +494,9 @@ class ConditionsMixin:
             self.conditions.end(c, "expired", own.t, "a new speed" if self.state.assignments.speed_kt != c.value else "")
             return False
         tuned = self.state.comms.tuned
-        if tuned is not None and tuned.controller == "tower":
+        handed = self._last_handoff is not None and self._last_handoff[2] is not None \
+            and self._last_handoff[2].controller == "tower"  # (read back, the radio not changed over yet)
+        if (tuned is not None and tuned.controller == "tower") or handed:
             # Handed to tower, approach's speed is done with: tower's first words were "reduce speed to 180" before the
             # pilot had even called, and again on final.
             self.conditions.end(c, "expired", own.t, "with tower")

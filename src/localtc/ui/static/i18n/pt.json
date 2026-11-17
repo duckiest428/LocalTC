@@ -1262,7 +1262,7 @@
 "{0} MB": "{0} MB",
 "{0} NOTAMs": "{0} NOTAM",
 "{0} at {1}: where ground sent you": "{0} em {1}: para onde o solo te mandou",
-"{0} at {1}: the gate you asked for": "{0} em {1}: o portão que pediste",
+"{0} at {1}: your expected gate": "{0} em {1}: a tua porta prevista",
 "{0} calls · click one to go there": "Chamadas: {0} · clica numa para ir até lá",
 "{0} can't be a push-to-talk key": "{0} não pode ser uma tecla de push-to-talk",
 "{0} checklist": "Lista {0}",

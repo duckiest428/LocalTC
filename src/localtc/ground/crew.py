@@ -735,13 +735,23 @@ class RampCrew:
         self._read_out[menu.title] = t
         if has_words(menu.title, "operator"):
             real = [(i, e) for i, e in real_entries(menu) if not (i < len(menu.disabled) and menu.disabled[i])]
-            airline = norm(self.link.airline())
-            own = next((i for i, e in real if airline and airline in norm(e)), None)
+            # The airline's own handling by any of its names ("Emirates", the callsign's word, its codes: "UAE", "EK")
+            names = {norm(n) for n in self.link.airline().split("|") if n.strip()}
+            own = next((i for i, e in real if any(n and (f" {n} " in f" {norm(e)} ") for n in names)), None)
             choice = own if own is not None else next((i for i, e in real if OPERATOR_CHOICE in norm(e)), real[0][0] if real else None)
+            log.info("Ground crew: %r for %s: %s (of %s)", menu.title, "/".join(sorted(names)) or "no airline",
+                     menu.entries[choice] if choice is not None else "none", ", ".join(e for _, e in real))
             if choice is not None:
                 return [Pick(choice, menu.entries[choice])]
         if has_words(menu.title, "refueling level"):
             return self._fuel_question(menu, t)
+        if has_words(menu.title, "change parking") and self._asking is None:
+            # GSX's parking page: the aircraft isn't parked as far as it knows (asked for the jetway still rolling
+            # in at Dubai, its eight choices were read over the radio). The services come once it's parked.
+            if (found := find(menu, ("activate services",))).index is not None:
+                return [Pick(found.index, menu.entries[found.index])]
+            log.info("Ground crew: GSX's %r page: not parked yet, closed", menu.title)
+            return [Close(), self._speech("not_parked", t)]
         if has_words(menu.title, "pushback tug") and self._push is not None and self._push.stage != "armed" \
                 and (found := find(menu, ("yes",))).index is not None:
             # The push called: the tug's wanted now. "No" to it (right while boarding) left an A350 at Montreal's gate

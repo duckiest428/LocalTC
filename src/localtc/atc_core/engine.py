@@ -197,7 +197,11 @@ SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?"
 NUDGE_REPLY_S = 4.0  # after the pilot answers "how do you read", the instruction follows this soon
 STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
 MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
-TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 5.0, 1200.0, 300.0
+# Called in good time (Dubai's "11 o'clock, 3 miles, same direction" was "way too late"), one call a minute at most,
+# and the same aircraft not again (made twice, it was called twice 16 s apart)
+TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 8.0, 1200.0, 300.0
+TRAFFIC_GAP_S = 60.0
+TRAFFIC_SAME_NM = 2.0  # one called this close to where another was called, a moment ago: the same aircraft
 TRAFFIC_MIN_KT = 40.0  # slower than this and not on the ground: a sim glitch, not something flying
 TRAFFIC_FIELD_NM, TRAFFIC_FIELD_AGL_FT = 5.0, 1000.0  # this low this close to an airport: the tower's, no call
 ORIGIN_NEAR_NM = 6.0  # the plan's origin, while the aircraft is this close to it: the flight starts there
@@ -353,6 +357,7 @@ LEFT_BEHIND_S = 300.0  # a controller handed off from this long ago is still the
 BREAK_S = 20.0  # an urgent call this soon after ATC's last words to the pilot: "break break", and no readback waited for
 # Of the other flights' calls that start with them (a clearance, a push, a taxi, ready for departure, a final), the
 # share where they call first: it was always the controller first ("why isn't the traffic asking for something?").
+TRANSITION_FT_MIN = 10000.0  # above this, other flights' levels are flight levels (pressure altitudes)
 PILOT_FIRST = 0.7
 CHATTER_REUSE_S = 150.0  # another flight heard again on the same frequency after this long (approach works each a few times)
 CHATTER_REUSE_MAX = 3
@@ -468,6 +473,7 @@ SECTOR_DESTINATION_NM = 400.0  # ... and its centre next
 SECTOR_ARRIVAL_NM = 120.0  # ... which still takes the flight this close in
 DESCENT_PAST_NM = 15.0  # this far past where it should have started down: ATC says something
 DESCENT_TOLD_EVERY_S = 150.0
+DESCENT_GIVEN_GRACE_S = 120.0  # a descent given this recently isn't "ignored" yet
 DESCENT_TOLD_MOST = 3
 CROSSING_TREND_S = 2.0  # how far apart two looks at the distance to a runway's hold short line are ...
 CROSSING_CLOSING_M = 3.0  # ... and how much closer the second has to be: heading for it
@@ -2413,8 +2419,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _traffic_request(self, kind: str, facility: Facility, callsign: Callsign, shown: str, slots: dict[str, Any],
                          rng: random.Random) -> tuple[str, str] | None:
         """What another flight says first, when it's its call to make (most of the time), or None: the controller's."""
-        if kind not in ("clearance", "pushback", "taxi_out", "taxi_in", "takeoff", "land") or rng.random() >= PILOT_FIRST:
+        if kind not in ("clearance", "pushback", "taxi_out", "taxi_in", "takeoff", "land"):
             return None
+        if kind in ("takeoff", "land") and rng.random() >= PILOT_FIRST:
+            return None  # tower calls them now and then; a clearance, a push and a taxi are always asked for first
+            # ("why didn't Ibiza Air ask for clearance before ground randomly assigned them?")
         said = speech.callsign(callsign)
         runway = str(slots.get("runway") or "")
         words = {
@@ -2638,8 +2647,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                     if lined_up and lined_up not in by_runway and (end_for := geo.end(lined_up)) is not None:
                         by_runway[lined_up] = self._chatter_routes(geo, end_for)
                 route = self._route_from(geo, target, lined_up) if doing in ("at_gate", "taxiing_out") else ()
-                other = chatter.Other(oid, callsign, doing, int(round(target.alt_ft / 1000) * 1000), lined_up,
-                                      route=route)
+                other = chatter.Other(oid, callsign, doing, int(round(self._as_flown(target.alt_ft, own) / 1000) * 1000),
+                                      lined_up, route=route)
                 if plan is not None and doing in ("descending", "level"):
                     other = self._other_arrival(other, target, geo, plan, own)
                 others.append(other)
@@ -2720,6 +2729,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if REGISTRATION.fullmatch(ident) and target.object_id in self._seen_moving:
             return Callsign.named(ident)  # a light aircraft flying about under its registration
         return None
+
+    @staticmethod
+    def _as_flown(true_ft: float, own: OwnshipState) -> float:
+        """Another aircraft's true altitude as its altimeter reads it: up in the flight levels, the pressure altitude
+        (corrected by what the pilot's own reads against its true altitude). A Qatari at FL390, 41,000 ft true on a warm
+        day, was told "climb to FL390"."""
+        if not own.altimeter_setting_inhg or own.alt_indicated_ft < TRANSITION_FT_MIN:
+            return true_ft
+        pressure_own = own.alt_indicated_ft - (own.altimeter_setting_inhg - 29.92) * 1000.0
+        return true_ft - (own.alt_msl_ft - pressure_own)
 
     def _doing(self, target: TrafficTarget, geo: AirportGeometry | None, facility: Facility,
                own: OwnshipState | None = None) -> str | None:
@@ -2857,6 +2876,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return False
         if st.comms.expected is not None and st.comms.expected != tuned:
             return False  # handed off to the next controller: this one has nothing more to say (Socal after "contact tower")
+        last = getattr(self, "_last_traffic_at", None)
+        if last is not None and t - last[0] < TRAFFIC_GAP_S:
+            return False
         best: tuple[float, TrafficTarget] | None = None
         fields = [g for g in (self.tracker.context.airport, self.geometry(st.flight.origin), self.geometry(st.flight.destination))
                   if g is not None]
@@ -2878,6 +2900,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 continue  # lined up to land: in the landing order, not in anyone's way up here
             if t - self._traffic_called.get(oid, -math.inf) < TRAFFIC_REPEAT_S:
                 continue
+            if last is not None and t - last[0] < TRAFFIC_REPEAT_S and last[3] == target.atc_model \
+                    and _distance_nm(target.lat, target.lon, last[1], last[2]) < TRAFFIC_SAME_NM + (t - last[0]) * target.gs_kt / 3600:
+                continue
             if best is None or nm < best[0]:
                 best = (nm, target)
         if best is None:
@@ -2889,6 +2914,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if 5 <= clock <= 7 and (relative < 30 or relative > 330):
             return False  # behind and going the same way: it can't be seen, and it isn't closing on anything
         self._traffic_called[target.object_id] = t
+        self._last_traffic_at = (t, target.lat, target.lon, target.atc_model)
         direction = ("same direction" if relative < 30 or relative > 330 else "opposite direction" if 150 <= relative <= 210
                      else "crossing left to right" if relative < 180 else "crossing right to left")
         miles = max(1, round(nm))
@@ -4655,7 +4681,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if tuned is None or not self._works_approach(own) or self._holding():
             return False
         if "approach" in st.clearances:  # cleared: still slowing down until tower has it
-            sent_on = st.comms.expected is not None and st.comms.expected.station != tuned.station
+            handed = self._last_handoff is not None and self._last_handoff[2].controller == "tower"
+            sent_on = (st.comms.expected is not None and st.comms.expected.station != tuned.station) or handed
+            # (handed to tower and read back, still on approach's frequency: "reduce speed to 180" came after it)
             # (Handed to tower already: not "reduce speed to 160" twelve seconds after "contact Denver Tower".)
             return st.pending is None and not sent_on and self._speed_control(own, t, tuned)
         if (st.comms.last_pilot_t or -math.inf) < self._tuned_since:
@@ -6336,6 +6364,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         """Cleared down, well past where the descent should have begun, and still up there, not descending."""
         st, geo = self.state, self.geometry(self.state.flight.destination)
         target = st.assignments.altitude_ft
+        if own.t - getattr(self, "_altitude_given_t", -math.inf) < DESCENT_GIVEN_GRACE_S:
+            return False  # just given: "start your descent now" 31 s after "descend and maintain 3,000" was no time
         if geo is None or target is None or self._descent_told >= DESCENT_TOLD_MOST or own.vs_fpm < -300 \
                 or own.alt_indicated_ft < target + 3000 or own.t - self._descent_told_t < DESCENT_TOLD_EVERY_S:
             return False
@@ -6412,7 +6442,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return
         start = old.index(first) if first is not None else len(old)
         head = [f for f in old[:start] if (f.via or "").upper() != filed.upper()]
-        tail = [f for f in old[start:] if (f.via or "").upper() != filed.upper()]
+        tail = [f for f in old[start:] if (f.via or "").upper() != filed.upper() or f.ident.upper() == dest]  # (the airport)
         new: list[RouteFix] = []
         if chosen is not None:
             have = {f.ident.upper() for f in head[-3:]}
@@ -7495,6 +7525,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 # Given again, it's to be reached again: 11,000 reached on the climb, then given as the descent
                 # (at pilot's discretion), had "check altitude" said at the top of the descent.
                 self.state.flags.discard(f"reached:{value}")
+                self._altitude_given_t = self._t
                 self._deviation_since = None
             setattr(self.state.assignments, key, value)
 
@@ -7537,7 +7568,7 @@ def _known_fix(said: str, known: set[str]) -> str | None:
 
 def round_altitude(feet: float) -> int:
     """An altitude as ATC gives one: the thousand when it's no more than 150 ft above it (2,062 is 2,000), else up to
-    the next five hundred (3,135 is 3,500). Dubai's approach gave 2,100 and 3,100: "weird altitude for one hundred feet"."""
+    the next five hundred (3,235 is 3,500). Dubai's approach gave 2,100 and 3,100: "weird altitude for one hundred feet"."""
     thousand = int(feet // 1000 * 1000)
     if feet - thousand <= 150:
         return thousand

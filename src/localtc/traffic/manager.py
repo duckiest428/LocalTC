@@ -1910,7 +1910,11 @@ class TrafficManager:
                 # speed bleeding off a little, the touchdown a few hundred metres past the threshold.
                 loc.vs_fpm = max(loc.vs_fpm, -TOUCHDOWN_FPM - (FLARE_FPM - TOUCHDOWN_FPM) * height / FLARE_FT)
                 loc.gs_kt = max(loc.target_kt - 8.0, loc.gs_kt - 1.5)
-            if before < -250 or height <= 1.0:
+            if before < -250 and height > 1.0:
+                # Long and still a few feet up: settled on, not dropped the rest of the way at once (the jolt at
+                # touchdown, "the plane bugs a little bit when touching down")
+                loc.vs_fpm = max(loc.vs_fpm, -min(600.0, height * 60.0)) if before > -900 else loc.vs_fpm
+            if height <= 1.0 or before < -900:
                 loc.on_ground, loc.vs_fpm, loc.alt_ft = True, 0.0, elev
                 loc.spoilers = True
         elif loc.follow is None:
@@ -2230,8 +2234,9 @@ class TrafficManager:
             if loc.follow.done:
                 return self._release(plane, now)
         loc.alt_ft = geo.airport.elev_ft
+        turning = loc.follow.turn_dps if loc.follow is not None and loc.stage in ("taxi", "line_up") else 0.0
         out.append(self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
-                                             hdg=loc.hdg, gs_kt=gs, on_ground=True, blend_s=1.5), now))
+                                             hdg=loc.hdg, gs_kt=gs, turn_dps=turning, on_ground=True, blend_s=1.5), now))
         return out + self._lights(plane, on_ground=True, gs=abs(gs) if loc.stage != "push" else 0.0, agl=0.0,
                                   lat=loc.lat, lon=loc.lon)
 
@@ -2409,7 +2414,8 @@ class TrafficManager:
             plane.arrived = True
             return out_call + self._track(plane, now, blend_s=6.0)
         out = out_call + [self._send(plane, AiTrack(object_id=plane.object_id, lat=loc.lat, lon=loc.lon, alt_ft=loc.alt_ft,
-                                                    hdg=loc.hdg, gs_kt=loc.gs_kt, on_ground=True, blend_s=1.5), now)]
+                                                    hdg=loc.hdg, gs_kt=loc.gs_kt, turn_dps=follow.turn_dps, on_ground=True,
+                                                    blend_s=1.5), now)]
         return out + self._lights(plane, on_ground=True, gs=loc.gs_kt, agl=0.0, lat=loc.lat, lon=loc.lon)
 
     def _on_spot(self, plane: Plane) -> bool:

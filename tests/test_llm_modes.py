@@ -666,7 +666,8 @@ def test_a_controllers_wording_said_another_standard_way_is_kept():
                           'minutes after departure, contact departure 120.42, squawk 4732"}', clearance, cs)
     assert check_reworded('{"reply":"radar contact, direct KEBGO"}', "radar contact, proceed direct KEBGO", cs)
     assert check_reworded('{"reply":"roger, Air Transat 250, maintain flight level 390"}', "identified, maintain FL390", cs)
-    assert check_reworded('{"reply":"maintain flight level 390, no problem"}', "identified, maintain FL390", cs)
+    with pytest.raises(PhraseError):  # ("continue, runway 30L, no problem": not a controller's words)
+        check_reworded('{"reply":"maintain flight level 390, no problem"}', "identified, maintain FL390", cs)
     assert check_reworded('{"reply":"taxi to runway 24R via A, F, B4, B"}', "runway 24R at B, taxi via A, F, B4, B", cs)
     with pytest.raises(PhraseError):
         check_reworded('{"reply":"negative KEBGO"}', "negative, direct KEBGO", cs)

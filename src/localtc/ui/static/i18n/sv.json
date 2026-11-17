@@ -1262,7 +1262,7 @@
 "{0} MB": "{0} MB",
 "{0} NOTAMs": "{0} NOTAM",
 "{0} at {1}: where ground sent you": "{0} vid {1}: dit ground skickade dig",
-"{0} at {1}: the gate you asked for": "{0} vid {1}: gaten du bad om",
+"{0} at {1}: your expected gate": "{0} på {1}: din förväntade gate",
 "{0} calls · click one to go there": "Anrop: {0} · klicka på ett för att gå dit",
 "{0} can't be a push-to-talk key": "{0} kan inte vara en push-to-talk-tangent",
 "{0} checklist": "Checklista {0}",

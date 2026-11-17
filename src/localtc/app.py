@@ -1050,8 +1050,11 @@ def _airline_name(engine) -> str:
     callsign = engine.state.flight.callsign
     if callsign is None:
         return ""
-    known = airline_of(callsign.ident)[1]
-    return known.name if known is not None else (callsign.telephony if callsign.is_airline else "")
+    code, known = airline_of(callsign.ident)
+    # Every name GSX's handlers might go by: the airline's, the callsign's word, its ICAO and IATA codes
+    names = [known.name if known is not None else "", callsign.telephony if callsign.is_airline else "",
+             callsign.ident[:3] if callsign.is_airline else "", getattr(known, "iata", "") if known is not None else ""]
+    return "|".join(dict.fromkeys(n for n in names if n))
 
 
 def copilot_locale(personality: str, language_code: str) -> str:

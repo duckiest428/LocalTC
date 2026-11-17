@@ -963,6 +963,8 @@ def values_close(element: str, heard: Any, expected: Any, confidence: float | No
         return expected[-1:].isdigit() and heard != expected and heard.rstrip("LRC") == expected  # "08 left" for 08
     if element in ("altitude", "cruise") and int(heard) % 100 != 0 and abs(int(heard) - int(expected)) < 50:
         return True  # "1508" for 1,500
+    if element == "procedure" and procedure_heard_close(str(heard), str(expected)):
+        return True
     if element == "frequency":
         # "121771" for 121.7 ("121.7 when ready" run together): worth a "confirm", not a "negative".
         wanted = _digits(element, expected)
@@ -1043,3 +1045,16 @@ def procedure_matches(heard: str, expected: str) -> bool:
 
 
 PROCEDURE_LIKENESS = 0.6  # how alike two spellings of a procedure's name must be to be the same one
+PROCEDURE_HEARD_CLOSE = 0.35  # ... and with its number and letter, how alike to be a mishearing of it, not another one
+
+
+def procedure_heard_close(heard: str, expected: str) -> bool:
+    """The procedure's number and letter, its name heard in an accent ("Zobuker 1 Golf" for OBOKA1G): no "negative"
+    over it (it's read back for good measure only). Another name altogether ("Dork 7" for HAWKZ7) still is one."""
+    def split(name: str) -> tuple[str, str]:
+        m = re.fullmatch(r"([A-Z]+?)(\d[A-Z]?)", re.sub(r"[^A-Z0-9]", "", name.upper()))
+        return (re.sub(r"(.)\1+", r"\1", m.group(1)), m.group(2)) if m else ("", "")
+
+    (heard_name, heard_end), (name, end) = split(heard), split(expected)
+    return bool(name) and heard_end == end and len(end) == 2 and \
+        difflib.SequenceMatcher(None, heard_name, name).ratio() >= PROCEDURE_HEARD_CLOSE

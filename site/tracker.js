@@ -128,6 +128,7 @@ const Tracker = {
   ensureMap() {
     if (this.map) { setTimeout(() => this.map.invalidateSize(), 0); return; }
     this.map = L.map("tr-map").setView([39, -98], 4);  // no world-copy jumping: atcmap.js keeps it all in one copy
+    this.map.on("zoomend", () => this.declutter());
     this.tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
     // Bottom to top, as in the app: the zones, the runways, the route, the path flown, then the aircraft.
@@ -230,6 +231,7 @@ const Tracker = {
     this.routeLayer.clearLayers();
     this.routeLine = route ? AtcMap.route(this.routeLayer, route) : null;
     this.straightRoute();
+    this.declutter();
   },
   straightRoute() {
     if (this.routeLine || !this.route || !this.zones) return;
@@ -248,6 +250,7 @@ const Tracker = {
     if (!this.opsLayer) return;
     this.opsLayer.clearLayers();
     AtcMap.operations(this.opsLayer, ops);
+    this.declutter();
   },
   // The Live Map's ATC layer, worked out by the app for the flight (ui/zones.py): redrawn when it changes.
   setZones(z) {
@@ -267,6 +270,12 @@ const Tracker = {
     if (!this.zonesOn || !this.zones) return;
     AtcMap.zones(this.zoneLayer, this.zones, { vfr: this.mode === "vfr" });
     if (legend) legend.querySelector(".lg-talk").innerHTML = AtcMap.talk(this.zones);
+    this.declutter();
+  },
+  /** The labels that would overlap, the less important hidden (atcmap.js), once drawn. */
+  declutter() {
+    if (!this.map || this.declutterSoon) return;
+    this.declutterSoon = requestAnimationFrame(() => { this.declutterSoon = null; AtcMap.declutter(this.map.getContainer(), this.map.getZoom()); });
   },
   clearMap() {
     this.gotOwn = false;

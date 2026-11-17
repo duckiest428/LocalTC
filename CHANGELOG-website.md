@@ -8,6 +8,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ### Fixed
 - **The live map's gate:** a gate you asked for at the destination is shown as "your expected gate", "where ground
   sent you" once ground has.
+- **The Flight Tracker's map** no longer piles labels on one another: where a centre's name, a fix or a badge would
+  cover another, the less important is hidden until you zoom in.
 
 ## [0.5.5] - 2026-11-02
 

@@ -186,6 +186,20 @@ a new minor version adds features, a patch fixes them.
 - **The cabin** starts boarding early without talk of being ahead of the plan.
 - **LocalTC's traffic** settles onto the runway at touchdown instead of dropping, and the sim is told how fast each
   one is turning as it taxies.
+- **SID, STAR and fix names heard through speech recognition:** a name read back right but written as the word it sounds
+  like is taken as the flight's own: "direct Diamond" (DYAMD), "Lobster" (LBSTA), "loss at" (LOZIT), "Itloaf" (ITLOV),
+  "the Ocean 5 arrival" (OOSHN5), "the Angel for arrival" (ANJLL4, its number heard as a word), "Holt's niner" (HOLTZ9),
+  Europe's said as their whole fix with their letter ("Lazet one alpha" LAZE1A, "Vuteb three echo" VUTE3E). Only where
+  it sounds clearly more like that name than any other of the flight's, so a wrong fix or procedure said clearly is still
+  caught. Found by LocalTC's voices reading correct readbacks in ten accents to Whisper: 209 of 324 were taken as right
+  before, 300 now.
+- **Accents on the radio:** "direct" heard as "Dehect", "Dishect", "They hacked" or "Directs"; "hold at" as "hold a",
+  "hold it", "holt at" or "older"; "flight level 1 under" (one hundred), "1 to 0" (one two zero), "12-Z-Hoe" (a
+  "tsero"); "Esquark" for squawk; "then as filed" heard "Dennis filed"; "climb under maintain".
+- **The live map** no longer piles labels on one another: where an airport's code, a centre's name, a fix or a badge
+  would cover another, the less important is hidden until you zoom in (your controllers, your route and its centres
+  first), and they're kept further apart zoomed far out.
+- **The app's tabs** stretch across the window, wider as it widens.
 - **Readbacks heard oddly but said right:** every readback ATC asks for, said right and written the ways speech
   recognition writes it (tens of thousands of variations), is now taken as right. Among them: "climbing to 8,000",
   "descending to 6,000", "descending 6,500" for the altitude you were given, "climbing and maintaining",

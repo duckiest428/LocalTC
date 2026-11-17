@@ -57,8 +57,19 @@ def flight_hints(engine: AtcEngine) -> VocabularyHints:
         taxiways=tuple(taxiways[:20]),
         procedures=tuple(p.upper() for p in (engine.cfg.sid, engine.cfg.star) if p),
         extra=_owed(engine),
-        fixes=tuple(f.ident for f in engine.route.fixes) if engine.route else (),
+        fixes=_fixes_in_play(engine),
     )
+
+
+def _fixes_in_play(engine: AtcEngine) -> tuple[str, ...]:
+    """The route's fixes, and the one a readback owed names (a direct off the route): what "direct Diamond" can be put
+    right to (stt.vocabulary.match_names). Never in Whisper's prompt: that's the pilot's to say."""
+    fixes = [f.ident for f in engine.route.fixes] if engine.route else []
+    pending = engine.state.pending
+    owed = pending.expected.get("fix") if pending is not None else None
+    if isinstance(owed, str) and owed.isalpha() and owed.isupper() and owed not in fixes:
+        fixes.append(owed)
+    return tuple(fixes)
 
 
 def _owed(engine) -> tuple[str, ...]:

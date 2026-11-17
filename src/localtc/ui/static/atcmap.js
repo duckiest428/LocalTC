@@ -39,7 +39,7 @@ const AtcMap = (() => {
     fixes.forEach((f, i) => {
       if (f.kind === "apt") return;
       L.circleMarker(pts[i], { radius: 3, color: "#e9d38a", weight: 1, fillOpacity: 0.8 }).addTo(layer);
-      L.marker(pts[i], { icon: L.divIcon({ className: "", html: `<div class="fix-label" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }),
+      L.marker(pts[i], { icon: L.divIcon({ className: "", html: `<div class="fix-label" data-rank="50" style="margin:6px 0 0 6px">${esc(f.ident)}</div>`, iconSize: [0, 0] }),
         interactive: false, keyboard: false }).addTo(layer);
     });
     return fixes.length > 1 ? L.polyline(pts, ROUTE).addTo(layer) : null;
@@ -62,7 +62,7 @@ const AtcMap = (() => {
         r.closed ? { color: "#ff3b30", weight: 5, opacity: 0.9, dashArray: "10 6" } : { color: "#d9dde2", weight: 4, opacity: 0.9 })
         .addTo(layer).bindTooltip(`${esc(a.icao)} ${esc(r.name)}`);
     }
-    L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", html: `<div class="tfc-label" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
+    L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", html: `<div class="tfc-label" data-rank="85" style="color:#e9d38a;font-weight:700">${esc(a.icao)}</div>`, iconSize: [0, 0] }),
       interactive: false, keyboard: false }).addTo(layer);
   }
 
@@ -125,19 +125,19 @@ const AtcMap = (() => {
 
   /** The ATC zones (ui/zones.py's answer) into ``layer``, IFR or VFR. */
   function zones(layer, z, { vfr = false } = {}) {
-    const label = (p, text, cls) => L.marker(at(p[0], p[1]), { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
+    const label = (p, text, cls, rank) => L.marker(at(p[0], p[1]), { icon: L.divIcon({ className: "", html: `<div class="zone-label ${cls}" data-rank="${rank}">${esc(text)}</div>`, iconSize: [0, 0] }), interactive: false, keyboard: false }).addTo(layer);
     if (vfr) classes(layer, z);
     for (const c of vfr ? [] : z.centers || []) {
       const on = c.active || c.working;
       L.polygon((c.rings || []).map(ring), { color: "#d9dde2", weight: on ? 2.2 : 1, opacity: c.route ? 0.85 : 0.35, dashArray: c.route ? null : "4 6",
         fill: on, fillColor: "#d9dde2", fillOpacity: 0.04, interactive: false }).addTo(layer);
-      if (c.label) label(c.label, c.name, `center ${c.active ? "here" : c.route ? "" : "dim"}`);
+      if (c.label) label(c.label, c.name, `center ${c.active ? "here" : c.route ? "" : "dim"}`, c.active ? 90 : c.route ? 70 : 10);
     }
     for (const a of vfr ? [] : z.terminals || []) {
       L.polygon((a.rings || []).map(ring), { color: "#2fb67c", weight: a.working ? 2.2 : 1.4, opacity: 0.9, fillColor: "#2fb67c",
         fillOpacity: a.working ? 0.22 : 0.12 }).addTo(layer)
         .bindTooltip(`${esc(a.name)}: ${a.role === "departure" ? "departure works you until you leave this area" : "approach takes you in here"}`);
-      if (a.label) label(a.label, a.name, "terminal");
+      if (a.label) label(a.label, a.name, "terminal", a.working ? 88 : 60);
     }
     if (z.final && !vfr) {
       L.polygon(ring(z.final.ring), { color: "#e7b24a", weight: 1.5, dashArray: "5 5", fillColor: "#e7b24a", fillOpacity: 0.1 }).addTo(layer)
@@ -170,7 +170,7 @@ const AtcMap = (() => {
           return `<span class="atc-badge ${KIND[s.controller][1]} ${state}">${KIND[s.controller][0]}</span>`;
         }).join("");
       const tip = stations.map((s) => `${esc(s.station)} ${mhz(s.mhz)}${s.tuned ? " ◀ tuned" : s.next ? " ◀ next" : ""}`).join("<br>");
-      L.marker(at(ap.lat, ap.lon), { icon: L.divIcon({ className: "", html: `<div class="atc-badges">${badges}</div>`, iconSize: [0, 0] }) })
+      L.marker(at(ap.lat, ap.lon), { icon: L.divIcon({ className: "", html: `<div class="atc-badges" data-rank="100">${badges}</div>`, iconSize: [0, 0] }) })
         .addTo(layer).bindTooltip(`<b>${esc(ap.icao)}</b> ${esc(ap.name || "")}<br>${tip}`);
     }
   }
@@ -421,7 +421,7 @@ const AtcMap = (() => {
       L.polyline(chain(h.racetrack), { color: "#4fd1c5", weight: 2.5, opacity: 0.95 }).addTo(layer)
         .bindTooltip(`<b>Hold at ${esc(h.fix)}</b>: inbound ${String(h.inbound).padStart(3, "0")}°, ${esc(h.turn)} turns, ${Number(h.altitude_ft).toLocaleString()} ft`
           + `<br>${h.reason === "arrival traffic" ? `number ${h.position}, ` : ""}${esc(h.reason)}${h.efc ? `, EFC ${esc(h.efc)}Z` : ""} · entry: ${esc(h.entry)}`, { sticky: true });
-      L.marker(at(h.lat, h.lon), { icon: L.divIcon({ className: "", html: `<div class="zone-label hold">HOLD ${esc(h.fix)}${h.efc ? ` · EFC ${esc(h.efc)}` : ""}</div>`, iconSize: [0, 0] }),
+      L.marker(at(h.lat, h.lon), { icon: L.divIcon({ className: "", html: `<div class="zone-label hold" data-rank="95">HOLD ${esc(h.fix)}${h.efc ? ` · EFC ${esc(h.efc)}` : ""}</div>`, iconSize: [0, 0] }),
         interactive: false, keyboard: false }).addTo(layer);
     }
     for (const a of ops.routing || []) {
@@ -453,11 +453,40 @@ const AtcMap = (() => {
       const list = [...atc, ...items.filter((n) => !(n.works_to || []).length)].slice(0, 12)
         .map((n) => `<div class="notam-tip${(n.works_to || []).length ? " atc" : ""}"><b>${esc(n.id || "")}</b> ${esc(String(n.text || "").slice(0, 160))}</div>`).join("");
       L.marker(at(a.lat, a.lon), { icon: L.divIcon({ className: "", iconSize: [0, 0],
-        html: `<div class="notam-badge${atc.length ? " atc" : ""}">NOTAM ${items.length}${atc.length ? ` · ${atc.length} ATC` : ""}</div>` }) })
+        html: `<div class="notam-badge${atc.length ? " atc" : ""}" data-rank="80">NOTAM ${items.length}${atc.length ? ` · ${atc.length} ATC` : ""}</div>` }) })
         .addTo(layer).bindTooltip(`<b>${esc(a.icao)} NOTAMs</b> (FAA)${list}${items.length > 12 ? `<div class="muted">and ${items.length - 12} more in the EFB</div>` : ""}`, { className: "notam-tooltip" });
     }
   }
 
-  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, PLANE, COLOURS, kindOf, shape: (kind) => SHAPES[kind] || SHAPES.jet, LEGEND,
+  /* Labels that would sit on one another (Europe zoomed out: every centre's name and every airport's code in a heap).
+     Each label drawn here carries a rank (``data-rank``): the controllers' badges, yours and the route's first, the
+     other centres last. The higher ones are kept, a lower one that would touch them hidden until zoomed in. Panning
+     moves them all together and changes nothing; run it again after a zoom or a redraw. Zoomed far out they're kept
+     further apart (``zoom``), so a continent reads at a glance. */
+  function declutter(container, zoom = 10) {
+    if (!container) return;
+    const items = [];
+    for (const el of container.querySelectorAll("[data-rank]")) {
+      const marker = el.closest(".leaflet-marker-icon") || el;
+      let box = null;
+      for (const part of [marker, ...marker.querySelectorAll("*")]) {
+        const r = part.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        box = box ? [Math.min(box[0], r.left), Math.min(box[1], r.top), Math.max(box[2], r.right), Math.max(box[3], r.bottom)]
+          : [r.left, r.top, r.right, r.bottom];
+      }
+      items.push({ marker, box, rank: Number(el.dataset.rank) || 0 });
+    }
+    items.sort((a, b) => b.rank - a.rank);
+    const placed = [], gap = zoom <= 5 ? 12 : zoom <= 7 ? 7 : 3;
+    for (const it of items) {
+      const b = it.box;
+      const clear = !b || !placed.some((p) => b[0] < p[2] + gap && b[2] + gap > p[0] && b[1] < p[3] + gap && b[3] + gap > p[1]);
+      it.marker.style.visibility = clear ? "" : "hidden";
+      if (clear && b) placed.push(b);
+    }
+  }
+
+  return { esc, route, straight, runways, ground, zones, talk, track, traffic, hazards, hazardsFromEfb, operations, notams, declutter, PLANE, COLOURS, kindOf, shape: (kind) => SHAPES[kind] || SHAPES.jet, LEGEND,
     setRef(lon) { ref = lon; }, get ref() { return ref; } };
 })();

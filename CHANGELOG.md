@@ -4,6 +4,10 @@ Every release of LocalTC, newest first. The app shows a version's section when a
 and the website's changelog page is built from this file. Versions follow [semantic versioning](https://semver.org):
 a new minor version adds features, a patch fixes them.
 
+## [0.5.9] - Upcoming
+
+Nothing yet: what's done for the next version is listed here as it lands.
+
 ## [0.5.8] - 2026-11-17
 
 ### Added

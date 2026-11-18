@@ -3,6 +3,10 @@
 Every version of localtc.tech, newest first. It carries the same version as LocalTC; the website's changelog page
 (Website) is built from this file.
 
+## [0.5.9] - Upcoming
+
+Nothing yet.
+
 ## [0.5.8] - 2026-11-17
 
 ### Fixed

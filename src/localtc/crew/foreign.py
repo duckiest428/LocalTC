@@ -882,9 +882,10 @@ TIME_SAID = {"de": ("Stunde", "Stunden", "Stunden", "Minute", "Minuten", "Minute
              "ru": ("час", "часа", "часов", "минута", "минуты", "минут"), "zh": ("小时", "小时", "小时", "分钟", "分钟", "分钟")}
 
 
-def _form(n: int, one: str, few: str, many: str) -> str:
-    """A noun with its number: "1 hour, 3 hours, 5 hours", as Slavic languages have it (few: 2-4, not 12-14)."""
-    if n == 1:
+def _form(n: int, one: str, few: str, many: str, code: str = "") -> str:
+    """A noun with its number: "1 hour, 3 hours, 5 hours", as Slavic languages have it (few: 2-4, not 12-14). Russian's
+    21, 31 ... take the one form too ("21 минута"); Polish's don't ("21 minut")."""
+    if n == 1 or code == "ru" and n % 10 == 1 and n % 100 != 11:
         return one
     return few if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else many
 
@@ -895,8 +896,8 @@ def _time_said(text: str, code: str) -> str:
         return text
     h1, h2, h3, m1, m2, m3 = TIME_SAID[code]
     glue = "" if code == "zh" else " "
-    text = re.sub(r"(\d+) hours?(?: (?=\d))?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), h1, h2, h3)}" + (" " if code != "zh" and m[0].endswith(" ") else ""), text)
-    return re.sub(r"(\d+) minutes?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), m1, m2, m3)}", text)
+    text = re.sub(r"(\d+) hours?(?: (?=\d))?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), h1, h2, h3, code)}" + (" " if code != "zh" and m[0].endswith(" ") else ""), text)
+    return re.sub(r"(\d+) minutes?", lambda m: f"{m[1]}{glue}{_form(int(m[1]), m1, m2, m3, code)}", text)
 
 
 # How a language groups a number's thousands: German reads "41,300" as forty-one point three.
@@ -924,6 +925,14 @@ SHOWN_NAMES = {"de": {"HEADING": "Kurs", "ALTITUDE": "Höhe", "SPEED": "Geschwin
 
 def templated(text: str, code: str) -> str | None:
     """One of the copilot's set lines in language ``code``, what's in it kept as said; None if it isn't one."""
+    from localtc.crew import foreign_lines
+
+    def plain(value: str) -> str:  # ("Heading 240?" as "Kurs 240?" too)
+        said = _grouped(_control_names(value[:1].lower() + value[1:], code), code)
+        return said[:1].upper() + said[1:] if value[:1].isupper() else said
+
+    if code in foreign_lines.CODES and (said := foreign_lines.templated(text, code, templated, plain, UNITS_SAID.get(code, {}))):
+        return said
     for pattern, said in TEMPLATES:
         if code in said and (m := re.match(pattern, text)):
             values = {k: _grouped(_control_names(v or "", code), code) for k, v in m.groupdict().items()}
@@ -1339,3 +1348,62 @@ def units_kept(english: str, said: str) -> bool:
 def numbers(text: str) -> list[str]:
     """The numbers in a line as digits ("41,300" and "41.300" are both 41300), for checking a translation."""
     return [re.sub(r"[.,\s ](?=\d{3}\b)", "", n) for n in re.findall(r"\d[\d.,  ]*\d|\d", text)]
+
+
+# A crew member's own words, by who says them: the lines are written for a man or a woman, and said as the other where
+# the language changes them ("Zrozumiałem"/"Zrozumiałam", "Понял"/"Поняла", "Je ne suis pas sûr"/"sûre").
+GENDERED: dict[str, tuple[tuple[str, str], ...]] = {
+    "pl": (("chciałem", "chciałam"), ("Zrozumiałem", "Zrozumiałam"), ("zrozumiałem", "zrozumiałam"), ("Przyjąłem", "Przyjęłam"), ("nadałem", "nadałam"),
+           ("Usłyszałem", "Usłyszałam"), ("mówiłem", "mówiłam"), ("dosłyszałem", "dosłyszałam"), ("Nie jestem pewien", "Nie jestem pewna"),
+           ("będę cię informował", "będę cię informowała"), ("szef pokładu", "szefowa pokładu")),
+    "ru": (("должен сообщить", "должна сообщить"), ("я и говорил", "я и говорила"), ("я хотел", "я хотела"), ("Понял", "Поняла"), ("Принял", "Приняла"), ("не говорил", "не говорила"), ("услышал", "услышала"), ("Не уверен", "Не уверена"),
+           ("не расслышал", "не расслышала"), ("не передавал", "не передавала"), ("старший бортпроводник", "старшая бортпроводница"),
+           ("не почувствовал", "не почувствовала")),
+    "fr": (("Je ne suis pas sûr", "Je ne suis pas sûre"),),
+    "es": (("No me quedo tranquilo", "No me quedo tranquila"), ("No estoy seguro", "No estoy segura"), ("su jefe de cabina", "su jefa de cabina")),
+    "it": (("Non sono tranquillo", "Non sono tranquilla"), ("Non sono sicuro", "Non sono sicura"), ("Non sono riuscito", "Non sono riuscita"), ("il suo capo cabina", "la sua capo cabina")),
+    "pt": (("Não estou tranquilo", "Não estou tranquila"), ("Obrigado", "Obrigada"), ("o seu chefe de cabine", "a sua chefe de cabine")),
+    "de": (("Kabinenchef", "Kabinenchefin"),),
+}
+
+
+def said_by(text: str, code: str, sex: str) -> str:
+    """``text`` as a man ("M") or a woman ("F") says it in language ``code``."""
+    for man, woman in GENDERED.get(code, ()):
+        was, now = (man, woman) if sex == "F" else (woman, man)
+        text = re.sub(rf"(?<!\w){re.escape(was)}(?!\w)", now, text)
+    return text
+
+
+_KNOWN: dict[str, dict[str, frozenset[str]]] = {}
+
+
+def _known(code: str) -> dict[str, frozenset[str]]:
+    """Every word ``gloss`` reads in language ``code`` with what it can mean: its phrases' words (their concepts),
+    numbers, small words and English's."""
+    if code not in _KNOWN:
+        meanings: dict[str, set[str]] = {}
+        for phrase, concept in _phrases(code):
+            for w in phrase.split():
+                meanings.setdefault(w, set()).add(concept)
+        words = set(DIGITS.get(code, {})) | set(DIGITS["en"])
+        for table in (STOPWORDS.get(code, ""), JOINERS.get(code, ""), QUESTION.get(code, ""), STOPWORDS["en"]):
+            words |= {_plain(w) for part in table.split("|") for w in part.split()}
+        if (numbers := spoken_numbers.TABLES.get(code)) is not None:
+            words |= set(numbers.values) | set(numbers.hundred) | set(numbers.thousand)
+        for w in words:
+            meanings.setdefault(w, {f"={w}"})
+        _KNOWN[code] = {w: frozenset(m) for w, m in meanings.items() if w}
+    return _KNOWN[code]
+
+
+def gloss_near(text: str, code: str) -> str | None:
+    """``gloss`` of ``text`` with the words Whisper wrote a letter or two off put right ("Inserici il pilota automatico",
+    "Fahrwerk einfachen"); None when that isn't one of the common things either. A reading this near is said back to be
+    sure of it, never just done."""
+    if code in ("", "en", "zh") or code not in WORDS or not text.strip():
+        return None
+    said = _plain(text)
+    numbers = {w for w in said.split() if re.search(r"\d", whole_numbers(w, code))}
+    fixed = spoken_numbers.near_words(said, _known(code), numbers=numbers)
+    return gloss(fixed, code) if fixed else None

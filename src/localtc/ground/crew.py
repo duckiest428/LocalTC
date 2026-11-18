@@ -233,6 +233,11 @@ class RampCrew:
         if self.turnaround is not None and BAGS_ASKED.search(text):
             return [self._speech("status", t, report=self.turnaround.answer("ramp", text))]
         asks = g.parse(self.read(text))
+        if asks and self.language and all(a.action == g.REQUEST for a in asks) and foreign.unread(text, self.language):
+            # A word left that the ramp couldn't read, beside the services: likely the verb misheard ("Catering,
+            # Applichen" for "Catering abbrechen"), so asked again, never the service ordered instead of cancelled.
+            log.info("Ramp: %r has %s it couldn't read: asked again", text, foreign.unread(text, self.language))
+            asks = ()
         if not asks:
             if (said := self._by_label(text, t)) is not None:
                 return said

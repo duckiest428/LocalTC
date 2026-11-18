@@ -2156,7 +2156,7 @@ const Settings = {
           ["llm", "Fully LLM: the model words all they say, except the safety announcements"]]
           .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.cabin.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they use the script's words.</span>
-        <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages.</span>
+        <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages, then in yours (the copilot's language). To you they always talk in yours.</span>
         <div class="row"><label>Your name, for the welcome<input id="s-cabin-captain" value="${esc(st.cabin.captain || "")}" placeholder="Reyes" autocomplete="off" spellcheck="false"></label></div>
         <label class="check-row"><input type="checkbox" id="s-cabin-announcements" ${st.cabin.announcements ? "checked" : ""}> Announcements: boarding, the welcome, the seatbelt sign, the descent and the arrival</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-safety" ${st.cabin.safety_demo ? "checked" : ""}> Safety demonstration during the taxi out, with this aircraft's exits</label>

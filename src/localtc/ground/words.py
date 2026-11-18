@@ -5,13 +5,13 @@ GSX itself says. "{Name}: ..." rather than a sentence around the name: Polish an
 
 import re
 
-from localtc.spoken_numbers import plain, whole_numbers, zh_whole_numbers
+from localtc.spoken_numbers import near_words, plain, whole_numbers, zh_whole_numbers
 
 # English -> what's said for it, in each language (without accents, as ``plain`` leaves it; Russian and Mandarin as written).
 HEARD: dict[str, dict[str, str]] = {
-    "de": {"what gate": "welches gate|an welchem gate|welche parkposition|wo stehen wir", "ramp": "rampe|ramper|ramp|vorfeld|bodencrew|bodenpersonal|ramp agent", "please": "bitte|danke", "yes": "ja|genau|korrekt|bestatigt", "no": "nein|negativ",
+    "de": {"what gate": "welches gate|an welchem gate|welche parkposition|wo stehen wir", "ramp": "rampe|ramper|ramp|vorfeld|bodencrew|bodenpersonal|ramp agent", "please": "bitte schon|danke schon|bitte|danke", "yes": "ja|genau|korrekt|bestatigt", "no": "nein|negativ",
            "status": "wie ist der stand|wie weit|was fehlt noch|was ist noch offen|was lauft|stand der dinge|status", "cancel": "abbrechen|absagen|storniere|storno|vergiss",
-           "complete now": "jetzt beenden|sofort beenden|fertig machen", "speed up": "beschleunigen|schneller|beeil", "disconnect": "abkoppeln|trennen|entfernen|wegfahren|weg",
+           "complete now": "jetzt beenden|sofort beenden|fertig machen", "speed up": "beschleunigen|schneller|beeil", "disconnect": "abkoppeln|abklemmen|abziehen|trennen|entfernen|wegfahren|weg",
            "stop the push": "push stoppen|pushback stoppen|anhalten|stopp", "brakes set": "bremse gesetzt|parkbremse gesetzt", "brakes released": "bremse gelost|parkbremse gelost",
            "good start": "triebwerke laufen|triebwerk lauft|guter start", "full service": "volles programm|kompletter service|alle dienste", "pushback": "pushback|push back|zuruckschieben|schlepper|push",
            "nose left": "nase links|nase nach links", "nose right": "nase rechts|nase nach rechts", "tail left": "heck links|heck nach links", "tail right": "heck rechts|heck nach rechts",
@@ -49,7 +49,7 @@ HEARD: dict[str, dict[str, str]] = {
            "stop the push": "stop de pushback|stop", "brakes set": "rem aan|parkeerrem aan|remmen aan", "brakes released": "rem los|parkeerrem los|remmen los", "good start": "goede start|motoren lopen", "full service": "volledige service|alle diensten",
            "pushback": "pushback|terugduwen|sleepwagen", "nose left": "neus links|neus naar links", "nose right": "neus rechts|neus naar rechts", "tail left": "staart links|staart naar links", "tail right": "staart rechts|staart naar rechts", "straight back": "recht achteruit|recht",
            "catering": "catering|maaltijden", "fuel": "brandstof|tanken|kerosine|fuel", "gpu": "gpu|grondstroom", "jetway": "slurf|aviobrug|jetway", "stairs": "trap|trappen", "water": "water|drinkwater", "lavatory": "toiletten|toilet", "cleaning": "schoonmaak|schoonmaken",
-           "de ice": "ontdooien|de icen", "start boarding": "begin met boarden|start het boarden|instappen", "deboard": "uitstappen|deboarden", "gate": "gate|standplaats", "percent": "procent", "option": "optie|nummer", "full tanks": "vol tanken|volle tanks"},
+           "de ice": "ontdooien|de icen", "start boarding": "begin met boarden|start het boarden|boarden|instappen", "deboard": "uitstappen|deboarden", "gate": "gate|standplaats", "percent": "procent", "option": "optie|nummer", "full tanks": "vol tanken|volle tanks"},
     "pl": {"what gate": "ktora bramka|jakie stanowisko|gdzie stoimy", "ramp": "rampa|plyta|obsluga naziemna|obsluga", "please": "prosze|dziekuje", "yes": "tak|potwierdzam|zgadza sie", "no": "nie|negatyw",
            "status": "jak idzie|co zostalo|co jeszcze|status|stan", "cancel": "anuluj|odwolaj|zostaw", "complete now": "zakoncz teraz|skoncz teraz", "speed up": "przyspiesz|szybciej|pospiesz", "disconnect": "odlacz|zabierz|usun|odjedz",
            "stop the push": "zatrzymaj wypychanie|zatrzymaj|stop", "brakes set": "hamulce zaciagniete|hamulec zaciagniety", "brakes released": "hamulce zwolnione|hamulec zwolniony", "good start": "dobry rozruch|silniki pracuja|silniki uruchomione", "full service": "pelna obsluga|wszystkie uslugi",
@@ -57,7 +57,7 @@ HEARD: dict[str, dict[str, str]] = {
            "catering": "catering|posilki|zaopatrzenie", "fuel": "paliwo|paliwa|tankowanie|zatankuj|fuel", "gpu": "gpu|zasilanie naziemne|agregat", "jetway": "rekaw|jetway", "stairs": "schody", "water": "woda|wode|wody", "lavatory": "toalety|toaleta|toalet",
            "cleaning": "sprzatanie|czyszczenie", "de ice": "odladzanie", "start boarding": "rozpocznij boarding|rozpocznij wejscie|boarding", "deboard": "wysiadanie|deboarding", "gate": "bramka|stanowisko|gate", "percent": "procent|procenty", "option": "opcja|numer", "full tanks": "do pelna"},
     "sv": {"what gate": "vilken gate|vilken grind|var star vi", "ramp": "ramp|plattan|markpersonal|marktjanst", "please": "tack|snalla", "yes": "ja|bekraftat|stammer", "no": "nej|negativt",
-           "status": "hur gar det|vad ar kvar|lagesrapport|lage|status", "cancel": "avbryt|stryk|glom", "complete now": "avsluta nu|gor klart nu", "speed up": "snabba pa|skynda|fortare", "disconnect": "koppla bort|koppla ur|ta bort|ta bort",
+           "status": "hur gar det|vad ar kvar|lagesrapport|lage|status", "cancel": "avbryt|stryk|glom", "complete now": "avsluta nu|gor klart nu", "speed up": "snabba pa|skynda|fortare", "disconnect": "koppla bort|koppla ur|ta bort|tabort",
            "stop the push": "stoppa pushback|stoppa|stopp", "brakes set": "bromsen ansatt|broms ansatt|bromsar pa", "brakes released": "bromsen slappt|bromsar slappta", "good start": "bra start|motorerna gar|motorer igang", "full service": "full service|alla tjanster",
            "pushback": "pushback|bogsering|bogserbil", "nose left": "nosen vanster|nos vanster", "nose right": "nosen hoger|nos hoger", "tail left": "stjarten vanster|stjart vanster", "tail right": "stjarten hoger|stjart hoger", "straight back": "rakt bakat|rakt",
            "catering": "catering|mat", "fuel": "bransle|tanka|tankning|fuel", "gpu": "gpu|markstrom", "jetway": "flygbrygga|flygbryggan|jetway|brygga|bryggan", "stairs": "trappa|trappan|trappor|trapporna", "water": "vatten|vattnet|dricksvatten", "lavatory": "toalett|toaletter|toaletterna",
@@ -67,7 +67,7 @@ HEARD: dict[str, dict[str, str]] = {
            "stop the push": "останови буксировку|стоп буксировка|стоп", "brakes set": "тормоз включён|тормоз включен|тормоз поставлен", "brakes released": "тормоз снят|тормоза отпущены|тормоз отпущен", "good start": "запуск нормальный|двигатели запущены|двигатели работают",
            "full service": "полное обслуживание|все услуги", "pushback": "буксировка|буксировку|буксир|пушбэк|пушбек", "nose left": "нос влево|носом влево", "nose right": "нос вправо|носом вправо", "tail left": "хвост влево|хвостом влево", "tail right": "хвост вправо|хвостом вправо", "straight back": "прямо назад|прямо",
            "catering": "кейтеринг|питание|бортпитание", "fuel": "топливо|топлива|заправку|заправка|заправь|керосин", "gpu": "гпу|аэродромное питание|наземное питание|apu наземный", "jetway": "телетрап|рукав|трап рукав", "stairs": "трап|лестницу|лестница", "water": "вода|воду|воды", "lavatory": "туалет|туалеты",
-           "cleaning": "уборка|уборку", "de ice": "противообледенительная|антиобледенение|обработка от обледенения", "start boarding": "начинайте посадку|начать посадку|посадку пассажиров|посадка пассажиров", "deboard": "высадка|высадку|высаживайте", "gate": "гейт|стоянка|стоянку", "percent": "процентов|процента|процент", "option": "вариант|номер", "full tanks": "полные баки"},
+           "cleaning": "уборка|уборку", "de ice": "противообледенительную обработку|противообледенительная обработка|противообледенительная|антиобледенение|обработка от обледенения", "start boarding": "начинайте посадку|начать посадку|посадку пассажиров|посадка пассажиров|посадку", "deboard": "высадка|высадку|высаживайте", "gate": "гейт|стоянка|стоянку", "percent": "процентов|процента|процент", "option": "вариант|номер", "full tanks": "полные баки"},
     "zh": {"what gate": "哪个登机口|哪个机位", "ramp": "地勤|得勤|的勤|低勤|机坪|地面人员|机务", "please": "请|谢谢", "yes": "是的|确认|好的|对", "no": "不用|不是|不要|否",
            "status": "什么情况|进度|还剩什么|还有什么|状态", "cancel": "取消|算了", "complete now": "现在结束|马上结束", "speed up": "加快|快点", "disconnect": "断开|撤走|移开|撤掉|拿走", "stop the push": "停止推出|停止|停下",
            "brakes set": "刹车已设置|刹车设好了|刹车好了", "brakes released": "刹车已松开|刹车松开了", "good start": "启动正常|发动机正常", "full service": "全套服务|所有服务", "pushback": "推出|推飞机|拖车", "nose left": "机头向左|机头朝左|机头左", "nose right": "机头向右|机头朝右|机头右",
@@ -242,6 +242,37 @@ def _phrases(code: str) -> list[tuple[str, str]]:
     return _CACHE[code]
 
 
+_KNOWN: dict[str, dict[str, frozenset[str]]] = {}
+
+
+def _known(code: str) -> dict[str, frozenset[str]]:
+    """The words of everything the ramp knows in language ``code``, with what each can mean ("отмени", "отмена": cancel)."""
+    if code not in _KNOWN:
+        meanings: dict[str, set[str]] = {}
+        for english, said in HEARD[code].items():
+            for phrase in said.split("|"):
+                for w in plain(phrase).split():
+                    meanings.setdefault(w, set()).add(english)
+        _KNOWN[code] = {w: frozenset(m) for w, m in meanings.items()}
+    return _KNOWN[code]
+
+
+def unread(text: str, code: str) -> list[str]:
+    """The words of ``text`` (said in language ``code``) the ramp couldn't read at all: what a misheard "cancel" or
+    "remove" leaves ("Rampe, Catering, Applichen"). Short words and numbers aren't counted."""
+    if code not in HEARD or code == "zh":
+        return []
+    english = {w for key in HEARD[code] for w in plain(key).split()} | {"ramp", "please", "percent"} | set(FILLERS.get(code, "").split("|"))
+    return [w for w in as_english(text, code).split() if len(w) >= 4 and w.isalpha() and w not in english]
+
+
+# Words around a call that aren't what's asked ("eine GPU", "noch"): never a misheard verb.
+FILLERS = {"de": "eine|einen|einem|einer|eins|noch|bitte|auch|jetzt|mal|doch", "fr": "des|les|une|pour|avec|aussi|maintenant",
+           "es": "unos|unas|para|tambien|ahora", "it": "anche|della|delle|degli|adesso|ora", "pt": "tambem|para|umas|agora",
+           "nl": "even|ook|een|graag|maar|alstublieft", "pl": "jeszcze|teraz|tez|prosze", "sv": "ocksa|lite|nu",
+           "ru": "тоже|ещё|еще|сейчас|нам|нас"}
+
+
 def as_english(text: str, code: str) -> str:
     """``text`` said in language ``code``, with what the ramp knows of it in the English their grammar reads. What isn't known stays:
     the grammar passes over it. A number said as words comes out in digits. Said in English, it's left as it is."""
@@ -253,7 +284,11 @@ def as_english(text: str, code: str) -> str:
         for words, english in _phrases(code):
             said = said.replace(words, f" {english} ")
         return " ".join(said.split())
-    said = plain(text)
+    said = plain(text.replace("%", " percent "))
+    if code == "nl":  # (a verb in two: "koppel de GPU af", "haal de slurf weg")
+        said = re.sub(r"\bkoppel ((?:de |het )?\w+) (?:af|los)\b", r"ontkoppel \1", said)
+        said = re.sub(r"\bhaal ((?:de |het )?\w+) weg\b", r"verwijder \1", said)
+    said = near_words(said, _known(code), strict=False) or said  # ("toilitten", "lavavos": a letter or two off)
     for words in (plain(w) for w in HEARD[code]["percent"].split("|")):  # (before the numbers: "pour cent" isn't a hundred)
         said = re.sub(rf"\b{words}\b", "percent", said)
     said = whole_numbers(said, code).replace(".", " ").replace(",", " ")

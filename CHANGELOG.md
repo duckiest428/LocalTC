@@ -202,6 +202,49 @@ a new minor version adds features, a patch fixes them.
   would cover another, the less important is hidden until you zoom in (your controllers, your route and its centres
   first), and they're kept further apart zoomed far out.
 - **The app's tabs** stretch across the window, wider as it widens.
+- **The copilot in your language** says its everyday lines in it with no language model, in all nine: leaving
+  something alone, "already" (gear, flaps, lights, the seatbelt sign, the autopilot, the APU, the parking brake,
+  the transponder, the autobrake), why it won't ("negative, we're on the ground", "not below 1,000 feet"), what it
+  asks first (the autopilot off low, an emergency squawk, a level that isn't the clearance, "did you say ..."), the
+  radio calls it offers to make or leaves to you, where we are ("about 20 miles north-northeast of ...") and the
+  runway's headwind and crosswind. They were English before, or the language model's translation. A copilot with a
+  personality no longer puts its English "um"s into another language.
+- **The cabin crew's own calls** to the flight deck (boarding complete, cabin secure for takeoff and landing, running
+  late, the service, everyone off) are in your language when you talk with them in one, as their answers already were.
+- **The cabin's announcements in your language too:** with the copilot in another language, each announcement is made
+  in the airline's own languages first, then in yours, then in English (Lufthansa with a Polish captain: German,
+  Polish, English; Delta with a German one: English, German). An order to the crew ("doors to automatic") is still
+  given once, in the airline's first.
+- **Every announcement in every language:** the night departure, the exit rows, the rest of the safety briefing (flight
+  mode, laptops, no smoking), the seatbelt sign off again, the service paused for turbulence and the word about the
+  aircraft were only ever made in English. They're in all ten now, and the US doors call and the plain "seatbelt sign
+  off" use each language's own.
+- **The cabin crew talk to you in your language, all of it:** a problem on board (a medical case, a disruptive
+  passenger, smoke, a security concern, the lavatories, help at the gate) is reported in it with its question, how
+  it's going, what happens with your decision and when it's sorted. Your answer is understood in it too ("weiterfliegen",
+  "wir weichen aus", "Notfall erklären", "объявляем бедствие", "备降"). The boarding and turnaround timing, and what
+  they thought of the landing, are in it too. A call with any piece not translated is made whole in English, never
+  half in each.
+- **"Noch etwa twenty-two Minuten":** a number the crew told you in another language was English words. Digits now.
+- **Said by a man or a woman:** the copilot's and the cabin crew's lines in Polish, Russian, French, Spanish, Italian,
+  Portuguese and German take the speaker's forms ("Zrozumiałam" from a woman, "Понял" from a man): the cabin's Polish
+  and Russian answers were a woman's whoever was on.
+- **Your language on the radio is told again:** with the copilot in another language, a radio call in that language
+  is heard as it was said and you're told ATC works in English. The check that tells the language never ran (it
+  called a step that wasn't there), so every call was heard as English of a sort and only got "say again". Only
+  a language it's sure of (0.95) counts: English read back in a French accent measured 0.90 French, and is heard
+  as English; French, Spanish, Italian, Portuguese and Mandarin said on the radio measured 0.99 and up.
+- **A word Whisper writes a letter or two off** is read as the copilot's, ramp's or cabin's word it is ("Inserici il
+  pilota automatico", "Connecta", "Spenni il segnale cinture", "Fahrwerk einfachen", "Schöckliste fertig",
+  "Toilitten", "lavavos", "Lampa boardink"), where it's clearly that word and no other. The copilot asks a reading
+  like that back ("Did you say autopilot on?") and never just does it. Found by the copilot's and the crew's voices
+  saying 72 things in each language to Whisper base: 315 of 720 read before, 384 now on the same recordings.
+- **The ramp asks again rather than order a service** when a word beside it can't be read: a misheard "abbrechen" or
+  "abklemmen" ("Rampe, Catering, Applichen") had the catering asked for instead of cancelled. More of the ramp's
+  words: German "abklemmen" and "bitte schön", Dutch "boarden" and "koppel de GPU af", Russian "посадку", Swedish
+  "tabort", "60%".
+- **Numbers in Polish and Russian** agree with their noun ("22 minuty", "5 minut", Russian's "21 минута"), the
+  minutes in the cabin's calls too.
 - **Readbacks heard oddly but said right:** every readback ATC asks for, said right and written the ways speech
   recognition writes it (tens of thousands of variations), is now taken as right. Among them: "climbing to 8,000",
   "descending to 6,000", "descending 6,500" for the altitude you were given, "climbing and maintaining",

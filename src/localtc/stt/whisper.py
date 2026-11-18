@@ -238,7 +238,7 @@ class WhisperTranscriber:
         if self.choice.model.endswith(".en"):
             return "", 0.0
         try:
-            self._load()
+            self.load()
             code, probability, *_ = self._model.detect_language(audio)
             return code, float(probability)
         except Exception as exc:  # noqa: BLE001 - telling is a nicety: the words are still heard as English

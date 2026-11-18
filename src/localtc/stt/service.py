@@ -84,7 +84,7 @@ def _radio_of(event: Any) -> int:
     return event.radio
 
 
-OWN_LANGUAGE_SURE = 0.85  # Spanish on the radio read 0.98 and up; English in a Spanish accent 0.62 at most
+OWN_LANGUAGE_SURE = 0.95  # French, Spanish, Italian, Portuguese, Mandarin on the radio read 0.99 and up; English in a French accent up to 0.90
 
 
 class VoiceService:

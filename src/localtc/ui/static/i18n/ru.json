@@ -984,7 +984,7 @@
 "The volume of ATC, the ATIS, other flights, the copilot and the radio's clicks, and your microphone": "Громкость диспетчера, ATIS, других бортов, второго пилота и щелчков радио, и ваш микрофон",
 "The whole replay": "Вся запись",
 "Their announcements and calls, the chimes and the boarding music.": "Их объявления и звонки, сигналы и музыка при посадке.",
-"Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages.": "Имя и акцент зависят от авиакомпании: у Lufthansa немецкий экипаж, у Air France французский, и каждый объявляет на языках авиакомпании.",
+"Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages, then in yours (the copilot's language). To you they always talk in yours.": "Имя и акцент зависят от авиакомпании: у Lufthansa немецкий экипаж, у Air France французский, и каждый объявляет на языках авиакомпании, а затем на твоём (языке второго пилота). С тобой они всегда говорят на твоём.",
 "They're made from your sim's data and a lot of rules, and they still get things wrong now and then: a runway, a taxi route, a misheard call. When something goes wrong, send it in (the gear → Support & feedback): each report makes them better.": "Они построены на данных вашего симулятора и множестве правил и всё же иногда ошибаются: полоса, маршрут руления, неверно понятый вызов. Если что-то пошло не так, отправьте отчёт (шестерёнка → Поддержка и отзывы): каждый отчёт делает их лучше.",
 "Third party": "Сторонние сервисы",
 "This computer: {0} CPU threads, {1} GB RAM, {2}.": "Этот компьютер: {0} потоков ЦП, {1} ГБ ОЗУ, {2}.",

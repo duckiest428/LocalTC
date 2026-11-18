@@ -4,6 +4,16 @@ What the Windows session (docs/windows-session.md) found running LocalTC against
 Mac session to read after a pull. Each entry: the date, the aircraft or airport, what failed, what was changed, and
 what's still open.
 
+## 2026-11-17: every language again, on the user's Whisper (base, CPU)
+- 720 things said to the copilot, the ramp and the cabin in the ten languages (Kokoro and the de/fr Piper voices;
+  nl/pl/sv/ru are an English Kokoro voice on espeak's phonemes, so their numbers say little): 315 read before, 389 now
+  (es 94%, it 85%, de 65%, fr 61%, zh 11%). Whisper small on the same audio: 434 (fr 78%, de 74%), three times slower.
+- `language_of` never ran (a missing `_load()`): the pilot's own language on the radio was never told. Now: fr, es, it,
+  pt, zh calls 0.99 and up; an English readback in a French accent 0.90 French, so the bar is 0.95.
+- Without a model the copilot's set lines, the cabin's own calls, its incident reports and every announcement are in
+  the language now; a misheard ramp verb is asked again instead of ordering the service.
+- Open: no human voice yet; Mandarin and the four espeak languages need real speakers (or their Piper packs) measured.
+
 ## 2026-11-03: every language, measured (tests/test_every_language.py)
 - Said to the copilot with no model: 457 of 569 phrases read, now all. Every language but Spanish missed numbers said as words, feet, knots, flight levels.
 - The real cloud model's translations, 50 lines over ten languages: 39 kept, now 48. Thrown away over "29,92", "час двадцать", 两. The two left are its own garbled French.

@@ -8,8 +8,10 @@
    in place of the repository's (without emailing the followers), and a deleted one is hidden (the server's "hidden").
 
    A post is Markdown, a small part of it: ## headings, **bold**, *italic*, `code`, [links](https://...),
-   ![pictures](address), - lists, 1. lists, > quotes and --- lines. It's escaped first and built up from there,
-   so nothing in a post can run. Pictures only from the server's blog store or this site.
+   ![pictures](address), - lists, 1. lists, > quotes and --- lines, and a YouTube link on a line of its own for the
+   video. It's escaped first and built up from there, so nothing in a post can run. Pictures only from the server's
+   blog store or this site. A video is only a button until it's pressed: nothing is loaded from YouTube before that,
+   and then from youtube-nocookie.com.
 
    Under a post, its reactions; reading it counts it once per reader (the server knows a reader by a salted hash of
    their address and browser: nothing is kept in this browser). The authors see each post's readers. Follow emails new posts to the
@@ -26,6 +28,11 @@
 
   const imageOk = (u) => /^https:\/\/api\.localtc\.tech\/v1\/blog\/images\/[a-f0-9]{32}$/.test(u)
     || /^http:\/\/localhost:8787\/v1\/blog\/images\/[a-f0-9]{32}$/.test(u) || /^\/?img\/[\w/.-]+\.(?:jpe?g|png|webp|gif)$/.test(u);
+  // A YouTube link alone on a line: youtu.be/<id>, youtube.com/watch?v=<id>, /embed/<id> or /shorts/<id>.
+  const YOUTUBE = /^(?:https?:\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:\S*&)?v=|embed\/|shorts\/))([\w-]{11})(?:[?&#]\S*)?\s*$/;
+  const startAt = (url) => { const m = /[?&#]t=(\d+)s?(?:$|&)/.exec(url); return m ? Number(m[1]) : 0; };
+  const video = (id, start) => `<figure class="post-video" data-id="${id}"${start ? ` data-start="${start}"` : ""}>
+<button type="button" aria-label="Play the video"><span class="pv-play" aria-hidden="true"></span><span class="pv-note">Plays from YouTube</span></button></figure>`;
   const linkOk = (u) => /^(https?:\/\/|\/|#|mailto:)/.test(u) || /^[\w-]+(#[\w-]+)?$/.test(u);
 
   function inline(text) {
@@ -61,6 +68,7 @@
       else if (!line.trim()) flush();
       else if ((m = /^(#{2,4})\s+(.*)$/.exec(line))) { flush(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); }
       else if (/^(-{3,}|\*{3,})\s*$/.test(line)) { flush(); out.push("<hr>"); }
+      else if ((m = YOUTUBE.exec(line.trim()))) { flush(); out.push(video(m[1], startAt(line))); }
       else if ((m = /^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/.exec(line))) { flush(); if (imageOk(m[2])) out.push(`<figure><img src="${esc(m[2])}" alt="${esc(m[1])}" loading="lazy"></figure>`); }
       else if ((m = /^>\s?(.*)$/.exec(line))) { if (para.length || list) { const q = quote; quote = []; flush(); quote = q; } quote.push(m[1]); }
       else if ((m = /^\s*[-*]\s+(.*)$/.exec(line)) || (m = /^\s*\d+[.)]\s+(.*)$/.exec(line))) {
@@ -130,14 +138,17 @@
     $("#editor").hidden = true;
     const art = $("#post");
     art.hidden = false;
+    const hasVideo = /<figure class="post-video"/.test(markdown(p.body));  // the cover is the video's picture then
     const editable = state.author;  // the site's own posts too: a change is saved on the server in their place
     art.innerHTML = `<a href="#" class="linklike post-back">&larr; All posts</a>
-${p.cover && imageOk(p.cover) ? `<img class="post-cover" src="${esc(p.cover)}" alt="">` : ""}
+${p.cover && imageOk(p.cover) && !hasVideo ? `<img class="post-cover" src="${esc(p.cover)}" alt="">` : ""}
 <header class="post-head"><p class="pc-date">${esc(when(p.published_at))} · ${minutes(p.body)} min read${p.author ? ` · ${esc(p.author)}` : ""}</p>
 <h1>${esc(p.title)}</h1>${p.summary ? `<p class="post-lede">${esc(p.summary)}</p>` : ""}
 ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">Edit this post</button>` : ""}</header>
 <div class="post-body">${markdown(p.body)}</div>
 <div class="post-react" aria-label="Reactions">${REACTIONS.map(([k, e, label]) => `<button type="button" data-kind="${k}" title="${label}" aria-label="${label}" aria-pressed="false"><span>${e}</span><b></b></button>`).join("")}</div>`;
+    const first = art.querySelector(".post-video button");
+    if (first && p.cover && imageOk(p.cover)) first.style.backgroundImage = `url("${p.cover}")`;
     reactions(art, p.slug);
     art.querySelector(".post-back").onclick = (e) => { e.preventDefault(); location.hash = ""; };
     if (editable) $("#post-edit").onclick = () => edit(p);
@@ -410,6 +421,21 @@ ${editable ? `<button type="button" class="btn btn-ghost btn-sm" id="post-edit">
     route();
     window.addEventListener("hashchange", route);
   }
+
+  // A video's button, pressed: only now is YouTube asked for it (in a post and in the editor's preview).
+  document.addEventListener("click", (e) => {
+    const button = e.target.closest(".post-video button");
+    if (!button) return;
+    const fig = button.parentElement, id = fig.dataset.id;
+    if (!/^[\w-]{11}$/.test(id)) return;
+    const frame = document.createElement("iframe");
+    frame.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0${fig.dataset.start ? `&start=${Number(fig.dataset.start)}` : ""}`;
+    frame.title = "Video";
+    frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    frame.allowFullscreen = true;
+    frame.referrerPolicy = "strict-origin-when-cross-origin";
+    button.replaceWith(frame);
+  });
 
   window.BlogMarkdown = markdown;
   start();

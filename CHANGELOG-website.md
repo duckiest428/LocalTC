@@ -5,7 +5,10 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.5.9] - Upcoming
 
-Nothing yet.
+### Added
+- **The blog's getting-started video:** a post with the tutorial, from the install to the first flight, with a link
+  to each chapter. A YouTube link on a line of its own in a post is shown as the video, which is loaded from YouTube
+  only once its play button is pressed (the cookie and privacy pages say so).
 
 ## [0.5.8] - 2026-11-17
 

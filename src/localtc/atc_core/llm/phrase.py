@@ -83,7 +83,9 @@ BANNED = {"cleared", "clear", "climb", "descend", "maintain", "turn", "heading",
 BANNED_PHRASES = re.compile(r"\bhold(?:ing)? (?:short|position)\b|\btail (?:left|right)\b|\bgo around\b|\bgive way\b")
 # A pilot's words, or a chat show's, in a controller's instruction: "maintain 9,000 feet, copy that, thanks",
 # "good afternoon, welcome, copy that, thanks, maintain FL330".
-ATC_NEVER = re.compile(r"\bcopy(?: that)?\b|\bwelcome\b|\bappreciate\b|\bno worries\b|\bcheers\b|\bawesome\b")
+# (and the chat a controller has no time for: "continue, runway 30L, no problem", "you're looking good up here")
+ATC_NEVER = re.compile(r"\bcopy(?: that)?\b|\bwelcome\b|\bappreciate\b|\bno worries\b|\bcheers\b|\bawesome\b|\bno problem\b|"
+                       r"\blooking good\b|\byou'?re (?:all )?good\b|\ball good\b|\bno delay\b")
 # "Thanks" the model tacks on ("start up approved, thanks, advise ready to taxi", "copy that, thanks"): taken out,
 # the rest kept. Pilots wanted ATC's thank-yous gone.
 THANKS = re.compile(r",?\s*\b(?:thanks(?: a lot| very much)?|thank you(?: very much)?|appreciate it)\b(?!\s+for\b)[.!]?",
@@ -397,6 +399,9 @@ PHONETIC = dict(zip("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ("Alpha", "Bravo", "Charlie", 
                                                    "Tango", "Uniform", "Victor", "Whiskey", "X-?ray", "Yankee", "Zulu"), strict=True))
 
 
+PLACE_WORDS = {"airport", "international", "intl", "field", "airfield", "municipal", "regional", "the", "de", "of"}
+
+
 def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     """The model's words for the script's reply ``scripted``, or PhraseError: something of it lost, or added."""
     text = digits_from_words(_reply_text(raw, callsigns).replace("**", ""))
@@ -409,6 +414,10 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     for phrase in KEPT_PHRASES:
         if phrase in said and phrase not in got:
             raise PhraseError(f'reply leaves out "{phrase}"; keep those words as they are')
+    if (to := re.search(r"\bcleared to ([a-z][a-z' -]*?)(?= via\b| as filed\b|,|$)", said)) and to.group(1) not in ("land",) \
+            and not all(w in got for w in re.findall(r"[a-z]+", to.group(1)) if w not in PLACE_WORDS):
+        # An IFR clearance's limit: Fiumicino's "cleared to Dubai via ..." came back as "cleared via SOSA9B departure"
+        raise PhraseError(f'reply leaves out "cleared to {to.group(1)}"; a clearance names where it\'s to')
     # A pleasantry isn't a "no" ("maintain flight level 390, no problem" was turned away for adding a negation).
     words = set(re.findall(r"[a-z']+", re.sub(r"\bno (?:problem|worries)\b", "", got)))
     want = set(re.findall(r"[a-z']+", said))

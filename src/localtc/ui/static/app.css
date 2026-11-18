@@ -123,7 +123,7 @@ a { color: var(--cyan); }
 /* --- tabs --- */
 .tabs { display: flex; gap: 6px; padding: 10px 10px 0; background: var(--bg); overflow-x: auto; }
 .tab { background: var(--panel-2); border: 1px solid var(--line); border-bottom: 0; color: var(--text-2); padding: 7px 14px; border-radius: var(--radius) var(--radius) 0 0;
-  cursor: pointer; white-space: nowrap; }
+  cursor: pointer; white-space: nowrap; flex: 1 0 auto; text-align: center; }  /* (across the window, wider with it) */
 .tab:hover { background: #3a4048; }
 .tab.active { background: var(--panel); color: var(--text-strong); font-weight: 600; box-shadow: inset 0 2px 0 var(--green-dim); }
 

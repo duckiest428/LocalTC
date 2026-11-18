@@ -59,7 +59,8 @@ from localtc.crew.commands import parse as copilot_command
 from localtc.crew import sights
 from localtc.ground import words as ramp_words
 from localtc.crew.turnaround import off_block_in
-from localtc.crew import cabin_words
+from localtc.crew import cabin_incident_words, cabin_words, foreign
+from localtc.crew.cabin_foreign_more import LANDING as LANDING_IN, NOT_LANDED, SAME_AS
 from localtc.crew.cabin_incidents import PLAYS, IncidentDirector, Inputs as IncidentInputs, decision_in
 from localtc.crew.cabin_lines import BY_ID, FOREIGN, LANDING_WORDS, LINES, PEOPLE, REPLIES, WHEN, Person
 from localtc.sim_api import (
@@ -224,6 +225,16 @@ def words(n: int) -> str:
     if n < 1000:
         return f"{ONES[n // 100]} hundred" + (f" and {words(n % 100)}" if n % 100 else "")
     return f"{words(n // 1000)} thousand" + ((" and " if n % 1000 < 100 else " ") + words(n % 1000) if n % 1000 else "")
+
+
+_NUMBERS: dict[str, str] = {}
+
+
+def _digits(value: str) -> str:
+    """A number in English words ("twenty-five") as its digits, for a line in another language; anything else as it is."""
+    if not _NUMBERS:
+        _NUMBERS.update({words(n): str(n) for n in range(1000)})
+    return _NUMBERS.get(value, value)
 
 
 def flight_words(number: str) -> str:
@@ -448,12 +459,17 @@ class CabinCrew:
         return self._crew
 
     def languages(self) -> tuple[str, ...]:
-        """The languages the announcements are made in, the first first."""
+        """The languages the announcements are made in, the first first: the airline's own, then the captain's
+        ([crew] language) when it isn't one of them, then English (unless the airline's own aren't English and English
+        isn't wanted too). Lufthansa with a Polish captain: German, Polish, English."""
         _, airline = self.airline()
-        langs = tuple(airline.languages) if airline is not None else ("en",)
-        if not self.settings.english_too and langs[0] != "en":
-            langs = tuple(lang for lang in langs if lang != "en")
-        return langs or ("en",)
+        own = tuple(airline.languages) if airline is not None else ("en",)
+        native = tuple(lang for lang in own if lang != "en")
+        captains = (self.talks_in,) if self.talks_in and self.talks_in != "en" and self.talks_in in FOREIGN else ()
+        english = ("en",) if "en" in own and (self.settings.english_too or own[0] == "en") else ()
+        if own[0] == "en":  # (an English-speaking airline: English first, as it always is)
+            return tuple(dict.fromkeys(("en", *native, *captains)))
+        return tuple(dict.fromkeys((*native, *captains, *english))) or ("en",)
 
     def passengers(self) -> int:
         """How many are on board: what GSX is boarding, else the flight plan's, else about what the aircraft would carry."""
@@ -665,7 +681,7 @@ class CabinCrew:
                     continue
                 text, spoken = said
             else:
-                template = FOREIGN.get(lang, {}).get(key)
+                template = FOREIGN.get(lang, {}).get(key) or FOREIGN.get(lang, {}).get(SAME_AS.get(key, ""))
                 values = self._foreign_values(lang, landed)
                 text = fill(template, values) if template else None
                 if text is None:
@@ -687,7 +703,11 @@ class CabinCrew:
 
     def call(self, key: str, *, extra: dict[str, str] | None = None, chime: str = "", channel: str = "interphone"
              ) -> list[Any]:
-        """A call of the crew's own to the flight deck (``LINES``): in English, on the interphone."""
+        """A call of the crew's own to the flight deck (``LINES``), on the interphone: in the captain's language when
+        they talk with them in one, else in English."""
+        if channel == "interphone" and (own := self._in_captains(key, extra or {})) is not None:
+            self._called_t = self._t
+            return [self._speech(own, own, channel, chime=chime, language=self.talks_in)]
         said = self._english(key, extra=extra)
         if said is not None and channel == "interphone":
             self._called_t = self._t
@@ -699,12 +719,28 @@ class CabinCrew:
         if (own := cabin_words.REPLIES.get(self.talks_in, {}).get(key)) is not None:
             # In the captain's language. (Their drink too: "coffee, black" said back in English isn't what was asked for.)
             text_values, _ = self._values()
-            text_values.update({k: cabin_words.drink_said(v, self.talks_in) if k == "drink" else v for k, v in extra.items()})
+            # (A number as digits: "twenty-two" isn't German.)
+            text_values.update({k: cabin_words.drink_said(v, self.talks_in) if k == "drink" else _digits(v) for k, v in extra.items()})
             words = fill(own, text_values)
             if words is not None:
+                words = foreign.said_by(cabin_words.counted(words, self.talks_in), self.talks_in, self.crew()[3])
                 return [self._speech(words, words, channel, language=self.talks_in)]
         said = self._reply(key, extra)
         return [self._speech(said[0], said[1], channel)] if said is not None else []
+
+    def _in_captains(self, key: str, extra: dict[str, str]) -> str | None:
+        """The crew's own call ``key`` in the captain's language (cabin_words.CALLS); None in English, or none for it."""
+        table = cabin_words.CALLS.get(self.talks_in)
+        if not table:
+            return None
+        if key == "late_boarding" and "left" not in extra:
+            key = "late_boarding_plain"
+        if key not in table:
+            return None
+        values, _ = self._values()
+        values.update({k: _digits(v) for k, v in extra.items() if k != "plain"})
+        words = fill(table[key], values)
+        return None if words is None else foreign.said_by(cabin_words.counted(words, self.talks_in), self.talks_in, self.crew()[3])
 
     def _reply(self, key: str, extra: dict[str, str]) -> tuple[str, str] | None:
         text_values, said_values = self._values()
@@ -807,7 +843,11 @@ class CabinCrew:
         out: list[Any] = []
         for words, record in steps:
             first = record is not None and record.stage == "reported"
-            out.append(self._speech(words, words, "interphone", chime="call" if first else ""))
+            if (own := cabin_incident_words.in_language(words, self.talks_in)) is not None:  # (to the captain: in their language)
+                own = foreign.said_by(own, self.talks_in, self.crew()[3])
+                out.append(self._speech(own, own, "interphone", chime="call" if first else "", language=self.talks_in))
+            else:
+                out.append(self._speech(words, words, "interphone", chime="call" if first else ""))
             if record is not None:
                 out.append(record)
         return out
@@ -822,6 +862,9 @@ class CabinCrew:
         if re.search(r"\b(?:how(?:'s| is| are)|update|status|what's happening|what's going on)\b", body, re.I):
             words = PLAYS[current.kind]["report"][current.severity].format(row=current.row)
             words = f"Still as I said, Captain: {words[len('Captain, '):]}" if words.startswith("Captain, ") else words
+            if (own := cabin_incident_words.in_language(words, self.talks_in)) is not None:
+                own = foreign.said_by(own, self.talks_in, self.crew()[3])
+                return [self._speech(own, own, "interphone", language=self.talks_in)]
             return [self._speech(words, words, "interphone")]
         return None
 
@@ -1135,7 +1178,9 @@ class CabinCrew:
         if self._landed_t is None:
             return ""
         kind = "soft" if self._touchdown_fpm < SOFT_FPM else "firm" if self._touchdown_fpm > FIRM_FPM else "normal"
-        return random.Random(crc(f"verdict|{self.seed}")).choice(LANDING_WORDS[kind])
+        words = LANDING_IN.get(self.talks_in, {}).get(kind) or LANDING_WORDS[kind]  # (to the captain: in their language)
+        said = random.Random(crc(f"verdict|{self.seed}")).choice(words)
+        return foreign.said_by(said, self.talks_in, self.crew()[3]) if self.talks_in in LANDING_IN else said
 
     def _due(self, t: float) -> list[Any]:
         out: list[Any] = []
@@ -1430,6 +1475,8 @@ class CabinCrew:
             return said
         if self.turnaround is not None and self.turnaround.role == "departure" and re.search(
                 r"\b(?:how long|when|status|eta|how's|how is|are we|are the)\b.*\b(?:boarding|doors?|crew|on board|on time|schedule)\b", low):
+            if self.talks_in in cabin_words.REPLIES:  # (the plan's words are English: how it stands, in the captain's language)
+                return reply(*self._where_we_are(t))
             timing = self.turnaround.answer("cabin", low)
             return [self._speech(timing, timing, "interphone")]
         if self.ground_hurry is not None and not ASKS_ABOUT.match(low) and (m := SPEED_UP.search(low)):
@@ -1440,8 +1487,9 @@ class CabinCrew:
             service = "Deboarding" if any(m.groups()) or self._landed_t is not None else "Boarding"
             called = self.ground_call(service, t)
             if isinstance(called, str) and service == "Boarding":
-                # Ahead of the turnaround's plan: started all the same, and what it would have waited for said.
-                return reply("ground_early", {"reason": called})
+                # Ahead of the turnaround's plan: started all the same, and nothing said of the plan (the passengers
+                # are a different number every flight: "let's not have ahead of plan")
+                return reply("ground_boarding")
             if not called:
                 return reply("ground_not_yet")
             return reply("ground_deboarding" if service == "Deboarding" else "ground_boarding")
@@ -1497,7 +1545,7 @@ class CabinCrew:
         if re.search(r"\bon\s+time\b|\brunning\s+(?:late|behind)\b|\bare\s+we\s+late\b|how\s+long\b.*\bboard|\bboarding\b.*\b(?:done|finished|complete|long)\b", low):
             return reply(*self._where_we_are(t))
         if re.search(r"how\s+was\s+(?:the|my|that)\s+landing", low):
-            verdict = self._landing_words() or "Ask me again once we've landed!"
+            verdict = self._landing_words() or NOT_LANDED.get(self.talks_in, "Ask me again once we've landed!")
             return reply("landing_feedback", {"verdict": verdict})
         if re.search(r"how(?:'s|\s+is|\s+are)\s+(?:the\s+cabin|everything|everyone|things|it\s+going|the\s+passengers)|everything\s+(?:ok|okay|alright|all\s+right|fine)|all\s+good\s+back", low):
             return reply("status")

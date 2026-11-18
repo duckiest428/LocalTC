@@ -3,11 +3,17 @@
 Every version of localtc.tech, newest first. It carries the same version as LocalTC; the website's changelog page
 (Website) is built from this file.
 
-## [0.5.6] - Upcoming
+## [0.5.9] - Upcoming
+
+Nothing yet.
+
+## [0.5.8] - 2026-11-17
 
 ### Fixed
-- **The live map's gate:** a gate you asked for at the destination is shown as that, "where ground sent you" once
-  ground has.
+- **The live map's gate:** a gate you asked for at the destination is shown as "your expected gate", "where ground
+  sent you" once ground has.
+- **The Flight Tracker's map** no longer piles labels on one another: where a centre's name, a fix or a badge would
+  cover another, the less important is hidden until you zoom in.
 
 ## [0.5.5] - 2026-11-02
 

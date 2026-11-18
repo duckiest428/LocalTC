@@ -388,17 +388,17 @@ def test_a_whole_recorded_flight_with_the_copilot_listening():
     assert max(words.count(w) for w in set(words)) <= 2 and "One thousand to go." not in words
 
 
-def test_standard_is_set_at_the_transition_even_with_a_qnh_of_1013():
-    """QNH 1013 reads 29.92: it was taken for standard already, and nothing was set."""
+def test_the_transition_is_called_and_the_altimeter_left_to_the_pilot():
+    """ "Just get rid of all altimeter actions because it's so inconsistent on these planes": the copilot calls the
+    transition and sets nothing."""
     pm = crew()
     pm.observe(PhaseChanged(t=0.5, previous="TAKEOFF", phase="DEPARTURE"))
     pm.observe(systems(0.6))
     out = fly(pm, [own(1 + i, on_ground=False, alt_agl_ft=17000 + 300 * i, alt_indicated_ft=17500 + 300 * i,
                        alt_msl_ft=17500 + 300 * i, vs_fpm=2000, ias_kt=280, gs_kt=280, gear_down=False, flaps_index=0)
                    for i in range(5)])
-    assert "Transition, standard set." in said(out)
-    # (The A320neo's baro knobs pulled: KOHLSMAN_SET at 29.92 left them on QNH 1013.)
-    assert any(getattr(o, "name", "") in ("KOHLSMAN_SET", "INSTRUMENT_QNH_CPT_PULL") for o in out)
+    assert "Transition, standard." in said(out)
+    assert not any(getattr(o, "name", "") in ("KOHLSMAN_SET", "INSTRUMENT_QNH_CPT_PULL") for o in out)
 
 
 def test_no_anti_ice_question_in_cloud():

@@ -57,6 +57,7 @@ class Follower:
     headings: list[float] = field(default_factory=list)
     smooth: bool = True  # its corners rounded (``rounded``); a push back isn't
     last_hdg: float | None = None  # the way its nose pointed a second ago
+    turn_dps: float = 0.0  # how fast it's turning now (the bridge carries the turn on between two steps)
 
     def __post_init__(self) -> None:
         if self.smooth and len(self.points) > 2:
@@ -101,12 +102,15 @@ class Follower:
             hdg = _bearing((lat, lon), target)
         k = move / ahead if ahead > 0 else 1.0
         lat, lon = lat + (target[0] - lat) * k, lon + (target[1] - lon) * k
-        if self.last_hdg is not None and self.gs_kt > 0:  # the nose swings round, it doesn't snap to the next leg
-            turn = (hdg - self.last_hdg + 180) % 360 - 180
+        before = self.last_hdg
+        if before is not None and self.gs_kt > 0:  # the nose swings round, it doesn't snap to the next leg
+            turn = (hdg - before + 180) % 360 - 180
             rate = min(MAX_YAW_DEG_S, math.degrees(self.gs_kt * 0.5144 / MIN_STEER_RADIUS_M))
-            hdg = (self.last_hdg + max(-rate * dt, min(rate * dt, turn))) % 360
+            hdg = (before + max(-rate * dt, min(rate * dt, turn))) % 360
+        self.turn_dps = ((hdg - before + 180) % 360 - 180) / dt if before is not None and dt > 0 else 0.0
         self.last_hdg = hdg
         return lat, lon, hdg, self.gs_kt
+
 
     def _turn_limit_kt(self, here: tuple[float, float]) -> float:
         """The fastest it can go now and still make every turn in the next ``LOOK_AHEAD_M`` at the speed its radius

@@ -4,7 +4,11 @@ Every version of LocalTC Companion for iPhone, newest first. It carries the same
 a version's section once, the first time it opens after the update, and the website's changelog page (Companion App)
 is built from this file.
 
-## [0.5.6] - Upcoming
+## [0.5.9] - Upcoming
+
+Nothing yet.
+
+## [0.5.8] - 2026-11-17
 
 ### Added
 - **Ground crew in Airport Ops:** with the ground crew on in LocalTC, each service with how it's going, a button to request

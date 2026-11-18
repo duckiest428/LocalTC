@@ -260,3 +260,53 @@ def zh_value(run: str) -> str:
 def zh_whole_numbers(text: str) -> str:
     """Numbers said by place as digits ("一万": 10000); those said digit by digit stay, one at a time."""
     return ZH_RUN.sub(lambda m: zh_value(m[0]) if any(c in ZH_PLACES for c in m[0]) and m[0] != "十" else m[0], text)
+
+
+# --- a word heard a letter or two off -----------------------------------------------------------------------------------
+
+NEAR = 0.78  # how alike a word heard and one the reader knows must be ("inserici" for "inserisci", "anschwaltzeichen")
+NEAR_CLEARER = 0.06  # ... and clearly more alike than the next one it might be
+
+
+def _alike(a: str, b: str) -> float:
+    import difflib
+
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def near_words(text: str, known: set[str] | dict[str, frozenset[str]], *, numbers: set[str] = frozenset(),
+               strict: bool = True) -> str | None:
+    """``text`` (``plain``) with each word the reader doesn't know put as the known word it sounds like, Whisper having
+    written it a letter or two off ("connecta" conecta, "spenni" spegni, "lande lichter" landelichter, "spegnile" spegni
+    le); None when no word changed or one can't be put right (a word it's nowhere near: left to the language model).
+    Short words (under 4 letters) and ``numbers`` are left as they are: "no" isn't "norte". ``known`` as a mapping: each
+    word's meanings, so two words alike that mean the same ("spegni", "spenti") aren't a doubt. Not ``strict``: a word
+    near nothing stays as it is (the ramp's grammar passes over what it doesn't know)."""
+    meaning = known if isinstance(known, dict) else {}
+    words, out, changed, i = re.sub(r"([,;])", r" \1 ", text).replace(".", " ").split(), [], False, 0
+    while i < len(words):
+        w = words[i]
+        if w in known or w in numbers or len(w) < 4 or not w.isalpha():  # (a comma too)
+            out.append(w)
+            i += 1
+            continue
+        if i + 1 < len(words) and len(words[i + 1]) >= 3 and (joined := w + words[i + 1]) in known:  # "lande lichter"
+            out.append(joined)
+            changed, i = True, i + 2
+            continue
+        split = next(((w[:k], w[k:]) for k in range(3, len(w) - 1) if w[:k] in known and w[k:] in known), None)
+        if split is not None:  # "spegnile"
+            out += split
+            changed, i = True, i + 1
+            continue
+        scored = sorted(((_alike(w, k), k) for k in known if abs(len(k) - len(w)) <= 2 and len(k) >= 4), reverse=True)
+        if not scored or scored[0][0] < NEAR or (len(scored) > 1 and scored[0][0] - scored[1][0] < NEAR_CLEARER
+                                                   and not meaning.get(scored[0][1], frozenset()) & meaning.get(scored[1][1], frozenset())):
+            if strict:
+                return None
+            out.append(w)
+            i += 1
+            continue
+        out.append(scored[0][1])
+        changed, i = True, i + 1
+    return " ".join(out) if changed else None

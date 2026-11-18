@@ -53,6 +53,7 @@ TRAFFIC_MAX_S = 420.0
 FLOW_LEVEL_FT = 24000
 FLOW_DEMAND = 3  # this many ahead, within the arrival's demand area
 FLOW_HOLD_S = 240.0
+MOUNTAIN_MIN_FT = 3000  # a minimum below this is no mountains to warn about (Dubai's 1,700)
 MOUNTAIN_EVERY_S = 900.0
 
 
@@ -147,10 +148,12 @@ class FlowMixin:
 
     def _mountain_warning(self: Any, own: OwnshipState, facility: "Facility") -> bool:
         """Below or near the minimum in mountains: said once in a while, before it's a low altitude alert."""
-        if not self.terrain or not self.terrain.mountainous(own.lat, own.lon) or own.vs_fpm > -200:
-            return False
+        if not self.terrain or not self.terrain.mountainous(own.lat, own.lon) or own.vs_fpm > -200 \
+                or "approach" in self.state.clearances:
+            return False  # (cleared for the approach: its own altitudes keep it clear, Dubai's ILS heard "mountainous")
         minimum = self._minimum_here(own)
-        if minimum is None or own.alt_indicated_ft > minimum + 2000 or not self._flow_due("mountain", own.t, MOUNTAIN_EVERY_S):
+        if minimum is None or minimum < MOUNTAIN_MIN_FT or own.alt_indicated_ft > minimum + 2000 \
+                or not self._flow_due("mountain", own.t, MOUNTAIN_EVERY_S):
             return False
         self._pending_alerts.append(self._alert(own.t, "terrain", f"mountainous terrain, minimum {minimum} ft"))
         self._schedule(own.t, "common.terrain_caution", {"altitude": minimum}, facility, delay=False, expects_readback=False)

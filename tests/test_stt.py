@@ -196,6 +196,25 @@ def test_a_transcription_caught_in_a_loop_is_heard_again_without_the_airports_wo
     assert len(transcriber.calls) == 2 and transcriber.calls[1][1:] == ("", "")
 
 
+class StoppingShort(FakeTranscriber):
+    """Whisper with the whole prompt gave "Fiumicino Clearance, Emirates 98." for 11 s of "... request IFR to Dubai"."""
+
+    def transcribe(self, audio, *, prompt="", hotwords=""):
+        self.calls.append((len(audio), prompt, hotwords))
+        if len(prompt) > 60:
+            return Result("Fiumicino Clearance, Emirates 98.", audio_s=11.0)
+        return Result("Fiumicino Clearance, Emirates 98, request IFR to Dubai as filed.", audio_s=11.0)
+
+
+def test_a_long_call_heard_as_a_few_words_is_heard_again():
+    transcriber = StoppingShort()
+    hints = lambda: VocabularyHints(callsign="UAE98", callsign_spoken="Emirates 98",  # noqa: E731
+                                    stations=("Fiumicino Clearance",), taxiways=("A", "B"))
+    [transcript] = talk(FakeCapture(11.0), transcriber, hints=hints)
+    assert transcript.text == "Fiumicino Clearance, Emirates 98, request IFR to Dubai as filed."
+    assert len(transcriber.calls) == 2
+
+
 @pytest.mark.parametrize("capture", [FakeCapture(0.1), FakeCapture(2.0, level=0.0)], ids=["click", "silence"])
 def test_no_speech_gives_an_empty_transcript(capture):
     transcriber = FakeTranscriber()

@@ -109,11 +109,10 @@ class Casting:
                     voice = candidate
                     break
             else:
-                if persona.role != "chatter":
-                    # None free: shared with another flight's pilot, not with a controller or the crew (the purser
-                    # and Zurich Ground were one voice).
-                    voice = next((pool[(start + i) % len(pool)] for i in range(len(pool))
-                                  if self.roles.get(self.taken[pool[(start + i) % len(pool)]]) == "chatter"), voice)
+                # None free: shared with another flight's pilot, never with a controller or the crew (the purser and
+                # Zurich Ground were one voice; Roma Radar and the pilot of KNE 660 too).
+                voice = next((pool[(start + i) % len(pool)] for i in range(len(pool))
+                              if self.roles.get(self.taken[pool[(start + i) % len(pool)]]) == "chatter"), voice)
         self.given[persona.key] = voice
         self.roles[persona.key] = persona.role
         if persona.role != "chatter" and self.roles.get(self.taken.get(voice, "")) == "chatter":

@@ -163,6 +163,8 @@ class HoldsMixin:
         if facility is None or facility.controller not in ("center", "approach") or self._vfr or own.on_ground \
                 or st.pending is not None or "approach" in st.clearances or self._going_around:
             return False
+        if self._vector_leg is not None or getattr(self, "_vectors_named", False):
+            return False  # being vectored already: the downwind's stretched instead (Dubai held a flight on its downwind)
         if t - self._hold_checked_t < HOLD_CHECK_S or self._holds_given >= MAX_HOLDS:
             return False
         if self.hold is not None and self.hold.history and t - self.hold.history[-1][0] < HOLD_AGAIN_S:
@@ -218,7 +220,8 @@ class HoldsMixin:
                 better = position < hold.position
                 hold.position, hold.delay_min = position, delay_minutes(position)
                 self._ops_changed = True
-                if better and position < hold.last_said_position and t - hold.issued_t >= SEQUENCE_SAY_S:
+                said_t = max(hold.issued_t, getattr(self, "_hold_said_t", -1e9))
+                if better and position < hold.last_said_position and t - said_t >= SEQUENCE_SAY_S:
                     return self._hold_update(own, facility, revise=False)
         elif not still:
             return self._leave_hold(own, facility)  # the weather's up to the minimums, the runway open again
@@ -233,6 +236,7 @@ class HoldsMixin:
             hold.efc_t = t + extra * 60.0
             hold.efc_clock = clock(own.zulu_s, extra * 60.0)
         hold.last_said_position = hold.position
+        self._hold_said_t = t  # (the next no sooner than SEQUENCE_SAY_S: "now number 4", "now number 3" 31 s apart)
         hold.history.append((t, f"number {hold.position}" + (", new EFC" if revise else "")))
         self._ops_changed = True
         slots: dict[str, Any] = {"message": self._hold_message(hold)}

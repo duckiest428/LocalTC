@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from localtc.atc_core.facilities import Facility
     from localtc.atc_core.readback import Interpretation
 
-SHORTCUT_SAVES_NM = 8.0
+SHORTCUT_SAVES_NM = 15.0  # (8 had a direct every sector, "for what reason??")
 SHORTCUT_MAX_NM = 250.0  # the fix given direct is no further than this
-SHORTCUT_EVERY_S = 900.0
+SHORTCUT_EVERY_S = 1800.0
 SHORTCUT_MIN_FIXES = 2  # the fix skipped to is at least this many down the route
 HAZARD_AHEAD_NM = 150.0  # hazards on the route this far ahead are told
 FIX_REACHED_NM = 20.0  # this close to one of the route's fixes in the air: reached, the route's progress past it
@@ -247,8 +247,8 @@ class RoutingMixin:
         not_fixes = {st.flight.origin, st.flight.destination, "TOC", "TOD"}
         for j in range(i + SHORTCUT_MIN_FIXES, len(points) - 1):
             ident, lat, lon = points[j]
-            if ident.upper() in not_fixes:
-                continue
+            if ident.upper() in not_fixes or ident.upper() in self.__dict__.setdefault("_directs_given", set()):
+                continue  # (never the same one twice: "direct SOTIV", and SOTIV again fifteen minutes on)
             direct = _nm(own.lat, own.lon, lat, lon)
             if direct > SHORTCUT_MAX_NM:
                 break
@@ -262,6 +262,10 @@ class RoutingMixin:
             return False
         saves, j, ident, lat, lon = best
         self._shortcut_t = t
+        self._directs_given.add(ident.upper())
+        # The fixes before it are passed by: the route's progress goes on from it (its next fix stayed the one before,
+        # and SOTIV saved as many miles again a sector later)
+        self._route_reached = max(getattr(self, "_route_reached", 0), j - 1)
         self.amendments.append(Amendment("shortcut", t, fix=ident, reason=f"saves {saves:.0f} nm",
                                          line=[(own.lat, own.lon), (lat, lon)]))
         self._ops_changed = True
@@ -274,7 +278,9 @@ class RoutingMixin:
             return True
         star = [f.ident for f in self.route.procedure(self.cfg.star, "DSC")]
         filed = [f.ident for f in self.route.fixes if (f.via or "").upper() == self.cfg.star.upper()]  # the plan's
-        return ident not in star[1:] and ident not in filed[1:]
+        # Where it starts (the fix before its first in the plan, VUTEB for VUTE3E) at most: never a fix on it, its
+        # first included (Bahrain and Doha both gave "direct DB400", the VUTE3E's first after VUTEB).
+        return ident not in star[1:] and ident not in filed
 
     # --- hazards ahead -----------------------------------------------------------------------------------------
 

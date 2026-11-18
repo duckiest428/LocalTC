@@ -132,13 +132,32 @@ FIXUPS: list[tuple[str, str]] = [
     (r"^comment in(?= \d)", "climb and maintain"),  # "Comment in 230"
     (r"\b(\d{3})\.(\d{4})\b", r"\1, \2"),  # "flight level 370.2321": the level, then the flight number; a frequency's never four decimals
     (r"\btengo\b", "tango"),
+    (r"\b(?:inflammation|in formation|informations)\b", "information"),  # "We have Inflammation Golf"
+    (r"\b(via|then) (?:mic|mic's|mics|mikes)\b", r"\1 Mike"),  # "via mic, Sierra Hotel ..."
+    (r"(?<=, )(?:mic|mics|mikes)\b(?=,)", "Mike"),
     # Readbacks misheard around their numbers: "squad 4521", "220 nots", "hitting 270", "flight lever 350"
     (r"\bsquad\b(?=,? \d)", "squawk"),
     (r"(\d),? (?:nots|notes|knot's|nuts)\b", r"\1 knots"),
     (r"\b(?:hitting|heating|heeding|heading's)(?=,? \d{3}\b)", "heading"),
     (r"\b(?:flight lever|fly level|flightlevel|flight-level|fight level)\b", "flight level"),
     (r"\bthe (?:sent|send|scent) and maintain\b", "descend and maintain"),
-    (r"\b(climb|descend)(?:ed)? in maintain\b", r"\1 and maintain"),
+    (r"\b(climb|descend)(?:ed)? (?:in|under|an|end|ad) maintain\b", r"\1 and maintain"),  # "climb under maintain"
+    # "direct" in an accent: "Dehect Opail", "Dishect Bubin", "Deact Keeper", "They hacked Archie", "Directs Semper"
+    (r"\b(?:de-?h[ae](?:ct|ck|kt)|di-?shect|deact|dee-?rect|directs)\b(?=[ ,-]+[A-Za-z])", "direct"),
+    (r"(?:^|(?<=[.,] ))(?:they|the) hacked\b(?= [A-Za-z])", "direct"),
+    (r"\bdirect\.(?=[a-z])", "direct "),  # "direct.gun"
+    # A level in an accent: "flight level 1 under" (one hundred), "flight level 1 to 0" (one two zero)
+    (r"\b(flight level) ([1-4]) (?:under|onder|hunder|hundred)(?: the)?\b", r"\1 \g<2>00"),
+    (r"\b(flight level|heading|inbound) ([0-4]) (?:to|too) ([0-9])\b", r"\1 \g<2>2\3"),
+    (r"\b(?:es|is|e)(?:quok|quark|quawk|quak|kwak|quack)\b", "squawk"),  # (an "s" before a consonant: "Esquark", "Isquark")
+    (r"\bis (?=squawk\b)", ""),  # "is squawk 4521"
+    (r"\bfly,? level\b", "flight level"),  # "Down to fly, level 120"
+    # "5350 in 10": five thousand, then the level expected (three five zero) in ten minutes, run together
+    (r"\b([1-9]|1\d)([1-5]\d0) (?:in|and) (\d{1,2})\b(?! ?(?:knots|degrees|miles))", r"\1,000, \2 in \3"),
+    # "zero" said "tsero": "flight level 12-Z-Hoe", "inbound 27Z"
+    (r"(\d)-?Z-(?:A-)?Hoe\b", r"\g<1>0"),
+    (r"\b(flight level|heading|inbound) (\d{1,2})Z\b", r"\1 \g<2>0"),
+    (r"\b(?:dennis|then is|than as|den as|then us|ten as|then has|than is)(?=,? filed\b)", "then as"),  # "Dennis filed"
     # "Tower 118, 3": a frequency after the station's name, its decimal point heard as a pause
     (r"\b(tower|ground|departure|approach|cent(?:er|re)|clearance|delivery|radio|director|control)(,? (?:on )?)"
      r"(1[1-3]\d)[.,] (\d{1,3})\b(?![,.]?\d)", r"\1\2\3.\4"),
@@ -212,10 +231,19 @@ NEVER_A_NAME = {"maintain", "maintaining", "climb", "climbing", "descend", "desc
 # A procedure's name heard in pieces, its number said or written: "F falls three" FOLZZ3, "FOL ZZ 3", "this NAPR 2" SNAPR2.
 DIGIT_WORDS = {"one": "1", "two": "2", "three": "3", "tree": "3", "four": "4", "five": "5", "fife": "5", "six": "6",
                "seven": "7", "eight": "8", "nine": "9", "niner": "9"}
+# (A word's "'s" is part of it: "Holt's niner" HOLTZ9; Europe's letter after the number: "Lazet one alpha" LAZE1A.)
+_WORD = r"[A-Za-z]+(?:'[A-Za-z]+)?"
 PROCEDURE_PIECES = re.compile(
-    r"\b((?:[A-Za-z]+[ -]+){0,3}[A-Za-z]+)[ -]+(\d|one|two|three|tree|four|five|fife|six|seven|eight|nine|niner)\b(?![.,]?\d)",
-    re.I)
+    rf"\b((?:{_WORD}[ -]+){{0,3}}{_WORD})[ -]+(\d|one|two|three|tree|four|five|fife|six|seven|eight|nine|niner)\b(?![.,]?\d)"
+    rf"((?:,?[ -]+(?:{_LETTER})\b)?)", re.I)
 MIN_PIECES_SOUND = 3  # a name put together from pieces sounds like this many consonants at least
+# A procedure's number heard as the word it sounds like, where only a procedure can follow: "the Angel for arrival" (ANJLL4),
+# "the Raider to departure", "Lazy won alpha departure".
+SOUNDS_LIKE_DIGIT = {"won": "1", "to": "2", "too": "2", "for": "4", "fore": "4", "free": "3", "tree": "3", "ate": "8",
+                     "sex": "6"}
+PROCEDURE_HOMOPHONE = re.compile(
+    rf"\b((?:{_WORD}[ -]+){{0,3}}{_WORD})[ -]+(won|to|too|for|fore|free|tree|ate|sex)"
+    rf"((?:[ -]+(?:{_LETTER}))?)(?=[ ,.]+(?:departure|arrival|transition)s?\b)", re.I)
 FIX_SAID = re.compile(r"\b(direct(?: to)?|via|at|to|hold(?:ing)?(?: at)?)\s+([A-Za-z]{4,})\b", re.I)
 LETTER_AND_NUMBER = re.compile(rf"\b({_LETTER})[ -]?(\d{{1,2}}[LRC]?)\b(?![.,]?\d)", re.I)
 INFORMATION = re.compile(rf"\b(information)([.,]?\s+)({_LETTER})\b", re.I)
@@ -227,25 +255,88 @@ RNAV_TO = re.compile(r"\b(?:(?:on|an|are|in) )?(?:r ?nav|r-?nav|[fv])[ -]?(?:2|t
 
 def _sound(word: str) -> str:
     """A word's consonants, as it sounds: RADYR and "Raider", LUCKI and "Lucky" come out the same."""
-    # (w goes with the vowels and z is an s: "Fonz" for FAWNS)
-    word = word.lower().replace("ck", "k").replace("ph", "f").replace("c", "k").replace("z", "s")
+    # (w goes with the vowels and z is an s: "Fonz" for FAWNS; a g before e, i or y is a j: "Angel" for ANJLL; x is ks,
+    # q a k: "Kugex" and "Kugeks")
+    word = word.lower().replace("ck", "k").replace("ph", "f").replace("c", "k").replace("z", "s").replace("x", "ks")
+    word = re.sub(r"g(?=[eiy])", "j", word).replace("q", "k")
     head, rest = word[:1], re.sub(r"[aeiouyhw]", "", word[1:])
     return re.sub(r"(.)\1+", r"\1", head + rest)
 
 
-def _named(said: str, names: tuple[str, ...]) -> str | None:
+# How alike a heard word sounds to a name, past what one spelling of a sound or an accent changes: the letters as
+# they're said (ph f, a soft c s, a soft g j, x ks, X at the start z), voiced and unvoiced alike (b p, d t, g k, v f,
+# s z), any vowel a vowel. "Diamond" for DYAMD, "Lobster" LBSTA, "Itloaf" ITLOV, "Timber" TIMBA, "Ocean" OOSHN.
+_SAID_AS = (("tch", "ch"), ("ck", "k"), ("ph", "f"), ("gh", ""), ("sh", "s"), ("ch", "k"), ("qu", "kw"), ("q", "k"),
+            ("x", "ks"), ("wr", "r"), ("kn", "n"), ("ee", "i"), ("ea", "i"), ("iew", "u"), ("oo", "u"), ("ou", "u"),
+            ("ew", "u"), ("ie", "i"), ("ay", "e"), ("ai", "e"), ("ey", "i"))
+_ALIKE = str.maketrans({"b": "p", "d": "t", "g": "k", "v": "f", "z": "s", "j": "s", "y": "i", "w": "u"})
+SOUNDS_LIKE = 0.6  # this alike, and clearly more than any other of the flight's names: it's that one
+SOUNDS_CLEARER = 0.08  # ... by this much (TIMBER: TIMBA 0.83, the next 0.38)
+
+
+def _said_key(word: str, vowels: bool = True) -> str:
+    w = re.sub(r"[^a-z]", "", word.lower())
+    if not w:
+        return ""
+    w = re.sub(r"^x", "z", w)
+    for spelled, said in _SAID_AS:
+        w = w.replace(spelled, said)
+    w = re.sub(r"g(?=[eiy])", "j", re.sub(r"c(?=[eiy])", "s", w)).replace("c", "k").translate(_ALIKE)
+    w = w[0] + w[1:].replace("h", "")
+    w = re.sub(r"(.)\1+", r"\1", w)
+    return w if vowels else w[0] + re.sub(r"[aeiou]", "", w[1:])
+
+
+def sounds_like(said: str, name: str) -> float:
+    """0 to 1: how alike ``said`` (as written by speech-to-text) and ``name`` (a fix or a procedure's) sound."""
+    k1, k2 = _said_key(said), _said_key(name)
+    if not k1 or not k2:
+        return 0.0
+    c1, c2 = _said_key(said, False), _said_key(name, False)
+    squeeze = lambda s: re.sub(r"(.)\1+", r"\1", re.sub(r"[^A-Z]", "", s.upper()))  # noqa: E731
+    score = (0.4 * difflib.SequenceMatcher(None, k1, k2).ratio() + 0.4 * difflib.SequenceMatcher(None, c1, c2).ratio()
+             + 0.2 * difflib.SequenceMatcher(None, squeeze(said), squeeze(name)).ratio())
+    if k1[0] == k2[0] or (k1[0] in "aeiou" and k2[0] in "aeiou"):
+        score += 0.05  # it starts the same
+    return score
+
+
+def _sounds_most_like(said: str, names: tuple[str, ...], also: dict[str, tuple[str, ...]] | None = None) -> str | None:
+    """The one of ``names`` that ``said`` sounds clearly most like, or None. ``also``: other ways a name is said (a
+    procedure's whole fix: VUTE3E's VUTEB)."""
+    if len(re.sub(r"[^A-Za-z]", "", said)) < 2:
+        return None
+    scored = sorted(((max(sounds_like(said, form) for form in (name, *(also or {}).get(name, ()))), name)
+                     for name in dict.fromkeys(names)), reverse=True)
+    if not scored or scored[0][0] < SOUNDS_LIKE:
+        return None
+    if len(scored) > 1 and scored[0][0] - scored[1][0] < SOUNDS_CLEARER:
+        return None  # two of them alike: which it was isn't known
+    return scored[0][1]
+
+
+def _named(said: str, names: tuple[str, ...], stem: bool = False) -> str | None:
+    """The one of ``names`` that ``said`` sounds like. ``stem``: the names are cut short, as Europe's procedures are
+    (LAZE1A is the LAZET one alpha, VUTE3E the VUTEB three echo): said, the whole fix is heard, a sound more."""
     key = _sound(said)
     found = {n for n in names if _sound(n) == key} if len(key) >= 2 else set()
+    if not found and stem and len(key) >= 3:
+        found = {n for n in names if len(_sound(n)) >= 2 and key.startswith(_sound(n)) and len(key) - len(_sound(n)) == 1}
     return found.pop() if len(found) == 1 else None  # (two names that sound alike: which it was isn't known)
 
 
-def _pieces(m: re.Match, procedures: tuple[str, ...]) -> str:
+NOT_IN_A_NAME = {"the", "a", "an", "by", "as", "via", "cleared", "clear", "to", "and", "then", "on", "of", "is", "are"}
+
+
+def _pieces(m: re.Match, procedures: tuple[str, ...], digit: str = "", suffix: str = "",
+            fixes: tuple[str, ...] = ()) -> str:
     """The words before a number, as few as make a name, read as the flight's own procedure: one word, or two to four
     joined ("F falls": FOLZZ's sound), or the last with the end of the one before ("this NAPR": SNAPR). Only where
-    exactly one of its procedures sounds so and has that number."""
-    words = re.split(r"[ -]+", m.group(1))
-    digit = DIGIT_WORDS.get(m.group(2).lower(), m.group(2))
-    wanted = tuple(p[:-1] for p in procedures if p[-1:] == digit and p[:-1].isalpha())
+    exactly one of its procedures sounds so and has that number (and ``suffix``, its letter: "1A")."""
+    words = [w.replace("'", "") for w in re.split(r"[ -]+", m.group(1))]
+    digit = digit or DIGIT_WORDS.get(m.group(2).lower(), m.group(2))
+    end = digit + suffix
+    wanted = tuple(p[:-len(end)] for p in procedures if p.endswith(end) and p[:-len(end)].isalpha())
     if not wanted:
         return m.group(0)
     tries: list[tuple[int, str]] = [(n, "".join(words[-n:])) for n in range(min(4, len(words)), 1, -1)]  # most first
@@ -257,10 +348,67 @@ def _pieces(m: re.Match, procedures: tuple[str, ...]) -> str:
             continue
         if any(w.lower() in NEVER_A_NAME or w.lower() in DIGIT_WORDS for w in words[-n:]):
             continue  # never across ATC's words or a number said: "maintain one two thousand" was MONTN2 thousand
-        if (named := _named(said, wanted)) is not None:
+        if (named := _named(said, wanted, stem=bool(suffix))) is not None:
             kept = " ".join(words[:-n])
-            return (kept + " " if kept else "") + f"{named}{digit}"
+            return (kept + " " if kept else "") + f"{named}{end}"
+    # No spelling of the sound the same: the word or two before the number that sound most like it ("the Ocean 5" for
+    # OOSHN5, "a full 3" FOLZZ3, "Jurcer 1 Yankee" GERS1Y), Europe's said as their whole fix (VUTE3E, "Viewedab 3 Echo").
+    full = {stem: tuple(f for f in fixes if f.startswith(stem) and len(f) > len(stem)) for stem in wanted}
+    for n in (1, 2):
+        if len(words) < n or any(w.lower() in NEVER_A_NAME or w.lower() in DIGIT_WORDS or w.lower() in NOT_IN_A_NAME
+                                 for w in words[-n:]):
+            break
+        said = "".join(words[-n:])
+        if len(said) >= 3 and (named := _sounds_most_like(said, wanted, full)) is not None:
+            kept = " ".join(words[:-n])
+            return (kept + " " if kept else "") + f"{named}{end}"
     return m.group(0)
+
+
+def _homophone(m: re.Match, procedures: tuple[str, ...], fixes: tuple[str, ...] = ()) -> str:
+    """ "the Angel for arrival": the flight's ANJLL4, its number heard as a word; else left as heard."""
+    letter = m.group(3).strip(" -").lower()
+    suffix = PHONETIC[letter] if letter else ""
+    named = _pieces(m, procedures, SOUNDS_LIKE_DIGIT[m.group(2).lower()], suffix, fixes)
+    return named if named != m.group(0) else m.group(0)
+
+
+# Where only a fix's name can follow, however it's heard: "direct", "hold at" (heard "hold a", "hold it", "holt at",
+# "older"), "cross". Then the next word or two, the callsign's own words never among them.
+FIX_SOUNDS = re.compile(
+    r"\b(direct(?: to)?|proceed(?:ing)? direct(?: to)?|hold(?:ing)? (?:at|over)|hold (?:a|it|ad|that)|holt at|halt at|"
+    r"older|halter(?:ed)?|halted(?: at)?|holder|cross(?:ing)?)[ ,-]+((?:the )?([A-Za-z][A-Za-z'-]*)(?:[ -]([A-Za-z][A-Za-z']*))?)", re.I)
+# Where "direct" goes that isn't a fix: "direct to the airport", "proceed direct on course".
+NOT_A_FIX = {"airport", "field", "destination", "course", "navigation", "own", "waypoint", "fix", "next", "present",
+             "position", "final", "localizer", "outer", "marker", "vor", "ndb", "please", "request", "requesting",
+             "now", "when", "if", "for", "we", "i", "is", "it", "that", "this", "there", "here"}
+HOLD_HEARD = re.compile(r"^(?:hold (?:a|it|ad|that)|holt at|halt at|older|halter(?:ed)?|halted(?: at)?|holder)$", re.I)
+
+
+def _fix_sounding(m: re.Match, hints: VocabularyHints) -> str:
+    """ "direct Diamond" DYAMD, "hold a carob" HAROB, "direct sea view" SEAVU: the flight's own fix that the word, or
+    the two together, sound clearly most like. A word that's a fix already, or ATC's, or the callsign's, is left."""
+    first, second = m.group(3), m.group(4)
+    own = {w.lower() for w in hints.callsign_spoken.split()} | {hints.callsign.lower()}
+    own |= {w.lower() for place in (*hints.airports, *hints.stations) for w in place.split()}  # "direct Boston": the airport
+    lead = "hold at" if HOLD_HEARD.match(m.group(1)) else m.group(1)
+    if first.upper() in hints.fixes:  # the fix already, "hold" heard as "holt at"
+        return lead + m.group(0)[len(m.group(1)):]
+    if first.lower() in NEVER_A_NAME or first.lower() in own or first.lower() in NOT_A_FIX:
+        return m.group(0)
+    tries = [(first, m.group(0)[:m.start(3) - m.start()] + first)]
+    if second and second.lower() not in NEVER_A_NAME and second.lower() not in own and second.lower() not in PHONETIC \
+            and second.lower() not in ("inbound", "at", "and", "then", "climb", "descend", "maintain"):
+        tries.insert(0, (first + second, m.group(0)))
+    best = None
+    for said, span in tries:
+        named = _sounds_most_like(said, hints.fixes)
+        score = sounds_like(said, named) if named else 0.0
+        if named and (best is None or score > best[0] + 0.05):
+            best = (score, named, span)
+    if best is None:
+        return m.group(0)
+    return f"{lead} {best[1]}" + m.group(0)[len(best[2]):]
 
 
 def _letters(text: str, hints: VocabularyHints) -> str:
@@ -271,11 +419,21 @@ def _letters(text: str, hints: VocabularyHints) -> str:
     def number(m: re.Match) -> str:
         return m.group(0) if m.group(1).lower() == own else PHONETIC[m.group(1).lower()] + m.group(2).upper()
 
+    taxiways = {w.upper() for w in hints.taxiways}
+
     def listed(m: re.Match) -> str:
-        words = re.findall(r"[A-Za-z-]+\d*[LRC]?", m.group(2))
+        found = list(re.finditer(r"[A-Za-z-]+\d*[LRC]?", m.group(2)))
+        names: list[str] = []
+        for k, w in enumerate(found):
+            letter = PHONETIC.get(w.group(0).lower(), w.group(0))
+            gap = m.group(2)[found[k - 1].end():w.start()] if k else ","
+            if names and "," not in gap and (names[-1] + letter).upper() in taxiways and len(names[-1]) == 1:
+                names[-1] += letter  # "Bravo Tango" is taxiway BT at Fiumicino, said without a pause
+            else:
+                names.append(letter)
         # (the comma after the last kept: "via E7, 2LT" ran into taxiway E72)
         tail = re.search(r"[,\s]*$", m.group(2)).group(0)
-        return m.group(1) + ", ".join(PHONETIC.get(w.lower(), w) for w in words) + tail
+        return m.group(1) + ", ".join(names) + tail
 
     text = LETTER_AND_NUMBER.sub(number, text)
     text = INFORMATION.sub(lambda m: f"{m.group(1)} {PHONETIC[m.group(3).lower()]}", text)
@@ -327,13 +485,24 @@ def match_names(text: str, hints: VocabularyHints) -> str:
             f"{_named(m.group(1), tuple(p[:-1] for p in wanted))}{m.group(2)}" or m.group(0)
 
     text = PROCEDURE_SAID.sub(procedure, text)
-    text = PROCEDURE_PIECES.sub(lambda m: _pieces(m, hints.procedures), text)
+    def pieces(m: re.Match) -> str:
+        letter = m.group(3).strip(" ,-").lower()
+        if letter and (named := _pieces(m, hints.procedures, suffix=PHONETIC[letter], fixes=hints.fixes)) != m.group(0):
+            return named  # "Lazet one alpha": LAZE1A
+        # (else the letter's another word: "Stick 5, Delta 1123")
+        named = _pieces(m, hints.procedures, fixes=hints.fixes)
+        return named + m.group(3) if named != m.group(0) else m.group(0)
+
+    text = PROCEDURE_PIECES.sub(pieces, text)
+    text = PROCEDURE_HOMOPHONE.sub(lambda m: _homophone(m, hints.procedures, hints.fixes), text)
 
     def fix(m: re.Match) -> str:
         named = _named(m.group(2), hints.fixes) if m.group(2).lower() not in NEVER_A_NAME else None
         return f"{m.group(1)} {named}" if named else m.group(0)
 
     text = FIX_SAID.sub(fix, text)
+    if hints.fixes:
+        text = FIX_SOUNDS.sub(lambda m: _fix_sounding(m, hints), text)
 
     def rnav(m: re.Match) -> str:
         named = _named("".join(re.split(r"[ -]", m.group(1))), tuple(f for f in hints.fixes if len(f) >= 4))

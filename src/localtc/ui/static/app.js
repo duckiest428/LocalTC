@@ -2156,7 +2156,7 @@ const Settings = {
           ["llm", "Fully LLM: the model words all they say, except the safety announcements"]]
           .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.cabin.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they use the script's words.</span>
-        <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages.</span>
+        <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages, then in yours (the copilot's language). To you they always talk in yours.</span>
         <div class="row"><label>Your name, for the welcome<input id="s-cabin-captain" value="${esc(st.cabin.captain || "")}" placeholder="Reyes" autocomplete="off" spellcheck="false"></label></div>
         <label class="check-row"><input type="checkbox" id="s-cabin-announcements" ${st.cabin.announcements ? "checked" : ""}> Announcements: boarding, the welcome, the seatbelt sign, the descent and the arrival</label>
         <label class="check-row"><input type="checkbox" id="s-cabin-safety" ${st.cabin.safety_demo ? "checked" : ""}> Safety demonstration during the taxi out, with this aircraft's exits</label>
@@ -2742,7 +2742,7 @@ const MapView = {
     this.map = L.map("map", { zoomControl: true, attributionControl: true, maxZoom: 19 }).setView([47.9, -122.28], 9);
     this.map.createPane("ground").style.zIndex = 390;  // under the routes, the zones and the aircraft (400 and up)
     this.groundRenderer = L.canvas({ padding: 0.5, pane: "ground" });
-    this.map.on("zoomend", () => this.groundZoom());
+    this.map.on("zoomend", () => { this.groundZoom(); this.declutter(); });
     // atcmap.js: the same legend as the website's Flight Tracker, folded away with its header (who you talk to stays).
     const legend = $("#map-legend");
     legend.innerHTML = `<button type="button" class="lg-fold" aria-expanded="true" title="Show or hide the legend">Legend</button>${AtcMap.LEGEND}`;
@@ -2851,6 +2851,7 @@ const MapView = {
     if (!this.opsLayer) return;
     this.opsLayer.clearLayers();
     AtcMap.operations(this.opsLayer, ops);
+    this.declutter();
     const min = ops && ops.minimum_altitude_ft;
     $("#map-mva").textContent = min ? `MIN ALT ${Number(min).toLocaleString()}` : "";
   },
@@ -2919,6 +2920,7 @@ const MapView = {
       { ident: `${arr.runway} final`, lat: arr.final[0], lon: arr.final[1], kind: "wpt" },
       { ident: p.destination, lat: arr.threshold[0], lon: arr.threshold[1], kind: "apt" }] } : p;
     this.route = AtcMap.route(this.routeLayer, shown);
+    this.declutter();
     this.zonesSoon();
     Promise.all([p.origin, p.destination].map((icao) => (icao ? this.airport(icao) : null))).then(([from, to]) => {
       if (!this.route && from && to && this.planKey === key)  // a typed plan: no fixes, a straight line
@@ -2936,6 +2938,7 @@ const MapView = {
     if (!this.map || this.drawnAirports.has(a.icao)) return;
     this.drawnAirports.add(a.icao);
     AtcMap.runways(this.map, a);
+    this.declutter();
     this.layout(a.icao);
   },
   /* An airport's ground, close in: taxiways and runways from zoom 13, their names from 15, the gates' names from 16
@@ -3001,11 +3004,17 @@ const MapView = {
       const code = a.iata || a.icao;
       const size = a.large ? "big" : zoom < 8 ? "small" : "";
       const icon = L.divIcon({ className: `apt-icon ${size}`, iconSize: [12, 12], iconAnchor: [6, 6],
-        html: `<span class="apt-dot"></span><span class="apt-code" translate="no">${esc(code)}</span>` });
+        html: `<span class="apt-dot" data-rank="${a.large ? 40 : 20}"></span><span class="apt-code" translate="no">${esc(code)}</span>` });
       const m = L.marker([a.lat, this.path.lon(a.lon)], { icon, pane: "apts", keyboard: false, title: `${a.icao} ${a.name}` });
       m.bindPopup(() => this.airportPopup(a));
       m.addTo(this.aptLayer);
     }
+    this.declutter();
+  },
+  /** The labels that would overlap, the less important hidden (atcmap.js), once the map has drawn them. */
+  declutter() {
+    if (!this.map || this.declutterSoon) return;
+    this.declutterSoon = requestAnimationFrame(() => { this.declutterSoon = null; AtcMap.declutter(this.map.getContainer(), this.map.getZoom()); });
   },
   airportPopup(a) {
     let away = "";
@@ -3070,6 +3079,7 @@ const MapView = {
     this.zoneLayer.clearLayers();
     AtcMap.zones(this.zoneLayer, z, { vfr: this.mode === "vfr" });  // atcmap.js, shared with the website
     this.zoneAirports = z.airports || [];
+    this.declutter();
     const gate = z.gate ? `${z.gate.icao}:${z.gate.name}` : "";
     if (gate !== this.gateSeen) {  // ground gave a gate: the gates drawn again, yours among them
       this.gateSeen = gate;

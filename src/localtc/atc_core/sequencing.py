@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
 SEQUENCE_FROM_NM = 40.0  # approach gives the landing order inside this
 SEQUENCE_AHEAD_NM = 30.0  # counting the ones ahead inside this of the field
+SEQUENCE_SAY_S = 180.0  # a better place said again no sooner than this
 GAP_GIVE_NM = 1.0  # on top of the wake spacing: room for the speeds to settle
 EXTEND_MAX_NM = 16.0  # a downwind isn't stretched past this from the field: turned in, and tower spaces it from there
 DIRECT_HELD_AHEAD = 3  # this many arrivals ahead, in the arrival's area: a direct waits
@@ -135,9 +136,11 @@ class SequenceMixin:
         runway = plan["approach"].landing_runway
         number = len(self._landing_order(own, runway)) + 1
         said = self._seq.get("number")
-        if number < 2 or (said is not None and abs(number - said) <= 1):
+        # Once, then only a better place, and not more often than SEQUENCE_SAY_S: Dubai's approach said "number 2",
+        # 4, 6, 8, 10 within two minutes as more arrivals came in ahead ("yeah I GET IT").
+        if number < 2 or (said is not None and (number >= said or own.t - self._seq.get("number_t", -1e9) < SEQUENCE_SAY_S)):
             return False
-        self._seq["number"] = number
+        self._seq["number"], self._seq["number_t"] = number, own.t
         self._schedule(own.t, "approach.sequence", {"message": number_phrase(number, runway)}, facility, delay=False,
                        expects_readback=False)
         return True

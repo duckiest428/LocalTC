@@ -68,6 +68,9 @@ class Vector:
     join_nm: float | None = None  # where it meets the final, miles out (straight in, intercept)
 
 
+CROSSED_NM = 1.5  # a pattern this far over the centreline before its base has changed sides
+
+
 def _heading(east: float, north: float) -> float:
     return math.degrees(math.atan2(east, north)) % 360
 
@@ -105,6 +108,11 @@ def vector(geo: AirportGeometry, end: RunwayEndGeometry, lat: float, lon: float,
     p = SLOW if slow else JET
     out, lateral = frame(geo, end, lat, lon)
     s = side if side is not None and after in ("join", "downwind", "base") else (1.0 if lateral >= 0 else -1.0)
+    if after in ("join", "downwind") and side is not None and lateral * side < -CROSSED_NM:
+        # Well over on the other side before any base (the turn onto the downwind carried it through the
+        # centreline): the pattern's there now. Dubai's downwind ended up 4 miles north of 30L's final with the
+        # pattern still taken as south, and the base was "turn left heading 029", away from the final.
+        s = 1.0 if lateral >= 0 else -1.0
     off = lateral * s  # towards the pattern's side: negative once across the centreline
     if after not in ("join", "downwind", "base"):
         off = abs(lateral)

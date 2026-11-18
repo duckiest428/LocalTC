@@ -4,7 +4,7 @@ script knows, and what they answer. Their announcements are the airline's langua
 
 import re
 
-from localtc.spoken_numbers import plain
+from localtc.spoken_numbers import near_words, plain
 
 # English -> what's said for it (without accents, as ``plain`` leaves it, which is applied to these too).
 HEARD: dict[str, dict[str, str]] = {
@@ -107,6 +107,15 @@ def _phrases(code: str) -> list[tuple[str, str]]:
     return _CACHE[code]
 
 
+_KNOWN: dict[str, set[str]] = {}
+
+
+def _known(code: str) -> set[str]:
+    if code not in _KNOWN:
+        _KNOWN[code] = {w for said in HEARD[code].values() for phrase in said.split("|") for w in plain(phrase).split()}
+    return _KNOWN[code]
+
+
 def as_english(text: str, code: str) -> str:
     """``text`` said in language ``code``, with what the cabin crew knows of it in the English their script reads."""
     if code not in HEARD or not text.strip():
@@ -116,7 +125,9 @@ def as_english(text: str, code: str) -> str:
         for words, english in _phrases(code):
             said = said.replace(words, f" {english} ")
         return " ".join(said.split())
-    said = f" {' '.join(plain(text).replace('.', ' ').replace(',', ' ').split())} "
+    said = plain(text)
+    said = near_words(said, _known(code), strict=False) or said  # (a word Whisper wrote a letter or two off)
+    said = f" {' '.join(said.replace('.', ' ').replace(',', ' ').split())} "
     for words, english in _phrases(code):
         said = said.replace(f" {words} ", f" {english} ")
     return " ".join(said.split())
@@ -130,3 +141,124 @@ def drink_said(drink: str, code: str) -> str:
     for english in sorted(table, key=len, reverse=True):
         drink = drink.replace(english, table[english])
     return drink
+
+
+# The crew's own calls to the flight deck (cabin_lines.LINES), in the captain's language: written for a man, said by
+# whoever's on (foreign.said_by). "late_boarding_plain": the late boarding call with no time to go.
+CALLS: dict[str, dict[str, str]] = {
+    "de": {"boarded": "Captain, hier ist {name}. Boarding abgeschlossen, {pax} Passagiere an Bord. Die Kabine ist bereit, die Türen können geschlossen werden, sobald Sie so weit sind.",
+           "deboarded": "Captain, hier ist {name}. Alle Passagiere sind ausgestiegen. Danke für den schönen Flug.",
+           "late_boarding": "Captain, hier ist {name}. Es ist Off-Block-Zeit und wir boarden noch, etwa {left} Minuten.",
+           "late_boarding_plain": "Captain, hier ist {name}. Es ist Off-Block-Zeit und wir boarden noch.",
+           "late_not_boarding": "Captain, hier ist {name}. In {minutes} Minuten ist Off-Block und das Boarding hat noch nicht begonnen. Sollen wir anfangen?",
+           "late_ready": "Captain, hier ist {name}. Wir sind {minutes} Minuten hinter der Off-Block-Zeit. Die Kabine ist bereit, sobald Sie es sind.",
+           "secure_takeoff": "Captain, hier ist {name}. Die Kabine ist für den Start gesichert.",
+           "secure_landing": "Captain, hier ist {name}. Die Kabine ist für die Landung gesichert.",
+           "service_call": "Captain, hier ist {name}. Wir beginnen gleich mit dem Service. Kann ich Ihnen etwas bringen?"},
+    "fr": {"boarded": "Commandant, c'est {name}. L'embarquement est terminé, {pax} passagers à bord. La cabine est prête, on peut fermer les portes quand vous voulez.",
+           "deboarded": "Commandant, c'est {name}. Tous les passagers sont descendus. Merci pour ce beau vol.",
+           "late_boarding": "Commandant, c'est {name}. C'est l'heure du départ et nous embarquons encore, environ {left} minutes.",
+           "late_boarding_plain": "Commandant, c'est {name}. C'est l'heure du départ et nous embarquons encore.",
+           "late_not_boarding": "Commandant, c'est {name}. Le départ est dans {minutes} minutes et l'embarquement n'a pas commencé. On commence ?",
+           "late_ready": "Commandant, c'est {name}. Nous avons {minutes} minutes de retard. La cabine est prête quand vous voulez.",
+           "secure_takeoff": "Commandant, c'est {name}. La cabine est prête pour le décollage.",
+           "secure_landing": "Commandant, c'est {name}. La cabine est prête pour l'atterrissage.",
+           "service_call": "Commandant, c'est {name}. Nous allons commencer le service. Je vous apporte quelque chose ?"},
+    "es": {"boarded": "Comandante, soy {name}. Embarque completado, {pax} pasajeros a bordo. La cabina está lista, podemos cerrar puertas cuando quiera.",
+           "deboarded": "Comandante, soy {name}. Ya han desembarcado todos los pasajeros. Gracias por el vuelo.",
+           "late_boarding": "Comandante, soy {name}. Ya es la hora de calzos fuera y seguimos embarcando, unos {left} minutos más.",
+           "late_boarding_plain": "Comandante, soy {name}. Ya es la hora de calzos fuera y seguimos embarcando.",
+           "late_not_boarding": "Comandante, soy {name}. Faltan {minutes} minutos para calzos fuera y el embarque no ha empezado. ¿Empezamos?",
+           "late_ready": "Comandante, soy {name}. Llevamos {minutes} minutos de retraso. La cabina está lista cuando usted quiera.",
+           "secure_takeoff": "Comandante, soy {name}. Cabina asegurada para el despegue.",
+           "secure_landing": "Comandante, soy {name}. Cabina asegurada para el aterrizaje.",
+           "service_call": "Comandante, soy {name}. Vamos a empezar el servicio. ¿Le traigo algo?"},
+    "it": {"boarded": "Comandante, sono {name}. Imbarco completato, {pax} passeggeri a bordo. La cabina è pronta, possiamo chiudere le porte quando vuole.",
+           "deboarded": "Comandante, sono {name}. Tutti i passeggeri sono scesi. Grazie per il bel volo.",
+           "late_boarding": "Comandante, sono {name}. È l'orario di partenza e stiamo ancora imbarcando, circa {left} minuti.",
+           "late_boarding_plain": "Comandante, sono {name}. È l'orario di partenza e stiamo ancora imbarcando.",
+           "late_not_boarding": "Comandante, sono {name}. Mancano {minutes} minuti alla partenza e l'imbarco non è iniziato. Cominciamo?",
+           "late_ready": "Comandante, sono {name}. Siamo in ritardo di {minutes} minuti. La cabina è pronta quando vuole.",
+           "secure_takeoff": "Comandante, sono {name}. Cabina pronta per il decollo.",
+           "secure_landing": "Comandante, sono {name}. Cabina pronta per l'atterraggio.",
+           "service_call": "Comandante, sono {name}. Stiamo per iniziare il servizio. Le porto qualcosa?"},
+    "pt": {"boarded": "Comandante, é {name}. Embarque concluído, {pax} passageiros a bordo. A cabine está pronta, podemos fechar as portas quando quiser.",
+           "deboarded": "Comandante, é {name}. Todos os passageiros já saíram. Obrigado pelo voo.",
+           "late_boarding": "Comandante, é {name}. Já é a hora de saída e ainda estamos a embarcar, cerca de {left} minutos.",
+           "late_boarding_plain": "Comandante, é {name}. Já é a hora de saída e ainda estamos a embarcar.",
+           "late_not_boarding": "Comandante, é {name}. Faltam {minutes} minutos para a saída e o embarque ainda não começou. Começamos?",
+           "late_ready": "Comandante, é {name}. Estamos {minutes} minutos atrasados. A cabine está pronta quando quiser.",
+           "secure_takeoff": "Comandante, é {name}. Cabine segura para a descolagem.",
+           "secure_landing": "Comandante, é {name}. Cabine segura para a aterragem.",
+           "service_call": "Comandante, é {name}. Vamos começar o serviço. Quer que lhe traga alguma coisa?"},
+    "nl": {"boarded": "Captain, met {name}. Het boarden is klaar, {pax} passagiers aan boord. De cabine is klaar, de deuren kunnen dicht wanneer je wilt.",
+           "deboarded": "Captain, met {name}. Alle passagiers zijn uitgestapt. Bedankt voor de fijne vlucht.",
+           "late_boarding": "Captain, met {name}. Het is vertrektijd en we zijn nog aan het boarden, nog ongeveer {left} minuten.",
+           "late_boarding_plain": "Captain, met {name}. Het is vertrektijd en we zijn nog aan het boarden.",
+           "late_not_boarding": "Captain, met {name}. Over {minutes} minuten is het vertrektijd en het boarden is nog niet begonnen. Zullen we beginnen?",
+           "late_ready": "Captain, met {name}. We lopen {minutes} minuten achter. De cabine is klaar wanneer jij het bent.",
+           "secure_takeoff": "Captain, met {name}. De cabine is klaar voor de start.",
+           "secure_landing": "Captain, met {name}. De cabine is klaar voor de landing.",
+           "service_call": "Captain, met {name}. We beginnen zo met de service. Kan ik je iets brengen?"},
+    "pl": {"boarded": "Kapitanie, tu {name}. Boarding zakończony, pasażerów na pokładzie: {pax}. Kabina gotowa, możemy zamknąć drzwi, kiedy pan zechce.",
+           "deboarded": "Kapitanie, tu {name}. Wszyscy pasażerowie wysiedli. Dziękuję za lot.",
+           "late_boarding": "Kapitanie, tu {name}. Minęła już godzina odlotu, a boarding jeszcze trwa, jeszcze około {left} minut.",
+           "late_boarding_plain": "Kapitanie, tu {name}. Minęła już godzina odlotu, a boarding jeszcze trwa.",
+           "late_not_boarding": "Kapitanie, tu {name}. Odlot za {minutes} minut, a boarding jeszcze się nie zaczął. Zaczynamy?",
+           "late_ready": "Kapitanie, tu {name}. Mamy {minutes} minut opóźnienia. Kabina jest gotowa, kiedy pan zechce.",
+           "secure_takeoff": "Kapitanie, tu {name}. Kabina zabezpieczona do startu.",
+           "secure_landing": "Kapitanie, tu {name}. Kabina zabezpieczona do lądowania.",
+           "service_call": "Kapitanie, tu {name}. Zaraz zaczynamy serwis. Czy coś panu przynieść?"},
+    "sv": {"boarded": "Kapten, det är {name}. Boardingen är klar, {pax} passagerare ombord. Kabinen är klar, dörrarna kan stängas när du vill.",
+           "deboarded": "Kapten, det är {name}. Alla passagerare har gått av. Tack för en fin flygning.",
+           "late_boarding": "Kapten, det är {name}. Det är avgångstid och vi boardar fortfarande, ungefär {left} minuter kvar.",
+           "late_boarding_plain": "Kapten, det är {name}. Det är avgångstid och vi boardar fortfarande.",
+           "late_not_boarding": "Kapten, det är {name}. Det är {minutes} minuter till avgång och boardingen har inte börjat. Ska vi börja?",
+           "late_ready": "Kapten, det är {name}. Vi är {minutes} minuter sena. Kabinen är klar när du är.",
+           "secure_takeoff": "Kapten, det är {name}. Kabinen är klar för start.",
+           "secure_landing": "Kapten, det är {name}. Kabinen är klar för landning.",
+           "service_call": "Kapten, det är {name}. Vi börjar servicen strax. Kan jag ta med något till dig?"},
+    "ru": {"boarded": "Командир, это {name}. Посадка закончена, пассажиров на борту: {pax}. Салон готов, двери можно закрывать, когда скажете.",
+           "deboarded": "Командир, это {name}. Все пассажиры вышли. Спасибо за полёт.",
+           "late_boarding": "Командир, это {name}. Время вылета уже наступило, а посадка ещё идёт, примерно {left} минут.",
+           "late_boarding_plain": "Командир, это {name}. Время вылета уже наступило, а посадка ещё идёт.",
+           "late_not_boarding": "Командир, это {name}. До вылета {minutes} минут, а посадка ещё не началась. Начинаем?",
+           "late_ready": "Командир, это {name}. Мы опаздываем на {minutes} минут. Салон готов, когда будете готовы вы.",
+           "secure_takeoff": "Командир, это {name}. Салон к взлёту готов.",
+           "secure_landing": "Командир, это {name}. Салон к посадке готов.",
+           "service_call": "Командир, это {name}. Мы начинаем обслуживание. Вам что-нибудь принести?"},
+    "zh": {"boarded": "机长，我是{name}。登机完毕，机上共有{pax}位乘客。客舱已准备好，您准备好就可以关门。",
+           "deboarded": "机长，我是{name}。乘客已全部下机。谢谢您这次飞行。",
+           "late_boarding": "机长，我是{name}。已经到了起飞时间，我们还在登机，大约还要{left}分钟。",
+           "late_boarding_plain": "机长，我是{name}。已经到了起飞时间，我们还在登机。",
+           "late_not_boarding": "机长，我是{name}。离起飞还有{minutes}分钟，登机还没开始。要开始吗？",
+           "late_ready": "机长，我是{name}。我们已经晚了{minutes}分钟。客舱准备好了，听您安排。",
+           "secure_takeoff": "机长，我是{name}。客舱已为起飞做好准备。",
+           "secure_landing": "机长，我是{name}。客舱已为着陆做好准备。",
+           "service_call": "机长，我是{name}。我们马上开始服务。需要给您带点什么吗？"},
+}
+
+# Minutes with their number as Polish and Russian have them ("2 minuty", "5 minut", "21 минута").
+_MINUTES = {"pl": (r"minut[ay]?", ("minuta", "minuty", "minut")), "ru": (r"минут[аы]?", ("минута", "минуты", "минут"))}
+
+
+def counted(text: str, code: str) -> str:
+    """The minutes in ``text`` agreeing with their number."""
+    if code not in _MINUTES:
+        return text
+    from localtc.crew.foreign import _form
+
+    pattern, forms = _MINUTES[code]
+    return re.sub(rf"\b(\d+) {pattern}(?!\w)", lambda m: f"{m[1]} {_form(int(m[1]), *forms, code)}", text)
+
+
+def _decisions() -> None:
+    """What the captain decides about a problem on board, in their language (cabin_incident_words.DECISIONS)."""
+    from localtc.crew.cabin_incident_words import DECISIONS
+
+    for code, said in DECISIONS.items():
+        for english, words in said.items():
+            HEARD.setdefault(code, {})[english] = "|".join(filter(None, (HEARD.get(code, {}).get(english, ""), words)))
+
+
+_decisions()

@@ -12,7 +12,7 @@ HINTS = VocabularyHints(callsign_spoken="Frontier 1469", procedures=("RADYR2", "
 @pytest.mark.parametrize("heard, written", [
     ("via the Raider 2 Departure.", "via the RADYR2 Departure."),
     ("Descend via the LU-CK-1 rifle.", "Descend via the LUCKI1 rifle."),
-    ("Hold that L-Y-N-D-I as depicted.", "Hold that LYNDI as depicted."),
+    ("Hold that L-Y-N-D-I as depicted.", "hold at LYNDI as depicted."),  # ("hold at" heard "hold that")
     ("Direct Lindy, Frontier 1469", "Direct LYNDI, Frontier 1469"),
     ("Hold at LYNDI. Front to 1469.", "Hold at LYNDI. Frontier 1469."),
     ("climbing 13,000 from to 1469", "climbing 13,000 Frontier 1469"),

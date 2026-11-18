@@ -388,7 +388,7 @@ def test_said_to_the_cabin_in_every_language(code, key):
     if key == "drink":  # (the drink in their language too)
         assert cabin_words.DRINKS[code]["coffee"] in line.text
     else:
-        own = cabin_words.REPLIES[code][key].split("{")[0]
+        own = foreign.said_by(cabin_words.REPLIES[code][key], code, line.sex).split("{")[0]  # (in their own words: "Obrigada")
         assert line.text.startswith(own)
 
 
@@ -466,3 +466,171 @@ def test_polish_is_spoken_by_its_own_pack():
 
     assert "pl" not in NATIVE
 
+
+
+# --- the copilot's other set lines, and who says them --------------------------------------------------------------------
+
+
+SET_LINES = ["Asking.", "That sounded like a question. Gear's up. Want gear down?", "That's gone stale. Say again what you need?",
+             "Copy, leaving it.", "My altitude doesn't reach this aircraft; that one's yours.", "Did you say heading 240?", "Gear up?",
+             "That was before the cleared altitude changed. Say it again if you still want it.", "Copy, I'll leave the flaps alone.",
+             "Autobrake max for takeoff?", "Not now, we're in the landing now.", "Flaps are already up.", "Flaps are already 2.", "Loud and clear.",
+             "We're about 20 miles north-northeast of Charlotte, North Carolina.", "We're over Orlando, Florida.", "Your side.", "That's yours.",
+             "Copy, only what matters.", 'Your radios: ask Seattle Center, "request climb FL350".', "Copy, later then.", "Landing lights already on.",
+             "Strobes already off.", "Seatbelt sign's already on.", "Autopilot's already on.", "Gear's already down.", "APU's already running.",
+             "Spoilers are already armed.", "Parking brake's already set.", "Squawk's already 4521.", "Negative, we're on the ground.",
+             "Negative, no positive rate yet.", "Negative, not below 1,000 feet.", "Negative, not while we're moving.",
+             "We're cleared to FL350. Set FL240, confirm?", "Autopilot off at 400 feet, confirm?", "Squawk 7700, emergency, confirm?",
+             "ATC gave us 4521. Squawk 4512, confirm?", "Did you want me to ask ground for push and start?", "Your radios: ask ground for taxi.",
+             "Your radios: tell Zurich Tower we're ready.", "Runway 16: 23 knots headwind, 1 knot crosswind from the left.", "Squawk 4521.",
+             "Go around?", "Declare a mayday with Zurich Approach?", "Which call?", "Telling tower.", "Who do you want me to ask?",
+             "Minimums 200 set.", 'I heard "abc". Say again?', "I can't move this aircraft's switches from here; they're yours.",
+             "We're on VATSIM, you'll have to call them yourself.", "Copy, I'll leave the fuel predictions to the box."]
+
+
+@pytest.mark.parametrize("code", sorted(foreign.WORDS))
+@pytest.mark.parametrize("english", SET_LINES)
+def test_the_copilots_set_lines_in_every_language(code, english):
+    said = foreign.templated(english, code)
+    assert said is not None and "{" not in said, said
+    assert sorted(foreign.numbers(said.replace(" ", " "))) == sorted(foreign.numbers(english))
+    if not any(w in english for w in ("Seattle", "Zurich", "Charlotte", "Orlando", "VATSIM", "abc", "ground", "Gear up", "gear down", "Squawk 4521")):
+        assert foreign.speaks(said, code), said
+
+
+def test_every_set_line_is_in_every_language():
+    from localtc.crew import foreign_lines
+
+    for pattern, said in foreign_lines.LINES:
+        assert set(said) == set(foreign_lines.CODES), pattern
+    for table in (foreign_lines.THING, foreign_lines.LIGHT, foreign_lines.PHASE, foreign_lines.KEY, foreign_lines.POINT, foreign_lines.CALL):
+        assert set(table) == set(foreign_lines.CODES)
+        assert len({len(v) for v in table.values()}) == 1
+
+
+def test_a_name_no_table_has_is_left_to_the_model():
+    assert foreign.templated("Copy, I'll leave the hydraulics alone.", "de") is None
+    assert foreign.templated("Flaps 2, confirm?", "de") == "Flaps 2, bestätigen?"  # (not taken as "Flaps 2, confirm" asked)
+
+
+@pytest.mark.parametrize("code, sex, said", [
+    ("pl", "F", "Zrozumiałam, zostawiam."), ("pl", "M", "Zrozumiałem, zostawiam."), ("ru", "F", "Поняла, оставляю."),
+    ("ru", "M", "Понял, оставляю."), ("fr", "F", "Je ne suis pas sûre. Tu peux répéter ?"),
+])
+def test_the_copilot_says_it_as_a_man_or_a_woman(code, sex, said):
+    english = "Copy, leaving it." if code != "fr" else "I'm not sure. Say again?"
+    assert foreign.said_by(foreign.templated(english, code), code, sex) == said
+
+
+def test_the_copilots_personality_doesnt_reword_another_language():
+    from test_crew import said, started
+
+    from localtc.crew import personalities
+    from localtc.sim_api import IntercomHeard
+
+    pm = started()
+    pm._language, pm.personality = "de", next(p for p in personalities.PERSONALITIES if not p.neutral)
+    line = said(pm.observe(IntercomHeard(t=60.0, text="Wie hoch sind wir?")))
+    assert line and foreign.speaks(line[0], "de")
+
+
+@pytest.mark.parametrize("code", sorted(foreign.WORDS))
+def test_the_cabin_calls_the_flight_deck_in_the_captains_language(code):
+    from localtc.crew import cabin_words
+    from localtc.crew.cabin_lines import LINES
+
+    assert set(cabin_words.CALLS[code]) == {"boarded", "deboarded", "late_boarding", "late_boarding_plain", "late_not_boarding", "late_ready",
+                                            "secure_landing", "secure_takeoff", "service_call"}
+    assert set(cabin_words.CALLS[code]) - {"late_boarding_plain"} <= set(LINES)
+    c = _cabin(code)
+    for key, extra in (("boarded", {}), ("secure_takeoff", {}), ("late_boarding", {"left": "twenty-two"}), ("late_ready", {"minutes": "three"})):
+        [line] = c.call(key, extra=extra)
+        assert line.language == code and line.channel == "interphone" and "{" not in line.text
+        assert foreign.speaks(line.text, code) or code in ("de", "nl", "sv"), line.text  # ("Captain", "Boarding", "Off-Block")
+        assert "twenty" not in line.text and "three" not in line.text
+    english = _cabin(code)
+    english.talks_in = ""
+    assert english.call("boarded")[0].language == ""
+
+
+@pytest.mark.parametrize("code, text", [("pl", "około 22 minuty"), ("pl", "Mamy 3 minuty"), ("pl", "Mamy 5 minut"), ("ru", "примерно 22 минуты"),
+                                        ("ru", "уже 21 минута")])
+def test_minutes_agree_with_their_number(code, text):
+    from localtc.crew.cabin_words import counted
+
+    plain = text.replace("minuty", "minut").replace("минуты", "минут").replace("минута", "минут")
+    assert counted(plain, code) == text
+
+
+@pytest.mark.parametrize("code, heard, english", [
+    ("es", "Connecta el piloto automático.", "autopilot on"), ("es", "Disconnecta el piloto automático.", "autopilot off"),
+    ("it", "Inserici il pilota automatico.", "autopilot on"), ("it", "Spenni il segnale cinture.", "seatbelt sign off"),
+    ("it", "Spegnile luci di rollaggio.", "taxi lights off"), ("fr", "Arme les spoilés.", "arm the spoilers"), ("es", "Olvízalo.", "cancel that"),
+    ("de", "Fahrwerk einfachen.", "gear up"), ("de", "Anschwaltzeichen an.", "seatbelt sign on"), ("de", "Schöckliste fertig.", "checklist complete"),
+    ("de", "Natlendecheckliste.", "run the after landing checklist"), ("it", "Salia diecci mila piedi.", "altitude 10000"),
+])
+def test_a_word_whisper_wrote_a_letter_off_is_read_as_it_was_meant(code, heard, english):
+    """Real Whisper (base) transcripts of the crew's words said in each language."""
+    assert foreign.gloss(heard, code) is None and foreign.gloss_near(heard, code) == english
+
+
+@pytest.mark.parametrize("code, said", [("it", "Norte."), ("pt", "Single."), ("de", "Wie geht's dir heute?"), ("fr", "Ça va aujourd'hui ?"),
+                                        ("de", "Ich glaube, wir sind etwas zu schnell"), ("de", "Fahrwerk ausfahren, aber erst nach dem Turm"),
+                                        ("es", "¿Cómo estás hoy?")])
+def test_a_word_nowhere_near_is_left_to_the_language_model(code, said):
+    assert foreign.gloss_near(said, code) is None
+
+
+def test_a_reading_put_right_is_asked_back_never_just_done():
+    from test_crew import said, started
+
+    from localtc.sim_api import CrewAction, IntercomHeard
+
+    pm = started()
+    pm._language = "it"
+    out = pm.observe(IntercomHeard(t=30.0, text="Spenni il segnale cinture.", confidence=0.9))  # (the seatbelt sign: the copilot's)
+    assert not any(isinstance(o, CrewAction) and o.outcome == "sent" for o in out)
+    assert said(out) and said(out)[0].endswith("?")
+
+
+@pytest.mark.parametrize("code, heard, want", [
+    ("de", "Rampe, Wasser und Toilitten bitte.", ("Water", "Lavatory")), ("es", "Rampa, agua y lavavos por favor.", ("Water", "Lavatory")),
+    ("it", "Rampa limbarco per favore.", ("Boarding",)), ("pl", "Lampa boardink proszę.", ("Boarding",)),
+    ("de", "Rampe, Catering, Treibstoff und eine GPU bitte", ("Catering", "Refueling", "GPU")), ("nl", "Platform, boarden graag", ("Boarding",)),
+    ("ru", "Перрон, посадку, пожалуйста", ("Boarding",)), ("de", "Rampe, Catering bitte schön", ("Catering",)),
+])
+def test_the_ramp_reads_a_request_heard_a_letter_off(code, heard, want):
+    """Real Whisper (base) transcripts, and wordings the ramp didn't know."""
+    from localtc.ground import grammar, words
+
+    [ask] = grammar.parse(words.as_english(heard, code))
+    assert ask.action == "request" and ask.services == want and not words.unread(heard, code)
+
+
+@pytest.mark.parametrize("code, heard, action", [
+    ("it", "Rampa togli il fingere.", "off"), ("it", "60%", "level"), ("nl", "Platform, koppel de GPU af", "off"), ("nl", "Platform, haal de slurf weg", "off"),
+    ("de", "Rampe, GPU abklemmen", "off"), ("sv", "Ramp, tabort, flygbrygga.", "off"), ("it", "Rampa a nulla il catering.", "cancel"),
+])
+def test_the_ramp_reads_the_rest_heard_a_letter_off(code, heard, action):
+    from localtc.ground import grammar, words
+
+    assert grammar.parse(words.as_english(heard, code))[0].action == action
+
+
+@pytest.mark.parametrize("code, heard", [("de", "Rampe, Catering, Applichen."), ("de", "Rampe, GPU, App, Clemen."), ("it", "Rampa, stack, GPU."),
+                                         ("nl", "Platform en nulier de catering."), ("nl", "Platform, koppel de GPU aan")])
+def test_a_misheard_cancel_is_asked_again_never_ordered(code, heard):
+    """A verb Whisper turned into a word nobody knows ("abbrechen" as "Applichen"): the service isn't asked for."""
+    from test_ground import services
+
+    from localtc.ground.api import GroundState
+    from localtc.ground.crew import RampCrew
+    from localtc.ground.lines import Words
+    from localtc.sim_api import OwnshipState, RampSpeech
+
+    c = RampCrew(seed=1, language=code)
+    base = {f: 0.0 for f in ("t", "lat", "lon", "alt_msl_ft", "alt_indicated_ft", "alt_agl_ft", "altimeter_inhg", "hdg_mag", "hdg_true", "ias_kt", "gs_kt", "vs_fpm", "com2_mhz")}
+    c.own = OwnshipState(**base, on_ground=True, parking_brake=True, engine_running=False, squawk="1000", xpdr_mode="standby", com1_mhz=122.8)
+    c.state = GroundState(connected=True, running=True, services=services())
+    out = [o for o in c.heard(heard, 1.0) if isinstance(o, RampSpeech)]
+    assert out and out[0].text == Words(1, code).line("say_again")

@@ -119,7 +119,9 @@ class AppController:
             self.cfg.voice.enabled = True  # the app is for flying with a microphone; the CLI asks with --voice
         self.stream = EventStream(lambda: self.on_connect())  # a page that fell behind starts again from all of it
         self.plan_path = plan_path or data_dir() / "flightplan.json"
-        self.plan: FlightPlan | None = load_plan(self.plan_path)
+        # The last flight's plan only while it's young (LocalTC restarted mid-flight carries on with it): a day-old
+        # one opened the app with its destination, flight number and aircraft already filled in.
+        self.plan: FlightPlan | None = load_plan(self.plan_path) if _young(self.plan_path) else None
         self.cache = cache or AirportCache()
         self.live: LiveSession | None = None
         self.status, self.status_detail = "idle", ""
@@ -478,6 +480,10 @@ class AppController:
         if self._clear_task is not None:
             self._clear_task.cancel()
             self._clear_task = None
+        if self.cfg.copilot.mode != "off":
+            # Every flight starts with the copilot off the radio, whatever the last one ended with ("copilot radio, no
+            # matter what, off by default"): it's switched on in the flight when wanted.
+            self.cfg.copilot.mode = "off"
         cfg = self.flight_config()
         record = cfg.recorder.enabled or cfg.ui.dev_mode
         self._stop = asyncio.Event()
@@ -733,6 +739,11 @@ class AppController:
                              "hdg": round(t.hdg_true), "gs": round(t.gs_kt), "ground": t.on_ground} for t in ev.targets]
             self.publish("traffic", self.traffic)
             return
+        if isinstance(ev, PhaseChanged) and ev.phase == "PARKED" and ev.previous == "TAXI_IN" and self.source_kind == "live":
+            try:  # arrived: the plan isn't the next flight's, even if the app's closed before the flight is ended
+                self.plan_path.unlink(missing_ok=True)
+            except OSError:
+                pass
         if isinstance(ev, OnlineAtc | RadioTuned | PhaseChanged | AtcOperations) or (
                 isinstance(ev, AtcAlert) and ev.kind in ("online", "online_back", "online_gap")):
             self._online(getattr(ev, "error", None))
@@ -1935,6 +1946,16 @@ def _recent_sessions(root: Path, limit: int = 15) -> list[dict]:
         out.append({"name": d.name, "path": str(d.resolve()), "size_mb": round(size / 2**20, 1),
                     "modified": datetime.fromtimestamp(d.stat().st_mtime).isoformat(timespec="minutes")})
     return out
+
+
+PLAN_KEEP_S = 18 * 3600.0  # a saved plan older than this isn't put back when the app opens (a long haul restarted is younger)
+
+
+def _young(path: Path) -> bool:
+    try:
+        return time.time() - path.stat().st_mtime <= PLAN_KEEP_S
+    except OSError:
+        return False
 
 
 def export_report(session_dir: Path, plan_path: Path | None = None, *, out_dir: Path | None = None,

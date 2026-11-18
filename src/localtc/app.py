@@ -190,6 +190,8 @@ def traffic_atc(engine) -> "AtcLink":
                 end = runway.end_for_heading(own.hdg_true, 90) or runway.ends[0]
                 return icao, end.ident, "on"
             if ("takeoff" in c or "line_up" in c) and a.departure_runway and icao == st.flight.origin:
+                if "takeoff" not in c and engine.conditions.active("behind_landing", a.departure_runway) is not None:
+                    continue  # lining up behind the landing traffic: that one's runway first (it was sent around for it)
                 return icao, a.departure_runway, "takeoff"
         return None
 
@@ -1048,8 +1050,11 @@ def _airline_name(engine) -> str:
     callsign = engine.state.flight.callsign
     if callsign is None:
         return ""
-    known = airline_of(callsign.ident)[1]
-    return known.name if known is not None else (callsign.telephony if callsign.is_airline else "")
+    code, known = airline_of(callsign.ident)
+    # Every name GSX's handlers might go by: the airline's, the callsign's word, its ICAO and IATA codes
+    names = [known.name if known is not None else "", callsign.telephony if callsign.is_airline else "",
+             callsign.ident[:3] if callsign.is_airline else "", getattr(known, "iata", "") if known is not None else ""]
+    return "|".join(dict.fromkeys(n for n in names if n))
 
 
 def copilot_locale(personality: str, language_code: str) -> str:

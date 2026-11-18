@@ -30,6 +30,7 @@ DEAD_CHECK_S = 0.5  # after reopening it, this long for its first audio
 STALLED_S = 1.0  # the microphone sent nothing for this long: it has stopped, reopen it before a press
 START_CHECK_S = 5.0  # this long into the flight, a microphone that has sent nothing at all is looked into
 START_TRIES = 4  # Windows lists a microphone up to four ways (MME, DirectSound, WASAPI, WDM-KS)
+SHORT_FROM_S, SHORT_WORDS_PER_S = 6.0, 0.6  # this much speech heard as fewer words than this a second: heard again
 NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignored
 # Below this confidence on a short clip, Whisper made it up from noise ("Exhale.", "Be careful.", "There you go." on a
 # key pressed for a shortcut, at 0.17-0.34): heard as nothing.
@@ -83,7 +84,7 @@ def _radio_of(event: Any) -> int:
     return event.radio
 
 
-OWN_LANGUAGE_SURE = 0.85  # Spanish on the radio read 0.98 and up; English in a Spanish accent 0.62 at most
+OWN_LANGUAGE_SURE = 0.95  # French, Spanish, Italian, Portuguese, Mandarin on the radio read 0.99 and up; English in a French accent up to 0.90
 
 
 class VoiceService:
@@ -290,6 +291,18 @@ class VoiceService:
             log.info("Heard %r, the same few over and over: once more without the airport's words", text[:80])
             again = await asyncio.to_thread(transcriber.transcribe, speech, prompt="", hotwords="", **kwargs)
             if again.no_speech < NO_SPEECH and (redone := fixup(again.text)) and not made_up(redone, audio_s):
+                result, text = again, redone
+                prompt = ""  # (heard without it already)
+        if text and prompt and result.audio_s >= SHORT_FROM_S and len(text.split()) < result.audio_s * SHORT_WORDS_PER_S:
+            # Far fewer words than the speech holds: Whisper stopped after the first sentence ("Fiumicino Clearance,
+            # Emirates 98." from 11 s of "... request IFR to Dubai as filed"). Heard again with only the callsign and
+            # the stations to go on, and the longer kept.
+            short = build_prompt(VocabularyHints(callsign=hints.callsign, callsign_spoken=hints.callsign_spoken,
+                                                 stations=hints.stations, style=" "))
+            again = await asyncio.to_thread(transcriber.transcribe, speech, prompt=short.strip(), hotwords="", **kwargs)
+            redone = match_names(fixup(again.text), hints) if again.no_speech < NO_SPEECH else ""
+            if len(redone.split()) >= 1.5 * len(text.split()) and not made_up(redone, audio_s, again.confidence):
+                log.info("Heard only %r in %.1f s of speech: heard again as %r", text, result.audio_s, redone)
                 result, text = again, redone
         if text and result.confidence < GUESSED_CONFIDENCE and audio_s <= GUESSED_MAX_S:
             log.info("Dropped %r: confidence %.2f on %.1f s of audio, made up from noise", text, result.confidence, audio_s)

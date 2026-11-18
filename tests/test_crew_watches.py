@@ -306,7 +306,7 @@ def test_off_the_taxi_route_is_said_once_joined():
     on_route = [own(1 + i, lat=47.0 + i * 0.0002, gs_kt=12, hdg_true=0) for i in range(5)]
     off = [own(6 + i, lat=47.001 + i * 0.0002, lon=-122.0 + 80 / 75900, gs_kt=12, hdg_true=0) for i in range(10)]
     words = said(fly(pm, on_route + off))
-    assert "We're off the taxi route, cleared via B." in words
+    assert "We're off the taxi route, cleared via Bravo." in words
     assert sum("taxi route" in w for w in words) == 1
 
 

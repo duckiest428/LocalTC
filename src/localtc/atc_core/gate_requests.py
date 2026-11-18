@@ -24,6 +24,7 @@ class GateRequestsMixin:
         arriving = icao == st.flight.destination
         assigned = st.assignments.gate_index if arriving and self.gate_given() else None
         out = []
+        fits = self._fits(geo, real, span)
         for g in stands.gates(geo, real):
             near = min(((t, abs(t.lat - g.spot.lat) + abs(t.lon - g.spot.lon)) for t in traffic if t.on_ground),
                        key=lambda x: x[1], default=(None, 1.0))
@@ -32,11 +33,24 @@ class GateRequestsMixin:
                         "lon": g.spot.lon, "radius_m": round(g.spot.radius_m, 1), "kind": g.spot.kind,
                         "international": g.international, "real": g.real,
                         "occupied": stands.occupied(g, geo, traffic), "taken": g.index in self._gates_taken,
-                        "fits": fits_stand(g.spot.radius_m, span),
+                        "fits": fits(g),
                         "airline": (parked.atc_id or "")[:3].upper() if parked is not None and parked.atc_id else ""})
         return {"icao": geo.icao, "assigned": assigned, "assigned_name": self.gate_given() if arriving else
                 st.assignments.departure_gate, "span_m": span, "stands": out,
                 "operator": self._callsign().ident[:3] if self._callsign().is_airline else ""}
+
+    @staticmethod
+    def _fits(geo, real, span: float):
+        """Whether a gate takes an aircraft of ``span``: by the scenery's radius; and where no gate there is listed big
+        enough, its biggest gates (Dubai's scenery gives every heavy gate 32 m, its A380 gates among them: "no gates
+        are big enough for the A388 where the most A380s land in the world")."""
+        everything = list(stands.gates(geo, real))
+        top = max((g.spot.radius_m for g in everything if g.word == "gate"), default=0.0)
+        none_fit = span > 0 and top > 0 and not fits_stand(top, span)
+
+        def fits(g) -> bool:
+            return fits_stand(g.spot.radius_m, span) or (none_fit and g.word == "gate" and g.spot.radius_m >= top - 2.0)
+        return fits
 
     def request_gate(self, icao: str | None, label: str) -> tuple[bool, str]:
         """A gate asked for at the destination: (approved, why). Approved, it's the one ground sends the flight to."""
@@ -55,7 +69,7 @@ class GateRequestsMixin:
         if gate.index in self._gates_taken or stands.occupied(gate, geo, self._traffic.values()):
             return False, f"{gate.display} is occupied."
         span = wingspan_m(st.flight.aircraft_type or self._aircraft_title)
-        if not fits_stand(gate.spot.radius_m, span):
+        if not self._fits(geo, self._real_gates(geo.icao), span)(gate):
             return False, f"{gate.display} is too small for your aircraft."
         if st.assignments.gate_index == gate.index and self.gate_given():
             return True, f"{gate.display} is already yours."

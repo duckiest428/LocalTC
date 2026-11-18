@@ -78,6 +78,8 @@ LINES = {
                   "cleaning, de-icing, the GPU, the jetway, stairs and the push."),
     "not_understood_llm": ("Sorry, I lost that one. Say again?",),
     "question": ("GSX is asking: {title}? {choices}.", "{title}? {choices}."),
+    "not_parked": ("Not parked as far as GSX knows yet. Once you're stopped on the stand, engines off, ask again.",
+                   "GSX doesn't have you parked yet: stop on the stand, engines off, and ask again."),
     "picked": ("Okay: {choice}.", "{Choice}, done."),
     "menu_failed": ("Trouble with GSX on that one: {why}", "GSX won't play on that: {why}"),
     "gate_ok": ("{why}", "Copy. {why}"),

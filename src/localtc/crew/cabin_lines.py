@@ -875,3 +875,13 @@ FOREIGN: dict[str, dict[str, str]] = {
         "doors_disarm": "乘务员，请解除滑梯预位并交叉检查。",
     },
 }
+
+
+def _more() -> None:
+    from localtc.crew.cabin_foreign_more import MORE
+
+    for code, lines in MORE.items():
+        FOREIGN.setdefault(code, {}).update(lines)
+
+
+_more()

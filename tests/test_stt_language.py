@@ -3,6 +3,7 @@
 import asyncio
 
 import numpy as np
+import pytest
 
 from localtc.bus import EventBus
 from localtc.stt.service import INTERCOM, VoiceService
@@ -44,8 +45,10 @@ def test_english_on_the_radio_goes_to_the_english_model():
     assert radio.calls == ["en"] and own.calls == []
 
 
-def test_a_strong_accent_isnt_taken_for_the_language():
-    s, radio, own = service(("es", 0.6))
+@pytest.mark.parametrize("sure", [0.6, 0.9])
+def test_a_strong_accent_isnt_taken_for_the_language(sure):
+    """An English readback in a French accent read as French at 0.90 (measured): still heard as English."""
+    s, radio, own = service(("es", sure))
     hear(s, 1)
     assert radio.calls == ["en"] and own.calls == []
 
@@ -60,3 +63,18 @@ def test_the_intercom_goes_to_the_languages_model():
     s, radio, own = service(("es", 0.98))
     hear(s, INTERCOM)
     assert radio.calls == [] and own.calls == ["es"]
+
+
+def test_the_multilingual_model_tells_the_language_itself():
+    """language_of called a method that wasn't there: every radio call was "can't tell", so a call in the pilot's own
+    language was never noticed."""
+    from localtc.stt.whisper import WhisperTranscriber
+
+    class Model:
+        def detect_language(self, audio):
+            return "de", 0.97, [("de", 0.97)]
+
+    whisper = WhisperTranscriber("base", device="cpu", compute_type="int8", allow_download=False)
+    whisper._model = Model()  # (loaded: load() leaves it as it is)
+    assert whisper.language_of(np.zeros(16000, dtype=np.float32)) == ("de", 0.97)
+    assert WhisperTranscriber("base.en", device="cpu", compute_type="int8").language_of(np.zeros(16000, dtype=np.float32)) == ("", 0.0)

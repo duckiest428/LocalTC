@@ -168,7 +168,11 @@ class KokoroVoices:
         return self._styles[voice]
 
     def voice_for(self, persona: Persona) -> tuple[str, str]:
-        lang, _, pool = pool_for(persona)
+        lang, accent, pool = pool_for(persona)
+        if persona.role == "chatter":
+            # Another flight's pilot: from its accent's voices of either sex, so there's a free one before a
+            # controller's is shared (a small accent's voices ran out, and Roma Radar spoke for KNE 660 too)
+            pool = [*pool, *(v for v in voices_for(accent, "F" if persona.sex == "M" else "M") if v not in pool)]
         return lang, self.casting.cast(persona, pool)
 
     def speaks(self, language: str) -> bool:

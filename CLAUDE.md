@@ -20,8 +20,9 @@ Two machines work on it:
 - Three changelogs, one version: `CHANGELOG.md` (the Main App), `CHANGELOG-companion.md` and `CHANGELOG-website.md`;
   the website's changelog page has a tab for each (`tools/release.py check` wants the version in all three and in the
   companion's `MARKETING_VERSION`).
-- New work goes in the CHANGELOG's top section, `## [0.5.6] - Upcoming` (replacing its "Nothing yet" line), until the
-  user names the next release. Don't bump `pyproject.toml` / `__version__` and don't build the installer (the exe)
+- New work goes in the CHANGELOG's top section, `## [x.y.z] - Upcoming` (0.5.8 is the last release: start
+  `## [0.5.9] - Upcoming` above it in all three changelogs with the first new entry), until the user names the next
+  release. Don't bump `pyproject.toml` / `__version__` and don't build the installer (the exe)
   unless asked. The installer (`python tools/build_installer.py --release`, needs `makensis` and `uv`) carries the
   committed source, its own Python and every wheel, and builds into `dist/` (never committed: it's ~140 MB); Ollama,
   GPU support and WebView2 are installed from the app (`src/localtc/components.py`), not by the setup. Every commit is

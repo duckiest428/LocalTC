@@ -2,7 +2,7 @@
 
 import re
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from localtc.atc_core.phraseology import speech
 from localtc.sim_api import Airport, Frequency
@@ -16,8 +16,13 @@ NOISE_WORDS = {
     "INTL", "INTERNATIONAL", "AIRPORT", "ARPT", "FLD", "FIELD", "CO", "COUNTY", "MUNI", "MUNICIPAL", "RGNL",
     "REGIONAL", "APP", "APPR", "APPROACH", "DEP", "DEPARTURE", "TWR", "TOWER", "GND", "GROUND", "CLNC", "CLR",
     "CLEARANCE", "DELIVERY", "DEL", "CTR", "CENTER", "CENTRE", "ATIS", "MEM", "MEMORIAL", "EXEC", "EXECUTIVE",
-    "MIL", "AB", "AFB", "BASE",
+    "MIL", "AB", "AFB", "BASE", "APRON", "RAMP", "APN",
 }
+# A ground frequency that's the apron's (or a ramp's): its own controller for the push and the start, then over to ground
+# for the taxi ("Incheon Apron", "Frankfurt Apron"). The US's ramp towers are the airlines' own, named "Ramp".
+APRON_WORDS = {"APRON": "Apron", "APN": "Apron", "RAMP": "Ramp"}
+# Clearance delivery as each region calls it: "Boston Clearance" in the Americas' north, "Incheon Delivery" elsewhere.
+CLEARANCE_NAMED = ("K", "C", "P")
 # A sector of the facility, not its callsign ("DUBAI ARRIVALS NORTH" is Dubai Approach), after the name's first word
 # (North Las Vegas is a name)
 SECTOR_WORDS = {"NORTH", "SOUTH", "EAST", "WEST", "VFR", "IFR", "ARRIVAL", "ARRIVALS", "DEPARTURES", "FINAL", "DIRECTOR",
@@ -31,6 +36,7 @@ class Facility:
     mhz: float  # primary frequency, used when ATC tells a pilot to contact this facility
     airport: str | None = None  # ICAO, None for center
     alternates: tuple[float, ...] = ()  # other frequencies the same controller works
+    apron: bool = False  # a ground controller that's the apron's: the push and the start, then ground for the taxi
 
     def matches(self, mhz: float) -> bool:
         return any(channel_khz(f) == channel_khz(mhz) for f in (self.mhz, *self.alternates))
@@ -47,9 +53,22 @@ def channel_khz(mhz: float) -> int:
     return khz + 5 if khz % 100 in (20, 70) else khz
 
 
+def apron_word(freq: Frequency, airport: Airport) -> str:
+    """ "Apron" or "Ramp" for a ground frequency the sim names after the apron ("INCHEON APRON"), else "". In the US and
+    Canada a ramp tower is an airline's own ("AA CONTROL RAMP" at Los Angeles), not ATC's: not one for every flight."""
+    words = re.split(r"[\s/()-]+", freq.name.upper())
+    found = next((APRON_WORDS[w] for w in words if w in APRON_WORDS), "")
+    return "" if found == "Ramp" and airport.icao[:1] in CLEARANCE_NAMED else found
+
+
 def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
-    """ "SEATTLE-TACOMA INTL" -> "Seattle Approach", "PAINE" -> "Paine Tower", "" -> "<airport> Tower"."""
+    """ "SEATTLE-TACOMA INTL" -> "Seattle Approach", "PAINE" -> "Paine Tower", "" -> "<airport> Tower"; "INCHEON APRON"
+    -> "Incheon Apron"; clearance delivery "Incheon Delivery" outside the US and Canada."""
     suffix = SUFFIXES[controller]
+    if controller == "ground" and (apron := apron_word(freq, airport)):
+        suffix = apron
+    elif controller == "clearance" and airport.icao[:1] not in CLEARANCE_NAMED:
+        suffix = "Delivery"  # (the FAA's and Canada's "Clearance" whatever the sim calls it: "CLNC DEL")
     first = re.split(r"[-/(]", freq.name.upper())[0]
     words = [w for w in first.split() if w not in NOISE_WORDS and w != airport.icao.upper()]
     words = words[:1] + [w for w in words[1:] if w not in SECTOR_WORDS]
@@ -92,9 +111,11 @@ def _named_first(freqs: list[Frequency], airport: Airport) -> list[Frequency]:
     return sorted(freqs, key=rank)
 
 
-def _facility(airport: Airport, controller: str, kinds: tuple[str, ...]) -> Facility | None:
+def _facility(airport: Airport, controller: str, kinds: tuple[str, ...], *, apron: bool | None = None) -> Facility | None:
+    """``apron``: for ground, only the apron's frequencies (True) or only the others (False); None all of them."""
     for kind in kinds:  # first kind that exists wins; all its frequencies belong to the facility
-        freqs = _named_first([f for f in airport.frequencies if f.kind == kind], airport)
+        freqs = _named_first([f for f in airport.frequencies if f.kind == kind
+                              and (apron is None or bool(apron_word(f, airport)) == apron)], airport)
         if freqs:
             return Facility(
                 controller=controller,
@@ -102,6 +123,7 @@ def _facility(airport: Airport, controller: str, kinds: tuple[str, ...]) -> Faci
                 mhz=freqs[0].mhz,
                 airport=airport.icao,
                 alternates=tuple(f.mhz for f in freqs[1:]),
+                apron=bool(apron),
             )
     return None
 
@@ -114,7 +136,13 @@ def airport_facilities(airport: Airport, *, role: str) -> list[Facility]:
         ("tower", ("tower",)),
         ("departure", ("departure", "approach")) if role == "departure" else ("approach", ("approach", "departure")),
     ]
-    facilities = [f for controller, kinds in specs if (f := _facility(airport, controller, kinds)) is not None]
+    facilities = [f for controller, kinds in specs
+                  if (f := _facility(airport, controller, kinds, apron=False if controller == "ground" else None)) is not None]
+    apron = _facility(airport, "ground", ("ground",), apron=True)
+    if apron is not None and not any(f.controller == "ground" for f in facilities):
+        facilities.append(replace(apron, apron=False))  # (only an apron frequency: it's the ground controller)
+    elif apron is not None and role == "departure":
+        facilities.append(apron)  # the push and the start; ground for the taxi
     # No clearance delivery: ground issues clearances.
     if not any(f.controller == "clearance" for f in facilities):
         ground = next((f for f in facilities if f.controller == "ground"), None)

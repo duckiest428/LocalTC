@@ -6,7 +6,31 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.5.9] - Upcoming
 
-Nothing yet: what's done for the next version is listed here as it lands.
+### Added
+- **An apron controller where the airport has one:** at an airport whose sim data has an apron frequency (Incheon
+  among them), delivery sends you to the apron ("contact Incheon Apron 121.65 when ready"), the apron gives
+  the push and start, and "ready to taxi" there is handed to ground ("contact Incheon Ground 118.75"). It was one
+  "Incheon Apron Ground" doing all of it. An airline's own ramp tower in the US ("AA Control Ramp" at Los Angeles)
+  isn't one for every flight, and stays out of it.
+- **Holding over a VOR or NDB by its name:** "request holding over Pisa VOR" is given there with no flight plan, from
+  OurAirports' list of the world's navaids, the nearest of that name. It used to be "unable" unless the fix was on
+  the filed route, and a hold couldn't be asked for during the departure at all. A name it can't place gets "say
+  again", never a made-up fix.
+- **South Korea's airlines by their callsigns:** Air Busan, Air Seoul, Aerohanguk (Aero K), Eastar, Jeju Air, Jin Air
+  and Parata Air, and Trinity Airways (formerly T'way) as "Sonorous". Their own aircraft in the traffic at Incheon,
+  Gimpo, Gimhae and Jeju.
+
+### Changed
+- **Clearance delivery is "Delivery" outside the US and Canada:** "Incheon Delivery", "Heathrow Delivery", as it's
+  called there; "Boston Clearance" in the US and Canada as before.
+
+### Fixed
+- **Whisper on the graphics card stays on it:** with the graphics card picked in the settings, the CUDA libraries
+  were never added, so Whisper failed with "cublas64_12.dll is not found" and went back to the CPU at every start.
+- **The sim's own placeholder position isn't a flight:** while the sim reloaded it put the aircraft at 0 N 0 E at
+  53,820 ft for a few seconds. LocalTC took that for a flight joined in the cruise ("call Accra Oceanic"), kept its
+  level, and after the takeoff from Pisa said "check altitude, maintain FL098" over and over. A start over on the
+  ground after a join that never flew also drops what the join took as given.
 
 ## [0.5.8] - 2026-11-17
 

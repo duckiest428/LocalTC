@@ -59,7 +59,10 @@ TELEPHONY: dict[str, str] = {
     "CAL": "Dynasty", "CCA": "Air China", "CES": "China Eastern", "CSN": "China Southern", "CSZ": "Shenzhen Air",
     "CXA": "Xiamen Air", "EVA": "Eva", "HVN": "Viet Nam Airlines", "IGO": "Ifly", "JAL": "Japanair",
     "JJP": "Orange Liner", "KAL": "Koreanair", "MAS": "Malaysian", "PAL": "Philippine", "SIA": "Singapore",
-    "SJX": "Starjet", "THA": "Thai", "TGW": "Go Cat", "TWB": "Teeway", "VJC": "Vietjet",
+    "SJX": "Starjet", "THA": "Thai", "TGW": "Go Cat", "TWB": "Sonorous", "VJC": "Vietjet",
+    # South Korea's low-cost airlines (Trinity Airways, formerly T'way, is "Sonorous" since September 2026)
+    "ABL": "Air Busan", "ASV": "Air Seoul", "EOK": "Aerohanguk", "ESR": "Eastar", "JJA": "Jeju Air", "JNA": "Jin Air",
+    "PTA": "Parata Air",
     "AKX": "Air Asia", "AXM": "Asian Express", "SEJ": "Spicejet", "AIQ": "Red Phoenix", "AXB": "Express India",
     "PIA": "Pakistan", "ALK": "Srilankan",
     # Oceania

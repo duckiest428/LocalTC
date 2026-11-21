@@ -1011,6 +1011,9 @@ def values_equal(element: str, heard: Any, expected: Any) -> bool:
         return taxi_route_matches(heard, expected)
     if element == "fix":
         # (A five-letter fix is one word: "direct BTLR, Frontier" isn't a fix called "BTLR Frontier".)
+        if " " in str(expected) and str(heard).split():
+            # A navaid by its name ("Pisa VOR"): its name read back, with or without "VOR".
+            return str(heard).split()[0].lower() == str(expected).split()[0].lower()
         return str(heard).lower() == str(expected).lower() or fix_matches(str(heard).split()[0], str(expected))
     if element == "procedure":
         return procedure_matches(str(heard), str(expected))

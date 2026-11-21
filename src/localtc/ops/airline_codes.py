@@ -14,7 +14,7 @@ IATA_TO_ICAO = {
     "PR": "PAL", "5J": "CEB", "VN": "HVN", "CA": "CCA", "MU": "CES", "CZ": "CSN", "HU": "CHH", "3U": "CSC",
     "AI": "AIC", "6E": "IGO", "UK": "VTI", "QF": "QFA", "VA": "VOZ", "JQ": "JST", "NZ": "ANZ", "LA": "LAN",
     "JJ": "TAM", "G3": "GLO", "AD": "AZU", "AV": "AVA", "CM": "CMP", "AR": "ARG", "MX": "MXA", "FX": "FDX",
-    "5X": "UPS", "PO": "PAC", "CV": "CLX", "LD": "AHK", "MM": "APJ", "BC": "SKY", "7C": "JJA", "ZG": "TZP",
+    "5X": "UPS", "PO": "PAC", "CV": "CLX", "LD": "AHK", "MM": "APJ", "BC": "SKY", "7C": "JJA", "LJ": "JNA", "BX": "ABL", "RS": "ASV", "ZE": "ESR", "RF": "EOK", "TW": "TWB", "ZG": "TZP",
     "OO": "SKW", "9E": "EDV", "YX": "RPA", "MQ": "ENY", "OH": "JIA", "YV": "ASH", "ZW": "AWI", "PT": "PDT",
     "QX": "QXE", "C5": "UCA", "G7": "GJS", "CP": "CPZ", "MW": "MUA",
 }

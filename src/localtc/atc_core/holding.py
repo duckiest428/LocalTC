@@ -20,6 +20,7 @@ from localtc.atc_core.holds import (
     leg_minutes,
     nm,
 )
+from localtc.atc_core import navaids
 from localtc.atc_core.phase import FlightPhase as P
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.values import Phrase
@@ -297,6 +298,13 @@ class HoldsMixin:
         fix = None
         if named and self.route:
             fix = next(((f.ident, f.lat, f.lon) for f in self.route.fixes if f.ident == named), None)
+        if fix is None and named and (navaid := navaids.find(named, own.lat, own.lon)) is not None:
+            # A VOR or NDB by its name, on no route of the flight's ("request holding over Pisa VOR" with no plan: it was
+            # "unable" every time).
+            fix = (navaid.said, navaid.lat, navaid.lon)
+        if fix is None and named:
+            self._schedule(t, "common.say_again", {}, facility)  # a fix it can't place: said again, never invented
+            return
         if fix is None:
             points = self._route_points()
             i = self._next_fix(own, points)

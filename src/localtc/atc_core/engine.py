@@ -348,6 +348,11 @@ ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it 
 OWED_READBACK_S = 60.0  # the pilot's readback waited for this long before ATC talks to the other flights
 # The calls to LocalTC's traffic that can't wait for the pilot's readback (a go-around, a hold short for this flight).
 URGENT_TRAFFIC_CALLS = ("go_around", "hold_short")
+def menu_position(own: OwnshipState) -> bool:
+    """The sim's placeholder position, not an aircraft: 0 N 0 E while it loads, 0 N 90 E in its menu."""
+    return abs(own.lat) < 0.01 and (abs(own.lon) < 0.01 or abs(own.lon - 90.0) < 0.01)
+
+
 JOIN_PHASES = (P.DEPARTURE, P.CRUISE, P.ARRIVAL, P.APPROACH, P.LANDING, P.TAXI_IN)  # LocalTC started with these
 JOIN_TERMINAL_NM = 40.0  # joined in flight this close to an airport, and below JOIN_TERMINAL_FT: its departure/approach
 JOIN_TERMINAL_FT = 18000.0
@@ -1021,11 +1026,36 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         candidates = [f for f in self.facilities if f.controller == controller]
         if not candidates:
             return None
+        if controller == "ground" and any(f.apron for f in candidates):
+            # An apron of its own (Incheon, Frankfurt): its controller has the flight until the push and start are done,
+            # ground from the taxi on.
+            apron = self._on_apron()
+            candidates = [f for f in candidates if f.apron == apron] or candidates
         preferred = self.state.flight.destination if self._arriving else self.state.flight.origin
         here = next((f for f in candidates if f.airport == preferred), None)
         if here is None and controller in AIRPORT_CONTROLLERS and preferred:
             return None  # an airport without one: never the other end's (Eugene's tower sent the flight to Flagstaff Ground)
         return here or candidates[0]
+
+    def _on_apron(self) -> bool:
+        """Still the apron controller's: at the gate or pushing back, before the taxi, on the way out."""
+        st = self.state
+        return not self._arriving and "taxi" not in st.clearances and (st.phase or P.PARKED.value) in (P.PARKED.value, P.PUSHBACK.value)
+
+    def _ground_stage(self, intent: str | None) -> Facility | None:
+        """At an airport with an apron controller: who a ground request is for. The push and the start are the
+        apron's, the taxi ground's. None: one ground controller does it all."""
+        here = self.state.flight.destination if self._arriving else self.state.flight.origin
+        grounds = [f for f in self.facilities if f.controller == "ground" and f.airport == here]
+        apron = next((f for f in grounds if f.apron), None)
+        main = next((f for f in grounds if not f.apron), None)
+        if apron is None or main is None:
+            return None
+        if intent == "request_pushback":
+            return apron
+        if intent in ("ready_to_taxi", "request_taxi_parking", "clear_of_runway"):
+            return main
+        return None
 
     def geometry(self, icao: str | None) -> AirportGeometry | None:
         return self.tracker.context_builder.airports.get(icao) if icao else None
@@ -1470,6 +1500,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         return msgspec.structs.replace(own, alt_indicated_ft=round(pressure))
 
     def _on_ownship(self, raw: OwnshipState) -> list[BusEvent]:
+        if menu_position(raw):
+            # The sim's own placeholder while it loads or sits in its menu (0 N 0 E at 53,820 ft, 0 N 90 E): no aircraft
+            # anywhere. Taken as real, a flight parked at Pisa was "joined in flight, cruise: call Accra Oceanic", given
+            # its level there, and told "check altitude, maintain FL098" after its takeoff.
+            return []
         st = self.state
         own = self._flight_altitude(raw)
         st.aircraft = own
@@ -1537,6 +1572,15 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             out.append(change)
             if change.previous is None and P(change.phase) in JOIN_PHASES:
                 self._join_in_progress(own, P(change.phase))
+            elif change.previous is None and own.on_ground and self.joined_to is not None and not self._landed:
+                # Started over on the ground after a join that never flew (the sim reloaded): what the join took as
+                # given isn't this flight's.
+                self.joined_to, self._joining = None, None
+                a = st.assignments
+                a.altitude_ft = a.heading = a.speed_kt = None
+                for kind in ("ifr", "takeoff"):
+                    st.clearances.pop(kind, None)
+                st.flags.discard("on_course")
             out += self._on_phase_change(change, own)
         if self._joining is not None:
             out += self._joined_with(own)
@@ -4371,6 +4415,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 return []
             self._clear_approach(t, own, facility, delay=True)  # "cleared to land?" on approach: clear it, send to tower
             return []
+        if target == "ground" and (stage := self._ground_stage(intent)) is not None and stage != facility:
+            if not stage.matches(facility.mhz) and facility.controller in ("ground", "clearance"):
+                # "Ready to taxi" to the apron: "contact Incheon Ground 118.75"; the push asked of ground: the apron's.
+                self._handoff(t, "common.contact", facility, stage, delay=True)
+                return []
+            facility = stage
         if target is not None and facility.controller != target:
             target_facility = self.facility(target)
             if target_facility is not None and target_facility.matches(facility.mhz):

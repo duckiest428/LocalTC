@@ -32,7 +32,7 @@ EXPECTED: Final[dict[str, tuple[frozenset[str], frozenset[str]]]] = {
     "checkin": (RADAR | {"tower"}, AIR_PHASES),
     "request_altitude": (RADAR, AIR_PHASES - {"LANDING"}),
     "request_direct": (RADAR, frozenset({"DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"})),
-    "request_hold": (RADAR, frozenset({"CRUISE", "ARRIVAL", "APPROACH"})),
+    "request_hold": (RADAR, frozenset({"DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"})),
     "report_holding": (RADAR, frozenset({"CRUISE", "ARRIVAL", "APPROACH"})),
     "request_deviation": (RADAR, frozenset({"DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"})),
     "report_back_on_course": (RADAR, frozenset({"DEPARTURE", "CRUISE", "ARRIVAL", "APPROACH"})),

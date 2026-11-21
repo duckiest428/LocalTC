@@ -40,11 +40,14 @@ def default_models_dir() -> Path:
     return Path(base) / "localtc" / "models"
 
 
+_DLL_DIRS: list[str] = []
+
+
 def add_nvidia_dll_dirs() -> list[str]:
-    """Windows: make the pip-installed CUDA libraries findable by ctranslate2. Returns the folders added."""
-    if sys.platform != "win32":
-        return []
-    added = []
+    """Windows: make the pip-installed CUDA libraries findable by ctranslate2 (once). Returns the folders added."""
+    if sys.platform != "win32" or _DLL_DIRS:
+        return list(_DLL_DIRS)
+    added = _DLL_DIRS
     try:
         import nvidia  # namespace package from nvidia-cublas-cu12 / nvidia-cudnn-cu12
     except ImportError:
@@ -205,6 +208,12 @@ class WhisperTranscriber:
                 self.stand_in_for = self.choice.model
                 self.choice = Choice(other, self.choice.device, self.choice.compute_type)
                 path = model_path(other, self.models_dir)
+        if self.choice.device == "cuda":
+            # The CUDA libraries' folders, whatever chose the card: only the "auto" check added them, so with the
+            # graphics card picked in the settings cuBLAS was never found ("cublas64_12.dll is not found") and Whisper
+            # went back to the CPU at every start.
+            if not add_nvidia_dll_dirs() and not cuda_libraries():
+                log.warning("Whisper on the graphics card needs GPU support installed (Quick Settings > Models)")
         try:
             self._model = WhisperModel(str(path), device=self.choice.device, compute_type=self.choice.compute_type)
         except Exception as exc:

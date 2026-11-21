@@ -24,7 +24,8 @@ HUBS: dict[str, tuple[str, ...]] = {
     "LPPT": ("TAP",), "LPPR": ("TAP", "RYR"), "LTFM": ("THY",), "LTFJ": ("PGT",), "EPWA": ("LOT",), "LKPR": ("CSA",),
     "OMDB": ("UAE", "FDB"), "OTHH": ("QTR",), "OMAA": ("ETD",), "OERK": ("SVA",), "OEJN": ("SVA",), "LLBG": ("ELY",),
     "HECA": ("MSR",), "FAOR": ("SAA",), "VHHH": ("CPA",), "RJTT": ("JAL", "ANA"), "RJAA": ("ANA", "JAL"),
-    "RKSI": ("KAL", "AAR"), "RCTP": ("EVA", "CAL"), "WSSS": ("SIA",), "VTBS": ("THA",), "ZBAA": ("CCA",),
+    "RKSI": ("KAL", "AAR", "JJA", "JNA", "TWB"), "RKSS": ("KAL", "AAR", "JJA", "JNA"),
+    "RKPK": ("ABL", "JJA", "JNA"), "RKPC": ("JJA", "KAL", "JNA", "TWB"), "RCTP": ("EVA", "CAL"), "WSSS": ("SIA",), "VTBS": ("THA",), "ZBAA": ("CCA",),
     "ZSPD": ("CES",), "ZGGG": ("CSN",), "VIDP": ("AIC", "IGO"), "VABB": ("AIC", "IGO"), "YSSY": ("QFA", "VOZ"),
     "YMML": ("QFA", "VOZ"), "NZAA": ("ANZ",), "SBGR": ("TAM", "GLO"), "SCEL": ("LAN",), "SKBO": ("AVA",),
     "SAEZ": ("ARG",), "MPTO": ("CMP",),
@@ -36,7 +37,7 @@ COUNTRY: dict[str, tuple[str, ...]] = {
     "LS": ("SWR",), "LO": ("AUA",), "EB": ("BEL",), "EK": ("SAS",), "ES": ("SAS",), "EN": ("SAS", "NOZ"), "EF": ("FIN",),
     "EI": ("EIN", "RYR"), "LP": ("TAP",), "LT": ("THY", "PGT"), "EP": ("LOT",), "LK": ("CSA",), "OM": ("UAE", "ETD"),
     "OT": ("QTR",), "OE": ("SVA",), "LL": ("ELY",), "HE": ("MSR",), "FA": ("SAA",), "VH": ("CPA",), "RJ": ("JAL", "ANA"),
-    "RK": ("KAL",), "RC": ("EVA", "CAL"), "WS": ("SIA",), "VT": ("THA",), "Z": ("CCA", "CES", "CSN"), "VI": ("AIC", "IGO"),
+    "RK": ("KAL", "AAR", "JJA", "JNA", "TWB"), "RC": ("EVA", "CAL"), "WS": ("SIA",), "VT": ("THA",), "Z": ("CCA", "CES", "CSN"), "VI": ("AIC", "IGO"),
     "VA": ("AIC", "IGO"), "Y": ("QFA", "VOZ"), "NZ": ("ANZ",), "SB": ("TAM", "GLO"), "SC": ("LAN",), "SK": ("AVA",),
     "SA": ("ARG",), "MP": ("CMP",),
 }

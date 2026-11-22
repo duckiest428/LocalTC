@@ -118,11 +118,31 @@ def _core_name(name: str) -> str:
     return re.sub(r"^\s*\d+\s*-\s*", "", inner).strip().lower()
 
 
+def _find_at_start(spec: str | int | None) -> int | None:
+    """The microphone for a flight: PortAudio's list is the one read when the app started, so a microphone plugged in
+    (or woken by Windows) since isn't on it: read again and looked for once more. Still not there, the system's default
+    input, and the flight goes on ("no input device matching 'Microphone (K66)'" stopped every start while Windows
+    showed the K66 working)."""
+    try:
+        return find_device(spec)
+    except ValueError:
+        pass
+    import sounddevice as sd
+
+    if GATE.restart(sd):
+        try:
+            return find_device(spec)
+        except ValueError:
+            pass
+    log.warning("%s isn't in Windows's list of microphones: using the system's default input", spec)
+    return None
+
+
 class AudioCapture:
     def __init__(self, device: str | int | None = None, *, pre_roll_s: float = 0.3, max_clip_s: float = 30.0,
                  gain: float = 1.0) -> None:
         self.spec = device  # None/"": whatever the system's default input is
-        self.device = find_device(device)
+        self.device = _find_at_start(device)
         self.pre_roll_s = pre_roll_s
         self.max_clip_s = max_clip_s
         self.rate = SAMPLE_RATE

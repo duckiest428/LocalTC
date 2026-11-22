@@ -159,3 +159,23 @@ def test_san_juan_is_the_faas_clearance_and_center():
     assert by["clearance"].station == "San Juan Clearance"
     area = Airspace.load().center_at(19.0, -66.0)
     assert area is not None and area.name == "San Juan Center"
+
+
+def test_a_microphone_plugged_in_after_the_app_started_is_found_at_the_flights_start(monkeypatch):
+    """PortAudio's list was the one from the app's start: the K66 back since stopped every flight from starting."""
+    from localtc.stt import audio
+
+    lists = iter([[(0, "Microsoft Sound Mapper - Input", 44100)],
+                  [(0, "Microsoft Sound Mapper - Input", 44100), (1, "Microphone (K66)", 48000)]])
+    current = {"list": next(lists)}
+    monkeypatch.setattr(audio, "input_devices", lambda: current["list"])
+
+    def restart(sd):
+        current["list"] = next(lists)
+        return True
+
+    monkeypatch.setattr(audio.GATE, "restart", restart)
+    assert audio._find_at_start("Microphone (K66)") == 1
+    current["list"] = [(0, "Microsoft Sound Mapper - Input", 44100)]
+    monkeypatch.setattr(audio.GATE, "restart", lambda sd: True)
+    assert audio._find_at_start("Microphone (K66)") is None  # gone altogether: the default input, the flight goes on

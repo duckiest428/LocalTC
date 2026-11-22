@@ -60,7 +60,9 @@ a new minor version adds features, a patch fixes them.
 - **A microphone Windows renamed is found again:** unplugged and back, "Microphone (K66)" comes back as "Microphone
   (2- K66)", the saved name matched nothing, and every press for the last hour of a flight was "too short for speech".
   It's found under its new name; gone altogether, the system's default input is used until it's back, and each press
-  tries again (it used to give up after the first try).
+  tries again (it used to give up after the first try). A microphone plugged in (or woken by Windows) after the app
+  started is found when the flight starts: Windows's list is read again. Every start had stopped with "no input device
+  matching 'Microphone (K66)'" while Windows showed the K66 working.
 - **Frequency readbacks heard right:** "tower on 1, 3, 2, 0, 0, 5" (the "point" heard as a zero) is 132.05, and "one
   through two decimal zero five" ("three" heard as "through") is too. Both were "confirm frequency".
 - **"Can we go boarding?"** starts the boarding; it went to the cabin crew's model, who said boarding hadn't been

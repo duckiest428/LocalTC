@@ -56,6 +56,7 @@ function connect() {
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); Setup.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); UpdatePopup.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
+  on("sharing", (v) => { if (S.account) { S.account.sharing = v; Settings.liveShare(); } liveBadge(); });
   on("dev", (d) => Dev.event(d));
   on("airport", ({ icao }) => {  // the flight fetched an airport's layout: on the map, with a plan or without one
     MapView.fetched.add(icao);
@@ -626,6 +627,7 @@ $$(".tab").forEach((t) => (t.onclick = () => showTab(t.dataset.tab)));
 $("#btn-settings").onclick = () => {
   const dlg = $("#dlg-settings");
   if (!dlg.open) dlg.showModal();
+  Settings.sharingAsked = false;  // Live Flights' choices asked again: they may have changed on the dashboard
   Settings.load();  // fresh each time it opens (the account, the update state)
 };
 $("#dlg-settings-close").onclick = () => $("#dlg-settings").close();
@@ -679,6 +681,28 @@ function notesHtml(md) {
   close();
   return out.join("");
 }
+// Live Flights: nothing is shared until Share in the dialog that lists what goes.
+$("#dlg-live-share").addEventListener("close", () => {
+  const dlg = $("#dlg-live-share");
+  if (dlg.returnValue !== "share") return;
+  const body = {
+    live_share: dlg.querySelector('input[name="ls-mode"]:checked').value, live_hide_route: $("#ls-hide-route").checked,
+    live_hide_name: $("#ls-hide-name").checked, live_delay_min: Number($("#ls-delay").value),
+  };
+  api("account/sharing", body).then((v) => {
+    S.account.sharing = v; Settings.liveShare();
+    toast(body.live_share === "always" ? "Sharing every flight on Live Flights" : "Sharing this flight on Live Flights");
+  }).catch(fail);
+});
+// While this flight is on the public map: the badge at the top, a click stops sharing.
+function liveBadge() {
+  const sh = S.account && S.account.sharing, badge = $("#sky-badge");
+  if (badge) badge.hidden = !(sh && sh.on_map);
+}
+$("#sky-badge").onclick = () => {
+  if (confirm("Stop sharing your flight on Live Flights? It leaves the public map now.")) Settings.stopSharing();
+};
+
 // The account suggestion: answered either way, it's never shown again; yes opens the account card in Settings.
 $("#dlg-account").addEventListener("close", () => {
   const yes = $("#dlg-account").returnValue === "yes";
@@ -2622,7 +2646,7 @@ const Settings = {
         <p class="muted small">LocalTC works fully without one, and your logbook stays on this computer either way.
           An account copies the logbook to <a href="${esc(a.dashboard)}" target="_blank" rel="noopener">localtc.tech</a>
           and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while
-          you fly, the phase and frequencies: never your position, voice, transcripts or recordings.</p>
+          you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.</p>
         <div class="row"><label>Email<input id="a-email" type="email" autocomplete="email" spellcheck="false" value="${esc(this.pendingEmail || "")}"></label>
           <div><button class="btn small primary" id="a-start">${this.pendingEmail ? "Send a new code" : "Email me a code"}</button></div></div>
         <div class="row" id="a-code-row" ${this.pendingEmail ? "" : "hidden"}><label>6-digit code from the email
@@ -2654,6 +2678,7 @@ const Settings = {
       <label class="check-row"><input type="checkbox" id="a-lan" ${a.companion_lan ? "checked" : ""} ${a.companion ? "" : "disabled"}> On the same Wi-Fi, the phone connects to this PC directly (map, traffic, radio log; nothing goes online)</label>
       <label class="check-row"><input type="checkbox" id="a-remote" ${a.companion_remote_map ? "checked" : ""} ${a.companion ? "" : "disabled"}> Away from this Wi-Fi, send the map, traffic and radio log through the server while the phone or the website's Flight Tracker watches (held in memory there, never stored)</label>
       <label class="check-row"><input type="checkbox" id="a-replays" ${a.upload_replays ? "checked" : ""}> Also upload each flight's replay (its track and radio transcript, never audio), so it plays on localtc.tech and the phone. Off: only the ones you upload from the Logbook</label>
+      <div class="live-share" id="a-live"></div>
       <label class="check-row"><input type="checkbox" id="a-stats" ${a.stats ? "checked" : ""} ${a.sync ? "" : "disabled"}> Stats and metrics: collect a few more numbers from each flight (the northernmost and southernmost points, equator and date-line crossings, fuel burned, top speed, night landings, time in cloud) and show the Stats page on localtc.tech. Off: none of it is collected, and the account's copy is deleted</label>
       <div class="row"><button class="btn small" id="a-sync-now">Sync now</button>
         <span class="muted small">${a.unsynced ? `${a.unsynced} flight${a.unsynced === 1 ? "" : "s"} not synced yet.` : "Everything synced."} ${esc(a.last_sync || "")}</span></div>
@@ -2666,12 +2691,57 @@ const Settings = {
     $("#a-replays").onchange = (e) => this.save("account", "upload_replays", e.target.checked).then(() => (a.upload_replays = e.target.checked));
     $("#a-stats").onchange = (e) => this.save("account", "stats", e.target.checked).then(() => { a.stats = e.target.checked; return api("account/sync", {}); })
       .then((v) => { if (v) { S.account = v; this.account(); } }).catch(fail);
+    this.liveShare();
+    if (!this.sharingAsked) {  // the choices can change on the dashboard: the server's, once each time Settings opens
+      this.sharingAsked = true;
+      api("account/sharing").then((v) => { a.sharing = v; this.liveShare(); }).catch(() => {});
+    }
     $("#a-sync-now").onclick = () => api("account/sync", {}).then((v) => { S.account = v; this.account(); }).catch(fail);
     $("#a-logout").onclick = () => api("account/logout", {}).then((v) => { S.account = v; this.account(); toast("Signed out"); }).catch(fail);
     $("#a-delete").onclick = () => {
       const email = prompt("Deleting the account removes it and every flight synced to it from the server, for good. Your logbook on this computer stays.\n\nType the account's email address to delete it:");
       if (email) api("account/delete", { email }).then((v) => { S.account = v; this.account(); toast("Account deleted"); }).catch(fail);
     };
+  },
+  // Live Flights: the public map of pilots who chose to share. Off until the pilot says yes in the dialog, which lists
+  // exactly what's sent; Stop sharing here, on the badge at the top, or on the dashboard.
+  liveShare() {
+    const box = $("#a-live"), a = S.account, sh = (a && a.sharing) || { live_share: "off" };
+    if (!box) return;
+    const on = sh.live_share === "flight" || sh.live_share === "always";
+    const what = [sh.live_share === "always" ? "every flight" : "this flight only", sh.live_hide_route ? "route hidden" : "",
+      sh.live_hide_name ? "name hidden" : "", sh.live_delay_min ? `${sh.live_delay_min} min delay` : "live"].filter(Boolean).join(" · ");
+    const blocked = sh.live_blocked ? `<p class="small error">Sharing on Live Flights has been turned off for this account.</p>` : "";
+    const paused = sh.live_paused ? `<p class="small muted">Live Flights is paused for everyone right now.</p>` : "";
+    box.innerHTML = `
+      <label class="check-row"><input type="checkbox" id="a-live-on" ${on ? "checked" : ""} ${sh.live_blocked ? "disabled" : ""}>
+        <span>Show my flight on the public Live Flights map</span></label>
+      <p class="small muted"><a href="https://localtc.tech/live" target="_blank" rel="noopener">See the Live Flights map</a></p>
+      ${on ? `<p class="ls-status muted">${sh.on_map ? "<b>&#9679; On the map now</b> " : ""}<span>Sharing: ${esc(what)}.</span>
+        ${sh.state && sh.state !== "sharing" ? `<span class="error">${esc(sh.state)}</span>` : ""}</p>
+        <div class="row"><button class="btn small danger" id="a-live-stop">Stop sharing</button>
+          <button class="btn small" id="a-live-edit">Change</button></div>` : ""}${blocked}${paused}`;
+    $("#a-live-on").onchange = (e) => {
+      if (e.target.checked) { e.target.checked = false; this.liveDialog(); }
+      else this.stopSharing();
+    };
+    if ($("#a-live-stop")) $("#a-live-stop").onclick = () => this.stopSharing();
+    if ($("#a-live-edit")) $("#a-live-edit").onclick = () => this.liveDialog();
+    liveBadge();
+  },
+  liveDialog() {
+    const dlg = $("#dlg-live-share"), sh = (S.account && S.account.sharing) || {};
+    dlg.querySelector(`input[name="ls-mode"][value="${sh.live_share === "always" ? "always" : "flight"}"]`).checked = true;
+    $("#ls-hide-route").checked = !!sh.live_hide_route;
+    $("#ls-hide-name").checked = !!sh.live_hide_name;
+    $("#ls-delay").value = String(sh.live_delay_min || 0);
+    dlg.returnValue = "";
+    dlg.showModal();
+    $("#ls-share").focus();
+  },
+  stopSharing() {
+    api("account/sharing/stop", {}).then((v) => { S.account.sharing = v; this.liveShare(); toast("Stopped sharing on Live Flights"); })
+      .catch((e) => { fail(e); this.liveShare(); });
   },
   captureKey(field = "ptt_key", capId = "#s-key", hintId = "#s-key-hint") {
     const cap = $(capId), hint = $(hintId);

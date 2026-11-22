@@ -35,7 +35,7 @@ def test_the_shared_maps_are_the_same_files_in_the_app_and_on_the_site(name):
     assert site == app, f"copy site/{name} over src/localtc/ui/static/{name} (or the other way)"
 
 
-PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html", "blog.html", "free-atc-msfs.html"]
+PAGES = ["index.html", "dashboard.html", "privacy.html", "terms.html", "cookies.html", "pricing.html", "blog.html", "free-atc-msfs.html", "live.html"]
 
 
 def test_every_page_has_the_same_header_links():
@@ -43,6 +43,7 @@ def test_every_page_has_the_same_header_links():
         html = (ROOT / "site" / page).read_text(encoding="utf-8")
         header = html[html.index('<header class="topbar">'):html.index("</header>")]
         assert '<a href="blog"' in header, page
+        assert 'href="live"' in header and ">Live Flights</a>" in header, page
         assert 'href="dashboard#support"' in header, page  # support is a dashboard section: it needs the account
         assert 'href="https://github.com/duckiest428/LocalTC">GitHub</a>' in header, page
         assert 'class="btn btn-ghost" href="dashboard"' in header and ">Dashboard</a>" in header, page
@@ -117,7 +118,7 @@ def test_the_sitemap_lists_the_public_pages_without_html():
     xml = (ROOT / "site" / "sitemap.xml").read_text(encoding="utf-8")
     urls = re.findall(r"<loc>([^<]+)</loc>", xml)
     assert urls[0] == "https://localtc.tech/" and all(".html" not in u for u in urls)
-    for name in ("free-atc-msfs", "pricing", "changelog", "blog", "privacy", "terms", "cookies"):
+    for name in ("free-atc-msfs", "pricing", "changelog", "blog", "live", "privacy", "terms", "cookies"):
         assert f"https://localtc.tech/{name}" in urls
     assert "Sitemap: https://localtc.tech/sitemap.xml" in (ROOT / "site" / "robots.txt").read_text(encoding="utf-8")
 

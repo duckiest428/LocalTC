@@ -1382,3 +1382,83 @@ body::after {
 .compare-wrap { overflow-x: auto; }
 .compare-page table { width: 100%; border-collapse: collapse; min-width: 640px; }
 .compare-page th, .compare-page td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line, rgba(127,127,127,.25)); vertical-align: top; }
+
+/* --- Live Flights (live.html): the public map of pilots who chose to share their flight ------------------------- */
+.lf { padding-top: 0; }
+.lf-stats { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; padding: 14px 16px; background: var(--bg-1);
+  border-bottom: 1px solid rgba(108, 201, 232, .35); }
+.lf-stat { display: flex; flex-direction: column; justify-content: center; min-width: 104px; padding: 8px 14px; border-radius: var(--r1);
+  background: var(--bg-2); box-shadow: inset 0 0 0 1px rgba(108, 201, 232, .25); }
+.lf-n { font-size: 24px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.lf-l { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--cyan); }
+.lf-updated { margin: 0 0 0 auto; align-self: center; font-size: 12.5px; color: var(--text-3); }
+.lf-mapwrap { position: relative; height: calc(100svh - 66px - 92px); min-height: 440px; }
+.lf-map { position: absolute; inset: 0; background: #1b2026; }
+.lf-map:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.lf-plane { background: none; border: 0; }
+.lf-plane > div { transition: transform .4s; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .7)); }
+.lf-plane:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 50%; }
+.lf-tools { position: absolute; right: 14px; top: 14px; z-index: 500; display: flex; flex-direction: column; gap: 6px; padding: 6px;
+  border-radius: var(--r1); background: rgba(14, 16, 19, .88); box-shadow: inset 0 0 0 1px rgba(108, 201, 232, .5); }
+.lf-tools button { width: 36px; height: 36px; display: grid; place-items: center; font: inherit; font-size: 20px; color: var(--cyan);
+  background: var(--bg-2); border: 1px solid rgba(108, 201, 232, .3); border-radius: 8px; cursor: pointer; }
+.lf-tools button:hover, .lf-tools button:focus-visible { background: var(--bg-3); color: #fff; }
+.lf-empty { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 450; max-width: 420px; text-align: center;
+  padding: 18px 22px; border-radius: var(--r2); background: rgba(14, 16, 19, .9); color: var(--text-2); box-shadow: var(--ring, none); }
+.lf-empty p { margin: 4px 0; }
+.lf-card { position: absolute; left: 14px; top: 14px; z-index: 600; width: min(360px, calc(100% - 28px)); max-height: calc(100% - 28px);
+  overflow: auto; padding: 16px 18px; border-radius: var(--r2); background: rgba(20, 23, 27, .97); color: var(--text-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.lf-card:focus { outline: none; }
+.lf-card:focus-visible { outline: 2px solid var(--cyan); }
+.lf-close { position: absolute; right: 10px; top: 10px; width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--text-3); font-size: 15px; cursor: pointer; }
+.lf-close:hover, .lf-close:focus-visible { background: var(--bg-3); color: var(--text); }
+.lf-c-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-right: 30px; }
+.lf-c-head h2 { margin: 0; font-size: 20px; color: var(--amber); letter-spacing: .02em; }
+.lf-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.lf-chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--bg-3); color: var(--text); }
+.lf-chip.ifr { background: #2a4e8f; color: #fff; }
+.lf-chip.vfr { background: #2f7a37; color: #fff; }
+.lf-chip.phase { background: rgba(108, 201, 232, .18); color: var(--cyan); }
+.lf-c-pilot { margin: 8px 0 0; font-size: 13.5px; }
+.lf-c-od { margin: 12px 0; text-align: center; font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: .04em; }
+.lf-c-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; text-align: center; }
+.lf-c-facts dt { font-size: 11.5px; color: var(--text-3); }
+.lf-c-facts dd { margin: 2px 0 0; font-size: 15px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.lf-c-route { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text); overflow-wrap: anywhere; }
+.lf-c-route.muted { color: var(--text-3); }
+.lf-c-delay { margin: 10px 0 0; font-size: 12.5px; color: var(--amber); }
+.lf-admin[hidden], .lf-card[hidden], .lf-empty[hidden], .lf-c-delay[hidden] { display: none; }
+.lf-admin { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.lf-how { max-width: var(--wrap, 1120px); margin: 0 auto; padding: 56px 16px 24px; }
+.lf-how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.lf-how-grid h3 { margin: 0 0 6px; color: var(--text); font-size: 17px; }
+.lf-how-grid p { margin: 0; color: var(--text-2); line-height: 1.6; }
+.lf-foot-note { margin: 0 auto 22px; max-width: 560px; color: var(--text-2); font-size: 14px; }
+.lf-intro { max-width: min(460px, calc(100vw - 32px)); padding: 24px 24px 20px; border: 0; border-radius: var(--r3);
+  background: var(--bg-2); color: var(--text-2); box-shadow: 0 20px 60px rgba(0, 0, 0, .6), inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.lf-intro::backdrop { background: rgba(5, 7, 9, .72); backdrop-filter: blur(3px); }
+.lf-intro h2 { margin: 0 0 10px; color: var(--text); font-size: 21px; }
+.lf-intro p { margin: 0 0 12px; line-height: 1.6; }
+.lf-intro-links { font-size: 14px; }
+.lf-intro form { margin: 0; display: flex; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .lf-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px; }
+  .lf-stat { min-width: 0; padding: 6px 8px; }
+  .lf-n { font-size: 18px; }
+  .lf-l { font-size: 10px; letter-spacing: .03em; }
+  .lf-updated { grid-column: 1 / -1; margin: 0; }
+  .lf-mapwrap { height: 70vh; min-height: 380px; }
+  .lf-card { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 60%; }
+}
+
+/* The dashboard's Live Flights choices */
+.live-form fieldset { border: 0; padding: 0; margin: 0 0 12px; }
+.live-form legend { font-size: 12.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.live-form label.choice { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; gap: 10px; margin: 6px 0;
+  color: var(--text); font-size: 15px; text-align: left; }
+.live-form input[type="radio"], .live-form input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 0; padding: 0;
+  accent-color: var(--green); box-shadow: none; }
+.live-form select { width: auto; background: var(--bg-3); color: var(--text); border: 1px solid rgba(255, 255, 255, .14); border-radius: 8px; padding: 6px 8px; font: inherit; }
+.live-actions { display: flex; flex-wrap: wrap; gap: 10px; }

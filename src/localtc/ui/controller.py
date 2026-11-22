@@ -93,6 +93,10 @@ FREQ_ORDER = list(FREQ_LABELS)
 def freq_label(kind: str) -> str:
     """A frequency's kind on the airport box: "GND", "PRE-TAXI" (never the sim's "CLEARANCE_PRETAXI")."""
     return FREQ_LABELS.get(kind, kind.upper().replace("_", " "))
+# Live Flights' phases (server/src/sky.ts PHASES) for the engine's.
+SKY_PHASES = {"PARKED": "parked", "PUSHBACK": "taxi", "TAXI_OUT": "taxi", "RUNWAY_HOLD": "taxi", "TAKEOFF": "takeoff",
+              "DEPARTURE": "climb", "CRUISE": "cruise", "ARRIVAL": "descent", "APPROACH": "approach", "LANDING": "landing",
+              "TAXI_IN": "landed"}
 DEPARTING = {"PARKED", "PUSHBACK", "TAXI_OUT", "RUNWAY_HOLD", "TAKEOFF", "DEPARTURE", "CRUISE"}
 STATUS_FROM_NM = 40.0  # the flight's status in the airport box this far from the departure ...
 STATUS_UNTIL_NM = 150.0  # ... until this close to the destination (then its frequencies and ATIS)
@@ -229,6 +233,7 @@ class AppController:
         logging.getLogger().addHandler(self._log_handler)
         loop.create_task(self._companion_on())
         loop.call_later(3.0, lambda: asyncio.ensure_future(self.pilot.recover(self._recording_now())))
+        loop.call_later(4.0, lambda: asyncio.ensure_future(self.pilot.refresh_sharing()))  # Live Flights' choices
         self._discord_task = loop.create_task(self._discord_loop())
         if self.cfg.ui.updates != "off":
             loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
@@ -542,6 +547,7 @@ class AppController:
             self.live = None
             if self._ticker:
                 self._ticker.cancel()
+            asyncio.create_task(self.pilot.sky_stop(ended=True))  # off Live Flights' map, if it was on
 
     def _clear_soon(self) -> None:
         """The flight over: its plan is no longer kept for the next time the app opens (it opens clean), and in
@@ -602,6 +608,8 @@ class AppController:
                     await asyncio.wait_for(self._task, timeout=10)
 
     async def shutdown(self) -> None:
+        with suppress(asyncio.TimeoutError, TimeoutError):
+            await asyncio.wait_for(self.pilot.sky_stop(ended=True), timeout=3)  # off Live Flights' map now
         await self.stop()
         await self._companion_off()
         self.detach()
@@ -613,9 +621,31 @@ class AppController:
                 self.publish("flight", self.flight)
                 self._network_traffic()
                 await self.pilot.live(self.companion_view())
+                await self.pilot.sky(self.sky_view())  # Live Flights, only if the pilot chose to share
             except Exception:
                 log.exception("Flight view failed")
             await asyncio.sleep(FLIGHT_EVERY_S)
+
+    def sky_view(self) -> dict:
+        """Live Flights: only what the public map is sent of a shared flight (account.SKY_KEYS), nothing else."""
+        own, f = self.own or {}, self.flight or {}
+        if own.get("lat") is None or not f.get("callsign"):
+            return {}
+        tuned = f.get("tuned") or {}
+        engine = self.live.engine if self.live else None
+
+        def where(icao: str | None) -> list[float] | None:  # an airport's own position, for the map's line
+            geo = engine.geometry(icao) if engine is not None and icao else None
+            return [round(geo.airport.lat, 3), round(geo.airport.lon, 3)] if geo is not None else None
+
+        return {
+            "callsign": f.get("callsign"), "type": f.get("aircraft"), "from": f.get("origin"), "to": f.get("destination"),
+            "from_ll": where(f.get("origin")), "to_ll": where(f.get("destination")),
+            "route": self.plan.route if self.plan is not None else None, "rules": f.get("rules") or "IFR",
+            "phase": SKY_PHASES.get(f.get("phase") or ""), "lat": own["lat"], "lon": own["lon"], "alt": own.get("alt"),
+            "gs": own.get("gs"), "hdg": own.get("hdg"), "ground": bool(own.get("ground")),
+            "station": tuned.get("station"), "mhz": tuned.get("mhz"),
+        }
 
     def flight_view(self) -> dict:
         """What the ATC tab shows above the radio log."""

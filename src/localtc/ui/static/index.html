@@ -40,6 +40,7 @@
       <span class="badge" id="alert-count" hidden>0</span>
     </button>
     <div class="flightctl">
+      <button class="sky-badge" id="sky-badge" hidden title="Your flight is on the public Live Flights map. Click to stop sharing.">&#9679; Sharing live <span aria-hidden="true">&#10005;</span></button>
       <span class="status" id="status"><span class="dot"></span><span id="status-text">Not flying</span></span>
       <button class="btn small" id="btn-startstop">Start</button>
     </div>
@@ -562,6 +563,42 @@
         phase and frequencies: never your voice or recordings unless you upload one. We'll only ask this once.</p>
       <div class="row"><button class="btn primary" value="yes" id="acct-yes">Create an account</button>
         <button class="btn" value="cancel" formnovalidate>Not now</button></div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Live Flights: what sharing on the public map means, before anything is shared (app.js Settings.liveShare) -->
+<dialog id="dlg-live-share" class="dialog" aria-labelledby="ls-title">
+  <form method="dialog" class="dlg">
+    <div class="dlghead"><h2 id="ls-title">Show my flight on Live Flights?</h2><button class="iconbtn" value="cancel" formnovalidate title="Close">&#10005;</button></div>
+    <div class="help">
+      <p>Live Flights is a public map on localtc.tech/live: anyone can see it, without an account. While you fly,
+        LocalTC sends it, every 10 seconds, only this:</p>
+      <ul class="benefits">
+        <li>Your display name from the dashboard (or "LocalTC pilot" if you hide it)</li>
+        <li>Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route</li>
+        <li>IFR or VFR, and the phase of the flight (taxi, climb, cruise ...)</li>
+        <li>Your position, altitude, ground speed and heading</li>
+        <li>The station and frequency you're tuned to</li>
+      </ul>
+      <p class="muted small">Never your voice, recordings, transcripts, settings or email. Nothing is stored: the server
+        holds it in memory, and your flight leaves the map when it ends, when you stop sharing, when LocalTC closes, or
+        90 seconds after the last update. Never during a replay.</p>
+      <fieldset class="ls-group"><legend>Share</legend>
+        <label class="check-row"><input type="radio" name="ls-mode" value="flight" checked> This flight only</label>
+        <label class="check-row"><input type="radio" name="ls-mode" value="always"> Every flight, until I stop</label>
+      </fieldset>
+      <fieldset class="ls-group"><legend>Privacy</legend>
+        <label class="check-row"><input type="checkbox" id="ls-hide-route"> Hide my route</label>
+        <label class="check-row"><input type="checkbox" id="ls-hide-name"> Hide my name (show "LocalTC pilot")</label>
+        <label class="ls-delay">Delay what's shown
+          <select id="ls-delay"><option value="0">Live (no delay)</option><option value="5">5 minutes</option>
+            <option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
+      </fieldset>
+      <p class="muted small">You can stop at any time: here in Settings, from the badge at the top while sharing, or on
+        the dashboard. <a href="https://localtc.tech/privacy#live-flights" target="_blank" rel="noopener">How it's handled</a>.</p>
+      <div class="row"><button class="btn primary" value="share" id="ls-share">Share</button>
+        <button class="btn" value="cancel" formnovalidate>Cancel</button></div>
     </div>
   </form>
 </dialog>

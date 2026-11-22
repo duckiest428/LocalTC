@@ -45,6 +45,12 @@ BATCH = 100  # flights per upload
 LOCAL_ONLY = ("synced_at", "recording", "replay_uploaded_at", "share_url")  # a logbook line's fields that stay on this computer
 LIVE_EVERY_S = 5.0  # the companion's status at most this often, except when something changes
 LIVE_HEARTBEAT_S = 15.0  # and at least this often while flying: the answer says whether a phone is watching
+SKY_EVERY_S = 10.0  # Live Flights: the shared flight's position at most this often ...
+SKY_IDLE_S = 30.0  # ... and when it hasn't moved, at least this often (the map drops a flight after 90 s without)
+# Live Flights: everything the public map is sent of a shared flight (the server drops anything else).
+SKY_KEYS = ("callsign", "type", "from", "to", "from_ll", "to_ll", "route", "rules", "phase", "lat", "lon", "alt", "gs", "hdg", "ground",
+            "station", "mhz")
+SHARING_KEYS = ("live_share", "live_hide_route", "live_hide_name", "live_delay_min", "live_blocked", "live_paused")
 
 
 class AccountError(Exception):
@@ -152,6 +158,12 @@ class Account:
         self.watchers = 0  # phones following the flight through the server, as of the last answer
         self.calls: list[str] = []  # radio calls typed on the phone or the website, waiting to be transmitted
         self.relayed_at = -math.inf  # (monotonic) the server's last answer about the live view
+        # Live Flights: the account's sharing choices as the server last said (it's the one that decides), and the
+        # shared flight's last heartbeat.
+        self.sharing: dict = {"live_share": "off"}
+        self._sky_sent = -math.inf
+        self._sky_last: dict | None = None
+        self.sky_on_map = False  # the last heartbeat put the flight on the map
 
     @property
     def logbook(self) -> Logbook:
@@ -184,6 +196,7 @@ class Account:
         self.store.delete("token")
         self.store.delete("email")
         self.email = None
+        self.sharing, self.sky_on_map = {"live_share": "off"}, False
         self.logbook.forget_sync()  # a different account may sign in next: everything uploads again
 
     def start(self, email: str) -> str:
@@ -283,6 +296,60 @@ class Account:
         self._live_sent, self._live_last = now, status
         self._relayed(data)
         return True
+
+    # --- Live Flights: the public map of pilots who chose to share their flight ------------------------------------
+
+    def _sharing_from(self, data: Any) -> dict:
+        if isinstance(data, dict):
+            self.sharing.update({k: data[k] for k in SHARING_KEYS if k in data})
+        return dict(self.sharing)
+
+    def sharing_choices(self) -> dict:
+        """The account's Live Flights choices, from the server: off, flight or always, and what's hidden."""
+        return self._sharing_from(self._call("GET", "/v1/me"))
+
+    def set_sharing(self, **fields: Any) -> dict:
+        """Change the Live Flights choices (live_share, live_hide_route, live_hide_name, live_delay_min)."""
+        body = {k: v for k, v in fields.items() if k in SHARING_KEYS[:4]}
+        return self._sharing_from(self._call("PATCH", "/v1/me", body))
+
+    @property
+    def sharing_on(self) -> bool:
+        return self.sharing.get("live_share") in ("flight", "always") and not self.sharing.get("live_blocked")
+
+    def sky(self, flight: dict, *, now: float | None = None) -> bool:
+        """The shared flight on the public map: every SKY_EVERY_S while it moves, every SKY_IDLE_S while it doesn't.
+        Only SKY_KEYS go. A refusal (sharing turned off on the dashboard, or by an admin) turns it off here too."""
+        if not (self.signed_in and self.sharing_on):
+            return False
+        now = time.monotonic() if now is None else now
+        body = {k: flight[k] for k in SKY_KEYS if flight.get(k) is not None}
+        since = now - self._sky_sent
+        if since < SKY_EVERY_S or (body == self._sky_last and since < SKY_IDLE_S):
+            return False
+        self._sky_sent, self._sky_last = now, body
+        try:
+            data = self._call("PUT", "/v1/sky/flight", body)
+        except AccountError as exc:
+            if exc.status == 403:
+                self.sharing["live_share"] = "off"
+                self.sky_on_map = False
+            raise
+        self.sky_on_map = bool((data or {}).get("ok"))
+        if isinstance(data, dict) and data.get("mode") in ("off", "flight", "always"):
+            self.sharing["live_share"] = data["mode"]
+        return True
+
+    def sky_stop(self, *, ended: bool = False) -> None:
+        """The flight off the map now. ``ended``: the flight is over, so "this flight only" ends with it."""
+        was = self.sky_on_map
+        self.sky_on_map = False
+        self._sky_sent, self._sky_last = -math.inf, None
+        if not self.signed_in or not (was or ended and self.sharing.get("live_share") == "flight"):
+            return
+        data = self._call("DELETE", "/v1/sky/flight", {"ended": ended})
+        if isinstance(data, dict) and data.get("mode") in ("off", "flight", "always"):
+            self.sharing["live_share"] = data["mode"]
 
     def _relayed(self, data: Any) -> None:
         """An answer about the live view: how many watch, and the radio calls waiting (each comes once)."""

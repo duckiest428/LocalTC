@@ -6,6 +6,14 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 ## [0.5.9] - Upcoming
 
 ### Added
+- **Live Flights (localtc.tech/live):** a public map of the LocalTC pilots flying right now who chose to share their
+  flight. Counts along the top (live, IFR, VFR, airborne, on the ground, helicopters), each aircraft drawn by its
+  type and heading, and a card for a flight with its callsign, aircraft, pilot, the controller they're talking to,
+  speed, altitude, heading and route, and the line from departure to arrival. Every visit opens with a note that
+  only pilots who chose to share are on it and positions may be delayed. It's in the menu of every page.
+- **The dashboard's Live Flights choices** (Account): off, the next flight only or every flight, hide the route or
+  name, the delay, and Stop sharing, which takes the flight off the map at once. The privacy policy, terms and cookie
+  policy say what's shared and for how long.
 - **The blog's getting-started video:** a post with the tutorial, from the install to the first flight, with a link
   to each chapter. A YouTube link on a line of its own in a post is shown as the video, which is loaded from YouTube
   only once its play button is pressed (the cookie and privacy pages say so).

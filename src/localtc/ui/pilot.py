@@ -43,6 +43,7 @@ class PilotRoutes:
         self._outbox: list[tuple[str, Any]] = []
         self._relay_task: asyncio.Task | None = None
         self._linked = False
+        self.sky_state = ""  # Live Flights: "sharing", or why the last heartbeat was refused
         if hub is not None:
             hub.remote = self.relay
 
@@ -79,6 +80,9 @@ class PilotRoutes:
             (post, "account/logout"): self.api_logout,
             (post, "account/sync"): self.api_sync,
             (post, "account/delete"): self.api_delete,
+            (get, "account/sharing"): self.api_sharing,
+            (post, "account/sharing"): self.api_set_sharing,
+            (post, "account/sharing/stop"): self.api_stop_sharing,
         }
 
     # --- logbook ------------------------------------------------------------------------------------------------
@@ -253,7 +257,81 @@ class PilotRoutes:
         return {"signed_in": a.signed_in, "email": a.email, "api_url": c.api_url, "dashboard": c.dashboard_url,
                 "sync": c.sync, "companion": c.companion, "companion_lan": c.companion_lan,
                 "companion_remote_map": c.companion_remote_map, "upload_replays": c.upload_replays, "stats": c.stats,
-                "last_sync": self.sync_state}
+                "last_sync": self.sync_state, "sharing": self.sharing_view()}
+
+    # --- Live Flights: the public map of pilots who chose to share their flight (server/src/sky.ts) -----------------
+
+    def sharing_view(self) -> dict:
+        """The account's sharing choices as the server last said, and whether this flight is on the map now."""
+        a = self.account
+        return {**a.sharing, "on_map": a.sky_on_map, "state": self.sky_state}
+
+    async def refresh_sharing(self) -> None:
+        """The choices from the server (they can change on the dashboard): at sign-in and when the app starts."""
+        if not self.account.signed_in:
+            return
+        try:
+            await asyncio.to_thread(self.account.sharing_choices)
+        except AccountError as exc:
+            log.debug("Couldn't read the Live Flights choices: %s", exc)
+
+    async def api_sharing(self, args: dict) -> dict:
+        await self._do(self.account.sharing_choices)
+        return self.sharing_view()
+
+    async def api_set_sharing(self, args: dict) -> dict:
+        """From the consent dialog (Share) or the card: only what's sent changes."""
+        fields: dict[str, Any] = {}
+        if args.get("live_share") in ("off", "flight", "always"):
+            fields["live_share"] = args["live_share"]
+        for k in ("live_hide_route", "live_hide_name"):
+            if isinstance(args.get(k), bool):
+                fields[k] = args[k]
+        if args.get("live_delay_min") in (0, 5, 10, 15):
+            fields["live_delay_min"] = args["live_delay_min"]
+        if not fields:
+            raise HttpError(400, "Nothing to change.")
+        await self._do(functools.partial(self.account.set_sharing, **fields))
+        if fields.get("live_share") == "off":
+            await self.sky_stop()
+        self.publish("sharing", self.sharing_view())
+        return self.sharing_view()
+
+    async def api_stop_sharing(self, args: dict) -> dict:
+        """Stop sharing: off the map now, and off for the flights after."""
+        await self._do(functools.partial(self.account.set_sharing, live_share="off"))
+        await self.sky_stop()
+        self.sky_state = ""
+        self.publish("sharing", self.sharing_view())
+        return self.sharing_view()
+
+    async def sky(self, flight: dict) -> None:
+        """The flight on the public map, when signed in, sharing is on, and it's a flight in the sim (never a
+        replay). Every heartbeat carries only account.SKY_KEYS."""
+        if self._account is None or not self._account.signed_in or not self._account.sharing_on \
+                or self.cfg().ui.source != "live" or not flight.get("callsign") or flight.get("lat") is None:
+            return
+        before = (self._account.sky_on_map, self.sky_state)
+        try:
+            await asyncio.to_thread(self._account.sky, flight)
+            self.sky_state = "sharing" if self._account.sky_on_map else self.sky_state
+        except AccountError as exc:
+            self.sky_state = str(exc)
+            log.info("Live Flights: %s", exc)
+        if (self._account.sky_on_map, self.sky_state) != before:
+            self.publish("sharing", self.sharing_view())
+
+    async def sky_stop(self, *, ended: bool = False) -> None:
+        """Off the map: the flight ended (``ended``: "this flight only" ends too), or the app is closing."""
+        if self._account is None:
+            return
+        try:
+            await asyncio.to_thread(functools.partial(self._account.sky_stop, ended=ended))
+        except AccountError as exc:
+            log.debug("Live Flights: couldn't take the flight off the map (it goes in 90 s anyway): %s", exc)
+        if self.sky_state == "sharing":
+            self.sky_state = ""
+        self.publish("sharing", self.sharing_view())
 
     async def _do(self, fn: Callable, *args: Any) -> Any:
         try:
@@ -275,6 +353,7 @@ class PilotRoutes:
         if len(code) != 6:
             raise HttpError(400, "Enter the 6-digit code from the email.")
         await self._do(self.account.finish, _email(args), code, f"LocalTC on {platform.node() or 'this PC'}")
+        await self.refresh_sharing()
         if self.cfg().account.sync:
             await self.sync()
         if self.on_signed_in is not None:

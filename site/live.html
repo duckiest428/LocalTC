@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Flights | LocalTC</title>
+<meta name="description" content="A live map of LocalTC pilots flying right now in MSFS 2020 and 2024 who chose to share their flight: callsigns, aircraft, routes and the controller they're talking to.">
+<meta name="robots" content="index, follow">
+<meta name="referrer" content="no-referrer">
+<link rel="canonical" href="https://localtc.tech/live">
+<link rel="icon" href="favicon.ico?v=2" sizes="any">
+<link rel="icon" href="logo.svg?v=2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="lf-page">
+
+<header class="topbar">
+  <a class="brand" href="./"><img class="brand-logo" src="logo.svg" alt="" width="28" height="28"><span class="brand-mark">LocalTC</span></a>
+  <nav class="nav">
+    <a href="./#features">Features</a>
+    <a href="pricing">Pricing</a>
+    <a href="./#install">Install</a>
+    <a href="live" aria-current="page">Live Flights</a>
+    <a href="blog">Blog</a>
+    <a href="dashboard#support">Support</a>
+    <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
+  </nav>
+  <a class="nav-discord" href="https://discord.gg/fDKfMxfC9a" rel="noopener" title="Join the LocalTC Discord" aria-label="Join the LocalTC Discord"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.3 5.4A16.6 16.6 0 0 0 15.2 4l-.5 1a15.4 15.4 0 0 0-5.4 0l-.5-1a16.6 16.6 0 0 0-4.1 1.4C2.1 9.3 1.4 13.1 1.7 16.8a16.7 16.7 0 0 0 5 2.6l1.1-1.7a10.8 10.8 0 0 1-1.7-.8l.4-.3a11.9 11.9 0 0 0 11 0l.4.3c-.5.3-1.1.6-1.7.8l1.1 1.7a16.6 16.6 0 0 0 5-2.6c.4-4.3-.7-8-3-11.4ZM8.5 14.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2Z"/></svg></a>
+  <a class="btn btn-ghost" href="dashboard">Dashboard</a>
+</header>
+
+<main class="lf" id="lf-main">
+  <h1 class="sr-only">Live Flights</h1>
+  <section class="lf-stats" aria-label="Flights on the map now">
+    <div class="lf-stat"><span class="lf-n" id="n-live">0</span><span class="lf-l">Live flights</span></div>
+    <div class="lf-stat"><span class="lf-n" id="n-ifr">0</span><span class="lf-l">IFR</span></div>
+    <div class="lf-stat"><span class="lf-n" id="n-vfr">0</span><span class="lf-l">VFR</span></div>
+    <div class="lf-stat"><span class="lf-n" id="n-air">0</span><span class="lf-l">Airborne</span></div>
+    <div class="lf-stat"><span class="lf-n" id="n-ground">0</span><span class="lf-l">On the ground</span></div>
+    <div class="lf-stat"><span class="lf-n" id="n-heli">0</span><span class="lf-l">Helicopters</span></div>
+    <p class="lf-updated" id="lf-updated" aria-live="polite"></p>
+  </section>
+
+  <div class="lf-mapwrap">
+    <div class="lf-map fm-tiles" id="lf-map" role="region" aria-label="Map of the shared flights"></div>
+    <div class="lf-tools" role="toolbar" aria-label="Map">
+      <button type="button" id="lf-zin" title="Zoom in" aria-label="Zoom in">+</button>
+      <button type="button" id="lf-zout" title="Zoom out" aria-label="Zoom out">&minus;</button>
+      <button type="button" id="lf-fit" title="Show every flight" aria-label="Show every flight"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+    <div class="lf-empty" id="lf-empty" hidden>
+      <p><b>No one is sharing a flight right now.</b></p>
+      <p>Pilots choose to share in the LocalTC app: Settings, Account, "Show my flight on the public Live Flights map".</p>
+    </div>
+    <aside class="lf-card" id="lf-card" hidden aria-labelledby="lf-c-callsign" tabindex="-1">
+      <button type="button" class="lf-close" id="lf-close" aria-label="Close the flight's details">&#10005;</button>
+      <div class="lf-c-head"><h2 id="lf-c-callsign"></h2><span class="lf-chips" id="lf-c-chips"></span></div>
+      <p class="lf-c-pilot" id="lf-c-pilot"></p>
+      <p class="lf-c-od" id="lf-c-od"></p>
+      <dl class="lf-c-facts">
+        <div><dt>Ground speed</dt><dd id="lf-c-gs"></dd></div>
+        <div><dt>Altitude</dt><dd id="lf-c-alt"></dd></div>
+        <div><dt>Heading</dt><dd id="lf-c-hdg"></dd></div>
+      </dl>
+      <p class="lf-c-route" id="lf-c-route"></p>
+      <p class="lf-c-delay" id="lf-c-delay" hidden></p>
+      <div class="lf-admin" id="lf-admin" hidden>
+        <button type="button" class="btn btn-ghost btn-sm" id="lf-takedown">Take off the map</button>
+        <button type="button" class="btn btn-danger btn-sm" id="lf-ban">Turn off this account's sharing</button>
+      </div>
+    </aside>
+  </div>
+
+  <section class="band lf-how" id="how">
+    <h2 class="section-title">How sharing works</h2>
+    <div class="lf-how-grid">
+      <div><h3>Only pilots who choose to</h3>
+        <p>Live Flights shows LocalTC pilots who turned on sharing in the app. It isn't every LocalTC user: sharing is
+          off unless a pilot turns it on, and it needs the free account so it can be stopped at any time, from the app or
+          the <a href="dashboard#account">dashboard</a>.</p></div>
+      <div><h3>Only what's listed</h3>
+        <p>The pilot's display name, callsign, aircraft type, departure and arrival, filed route, IFR or VFR, the phase,
+          position, altitude, ground speed, heading, and the station they're tuned to. Never their voice, recordings,
+          settings or email. Pilots can hide their route and name.</p></div>
+      <div><h3>Delayed if the pilot wants</h3>
+        <p>A pilot can delay what's shown by 5, 10 or 15 minutes, so a stream can't be followed in real time. Positions
+          may be delayed; the card says so.</p></div>
+      <div><h3>Gone when the flight is</h3>
+        <p>Nothing is stored. A flight leaves the map when it ends, when sharing is turned off, when the app closes, or
+          90 seconds after its last update. <a href="privacy#live-flights">The privacy policy</a> has the details.</p></div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <p class="lf-foot-note">Live Flights only shows LocalTC pilots who chose to share their flight. Positions may be delayed.</p>
+    <a class="footer-brand" href="./"><img class="footer-logo" src="logo.svg" alt="" width="40" height="40"><span class="brand-mark">LocalTC</span></a>
+    <nav>
+      <a href="https://github.com/duckiest428/LocalTC">Source</a>
+      <a href="changelog">Changelog</a>
+      <a href="blog">Blog</a>
+      <a href="dashboard">Dashboard</a>
+      <a href="privacy">Privacy</a>
+      <a href="terms">Terms</a>
+      <a href="cookies">Cookies</a>
+      <a href="https://discord.gg/fDKfMxfC9a" rel="noopener">Discord</a>
+    </nav>
+    <p class="fineprint">Map data &copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> contributors.
+      LocalTC is free software under the <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="noopener">GNU AGPL&nbsp;v3</a>.</p>
+  </div>
+</footer>
+
+<!-- Every time the page opens, before the map can be used: who's on it. Not remembered between visits. -->
+<dialog class="lf-intro" id="lf-intro" closedby="none" aria-labelledby="lf-intro-title" aria-describedby="lf-intro-text">
+  <h2 id="lf-intro-title">Before you look</h2>
+  <p id="lf-intro-text">Live Flights only shows LocalTC pilots who chose to share their flight. It isn't every LocalTC
+    user. Positions may be delayed.</p>
+  <p class="lf-intro-links"><a href="#how" id="lf-intro-how">How sharing works</a> · <a href="privacy#live-flights">Privacy</a></p>
+  <form method="dialog"><button class="btn btn-primary" id="lf-intro-ok" value="ok" autofocus>Got it</button></form>
+</dialog>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="atcmap.js"></script>
+<script src="api.js"></script>
+<script src="live.js"></script>
+<script src="app.js"></script>
+<script src="notice.js" defer></script>
+</body>
+</html>

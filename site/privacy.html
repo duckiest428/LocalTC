@@ -21,6 +21,7 @@
     <a href="./#why">Why not a subscription</a>
     <a href="./#install">Install</a>
     <a href="./#status">Status</a>
+    <a href="live">Live Flights</a>
     <a href="blog">Blog</a>
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
@@ -32,7 +33,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 18 November 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 21 November 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -48,7 +49,8 @@
       Once a day it asks GitHub whether there's a new version, and you can turn that off. If you create
       an account, we store your email address and a summary of each flight you
       sync, plus a flight's track and radio transcript only if you upload its replay, and a public card
-      only for a flight you choose to share. Never your voice or
+      only for a flight you choose to share. Only if you turn on Live Flights, your flight's position and a few
+      details are shown on a public map while you fly, and forgotten when it ends. Never your voice or
       recordings, and you can export or delete all of it yourself at any time.
     </p>
   </div>
@@ -62,7 +64,8 @@
     cookies and nothing in local or session storage, with one exception: if you sign in to the
     <a href="dashboard">dashboard</a>, the account server sets one sign-in cookie (see
     <a href="cookies">the cookie policy</a>). Only the dashboard and the blog talk to that server, and only when you
-    use them. The dashboard's two maps (your flights, and the Flight Tracker) load map
+    use them, and the <a href="live">Live Flights</a> page asks it for the shared flights (no sign-in, nothing about
+    you). The dashboard's two maps (your flights, and the Flight Tracker) and the Live Flights map load map
     tiles from <a href="https://wiki.osmfoundation.org/wiki/Privacy_Policy" rel="noopener">OpenStreetMap</a>,
     which sees your IP address and which part of the map you're looking at.
   </p>
@@ -240,6 +243,20 @@
       is random, the page asks search engines not to index it, and it's gone when you
       stop sharing, delete the flight or delete the account (copies cached by chat apps or browsers can
       linger for a few minutes).</li>
+    <li id="live-flights"><strong>Only if you turn on Live Flights</strong> (off until you do: in the app's Settings
+      (the gear) → Account, or on the dashboard's Account page, after a dialog that lists exactly this): while a flight
+      runs in the sim, the app sends, every 10 seconds, your callsign, aircraft type, departure and arrival (and the
+      airports' positions), the route you filed, IFR or VFR, the phase of flight, your aircraft's position, altitude,
+      ground speed and heading, and the station and frequency you're tuned to. They're shown to anyone on the public
+      <a href="live">Live Flights</a> map, with your display name (or "LocalTC pilot" if you hide it, or set none).
+      You can hide the route, and delay what's shown by 5, 10 or 15 minutes. You choose "this flight only" or "every
+      flight". It's never your voice, recordings, transcripts, settings, email address or account. The server holds it
+      in memory only, never in the database or on disk, under a random id made for that flight; it's gone when the
+      flight ends, when you stop sharing, when the app closes, or 90 seconds after the last update, and nothing is
+      sent during a replay. The account keeps only your choices (on or off, what's hidden, the delay). Anyone who
+      looks at the map while you share sees it, and can screenshot it. We can take a flight off the map, and turn an
+      account's sharing off, if it's abused (an offensive name, for instance). Stop at any time: in the app, from the
+      "Sharing live" badge while you fly, or on the dashboard.</li>
     <li><strong>An iPhone's push token</strong>, if you allow the companion app's notifications.</li>
     <li><strong>Short-lived counters</strong> of sign-in attempts per IP address and email address, to stop
       code guessing and email flooding. They're deleted within a day.</li>

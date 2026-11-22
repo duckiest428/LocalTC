@@ -14,10 +14,12 @@ import { HttpError, cors, json } from "./http";
 import * as live from "./live";
 import * as replays from "./replays";
 import * as shares from "./shares";
+import * as sky from "./sky";
 import * as support from "./support";
 import * as wrapped from "./wrapped";
 
 export { LiveRoom } from "./live";
+export { SkyRoom } from "./sky";
 
 type Handler = (env: Env, request: Request, url: URL, params: string[]) => Promise<Response>;
 
@@ -88,6 +90,12 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["GET", /^\/v1\/chartfox\/callback$/, (env, req, url) => chartfox.callback(env, req, url)],
   ["POST", /^\/v1\/chartfox\/token$/, (env, req) => chartfox.token(env, req)],
   ["POST", /^\/v1\/chartfox\/refresh$/, (env, req) => chartfox.refresh(env, req)],
+  // Live Flights: the public map of pilots who chose to share (src/sky.ts).
+  ["GET", /^\/v1\/sky\/flights$/, (env, req) => sky.flights(env, req)],
+  ["PUT", /^\/v1\/sky\/flight$/, signedIn((env, req, a) => sky.beat(env, req, a))],
+  ["DELETE", /^\/v1\/sky\/flight$/, signedIn((env, req, a) => sky.stop(env, req, a))],
+  ["DELETE", /^\/v1\/sky\/flights\/([0-9a-f]{16})$/, signedIn((env, _req, a, _u, p) => sky.takeDown(env, a, p[0]))],
+  ["POST", /^\/v1\/sky\/ban$/, signedIn((env, req, a) => sky.ban(env, req, a))],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],
   ["DELETE", /^\/v1\/push-tokens\/(\w+)$/, signedIn((env, _req, a, _u, p) => live.removePushToken(env, a, p[0]))],
 ];

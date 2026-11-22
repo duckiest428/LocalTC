@@ -25,6 +25,7 @@
     <a href="pricing">Pricing</a>
     <a href="./#install">Install</a>
     <a href="changelog">Changelog</a>
+    <a href="live">Live Flights</a>
     <a href="blog">Blog</a>
     <a href="dashboard#support">Support</a>
     <a href="https://github.com/duckiest428/LocalTC">GitHub</a>
@@ -266,6 +267,32 @@
             <button class="btn btn-primary" type="submit">Save</button>
           </form>
           <p class="hint" id="name-status" role="status" aria-live="polite"></p>
+        </div>
+        <div class="panel" id="live-panel">
+          <h3>Live Flights</h3>
+          <p class="hint">Show your flight on the public <a href="live">Live Flights</a> map while you fly. Off unless you
+            turn it on. It shares your display name, callsign, aircraft type, departure and arrival, filed route, IFR or
+            VFR, the phase, position, altitude, ground speed, heading and the station you're tuned to; never your voice,
+            recordings, settings or email. Nothing is stored, and a flight leaves the map when it ends.</p>
+          <form id="live-form" class="live-form" novalidate>
+            <fieldset><legend>Share</legend>
+              <label class="choice"><input type="radio" name="live-share" value="off"> Off</label>
+              <label class="choice"><input type="radio" name="live-share" value="flight"> The next or current flight only</label>
+              <label class="choice"><input type="radio" name="live-share" value="always"> Every flight, until I stop</label>
+            </fieldset>
+            <fieldset><legend>Privacy</legend>
+              <label class="choice"><input type="checkbox" id="live-hide-route"> Hide my route</label>
+              <label class="choice"><input type="checkbox" id="live-hide-name"> Hide my name (show "LocalTC pilot")</label>
+              <label class="choice">Delay what's shown
+                <select id="live-delay"><option value="0">Live (no delay)</option><option value="5">5 minutes</option>
+                  <option value="10">10 minutes</option><option value="15">15 minutes</option></select></label>
+            </fieldset>
+            <div class="live-actions">
+              <button class="btn btn-primary" type="submit">Save</button>
+              <button class="btn btn-danger" type="button" id="live-stop">Stop sharing</button>
+            </div>
+          </form>
+          <p class="hint" id="live-status" role="status" aria-live="polite"></p>
         </div>
         <div class="panel-row">
           <div class="panel">

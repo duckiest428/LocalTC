@@ -4,6 +4,7 @@ import { send } from "./email";
 import type { Env } from "./env";
 import { COOKIE, HttpError, isoIn, json, now, readCookie, readJson, sessionCookie, str } from "./http";
 import { clientIp, limit } from "./rate";
+import * as sky from "./sky";
 
 const SESSION_S = { desktop: 365 * 86400, ios: 365 * 86400, web: 30 * 86400 } as const;
 const LOGIN_S = 15 * 60; // a code or link works for this long
@@ -19,6 +20,11 @@ export interface User {
   created_at: string;
   display_name?: string;
   stats?: number; // Stats and metrics on (the app's [account] stats)
+  live_share?: string; // Live Flights (src/sky.ts): off, flight or always
+  live_hide_route?: number;
+  live_hide_name?: number;
+  live_delay_min?: number;
+  live_banned?: number;
 }
 
 export interface Auth {
@@ -152,21 +158,34 @@ export async function me(env: Env, auth: Auth): Promise<Response> {
   ).bind(auth.user.id).all<{ id: string }>();
   return json({
     email: auth.user.email, created_at: auth.user.created_at, display_name: auth.user.display_name ?? "", stats: !!auth.user.stats,
-    blog_author: isAuthor(env, auth),
+    blog_author: isAuthor(env, auth), ...sky.choices(env, auth.user), sky_admin: sky.isAdmin(env, auth),
     sessions: results.map((s) => ({ ...s, current: s.id === auth.sessionId })),
   });
 }
 
-/** A name the pilot shows on what they share ("Flown by ..."): letters, digits, spaces and . _ ' -, up to 32. */
+/** The account's own choices: the name the pilot shows on what they share ("Flown by ..."): letters, digits, spaces
+ * and . _ ' -, up to 32; and Live Flights' sharing (src/sky.ts). Only what's sent changes. */
 export async function updateMe(env: Env, request: Request, auth: Auth): Promise<Response> {
   const body = await readJson(request, 4096);
-  if (typeof body.display_name !== "string") throw new HttpError(400, "Send a display_name.");
-  const name = body.display_name.normalize("NFC").replace(/\s+/g, " ").trim();
-  if (name.length > 32 || (name && !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._'-]*$/u.test(name))) {
-    throw new HttpError(400, "A display name is up to 32 letters, digits and spaces (and . _ ' -).");
+  const changed: Record<string, string | number> = sky.readChoices(body);
+  if ("display_name" in body) {
+    if (typeof body.display_name !== "string") throw new HttpError(400, "Send a display_name.");
+    const name = body.display_name.normalize("NFC").replace(/\s+/g, " ").trim();
+    if (name.length > 32 || (name && !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._'-]*$/u.test(name))) {
+      throw new HttpError(400, "A display name is up to 32 letters, digits and spaces (and . _ ' -).");
+    }
+    changed.display_name = name;
   }
-  await env.DB.prepare("UPDATE users SET display_name = ?1 WHERE id = ?2").bind(name, auth.user.id).run();
-  return json({ display_name: name });
+  if (!Object.keys(changed).length) throw new HttpError(400, "Nothing to change.");
+  if (auth.user.live_banned && changed.live_share && changed.live_share !== "off") {
+    throw new HttpError(403, "Sharing on Live Flights is turned off for this account.");
+  }
+  const keys = Object.keys(changed);
+  await env.DB.prepare(`UPDATE users SET ${keys.map((k, i) => `${k} = ?${i + 1}`).join(", ")} WHERE id = ?${keys.length + 1}`)
+    .bind(...keys.map((k) => changed[k]), auth.user.id).run();
+  await sky.applied(env, auth, changed, String(changed.display_name ?? ""));
+  const user = { ...auth.user, ...changed } as User;
+  return json({ display_name: user.display_name ?? "", ...sky.choices(env, user) });
 }
 
 export async function revokeSession(env: Env, auth: Auth, id: string): Promise<Response> {
@@ -186,6 +205,7 @@ export async function deleteMe(env: Env, request: Request, auth: Auth): Promise<
     env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(id)).concat(
     env.DB.prepare("DELETE FROM users WHERE id = ?1").bind(id)));
   await env.LIVE.get(env.LIVE.idFromName(id)).fetch("https://live/wipe", { method: "POST" });
+  await sky.forget(env, id);
   return json({ ok: true }, 200, auth.viaCookie ? { "Set-Cookie": sessionCookie(env, "", 0) } : {});
 }
 

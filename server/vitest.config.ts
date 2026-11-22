@@ -15,6 +15,8 @@ export default defineConfig(async () => {
             ALLOWED_ORIGINS: "https://localtc.test",
             COOKIE_DOMAIN: "",
             APNS_TOPIC: "",
+            SKY_CACHE_S: "0",
+            LIVE_ADMINS: "admin@example.com",
           },
         },
       }),

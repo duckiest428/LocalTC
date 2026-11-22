@@ -24,6 +24,9 @@ APNS_HOST = "api.push.apple.com"  # api.sandbox.push.apple.com for development b
 APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the APNS_* secrets are set
 MARKETING_FROM = "LocalTC <marketing@localtc.tech>"  # the blog's emails to its followers
 BLOG_AUTHORS = "duckiesty@gmail.com"  # the only accounts that may write the blog (src/blog.ts)
+LIVE_SKY = "on"  # Live Flights (src/sky.ts); "off" pauses it for everyone: no heartbeat taken, an empty map
+LIVE_ADMINS = "duckiesty@gmail.com"  # may take a flight off Live Flights and turn an account's sharing off
+SKY_CACHE_S = "10"  # the Live Flights map's snapshot, cached at the edge this long
 # Secrets (wrangler secret put NAME): RESEND_API_KEY, SUPPORT_EMAIL (where Support messages go),
 # APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY, CHARTFOX_CLIENT_ID, CHARTFOX_CLIENT_SECRET (ChartFox sign-in)
 
@@ -37,9 +40,17 @@ migrations_dir = "migrations"
 name = "LIVE"
 class_name = "LiveRoom"
 
+[[durable_objects.bindings]]
+name = "SKY"
+class_name = "SkyRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LiveRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["SkyRoom"]
 
 # Daily: expired sessions and links, old rate-limit counters, accounts never confirmed.
 [triggers]
@@ -60,3 +71,7 @@ migrations_dir = "migrations"
 [[env.dev.durable_objects.bindings]]
 name = "LIVE"
 class_name = "LiveRoom"
+
+[[env.dev.durable_objects.bindings]]
+name = "SKY"
+class_name = "SkyRoom"

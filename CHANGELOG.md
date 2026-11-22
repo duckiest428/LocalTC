@@ -7,6 +7,14 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.9] - Upcoming
 
 ### Added
+- **Live Flights (optional, off by default):** show your flight on the public map at localtc.tech/live while you
+  fly. Settings, Account, "Show my flight on the public Live Flights map" opens a dialog listing exactly what's
+  sent, every 10 seconds: your display name, callsign, aircraft type, departure and arrival, filed route, IFR or
+  VFR, the phase, position, altitude, ground speed, heading and the station you're tuned to. Never your voice,
+  recordings, settings or email, and nothing during a replay. Share this flight only or every flight, hide your
+  route or name, and delay what's shown by 5, 10 or 15 minutes. While your flight is on the map a "Sharing live"
+  badge sits at the top; a click stops it. It needs the account, and the dashboard can stop it too. The flight
+  leaves the map when it ends, when you stop, when LocalTC closes, or 90 seconds after the last update.
 - **An apron controller where the airport has one:** at an airport whose sim data has an apron frequency (Incheon
   among them), delivery sends you to the apron ("contact Incheon Apron 121.65 when ready"), the apron gives
   the push and start, and "ready to taxi" there is handed to ground ("contact Incheon Ground 118.75"). It was one

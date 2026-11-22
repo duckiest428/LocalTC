@@ -136,6 +136,7 @@ async function load() {
   } catch { /* storage off */ }
   document.querySelectorAll(".who-email").forEach((el) => { el.textContent = me.email; });
   $("#display-name").value = me.display_name || "";
+  liveChoices(me);
   $("#s-from").textContent = me.email;
   devices(me.sessions);
   go(location.hash.slice(1));
@@ -251,6 +252,44 @@ $("#name-form").onsubmit = async (e) => {
     status.classList.add("error");
   }
 };
+
+// Live Flights (localtc.tech/live): the same choices as the app's Settings, Account. The server decides, and turning
+// it off takes the flight off the map at once.
+function liveChoices(me) {
+  const mode = me.live_share || "off";
+  const radio = document.querySelector(`input[name="live-share"][value="${mode}"]`);
+  if (radio) radio.checked = true;
+  $("#live-hide-route").checked = !!me.live_hide_route;
+  $("#live-hide-name").checked = !!me.live_hide_name;
+  $("#live-delay").value = String(me.live_delay_min || 0);
+  $("#live-stop").hidden = mode === "off";
+  const status = $("#live-status");
+  status.classList.toggle("error", !!me.live_blocked);
+  status.textContent = me.live_blocked ? "Sharing on Live Flights has been turned off for this account."
+    : me.live_paused ? "Live Flights is paused for everyone right now."
+    : mode === "off" ? "Not sharing." : mode === "flight" ? "Sharing the next or current flight, then off again." : "Sharing every flight.";
+  document.querySelectorAll("#live-form input, #live-form select, #live-form button").forEach((el) => { el.disabled = !!me.live_blocked; });
+}
+
+async function saveLive(body) {
+  const status = $("#live-status");
+  try {
+    liveChoices(await api("PATCH", "/v1/me", body));
+  } catch (err) {
+    status.textContent = err.message;
+    status.classList.add("error");
+  }
+}
+
+$("#live-form").onsubmit = (e) => {
+  e.preventDefault();
+  saveLive({
+    live_share: document.querySelector('input[name="live-share"]:checked')?.value || "off",
+    live_hide_route: $("#live-hide-route").checked, live_hide_name: $("#live-hide-name").checked,
+    live_delay_min: Number($("#live-delay").value),
+  });
+};
+$("#live-stop").onclick = () => saveLive({ live_share: "off" });
 
 $("#del-form").onsubmit = async (e) => {
   e.preventDefault();

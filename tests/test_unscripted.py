@@ -86,6 +86,7 @@ def transmissions(engine: AtcEngine, events) -> list[AtcTransmission]:
 
 def test_traffic_advisory_for_converging_traffic():
     engine, own = cruising_engine()
+    engine.state.comms.last_pilot_t = own.t  # checked in as it's tuned: a controller's own calls wait for that
     engine.handle(own)
     heading = math.radians(own.hdg_true)
 
@@ -107,7 +108,8 @@ def test_traffic_advisory_for_converging_traffic():
 def test_altitude_check_after_drifting_off_the_assigned_altitude():
     engine, own = cruising_engine()
     level = [msgspec.structs.replace(own, t=own.t + i, alt_indicated_ft=5000.0) for i in range(3)]
-    drifting = [msgspec.structs.replace(own, t=own.t + 20 + i, alt_indicated_ft=5450.0, alt_msl_ft=5450.0) for i in range(20)]
+    # (Past the wait for a check-in on the frequency just tuned: the controller's own calls come after that.)
+    drifting = [msgspec.structs.replace(own, t=own.t + 50 + i, alt_indicated_ft=5450.0, alt_msl_ft=5450.0) for i in range(20)]
     out = transmissions(engine, level + drifting)
     checks = [o.text for o in out if o.instruction_id == "common.check_altitude"]
     assert len(checks) == 1 and checks[0].endswith("check altitude, maintain 5,000.")

@@ -162,7 +162,11 @@ function thinking(t) {
   if (stick) log.scrollTop = log.scrollHeight;
 }
 
+// The model's words turned away, the script's said instead (the same instruction): for the developer, not every pilot.
+const DEV_ONLY_ALERTS = new Set(["llm_rejected"]);
+
 function addLine(l) {
+  if (l.kind === "alert" && DEV_ONLY_ALERTS.has(l.code) && !S.state?.dev_mode) return;
   const log = $("#log");
   if (l.kind === "atc") $("#log .line.thinking")?.remove();
   const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
@@ -213,7 +217,7 @@ function addLine(l) {
   if (stick) log.scrollTop = log.scrollHeight;
   if (l.kind === "alert") { S.alerts.push(l); updateAlerts(); }
   // The model running out of time changes what ATC said: always shown, with where to give it longer.
-  if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);
+  if (l.kind === "alert" && l.code === "llm_rejected") toast(l.text, false, 8000);  // (dev mode only: above)
   if (l.kind === "alert" && l.code === "llm_timeout") toast(`${l.text}. Give it longer in Quick Settings → Language models → ATC.`, true, 12000);
 }
 

@@ -10,6 +10,7 @@ before a press when it has gone quiet.
 """
 
 import logging
+import re
 import threading
 import time
 import wave
@@ -98,12 +99,23 @@ def find_device(spec: str | int | None, *, after: int | None = None) -> int | No
         return None
     if isinstance(spec, int) or str(spec).isdigit():
         return int(spec)
-    matches = [i for i, name, _ in input_devices() if str(spec).lower() in name.lower()]
+    devices = input_devices()
+    matches = [i for i, name, _ in devices if str(spec).lower() in name.lower()]
+    if not matches and len(core := _core_name(str(spec))) >= 3:
+        # Plugged back in, Windows renames it: "Microphone (K66)" comes back as "Microphone (2- K66)", and the
+        # name saved no longer matches (a flight's last hour unheard, every press "too short").
+        matches = [i for i, name, _ in devices if core in _core_name(name)]
     if not matches:
         raise ValueError(f"no input device matching {spec!r}; see: localtc voice devices")
     if after is not None:
         return next((i for i in matches if i > after), matches[0])
     return matches[0]
+
+
+def _core_name(name: str) -> str:
+    """The microphone itself in a Windows device name: "k66" from "Microphone (2- K66)" or "Microphone (K66)"."""
+    inner = m.group(1) if (m := re.search(r"\((.*)\)", name)) else name
+    return re.sub(r"^\s*\d+\s*-\s*", "", inner).strip().lower()
 
 
 class AudioCapture:
@@ -123,10 +135,13 @@ class AudioCapture:
         self._clip_len = 0
         self._stream = None
         self._last_block = 0.0  # monotonic time of the last block the stream sent
+        self._lost = False  # a reopen found no microphone at all: the next press tries again
 
     @property
     def idle_s(self) -> float:
         """Seconds since the open stream last sent audio (0 when it isn't open)."""
+        if self._lost:
+            return float("inf")
         if self._stream is None or not self._last_block:
             return 0.0
         return time.monotonic() - self._last_block
@@ -178,10 +193,18 @@ class AudioCapture:
         # (Only with no voice playing: restarted under one, the heap was corrupted and the app vanished.)
         if not GATE.restart(sd):
             log.info("Microphone reopened without reading the device list again: a voice was playing")
+        self._lost = True
         if self.spec not in (None, ""):
-            self.device = find_device(self.spec, after=self.device if another else None)
+            try:
+                self.device = find_device(self.spec, after=self.device if another else None)
+            except ValueError:
+                # The one chosen is gone from Windows's list: the system's default input meanwhile (better heard on
+                # another microphone than not at all), the chosen one again at a later reopen once it's back.
+                log.warning("%s isn't connected: using the system's default input until it is", self.spec)
+                self.device = None
         self.rate = SAMPLE_RATE
         self.start()
+        self._lost = False
         return self.name
 
     def begin(self) -> None:

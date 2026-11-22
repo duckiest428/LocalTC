@@ -269,7 +269,10 @@ class RoutingMixin:
         self.amendments.append(Amendment("shortcut", t, fix=ident, reason=f"saves {saves:.0f} nm",
                                          line=[(own.lat, own.lon), (lat, lon)]))
         self._ops_changed = True
-        self._schedule(t, "common.direct", {"fix": ident}, facility, delay=False)
+        # With the reason, as a controller gives one: a direct out of nowhere left the pilot asking why.
+        n = max(5, int(round(saves / 5.0)) * 5)
+        why = Phrase(f"that saves you about {n} miles", f"that saves you about {speech.miles(n)} miles")
+        self._schedule(t, "common.direct", {"fix": ident}, facility, delay=False, note=why)
         return True
 
     def _star_start_ok(self, ident: str) -> bool:
@@ -336,11 +339,19 @@ class RoutingMixin:
         self._hazards_told.add(h.id)
         beyond = self._beyond(h, points, i, own.alt_indicated_ft)
         fix = beyond[0] if beyond is not None else ""
-        n = max(5, int(round(miles / 5.0)) * 5)
-        display = f"convective SIGMET along your route, about {n} miles ahead, deviations left or right of course approved" + \
-            (f", when able proceed direct {fix}" if fix else "")
-        spoken = f"convective sigmet along your route, about {speech.miles(n)} miles ahead, deviations left or right " \
-                 f"of course approved" + (f", when able proceed direct {fix}" if fix else "")
+        # Where it is, and how high it goes: a flight already in it isn't told it's "about 5 miles ahead" (San Juan
+        # was under one as the flight took off), and "tops FL430" says why it matters at the level flown.
+        tops = (f", tops {speech.altitude_display(h.ceiling_ft)}", f", tops {speech.altitude(h.ceiling_ft)}") \
+            if h.ceiling_ft else ("", "")
+        if h.contains(own.lat, own.lon) or miles < 2.5:
+            where = ("convective SIGMET in your area", "convective sigmet in your area")
+        else:
+            n = max(5, int(round(miles / 5.0)) * 5)
+            where = (f"convective SIGMET along your route, about {n} miles ahead",
+                     f"convective sigmet along your route, about {speech.miles(n)} miles ahead")
+        direct = (f", when able proceed direct {fix}" if fix else "")
+        display = f"{where[0]}{tops[0]}, deviations left or right of course approved{direct}"
+        spoken = f"{where[1]}{tops[1]}, deviations left or right of course approved{direct}"
         self.amendments.append(Amendment("deviation", t, fix=fix, side="either", reason="convective SIGMET",
                                          hazard=h.id, line=[(own.lat, own.lon)] + ([(beyond[1], beyond[2])] if beyond else [])))
         self._ops_changed = True
@@ -398,8 +409,9 @@ class RoutingMixin:
                     a.state = "done"
                     self._ops_changed = True
                     if facility is not None and facility.controller in ("center", "approach", "departure"):
+                        clear = Phrase(f"clear of {h.said()}", f"clear of {h.said()}") if h is not None else None
                         self._schedule(t, "common.direct", {"fix": a.fix}, facility, delay=False,
-                                       on_issue=lambda: self._assign(heading=None))
+                                       on_issue=lambda: self._assign(heading=None), note=clear)
                         return True
             elif a.kind == "deviation" and a.fix and self._fix_passed(own, a.fix):
                 # Flown past the fix it was to go direct to (it went through, or round and back on course): over.

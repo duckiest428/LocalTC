@@ -289,6 +289,16 @@ def _doubled_digit(text: str, expected: Any) -> bool:
     return any(heard[:i] + heard[i + 1:] == want and heard[i] == heard[i - 1] for i in range(1, len(heard)))
 
 
+def _point_as_zero(text: str, expected: Any) -> bool:
+    """ "132005" for 132.05: the "point" heard as a zero ("tower on 1, 3, 2, 0, 0, 5"), and nothing else different."""
+    try:
+        want = f"{float(expected):.3f}".rstrip("0").rstrip(".")
+    except (TypeError, ValueError):
+        return False
+    whole, _, decimals = want.partition(".")
+    return text.isdigit() and len(whole) == 3 and bool(decimals) and text == f"{whole}0{decimals}"
+
+
 def _with_to(text: str, expected: Any) -> bool:
     """ "121.02" for 121.0: the frequency and the "to" after it ("121.0 to Montreal Ground") run together; "121.01"
     the same with "one" or "on" ("121.0, on ground, ready")."""
@@ -309,6 +319,8 @@ def frequencies(tokens: list[Token], expected: Any = None) -> list[float]:
         if expected is not None and _with_to(token.text, expected):
             found.append(float(expected))
         elif "." in token.text and expected is not None and _doubled_digit(token.text, expected):
+            found.append(float(expected))
+        elif expected is not None and _point_as_zero(token.text, expected):
             found.append(float(expected))
         elif (value := _as_frequency(token.text)) is not None:
             found.append(value)

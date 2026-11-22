@@ -23,6 +23,15 @@ NOISE_WORDS = {
 APRON_WORDS = {"APRON": "Apron", "APN": "Apron", "RAMP": "Ramp"}
 # Clearance delivery as each region calls it: "Boston Clearance" in the Americas' north, "Incheon Delivery" elsewhere.
 CLEARANCE_NAMED = ("K", "C", "P")
+# ... and the US's territories in the Caribbean, worked by the FAA: Puerto Rico (TJ) and the Virgin Islands (TI). San
+# Juan's was "San Juan Delivery", a name it doesn't have.
+FAA_CARIBBEAN = ("TJ", "TI")
+
+
+def north_american(icao: str) -> bool:
+    """The US's (its territories too) or Canada's: "Clearance", "Center", an airline's "Ramp"."""
+    icao = icao.upper()
+    return icao[:1] in CLEARANCE_NAMED or icao[:2] in FAA_CARIBBEAN
 # A sector of the facility, not its callsign ("DUBAI ARRIVALS NORTH" is Dubai Approach), after the name's first word
 # (North Las Vegas is a name)
 SECTOR_WORDS = {"NORTH", "SOUTH", "EAST", "WEST", "VFR", "IFR", "ARRIVAL", "ARRIVALS", "DEPARTURES", "FINAL", "DIRECTOR",
@@ -58,7 +67,7 @@ def apron_word(freq: Frequency, airport: Airport) -> str:
     Canada a ramp tower is an airline's own ("AA CONTROL RAMP" at Los Angeles), not ATC's: not one for every flight."""
     words = re.split(r"[\s/()-]+", freq.name.upper())
     found = next((APRON_WORDS[w] for w in words if w in APRON_WORDS), "")
-    return "" if found == "Ramp" and airport.icao[:1] in CLEARANCE_NAMED else found
+    return "" if found == "Ramp" and north_american(airport.icao) else found
 
 
 def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
@@ -67,7 +76,7 @@ def station_name(freq: Frequency, airport: Airport, controller: str) -> str:
     suffix = SUFFIXES[controller]
     if controller == "ground" and (apron := apron_word(freq, airport)):
         suffix = apron
-    elif controller == "clearance" and airport.icao[:1] not in CLEARANCE_NAMED:
+    elif controller == "clearance" and not north_american(airport.icao):
         suffix = "Delivery"  # (the FAA's and Canada's "Clearance" whatever the sim calls it: "CLNC DEL")
     first = re.split(r"[-/(]", freq.name.upper())[0]
     words = [w for w in first.split() if w not in NOISE_WORDS and w != airport.icao.upper()]
@@ -114,7 +123,7 @@ def _named_first(freqs: list[Frequency], airport: Airport) -> list[Frequency]:
 def _facility(airport: Airport, controller: str, kinds: tuple[str, ...], *, apron: bool | None = None) -> Facility | None:
     """``apron``: for ground, only the apron's frequencies (True) or only the others (False); None all of them."""
     for kind in kinds:  # first kind that exists wins; all its frequencies belong to the facility
-        freqs = _named_first([f for f in airport.frequencies if f.kind == kind
+        freqs = _named_first([f for f in airport.frequencies if f.kind == kind and _airband(f.mhz)
                               and (apron is None or bool(apron_word(f, airport)) == apron)], airport)
         if freqs:
             return Facility(
@@ -162,7 +171,7 @@ def center_facility(airports: list[Airport], name: str, mhz: float) -> Facility:
         facility = _facility(airport, "center", ("center",))
         if facility is not None:
             return Facility("center", facility.station, facility.mhz, None, facility.alternates)
-    return Facility("center", f"{name} Center", mhz)
+    return Facility("center", f"{name} Center", mhz if _airband(mhz) else _band_frequency(name, ()))
 
 
 # An airport big enough for the enroute centre around it to be named after: a real field with real ATC,
@@ -196,9 +205,14 @@ def area_center(name: str, airports: list[Airport], mhz: float | None = None, ta
         published = _facility(airport, "center", ("center",))
         if published is not None and published.station.lower().startswith(place):
             return Facility("center", name, published.mhz, None, published.alternates)
-    if mhz is not None:
+    if mhz is not None and _airband(mhz):
         return Facility("center", name, mhz)
     return Facility("center", name, _band_frequency(name, taken))
+
+
+def _airband(mhz: float) -> bool:
+    """A frequency a controller can be on: a 0.0 from an empty setting never is ("contact Montreal Centre 0.0")."""
+    return 118.0 <= mhz < 137.0
 
 
 def _band_frequency(name: str, taken: tuple[float, ...]) -> float:
@@ -216,7 +230,7 @@ def sector_center(airport: Airport, taken: tuple[float, ...] = ()) -> Facility:
     nearest sizeable airport and given a frequency of its own, derived from that name so the same
     place is always the same frequency. ``taken`` keeps it off a frequency another controller works.
     """
-    american = airport.icao[:1] in ("K", "C", "P")  # "Center" there; elsewhere an area control centre is "Control"
+    american = north_american(airport.icao)  # "Center" there; elsewhere an area control centre is "Control"
     if (published := _facility(airport, "center", ("center",))) is not None:
         station = published.station if american else published.station.replace(" Center", " Control")
         return Facility("center", station, published.mhz, None, published.alternates)

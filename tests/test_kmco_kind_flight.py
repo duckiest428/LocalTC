@@ -238,6 +238,10 @@ def test_chatter_is_the_aircraft_in_the_sim():
     assert len(heard_from) > 10
     assert heard_from <= in_the_sim, heard_from - in_the_sim  # "Breeze 1909" is the sim's MXY1909, and so on
     assert not heard_from & {"Jazz 43", "Air Transat 393", "Flair 1082"}  # made up, on the flight as flown
+    # A busy controller's two calls back to back, as on a real frequency: "break, break" between them, both read back after.
+    chatter = [o for o in result.outputs if isinstance(o, RadioChatter)]
+    broken = [i for i, o in enumerate(chatter) if o.text.startswith("Break, break. ")]
+    assert broken and all(chatter[i].speaker == "atc" and chatter[i - 1].speaker == "atc" for i in broken)
 
 
 # --- readbacks: less pesky, and heard through speech-to-text -------------------------------------------------------

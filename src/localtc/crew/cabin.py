@@ -128,7 +128,11 @@ START_BOARDING = re.compile(r"\b(?:start|begin|commence)\s+(?:the\s+|our\s+)?(de
                             r"|\b(?:go\s+ahead\s+with|proceed\s+with|get\s+on\s+with|time\s+for|ready\s+for)\s+(?:the\s+)?(de-?\s?)?boarding\b"
                             # "Can we get the deboarding started", "please get deboarding please", "deboarding please"
                             r"|\bget\s+(?:the\s+|a\s+)?(de-?\s?)?boarding\b|\b(de-?\s?)?boarding,?\s+please\b"
-                            r"|\b(de-?\s?)?boarding\s+start(?:ed|er|ing)?\b")  # ("can we get a boarding starter please?")
+                            r"|\b(de-?\s?)?boarding\s+start(?:ed|er|ing)?\b"  # ("can we get a boarding starter please?")
+                            # "Can we go boarding?", "let's do the boarding", "let's board": it went to the model, which
+                            # answered "boarding hasn't been reported yet"
+                            r"|\b(?:go|do)\s+(?:the\s+|with\s+(?:the\s+)?)?(de-?\s?)?boarding\b"
+                            r"|\blet'?s\s+(?:get\s+|go\s+)?(de-?\s?)?board(?:ing)?\b(?!\s+(?:pass|music))")
 # Whisper's spellings of it ("Can we get the deborings started please?").
 DEBOARDING_HEARD = re.compile(r"\bde-?\s?bor(?:d)?ings?\b|\b(?:deep|dee|d)[\s-]boarding\b")  # ("deep boarding")
 ANNOUNCED = {  # what the radio log shows of an announcement (the voice says all of it)

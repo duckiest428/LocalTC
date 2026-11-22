@@ -359,6 +359,7 @@ JOIN_TERMINAL_FT = 18000.0
 JOIN_TOWER_NM = 12.0  # ... this close on its final: its tower
 REAL_ATIS_WAIT_S = 120.0  # [atc] atis_source "real": this long for the real ATIS or METAR before the sim's weather is used
 LEFT_BEHIND_S = 300.0  # a controller handed off from this long ago is still the one hearing its readback and reminders
+BREAK_CHAIN_SHARE = 0.3  # on a busy frequency, this share of the other flights' calls come two at once: "break, break"
 BREAK_S = 20.0  # an urgent call this soon after ATC's last words to the pilot: "break break", and no readback waited for
 # Of the other flights' calls that start with them (a clearance, a push, a taxi, ready for departure, a final), the
 # share where they call first: it was always the controller first ("why isn't the traffic asking for something?").
@@ -460,6 +461,10 @@ NO_GREETING = ("say_again", "how_read", "read_back", "read_back_hold_short", "ne
                "stopped_ahead", "give_way", "readback_correct", "did_you_copy", "common.info", "common.roger")
 TOWER_SWITCH_S = 60.0  # a flight sent to tower that read it back has this long to switch before being sent around
 ESTABLISHED_M = 600.0  # this close to a final's centreline, pointing down it, is established on it
+# A radar controller's calls that don't wait for the pilot's check-in on a frequency just tuned.
+CHECKIN_EXEMPT = ("common.low_altitude", "common.terrain_caution", "common.unable_terrain", "common.emergency",
+                  "common.how_read", "common.radio_check", "approach.go_around", "approach.missed", "common.descend_now")
+TOWER_CHECKIN_WAIT_S = 10.0  # on the final, the tower waits this long for the pilot's call before clearing it to land
 CHECK_IN_WAIT_S = 30.0  # the tower waits this long for an arrival's call before saying where it is in the sequence
 SIDESTEP_NM = 2.0  # lined up on a parallel runway closer in than this: that's the runway it's landing on
 # Starting down without a clearance this long or more before the top of descent: not the arrival begun early but
@@ -566,6 +571,7 @@ class _Scheduled:
     worded: Phrase | None = None  # ... without the callsign, which the template gives
     lead: Phrase | None = None  # said first, after the callsign: "sorry, Gate 403 is occupied"
     repeat: bool = False  # said again when asked: in other words than the first time
+    held: bool = False  # waited for the pilot's check-in on the frequency (AtcEngine._waits_for_checkin)
 
 
 def t_told(told: dict[str, float], key: str, t: float) -> bool:
@@ -1012,8 +1018,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     @property
     def idle(self) -> bool:
-        """Nothing scheduled to say and the pilot isn't transmitting: a good moment for the pilot to call."""
-        return not self._scheduled and not self._transmitting(self._t) and self._t >= self._radio_busy_until
+        """Nothing scheduled to say and the pilot isn't transmitting: a good moment for the pilot to call. A call held for
+        the pilot's check-in isn't in the way of it: the copilot waited for it, and it for the copilot."""
+        waiting = [s for s in self._scheduled if not (s.held and self._waits_for_checkin(s, self._t))]
+        return not waiting and not self._transmitting(self._t) and self._t >= self._radio_busy_until
 
     @property
     def _arriving(self) -> bool:
@@ -2209,7 +2217,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # Cleared once the runway is empty and nobody's still ahead on the same final: the one in front is
             # cleared first. Cleared behind an A321 on a two mile final, then told "number two", sounded backwards.
             occupying = self._traffic_on_runway(own, runway) if runway is not None else None
-            if on_final and (runway is None or (occupying is None and self._traffic_ahead(own, runway) is None)):
+            if on_final and not spoke_here and t - self._tuned_since < TOWER_CHECKIN_WAIT_S:
+                pass  # the pilot's call first (Kennedy Tower cleared to land the instant it was tuned, unannounced)
+            elif on_final and (runway is None or (occupying is None and self._traffic_ahead(own, runway) is None)):
                 self._clear_to_land(t, own, st.comms.tuned, delay=False)
             elif on_final and occupying is not None and self.cfg.unscripted and self._departing_ahead(own, runway, occupying):
                 self._clear_after_departure(t, own, st.comms.tuned, runway, occupying)
@@ -2253,7 +2263,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         ground = self.facility("ground")
         geo = self.geometry(st.flight.destination)
         way_off = None
-        if geo is not None and own.on_runway:  # still on it: which way off, by which taxiway
+        # Still on it: which way off, by which taxiway. The sim's word or the runway's outline: Kennedy's scenery never
+        # says "on a runway", and its tower only ever said "contact ground when clear".
+        if geo is not None and (own.on_runway or self.tracker.context.on_runway):
             landed = geo.end(st.assignments.arrival_runway) if st.assignments.arrival_runway else None
             heading = landed.heading_true if landed is not None else own.hdg_true  # (not mid-turn off it)
             # (Still rolling at 100 knots: an exit it has the room to slow down for, 800 m on)
@@ -2599,13 +2611,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return []
         self._chatter_due = t + self._chatter.gap(facility.controller)
         try:
-            lines = self._chatter.exchange(self._scene(facility, own))
+            scene = self._scene(facility, own)
+            lines = self._chatter.exchange(scene)
+            first = self._chatter.last
+            if first is not None:
+                key = (first.callsign.ident, facility.station)
+                self._chatter_used[key] = (self._chatter_used.get(key, (0, 0.0))[0] + 1, t)
+            if lines and lines[0].speaker == "atc" and self._workload(facility, t) == "busy" \
+                    and self._chatter.rng.random() < BREAK_CHAIN_SHARE:
+                lines = self._break_break(scene, lines, first)
         except Exception:  # another crew's call that can't be said never stops ATC (15 times over the Atlantic)
             logging.getLogger(__name__).exception("Chatter failed on %s", facility.station)
             return []
-        if self._chatter.last is not None:
-            key = (self._chatter.last.callsign.ident, facility.station)
-            self._chatter_used[key] = (self._chatter_used.get(key, (0, 0.0))[0] + 1, t)
         out: list[BusEvent] = []
         at = t
         for line in lines:
@@ -2616,6 +2633,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             at += self._speech_s(line.spoken) + CHATTER_TURN_S
         self._radio_busy_until = max(self._radio_busy_until, at)  # ATC doesn't talk over its own other traffic
         return self._paced(out)
+
+    def _break_break(self, scene: "chatter.Scene", lines: list, first) -> list:
+        """A busy controller's two calls back to back: one flight's instruction, "break, break", the next one's at once,
+        then both read back. On a busy frequency the pilots never heard it ("I've never once heard a break break")."""
+        others = [o for o in scene.others if first is None or o.callsign.ident != first.callsign.ident]
+        more = self._chatter.exchange(replace(scene, others=others)) if others else []
+        if not more or more[0].speaker != "atc":
+            return lines
+        if self._chatter.last is not None:
+            key = (self._chatter.last.callsign.ident, scene.station)
+            self._chatter_used[key] = (self._chatter_used.get(key, (0, 0.0))[0] + 1, self.state.aircraft.t)
+        second = replace(more[0], text=f"Break, break. {more[0].text}", spoken=f"Break, break. {more[0].spoken}")
+        return [lines[0], second, *lines[1:], *more[1:]]
 
     def _route_from(self, geo: AirportGeometry | None, target: TrafficTarget, runway: str) -> tuple[str, ...]:
         """Another aircraft's taxi route to its runway from where it actually is (VATSIM's, IVAO's or the sim's own):
@@ -6935,7 +6965,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         out: list[BusEvent] = []
         paused = self.tracker.paused
         own = self.state.aircraft
-        due = sorted((s for s in self._scheduled if s.due <= t and (s.reply or not paused)), key=lambda s: s.due)
+        due = [s for s in self._scheduled if s.due <= t and (s.reply or not paused)]
+        for item in due:
+            item.held = item.held or self._waits_for_checkin(item, t)
+        due = [s for s in due if not (s.held and self._waits_for_checkin(s, t))]
+        # What was held for the check-in goes after the answer to it: "radar contact", then the SIGMET.
+        due.sort(key=lambda s: (s.held, s.due))
         for item in list(due):
             if (heard := self._reach(item.facility, own)) is not None and not heard.in_range:
                 due.remove(item)  # the pilot wouldn't hear it: not said (anything still due is said when it's in range)
@@ -7036,6 +7071,23 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         for f in facilities:
             if f.controller in ("center", "departure", "approach"):
                 self._radar_seen.setdefault(f.station, f)
+
+    def _waits_for_checkin(self, item: _Scheduled, t: float) -> bool:
+        """A radar controller's call of its own to a flight that has just tuned it and said nothing yet: held for its
+        check-in (San Juan Departure's SIGMET came four seconds after the pilot tuned it, before a word from them: "how
+        is it ever possible for departure to contact me before knowing that I'm on frequency"). Answers, and the calls
+        that can't wait (terrain, an emergency, a go-around), go out at once; after MISSED_CHECKIN_S, everything."""
+        tuned = self.state.comms.tuned
+        return not item.reply and tuned is not None and item.facility.station == tuned.station \
+            and item.facility.controller in ("departure", "center", "approach") \
+            and not item.instruction_id.startswith(CHECKIN_EXEMPT) and not self._heard_here(t) \
+            and not (self.state.aircraft is not None and self.state.aircraft.on_ground)
+
+    def _heard_here(self, t: float) -> bool:
+        """The pilot has spoken on the frequency tuned since tuning it, or has been quiet there long enough that the
+        controller calls first (MISSED_CHECKIN_S)."""
+        return (self.state.comms.last_pilot_t or -math.inf) >= self._tuned_since \
+            or t - self._tuned_since >= MISSED_CHECKIN_S
 
     def _staffed(self, icao: str | None, *controllers: str) -> bool:
         """``icao`` has one of ``controllers`` (its frequencies in the sim): a towered field, not one whose pilots

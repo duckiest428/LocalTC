@@ -1146,8 +1146,13 @@ def test_every_english_call_opens_ground_to_cockpit():
     from localtc.ground.service import _on_the_air
     from localtc.sim_api import RampSpeech
 
+    from localtc.ground.service import _OPENERS
+
     line = _on_the_air(RampSpeech(t=0.0, text="Ground power's on.", speaker="Ramp", channel="radio"))
-    assert line.text == "Ground to cockpit. Ground power's on."
+    assert any(line.text == f"{o}. Ground power's on." for o in _OPENERS)
+    openers = {_on_the_air(RampSpeech(t=0.0, text=f"Line {i}.", speaker="Ramp", channel="radio")).text.split(".")[0]
+               for i in range(40)}
+    assert "Ground to cockpit" in openers and len(openers) > 1  # mostly that, not always
     assert _on_the_air(line).text == line.text
     assert _on_the_air(RampSpeech(t=0.0, text="Strom ist da.", speaker="Ramp", channel="radio", language="de")).text == "Strom ist da."
 

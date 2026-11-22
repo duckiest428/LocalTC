@@ -324,6 +324,8 @@ def test_a_shortcut_is_never_to_the_destination_or_into_the_filed_star():
     assert engine._shortcut(own, CENTER)
     fix = engine._scheduled[-1].slots["fix"]
     assert fix in ("CHRLY", "DELTA") and engine._scheduled[-1].instruction_id == "common.direct"
+    # With its reason: a direct out of nowhere left the pilot asking why.
+    assert engine._scheduled[-1].note.display.startswith("that saves you about ")
 
 
 def test_turned_back_in_the_cruise_no_direct_to_a_fix_behind_and_asked_for_intentions():

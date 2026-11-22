@@ -437,7 +437,7 @@ def test_a_microphone_that_stopped_sending_is_reopened_before_the_press(caplog):
 
 def test_the_capture_says_how_long_its_stream_has_been_quiet():
     capture = AudioCapture.__new__(AudioCapture)
-    capture._stream, capture._last_block = None, 0.0
+    capture._stream, capture._last_block, capture._lost = None, 0.0, False
     assert capture.idle_s == 0.0  # not open
     capture._stream, capture._last_block = object(), 1.0
     assert capture.idle_s > 1.0

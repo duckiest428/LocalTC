@@ -5,6 +5,7 @@ intercom comes through the copilot's service when there's a copilot (crew.servic
 
 import asyncio
 import logging
+import zlib
 from typing import Any
 
 import msgspec
@@ -283,11 +284,19 @@ def _together(asks: Any) -> list[Any]:
     return merged
 
 
+# ... and the ways it's said: the same opener on every call sounded like a recording.
+CALLS_AS_TOO = ("Ground to flight deck", "Cockpit, ground", "Flight deck, ground")
+_OPENERS = (CALLS_AS, *CALLS_AS_TOO)
+
+
 def _on_the_air(speech: RampSpeech) -> RampSpeech:
-    """Every call opens with who's calling whom, as on a real headset. In English: other languages keep their own wording."""
-    if speech.language or speech.text.lower().startswith(CALLS_AS.lower()):
+    """Every call opens with who's calling whom, as on a real headset. In English: other languages keep their own wording.
+    Mostly "Ground to cockpit", now and then another way (the same for the same words, so a replay says it alike)."""
+    if speech.language or any(speech.text.lower().startswith(o.lower()) for o in _OPENERS):
         return speech
-    return msgspec.structs.replace(speech, text=f"{CALLS_AS}. {speech.text}", spoken=f"{CALLS_AS}. {speech.spoken}" if speech.spoken else "")
+    pick = zlib.crc32(speech.text.encode()) % 6
+    opener = _OPENERS[pick] if pick < len(_OPENERS) else CALLS_AS
+    return msgspec.structs.replace(speech, text=f"{opener}. {speech.text}", spoken=f"{opener}. {speech.spoken}" if speech.spoken else "")
 
 
 __all__ = ["GroundService", "LlmExchange"]

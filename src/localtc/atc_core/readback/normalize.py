@@ -21,6 +21,7 @@ TEEN_WORDS = {
 }
 TENS_WORDS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90}
 MULTIPLIERS = {"hundred": 100, "thousand": 1000}
+_DIGIT_ALT = "|".join([*DIGIT_WORDS, r"\d"])
 POINT_WORDS = {"point", "decimal", "."}
 PHONETIC = {
     "alpha": "a", "alfa": "a", "bravo": "b", "charlie": "c", "charley": "c", "delta": "d", "echo": "e", "foxtrot": "f", "golf": "g",
@@ -48,6 +49,8 @@ def normalize(text: str) -> list[Token]:
     # After "point", a digit is what was said, whatever speech-to-text spelled: "125 decimal to" is 125.2.
     lowered = re.sub(r"\b(point|decimal) (?:to|too)\b", r"\1 two", lowered)
     lowered = re.sub(r"\b(point|decimal) (?:for|fore)\b", r"\1 four", lowered)
+    # Between two digits, "through" is speech-to-text's "three": "one through two decimal zero five" was 132.05.
+    lowered = re.sub(rf"\b({_DIGIT_ALT}) (?:through|thru|threw) (?=(?:{_DIGIT_ALT})\b)", r"\1 three ", lowered)
     lowered = re.sub(r"\b(?:an? )?(?:i less|eye less|i l s|i els|iless)\b", "an ils", lowered)  # "an I-less for 26 left"
     # "Runway 22 to the left" is speech-to-text's "22 left" (it was read as a pushback "tail left").
     lowered = re.sub(r"\b(runway \w+(?: \w+)?) to the (left|right|center|centre)\b", r"\1 \2", lowered)

@@ -157,11 +157,15 @@ class FlightConfig(_Section):
     perf: PlanPerf = PlanPerf()  # SimBrief's fuel, weights and speeds; set from the plan for each flight
 
 
+# The first centre after departure where the airspace data names none (hidden settings, no longer on the page).
+CENTER_NAME, CENTER_MHZ = "Seattle", 125.1
+
+
 class AtcConfig(_Section):
     enabled: bool = True
     seed: int = 0  # 0 = derived from the callsign and date
-    center_name: str = "Seattle"
-    center_mhz: float = 125.1
+    center_name: str = CENTER_NAME
+    center_mhz: float = CENTER_MHZ
     strict_callsign: bool = False
     radio_range: bool = True  # an airport's frequencies reach only so far: tower 20-60 nm, ground 6 nm (by altitude)
     chatter: bool = True  # other flights heard on the frequency now and then (no traffic behind them, nothing to answer)
@@ -213,6 +217,15 @@ class AtcConfig(_Section):
     # onto or across (LocalTC's own objects: a package it puts in the sim's Community folder, shown from the sim's
     # next start).
     taxi_guide: bool = False
+
+    def __post_init__(self) -> None:
+        # The settings page once had these two fields: saved empty, they came back as "" and 0.0, and the first
+        # centre after departure was "contact Montreal Centre 0.0". The page has none now, so nothing there can
+        # set them right: a value that can't be a centre's is the default again.
+        if not self.center_name.strip():
+            self.center_name = CENTER_NAME
+        if not 118.0 <= self.center_mhz < 137.0:
+            self.center_mhz = CENTER_MHZ
 
 
 LlmMode = Literal["scripted", "semi", "mostly_llm", "llm", "off"]

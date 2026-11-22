@@ -2397,9 +2397,11 @@ class TrafficManager:
         own = self.own
         limit = None
         geo = self._geo(loc.runway[0]) if loc.runway is not None else None
-        if own.on_ground and follow.index > follow.exit_index and (closest := self._closing(
-                loc.lat, loc.lon, loc.hdg, own, max(loc.gs_kt, 8.0))) is not None and closest < GIVE_WAY_M:
-            limit = 0.0  # the user ahead: it slows and waits
+        if own.on_ground and follow.index > follow.exit_index and self._user_in_way(loc, own, now):
+            # The user in its way: coming towards it, or standing on the next of its route (for GIVE_WAY_MAX_S at
+            # most). Not a user stopped off to one side: at San Juan a JetBlue stood nose to nose with the user just
+            # pushed, 135 m away, waiting as long as the user stood there (projected along its heading, not its way in).
+            limit = 0.0
         elif geo is not None and follow.index > follow.exit_index:
             # Off its own runway, its way in crossing the one the user has (cleared for takeoff, lined up, landing):
             # held short of it. United's taxi in crossed O'Hare's 27L in front of a departure cleared for takeoff.
@@ -2409,6 +2411,11 @@ class TrafficManager:
         loc.lat, loc.lon, loc.hdg, loc.gs_kt = follow.step(loc.lat, loc.lon, limit_kt=limit)
         loc.on_ground, loc.vs_fpm = True, 0.0
         loc.alt_ft = self._elev(loc.lat, loc.lon)
+        if loc.spoilers and (loc.gs_kt <= SPOILERS_IN_KT or follow.index > follow.exit_index):
+            # In as it slows, or off the runway at the latest: its way in starts at 60 knots, before the spoilers
+            # came in at 45, and nothing took them in after (a JetBlue taxied to its gate with them up).
+            loc.spoilers = False
+        out_call = out_call + self._surfaces(plane, loc)
         if follow.done:
             plane.mode, plane.local, plane.parked_t, plane.stood_t = "parked", None, now, 0.0
             plane.arrived = True

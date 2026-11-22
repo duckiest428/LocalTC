@@ -19,12 +19,50 @@ a new minor version adds features, a patch fixes them.
 - **South Korea's airlines by their callsigns:** Air Busan, Air Seoul, Aerohanguk (Aero K), Eastar, Jeju Air, Jin Air
   and Parata Air, and Trinity Airways (formerly T'way) as "Sonorous". Their own aircraft in the traffic at Incheon,
   Gimpo, Gimhae and Jeju.
+- **"Break, break" on a busy frequency:** now and then a busy controller gives two of the other flights their
+  instructions back to back, "break, break" between them, and both read back after.
 
 ### Changed
 - **Clearance delivery is "Delivery" outside the US and Canada:** "Incheon Delivery", "Heathrow Delivery", as it's
-  called there; "Boston Clearance" in the US and Canada as before.
+  called there; "Boston Clearance" in the US and Canada as before, and in Puerto Rico and the US Virgin Islands too
+  ("San Juan Clearance"; it was "San Juan Delivery"). San Juan's centre is "San Juan Center", as the FAA's is called.
+- **A controller waits for your check-in:** a departure, centre or approach controller's own calls (a SIGMET, a
+  direct, a traffic call, an altitude check) wait until you've called on its frequency, and come after its answer to
+  you ("radar contact", then the SIGMET). San Juan Departure gave a SIGMET four seconds after the frequency was tuned,
+  before a word from the pilot. Terrain, emergency and go-around calls don't wait, and after 45 seconds of silence the
+  controller calls you. The tower, on the final, waits ten seconds for your call before clearing you to land.
+- **Why a direct:** a shortcut says what it saves ("cleared direct PREPI, that saves you about 25 miles"), and the
+  direct after vectors round a restricted area says you're clear of it.
+- **A SIGMET you're already in:** "convective SIGMET in your area", not "about 5 miles ahead" (San Juan was under one
+  as the flight took off), and every SIGMET call says how high it goes ("tops FL430").
+- **The ramp crew say it differently each time:** the push's calls (tug connected, pushing back, cleared to start,
+  set parking brake, the hand signal) each have several wordings, every one with the same instruction in it word for
+  word, and the call now and then opens "Ground to flight deck" or "Cockpit, ground".
+- **The language model's turned-away words are for dev mode:** the alert that ATC's or the ground crew's model words
+  were turned away and the script's said instead (the same instruction) shows in dev mode only.
 
 ### Fixed
+- **No more "contact Montreal Centre 0.0":** the settings page once had a centre name and frequency; saved empty,
+  they came back as "" and 0.0, and the first centre after departure was given that frequency (the copilot tuned
+  0.000, or nothing). An empty name or a frequency off the airband is the default again, and no controller is ever
+  given a frequency outside 118 to 137 MHz.
+- **A blink of a pause is no pause:** the Bluebird 757's EFB (an MSFS 2020 aircraft in 2024) pauses the sim for a
+  tenth of a second at each touch, and each was "sim paused, sim unpaused" in the radio log with ATC's calls held. A
+  pause now counts once it has lasted a second.
+- **A microphone Windows renamed is found again:** unplugged and back, "Microphone (K66)" comes back as "Microphone
+  (2- K66)", the saved name matched nothing, and every press for the last hour of a flight was "too short for speech".
+  It's found under its new name; gone altogether, the system's default input is used until it's back, and each press
+  tries again (it used to give up after the first try).
+- **Frequency readbacks heard right:** "tower on 1, 3, 2, 0, 0, 5" (the "point" heard as a zero) is 132.05, and "one
+  through two decimal zero five" ("three" heard as "through") is too. Both were "confirm frequency".
+- **"Can we go boarding?"** starts the boarding; it went to the cabin crew's model, who said boarding hadn't been
+  reported yet.
+- **The exit off the runway at Kennedy:** its scenery never says the aircraft is on a runway, so tower only ever said
+  "contact ground when clear". The runway's outline counts too now: "vacate right DB, contact Kennedy Ground".
+- **An arrival taxiing in doesn't stand nose to nose with you:** it gave way to any aircraft within 90 m of where its
+  nose pointed, and waited as long as you stood there (a JetBlue sat 135 m from a flight just pushed). It waits now
+  only for an aircraft moving toward it or standing on its way in, three minutes at most, as the departures already did.
+- **Arrivals' spoilers come in:** an arrival LocalTC landed and taxied in kept its spoilers up to the gate.
 - **Whisper on the graphics card stays on it:** with the graphics card picked in the settings, the CUDA libraries
   were never added, so Whisper failed with "cublas64_12.dll is not found" and went back to the CPU at every start.
 - **The sim's own placeholder position isn't a flight:** while the sim reloaded it put the aircraft at 0 N 0 E at

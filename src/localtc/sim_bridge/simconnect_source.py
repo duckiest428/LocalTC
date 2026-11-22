@@ -153,6 +153,9 @@ MSFS_2024 = 12
 
 OPEN_TIMEOUT_S = 10.0
 POLL_INTERVAL_S = 0.005
+# A pause shorter than this is no pause: the Bluebird 757's EFB (an MSFS 2020 aircraft in 2024) pauses the sim for a
+# tenth of a second at every touch, and each one was "sim paused, sim unpaused" in the log and held ATC's calls.
+PAUSE_SETTLE_S = 1.0
 
 _STOP = object()
 
@@ -199,6 +202,8 @@ class SimConnectSource:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue | None = None
         self._frames, self._frames_fps, self._frames_t = 0, 0.0, -1e9
+        self._pause_held: SimLifecycle | None = None  # a pause not yet long enough to be one (PAUSE_SETTLE_S)
+        self._pause_out = False  # a pause was passed on, and its unpause is still to come
         self._ready: asyncio.Future[SessionInfo] | None = None
         # Owned by the bridge thread:
         self._open: OpenInfo | None = None
@@ -464,7 +469,27 @@ class SimConnectSource:
                     self._request_airport(dll, handle, self._nearest_to_fetch)
                     self._nearest_to_fetch = None
                 self._expire_assemblers()
+                self._settle_pause()
             self._stop.wait(POLL_INTERVAL_S)
+
+    def _on_lifecycle(self, event: SimLifecycle) -> None:
+        """Pauses wait PAUSE_SETTLE_S before they're passed on; one undone sooner never happened."""
+        if event.kind == "paused":
+            if not self._pause_out and self._pause_held is None:
+                self._pause_held = event
+            return  # (already paused: another flag of the same pause)
+        if event.kind == "unpaused":
+            if self._pause_held is not None:
+                self._pause_held = None  # a blink: neither half goes out
+                return
+            self._pause_out = False
+        self._emit(event)
+
+    def _settle_pause(self) -> None:
+        held, now = self._pause_held, self._clock.now()
+        if held is not None and now - held.t >= PAUSE_SETTLE_S:
+            self._pause_held, self._pause_out = None, True
+            self._emit(replace(held, t=now))  # (in time with what's gone out since)
 
     def _handle(self, buf: bytes) -> bool:
         """Handle one message; returns False when the sim has quit."""
@@ -490,7 +515,7 @@ class SimConnectSource:
                 self._frames, self._frames_fps, self._frames_t = 0, 0.0, t
         elif isinstance(msg, EventInfo):
             if (event := _lifecycle_event(msg, t)) is not None:
-                self._emit(event)
+                self._on_lifecycle(event)
         elif isinstance(msg, ObjectData):
             self._on_data(msg, t)
         elif isinstance(msg, FacilityData):

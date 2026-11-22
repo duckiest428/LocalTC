@@ -17,6 +17,8 @@ from itertools import pairwise
 from pathlib import Path
 
 HERE = Path(__file__).parent
+# The names on the radio where the outlines' differ: the FAA's San Juan CERAP is "San Juan Center", not "Control".
+RADIO_NAMES = {"TJZS": "San Juan Center"}
 
 Ring = tuple[tuple[float, float], ...]  # (lat, lon) points, closed
 
@@ -98,7 +100,7 @@ def _load() -> Airspace:
         if not path.exists():
             return ()
         rows = json.loads(gzip.decompress(path.read_bytes()))["areas"]
-        return tuple(Area(id=r["id"], name=r["name"], kind=r["kind"], label=(r["label"][0], r["label"][1]),
+        return tuple(Area(id=r["id"], name=RADIO_NAMES.get(r["id"], r["name"]), kind=r["kind"], label=(r["label"][0], r["label"][1]),
                           rings=_unwrapped(tuple(tuple((p[0], p[1]) for p in ring) for ring in r["rings"])),
                           airports=tuple(r.get("airports", ())), oceanic=bool(r.get("oceanic")))
                      for r in rows)

@@ -6,11 +6,10 @@
  * The app sends a small heartbeat every 10 s while a flight runs; what it may carry is SKY_KEYS and nothing else.
  * The pilot can hide the route and their name, and delay what's shown by 5, 10 or 15 minutes.
  *
- * Everything is held in memory in one Durable Object (SkyRoom, "public"): never written to storage or D1. A flight
- * leaves the map when it ends, when sharing is turned off, when the app closes, or 90 s after its last heartbeat.
+ * One Durable Object (SkyRoom, "public") holds the flights on the map: in memory, and in its own storage only while
+ * they're on it (never in D1, the account's database). A flight leaves the map, and that storage, when it ends, when
+ * sharing is turned off, when the app closes, or 90 s after its last heartbeat.
  * The map's snapshot (GET /v1/sky/flights) is cached at the edge for SKY_CACHE_S, so viewers don't reach the room.
- * An idle room is evicted from memory (70-140 s with nothing coming in; much sooner under `wrangler dev`): its flights
- * go with it and come back with their next heartbeat, under a new id (a delayed one after its delay again).
  */
 import { DurableObject } from "cloudflare:workers";
 import type { Auth } from "./auth";
@@ -96,7 +95,7 @@ export interface Meta { name: string; hideRoute: boolean; hideName: boolean; del
 type Moving = Pick<SkyFlight, "lat" | "lon" | "alt" | "gs" | "hdg" | "ground" | "phase" | "station" | "mhz">;
 const MOVING = ["lat", "lon", "alt", "gs", "hdg", "ground", "phase", "station", "mhz"] as const;
 
-interface Held {
+export interface Held {
   id: string; uid: string; meta: Meta; flight: SkyFlight; last: number; started: number;
   history: { t: number; at: Moving }[]; // for a delay: where it was, one point per HISTORY_EVERY_MS
 }
@@ -111,7 +110,36 @@ export class Sky {
   private lastBeat = new Map<string, number>();
   private ipHits = new Map<string, { minute: number; count: number }>();
 
+  // What changed since the room last saved: flights to write, and the ids to delete.
+  private dirty = new Set<string>();
+  private gone = new Set<string>();
+
   get size(): number { return this.flights.size; }
+
+  private keep(id: string, held: Held): void { this.flights.set(id, held); this.dirty.add(id); this.gone.delete(id); }
+
+  private drop(id: string): boolean {
+    const had = this.flights.delete(id);
+    if (had) { this.gone.add(id); this.dirty.delete(id); }
+    return had;
+  }
+
+  /** The changes since the last call, for the room's storage. */
+  changes(): { put: Held[]; del: string[] } {
+    const out = { put: [...this.dirty].map((id) => this.flights.get(id)).filter((h): h is Held => !!h), del: [...this.gone] };
+    this.dirty.clear();
+    this.gone.clear();
+    return out;
+  }
+
+  /** The flights the room saved, after it was evicted from memory and started again. */
+  restore(saved: Held[], now: number): void {
+    for (const held of saved) {
+      this.flights.set(held.id, held);
+      this.byUser.set(held.uid, held.id);
+    }
+    this.prune(now);
+  }
 
   beat(uid: string, ip: string, meta: Meta, flight: SkyFlight, now: number): string {
     this.prune(now);
@@ -126,18 +154,19 @@ export class Sky {
     let held = this.flights.get(this.byUser.get(uid) ?? "");
     // One shared flight per account: a new callsign or route is a new flight, under a new id.
     if (held && (held.flight.callsign !== flight.callsign || held.flight.from !== flight.from || held.flight.to !== flight.to)) {
-      this.flights.delete(held.id);
+      this.drop(held.id);
       held = undefined;
     }
     if (!held) {
       if (this.flights.size >= MAX_FLIGHTS) throw new HttpError(503, "Live Flights is full right now. Try again later.");
       held = { id: newId(), uid, meta, flight, last: now, started: now, history: [] };
-      this.flights.set(held.id, held);
+      this.keep(held.id, held);
       this.byUser.set(uid, held.id);
     }
     held.meta = meta;
     held.flight = flight;
     held.last = now;
+    this.dirty.add(held.id);
     const at = Object.fromEntries(MOVING.filter((k) => flight[k] !== undefined).map((k) => [k, flight[k]])) as Moving;
     const top = held.history[held.history.length - 1];
     if (!top || now - top.t >= HISTORY_EVERY_MS) held.history.push({ t: now, at });
@@ -150,21 +179,21 @@ export class Sky {
   /** The pilot's choices changed on the dashboard or in the app: at once, not at the next heartbeat. */
   setMeta(uid: string, meta: Partial<Meta>): void {
     const held = this.flights.get(this.byUser.get(uid) ?? "");
-    if (held) held.meta = { ...held.meta, ...meta };
+    if (held) { held.meta = { ...held.meta, ...meta }; this.dirty.add(held.id); }
   }
 
   /** The account's flight off the map (flight ended, sharing off, app closed, banned). */
   stop(uid: string): boolean {
     const id = this.byUser.get(uid);
     this.byUser.delete(uid);
-    return id !== undefined && this.flights.delete(id);
+    return id !== undefined && this.drop(id);
   }
 
   /** A flight taken down by an admin: the account behind it, for a ban. */
   remove(id: string): string | null {
     const held = this.flights.get(id);
     if (!held) return null;
-    this.flights.delete(id);
+    this.drop(id);
     if (this.byUser.get(held.uid) === id) this.byUser.delete(held.uid);
     return held.uid;
   }
@@ -172,7 +201,7 @@ export class Sky {
   prune(now: number): void {
     for (const [id, held] of this.flights) {
       if (now - held.last > STALE_MS) {
-        this.flights.delete(id);
+        this.drop(id);
         if (this.byUser.get(held.uid) === id) this.byUser.delete(held.uid);
       }
     }
@@ -214,10 +243,43 @@ function newId(): string {
 }
 
 export class SkyRoom extends DurableObject<Env> {
-  // In memory only. Never written to this.ctx.storage.
+  // The flights on the map, in memory, and in this room's own storage so they survive the room being evicted from
+  // memory between two heartbeats (Cloudflare does that after a few idle seconds). Only what's on the map now: a
+  // flight is deleted from the storage the moment it leaves the map, and an alarm clears any left when nothing comes in.
   private sky = new Sky();
 
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      const saved = await ctx.storage.list<Held>({ prefix: "f:" });
+      this.sky.restore([...saved.values()], Date.now());
+      await this.save();
+    });
+  }
+
+  /** What changed, written; what left the map, deleted; and the alarm to tidy up after the last heartbeat. */
+  private async save(): Promise<void> {
+    const { put, del } = this.sky.changes();
+    if (del.length) await this.ctx.storage.delete(del.map((id) => `f:${id}`));
+    if (put.length) await this.ctx.storage.put(Object.fromEntries(put.map((h) => [`f:${h.id}`, h])));
+    if (put.length && (await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + STALE_MS + 5_000);
+  }
+
+  async alarm(): Promise<void> {
+    this.sky.prune(Date.now());
+    await this.save();
+    if (this.sky.size) await this.ctx.storage.setAlarm(Date.now() + STALE_MS + 5_000);
+  }
+
   async fetch(request: Request): Promise<Response> {
+    try {
+      return await this.handle(request);
+    } finally {
+      await this.save();
+    }
+  }
+
+  private async handle(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const now = Date.now();
     const body = request.method === "GET" ? {} : ((await request.json()) as Record<string, unknown>);

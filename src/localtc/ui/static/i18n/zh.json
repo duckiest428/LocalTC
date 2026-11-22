@@ -1617,7 +1617,7 @@
 "Live (no delay)": "实时（无延迟）",
 "Live Flights is a public map on localtc.tech/live: anyone can see it, without an account. While you fly, LocalTC sends it, every 10 seconds, only this:": "Live Flights 是 localtc.tech/live 上的公开地图：任何人无需账户即可查看。飞行时，LocalTC 每 10 秒只向它发送以下内容：",
 "Live Flights is paused for everyone right now.": "Live Flights 目前对所有人暂停。",
-"Never your voice, recordings, transcripts, settings or email. Nothing is stored: the server holds it in memory, and your flight leaves the map when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.": "绝不包括你的语音、录音、转写、设置或电子邮件。不保存任何内容：服务器只在内存中保留，你的航班会在结束、你停止分享、LocalTC 关闭或最后一次更新 90 秒后离开地图。回放时绝不发送。",
+"Never your voice, recordings, transcripts, settings or email. Nothing is kept once your flight leaves the map, and it leaves when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.": "绝不包括你的语音、录音、转写、设置或电子邮件。你的航班离开地图后不保留任何内容；航班会在结束、你停止分享、LocalTC 关闭或最后一次更新 90 秒后离开地图。回放时绝不发送。",
 "Privacy": "隐私",
 "See the Live Flights map": "查看 Live Flights 地图",
 "Sharing every flight on Live Flights": "正在 Live Flights 上分享每次飞行",

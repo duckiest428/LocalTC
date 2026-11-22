@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BEAT_MIN_MS, IP_BEATS_PER_MIN, type Meta, STALE_MS, Sky, cleanSkyFlight } from "../src/sky";
+import { env, runInDurableObject } from "cloudflare:test";
 import { bearer, call, data, signIn } from "./helpers";
 
 const cruise = {
@@ -146,5 +147,32 @@ describe("the map's memory", () => {
     for (let i = 0; i < IP_BEATS_PER_MIN - 1; i++) sky.beat(`v${i}`, "shared", meta, flight, 1000);
     sky.beat("w", "shared", meta, flight, 1000);
     expect(() => sky.beat("x", "shared", meta, flight, 1000)).toThrow(/address/);
+  });
+});
+
+describe("the map surviving the room's restart", () => {
+  const flight = cleanSkyFlight(cruise);
+
+  it("saves what changed and what left, and starts again from it", () => {
+    const sky = new Sky();
+    const id = sky.beat("u1", "ip", meta, flight, 0);
+    const first = sky.changes();
+    expect(first.put.map((h) => h.id)).toEqual([id]);
+    expect(sky.changes()).toEqual({ put: [], del: [] });
+    const restarted = new Sky();
+    restarted.restore(first.put, 30_000);
+    expect(restarted.snapshot(30_000).flights.map((f) => f.id)).toEqual([id]);
+    restarted.stop("u1");
+    expect(restarted.changes().del).toEqual([id]);
+  });
+
+  it("keeps nothing in its storage once the flight is off the map", async () => {
+    const { token } = await sharing();
+    const { flight_id } = await data(await call("PUT", "/v1/sky/flight", cruise, bearer(token)));
+    const room = env.SKY.get(env.SKY.idFromName("public"));
+    const stored = () => runInDurableObject(room, async (_o, state) => (await state.storage.list({ prefix: "f:" })).has(`f:${flight_id}`));
+    expect(await stored()).toBe(true);
+    await call("DELETE", "/v1/sky/flight", {}, bearer(token));
+    expect(await stored()).toBe(false);
   });
 });

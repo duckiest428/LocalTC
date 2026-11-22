@@ -1617,7 +1617,7 @@
 "Live (no delay)": "In diretta (nessun ritardo)",
 "Live Flights is a public map on localtc.tech/live: anyone can see it, without an account. While you fly, LocalTC sends it, every 10 seconds, only this:": "Live Flights è una mappa pubblica su localtc.tech/live: chiunque può vederla, senza account. Mentre voli, LocalTC le invia, ogni 10 secondi, solo questo:",
 "Live Flights is paused for everyone right now.": "Live Flights è in pausa per tutti in questo momento.",
-"Never your voice, recordings, transcripts, settings or email. Nothing is stored: the server holds it in memory, and your flight leaves the map when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.": "Mai la tua voce, registrazioni, trascrizioni, impostazioni o e-mail. Non viene salvato nulla: il server lo tiene in memoria, e il tuo volo lascia la mappa quando finisce, quando smetti di condividere, quando LocalTC si chiude o 90 secondi dopo l'ultimo aggiornamento. Mai durante un replay.",
+"Never your voice, recordings, transcripts, settings or email. Nothing is kept once your flight leaves the map, and it leaves when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.": "Mai la tua voce, registrazioni, trascrizioni, impostazioni o e-mail. Non resta nulla quando il tuo volo lascia la mappa, e la lascia quando finisce, quando smetti di condividere, quando LocalTC si chiude o 90 secondi dopo l'ultimo aggiornamento. Mai durante un replay.",
 "Privacy": "Privacy",
 "See the Live Flights map": "Vedi la mappa di Live Flights",
 "Sharing every flight on Live Flights": "Condivisione di ogni volo su Live Flights",

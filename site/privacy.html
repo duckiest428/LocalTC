@@ -31,7 +31,7 @@
 <main class="legal">
   <p class="kicker">Privacy</p>
   <h1>What we know about you.</h1>
-  <p class="updated">Without an account: nothing. Last updated 21 November 2026.</p>
+  <p class="updated">Without an account: nothing. Last updated 22 November 2026.</p>
 
   <p>
     LocalTC is a hobby project, not a company. It runs on your own computer and needs no account. There
@@ -248,8 +248,9 @@
       ground speed and heading, and the station and frequency you're tuned to. They're shown to anyone on the public
       <a href="live">Live Flights</a> map, with your display name (or "LocalTC pilot" if you hide it, or set none).
       You can hide the route, and delay what's shown by 5, 10 or 15 minutes. You choose "this flight only" or "every
-      flight". It's never your voice, recordings, transcripts, settings, email address or account. The server holds it
-      in memory only, never in the database or on disk, under a random id made for that flight; it's gone when the
+      flight". It's never your voice, recordings, transcripts, settings, email address or account. The Live Flights
+      server keeps it only while the flight is on the map (its latest position, and the last 15 minutes of positions if
+      you set a delay), never in the account's database, under a random id made for that flight; it's deleted when the
       flight ends, when you stop sharing, when the app closes, or 90 seconds after the last update, and nothing is
       sent during a replay. The account keeps only your choices (on or off, what's hidden, the delay). Anyone who
       looks at the map while you share sees it, and can screenshot it. We can take a flight off the map, and turn an

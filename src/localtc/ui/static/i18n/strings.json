@@ -716,7 +716,7 @@
 "Never",
 "Never (LocalTC won't contact GitHub)",
 "Never your email or the time of day{0}. Stop sharing whenever you like.",
-"Never your voice, recordings, transcripts, settings or email. Nothing is stored: the server holds it in memory, and your flight leaves the map when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.",
+"Never your voice, recordings, transcripts, settings or email. Nothing is kept once your flight leaves the map, and it leaves when it ends, when you stop sharing, when LocalTC closes, or 90 seconds after the last update. Never during a replay.",
 "New Flight",
 "Next",
 "Next call",

@@ -2731,7 +2731,7 @@ const Settings = {
   },
   liveDialog() {
     const dlg = $("#dlg-live-share"), sh = (S.account && S.account.sharing) || {};
-    dlg.querySelector(`input[name="ls-mode"][value="${sh.live_share === "always" ? "always" : "flight"}"]`).checked = true;
+    dlg.querySelector(`input[name="ls-mode"][value="${sh.live_share === "flight" ? "flight" : "always"}"]`).checked = true;
     $("#ls-hide-route").checked = !!sh.live_hide_route;
     $("#ls-hide-name").checked = !!sh.live_hide_name;
     $("#ls-delay").value = String(sh.live_delay_min || 0);

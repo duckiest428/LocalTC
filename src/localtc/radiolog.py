@@ -136,10 +136,11 @@ def radio_line(ev: BusEvent) -> dict | None:
     if isinstance(ev, CrewAction):
         return None  # what the copilot said about it is the line; the action itself is in the recording
     if isinstance(ev, ReadbackEvaluated):
+        said = {"heard": ev.heard} if ev.heard else {}  # (the line above, its frequency as ATC took it)
         if ev.status == "correct":
-            return {"kind": "readback", "t": t, "ok": True, "text": "readback ok"}
+            return {"kind": "readback", "t": t, "ok": True, "text": "readback ok", **said}
         what = ", ".join([*ev.missing, *(f"{k} {v}" for k, v in ev.mismatched.items())])
-        return {"kind": "readback", "t": t, "ok": False, "text": f"readback {ev.status}" + (f": {what}" if what else "")}
+        return {"kind": "readback", "t": t, "ok": False, "text": f"readback {ev.status}" + (f": {what}" if what else ""), **said}
     if isinstance(ev, RadioChatter):  # somebody else on the frequency
         who = ev.station if ev.speaker == "atc" else ev.callsign
         return {"kind": "chatter", "t": t, "station": who, "mhz": ev.frequency_mhz, "text": ev.text, "atc": ev.speaker == "atc",

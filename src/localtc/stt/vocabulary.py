@@ -80,6 +80,25 @@ def without_prompt(text: str, hints: VocabularyHints) -> str:
     return lead.sub("", text)
 
 
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def echoes_prompt(text: str, hints: VocabularyHints) -> bool:
+    """Whether ``text`` is only the airport's taxiways or runways from the prompt, read back: "A, B, D, E, F." from a
+    press with no speech in it, and ground said "say again" to words the pilot never said. Three names at least: no
+    call is ever a run of them alone (a route said is "Alpha, Bravo", with "via" or "taxi" before it)."""
+    said = _words(text)
+    if said[:1] in (["taxiways"], ["runways"]):
+        said = said[1:]
+    n = len(said)
+    for names in (hints.taxiways, hints.runways):
+        given = _words(" ".join(dict.fromkeys(names)))
+        if n >= 3 and any(given[i:i + n] == said for i in range(len(given) - n + 1)):
+            return True
+    return False
+
+
 def hotwords(hints: VocabularyHints) -> str:
     """Words worth boosting on their own: the callsign and station names."""
     words = [hints.callsign, hints.callsign_spoken, *hints.stations]

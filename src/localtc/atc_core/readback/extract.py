@@ -458,6 +458,8 @@ def _route_at(tokens: list[Token], start: int, names: set[str] | frozenset[str] 
     i = start
     while i < len(tokens):
         token = tokens[i]
+        if _runway_said_short(tokens, i, names):
+            break  # "via A D E, hold short R9": runway 9, where the route ends, never taxiway R9
         if filler and route and _article(tokens, i, names):
             i += 1  # "via K and a H three": the "a" of speech, not taxiway A (that one's "alpha")
             continue
@@ -510,7 +512,18 @@ def _garbled(tokens: list[Token], i: int, names: set[str] | frozenset[str]) -> b
         j += 1
     if j < len(tokens) and tokens[j].kind == "word" and j + 1 < len(tokens) and _garbled(tokens, j, names):
         return True  # two in a row: "trile, trile 1, bravo"
-    return j < len(tokens) and _is_route_token(tokens[j], names) and not _callsign_letter(tokens, j)
+    return j < len(tokens) and _is_route_token(tokens[j], names) and not _callsign_letter(tokens, j) \
+        and not _runway_said_short(tokens, j, names)
+
+
+def _runway_said_short(tokens: list[Token], i: int, names: set[str] | frozenset[str]) -> bool:
+    """ "R9", "R 27": a runway as the pilot's writing has it, where the route given has no taxiway of that name."""
+    token = tokens[i]
+    if token.text != "r" or i + 1 >= len(tokens):
+        return False
+    number = tokens[i + 1]
+    return number.kind == "number" and number.text.isdigit() and 1 <= int(number.text) <= 36 \
+        and f"r{number.text}" not in names and "r" not in names
 
 
 PROCEDURE_END = ("departure", "arrival", "transition")

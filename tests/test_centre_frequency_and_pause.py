@@ -118,7 +118,9 @@ def test_a_controller_waits_for_the_check_in_before_its_own_calls():
     engine._schedule(t + 3, "common.roger", {}, center, delay=False, expects_readback=False)
     engine._answering = False
     said = [tx.instruction_id for tx in engine._flush(t + 3)]
-    assert said[:1] == ["common.roger"] and "common.info" in said  # the answer first, then what waited
+    assert said == ["common.roger"]  # the answer first ...
+    later = [tx.instruction_id for tx in engine._flush(t + 9)]
+    assert later == ["common.info"]  # ... then what waited
     # Never a word from the pilot: after MISSED_CHECKIN_S the controller calls anyway.
     engine2, own2 = cruising_engine()
     engine2.handle(own2)
@@ -143,7 +145,7 @@ def test_a_sigmet_over_the_flight_is_in_its_area_with_its_tops():
     here = ms.structs.replace(own, lat=18.466, lon=-65.971)
     engine._weather_ahead(here, engine.state.comms.tuned, golf4, [], 0, 0.0)
     said = engine._scheduled[-1].slots["message"].display
-    assert said.startswith("convective SIGMET in your area, tops FL430, deviations left or right of course approved"), said
+    assert said.startswith("convective SIGMET in your area, thunderstorms up to FL430, deviations left or right of course approved"), said
     assert "miles ahead" not in said
 
 
@@ -179,3 +181,33 @@ def test_a_microphone_plugged_in_after_the_app_started_is_found_at_the_flights_s
     current["list"] = [(0, "Microsoft Sound Mapper - Input", 44100)]
     monkeypatch.setattr(audio.GATE, "restart", lambda sd: True)
     assert audio._find_at_start("Microphone (K66)") is None  # gone altogether: the default input, the flight goes on
+
+
+def test_a_held_call_waits_for_the_answer_the_model_is_still_working_on():
+    """Punta Cana Departure: "climbing 6,000" heard, the model nine seconds over its answer, and the SIGMET went out
+    before "radar contact"."""
+    from localtc.atc_core.engine import ANSWER_FIRST_S
+    from localtc.atc_core.values import Phrase
+    from test_unscripted import cruising_engine
+
+    engine, own = cruising_engine()
+    engine.handle(own)
+    center = engine.state.comms.tuned
+    t = own.t + 4
+    engine.state.comms.last_pilot_t = t  # the check-in: the model still working on its answer
+    engine._deferred = object()
+    engine._schedule(t + 1, "common.info", {"message": Phrase("convective SIGMET", "convective sigmet")}, center,
+                     delay=False, expects_readback=False)
+    assert engine._flush(t + 1) == []
+    engine._deferred = None  # "radar contact" said
+    assert [tx.instruction_id for tx in engine._flush(t + 10)] == ["common.info"]
+    # No answer at all: it goes after ANSWER_FIRST_S
+    engine2, own2 = cruising_engine()
+    engine2.handle(own2)
+    t2 = own2.t + 4
+    engine2.state.comms.last_pilot_t = t2
+    engine2._deferred = object()  # (and never answered)
+    engine2._schedule(t2 + 1, "common.info", {"message": Phrase("x", "x")}, engine2.state.comms.tuned, delay=False,
+                      expects_readback=False)
+    assert engine2._flush(t2 + 1) == []
+    assert [tx.instruction_id for tx in engine2._flush(t2 + ANSWER_FIRST_S + 1)] == ["common.info"]

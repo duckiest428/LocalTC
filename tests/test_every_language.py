@@ -322,7 +322,7 @@ def test_every_ramp_line_is_there_and_fills_in(code):
         assert "{" not in table.line(key, **values)
         assert table.in_language(key)
     assert not table.in_language("set_brake")  # the headset's calls stay as they are
-    assert set(words.NAMES[code]) == set(lines.SPOKEN) and code in words.TERMS and set(words.WHY[code]) == {"never_opened", "missing", "disabled", "no_change", "ambiguous"}
+    assert set(words.NAMES[code]) == set(lines.SPOKEN) and code in words.TERMS and set(words.WHY[code]) == set(__import__("localtc.ground.crew", fromlist=["WHY"]).WHY)
 
 
 @pytest.mark.parametrize("code", sorted(foreign.WORDS))

@@ -1626,14 +1626,11 @@
 "Sharing: {0}.": "Gedeeld: {0}.",
 "Show my flight on Live Flights?": "Mijn vlucht op Live Flights tonen?",
 "Show my flight on the public Live Flights map": "Mijn vlucht tonen op de openbare Live Flights-kaart",
-"Stop sharing your flight on Live Flights? It leaves the public map now.": "Stoppen met het delen van je vlucht op Live Flights? Hij verdwijnt nu van de openbare kaart.",
 "Stopped sharing on Live Flights": "Gestopt met delen op Live Flights",
 "The station and frequency you're tuned to": "Het station en de frequentie waarop je bent afgestemd",
 "This flight only": "Alleen deze vlucht",
-"You can stop at any time: here in Settings, from the badge at the top while sharing, or on the dashboard.": "Je kunt altijd stoppen: hier in Instellingen, via de badge bovenaan tijdens het delen, of op het dashboard.",
 "Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route": "Je roepnaam, vliegtuigtype, vertrek en aankomst en, tenzij je hem verbergt, je ingediende route",
 "Your display name from the dashboard (or \"LocalTC pilot\" if you hide it)": "Je weergavenaam van het dashboard (of \"LocalTC pilot\" als je hem verbergt)",
-"Your flight is on the public Live Flights map. Click to stop sharing.": "Je vlucht staat op de openbare Live Flights-kaart. Klik om te stoppen met delen.",
 "Your position, altitude, ground speed and heading": "Je positie, hoogte, grondsnelheid en koers",
 "and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.": "en voedt de companion-app. Het stuurt vluchtsamenvattingen (luchthavens, tijden, afstand, landingssnelheid) en, terwijl je vliegt, de fase en de frequenties: nooit je positie (tenzij je Live Flights aanzet), stem, transcripties of opnames.",
 "every flight": "elke vlucht",
@@ -1642,5 +1639,7 @@
 "this flight only": "alleen deze vlucht",
 "{0} min delay": "{0} min vertraging",
 "● On the map now": "● Nu op de kaart",
-"● Sharing live": "● Live gedeeld"
+"Change it any time in Settings → Account.": "Altijd te wijzigen in Instellingen → Account.",
+"With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Met een gratis account (Instellingen → Account) kan je vlucht op de openbare Live Flights-kaart staan, localtc.tech/live.",
+"You can stop at any time: here in Settings, or on the dashboard.": "Je kunt altijd stoppen: hier in Instellingen, of op het dashboard."
 }

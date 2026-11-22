@@ -124,10 +124,11 @@ def plausible_ident(icao: str) -> bool:
 
 
 def _parking_suffix(code: int) -> str:
-    """A stand's letter after its number ("B7A"): the sim sends it as a letter's code, or as 1-26."""
+    """A stand's letter after its number ("20B"): the sim sends it as a letter's code, or in the stand names' own list,
+    where 12 is GATE_A and 37 GATE_Z (so 13 is B: Punta Cana's gate 20B was "20M", read as the 13th letter)."""
     if 65 <= code <= 90:
         return chr(code)
-    return chr(64 + code) if 1 <= code <= 26 else ""
+    return chr(65 + code - 12) if 12 <= code <= 37 else ""
 
 
 def definition_lines() -> list[str]:

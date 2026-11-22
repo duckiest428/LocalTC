@@ -64,6 +64,7 @@ from localtc.atc_core.llm.phrase import facts_problem, spoken_as
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
+from localtc.atc_core.readback.written import with_frequency
 from localtc.atc_core.readback import (
     ChainInterpreter,
     GrammarInterpreter,
@@ -104,7 +105,7 @@ from localtc.atc_core.atis.observation import from_report
 from localtc.atc_core.atis.real import with_magvar
 from localtc.atc_core.atis.operations import Notice
 from localtc.atc_core.vfr import VfrMixin, VfrState
-from localtc.atc_core.conditions import BEHIND_LANDING_NM, CROSS_HOLD_NM, EXPEDITE_NM, NO_DELAY_NM, ConditionBook, \
+from localtc.atc_core.conditions import BEHIND_LANDING_NM, CROSS_HOLD_NM, EXPEDITE_NM, NO_DELAY_NM, WAKE_DEPARTURE_S, ConditionBook, \
     ConditionsMixin
 from localtc.atc_core.holding import HoldsMixin
 from localtc.atc_core.gate_requests import GateRequestsMixin
@@ -169,7 +170,7 @@ ONLINE_QUIET = (AtcTransmission, RadioChatter, AtcThinking, ReadbackEvaluated)
 ONLINE_RELEASED_S = 1200.0  # an online airspace that let the flight go isn't proposed again for this long
 ONLINE_TELL_AGAIN_S = 600.0  # a controller the pilot was told of and didn't call: said again after this long
 # The calls to LocalTC's real flights (``traffic_call``), and the controller who makes each.
-TRAFFIC_CALLS = {"clearance": "clearance", "pushback": "ground", "taxi_out": "ground", "taxi_in": "ground",
+TRAFFIC_CALLS = {"clearance": "clearance", "pushback": "ground", "taxi_out": "ground", "taxi_in": "ground", "cross": "ground",
                  "lineup": "tower", "takeoff": "tower", "land": "tower", "go_around": "tower", "hold_short": "tower",
                  "vacate": "tower", "handoff_departure": "tower"}
 DEPARTURE_PHASES = {P.PARKED, P.PUSHBACK, P.TAXI_OUT, P.RUNWAY_HOLD, P.TAKEOFF, P.DEPARTURE, P.CRUISE}
@@ -197,6 +198,7 @@ SILENT_PILOT_S = 30.0  # an instruction unanswered this long: "how do you read?"
 NUDGE_REPLY_S = 4.0  # after the pilot answers "how do you read", the instruction follows this soon
 STALE_READBACK_S = 45.0  # answered with something else and then quiet this long: repeat it once, then stop waiting
 MISSED_CHECKIN_S = 45.0  # on the new frequency but quiet this long: the controller calls first
+ANSWER_FIRST_S = 30.0  # the controller's own call waits this long at most for its answer to the check-in
 # Called in good time (Dubai's "11 o'clock, 3 miles, same direction" was "way too late"), one call a minute at most,
 # and the same aircraft not again (made twice, it was called twice 16 s apart)
 TRAFFIC_NM, TRAFFIC_ALT_FT, TRAFFIC_REPEAT_S = 8.0, 1200.0, 300.0
@@ -343,6 +345,10 @@ OVER_RUNWAY_FT = 500.0  # airborne this low over a runway: landing on it (or jus
 LANDING_ZONE_M = 1800.0  # the part of the runway a landing uses: traffic further on and moving is off it in time ...
 RUNWAY_VACATING_KT = 15.0  # ... at this speed or more
 CROSSING_ARRIVAL_NM = 2.5  # traffic this close in on a runway that crosses the departure runway goes first
+# Lining up behind a departure still on the runway: not with an arrival this close in that would be over the threshold
+# before this one could go (the one ahead's roll and this one's, LINE_UP_ROLL_S, the wake time behind a heavier one, and
+# LINE_UP_SPARE_S to spare). Held short instead, and the arrival lands first.
+LINE_UP_LOOK_NM, LINE_UP_ROLL_S, LINE_UP_SPARE_S = 12.0, 75.0, 30.0
 ROLLING_KT = 20.0  # on the ground at this speed or more: rolling along a runway, not taxiing
 ROLLING_ONTO_S = 30.0  # rolling onto the departure runway within this long: it isn't free
 OWED_READBACK_S = 60.0  # the pilot's readback waited for this long before ATC talks to the other flights
@@ -402,6 +408,7 @@ INCIDENTS = {"medical": ("a medical emergency on board", "paramedics"), "unruly"
 MIN_TURN_DEG = 12.0  # a smaller correction isn't worth a transmission
 REVECTOR_DEG = 20.0  # a new vector has to differ from the one already given by at least this much
 SPEED_CONTROL_MIN_KT = 175.0  # slower than this and there is nothing to manage
+SPEED_SPACING_NM = 10.0  # approach slows an arrival only with another this close ahead of it (250 below 10,000 apart)
 SPEED_GATES = ((30.0, 250, "speed250"), (25.0, 210, "speed210"), (12.0, 180, "speed180"), (8.0, 160, "speed160"))
 # Speeds are the pilot's own unless there's a reason: 250 knots below 10,000 feet (the rule) and the slower ones for
 # traffic landing ahead (another aircraft this close to the airport, nearer it and lower). Slowing every arrival to
@@ -2399,6 +2406,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         gate = next((g for g in stands.gates(geo, self._real_gates(geo.icao)) if g.index == a.gate_index), None)
         return (gate.spot.lat, gate.spot.lon) if gate is not None else None
 
+    def traffic_heard(self, kind: str, icao: str) -> bool:
+        """Whether a call of ``kind`` to one of the real flights at ``icao`` would be heard: the pilot on that controller."""
+        facility, want = self.state.comms.tuned, TRAFFIC_CALLS.get(kind)
+        return facility is not None and want is not None and facility.controller == want \
+            and (facility.airport or "").upper() == icao.upper()
+
     def traffic_call(self, ident: str, kind: str, icao: str, runway: str, t: float, *, lat: float | None = None,
                      lon: float | None = None, destination: str = "") -> list[BusEvent]:
         """A controller telling one of the real flights (LocalTC's traffic) what it's about to do, and its readback:
@@ -2438,9 +2451,17 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         at = max(t, self._radio_busy_until) if not urgent else t
         out: list[BusEvent] = []
         last_atc = self.state.comms.last_atc_t if self.state.comms.last_atc_t is not None else -math.inf
-        if urgent and (pending is not None or t - last_atc < BREAK_S):
-            # Straight after ATC's words to the pilot: "break break", the urgent call at once, and the pilot's
-            # readback of what went before not waited for (a go-around can't wait for it).
+        cut = False
+        if urgent:
+            # Another flight's readback still to come goes unsaid: the go-around answers, nobody in between (Air Canada
+            # read its handoff back between Tomjet's "go around" and Tomjet's answer).
+            atc_left = {e.ident for e in self._later if e.speaker == "atc"}
+            kept = [e for e in self._later if not (e.speaker == "pilot" and e.ident != callsign.ident
+                                                   and e.frequency_mhz == facility.mhz and e.ident not in atc_left)]
+            cut, self._later = len(kept) < len(self._later), kept
+        if urgent and (pending is not None or t - last_atc < BREAK_S or cut):
+            # Straight after ATC's words to the pilot (or another flight's): "break break", the urgent call at once, and
+            # the readback of what went before not waited for (a go-around can't wait for it).
             atc = replace(atc, text=f"Break, break. {atc.text}", spoken=f"Break, break. {atc.spoken}")
             if pending is not None:
                 self.state.pending = None
@@ -2509,6 +2530,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return "tower.hold_short_traffic", {"hold_short": runway, "message": Phrase(words, words)}
         if kind in ("takeoff", "lineup"):
             return ("tower.takeoff" if kind == "takeoff" else "tower.luaw"), {"runway": runway}
+        if kind == "cross":  # a runway on its way out: "cross runway 09"
+            return ("ground.cross_runway", {"runway": runway}) if runway else None
         if kind == "land":
             return ("tower.land", {"runway": runway, "wind": self._wind(own)}) if own is not None else None
         if kind == "pushback":
@@ -3217,6 +3240,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                            on_issue=lambda: self._assign(departure_runway=runway), note=note)
             return
         reason, target, miles = blocked
+        if reason == "occupied" and not self._lined_up(runway) and (first := self._lands_first(runway, target)) is not None:
+            # Lined up now, the arrival would be over the threshold before the departure could go (Punta Cana: lined up
+            # behind a departing 787, its two minutes of wake to wait, and the A320 on a seven mile final sent around).
+            reason, target, miles = "arrival", first[1], first[0]
         if reason == "arrival" and self._takeoff_hold == "occupied":
             return  # lined up already: it goes the moment the runway is free, not back to the hold line
         if self._takeoff_wait == runway and self._takeoff_hold == reason and not answering:
@@ -3237,6 +3264,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         else:
             self._schedule(t, "tower.luaw", {"runway": runway}, facility, clearance="line_up", delay=answering,
                            on_issue=lambda: self._assign(departure_runway=runway))
+
+    def _lands_first(self, runway: str, ahead: TrafficTarget | None) -> tuple[float, TrafficTarget] | None:
+        """An arrival on ``runway`` that will be at the threshold before a departure lined up now behind ``ahead`` (on
+        the runway, going) could be off it: its miles and it, or None. Behind a heavier one, its wake time counts."""
+        geo = self.geometry(self.state.flight.origin)
+        end = geo.end(runway) if geo is not None else None
+        if end is None:
+            return None
+        got = self._arrival_on(self.state.flight.origin, end.runway.name, LINE_UP_LOOK_NM)
+        if got is None:
+            return None
+        miles, arrival = got
+        wait = LINE_UP_ROLL_S  # the one ahead off the runway, then this one's own roll
+        category = self._wake_of(ahead) if ahead is not None else ""
+        if category and aircraft_size.heavier(category, self._own_wake()):
+            wait += WAKE_DEPARTURE_S.get(category, 120.0)
+        eta = miles / max(arrival.gs_kt, 100.0) * 3600.0
+        return got if eta < wait + LINE_UP_SPARE_S else None
 
     def _arrival_beyond(self, runway: str) -> float | None:
         """An arrival on the departure runway's final just beyond the margin a takeoff waits for: its miles (the
@@ -3826,7 +3871,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, "common.contact", {"station": right.station, "frequency": right.mhz}, facility,
                            handoff_to=right)
             return []
-        if pending is not None and ".handoff_" in pending.instruction_id and own is not None and not own.on_ground                 and (to := st.comms.expected) is not None and to.station != facility.station                 and not frequencies(normalize(ev.text)) and "emergency" not in st.flags:
+        if pending is not None and ".handoff_" in pending.instruction_id and own is not None and not own.on_ground \
+                and (to := st.comms.expected) is not None and to.station != facility.station \
+                and not frequencies(normalize(ev.text)) and "emergency" not in st.flags:
             # Handed on, and the pilot calls with something else on the old frequency ("airborne" to the tower that
             # said "contact Milan Radar Departure"): the handoff said again, not "say again".
             st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
@@ -4251,10 +4298,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         assert pending is not None
         issued = st.issued.get(pending.instruction_id)
         slots = issued.slots if issued else {}
+        heard = ""
+        if isinstance(mhz := pending.expected.get("frequency"), float | int) and interp.text \
+                and "frequency" not in (*interp.mismatched, *interp.unclear, *interp.missing):
+            # The log's line with the frequency as ATC took it ("Tower on 118, Dec. 7, 7, 7, 5" is 118.775)
+            heard = with_frequency(interp.text, float(mhz))
         out: list[BusEvent] = [
             ReadbackEvaluated(
                 t=t, instruction_id=pending.instruction_id, status=interp.status, missing=interp.missing,
                 mismatched={k: _display(v) for k, v in {**interp.mismatched, **interp.unclear}.items()},
+                heard=heard if heard != interp.text else "",
             )
         ]
         for clearance in st.clearances.values():
@@ -4985,9 +5038,13 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             to_go = max(to_go, leg.track_nm)  # vectored: the miles round the pattern, not abeam the field ("maintain
             # 180 until five mile final" on a downwind 30 miles from landing)
         star_kt = self._star_speed()
+        spacing = self._arrival_ahead_nm(own)
         for distance, speed, flag in SPEED_GATES:
             if assigned is not None and speed >= assigned:
                 continue  # slowed down already: never sped up again (210, then "maintain 250", then 180)
+            if speed != 250 and (spacing is None or spacing > SPEED_SPACING_NM):
+                continue  # nobody close ahead to keep apart from: no slowing down for its own sake ("you don't need
+                # speed to be reduced every approach, just if needed"); 250 below 10,000 is the rule anyway
             if star_kt and speed > star_kt:
                 continue  # off the STAR at its published 210: never faster than it (its speed, or slower)
             if speed == 250 and own.alt_indicated_ft >= SPEED_LIMIT_BELOW_FT:
@@ -5004,6 +5061,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                on_issue=lambda s=speed: self._assign(speed_kt=s))
                 return True
         return False
+
+    def _arrival_ahead_nm(self, own: OwnshipState) -> float | None:
+        """Miles to the nearest arrival ahead: airborne, low, nearer the destination than this flight; None for none."""
+        ctx = self.tracker.context
+        dest = self.geometry(self.state.flight.destination) if self.state.flight.destination else None
+        if dest is None or ctx.destination_distance_nm is None:
+            return None
+        lat, lon = dest.airport.lat, dest.airport.lon
+        mine = _distance_nm(own.lat, own.lon, lat, lon)
+        best = None
+        for target in self._traffic.values():
+            if target.on_ground or target.alt_ft - dest.airport.elev_ft > 12000 or self._climbing(target):
+                continue
+            if _distance_nm(target.lat, target.lon, lat, lon) >= mine:
+                continue
+            d = _distance_nm(own.lat, own.lon, target.lat, target.lon)
+            best = d if best is None else min(best, d)
+        return best
 
     def _star_speed(self) -> int:
         """The last published speed on the filed STAR (the sim's navdata: its common part and the runway's
@@ -7086,8 +7161,16 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
     def _heard_here(self, t: float) -> bool:
         """The pilot has spoken on the frequency tuned since tuning it, or has been quiet there long enough that the
         controller calls first (MISSED_CHECKIN_S)."""
-        return (self.state.comms.last_pilot_t or -math.inf) >= self._tuned_since \
-            or t - self._tuned_since >= MISSED_CHECKIN_S
+        comms = self.state.comms
+        spoke = comms.last_pilot_t if comms.last_pilot_t is not None else -math.inf
+        if t - self._tuned_since >= MISSED_CHECKIN_S:
+            return True
+        if spoke < self._tuned_since:
+            return False
+        # Spoken: the answer to it first ("radar contact", then the SIGMET: the model took nine seconds over its
+        # answer and the SIGMET went out before it). Not answered within ANSWER_FIRST_S, the call goes anyway.
+        working = getattr(self, "_deferred", None) is not None or any(s.reply for s in self._scheduled)
+        return not working or t - spoke >= ANSWER_FIRST_S
 
     def _staffed(self, icao: str | None, *controllers: str) -> bool:
         """``icao`` has one of ``controllers`` (its frequencies in the sim): a towered field, not one whose pilots

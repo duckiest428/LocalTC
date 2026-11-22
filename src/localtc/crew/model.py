@@ -29,6 +29,7 @@ from localtc.atc_core.llm.phrase import digits_from_words
 from localtc.crew.answers import numbers_in
 from localtc.crew.commands import Command
 from localtc.sim_api import LlmExchange
+from localtc.markup import unmarked
 
 log = logging.getLogger(__name__)
 
@@ -312,7 +313,7 @@ class CrewModel:
                                       prompt=text, response="", outcome="timeout" if result.error == "timeout" else "error",
                                       detail=result.error, latency_ms=result.latency_ms)]
         try:
-            words = str(json.loads(result.text).get("reply", "")).strip()
+            words = unmarked(str(json.loads(result.text).get("reply", "")).strip())
         except (ValueError, AttributeError):
             # (Plain text: its first line; a small model adds the numbers again in brackets below.)
             words = result.text.strip().splitlines()[0].strip().strip('"“”「」') if plain and result.text.strip() else ""
@@ -339,7 +340,7 @@ class CrewModel:
             data = json.loads(raw)
         except json.JSONDecodeError:
             return None, "not JSON"
-        reply = str(data.get("reply", "")).strip()
+        reply = unmarked(str(data.get("reply", "")).strip())
         if self.language:
             from localtc.crew import foreign
 
@@ -536,7 +537,7 @@ def check_reworded(raw: str, original: str) -> tuple[str | None, str]:
     """A reworded call: every number and every name (a procedure, an airport, a taxiway, a runway) of the original
     still there, and nothing new; not much longer than it was."""
     try:
-        reply = str(json.loads(raw).get("reply", "")).strip()
+        reply = unmarked(str(json.loads(raw).get("reply", "")).strip())
     except (ValueError, AttributeError):
         return None, "not JSON"
     if not reply:

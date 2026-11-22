@@ -1626,14 +1626,11 @@
 "Sharing: {0}.": "A partilhar: {0}.",
 "Show my flight on Live Flights?": "Mostrar o meu voo no Live Flights?",
 "Show my flight on the public Live Flights map": "Mostrar o meu voo no mapa público do Live Flights",
-"Stop sharing your flight on Live Flights? It leaves the public map now.": "Deixar de partilhar o seu voo no Live Flights? Sai do mapa público agora.",
 "Stopped sharing on Live Flights": "Deixou de partilhar no Live Flights",
 "The station and frequency you're tuned to": "A estação e a frequência em que está sintonizado",
 "This flight only": "Apenas este voo",
-"You can stop at any time: here in Settings, from the badge at the top while sharing, or on the dashboard.": "Pode parar a qualquer momento: aqui nas Definições, pelo distintivo no topo durante a partilha, ou no painel.",
 "Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route": "O seu indicativo, tipo de avião, partida e chegada e, a menos que a oculte, a sua rota submetida",
 "Your display name from the dashboard (or \"LocalTC pilot\" if you hide it)": "O seu nome de apresentação do painel (ou \"LocalTC pilot\" se o ocultar)",
-"Your flight is on the public Live Flights map. Click to stop sharing.": "O seu voo está no mapa público do Live Flights. Clique para deixar de partilhar.",
 "Your position, altitude, ground speed and heading": "A sua posição, altitude, velocidade em relação ao solo e rumo",
 "and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.": "e alimenta a aplicação complementar. Envia resumos dos voos (aeroportos, horas, distância, razão de aterragem) e, enquanto voa, a fase e as frequências: nunca a sua posição (a menos que ative o Live Flights), voz, transcrições ou gravações.",
 "every flight": "todos os voos",
@@ -1642,5 +1639,7 @@
 "this flight only": "apenas este voo",
 "{0} min delay": "{0} min de atraso",
 "● On the map now": "● No mapa agora",
-"● Sharing live": "● A partilhar em direto"
+"Change it any time in Settings → Account.": "Pode mudar a qualquer momento em Definições → Conta.",
+"With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Com uma conta gratuita (Definições → Conta), o seu voo pode aparecer no mapa público do Live Flights, localtc.tech/live.",
+"You can stop at any time: here in Settings, or on the dashboard.": "Pode parar a qualquer momento: aqui nas Definições, ou no painel."
 }

@@ -1626,14 +1626,11 @@
 "Sharing: {0}.": "分享：{0}。",
 "Show my flight on Live Flights?": "在 Live Flights 上显示我的航班？",
 "Show my flight on the public Live Flights map": "在公开的 Live Flights 地图上显示我的航班",
-"Stop sharing your flight on Live Flights? It leaves the public map now.": "停止在 Live Flights 上分享你的航班？它会立即离开公开地图。",
 "Stopped sharing on Live Flights": "已停止在 Live Flights 上分享",
 "The station and frequency you're tuned to": "你调谐的电台和频率",
 "This flight only": "仅本次飞行",
-"You can stop at any time: here in Settings, from the badge at the top while sharing, or on the dashboard.": "你可以随时停止：在这里的设置中、分享时通过顶部的标记，或在控制台中。",
 "Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route": "你的呼号、机型、起飞和到达机场，以及（除非你隐藏）你申报的航路",
 "Your display name from the dashboard (or \"LocalTC pilot\" if you hide it)": "你在控制台中的显示名称（如果隐藏则为\"LocalTC pilot\"）",
-"Your flight is on the public Live Flights map. Click to stop sharing.": "你的航班正在公开的 Live Flights 地图上。点击停止分享。",
 "Your position, altitude, ground speed and heading": "你的位置、高度、地速和航向",
 "and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.": "并为配套应用提供数据。它发送飞行摘要（机场、时间、距离、着陆率），以及飞行时的阶段和频率：绝不包括你的位置（除非你开启 Live Flights）、语音、转写或录音。",
 "every flight": "每次飞行",
@@ -1642,5 +1639,7 @@
 "this flight only": "仅本次飞行",
 "{0} min delay": "延迟 {0} 分钟",
 "● On the map now": "● 正在地图上",
-"● Sharing live": "● 正在实时分享"
+"Change it any time in Settings → Account.": "随时可在 设置 → 账户 中更改。",
+"With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "有了免费账户（设置 → 账户），你的航班可以显示在公开的 Live Flights 地图上：localtc.tech/live。",
+"You can stop at any time: here in Settings, or on the dashboard.": "你可以随时停止：在这里的设置中，或在控制台中。"
 }

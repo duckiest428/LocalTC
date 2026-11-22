@@ -30,6 +30,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from localtc.markup import unmarked
 from localtc.tts.accents import accent_for
 from localtc.tts.persona import Persona
 from localtc.tts.synth import Speech
@@ -147,6 +148,7 @@ class VoiceChain:
         """The first provider's good audio for ``text``, or None (text only). ``local``: only those on this PC (none
         there: the cloud's after all)."""
         providers = [p for p in self.providers if getattr(p, "local", True)] if local else self.providers
+        text = unmarked(text)  # ("*shaken, not stirred*" was read as "asterisk shaken ...")
         key = (text, persona)
         if len(text) <= KEEP_CHARS and (kept := self._kept.get(key)) is not None:
             return dataclasses.replace(kept, audio=kept.audio.copy(), latency_ms=0.0)

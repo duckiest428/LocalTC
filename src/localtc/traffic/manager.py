@@ -131,6 +131,8 @@ LIVE_PER_TICK = 2
 PARKED_MODELS = 10  # an airport's parked aircraft drawn with this many models at most (each one more is memory)
 STATUS_EVERY_S = 5.0
 SHORT_FINAL_NM = 4.0
+# Sent around for the user taking off: rolling, only this close in; cleared and about to roll, this close
+ROLLING_USER_KT, ROLLING_FINAL_NM, CLEARED_FINAL_NM = 10.0, 1.5, 2.5
 SHORT_FINAL_AGL = 2000.0
 RUNWAY_NEAR_M = 120.0
 HELD_RELEASE_S = 20.0  # the user off the runway this long: the held departure goes
@@ -160,6 +162,7 @@ ROLL_AFTER_CALL_S = 18.0  # a released departure lines up and waits this long (i
 EARLY_KEPT_OFF_S = 1800.0  # one that went before its real one: the real one isn't made again for this long
 FROZEN_AIR_S = 45.0  # reported in the air at speed, and in the same place in every report this long: taken away
 QUEUE_CONE_DEG = 40.0  # ahead: within this either side of its nose
+QUEUE_WAITING_STUCK_S = 600.0  # ... and behind one waiting its turn (the holding point, its clearance) only after this
 QUEUE_STUCK_S = 120.0  # one in line behind another that hasn't moved in this long goes round it (a Delta stood across
 # the taxiway at the end of O'Hare's line, and the whole line behind it with it)
 QUEUE_SAME_WAY_DEG = 90.0  # going the same way (one coming the other way isn't queued behind: they'd both wait)
@@ -245,7 +248,7 @@ ESTABLISHED_M = 150.0  # this close to the centreline, and lined up with it: on 
 APPROACH_TTL_S = 25 * 60.0
 APPROACH_TRIES = 2  # sent around, it comes round for another approach this many times at most
 RUNWAY_SHORT_M = 1500.0  # an airliner's airport has a runway this long at least (not the strip beside the hub)
-LINE_UP_CLEAR_NM = 5.0  # a departure doesn't line up with one of LocalTC's arrivals this close in on that runway
+LINE_UP_CLEAR_NM = 4.0  # a departure doesn't line up with one of LocalTC's arrivals this close in on that runway
 OCCUPIED_NM = 1.0  # an arrival this close in with another of LocalTC's on the runway: sent around
 REJOIN_TTL_S = 15 * 60.0  # a departure off ATC's runway flies to the real one's track this long at most
 REJOIN_LEAD_S = 60.0  # ... steering for where the real one will be this far ahead
@@ -294,6 +297,9 @@ class AtcLink:
     # The controllers telling a real flight what it's about to do (``TrafficManager._calls``): keyword arguments
     # callsign, kind, icao, runway, lat, lon, destination.
     call: Callable[..., list[Any]] = lambda **kw: []
+    # Whether a call of that kind at that airport would be heard: the user tuned to that controller (a move waits for
+    # its call only then; nobody listening, it goes)
+    hears: Callable[[str, str], bool] = lambda kind, icao: False
     managed: Callable[[set[int]], None] = lambda ids: None  # the object ids that are LocalTC's, each second
     runway_in_use: Callable[[str], str | None] = lambda icao: None  # the departure runway at an airport, by ATC
     # The runway ATC gives one flight there: (icao, landing=, aircraft_type=, lat=, lon=, key=callsign) -> its ident,
@@ -341,6 +347,8 @@ class Local:
     turn: float = 0.0  # degrees a second it's turning now (its bank)
     tries: int = 0  # approaches flown (sent around: another, up to APPROACH_TRIES)
     rejoin: bool = False  # a departure off ATC's runway, flying to the real one's track
+    go_t: float = 0.0  # taxiing out: moves on once its clearance has been heard (the taxi, a crossing, the takeoff)
+    crossed: tuple[str, ...] = ()  # the runways it's been cleared across
 
 
 @dataclass
@@ -645,6 +653,17 @@ class TrafficManager:
     def _dist_nm(self, lat: float, lon: float) -> float:
         return haversine_nm(self.own.lat, self.own.lon, lat, lon)
 
+    def _ground_at(self, plane: "Plane", f: Flight | None) -> tuple[float, float] | None:
+        """Where one of LocalTC's stands or taxis on the ground, or None if it's flying (or nowhere yet)."""
+        if plane.mode == "parked" and plane.spot is not None and plane.spot[0] in self.airports:
+            return self._spot_latlon(plane.spot)
+        if plane.local is not None:
+            return (plane.local.lat, plane.local.lon) if plane.local.on_ground else None
+        if plane.mode == "live":
+            shown = plane.flight or f
+            return (shown.lat, shown.lon) if shown is not None and shown.on_ground else None
+        return (plane.sent[0], plane.sent[1]) if plane.sent is not None else None
+
     def _live(self, now: float) -> list[Any]:
         out: list[Any] = []
         own = self.own
@@ -670,6 +689,12 @@ class TrafficManager:
         # Gone: out of the area, lost, or one too many.
         for key, plane in list(self.planes.items()):
             f = self.flights.get(key[5:]) if plane.live else None
+            if plane.live and not own.on_ground and plane.mode in ("parked", "taxi_out", "hold", "give_way", "taxi_in", "live") \
+                    and (where := self._ground_at(plane, f)) is not None and self._dist_nm(*where) > PARKED_LEAVE_NM:
+                # An airport left behind: what's still on its ground goes (45 nm past Punta Cana, three were still
+                # taxiing out there, and three at their gates).
+                out += self._remove(plane)
+                continue
             if f is not None and plane.mode == "live" and self._frozen(plane, f, now):
                 # Hanging in the air, its reports flying but never moving: a departure stood at 4,100 ft south of
                 # Seattle for eight minutes. (Judged by what was sent, the arrivals the bridge was carrying on between
@@ -1380,7 +1405,11 @@ class TrafficManager:
             if flown and loc.on_ground:
                 continue
             if flown or not f.on_ground:
-                final = geo.final_approach(lat, lon, hdg, max_distance_nm=SHORT_FINAL_NM)
+                # The user rolling is off the runway in well under a minute: only one about to be over the threshold
+                # goes round (JetBlue sent around 4 miles out as the user rolled, cleared with it 5.4 out).
+                rolling = self.own is not None and self.own.on_ground and self.own.gs_kt >= ROLLING_USER_KT
+                close = ROLLING_FINAL_NM if rolling else CLEARED_FINAL_NM if kind == "takeoff" else SHORT_FINAL_NM
+                final = geo.final_approach(lat, lon, hdg, max_distance_nm=close)
                 if final is not None and final.end.runway is runway and alt - geo.airport.elev_ft < SHORT_FINAL_AGL \
                         and kind in ("takeoff", "on"):
                     out += self._go_around(plane, geo, final.end, now)
@@ -1514,7 +1543,10 @@ class TrafficManager:
             if abs(((bearing - loc.hdg + 540) % 360) - 180) <= QUEUE_CONE_DEG:
                 d = haversine_nm(loc.lat, loc.lon, there.lat, there.lon) * M_PER_NM
                 w = loc.behind
-                if w is not None and w[0] == other.key and now - w[1] > QUEUE_STUCK_S \
+                # Waiting its turn (at the holding point, in the line itself, for its clearance) is a queue however long
+                # it lasts: gone round, the 787 drove into the A330 ahead of it and two stood on one holding point.
+                waiting = there.stage in ("hold_short", "line_up", "start") or there.behind is not None or now < there.go_t
+                if w is not None and w[0] == other.key and now - w[1] > (QUEUE_WAITING_STUCK_S if waiting else QUEUE_STUCK_S) \
                         and haversine_nm(w[2], w[3], there.lat, there.lon) * M_PER_NM < 5:
                     stuck = True
                     continue  # stood there all this time: not a queue, an obstacle (in the sim they pass through)
@@ -1567,6 +1599,9 @@ class TrafficManager:
         self._did(f"{plane.callsign} cleared for takeoff {end.ident} after you")
         out = [self._send(plane, AiTrack(object_id=plane.object_id, lat=lat, lon=lon, alt_ft=geo.airport.elev_ft,
                                          hdg=end.heading_true, on_ground=True, blend_s=3.0), now)]
+        if "takeoff" in plane.said:  # cleared at the holding point already: it rolls
+            plane.local.roll_after = now + 3.0
+            return out
         return out + self._say(plane.callsign, "takeoff", geo.icao, end.ident, now)
 
     def _go_around(self, plane: Plane, geo: AirportGeometry, end, now: float, why: str = "") -> list[Any]:
@@ -2201,11 +2236,25 @@ class TrafficManager:
             if now - loc.stage_t >= START_S:
                 loc.stage, loc.stage_t = "taxi", now
         elif loc.stage == "taxi":
-            out += self._try_call(plane, "taxi_out", icao, ident, now, lat=loc.push_to[0], lon=loc.push_to[1])
+            said = self._try_call(plane, "taxi_out", icao, ident, now, lat=loc.push_to[0], lon=loc.push_to[1])
+            out += said
+            loc.go_t = max(loc.go_t, self._heard_by(said))
             own = self.own
             ahead = advance(loc.lat, loc.lon, loc.hdg, 40.0 / 0.5144, 0.0, 1.0)
             limit = None  # slowed to stop, not stopped dead
-            if own.on_ground and self._user_in_way(loc, own, now):
+            crossing = self._crossing_ahead(geo, plane, ahead[:2])
+            if crossing and crossing not in loc.crossed:
+                said = self._try_call(plane, "cross", icao, crossing, now)
+                out += said
+                loc.go_t = max(loc.go_t, self._heard_by(said))
+                if said or not self._call_waits(plane, "cross", now):
+                    loc.crossed += (crossing,)
+                    plane.said.discard("cross")  # (the next runway on its way gets its own)
+                    plane.call_due.pop("cross", None)
+            if now < loc.go_t or self._call_waits(plane, "taxi_out", now) or (crossing and crossing not in loc.crossed):
+                limit = 0.0  # its clearance first, heard on the frequency, then it moves (Air Canada moved off before
+                # its "ready to taxi", lined up before its takeoff clearance and crossed a runway untold)
+            elif own.on_ground and self._user_in_way(loc, own, now):
                 limit = 0.0  # the user ahead: it waits
             elif self._users_runway_at(geo, *ahead[:2], now):
                 limit = 0.0  # not across the runway the user has
@@ -2222,7 +2271,15 @@ class TrafficManager:
             busy = end is not None and (self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
                                         or self._arrival_close(geo, end))  # (one of LocalTC's coming in to it)
             waited = now - loc.stage_t >= HOLD_SHORT_MAX_S
-            if (rolling or waited) and not busy and now - self._released_t >= self._wake_gap(plane, TAKEOFF_GAP_S):
+            ready = (rolling or waited) and not busy and now - self._released_t >= self._wake_gap(plane, TAKEOFF_GAP_S)
+            if ready and "takeoff" not in plane.said and self._calls_on(plane):
+                said = self._try_call(plane, "takeoff", icao, ident, now)
+                out += said
+                if said:
+                    loc.go_t = self._heard_by(said)
+                elif self._call_waits(plane, "takeoff", now):
+                    ready = False  # its clearance first (the frequency busy): it waits for a gap, then goes whatever
+            if ready and now >= loc.go_t:
                 self._released_t, self._released_wake = now, self._wake_of(plane)
                 if not rolling and plane.live:
                     self._kept_off[plane.key] = now + EARLY_KEPT_OFF_S  # gone before its real one: not made again
@@ -2310,10 +2367,37 @@ class TrafficManager:
         end = geo.end(user[1])
         return end is not None and end.runway.contains(geo.xy(lat, lon), 30.0)
 
+    def _calls_on(self, plane: Plane) -> bool:
+        return bool(self.s.atc_control and plane.callsign)
+
+    @staticmethod
+    def _heard_by(said: list[Any]) -> float:
+        """When the controller's words in a call just made have been said (the pilot's request first, then them): the
+        aircraft moves after that, not as the request goes out. 0 when nothing was said."""
+        atc = [e for e in said if getattr(e, "speaker", "") == "atc"]
+        if not atc:
+            return 0.0
+        words = len(str(getattr(atc[0], "spoken", "") or getattr(atc[0], "text", "")).split())
+        return float(atc[0].t) + words / 2.6 + 1.0
+
+    def _crossing_ahead(self, geo: AirportGeometry, plane: Plane, ahead: tuple[float, float]) -> str:
+        """The runway just ahead on its way out that isn't its own (to cross it), as said ("09"), or "" for none."""
+        loc = plane.local
+        runway = geo.runway_at(ahead[0], ahead[1], 10.0)
+        if runway is None or geo.runway_at(loc.lat, loc.lon, 10.0) is runway:
+            return ""
+        idents = [e.ident for e in runway.ends]
+        if loc.runway and loc.runway[1] in idents:
+            return ""  # its own: the line-up's, not a crossing
+        return min(idents)
+
     def _call_waits(self, plane: Plane, kind: str, now: float) -> bool:
         """The move waits for its call: one tried and not said yet (the frequency busy), still inside its window."""
         if not self.s.atc_control or not plane.callsign or kind in plane.said:
             return False
+        icao = plane.spot[0] if plane.spot else plane.local.runway[0] if plane.local and plane.local.runway else ""
+        if not self.atc.hears("taxi_out" if kind == "cross" else kind, icao):
+            return False  # nobody's listening to that frequency: it goes
         return now - plane.call_due.get(kind, now) <= CALL_WINDOW_S
 
     def _try_call(self, plane: Plane, kind: str, icao: str, runway: str, now: float, **extra: Any) -> list[Any]:

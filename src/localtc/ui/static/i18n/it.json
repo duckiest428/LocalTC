@@ -1626,14 +1626,11 @@
 "Sharing: {0}.": "Condivisione: {0}.",
 "Show my flight on Live Flights?": "Mostrare il mio volo su Live Flights?",
 "Show my flight on the public Live Flights map": "Mostra il mio volo sulla mappa pubblica di Live Flights",
-"Stop sharing your flight on Live Flights? It leaves the public map now.": "Smettere di condividere il tuo volo su Live Flights? Lascia subito la mappa pubblica.",
 "Stopped sharing on Live Flights": "Condivisione su Live Flights interrotta",
 "The station and frequency you're tuned to": "La stazione e la frequenza su cui sei sintonizzato",
 "This flight only": "Solo questo volo",
-"You can stop at any time: here in Settings, from the badge at the top while sharing, or on the dashboard.": "Puoi smettere in qualsiasi momento: qui nelle Impostazioni, dal badge in alto mentre condividi, o nella dashboard.",
 "Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route": "Il tuo nominativo, il tipo di aereo, partenza e arrivo e, se non la nascondi, la rotta depositata",
 "Your display name from the dashboard (or \"LocalTC pilot\" if you hide it)": "Il tuo nome visualizzato dalla dashboard (o \"LocalTC pilot\" se lo nascondi)",
-"Your flight is on the public Live Flights map. Click to stop sharing.": "Il tuo volo è sulla mappa pubblica di Live Flights. Fai clic per smettere di condividere.",
 "Your position, altitude, ground speed and heading": "La tua posizione, quota, velocità al suolo e prua",
 "and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.": "e alimenta l'app companion. Invia i riepiloghi dei voli (aeroporti, orari, distanza, rateo di atterraggio) e, mentre voli, la fase e le frequenze: mai la tua posizione (a meno che non attivi Live Flights), voce, trascrizioni o registrazioni.",
 "every flight": "ogni volo",
@@ -1642,5 +1639,7 @@
 "this flight only": "solo questo volo",
 "{0} min delay": "{0} min di ritardo",
 "● On the map now": "● Sulla mappa ora",
-"● Sharing live": "● Condivisione in diretta"
+"Change it any time in Settings → Account.": "Puoi cambiarlo quando vuoi in Impostazioni → Account.",
+"With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Con un account gratuito (Impostazioni → Account), il tuo volo può comparire sulla mappa pubblica Live Flights, localtc.tech/live.",
+"You can stop at any time: here in Settings, or on the dashboard.": "Puoi smettere in qualsiasi momento: qui nelle Impostazioni o nella dashboard."
 }

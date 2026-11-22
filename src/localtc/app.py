@@ -212,6 +212,9 @@ def traffic_atc(engine) -> "AtcLink":
         own = engine.state.aircraft
         return engine.traffic_call(callsign, kind, icao, runway, own.t if own is not None else 0.0, **more)
 
+    def hears(kind: str, icao: str) -> bool:
+        return engine.traffic_heard(kind, icao)
+
     def managed(ids: set[int]) -> None:
         engine.managed_traffic = ids
 
@@ -227,7 +230,7 @@ def traffic_atc(engine) -> "AtcLink":
         return engine.closed_taxiways(icao)
 
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
-                   destination=lambda: engine.state.flight.destination or "", call=call, managed=managed,
+                   destination=lambda: engine.state.flight.destination or "", call=call, hears=hears, managed=managed,
                    runway_in_use=runway_in_use, runway_for=runway_for, closed=closed,
                    user_callsign=lambda: str(engine.state.flight.callsign.ident) if engine.state.flight.callsign else "")
 

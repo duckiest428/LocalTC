@@ -817,7 +817,8 @@ class AppController:
             if isinstance(ev, AtcTransmission):
                 self._last_atc = ev
                 self.companion.on_event(ev)
-            if isinstance(ev, RadioTuned) and ev.controller is None and not self.cfg.ground.enabled                     and not self._told_ramp_off and on_ramp(ev.frequency_mhz):
+            if isinstance(ev, RadioTuned) and ev.controller is None and not self.cfg.ground.enabled \
+                and not self._told_ramp_off and on_ramp(ev.frequency_mhz):
                 self._told_ramp_off = True
                 self.system("That's the ramp frequency, but the ground crew are off. Turn them on in Settings, Ground crew: "
                             "they start with the next flight.")

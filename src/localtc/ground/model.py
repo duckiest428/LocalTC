@@ -13,6 +13,7 @@ from localtc.ground import grammar as g
 from localtc.ground.api import SERVICES
 from localtc.atc_core.llm.backend import LlmRequest
 from localtc.sim_api import LlmExchange
+from localtc.markup import unmarked
 
 MODES = ("scripted", "semi", "mostly_llm", "llm")
 ACTIONS = (g.BRAKES_SET, g.WHERE, g.REQUEST, g.CANCEL, g.FINISH, g.HURRY, g.STATUS, g.PUSH, g.STOP_PUSH, g.OFF, g.GATE, g.YES, g.NO, g.OPTION, g.FULL)
@@ -45,6 +46,11 @@ WORD_SYSTEM = (
 
 # Told not to, a model still had the crew waiting on the pilot: "Jetway's coming right up, just let me know when you're ready to plug in."
 WAITS_ON_THE_PILOT = re.compile(r"\blet (?:me|us) know\b|\bwhen you(?:'|\u2019)?(?:re| are) ready\b|\bgive (?:me|us) a shout\b", re.IGNORECASE)
+
+
+# "Hold off on pushback and startup, we've still got the GPU hooked up" for "We've still got the GPU on. Do you want to
+# push regardless?": the crew's question turned into an order to wait, and the pilot asked them to take it away.
+HOLD_OFF = re.compile(r"\b(?:hold off|hold on|hold tight|stand by|wait(?:ing)? (?:for|until|till|a)|not yet)\b", re.IGNORECASE)
 
 
 # "Jetway's clear, you're good to go" for "taking away the jetway", with it still on the door, and the copilot then told the captain it was.
@@ -118,11 +124,13 @@ class RampModel:
         text, record = self._ask("ramp_word", system, f"Pilot said: \"{heard}\"\nYou were going to say: \"{draft}\"",
                                  {"type": "object", "properties": {"reply": {"type": "string"}}, "required": ["reply"]}, t, 120)
         try:
-            reply = str(json.loads(text).get("reply", "")).strip() if text else ""
+            reply = unmarked(str(json.loads(text).get("reply", "")).strip()) if text else ""
         except (ValueError, AttributeError):
             reply = ""
         why = "it had the crew waiting for the pilot" if reply and WAITS_ON_THE_PILOT.search(reply) and not WAITS_ON_THE_PILOT.search(draft) \
-            else "it said something was done that isn't yet" if reply and SAYS_DONE.search(reply) and not SAYS_DONE.search(draft) else ""
+            else "it said something was done that isn't yet" if reply and SAYS_DONE.search(reply) and not SAYS_DONE.search(draft) \
+            else "it answered the crew's own question" if reply and "?" in draft and "?" not in reply \
+            else "it told the pilot to wait" if reply and HOLD_OFF.search(reply) and not HOLD_OFF.search(draft) else ""
         if why:
             return draft, [LlmExchange(t=t, purpose=record.purpose, model=record.model, key=record.key, prompt=record.prompt, response=record.response,
                                        outcome="rejected", detail=why, latency_ms=record.latency_ms)]

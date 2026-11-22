@@ -21,6 +21,7 @@ from dataclasses import replace
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest, waits
 from localtc.atc_core.phraseology import speech
 from localtc.atc_core.values import Phrase
+from localtc.markup import unmarked
 from localtc.sim_api import LlmExchange
 
 # [llm] beyond_facts: the model may answer from what it knows as well, where the sim's data says nothing.
@@ -145,7 +146,7 @@ def _reply_text(raw: str, callsigns: tuple[str, ...]) -> str:
     reply = data.get("reply") if isinstance(data, dict) else None
     if not isinstance(reply, str) or not reply.strip():
         raise PhraseError("reply must be a non-empty string")
-    text = " ".join(reply.split()).strip(" .")
+    text = " ".join(unmarked(reply).split()).strip(" .")
     for callsign in callsigns:
         if callsign and text.lower().startswith(callsign.lower()):
             text = text[len(callsign):].lstrip(" ,")

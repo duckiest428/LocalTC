@@ -1626,14 +1626,11 @@
 "Sharing: {0}.": "Публикация: {0}.",
 "Show my flight on Live Flights?": "Показать мой полёт в Live Flights?",
 "Show my flight on the public Live Flights map": "Показывать мой полёт на публичной карте Live Flights",
-"Stop sharing your flight on Live Flights? It leaves the public map now.": "Прекратить публикацию вашего полёта в Live Flights? Он сразу исчезнет с публичной карты.",
 "Stopped sharing on Live Flights": "Публикация в Live Flights прекращена",
 "The station and frequency you're tuned to": "Станция и частота, на которую вы настроены",
 "This flight only": "Только этот полёт",
-"You can stop at any time: here in Settings, from the badge at the top while sharing, or on the dashboard.": "Вы можете прекратить в любой момент: здесь в Настройках, значком вверху во время публикации или в панели управления.",
 "Your callsign, aircraft type, departure and arrival and, unless you hide it, your filed route": "Ваш позывной, тип самолёта, вылет и прилёт и, если вы его не скроете, поданный маршрут",
 "Your display name from the dashboard (or \"LocalTC pilot\" if you hide it)": "Ваше отображаемое имя из панели управления (или \"LocalTC pilot\", если вы его скроете)",
-"Your flight is on the public Live Flights map. Click to stop sharing.": "Ваш полёт на публичной карте Live Flights. Нажмите, чтобы прекратить публикацию.",
 "Your position, altitude, ground speed and heading": "Ваше положение, высота, путевая скорость и курс",
 "and feeds the companion app. It sends flight summaries (airports, times, distance, landing rate) and, while you fly, the phase and frequencies: never your position (unless you turn on Live Flights), voice, transcripts or recordings.": "и снабжает приложение-компаньон. Оно отправляет сводки полётов (аэропорты, время, расстояние, вертикальная скорость при посадке), а во время полёта — этап и частоты: никогда ваше положение (если вы не включите Live Flights), голос, расшифровки или записи.",
 "every flight": "каждый полёт",
@@ -1642,5 +1639,7 @@
 "this flight only": "только этот полёт",
 "{0} min delay": "задержка {0} мин",
 "● On the map now": "● Сейчас на карте",
-"● Sharing live": "● Публикуется вживую"
+"Change it any time in Settings → Account.": "Изменить можно в любой момент: Настройки → Аккаунт.",
+"With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "С бесплатным аккаунтом (Настройки → Аккаунт) ваш полёт может отображаться на публичной карте Live Flights, localtc.tech/live.",
+"You can stop at any time: here in Settings, or on the dashboard.": "Вы можете прекратить в любой момент: здесь в Настройках или в панели управления."
 }

@@ -805,8 +805,13 @@ class LlmInterpreter:
                 unclear[element] = close
             elif candidates:
                 mismatched[element] = candidates[0]
-            elif from_model is not None:
+            elif from_model is not None and element in pending.required:
                 mismatched[element] = from_model
+            elif from_model is not None:
+                # Optional, and nothing in the pilot's words for it: the model filed something else they said under it
+                # ("climb flight level 060" as the cruise, and ATC said "negative, expect flight level 150", which the
+                # clearance never mentioned). Not read back is all an optional element can be.
+                continue
             elif element in pending.required:
                 missing.append(element)
         if not heard and not mismatched and not unclear:

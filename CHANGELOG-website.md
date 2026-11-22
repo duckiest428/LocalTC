@@ -31,6 +31,10 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   to each chapter. A YouTube link on a line of its own in a post is shown as the video, which is loaded from YouTube
   only once its play button is pressed (the cookie and privacy pages say so).
 
+### Changed
+- **The privacy policy on stopping Live Flights:** in the app's Settings or on the dashboard (the app's "Sharing live"
+  badge is gone).
+
 ## [0.5.8] - 2026-11-17
 
 ### Fixed

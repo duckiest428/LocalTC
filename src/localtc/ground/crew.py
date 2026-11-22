@@ -77,7 +77,8 @@ SIDE = {g.NOSE_LEFT: "right", g.NOSE_RIGHT: "left"}  # the headset's side: the s
 PASSED_ON = ("cannot", "can't", "you already", "jetway not close", "no jetway", "not enough")
 FUEL_ROW = re.compile(r"(\d{1,3})\s*%")
 WHY = {"never_opened": "its menu never came up.", "missing": "that isn't on its menu right now.", "disabled": "it's greyed out on its menu.",
-       "no_change": "it didn't react.", "ambiguous": "its menu has more than one like that."}
+       "no_change": "it didn't react.", "ambiguous": "its menu has more than one like that.",
+       "with_push": "GSX takes it away itself when the push starts."}
 
 
 @dataclass
@@ -886,8 +887,10 @@ class RampCrew:
                     self._sending = None
                     self._ours.pop(service, None)
                 self._cancelled.discard(service)
+                # The GPU not on GSX's menu to send away (Punta Cana, asked before the push): it goes with the push.
+                failed = "with_push" if kind == "off" and service == "GPU" and run.failed == "missing" else run.failed
                 out.append(self._speech({"cancel": "cancel_failed", "finish": "finish_failed", "off": "off_failed"}.get(kind, "menu_failed"),
-                                        t, name=name, why=self._why(run.failed)))
+                                        t, name=name, why=self._why(failed)))
             elif kind != "call":  # (a service called: GSX showing it says the rest)
                 out.append(self._speech({"cancel": "cancelled", "finish": "finished", "off": "off"}[kind], t, name=name))
         return out

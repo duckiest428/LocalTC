@@ -104,16 +104,16 @@ TERMS: dict[str, tuple[str, ...]] = {
 }
 # Why a menu errand failed, by ``crew.WHY``'s keys.
 WHY: dict[str, dict[str, str]] = {
-    "de": {"never_opened": "das Menü ging nicht auf.", "missing": "das steht gerade nicht im Menü.", "disabled": "das ist im Menü ausgegraut.", "no_change": "es hat nicht reagiert.", "ambiguous": "das steht mehrfach im Menü."},
-    "fr": {"never_opened": "le menu ne s'est pas ouvert.", "missing": "ce n'est pas au menu pour l'instant.", "disabled": "c'est grisé dans le menu.", "no_change": "ça n'a pas réagi.", "ambiguous": "il y a plusieurs choix comme ça au menu."},
-    "es": {"never_opened": "el menú no se abrió.", "missing": "ahora no está en el menú.", "disabled": "está en gris en el menú.", "no_change": "no ha reaccionado.", "ambiguous": "hay más de una opción así en el menú."},
-    "it": {"never_opened": "il menu non si è aperto.", "missing": "ora non è nel menu.", "disabled": "è in grigio nel menu.", "no_change": "non ha reagito.", "ambiguous": "nel menu ce n'è più di uno così."},
-    "pt": {"never_opened": "o menu não abriu.", "missing": "agora não está no menu.", "disabled": "está a cinzento no menu.", "no_change": "não reagiu.", "ambiguous": "há mais do que uma opção assim no menu."},
-    "nl": {"never_opened": "het menu ging niet open.", "missing": "dat staat nu niet in het menu.", "disabled": "dat is grijs in het menu.", "no_change": "er gebeurde niets.", "ambiguous": "dat staat meerdere keren in het menu."},
-    "pl": {"never_opened": "menu się nie otworzyło.", "missing": "tego teraz nie ma w menu.", "disabled": "to jest wyszarzone w menu.", "no_change": "nic się nie stało.", "ambiguous": "w menu jest kilka takich pozycji."},
-    "sv": {"never_opened": "menyn öppnades inte.", "missing": "det finns inte i menyn just nu.", "disabled": "det är nedtonat i menyn.", "no_change": "inget hände.", "ambiguous": "det finns flera sådana i menyn."},
-    "ru": {"never_opened": "меню не открылось.", "missing": "сейчас этого нет в меню.", "disabled": "в меню это неактивно.", "no_change": "ничего не произошло.", "ambiguous": "в меню таких несколько."},
-    "zh": {"never_opened": "菜单没有打开。", "missing": "菜单里现在没有这一项。", "disabled": "这一项在菜单里是灰色的。", "no_change": "没有反应。", "ambiguous": "菜单里有多个这样的选项。"},
+    "de": {"with_push": "GSX nimmt sie selbst weg, wenn der Pushback beginnt.", "never_opened": "das Menü ging nicht auf.", "missing": "das steht gerade nicht im Menü.", "disabled": "das ist im Menü ausgegraut.", "no_change": "es hat nicht reagiert.", "ambiguous": "das steht mehrfach im Menü."},
+    "fr": {"with_push": "GSX le retire tout seul au début du repoussage.", "never_opened": "le menu ne s'est pas ouvert.", "missing": "ce n'est pas au menu pour l'instant.", "disabled": "c'est grisé dans le menu.", "no_change": "ça n'a pas réagi.", "ambiguous": "il y a plusieurs choix comme ça au menu."},
+    "es": {"with_push": "GSX lo retira solo cuando empieza el remolque.", "never_opened": "el menú no se abrió.", "missing": "ahora no está en el menú.", "disabled": "está en gris en el menú.", "no_change": "no ha reaccionado.", "ambiguous": "hay más de una opción así en el menú."},
+    "it": {"with_push": "GSX lo toglie da solo quando inizia il pushback.", "never_opened": "il menu non si è aperto.", "missing": "ora non è nel menu.", "disabled": "è in grigio nel menu.", "no_change": "non ha reagito.", "ambiguous": "nel menu ce n'è più di uno così."},
+    "pt": {"with_push": "O GSX retira-o sozinho quando o pushback começa.", "never_opened": "o menu não abriu.", "missing": "agora não está no menu.", "disabled": "está a cinzento no menu.", "no_change": "não reagiu.", "ambiguous": "há mais do que uma opção assim no menu."},
+    "nl": {"with_push": "GSX haalt hem zelf weg zodra de pushback begint.", "never_opened": "het menu ging niet open.", "missing": "dat staat nu niet in het menu.", "disabled": "dat is grijs in het menu.", "no_change": "er gebeurde niets.", "ambiguous": "dat staat meerdere keren in het menu."},
+    "pl": {"with_push": "GSX sam go zabiera, gdy zaczyna się wypychanie.", "never_opened": "menu się nie otworzyło.", "missing": "tego teraz nie ma w menu.", "disabled": "to jest wyszarzone w menu.", "no_change": "nic się nie stało.", "ambiguous": "w menu jest kilka takich pozycji."},
+    "sv": {"with_push": "GSX tar bort det själv när pushbacken börjar.", "never_opened": "menyn öppnades inte.", "missing": "det finns inte i menyn just nu.", "disabled": "det är nedtonat i menyn.", "no_change": "inget hände.", "ambiguous": "det finns flera sådana i menyn."},
+    "ru": {"with_push": "GSX сам убирает его, когда начинается буксировка.", "never_opened": "меню не открылось.", "missing": "сейчас этого нет в меню.", "disabled": "в меню это неактивно.", "no_change": "ничего не произошло.", "ambiguous": "в меню таких несколько."},
+    "zh": {"with_push": "推出开始时 GSX 会自己撤走。", "never_opened": "菜单没有打开。", "missing": "菜单里现在没有这一项。", "disabled": "这一项在菜单里是灰色的。", "no_change": "没有反应。", "ambiguous": "菜单里有多个这样的选项。"},
 }
 
 LINES: dict[str, dict[str, str]] = {

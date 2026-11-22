@@ -80,6 +80,7 @@ from localtc.sim_api import (
 )
 from localtc.sim_api.events import REPEATED
 from localtc.sim_api.geo import haversine_nm
+from localtc.markup import unmarked
 
 
 @dataclass(frozen=True)
@@ -1309,7 +1310,7 @@ class CabinCrew:
         reply = ""
         if result.text:
             try:
-                reply = str(json.loads(result.text).get("reply", "")).strip()
+                reply = unmarked(str(json.loads(result.text).get("reply", "")).strip())
             except (ValueError, AttributeError):
                 reply = ""
         wanted = {n.lower().strip(".,") for n in NUMBER.findall(draft)}
@@ -1370,7 +1371,7 @@ class CabinCrew:
         reply = ""
         if result.text:
             try:
-                reply = str(json.loads(result.text).get("reply", "")).strip()
+                reply = unmarked(str(json.loads(result.text).get("reply", "")).strip())
             except (ValueError, AttributeError):
                 reply = ""
         wrong = self._wrong_words(reply, draft, to_captain=True) if reply else ""

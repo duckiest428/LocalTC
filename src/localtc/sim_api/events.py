@@ -611,6 +611,7 @@ class ReadbackEvaluated(Event, tag="readback_evaluated"):
     status: str  # correct, incorrect, incomplete, no_match
     missing: tuple[str, ...] = ()
     mismatched: dict[str, str] = {}  # element -> what the pilot said
+    heard: str = ""  # the pilot's words with the frequency ATC took in them as it's written ("Tower on 118.775"), if changed
 
 
 class RadioTuned(Event, tag="radio_tuned"):

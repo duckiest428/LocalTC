@@ -19,7 +19,16 @@ from typing import Any
 from localtc.bus import EventBus
 from localtc.dsp.clips import CLIPS, clip_id
 from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16, trim_silence
-from localtc.stt.vocabulary import CREW_STYLE_IN, VocabularyHints, build_prompt, fixup, hotwords, match_names, without_prompt
+from localtc.stt.vocabulary import (
+    CREW_STYLE_IN,
+    VocabularyHints,
+    build_prompt,
+    echoes_prompt,
+    fixup,
+    hotwords,
+    match_names,
+    without_prompt,
+)
 from localtc.sim_api import IntercomHeard, IntercomPressed, IntercomReleased, PttPressed, PttReleased, Transcript
 
 log = logging.getLogger(__name__)
@@ -285,6 +294,9 @@ class VoiceService:
         result = await asyncio.to_thread(transcriber.transcribe, speech, prompt=prompt, hotwords=words, **kwargs)
         text = fixup(result.text) if result.no_speech < NO_SPEECH else ""
         text = match_names(without_prompt(text, hints) if prompt else text, hints)
+        if text and prompt and echoes_prompt(text, hints):
+            log.info("Dropped %r: only the prompt's own words, read back from a press without speech", text[:80])
+            text = ""
         if text and made_up(text, audio_s) and (prompt or words):
             # Caught in a loop on the airport's names it was given ("United 318, A15, A15, A15, ..." for a 22 s
             # clearance readback, dropped, and ATC asked "how do you read?"): heard again without them.

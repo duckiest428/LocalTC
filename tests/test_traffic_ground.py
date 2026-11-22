@@ -200,7 +200,10 @@ def test_a_departures_push_and_taxi_are_localtcs_and_it_goes_once_the_real_one_h
                 break
     assert {"push", "start", "taxi", "hold_short"} <= stages
     assert pushing and all(c.gs_kt < 0 for c in pushing)  # pushed: backwards, the nose the other way
-    assert [c["kind"] for c in calls] == ["clearance", "pushback", "taxi_out"] and calls[-1]["runway"] == "34R"
+    kinds = [c["kind"] for c in calls]
+    assert kinds[:3] == ["clearance", "pushback", "taxi_out"] and calls[2]["runway"] == "34R"
+    # A runway on its way out it's told to cross (Haneda's 04/22 from this gate), as it gets there
+    assert set(kinds[3:]) <= {"cross"}
     for k in range(5):  # at the hold short, the real one still on the ground: it waits
         t += 1
         m.on_feed([real("05", "ANA5", gate.lat, gate.lon, gs=4.0, t=t)], "test", t)
@@ -222,7 +225,60 @@ def test_a_departures_push_and_taxi_are_localtcs_and_it_goes_once_the_real_one_h
         m.tick(t)
         if plane.mode == "departing":
             break
-    assert plane.mode == "departing" and said[-1] == ("takeoff", "34R")
+    # Cleared for takeoff at the holding point, before it lines up: not once on the runway (Air Canada lined up on its own)
+    assert plane.mode == "departing" and (calls[-1]["kind"], calls[-1]["runway"]) == ("takeoff", "34R") and not said
+
+
+def test_a_departure_moves_once_its_clearance_has_been_said_when_the_pilot_hears_it():
+    """Air Canada taxied before its "ready to taxi" and lined up before its takeoff clearance: with the user on that
+    frequency each move waits for its call and its clearance said, and goes anyway if the frequency never frees."""
+    from localtc.sim_api import RadioChatter
+    from localtc.traffic.manager import CALL_WINDOW_S, Local, Plane
+
+    m = manager()
+    m.atc.hears = lambda kind, icao: True
+    busy = {"on": True}
+    m.atc.call = lambda **kw: [] if busy["on"] else [
+        RadioChatter(t=kw.get("t", 0.0) + 0.0 + m._now_for_test, station="Haneda Tower", frequency_mhz=118.1, speaker="pilot",
+                     callsign="ANA8", text="ready", spoken="ready"),
+        RadioChatter(t=m._now_for_test + 5.0, station="Haneda Tower", frequency_mhz=118.1, speaker="atc", callsign="ANA8",
+                     text="ANA 8, runway 34R, cleared for takeoff.", spoken="ANA eight, runway three four right, cleared for takeoff.")]
+    geo = AirportGeometry(RJTT)
+    end = geo.end("34R")
+    lat, lon = geo.frame.to_latlon(*end.threshold)
+    plane = Plane("live:08", 8, "FSLTL_A320_ZZZZ", "", callsign="ANA8", object_id=704, mode="taxi_out",
+                  local=Local(lat, lon, 20.0, end.heading_true, 0.0, 0.0, True, started=NOW, runway=("RJTT", "34R"),
+                              stage="hold_short", stage_t=NOW), runway=("RJTT", "34R"))
+    m.planes[plane.key] = plane
+    m._released_t = 0.0
+    t = NOW
+    m.on_feed([real("08", "ANA8", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)  # its real one's gone
+    m._now_for_test = t
+    m.tick(t)
+    assert plane.local.stage == "hold_short"  # the frequency busy: it waits for its clearance
+    busy["on"] = False
+    t += 21.0  # (the airport's calls spaced)
+    m._now_for_test = t
+    m.on_feed([real("08", "ANA8", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)
+    m.tick(t)
+    assert "takeoff" in plane.said and plane.local.stage == "hold_short"  # said: still there while it's being said
+    t += 12.0
+    m.on_feed([real("08", "ANA8", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t)], "test", t)
+    m.tick(t)
+    assert plane.local.stage == "line_up"
+    # Never heard (the frequency busy throughout): it goes after its window all the same.
+    m2 = manager()
+    m2.atc.hears = lambda kind, icao: True
+    p2 = Plane("live:09", 9, "FSLTL_A320_ZZZZ", "", callsign="ANA9", object_id=705, mode="taxi_out",
+               local=Local(lat, lon, 20.0, end.heading_true, 0.0, 0.0, True, started=NOW, runway=("RJTT", "34R"),
+                           stage="hold_short", stage_t=NOW), runway=("RJTT", "34R"))
+    m2.planes[p2.key] = p2
+    m2._released_t = 0.0
+    for k in range(0, int(CALL_WINDOW_S) + 3):
+        t2 = NOW + k
+        m2.on_feed([real("09", "ANA9", 35.50, 139.70, ground=False, alt=3000.0, track=340.0, t=t2)], "test", t2)
+        m2.tick(t2)
+    assert p2.local.stage == "line_up"
 
 
 def test_taxiing_out_it_waits_for_the_user_in_its_way():
@@ -435,7 +491,7 @@ def test_an_arrival_reported_moving_is_never_taken_away_for_standing_still():
 
 def test_a_line_goes_round_one_that_never_moves():
     """A Delta stood across the taxiway at the end of O'Hare's line held the whole line behind it."""
-    from localtc.traffic.manager import QUEUE_M, QUEUE_STUCK_S, Local, Plane
+    from localtc.traffic.manager import QUEUE_M, QUEUE_STUCK_S, QUEUE_WAITING_STUCK_S, Local, Plane
 
     m = manager()
     m.atc.runway_in_use = lambda icao: "34R"
@@ -459,12 +515,14 @@ def test_a_line_goes_round_one_that_never_moves():
                               stage="hold_short"))
     m.planes[ahead.key] = ahead
     m._released_t = t + 1e6
-    for k in range(1, int(QUEUE_STUCK_S) + 20):
+    for k in range(1, int(QUEUE_WAITING_STUCK_S) + 20):
         m.on_feed([real("07", "ANA7", gate.lat, gate.lon, gs=4.0, t=t + k)], "test", t + k)
         m.tick(t + k)
-        if k == 30:
-            assert loc.follow.gs_kt == 0.0  # in line behind it
-    assert loc.follow.gs_kt > 0.0  # stood there two minutes: gone round
+        if k in (30, int(QUEUE_STUCK_S) + 10):
+            # in line behind it: one waiting its turn at the holding point is a queue, minutes on (Punta Cana's 787 went
+            # round the A330 ahead of it after two, into it)
+            assert loc.follow.gs_kt == 0.0
+    assert loc.follow.gs_kt > 0.0  # stood there far longer than any turn: gone round
 
 
 def test_taken_over_rolling_out_it_doesnt_go_back_for_where_it_was():

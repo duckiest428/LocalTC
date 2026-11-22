@@ -12,9 +12,9 @@ a new minor version adds features, a patch fixes them.
   sent, every 10 seconds: your display name, callsign, aircraft type, departure and arrival, filed route, IFR or
   VFR, the phase, position, altitude, ground speed, heading and the station you're tuned to. Never your voice,
   recordings, settings or email, and nothing during a replay. Share this flight only or every flight, hide your
-  route or name, and delay what's shown by 5, 10 or 15 minutes. While your flight is on the map a "Sharing live"
-  badge sits at the top; a click stops it. It needs the account, and the dashboard can stop it too. The flight
-  leaves the map when it ends, when you stop, when LocalTC closes, or 90 seconds after the last update.
+  route or name, and delay what's shown by 5, 10 or 15 minutes. It's offered on the setup's last page too. It needs
+  the account; stop it in Settings or on the dashboard. The flight leaves the map when it ends, when you stop, when
+  LocalTC closes, or 90 seconds after the last update.
   The map's card shows your filed route fix by fix and your airline's logo (the route's fixes are sent once a
   flight, the airline's code with each update).
 - **An apron controller where the airport has one:** at an airport whose sim data has an apron frequency (Incheon
@@ -31,6 +31,11 @@ a new minor version adds features, a patch fixes them.
   Gimpo, Gimhae and Jeju.
 - **"Break, break" on a busy frequency:** now and then a busy controller gives two of the other flights their
   instructions back to back, "break, break" between them, and both read back after.
+- **The other flights wait for their clearances:** with you on the frequency, LocalTC's traffic moves only once its
+  clearance has been said: it taxis after "taxi to holding point ...", lines up after "cleared for takeoff" (given at
+  the holding point now, not once it's already on the runway), and a runway on its way out gets "cross runway 09".
+  With the frequency busy it waits for a gap, and goes after 45 seconds whatever; with nobody listening it just goes.
+  At Punta Cana an Air Canada 787 taxied before its "ready to taxi", crossed a runway untold and lined up on its own.
 
 ### Changed
 - **Clearance delivery is "Delivery" outside the US and Canada:** "Incheon Delivery", "Heathrow Delivery", as it's
@@ -44,10 +49,21 @@ a new minor version adds features, a patch fixes them.
 - **Why a direct:** a shortcut says what it saves ("cleared direct PREPI, that saves you about 25 miles"), and the
   direct after vectors round a restricted area says you're clear of it.
 - **A SIGMET you're already in:** "convective SIGMET in your area", not "about 5 miles ahead" (San Juan was under one
-  as the flight took off), and every SIGMET call says how high it goes ("tops FL430").
+  as the flight took off), and every SIGMET call says how high it goes ("thunderstorms up to FL430").
 - **The ramp crew say it differently each time:** the push's calls (tug connected, pushing back, cleared to start,
   set parking brake, the hand signal) each have several wordings, every one with the same instruction in it word for
   word, and the call now and then opens "Ground to flight deck" or "Cockpit, ground".
+- **A SIGMET's levels in plain words:** "thunderstorms up to FL500" (or "FL250 to FL400"); "tops FL500" was heard at
+  FL150 as weather above the cruise. A convective SIGMET with no floor reaches down to the ground.
+- **Approach slows you only when it has to:** "reduce speed to 210 knots" and "180 until five mile final" only with
+  another arrival within 10 miles ahead of you. 250 knots below 10,000 feet is still asked for.
+- **The tower doesn't line you up into an arrival's way:** behind a departure still on the runway, you hold short if an
+  arrival would be at the threshold before you could go (behind a heavy, its wake time counted). At Punta Cana a line
+  up behind a departing 787, two minutes of wake to wait, sent the A320 on a seven mile final around.
+- **An arrival isn't sent around for you already rolling:** it goes around for your takeoff only within 1.5 miles once
+  you're rolling (2.5 cleared and about to roll); JetBlue was sent around four miles out, as you rolled.
+- **Departures go between arrivals four miles apart** (five before), so a line at the holding point moves.
+- **The Dominican Republic flies altitudes below 18,000 feet**, as Puerto Rico does: "climb 6,000", not "FL060".
 - **The language model's turned-away words are for dev mode:** the alert that ATC's or the ground crew's model words
   were turned away and the script's said instead (the same instruction) shows in dev mode only.
 
@@ -65,6 +81,32 @@ a new minor version adds features, a patch fixes them.
   tries again (it used to give up after the first try). A microphone plugged in (or woken by Windows) after the app
   started is found when the flight starts: Windows's list is read again. Every start had stopped with "no input device
   matching 'Microphone (K66)'" while Windows showed the K66 working.
+- **The radio log writes the frequency ATC took:** "Tower on 118, Dec. 7, 7, 7, 5" shows as "Tower on 118.775" once
+  ATC has taken the readback; "9 decimal 75" as 119.75. The recording keeps what was heard, and a frequency ATC turned
+  down is left as it was.
+- **A press with nothing said is no call:** "A, B, D, E, F.", the airport's taxiways read back by Whisper from a press
+  with only noise in it, got "say again" from ground. Words that are only the airport's taxiway or runway names are
+  dropped.
+- **"Expect flight level 150" isn't asked for when it wasn't given:** the clearance said "climb FL060"; the readback
+  "climb flight level 060" was taken by the model as the cruise, and delivery said "negative, expect flight level 150".
+- **"Hold short R9" ends the taxi route:** the runway written as R9 (and a word Whisper made of "hold short") was read as
+  two more taxiways, and ground said "negative".
+- **The stand's letter:** Punta Cana's gate 20B was "20M" on the map, the logbook and to ATC: the sim numbers a stand's
+  letter the way it numbers its gates (12 is A, so 13 is B), and LocalTC took 13 as M.
+- **No asterisks read out:** "*shaken, not stirred*" in the cabin's words was read as "asterisk". A model's markdown
+  is taken out of every crew and ATC line, and the voices never say it.
+- **The ramp doesn't turn a question into an order:** "We've still got the GPU on. Do you want to push regardless?"
+  became "hold off on pushback" in the model's words. A reply that answers the crew's own question, or tells you to
+  wait when the script didn't, is said in the script's words. Asked to take the GPU away when GSX's menu has no such
+  row, the ramp says GSX takes it away itself when the push starts.
+- **"Radar contact" before the SIGMET:** a controller's own call held for your check-in now also waits for its answer
+  to it (the model was nine seconds over "radar contact" and the SIGMET went first); 30 seconds at most.
+- **A line at the holding point stays a line:** one waiting its turn there (or for its clearance) was gone round after
+  two minutes, into it: a 787 drove into the A330 ahead, and two stood on one holding point. Ten minutes now.
+- **The airport you left empties:** what LocalTC had on its ground (parked, taxiing, waiting at the holding point) goes
+  once you're airborne and 30 miles away. 45 miles past Punta Cana, six were still there.
+- **"Break, break" for a go-around:** another flight's readback still to come isn't said in between; the one sent
+  around answers.
 - **Frequency readbacks heard right:** "tower on 1, 3, 2, 0, 0, 5" (the "point" heard as a zero) is 132.05, and "one
   through two decimal zero five" ("three" heard as "through") is too. Both were "confirm frequency".
 - **"Can we go boarding?"** starts the boarding; it went to the cabin crew's model, who said boarding hadn't been

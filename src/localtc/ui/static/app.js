@@ -56,7 +56,7 @@ function connect() {
   on("jobs", (jobs) => { S.state.jobs = jobs; Settings.jobs(jobs); Setup.jobs(jobs); });
   on("update", (u) => { S.state.update = u; Settings.update(u); UpdatePopup.update(u); });
   on("account", (a) => { S.account = a; Settings.account(); });
-  on("sharing", (v) => { if (S.account) { S.account.sharing = v; Settings.liveShare(); } liveBadge(); });
+  on("sharing", (v) => { if (S.account) { S.account.sharing = v; Settings.liveShare(); } });
   on("dev", (d) => Dev.event(d));
   on("airport", ({ icao }) => {  // the flight fetched an airport's layout: on the map, with a plan or without one
     MapView.fetched.add(icao);
@@ -169,6 +169,10 @@ const DEV_ONLY_ALERTS = new Set(["llm_rejected"]);
 function addLine(l) {
   if (l.kind === "alert" && DEV_ONLY_ALERTS.has(l.code) && !S.state?.dev_mode) return;
   const log = $("#log");
+  if (l.kind === "readback" && l.heard) {  // your last call, its frequency written as ATC took it ("Tower on 118.775")
+    const yours = [...log.querySelectorAll(".line.pilot .body")].pop();
+    if (yours) yours.textContent = l.heard;
+  }
   if (l.kind === "atc") $("#log .line.thinking")?.remove();
   const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
   const row = document.createElement("div");
@@ -694,14 +698,6 @@ $("#dlg-live-share").addEventListener("close", () => {
     toast(body.live_share === "always" ? "Sharing every flight on Live Flights" : "Sharing this flight on Live Flights");
   }).catch(fail);
 });
-// While this flight is on the public map: the badge at the top, a click stops sharing.
-function liveBadge() {
-  const sh = S.account && S.account.sharing, badge = $("#sky-badge");
-  if (badge) badge.hidden = !(sh && sh.on_map);
-}
-$("#sky-badge").onclick = () => {
-  if (confirm("Stop sharing your flight on Live Flights? It leaves the public map now.")) Settings.stopSharing();
-};
 
 // The account suggestion: answered either way, it's never shown again; yes opens the account card in Settings.
 $("#dlg-account").addEventListener("close", () => {
@@ -1397,7 +1393,33 @@ const Setup = {
         <li><b>ATC and the copilot aren't perfect.</b> When something goes wrong, send it in (the gear &rarr; Support &amp; feedback): each report makes them better.</li>
         <li><b>The mixer</b> (the sliders at the top) sets the volume of ATC, the other flights, the copilot and your microphone.</li>
         <li><b>Quick Settings</b> has all of this and more: the voices, the language models, the copilot's hands, checklists, LocalTC's traffic, the taxi guidance.</li>
-      </ul>`;
+      </ul>
+      <div class="wbox" id="w-live-box">${this.live()}</div>`;
+  },
+  // Live Flights on the last page: the pilot's flight on the public map at localtc.tech/live, only after the dialog
+  // that lists what's sent (Settings' own), and only with an account.
+  live() {
+    const a = S.account, sh = (a && a.sharing) || {};
+    if (!a || !a.signed_in) {
+      return `<p class="small">With a free account (Settings &rarr; Account), your flight can show on the public Live Flights map, localtc.tech/live.</p>`;
+    }
+    const on = sh.live_share === "flight" || sh.live_share === "always";
+    return `<label class="check-row"><input type="checkbox" id="w-live" ${on ? "checked" : ""} ${sh.live_blocked ? "disabled" : ""}>
+        <span>Show my flight on the public Live Flights map</span></label>
+      <p class="muted small">Change it any time in Settings &rarr; Account. <a href="https://localtc.tech/live" target="_blank" rel="noopener">See the Live Flights map</a></p>`;
+  },
+  wire_done() {
+    const box = $("#w-live-box");
+    if (!box) return;
+    if (!S.account && !this.accountAsked) {  // (Settings fetches it when it opens: the setup may come first)
+      this.accountAsked = true;
+      api("account").then((a) => { S.account = a; this.wire_done(); }).catch(() => {});
+    }
+    box.innerHTML = this.live();
+    if ($("#w-live")) $("#w-live").onchange = (e) => {
+      if (e.target.checked) { e.target.checked = false; Settings.liveDialog(); }
+      else Settings.stopSharing();
+    };
   },
 };
 $("#setup-next").onclick = () => (Setup.step === Setup.steps().length - 1 ? Setup.finish() : Setup.go(1));
@@ -2704,9 +2726,10 @@ const Settings = {
     };
   },
   // Live Flights: the public map of pilots who chose to share. Off until the pilot says yes in the dialog, which lists
-  // exactly what's sent; Stop sharing here, on the badge at the top, or on the dashboard.
+  // exactly what's sent; Stop sharing here, or on the dashboard. (Asked on the setup's last page too.)
   liveShare() {
     const box = $("#a-live"), a = S.account, sh = (a && a.sharing) || { live_share: "off" };
+    if ($("#w-live-box")) Setup.wire_done();  // (the setup's last page, open behind the dialog)
     if (!box) return;
     const on = sh.live_share === "flight" || sh.live_share === "always";
     const what = [sh.live_share === "always" ? "every flight" : "this flight only", sh.live_hide_route ? "route hidden" : "",
@@ -2727,7 +2750,6 @@ const Settings = {
     };
     if ($("#a-live-stop")) $("#a-live-stop").onclick = () => this.stopSharing();
     if ($("#a-live-edit")) $("#a-live-edit").onclick = () => this.liveDialog();
-    liveBadge();
   },
   liveDialog() {
     const dlg = $("#dlg-live-share"), sh = (S.account && S.account.sharing) || {};

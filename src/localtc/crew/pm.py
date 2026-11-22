@@ -48,6 +48,7 @@ from localtc.crew.model import ACTION_WORDS, ACTIONS
 from localtc.crew.monitor import SAFETY, Call, Monitor
 from localtc.crew.profiles import Profile, for_aircraft, load_all
 from localtc.flightdeck import FlightDeck
+from localtc.markup import unmarked
 from localtc.sim_api import (
     AircraftIdentity,
     AircraftSystems,
@@ -1442,7 +1443,7 @@ def _model_command(raw: str) -> tuple[Command, str] | None:
     action, value, target = (str(data.get(k, "")).strip().lower() for k in ("action", "value", "target"))
     if action not in ACTIONS or action not in ACTION_WORDS:
         return None
-    return Command(action, value, target), str(data.get("reply", "")).strip()
+    return Command(action, value, target), unmarked(str(data.get("reply", "")).strip())
 
 
 def _radio_words(call: str, station: str) -> str:

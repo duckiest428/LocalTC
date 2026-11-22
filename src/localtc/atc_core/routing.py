@@ -340,9 +340,16 @@ class RoutingMixin:
         beyond = self._beyond(h, points, i, own.alt_indicated_ft)
         fix = beyond[0] if beyond is not None else ""
         # Where it is, and how high it goes: a flight already in it isn't told it's "about 5 miles ahead" (San Juan
-        # was under one as the flight took off), and "tops FL430" says why it matters at the level flown.
-        tops = (f", tops {speech.altitude_display(h.ceiling_ft)}", f", tops {speech.altitude(h.ceiling_ft)}") \
-            if h.ceiling_ft else ("", "")
+        # was under one as the flight took off), and the levels say why it matters at the one flown: "thunderstorms
+        # up to FL500" (it was "tops FL500", heard at FL150 as weather above the cruise).
+        what = "thunderstorms" if h.hazard in ("TS", "") else "the weather"
+        if h.ceiling_ft and h.floor_ft:
+            tops = (f", {what} {speech.altitude_display(h.floor_ft)} to {speech.altitude_display(h.ceiling_ft)}",
+                    f", {what} {speech.altitude(h.floor_ft)} to {speech.altitude(h.ceiling_ft)}")
+        elif h.ceiling_ft:
+            tops = (f", {what} up to {speech.altitude_display(h.ceiling_ft)}", f", {what} up to {speech.altitude(h.ceiling_ft)}")
+        else:
+            tops = ("", "")
         if h.contains(own.lat, own.lon) or miles < 2.5:
             where = ("convective SIGMET in your area", "convective sigmet in your area")
         else:

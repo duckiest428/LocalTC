@@ -18,6 +18,8 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   followers, who's sharing), Live Flights (pause it for everyone, take a flight down, turn an account's sharing off), and
   every account (search, its devices and latest flights, tags shown on its Live Flights card, sign it out everywhere,
   delete it).
+- **The Admin page's accounts** sort by any column (a click on its name, again for the other way), page with Previous
+  and Next, say what they're sorted by, and show whether each account's app has Discord Rich Presence on.
 - **The Flight Tracker's map key folds again:** "Map key" hid only part of it.
 - **A menu on phones and tablets:** below 1080 px the header's links fold behind a menu button (with Dashboard and
   Discord on a phone), each a full-width row easy to tap, opened and closed with the keyboard too (Escape closes it).

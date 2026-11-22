@@ -383,7 +383,8 @@ class PilotRoutes:
         if not self.account.signed_in:
             return
         try:
-            result = await self._do(functools.partial(self.account.sync, stats=self.cfg().account.stats))
+            result = await self._do(functools.partial(self.account.sync, stats=self.cfg().account.stats,
+                                                      discord=self.cfg().ui.discord))
             self.sync_state = f"Synced {result.uploaded} new flight{'s' if result.uploaded != 1 else ''}."
         except HttpError as exc:
             self.sync_state = f"Sync failed: {exc}"

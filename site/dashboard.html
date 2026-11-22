@@ -274,10 +274,13 @@
           <div class="adm-search-row"><input id="adm-search" type="search" placeholder="Search by email or display name" aria-label="Search the accounts">
             <span class="hint" id="adm-users-count"></span></div>
           <div class="adm-scroll"><table class="adm-table">
-            <thead><tr><th>Email</th><th>Name</th><th>Tags</th><th>Flights</th><th>Live Flights</th><th>Joined</th><th>Last seen</th></tr></thead>
+            <thead><tr id="adm-user-head"><th data-sort="email">Email</th><th data-sort="name">Name</th><th data-sort="tags">Tags</th>
+              <th data-sort="flights">Flights</th><th data-sort="live">Live Flights</th><th data-sort="discord">Discord</th>
+              <th data-sort="joined">Joined</th><th data-sort="last_seen">Last seen</th></tr></thead>
             <tbody id="adm-user-rows"></tbody></table></div>
-          <div class="adm-pager"><button class="btn btn-ghost btn-sm" type="button" id="adm-prev">Newer</button>
-            <button class="btn btn-ghost btn-sm" type="button" id="adm-next">Older</button></div>
+          <div class="adm-pager"><span class="hint" id="adm-page"></span>
+            <button class="btn btn-ghost btn-sm" type="button" id="adm-prev">Previous</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="adm-next">Next</button></div>
           <div class="adm-user" id="adm-user" hidden></div>
         </div>
       </section>

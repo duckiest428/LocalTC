@@ -1513,7 +1513,17 @@ body::after {
 .adm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .adm-search-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .adm-search-row input { flex: 1 1 260px; }
-.adm-pager { display: flex; gap: 8px; justify-content: flex-end; }
+.adm-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
+.adm-pager .hint { margin: 0 auto 0 0; }
+.adm-sort { font: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; padding: 2px 0;
+  cursor: pointer; text-align: left; white-space: nowrap; }
+.adm-sort:hover, .adm-sort:focus-visible { color: var(--text); }
+.adm-sort:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 4px; }
+.adm-table th[aria-sort="ascending"], .adm-table th[aria-sort="descending"] { color: var(--text); }
+.adm-arrow { font-size: 10px; }
+.adm-table td.adm-on { color: var(--green); }
+.adm-table td.adm-date, .adm-table td.num { white-space: nowrap; }
+.adm-table td:first-child { overflow-wrap: anywhere; min-width: 180px; }
 .adm-user { margin-top: 18px; padding: 18px 20px; border-radius: var(--r2); background: var(--bg-1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
 .adm-user[hidden] { display: none; }
 .adm-user-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

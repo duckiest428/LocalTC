@@ -67,4 +67,23 @@ describe("the admin panel", () => {
     expect((await call("DELETE", `/v1/admin/users/${id}`, { email: pilot.email }, bearer(admin.token))).status).toBe(200);
     expect((await call("GET", `/v1/admin/users/${id}`, undefined, bearer(admin.token))).status).toBe(404);
   });
+
+  it("shows whether the app's Discord Rich Presence is on, as its sync says, and sorts by any column", async () => {
+    const on = await signIn(`aaa-${crypto.randomUUID()}@example.com`);
+    const off = await signIn(`zzz-${crypto.randomUUID()}@example.com`);
+    await call("POST", "/v1/flights", { flights: [], stats: false, discord: true }, bearer(on.token));
+    await call("POST", "/v1/flights", { flights: [], stats: false, discord: false }, bearer(off.token));
+    const admin = await signIn("admin@example.com");
+    const find = async (sort: string, dir: string) =>
+      (await data(await call("GET", `/v1/admin/users?q=example.com&sort=${sort}&dir=${dir}`, undefined, bearer(admin.token)))).users;
+    const byEmail = await find("email", "asc");
+    expect(byEmail.find((u: any) => u.email === on.email).discord).toBe(true);
+    expect(byEmail.find((u: any) => u.email === off.email).discord).toBe(false);
+    const emails = byEmail.map((u: any) => u.email);
+    expect(emails).toEqual([...emails].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase())));
+    expect((await find("email", "desc"))[0].email >= (await find("email", "asc"))[0].email).toBe(true);
+    expect((await find("discord", "desc"))[0].discord).toBe(true);
+    const r = await data(await call("GET", "/v1/admin/users?sort=nonsense; DROP TABLE users", undefined, bearer(admin.token)));
+    expect(r.sort).toBe("joined");
+  });
 });

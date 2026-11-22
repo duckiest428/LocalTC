@@ -78,7 +78,7 @@ export function clean(raw: unknown): Flight {
 }
 
 export async function upload(env: Env, request: Request, auth: Auth): Promise<Response> {
-  const body = await readJson<{ flights?: unknown; stats?: unknown }>(request, 512 * 1024);
+  const body = await readJson<{ flights?: unknown; stats?: unknown; discord?: unknown }>(request, 512 * 1024);
   if (!Array.isArray(body.flights) || body.flights.length > BATCH) {
     throw new HttpError(400, `Send up to ${BATCH} flights at a time.`);
   }
@@ -91,6 +91,10 @@ export async function upload(env: Env, request: Request, auth: Auth): Promise<Re
       env.DB.prepare("UPDATE users SET stats = ?1 WHERE id = ?2").bind(stats ? 1 : 0, auth.user.id),
       ...(stats ? [] : [env.DB.prepare("UPDATE flights SET metrics = NULL WHERE user_id = ?1").bind(auth.user.id)]),
     ]);
+  }
+  // Whether the app's Discord Rich Presence is on, for the admin panel (an older app doesn't say: left as it is).
+  if (typeof body.discord === "boolean" && (body.discord ? 1 : 0) !== auth.user.discord_rpc) {
+    await env.DB.prepare("UPDATE users SET discord_rpc = ?1 WHERE id = ?2").bind(body.discord ? 1 : 0, auth.user.id).run();
   }
   const metrics = (body.flights as Record<string, unknown>[]).map((f) => (stats ? cleanMetrics(f.metrics) : null));
   const received = now();

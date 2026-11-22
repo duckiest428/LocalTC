@@ -26,6 +26,7 @@ export interface User {
   live_delay_min?: number;
   live_banned?: number;
   tags?: string; // JSON: an admin's labels for the account (src/sky.ts readTags)
+  discord_rpc?: number | null; // the app's Discord Rich Presence on (1), off (0), or not known (null)
 }
 
 export interface Auth {

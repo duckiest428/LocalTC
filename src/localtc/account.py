@@ -232,7 +232,7 @@ class Account:
         self._call("DELETE", "/v1/me", {"email": confirm_email})
         self._forget()
 
-    def sync(self, *, stats: bool = False) -> SyncResult:
+    def sync(self, *, stats: bool = False, discord: bool | None = None) -> SyncResult:
         """Upload the flights the server doesn't have yet, a batch at a time. ``stats``: [account] stats, which the
         server is told each time (off, it deletes the metrics it has); only then do the lines carry their metrics."""
         if not self.signed_in:
@@ -240,12 +240,13 @@ class Account:
         pending = self.logbook.unsynced()
         uploaded = 0
         drop = LOCAL_ONLY if stats else (*LOCAL_ONLY, "metrics")
+        extra = {} if discord is None else {"discord": discord}  # whether Discord Rich Presence is on, for the admin panel
         if not pending:
-            self._call("POST", "/v1/flights", {"flights": [], "stats": stats})
+            self._call("POST", "/v1/flights", {"flights": [], "stats": stats, **extra})
         for i in range(0, len(pending), BATCH):
             batch = pending[i:i + BATCH]
             payload = [{k: v for k, v in f.to_dict().items() if k not in drop} for f in batch]
-            data = self._call("POST", "/v1/flights", {"flights": payload, "stats": stats})
+            data = self._call("POST", "/v1/flights", {"flights": payload, "stats": stats, **extra})
             accepted = list((data or {}).get("accepted", []))
             self.logbook.mark_synced(accepted)
             uploaded += len(accepted)

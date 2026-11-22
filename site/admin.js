@@ -14,9 +14,16 @@ const Admin = (() => {
     e.append(...kids.filter((k) => k !== null && k !== undefined && k !== false));
     return e;
   };
+  const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : "–");
   const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "–");
   const ago = (ms) => { const s = Math.round((Date.now() - ms) / 1000); return s < 90 ? `${s} s ago` : `${Math.round(s / 60)} min ago`; };
-  const st = { q: "", offset: 0, open: null };
+  const st = { q: "", offset: 0, open: null, sort: "joined", dir: "desc" };
+  // The columns the accounts sort by: their name in the header, and which way a first click sorts (A to Z, or most first).
+  const SORT = { email: ["Email", "asc"], name: ["Name", "asc"], tags: ["Tags", "desc"], flights: ["Flights", "desc"],
+    live: ["Live Flights", "desc"], discord: ["Discord", "desc"], joined: ["Joined", "desc"], last_seen: ["Last seen", "desc"] };
+  const ORDER = { email: ["A to Z", "Z to A"], name: ["A to Z", "Z to A"], tags: ["fewest first", "most first"],
+    flights: ["fewest first", "most first"], live: ["off first", "sharing first"], discord: ["off first", "on first"],
+    joined: ["oldest first", "newest first"], last_seen: ["longest ago first", "most recent first"] };
 
   function say(text, error = false) {
     const m = $("#adm-msg");
@@ -61,7 +68,7 @@ const Admin = (() => {
   }
 
   async function users() {
-    const v = await api("GET", `/v1/admin/users?q=${encodeURIComponent(st.q)}&offset=${st.offset}`);
+    const v = await api("GET", `/v1/admin/users?q=${encodeURIComponent(st.q)}&offset=${st.offset}&sort=${st.sort}&dir=${st.dir}`);
     const rows = v.users.map((u) => el("tr", { class: "adm-row", tabindex: "0", onclick: () => openUser(u.id),
       onkeydown: (e) => { if (e.key === "Enter") openUser(u.id); } },
       el("td", {}, el("span", { text: u.email }), u.verified ? null : el("span", { class: "adm-flag", text: "unconfirmed" })),
@@ -69,11 +76,37 @@ const Admin = (() => {
       el("td", {}, ...u.tags.map((t) => el("span", { class: `lf-chip tag tag-${COLORS.includes(t.color) ? t.color : "gray"}`, text: t.label }))),
       el("td", { class: "num", text: String(u.flights) }),
       el("td", { text: u.live_banned ? "turned off" : u.live_share }),
-      el("td", { text: when(u.created_at) }), el("td", { text: when(u.last_seen) })));
-    $("#adm-user-rows").replaceChildren(...(rows.length ? rows : [el("tr", {}, el("td", { colspan: "7", class: "hint", text: "No account matches." }))]));
+      el("td", { class: u.discord ? "adm-on" : "", text: u.discord === null ? "–" : u.discord ? "On" : "Off",
+        title: u.discord === null ? "Not known: the app hasn't synced since it started saying" : "" }),
+      el("td", { class: "adm-date", text: day(u.created_at), title: when(u.created_at) }),
+      el("td", { class: "adm-date", text: day(u.last_seen), title: when(u.last_seen) })));
+    $("#adm-user-rows").replaceChildren(...(rows.length ? rows : [el("tr", {}, el("td", { colspan: "8", class: "hint", text: "No account matches." }))]));
     $("#adm-users-count").textContent = `${v.total.toLocaleString()} account${v.total === 1 ? "" : "s"}${st.q ? ` matching "${st.q}"` : ""}`;
     $("#adm-prev").disabled = st.offset === 0;
     $("#adm-next").disabled = st.offset + v.page >= v.total;
+    const last = Math.min(v.total, st.offset + v.page);
+    $("#adm-page").textContent = v.total ? `${st.offset + 1} to ${last} of ${v.total.toLocaleString()}, by ${SORT[st.sort][0].toLowerCase()}, ${ORDER[st.sort][st.dir === "asc" ? 0 : 1]}` : "";
+    heads();
+  }
+
+  /** The header: each column a button that sorts by it (again: the other way), the sorted one marked for screen readers. */
+  function heads() {
+    for (const th of document.querySelectorAll("#adm-user-head th[data-sort]")) {
+      const key = th.dataset.sort, on = key === st.sort;
+      th.setAttribute("aria-sort", on ? (st.dir === "asc" ? "ascending" : "descending") : "none");
+      let b = th.querySelector("button");
+      if (!b) {
+        b = el("button", { type: "button", class: "adm-sort", onclick: () => {
+          if (st.sort === key) st.dir = st.dir === "asc" ? "desc" : "asc"; else { st.sort = key; st.dir = SORT[key][1]; }
+          st.offset = 0;
+          users().catch((e) => say(e.message, true));
+        } });
+        th.replaceChildren(b);
+      }
+      b.textContent = SORT[key][0];
+      b.append(el("span", { class: "adm-arrow", "aria-hidden": "true", text: on ? (st.dir === "asc" ? " ▲" : " ▼") : "" }));
+      b.title = `Sort by ${SORT[key][0].toLowerCase()}`;
+    }
   }
 
   async function openUser(id) {
@@ -113,7 +146,8 @@ const Admin = (() => {
         el("dt", { text: "Joined" }), el("dd", { text: `${when(u.created_at)}${u.verified ? "" : " (not confirmed)"}` }),
         el("dt", { text: "Last seen" }), el("dd", { text: when(u.last_seen) }),
         el("dt", { text: "Flights synced" }), el("dd", { text: String(u.flights) }),
-        el("dt", { text: "Live Flights" }), el("dd", { text: u.live_banned ? "Turned off by an admin" : `Sharing: ${u.live_share}` })),
+        el("dt", { text: "Live Flights" }), el("dd", { text: u.live_banned ? "Turned off by an admin" : `Sharing: ${u.live_share}` }),
+        el("dt", { text: "Discord" }), el("dd", { text: u.discord === null ? "Not known yet" : u.discord ? "Rich Presence on" : "Rich Presence off" })),
       el("h4", { text: "Tags" }), tagList, add,
       el("h4", { text: "Devices" }),
       el("ul", { class: "adm-list" }, ...(u.sessions.length ? u.sessions.map((s) => el("li", { text: `${s.device || s.kind} (${s.kind}), last used ${when(s.last_used_at)}` }))

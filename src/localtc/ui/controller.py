@@ -1237,7 +1237,10 @@ class AppController:
         CLIPS.enabled = cfg.ui.replay_audio
         if not CLIPS.enabled:
             CLIPS.clear()
+        discord_changed = cfg.ui.discord != self.cfg.ui.discord
         self.cfg = cfg
+        if discord_changed and cfg.account.sync:
+            asyncio.create_task(self.pilot.sync())  # the account's admin panel says whether Discord Rich Presence is on
         self.companion.remote_map = cfg.account.companion_remote_map
         self.apply_on_top()
         self._apply_mixer(cfg)

@@ -45,30 +45,40 @@ export async function overview(env: Env, auth: Auth): Promise<Response> {
 
 interface Row {
   id: string; email: string; display_name: string | null; created_at: string; verified_at: string | null;
-  live_share: string; live_banned: number; tags: string; flights: number; last_seen: string | null;
+  live_share: string; live_banned: number; tags: string; flights: number; last_seen: string | null; discord_rpc: number | null;
 }
 
 const view = (r: Row) => ({
   id: r.id, email: r.email, display_name: r.display_name ?? "", created_at: r.created_at, verified: !!r.verified_at,
   live_share: r.live_share, live_banned: !!r.live_banned, tags: sky.readTags(r.tags), flights: r.flights,
-  last_seen: r.last_seen,
+  last_seen: r.last_seen, discord: r.discord_rpc === null || r.discord_rpc === undefined ? null : !!r.discord_rpc,
 });
 
-const USER_SQL = `SELECT u.id, u.email, u.display_name, u.created_at, u.verified_at, u.live_share, u.live_banned, u.tags,
+const USER_SQL = `SELECT u.id, u.email, u.display_name, u.created_at, u.verified_at, u.live_share, u.live_banned, u.tags, u.discord_rpc,
   (SELECT COUNT(*) FROM flights f WHERE f.user_id = u.id) AS flights,
   (SELECT MAX(s.last_used_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen FROM users u`;
 
-/** GET /v1/admin/users?q=&offset= : newest first, by email or display name. */
+/** What the accounts can be sorted by: a column's name to its SQL (a fixed list, nothing from the request goes in). */
+const SORTS: Record<string, string> = {
+  email: "lower(u.email)", name: "lower(coalesce(u.display_name, ''))", tags: "length(u.tags)", flights: "flights",
+  live: "u.live_banned * 10 + (u.live_share != 'off')", discord: "coalesce(u.discord_rpc, -1)", joined: "u.created_at",
+  last_seen: "coalesce(last_seen, '')",
+};
+
+/** GET /v1/admin/users?q=&offset=&sort=&dir= : by email or display name; newest first unless sorted otherwise. */
 export async function users(env: Env, auth: Auth, url: URL): Promise<Response> {
   admin(env, auth);
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 80);
   const offset = Math.max(0, Math.min(1e6, Number(url.searchParams.get("offset")) || 0));
   const like = q.toLowerCase(); // (instr, not LIKE: D1 refuses a LIKE pattern as long as an address)
   const where = q ? " WHERE instr(lower(u.email), ?1) > 0 OR instr(lower(coalesce(u.display_name, '')), ?1) > 0" : "";
-  const { results } = await env.DB.prepare(`${USER_SQL}${where} ORDER BY u.created_at DESC LIMIT ${PAGE} OFFSET ${offset}`)
+  const sort = SORTS[url.searchParams.get("sort") ?? ""] ? (url.searchParams.get("sort") as string) : "joined";
+  const dir = url.searchParams.get("dir") === "asc" ? "ASC" : "DESC";
+  const { results } = await env.DB.prepare(
+    `${USER_SQL}${where} ORDER BY ${SORTS[sort]} ${dir}, u.created_at DESC LIMIT ${PAGE} OFFSET ${offset}`)
     .bind(...(q ? [like] : [])).all<Row>();
   const total = await count(env, `SELECT COUNT(*) AS n FROM users u${where}`, ...(q ? [like] : []));
-  return json({ users: results.map(view), total, offset, page: PAGE });
+  return json({ users: results.map(view), total, offset, page: PAGE, sort, dir: dir.toLowerCase() });
 }
 
 async function one(env: Env, id: string): Promise<Row> {

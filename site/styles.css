@@ -453,6 +453,27 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
   color: var(--text-3); transition: color .15s, background .15s; }
 .nav-discord:hover { color: #fff; background: #5865f2; }
 .nav-discord + .btn { margin-left: 0 !important; }
+/* The menu button (nav.js): below 1080 px the header's links fold behind it */
+.nav-toggle { display: none; place-items: center; width: 42px; height: 42px; margin-left: 6px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text); cursor: pointer; flex: none; }
+.nav-toggle:hover, .nav-toggle:focus-visible { background: rgba(255, 255, 255, .08); }
+.nav-toggle:focus-visible, .nav a:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+@media (max-width: 1080px) {
+  .has-nav-js .topbar .nav { display: none; }
+  .has-nav-js .nav-toggle { display: inline-grid; }
+  .has-nav-js .topbar.nav-open .nav { display: flex; position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; flex-wrap: nowrap;
+    gap: 0; margin: 0; padding: 6px 22px 16px; background: var(--bg-0); opacity: 1; box-shadow: 0 12px 30px rgba(0, 0, 0, .45);
+    border-bottom: 1px solid rgba(255, 255, 255, .08); max-height: calc(100vh - 70px); overflow-y: auto; }
+  html.has-nav-js .topbar.nav-open .nav a { display: flex; align-items: center; min-height: 48px; font-size: 17px; color: var(--text);
+    border-bottom: 1px solid rgba(255, 255, 255, .06); }
+  .has-nav-js .topbar.nav-open .nav a:last-child { border-bottom: 0; }
+}
+.nav .nav-more { display: none; }
+@media (max-width: 560px) {
+  .has-nav-js .topbar > a.btn, .has-nav-js .topbar > .nav-discord { display: none; }
+  .has-nav-js .topbar .nav-toggle { margin-left: auto; }
+  .has-nav-js .topbar.nav-open .nav .nav-more { display: flex; }
+}
 .btn-discord { display: inline-flex; align-items: center; gap: 8px; background: #5865f2; color: #fff; }
 .btn-discord:hover { background: #4752c4; text-decoration: none; }
 .linklike { font: inherit; font-size: 14px; color: var(--cyan); background: none; border: 0; padding: 0; cursor: pointer; }
@@ -787,7 +808,6 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 @media (max-width: 940px) {
   .hero-inner { grid-template-columns: 1fr; }
   .hero h1 { max-width: 18ch; }
-  .nav { display: none; }
   .calc-row { grid-template-columns: 1fr auto; gap: 8px 16px; }
   .calc-row input { grid-column: 1 / -1; }
   .calc-row output { text-align: right; }

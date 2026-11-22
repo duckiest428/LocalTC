@@ -109,6 +109,7 @@ PAGE = """<!DOCTYPE html>
     document.querySelectorAll(".changelog .release").forEach((el) => seen.observe(el));
   }})();
 </script>
+<script src="nav.js" defer></script>
 <script src="notice.js" defer></script>
 </body>
 </html>

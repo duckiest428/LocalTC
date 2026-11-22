@@ -11,6 +11,9 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   type and heading, and a card for a flight with its callsign, aircraft, pilot, the controller they're talking to,
   speed, altitude, heading and route, and the line from departure to arrival. Every visit opens with a note that
   only pilots who chose to share are on it and positions may be delayed. It's in the menu of every page.
+- **A menu on phones and tablets:** below 1080 px the header's links fold behind a menu button (with Dashboard and
+  Discord on a phone), each a full-width row easy to tap, opened and closed with the keyboard too (Escape closes it).
+  They were hidden altogether on a phone. "Why not a subscription" and "Status" left the header.
 - **The dashboard's Live Flights choices** (Account): off, the next flight only or every flight, hide the route or
   name, the delay, and Stop sharing, which takes the flight off the map at once. The privacy policy, terms and cookie
   policy say what's shared and for how long.

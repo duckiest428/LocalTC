@@ -28,13 +28,14 @@ function show(which) {
 
 // --- the sections: the sidebar picks one; the address bar's #hash remembers it --------------------------------
 
-const PAGES = ["tracker", "logbook", "stats", "replay", "wrapped", "download", "support", "account"];
+const PAGES = ["tracker", "logbook", "stats", "replay", "wrapped", "download", "support", "account", "admin"];
 let page = null;
+let isAdmin = false;  // the server's ADMINS: the Admin page (admin.js); the server checks every call again
 
 function go(name, { push = false } = {}) {
   const [base, id] = (name || "").split("/");  // "replay/<flight id>": a flight to rewatch
   const hash = (base === "replay" || base === "wrapped") && id ? `${base}/${id}` : base;
-  name = PAGES.includes(base) && (base !== "replay" || id) ? base : "tracker";
+  name = PAGES.includes(base) && (base !== "replay" || id) && (base !== "admin" || isAdmin) ? base : "tracker";
   if (push && `#${hash}` !== location.hash) history.pushState(null, "", `#${name === base ? hash : name}`);
   page = name;
   for (const p of PAGES) $(`#${p}`).hidden = p !== name;
@@ -47,6 +48,7 @@ function go(name, { push = false } = {}) {
   if (name === "wrapped") Wrapped.open(id);
   if (name === "stats") Stats.open();
   if (name === "download") Download.open();
+  if (name === "admin") Admin.open();
   document.title = `${$(`#${name}-h`).textContent} | LocalTC`;
   // The tracker's connection is only open while it's on screen: the app sends the position for no one otherwise.
   if (name === "tracker") Tracker.start(); else Tracker.stop();
@@ -136,6 +138,8 @@ async function load() {
   } catch { /* storage off */ }
   document.querySelectorAll(".who-email").forEach((el) => { el.textContent = me.email; });
   $("#display-name").value = me.display_name || "";
+  isAdmin = !!me.admin;
+  $("#side-admin").hidden = !isAdmin;
   liveChoices(me);
   $("#s-from").textContent = me.email;
   devices(me.sessions);

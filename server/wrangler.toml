@@ -25,7 +25,7 @@ APNS_TOPIC = ""  # the companion app's bundle id; push is off until it and the A
 MARKETING_FROM = "LocalTC <marketing@localtc.tech>"  # the blog's emails to its followers
 BLOG_AUTHORS = "duckiesty@gmail.com"  # the only accounts that may write the blog (src/blog.ts)
 LIVE_SKY = "on"  # Live Flights (src/sky.ts); "off" pauses it for everyone: no heartbeat taken, an empty map
-LIVE_ADMINS = "duckiesty@gmail.com"  # may take a flight off Live Flights and turn an account's sharing off
+ADMINS = "duckiesty@gmail.com"  # the only accounts with the dashboard's Admin page (src/admin.ts): accounts, tags, Live Flights
 SKY_CACHE_S = "10"  # the Live Flights map's snapshot, cached at the edge this long
 # Secrets (wrangler secret put NAME): RESEND_API_KEY, SUPPORT_EMAIL (where Support messages go),
 # APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY, CHARTFOX_CLIENT_ID, CHARTFOX_CLIENT_SECRET (ChartFox sign-in)
@@ -57,6 +57,7 @@ new_sqlite_classes = ["SkyRoom"]
 crons = ["17 3 * * *"]
 
 [env.dev.vars]
+ADMINS = "dev1@example.com"  # local development only: the seeded test pilot sees the Admin page
 SITE_URL = "http://localhost:8000"
 ALLOWED_ORIGINS = "http://localhost:8000"
 COOKIE_DOMAIN = ""

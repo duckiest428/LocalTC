@@ -11,6 +11,14 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   type and heading, and a card for a flight with its callsign, aircraft, pilot, the controller they're talking to,
   speed, altitude, heading and route, and the line from departure to arrival. Every visit opens with a note that
   only pilots who chose to share are on it and positions may be delayed. It's in the menu of every page.
+- **Live Flights' card shows the real route:** the route the pilot filed, fix by fix with each fix named, every leg
+  along the curve of the earth (a dashed great circle from departure to arrival when there are no fixes), the
+  airline's logo, and the pilot's tags ("Streamer", "Contributor") beside the aircraft and IFR chips.
+- **An Admin page on the dashboard,** for LocalTC's admins only: an overview (accounts, flights, replays, shares,
+  followers, who's sharing), Live Flights (pause it for everyone, take a flight down, turn an account's sharing off), and
+  every account (search, its devices and latest flights, tags shown on its Live Flights card, sign it out everywhere,
+  delete it).
+- **The Flight Tracker's map key folds again:** "Map key" hid only part of it.
 - **A menu on phones and tablets:** below 1080 px the header's links fold behind a menu button (with Dashboard and
   Discord on a phone), each a full-width row easy to tap, opened and closed with the keyboard too (Escape closes it).
   They were hidden altogether on a phone. "Why not a subscription" and "Status" left the header.

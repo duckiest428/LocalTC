@@ -25,6 +25,7 @@ export interface User {
   live_hide_name?: number;
   live_delay_min?: number;
   live_banned?: number;
+  tags?: string; // JSON: an admin's labels for the account (src/sky.ts readTags)
 }
 
 export interface Auth {
@@ -158,7 +159,8 @@ export async function me(env: Env, auth: Auth): Promise<Response> {
   ).bind(auth.user.id).all<{ id: string }>();
   return json({
     email: auth.user.email, created_at: auth.user.created_at, display_name: auth.user.display_name ?? "", stats: !!auth.user.stats,
-    blog_author: isAuthor(env, auth), ...sky.choices(env, auth.user), sky_admin: sky.isAdmin(env, auth),
+    blog_author: isAuthor(env, auth), ...sky.choices(auth.user, !(await sky.enabled(env))), sky_admin: sky.isAdmin(env, auth),
+    admin: sky.isAdmin(env, auth), tags: sky.readTags(auth.user.tags),
     sessions: results.map((s) => ({ ...s, current: s.id === auth.sessionId })),
   });
 }
@@ -185,7 +187,7 @@ export async function updateMe(env: Env, request: Request, auth: Auth): Promise<
     .bind(...keys.map((k) => changed[k]), auth.user.id).run();
   await sky.applied(env, auth, changed, String(changed.display_name ?? ""));
   const user = { ...auth.user, ...changed } as User;
-  return json({ display_name: user.display_name ?? "", ...sky.choices(env, user) });
+  return json({ display_name: user.display_name ?? "", ...sky.choices(user, !(await sky.enabled(env))) });
 }
 
 export async function revokeSession(env: Env, auth: Auth, id: string): Promise<Response> {
@@ -200,13 +202,17 @@ export async function deleteMe(env: Env, request: Request, auth: Auth): Promise<
   if (typeof body.email !== "string" || body.email.trim().toLowerCase() !== auth.user.email.toLowerCase()) {
     throw new HttpError(400, "Type the account's email address to confirm.");
   }
-  const id = auth.user.id;
+  await deleteUser(env, auth.user.id);
+  return json({ ok: true }, 200, auth.viaCookie ? { "Set-Cookie": sessionCookie(env, "", 0) } : {});
+}
+
+/** An account and everything in it, gone: its rows, its live relay and its flight on Live Flights. Also the admin's. */
+export async function deleteUser(env: Env, id: string): Promise<void> {
   await env.DB.batch(["shares", "replays", "flights", "sessions", "logins", "push_tokens"].map((t) =>
     env.DB.prepare(`DELETE FROM ${t} WHERE user_id = ?1`).bind(id)).concat(
     env.DB.prepare("DELETE FROM users WHERE id = ?1").bind(id)));
   await env.LIVE.get(env.LIVE.idFromName(id)).fetch("https://live/wipe", { method: "POST" });
   await sky.forget(env, id);
-  return json({ ok: true }, 200, auth.viaCookie ? { "Set-Cookie": sessionCookie(env, "", 0) } : {});
 }
 
 /** The daily tidy-up: expired sign-ins and codes, old rate-limit counters, accounts never signed in to. */

@@ -770,7 +770,7 @@ table.flights tr.picked td { background: rgba(233, 120, 214, .08); }
 .tr-seg button:first-child { border-radius: 8px 0 0 8px; }
 .tr-seg button:last-child { border-radius: 0 8px 8px 0; }
 .tr-map .maplegend { bottom: 24px; right: 8px; max-width: 300px; border-radius: 8px; }
-.tr-legend.folded .lg-ifr, .tr-legend.folded .lg-vfr, .tr-legend.folded .lg-badges, .tr-legend.folded .lg-src { display: none; }
+.tr-legend.folded > :not(.lg-fold):not(.lg-talk) { display: none; }
 .tr-legend.folded .lg-talk { margin-bottom: 0; }
 .lg-fold { float: right; margin: -2px -4px 0 12px; font: 600 11px var(--sans); color: var(--text-2); background: none; border: 0;
   padding: 2px 4px; cursor: pointer; }
@@ -1441,6 +1441,15 @@ body::after {
 .lf-chip.ifr { background: #2a4e8f; color: #fff; }
 .lf-chip.vfr { background: #2f7a37; color: #fff; }
 .lf-chip.phase { background: rgba(108, 201, 232, .18); color: var(--cyan); }
+/* An admin's tags for a pilot (server/src/sky.ts TAG_COLORS) */
+.lf-chip.tag { color: #fff; }
+.lf-chip.tag-green { background: #2f7a37; } .lf-chip.tag-blue { background: #2a5bb0; } .lf-chip.tag-purple { background: #6f45c4; }
+.lf-chip.tag-amber { background: #a86b00; } .lf-chip.tag-red { background: #b23a3a; } .lf-chip.tag-pink { background: #b0367f; }
+.lf-chip.tag-teal { background: #1f7a7a; } .lf-chip.tag-gray { background: #4a5058; }
+.lf-c-logo { display: block; max-width: 200px; max-height: 46px; margin: 0 0 10px; object-fit: contain; }
+.lf-c-logo[hidden] { display: none; }
+.lf-fix { color: #e9d38a; font: 600 10.5px var(--mono, monospace); white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 3px #000;
+  transform: translate(6px, 4px); width: auto !important; height: auto !important; }
 .lf-c-pilot { margin: 8px 0 0; font-size: 13.5px; }
 .lf-c-od { margin: 12px 0; text-align: center; font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: .04em; }
 .lf-c-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; text-align: center; }
@@ -1482,3 +1491,44 @@ body::after {
   accent-color: var(--green); box-shadow: none; }
 .live-form select { width: auto; background: var(--bg-3); color: var(--text); border: 1px solid rgba(255, 255, 255, .14); border-radius: 8px; padding: 6px 8px; font: inherit; }
 .live-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* The dashboard's Admin page (admin.js) */
+.adm-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.adm-tile { padding: 14px 16px; border-radius: var(--r2); background: var(--bg-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+.adm-tile b { display: block; font-size: 24px; color: var(--text); font-variant-numeric: tabular-nums; }
+.adm-tile span { font-size: 12.5px; color: var(--text-3); }
+.adm-msg:empty { display: none; }
+.adm-scroll { overflow-x: auto; margin: 8px 0; }
+.adm-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+.adm-table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.adm-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255, 255, 255, .06); color: var(--text-2); vertical-align: middle; }
+.adm-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.adm-table .mono { font-family: var(--mono, monospace); color: var(--text); }
+.adm-row { cursor: pointer; }
+.adm-row:hover td, .adm-row:focus-visible td { background: rgba(255, 255, 255, .04); }
+.adm-row:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+.adm-table .lf-chip { margin-right: 4px; }
+.adm-flag { margin-left: 6px; font-size: 11px; color: var(--amber); }
+.adm-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-search-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.adm-search-row input { flex: 1 1 260px; }
+.adm-pager { display: flex; gap: 8px; justify-content: flex-end; }
+.adm-user { margin-top: 18px; padding: 18px 20px; border-radius: var(--r2); background: var(--bg-1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
+.adm-user[hidden] { display: none; }
+.adm-user-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.adm-user-head h3 { margin: 0; overflow-wrap: anywhere; }
+.adm-user h4 { margin: 18px 0 8px; font-size: 13px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+.adm-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 12px 0 0; font-size: 14px; }
+.adm-facts dt { color: var(--text-3); }
+.adm-facts dd { margin: 0; color: var(--text); }
+.adm-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.adm-tags .lf-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; padding: 3px 4px 3px 9px; }
+.adm-x { border: 0; background: rgba(0, 0, 0, .25); color: #fff; width: 20px; height: 20px; border-radius: 5px; cursor: pointer; line-height: 1; }
+.adm-x:hover, .adm-x:focus-visible { background: rgba(0, 0, 0, .5); }
+.adm-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adm-add input { flex: 1 1 160px; max-width: 240px; }
+.adm-add select { background: var(--bg-3); color: var(--text); border: 1px solid rgba(255, 255, 255, .14); border-radius: 8px; padding: 8px; font: inherit; }
+.adm-list { margin: 0; padding-left: 18px; font-size: 14px; color: var(--text-2); }
+.adm-list li { margin: 3px 0; }
+.adm-danger { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .08); }

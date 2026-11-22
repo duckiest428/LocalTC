@@ -16,7 +16,7 @@ export default defineConfig(async () => {
             COOKIE_DOMAIN: "",
             APNS_TOPIC: "",
             SKY_CACHE_S: "0",
-            LIVE_ADMINS: "admin@example.com",
+            ADMINS: "admin@example.com",
           },
         },
       }),

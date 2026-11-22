@@ -82,6 +82,7 @@
         <a href="#wrapped" data-page="wrapped"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8c-2-4-6-4-6-1.5S10 8 12 8zm0 0c2-4 6-4 6-1.5S14 8 12 8z"/></svg><span>Wrapped</span></a>
         <a href="#download" data-page="download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg><span>Download</span></a>
         <a href="#support" data-page="support"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg><span>Support</span></a>
+        <a href="#admin" data-page="admin" id="side-admin" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg><span>Admin</span></a>
         <a href="#account" data-page="account" class="side-account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Account</span></a>
       </nav>
       <div class="side-who">
@@ -254,6 +255,33 @@
         </div>
       </section>
 
+      <!-- Admin: only for the server's ADMINS (admin.js; every call checked by the server, server/src/admin.ts) -->
+      <section class="dash-page" id="admin" aria-labelledby="admin-h" hidden>
+        <div class="page-head"><h1 id="admin-h">Admin</h1>
+          <button class="btn btn-ghost btn-sm" type="button" id="adm-refresh">Refresh</button></div>
+        <p class="hint adm-msg" id="adm-msg" role="status" aria-live="polite"></p>
+        <div class="adm-tiles" id="adm-tiles"></div>
+        <div class="panel">
+          <h3>Live Flights</h3>
+          <p class="hint" id="adm-live-state"></p>
+          <p><button type="button" id="adm-pause" class="btn btn-danger">Pause Live Flights for everyone</button></p>
+          <div class="adm-scroll"><table class="adm-table">
+            <thead><tr><th>Callsign</th><th>Route</th><th>Account</th><th>Started</th><th>Last update</th><th></th></tr></thead>
+            <tbody id="adm-live-rows"></tbody></table></div>
+        </div>
+        <div class="panel">
+          <h3>Accounts</h3>
+          <div class="adm-search-row"><input id="adm-search" type="search" placeholder="Search by email or display name" aria-label="Search the accounts">
+            <span class="hint" id="adm-users-count"></span></div>
+          <div class="adm-scroll"><table class="adm-table">
+            <thead><tr><th>Email</th><th>Name</th><th>Tags</th><th>Flights</th><th>Live Flights</th><th>Joined</th><th>Last seen</th></tr></thead>
+            <tbody id="adm-user-rows"></tbody></table></div>
+          <div class="adm-pager"><button class="btn btn-ghost btn-sm" type="button" id="adm-prev">Newer</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="adm-next">Older</button></div>
+          <div class="adm-user" id="adm-user" hidden></div>
+        </div>
+      </section>
+
       <section class="dash-page" id="account" aria-labelledby="account-h" hidden>
         <div class="page-head"><h1 id="account-h">Account</h1></div>
         <p class="acct-who"><span>Signed in as <b class="who-email"></b></span>
@@ -332,6 +360,7 @@
 <script src="stats.js"></script>
 <script src="api.js"></script>
 <script src="tracker.js"></script>
+<script src="admin.js"></script>
 <script src="dashboard.js"></script>
 <script src="nav.js" defer></script>
 <script src="notice.js" defer></script>

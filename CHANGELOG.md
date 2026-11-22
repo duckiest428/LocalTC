@@ -15,6 +15,8 @@ a new minor version adds features, a patch fixes them.
   route or name, and delay what's shown by 5, 10 or 15 minutes. While your flight is on the map a "Sharing live"
   badge sits at the top; a click stops it. It needs the account, and the dashboard can stop it too. The flight
   leaves the map when it ends, when you stop, when LocalTC closes, or 90 seconds after the last update.
+  The map's card shows your filed route fix by fix and your airline's logo (the route's fixes are sent once a
+  flight, the airline's code with each update).
 - **An apron controller where the airport has one:** at an airport whose sim data has an apron frequency (Incheon
   among them), delivery sends you to the apron ("contact Incheon Apron 121.65 when ready"), the apron gives
   the push and start, and "ready to taxi" there is handed to ground ("contact Incheon Ground 118.75"). It was one

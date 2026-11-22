@@ -24,16 +24,24 @@ export const MAX_FLIGHTS = 1000;
 export const DELAYS = [0, 5, 10, 15] as const; // minutes
 export const MODES = ["off", "flight", "always"] as const;
 export type Mode = (typeof MODES)[number];
-const MAX_BODY = 4096;
+const MAX_BODY = 16384; // a heartbeat with the route's fixes in it
+const MAX_FIXES = 150;
 const HISTORY_EVERY_MS = 10_000; // a delayed flight's positions are kept one per this long
 export const PHASES = ["parked", "taxi", "takeoff", "climb", "cruise", "descent", "approach", "landing", "landed"] as const;
 
 /** Everything a heartbeat may carry. The pilot's name is the server's own (users.display_name), never the app's. */
-export const SKY_KEYS = ["callsign", "type", "from", "to", "from_ll", "to_ll", "route", "rules", "phase", "lat", "lon", "alt",
-  "gs", "hdg", "ground", "station", "mhz"] as const;
+export const SKY_KEYS = ["callsign", "type", "airline", "from", "to", "from_ll", "to_ll", "route", "fixes", "rules", "phase",
+  "lat", "lon", "alt", "gs", "hdg", "ground", "station", "mhz"] as const;
+
+/** A fix of the filed route, for drawing it: sent once a flight (and again if the room asks), not with every beat. */
+export interface Fix { ident: string; lat: number; lon: number; kind?: string }
+/** A label an admin gave the account ("Streamer", "Contributor"), shown on its flight's card. */
+export interface Tag { label: string; color: string }
+export const TAG_COLORS = ["green", "blue", "purple", "amber", "red", "pink", "teal", "gray"] as const;
+export const MAX_TAGS = 4;
 
 export interface SkyFlight {
-  callsign: string; type?: string; from?: string; to?: string; route?: string;
+  callsign: string; type?: string; airline?: string; from?: string; to?: string; route?: string; fixes?: Fix[];
   from_ll?: [number, number]; to_ll?: [number, number]; // the airports' own positions, for the line between them
   rules: "IFR" | "VFR"; phase?: string;
   lat: number; lon: number; alt: number; gs: number; hdg: number; ground: boolean; station?: string; mhz?: number;
@@ -67,6 +75,20 @@ export function cleanSkyFlight(raw: Record<string, unknown>): SkyFlight {
   };
   const type = code(raw.type, /^[A-Z0-9]{2,4}$/, 4);
   if (type) out.type = type;
+  const airline = code(raw.airline, /^[A-Z0-9]{2}$/, 2); // its IATA code, for the logo
+  if (airline) out.airline = airline;
+  if (Array.isArray(raw.fixes)) {
+    const fixes: Fix[] = [];
+    for (const f of raw.fixes.slice(0, MAX_FIXES)) {
+      if (!f || typeof f !== "object") continue;
+      const o = f as Record<string, unknown>, la = finite(o.lat), lo = finite(o.lon), id = code(o.ident, /^[A-Z0-9]{1,7}$/, 7);
+      if (la === undefined || lo === undefined || Math.abs(la) > 90 || Math.abs(lo) > 180 || !id) continue;
+      const fix: Fix = { ident: id, lat: Math.round(la * 1e4) / 1e4, lon: Math.round(lo * 1e4) / 1e4 };
+      if (typeof o.kind === "string" && /^[a-z]{1,8}$/.test(o.kind)) fix.kind = o.kind;
+      fixes.push(fix);
+    }
+    if (fixes.length >= 2) out.fixes = fixes;
+  }
   const from = code(raw.from, /^[A-Z0-9]{3,4}$/, 4), to = code(raw.to, /^[A-Z0-9]{3,4}$/, 4);
   if (from) out.from = from;
   if (to) out.to = to;
@@ -90,7 +112,21 @@ export function cleanSkyFlight(raw: Record<string, unknown>): SkyFlight {
 }
 
 /** What the pilot chose, from their account: shown with the flight. */
-export interface Meta { name: string; hideRoute: boolean; hideName: boolean; delayMin: number }
+export interface Meta { name: string; hideRoute: boolean; hideName: boolean; delayMin: number; tags?: Tag[] }
+
+/** An account's tags, from users.tags (JSON), checked again on the way out. */
+export function readTags(raw: unknown): Tag[] {
+  let list: unknown = raw;
+  if (typeof raw === "string") { try { list = JSON.parse(raw); } catch { return []; } }
+  if (!Array.isArray(list)) return [];
+  return list.slice(0, MAX_TAGS).flatMap((t) => {
+    const o = t && typeof t === "object" ? (t as Record<string, unknown>) : {};
+    const label = typeof o.label === "string" ? o.label.normalize("NFC").replace(/\s+/g, " ").trim() : "";
+    if (!label || label.length > 20 || !/^[\p{L}\p{N}][\p{L}\p{N} .&+'-]*$/u.test(label)) return [];
+    const color = (TAG_COLORS as readonly string[]).includes(String(o.color)) ? String(o.color) : "gray";
+    return [{ label, color }];
+  });
+}
 
 type Moving = Pick<SkyFlight, "lat" | "lon" | "alt" | "gs" | "hdg" | "ground" | "phase" | "station" | "mhz">;
 const MOVING = ["lat", "lon", "alt", "gs", "hdg", "ground", "phase", "station", "mhz"] as const;
@@ -101,7 +137,7 @@ export interface Held {
 }
 
 /** What the map shows of one flight. No account id, no email: a random id made for this flight. */
-export interface Shown extends Partial<SkyFlight> { id: string; name: string; delay_min: number }
+export interface Shown extends Partial<SkyFlight> { id: string; name: string; delay_min: number; tags?: Tag[]; has_route?: boolean }
 
 /** The map's flights, kept in memory. Pure, with the time passed in, so the tests can run the clock. */
 export class Sky {
@@ -164,7 +200,7 @@ export class Sky {
       this.byUser.set(uid, held.id);
     }
     held.meta = meta;
-    held.flight = flight;
+    held.flight = { ...flight, fixes: flight.fixes ?? held.flight.fixes };
     held.last = now;
     this.dirty.add(held.id);
     const at = Object.fromEntries(MOVING.filter((k) => flight[k] !== undefined).map((k) => [k, flight[k]])) as Moving;
@@ -210,6 +246,30 @@ export class Sky {
     for (const [ip, h] of this.ipHits) if (h.minute !== minute) this.ipHits.delete(ip);
   }
 
+  /** A flight's filed route, fix by fix, unless the pilot hides it. */
+  routeOf(id: string): Fix[] | null {
+    const held = this.flights.get(id);
+    return held && !held.meta.hideRoute && held.flight.fixes ? held.flight.fixes : null;
+  }
+
+  /** Whether the account's flight here has its fixes (else the app is asked for them). */
+  hasFixes(uid: string): boolean {
+    return !!this.flights.get(this.byUser.get(uid) ?? "")?.flight.fixes;
+  }
+
+  /** For the admin panel: every flight with the account behind it. */
+  all(now: number): { id: string; uid: string; callsign: string; from?: string; to?: string; last: number; started: number }[] {
+    this.prune(now);
+    return [...this.flights.values()].map((h) => ({ id: h.id, uid: h.uid, callsign: h.flight.callsign, from: h.flight.from,
+      to: h.flight.to, last: h.last, started: h.started }));
+  }
+
+  /** Everything off the map (Live Flights paused). */
+  clear(): void {
+    for (const id of [...this.flights.keys()]) this.drop(id);
+    this.byUser.clear();
+  }
+
   snapshot(now: number): { flights: Shown[]; generated_at: string } {
     this.prune(now);
     const flights: Shown[] = [];
@@ -226,10 +286,13 @@ export class Sky {
         id: held.id, name: meta.hideName || !meta.name ? "LocalTC pilot" : meta.name, delay_min: meta.delayMin,
         callsign: flight.callsign, rules: flight.rules,
       };
-      for (const k of ["type", "from", "to"] as const) if (flight[k]) shown[k] = flight[k];
+      for (const k of ["type", "airline", "from", "to"] as const) if (flight[k]) shown[k] = flight[k];
+      if (meta.tags?.length) shown.tags = meta.tags;
+      if (!meta.hideRoute && flight.fixes) shown.has_route = true;
       if (flight.from_ll) shown.from_ll = flight.from_ll;
       if (flight.to_ll) shown.to_ll = flight.to_ll;
       if (!meta.hideRoute && flight.route) shown.route = flight.route;
+      delete shown.fixes;
       for (const k of MOVING) if (at[k] !== undefined) (shown as unknown as Record<string, unknown>)[k] = at[k];
       flights.push(shown);
     }
@@ -287,7 +350,7 @@ export class SkyRoom extends DurableObject<Env> {
       case "PUT /beat": {
         try {
           const id = this.sky.beat(String(body.uid), String(body.ip), body.meta as Meta, body.flight as SkyFlight, now);
-          return json({ ok: true, flight_id: id });
+          return json({ ok: true, flight_id: id, need_fixes: !this.sky.hasFixes(String(body.uid)) });
         } catch (err) {
           if (err instanceof HttpError) return json({ error: err.message }, err.status);
           throw err;
@@ -302,6 +365,16 @@ export class SkyRoom extends DurableObject<Env> {
         return json({ uid: this.sky.remove(String(body.id)) });
       case "GET /snapshot":
         return json(this.sky.snapshot(now));
+      case "GET /all":
+        return json({ flights: this.sky.all(now) });
+      case "POST /clear":
+        this.sky.clear();
+        return json({ ok: true });
+    }
+    const route = /^\/route\/([0-9a-f]{16})$/.exec(url.pathname);
+    if (route && request.method === "GET") {
+      const fixes = this.sky.routeOf(route[1]);
+      return fixes ? json({ fixes }) : json({ error: "No route for that flight." }, 404);
     }
     return json({ error: "Not found." }, 404);
   }
@@ -317,16 +390,21 @@ async function send(env: Env, method: string, path: string, body?: unknown): Pro
   return room(env).fetch(`https://sky${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
 }
 
-const enabled = (env: Env) => (env.LIVE_SKY ?? "on") !== "off";
+/** Live Flights on for everyone: not paused in wrangler.toml (LIVE_SKY) nor from the admin panel (server_flags). */
+export async function enabled(env: Env): Promise<boolean> {
+  if ((env.LIVE_SKY ?? "on") === "off") return false;
+  const row = await env.DB.prepare("SELECT value FROM server_flags WHERE key = 'live_sky_paused'").first<{ value: string }>();
+  return row?.value !== "1";
+}
 
 /** The pilot's sharing choices, as GET /v1/me shows them. */
-export function choices(env: Env, user: Auth["user"]): Record<string, unknown> {
+export function choices(user: Auth["user"], paused = false): Record<string, unknown> {
   return {
     live_share: (MODES as readonly string[]).includes(user.live_share ?? "") ? user.live_share : "off",
     live_hide_route: !!user.live_hide_route, live_hide_name: !!user.live_hide_name,
     live_delay_min: (DELAYS as readonly number[]).includes(Number(user.live_delay_min)) ? Number(user.live_delay_min) : 0,
     live_blocked: !!user.live_banned, // an admin turned this account's sharing off
-    live_paused: !enabled(env), // Live Flights is off for everyone (LIVE_SKY)
+    live_paused: paused, // Live Flights is off for everyone (LIVE_SKY, or the admin panel)
   };
 }
 
@@ -361,20 +439,26 @@ export async function applied(env: Env, auth: Auth, changed: Record<string, stri
   if ("live_hide_name" in changed) meta.hideName = !!changed.live_hide_name;
   if ("live_delay_min" in changed) meta.delayMin = Number(changed.live_delay_min);
   if ("display_name" in changed) meta.name = name;
-  if (Object.keys(meta).length) await send(env, "POST", "/meta", { uid: auth.user.id, meta });
+  await setMeta(env, auth.user.id, meta);
+}
+
+/** An account's flight shown differently at once (its name, choices or tags changed). */
+export async function setMeta(env: Env, uid: string, meta: Partial<Meta>): Promise<void> {
+  if (Object.keys(meta).length) await send(env, "POST", "/meta", { uid, meta });
 }
 
 /** PUT /v1/sky/flight: the app's heartbeat while a shared flight runs. */
 export async function beat(env: Env, request: Request, auth: Auth): Promise<Response> {
   const user = auth.user;
   const mode = (MODES as readonly string[]).includes(user.live_share ?? "") ? (user.live_share as Mode) : "off";
-  if (!enabled(env)) return json({ ok: false, mode, error: "Live Flights is paused for now." }, 503);
+  if (!(await enabled(env))) return json({ ok: false, mode, error: "Live Flights is paused for now." }, 503);
   if (user.live_banned) return json({ ok: false, mode: "off", error: "Sharing is turned off for this account." }, 403);
   if (mode === "off") return json({ ok: false, mode, error: "Sharing is off. Turn it on in Settings, Account." }, 403);
   const flight = cleanSkyFlight(await readJson(request, MAX_BODY));
   const meta: Meta = {
     name: user.display_name ?? "", hideRoute: !!user.live_hide_route, hideName: !!user.live_hide_name,
     delayMin: (DELAYS as readonly number[]).includes(Number(user.live_delay_min)) ? Number(user.live_delay_min) : 0,
+    tags: readTags(user.tags),
   };
   const res = await send(env, "PUT", "/beat", { uid: user.id, ip: clientIp(request), meta, flight });
   const out = (await res.json()) as Record<string, unknown>;
@@ -397,20 +481,36 @@ export async function stop(env: Env, request: Request, auth: Auth): Promise<Resp
 export async function flights(env: Env, request: Request): Promise<Response> {
   const ttl = Number(env.SKY_CACHE_S ?? "10");
   const headers = { "Cache-Control": `public, max-age=${ttl}`, "Access-Control-Allow-Origin": "*" };
-  if (!enabled(env)) return json({ flights: [], generated_at: new Date().toISOString(), paused: true }, 200, headers);
   const key = new Request(new URL("/v1/sky/flights", request.url).toString());
   const cache = ttl > 0 ? await caches.open("sky") : null;
   const hit = cache ? await cache.match(key) : undefined;
   if (hit) return new Response(hit.body, hit);
+  if (!(await enabled(env))) return json({ flights: [], generated_at: new Date().toISOString(), paused: true }, 200, headers);
   const res = await send(env, "GET", "/snapshot");
   const out = json(await res.json(), 200, headers);
   if (cache) await cache.put(key, out.clone());
   return out;
 }
 
+/** GET /v1/sky/flights/:id/route: a flight's filed route, fix by fix (unless the pilot hides it), for its card. */
+export async function route(env: Env, id: string): Promise<Response> {
+  const res = await send(env, "GET", `/route/${id}`);
+  return json(await res.json(), res.status, { "Cache-Control": "public, max-age=60", "Access-Control-Allow-Origin": "*" });
+}
+
+/** For the admin panel (src/admin.ts): the flights on the map with their accounts, and pausing it all. */
+export async function adminFlights(env: Env): Promise<{ id: string; uid: string; callsign: string; last: number; started: number }[]> {
+  return ((await (await send(env, "GET", "/all")).json()) as { flights: [] }).flights;
+}
+
+export async function clearAll(env: Env): Promise<void> {
+  await send(env, "POST", "/clear", {});
+}
+
+/** The server's admins (ADMINS in wrangler.toml), with a confirmed address. */
 export function isAdmin(env: Env, auth: Auth): boolean {
   if (!auth.user.verified_at) return false;
-  return (env.LIVE_ADMINS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean).includes(auth.user.email.toLowerCase());
+  return (env.ADMINS ?? env.LIVE_ADMINS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean).includes(auth.user.email.toLowerCase());
 }
 
 /** DELETE /v1/sky/flights/:id (admins): one flight off the map. */
@@ -443,4 +543,16 @@ export async function ban(env: Env, request: Request, auth: Auth): Promise<Respo
 /** The account deleted: its flight off the map. */
 export async function forget(env: Env, uid: string): Promise<void> {
   await send(env, "POST", "/stop", { uid });
+}
+
+/** GET /v1/logo/:iata : an airline's logo for Live Flights' cards (pics.avs.io's PNG, as the app shows it), through
+ * here so a viewer's browser asks no one else, and readable by the page (it clears the white round it). A week cached. */
+export async function logo(iata: string): Promise<Response> {
+  const res = await fetch(`https://pics.avs.io/200/60/${iata}.png`, {
+    headers: { "User-Agent": "LocalTC" }, cf: { cacheTtl: 7 * 86400, cacheEverything: true },
+  } as RequestInit);
+  const type = res.headers.get("Content-Type") ?? "";
+  if (!res.ok || !type.startsWith("image/")) return json({ error: "No logo for that airline." }, 404, { "Cache-Control": "public, max-age=86400" });
+  return new Response(res.body, { headers: { "Content-Type": type, "Cache-Control": "public, max-age=604800",
+    "Access-Control-Allow-Origin": "*", "Cross-Origin-Resource-Policy": "cross-origin" } });
 }

@@ -18,6 +18,7 @@ export interface Env {
   CHARTFOX_CLIENT_SECRET?: string;
   MARKETING_FROM?: string; // the blog's emails to its followers: "LocalTC <marketing@localtc.tech>"
   LIVE_SKY?: string; // "off": Live Flights paused for everyone (the kill switch); on otherwise
+  ADMINS?: string; // comma-separated addresses with the dashboard's Admin page: accounts, tags, Live Flights (src/admin.ts)
   LIVE_ADMINS?: string; // comma-separated addresses that may take flights off Live Flights and turn an account's sharing off
   SKY_CACHE_S?: string; // how long the map's snapshot is cached at the edge (10; 0 in the tests)
   BLOG_AUTHORS?: string; // comma-separated addresses that may write the blog (src/blog.ts); its default otherwise

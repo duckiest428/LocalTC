@@ -33,7 +33,7 @@ class SkyServer:
         if path == "/v1/sky/flight" and method == "PUT":
             if self.mode == "off":
                 return 403, {"ok": False, "mode": "off", "error": "Sharing is off."}
-            return 200, {"ok": True, "mode": self.mode, "flight_id": "0123456789abcdef"}
+            return 200, {"ok": True, "mode": self.mode, "flight_id": "0123456789abcdef", "need_fixes": False}
         if path == "/v1/sky/flight" and method == "DELETE":
             if body.get("ended") and self.mode == "flight":
                 self.mode = "off"
@@ -44,7 +44,8 @@ class SkyServer:
         return [b for m, p, b in self.requests if (m, p) == ("PUT", "/v1/sky/flight")]
 
 
-FLIGHT = {"callsign": "ACA8272", "type": "A321", "from": "CYVR", "to": "KSEA", "from_ll": [49.194, -123.184], "to_ll": [47.449, -122.309], "route": "PAE3", "rules": "IFR",
+FLIGHT = {"callsign": "ACA8272", "type": "A321", "airline": "AC",
+          "fixes": [{"ident": "CYVR", "lat": 49.19, "lon": -123.18, "kind": "apt"}, {"ident": "KSEA", "lat": 47.45, "lon": -122.31, "kind": "apt"}], "from": "CYVR", "to": "KSEA", "from_ll": [49.194, -123.184], "to_ll": [47.449, -122.309], "route": "PAE3", "rules": "IFR",
           "phase": "cruise", "lat": 48.1, "lon": -122.9, "alt": 13000, "gs": 310, "hdg": 152, "ground": False,
           "station": "Seattle Center", "mhz": 132.6}
 
@@ -123,3 +124,13 @@ def test_stop_sharing_takes_the_flight_down_and_turns_it_off():
     view = asyncio.run(pilot.api_stop_sharing({}))
     assert view["live_share"] == "off" and not view["on_map"]
     assert ("DELETE", "/v1/sky/flight", {"ended": False}) in server.requests
+
+
+def test_the_route_s_fixes_go_once_not_with_every_heartbeat():
+    server = SkyServer("always")
+    a = account(server)
+    a.sharing_choices()
+    a.sky(FLIGHT, now=0)
+    a.sky({**FLIGHT, "lat": 48.2}, now=SKY_EVERY_S)
+    first, second = server.beats()
+    assert first["fixes"] == FLIGHT["fixes"] and "fixes" not in second

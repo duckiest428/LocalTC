@@ -638,8 +638,12 @@ class AppController:
             geo = engine.geometry(icao) if engine is not None and icao else None
             return [round(geo.airport.lat, 3), round(geo.airport.lon, 3)] if geo is not None else None
 
+        route = route_view(self.plan) or {}
+        fixes = [{"ident": x["ident"], "lat": round(x["lat"], 4), "lon": round(x["lon"], 4), "kind": x.get("kind") or "fix"}
+                 for x in route.get("fixes") or [] if x.get("lat") is not None and x.get("lon") is not None][:150]
         return {
-            "callsign": f.get("callsign"), "type": f.get("aircraft"), "from": f.get("origin"), "to": f.get("destination"),
+            "callsign": f.get("callsign"), "type": f.get("aircraft"), "airline": airline_iata(f.get("callsign")),
+            "from": f.get("origin"), "to": f.get("destination"), "fixes": fixes or None,
             "from_ll": where(f.get("origin")), "to_ll": where(f.get("destination")),
             "route": self.plan.route if self.plan is not None else None, "rules": f.get("rules") or "IFR",
             "phase": SKY_PHASES.get(f.get("phase") or ""), "lat": own["lat"], "lon": own["lon"], "alt": own.get("alt"),
@@ -1621,6 +1625,16 @@ def online_network(cfg: Config) -> str:
     """The network a flight is flown beside ("vatsim", "ivao"), or "": LocalTC only (the integration off, or chosen)."""
     atc = cfg.atc
     return atc.online_network if atc.online_integration and atc.online_network in ("vatsim", "ivao") else ""
+
+
+def airline_iata(callsign: str | None) -> str | None:
+    """The airline's IATA code from an ICAO callsign ("FFT38" -> "F9"), for its logo; None for anything else."""
+    from localtc.ops.airline_codes import IATA_TO_ICAO
+
+    cs = (callsign or "").upper()
+    if len(cs) < 4 or not cs[:3].isalpha() or not cs[3].isdigit():
+        return None
+    return next((k for k, v in IATA_TO_ICAO.items() if v == cs[:3]), None)
 
 
 def own_view(ev: OwnshipState) -> dict:

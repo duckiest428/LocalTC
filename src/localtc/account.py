@@ -48,7 +48,7 @@ LIVE_HEARTBEAT_S = 15.0  # and at least this often while flying: the answer says
 SKY_EVERY_S = 10.0  # Live Flights: the shared flight's position at most this often ...
 SKY_IDLE_S = 30.0  # ... and when it hasn't moved, at least this often (the map drops a flight after 90 s without)
 # Live Flights: everything the public map is sent of a shared flight (the server drops anything else).
-SKY_KEYS = ("callsign", "type", "from", "to", "from_ll", "to_ll", "route", "rules", "phase", "lat", "lon", "alt", "gs", "hdg", "ground",
+SKY_KEYS = ("callsign", "type", "airline", "from", "to", "from_ll", "to_ll", "route", "fixes", "rules", "phase", "lat", "lon", "alt", "gs", "hdg", "ground",
             "station", "mhz")
 SHARING_KEYS = ("live_share", "live_hide_route", "live_hide_name", "live_delay_min", "live_blocked", "live_paused")
 
@@ -164,6 +164,7 @@ class Account:
         self._sky_sent = -math.inf
         self._sky_last: dict | None = None
         self.sky_on_map = False  # the last heartbeat put the flight on the map
+        self._sky_need_fixes = True  # the route's fixes go with the next heartbeat (the server asks again if it lost them)
 
     @property
     def logbook(self) -> Logbook:
@@ -323,11 +324,13 @@ class Account:
         if not (self.signed_in and self.sharing_on):
             return False
         now = time.monotonic() if now is None else now
-        body = {k: flight[k] for k in SKY_KEYS if flight.get(k) is not None}
+        body = {k: flight[k] for k in SKY_KEYS if flight.get(k) is not None and k != "fixes"}
         since = now - self._sky_sent
         if since < SKY_EVERY_S or (body == self._sky_last and since < SKY_IDLE_S):
             return False
-        self._sky_sent, self._sky_last = now, body
+        self._sky_sent, self._sky_last = now, dict(body)
+        if self._sky_need_fixes and flight.get("fixes"):  # the route's fixes: once, not with every heartbeat
+            body["fixes"] = flight["fixes"]
         try:
             data = self._call("PUT", "/v1/sky/flight", body)
         except AccountError as exc:
@@ -336,6 +339,7 @@ class Account:
                 self.sky_on_map = False
             raise
         self.sky_on_map = bool((data or {}).get("ok"))
+        self._sky_need_fixes = bool((data or {}).get("need_fixes"))
         if isinstance(data, dict) and data.get("mode") in ("off", "flight", "always"):
             self.sharing["live_share"] = data["mode"]
         return True
@@ -345,6 +349,7 @@ class Account:
         was = self.sky_on_map
         self.sky_on_map = False
         self._sky_sent, self._sky_last = -math.inf, None
+        self._sky_need_fixes = True
         if not self.signed_in or not (was or ended and self.sharing.get("live_share") == "flight"):
             return
         data = self._call("DELETE", "/v1/sky/flight", {"ended": ended})

@@ -66,8 +66,9 @@ def test_the_dashboard_is_a_sidebar_of_sections_behind_the_sign_in():
     side = html[html.index('<nav class="side-nav"'):html.index("</nav>", html.index('<nav class="side-nav"'))]
     import re
 
-    pages = ["tracker", "logbook", "stats", "wrapped", "download", "support", "account"]
+    pages = ["tracker", "logbook", "stats", "wrapped", "download", "support", "admin", "account"]
     assert re.findall(r'data-page="(\w+)"', side) == pages
+    assert 'id="side-admin" hidden' in side  # the Admin page: hidden unless the server says the account is an admin
     app = html[html.index('<div class="dash-app" id="dash" hidden>'):]
     for page in pages:
         assert f'<section class="dash-page" id="{page}"' in app  # all inside the signed-in part, hidden until then

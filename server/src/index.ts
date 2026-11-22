@@ -5,6 +5,7 @@
  * logbook's summary lines, the replays of the flights the pilot uploads, and the public pages of what they
  * chose to share. There are no passwords: signing in is a code or link sent by email. See README.md.
  */
+import * as admin from "./admin";
 import * as auth from "./auth";
 import * as blog from "./blog";
 import * as chartfox from "./chartfox";
@@ -96,6 +97,17 @@ const ROUTES: [string, RegExp, Handler][] = [
   ["DELETE", /^\/v1\/sky\/flight$/, signedIn((env, req, a) => sky.stop(env, req, a))],
   ["DELETE", /^\/v1\/sky\/flights\/([0-9a-f]{16})$/, signedIn((env, _req, a, _u, p) => sky.takeDown(env, a, p[0]))],
   ["POST", /^\/v1\/sky\/ban$/, signedIn((env, req, a) => sky.ban(env, req, a))],
+  ["GET", /^\/v1\/logo\/([A-Z0-9]{2})$/, (_env, _req, _u, p) => sky.logo(p[0])],
+  ["GET", /^\/v1\/sky\/flights\/([0-9a-f]{16})\/route$/, (env, _req, _u, p) => sky.route(env, p[0])],
+  // The admin panel (src/admin.ts): the ADMINS only, checked there.
+  ["GET", /^\/v1\/admin\/overview$/, signedIn((env, _req, a) => admin.overview(env, a))],
+  ["GET", /^\/v1\/admin\/users$/, signedIn((env, _req, a, url) => admin.users(env, a, url))],
+  ["GET", /^\/v1\/admin\/users\/([\w-]+)$/, signedIn((env, _req, a, _u, p) => admin.user(env, a, p[0]))],
+  ["PATCH", /^\/v1\/admin\/users\/([\w-]+)$/, signedIn((env, req, a, _u, p) => admin.update(env, req, a, p[0]))],
+  ["DELETE", /^\/v1\/admin\/users\/([\w-]+)$/, signedIn((env, req, a, _u, p) => admin.remove(env, req, a, p[0]))],
+  ["POST", /^\/v1\/admin\/users\/([\w-]+)\/signout$/, signedIn((env, _req, a, _u, p) => admin.signOut(env, a, p[0]))],
+  ["GET", /^\/v1\/admin\/live$/, signedIn((env, _req, a) => admin.live(env, a))],
+  ["PUT", /^\/v1\/admin\/live$/, signedIn((env, req, a) => admin.pause(env, req, a))],
   ["POST", /^\/v1\/push-tokens$/, signedIn((env, req, a) => live.addPushToken(env, req, a))],
   ["DELETE", /^\/v1\/push-tokens\/(\w+)$/, signedIn((env, _req, a, _u, p) => live.removePushToken(env, a, p[0]))],
 ];

@@ -850,7 +850,7 @@ const Language = {
         <span class="hint">What it says to you and what it hears on the intercom. Its callouts, checklists and radio calls stay
           in aviation English, as ATC does. It needs speech recognition that knows the language and a voice that speaks
           it: downloaded once, by itself (the voices of your language: Quick Settings &rarr; Models).</span></div>
-      <p class="muted small">ATC always speaks aviation English, as on the real radio.</p>`;
+      <p class="muted small">Call ATC in your language and they answer in it (Quick Settings, ATC, ATC's language).</p>`;
   },
   wire(id, after) {
     $$("[data-lang]").forEach((b) => (b.onclick = async () => {
@@ -2285,7 +2285,7 @@ const Settings = {
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
         <div class="row"><label>ATC's language
           <select id="s-atc-language">${[["auto", "Yours: the copilot's language, else the window's"], ["en", "English only"],
-            ...Languages.list().filter((l) => l.code !== "en").map((l) => [l.code, l.native])]
+            ...Language.list().filter((l) => l.code !== "en").map((l) => [l.code, l.native])]
             .map(([v, t]) => `<option value="${v}" ${(st.atc.language || "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
           <span class="hint">Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.</span></label></div>
       </div>

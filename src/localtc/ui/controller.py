@@ -130,6 +130,10 @@ class AppController:
         self.live: LiveSession | None = None
         self.status, self.status_detail = "idle", ""
         self.radio: deque[dict] = deque(maxlen=RADIO_HISTORY)
+        # The sim's panel: the radio log's lines by number. Their times go back to 0 with each flight (and the app's
+        # own lines before it have none), so "newer than this time" lost lines.
+        self._radio_seq = 0
+        self._panel_radio: deque[tuple[int, dict]] = deque(maxlen=PANEL_LINES)
         self.own: dict | None = None
         self.traffic: list[dict] = []
         self.airports: dict[str, Any] = {}  # icao -> Airport seen this session
@@ -453,6 +457,8 @@ class AppController:
 
     def _radio(self, line: dict) -> None:
         self.radio.append(line)
+        self._radio_seq += 1
+        self._panel_radio.append((self._radio_seq, line))
         self.publish("radio", line)
 
     # --- a flight ---------------------------------------------------------------------------------------------
@@ -987,13 +993,18 @@ class AppController:
 
     async def api_panel(self, args: dict) -> dict:
         """What the sim's toolbar panel shows (``static/panel.html``, for VR): the radio log's last lines and the radios.
-        ``after``: only the lines newer than this time."""
-        after = float(args.get("after") or -1e18)
-        lines = [line for line in list(self.radio)[-PANEL_LINES:] if float(line.get("t") or 0.0) > after]
+        ``after``: only the lines after this one (``seq`` in the answer: the last line's number; none or anything else:
+        all of them). It asked "after=-1e+18" first, the "+" read as a space, and every answer was an error: the panel
+        said "LocalTC isn't running" with LocalTC flying."""
+        try:
+            after = int(float(args.get("after") or -1))
+        except (TypeError, ValueError):
+            after = -1
+        lines = [line for seq, line in list(self._panel_radio) if seq > after]
         own = self.own or {}
-        out = {"radio": lines, "com1": own.get("com1"), "com2": own.get("com2"), "squawk": own.get("squawk"),
-               "flying": self.live is not None}
-        if after < -1e17:
+        out = {"radio": lines, "seq": self._radio_seq, "com1": own.get("com1"), "com2": own.get("com2"),
+               "squawk": own.get("squawk"), "flying": self.live is not None}
+        if after < 0:
             out["language"] = self.state().get("language") or "en"  # (the first call: the page's words in it)
         return out
 

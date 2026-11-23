@@ -3,7 +3,7 @@
 "use strict";
 
 var PanelWords = {};  // English -> the pilot's language (i18n/<code>.json)
-var panelLast = -1e18;
+var panelLast = -1;  // the last radio line's number (the app's "seq"); -1: none yet
 var panelLang = "";
 var panelLines = 0;
 
@@ -81,10 +81,8 @@ function panelPoll() {
     document.getElementById("com2").textContent = panelMhz(data.com2);
     document.getElementById("state").textContent = data.flying ? "" : panelSay("No flight running");
     var lines = data.radio || [];
-    for (var i = 0; i < lines.length; i++) {
-      panelAdd(lines[i]);
-      if (lines[i].t > panelLast) panelLast = lines[i].t;
-    }
+    for (var i = 0; i < lines.length; i++) panelAdd(lines[i]);
+    if (typeof data.seq === "number") panelLast = data.seq;
     setTimeout(panelPoll, 1000);
   }, function () {
     document.getElementById("state").textContent = panelSay("LocalTC isn't running");

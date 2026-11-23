@@ -7,8 +7,9 @@
      and plain. Old-fashioned script on purpose: the sim's own browser is no modern one. -->
 <style>
   html, body { margin: 0; height: 100%; background: #10151c; color: #e8edf3; font-family: "Segoe UI", Arial, sans-serif; }
-  #top { display: flex; gap: 14px; align-items: baseline; padding: 8px 12px; background: #18202b; border-bottom: 1px solid #2a3442;
+  #top { display: flex; align-items: baseline; padding: 8px 12px; background: #18202b; border-bottom: 1px solid #2a3442;
          font-size: 15px; }
+  #top > * { margin-right: 14px; }  /* (no "gap": the sim's browser ignores it, and "LocalTCCOM1" ran together) */
   #top b { color: #8fd3ff; font-size: 17px; }
   #top .radio { color: #c9d4e0; }
   #top .radio span { color: #ffffff; font-weight: 600; }

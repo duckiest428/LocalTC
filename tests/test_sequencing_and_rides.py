@@ -208,11 +208,18 @@ def test_the_sims_panel_reads_the_radio_log(tmp_path, monkeypatch):
 
     monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
     controller = AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
-    controller.radio.append({"kind": "atc", "t": 10.0, "station": "Boeing Tower", "text": "cleared to land"})
-    controller.radio.append({"kind": "pilot", "t": 12.0, "text": "cleared to land"})
+    controller._radio({"kind": "system", "t": None, "text": "Loading Whisper"})
+    controller._radio({"kind": "atc", "t": 10.0, "station": "Boeing Tower", "text": "cleared to land"})
+    controller._radio({"kind": "pilot", "t": 12.0, "text": "cleared to land"})
     first = asyncio.run(controller.api_panel({}))
-    assert [x["t"] for x in first["radio"]] == [10.0, 12.0] and first["language"]
-    assert asyncio.run(controller.api_panel({"after": "10.0"}))["radio"][0]["t"] == 12.0
+    assert [x["t"] for x in first["radio"]] == [None, 10.0, 12.0] and first["language"] and first["seq"] == 3
+    # The first call as the panel made it ("+" read as a space): every line, not an error.
+    assert len(asyncio.run(controller.api_panel({"after": "-1e 18"}))["radio"]) == 3
+    # A new flight's times start at 0 again: its lines still come, by number.
+    controller._radio({"kind": "atc", "t": 0.5, "station": "Boeing Ground", "text": "taxi to runway 34L"})
+    after = asyncio.run(controller.api_panel({"after": str(first["seq"])}))
+    assert [x["text"] for x in after["radio"]] == ["taxi to runway 34L"] and after["seq"] == 4
+    assert asyncio.run(controller.api_panel({"after": "4"}))["radio"] == []
     from pathlib import Path
 
     static = Path(__file__).resolve().parents[1] / "src" / "localtc" / "ui" / "static"

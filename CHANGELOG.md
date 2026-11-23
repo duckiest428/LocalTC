@@ -89,6 +89,24 @@ a new minor version adds features, a patch fixes them.
   were turned away and the script's said instead (the same instruction) shows in dev mode only.
 
 ### Fixed
+- **Iran's controllers don't sound Indian:** the voices for Iran, the Arab states and Turkey were half Kokoro's Hindi
+  voices, and Tabriz sounded Indian. They're Mediterranean voices now, with the region's accent on their English.
+  Tehran's radar sectors ("Tehran North Radar") had no country at all and spoke American; they're Iran's now, and so
+  are Buenos Aires' (Ezeiza) and Adria's.
+- **No terrain made of bad data:** the elevation tiles have single bad points, 5,551 ft on 100 ft lowland near Samara,
+  and ATC said "low altitude alert, minimum FL076" at 2,600 ft on a vector. A point standing more than 1,000 ft above
+  everything around it is taken as the noise it is; real summits are kept.
+- **Approach takes an arrival kept at FL180:** Samara Control descended a flight to its STAR's FL180 and then had
+  nothing lower to give, and approach only took arrivals below 17,000 ft. The flight crossed the field at FL180 and
+  went 18 miles past before the pilot came down on their own. Approach takes it there now.
+- **An old METAR isn't today's weather:** Tabriz's latest was nine days old, and its calm wind made the day's ATIS.
+  One more than three hours old is left out, and the sim's weather is used.
+- **Whisper caught in a loop is caught:** "Tabriz Ground, Tabriz Ground, ..." seven times, from half a second of
+  speech, went to ATC as a call. A word or a few said over and over is heard again without the airport's names, and
+  dropped if it's still a loop ("squawk two two two two" is still a call).
+- **The apron answers on the way in:** at an airport with an apron frequency of its own (Samara Apron 118.8 beside
+  Samara Ground 119.0), the apron was only there for the departure; called off the runway for a gate, nobody
+  answered. It says "contact Samara Ground 119.0" now, and ground's taxi goes to the gate asked for.
 - **Restarting a flight no longer hangs at "Loading Whisper":** with the graphics card failing Whisper (a CUDA library
   that wouldn't load), the restart tried the card again and never got past loading; only closing the app and waiting
   got it going. Once the card has failed, the rest of that run goes straight to the CPU (restart the app to try the

@@ -86,11 +86,16 @@ ACCENTS: dict[str, str] = {
 }
 
 
+# The centres not named by their FIR (airspace/centers.json.gz): Tehran's sectors ("TEH-1N"), Ezeiza, Adria.
+CENTER_IDS = {"TEH": "OIIX", "BAIRES": "SAEF", "ADR": "LDZO"}
+
+
 def accent(code: str | None) -> str:
     """The voice ATC speaks English with at an airport or FIR: its English ("en-GB" for EGLL), or where English
     isn't the first language the region's own language ("de-DE" for EDDF: a German voice speaking English); "" not
     known (a voice of no region in particular)."""
     code = (code or "").upper()
+    code = CENTER_IDS.get(code.split("-")[0], code)
     for size in (2, 1):
         if code[:size] in ACCENTS:
             return ACCENTS[code[:size]]

@@ -24,6 +24,26 @@ TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.
 GRID_CELL_NM = 2.0  # the ATC's terrain: the highest ground in squares this size (TerrainGrid)
 ZOOM = 9  # ~300 m a pixel at the equator, 76 km a tile: fine enough for minimum altitudes, few tiles to fetch
 M_TO_FT = 3.28084
+# A pixel this far above the second highest of the eight around it (~300 m away) is the data's noise, not ground: near
+# Samara, on 100 ft lowland, single pixels of 4,146 and 5,551 ft made a minimum of FL076 and a low altitude alert at
+# 2,600 ft. A real summit has a ridge or slope within this of it that far away.
+SPIKE_FT = 1000
+
+
+def despike(heights: np.ndarray, passes: int = 2) -> np.ndarray:
+    """``heights`` with each pixel standing more than SPIKE_FT above the second highest of its eight neighbours put
+    down to that neighbour (twice over, for a few bad pixels together)."""
+    out = heights.copy()
+    h, w = out.shape
+    for _ in range(passes):
+        p = np.pad(out, 1, mode="edge")
+        around = np.stack([p[1 + dy:h + 1 + dy, 1 + dx:w + 1 + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx])
+        second = np.sort(around, axis=0)[-2]
+        spikes = out > second + SPIKE_FT
+        if not spikes.any():
+            break
+        out[spikes] = second[spikes]
+    return out
 
 
 def decode_png(data: bytes) -> np.ndarray:
@@ -110,7 +130,7 @@ class Terrain:
             try:
                 rgb = decode_png(path.read_bytes()).astype(np.float32)
                 heights = (rgb[..., 0] * 256 + rgb[..., 1] + rgb[..., 2] / 256 - 32768) * M_TO_FT
-                heights = np.maximum(heights, 0).astype(np.int32)  # the sea is sea level
+                heights = despike(np.maximum(heights, 0).astype(np.int32))  # the sea is sea level
             except (OSError, ValueError, zlib.error) as exc:
                 log.info("Terrain tile %s unreadable: %s", path, exc)
         with self._lock:

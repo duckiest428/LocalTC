@@ -32,6 +32,7 @@ GURU_URL = "https://atis.guru/atis/{icao}"
 GURU_CARD = re.compile(r'card-title[^>]*>\s*([^<]*?)\s*</h5>.*?card-subtitle[^>]*>([^<]*)</h6>\s*<div class="atis">(.*?)</div>', re.S)
 GURU_MAX_AGE_MIN = 90  # (as ATC's own limit on a real ATIS, atc_core.engine)
 FAA_PREFIXES = ("K", "P", "TJ", "TI")  # the airports atis.info has: the US's (Hawaii, Alaska, Guam, Puerto Rico ...)
+METAR_MAX_AGE_H = 3.0  # an airport's latest METAR older than this is none (the sim's weather is used)
 REFRESH_S = 1800.0  # a new METAR comes hourly (and specials between): looked for every half hour
 ATIS_REFRESH_S = 300.0  # a real ATIS looked for this often (a new letter comes hourly, specials between: caught soon)
 RETRY_S = 600.0  # a failed fetch (offline, the service busy) is tried again after this long
@@ -45,7 +46,19 @@ def fetch(icao: str, *, timeout_s: float = TIMEOUT_S) -> WeatherReport | None:
     with urllib.request.urlopen(request, timeout=timeout_s) as response:
         body = response.read()
     rows = json.loads(body) if body.strip() else []
-    return parse(rows[0]) if rows else None
+    if not rows:
+        return None
+    if too_old(rows[0], time.time()):
+        log.info("METAR for %s is too old to use: %s", icao.upper(), rows[0].get("rawOb"))
+        return None
+    return parse(rows[0])
+
+
+def too_old(row: dict, now_s: float) -> bool:
+    """Published more than METAR_MAX_AGE_H ago: Tabriz's latest was nine days old ("141530Z" on the 23rd), its calm wind
+    taken for the day's."""
+    observed = row.get("obsTime")
+    return isinstance(observed, (int, float)) and now_s - float(observed) > METAR_MAX_AGE_H * 3600.0
 
 
 def parse(row: dict) -> WeatherReport:

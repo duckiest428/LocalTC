@@ -46,6 +46,9 @@ NO_SPEECH = 0.8  # Whisper's no-speech probability above which the clip is ignor
 # key pressed for a shortcut, at 0.17-0.34): heard as nothing.
 GUESSED_CONFIDENCE, GUESSED_MAX_S = 0.35, 3.0
 WORDS_PER_S = 6.0  # more words a second than this: made up
+# A word, or two or three, said this many times in a row: Whisper in a loop. (One word needs more: "squawk two two two
+# two" is a real call.)
+LOOP_TIMES = {1: 6, 2: 4, 3: 4}
 INTERCOM = 0  # the "radio" of the intercom key: the copilot, not a COM radio
 CABIN = -1  # ... and of the cabin's key: the cabin crew
 # What Whisper is primed with on the intercom: the words a pilot says to the copilot.
@@ -81,6 +84,9 @@ def made_up(text: str, audio_s: float, confidence: float | None = None) -> bool:
     if confidence is not None and confidence < DOUBTFUL_CONFIDENCE and audio_s <= SHORT_CLIP_S \
             and len(words) > QUICK_WORDS_PER_S * audio_s:
         return True
+    if any(words[i:i + n] * times == words[i:i + n * times] for n, times in LOOP_TIMES.items()
+           for i in range(len(words) - n * times + 1)):
+        return True  # "Tabriz Ground, Tabriz Ground, ..." seven times from half a second of speech
     return len(words) >= 16 and len(set(words)) < len(words) / 4
 
 

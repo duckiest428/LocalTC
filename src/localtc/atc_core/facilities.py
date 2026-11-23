@@ -150,8 +150,10 @@ def airport_facilities(airport: Airport, *, role: str) -> list[Facility]:
     apron = _facility(airport, "ground", ("ground",), apron=True)
     if apron is not None and not any(f.controller == "ground" for f in facilities):
         facilities.append(replace(apron, apron=False))  # (only an apron frequency: it's the ground controller)
-    elif apron is not None and role == "departure":
-        facilities.append(apron)  # the push and the start; ground for the taxi
+    elif apron is not None:
+        # The push and the start; ground for the taxi. At the destination it's there too: called on the way in,
+        # it says to call ground (Samara Apron, called off the runway, never answered at all).
+        facilities.append(apron)
     # No clearance delivery: ground issues clearances.
     if not any(f.controller == "clearance" for f in facilities):
         ground = next((f for f in facilities if f.controller == "ground"), None)

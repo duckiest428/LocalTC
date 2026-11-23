@@ -511,6 +511,7 @@ SECTOR_BACK_DWELL_S = 600.0  # ... takes this long in there before it's handed b
 AREA_RECHECK_S = 5.0  # how often the aircraft's position is checked against the airspace outlines
 HANDOFF_SPARE_NM = 15.0  # an arrival handed to approach with this much more than its descent needs
 APPROACH_CEILING_FT = 17000.0  # inside the destination's approach area and below this, approach takes the arrival
+LEVEL_MARGIN_FT = 500.0  # ... or at the level the centre gave it, within this
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
 
@@ -764,6 +765,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._continued_t = -math.inf  # when tower last said "continue" for traffic on the runway
         self._gate_changed = False  # a gate asked for (Airport Ops) after the taxi in was given: a new route
         self._gate_asked = False  # a gate the pilot asked for and got (the gate map): theirs, shown
+        self._gate_wanted: str | None = None  # a gate asked of the apron, sent on to ground: ground's taxi goes there
         self._routes_from: dict[tuple, tuple[str, ...]] = {}  # other aircraft's taxi routes from where they were
         self._star_legs: dict[str, tuple] = {}  # the destination's arrivals (the sim's navdata) by name
         self._arrivals_at: dict[str, tuple] = {}  # every arrival at an airport (ArrivalProcedure), from the sim
@@ -4647,6 +4649,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if target == "ground" and (stage := self._ground_stage(intent)) is not None and stage != facility:
             if not stage.matches(facility.mhz) and facility.controller in ("ground", "clearance"):
                 # "Ready to taxi" to the apron: "contact Incheon Ground 118.75"; the push asked of ground: the apron's.
+                # A gate asked for on the way in is kept for ground's taxi (Samara Apron, "request taxi to gate 18").
+                self._gate_wanted = stands.requested(normalize(interp.text or "")) or self._gate_wanted
                 self._handoff(t, "common.contact", facility, stage, delay=True)
                 return []
             facility = stage
@@ -4710,7 +4714,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             # a readback the copilot had given a few seconds before, then "how do you read?".
             self._schedule(t, again.instruction_id, again.slots, facility, expects_readback=False)
         elif intent in ("request_taxi_parking", "clear_of_runway"):
-            self._taxi_in(t, facility, own, requested=stands.requested(normalize(interp.text or "")),
+            self._taxi_in(t, facility, own, requested=stands.requested(normalize(interp.text or "")) or self._gate_wanted,
                           area=stands.requested_area(normalize(interp.text or "")))
         elif intent == "say_again":
             last = st.last_issued
@@ -7608,13 +7612,19 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         distance = self.tracker.context.destination_distance_nm
         if area is None:
             return distance is not None and distance <= DEPARTURE_ENDS_NM
-        if self._in_area(area, own) and own.alt_indicated_ft <= APPROACH_CEILING_FT:
+        # Down to what the centre gave it, the centre has nothing lower to give: approach takes it there. Samara Control
+        # descended an arrival to its STAR's FL180 and kept it there over the field and 18 miles past, waiting for it
+        # to come below FL170.
+        assigned = self.state.assignments.altitude_ft
+        ceiling = max(APPROACH_CEILING_FT, assigned + LEVEL_MARGIN_FT) \
+            if assigned is not None and "descend" in self.state.flags else APPROACH_CEILING_FT
+        if self._in_area(area, own) and own.alt_indicated_ft <= ceiling:
             return True
         # A small approach area and a fast arrival: handed over in time to get down, three miles a thousand feet
         # and room to slow and turn. Eugene's took a jet at 11,000 ft and 300 kt 30 miles out.
         geo = self.geometry(self.state.flight.destination)
         above = own.alt_indicated_ft - (geo.airport.elev_ft if geo is not None else 0.0)
-        return distance is not None and own.alt_indicated_ft <= APPROACH_CEILING_FT \
+        return distance is not None and own.alt_indicated_ft <= ceiling \
             and distance <= above / 1000 * 3 + HANDOFF_SPARE_NM
 
     def _sector_candidate(self, own: OwnshipState) -> Facility | None:

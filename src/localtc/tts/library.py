@@ -41,8 +41,9 @@ EAST_ASIAN = {"F": ("zf_xiaoni+bf_emma", "jf_nezumi+af_kore", "zf_xiaoxiao+af_ko
               "M": ("jm_kumo+zm_yunjian", "zm_yunyang+jm_kumo", "zm_yunjian+jm_kumo")}
 SOUTHEAST_ASIAN = {"F": ("hf_beta+zf_xiaoni", "hf_alpha+zf_xiaobei", "zf_xiaoni+bf_emma"),
                    "M": ("zm_yunjian+hm_psi", "hm_omega+zm_yunyang", "zm_yunjian+em_alex")}
-MIDDLE_EAST = {"F": ("hf_beta+ef_dora", "hf_alpha+if_sara", "ef_dora+hf_beta"),
-               "M": ("hm_omega+em_alex", "hm_psi+im_nicola", "em_alex+hm_omega")}
+# (No Hindi voice in them: a controller at Tabriz or Tehran sounded Indian. The accent rules give the region's English.)
+MIDDLE_EAST = {"F": ("ef_dora+if_sara", "if_sara+bf_isabella", "ef_dora+bf_emma"),
+               "M": ("em_alex+im_nicola", "im_nicola+bm_george", "em_santa+bm_lewis")}
 AFRICAN = {"F": ("af_kore+hf_beta", "af_aoede+pf_dora", "bf_alice+hf_alpha"),
            "M": ("am_onyx+hm_omega", "am_echo+pm_alex", "bm_lewis+am_onyx")}
 

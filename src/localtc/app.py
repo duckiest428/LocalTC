@@ -373,7 +373,10 @@ def start_ground(cfg: Config, engine, source, bus, backend, get_cabin):
                     airline=lambda: _airline_name(engine),
                     request_gate=lambda label: engine.request_gate(engine.state.flight.destination, label),
                     locale=lambda airport: accent(airport or engine.state.flight.origin), relay=relay)
-    talked = crew_language(cfg.crew.language)  # the pilot's language: theirs too
+    from localtc.languages import radio_language
+
+    # The pilot's language: theirs too (the copilot's, else the radio's: the ramp talks with you in it).
+    talked = crew_language(cfg.crew.language) or crew_language(radio_language(cfg))
     crew = RampCrew(link, verbosity=g.verbosity, wait_for_clearance=g.wait_for_clearance, seed=int(time.time()) % 100000,
                     language=talked.code if talked is not None else "")
     model = None
@@ -536,6 +539,9 @@ def build_engine(cfg: Config, backend=None):  # noqa: C901
                              beyond_facts=llm.beyond_facts,
                              patience_s=llm.patience_s)
     engine = AtcEngine(engine_config(cfg.flight, cfg.atc), interpreter=interpreter, phraser=phraser)
+    from localtc.languages import radio_language
+
+    engine.cfg.radio_language = radio_language(cfg)  # called in your language, ATC answers in it
     engine.cfg.await_transcripts = cfg.voice.enabled  # ATC waits for each spoken transmission's transcript
     engine.cfg.gate_radius_m = cfg.session.gate_radius_m
     # The airports' real gate names, from OpenStreetMap (cached; fetched in the background). LOCALTC_REAL_GATES=""
@@ -1190,15 +1196,17 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     from localtc.stt.service import VoiceService
     from localtc.stt.whisper import WhisperTranscriber
 
-    from localtc.languages import language
+    from localtc.languages import language, radio_language
     from localtc.models import radio_model, whisper_model
 
     v = cfg.voice
     talked = language(cfg.crew.language) if cfg.crew.enabled else None  # the copilot talked to in another language
-    transcriber = WhisperTranscriber(radio_model(cfg) if talked is not None else v.model, device=v.device,
+    on_radio = radio_language(cfg)  # ATC called in your language answers in it
+    multilingual = talked is not None or bool(on_radio)
+    transcriber = WhisperTranscriber(radio_model(cfg) if multilingual else v.model, device=v.device,
                                      compute_type=v.compute_type, models_dir=v.models_dir or None, beam_size=v.beam_size)
     talked_to = transcriber
-    if talked is not None and whisper_model(cfg) != radio_model(cfg):  # the copilot's language: a model of its own
+    if multilingual and whisper_model(cfg) != radio_model(cfg):  # your language: a model of its own
         talked_to = WhisperTranscriber(whisper_model(cfg), device=v.device, compute_type=v.compute_type,
                                        models_dir=v.models_dir or None, beam_size=v.beam_size)
         log.info("Loading %s ...", talked_to.description, extra=CONSOLE)
@@ -1224,7 +1232,8 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         hints = lambda: ramp if on_ramp(engine.state.comms.tuned_mhz, engine.ramp_mhz or 0.0) else flight_hints(engine)  # noqa: E731
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
                            vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
-                           intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to)
+                           intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to,
+                           radio_language=on_radio)
     if engine is not None:
         # On a VATSIM/IVAO controller's frequency the pilot talks to them through the network's client: not transcribed.
         service.skip_radio = lambda: getattr(engine, "online_muted", False)

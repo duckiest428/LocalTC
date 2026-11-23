@@ -195,6 +195,10 @@ class AtcConfig(_Section):
     shift: int = 0
     # FAA or ICAO wording: "auto" by where the controller is (US and Canada FAA, elsewhere ICAO), or always one.
     phraseology: Literal["auto", "faa", "icao"] = "auto"
+    # The radio in your own language (localtc.languages): call ATC in it and they answer in it, and the copilot's radio
+    # calls and the ramp follow; call in English and it's English again. "auto": the copilot's language, else the
+    # window's; "en": English only; or one of the languages ("fr").
+    language: str = "auto"
     transition_ft: int = 0  # 0 = the region's (18,000 ft in North America, 3,000-18,500 elsewhere); or this everywhere
     airport_dirs: list[str] = []  # extra folders of <ICAO>.json airport files
     phase: dict[str, float] = {}  # overrides for PhaseThresholds, e.g. taxi_start_kt = 4

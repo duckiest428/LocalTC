@@ -442,6 +442,8 @@ class Transcript(Event, tag="transcript"):
     audio_ref: str | None = None
     stt_ms: float = 0.0  # speech-to-text time
     source: str = ""  # voice, typed, copilot, or "" (older recordings, scripts)
+    # The language it was said in, as speech-to-text heard it ("en", "fr"); "": not told (typed, older recordings).
+    language: str = ""
 
 
 # --- The intercom: the pilot and the copilot (produced by localtc.crew and the voice input) ---------------
@@ -595,6 +597,7 @@ class AtcTransmission(Event, tag="atc_transmission"):
     # The controller's manner, for the voice ("tower:hurried", ":busy" on a busy frequency): atc_core.personality.
     manner: str = ""
     locale: str = ""  # the region's English, for the voice ("en-GB", "en-AU"); "": none in particular (region.accent)
+    language: str = ""  # said in the pilot's own language ("fr"), not English: a voice of that language speaks it
 
 
 # --- ATC core events (produced by localtc.atc_core) -------------------------

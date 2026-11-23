@@ -1,0 +1,1047 @@
+# Mandarin radiotelephony (the CAAC's). The same ids as the English templates, reworded; what's read back is the same.
+# A pilot's readback here is read through tongues/zh.py's lexicon. (The callsign is followed by ", " as in every
+# language: the engine finds where the instruction starts by it.)
+
+# --- approach -----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "approach.descend"
+text = ["{callsign}, {station}, 下降到{altitude}保持, 预计{approach}进近。", "{callsign}, {station}, 预计{approach}进近, 下降到{altitude}。"]
+pilot_readback = "下降到{altitude}保持, 预计{approach}, {callsign_short}。"
+
+[[template]]
+id = "approach.checkin_descend_via"
+text = ["{callsign}, {station}, 预计{approach}进近。"]
+
+[[template]]
+id = "approach.checkin_roger"
+text = ["{callsign}, {station}, 收到。", "{callsign}, {station}, 你好。"]
+
+[[template]]
+id = "approach.checkin_vectors"
+text = ["{callsign}, {station}, 收到, 预计雷达引导{approach}进近。"]
+
+[[template]]
+id = "approach.maintain"
+text = ["{callsign}, {station}, 保持{altitude}, 预计{approach}进近。"]
+pilot_readback = "保持{altitude}, 预计{approach}, {callsign_short}。"
+
+[[template]]
+id = "approach.cleared"
+text = ["{callsign}, 可以{approach}进近, 联系{station}{frequency}。"]
+pilot_readback = "可以{approach}进近, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "approach.go_around_no_clearance"
+text = ["{callsign}, 复飞, 你没有落地许可, 保持跑道航向, 上升到{altitude}保持。"]
+pilot_readback = "复飞, 跑道航向, 上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "approach.go_around_checkin"
+text = ["{callsign}, {station}, 雷达已识别, 保持{altitude}, 预计雷达引导再次{approach}进近。"]
+pilot_readback = "保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "approach.vectors"
+text = ["{callsign}, 航向{heading}, 雷达引导{approach}进近。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.missed"
+text = ["{callsign}, 收到, 保持跑道航向, 上升到{altitude}保持。"]
+pilot_readback = "跑道航向, 上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "approach.turn"
+text = ["{callsign}, {turn}转航向{heading}, 雷达引导{approach}进近。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.heading"
+text = ["{callsign}, {turn}转航向{heading}。", "{callsign}, 飞航向{heading}。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.expect_visual"
+text = ["{callsign}, 收到, 预计跑道{runway}目视进近, 雷达引导到五边。"]
+
+[[template]]
+id = "approach.present_heading"
+text = ["{callsign}, 保持现在航向, 雷达引导{approach}进近。"]
+pilot_readback = "保持现在航向, {callsign_short}。"
+
+[[template]]
+id = "approach.fly_heading"
+text = ["{callsign}, 飞航向{heading}。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.heading_descend"
+text = ["{callsign}, 航向{heading}, 下降到{altitude}保持。"]
+pilot_readback = "航向{heading}, 下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "approach.turn_descend"
+text = ["{callsign}, {turn}转航向{heading}, 下降到{altitude}保持。"]
+pilot_readback = "{turn}转航向{heading}, 下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "approach.downwind"
+text = ["{callsign}, {turn}转航向{heading}, 雷达引导{approach}进近。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.base"
+text = ["{callsign}, {turn}转航向{heading}。", "{callsign}, {turn}转航向{heading}, 雷达引导到五边。"]
+pilot_readback = "{turn}转航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "approach.intercept_cleared"
+text = ["{callsign}, {turn}转航向{heading}, 保持{altitude}直到建立航向道, 可以{approach}进近。"]
+pilot_readback = "{turn}转航向{heading}, 保持{altitude}直到建立, 可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "approach.intercept_course"
+text = ["{callsign}, {turn}转航向{heading}, 保持{altitude}直到建立最后进近航道, 可以{approach}进近。"]
+pilot_readback = "{turn}转航向{heading}, 保持{altitude}直到建立, 可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "approach.intercept_visual"
+text = ["{callsign}, {turn}转航向{heading}, 可以{approach}进近。"]
+pilot_readback = "{turn}转航向{heading}, 可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "approach.advisory"
+text = ["{callsign}, 没有报告的活动, 风{wind}, 同意转换频率。"]
+pilot_readback = "转换频率, {callsign_short}。"
+
+[[template]]
+id = "approach.handoff_radio"
+text = ["{callsign}, 没有报告的活动, 风{wind}, 联系{station}{frequency}。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "approach.handoff_tower"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 联系{station}{frequency}, 再见。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "approach.intercept"
+text = ["{callsign}, {turn}转航向{heading}, 切入最后进近航道, {approach}进近。"]
+pilot_readback = "航向{heading}切入, {callsign_short}。"
+
+[[template]]
+id = "approach.speed"
+text = ["{callsign}, 减速到{speed}节。"]
+pilot_readback = "{speed}节, {callsign_short}。"
+
+[[template]]
+id = "approach.cleared_star"
+text = ["{callsign}, 可以{approach}进近。"]
+pilot_readback = "可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "approach.cleared_star_descend"
+text = ["{callsign}, 下降到{altitude}, 可以{approach}进近。"]
+pilot_readback = "下降到{altitude}, 可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "approach.cleared_star_descend_tower"
+text = ["{callsign}, 下降到{altitude}, 可以{approach}进近, 建立后联系{station}{frequency}。"]
+pilot_readback = "下降到{altitude}, 可以{approach}进近, 建立后{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "approach.checkin_descend_star"
+text = ["{callsign}, {station}, 继续下降到{altitude}, 预计{approach}进近。"]
+pilot_readback = "继续下降到{altitude}, {callsign_short}。"
+
+[[template]]
+id = "approach.speed_until"
+text = ["{callsign}, 保持{speed}节到五边5海里。"]
+pilot_readback = "{speed}节到五边5海里, {callsign_short}。"
+
+[[template]]
+id = "approach.sequence"
+text = ["{callsign}, 你是{message}。", "{callsign}, {message}, 雷达引导是为了排序。"]
+
+[[template]]
+id = "approach.extend_downwind"
+text = ["{callsign}, 延长三边, {message}, 我会通知你转四边。"]
+
+[[template]]
+id = "approach.sidestep"
+text = ["{callsign}, 同意改到跑道{runway}。"]
+pilot_readback = "改到跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "approach.weather_change"
+text = ["{callsign}, 天气低于目视标准, 预计{approach}进近。"]
+pilot_readback = "预计{approach}, {callsign_short}。"
+
+# --- center -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "center.checkin"
+text = ["{callsign}, {station}, 你好。"]
+
+[[template]]
+id = "center.radar_contact"
+text = ["{callsign}, {station}, 雷达已识别, 上升到{altitude}保持。", "{callsign}, {station}, 雷达已识别, 上升到{altitude}, 按航路飞行。"]
+pilot_readback = "上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "center.checkin_level"
+text = ["{callsign}, {station}, 雷达已识别, 保持{altitude}。"]
+
+[[template]]
+id = "center.checkin_ack"
+text = ["{callsign}, {station}, 雷达已识别。", "{callsign}, {station}, 你好。"]
+
+[[template]]
+id = "center.checkin_climb"
+text = ["{callsign}, {station}, 雷达已识别, 上升到{altitude}保持。"]
+pilot_readback = "上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "center.checkin_climbing"
+text = ["{callsign}, {station}, 雷达已识别, 继续上升, 保持{altitude}。"]
+
+[[template]]
+id = "center.checkin_descending"
+text = ["{callsign}, {station}, 收到, 继续下降到{altitude}。"]
+
+[[template]]
+id = "center.checkin_descend"
+text = ["{callsign}, {station}, 雷达已识别, 下降到{altitude}保持。"]
+pilot_readback = "下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "center.checkin_descend_via"
+text = ["{callsign}, {station}, 收到, 按{procedure}进场程序下降。"]
+
+[[template]]
+id = "center.descend"
+text = ["{callsign}, 下降到{altitude}保持, 预计{approach}进近。"]
+pilot_readback = "下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "center.descend_pd"
+text = ["{callsign}, 自行决定下降, 保持{altitude}, 预计{approach}进近。"]
+pilot_readback = "自行决定, 下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "center.descend_via"
+text = ["{callsign}, 下降 via {procedure} 进场程序, 预计{approach}进近。"]
+pilot_readback = "下降 via {procedure} 进场程序, {callsign_short}。"
+
+[[template]]
+id = "center.descend_star"
+text = ["{callsign}, 下降到{altitude}, 可以{procedure}进场, 预计{approach}进近。"]
+pilot_readback = "下降到{altitude}, 可以{procedure}进场, {callsign_short}。"
+
+[[template]]
+id = "center.descend_star_pd"
+text = ["{callsign}, 准备好后下降到{altitude}, 可以{procedure}进场, 预计{approach}进近。"]
+pilot_readback = "准备好后下降到{altitude}, 可以{procedure}进场, {callsign_short}。"
+
+[[template]]
+id = "center.checkin_descend_star"
+text = ["{callsign}, {station}, 收到, 继续下降到{altitude}, {procedure}进场。"]
+pilot_readback = "继续下降到{altitude}, {procedure}进场, {callsign_short}。"
+
+[[template]]
+id = "center.maintain"
+text = ["{callsign}, 保持{altitude}, 预计{approach}进近。"]
+pilot_readback = "保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "center.handoff_approach"
+text = ["{callsign}, 联系{station}{frequency}。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "center.handoff_center"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 联系{station}{frequency}, 再见。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "center.reroute"
+text = ["{callsign}, {turn}转航向{heading}, {message}, 可以时直飞{fix}。"]
+pilot_readback = "{turn}转航向{heading}, 然后直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "center.off_course"
+text = ["{callsign}, 我看到你偏离航路{distance}海里, 请说明意图。", "{callsign}, 你似乎偏离航路{distance}海里, 请检查导航。"]
+
+[[template]]
+id = "center.advise_direct"
+text = ["{callsign}, 可以直飞{fix}时报告。"]
+
+[[template]]
+id = "center.descend_cross"
+text = ["{callsign}, 在{altitude}飞越{fix}, 自行决定下降, 预计{approach}进近。"]
+pilot_readback = "飞越{fix}{altitude}, 自行决定, {callsign_short}。"
+
+# --- clearance ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "clearance.ifr"
+text = ["{callsign}, 可以按计划飞往{destination}{runway_note}, 上升到{altitude}保持, 预计起飞后{minutes}分钟上升到{cruise}, 离场频率{frequency}, 应答机{squawk}。"]
+pilot_readback = "可以按计划飞往{destination}, 上升到{altitude}保持, 预计起飞后{minutes}分钟{cruise}, 离场频率{frequency}, 应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "clearance.ifr_at_cruise"
+text = ["{callsign}, 可以按计划飞往{destination}{runway_note}, 上升到{altitude}保持, 离场频率{frequency}, 应答机{squawk}。"]
+pilot_readback = "可以按计划飞往{destination}, 上升到{altitude}保持, 离场频率{frequency}, 应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "clearance.say_destination"
+text = ["{callsign}, 请报告目的地和申请的高度。"]
+
+[[template]]
+id = "clearance.ifr_sid"
+text = ["{callsign}, 可以飞往{destination}, {procedure}离场, 然后按计划{runway_note}, 上升到{altitude}保持, 预计起飞后{minutes}分钟上升到{cruise}, 离场频率{frequency}, 应答机{squawk}。"]
+pilot_readback = "可以飞往{destination}, {procedure}离场, 然后按计划, 上升到{altitude}保持, 预计起飞后{minutes}分钟{cruise}, 离场频率{frequency}, 应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+text = ["{callsign}, 可以飞往{destination}, {procedure}离场, 然后按计划{runway_note}, 上升到{altitude}保持, 离场频率{frequency}, 应答机{squawk}。"]
+pilot_readback = "可以飞往{destination}, {procedure}离场, 然后按计划, 上升到{altitude}保持, 离场频率{frequency}, 应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "clearance.readback_correct_ground"
+text = ["{callsign}, 复诵正确, 准备好后联系{station}{frequency}。", "{callsign}, 复诵正确。准备推出开车时联系{station}{frequency}。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "clearance.standby"
+text = ["{callsign}, 正在申请放行, 稍等。", "{callsign}, 稍等, 放行马上就好。"]
+
+# --- common -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "common.contact"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 联系{station}{frequency}, 再见。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "common.vectors_descent"
+text = ["{callsign}, {turn}转航向{heading}, 雷达引导下降。"]
+pilot_readback = "{turn}转航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "common.speed_spacing"
+text = ["{callsign}, 为了间隔减速到{speed}节, {message}。"]
+pilot_readback = "速度{speed}, {callsign_short}。"
+
+[[template]]
+id = "common.speed_spacing_again"
+text = ["{callsign}, 现在减速到{speed}节, 你在接近前方的飞机。"]
+pilot_readback = "速度{speed}, {callsign_short}。"
+
+[[template]]
+id = "common.speed_resume"
+text = ["{callsign}, 恢复正常速度。"]
+
+[[template]]
+id = "common.turn_for_traffic"
+text = ["{callsign}, 因为活动{message}。"]
+
+[[template]]
+id = "common.terrain_caution"
+text = ["{callsign}, 注意, 山区地形, 你所在区域的最低高度是{altitude}。"]
+
+[[template]]
+id = "common.unable_terrain"
+text = ["{callsign}, 不能, 地形, 你所在区域的最低高度是{altitude}。"]
+
+[[template]]
+id = "common.traffic_gone"
+text = ["{callsign}, 你跟随的飞机已不再影响你。"]
+
+[[template]]
+id = "common.cabin_assist"
+text = ["{callsign}, 收到, {message}。"]
+
+[[template]]
+id = "common.descend_now"
+text = ["{callsign}, 现在开始下降。", "{callsign}, 你已过下降点, 现在下降。"]
+
+[[template]]
+id = "common.descend_intentions"
+text = ["{callsign}, 你远高于下降剖面, 请说明意图。"]
+
+[[template]]
+id = "common.say_again"
+text = ["{callsign}, 请重复。"]
+
+[[template]]
+id = "common.station_say_again"
+text = ["呼叫{station}的电台, 请重复你的呼号。"]
+
+[[template]]
+id = "common.readback_correct"
+text = ["{callsign}, 复诵正确。"]
+
+[[template]]
+id = "common.roger"
+text = ["{callsign}, 收到。", "{callsign}, 明白。"]
+
+[[template]]
+id = "common.negative"
+text = ["{callsign}, 否定, {correction}。"]
+
+[[template]]
+id = "common.equipment"
+text = ["{callsign}, 收到, 救援设备会准备好。", "{callsign}, 收到, 我们通知消防待命。"]
+
+[[template]]
+id = "common.problem"
+text = ["{callsign}, 收到, 如需帮助请报告。"]
+
+[[template]]
+id = "common.affirmative"
+text = ["{callsign}, 是的。"]
+
+[[template]]
+id = "common.confirm"
+text = ["{callsign}, 请证实{correction}。"]
+
+[[template]]
+id = "common.read_back"
+text = ["{callsign}, 请复诵{missing}。"]
+
+[[template]]
+id = "common.emergency"
+text = ["{callsign}, 收到, 请报告紧急情况的性质, 剩余油量和机上人数。"]
+
+[[template]]
+id = "common.emergency_copied"
+text = ["{callsign}, 收到, {message}。请说明意图。"]
+
+[[template]]
+id = "common.info"
+text = ["{callsign}, {message}。"]
+
+[[template]]
+id = "common.unable"
+text = ["{callsign}, 不能。"]
+
+[[template]]
+id = "common.climb"
+text = ["{callsign}, 上升到{altitude}保持。"]
+pilot_readback = "上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "common.descend"
+text = ["{callsign}, 下降到{altitude}保持。"]
+pilot_readback = "下降到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "common.maintain"
+text = ["{callsign}, 保持{altitude}。"]
+pilot_readback = "保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.say_altitude"
+text = ["{callsign}, 请报告申请的高度。"]
+
+[[template]]
+id = "common.direct"
+text = ["{callsign}, 可以直飞{fix}。", "{callsign}, 直飞{fix}。"]
+pilot_readback = "直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "common.expect_runway"
+text = ["{callsign}, 收到, 预计跑道{runway}。"]
+pilot_readback = "预计跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "common.expect_approach"
+text = ["{callsign}, 收到, 预计{approach}进近。"]
+pilot_readback = "预计{approach}, {callsign_short}。"
+
+[[template]]
+id = "common.runway_change"
+text = ["{callsign}, 更换跑道, 预计{approach}进近。", "{callsign}, 跑道已更换, 现在预计{approach}进近。"]
+pilot_readback = "预计{approach}, {callsign_short}。"
+
+[[template]]
+id = "common.unable_runway"
+text = ["{callsign}, 跑道{runway}不能使用, 风{wind}。"]
+
+[[template]]
+id = "common.runway_closed"
+text = ["{callsign}, 不能, 跑道{runway}关闭。"]
+
+[[template]]
+id = "common.return"
+text = ["{callsign}, 收到, 可以直飞{destination}, 保持{altitude}, 预计{approach}进近。"]
+pilot_readback = "直飞{destination}, 保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.pirep"
+text = ["{callsign}, 收到, 谢谢你的报告。", "{callsign}, 谢谢, 我会转告。"]
+
+[[template]]
+id = "common.traffic"
+text = ["{callsign}, 活动, {message}。"]
+
+[[template]]
+id = "common.check_altitude"
+text = ["{callsign}, 检查高度, 保持{altitude}。"]
+pilot_readback = "保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.check_heading"
+text = ["{callsign}, 检查航向, 飞航向{heading}。"]
+pilot_readback = "航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "common.how_read"
+text = ["{callsign}, {station}, 听我几个？", "{callsign}, 收到了吗？"]
+
+[[template]]
+id = "common.read_back_hold_short"
+text = ["{callsign}, 请复诵跑道外等待的指令。"]
+
+[[template]]
+id = "common.stand_by"
+text = ["{callsign}, 稍等。", "{callsign}, 请等待。"]
+
+[[template]]
+id = "common.pleasantry"
+text = ["{callsign}, 很好, 谢谢。", "{callsign}, 不错, 谢谢关心。"]
+
+[[template]]
+id = "common.advise_ready"
+text = ["{callsign}, 收到, 准备好报告。", "{callsign}, 没问题, 准备好了叫我。"]
+
+[[template]]
+id = "common.radio_check"
+text = ["{callsign}, {station}, 听你五个。"]
+
+[[template]]
+id = "common.emergency_cancelled"
+text = ["{callsign}, 收到, 紧急情况取消。"]
+
+[[template]]
+id = "common.emergency_priority"
+text = ["{callsign}, 收到, 你是第一个, 可以直飞{destination}, 自行决定下降, 救援设备已待命。"]
+pilot_readback = "直飞{destination}, 自行决定下降, {callsign_short}。"
+
+[[template]]
+id = "common.emergency_approach"
+text = ["{callsign}, 可以{approach}进近, 你是第一个, 救援设备正在出动。"]
+pilot_readback = "可以{approach}进近, {callsign_short}。"
+
+[[template]]
+id = "common.emergency_land"
+text = ["{callsign}, 跑道{runway}, 可以落地, 风{wind}, 救援设备已待命。"]
+pilot_readback = "跑道{runway}可以落地, {callsign_short}。"
+
+[[template]]
+id = "common.emergency_intentions"
+text = ["{callsign}, 请报告机上人数和剩余油量。"]
+
+[[template]]
+id = "common.emergency_nearest"
+text = ["{callsign}, 收到, 你是第一个。最近的合适机场是{message}。请说明意图。"]
+
+[[template]]
+id = "common.nearest"
+text = ["{callsign}, 最近的合适机场是{message}。请说明意图。"]
+
+[[template]]
+id = "common.divert"
+text = ["{callsign}, {turn}转航向{heading}, 雷达引导去{destination}, {distance}海里, 自行决定下降, 保持{altitude}, 预计跑道{runway}, 救援设备会待命。"]
+pilot_readback = "{turn}转航向{heading}, 下降到{altitude}保持, 雷达引导去{destination}, {callsign_short}。"
+
+[[template]]
+id = "common.divert_level"
+text = ["{callsign}, {turn}转航向{heading}, 雷达引导去{destination}, {distance}海里, 保持{altitude}, 预计跑道{runway}, 救援设备会待命。"]
+pilot_readback = "{turn}转航向{heading}, 保持{altitude}, 雷达引导去{destination}, {callsign_short}。"
+
+[[template]]
+id = "common.divert_vector"
+text = ["{callsign}, {turn}转航向{heading}, {destination}{distance}海里。", "{callsign}, {turn}转航向{heading}, 雷达引导去{destination}。"]
+pilot_readback = "{turn}转航向{heading}, {callsign_short}。"
+
+[[template]]
+id = "common.hold"
+text = ["{callsign}, 在{fix}上空等待, 入航航向{heading}, {turn}转等待, 保持{altitude}, 预计进一步许可时间{efc}, {message}。"]
+pilot_readback = "在{fix}上空等待, 入航{heading}, {turn}转等待, 保持{altitude}, 预计进一步许可{efc}, {callsign_short}。"
+
+[[template]]
+id = "common.hold_minutes"
+text = ["{callsign}, 在{fix}上空等待, 入航航向{heading}, {turn}转等待, 保持{altitude}, 预计{minutes}分钟后进一步许可, {message}。"]
+pilot_readback = "在{fix}上空等待, 入航{heading}, {turn}转等待, 保持{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.hold_update"
+text = ["{callsign}, 现在{message}, 预计进一步许可时间{efc}。"]
+pilot_readback = "预计进一步许可{efc}, {callsign_short}。"
+
+[[template]]
+id = "common.hold_revised"
+text = ["{callsign}, {message}, 修正预计进一步许可时间{efc}。"]
+pilot_readback = "预计进一步许可{efc}, {callsign_short}。"
+
+[[template]]
+id = "common.hold_update_minutes"
+text = ["{callsign}, {message}, 预计{minutes}分钟后进一步许可。"]
+
+[[template]]
+id = "common.leave_hold"
+text = ["{callsign}, 退出等待, 直飞{fix}。"]
+pilot_readback = "退出等待, 直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "common.low_altitude"
+text = ["{callsign}, 低高度警告, 立即检查高度, 你所在区域的最低高度是{altitude}。"]
+
+[[template]]
+id = "common.unable_direct_sequence"
+text = ["{callsign}, 因为排序不能直飞, 预计大约{minutes}分钟后。"]
+
+[[template]]
+id = "common.direct_now"
+text = ["{callsign}, 现在排序允许了, 直飞{fix}。"]
+pilot_readback = "直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "common.ride_report"
+text = ["{callsign}, {message}。", "{callsign}, 最新的报告, {message}。"]
+
+[[template]]
+id = "common.ride_none"
+text = ["{callsign}, 你附近最近没有颠簸报告, {message}。"]
+
+[[template]]
+id = "common.smoother_climb"
+text = ["{callsign}, {message}, 上升到{altitude}保持。"]
+pilot_readback = "上升到{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.smoother_descend"
+text = ["{callsign}, {message}, 下降到{altitude}保持。"]
+pilot_readback = "下降到{altitude}, {callsign_short}。"
+
+[[template]]
+id = "common.smoother_none"
+text = ["{callsign}, {message}。", "{callsign}, 没有更好的高度, {message}。"]
+
+[[template]]
+id = "common.confirm_clearance"
+text = ["{callsign}, 是的, {message}。", "{callsign}, 你是{message}。"]
+
+# --- departure ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "departure.radar_contact"
+text = ["{callsign}, {station}, 雷达已识别, 上升到{altitude}保持。", "{callsign}, {station}, 雷达已识别, 上升到{altitude}, 按航路飞行。"]
+pilot_readback = "上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "departure.radar_contact_only"
+text = ["{callsign}, {station}, 雷达已识别。", "{callsign}, 雷达已识别。"]
+pilot_readback = "{callsign_short}。"
+
+[[template]]
+id = "departure.radar_contact_direct"
+text = ["{callsign}, {station}, 雷达已识别, 上升到{altitude}保持, 直飞{fix}。"]
+pilot_readback = "上升到{altitude}保持, 直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+text = ["{callsign}, {station}, 雷达已识别, 直飞{fix}。"]
+pilot_readback = "直飞{fix}, {callsign_short}。"
+
+[[template]]
+id = "departure.handoff_center"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 联系{station}{frequency}, 再见。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+# --- ground -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "ground.taxi_out"
+text = ["{callsign}, 经由{taxi_route}滑行到跑道{runway}等待点。"]
+pilot_readback = "经由{taxi_route}滑行到跑道{runway}等待点, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_out_at"
+text = ["{callsign}, 经由{taxi_route}滑行到跑道{runway} {hold_point}等待点。"]
+pilot_readback = "经由{taxi_route}滑行到跑道{runway} {hold_point}等待点, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+text = ["{callsign}, 经由{taxi_route}滑行到跑道{runway}等待点, 跑道{hold_short}外等待。"]
+pilot_readback = "经由{taxi_route}滑行到跑道{runway}等待点, 跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_out_no_route"
+text = ["{callsign}, 滑行到跑道{runway}等待点。"]
+pilot_readback = "跑道{runway}等待点, {callsign_short}。"
+
+[[template]]
+id = "ground.hold_position"
+text = ["{callsign}, 原地等待, 需要滑行许可。"]
+pilot_readback = "原地等待, {callsign_short}。"
+
+[[template]]
+id = "ground.handoff_tower"
+text = ["{callsign}, 联系{station}{frequency}。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_in"
+text = ["{callsign}, 经由{taxi_route}滑行到停机位。"]
+pilot_readback = "经由{taxi_route}滑行到停机位, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_in_ramp"
+text = ["{callsign}, 经由{taxi_route}滑行到通用航空机坪。"]
+pilot_readback = "经由{taxi_route}滑行到通用航空机坪, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+text = ["{callsign}, 经由{taxi_route}滑行到通用航空机坪, 跑道{hold_short}外等待。"]
+pilot_readback = "经由{taxi_route}滑行到通用航空机坪, 跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_to_gate"
+text = ["{callsign}, 经由{taxi_route}滑行到{gate}。"]
+pilot_readback = "经由{taxi_route}滑行到{gate}, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_to_gate_hold_short"
+text = ["{callsign}, 经由{taxi_route}滑行到{gate}, 跑道{hold_short}外等待。"]
+pilot_readback = "经由{taxi_route}滑行到{gate}, 跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_in_hold_short"
+text = ["{callsign}, 经由{taxi_route}滑行到停机位, 跑道{hold_short}外等待。"]
+pilot_readback = "经由{taxi_route}滑行到停机位, 跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_cancelled"
+text = ["{callsign}, 收到, 取消滑行许可, 原地等待。"]
+
+[[template]]
+id = "ground.taxi_cancelled_ready"
+text = ["{callsign}, 收到, 取消滑行许可, 准备好报告。"]
+
+[[template]]
+id = "ground.taxi_to_gate_no_route"
+text = ["{callsign}, 滑行到{gate}。"]
+pilot_readback = "滑行到{gate}, {callsign_short}。"
+
+[[template]]
+id = "ground.taxi_in_no_route"
+text = ["{callsign}, 滑行到停机位。"]
+
+[[template]]
+id = "ground.pushback"
+text = ["{callsign}, 可以推出开车, 机尾朝{turn}。", "{callsign}, 自行决定推出开车, 机尾朝{turn}。"]
+
+[[template]]
+id = "ground.pushback_straight"
+text = ["{callsign}, 可以推出开车。", "{callsign}, 自行决定推出开车。"]
+
+[[template]]
+id = "ground.startup"
+text = ["{callsign}, 可以开车, 准备好滑行报告。", "{callsign}, 自行决定开车, 准备好滑行报告。"]
+
+[[template]]
+id = "ground.cross_runway"
+text = ["{callsign}, 穿越跑道{runway}。", "{callsign}, 穿越跑道{runway}, 保持本频率。"]
+pilot_readback = "穿越跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "ground.stopped_ahead"
+text = ["{callsign}, 注意, {message}停在你前方的滑行道上。"]
+
+[[template]]
+id = "ground.give_way"
+text = ["{callsign}, 原地等待, 避让{message}。", "{callsign}, 避让{message}, 然后继续滑行。"]
+
+[[template]]
+id = "ground.follow_close"
+text = ["{callsign}, 减速, 你在接近前方的飞机。"]
+
+[[template]]
+id = "ground.follow"
+text = ["{callsign}, 避让{message}, 然后跟随它。", "{callsign}, 跟随{message}。"]
+
+[[template]]
+id = "ground.cross_behind"
+text = ["{callsign}, 在{message}后面, 穿越跑道{runway}。"]
+pilot_readback = "在落地飞机后面, 穿越跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "ground.hold_short_landing"
+text = ["{callsign}, 跑道{hold_short}外等待, {message}。"]
+pilot_readback = "跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "ground.cross_expedite"
+text = ["{callsign}, 穿越跑道{runway}, 不要耽误, {message}。"]
+pilot_readback = "穿越跑道{runway}, 加快, {callsign_short}。"
+
+[[template]]
+id = "ground.push_hold_traffic"
+text = ["{callsign}, 推出等一会, {message}, 我会叫你。"]
+pilot_readback = "推出稍等, {callsign_short}。"
+
+[[template]]
+id = "ground.push_hold_queue"
+text = ["{callsign}, 预计在机位延误大约{minutes}分钟, {message}, 推出时我会叫你。"]
+pilot_readback = "在机位稍等, {callsign_short}。"
+
+# --- tower --------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "tower.takeoff"
+text = ["{callsign}, 跑道{runway}, 保持跑道航向, 可以起飞。", "{callsign}, 跑道{runway}, 可以起飞, 保持跑道航向。"]
+pilot_readback = "跑道航向, 跑道{runway}, 可以起飞, {callsign_short}。"
+
+[[template]]
+id = "tower.takeoff_rnav"
+text = ["{callsign}, RNAV到{fix}, 跑道{runway}, 可以起飞。"]
+pilot_readback = "RNAV到{fix}, 跑道{runway}, 可以起飞, {callsign_short}。"
+
+[[template]]
+id = "tower.takeoff_sid"
+text = ["{callsign}, 跑道{runway}, 可以起飞。"]
+pilot_readback = "跑道{runway}, 可以起飞, {callsign_short}。"
+
+[[template]]
+id = "tower.luaw"
+text = ["{callsign}, 跑道{runway}进跑道等待。"]
+pilot_readback = "跑道{runway}进跑道等待, {callsign_short}。"
+
+[[template]]
+id = "tower.hold_short_traffic"
+text = ["{callsign}, 跑道{hold_short}外等待, {message}。"]
+pilot_readback = "跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "tower.handoff_departure"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 联系{station}{frequency}, 再见。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.land"
+text = ["{callsign}, 风{wind}, 跑道{runway}, 可以落地。", "{callsign}, 跑道{runway}, 可以落地, 风{wind}。"]
+pilot_readback = "跑道{runway}可以落地, {callsign_short}。"
+
+[[template]]
+id = "tower.continue"
+text = ["{callsign}, 继续进近跑道{runway}。", "{callsign}, 跑道{runway}, 继续, 我会给你落地许可。"]
+
+[[template]]
+id = "tower.exit_vacate"
+text = ["{callsign}, 从{exit}向{side}脱离跑道, 联系{station}{frequency}。"]
+pilot_readback = "从{exit}向{side}脱离, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.exit_vacate_welcome"
+text = ["{callsign}, 欢迎来到{city}, 从{exit}向{side}脱离跑道, 联系{station}{frequency}。"]
+pilot_readback = "从{exit}向{side}脱离, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.exit_contact_ground"
+text = ["{callsign}, 联系{station}{frequency}。", "{callsign}, 脱离跑道后联系{station}{frequency}。"]
+pilot_readback = "{station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.go_around"
+text = ["{callsign}, 收到, 保持跑道航向, 上升到{altitude}保持, 联系{station}{frequency}。"]
+pilot_readback = "跑道航向, 上升到{altitude}保持, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.turn_approved"
+text = ["{callsign}, 同意{turn}转。"]
+
+[[template]]
+id = "tower.turn_unable"
+text = ["{callsign}, 不能{turn}转, 保持跑道航向。"]
+
+[[template]]
+id = "tower.go_around_traffic_contact"
+text = ["{callsign}, 复飞, 跑道上有飞机, 保持跑道航向, 上升到{altitude}保持, 联系{station}{frequency}。"]
+pilot_readback = "复飞, 跑道航向, 上升到{altitude}保持, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "tower.go_around_traffic"
+text = ["{callsign}, 复飞, 跑道上有飞机, 保持跑道航向, 上升到{altitude}保持。"]
+pilot_readback = "复飞, 跑道航向, 上升到{altitude}保持, {callsign_short}。"
+
+[[template]]
+id = "tower.sequence"
+text = ["{callsign}, {message}。"]
+
+[[template]]
+id = "tower.continue_hold_short"
+text = ["{callsign}, 继续滑行, 跑道{hold_short}外等待。"]
+pilot_readback = "跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "tower.hold_short_runway"
+text = ["{callsign}, 跑道{hold_short}外等待。"]
+pilot_readback = "跑道{hold_short}外等待, {callsign_short}。"
+
+[[template]]
+id = "tower.stop_takeoff"
+text = ["{callsign}, 立即停止, 我重复, 立即停止, 跑道上有飞机。"]
+
+[[template]]
+id = "tower.luaw_behind"
+text = ["{callsign}, 在{message}后面, 跑道{runway}进跑道等待。"]
+pilot_readback = "在落地飞机后面, 跑道{runway}进跑道等待, {callsign_short}。"
+
+[[template]]
+id = "tower.hold_position_traffic"
+text = ["{callsign}, 原地等待, {message}。"]
+pilot_readback = "原地等待, {callsign_short}。"
+
+[[template]]
+id = "tower.cancel_takeoff"
+text = ["{callsign}, 原地等待, 取消起飞许可, {message}。"]
+pilot_readback = "原地等待, {callsign_short}。"
+
+[[template]]
+id = "tower.hold_wake"
+text = ["{callsign}, 因为尾流等待, {message}, 大约{minutes}分钟。"]
+
+[[template]]
+id = "tower.follow_slow"
+text = ["{callsign}, 减速到最后进近速度, {message}。"]
+
+[[template]]
+id = "tower.continue_traffic"
+text = ["{callsign}, 继续, {message}。", "{callsign}, 继续, 预计晚一点给落地许可, {message}。"]
+
+[[template]]
+id = "tower.sidestep_land"
+text = ["{callsign}, 改到跑道{runway}, 跑道{runway}, 风{wind}, 可以落地。"]
+pilot_readback = "改到跑道, 跑道{runway}可以落地, {callsign_short}。"
+
+[[template]]
+id = "tower.land_after_departure"
+text = ["{callsign}, 跑道{runway}, 可以落地, 风{wind}, 前方有{message}起飞。"]
+pilot_readback = "跑道{runway}可以落地, {callsign_short}。"
+
+# --- VFR ----------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "vfr.class_b_departure"
+text = ["{callsign}, 可以{direction}离开B类空域, 目视飞行保持{altitude}或以下, 离场频率{frequency}, 应答机{squawk}。"]
+pilot_readback = "{direction}离开B类空域, 目视{altitude}或以下, 离场频率{frequency}, 应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "vfr.takeoff"
+text = ["{callsign}, 跑道{runway}, 同意{direction}离场, 可以起飞。"]
+pilot_readback = "跑道{runway}, 可以起飞, {callsign_short}。"
+
+[[template]]
+id = "vfr.takeoff_closed"
+text = ["{callsign}, 跑道{runway}, {turn}航线起落, 可以起飞。"]
+pilot_readback = "{turn}航线, 跑道{runway}, 可以起飞, {callsign_short}。"
+
+[[template]]
+id = "vfr.frequency_change"
+text = ["{callsign}, 同意转换频率。", "{callsign}, 同意转换频率, 再见。"]
+
+[[template]]
+id = "vfr.closed_traffic"
+text = ["{callsign}, {turn}航线起落, 跑道{runway}, 三边中点报告。"]
+pilot_readback = "{turn}航线, 跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "vfr.squawk"
+text = ["{callsign}, 应答机{squawk}。"]
+pilot_readback = "应答机{squawk}, {callsign_short}。"
+
+[[template]]
+id = "vfr.radar_contact"
+text = ["{callsign}, {station}, 雷达已识别, {message}。"]
+
+[[template]]
+id = "vfr.cleared_class_b"
+text = ["{callsign}, 可以进入B类空域, 目视飞行保持{altitude}或以下。"]
+pilot_readback = "进入B类空域, 目视{altitude}或以下, {callsign_short}。"
+
+[[template]]
+id = "vfr.remain_clear_b"
+text = ["{callsign}, 保持在B类空域以外。"]
+
+[[template]]
+id = "vfr.service_terminated"
+text = ["{callsign}, 雷达服务终止, 应答机目视编码, 联系{station}{frequency}。"]
+pilot_readback = "目视编码, {station}{frequency}, {callsign_short}。"
+
+[[template]]
+id = "vfr.enter_downwind"
+text = ["{callsign}, {station}, 加入{turn}三边, 跑道{runway}, 三边中点报告。"]
+pilot_readback = "{turn}三边, 跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "vfr.straight_in"
+text = ["{callsign}, {station}, 直接五边进近跑道{runway}, 五边3海里报告。"]
+pilot_readback = "直接五边跑道{runway}, {callsign_short}。"
+
+[[template]]
+id = "vfr.option"
+text = ["{callsign}, 跑道{runway}, 风{wind}, 可以自选。"]
+pilot_readback = "跑道{runway}可以自选, {callsign_short}。"
+
+[[template]]
+id = "vfr.touch_and_go"
+text = ["{callsign}, 跑道{runway}, 风{wind}, 可以连续起落。"]
+pilot_readback = "跑道{runway}可以连续起落, {callsign_short}。"
+
+[[template]]
+id = "vfr.following_ground"
+text = ["{callsign}, 应答机{squawk}, 离场频率{frequency}。"]
+pilot_readback = "应答机{squawk}, 离场频率{frequency}, {callsign_short}。"
+
+[[template]]
+id = "vfr.transition"
+text = ["{callsign}, 同意{direction}穿越, 目视飞行保持{altitude}或以下, 离开区域报告。"]
+pilot_readback = "同意穿越, {altitude}或以下, wilco, {callsign_short}。"
+
+[fragments]
+hold_fix = "在{fix}上空等待"
+altitude = "保持{altitude}"
+cruise = "预计{cruise}"
+frequency = "频率{frequency}"
+squawk = "应答机{squawk}"
+runway = "跑道{runway}"
+hold_short = "跑道{hold_short}外等待"
+heading = "航向{heading}"
+speed = "保持{speed}节"
+taxi_route = "经由{taxi_route}滑行"
+approach = "可以{approach}进近"
+procedure = "{procedure}离场"
+procedure_arrival = "{procedure}进场"
+destination = "可以飞往{destination}"
+cleared_for_takeoff = "可以起飞"
+line_up_and_wait = "进跑道等待"
+cleared_to_land = "可以落地"
+hold_position = "原地等待"
+descend_via = "下降 via 进场程序"
+fix = "直飞{fix}"
+behind = "在落地飞机后面"
+hold = "等待"
+efc = "预计进一步许可{efc}"
+i_say_again = "我重复"
+expect_runway_note = ", 预计跑道{runway}"
+vectors_to_note = "{message}, 雷达引导到{fix}"
+unavailable = "不能, 没有这个信息"
+traffic_vacating = "{message}正在脱离跑道"
+landing_traffic = "落地飞机"
+traffic_final = "五边{distance}海里有飞机"
+rejected_vacate = "收到, 可以时从{exit}脱离跑道, 准备好起飞报告"
+rejected_vacate_runway = "收到, 可以时脱离跑道, 准备好起飞报告"

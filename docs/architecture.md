@@ -71,6 +71,19 @@ bridge needs Windows. Everything else is built and tested on a Mac against recor
    words take (`speech_s_per_char`).
 8. The **recorder** writes every event. The **app** shows it in the radio log.
 
+### In the pilot's own language
+
+With `[atc] language` set (by default the copilot's language, else the window's), Whisper tells which language
+each radio call is in and hears it in that language (`Transcript.language`). The engine reads a call in another
+language by putting it into English for the grammar (`readback/translate.py`: its number words as figures, then
+its aviation words through the language's lexicon in `atc_core/phraseology/tongues/<code>.py`), so readbacks and
+requests are checked by the same rules as English ones. ATC then answers in that language until the pilot calls in
+English: every template reworded in `phraseology/templates/lang/<code>.toml`, the numbers, runways, levels and
+frequencies said as that language's radio says them (`Tongue`), the engine's own message words reworded by
+`tongues/messages.py`, and a voice of that language (`AtcTransmission.language`). Other flights' exchanges and the
+ATIS stay in English. `tests/test_radio_languages.py` reads every template's readback in every language back through
+its lexicon.
+
 ## Controllers
 
 The airport's own frequency data names the clearance, ground, tower and approach/departure controllers

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 import msgspec
 
-from localtc.atc_core.phraseology import speech
+from localtc.atc_core.phraseology import speech, tongues
 from localtc.atc_core.phraseology.slots import SLOT_DEFAULTS, SLOTS
 from localtc.atc_core.readback.extract import ELEMENTS
 from localtc.atc_core.values import Approach, Phrase
@@ -72,19 +72,25 @@ def slot_names(text: str) -> list[str]:
 
 
 class TemplateLibrary:
-    def __init__(self, templates: dict[str, Template], fragments: dict[str, str], style: str = "faa") -> None:
+    def __init__(self, templates: dict[str, Template], fragments: dict[str, str], style: str = "faa",
+                 language: str = "", untranslated: frozenset[str] = frozenset()) -> None:
         self.templates = templates
         self.fragments = fragments
         self.style = style
+        self.language = language  # "" English; else the language every template here is worded in ("fr")
+        self.untranslated = untranslated  # template ids (and "fragment:<key>") still in English in that language
         self.validate()
 
     @classmethod
-    def load(cls, *extra_dirs: str | Path, style: str = "faa") -> "TemplateLibrary":
+    def load(cls, *extra_dirs: str | Path, style: str = "faa", language: str = "") -> "TemplateLibrary":
         """Built-in templates plus any ``*.toml`` in ``extra_dirs`` (later files override ids).
 
         ``style="icao"`` lays ``templates/icao/*.toml`` over the FAA templates: the same ids, reworded. An
         ICAO template may change ``text`` and ``pilot_readback`` only; what must be read back is the same
-        in both, so the engine and the readback checks don't depend on the style."""
+        in both, so the engine and the readback checks don't depend on the style.
+
+        ``language`` ("fr"): ``templates/lang/<language>.toml`` laid over them the same way, every template in that
+        language (each one rendered in it, its numbers and names as it says them: ``tongues``)."""
         files: list[tuple[str, bytes]] = []
         package = resources.files("localtc.atc_core.phraseology") / "templates"
         for entry in sorted(package.iterdir(), key=lambda e: e.name):
@@ -95,11 +101,16 @@ class TemplateLibrary:
             for entry in sorted((package / "icao").iterdir(), key=lambda e: e.name):
                 if entry.name.endswith(".toml"):
                     overlay.append((f"icao/{entry.name}", entry.read_bytes()))
+        language = language if tongues.tongue(language) is not None else ""
+        if language:
+            entry = package / "lang" / f"{language}.toml"
+            overlay.append((f"lang/{language}.toml", entry.read_bytes()))
         for directory in extra_dirs:
             for path in sorted(Path(directory).glob("*.toml")):
                 files.append((str(path), path.read_bytes()))
         templates: dict[str, Template] = {}
         fragments: dict[str, str] = {}
+        reworded: set[str] = set()
         for name, data in files:
             try:
                 parsed = msgspec.convert(tomllib.loads(data.decode()), TemplateFile)
@@ -119,8 +130,15 @@ class TemplateLibrary:
                 base = templates[change.id]
                 templates[change.id] = msgspec.structs.replace(
                     base, text=change.text or base.text, pilot_readback=change.pilot_readback or base.pilot_readback)
+                if name.startswith("lang/") and change.text:
+                    reworded.add(change.id)
             fragments.update(parsed.fragments)
-        return cls(templates, fragments, style=style)
+            if name.startswith("lang/"):
+                reworded |= {f"fragment:{key}" for key in parsed.fragments}
+        untranslated = frozenset({*(t for t in templates if t not in reworded),
+                                  *(f"fragment:{k}" for k in fragments if f"fragment:{k}" not in reworded)}) \
+            if language else frozenset()
+        return cls(templates, fragments, style=style, language=language, untranslated=untranslated)
 
     def validate(self) -> None:
         problems = []
@@ -161,6 +179,11 @@ class TemplateLibrary:
     ) -> Rendered:
         """``choose(n)`` picks one of a template's ``n`` wordings (a controller's habit); else ``rng`` does, else
         the first."""
+        with tongues.speaking(self.language or "en"):
+            return self._render(instruction_id, slots, rng=rng, controller=controller, choose=choose)
+
+    def _render(self, instruction_id: str, slots: dict[str, Any], *, rng: random.Random | None,
+                controller: str | None, choose: Callable[[int], int] | None) -> Rendered:
         template = self.get(instruction_id)
         if len(template.text) == 1:
             text = template.text[0]
@@ -184,11 +207,27 @@ class TemplateLibrary:
     def fragment(self, key: str, slots: dict[str, Any]) -> Phrase:
         if key not in self.fragments:
             raise TemplateError(f"no fragment {key!r}")
-        return Phrase(*self.fill(self.fragments[key], slots, context=f"fragment {key}"))
+        with tongues.speaking(self.language or "en"):
+            return Phrase(*self.fill(self.fragments[key], slots, context=f"fragment {key}"))
+
+    def say(self, key: str, **slots: Any) -> Phrase:
+        """A fragment by name, its slots given as keywords: ``say("traffic_landing", what=...)``."""
+        return self.fragment(key, slots)
 
     def pilot_readback(self, instruction_id: str, slots: dict[str, Any]) -> str:
         """The template's ideal readback, in spoken words (as a speech recognizer would hear it)."""
-        return self.fill(self.get(instruction_id).pilot_readback, slots, context=instruction_id)[1]
+        with tongues.speaking(self.language or "en"):
+            return self.fill(self.get(instruction_id).pilot_readback, slots, context=instruction_id)[1]
+
+    def pilot_readback_written(self, instruction_id: str, slots: dict[str, Any]) -> str:
+        """The template's ideal readback as it's written (figures: as speech-to-text writes it)."""
+        with tongues.speaking(self.language or "en"):
+            return self.fill(self.get(instruction_id).pilot_readback, slots, context=instruction_id)[0]
+
+    def worded(self, text: str, slots: dict[str, Any], *, context: str = "") -> tuple[str, str]:
+        """``fill`` in this library's language."""
+        with tongues.speaking(self.language or "en"):
+            return self.fill(text, slots, context=context)
 
     @staticmethod
     def fill(text: str, slots: dict[str, Any], *, context: str = "") -> tuple[str, str]:
@@ -207,6 +246,8 @@ class TemplateLibrary:
             display[name] = slot_type.display(value)
             spoken[name] = slot_type.spoken(value)
         shown, said = text.format_map(display), text.format_map(spoken)
+        if (tg := tongues.current()) is not None:  # (the fixes below are English's)
+            return shown, _spoken_sentence(said)
         approach = slots.get("approach")
         if "approach" in display and isinstance(approach, Approach) and approach.kind == "VISUAL" and not approach.charted:
             # "Cleared visual approach runway 34R", not "cleared VISUAL RWY 34R approach".

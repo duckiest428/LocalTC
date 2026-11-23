@@ -52,6 +52,21 @@ CREW_STYLE_IN = {
 }
 
 
+# What's said to ATC in each language, to listen for (the pilot calling in their own language: ``[atc] language``).
+RADIO_STYLE_IN = {
+    "de": "Frankfurt Turm, Lufthansa eins zwo drei, Rollhalt Piste zwo fünf links, abflugbereit. Steigen Flugfläche eins zwo null. Kurs zwo sieben null. Transponder vier fünf zwo eins. Frei zum Start Piste zwo fünf links. QNH eins null eins drei. Rollen über A, B zum Rollhalt. Kontakt Langen Radar eins zwo null Komma acht.",
+    "fr": "Roissy Tour, Air France un deux trois, point d'arrêt piste deux sept gauche, prêts au départ. Montons niveau un deux zéro. Cap deux sept zéro. Transpondeur quatre cinq deux un. Autorisés décollage piste deux sept gauche. QNH un zéro un trois. Roulons via A, B au point d'arrêt. On passe avec Paris Contrôle un deux huit décimal un.",
+    "es": "Madrid Torre, Iberia uno dos tres, en punto de espera pista tres seis izquierda, listos para salir. Ascendemos nivel de vuelo uno dos cero. Rumbo dos siete cero. Transpondedor cuatro cinco dos uno. Autorizados a despegar pista tres seis izquierda. QNH uno cero uno tres. Rodamos por A, B al punto de espera. Contactamos Madrid Control uno dos ocho decimal uno.",
+    "it": "Roma Torre, Alitalia uno due tre, al punto attesa pista uno sei destra, pronti al decollo. Saliamo livello di volo uno due zero. Prua due sette zero. Transponder quattro cinque due uno. Autorizzati al decollo pista uno sei destra. QNH uno zero uno tre. Rulliamo via A, B al punto attesa. Contattiamo Roma Controllo uno due otto decimale uno.",
+    "pt": "Lisboa Torre, TAP uno dois três, no ponto de espera pista dois zero, prontos para descolar. Subimos nível de voo um dois zero. Rumo dois sete zero. Transponder quatro cinco dois um. Autorizados a descolar pista dois zero. QNH um zero um três. Rolamos via A, B para o ponto de espera. Contactamos Lisboa Controlo um dois oito decimal um.",
+    "nl": "Schiphol Toren, KLM één twee drie, bij het wachtpunt baan twee vier, gereed voor vertrek. Klimmen naar vliegniveau één twee nul. Koers twee zeven nul. Transponder vier vijf twee één. Vrij om op te stijgen baan twee vier. QNH één nul één drie. Taxiën via A, B naar het wachtpunt. Contact Amsterdam Radar één twee acht komma één.",
+    "pl": "Okęcie Wieża, LOT jeden dwa trzy, w punkcie oczekiwania pas dwa dziewięć, gotowi do startu. Wznosimy się na poziom lotu jeden dwa zero. Kurs dwa siedem zero. Transponder cztery pięć dwa jeden. Zezwolenie na start pas dwa dziewięć. QNH jeden zero jeden trzy. Kołujemy przez A, B do punktu oczekiwania. Kontakt Warszawa Radar jeden dwa osiem przecinek jeden.",
+    "sv": "Arlanda Torn, Scandinavian ett två tre, vid väntepunkt bana ett nio vänster, klara för start. Stiger till flygnivå ett två noll. Kurs två sju noll. Transponder fyra fem två ett. Klar för start bana ett nio vänster. QNH ett noll ett tre. Taxar via A, B till väntepunkten. Kontakt Stockholm Kontroll ett två åtta komma ett.",
+    "ru": "Шереметьево Старт, Аэрофлот один два три, на предварительном полосы два четыре левая, готовы к взлёту. Набираем эшелон один два ноль. Курс два семь ноль. Ответчик четыре пять два один. Взлёт разрешён полоса два четыре левая. QNH один ноль один три. Рулим по A, B на предварительный. Работаем с Москва Контроль один два восемь запятая один.",
+    "zh": "首都塔台，国航一二三，跑道三六右外等待，准备好起飞。上升到高度层一二零。航向二七零。应答机四五二一。跑道三六右，可以起飞。修正海压一零一三。经由A，B滑行到等待点。联系北京区调一二八点一。",
+}
+
+
 def build_prompt(hints: VocabularyHints) -> str:
     parts = [hints.style or STYLE]
     if hints.stations:

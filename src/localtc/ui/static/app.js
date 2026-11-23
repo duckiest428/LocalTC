@@ -2279,6 +2279,11 @@ const Settings = {
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
             .map(([v, t]) => `<option value="${v}" ${st.atc.phraseology === v ? "selected" : ""}>${t}</option>`).join("")}</select>
           <span class="hint">ICAO says "QNH 1013", "decimal", "taxi to holding point", "climb to FL120"; FAA says "altimeter 29.92", "point", "hold short", "climb and maintain".</span></label></div>
+        <div class="row"><label>ATC's language
+          <select id="s-atc-language">${[["auto", "Yours: the copilot's language, else the window's"], ["en", "English only"],
+            ...Languages.list().filter((l) => l.code !== "en").map((l) => [l.code, l.native])]
+            .map(([v, t]) => `<option value="${v}" ${(st.atc.language || "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <span class="hint">Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.</span></label></div>
       </div>
 
       <div class="card" data-section="traffic">
@@ -2576,6 +2581,7 @@ const Settings = {
     on("#s-traffic-max-parked", "change", () => this.save("traffic", "max_parked", Number(val("#s-traffic-max-parked"))));
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
+    on("#s-atc-language", "change", () => this.save("atc", "language", val("#s-atc-language")));
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-taxi-ribbon", "change", (e) => this.save("atc", "taxi_guide", e.target.checked));

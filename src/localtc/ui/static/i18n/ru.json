@@ -1641,5 +1641,9 @@
 "● On the map now": "● Сейчас на карте",
 "Change it any time in Settings → Account.": "Изменить можно в любой момент: Настройки → Аккаунт.",
 "With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "С бесплатным аккаунтом (Настройки → Аккаунт) ваш полёт может отображаться на публичной карте Live Flights, localtc.tech/live.",
-"You can stop at any time: here in Settings, or on the dashboard.": "Вы можете прекратить в любой момент: здесь в Настройках или в панели управления."
+"You can stop at any time: here in Settings, or on the dashboard.": "Вы можете прекратить в любой момент: здесь в Настройках или в панели управления.",
+"ATC's language": "Язык диспетчера",
+"Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Вызовите диспетчера на своём языке, и он ответит на нём: диспетчеры, радиовызовы второго пилота и наземная служба. Ваши повторы на нём проверяются так же, как английские. Вызовите по-английски, и снова будет английский.",
+"English only": "Только английский",
+"Yours: the copilot's language, else the window's": "Ваш: язык второго пилота, иначе язык окна"
 }

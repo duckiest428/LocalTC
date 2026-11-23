@@ -1641,5 +1641,9 @@
 "● On the map now": "● Nu op de kaart",
 "Change it any time in Settings → Account.": "Altijd te wijzigen in Instellingen → Account.",
 "With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Met een gratis account (Instellingen → Account) kan je vlucht op de openbare Live Flights-kaart staan, localtc.tech/live.",
-"You can stop at any time: here in Settings, or on the dashboard.": "Je kunt altijd stoppen: hier in Instellingen, of op het dashboard."
+"You can stop at any time: here in Settings, or on the dashboard.": "Je kunt altijd stoppen: hier in Instellingen, of op het dashboard.",
+"ATC's language": "Taal van de verkeersleiding",
+"Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Roep de verkeersleiding op in uw taal en zij antwoorden in die taal: de verkeersleiders, de radio-oproepen van de copiloot en het platformpersoneel. Uw teruglezingen erin worden gecontroleerd zoals Engelse. Roep in het Engels en het is weer Engels.",
+"English only": "Alleen Engels",
+"Yours: the copilot's language, else the window's": "Die van u: de taal van de copiloot, anders die van het venster"
 }

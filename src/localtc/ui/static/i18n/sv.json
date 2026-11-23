@@ -1641,5 +1641,9 @@
 "● On the map now": "● På kartan nu",
 "Change it any time in Settings → Account.": "Ändra det när som helst i Inställningar → Konto.",
 "With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Med ett gratis konto (Inställningar → Konto) kan din flygning synas på den offentliga Live Flights-kartan, localtc.tech/live.",
-"You can stop at any time: here in Settings, or on the dashboard.": "Du kan sluta när som helst: här i Inställningar, eller på instrumentpanelen."
+"You can stop at any time: here in Settings, or on the dashboard.": "Du kan sluta när som helst: här i Inställningar, eller på instrumentpanelen.",
+"ATC's language": "Flygledningens språk",
+"Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Anropa flygledningen på ditt språk så svarar de på det: flygledarna, andrepilotens radioanrop och markpersonalen. Dina kollationeringar på det kontrolleras som engelska. Anropa på engelska så blir det engelska igen.",
+"English only": "Endast engelska",
+"Yours: the copilot's language, else the window's": "Ditt: andrepilotens språk, annars fönstrets"
 }

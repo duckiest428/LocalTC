@@ -1641,5 +1641,9 @@
 "● On the map now": "● 正在地图上",
 "Change it any time in Settings → Account.": "随时可在 设置 → 账户 中更改。",
 "With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "有了免费账户（设置 → 账户），你的航班可以显示在公开的 Live Flights 地图上：localtc.tech/live。",
-"You can stop at any time: here in Settings, or on the dashboard.": "你可以随时停止：在这里的设置中，或在控制台中。"
+"You can stop at any time: here in Settings, or on the dashboard.": "你可以随时停止：在这里的设置中，或在控制台中。",
+"ATC's language": "管制语言",
+"Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "用你的语言呼叫管制，他们就用这种语言回答：管制员、副驾驶的无线电呼叫和地勤。你用这种语言的复诵会像英语一样被检查。用英语呼叫，就又变回英语。",
+"English only": "仅英语",
+"Yours: the copilot's language, else the window's": "你的：副驾驶的语言，否则是窗口的语言"
 }

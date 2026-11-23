@@ -14,7 +14,8 @@ import math
 import random
 import re
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -63,7 +64,9 @@ from localtc.atc_core.llm import LlmPhraser
 from localtc.atc_core.llm.phrase import facts_problem, spoken_as
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
-from localtc.atc_core.phraseology import TemplateLibrary, speech
+from localtc.atc_core.phraseology import TemplateLibrary, speech, tongues
+from localtc.atc_core.phraseology.tongues import messages
+from localtc.atc_core.readback.translate import read_in, to_english
 from localtc.atc_core.readback.written import with_expected, with_frequency
 from localtc.atc_core.readback import (
     ChainInterpreter,
@@ -520,6 +523,9 @@ REQUEST_CONTROLLER = {
 @dataclass
 class EngineConfig:
     origin: str | None = None  # the plan's: the airport the flight starts from, when the aircraft is there
+    # The pilot's own language ("fr"): called in it, ATC answers in it (and goes on in it until called in English);
+    # "": English only.
+    radio_language: str = ""
     standby_s: tuple[float, float] = STANDBY_S  # after "stand by for your clearance", the clearance this long later
     destination: str | None = None
     cruise_ft: int | None = None
@@ -606,6 +612,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self.airspace = Airspace.load()
         self._area_cache: dict[str, tuple[float, Any]] = {}  # lookups, reused for AREA_RECHECK_S of sim time
         self.libraries = {"faa": library or TemplateLibrary.load(), "icao": TemplateLibrary.load(style="icao")}
+        # The language ATC speaks with the pilot now: "" English, else the one they last called in ([atc] language).
+        self.radio_language = ""
+        self._said_in = ""  # the language of the call being answered ("": English)
+        self._said_text = ""  # ... and its words as they were said, for the language model
         self.region = regions.FAA  # the phraseology region of the current step (see _region)
         self.vfr = VfrState()  # what a VFR flight asked for (atc_core/vfr.py)
         self.diversion = DiversionState()  # the airports around, and a diversion (atc_core/diversion.py)
@@ -813,13 +823,49 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     @property
     def library(self) -> TemplateLibrary:
-        """The templates in the current region's wording, FAA or ICAO."""
-        return self.libraries[self.region.style]
+        """The templates in the current region's wording, FAA or ICAO, in the language ATC speaks with the pilot."""
+        style = self.region.style
+        if not self.radio_language:
+            return self.libraries[style]
+        key = f"{style}:{self.radio_language}"
+        if key not in self.libraries:
+            self.libraries[key] = TemplateLibrary.load(style=style, language=self.radio_language)
+        return self.libraries[key]
+
+    @contextmanager
+    def _in_english(self) -> Iterator[None]:
+        """What's said to the other flights (LocalTC's traffic, the chatter): English, whatever the pilot speaks."""
+        saved = self.radio_language
+        self.radio_language = ""
+        try:
+            with tongues.speaking("en"):
+                yield
+        finally:
+            self.radio_language = saved
+
+    def _heard_in(self, ev: Transcript) -> Transcript:
+        """The pilot's call in the language it was said in: in their own language ([atc] language), ATC answers in it
+        from now on, and the call is read in English words by the grammar (``translate.to_english``); called in English,
+        ATC is back in English. Typed calls are told by their words."""
+        # (A replay has the language each call was heard in, whatever the settings now.)
+        code = self.cfg.radio_language or (ev.language if tongues.tongue(ev.language) is not None else "")
+        if not code or tongues.tongue(code) is None:
+            return ev
+        said = ev.language or (read_in(ev.text, code) if ev.source in ("typed", "") else "")
+        if said == code:
+            self.radio_language, self._said_in, self._said_text = code, code, ev.text
+            return msgspec.structs.replace(ev, text=to_english(ev.text, code))
+        if said == "en" or (ev.source == "typed" and ev.language == ""):
+            self.radio_language = ""
+        self._said_in, self._said_text = "", ""
+        return ev
 
     def handle(self, event: BusEvent) -> list[BusEvent]:
         # Everything said in this step is worded for where the controller the pilot is talking to sits.
         self.region = self._region()
-        with regions.speaking(self.region):
+        if isinstance(event, Transcript) and event.text.strip():
+            event = self._heard_in(event)
+        with regions.speaking(self.region), tongues.speaking(self.radio_language or "en"):
             out = self._handle(event)
         if self._online_after_readback:
             out += self._online_reminders(event, out)
@@ -2243,8 +2289,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
                 self.conditions.add(Condition("vacate", t, "tower.continue_traffic", occupying.object_id,
                                               f"the {what}on the runway".replace("  ", " "), runway, until_t=t + 300))
-                self._schedule(t, "tower.continue_traffic", {"message": Phrase(f"traffic {what}vacating the runway",
-                                                                                f"traffic {said}vacating the runway")},
+                self._schedule(t, "tower.continue_traffic", {"message": self.library.say(
+                                   "traffic_vacating", message=kind if kind is not None else Phrase("", ""))},
                                st.comms.tuned, delay=False, expects_readback=False)
         elif phase is P.LANDING and tuned == "tower" and own.on_ground and own.gs_kt <= EXIT_CALL_KT \
                 and "landing" in st.clearances and not self._vfr_in_pattern and self.facility("ground") is not None \
@@ -2331,8 +2377,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             else:
                 self.conditions.add(Condition("cross_after", t, "ground.hold_short_landing", target.object_id,
                                               behind.display, crossing, until_t=t + 600, value=side))
-                self._schedule(t, "ground.hold_short_landing", {"hold_short": side, "message": Phrase(
-                    "landing traffic", "landing traffic")}, st.comms.tuned, delay=False)
+                self._schedule(t, "ground.hold_short_landing", {"hold_short": side, "message": self.library.say(
+                    "landing_traffic")}, st.comms.tuned, delay=False)
             return
         self._crossed.add(crossing)
         self._crossing = crossing
@@ -2341,8 +2387,8 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             n = max(1, round(miles))
             self.conditions.add(Condition("expedite", t, "ground.cross_expedite", target.object_id, runway=crossing,
                                           until_t=t + 180))
-            self._schedule(t, "ground.cross_expedite", {"runway": side, "message": Phrase(
-                f"traffic on {n} mile final", f"traffic on a {speech.number_words(n)} mile final")}, st.comms.tuned, delay=False)
+            self._schedule(t, "ground.cross_expedite", {"runway": side, "message": self.library.say(
+                "traffic_final", distance=n)}, st.comms.tuned, delay=False)
             return
         self._schedule(t, "ground.cross_runway", {"runway": side}, st.comms.tuned, delay=False)
 
@@ -2421,6 +2467,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         delivery its "clearance"; ground its "pushback", "taxi_out" and "taxi_in" (a route from ``lat, lon``); tower
         its "lineup", "takeoff" and "land", and "go_around" or "hold_short" because of this one. Heard only on that
         airport's controller of that kind, when it's the frequency tuned and nothing else is being said."""
+        with self._in_english():
+            return self._traffic_call(ident, kind, icao, runway, t, lat=lat, lon=lon, destination=destination)
+
+    def _traffic_call(self, ident: str, kind: str, icao: str, runway: str, t: float, *, lat: float | None = None,
+                      lon: float | None = None, destination: str = "") -> list[BusEvent]:
         facility = self.state.comms.tuned
         want = TRAFFIC_CALLS.get(kind)
         urgent = kind in URGENT_TRAFFIC_CALLS
@@ -2574,8 +2625,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
 
     def _ambient(self, own: OwnshipState) -> list[BusEvent]:
         """The rest of the frequency (atc_core/chatter.py), on COM1 and on COM2 when it's being listened to."""
-        out = self._ambient_com1(own)
-        return out or self._ambient_com2(own)
+        with self._in_english():
+            out = self._ambient_com1(own)
+            return out or self._ambient_com2(own)
 
     def _ambient_com2(self, own: OwnshipState) -> list[BusEvent]:
         """COM2 monitored (its receive switch on), on another controller's frequency: that one's traffic now and then too,
@@ -3769,8 +3821,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             body = self._reply_body(item)
             if body is None:
                 continue
-            text, exchanges = self.phraser.reword(pilot=ev.text, scripted=body, callsigns=callsigns, t=ev.t,
-                                                  trigger=interp.trigger or "", persona=self._persona(item.facility))
+            text, exchanges = self.phraser.reword(pilot=self._said_text or ev.text, scripted=body, callsigns=callsigns,
+                                                  t=ev.t, trigger=interp.trigger or "", persona=self._persona(item.facility),
+                                                  language=self.library.language)
             out += exchanges
             if text is None:
                 last = exchanges[-1] if exchanges else None
@@ -4154,7 +4207,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if pending is not None or unsure or len(words) < CONVERSE_WORDS:
             return "common.say_again"
         if is_question(ev.text) or asks(ev.text):
-            return UNAVAILABLE
+            return self.library.say("unavailable")
         return "common.roger"
 
     def _taxi_in_given(self) -> IssuedInstruction | None:
@@ -4296,11 +4349,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(("tower.takeoff", "tower.luaw"))]
         where = REJECT_ONTO.search(text)
         name = (PHONETIC_LETTERS.get(where.group(1).lower(), where.group(1).upper()) + (where.group(2) or "")) if where else ""
-        name_said = speech.taxiway(name) if name and hasattr(speech, "taxiway") else name
-        vacate = (f"vacate onto {name} when able", f"vacate onto {name_said} when able") if name else \
-            ("vacate the runway when able", "vacate the runway when able")
-        message = Phrase(f"roger, {vacate[0]}, advise when ready for departure",
-                         f"roger, {vacate[1]}, advise when ready for departure")
+        message = self.library.say("rejected_vacate", exit=name) if name else self.library.say("rejected_vacate_runway")
         self._schedule(t, "common.info", {"message": message}, facility, expects_readback=False)
         return []
 
@@ -4326,11 +4375,13 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         issued = st.issued.get(pending.instruction_id)
         slots = issued.slots if issued else {}
         heard = ""
-        if isinstance(mhz := pending.expected.get("frequency"), float | int) and interp.text \
+        if self._said_in:
+            pass  # (said in another language: the log keeps the pilot's own words)
+        elif isinstance(mhz := pending.expected.get("frequency"), float | int) and interp.text \
                 and "frequency" not in (*interp.mismatched, *interp.unclear, *interp.missing):
             # The log's line with the frequency as ATC took it ("Tower on 118, Dec. 7, 7, 7, 5" is 118.775)
             heard = with_frequency(interp.text, float(mhz))
-        if isinstance(cruise := pending.expected.get("cruise"), float | int) and interp.text and cruise > 0 \
+        if not self._said_in and isinstance(cruise := pending.expected.get("cruise"), float | int) and interp.text and cruise > 0 \
                 and "cruise" not in (*interp.mismatched, *interp.unclear, *interp.missing):
             # ... and the level to expect as ATC gave it ("Expect 5L, 3300, 23M, departure": FL330, 23 minutes)
             minutes = slots.get("minutes") if isinstance(slots.get("minutes"), int) else None
@@ -5570,7 +5621,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if answers_it:
             self._schedule(t, "common.info", {"message": message}, facility)
             return []
-        self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
+        self._schedule(t, "common.info", {"message": self.library.say("unavailable")}, facility)
         return []
 
     def _airport_here(self, facility: Facility | None) -> str | None:
@@ -5767,7 +5818,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             pilot=interp.text, decision=decision, facts=facts, callsigns=callsigns, t=t,
             trigger={"answer": "question", "reply": "conversation"}.get(decision, "unsupported_request"),
             required=known.display if known is not None and require else "", more=more,
-            persona=self._persona(facility),
+            persona=self._persona(facility), language=self.library.language,
         )
         if message is not None and decision == "reply" and NOT_AN_ANSWER.search(message.display) and exchanges \
                 and not (is_question(interp.text or "") or asks(interp.text or "")):
@@ -5789,7 +5840,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, otherwise, {}, facility, expects_readback=False)
             said = f'ATC said "{SAID.get(otherwise, otherwise)}"'
         elif decision == "answer":
-            self._schedule(t, "common.info", {"message": UNAVAILABLE}, facility)
+            self._schedule(t, "common.info", {"message": self.library.say("unavailable")}, facility)
             said = f'ATC said "{UNAVAILABLE.display}"'
         else:
             self._schedule(t, "common.unable", {}, facility)
@@ -6155,14 +6206,14 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                                  "minutes": self.route.minutes_to_cruise(cruise)}
         if st.aircraft is not None and (end := self._runway_end(st.flight.origin, st.aircraft)) is not None:
             # The runway to plan the departure for ("there should be an 'expect runway'").
-            slots["runway_note"] = Phrase(f", expect runway {end.ident}", f", expect runway {speech.runway(end.ident)}")
+            slots["runway_note"] = self.library.say("expect_runway_note", runway=end.ident)
             self._expected_runway = end.ident  # kept for the taxi while it's still in use (``_runway_end``)
         instruction = "clearance.ifr" if cruise > initial else "clearance.ifr_at_cruise"
         filed = self.cfg.sid
         self.cfg.sid = self._sid_from(end.ident if st.aircraft is not None and end is not None else None)
         if filed and not self.cfg.sid and (first := self._after_sid(filed)) and "runway_note" in slots:
             # Nothing from this runway goes that way: said, not left for the pilot to find out in the FMS.
-            slots["runway_note"] = Phrase(f"{slots['runway_note'].display}, radar vectors to {first}", f"{slots['runway_note'].spoken}, radar vectors to {first}")
+            slots["runway_note"] = self.library.say("vectors_to_note", message=slots["runway_note"], fix=first)
         if self.cfg.sid:  # the flight plan files a SID: ATC clears the flight on it by name
             slots["procedure"] = self.cfg.sid
             instruction = "clearance.ifr_sid" if cruise > initial else "clearance.ifr_sid_at_cruise"
@@ -7096,6 +7147,10 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if facility.controller in st.comms.contacted and not callsign.is_airline:
             callsign = callsign.short
         slots = {**item.slots, "callsign": callsign}
+        if self.library.language:  # the engine's own English in the message, in the language ATC speaks
+            slots = {k: self._own_words(v) for k, v in slots.items()}
+            item.note, item.lead = self._own_words(item.note), self._own_words(item.lead)
+
         def choose(n: int) -> int:
             habit = personality.wording(facility.station, item.instruction_id, n, self._voice_rng)
             if item.repeat and n > 1:
@@ -7104,7 +7159,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             return habit
 
         if item.repeat and item.worded is None and item.lead is None:
-            item.lead = Phrase("I say again", "I say again")  # as a controller repeats, and in other words where it can
+            item.lead = self.library.say("i_say_again")  # as a controller repeats, and in other words where it can
         rendered = self.library.render(item.instruction_id, slots, controller=facility.controller, choose=choose)
         if item.worded is not None:
             # The model's words for it (checked to say the same). What's read back is still the template's.
@@ -7118,8 +7173,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if rendered.text.startswith(head) and rendered.spoken.startswith(spoken_head):
                 rendered = replace(rendered, text=head + item.lead.display + ", " + rendered.text[len(head):],
                                    spoken=spoken_head + item.lead.spoken + ", " + rendered.spoken[len(spoken_head):])
-        rendered = self._personalize(rendered, item, facility, callsign)
-        if self.cfg.humanize:  # an "uh" now and then, in the voice only (never in anything urgent)
+        if not self.library.language:  # (a controller's own English: their greetings, acknowledgements, sign-offs)
+            rendered = self._personalize(rendered, item, facility, callsign)
+        if self.cfg.humanize and not self.library.language:  # an "uh" now and then, in the voice only (never urgent)
             who = self._controller(facility) if self.cfg.personalities else \
                 personality.profile(facility.station, icao=self.region.icao)
             rendered = replace(rendered, spoken=disfluency.atc(
@@ -7159,8 +7215,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             t=t, station=facility.station, frequency_mhz=facility.mhz, text=_stops(rendered.text),
             controller=facility.controller, instruction_id=item.instruction_id, spoken=_stops(rendered.spoken),
             worded_by="model" if item.worded_by == "model" else "template",
-            manner=self._manner(facility), locale=self._locale(facility),
+            manner=self._manner(facility), locale=self._spoken_locale(facility), language=self.library.language,
         )
+
+    def _own_words(self, value: Any) -> Any:
+        """A message the engine put together in English ("traffic, 2 o'clock, 5 miles, opposite direction"), in the
+        language ATC speaks (``tongues.messages``); anything else as it is."""
+        if not isinstance(value, Phrase) or not self.library.language or not value.display:
+            return value
+        own = messages.reworded(value.display, self.library.language)
+        return value if own == value.display else Phrase(own, own)
+
+    def _spoken_locale(self, facility: Facility) -> str:
+        """The controller's voice: their region's, or in another language one of its own where the region doesn't speak
+        it (French at JFK is a French voice; at Lyon the region's own)."""
+        locale, code = self._locale(facility), self.library.language
+        if code and not locale.lower().startswith(code):
+            return tongues.LOCALES.get(code, locale)
+        return locale
 
     # --- helpers ------------------------------------------------------------------------------------------------
 

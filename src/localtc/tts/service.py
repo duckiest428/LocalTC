@@ -152,7 +152,7 @@ class VoiceOut:
             return persona_for(PILOT_SPEAKER_SALT, "copilot", sex=self.crew_sex, pick=self.crew_pick,
                                piper_speaker=self.crew_speaker, pace=self.crew_pace, expressive=self.crew_expressive,
                                locale=self.crew_locale if self.regional else "", language=language)
-        return persona_for(key, role, manner=manner, locale=locale if self.regional else "")
+        return persona_for(key, role, manner=manner, locale=locale if self.regional or language else "", language=language)
 
     async def _watch_radio(self) -> None:
         async for ev in self._radio:
@@ -222,7 +222,7 @@ class VoiceOut:
         locale = getattr(ev, "locale", "")
         if isinstance(ev, AtcTransmission):
             await self.say(ev.spoken or ev.text, self.persona(shift_key(ev.station, self.shift), "atc",
-                           manner=ev.manner or ev.controller or "atc", locale=locale), "atc", keep=clip_id(ev),
+                           manner=ev.manner or ev.controller or "atc", locale=locale, language=ev.language), "atc", keep=clip_id(ev),
                            station=ev.station)
         elif isinstance(ev, RadioChatter):  # somebody else on the frequency: the station's voice, or the other crew's
             if ev.radio == 2:
@@ -236,7 +236,7 @@ class VoiceOut:
                                station=ev.station, channel="chatter", strength=_spread(ev.callsign, SIGNAL, "signal"),
                                cabin=_spread(ev.callsign, CABIN, "cabin"))
         elif isinstance(ev, Transcript) and ev.source == "copilot" and self.copilot and ev.text:
-            await self.say(ev.text, self.persona("", "copilot"), "pilot", keep=clip_id(ev))
+            await self.say(ev.text, self.persona("", "copilot", language=ev.language), "pilot", keep=clip_id(ev))
         elif isinstance(ev, CrewSpeech) and (ev.spoken or ev.text):
             # The copilot is one person: talking with you in another language, its English callouts are in that voice too.
             await self.say(ev.spoken or ev.text, self.persona("", "copilot", language=ev.language or self.crew_language),

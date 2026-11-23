@@ -27,7 +27,8 @@ from localtc.atc_core.airport import gates as stands
 from localtc.atc_core.airport.classes import bearing_words
 from localtc.atc_core.engine import AtcEngine
 from localtc.atc_core.facilities import Facility, channel_khz
-from localtc.atc_core.phraseology import speech
+from localtc.atc_core import region as regions
+from localtc.atc_core.phraseology import speech, tongues
 from localtc.flightdeck import HELD, FlightDeck, Item
 from localtc.sim_api import (
     AircraftSystems,
@@ -144,29 +145,62 @@ class CallWords:
         if gate is None and own is not None and geo is not None:
             parked = stands.parked_at(geo, own.lat, own.lon, self.engine._real_gates(geo.icao))
             gate = parked.display if parked is not None else None
+        if (own := self._own("pushback", f, where=f"{gate}, " if gate else "", information=self._with_atis(st.flight.origin))):
+            return own
         at = f", {gate}," if gate else ","
         return f"{f.station}, {self._callsign()}{at} request push and start" + self._with_atis(st.flight.origin)
+
+    def _own(self, key: str, f: Facility | None = None, **fields: object) -> str | None:
+        """The copilot's call ``key`` in the language ATC is speaking with the flight (``Tongue.pilot``); None in
+        English (or a call that language hasn't)."""
+        code = getattr(self.engine, "radio_language", "")
+        tg = tongues.tongue(code)
+        if tg is None or key not in tg.pilot:
+            return None
+        with tongues.speaking(code), regions.speaking(self.engine.region):
+            values = {"where": "", "information": "", "callsign": self._callsign(), **fields}
+            if f is not None:
+                values["station"] = tg.station(f.station)
+            transition = regions.CURRENT.get().transition_ft
+            values = {k: ((f"{tg.flight_level}{tg.sep or ' '}{v // 100:03d}" if v >= transition else f"{v} {tg.feet}")
+                          if k in ("level", "cleared") and isinstance(v, int) else v) for k, v in values.items()}
+            return tg.pilot[key].format(**values)
 
     def _with_atis(self, icao: str | None) -> str:
         """", with information Charlie": the copilot listens to the ATIS first."""
         info = self.engine.current_atis(icao)
-        return f", with information {speech.letter(info.letter).capitalize()}" if info is not None else ""
+        if info is None:
+            return ""
+        code = getattr(self.engine, "radio_language", "")
+        if tongues.tongue(code) is not None:
+            with tongues.speaking(code):
+                letter = speech.letter(info.letter).capitalize()
+            if (own := self._own("information", atis=letter)) is not None:
+                return own
+        return f", with information {speech.letter(info.letter).capitalize()}"
 
     def _ifr_request(self, f: Facility) -> str:
         if self._vfr():
             # A VFR flight out of Class B or a control zone asks for its VFR clearance; never "IFR to ..., ready to
             # copy" (the copilot asked St-Hubert Ground for an IFR clearance on a local VFR flight).
             return f"{f.station}, {self._callsign()}{self._vfr_way()}, request VFR departure clearance"
+        if (own := self._own("ifr", f, destination=self._destination(),
+                             information=self._with_atis(self.engine.state.flight.origin))):
+            return own
         return f"{f.station}, {self._callsign()}, IFR to {self._destination()}, ready to copy"
 
     def _taxi_request(self, f: Facility) -> str:
         """ "Ready to taxi, with information Charlie"; VFR, the way the flight is going first ("VFR to Lachute,
         westbound", "VFR local", "closed traffic"), as ground needs it for the runway."""
         way = self._vfr_way() if self._vfr() else ""
+        if not way and (own := self._own("taxi", f, information=self._with_atis(self.engine.state.flight.origin))):
+            return own
         return f"{f.station}, {self._callsign()}{way}, ready to taxi" + self._with_atis(self.engine.state.flight.origin)
 
     def _ready_for_departure(self, f: Facility) -> str:
         runway = self.engine.state.assignments.departure_runway
+        if not self._vfr() and (own := self._own("ready" if runway else "ready_no_runway", f, runway=runway or "")):
+            return own
         where = f"holding short runway {runway}" if runway else "holding short"
         said = f"{f.station}, {self._callsign()}, {where}, ready for departure"
         if self._vfr():
@@ -389,7 +423,7 @@ class Copilot(CallWords):
                 self._push("say", tx.t, text=self._last_said, again=True)
             return
         if tx.instruction_id == "common.traffic":
-            self._push("say", tx.t, text=f"Looking, {self._callsign()}")
+            self._push("say", tx.t, text=self._own("looking") or f"Looking, {self._callsign()}")
             return
         pending = st.pending
         if tx.instruction_id == "common.how_read":
@@ -397,7 +431,7 @@ class Copilot(CallWords):
             # clear", both at once, over each other).
             owed = pending is not None and pending.instruction_id in st.issued                 and self.engine.library.get(pending.instruction_id).pilot_readback
             if not owed:
-                self._push("say", tx.t, text=f"Loud and clear, {self._callsign()}")
+                self._push("say", tx.t, text=self._own("loud_and_clear") or f"Loud and clear, {self._callsign()}")
         if pending is None or (pending.instruction_id, tx.t) in self._answered:
             return
         issued = st.issued.get(pending.instruction_id)
@@ -605,13 +639,14 @@ class Copilot(CallWords):
             self._done.discard("departure")
             self._call_once("departure", engine.facility("tower"), t, self._ready_for_departure)
         elif self.deck.take_want("go_around", t) and st.comms.tuned is not None:
-            self._push("say", t, text=f"{st.comms.tuned.station}, {self._callsign()}, going around", pause=0.5)
+            self._push("say", t, text=self._own("going_around", st.comms.tuned) or
+                       f"{st.comms.tuned.station}, {self._callsign()}, going around", pause=0.5)
         else:
             for word in ("mayday", "pan"):
                 if self.deck.take_want(word, t) and st.comms.tuned is not None:
                     said = "Mayday, mayday, mayday" if word == "mayday" else "Pan-pan, pan-pan, pan-pan"
-                    self._push("say", t, text=f"{said}, {st.comms.tuned.station}, {self._callsign()}, "
-                                              "declaring an emergency", pause=0.5)
+                    self._push("say", t, text=self._own(word, st.comms.tuned) or
+                               f"{said}, {st.comms.tuned.station}, {self._callsign()}, declaring an emergency", pause=0.5)
 
     def _needs_pushback(self) -> bool:
         """Parked at a gate (nose in): the way out is a pushback, not a taxi."""
@@ -691,36 +726,43 @@ class Copilot(CallWords):
             landing = self.engine.landing_runway(self.engine.state.aircraft) if self.engine.state.aircraft else None
             runway = landing or (final.end.ident if final is not None else "") or st.assignments.arrival_runway
             miles = f"{max(1, round(final.distance_nm))} mile final" if final else "inbound"
+            if runway and (own := self._own("final" if final else "inbound", f, runway=runway,
+                                            miles=max(1, round(final.distance_nm)) if final else 0)):
+                return own
             return f"{f.station}, {cs}, {miles} runway {runway}".rstrip()
         if f.controller == "ground":
             if "taxi_in" in st.clearances or st.assignments.gate:
                 return None  # already given the way in
             runway = st.assignments.arrival_runway
+            if (own := self._own("vacated" if runway else "vacated_no_runway", f, runway=runway or "")):
+                return own
             return f"{f.station}, {cs}, clear of runway {runway}, taxi to parking" if runway else \
                 f"{f.station}, {cs}, clear of the runway, taxi to parking"
         if own is None:
-            return f"{f.station}, {cs}, with you"
+            return self._own("with_you", f) or f"{f.station}, {cs}, with you"
         own = st.aircraft or own  # the engine's reading: the flight level up high, whatever the altimeter says
         alt = int(round(own.alt_indicated_ft / 100.0) * 100)
         assigned = st.assignments.altitude_ft
         atis = self._with_atis(st.flight.destination) if f.controller == "approach" else ""
         if getattr(self.engine, "_going_around", False):
             # Sent back from tower: going around, and nothing about the ATIS (heard it once already).
-            return f"{f.station}, {cs}, going around, {alt:,}" + (f" climbing {assigned:,}" if assigned and assigned > alt + 300 else "")
+            return self._own("going_around_level", f, level=alt) or \
+                f"{f.station}, {cs}, going around, {alt:,}" + (f" climbing {assigned:,}" if assigned and assigned > alt + 300 else "")
         star = self.engine.cfg.star
         vs = self._trend_fpm(own.vs_fpm)
         if getattr(self.engine, "_via_floor", None) is not None and star and vs < -300:
-            return f"{f.station}, {cs}, {alt:,} descending via the {star}" + atis
+            return (self._own("descending_via", f, level=alt, procedure=star) or
+                    f"{f.station}, {cs}, {alt:,} descending via the {star}") + atis
         if assigned and abs(assigned - alt) > 300:
             if assigned > alt and vs < -300:  # going down below an old clearance: say what it's doing
-                return f"{f.station}, {cs}, {alt:,} descending" + atis
+                return (self._own("descending_only", f, level=alt) or f"{f.station}, {cs}, {alt:,} descending") + atis
             stale = self._t - self._assigned[1] > LEVEL_STALE_S
             if stale and ((assigned > alt and vs < 300) or (assigned < alt and vs > -300)):
                 # Cleared higher and still level (five hours of "35,000 climbing 37,000" at 35,000): as it is.
-                return f"{f.station}, {cs}, level {alt:,}" + atis
+                return (self._own("level", f, level=alt) or f"{f.station}, {cs}, level {alt:,}") + atis
             verb = "climbing" if assigned > alt else "descending"
-            return f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}" + atis
-        return f"{f.station}, {cs}, level {alt:,}" + atis
+            return (self._own(verb, f, level=alt, cleared=assigned) or f"{f.station}, {cs}, {alt:,} {verb} {assigned:,}") + atis
+        return (self._own("level", f, level=alt) or f"{f.station}, {cs}, level {alt:,}") + atis
 
     def _trend_fpm(self, now: float) -> float:
         """Feet a minute over the last TREND_S, not this instant's: "33,500 descending" was said to Milano climbing to

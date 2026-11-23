@@ -1,0 +1,1051 @@
+# Dutch radiotelephony (LVNL's Dutch phraseology). The same ids as the English templates, reworded; what's read back
+# is the same. A pilot's readback here is read through tongues/nl.py's lexicon.
+
+# --- approach -----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "approach.descend"
+text = ["{callsign}, {station}, daal naar {altitude}, verwacht {approach} nadering.",
+        "{callsign}, {station}, verwacht {approach} nadering, daal naar {altitude}."]
+pilot_readback = "Dalen naar {altitude}, verwachten {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_via"
+text = ["{callsign}, {station}, verwacht {approach} nadering."]
+
+[[template]]
+id = "approach.checkin_roger"
+text = ["{callsign}, {station}, begrepen.", "{callsign}, {station}, goedemiddag."]
+
+[[template]]
+id = "approach.checkin_vectors"
+text = ["{callsign}, {station}, begrepen, verwacht radarvectoren voor de {approach} nadering."]
+
+[[template]]
+id = "approach.maintain"
+text = ["{callsign}, {station}, handhaaf {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Handhaven {altitude}, verwachten {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared"
+text = ["{callsign}, vrij voor nadering {approach}, neem contact op met {station} {frequency}."]
+pilot_readback = "Vrij voor nadering {approach}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_no_clearance"
+text = ["{callsign}, start door, u heeft geen landingsklaring, vlieg baankoers, klim naar {altitude}."]
+pilot_readback = "Starten door, baankoers, klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_checkin"
+text = ["{callsign}, {station}, radarcontact, handhaaf {altitude}, verwacht radarvectoren voor een nieuwe {approach} nadering."]
+pilot_readback = "Handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.vectors"
+text = ["{callsign}, koers {heading}, radarvectoren voor de {approach} nadering."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.missed"
+text = ["{callsign}, begrepen, vlieg baankoers, klim naar {altitude}."]
+pilot_readback = "Baankoers, klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn"
+text = ["{callsign}, draai {turn} koers {heading}, radarvectoren voor de {approach} nadering."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading"
+text = ["{callsign}, draai {turn} koers {heading}.", "{callsign}, vlieg koers {heading}."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.expect_visual"
+text = ["{callsign}, begrepen, verwacht zichtnadering baan {runway}, radarvectoren naar de eindnadering."]
+
+[[template]]
+id = "approach.present_heading"
+text = ["{callsign}, handhaaf de huidige koers, radarvectoren voor de {approach} nadering."]
+pilot_readback = "Huidige koers, {callsign_short}."
+
+[[template]]
+id = "approach.fly_heading"
+text = ["{callsign}, vlieg koers {heading}."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading_descend"
+text = ["{callsign}, koers {heading}, daal naar {altitude}."]
+pilot_readback = "Koers {heading}, dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn_descend"
+text = ["{callsign}, draai {turn} koers {heading}, daal naar {altitude}."]
+pilot_readback = "Draaien {turn} koers {heading}, dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.downwind"
+text = ["{callsign}, draai {turn} koers {heading}, radarvectoren voor de {approach} nadering."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.base"
+text = ["{callsign}, draai {turn} koers {heading}.", "{callsign}, draai {turn} koers {heading}, radarvectoren naar de eindnadering."]
+pilot_readback = "Draaien {turn} koers {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_cleared"
+text = ["{callsign}, draai {turn} koers {heading}, handhaaf {altitude} tot gevestigd op de localizer, vrij voor nadering {approach}."]
+pilot_readback = "Draaien {turn} koers {heading}, handhaven {altitude} tot gevestigd, vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_course"
+text = ["{callsign}, draai {turn} koers {heading}, handhaaf {altitude} tot gevestigd op de eindnaderingskoers, vrij voor nadering {approach}."]
+pilot_readback = "Draaien {turn} koers {heading}, handhaven {altitude} tot gevestigd, vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_visual"
+text = ["{callsign}, draai {turn} koers {heading}, vrij voor nadering {approach}."]
+pilot_readback = "Draaien {turn} koers {heading}, vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.advisory"
+text = ["{callsign}, geen verkeer bekend, wind {wind}, frequentiewissel goedgekeurd."]
+pilot_readback = "Frequentiewissel, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_radio"
+text = ["{callsign}, geen verkeer bekend, wind {wind}, neem contact op met {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_tower"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} op {frequency}, goede vlucht."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept"
+text = ["{callsign}, draai {turn} koers {heading}, onderschep de eindnaderingskoers, {approach} nadering."]
+pilot_readback = "Koers {heading} om te onderscheppen, {callsign_short}."
+
+[[template]]
+id = "approach.speed"
+text = ["{callsign}, verminder snelheid naar {speed} knopen."]
+pilot_readback = "{speed} knopen, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star"
+text = ["{callsign}, vrij voor nadering {approach}."]
+pilot_readback = "Vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend"
+text = ["{callsign}, daal naar {altitude}, vrij voor nadering {approach}."]
+pilot_readback = "Dalen naar {altitude}, vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend_tower"
+text = ["{callsign}, daal naar {altitude}, vrij voor nadering {approach}, neem contact op met {station} {frequency} wanneer gevestigd."]
+pilot_readback = "Dalen naar {altitude}, vrij voor nadering {approach}, {station} {frequency} wanneer gevestigd, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_star"
+text = ["{callsign}, {station}, vervolg de daling naar {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Vervolgen de daling naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.speed_until"
+text = ["{callsign}, handhaaf {speed} knopen tot vijf mijl eindnadering."]
+pilot_readback = "{speed} knopen tot vijf mijl eindnadering, {callsign_short}."
+
+[[template]]
+id = "approach.sequence"
+text = ["{callsign}, u bent {message}.", "{callsign}, {message}, de vectoren zijn voor de volgorde."]
+
+[[template]]
+id = "approach.extend_downwind"
+text = ["{callsign}, verleng het benedenwindse been, {message}, ik roep u voor de base."]
+
+[[template]]
+id = "approach.sidestep"
+text = ["{callsign}, wissel naar baan {runway} goedgekeurd."]
+pilot_readback = "Wissel naar baan {runway}, {callsign_short}."
+
+[[template]]
+id = "approach.weather_change"
+text = ["{callsign}, het weer is onder de zichtminima, verwacht {approach} nadering."]
+pilot_readback = "Verwachten {approach}, {callsign_short}."
+
+# --- center -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "center.checkin"
+text = ["{callsign}, {station}, goedemiddag."]
+
+[[template]]
+id = "center.radar_contact"
+text = ["{callsign}, {station}, radarcontact, klim naar {altitude}.",
+        "{callsign}, {station}, radarcontact, klim naar {altitude}, vervolg uw route."]
+pilot_readback = "Klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_level"
+text = ["{callsign}, {station}, radarcontact, handhaaf {altitude}."]
+
+[[template]]
+id = "center.checkin_ack"
+text = ["{callsign}, {station}, radarcontact.", "{callsign}, {station}, goedemiddag."]
+
+[[template]]
+id = "center.checkin_climb"
+text = ["{callsign}, {station}, radarcontact, klim naar {altitude}."]
+pilot_readback = "Klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_climbing"
+text = ["{callsign}, {station}, radarcontact, vervolg de klim, handhaaf {altitude}."]
+
+[[template]]
+id = "center.checkin_descending"
+text = ["{callsign}, {station}, begrepen, vervolg de daling naar {altitude}."]
+
+[[template]]
+id = "center.checkin_descend"
+text = ["{callsign}, {station}, radarcontact, daal naar {altitude}."]
+pilot_readback = "Dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_via"
+text = ["{callsign}, {station}, begrepen, daal via de aankomstroute {procedure}."]
+
+[[template]]
+id = "center.descend"
+text = ["{callsign}, daal naar {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_pd"
+text = ["{callsign}, daal naar eigen inzicht, handhaaf {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Naar eigen inzicht, dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_via"
+text = ["{callsign}, daal via de aankomstroute {procedure}, verwacht {approach} nadering."]
+pilot_readback = "Dalen via de aankomstroute {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star"
+text = ["{callsign}, daal naar {altitude}, vrij voor aankomstroute {procedure}, verwacht {approach} nadering."]
+pilot_readback = "Dalen naar {altitude}, vrij voor aankomstroute {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star_pd"
+text = ["{callsign}, wanneer gereed daal naar {altitude}, vrij voor aankomstroute {procedure}, verwacht {approach} nadering."]
+pilot_readback = "Wanneer gereed dalen naar {altitude}, vrij voor aankomstroute {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_star"
+text = ["{callsign}, {station}, begrepen, vervolg de daling naar {altitude}, aankomstroute {procedure}."]
+pilot_readback = "Vervolgen de daling naar {altitude}, aankomstroute {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.maintain"
+text = ["{callsign}, handhaaf {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_approach"
+text = ["{callsign}, neem contact op met {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_center"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} op {frequency}, goede vlucht."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.reroute"
+text = ["{callsign}, draai {turn} koers {heading}, {message}, zodra mogelijk direct {fix}."]
+pilot_readback = "Draaien {turn} koers {heading}, daarna direct {fix}, {callsign_short}."
+
+[[template]]
+id = "center.off_course"
+text = ["{callsign}, ik zie u {distance} mijl naast uw route, wat zijn uw intenties?",
+        "{callsign}, u lijkt van de route af te wijken, {distance} mijl van uw route, controleer uw navigatie."]
+
+[[template]]
+id = "center.advise_direct"
+text = ["{callsign}, meld wanneer u direct {fix} kunt vliegen."]
+
+[[template]]
+id = "center.descend_cross"
+text = ["{callsign}, kruis {fix} op {altitude}, daal naar eigen inzicht, verwacht {approach} nadering."]
+pilot_readback = "Kruisen {fix} op {altitude}, naar eigen inzicht, {callsign_short}."
+
+# --- clearance ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "clearance.ifr"
+text = ["{callsign}, vrijgegeven naar {destination} volgens vliegplan{runway_note}, klim naar {altitude}, verwacht {cruise} {minutes} minuten na vertrek, vertrekfrequentie {frequency}, transponder {squawk}."]
+pilot_readback = "Vrijgegeven naar {destination} volgens vliegplan, klimmen naar {altitude}, verwachten {cruise} {minutes} minuten na vertrek, vertrek {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_at_cruise"
+text = ["{callsign}, vrijgegeven naar {destination} volgens vliegplan{runway_note}, klim naar {altitude}, vertrekfrequentie {frequency}, transponder {squawk}."]
+pilot_readback = "Vrijgegeven naar {destination} volgens vliegplan, klimmen naar {altitude}, vertrek {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.say_destination"
+text = ["{callsign}, meld uw bestemming en het gewenste niveau."]
+
+[[template]]
+id = "clearance.ifr_sid"
+text = ["{callsign}, vrijgegeven naar {destination}, vertrekroute {procedure}, daarna volgens vliegplan{runway_note}, klim naar {altitude}, verwacht {cruise} {minutes} minuten na vertrek, vertrekfrequentie {frequency}, transponder {squawk}."]
+pilot_readback = "Vrijgegeven naar {destination}, vertrekroute {procedure}, daarna volgens vliegplan, klimmen naar {altitude}, verwachten {cruise} {minutes} minuten na vertrek, vertrek {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+text = ["{callsign}, vrijgegeven naar {destination}, vertrekroute {procedure}, daarna volgens vliegplan{runway_note}, klim naar {altitude}, vertrekfrequentie {frequency}, transponder {squawk}."]
+pilot_readback = "Vrijgegeven naar {destination}, vertrekroute {procedure}, daarna volgens vliegplan, klimmen naar {altitude}, vertrek {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.readback_correct_ground"
+text = ["{callsign}, teruglezing correct, neem contact op met {station} {frequency} wanneer gereed.",
+        "{callsign}, teruglezing correct. Gereed voor pushback en opstarten, neem contact op met {station} op {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "clearance.standby"
+text = ["{callsign}, klaring aangevraagd, stand-by.", "{callsign}, stand-by voor uw klaring."]
+
+# --- common -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "common.contact"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} op {frequency}, goede vlucht."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "common.vectors_descent"
+text = ["{callsign}, draai {turn} koers {heading}, radarvectoren voor de daling."]
+pilot_readback = "{turn} koers {heading}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing"
+text = ["{callsign}, verminder snelheid naar {speed} knopen voor separatie, {message}."]
+pilot_readback = "Snelheid {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing_again"
+text = ["{callsign}, verminder nu snelheid naar {speed} knopen, u loopt in op het verkeer voor u."]
+pilot_readback = "Snelheid {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_resume"
+text = ["{callsign}, geen snelheidsbeperking meer."]
+
+[[template]]
+id = "common.turn_for_traffic"
+text = ["{callsign}, draai {message} voor verkeer."]
+
+[[template]]
+id = "common.terrain_caution"
+text = ["{callsign}, let op, bergachtig terrein, de minimale hoogte in uw gebied is {altitude}."]
+
+[[template]]
+id = "common.unable_terrain"
+text = ["{callsign}, niet mogelijk, terrein, de minimale hoogte in uw gebied is {altitude}."]
+
+[[template]]
+id = "common.traffic_gone"
+text = ["{callsign}, het verkeer dat u volgde is geen factor meer."]
+
+[[template]]
+id = "common.cabin_assist"
+text = ["{callsign}, begrepen, {message}."]
+
+[[template]]
+id = "common.descend_now"
+text = ["{callsign}, begin nu met dalen.", "{callsign}, u bent voorbij uw dalingspunt, daal nu."]
+
+[[template]]
+id = "common.descend_intentions"
+text = ["{callsign}, u zit ruim boven het dalingsprofiel, wat zijn uw intenties?"]
+
+[[template]]
+id = "common.say_again"
+text = ["{callsign}, herhaal."]
+
+[[template]]
+id = "common.station_say_again"
+text = ["Station dat {station} roept, herhaal uw roepnaam."]
+
+[[template]]
+id = "common.readback_correct"
+text = ["{callsign}, teruglezing correct.", "{callsign}, correct."]
+
+[[template]]
+id = "common.roger"
+text = ["{callsign}, begrepen.", "{callsign}, roger."]
+
+[[template]]
+id = "common.negative"
+text = ["{callsign}, negatief, {correction}."]
+
+[[template]]
+id = "common.equipment"
+text = ["{callsign}, begrepen, de hulpdiensten staan klaar.", "{callsign}, begrepen, we laten de brandweer klaarstaan."]
+
+[[template]]
+id = "common.problem"
+text = ["{callsign}, begrepen, meld als u assistentie nodig heeft."]
+
+[[template]]
+id = "common.affirmative"
+text = ["{callsign}, bevestigd."]
+
+[[template]]
+id = "common.confirm"
+text = ["{callsign}, bevestig {correction}."]
+
+[[template]]
+id = "common.read_back"
+text = ["{callsign}, lees {missing} terug."]
+
+[[template]]
+id = "common.emergency"
+text = ["{callsign}, begrepen, meld de aard van de noodsituatie, de resterende brandstof en het aantal personen aan boord."]
+
+[[template]]
+id = "common.emergency_copied"
+text = ["{callsign}, begrepen, {message}. Wat zijn uw intenties?"]
+
+[[template]]
+id = "common.info"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "common.unable"
+text = ["{callsign}, niet mogelijk."]
+
+[[template]]
+id = "common.climb"
+text = ["{callsign}, klim naar {altitude}.", "{callsign}, klim {altitude}."]
+pilot_readback = "Klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.descend"
+text = ["{callsign}, daal naar {altitude}.", "{callsign}, daal {altitude}."]
+pilot_readback = "Dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.maintain"
+text = ["{callsign}, handhaaf {altitude}."]
+pilot_readback = "Handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.say_altitude"
+text = ["{callsign}, meld het gewenste niveau."]
+
+[[template]]
+id = "common.direct"
+text = ["{callsign}, vrij direct {fix}.", "{callsign}, vlieg direct {fix}."]
+pilot_readback = "Direct {fix}, {callsign_short}."
+
+[[template]]
+id = "common.expect_runway"
+text = ["{callsign}, begrepen, verwacht baan {runway}."]
+pilot_readback = "Verwachten baan {runway}, {callsign_short}."
+
+[[template]]
+id = "common.expect_approach"
+text = ["{callsign}, begrepen, verwacht {approach} nadering."]
+pilot_readback = "Verwachten {approach}, {callsign_short}."
+
+[[template]]
+id = "common.runway_change"
+text = ["{callsign}, baanwissel, verwacht {approach} nadering.", "{callsign}, de baan is gewijzigd, verwacht nu {approach} nadering."]
+pilot_readback = "Verwachten {approach}, {callsign_short}."
+
+[[template]]
+id = "common.unable_runway"
+text = ["{callsign}, baan {runway} niet mogelijk, wind {wind}."]
+
+[[template]]
+id = "common.runway_closed"
+text = ["{callsign}, niet mogelijk, baan {runway} is gesloten."]
+
+[[template]]
+id = "common.return"
+text = ["{callsign}, begrepen, vlieg direct {destination}, handhaaf {altitude}, verwacht {approach} nadering."]
+pilot_readback = "Direct {destination}, handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.pirep"
+text = ["{callsign}, begrepen, bedankt voor de melding.", "{callsign}, bedankt, ik geef het door."]
+
+[[template]]
+id = "common.traffic"
+text = ["{callsign}, verkeer, {message}."]
+
+[[template]]
+id = "common.check_altitude"
+text = ["{callsign}, controleer uw hoogte, handhaaf {altitude}."]
+pilot_readback = "Handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.check_heading"
+text = ["{callsign}, controleer uw koers, vlieg koers {heading}."]
+pilot_readback = "Koers {heading}, {callsign_short}."
+
+[[template]]
+id = "common.how_read"
+text = ["{callsign}, {station}, hoe hoort u mij?", "{callsign}, heeft u dat ontvangen?"]
+
+[[template]]
+id = "common.read_back_hold_short"
+text = ["{callsign}, lees de instructie om voor de baan te wachten terug."]
+
+[[template]]
+id = "common.stand_by"
+text = ["{callsign}, stand-by.", "{callsign}, een moment."]
+
+[[template]]
+id = "common.pleasantry"
+text = ["{callsign}, prima, bedankt.", "{callsign}, goed, bedankt voor het vragen."]
+
+[[template]]
+id = "common.advise_ready"
+text = ["{callsign}, begrepen, meld gereed.", "{callsign}, geen probleem, roep wanneer u gereed bent."]
+
+[[template]]
+id = "common.radio_check"
+text = ["{callsign}, {station}, ik hoor u vijf uit vijf."]
+
+[[template]]
+id = "common.emergency_cancelled"
+text = ["{callsign}, begrepen, noodsituatie geannuleerd."]
+
+[[template]]
+id = "common.emergency_priority"
+text = ["{callsign}, begrepen, u bent nummer één, vlieg direct {destination}, daal naar eigen inzicht, de hulpdiensten staan klaar."]
+pilot_readback = "Direct {destination}, dalen naar eigen inzicht, {callsign_short}."
+
+[[template]]
+id = "common.emergency_approach"
+text = ["{callsign}, vrij voor nadering {approach}, u bent nummer één, de hulpdiensten zijn onderweg."]
+pilot_readback = "Vrij voor nadering {approach}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_land"
+text = ["{callsign}, baan {runway}, vrij om te landen, wind {wind}, de hulpdiensten staan klaar."]
+pilot_readback = "Vrij om te landen baan {runway}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_intentions"
+text = ["{callsign}, meld het aantal personen aan boord en de resterende brandstof."]
+
+[[template]]
+id = "common.emergency_nearest"
+text = ["{callsign}, begrepen, u bent nummer één. Het dichtstbijzijnde geschikte vliegveld is {message}. Wat zijn uw intenties?"]
+
+[[template]]
+id = "common.nearest"
+text = ["{callsign}, het dichtstbijzijnde geschikte vliegveld is {message}. Wat zijn uw intenties?"]
+
+[[template]]
+id = "common.divert"
+text = ["{callsign}, draai {turn} koers {heading}, radarvectoren naar {destination}, {distance} mijl, daal naar eigen inzicht, handhaaf {altitude}, verwacht baan {runway}, de hulpdiensten staan klaar."]
+pilot_readback = "Draaien {turn} koers {heading}, dalen naar {altitude}, radarvectoren naar {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_level"
+text = ["{callsign}, draai {turn} koers {heading}, radarvectoren naar {destination}, {distance} mijl, handhaaf {altitude}, verwacht baan {runway}, de hulpdiensten staan klaar."]
+pilot_readback = "Draaien {turn} koers {heading}, handhaven {altitude}, radarvectoren naar {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_vector"
+text = ["{callsign}, draai {turn} koers {heading}, {destination} {distance} mijl.", "{callsign}, draai {turn} koers {heading}, radarvectoren naar {destination}."]
+pilot_readback = "Draaien {turn} koers {heading}, {callsign_short}."
+
+[[template]]
+id = "common.hold"
+text = ["{callsign}, wachtpatroon boven {fix}, inkomende koers {heading}, bochten naar {turn}, handhaaf {altitude}, verwachte klaring om {efc}, {message}."]
+pilot_readback = "Wachtpatroon boven {fix}, inkomende koers {heading}, bochten naar {turn}, handhaven {altitude}, verwachte klaring om {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_minutes"
+text = ["{callsign}, wachtpatroon boven {fix}, inkomende koers {heading}, bochten naar {turn}, handhaaf {altitude}, verwachte klaring over {minutes} minuten, {message}."]
+pilot_readback = "Wachtpatroon boven {fix}, inkomende koers {heading}, bochten naar {turn}, handhaven {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update"
+text = ["{callsign}, nu {message}, verwachte klaring om {efc}."]
+pilot_readback = "Verwachte klaring om {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_revised"
+text = ["{callsign}, {message}, nieuwe verwachte klaring om {efc}."]
+pilot_readback = "Verwachte klaring om {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update_minutes"
+text = ["{callsign}, {message}, verwachte klaring over {minutes} minuten."]
+
+[[template]]
+id = "common.leave_hold"
+text = ["{callsign}, verlaat het wachtpatroon, vlieg direct {fix}."]
+pilot_readback = "Verlaten het wachtpatroon, direct {fix}, {callsign_short}."
+
+[[template]]
+id = "common.low_altitude"
+text = ["{callsign}, waarschuwing lage hoogte, controleer onmiddellijk uw hoogte, de minimale hoogte in uw gebied is {altitude}."]
+
+[[template]]
+id = "common.unable_direct_sequence"
+text = ["{callsign}, direct niet mogelijk vanwege de volgorde, verwacht het over ongeveer {minutes} minuten."]
+
+[[template]]
+id = "common.direct_now"
+text = ["{callsign}, de volgorde laat het nu toe, vlieg direct {fix}."]
+pilot_readback = "Direct {fix}, {callsign_short}."
+
+[[template]]
+id = "common.ride_report"
+text = ["{callsign}, {message}.", "{callsign}, de laatste meldingen, {message}."]
+
+[[template]]
+id = "common.ride_none"
+text = ["{callsign}, geen recente meldingen bij u in de buurt, {message}."]
+
+[[template]]
+id = "common.smoother_climb"
+text = ["{callsign}, {message}, klim naar {altitude}."]
+pilot_readback = "Klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_descend"
+text = ["{callsign}, {message}, daal naar {altitude}."]
+pilot_readback = "Dalen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_none"
+text = ["{callsign}, {message}.", "{callsign}, geen beter niveau mogelijk, {message}."]
+
+[[template]]
+id = "common.confirm_clearance"
+text = ["{callsign}, bevestigd, {message}.", "{callsign}, u bent {message}."]
+
+# --- departure ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "departure.radar_contact"
+text = ["{callsign}, {station}, radarcontact, klim naar {altitude}.",
+        "{callsign}, {station}, radarcontact, klim naar {altitude}, vervolg uw route."]
+pilot_readback = "Klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only"
+text = ["{callsign}, {station}, radarcontact.", "{callsign}, radarcontact."]
+pilot_readback = "{callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_direct"
+text = ["{callsign}, {station}, radarcontact, klim naar {altitude}, vlieg direct {fix}."]
+pilot_readback = "Klimmen naar {altitude}, direct {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+text = ["{callsign}, {station}, radarcontact, vlieg direct {fix}."]
+pilot_readback = "Direct {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.handoff_center"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} op {frequency}, goede vlucht."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+# --- ground -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "ground.taxi_out"
+text = ["{callsign}, taxi naar wachtpunt baan {runway} via {taxi_route}."]
+pilot_readback = "Taxiën naar wachtpunt baan {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_at"
+text = ["{callsign}, taxi naar wachtpunt {hold_point} baan {runway} via {taxi_route}."]
+pilot_readback = "Taxiën naar wachtpunt {hold_point} baan {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+text = ["{callsign}, taxi naar wachtpunt baan {runway} via {taxi_route}, wacht voor baan {hold_short}."]
+pilot_readback = "Taxiën naar wachtpunt baan {runway} via {taxi_route}, wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_no_route"
+text = ["{callsign}, taxi naar wachtpunt baan {runway}."]
+pilot_readback = "Wachtpunt baan {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.hold_position"
+text = ["{callsign}, houd positie, taxiklaring vereist."]
+pilot_readback = "Houden positie, {callsign_short}."
+
+[[template]]
+id = "ground.handoff_tower"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} op {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in"
+text = ["{callsign}, taxi naar de parkeerplaats via {taxi_route}."]
+pilot_readback = "Taxiën naar de parkeerplaats via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp"
+text = ["{callsign}, taxi naar het platform van de algemene luchtvaart via {taxi_route}."]
+pilot_readback = "Taxiën naar de algemene luchtvaart via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+text = ["{callsign}, taxi naar het platform van de algemene luchtvaart via {taxi_route}, wacht voor baan {hold_short}."]
+pilot_readback = "Taxiën naar de algemene luchtvaart via {taxi_route}, wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate"
+text = ["{callsign}, taxi naar {gate} via {taxi_route}.", "{callsign}, {gate}, taxi via {taxi_route}."]
+pilot_readback = "Taxiën naar {gate} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate_hold_short"
+text = ["{callsign}, taxi naar {gate} via {taxi_route}, wacht voor baan {hold_short}."]
+pilot_readback = "Taxiën naar {gate} via {taxi_route}, wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_hold_short"
+text = ["{callsign}, taxi naar de parkeerplaats via {taxi_route}, wacht voor baan {hold_short}."]
+pilot_readback = "Taxiën naar de parkeerplaats via {taxi_route}, wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_cancelled"
+text = ["{callsign}, begrepen, taxiklaring ingetrokken, houd positie."]
+
+[[template]]
+id = "ground.taxi_cancelled_ready"
+text = ["{callsign}, begrepen, taxiklaring ingetrokken, meld gereed."]
+
+[[template]]
+id = "ground.taxi_to_gate_no_route"
+text = ["{callsign}, taxi naar {gate}."]
+pilot_readback = "Taxiën naar {gate}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_no_route"
+text = ["{callsign}, taxi naar de parkeerplaats."]
+
+[[template]]
+id = "ground.pushback"
+text = ["{callsign}, pushback en opstarten goedgekeurd, staart naar {turn}.", "{callsign}, pushback en opstarten naar eigen inzicht, staart naar {turn}."]
+
+[[template]]
+id = "ground.pushback_straight"
+text = ["{callsign}, pushback en opstarten goedgekeurd.", "{callsign}, pushback en opstarten naar eigen inzicht."]
+
+[[template]]
+id = "ground.startup"
+text = ["{callsign}, opstarten goedgekeurd, meld gereed om te taxiën.", "{callsign}, opstarten naar eigen inzicht, meld gereed om te taxiën."]
+
+[[template]]
+id = "ground.cross_runway"
+text = ["{callsign}, kruis baan {runway}.", "{callsign}, kruis baan {runway}, blijf op deze frequentie."]
+pilot_readback = "Kruisen baan {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.stopped_ahead"
+text = ["{callsign}, let op, {message} staat stil op de taxibaan voor u."]
+
+[[template]]
+id = "ground.give_way"
+text = ["{callsign}, houd positie, geef voorrang aan {message}.", "{callsign}, geef voorrang aan {message}, vervolg daarna de taxi."]
+
+[[template]]
+id = "ground.follow_close"
+text = ["{callsign}, rustiger aan, u loopt in op het verkeer voor u."]
+
+[[template]]
+id = "ground.follow"
+text = ["{callsign}, geef voorrang aan {message} en volg daarna.", "{callsign}, volg {message}."]
+
+[[template]]
+id = "ground.cross_behind"
+text = ["{callsign}, achter {message}, kruis baan {runway} erachter."]
+pilot_readback = "Achter het landende verkeer, kruisen baan {runway} erachter, {callsign_short}."
+
+[[template]]
+id = "ground.hold_short_landing"
+text = ["{callsign}, wacht voor baan {hold_short}, {message}."]
+pilot_readback = "Wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.cross_expedite"
+text = ["{callsign}, kruis baan {runway} zonder vertraging, {message}."]
+pilot_readback = "Kruisen baan {runway} zonder vertraging, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_traffic"
+text = ["{callsign}, wacht met de pushback, {message}, ik roep u."]
+pilot_readback = "Wachten met de pushback, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_queue"
+text = ["{callsign}, verwacht ongeveer {minutes} minuten vertraging op de positie, {message}, ik roep u voor de pushback."]
+pilot_readback = "Wachten op de positie, {callsign_short}."
+
+# --- tower --------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "tower.takeoff"
+text = ["{callsign}, baan {runway}, vlieg baankoers, vrij om op te stijgen.", "{callsign}, baan {runway}, vrij om op te stijgen, vlieg baankoers."]
+pilot_readback = "Baankoers, baan {runway}, vrij om op te stijgen, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_rnav"
+text = ["{callsign}, RNAV naar {fix}, baan {runway}, vrij om op te stijgen."]
+pilot_readback = "RNAV naar {fix}, baan {runway}, vrij om op te stijgen, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_sid"
+text = ["{callsign}, baan {runway}, vrij om op te stijgen."]
+pilot_readback = "Baan {runway}, vrij om op te stijgen, {callsign_short}."
+
+[[template]]
+id = "tower.luaw"
+text = ["{callsign}, baan {runway}, lijn op en wacht.", "{callsign}, lijn op baan {runway} en wacht."]
+pilot_readback = "Baan {runway}, lijnen op en wachten, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_traffic"
+text = ["{callsign}, wacht voor baan {hold_short}, {message}."]
+pilot_readback = "Wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.handoff_departure"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, neem contact op met {station} {frequency}, goede vlucht."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.land"
+text = ["{callsign}, wind {wind}, baan {runway}, vrij om te landen.", "{callsign}, baan {runway}, vrij om te landen, wind {wind}."]
+pilot_readback = "Vrij om te landen baan {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.continue"
+text = ["{callsign}, vervolg de nadering baan {runway}.", "{callsign}, baan {runway}, vervolg, ik roep u voor de landingsklaring."]
+
+[[template]]
+id = "tower.exit_vacate"
+text = ["{callsign}, verlaat de baan {side} via {exit}, neem contact op met {station} {frequency}."]
+pilot_readback = "Verlaten {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_vacate_welcome"
+text = ["{callsign}, welkom in {city}, verlaat de baan {side} via {exit}, neem contact op met {station} {frequency}."]
+pilot_readback = "Verlaten {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_contact_ground"
+text = ["{callsign}, neem contact op met {station} {frequency}.", "{callsign}, wanneer de baan vrij is, neem contact op met {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around"
+text = ["{callsign}, begrepen, vlieg baankoers, klim naar {altitude}, neem contact op met {station} {frequency}."]
+pilot_readback = "Baankoers, klimmen naar {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.turn_approved"
+text = ["{callsign}, bocht naar {turn} goedgekeurd."]
+
+[[template]]
+id = "tower.turn_unable"
+text = ["{callsign}, bocht naar {turn} niet mogelijk, vlieg baankoers."]
+
+[[template]]
+id = "tower.go_around_traffic_contact"
+text = ["{callsign}, start door, verkeer op de baan, vlieg baankoers, klim naar {altitude}, neem contact op met {station} {frequency}."]
+pilot_readback = "Starten door, baankoers, klimmen naar {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around_traffic"
+text = ["{callsign}, start door, verkeer op de baan, vlieg baankoers, klim naar {altitude}."]
+pilot_readback = "Starten door, baankoers, klimmen naar {altitude}, {callsign_short}."
+
+[[template]]
+id = "tower.sequence"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "tower.continue_hold_short"
+text = ["{callsign}, vervolg de taxi, wacht voor baan {hold_short}."]
+pilot_readback = "Wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_runway"
+text = ["{callsign}, wacht voor baan {hold_short}."]
+pilot_readback = "Wachten voor baan {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.stop_takeoff"
+text = ["{callsign}, stop onmiddellijk, ik herhaal, stop onmiddellijk, verkeer op de baan."]
+
+[[template]]
+id = "tower.luaw_behind"
+text = ["{callsign}, achter {message}, baan {runway}, lijn op en wacht erachter."]
+pilot_readback = "Achter het landende verkeer, baan {runway}, lijnen op en wachten erachter, {callsign_short}."
+
+[[template]]
+id = "tower.hold_position_traffic"
+text = ["{callsign}, houd positie, {message}."]
+pilot_readback = "Houden positie, {callsign_short}."
+
+[[template]]
+id = "tower.cancel_takeoff"
+text = ["{callsign}, houd positie, startklaring ingetrokken, {message}."]
+pilot_readback = "Houden positie, {callsign_short}."
+
+[[template]]
+id = "tower.hold_wake"
+text = ["{callsign}, wacht voor zogturbulentie, {message}, ongeveer {minutes} minuten."]
+
+[[template]]
+id = "tower.follow_slow"
+text = ["{callsign}, verminder naar de eindnaderingssnelheid, {message}."]
+
+[[template]]
+id = "tower.continue_traffic"
+text = ["{callsign}, vervolg, {message}.", "{callsign}, vervolg, verwacht een late landingsklaring, {message}."]
+
+[[template]]
+id = "tower.sidestep_land"
+text = ["{callsign}, wissel naar baan {runway}, baan {runway}, wind {wind}, vrij om te landen."]
+pilot_readback = "Wissel, vrij om te landen baan {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.land_after_departure"
+text = ["{callsign}, baan {runway}, vrij om te landen, wind {wind}, verkeer {message} vertrekt voor u."]
+pilot_readback = "Vrij om te landen baan {runway}, {callsign_short}."
+
+# --- VFR ----------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "vfr.class_b_departure"
+text = ["{callsign}, vrij om het luchtruim klasse Bravo te verlaten {direction}, handhaaf VFR op of onder {altitude}, vertrekfrequentie {frequency}, transponder {squawk}."]
+pilot_readback = "Verlaten de Bravo {direction}, VFR op of onder {altitude}, vertrek {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff"
+text = ["{callsign}, baan {runway}, vertrek {direction} goedgekeurd, vrij om op te stijgen."]
+pilot_readback = "Baan {runway}, vrij om op te stijgen, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff_closed"
+text = ["{callsign}, baan {runway}, circuit naar {turn}, vrij om op te stijgen."]
+pilot_readback = "Circuit naar {turn}, baan {runway}, vrij om op te stijgen, {callsign_short}."
+
+[[template]]
+id = "vfr.frequency_change"
+text = ["{callsign}, frequentiewissel goedgekeurd.", "{callsign}, frequentiewissel goedgekeurd, goede vlucht."]
+
+[[template]]
+id = "vfr.closed_traffic"
+text = ["{callsign}, circuit naar {turn} baan {runway}, meld halverwege benedenwinds."]
+pilot_readback = "Circuit naar {turn} baan {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.squawk"
+text = ["{callsign}, transponder {squawk}."]
+pilot_readback = "Transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.radar_contact"
+text = ["{callsign}, {station}, radarcontact, {message}."]
+
+[[template]]
+id = "vfr.cleared_class_b"
+text = ["{callsign}, vrij om het luchtruim klasse Bravo in te vliegen, handhaaf VFR op of onder {altitude}."]
+pilot_readback = "Vrij voor de Bravo, VFR op of onder {altitude}, {callsign_short}."
+
+[[template]]
+id = "vfr.remain_clear_b"
+text = ["{callsign}, blijf buiten het luchtruim klasse Bravo."]
+
+[[template]]
+id = "vfr.service_terminated"
+text = ["{callsign}, radardienst beëindigd, transponder VFR, neem contact op met {station} {frequency}."]
+pilot_readback = "Transponder VFR, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.enter_downwind"
+text = ["{callsign}, {station}, voeg in op het benedenwindse been {turn} baan {runway}, meld halverwege benedenwinds."]
+pilot_readback = "Benedenwinds {turn} baan {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.straight_in"
+text = ["{callsign}, {station}, rechtstreekse eindnadering baan {runway}, meld drie mijl eindnadering."]
+pilot_readback = "Rechtstreekse eindnadering baan {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.option"
+text = ["{callsign}, baan {runway}, wind {wind}, vrij voor de optie."]
+pilot_readback = "Vrij voor de optie baan {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.touch_and_go"
+text = ["{callsign}, baan {runway}, wind {wind}, vrij voor touch and go."]
+pilot_readback = "Vrij voor touch and go baan {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.following_ground"
+text = ["{callsign}, transponder {squawk}, vertrekfrequentie {frequency}."]
+pilot_readback = "Transponder {squawk}, vertrek {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.transition"
+text = ["{callsign}, doorvlucht goedgekeurd {direction}, handhaaf VFR op of onder {altitude}, meld bij het verlaten van de zone."]
+pilot_readback = "Doorvlucht goedgekeurd, op of onder {altitude}, wilco, {callsign_short}."
+
+[fragments]
+hold_fix = "wachtpatroon boven {fix}"
+altitude = "handhaaf {altitude}"
+cruise = "verwacht {cruise}"
+frequency = "frequentie {frequency}"
+squawk = "transponder {squawk}"
+runway = "baan {runway}"
+hold_short = "wacht voor baan {hold_short}"
+heading = "koers {heading}"
+speed = "handhaaf {speed} knopen"
+taxi_route = "taxi via {taxi_route}"
+approach = "vrij voor nadering {approach}"
+procedure = "vertrekroute {procedure}"
+procedure_arrival = "aankomstroute {procedure}"
+destination = "vrijgegeven naar {destination}"
+cleared_for_takeoff = "vrij om op te stijgen"
+line_up_and_wait = "lijn op en wacht"
+cleared_to_land = "vrij om te landen"
+hold_position = "houd positie"
+descend_via = "daal via de aankomstroute"
+fix = "direct {fix}"
+behind = "achter het landende verkeer"
+hold = "wachtpatroon"
+efc = "verwachte klaring om {efc}"
+i_say_again = "ik herhaal"
+expect_runway_note = ", verwacht baan {runway}"
+vectors_to_note = "{message}, radarvectoren naar {fix}"
+unavailable = "niet mogelijk, die informatie heb ik niet"
+traffic_vacating = "verkeer {message} verlaat de baan"
+landing_traffic = "landend verkeer"
+traffic_final = "verkeer op {distance} mijl eindnadering"
+rejected_vacate = "begrepen, verlaat de baan via {exit} zodra mogelijk, meld gereed voor vertrek"
+rejected_vacate_runway = "begrepen, verlaat de baan zodra mogelijk, meld gereed voor vertrek"

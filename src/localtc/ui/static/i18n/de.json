@@ -1641,5 +1641,9 @@
 "● On the map now": "● Jetzt auf der Karte",
 "Change it any time in Settings → Account.": "Jederzeit änderbar unter Einstellungen → Konto.",
 "With a free account (Settings → Account), your flight can show on the public Live Flights map, localtc.tech/live.": "Mit einem kostenlosen Konto (Einstellungen → Konto) kann dein Flug auf der öffentlichen Live-Flights-Karte erscheinen, localtc.tech/live.",
-"You can stop at any time: here in Settings, or on the dashboard.": "Du kannst jederzeit aufhören: hier in den Einstellungen oder im Dashboard."
+"You can stop at any time: here in Settings, or on the dashboard.": "Du kannst jederzeit aufhören: hier in den Einstellungen oder im Dashboard.",
+"ATC's language": "Sprache der Flugsicherung",
+"Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Rufen Sie die Flugsicherung in Ihrer Sprache und sie antwortet in ihr: die Lotsen, die Funksprüche des Copiloten und die Bodencrew. Ihre Rücklesungen darin werden wie englische geprüft. Rufen Sie auf Englisch, ist es wieder Englisch.",
+"English only": "Nur Englisch",
+"Yours: the copilot's language, else the window's": "Ihre: die Sprache des Copiloten, sonst die des Fensters"
 }

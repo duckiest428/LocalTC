@@ -20,6 +20,7 @@ When every provider fails, the chain answers None and ATC carries on as text: a 
 
 import dataclasses
 import logging
+import re
 import statistics
 import threading
 import time
@@ -347,6 +348,10 @@ class PiperVoices:
     def synthesize(self, text: str, persona: Persona) -> Speech:
         if persona.foreign:  # the copilot in the pilot's language: that language's voice, at its own pace
             synth, speaker = self.voice_of(persona.language, persona.sex)
+            if persona.language.split("-")[0].lower() == "ru":  # Latin names ("Aeroflot") in letters its voice reads
+                from localtc.languages import cyrillic
+
+                text = re.sub(r"[A-Za-z]+", lambda m: cyrillic(m.group(0)), text)
             speech = synth.synthesize(text, speaker)
             return Speech(speech.audio, speech.rate, speech.latency_ms, "piper", synth.voice_file.stem)
         speaker = self.speaker(persona)

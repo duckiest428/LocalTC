@@ -1,0 +1,1051 @@
+# Swedish radiotelephony (LFV's Swedish phraseology). The same ids as the English templates, reworded; what's read
+# back is the same. A pilot's readback here is read through tongues/sv.py's lexicon.
+
+# --- approach -----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "approach.descend"
+text = ["{callsign}, {station}, sjunk till {altitude}, räkna med {approach} inflygning.",
+        "{callsign}, {station}, räkna med {approach} inflygning, sjunk till {altitude}."]
+pilot_readback = "Sjunker till {altitude}, räknar med {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_via"
+text = ["{callsign}, {station}, räkna med {approach} inflygning."]
+
+[[template]]
+id = "approach.checkin_roger"
+text = ["{callsign}, {station}, uppfattat.", "{callsign}, {station}, god dag."]
+
+[[template]]
+id = "approach.checkin_vectors"
+text = ["{callsign}, {station}, uppfattat, räkna med radarvektorer för {approach} inflygning."]
+
+[[template]]
+id = "approach.maintain"
+text = ["{callsign}, {station}, bibehåll {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Bibehåller {altitude}, räknar med {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared"
+text = ["{callsign}, klar för inflygning {approach}, kontakta {station} {frequency}."]
+pilot_readback = "Klar för inflygning {approach}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_no_clearance"
+text = ["{callsign}, gör om, ni har ingen landningsklarering, flyg banans kurs, stig till {altitude}."]
+pilot_readback = "Går om, banans kurs, stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_checkin"
+text = ["{callsign}, {station}, radarkontakt, bibehåll {altitude}, räkna med radarvektorer för en ny {approach} inflygning."]
+pilot_readback = "Bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.vectors"
+text = ["{callsign}, kurs {heading}, radarvektorer för {approach} inflygning."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.missed"
+text = ["{callsign}, uppfattat, flyg banans kurs, stig till {altitude}."]
+pilot_readback = "Banans kurs, stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn"
+text = ["{callsign}, sväng {turn} kurs {heading}, radarvektorer för {approach} inflygning."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading"
+text = ["{callsign}, sväng {turn} kurs {heading}.", "{callsign}, flyg kurs {heading}."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.expect_visual"
+text = ["{callsign}, uppfattat, räkna med visuell inflygning bana {runway}, radarvektorer till final."]
+
+[[template]]
+id = "approach.present_heading"
+text = ["{callsign}, behåll nuvarande kurs, radarvektorer för {approach} inflygning."]
+pilot_readback = "Nuvarande kurs, {callsign_short}."
+
+[[template]]
+id = "approach.fly_heading"
+text = ["{callsign}, flyg kurs {heading}."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading_descend"
+text = ["{callsign}, kurs {heading}, sjunk till {altitude}."]
+pilot_readback = "Kurs {heading}, sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn_descend"
+text = ["{callsign}, sväng {turn} kurs {heading}, sjunk till {altitude}."]
+pilot_readback = "Svänger {turn} kurs {heading}, sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.downwind"
+text = ["{callsign}, sväng {turn} kurs {heading}, radarvektorer för {approach} inflygning."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.base"
+text = ["{callsign}, sväng {turn} kurs {heading}.", "{callsign}, sväng {turn} kurs {heading}, radarvektorer till final."]
+pilot_readback = "Svänger {turn} kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_cleared"
+text = ["{callsign}, sväng {turn} kurs {heading}, bibehåll {altitude} tills etablerad på localizern, klar för inflygning {approach}."]
+pilot_readback = "Svänger {turn} kurs {heading}, bibehåller {altitude} tills etablerade, klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_course"
+text = ["{callsign}, sväng {turn} kurs {heading}, bibehåll {altitude} tills etablerad på slutlig inflygningskurs, klar för inflygning {approach}."]
+pilot_readback = "Svänger {turn} kurs {heading}, bibehåller {altitude} tills etablerade, klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_visual"
+text = ["{callsign}, sväng {turn} kurs {heading}, klar för inflygning {approach}."]
+pilot_readback = "Svänger {turn} kurs {heading}, klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.advisory"
+text = ["{callsign}, ingen rapporterad trafik, vind {wind}, frekvensbyte godkänt."]
+pilot_readback = "Frekvensbyte, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_radio"
+text = ["{callsign}, ingen rapporterad trafik, vind {wind}, kontakta {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_tower"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} på {frequency}, hej då."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept"
+text = ["{callsign}, sväng {turn} kurs {heading}, genskär slutlig inflygningskurs, {approach} inflygning."]
+pilot_readback = "Kurs {heading} för att genskära, {callsign_short}."
+
+[[template]]
+id = "approach.speed"
+text = ["{callsign}, minska fart till {speed} knop."]
+pilot_readback = "{speed} knop, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star"
+text = ["{callsign}, klar för inflygning {approach}."]
+pilot_readback = "Klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend"
+text = ["{callsign}, sjunk till {altitude}, klar för inflygning {approach}."]
+pilot_readback = "Sjunker till {altitude}, klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend_tower"
+text = ["{callsign}, sjunk till {altitude}, klar för inflygning {approach}, kontakta {station} {frequency} när etablerad."]
+pilot_readback = "Sjunker till {altitude}, klar för inflygning {approach}, {station} {frequency} när etablerade, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_star"
+text = ["{callsign}, {station}, fortsätt sjunkningen till {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Fortsätter sjunkningen till {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.speed_until"
+text = ["{callsign}, bibehåll {speed} knop till fem mil final."]
+pilot_readback = "{speed} knop till fem mil final, {callsign_short}."
+
+[[template]]
+id = "approach.sequence"
+text = ["{callsign}, ni är {message}.", "{callsign}, {message}, vektorerna är för sekvensen."]
+
+[[template]]
+id = "approach.extend_downwind"
+text = ["{callsign}, förläng medvinden, {message}, jag anropar er för basen."]
+
+[[template]]
+id = "approach.sidestep"
+text = ["{callsign}, byte till bana {runway} godkänt."]
+pilot_readback = "Byte till bana {runway}, {callsign_short}."
+
+[[template]]
+id = "approach.weather_change"
+text = ["{callsign}, vädret är under visuella minima, räkna med {approach} inflygning."]
+pilot_readback = "Räknar med {approach}, {callsign_short}."
+
+# --- center -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "center.checkin"
+text = ["{callsign}, {station}, god dag."]
+
+[[template]]
+id = "center.radar_contact"
+text = ["{callsign}, {station}, radarkontakt, stig till {altitude}.",
+        "{callsign}, {station}, radarkontakt, stig till {altitude}, fortsätt enligt rutt."]
+pilot_readback = "Stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_level"
+text = ["{callsign}, {station}, radarkontakt, bibehåll {altitude}."]
+
+[[template]]
+id = "center.checkin_ack"
+text = ["{callsign}, {station}, radarkontakt.", "{callsign}, {station}, god dag."]
+
+[[template]]
+id = "center.checkin_climb"
+text = ["{callsign}, {station}, radarkontakt, stig till {altitude}."]
+pilot_readback = "Stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_climbing"
+text = ["{callsign}, {station}, radarkontakt, fortsätt stigningen, bibehåll {altitude}."]
+
+[[template]]
+id = "center.checkin_descending"
+text = ["{callsign}, {station}, uppfattat, fortsätt sjunkningen till {altitude}."]
+
+[[template]]
+id = "center.checkin_descend"
+text = ["{callsign}, {station}, radarkontakt, sjunk till {altitude}."]
+pilot_readback = "Sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_via"
+text = ["{callsign}, {station}, uppfattat, sjunk enligt ankomstvägen {procedure}."]
+
+[[template]]
+id = "center.descend"
+text = ["{callsign}, sjunk till {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_pd"
+text = ["{callsign}, sjunk efter eget gottfinnande, bibehåll {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Efter vårt gottfinnande, sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_via"
+text = ["{callsign}, sjunk via ankomstvägen {procedure}, räkna med {approach} inflygning."]
+pilot_readback = "Sjunker via ankomstvägen {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star"
+text = ["{callsign}, sjunk till {altitude}, klar för ankomstvägen {procedure}, räkna med {approach} inflygning."]
+pilot_readback = "Sjunker till {altitude}, klar för ankomstvägen {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star_pd"
+text = ["{callsign}, när ni är redo sjunk till {altitude}, klar för ankomstvägen {procedure}, räkna med {approach} inflygning."]
+pilot_readback = "När vi är redo sjunker till {altitude}, klar för ankomstvägen {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_star"
+text = ["{callsign}, {station}, uppfattat, fortsätt sjunkningen till {altitude}, ankomstvägen {procedure}."]
+pilot_readback = "Fortsätter sjunkningen till {altitude}, ankomstvägen {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.maintain"
+text = ["{callsign}, bibehåll {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_approach"
+text = ["{callsign}, kontakta {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_center"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} på {frequency}, hej då."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.reroute"
+text = ["{callsign}, sväng {turn} kurs {heading}, {message}, när möjligt direkt {fix}."]
+pilot_readback = "Svänger {turn} kurs {heading}, sedan direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "center.off_course"
+text = ["{callsign}, jag ser er {distance} mil från er rutt, vad är era avsikter?",
+        "{callsign}, ni verkar vara ur kurs, {distance} mil från er rutt, kontrollera er navigering."]
+
+[[template]]
+id = "center.advise_direct"
+text = ["{callsign}, rapportera när ni kan flyga direkt {fix}."]
+
+[[template]]
+id = "center.descend_cross"
+text = ["{callsign}, korsa {fix} på {altitude}, sjunk efter eget gottfinnande, räkna med {approach} inflygning."]
+pilot_readback = "Korsar {fix} på {altitude}, efter vårt gottfinnande, {callsign_short}."
+
+# --- clearance ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "clearance.ifr"
+text = ["{callsign}, klar till {destination} enligt färdplan{runway_note}, stig till {altitude}, räkna med {cruise} {minutes} minuter efter avgång, utflygningsfrekvens {frequency}, transponder {squawk}."]
+pilot_readback = "Klar till {destination} enligt färdplan, stiger till {altitude}, räknar med {cruise} {minutes} minuter efter avgång, utflygning {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_at_cruise"
+text = ["{callsign}, klar till {destination} enligt färdplan{runway_note}, stig till {altitude}, utflygningsfrekvens {frequency}, transponder {squawk}."]
+pilot_readback = "Klar till {destination} enligt färdplan, stiger till {altitude}, utflygning {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.say_destination"
+text = ["{callsign}, ange destination och önskad nivå."]
+
+[[template]]
+id = "clearance.ifr_sid"
+text = ["{callsign}, klar till {destination}, utflygning {procedure}, sedan enligt färdplan{runway_note}, stig till {altitude}, räkna med {cruise} {minutes} minuter efter avgång, utflygningsfrekvens {frequency}, transponder {squawk}."]
+pilot_readback = "Klar till {destination}, utflygning {procedure}, sedan enligt färdplan, stiger till {altitude}, räknar med {cruise} {minutes} minuter efter avgång, utflygning {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+text = ["{callsign}, klar till {destination}, utflygning {procedure}, sedan enligt färdplan{runway_note}, stig till {altitude}, utflygningsfrekvens {frequency}, transponder {squawk}."]
+pilot_readback = "Klar till {destination}, utflygning {procedure}, sedan enligt färdplan, stiger till {altitude}, utflygning {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.readback_correct_ground"
+text = ["{callsign}, kollationering korrekt, kontakta {station} {frequency} när ni är redo.",
+        "{callsign}, kollationering korrekt. Redo för push och start, kontakta {station} på {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "clearance.standby"
+text = ["{callsign}, klarering begärd, vänta.", "{callsign}, vänta på er klarering."]
+
+# --- common -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "common.contact"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} på {frequency}, hej då."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "common.vectors_descent"
+text = ["{callsign}, sväng {turn} kurs {heading}, radarvektorer för sjunkning."]
+pilot_readback = "{turn} kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing"
+text = ["{callsign}, minska fart till {speed} knop för separation, {message}."]
+pilot_readback = "Fart {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing_again"
+text = ["{callsign}, minska fart till {speed} knop nu, ni knappar in på trafiken framför."]
+pilot_readback = "Fart {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_resume"
+text = ["{callsign}, ingen fartbegränsning längre."]
+
+[[template]]
+id = "common.turn_for_traffic"
+text = ["{callsign}, sväng {message} för trafik."]
+
+[[template]]
+id = "common.terrain_caution"
+text = ["{callsign}, varning, bergig terräng, minsta höjd i ert område är {altitude}."]
+
+[[template]]
+id = "common.unable_terrain"
+text = ["{callsign}, inte möjligt, terräng, minsta höjd i ert område är {altitude}."]
+
+[[template]]
+id = "common.traffic_gone"
+text = ["{callsign}, trafiken ni följde är inte längre aktuell."]
+
+[[template]]
+id = "common.cabin_assist"
+text = ["{callsign}, uppfattat, {message}."]
+
+[[template]]
+id = "common.descend_now"
+text = ["{callsign}, påbörja sjunkningen nu.", "{callsign}, ni har passerat er sjunkpunkt, sjunk nu."]
+
+[[template]]
+id = "common.descend_intentions"
+text = ["{callsign}, ni är långt över sjunkprofilen, vad är era avsikter?"]
+
+[[template]]
+id = "common.say_again"
+text = ["{callsign}, upprepa."]
+
+[[template]]
+id = "common.station_say_again"
+text = ["Station som anropar {station}, upprepa er anropssignal."]
+
+[[template]]
+id = "common.readback_correct"
+text = ["{callsign}, kollationering korrekt.", "{callsign}, korrekt."]
+
+[[template]]
+id = "common.roger"
+text = ["{callsign}, uppfattat.", "{callsign}, roger."]
+
+[[template]]
+id = "common.negative"
+text = ["{callsign}, negativt, {correction}."]
+
+[[template]]
+id = "common.equipment"
+text = ["{callsign}, uppfattat, räddningstjänsten står beredd.", "{callsign}, uppfattat, vi larmar räddningstjänsten."]
+
+[[template]]
+id = "common.problem"
+text = ["{callsign}, uppfattat, meddela om ni behöver assistans."]
+
+[[template]]
+id = "common.affirmative"
+text = ["{callsign}, bekräftat."]
+
+[[template]]
+id = "common.confirm"
+text = ["{callsign}, bekräfta {correction}."]
+
+[[template]]
+id = "common.read_back"
+text = ["{callsign}, kollationera {missing}."]
+
+[[template]]
+id = "common.emergency"
+text = ["{callsign}, uppfattat, ange typ av nödläge, kvarvarande bränsle och antal personer ombord."]
+
+[[template]]
+id = "common.emergency_copied"
+text = ["{callsign}, uppfattat, {message}. Vad är era avsikter?"]
+
+[[template]]
+id = "common.info"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "common.unable"
+text = ["{callsign}, inte möjligt."]
+
+[[template]]
+id = "common.climb"
+text = ["{callsign}, stig till {altitude}.", "{callsign}, stig {altitude}."]
+pilot_readback = "Stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.descend"
+text = ["{callsign}, sjunk till {altitude}.", "{callsign}, sjunk {altitude}."]
+pilot_readback = "Sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.maintain"
+text = ["{callsign}, bibehåll {altitude}."]
+pilot_readback = "Bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.say_altitude"
+text = ["{callsign}, ange önskad nivå."]
+
+[[template]]
+id = "common.direct"
+text = ["{callsign}, klar direkt {fix}.", "{callsign}, flyg direkt {fix}."]
+pilot_readback = "Direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "common.expect_runway"
+text = ["{callsign}, uppfattat, räkna med bana {runway}."]
+pilot_readback = "Räknar med bana {runway}, {callsign_short}."
+
+[[template]]
+id = "common.expect_approach"
+text = ["{callsign}, uppfattat, räkna med {approach} inflygning."]
+pilot_readback = "Räknar med {approach}, {callsign_short}."
+
+[[template]]
+id = "common.runway_change"
+text = ["{callsign}, banbyte, räkna med {approach} inflygning.", "{callsign}, banan har bytts, räkna nu med {approach} inflygning."]
+pilot_readback = "Räknar med {approach}, {callsign_short}."
+
+[[template]]
+id = "common.unable_runway"
+text = ["{callsign}, bana {runway} inte möjligt, vind {wind}."]
+
+[[template]]
+id = "common.runway_closed"
+text = ["{callsign}, inte möjligt, bana {runway} är stängd."]
+
+[[template]]
+id = "common.return"
+text = ["{callsign}, uppfattat, flyg direkt {destination}, bibehåll {altitude}, räkna med {approach} inflygning."]
+pilot_readback = "Direkt {destination}, bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.pirep"
+text = ["{callsign}, uppfattat, tack för rapporten.", "{callsign}, tack, jag för det vidare."]
+
+[[template]]
+id = "common.traffic"
+text = ["{callsign}, trafik, {message}."]
+
+[[template]]
+id = "common.check_altitude"
+text = ["{callsign}, kontrollera höjden, bibehåll {altitude}."]
+pilot_readback = "Bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.check_heading"
+text = ["{callsign}, kontrollera kursen, flyg kurs {heading}."]
+pilot_readback = "Kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "common.how_read"
+text = ["{callsign}, {station}, hur hör ni mig?", "{callsign}, uppfattade ni?"]
+
+[[template]]
+id = "common.read_back_hold_short"
+text = ["{callsign}, kollationera instruktionen att hålla före banan."]
+
+[[template]]
+id = "common.stand_by"
+text = ["{callsign}, vänta.", "{callsign}, ett ögonblick."]
+
+[[template]]
+id = "common.pleasantry"
+text = ["{callsign}, bara bra, tack.", "{callsign}, bra, tack för att ni frågar."]
+
+[[template]]
+id = "common.advise_ready"
+text = ["{callsign}, uppfattat, rapportera redo.", "{callsign}, inga problem, anropa när ni är redo."]
+
+[[template]]
+id = "common.radio_check"
+text = ["{callsign}, {station}, hör er fem av fem."]
+
+[[template]]
+id = "common.emergency_cancelled"
+text = ["{callsign}, uppfattat, nödläget avbrutet."]
+
+[[template]]
+id = "common.emergency_priority"
+text = ["{callsign}, uppfattat, ni är nummer ett, flyg direkt {destination}, sjunk efter eget gottfinnande, räddningstjänsten står beredd."]
+pilot_readback = "Direkt {destination}, sjunker efter vårt gottfinnande, {callsign_short}."
+
+[[template]]
+id = "common.emergency_approach"
+text = ["{callsign}, klar för inflygning {approach}, ni är nummer ett, räddningstjänsten är på väg."]
+pilot_readback = "Klar för inflygning {approach}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_land"
+text = ["{callsign}, bana {runway}, klar att landa, vind {wind}, räddningstjänsten står beredd."]
+pilot_readback = "Klar att landa bana {runway}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_intentions"
+text = ["{callsign}, ange antal personer ombord och kvarvarande bränsle."]
+
+[[template]]
+id = "common.emergency_nearest"
+text = ["{callsign}, uppfattat, ni är nummer ett. Närmaste lämpliga flygplats är {message}. Vad är era avsikter?"]
+
+[[template]]
+id = "common.nearest"
+text = ["{callsign}, närmaste lämpliga flygplats är {message}. Vad är era avsikter?"]
+
+[[template]]
+id = "common.divert"
+text = ["{callsign}, sväng {turn} kurs {heading}, radarvektorer till {destination}, {distance} mil, sjunk efter eget gottfinnande, bibehåll {altitude}, räkna med bana {runway}, räddningstjänsten står beredd."]
+pilot_readback = "Svänger {turn} kurs {heading}, sjunker till {altitude}, radarvektorer till {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_level"
+text = ["{callsign}, sväng {turn} kurs {heading}, radarvektorer till {destination}, {distance} mil, bibehåll {altitude}, räkna med bana {runway}, räddningstjänsten står beredd."]
+pilot_readback = "Svänger {turn} kurs {heading}, bibehåller {altitude}, radarvektorer till {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_vector"
+text = ["{callsign}, sväng {turn} kurs {heading}, {destination} {distance} mil.", "{callsign}, sväng {turn} kurs {heading}, radarvektorer till {destination}."]
+pilot_readback = "Svänger {turn} kurs {heading}, {callsign_short}."
+
+[[template]]
+id = "common.hold"
+text = ["{callsign}, vänteläge över {fix}, inkommande kurs {heading}, varv åt {turn}, bibehåll {altitude}, fortsatt klarering klockan {efc}, {message}."]
+pilot_readback = "Vänteläge över {fix}, inkommande kurs {heading}, varv åt {turn}, bibehåller {altitude}, fortsatt klarering klockan {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_minutes"
+text = ["{callsign}, vänteläge över {fix}, inkommande kurs {heading}, varv åt {turn}, bibehåll {altitude}, fortsatt klarering om {minutes} minuter, {message}."]
+pilot_readback = "Vänteläge över {fix}, inkommande kurs {heading}, varv åt {turn}, bibehåller {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update"
+text = ["{callsign}, nu {message}, fortsatt klarering klockan {efc}."]
+pilot_readback = "Fortsatt klarering klockan {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_revised"
+text = ["{callsign}, {message}, ny fortsatt klarering klockan {efc}."]
+pilot_readback = "Fortsatt klarering klockan {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update_minutes"
+text = ["{callsign}, {message}, fortsatt klarering om {minutes} minuter."]
+
+[[template]]
+id = "common.leave_hold"
+text = ["{callsign}, lämna vänteläget, flyg direkt {fix}."]
+pilot_readback = "Lämnar vänteläget, direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "common.low_altitude"
+text = ["{callsign}, varning låg höjd, kontrollera höjden omedelbart, minsta höjd i ert område är {altitude}."]
+
+[[template]]
+id = "common.unable_direct_sequence"
+text = ["{callsign}, direkt inte möjligt på grund av sekvensen, räkna med det om cirka {minutes} minuter."]
+
+[[template]]
+id = "common.direct_now"
+text = ["{callsign}, sekvensen tillåter det nu, flyg direkt {fix}."]
+pilot_readback = "Direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "common.ride_report"
+text = ["{callsign}, {message}.", "{callsign}, de senaste rapporterna, {message}."]
+
+[[template]]
+id = "common.ride_none"
+text = ["{callsign}, inga färska rapporter nära er, {message}."]
+
+[[template]]
+id = "common.smoother_climb"
+text = ["{callsign}, {message}, stig till {altitude}."]
+pilot_readback = "Stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_descend"
+text = ["{callsign}, {message}, sjunk till {altitude}."]
+pilot_readback = "Sjunker till {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_none"
+text = ["{callsign}, {message}.", "{callsign}, ingen bättre nivå möjlig, {message}."]
+
+[[template]]
+id = "common.confirm_clearance"
+text = ["{callsign}, bekräftat, {message}.", "{callsign}, ni är {message}."]
+
+# --- departure ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "departure.radar_contact"
+text = ["{callsign}, {station}, radarkontakt, stig till {altitude}.",
+        "{callsign}, {station}, radarkontakt, stig till {altitude}, fortsätt enligt rutt."]
+pilot_readback = "Stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only"
+text = ["{callsign}, {station}, radarkontakt.", "{callsign}, radarkontakt."]
+pilot_readback = "{callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_direct"
+text = ["{callsign}, {station}, radarkontakt, stig till {altitude}, flyg direkt {fix}."]
+pilot_readback = "Stiger till {altitude}, direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+text = ["{callsign}, {station}, radarkontakt, flyg direkt {fix}."]
+pilot_readback = "Direkt {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.handoff_center"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} på {frequency}, hej då."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+# --- ground -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "ground.taxi_out"
+text = ["{callsign}, taxa till väntepunkt bana {runway} via {taxi_route}."]
+pilot_readback = "Taxar till väntepunkt bana {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_at"
+text = ["{callsign}, taxa till väntepunkt {hold_point} bana {runway} via {taxi_route}."]
+pilot_readback = "Taxar till väntepunkt {hold_point} bana {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+text = ["{callsign}, taxa till väntepunkt bana {runway} via {taxi_route}, håll före bana {hold_short}."]
+pilot_readback = "Taxar till väntepunkt bana {runway} via {taxi_route}, håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_no_route"
+text = ["{callsign}, taxa till väntepunkt bana {runway}."]
+pilot_readback = "Väntepunkt bana {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.hold_position"
+text = ["{callsign}, håll position, taxiklarering krävs."]
+pilot_readback = "Håller position, {callsign_short}."
+
+[[template]]
+id = "ground.handoff_tower"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} på {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in"
+text = ["{callsign}, taxa till parkeringen via {taxi_route}."]
+pilot_readback = "Taxar till parkeringen via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp"
+text = ["{callsign}, taxa till allmänflygets platta via {taxi_route}."]
+pilot_readback = "Taxar till allmänflyget via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+text = ["{callsign}, taxa till allmänflygets platta via {taxi_route}, håll före bana {hold_short}."]
+pilot_readback = "Taxar till allmänflyget via {taxi_route}, håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate"
+text = ["{callsign}, taxa till {gate} via {taxi_route}.", "{callsign}, {gate}, taxa via {taxi_route}."]
+pilot_readback = "Taxar till {gate} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate_hold_short"
+text = ["{callsign}, taxa till {gate} via {taxi_route}, håll före bana {hold_short}."]
+pilot_readback = "Taxar till {gate} via {taxi_route}, håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_hold_short"
+text = ["{callsign}, taxa till parkeringen via {taxi_route}, håll före bana {hold_short}."]
+pilot_readback = "Taxar till parkeringen via {taxi_route}, håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_cancelled"
+text = ["{callsign}, uppfattat, taxiklareringen återkallad, håll position."]
+
+[[template]]
+id = "ground.taxi_cancelled_ready"
+text = ["{callsign}, uppfattat, taxiklareringen återkallad, rapportera redo."]
+
+[[template]]
+id = "ground.taxi_to_gate_no_route"
+text = ["{callsign}, taxa till {gate}."]
+pilot_readback = "Taxar till {gate}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_no_route"
+text = ["{callsign}, taxa till parkeringen."]
+
+[[template]]
+id = "ground.pushback"
+text = ["{callsign}, push och start godkänt, stjärten åt {turn}.", "{callsign}, push och start efter eget gottfinnande, stjärten åt {turn}."]
+
+[[template]]
+id = "ground.pushback_straight"
+text = ["{callsign}, push och start godkänt.", "{callsign}, push och start efter eget gottfinnande."]
+
+[[template]]
+id = "ground.startup"
+text = ["{callsign}, motorstart godkänd, rapportera redo att taxa.", "{callsign}, motorstart efter eget gottfinnande, rapportera redo att taxa."]
+
+[[template]]
+id = "ground.cross_runway"
+text = ["{callsign}, korsa bana {runway}.", "{callsign}, korsa bana {runway}, stanna på den här frekvensen."]
+pilot_readback = "Korsar bana {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.stopped_ahead"
+text = ["{callsign}, varning, {message} står stilla på taxibanan framför er."]
+
+[[template]]
+id = "ground.give_way"
+text = ["{callsign}, håll position, lämna företräde åt {message}.", "{callsign}, lämna företräde åt {message}, fortsätt sedan taxningen."]
+
+[[template]]
+id = "ground.follow_close"
+text = ["{callsign}, sakta ner, ni knappar in på trafiken framför."]
+
+[[template]]
+id = "ground.follow"
+text = ["{callsign}, lämna företräde åt {message}, följ sedan efter.", "{callsign}, följ {message}."]
+
+[[template]]
+id = "ground.cross_behind"
+text = ["{callsign}, bakom {message}, korsa bana {runway} bakom."]
+pilot_readback = "Bakom den landande trafiken, korsar bana {runway} bakom, {callsign_short}."
+
+[[template]]
+id = "ground.hold_short_landing"
+text = ["{callsign}, håll före bana {hold_short}, {message}."]
+pilot_readback = "Håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.cross_expedite"
+text = ["{callsign}, korsa bana {runway} utan dröjsmål, {message}."]
+pilot_readback = "Korsar bana {runway} utan dröjsmål, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_traffic"
+text = ["{callsign}, avvakta med pushen, {message}, jag anropar er."]
+pilot_readback = "Avvaktar med pushen, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_queue"
+text = ["{callsign}, räkna med cirka {minutes} minuters fördröjning vid gaten, {message}, jag anropar er för push."]
+pilot_readback = "Avvaktar vid gaten, {callsign_short}."
+
+# --- tower --------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "tower.takeoff"
+text = ["{callsign}, bana {runway}, flyg banans kurs, klar för start.", "{callsign}, bana {runway}, klar för start, flyg banans kurs."]
+pilot_readback = "Banans kurs, bana {runway}, klar för start, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_rnav"
+text = ["{callsign}, RNAV till {fix}, bana {runway}, klar för start."]
+pilot_readback = "RNAV till {fix}, bana {runway}, klar för start, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_sid"
+text = ["{callsign}, bana {runway}, klar för start."]
+pilot_readback = "Bana {runway}, klar för start, {callsign_short}."
+
+[[template]]
+id = "tower.luaw"
+text = ["{callsign}, kör upp på bana {runway} och vänta.", "{callsign}, bana {runway}, kör upp och vänta."]
+pilot_readback = "Kör upp på bana {runway} och väntar, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_traffic"
+text = ["{callsign}, håll före bana {hold_short}, {message}."]
+pilot_readback = "Håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.handoff_departure"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, kontakta {station} {frequency}, hej då."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.land"
+text = ["{callsign}, vind {wind}, bana {runway}, klar att landa.", "{callsign}, bana {runway}, klar att landa, vind {wind}."]
+pilot_readback = "Klar att landa bana {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.continue"
+text = ["{callsign}, fortsätt inflygningen bana {runway}.", "{callsign}, bana {runway}, fortsätt, jag anropar er med landningsklarering."]
+
+[[template]]
+id = "tower.exit_vacate"
+text = ["{callsign}, lämna banan {side} via {exit}, kontakta {station} {frequency}."]
+pilot_readback = "Lämnar {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_vacate_welcome"
+text = ["{callsign}, välkommen till {city}, lämna banan {side} via {exit}, kontakta {station} {frequency}."]
+pilot_readback = "Lämnar {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_contact_ground"
+text = ["{callsign}, kontakta {station} {frequency}.", "{callsign}, när banan är fri, kontakta {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around"
+text = ["{callsign}, uppfattat, flyg banans kurs, stig till {altitude}, kontakta {station} {frequency}."]
+pilot_readback = "Banans kurs, stiger till {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.turn_approved"
+text = ["{callsign}, sväng åt {turn} godkänd."]
+
+[[template]]
+id = "tower.turn_unable"
+text = ["{callsign}, sväng åt {turn} inte möjlig, flyg banans kurs."]
+
+[[template]]
+id = "tower.go_around_traffic_contact"
+text = ["{callsign}, gör om, trafik på banan, flyg banans kurs, stig till {altitude}, kontakta {station} {frequency}."]
+pilot_readback = "Går om, banans kurs, stiger till {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around_traffic"
+text = ["{callsign}, gör om, trafik på banan, flyg banans kurs, stig till {altitude}."]
+pilot_readback = "Går om, banans kurs, stiger till {altitude}, {callsign_short}."
+
+[[template]]
+id = "tower.sequence"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "tower.continue_hold_short"
+text = ["{callsign}, fortsätt taxa, håll före bana {hold_short}."]
+pilot_readback = "Håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_runway"
+text = ["{callsign}, håll före bana {hold_short}."]
+pilot_readback = "Håller före bana {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.stop_takeoff"
+text = ["{callsign}, stanna omedelbart, jag upprepar, stanna omedelbart, trafik på banan."]
+
+[[template]]
+id = "tower.luaw_behind"
+text = ["{callsign}, bakom {message}, kör upp på bana {runway} och vänta bakom."]
+pilot_readback = "Bakom den landande trafiken, kör upp på bana {runway} och väntar bakom, {callsign_short}."
+
+[[template]]
+id = "tower.hold_position_traffic"
+text = ["{callsign}, håll position, {message}."]
+pilot_readback = "Håller position, {callsign_short}."
+
+[[template]]
+id = "tower.cancel_takeoff"
+text = ["{callsign}, håll position, startklareringen annullerad, {message}."]
+pilot_readback = "Håller position, {callsign_short}."
+
+[[template]]
+id = "tower.hold_wake"
+text = ["{callsign}, vänta på grund av virvelturbulens, {message}, cirka {minutes} minuter."]
+
+[[template]]
+id = "tower.follow_slow"
+text = ["{callsign}, minska till slutlig inflygningsfart, {message}."]
+
+[[template]]
+id = "tower.continue_traffic"
+text = ["{callsign}, fortsätt, {message}.", "{callsign}, fortsätt, räkna med sen landningsklarering, {message}."]
+
+[[template]]
+id = "tower.sidestep_land"
+text = ["{callsign}, byt till bana {runway}, bana {runway}, vind {wind}, klar att landa."]
+pilot_readback = "Byte, klar att landa bana {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.land_after_departure"
+text = ["{callsign}, bana {runway}, klar att landa, vind {wind}, trafik {message} startar framför er."]
+pilot_readback = "Klar att landa bana {runway}, {callsign_short}."
+
+# --- VFR ----------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "vfr.class_b_departure"
+text = ["{callsign}, klar att lämna luftrummet klass Bravo {direction}, bibehåll VFR på eller under {altitude}, utflygningsfrekvens {frequency}, transponder {squawk}."]
+pilot_readback = "Lämnar Bravo {direction}, VFR på eller under {altitude}, utflygning {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff"
+text = ["{callsign}, bana {runway}, utflygning {direction} godkänd, klar för start."]
+pilot_readback = "Bana {runway}, klar för start, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff_closed"
+text = ["{callsign}, bana {runway}, landningsvarv åt {turn}, klar för start."]
+pilot_readback = "Landningsvarv åt {turn}, bana {runway}, klar för start, {callsign_short}."
+
+[[template]]
+id = "vfr.frequency_change"
+text = ["{callsign}, frekvensbyte godkänt.", "{callsign}, frekvensbyte godkänt, hej då."]
+
+[[template]]
+id = "vfr.closed_traffic"
+text = ["{callsign}, landningsvarv åt {turn} bana {runway}, rapportera mitt på medvind."]
+pilot_readback = "Landningsvarv åt {turn} bana {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.squawk"
+text = ["{callsign}, transponder {squawk}."]
+pilot_readback = "Transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.radar_contact"
+text = ["{callsign}, {station}, radarkontakt, {message}."]
+
+[[template]]
+id = "vfr.cleared_class_b"
+text = ["{callsign}, klar in i luftrummet klass Bravo, bibehåll VFR på eller under {altitude}."]
+pilot_readback = "Klar in i Bravo, VFR på eller under {altitude}, {callsign_short}."
+
+[[template]]
+id = "vfr.remain_clear_b"
+text = ["{callsign}, håll er utanför luftrummet klass Bravo."]
+
+[[template]]
+id = "vfr.service_terminated"
+text = ["{callsign}, radartjänst avslutad, transponder VFR, kontakta {station} {frequency}."]
+pilot_readback = "Transponder VFR, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.enter_downwind"
+text = ["{callsign}, {station}, gå in i medvind {turn} bana {runway}, rapportera mitt på medvind."]
+pilot_readback = "Medvind {turn} bana {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.straight_in"
+text = ["{callsign}, {station}, rak inflygning bana {runway}, rapportera tre mil final."]
+pilot_readback = "Rak inflygning bana {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.option"
+text = ["{callsign}, bana {runway}, vind {wind}, klar för optionen."]
+pilot_readback = "Klar för optionen bana {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.touch_and_go"
+text = ["{callsign}, bana {runway}, vind {wind}, klar för touch and go."]
+pilot_readback = "Klar för touch and go bana {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.following_ground"
+text = ["{callsign}, transponder {squawk}, utflygningsfrekvens {frequency}."]
+pilot_readback = "Transponder {squawk}, utflygning {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.transition"
+text = ["{callsign}, genomflygning godkänd {direction}, bibehåll VFR på eller under {altitude}, rapportera när ni lämnar zonen."]
+pilot_readback = "Genomflygning godkänd, på eller under {altitude}, wilco, {callsign_short}."
+
+[fragments]
+hold_fix = "vänteläge över {fix}"
+altitude = "bibehåll {altitude}"
+cruise = "räkna med {cruise}"
+frequency = "frekvens {frequency}"
+squawk = "transponder {squawk}"
+runway = "bana {runway}"
+hold_short = "håll före bana {hold_short}"
+heading = "kurs {heading}"
+speed = "bibehåll {speed} knop"
+taxi_route = "taxa via {taxi_route}"
+approach = "klar för inflygning {approach}"
+procedure = "utflygning {procedure}"
+procedure_arrival = "ankomstvägen {procedure}"
+destination = "klar till {destination}"
+cleared_for_takeoff = "klar för start"
+line_up_and_wait = "kör upp och vänta"
+cleared_to_land = "klar att landa"
+hold_position = "håll position"
+descend_via = "sjunk via ankomstvägen"
+fix = "direkt {fix}"
+behind = "bakom den landande trafiken"
+hold = "vänteläge"
+efc = "fortsatt klarering klockan {efc}"
+i_say_again = "jag upprepar"
+expect_runway_note = ", räkna med bana {runway}"
+vectors_to_note = "{message}, radarvektorer mot {fix}"
+unavailable = "inte möjligt, den informationen har jag inte"
+traffic_vacating = "trafik {message} lämnar banan"
+landing_traffic = "landande trafik"
+traffic_final = "trafik på {distance} mil final"
+rejected_vacate = "uppfattat, lämna banan via {exit} när möjligt, rapportera redo för avgång"
+rejected_vacate_runway = "uppfattat, lämna banan när möjligt, rapportera redo för avgång"

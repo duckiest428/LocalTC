@@ -21,6 +21,7 @@ from localtc.dsp.clips import CLIPS, clip_id
 from localtc.stt.audio import SAMPLE_RATE, rms, to_pcm16, trim_silence
 from localtc.stt.vocabulary import (
     CREW_STYLE_IN,
+    RADIO_STYLE_IN,
     VocabularyHints,
     build_prompt,
     echoes_prompt,
@@ -110,11 +111,14 @@ class VoiceService:
         tail_s: float = 0.25,
         intercom_language: str = "",  # the copilot talked to in this language ("de"); "" English
         intercom_transcriber: Any = None,  # the model that knows it (None: ``transcriber``); the radio keeps its own
+        radio_language: str = "",  # ATC answers in this language when called in it ("fr"); "" English only
     ) -> None:
         self.bus, self.now, self.transcriber, self.capture = bus, now, transcriber, capture
         self.recorder, self.hints, self.vocabulary, self.tail_s = recorder, hints, vocabulary, tail_s
         self.intercom_language = intercom_language
         self.intercom_transcriber = intercom_transcriber or transcriber
+        self.radio_language = radio_language
+        self._said_in = ""  # the language of the words being heard ("": English)
         self._inputs = bus.subscribe(PttPressed, PttReleased, IntercomPressed, IntercomReleased)
         self._loop: asyncio.AbstractEventLoop | None = None
         self._radio = 1
@@ -195,7 +199,7 @@ class VoiceService:
             return IntercomHeard(t=self.now(), text=text, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
                                  to=_to(self._radio))
         return Transcript(t=self.now(), text=text, radio=self._radio, confidence=confidence, audio_ref=ref, stt_ms=stt_ms,
-                          source="voice")
+                          source="voice", language=self._said_in or ("en" if self.radio_language else ""))
 
     async def _check_at_start(self) -> None:
         """The microphone sending nothing from the start: found out then, not at the first press 48 minutes into the
@@ -279,7 +283,21 @@ class VoiceService:
         kwargs = {}
         transcriber = self.transcriber
         in_language = self._radio <= INTERCOM
-        if self.intercom_language and not in_language and (tell := getattr(self.intercom_transcriber, "language_of", None)):
+        self._said_in = ""
+        if self.radio_language and not in_language and (tell := getattr(self.intercom_transcriber, "language_of", None)):
+            # ATC in the pilot's own language: a call in it is heard as it was said, and ATC answers in it.
+            code, sure = await asyncio.to_thread(tell, speech)
+            if code == self.radio_language and sure >= OWN_LANGUAGE_SURE:
+                log.info("The radio call was in %s (%.2f): ATC answers in it", code, sure)
+                self._said_in = code
+                radio = VocabularyHints(callsign=hints.callsign, callsign_spoken="", stations=hints.stations,
+                                        airports=hints.airports, runways=hints.runways, taxiways=hints.taxiways,
+                                        procedures=hints.procedures, fixes=hints.fixes,
+                                        style=RADIO_STYLE_IN.get(code, " "))
+                hints = radio
+                prompt, words, kwargs = (build_prompt(radio).strip() if self.vocabulary else ""), "", {"language": code}
+                transcriber = self.intercom_transcriber
+        elif self.intercom_language and not in_language and (tell := getattr(self.intercom_transcriber, "language_of", None)):
             # The pilot's own language on the radio: heard as English it was English of a sort ("Remove the brake of the
             # steering wheel"), so ATC only said "say again" and nobody could tell them why. Heard as it was said.
             code, sure = await asyncio.to_thread(tell, speech)

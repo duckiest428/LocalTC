@@ -175,7 +175,14 @@ starting with "ramp".
 - [ ] "Ramp" in your language, then a service: understood and answered in it. The push's safety calls stay in English.
 - [ ] "Cabin" in your language, then a coffee: understood and answered in it.
 - [ ] The voice: can you understand it, and is it the right language? **Polish especially.**
-- [ ] A radio call in your language: told once that ATC works in English. On the ramp frequency it's just answered.
+- [ ] ATC in your language (Quick Settings, ATC, "ATC's language" on "Yours"): ask for the clearance in it. It comes
+  in your language, in its voice, and your readback in it gets "readback correct" in it. *If not:* Mark, and say
+  what the log shows you said.
+- [ ] Through a whole flight in it: taxi, takeoff, the handoffs, a level change, the approach, landing. Anything
+  said in English that shouldn't be? Mark it.
+- [ ] A call in English halfway: ATC is in English from then on, and back in your language when you call in it.
+- [ ] The copilot on the radio (if you give it the radio): its check-ins and readbacks in your language.
+- [ ] With a cloud model: ATC's replies still in your language, not in English.
 
 ## What to send back
 

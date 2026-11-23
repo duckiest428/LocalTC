@@ -19,7 +19,8 @@ from collections.abc import Callable
 from dataclasses import replace
 
 from localtc.atc_core.llm.backend import LlmBackend, LlmRequest, waits
-from localtc.atc_core.phraseology import speech
+from localtc.atc_core.phraseology import speech, tongues
+from localtc.atc_core.readback.translate import sounds_english, to_english
 from localtc.atc_core.values import Phrase
 from localtc.markup import unmarked
 from localtc.sim_api import LlmExchange
@@ -476,11 +477,32 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     return text
 
 
-def reword_request(pilot: str, scripted: str) -> LlmRequest:
+LANGUAGE_NAMES = {"de": "German", "fr": "French", "es": "Spanish", "it": "Italian", "pt": "Portuguese", "nl": "Dutch",
+                  "pl": "Polish", "sv": "Swedish", "ru": "Russian", "zh": "Mandarin Chinese"}
+
+
+def in_language(code: str) -> str:
+    """What the model is told when ATC speaks the pilot's own language with them ("" English)."""
+    name = LANGUAGE_NAMES.get(code)
+    return (f"\nSay it in {name}, as a {name}-speaking controller says it on the radio in {name} radiotelephony "
+            "(the Keep items exactly as written).") if name else ""
+
+
+def reword_request(pilot: str, scripted: str, language: str = "") -> LlmRequest:
     messages: tuple[tuple[str, str], ...] = tuple(
         turn for user, assistant in REWORD_EXAMPLES for turn in (("user", user), ("assistant", assistant))
-    ) + (("user", f'Pilot said: "{pilot}"\nReply: "{scripted}"\nKeep: {keep_line(scripted)}'),)
-    return LlmRequest("reword", REWORD_SYSTEM, messages, SCHEMA, max_tokens=100)
+    ) + (("user", f'Pilot said: "{pilot}"\nReply: "{scripted}"\nKeep: {keep_line(scripted)}{in_language(language)}'),)
+    return LlmRequest("reword", REWORD_SYSTEM, messages, SCHEMA, max_tokens=140 if language else 100)
+
+
+def in_own_words(check: Callable[[str], str], raw: str, callsigns: tuple[str, ...], code: str) -> str:
+    """A reply in another language checked as an English one: read in English words (``to_english``) by ``check``;
+    the model's own words kept for the voice. One in English instead is turned away."""
+    own = _reply_text(raw, callsigns).replace("**", "").strip()
+    if sounds_english(own, code):
+        raise PhraseError(f"reply is in English; say it in {LANGUAGE_NAMES.get(code, code)}")
+    check(json.dumps({"reply": to_english(own, code)}))
+    return own
 
 
 def spoken_as(text: str, pairs: list[tuple[str, str]]) -> str:
@@ -531,23 +553,37 @@ class LlmPhraser:
 
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
               trigger: str = "", required: str = "", more: dict[str, str] | None = None,
-              persona: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
+              persona: str = "", language: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template.
         ``required``: the data's answer, which the reply must give (``check_reply``). ``more``: the rest of what's
         known, for a model that can take it (a cloud one); a reply may use it as it may the facts."""
         beyond = self.beyond_facts
         known = {**(more or {}), **facts}
         request = replace(phrase_request(pilot, decision, facts, beyond_facts=beyond, more=more), persona=persona)
-        text, exchanges = self._run(request,
-                                    lambda raw: check_reply(raw, known, callsigns, required, beyond_facts=beyond),
-                                    t, trigger)
+
+        def check(raw: str) -> str:
+            return check_reply(raw, known, callsigns, required, beyond_facts=beyond)
+
+        if language:  # in the pilot's own language: told so, and its words checked in English
+            last = request.messages[-1]
+            request = replace(request, messages=(*request.messages[:-1], (last[0], last[1] + in_language(language))),
+                              max_tokens=120)
+            text, exchanges = self._run(request, lambda raw: in_own_words(check, raw, callsigns, language), t, trigger)
+            with tongues.speaking(language):
+                return (Phrase(text, spoken(text)) if text is not None else None), exchanges
+        text, exchanges = self._run(request, check, t, trigger)
         return (Phrase(text, spoken(text)) if text is not None else None), exchanges
 
     def reword(self, *, pilot: str, scripted: str, callsigns: tuple[str, ...], t: float,
-               trigger: str = "", persona: str = "") -> tuple[str | None, list[LlmExchange]]:
+               trigger: str = "", persona: str = "", language: str = "") -> tuple[str | None, list[LlmExchange]]:
         """The model's words for the script's reply ``scripted`` (without the callsign), checked; None: the
-        template's words stand. ``persona``: the controller's manner (their words, never other values)."""
-        request = replace(reword_request(pilot, scripted), persona=persona)
+        template's words stand. ``persona``: the controller's manner (their words, never other values).
+        ``language``: ATC speaking the pilot's own ("fr"): ``scripted`` is in it, and so must the reply be."""
+        request = replace(reword_request(pilot, scripted, language), persona=persona)
+        if language:
+            english = to_english(scripted, language)
+            return self._run(request, lambda raw: in_own_words(lambda r: check_reworded(r, english, callsigns), raw,
+                                                               callsigns, language), t, trigger)
         return self._run(request, lambda raw: check_reworded(raw, scripted, callsigns), t, trigger)
 
     def _run(self, request: LlmRequest, check: Callable[[str], str], t: float,

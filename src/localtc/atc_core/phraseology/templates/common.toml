@@ -302,6 +302,16 @@ fix = "direct {fix}"
 behind = "behind the landing traffic"
 hold = "hold"
 efc = "expect further clearance {efc}"
+# Words of the engine's own (engine.py: ``library.say``), so they're in the language ATC speaks.
+i_say_again = "I say again"
+expect_runway_note = ", expect runway {runway}"
+vectors_to_note = "{message}, radar vectors to {fix}"
+unavailable = "unable, that information is not available"
+traffic_vacating = "traffic {message} vacating the runway"
+landing_traffic = "landing traffic"
+traffic_final = "traffic on {distance} mile final"
+rejected_vacate = "roger, vacate onto {exit} when able, advise when ready for departure"
+rejected_vacate_runway = "roger, vacate the runway when able, advise when ready for departure"
 
 [[template]]
 id = "common.radio_check"

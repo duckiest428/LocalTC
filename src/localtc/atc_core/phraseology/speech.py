@@ -6,6 +6,7 @@ Everything returns the spoken form as plain words for speech synthesis, e.g.
 
 import re
 
+from localtc.atc_core.phraseology import tongues
 from localtc.atc_core.region import CURRENT
 from localtc.atc_core.values import Approach, Callsign, Wind
 
@@ -24,6 +25,8 @@ SIDES = {"L": "left", "R": "right", "C": "center"}
 
 def digits(text: str) -> str:
     """Each digit separately; letters phonetically; '.' as 'point'."""
+    if (tg := tongues.current()) is not None:
+        return tg.spell(text)
     words = []
     for ch in str(text).upper():
         if ch.isdigit():
@@ -37,6 +40,8 @@ def digits(text: str) -> str:
 
 def number_words(n: int) -> str:
     """0-99 as words ("twenty-three"); 100 and more as ``miles`` says them (a SIGMET 120 miles ahead crashed ATC)."""
+    if tongues.current() is not None:
+        return str(int(n))  # (in another language its own voice reads the figures)
     if n >= 100:
         return miles(n)
     if n < 10:
@@ -49,6 +54,8 @@ def number_words(n: int) -> str:
 
 def miles(n: int) -> str:
     """A distance: 38 -> "thirty-eight", 120 -> "one hundred twenty"."""
+    if tongues.current() is not None:
+        return str(max(0, int(n)))
     n = max(0, int(n))
     if n < 100:
         return number_words(n)
@@ -59,11 +66,15 @@ def miles(n: int) -> str:
 
 def feet(n: int) -> str:
     """A runway length, to the nearest hundred: 13300 -> "one three thousand three hundred"."""
+    if (tg := tongues.current()) is not None:
+        return f"{int(round(n / 100.0) * 100)} {tg.feet}"
     return _feet(int(round(n / 100.0) * 100))
 
 
 def group_form(number: str) -> str:
     """Airline flight numbers: 123 -> "one twenty-three", 1234 -> "twelve thirty-four", 1200 -> "twelve hundred"."""
+    if (tg := tongues.current()) is not None:
+        return tg.spell(number.lstrip("0") or "0")  # digit by digit, as in ICAO's radiotelephony
     num = number.lstrip("0") or "0"
     # Letters after the number, one or more ("551A", "18AB": a chatter callsign with two stopped the ATC engine).
     head = num.rstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
@@ -84,6 +95,8 @@ def group_form(number: str) -> str:
 
 def runway(ident: str) -> str:
     """ "34L" -> "three four left", "04" -> "four"."""
+    if (tg := tongues.current()) is not None:
+        return tg.runway_said(ident)
     num = "".join(c for c in ident if c.isdigit()).lstrip("0") or "0"
     side = ident[len(ident.rstrip("LRC")):]
     return " ".join([digits(num), *(SIDES[s] for s in side)])
@@ -91,6 +104,8 @@ def runway(ident: str) -> str:
 
 def frequency(mhz: float) -> str:
     """121.8 -> "one two one point eight", 124.675 -> "one two four point six seven five". ICAO says "decimal"."""
+    if (tg := tongues.current()) is not None:
+        return tg.frequency_said(mhz)
     text = f"{mhz:.3f}".rstrip("0")
     if text.endswith("."):
         text += "0"
@@ -106,6 +121,8 @@ def frequency_display(mhz: float) -> str:
 def altitude(feet: int) -> str:
     """5000 -> "five thousand", 3500 -> "three thousand five hundred", 12000 -> "one two thousand"; at and
     above the region's transition altitude, a flight level. ICAO says "feet" below it: "six thousand feet"."""
+    if (tg := tongues.current()) is not None:
+        return tg.altitude_said(feet, CURRENT.get().transition_ft)
     feet = int(round(feet / 100.0) * 100)
     region = CURRENT.get()
     if feet >= region.transition_ft:
@@ -126,6 +143,8 @@ def _feet(feet: int) -> str:
 
 
 def altitude_display(feet: int) -> str:
+    if (tg := tongues.current()) is not None:
+        return tg.altitude_shown(feet, CURRENT.get().transition_ft)
     feet = int(round(feet / 100.0) * 100)
     region = CURRENT.get()
     if feet >= region.transition_ft:
@@ -152,6 +171,8 @@ def hpa(inhg: float) -> int:
 
 def altimeter(inhg: float) -> str:
     """ "two niner niner two"; ICAO gives QNH in hectopascals: "one zero one three"."""
+    if (tg := tongues.current()) is not None:
+        return tg.spell(str(hpa(inhg)) if CURRENT.get().icao else f"{inhg:.2f}".replace(".", ""))
     if CURRENT.get().icao:
         return digits(str(hpa(inhg)))
     return digits(f"{inhg:.2f}".replace(".", ""))
@@ -162,12 +183,16 @@ def altimeter_display(inhg: float) -> str:
 
 
 def letter(ch: str) -> str:
+    if (tg := tongues.current()) is not None:
+        return tg.letters.get(ch.upper(), ch)
     return PHONETIC[ch.upper()]
 
 
 def taxiway(name: str) -> str:
     """ "A1" -> "alpha one", "C" -> "charlie", "TWY B" -> "bravo"; a name that's a word is said as one: "LINK 60" ->
     "link six zero" (Heathrow's links were spelled "lima india november kilo six zero")."""
+    if (tg := tongues.current()) is not None:
+        return tg.taxiway(name)
     name = name.upper().replace("TWY", "").strip()
     out = []
     for part in re.findall(r"[A-Z]{3,}|[A-Z]|\d", name):
@@ -181,6 +206,8 @@ def procedure(name: str) -> str:
     The published spoken name ("MONTANA TWO") isn't in the sim's data, so the letters are left as a
     word and only the digits and any trailing letter are spelled out, the way a controller reads them.
     """
+    if (tg := tongues.current()) is not None:
+        return tg.procedure(name)
     said, word = [], ""
     for char in name.upper():
         if char.isdigit():
@@ -200,6 +227,8 @@ def procedure(name: str) -> str:
 
 def gate(display: str) -> str:
     """ "Gate B25" -> "gate bravo two five", "Parking 3" -> "parking three"."""
+    if (tg := tongues.current()) is not None:
+        return tg.place(display)[1]
     word, _, label = display.partition(" ")
     return f"{word.lower()} {taxiway(label)}".strip()
 
@@ -210,6 +239,8 @@ def taxi_route(names: tuple[str, ...]) -> str:
 
 def wind(value: Wind) -> str:
     """ "two seven zero at one zero"; ICAO: "two seven zero degrees one zero knots"."""
+    if (tg := tongues.current()) is not None:
+        return tg.wind_said(value.direction_mag, value.speed_kt)
     if value.speed_kt < 3:
         return "calm"
     direction, speed_ = digits(f"{value.direction_mag % 360 or 360:03d}"), digits(str(value.speed_kt))
@@ -217,6 +248,8 @@ def wind(value: Wind) -> str:
 
 
 def wind_display(value: Wind) -> str:
+    if (tg := tongues.current()) is not None:
+        return tg.wind_shown(value.direction_mag, value.speed_kt)
     if value.speed_kt < 3:
         return "calm"
     direction = f"{value.direction_mag % 360 or 360:03d}"
@@ -230,6 +263,8 @@ APPROACH_SPOKEN = {"ILS": "I L S", "RNAV": "R-NAV", "RNP": "R-NAV", "GPS": "G P 
 
 def approach(value: Approach) -> str:
     """ "I L S zulu runway three four right", "localizer back course runway two six", "V O R alpha"."""
+    if (tg := tongues.current()) is not None:
+        return tg.approach_said(value.kind, value.runway, value.suffix, value.charted)
     if value.charted:
         return f"{value.charted.lower()} visual runway {runway(value.runway)}"
     kind = APPROACH_SPOKEN.get(value.kind, value.kind.lower())
@@ -242,7 +277,7 @@ def approach(value: Approach) -> str:
 def circling(value: Approach) -> tuple[str, str]:
     """What follows "cleared ... approach" on a circle-to-land (FAA JO 7110.65 4-8-6): "circle to runway 34", or
     "circle west of the airport for a left downwind to runway 34". (display, spoken); empty when not circling."""
-    if not value.circle_to:
+    if not value.circle_to or tongues.current() is not None:
         return "", ""
     if value.circle_side and value.circle_pattern:
         where = f"circle {value.circle_side} of the airport for a {value.circle_pattern} downwind to runway "
@@ -251,6 +286,12 @@ def circling(value: Approach) -> tuple[str, str]:
 
 
 def callsign(value: Callsign) -> str:
+    if (tg := tongues.current()) is not None:
+        if value.is_airline:
+            return tg.callsign_said(value.telephony, value.flight_number)
+        if value.abbreviated:
+            return f"{value.type_name or tg.letters.get(value.ident[:1], '')} {tg.spell(value.suffix)}".strip()
+        return tg.spell(value.ident.replace("-", ""))
     if value.is_airline:
         return f"{value.telephony} {group_form(value.flight_number)}"
     if value.abbreviated:
@@ -372,6 +413,11 @@ def aircraft_type(model: str) -> tuple[str, str]:
     "Boeing 737" / "Boeing seven thirty-seven", "Airbus A321" / "Airbus three twenty-one", "Embraer 170" /
     "Embraer one seventy". A name the table doesn't know is said as written."""
     import re
+
+    if tongues.current() is not None:
+        with tongues.speaking("en"):
+            shown, _ = aircraft_type(model)
+        return shown, shown  # (its voice reads "Boeing 737" in its own words)
 
     code = model.strip().upper().replace("-", "")
     if not code:

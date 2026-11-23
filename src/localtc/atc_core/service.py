@@ -109,7 +109,8 @@ class AtcService:
             self.copilot.observe(observed)
         for action in self.copilot.due(event.t):
             if action.kind == "say":
-                self.bus.publish(Transcript(t=action.t, text=action.text, source="copilot"))
+                self.bus.publish(Transcript(t=action.t, text=action.text, source="copilot",
+                                            language=getattr(self.engine, "radio_language", "")))
             elif action.kind == "tune":
                 if self.source is not None:
                     await self.source.send(SetComFrequency(hz=action.hz))

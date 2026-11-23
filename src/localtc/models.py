@@ -182,10 +182,11 @@ def status(cfg) -> list[ModelStatus]:
         out.append(ModelStatus("kokoro", "LocalTC voice library",
                                kokoro.installed(voices_dir or default_voices_dir(), cfg.tts.kokoro_model),
                                kokoro.available()))
-    from localtc.languages import language
+    from localtc.languages import language, radio_language
 
-    if (lang := language(cfg.crew.language)) is not None and cfg.crew.enabled and lang.voices:
-        # The copilot talking in the pilot's language: that language's voice pack on this PC.
+    lang = (language(cfg.crew.language) if cfg.crew.enabled else None) or language(radio_language(cfg))
+    if lang is not None and lang.voices:
+        # The copilot talking in the pilot's language, or ATC in it: that language's voice pack on this PC.
         out.append(ModelStatus("voice_lang", ", ".join(lang.voices),
                                all(voice_installed(v, voices_dir) for v in lang.voices)))
     return out
@@ -204,12 +205,13 @@ def radio_model(cfg) -> str:
 def whisper_model(cfg) -> str:
     """The Whisper model a flight will load ("auto" resolved without importing the GPU libraries). An NVIDIA card
     counts only with its CUDA libraries installed: without them Whisper runs on the CPU."""
-    from localtc.languages import language
+    from localtc.languages import language, radio_language
 
     model = radio_model(cfg)
 
-    # The copilot talked to in another language: the same size that knows them all (the radio still heard as English).
-    return model.removesuffix(".en") if language(cfg.crew.language) is not None else model
+    # The copilot talked to in another language, or ATC in yours: the same size that knows them all (English on the
+    # radio still heard by the English model).
+    return model.removesuffix(".en") if language(cfg.crew.language) is not None or radio_language(cfg) else model
 
 
 Progress = Callable[[str, float | None], None]  # (message, fraction 0-1 or None when unknown)
@@ -238,10 +240,10 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
         say(f"Voice ready ({path.stat().st_size // 2**20} MB)" if path.exists() else "Voice ready", 1.0)
         return voice_path(cfg.tts.voice, voices_dir).exists()
     if kind == "voice_lang":
-        from localtc.languages import language
+        from localtc.languages import language, radio_language
         from localtc.tts.voices import download, installed
 
-        lang = language(cfg.crew.language)
+        lang = language(cfg.crew.language) or language(radio_language(cfg))
         if lang is None or not lang.voices:
             return True
         voices_dir = Path(cfg.tts.voices_dir) if cfg.tts.voices_dir else None

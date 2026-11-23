@@ -68,6 +68,42 @@ def language(code: str) -> Language | None:
     return None if lang is None or lang.code == "en" else lang
 
 
+_LATIN = {"a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г", "h": "х", "i": "и", "j": "дж",
+          "k": "к", "l": "л", "m": "м", "n": "н", "o": "о", "p": "п", "q": "к", "r": "р", "s": "с", "t": "т",
+          "u": "у", "v": "в", "w": "в", "x": "кс", "y": "й", "z": "з"}
+_PAIRS = {"sh": "ш", "ch": "ч", "zh": "ж", "kh": "х", "ts": "ц", "ya": "я", "yu": "ю", "yo": "ё", "ye": "е",
+          "oo": "у", "ee": "и"}
+
+
+def cyrillic(word: str) -> str:
+    """A Latin name as a Russian voice reads it (the radio's Russian: atc_core/phraseology/tongues/ru.py) ("Aeroflot" -> "аерофлот", "Sheremetyevo" -> "шереметиево")."""
+    out, i, low = [], 0, word.lower()
+    while i < len(low):
+        pair = low[i:i + 2]
+        if pair in _PAIRS:
+            out.append(_PAIRS[pair])
+            i += 2
+            continue
+        out.append(_LATIN.get(low[i], low[i]))
+        i += 1
+    return "".join(out)
+
+
+def radio_language(cfg) -> str:
+    """The language ATC answers in when the pilot calls in it (``[atc] language``): "auto" the copilot's language,
+    else the window's; "" when it's English only."""
+    choice = (getattr(cfg.atc, "language", "") or "").lower()
+    if choice in ("", "en", "off", "english"):
+        return ""
+    if choice == "auto":
+        for code in (cfg.crew.language, cfg.ui.language):
+            if (lang := language(code)) is not None:
+                return lang.code
+        return ""
+    lang = language(choice)
+    return lang.code if lang is not None else ""
+
+
 def listing() -> list[dict[str, str]]:
     """For the window: each language's code and names."""
     return [{"code": lang.code, "native": lang.native, "english": lang.english} for lang in LANGUAGES.values()]

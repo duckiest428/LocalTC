@@ -7,6 +7,17 @@ a new minor version adds features, a patch fixes them.
 ## [0.5.9] - Upcoming
 
 ### Added
+- **ATC in your own language:** call ATC in German, French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish,
+  Russian or Mandarin and they answer in it, in that language's radiotelephony: "Air France un deux trois, montez
+  niveau un deux zéro", "Lufthansa eins zwo drei, Piste zwo fünf links, frei zum Start", "国航幺两三，上升到高度层幺两洞
+  保持". Every instruction is worded natively, with the numbers, runways, levels and frequencies said the way that
+  language says them on the radio, and spoken by a voice of that language. Your readbacks and requests in it are
+  checked the same way as English ones ("montons niveau un deux zéro" is a correct readback of FL120, "Piste 25L,
+  frei zum Start" of a takeoff clearance). The copilot's radio calls and its readbacks go out in the same
+  language, and the ramp talks with you in it. Call in English and ATC is in English again. Speech-to-text tells
+  which language each call was in, and hears it in that language. Quick Settings, ATC, "ATC's language":
+  yours (the copilot's language, else the window's) by default, English only, or one of them. Other flights on
+  the frequency and the ATIS stay in English.
 - **Live Flights (optional, off by default):** show your flight on the public map at localtc.tech/live while you
   fly. Settings, Account, "Show my flight on the public Live Flights map" opens a dialog listing exactly what's
   sent, every 10 seconds: your display name, callsign, aircraft type, departure and arrival, filed route, IFR or

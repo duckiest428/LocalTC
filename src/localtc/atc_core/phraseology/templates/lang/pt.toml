@@ -1,0 +1,1051 @@
+# Portuguese radiotelephony (NAV Portugal's). The same ids as the English templates, reworded; what's read back is
+# the same. A pilot's readback here is read through tongues/pt.py's lexicon (which knows Brazil's words too).
+
+# --- approach -----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "approach.descend"
+text = ["{callsign}, {station}, desça e mantenha {altitude}, preveja aproximação {approach}.",
+        "{callsign}, {station}, preveja aproximação {approach}, desça {altitude}."]
+pilot_readback = "Descemos e mantemos {altitude}, prevemos {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_via"
+text = ["{callsign}, {station}, preveja aproximação {approach}."]
+
+[[template]]
+id = "approach.checkin_roger"
+text = ["{callsign}, {station}, recebido.", "{callsign}, {station}, bom dia."]
+
+[[template]]
+id = "approach.checkin_vectors"
+text = ["{callsign}, {station}, recebido, preveja vetores para a aproximação {approach}."]
+
+[[template]]
+id = "approach.maintain"
+text = ["{callsign}, {station}, mantenha {altitude}, preveja aproximação {approach}."]
+pilot_readback = "Mantemos {altitude}, prevemos {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared"
+text = ["{callsign}, autorizado aproximação {approach}, contacte {station} {frequency}."]
+pilot_readback = "Autorizados aproximação {approach}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_no_clearance"
+text = ["{callsign}, faça borrego, não está autorizado a aterrar, mantenha rumo da pista, suba e mantenha {altitude}."]
+pilot_readback = "Borrego, rumo da pista, subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.go_around_checkin"
+text = ["{callsign}, {station}, contacto radar, mantenha {altitude}, preveja vetores para nova aproximação {approach}."]
+pilot_readback = "Mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.vectors"
+text = ["{callsign}, rumo {heading}, vetores para a aproximação {approach}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.missed"
+text = ["{callsign}, recebido, mantenha rumo da pista, suba e mantenha {altitude}."]
+pilot_readback = "Rumo da pista, subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn"
+text = ["{callsign}, vire à {turn} rumo {heading}, vetores para a aproximação {approach}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading"
+text = ["{callsign}, vire à {turn} rumo {heading}.", "{callsign}, voe rumo {heading}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.expect_visual"
+text = ["{callsign}, recebido, preveja a aproximação visual pista {runway}, vetores para final."]
+
+[[template]]
+id = "approach.present_heading"
+text = ["{callsign}, mantenha o rumo atual, vetores para a aproximação {approach}."]
+pilot_readback = "Rumo atual, {callsign_short}."
+
+[[template]]
+id = "approach.fly_heading"
+text = ["{callsign}, voe rumo {heading}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.heading_descend"
+text = ["{callsign}, rumo {heading}, desça e mantenha {altitude}."]
+pilot_readback = "Rumo {heading}, descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.turn_descend"
+text = ["{callsign}, vire à {turn} rumo {heading}, desça e mantenha {altitude}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.downwind"
+text = ["{callsign}, vire à {turn} rumo {heading}, vetores para a aproximação {approach}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.base"
+text = ["{callsign}, vire à {turn} rumo {heading}.", "{callsign}, vire à {turn} rumo {heading}, vetores para final."]
+pilot_readback = "Viramos à {turn} rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_cleared"
+text = ["{callsign}, vire à {turn} rumo {heading}, mantenha {altitude} até estabelecido no localizador, autorizado aproximação {approach}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, mantemos {altitude} até estabelecidos, autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_course"
+text = ["{callsign}, vire à {turn} rumo {heading}, mantenha {altitude} até estabelecido no curso de aproximação final, autorizado aproximação {approach}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, mantemos {altitude} até estabelecidos, autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept_visual"
+text = ["{callsign}, vire à {turn} rumo {heading}, autorizado aproximação {approach}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.advisory"
+text = ["{callsign}, sem tráfego reportado, vento {wind}, mudança de frequência aprovada."]
+pilot_readback = "Mudança de frequência, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_radio"
+text = ["{callsign}, sem tráfego reportado, vento {wind}, contacte {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.handoff_tower"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} em {frequency}, bom voo."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "approach.intercept"
+text = ["{callsign}, vire à {turn} rumo {heading}, intercete o curso de aproximação final, aproximação {approach}."]
+pilot_readback = "Rumo {heading} para intercetar, {callsign_short}."
+
+[[template]]
+id = "approach.speed"
+text = ["{callsign}, reduza velocidade {speed} nós."]
+pilot_readback = "{speed} nós, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star"
+text = ["{callsign}, autorizado aproximação {approach}."]
+pilot_readback = "Autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend"
+text = ["{callsign}, desça {altitude}, autorizado aproximação {approach}."]
+pilot_readback = "Descemos {altitude}, autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "approach.cleared_star_descend_tower"
+text = ["{callsign}, desça {altitude}, autorizado aproximação {approach}, contacte {station} {frequency} quando estabelecido."]
+pilot_readback = "Descemos {altitude}, autorizados aproximação {approach}, {station} {frequency} quando estabelecidos, {callsign_short}."
+
+[[template]]
+id = "approach.checkin_descend_star"
+text = ["{callsign}, {station}, continue a descida {altitude}, preveja aproximação {approach}."]
+pilot_readback = "Continuamos a descida {altitude}, {callsign_short}."
+
+[[template]]
+id = "approach.speed_until"
+text = ["{callsign}, mantenha {speed} nós até cinco milhas em final."]
+pilot_readback = "{speed} nós até cinco milhas em final, {callsign_short}."
+
+[[template]]
+id = "approach.sequence"
+text = ["{callsign}, é o {message}.", "{callsign}, {message}, os vetores são para a sequência."]
+
+[[template]]
+id = "approach.extend_downwind"
+text = ["{callsign}, estenda a perna do vento, {message}, chamo-o para a base."]
+
+[[template]]
+id = "approach.sidestep"
+text = ["{callsign}, mudança para a pista {runway} aprovada."]
+pilot_readback = "Mudança para a pista {runway}, {callsign_short}."
+
+[[template]]
+id = "approach.weather_change"
+text = ["{callsign}, o tempo está abaixo dos mínimos visuais, preveja aproximação {approach}."]
+pilot_readback = "Prevemos {approach}, {callsign_short}."
+
+# --- center -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "center.checkin"
+text = ["{callsign}, {station}, bom dia."]
+
+[[template]]
+id = "center.radar_contact"
+text = ["{callsign}, {station}, contacto radar, suba e mantenha {altitude}.",
+        "{callsign}, {station}, contacto radar, suba {altitude}, prossiga em rota."]
+pilot_readback = "Subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_level"
+text = ["{callsign}, {station}, contacto radar, mantenha {altitude}."]
+
+[[template]]
+id = "center.checkin_ack"
+text = ["{callsign}, {station}, contacto radar.", "{callsign}, {station}, bom dia."]
+
+[[template]]
+id = "center.checkin_climb"
+text = ["{callsign}, {station}, contacto radar, suba e mantenha {altitude}."]
+pilot_readback = "Subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_climbing"
+text = ["{callsign}, {station}, contacto radar, continue a subida, mantenha {altitude}."]
+
+[[template]]
+id = "center.checkin_descending"
+text = ["{callsign}, {station}, recebido, continue a descida para {altitude}."]
+
+[[template]]
+id = "center.checkin_descend"
+text = ["{callsign}, {station}, contacto radar, desça e mantenha {altitude}."]
+pilot_readback = "Descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_via"
+text = ["{callsign}, {station}, recebido, desça conforme a chegada {procedure}."]
+
+[[template]]
+id = "center.descend"
+text = ["{callsign}, desça e mantenha {altitude}, preveja aproximação {approach}."]
+pilot_readback = "Descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_pd"
+text = ["{callsign}, desça à sua discrição, mantenha {altitude}, preveja aproximação {approach}."]
+pilot_readback = "À nossa discrição, descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.descend_via"
+text = ["{callsign}, desça via a chegada {procedure}, preveja aproximação {approach}."]
+pilot_readback = "Descemos via a chegada {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star"
+text = ["{callsign}, desça {altitude}, autorizado chegada {procedure}, preveja aproximação {approach}."]
+pilot_readback = "Descemos {altitude}, autorizados chegada {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.descend_star_pd"
+text = ["{callsign}, quando pronto desça {altitude}, autorizado chegada {procedure}, preveja aproximação {approach}."]
+pilot_readback = "Quando prontos descemos {altitude}, autorizados chegada {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.checkin_descend_star"
+text = ["{callsign}, {station}, recebido, continue a descida {altitude}, chegada {procedure}."]
+pilot_readback = "Continuamos a descida {altitude}, chegada {procedure}, {callsign_short}."
+
+[[template]]
+id = "center.maintain"
+text = ["{callsign}, mantenha {altitude}, preveja aproximação {approach}."]
+pilot_readback = "Mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_approach"
+text = ["{callsign}, contacte {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.handoff_center"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} em {frequency}, bom voo."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "center.reroute"
+text = ["{callsign}, vire à {turn} rumo {heading}, {message}, quando possível direto {fix}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, depois direto {fix}, {callsign_short}."
+
+[[template]]
+id = "center.off_course"
+text = ["{callsign}, vejo-o a {distance} milhas da sua rota, intenções?",
+        "{callsign}, parece estar fora de rota, a {distance} milhas da sua rota, verifique a navegação."]
+
+[[template]]
+id = "center.advise_direct"
+text = ["{callsign}, reporte quando puder prosseguir direto {fix}."]
+
+[[template]]
+id = "center.descend_cross"
+text = ["{callsign}, cruze {fix} a {altitude}, descida à sua discrição, preveja aproximação {approach}."]
+pilot_readback = "Cruzamos {fix} a {altitude}, à nossa discrição, {callsign_short}."
+
+# --- clearance ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "clearance.ifr"
+text = ["{callsign}, autorizado para {destination} conforme plano de voo{runway_note}, suba e mantenha {altitude}, preveja {cruise} {minutes} minutos após a partida, frequência de partidas {frequency}, transponder {squawk}."]
+pilot_readback = "Autorizados para {destination} conforme plano de voo, subimos e mantemos {altitude}, prevemos {cruise} {minutes} minutos após a partida, partidas {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_at_cruise"
+text = ["{callsign}, autorizado para {destination} conforme plano de voo{runway_note}, suba e mantenha {altitude}, frequência de partidas {frequency}, transponder {squawk}."]
+pilot_readback = "Autorizados para {destination} conforme plano de voo, subimos e mantemos {altitude}, partidas {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.say_destination"
+text = ["{callsign}, indique o destino e o nível solicitado."]
+
+[[template]]
+id = "clearance.ifr_sid"
+text = ["{callsign}, autorizado para {destination}, saída {procedure}, depois conforme plano de voo{runway_note}, suba e mantenha {altitude}, preveja {cruise} {minutes} minutos após a partida, frequência de partidas {frequency}, transponder {squawk}."]
+pilot_readback = "Autorizados para {destination}, saída {procedure}, depois conforme plano de voo, subimos e mantemos {altitude}, prevemos {cruise} {minutes} minutos após a partida, partidas {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.ifr_sid_at_cruise"
+text = ["{callsign}, autorizado para {destination}, saída {procedure}, depois conforme plano de voo{runway_note}, suba e mantenha {altitude}, frequência de partidas {frequency}, transponder {squawk}."]
+pilot_readback = "Autorizados para {destination}, saída {procedure}, depois conforme plano de voo, subimos e mantemos {altitude}, partidas {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "clearance.readback_correct_ground"
+text = ["{callsign}, colação correta, contacte {station} {frequency} quando pronto.",
+        "{callsign}, colação correta. Pronto para pushback e arranque, contacte {station} em {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "clearance.standby"
+text = ["{callsign}, autorização pedida, mantenha escuta.", "{callsign}, mantenha escuta para a sua autorização."]
+
+# --- common -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "common.contact"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} em {frequency}, bom voo."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "common.vectors_descent"
+text = ["{callsign}, vire à {turn} rumo {heading}, vetores para a descida."]
+pilot_readback = "{turn} rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing"
+text = ["{callsign}, reduza velocidade {speed} nós para separação, {message}."]
+pilot_readback = "Velocidade {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_spacing_again"
+text = ["{callsign}, reduza velocidade {speed} nós agora, está a aproximar-se do tráfego à frente."]
+pilot_readback = "Velocidade {speed}, {callsign_short}."
+
+[[template]]
+id = "common.speed_resume"
+text = ["{callsign}, sem restrição de velocidade."]
+
+[[template]]
+id = "common.turn_for_traffic"
+text = ["{callsign}, vire {message} por tráfego."]
+
+[[template]]
+id = "common.terrain_caution"
+text = ["{callsign}, atenção, terreno montanhoso, a altitude mínima na sua área é {altitude}."]
+
+[[template]]
+id = "common.unable_terrain"
+text = ["{callsign}, impossível, terreno, a altitude mínima na sua área é {altitude}."]
+
+[[template]]
+id = "common.traffic_gone"
+text = ["{callsign}, o tráfego que seguia já não é um fator."]
+
+[[template]]
+id = "common.cabin_assist"
+text = ["{callsign}, recebido, {message}."]
+
+[[template]]
+id = "common.descend_now"
+text = ["{callsign}, inicie a descida agora.", "{callsign}, passou o ponto de descida, desça agora."]
+
+[[template]]
+id = "common.descend_intentions"
+text = ["{callsign}, está muito acima do perfil de descida, intenções?"]
+
+[[template]]
+id = "common.say_again"
+text = ["{callsign}, repita."]
+
+[[template]]
+id = "common.station_say_again"
+text = ["Estação chamando {station}, repita o indicativo."]
+
+[[template]]
+id = "common.readback_correct"
+text = ["{callsign}, colação correta.", "{callsign}, correto."]
+
+[[template]]
+id = "common.roger"
+text = ["{callsign}, recebido.", "{callsign}, ciente."]
+
+[[template]]
+id = "common.negative"
+text = ["{callsign}, negativo, {correction}."]
+
+[[template]]
+id = "common.equipment"
+text = ["{callsign}, recebido, os meios de emergência estarão prontos.", "{callsign}, recebido, vamos alertar os bombeiros."]
+
+[[template]]
+id = "common.problem"
+text = ["{callsign}, recebido, informe se precisar de assistência."]
+
+[[template]]
+id = "common.affirmative"
+text = ["{callsign}, afirmativo."]
+
+[[template]]
+id = "common.confirm"
+text = ["{callsign}, confirme {correction}."]
+
+[[template]]
+id = "common.read_back"
+text = ["{callsign}, colacione {missing}."]
+
+[[template]]
+id = "common.emergency"
+text = ["{callsign}, recebido, indique a natureza da emergência, o combustível restante e as pessoas a bordo."]
+
+[[template]]
+id = "common.emergency_copied"
+text = ["{callsign}, recebido, {message}. Intenções?"]
+
+[[template]]
+id = "common.info"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "common.unable"
+text = ["{callsign}, impossível."]
+
+[[template]]
+id = "common.climb"
+text = ["{callsign}, suba e mantenha {altitude}.", "{callsign}, suba {altitude}."]
+pilot_readback = "Subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.descend"
+text = ["{callsign}, desça e mantenha {altitude}.", "{callsign}, desça {altitude}."]
+pilot_readback = "Descemos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.maintain"
+text = ["{callsign}, mantenha {altitude}."]
+pilot_readback = "Mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.say_altitude"
+text = ["{callsign}, indique o nível solicitado."]
+
+[[template]]
+id = "common.direct"
+text = ["{callsign}, autorizado direto {fix}.", "{callsign}, prossiga direto {fix}."]
+pilot_readback = "Direto {fix}, {callsign_short}."
+
+[[template]]
+id = "common.expect_runway"
+text = ["{callsign}, recebido, preveja pista {runway}."]
+pilot_readback = "Prevemos pista {runway}, {callsign_short}."
+
+[[template]]
+id = "common.expect_approach"
+text = ["{callsign}, recebido, preveja aproximação {approach}."]
+pilot_readback = "Prevemos {approach}, {callsign_short}."
+
+[[template]]
+id = "common.runway_change"
+text = ["{callsign}, mudança de pista, preveja aproximação {approach}.", "{callsign}, a pista mudou, agora preveja aproximação {approach}."]
+pilot_readback = "Prevemos {approach}, {callsign_short}."
+
+[[template]]
+id = "common.unable_runway"
+text = ["{callsign}, pista {runway} impossível, vento {wind}."]
+
+[[template]]
+id = "common.runway_closed"
+text = ["{callsign}, impossível, a pista {runway} está fechada."]
+
+[[template]]
+id = "common.return"
+text = ["{callsign}, recebido, autorizado direto {destination}, mantenha {altitude}, preveja aproximação {approach}."]
+pilot_readback = "Direto {destination}, mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.pirep"
+text = ["{callsign}, recebido, obrigado pelo reporte.", "{callsign}, obrigado, vou passar a informação."]
+
+[[template]]
+id = "common.traffic"
+text = ["{callsign}, tráfego, {message}."]
+
+[[template]]
+id = "common.check_altitude"
+text = ["{callsign}, verifique a altitude, mantenha {altitude}."]
+pilot_readback = "Mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.check_heading"
+text = ["{callsign}, verifique o rumo, voe rumo {heading}."]
+pilot_readback = "Rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "common.how_read"
+text = ["{callsign}, {station}, como me ouve?", "{callsign}, copiou?"]
+
+[[template]]
+id = "common.read_back_hold_short"
+text = ["{callsign}, colacione a instrução de aguardar antes da pista."]
+
+[[template]]
+id = "common.stand_by"
+text = ["{callsign}, mantenha escuta.", "{callsign}, um momento."]
+
+[[template]]
+id = "common.pleasantry"
+text = ["{callsign}, tudo bem, obrigado.", "{callsign}, bem, obrigado por perguntar."]
+
+[[template]]
+id = "common.advise_ready"
+text = ["{callsign}, recebido, informe pronto.", "{callsign}, sem problema, chame quando estiver pronto."]
+
+[[template]]
+id = "common.radio_check"
+text = ["{callsign}, {station}, recebo cinco sobre cinco."]
+
+[[template]]
+id = "common.emergency_cancelled"
+text = ["{callsign}, recebido, emergência cancelada."]
+
+[[template]]
+id = "common.emergency_priority"
+text = ["{callsign}, recebido, é o número um, autorizado direto {destination}, desça à sua discrição, os meios de emergência estão prontos."]
+pilot_readback = "Direto {destination}, descida à nossa discrição, {callsign_short}."
+
+[[template]]
+id = "common.emergency_approach"
+text = ["{callsign}, autorizado aproximação {approach}, é o número um, os meios de emergência estão a caminho."]
+pilot_readback = "Autorizados aproximação {approach}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_land"
+text = ["{callsign}, pista {runway}, autorizado a aterrar, vento {wind}, os meios de emergência estão prontos."]
+pilot_readback = "Autorizados a aterrar pista {runway}, {callsign_short}."
+
+[[template]]
+id = "common.emergency_intentions"
+text = ["{callsign}, indique as pessoas a bordo e o combustível restante."]
+
+[[template]]
+id = "common.emergency_nearest"
+text = ["{callsign}, recebido, é o número um. O aeroporto adequado mais próximo é {message}. Intenções?"]
+
+[[template]]
+id = "common.nearest"
+text = ["{callsign}, o aeroporto adequado mais próximo é {message}. Intenções?"]
+
+[[template]]
+id = "common.divert"
+text = ["{callsign}, vire à {turn} rumo {heading}, vetores para {destination}, {distance} milhas, desça à sua discrição, mantenha {altitude}, preveja pista {runway}, os meios de emergência estarão prontos."]
+pilot_readback = "Viramos à {turn} rumo {heading}, descemos e mantemos {altitude}, vetores para {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_level"
+text = ["{callsign}, vire à {turn} rumo {heading}, vetores para {destination}, {distance} milhas, mantenha {altitude}, preveja pista {runway}, os meios de emergência estarão prontos."]
+pilot_readback = "Viramos à {turn} rumo {heading}, mantemos {altitude}, vetores para {destination}, {callsign_short}."
+
+[[template]]
+id = "common.divert_vector"
+text = ["{callsign}, vire à {turn} rumo {heading}, {destination} a {distance} milhas.", "{callsign}, vire à {turn} rumo {heading}, vetores para {destination}."]
+pilot_readback = "Viramos à {turn} rumo {heading}, {callsign_short}."
+
+[[template]]
+id = "common.hold"
+text = ["{callsign}, entre em espera sobre {fix}, rumo de aproximação {heading}, curvas à {turn}, mantenha {altitude}, nova autorização prevista às {efc}, {message}."]
+pilot_readback = "Espera sobre {fix}, aproximação {heading}, curvas à {turn}, mantemos {altitude}, nova autorização às {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_minutes"
+text = ["{callsign}, entre em espera sobre {fix}, rumo de aproximação {heading}, curvas à {turn}, mantenha {altitude}, nova autorização prevista dentro de {minutes} minutos, {message}."]
+pilot_readback = "Espera sobre {fix}, aproximação {heading}, curvas à {turn}, mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update"
+text = ["{callsign}, agora {message}, nova autorização prevista às {efc}."]
+pilot_readback = "Nova autorização às {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_revised"
+text = ["{callsign}, {message}, nova autorização revista prevista às {efc}."]
+pilot_readback = "Nova autorização às {efc}, {callsign_short}."
+
+[[template]]
+id = "common.hold_update_minutes"
+text = ["{callsign}, {message}, nova autorização prevista dentro de {minutes} minutos."]
+
+[[template]]
+id = "common.leave_hold"
+text = ["{callsign}, saia da espera, prossiga direto {fix}."]
+pilot_readback = "Saímos da espera, direto {fix}, {callsign_short}."
+
+[[template]]
+id = "common.low_altitude"
+text = ["{callsign}, alerta de baixa altitude, verifique a altitude imediatamente, a altitude mínima na sua área é {altitude}."]
+
+[[template]]
+id = "common.unable_direct_sequence"
+text = ["{callsign}, direto impossível pela sequência, preveja-o dentro de cerca de {minutes} minutos."]
+
+[[template]]
+id = "common.direct_now"
+text = ["{callsign}, a sequência já o permite, prossiga direto {fix}."]
+pilot_readback = "Direto {fix}, {callsign_short}."
+
+[[template]]
+id = "common.ride_report"
+text = ["{callsign}, {message}.", "{callsign}, os últimos reportes, {message}."]
+
+[[template]]
+id = "common.ride_none"
+text = ["{callsign}, sem reportes recentes perto de si, {message}."]
+
+[[template]]
+id = "common.smoother_climb"
+text = ["{callsign}, {message}, suba e mantenha {altitude}."]
+pilot_readback = "Subimos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_descend"
+text = ["{callsign}, {message}, desça e mantenha {altitude}."]
+pilot_readback = "Descemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "common.smoother_none"
+text = ["{callsign}, {message}.", "{callsign}, impossível um nível melhor, {message}."]
+
+[[template]]
+id = "common.confirm_clearance"
+text = ["{callsign}, afirmativo, {message}.", "{callsign}, está {message}."]
+
+# --- departure ----------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "departure.radar_contact"
+text = ["{callsign}, {station}, contacto radar, suba e mantenha {altitude}.",
+        "{callsign}, {station}, contacto radar, suba {altitude}, prossiga em rota."]
+pilot_readback = "Subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only"
+text = ["{callsign}, {station}, contacto radar.", "{callsign}, contacto radar."]
+pilot_readback = "{callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_direct"
+text = ["{callsign}, {station}, contacto radar, suba e mantenha {altitude}, prossiga direto {fix}."]
+pilot_readback = "Subimos e mantemos {altitude}, direto {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.radar_contact_only_direct"
+text = ["{callsign}, {station}, contacto radar, prossiga direto {fix}."]
+pilot_readback = "Direto {fix}, {callsign_short}."
+
+[[template]]
+id = "departure.handoff_center"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} em {frequency}, bom voo."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+# --- ground -------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "ground.taxi_out"
+text = ["{callsign}, role para o ponto de espera pista {runway} via {taxi_route}."]
+pilot_readback = "Rolamos para o ponto de espera pista {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_at"
+text = ["{callsign}, role para o ponto de espera {hold_point} pista {runway} via {taxi_route}."]
+pilot_readback = "Rolamos para o ponto de espera {hold_point} pista {runway} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_hold_short"
+text = ["{callsign}, role para o ponto de espera pista {runway} via {taxi_route}, aguarde antes da pista {hold_short}."]
+pilot_readback = "Rolamos para o ponto de espera pista {runway} via {taxi_route}, aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_out_no_route"
+text = ["{callsign}, role para o ponto de espera pista {runway}."]
+pilot_readback = "Ponto de espera pista {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.hold_position"
+text = ["{callsign}, mantenha a posição, necessita de autorização de rolagem."]
+pilot_readback = "Mantemos a posição, {callsign_short}."
+
+[[template]]
+id = "ground.handoff_tower"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} em {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in"
+text = ["{callsign}, role para o estacionamento via {taxi_route}."]
+pilot_readback = "Rolamos para o estacionamento via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp"
+text = ["{callsign}, role para a placa da aviação geral via {taxi_route}."]
+pilot_readback = "Rolamos para a aviação geral via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_ramp_hold_short"
+text = ["{callsign}, role para a placa da aviação geral via {taxi_route}, aguarde antes da pista {hold_short}."]
+pilot_readback = "Rolamos para a aviação geral via {taxi_route}, aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate"
+text = ["{callsign}, role para a {gate} via {taxi_route}.", "{callsign}, {gate}, role via {taxi_route}."]
+pilot_readback = "Rolamos para a {gate} via {taxi_route}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_to_gate_hold_short"
+text = ["{callsign}, role para a {gate} via {taxi_route}, aguarde antes da pista {hold_short}."]
+pilot_readback = "Rolamos para a {gate} via {taxi_route}, aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_hold_short"
+text = ["{callsign}, role para o estacionamento via {taxi_route}, aguarde antes da pista {hold_short}."]
+pilot_readback = "Rolamos para o estacionamento via {taxi_route}, aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_cancelled"
+text = ["{callsign}, recebido, autorização de rolagem cancelada, mantenha a posição."]
+
+[[template]]
+id = "ground.taxi_cancelled_ready"
+text = ["{callsign}, recebido, autorização de rolagem cancelada, informe pronto."]
+
+[[template]]
+id = "ground.taxi_to_gate_no_route"
+text = ["{callsign}, role para a {gate}."]
+pilot_readback = "Rolamos para a {gate}, {callsign_short}."
+
+[[template]]
+id = "ground.taxi_in_no_route"
+text = ["{callsign}, role para o estacionamento."]
+
+[[template]]
+id = "ground.pushback"
+text = ["{callsign}, pushback e arranque aprovados, cauda à {turn}.", "{callsign}, pushback e arranque à sua discrição, cauda à {turn}."]
+
+[[template]]
+id = "ground.pushback_straight"
+text = ["{callsign}, pushback e arranque aprovados.", "{callsign}, pushback e arranque à sua discrição."]
+
+[[template]]
+id = "ground.startup"
+text = ["{callsign}, arranque aprovado, informe pronto para rolar.", "{callsign}, arranque à sua discrição, informe pronto para rolar."]
+
+[[template]]
+id = "ground.cross_runway"
+text = ["{callsign}, atravesse a pista {runway}.", "{callsign}, atravesse a pista {runway}, mantenha esta frequência."]
+pilot_readback = "Atravessamos a pista {runway}, {callsign_short}."
+
+[[template]]
+id = "ground.stopped_ahead"
+text = ["{callsign}, atenção, {message} parado no caminho de circulação à sua frente."]
+
+[[template]]
+id = "ground.give_way"
+text = ["{callsign}, mantenha a posição, dê passagem ao {message}.", "{callsign}, dê passagem ao {message}, depois continue a rolagem."]
+
+[[template]]
+id = "ground.follow_close"
+text = ["{callsign}, abrande, está a aproximar-se do tráfego à frente."]
+
+[[template]]
+id = "ground.follow"
+text = ["{callsign}, dê passagem ao {message}, depois siga-o.", "{callsign}, siga o {message}."]
+
+[[template]]
+id = "ground.cross_behind"
+text = ["{callsign}, atrás do {message}, atravesse a pista {runway} atrás."]
+pilot_readback = "Atrás do tráfego a aterrar, atravessamos a pista {runway} atrás, {callsign_short}."
+
+[[template]]
+id = "ground.hold_short_landing"
+text = ["{callsign}, aguarde antes da pista {hold_short}, {message}."]
+pilot_readback = "Aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "ground.cross_expedite"
+text = ["{callsign}, atravesse a pista {runway} sem demora, {message}."]
+pilot_readback = "Atravessamos a pista {runway} sem demora, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_traffic"
+text = ["{callsign}, aguarde para o pushback, {message}, eu chamo-o."]
+pilot_readback = "Aguardamos para o pushback, {callsign_short}."
+
+[[template]]
+id = "ground.push_hold_queue"
+text = ["{callsign}, preveja cerca de {minutes} minutos de atraso na posição, {message}, chamo-o para o pushback."]
+pilot_readback = "Aguardamos na posição, {callsign_short}."
+
+# --- tower --------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "tower.takeoff"
+text = ["{callsign}, pista {runway}, mantenha rumo da pista, autorizado a descolar.", "{callsign}, pista {runway}, autorizado a descolar, mantenha rumo da pista."]
+pilot_readback = "Rumo da pista, pista {runway}, autorizados a descolar, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_rnav"
+text = ["{callsign}, RNAV para {fix}, pista {runway}, autorizado a descolar."]
+pilot_readback = "RNAV para {fix}, pista {runway}, autorizados a descolar, {callsign_short}."
+
+[[template]]
+id = "tower.takeoff_sid"
+text = ["{callsign}, pista {runway}, autorizado a descolar."]
+pilot_readback = "Pista {runway}, autorizados a descolar, {callsign_short}."
+
+[[template]]
+id = "tower.luaw"
+text = ["{callsign}, pista {runway}, alinhe e aguarde.", "{callsign}, alinhe e aguarde pista {runway}."]
+pilot_readback = "Pista {runway}, alinhamos e aguardamos, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_traffic"
+text = ["{callsign}, aguarde antes da pista {hold_short}, {message}."]
+pilot_readback = "Aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.handoff_departure"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, contacte {station} {frequency}, bom voo."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.land"
+text = ["{callsign}, vento {wind}, pista {runway}, autorizado a aterrar.", "{callsign}, pista {runway}, autorizado a aterrar, vento {wind}."]
+pilot_readback = "Autorizados a aterrar pista {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.continue"
+text = ["{callsign}, continue a aproximação pista {runway}.", "{callsign}, pista {runway}, continue, chamo-o para a aterragem."]
+
+[[template]]
+id = "tower.exit_vacate"
+text = ["{callsign}, livre à {side} via {exit}, contacte {station} {frequency}."]
+pilot_readback = "Livramos à {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_vacate_welcome"
+text = ["{callsign}, bem-vindo a {city}, livre à {side} via {exit}, contacte {station} {frequency}."]
+pilot_readback = "Livramos à {side} via {exit}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.exit_contact_ground"
+text = ["{callsign}, contacte {station} {frequency}.", "{callsign}, com a pista livre, contacte {station} {frequency}."]
+pilot_readback = "{station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around"
+text = ["{callsign}, recebido, mantenha rumo da pista, suba e mantenha {altitude}, contacte {station} {frequency}."]
+pilot_readback = "Rumo da pista, subimos e mantemos {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.turn_approved"
+text = ["{callsign}, curva à {turn} aprovada."]
+
+[[template]]
+id = "tower.turn_unable"
+text = ["{callsign}, curva à {turn} impossível, mantenha rumo da pista."]
+
+[[template]]
+id = "tower.go_around_traffic_contact"
+text = ["{callsign}, faça borrego, tráfego na pista, mantenha rumo da pista, suba e mantenha {altitude}, contacte {station} {frequency}."]
+pilot_readback = "Borrego, rumo da pista, subimos e mantemos {altitude}, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "tower.go_around_traffic"
+text = ["{callsign}, faça borrego, tráfego na pista, mantenha rumo da pista, suba e mantenha {altitude}."]
+pilot_readback = "Borrego, rumo da pista, subimos e mantemos {altitude}, {callsign_short}."
+
+[[template]]
+id = "tower.sequence"
+text = ["{callsign}, {message}."]
+
+[[template]]
+id = "tower.continue_hold_short"
+text = ["{callsign}, continue a rolagem, aguarde antes da pista {hold_short}."]
+pilot_readback = "Aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.hold_short_runway"
+text = ["{callsign}, aguarde antes da pista {hold_short}."]
+pilot_readback = "Aguardamos antes da pista {hold_short}, {callsign_short}."
+
+[[template]]
+id = "tower.stop_takeoff"
+text = ["{callsign}, pare imediatamente, repito, pare imediatamente, tráfego na pista."]
+
+[[template]]
+id = "tower.luaw_behind"
+text = ["{callsign}, atrás do {message}, pista {runway}, alinhe e aguarde atrás."]
+pilot_readback = "Atrás do tráfego a aterrar, pista {runway}, alinhamos e aguardamos atrás, {callsign_short}."
+
+[[template]]
+id = "tower.hold_position_traffic"
+text = ["{callsign}, mantenha a posição, {message}."]
+pilot_readback = "Mantemos a posição, {callsign_short}."
+
+[[template]]
+id = "tower.cancel_takeoff"
+text = ["{callsign}, mantenha a posição, descolagem cancelada, {message}."]
+pilot_readback = "Mantemos a posição, {callsign_short}."
+
+[[template]]
+id = "tower.hold_wake"
+text = ["{callsign}, aguarde pela esteira de turbulência, {message}, cerca de {minutes} minutos."]
+
+[[template]]
+id = "tower.follow_slow"
+text = ["{callsign}, reduza para a velocidade de aproximação final, {message}."]
+
+[[template]]
+id = "tower.continue_traffic"
+text = ["{callsign}, continue, {message}.", "{callsign}, continue, preveja autorização de aterragem tardia, {message}."]
+
+[[template]]
+id = "tower.sidestep_land"
+text = ["{callsign}, mude para a pista {runway}, pista {runway}, vento {wind}, autorizado a aterrar."]
+pilot_readback = "Mudança, autorizados a aterrar pista {runway}, {callsign_short}."
+
+[[template]]
+id = "tower.land_after_departure"
+text = ["{callsign}, pista {runway}, autorizado a aterrar, vento {wind}, tráfego {message} a partir à frente."]
+pilot_readback = "Autorizados a aterrar pista {runway}, {callsign_short}."
+
+# --- VFR ----------------------------------------------------------------------------------------------------------
+
+[[template]]
+id = "vfr.class_b_departure"
+text = ["{callsign}, autorizado a sair do espaço aéreo classe Bravo {direction}, mantenha VFR a ou abaixo de {altitude}, frequência de partidas {frequency}, transponder {squawk}."]
+pilot_readback = "Autorizados a sair da Bravo {direction}, VFR a ou abaixo de {altitude}, partidas {frequency}, transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff"
+text = ["{callsign}, pista {runway}, saída {direction} aprovada, autorizado a descolar."]
+pilot_readback = "Pista {runway}, autorizados a descolar, {callsign_short}."
+
+[[template]]
+id = "vfr.takeoff_closed"
+text = ["{callsign}, pista {runway}, circuito de tráfego pela {turn}, autorizado a descolar."]
+pilot_readback = "Circuito pela {turn}, pista {runway}, autorizados a descolar, {callsign_short}."
+
+[[template]]
+id = "vfr.frequency_change"
+text = ["{callsign}, mudança de frequência aprovada.", "{callsign}, mudança de frequência aprovada, bom voo."]
+
+[[template]]
+id = "vfr.closed_traffic"
+text = ["{callsign}, circuito de tráfego pela {turn} pista {runway}, reporte a meio da perna do vento."]
+pilot_readback = "Circuito pela {turn} pista {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.squawk"
+text = ["{callsign}, transponder {squawk}."]
+pilot_readback = "Transponder {squawk}, {callsign_short}."
+
+[[template]]
+id = "vfr.radar_contact"
+text = ["{callsign}, {station}, contacto radar, {message}."]
+
+[[template]]
+id = "vfr.cleared_class_b"
+text = ["{callsign}, autorizado a entrar no espaço aéreo classe Bravo, mantenha VFR a ou abaixo de {altitude}."]
+pilot_readback = "Autorizados a entrar na Bravo, VFR a ou abaixo de {altitude}, {callsign_short}."
+
+[[template]]
+id = "vfr.remain_clear_b"
+text = ["{callsign}, mantenha-se fora do espaço aéreo classe Bravo."]
+
+[[template]]
+id = "vfr.service_terminated"
+text = ["{callsign}, serviço radar terminado, transponder VFR, contacte {station} {frequency}."]
+pilot_readback = "Transponder VFR, {station} {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.enter_downwind"
+text = ["{callsign}, {station}, entre na perna do vento pela {turn} pista {runway}, reporte a meio da perna do vento."]
+pilot_readback = "Perna do vento pela {turn} pista {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.straight_in"
+text = ["{callsign}, {station}, final direta pista {runway}, reporte a três milhas em final."]
+pilot_readback = "Final direta pista {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.option"
+text = ["{callsign}, pista {runway}, vento {wind}, autorizado para a opção."]
+pilot_readback = "Autorizados para a opção pista {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.touch_and_go"
+text = ["{callsign}, pista {runway}, vento {wind}, autorizado para toque e descolagem."]
+pilot_readback = "Autorizados para toque e descolagem pista {runway}, {callsign_short}."
+
+[[template]]
+id = "vfr.following_ground"
+text = ["{callsign}, transponder {squawk}, frequência de partidas {frequency}."]
+pilot_readback = "Transponder {squawk}, partidas {frequency}, {callsign_short}."
+
+[[template]]
+id = "vfr.transition"
+text = ["{callsign}, trânsito aprovado {direction}, mantenha VFR a ou abaixo de {altitude}, reporte ao sair da zona."]
+pilot_readback = "Trânsito aprovado, a ou abaixo de {altitude}, wilco, {callsign_short}."
+
+[fragments]
+hold_fix = "espera sobre {fix}"
+altitude = "mantenha {altitude}"
+cruise = "preveja {cruise}"
+frequency = "frequência {frequency}"
+squawk = "transponder {squawk}"
+runway = "pista {runway}"
+hold_short = "aguarde antes da pista {hold_short}"
+heading = "rumo {heading}"
+speed = "mantenha {speed} nós"
+taxi_route = "role via {taxi_route}"
+approach = "autorizado aproximação {approach}"
+procedure = "saída {procedure}"
+procedure_arrival = "chegada {procedure}"
+destination = "autorizado para {destination}"
+cleared_for_takeoff = "autorizado a descolar"
+line_up_and_wait = "alinhe e aguarde"
+cleared_to_land = "autorizado a aterrar"
+hold_position = "mantenha a posição"
+descend_via = "desça via a chegada"
+fix = "direto {fix}"
+behind = "atrás do tráfego a aterrar"
+hold = "espera"
+efc = "nova autorização às {efc}"
+i_say_again = "repito"
+expect_runway_note = ", preveja pista {runway}"
+vectors_to_note = "{message}, vetores radar para {fix}"
+unavailable = "impossível, não tenho essa informação"
+traffic_vacating = "tráfego {message} a livrar a pista"
+landing_traffic = "tráfego a aterrar"
+traffic_final = "tráfego em final a {distance} milhas"
+rejected_vacate = "recebido, livre via {exit} quando possível, informe pronto para descolar"
+rejected_vacate_runway = "recebido, livre a pista quando possível, informe pronto para descolar"

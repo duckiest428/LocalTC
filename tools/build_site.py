@@ -69,6 +69,7 @@ PAGE = """<!DOCTYPE html>
   <div class="cl-tabs" role="tablist">
 {tabs}
   </div>
+  <label class="cl-toggle"><input type="checkbox" id="cl-upcoming"> Show upcoming versions</label>
 {body}
   <nav class="legal-nav">
     <a href="./">&larr; Back to LocalTC</a>
@@ -77,6 +78,24 @@ PAGE = """<!DOCTYPE html>
 </main>
 </div>
 <script>
+  // Upcoming versions (done, not released) show once "Show upcoming versions" is ticked, remembered on this browser;
+  // a link straight to one ticks it. Without the script everything shows.
+  (function () {{
+    const box = document.getElementById("cl-upcoming");
+    const show = (on) => {{
+      box.checked = on;
+      document.querySelectorAll("[data-upcoming]").forEach((el) => {{ el.hidden = !on; }});
+    }};
+    let saved = false;
+    try {{ saved = localStorage.getItem("cl-upcoming") === "1"; }} catch {{ /* private window */ }}
+    const linkedToOne = () => !!document.getElementById(decodeURIComponent(location.hash.slice(1)))?.closest("[data-upcoming]");
+    show(saved || linkedToOne());
+    box.addEventListener("change", () => {{
+      show(box.checked);
+      try {{ localStorage.setItem("cl-upcoming", box.checked ? "1" : "0"); }} catch {{ /* private window */ }}
+    }});
+    window.addEventListener("hashchange", () => {{ if (linkedToOne()) show(true); }});
+  }})();
   // One tab each: the Main App, the Companion App and the Website; a link to a version opens its tab.
   (function () {{
     const tabs = [...document.querySelectorAll(".cl-tabs [data-product]")];
@@ -89,7 +108,7 @@ PAGE = """<!DOCTYPE html>
     const linked = () => {{
       const id = decodeURIComponent(location.hash.slice(1));
       if (tabs.some((t) => t.dataset.product === id)) {{ pick(id); return; }}
-      const el = id && document.getElementById(id);
+      const el = id ? document.getElementById(id) : null; // no hash: no element (an empty id gave "" and threw)
       pick(el?.closest(".cl-product")?.dataset.product || "app");
       el?.scrollIntoView();
     }};

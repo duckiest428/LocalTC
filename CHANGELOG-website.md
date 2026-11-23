@@ -34,9 +34,12 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 - **Live Flights draws the path flown:** a solid line from where the flight started (the taxi too) to the aircraft,
   and the way still to go dashed from the aircraft, through the filed route's fixes still ahead or straight to the
   destination. The map opens on the whole world, and zooms in close enough to see an airport's taxiways.
+- **"Show upcoming versions" on the changelog:** a tick above the versions, for all three tabs; what's done but not
+  released is hidden until it's ticked, the choice is remembered, and a link to an upcoming version ticks it.
 - **The home page's app window can be used:** its tabs (ATC, Quick Settings, Live Map, EFB, Airport Lookup, Logbook)
   open by a click or the arrow keys, each with a look at that part of the app; Quick Settings' switches switch, and
-  Airport Lookup finds a few airports by their codes.
+  Airport Lookup finds a few airports by their codes. The Live Map tab is a real screenshot of the app's Live Map,
+  from a flight from Des Moines to Joplin.
 
 ### Changed
 - **The privacy policy on stopping Live Flights:** in the app's Settings or on the dashboard (the app's "Sharing live"
@@ -46,9 +49,13 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   Free", with the Windows logo, downloads the installer.
 - **"LocalTC" is white** beside the tower logo, on every page.
 - **The home page's status and features** list what's come since: VATSIM and IVAO controllers, the arrival sequence,
-  apron controllers, the turnaround timeline, cabin incidents, traffic that waits for its clearances, taxi arrows,
+  apron controllers, each country's own ATC voice, the turnaround timeline, cabin incidents, traffic that waits for its clearances, taxi arrows,
   the panel on the sim's toolbar and Live Flights. The install section says what the setup guide adds after the
   installer (the models, Ollama, GPU support).
+
+### Fixed
+- **The headline's "y" was cut off below the line** once its words had come in.
+- **The changelog's tabs** stopped working when the page was opened without a version in its address.
 
 ### Removed
 - **The "Is this a free AI ATC for MSFS?" section and the comparison page (free-atc-msfs):** search engines know

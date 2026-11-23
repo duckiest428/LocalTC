@@ -220,32 +220,7 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .wp-switch:checked { background: var(--green); }
 .wp-switch:checked::after { transform: translateX(14px); background: var(--on-green); }
 .wp-switch:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
-.wp-map { display: block; width: 100%; flex: 1; min-height: 0; }
-.wp-map .m-sea { fill: #0c1418; }
-.wp-map .m-land { fill: #1a2024; }
-.wp-map .m-coast { fill: none; stroke: rgba(255, 255, 255, .12); stroke-width: 1.2; }
-.wp-map .m-zone { fill: rgba(108, 201, 232, .05); stroke: var(--cyan); stroke-opacity: .5; stroke-dasharray: 4 5; }
-.wp-map .m-tower { fill: none; stroke: var(--amber); stroke-opacity: .55; stroke-dasharray: 3 4; }
-.wp-map .m-zlabel { fill: var(--cyan); font: 600 9px var(--mono); letter-spacing: .06em; text-anchor: middle; opacity: .8; }
-.wp-map .m-flown { fill: none; stroke: var(--green); stroke-width: 3; stroke-linecap: round; }
-.wp-map .m-ahead { fill: none; stroke: var(--green); stroke-width: 2.5; stroke-dasharray: 7 7; opacity: .85;
-  animation: ahead 1.6s linear infinite; }
-@keyframes ahead { to { stroke-dashoffset: -14; } }
-.wp-map .m-fix circle { fill: var(--text-2); }
-.wp-map .m-fix text, .wp-map .m-apt, .wp-map .m-tlabel { fill: var(--text-2); font: 500 9.5px var(--mono); }
-.wp-map .m-apt { fill: var(--text); font-weight: 600; }
-.wp-map .m-tlabel { fill: var(--cyan); }
-.wp-map .m-rwy { fill: var(--text-2); }
-.wp-map .m-own path { fill: var(--green); filter: drop-shadow(0 0 6px rgba(95, 208, 104, .7)); }
-.wp-map .m-tfc path { fill: var(--cyan); }
-.wp-map .m-gnd path { fill: var(--amber); }
-.wp-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 10px 14px; font-size: 11px; color: var(--text-3);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); }
-.wp-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.wp-legend i { display: inline-block; width: 16px; height: 0; border-top: 3px solid var(--green); }
-.wp-legend .lg-ahead { border-top-style: dashed; border-top-width: 2px; }
-.wp-legend .lg-zone { border-top: 2px dashed var(--cyan); }
-.wp-legend .lg-tfc { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--cyan); }
+.wp-shot { display: block; width: 100%; flex: 1; min-height: 0; object-fit: cover; object-position: 50% 50%; }
 .wp-turn { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12.5px; }
 .wp-turn li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0 8px 22px; position: relative;
   color: var(--text-3); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .05); }
@@ -464,7 +439,7 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
   max-height: calc(100vh - 76px); overflow-y: auto; }
 .cl-side-h { font-family: var(--mono); font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase;
   color: var(--text-3); margin: 0 0 12px; }
-.cl-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); margin: 0 0 14px;
+.cl-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); margin: 14px 0 14px;
   cursor: pointer; user-select: none; }
 .cl-toggle input { accent-color: var(--green, #5fd068); width: 15px; height: 15px; margin: 0; }
 .cl-versions { display: flex; flex-direction: column; gap: 2px; }
@@ -474,7 +449,7 @@ code.inline { background: rgba(255, 255, 255, .05); border-radius: 6px; padding:
 .cl-versions a.on { background: rgba(95, 208, 104, .1); color: var(--text); box-shadow: inset 2px 0 0 var(--green, #5fd068); }
 .cl-versions .cl-date { font-size: 11px; color: var(--text-3); }
 .cl-versions .cl-up { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--amber, #e7b24a); }
-.cl-versions [hidden] { display: none; }
+.cl-versions [hidden], .changelog .release[hidden] { display: none; }
 @media (max-width: 900px) {
   .cl-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .cl-side { position: static; max-height: none; padding-top: 32px; }
@@ -890,7 +865,7 @@ table.flights td { padding: 10px 6px; box-shadow: inset 0 1px 0 rgba(255, 255, 2
 /* --------------------------------------------------------- no motion, please */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .sweep, .log .cursor, .log li, .live-dot, .hero-slides img, .wp-map .m-ahead, .wp-turn .now::before { animation: none; }
+  .sweep, .log .cursor, .log li, .live-dot, .hero-slides img, .wp-turn .now::before { animation: none; }
   .reveal { opacity: 1; transform: none; }
   .btn:hover, .card:hover { transform: none; }
   * { transition-duration: .01ms !important; }
@@ -1035,9 +1010,11 @@ body::after {
 
 /* The headline arrives a word at a time (app.js wraps the words). */
 .hero h1.split { background: none; color: #fff; -webkit-text-fill-color: currentColor; text-shadow: 0 2px 30px rgba(0, 0, 0, .35); }
-.split .w { display: inline-block; opacity: 0; transform: translateY(.45em) rotate(2deg); filter: blur(8px);
-  animation: word-in .9s var(--ease) forwards; animation-delay: calc(var(--i) * 70ms + 150ms); }
-@keyframes word-in { to { opacity: 1; transform: none; filter: none; } }
+/* The words' own style is where they end, so nothing is left on them after: a filter left behind (even "blur(0)")
+   cut off the descender of a "y" below the tight line. The room below each word keeps that descender inside it. */
+.split .w { display: inline-block; padding-bottom: .14em; margin-bottom: -.14em;
+  animation: word-in .9s var(--ease) backwards; animation-delay: calc(var(--i) * 70ms + 150ms); }
+@keyframes word-in { from { opacity: 0; transform: translateY(.45em) rotate(2deg); filter: blur(8px); } }
 .home .hero-copy > :not(h1) { animation: rise-in .9s var(--ease) both; }
 .home .hero-copy > .lede { animation-delay: .55s; }
 .home .hero-copy > .lede-strong { animation-delay: .68s; }

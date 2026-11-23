@@ -152,7 +152,15 @@ def test_one_products_changelog_is_always_the_one_showing():
                             "website": "## [1.0.0] - 2026-01-01\n- c\n"})
     assert page.count('aria-selected="true"') == 1 and 'data-product="app" aria-selected="true"' in page
     assert page.count('<div class="cl-product" data-product="companion" hidden>') == 1
-    assert '<div class="cl-product" data-product="app">' in page and "cl-upcoming" not in page
+    assert '<div class="cl-product" data-product="app">' in page
+
+
+def test_upcoming_versions_show_with_a_tick():
+    """ "There must be a tick to see upcoming versions": one for the page, every product's upcoming version with it."""
+    page = build_site.page({"app": "## [1.1.0] - Upcoming\n- a\n## [1.0.0] - 2026-01-01\n- a\n",
+                            "companion": "## [1.0.0] - 2026-01-01\n- b\n", "website": "## [1.0.0] - 2026-01-01\n- c\n"})
+    assert page.count('id="cl-upcoming"') == 1 and "Show upcoming versions" in page
+    assert 'querySelectorAll("[data-upcoming]")' in page
 
 
 def test_the_changelogs_upcoming_section_is_the_next_version():

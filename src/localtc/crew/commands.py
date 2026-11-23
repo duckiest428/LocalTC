@@ -296,7 +296,16 @@ def _at(tokens: list[Token], i: int) -> tuple[Command | None, int]:  # noqa: C90
     if w == "apu":  # "start the APU", "APU bleed on", "APU off"
         if nxt == "bleed":
             return Command("apu_bleed", _on_off(tokens, i - 3, i + 4) or "on"), i + 2
-        stop = {_word(tokens, j) for j in range(max(0, i - 3), min(len(tokens), i + 3))} & {"stop", "shut", "shutdown", "off"}
+        near = {_word(tokens, j) for j in range(max(0, i - 3), min(len(tokens), i + 3))}
+        stop = near & {"stop", "shut", "shutdown", "off"}
+        # Said to be started, or the APU alone ("APU", "APU please"): "it doesn't seem it works without the APU, so I'll
+        # wait for the startup" started it, and the pilot had to stop it again.
+        start = near & {"start", "starting", "startup", "on", "fire", "light", "bring", "turn", "run", "get"}
+        if _word(tokens, i - 1) in ("without", "the") and _word(tokens, i - 2) in ("without", "works", "work") \
+                or not (stop or start or len(tokens) <= 3):
+            return None, i + 1
+        if start and not stop and near & {"wait", "until", "after"}:
+            return None, i + 1  # "I'll wait for the APU start": talk about it, not the word to start it
         return Command("apu", "stop" if stop else "start"), i + 1
     if w == "seatbelt":  # "seatbelt sign on", "turn on the seatbelts" (no on or off: on)
         return Command("seatbelt", _on_off(tokens, i - 3, i + 3) or "on"), i + 1

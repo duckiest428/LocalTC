@@ -64,7 +64,7 @@ from localtc.atc_core.llm.phrase import facts_problem, spoken_as
 from localtc.atc_core.llm.triggers import is_question, question_topic
 from localtc.atc_core.phase import FlightPhase, PhaseThresholds, PhaseTracker
 from localtc.atc_core.phraseology import TemplateLibrary, speech
-from localtc.atc_core.readback.written import with_frequency
+from localtc.atc_core.readback.written import with_expected, with_frequency
 from localtc.atc_core.readback import (
     ChainInterpreter,
     GrammarInterpreter,
@@ -427,6 +427,9 @@ def automated_only(geo: AirportGeometry) -> bool:
     kinds = {f.kind for f in geo.airport.frequencies}
     return "atis" not in kinds and bool(kinds & {"awos", "asos"})
 REPEAT_WINDOW_S = 180.0
+# A takeoff given up on the runway, as pilots say it, and where they're leaving the runway: "onto Juliet", "via J3"
+REJECTED_TAKEOFF = re.compile(r"\b(?:reject(?:ed|ing)?|abort(?:ed|ing)?|stopping)\b(?:\W+\w+){0,2}?\W+take ?-?off\b|\breject(?:ed|ing)\b", re.I)
+REJECT_ONTO = re.compile(r"\b(?:onto|via)\s+([a-z]+)(?:\s?(\d{1,2}))?\b", re.I)
 CONFIRM_WORDS = {"confirm", "confirming", "verify"}  # a readback repeated within this long of the instruction is just a repeat
 AIRPORT_CONTROLLERS = ("ground", "tower", "clearance", "delivery", "ramp", "apron")  # one airport's own
 SEQUENCE_MIN_KT = 40.0  # slower than this, nothing is on final (an aircraft parked a few feet up isn't)
@@ -3927,6 +3930,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             if answer is not None:  # "just to confirm, taxi to 06L?": affirmative, or negative with the right value
                 st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
                 return answer
+        if REJECTED_TAKEOFF.search(ev.text) and facility.controller == "tower" and st.aircraft is not None \
+                and st.aircraft.on_ground:
+            # "We have a rejected takeoff, vacating left onto Juliet": tower answers, and the takeoff clearance is
+            # gone (it named 17R just read back, was taken for that readback again, and went unanswered).
+            st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
+            return self._rejected_takeoff(ev.text, facility, t)
         if pending is None and self._repeats_readback(ev.text, facility, mhz, t):
             # The pilot read it back again (maybe didn't hear "readback correct"): nothing to add.
             st.exchanges.append(Exchange(t, "pilot", facility.controller, ev.text, None))
@@ -4277,6 +4286,24 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             self._schedule(t, "common.affirmative", {}, facility, expects_readback=False)
         return []
 
+    def _rejected_takeoff(self, text: str, facility: Facility, t: float) -> list[BusEvent]:
+        """A takeoff rejected: "roger, vacate onto J when able, advise when ready for departure". The takeoff clearance
+        is withdrawn, and the next "ready for departure" gets a new one."""
+        st = self.state
+        st.clearances.pop("takeoff", None)
+        st.pending = None
+        self._takeoff_wait = self._takeoff_hold = None
+        self._scheduled = [s for s in self._scheduled if not s.instruction_id.startswith(("tower.takeoff", "tower.luaw"))]
+        where = REJECT_ONTO.search(text)
+        name = (PHONETIC_LETTERS.get(where.group(1).lower(), where.group(1).upper()) + (where.group(2) or "")) if where else ""
+        name_said = speech.taxiway(name) if name and hasattr(speech, "taxiway") else name
+        vacate = (f"vacate onto {name} when able", f"vacate onto {name_said} when able") if name else \
+            ("vacate the runway when able", "vacate the runway when able")
+        message = Phrase(f"roger, {vacate[0]}, advise when ready for departure",
+                         f"roger, {vacate[1]}, advise when ready for departure")
+        self._schedule(t, "common.info", {"message": message}, facility, expects_readback=False)
+        return []
+
     def _repeats_readback(self, text: str, facility: Facility, mhz: float | None, t: float) -> bool:
         done = self.state.read_back
         if done is None or t - done.issued_t > REPEAT_WINDOW_S:
@@ -4303,6 +4330,11 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
                 and "frequency" not in (*interp.mismatched, *interp.unclear, *interp.missing):
             # The log's line with the frequency as ATC took it ("Tower on 118, Dec. 7, 7, 7, 5" is 118.775)
             heard = with_frequency(interp.text, float(mhz))
+        if isinstance(cruise := pending.expected.get("cruise"), float | int) and interp.text and cruise > 0 \
+                and "cruise" not in (*interp.mismatched, *interp.unclear, *interp.missing):
+            # ... and the level to expect as ATC gave it ("Expect 5L, 3300, 23M, departure": FL330, 23 minutes)
+            minutes = slots.get("minutes") if isinstance(slots.get("minutes"), int) else None
+            heard = with_expected(heard or interp.text, speech.altitude_display(int(cruise)), minutes)
         out: list[BusEvent] = [
             ReadbackEvaluated(
                 t=t, instruction_id=pending.instruction_id, status=interp.status, missing=interp.missing,
@@ -6149,7 +6181,9 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         way (``procedures.sid_for_runway``), else none at all. Without the sim's procedures, only the plan's own runway says
         which runway the filed one is for."""
         filed = self.cfg.sid or None
-        if runway is None:
+        if runway is None or filed is None:
+            # None filed: none given. Calgary's plan went "DCT LOMLO" with no SID, and the clearance put it on CWBOY2
+            # (the one from 17R that reaches LOMLO).
             return filed
         known = self._departures.get((self.state.flight.origin or "").upper())
         if known:

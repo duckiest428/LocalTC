@@ -250,6 +250,7 @@ APPROACH_TRIES = 2  # sent around, it comes round for another approach this many
 RUNWAY_SHORT_M = 1500.0  # an airliner's airport has a runway this long at least (not the strip beside the hub)
 LINE_UP_CLEAR_NM = 4.0  # a departure doesn't line up with one of LocalTC's arrivals this close in on that runway
 OCCUPIED_NM = 1.0  # an arrival this close in with another of LocalTC's on the runway: sent around
+LAND_CALL_CLEAR_NM = 3.0  # ... and this close in, not cleared to land while the runway is still taken
 REJOIN_TTL_S = 15 * 60.0  # a departure off ATC's runway flies to the real one's track this long at most
 REJOIN_LEAD_S = 60.0  # ... steering for where the real one will be this far ahead
 NO_RUNWAY_AGAIN_S = 30.0  # ATC with no runway for an airport (no ATIS for it): asked again after this long
@@ -2035,7 +2036,9 @@ class TrafficManager:
                 end = geo.end(loc.runway[1]) if geo is not None else None
                 if end is not None and not loc.on_ground:
                     togo = self._togo_nm(geo, end, loc)
-                    if togo <= FINAL_CALL_NM:
+                    if togo <= FINAL_CALL_NM and not (togo <= LAND_CALL_CLEAR_NM and self._runway_taken(plane, geo, end)):
+                        # Not cleared to land onto a runway still taken that close in: Calgary cleared an A330 on a mile
+                        # final and sent it around eight seconds later ("decide one"). It's cleared once it's free.
                         out += self._try_call(plane, "land", geo.icao, end.ident, now)
                     if togo <= OCCUPIED_NM and loc.owned and self._runway_taken(plane, geo, end):
                         out += self._go_around(plane, geo, end, now, why="the runway still taken")

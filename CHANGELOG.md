@@ -29,6 +29,9 @@ a new minor version adds features, a patch fixes them.
 - **South Korea's airlines by their callsigns:** Air Busan, Air Seoul, Aerohanguk (Aero K), Eastar, Jeju Air, Jin Air
   and Parata Air, and Trinity Airways (formerly T'way) as "Sonorous". Their own aircraft in the traffic at Incheon,
   Gimpo, Gimhae and Jeju.
+- **A rejected takeoff is answered:** "we have a rejected takeoff, vacating onto Juliet" gets "roger, vacate onto J
+  when able, advise when ready for departure", and the takeoff clearance is withdrawn; the next "ready for departure"
+  gets a new one. Tower said nothing: the call named the runway just read back, and was taken for that readback again.
 - **"Break, break" on a busy frequency:** now and then a busy controller gives two of the other flights their
   instructions back to back, "break, break" between them, and both read back after.
 - **The other flights wait for their clearances:** with you on the frequency, LocalTC's traffic moves only once its
@@ -81,8 +84,25 @@ a new minor version adds features, a patch fixes them.
   tries again (it used to give up after the first try). A microphone plugged in (or woken by Windows) after the app
   started is found when the flight starts: Windows's list is read again. Every start had stopped with "no input device
   matching 'Microphone (K66)'" while Windows showed the K66 working.
+- **No SID unless one is filed:** a plan starting "DCT LOMLO" with no SID was cleared on CWBOY2 (the departure from
+  17R that reaches LOMLO). A SID is still swapped for the runway's when the filed one doesn't leave from it.
+- **No "cleared to land" onto a taken runway:** one of LocalTC's arrivals inside three miles isn't cleared while another
+  is still on its runway (Calgary cleared an A330 and sent it around eight seconds later); it's cleared once it's free.
+- **GSX's de-icing question is yours:** "Ice warning: do you request the de-icing treatment?" at the push was answered
+  "No" for you (GSX's own choice) at -8 °C. It's read out and waits for your answer, unless you've been de-iced
+  already. And once de-iced, "cleared to start engines" comes when the push is done, not as it begins.
+- **GSX's invoice isn't read over the radio** ("Latest Invoice? 1: Open in browser, 2: Close").
+- **"Stopping the push" only once it's stopped:** asked to stop with the tug still on its way, the ramp said "stopping
+  the push" and, in the same breath, that the tug wouldn't stand down (GSX had no way to stop it yet). Now one or the
+  other, as GSX takes it.
+- **Talk about the APU doesn't start it:** "it doesn't seem it works without the APU, so I'll wait for the startup"
+  had the copilot start the APU. It's started when asked ("start the APU", "APU on", "APU please").
+- **One crew meal:** a second mention of dinner ("not the crew meals ...") ordered a second tray, and both came.
+- **The cabin's announcements keep their voice:** Kokoro slow for a moment (the sim busy with the push) had Piper read
+  the rest of the French safety briefing in an English voice. An announcement waits three times as long for its own.
 - **The radio log writes the frequency ATC took:** "Tower on 118, Dec. 7, 7, 7, 5" shows as "Tower on 118.775" once
-  ATC has taken the readback; "9 decimal 75" as 119.75. The recording keeps what was heard, and a frequency ATC turned
+  ATC has taken the readback; "9 decimal 75" as 119.75; and the clearance's level to expect ("Expect 5L, 3300, 23M,
+  departure" is "Expect FL330 23 minutes after departure"). The recording keeps what was heard, and a value ATC turned
   down is left as it was.
 - **A press with nothing said is no call:** "A, B, D, E, F.", the airport's taxiways read back by Whisper from a press
   with only noise in it, got "say again" from ground. Words that are only the airport's taxiway or runway names are

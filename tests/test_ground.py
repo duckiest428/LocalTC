@@ -562,7 +562,12 @@ def test_stop_the_push():
     c.heard("pushback", 1.0)
     c.tick(1.0)
     out = c.heard("stop the push", 2.0)
-    assert any("Set parking brake" in s for s in said(out))
+    # "Stopping the push" only once GSX has stopped it: said first, it came with "the tug won't stand down" when GSX had
+    # no way to stop it yet, and the push went on.
+    assert not any("parking brake" in s for s in said(out))
+    c.state = state_with(c, services=c.state.services, menu=Menu("Activate Services at LSZH", ("Request Boarding",)))
+    out = c.tick(3.0)
+    assert said(out) and "tug" in said(out)[0].lower() and not any("parking brake" in s for s in said(out))
 
 
 # --- gates -----------------------------------------------------------------------------------------------------------

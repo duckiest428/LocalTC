@@ -1506,7 +1506,10 @@ class CabinCrew:
             self._later.append(_Later(t + delay, "delivered", {"drink": name if not both else f"{name}s",
                                                                "hot": "1" if hot else ""}))
             return reply("drink_both" if both else "drink", {"drink": name})
-        if re.search(r"\b(?:meals?|food|something\s+to\s+eat|sandwich|lunch|dinner|breakfast|snacks?)\b", low):
+        if re.search(r"\b(?:meals?|food|something\s+to\s+eat|sandwich|lunch|dinner|breakfast|snacks?)\b", low) \
+                and not re.search(r"\b(?:not|no|don't|dont)\s+(?:the\s+)?(?:crew\s+)?(?:meals?|food|dinner)\b", low) \
+                and not any(later.what == "delivered" and later.data.get("meal") for later in self._later):
+            # (Once: "not the crew meals" was a second tray, and both came; the same meal on its way isn't ordered again.)
             self._asking = None
             self._later.append(_Later(t + self._rng.uniform(*DRINK_S) + 60, "delivered", {"meal": "1"}))
             return reply("meal")

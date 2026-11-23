@@ -42,6 +42,7 @@ KINDS = ("timeout", "quota", "rate_limit", "network", "auth", "invalid_audio", "
 # Time for a long line beside the sim: an ATIS's 400 characters ran out of 8 s, the voice went to another, and that ran out
 # too: text only.
 SECONDS_PER_CHAR = 0.06
+CABIN_PATIENCE = 3.0  # a cabin announcement waits this many times longer for its voice before another stands in
 REST_S = 30.0
 REST_MAX_S = 600.0
 RATE_LIMIT_S = 60.0
@@ -158,7 +159,11 @@ class VoiceChain:
                 continue
             st.calls += 1
             try:
-                speech = check_audio(self._run(provider, text, persona, max(self.timeout_s, len(text) * SECONDS_PER_CHAR)), text)
+                # The cabin's announcements wait longer for their voice: nothing waits on them, and Kokoro timing out
+                # (the sim busy with the push) read the rest of Grace's French safety briefing in another voice.
+                patience = CABIN_PATIENCE if persona.role == "cabin" else 1.0
+                speech = check_audio(self._run(provider, text, persona,
+                                               patience * max(self.timeout_s, len(text) * SECONDS_PER_CHAR)), text)
             except TtsError as exc:
                 self._failed(provider, st, exc)
                 continue

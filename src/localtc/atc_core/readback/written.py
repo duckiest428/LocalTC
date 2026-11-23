@@ -71,3 +71,17 @@ def with_frequency(text: str, mhz: float) -> str:
     run = best.group(0)
     end = best.start() + len(run.rstrip(" ,."))
     return text[:start] + written(mhz) + text[end:]
+
+
+_EXPECT = re.compile(r"\bexpect(?:ing)?\b(?P<said>.{1,60}?)\b(?:after\s+)?departure\b", re.IGNORECASE)
+
+
+def with_expected(text: str, level: str, minutes: int | None) -> str:
+    """``text`` with its "expect ... departure" written as ATC gave it ("Expect 5L, 3300, 23M, departure" is "Expect
+    FL330 23 minutes after departure"), once the cruise in it was taken; ``text`` as it was without one."""
+    m = _EXPECT.search(text)
+    if m is None or not re.search(r"\d", m.group("said")):
+        return text
+    word = m.group(0).split()[0]
+    after = f" {minutes} minutes after departure" if minutes else " after departure"
+    return text[:m.start()] + f"{word} {level}{after}" + text[m.end():]

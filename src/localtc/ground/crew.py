@@ -622,7 +622,9 @@ class RampCrew:
             self._push = None
             return [self._speech("no_push", t)]
         self._cancelled.add("Departure")
-        return [self._speech("stopping", t), *self._start_run((row_of("Departure"), Want(("stop", "abort service", "abort"))), "cancel", "Departure", t)]
+        # "Stopping the push" once GSX has taken it: said first, it was followed by "the tug won't stand down" when GSX's
+        # menu had no way to stop it yet (the tug still on its way), and the push went on.
+        return self._start_run((row_of("Departure"), Want(("stop", "abort service", "abort"))), "cancel", "Departure", t)
 
     def _confirmation(self, what: str, t: float) -> list[Any]:
         menu = self.state.menu
@@ -639,6 +641,12 @@ class RampCrew:
             if not self._after_brake and self._push is None:
                 return [self._speech("ok", t)]
         return []  # (what was waiting on it goes by itself; the headset's calls follow the aircraft)
+
+    def _start_after_push(self) -> bool:
+        """De-iced (or being de-iced): GSX has the engines started once the push is done, not on it (Calgary at -8 °C:
+        "cleared to start" came as the push began, and GSX said to start after it)."""
+        deice = self._service("DeIce")
+        return deice is not None and (deice.active or deice.state == "completed")
 
     def _push_moves(self, t: float) -> list[Any]:
         """The push as it goes: what the aircraft and GSX are doing, the standard words at each point."""
@@ -675,11 +683,14 @@ class RampCrew:
                 and t - push.release_t >= RELEASE_AGAIN_S and self.state.menu is None:
             push.told.add("again")  # let go before GSX was ready for it: it waits for the brake to come off again
             out.append(self._speech("release_again", t))
+        after = self._start_after_push()
         if push.stage == "pushing":
-            if "start" not in push.told and own.gs_kt > 0.5:
+            if own.gs_kt > 0.5:
+                push.told.add("moved")
+            if "start" not in push.told and own.gs_kt > 0.5 and not after:
                 push.told.add("start")
                 out.append(self._speech("cleared_start", t))
-            moved = "start" in push.told
+            moved = "moved" in push.told
             # ("Release parking brake" is GSX's too: it had "Pushback complete" called before the aircraft moved. So had the
             # service showing "available" while GSX waits on which way to go.)
             if ("brake" in message and "release" not in message and moved) or svc.state == "completing" \
@@ -692,6 +703,9 @@ class RampCrew:
                 push.brake_said_t = t
             elif self.braked:
                 push.stage = "start"
+                if after and "start" not in push.told:  # de-iced: the engines once the push is done
+                    push.told.add("start")
+                    out.append(self._speech("cleared_start", t))
         if push.stage == "start" and (not svc.active or any(w in status for w in TUG_OFF)):
             side = SIDE.get(push.direction)
             out.append(self._speech("disconnecting" if side else "disconnecting_no_side", t, side=side or ""))
@@ -739,6 +753,24 @@ class RampCrew:
             self._asking = menu  # (the same question again: GSX's menu comes and goes. Still answerable)
             return []
         self._read_out[menu.title] = t
+        if has_words(menu.title, "de-icing") or has_words(menu.title, "ice warning"):
+            # GSX's "Ice warning: do you request the de-icing treatment?" at the push is the pilot's call: answered
+            # "No" for them (GSX's own choice) at Calgary at -8 °C, and the pilot had to call de-icing up themselves.
+            # Asked, unless it's been done (or is under way) already: then no, a second treatment isn't wanted.
+            deice = self._service("DeIce")
+            if deice is not None and (deice.active or deice.state == "completed") \
+                    and (found := find(menu, ("no",))).index is not None:
+                log.info("Ground crew: %r: no, de-iced already", menu.title)
+                return [Pick(found.index, menu.entries[found.index])]
+            self._asking = menu
+            real = real_entries(menu)
+            return [self._speech("question", t, title=_plain(menu.title),
+                                 choices=", ".join(f"{n}: {_plain(e)}" for n, (_, e) in enumerate(real, 1)))]
+        if has_words(menu.title, "invoice"):
+            # GSX's bill at the end of the turnaround ("Latest Invoice? 1: Open in browser, 2: Close"): the pilot's to
+            # look at in GSX if they like, never read over the radio.
+            log.info("Ground crew: GSX's %r page: left alone", menu.title)
+            return []
         if has_words(menu.title, "operator"):
             real = [(i, e) for i, e in real_entries(menu) if not (i < len(menu.disabled) and menu.disabled[i])]
             # The airline's own handling by any of its names ("Emirates", the callsign's word, its codes: "UAE", "EK")
@@ -891,6 +923,8 @@ class RampCrew:
                 failed = "with_push" if kind == "off" and service == "GPU" and run.failed == "missing" else run.failed
                 out.append(self._speech({"cancel": "cancel_failed", "finish": "finish_failed", "off": "off_failed"}.get(kind, "menu_failed"),
                                         t, name=name, why=self._why(failed)))
+            elif kind == "cancel" and service == "Departure":
+                out.append(self._speech("stopping", t))  # the push stopped: "Stopping the push. Set parking brake."
             elif kind != "call":  # (a service called: GSX showing it says the rest)
                 out.append(self._speech({"cancel": "cancelled", "finish": "finished", "off": "off"}[kind], t, name=name))
         return out

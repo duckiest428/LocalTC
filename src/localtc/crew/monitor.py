@@ -632,7 +632,10 @@ class Monitor(WatchMixin):
             elif phase == "ARRIVAL" and previous == "CRUISE":
                 self._prompt_checklist("descent", t=t + 5)
             elif phase == "CRUISE":
-                level = (st.flight.cruise_ft if st is not None else None) or (round(self._altitude(self.c.own), -2) if self.c.own else None)
+                cruise = st.flight.cruise_ft if st is not None else None
+                here = round(self._altitude(self.c.own), -2) if self.c.own else None
+                # Where it levelled off: "Level at FL360" was said at FL290, cleared to FL360 and not climbing yet.
+                level = cruise if cruise and (here is None or abs(here - cruise) <= 300) else here or cruise
                 if level:
                     self._call("toc", ROUTINE, t, [f"Level at {speech.altitude_display(int(level))}.",
                                                    f"Top of climb, level {speech.altitude_display(int(level))}."])

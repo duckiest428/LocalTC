@@ -17,6 +17,7 @@ class Gate:
         self._lock = threading.Condition()
         self._open = 0
         self._restarting = False
+        self.generation = 0  # one more at each restart: device numbers read before it may be another device's now
 
     @contextmanager
     def playing(self) -> Iterator[None]:
@@ -60,6 +61,7 @@ class Gate:
             sd._initialize()
         finally:
             with self._lock:
+                self.generation += 1
                 self._restarting = False
                 self._lock.notify_all()
         return True

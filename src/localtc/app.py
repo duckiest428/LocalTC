@@ -1190,6 +1190,45 @@ class VoiceInput:
         self.capture.close()
 
 
+WHISPER_CARD_WAIT_S = 90.0  # the graphics card's first words (loading included): longer than this, the CPU
+
+
+async def warm_whisper(transcriber, wait_s: float | None = None) -> float:
+    """Whisper loaded and run once, on a thread of its own that can't keep the app from closing. On the graphics card
+    it has ``WHISPER_CARD_WAIT_S``: a flight restarted to apply a setting hung at "Loading Whisper" there (the card's
+    first words never came back), and only closing the app and waiting got it going. Past that, the CPU for the rest of
+    this run, and the flight starts."""
+    wait_s = WHISPER_CARD_WAIT_S if wait_s is None else wait_s
+    loop = asyncio.get_running_loop()
+
+    def run() -> "asyncio.Future[float]":
+        done: asyncio.Future[float] = loop.create_future()
+
+        def work() -> None:
+            try:
+                seconds = transcriber.warm_up()
+                result = lambda: done.done() or done.set_result(seconds)  # noqa: E731
+            except BaseException as exc:  # noqa: BLE001 - handed to the flight's start
+                result = lambda: done.done() or done.set_exception(exc)  # noqa: E731
+            try:
+                loop.call_soon_threadsafe(result)
+            except RuntimeError:
+                pass  # the flight gave up on it long ago (the CPU took over) and has ended: nobody is waiting
+
+        threading.Thread(target=work, name="localtc-whisper-warm-up", daemon=True).start()
+        return done
+
+    if transcriber.choice.device != "cuda":
+        return await run()
+    try:
+        return await asyncio.wait_for(asyncio.shield(run()), wait_s)
+    except asyncio.TimeoutError:
+        transcriber.to_cpu(f"no words from it in {wait_s:.0f} s")
+        log.warning("Whisper on the graphics card didn't answer in %.0f s: the CPU for this flight (restart the app to "
+                    "try the card again)", wait_s, extra=CONSOLE)
+        return await run()
+
+
 async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, engine) -> VoiceInput:
     """Microphone, Whisper and the push-to-talk switch for a session."""
     from localtc.stt.audio import AudioCapture
@@ -1210,15 +1249,15 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
         talked_to = WhisperTranscriber(whisper_model(cfg), device=v.device, compute_type=v.compute_type,
                                        models_dir=v.models_dir or None, beam_size=v.beam_size)
         log.info("Loading %s ...", talked_to.description, extra=CONSOLE)
-        await asyncio.to_thread(talked_to.warm_up)
+        await warm_whisper(talked_to)
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
-    seconds = await asyncio.to_thread(transcriber.warm_up)
+    seconds = await warm_whisper(transcriber)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
     if transcriber.stand_in_for:
         log.warning("Whisper %s couldn't be downloaded (no connection to Hugging Face or its mirror): using Whisper "
                     "%s, already on this PC, for this flight", transcriber.stand_in_for, transcriber.choice.model,
                     extra=CONSOLE)
-    capture =AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000, gain=cfg.mixer.mic_gain)
+    capture = AudioCapture(v.input_device or None, pre_roll_s=v.pre_roll_ms / 1000, gain=cfg.mixer.mic_gain)
     capture.start()
     log.info("Microphone: %s%s", capture.name, "" if v.input_device else " (the system default input)", extra=CONSOLE)
     hints = None

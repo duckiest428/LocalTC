@@ -202,8 +202,8 @@ def parked_at(geometry: AirportGeometry, lat: float, lon: float, real: GateData 
 
 
 def requested(tokens: list[Token]) -> str | None:
-    """The gate a pilot asks for ("gate Echo 9", "taxi to B 25", "stand 46", "can we get Echo 9 as our gate"): "E9",
-    "B25", "46"; None."""
+    """The gate a pilot asks for ("gate Echo 9", "taxi to B 25", "stand 46", "gate 46B", "can we get Echo 9 as our
+    gate"): "E9", "B25", "46", "46B"; None."""
     for i, token in enumerate(tokens):
         if token.text not in ("gate", "stand", "to"):
             continue
@@ -211,6 +211,8 @@ def requested(tokens: list[Token]) -> str | None:
         if len(rest) == 2 and len(rest[0].text) == 1 and rest[0].text.isalpha() and rest[1].text.isdigit():
             return rest[0].text.upper() + rest[1].text
         if token.text in ("gate", "stand") and rest and rest[0].text.isdigit():
+            if len(rest) == 2 and len(rest[1].text) == 1 and rest[1].text.isalpha():
+                return rest[0].text + rest[1].text.upper()  # "gate 46B": its letter after it (Los Angeles's 46B was "46")
             return rest[0].text
     for i, token in enumerate(tokens):  # the gate named before the word: "Echo 9 as our gate"
         if token.text not in ("gate", "stand"):

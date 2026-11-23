@@ -138,8 +138,10 @@ def facts(p: Picture) -> dict[str, str]:
                 weather += f", altimeter {speech.altimeter_display(w.altimeter_inhg)}"
             if w.temperature_c is not None:
                 weather += f", temperature {w.temperature_c}"
-            out["destination weather"] = weather + f", runway {info.runway} in use"
-            if (comp := _components(p.engine, dest, a.arrival_runway or info.runway, w)) is not None:
+            # ("there": held short of Denver's 25, "should I enter the runway?" got "negative, runway 25R is in use",
+            # Los Angeles's.)
+            out["destination weather"] = weather + f", runway {info.runway} in use there"
+            if not departing and (comp := _components(p.engine, dest, a.arrival_runway or info.runway, w)) is not None:
                 out[f"wind on runway {comp[0]}"] = comp[1]
     if own is not None:
         out["altitude"] = f"{round(own.alt_indicated_ft / 10) * 10:,.0f} feet"

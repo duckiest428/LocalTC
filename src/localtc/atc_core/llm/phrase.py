@@ -172,6 +172,21 @@ def _check_facts(text: str, words: list[str], facts: dict[str, str]) -> None:
     _check_runways(text, facts)
 
 
+RUNWAY_SIDE = re.compile(r"(?<!\w)(\d{1,2})([LRC])(?!\w)")  # "25L", "07R" (and in "07L/25R")
+
+
+def _check_sides(text: str, facts: dict[str, str]) -> None:
+    """A runway's left, right or centre only where the airport has it (``facts["runways here"]``), whatever the model
+    may otherwise answer from: "Am I at the correct runway?" got "runway 25L", and Denver has one runway 25."""
+    here = facts.get("runways here", "").upper()
+    if not here:
+        return
+    sides = {f"{int(n)}{side}" for n, side in RUNWAY_SIDE.findall(here)}
+    for n, side in RUNWAY_SIDE.findall(_plain(text).upper()):
+        if f"{int(n)}{side}" not in sides:
+            raise PhraseError(f"reply names runway {n}{side}, which the airport doesn't have (its runways: {here})")
+
+
 def _check_runways(text: str, facts: dict[str, str]) -> None:
     """Runways as the facts have them: a pair ("19L/01R") only as the airport has it, and one said to be in use only
     if the facts say it is."""
@@ -236,6 +251,7 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
                               + (f" (waiting for: {waiting})" if waiting else ""))
     if not beyond_facts:
         _check_facts(text, words, facts)
+    _check_sides(text, facts)
     if required and "unable" not in words:
         if missing := sorted(numbers(required) - numbers(text)):
             raise PhraseError(f"reply leaves out {', '.join(missing)}: the answer is \"{required}\" (here and now)")
@@ -553,12 +569,15 @@ class LlmPhraser:
 
     def reply(self, *, pilot: str, decision: str, facts: dict[str, str], callsigns: tuple[str, ...], t: float,
               trigger: str = "", required: str = "", more: dict[str, str] | None = None,
-              persona: str = "", language: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
+              persona: str = "", language: str = "", runways: str = "") -> tuple[Phrase | None, list[LlmExchange]]:
         """``decision`` is "answer" or "decline". Returns the checked wording, or None to use the template.
+        ``runways``: the airport's runways ("07/25, 16L/34R"), for the check only: no other is ever named.
         ``required``: the data's answer, which the reply must give (``check_reply``). ``more``: the rest of what's
         known, for a model that can take it (a cloud one); a reply may use it as it may the facts."""
         beyond = self.beyond_facts
         known = {**(more or {}), **facts}
+        if runways:
+            known["runways here"] = runways
         request = replace(phrase_request(pilot, decision, facts, beyond_facts=beyond, more=more), persona=persona)
 
         def check(raw: str) -> str:

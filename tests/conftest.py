@@ -11,3 +11,18 @@ os.environ["LOCALTC_REAL_GATES"] = ""
 os.environ["LOCALTC_METAR"] = ""
 # ... nor the EFB's notes and achievements on this machine: kept nowhere.
 os.environ["LOCALTC_EFB_DIR"] = ""
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _whisper_fresh():
+    """Each test starts with no Whisper loaded and the graphics card not yet failed (both kept for a run of the app)."""
+    from localtc.stt import whisper
+
+    whisper._LOADED.clear()
+    whisper._CARD_FAILED = ""
+    yield
+    whisper._LOADED.clear()
+    whisper._CARD_FAILED = ""

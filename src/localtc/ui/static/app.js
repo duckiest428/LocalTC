@@ -4,6 +4,14 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// A microphone or output list: each device once (its whole name), and the one chosen kept even when it isn't plugged in.
+const deviceOptions = (list, cur, marks) => {
+  const chosen = cur ? String(cur).toLowerCase() : "";
+  const found = chosen && list.some((d) => d.name.toLowerCase().includes(chosen));
+  return `<option value="" ${!cur ? "selected" : ""}>System default</option>` +
+    (cur && !found ? `<option value="${esc(cur)}" selected>${esc(cur)}</option>` : "") +
+    list.map((d) => `<option value="${esc(d.name)}" ${chosen && d.name.toLowerCase().includes(chosen) ? "selected" : ""}>${esc(d.label || d.name)}${marks && d.default ? " (default)" : ""}</option>`).join("");
+};
 const mhz = (f) => (f == null ? "---.---" : Number(f).toFixed(3));
 const clock = (t) => {
   if (t == null) return "";
@@ -1043,10 +1051,7 @@ const Setup = {
     this["wire_" + id]?.();
   },
   finish() { $("#dlg-setup").close(); },
-  devices(list, cur) {
-    return `<option value="" ${!cur ? "selected" : ""}>System default</option>` + list.map((d) =>
-      `<option value="${esc(d.name)}" ${cur && d.name.toLowerCase().includes(String(cur).toLowerCase()) ? "selected" : ""}>${esc(d.name)}</option>`).join("");
-  },
+  devices(list, cur) { return deviceOptions(list, cur, false); },
 
   language() {
     return `<div class="whero"><img src="/static/logo.svg" alt="" width="64" height="64">
@@ -1991,8 +1996,7 @@ const Settings = {
     const crewNone = st.crew.llm === "off" || st.crew.mode === "off";  // the copilot without a model
     const profileCur = m.catalog.profiles.find((p) => p.llm === st.llm.model && (p.whisper === st.voice.model || (st.voice.model === "auto" && p.whisper === m.whisper_model)) && p.voice === st.tts.voice);
     const gpu = hw.gpu ? `${esc(hw.gpu)} (${hw.gpu_vram_gb} GB)` : "no NVIDIA GPU";
-    const devOpts = (list, cur) => `<option value="" ${!cur ? "selected" : ""}>System default</option>` +
-      list.map((d) => `<option value="${esc(d.name)}" ${cur && d.name.toLowerCase().includes(String(cur).toLowerCase()) ? "selected" : ""}>${esc(d.name)}${d.default ? " (default)" : ""}</option>`).join("");
+    const devOpts = (list, cur) => deviceOptions(list, cur, true);
     const note = (list, id) => esc(list.find((o) => o.id === id)?.note || "");
     const status = (kind) => {
       const s = this.statusOf(kind);

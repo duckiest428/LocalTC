@@ -52,6 +52,12 @@ a new minor version adds features, a patch fixes them.
   At Punta Cana an Air Canada 787 taxied before its "ready to taxi", crossed a runway untold and lined up on its own.
 
 ### Changed
+- **Microphone and speakers change in flight:** picking another microphone or output in the settings takes effect at
+  once, and the radio log says which is now in use. Only settings a flight can't take up as it goes (the voice
+  models, push-to-talk, ATC's style) still show "Restart flight to apply".
+- **Each sound device is listed once:** Windows lists every device four ways (MME, DirectSound, WASAPI, WDM-KS), and
+  each showed up four times in the microphone and output lists. Each is shown once now, by its whole name, and one
+  chosen that isn't plugged in stays on the list.
 - **"LocalTC" in the app's top bar is white** (the theme's brightest text), no longer green.
 - **Clearance delivery is "Delivery" outside the US and Canada:** "Incheon Delivery", "Heathrow Delivery", as it's
   called there; "Boston Clearance" in the US and Canada as before, and in Puerto Rico and the US Virgin Islands too
@@ -83,6 +89,39 @@ a new minor version adds features, a patch fixes them.
   were turned away and the script's said instead (the same instruction) shows in dev mode only.
 
 ### Fixed
+- **Restarting a flight no longer hangs at "Loading Whisper":** with the graphics card failing Whisper (a CUDA library
+  that wouldn't load), the restart tried the card again and never got past loading; only closing the app and waiting
+  got it going. Once the card has failed, the rest of that run goes straight to the CPU (restart the app to try the
+  card again). A card that doesn't answer within 90 seconds is left for the CPU too, and a restarted flight reuses
+  the Whisper already loaded instead of loading it again.
+- **ATC's voice stays on the output you chose:** when the microphone was reopened, the sound devices were numbered
+  afresh, and ATC kept playing on the old number, which could now be another device. Only an app restart brought it
+  back. The output is found again by its name each time.
+- **Departure hears a check-in made just before you switch:** "Denver Departure, with you climbing 9,000", said
+  while still on the tower's frequency and switched a moment later, went unanswered. There was no radar contact and
+  no climb for fourteen minutes, at 9,000 ft under a 10,100 ft minimum. Now the controller you named answers it once
+  you're on its frequency.
+- **No altitude under the mountains:** a departure or centre controller with you at an altitude below the terrain's
+  minimum climbs you above it with the terrain warning, and never says "check altitude" to send you back down to it.
+  "Request altitude increase" gets a climb (it was read as a request for the 9,000 ft complained about, and answered
+  "unable, terrain").
+- **"Request flight level 290" is a request:** it was taken for a check-in at FL290 and went unanswered; "request
+  FL290" and "request one seven thousand" are read too.
+- **LocalTC's arrivals land on the arrival runways:** at an airport with separate arrival and departure ATIS
+  (Denver), its arrivals were given the departure ATIS's runways and landed on 25 every two minutes, with you held
+  short of it for a quarter of an hour. And held short of a runway for landing traffic for three minutes, the
+  arrivals still to come go round once before their final, so you can go.
+- **A runway change on the taxi brings its departure procedure:** cleared on ROCKI7 for 26, then sent to 25 at the
+  taxi, ground now says "runway change, runway 26 no longer in use, BAYLR6 departure". In the other ATC languages
+  too.
+- **Runways that don't exist are never said:** "Am I at the correct runway?" was answered "runway 25L" at Denver,
+  which has one 25. A model's reply naming a left, right or centre runway the airport hasn't is turned away, even
+  with "Let the model answer beyond the sim's data" on. The copilot no longer takes the destination's runway for the
+  one you're holding short of ("negative, runway 25R is in use").
+- **"Level at" says the level you're at:** "Level at FL360" was said at FL290, cleared to FL360 and not climbing
+  yet.
+- **A gate asked for by number and letter:** "request taxi to gate 46B" was heard as gate 46, and Los Angeles gave
+  Gate 14 without a word. A gate that isn't there is said so ("gate 46B isn't available") before the one given.
 - **No more "contact Montreal Centre 0.0":** the settings page once had a centre name and frequency; saved empty,
   they came back as "" and 0.0, and the first centre after departure was given that frequency (the copilot tuned
   0.000, or nothing). An empty name or a frequency off the airband is the default again, and no controller is ever

@@ -32,6 +32,9 @@ PATTERNS: tuple[tuple[str, str], ...] = (
     ("runway_closed", r"the runway is closed"),
     ("as_requested", r"as requested"),
     ("vfr_departure", r"VFR departure"),
+    ("runway_change", r"runway change"),
+    ("no_longer_in_use", r"runway (\S+) no longer in use"),
+    ("sid_departure", r"([a-z]{2,6}\d[a-z]?) departure"),
     ("no_clearance", r"no clearance required"),
     ("ground_when_ready", r"contact ground when ready to taxi"),
     ("service_terminated", r"radar service terminated"),
@@ -81,6 +84,7 @@ _COMPILED = tuple((key, re.compile(rf"\s*{pattern}\s*", re.IGNORECASE)) for key,
 # Each language's words for them: "{0}", "{1}" the groups (reworded the same way).
 WORDS: dict[str, dict[str, str]] = {
     "fr": {
+        "runway_change": "changement de piste", "no_longer_in_use": "piste {0} plus en service", "sid_departure": "départ {0}",
         "traffic": "trafic", "an_aircraft": "un appareil", "wake": "attention turbulence de sillage",
         "no_delay": "sans délai", "maintain_vfr": "maintenez VFR",
         "no_ride": "aucun compte rendu récent près de votre niveau", "nothing_better": "rien de mieux signalé près de vous",
@@ -109,6 +113,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_opposite": "en sens inverse", "w_left": "gauche", "w_right": "droite",
     },
     "de": {
+        "runway_change": "Pistenwechsel", "no_longer_in_use": "Piste {0} nicht mehr in Betrieb", "sid_departure": "Abflug {0}",
         "traffic": "Verkehr", "an_aircraft": "ein Luftfahrzeug", "wake": "Vorsicht Wirbelschleppen",
         "no_delay": "ohne Verzögerung", "maintain_vfr": "halten Sie VFR",
         "no_ride": "keine aktuellen Meldungen in Ihrer Höhe", "nothing_better": "nichts Besseres in Ihrer Nähe gemeldet",
@@ -137,6 +142,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_arriving": "anfliegende", "w_opposite": "entgegenkommende", "w_left": "links", "w_right": "rechts",
     },
     "es": {
+        "runway_change": "cambio de pista", "no_longer_in_use": "pista {0} ya no está en uso", "sid_departure": "salida {0}",
         "traffic": "tráfico", "an_aircraft": "una aeronave", "wake": "precaución estela turbulenta",
         "no_delay": "sin demora", "maintain_vfr": "mantenga VFR",
         "no_ride": "sin reportes recientes cerca de su nivel", "nothing_better": "nada mejor reportado cerca de usted",
@@ -164,6 +170,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_left": "izquierda", "w_right": "derecha",
     },
     "it": {
+        "runway_change": "cambio pista", "no_longer_in_use": "pista {0} non più in uso", "sid_departure": "partenza {0}",
         "traffic": "traffico", "an_aircraft": "un aeromobile", "wake": "attenzione turbolenza di scia",
         "no_delay": "senza ritardo", "maintain_vfr": "mantenga VFR",
         "no_ride": "nessun riporto recente vicino al suo livello", "nothing_better": "niente di meglio riportato vicino a lei",
@@ -192,6 +199,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_arriving": "in arrivo", "w_opposite": "opposto", "w_left": "sinistra", "w_right": "destra",
     },
     "pt": {
+        "runway_change": "mudança de pista", "no_longer_in_use": "pista {0} já não está em uso", "sid_departure": "saída {0}",
         "traffic": "tráfego", "an_aircraft": "uma aeronave", "wake": "atenção esteira de turbulência",
         "no_delay": "sem demora", "maintain_vfr": "mantenha VFR",
         "no_ride": "sem reportes recentes perto do seu nível", "nothing_better": "nada melhor reportado perto de si",
@@ -220,6 +228,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_left": "esquerda", "w_right": "direita",
     },
     "nl": {
+        "runway_change": "baanwissel", "no_longer_in_use": "baan {0} niet meer in gebruik", "sid_departure": "vertrek {0}",
         "traffic": "verkeer", "an_aircraft": "een toestel", "wake": "let op zogturbulentie", "no_delay": "zonder vertraging",
         "maintain_vfr": "handhaaf VFR", "no_ride": "geen recente meldingen bij uw niveau",
         "nothing_better": "niets beters gemeld bij u in de buurt", "try_level": "meld als u een ander niveau wilt proberen",
@@ -247,6 +256,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_arriving": "naderende", "w_opposite": "tegemoetkomende", "w_left": "links", "w_right": "rechts",
     },
     "pl": {
+        "runway_change": "zmiana pasa", "no_longer_in_use": "pas {0} już nie jest w użyciu", "sid_departure": "odlot {0}",
         "traffic": "ruch", "an_aircraft": "statek powietrzny", "wake": "uwaga turbulencja w śladzie",
         "no_delay": "bez zwłoki", "maintain_vfr": "utrzymuj VFR", "no_ride": "brak ostatnich meldunków przy twoim poziomie",
         "nothing_better": "nic lepszego nie zgłoszono w pobliżu", "try_level": "zgłoś, jeśli chcesz spróbować innego poziomu",
@@ -274,6 +284,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_arriving": "przylatujący", "w_opposite": "z przeciwka", "w_left": "lewo", "w_right": "prawo",
     },
     "sv": {
+        "runway_change": "banbyte", "no_longer_in_use": "bana {0} inte längre i bruk", "sid_departure": "avgång {0}",
         "traffic": "trafik", "an_aircraft": "ett luftfartyg", "wake": "varning för virvelturbulens", "no_delay": "utan dröjsmål",
         "maintain_vfr": "bibehåll VFR", "no_ride": "inga färska rapporter vid er nivå",
         "nothing_better": "inget bättre rapporterat nära er", "try_level": "meddela om ni vill prova en annan nivå",
@@ -300,6 +311,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_arriving": "ankommande", "w_opposite": "mötande", "w_left": "vänster", "w_right": "höger",
     },
     "ru": {
+        "runway_change": "смена полосы", "no_longer_in_use": "полоса {0} больше не используется", "sid_departure": "вылет {0}",
         "traffic": "борт", "an_aircraft": "воздушное судно", "wake": "внимание, спутный след", "no_delay": "без задержки",
         "maintain_vfr": "выдерживайте ПВП", "no_ride": "недавних докладов на вашем эшелоне нет",
         "nothing_better": "лучше рядом с вами ничего не докладывали", "try_level": "сообщите, если хотите попробовать другой эшелон",
@@ -327,6 +339,7 @@ WORDS: dict[str, dict[str, str]] = {
         "w_left": "влево", "w_right": "вправо",
     },
     "zh": {
+        "runway_change": "跑道变更", "no_longer_in_use": "跑道{0}已停止使用", "sid_departure": "{0}离场",
         "traffic": "活动", "an_aircraft": "一架飞机", "wake": "注意尾流", "no_delay": "不要耽误", "maintain_vfr": "保持目视",
         "no_ride": "你的高度附近最近没有颠簸报告", "nothing_better": "你附近没有更好的报告", "try_level": "如需尝试其他高度请报告",
         "sorry": "抱歉", "opposite": "相对", "same": "同向", "crossing_lr": "从左向右穿越", "crossing_rl": "从右向左穿越",

@@ -1870,6 +1870,11 @@ class TrafficManager:
             gap = togo - self._togo_nm(geo, theirs, there)
             if 0 <= gap < spacing or (other.mode == "landing" and abs(gap) < spacing):
                 return f"{other.callsign or 'another'} on the final"
+        waiting = getattr(self.atc, "departure_waiting", None)
+        held = waiting(geo.icao) if callable(waiting) else None
+        if held and (mine := geo.end(held)) is not None and mine.runway is end.runway and togo > LINE_UP_CLEAR_NM + 2.0:
+            # You've been held short of this runway for a while: the ones still coming go round, and you go in the gap.
+            return "you waiting to depart"
         own = self.own
         if own is not None and not own.on_ground:
             mine = geo.final_approach(own.lat, own.lon, own.hdg_true, max_distance_nm=FINAL_NM)

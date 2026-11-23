@@ -93,8 +93,44 @@ class Choice:
     compute_type: str
 
 
+# The graphics card failed Whisper once in this run of the app (a CUDA library that wouldn't load): every later load
+# goes straight to the CPU. Tried again by a flight restarted to apply a setting, the card's first words never came back
+# and the start hung at "Loading Whisper" until the app was closed.
+_CARD_FAILED = ""
+# Models already loaded in this run, by (folder, device, compute type): a flight restarted uses the same one again
+# rather than loading it a second time (the newest few kept).
+_LOADED: dict[tuple[str, str, str], Any] = {}
+_KEEP_LOADED = 2
+
+
+def card_failed() -> str:
+    """Why Whisper on the graphics card failed in this run ("" it hasn't)."""
+    return _CARD_FAILED
+
+
+def _card_failed(exc: BaseException) -> None:
+    global _CARD_FAILED
+    _CARD_FAILED = str(exc) or type(exc).__name__
+    for key in [k for k in _LOADED if k[1] == "cuda"]:
+        del _LOADED[key]
+
+
+def _loaded(path: Path, device: str, compute_type: str) -> Any:
+    from faster_whisper import WhisperModel
+
+    key = (str(path), device, compute_type)
+    if (model := _LOADED.pop(key, None)) is None:
+        model = WhisperModel(str(path), device=device, compute_type=compute_type)
+    _LOADED[key] = model  # the newest last
+    while len(_LOADED) > _KEEP_LOADED:
+        del _LOADED[next(iter(_LOADED))]
+    return model
+
+
 def choose(model: str = "auto", device: str = "auto", compute_type: str = "auto") -> Choice:
-    cuda = device == "cuda" or (device == "auto" and cuda_available())
+    cuda = (device == "cuda" or (device == "auto" and cuda_available())) and not _CARD_FAILED
+    if not cuda and "float16" in compute_type:
+        compute_type = "auto"  # the card's float16 on the CPU: its own int8
     return Choice(
         model=model if model != "auto" else ("small.en" if cuda else "base.en"),
         device="cuda" if cuda else "cpu",
@@ -177,6 +213,8 @@ class WhisperTranscriber:
     def __init__(self, model: str = "auto", *, device: str = "auto", compute_type: str = "auto",
                  models_dir: str | Path | None = None, beam_size: int = 5, allow_download: bool = True) -> None:
         self.choice = choose(model, device, compute_type)
+        if device == "cuda" and self.choice.device == "cpu":
+            log.warning("Whisper on the CPU: the graphics card failed earlier in this run (%s)", _CARD_FAILED)
         self.models_dir = Path(models_dir) if models_dir else default_models_dir()
         self.beam_size = beam_size
         self.allow_download = allow_download
@@ -190,8 +228,6 @@ class WhisperTranscriber:
     def load(self) -> None:
         if self._model is not None:
             return
-        from faster_whisper import WhisperModel
-
         path = model_path(self.choice.model, self.models_dir)
         if not (path / "model.bin").exists():
             if not self.allow_download:
@@ -215,14 +251,22 @@ class WhisperTranscriber:
             if not add_nvidia_dll_dirs() and not cuda_libraries():
                 log.warning("Whisper on the graphics card needs GPU support installed (Quick Settings > Models)")
         try:
-            self._model = WhisperModel(str(path), device=self.choice.device, compute_type=self.choice.compute_type)
+            self._model = _loaded(path, self.choice.device, self.choice.compute_type)
         except Exception as exc:
             if self.choice.device != "cuda":
                 raise
             log.warning("Whisper on CUDA failed (%s); using the CPU", exc)
+            _card_failed(exc)
             self.choice = Choice(self.choice.model, "cpu", "int8")
-            self._model = WhisperModel(str(path), device="cpu", compute_type="int8")
+            self._model = _loaded(path, "cpu", "int8")
         log.info("%s ready", self.description)
+
+    def to_cpu(self, why: str) -> None:
+        """The graphics card failed (or never answered): the CPU from now on, for the rest of this run."""
+        log.warning("Whisper on the graphics card failed (%s); using the CPU from now on", why)
+        _card_failed(RuntimeError(why))
+        self.choice = Choice(self.choice.model, "cpu", "int8")
+        self._model = None
 
     def _tokens(self, text: str) -> list[int]:
         tokenizer = getattr(self._model, "hf_tokenizer", None)
@@ -263,9 +307,7 @@ class WhisperTranscriber:
         except (RuntimeError, OSError) as exc:
             if self.choice.device != "cuda" or not re.search(r"cuda|cublas|cudnn|\.dll", str(exc), re.IGNORECASE):
                 raise
-            log.warning("Whisper on the graphics card failed (%s); using the CPU from now on", exc)
-            self.choice = Choice(self.choice.model, "cpu", "int8")
-            self._model = None
+            self.to_cpu(str(exc))
             return self._transcribe(audio, prompt=prompt, hotwords=hotwords, language=language)
 
     def _transcribe(self, audio, *, prompt: str, hotwords: str, language: str) -> SttResult:

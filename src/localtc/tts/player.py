@@ -104,14 +104,21 @@ class _Lane:
     def run(self) -> None:
         import sounddevice as sd
 
-        try:
-            rate = int(sd.query_devices(self.player.device, "output")["default_samplerate"])
-        except (sd.PortAudioError, ValueError) as exc:
-            log.warning("No audio output (%s): ATC will be text only", exc)
-            return
+        rate, on, said = 0, object(), False
         while (clip := self.queue.get()) is not None:
             if clip.done.is_set():
                 continue  # dropped while it waited
+            device = self.player.device
+            if device != on or not rate:  # the first clip, or another output since (chosen, or found again)
+                try:
+                    rate, on = int(sd.query_devices(device, "output")["default_samplerate"]), device
+                except (sd.PortAudioError, ValueError) as exc:
+                    if not said:
+                        log.warning("No audio output (%s): ATC will be text only until there is one", exc)
+                        said = True
+                    rate = 0
+                    clip.done.set()
+                    continue
             if (self is self.player.intercom or clip.kind in TO_THE_DECK) and not clip.urgent:
                 waited = 0.0
                 while waited < INTERCOM_WAIT_S and self.player.atc_to_us() and not clip.done.is_set():
@@ -121,7 +128,7 @@ class _Lane:
             self.cut_now.clear()
             try:
                 with GATE.playing(), sd.OutputStream(samplerate=rate, channels=1, dtype="float32",
-                                                     device=self.player.device) as stream:
+                                                     device=device) as stream:
                     block = int(rate * BLOCK_S)
                     for start in range(0, len(audio), block):
                         if self.cut_now.is_set():
@@ -140,7 +147,10 @@ RADIO = ("atc", "pilot")  # what's said on the frequency (the ATIS is cut on its
 
 class AudioPlayer:
     def __init__(self, device: str | int | None = None, *, volume: float = 0.8, mix: dict[str, float] | None = None) -> None:
-        self.device = find_output(device)
+        self.spec = device  # what was chosen: a name ("" / None the system's default)
+        self._device = find_output(device)
+        self._generation = GATE.generation
+        self._missing: str | int | None = None  # the output said to be missing (said once)
         self.volume = volume  # the master
         self.mix: dict[str, float] = dict(mix or {})  # each channel's volume (CHANNELS; 1 when not given, 0 muted)
         self.radio = _Lane(self, "radio")
@@ -149,6 +159,30 @@ class AudioPlayer:
         self.cabin = _Lane(self, "cabin")  # the cabin crew: announcements, calls to the flight deck, the chimes
         self.ambience = _Lane(self, "ambience")  # the boarding music, under the rest
         self._started = False
+
+    @property
+    def device(self) -> int | None:
+        """PortAudio's number for the output now. Reading the device list again (the microphone reopened) numbers the
+        devices afresh: the number kept from the start then played ATC on another device, and only restarting the app
+        brought it back. So after each restart it's looked for again by its name."""
+        if self._generation != GATE.generation:
+            self._generation = GATE.generation
+            try:
+                self._device = find_output(self.spec)
+            except ValueError:
+                if self._missing != self.spec:
+                    log.warning("%s isn't connected: the system's default output until it is", self.spec)
+                self._missing, self._device = self.spec, None
+                self._generation = -1  # looked for again at the next clip
+            else:
+                self._missing = None
+        return self._device
+
+    def set_output(self, spec: str | int | None) -> str:
+        """Another output chosen in the settings: from the next clip, in flight. Returns its name."""
+        self.spec = spec or None
+        self._generation = -1
+        return self.name
 
     def gain(self, channel: str) -> float:
         """What a channel plays at now: its own volume times the master."""
@@ -223,6 +257,7 @@ class Sidetone:
         self._pending = np.zeros(0, np.float32)
         self._stream = None
         self._filter = None
+        self._device: int | None = None  # the output its stream is open on
 
     @property
     def wanted(self) -> bool:
@@ -238,9 +273,10 @@ class Sidetone:
         if not GATE.hold():
             return False  # PortAudio restarting: no sidetone this moment
         try:
-            out_rate = int(sd.query_devices(self.player.device, "output")["default_samplerate"])
+            self._device = self.player.device
+            out_rate = int(sd.query_devices(self._device, "output")["default_samplerate"])
             self._filter = SidetoneFilter(self.in_rate, out_rate)
-            self._stream = sd.OutputStream(samplerate=out_rate, channels=1, dtype="float32", device=self.player.device,
+            self._stream = sd.OutputStream(samplerate=out_rate, channels=1, dtype="float32", device=self._device,
                                            latency="low", callback=self._play)
             self._stream.start()
         except Exception as exc:  # noqa: BLE001 - no sidetone is never a reason to stop the voice
@@ -254,8 +290,8 @@ class Sidetone:
         """A block from the microphone at rate (on its thread), while the key is held."""
         if not self.keyed or not self.wanted:
             return
-        if rate != self.in_rate:  # the first block, or the microphone reopened at another rate
-            self.close()
+        if rate != self.in_rate or (self._stream is not None and self.player.device != self._device):
+            self.close()  # the first block, the microphone reopened at another rate, or another output
             self.in_rate = rate
         if self._stream is None and not self.start():
             return

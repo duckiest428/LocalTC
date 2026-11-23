@@ -44,6 +44,25 @@ def _reported_altitudes(tokens: list[Token]) -> list[int]:
     return found
 
 
+def _asked_level(tokens: list[Token]) -> list[int]:
+    """The level a request names right after its word: "request flight level 290", "request FL290", "requesting
+    17,000" ("Spirit 283, request flight level 290" was taken for a check-in at FL290, and went unanswered)."""
+    for i, token in enumerate(tokens):
+        if token.text not in ("request", "requesting"):
+            continue
+        j, level = i + 1, False
+        while j < len(tokens) and tokens[j].text in ("flight", "level", "fl", "to", "for", "a", "climb", "descent"):
+            level = level or tokens[j].text in ("level", "fl")
+            j += 1
+        num = _number(tokens, j) if j < len(tokens) else None
+        after = tokens[j + 1].text if j + 1 < len(tokens) else ""
+        if num and num.isdigit() and after not in ("knots", "degrees", "heading", "miles", "feet"):
+            value = int(num) * 100 if level and int(num) < 1000 else int(num)
+            if 1000 <= value <= 60000 and value % 100 == 0:
+                return [value]
+    return []
+
+
 def _any_runway(tokens: list[Token]) -> str | None:
     """A runway mentioned in a report ("holding short runway 34L", "clear of 14R", "final runway 14R");
     after "correction", the corrected one."""
@@ -393,7 +412,7 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
             and not _has_any(tokens, ("enter",), ("join",), ("make",)):
         add("position_report", option=option)  # "midfield left downwind 27": a pattern report
     wanted = altitudes(tokens) or ([n for n in _reported_altitudes(tokens) if n >= 1000]
-                                   if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])
+                                   if _has_any(tokens, ("higher",), ("lower",), ("climb",), ("descend",)) else [])         or _asked_level(tokens)
     if _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and wanted:
         add("request_altitude", altitude=wanted[0])  # "request to maintain 1,500", "request higher, 7000"
     elif _has_any(tokens, ("request",), ("requesting",), ("like",), ("can", "we"), ("could", "we")) and (
@@ -518,6 +537,7 @@ COMPATIBLE = [
     {"request_hold", "request_direct"},
     {"request_hold", "checkin"},  # "ready to continue out of the hold" ("out of": a check-in's words)
     {"report_holding", "checkin"},  # "established in the hold at BLAKO, level 120"
+    {"request_altitude", "checkin"},  # "Spirit 283, request flight level 290" ("level": a check-in's word): the request
 ]
 
 

@@ -157,6 +157,29 @@ class FlowMixin:
             return False
         self._pending_alerts.append(self._alert(own.t, "terrain", f"mountainous terrain, minimum {minimum} ft"))
         self._schedule(own.t, "common.terrain_caution", {"altitude": minimum}, facility, delay=False, expects_readback=False)
+        self._terrain_climb(own, facility, minimum)
+        return True
+
+    def _above_terrain(self: Any, own: OwnshipState, minimum: int | None) -> int | None:
+        """The altitude to climb to when ATC's own altitude is under the terrain's minimum here (``minimum``): that
+        minimum rounded up to a thousand, never above the filed level. None when what's assigned is clear of it."""
+        st = self.state
+        assigned = st.assignments.altitude_ft
+        if minimum is None or assigned is None or assigned >= minimum or "approach" in st.clearances \
+                or st.phase is None or P(st.phase) not in (P.DEPARTURE, P.CRUISE):
+            return None
+        climb = int(math.ceil(minimum / 1000.0)) * 1000
+        cruise = st.assignments.cruise_ft or st.flight.cruise_ft
+        return min(climb, cruise) if cruise and cruise > assigned else climb
+
+    def _terrain_climb(self: Any, own: OwnshipState, facility: "Facility", minimum: int | None) -> bool:
+        """Kept under the mountains' minimum by ATC's own altitude: a climb above it, said with the warning. Denver's
+        departure warned "the minimum altitude in your area is 10,100" to a flight it had at 9,000, and left it there."""
+        climb = self._above_terrain(own, minimum)
+        if climb is None:
+            return False
+        self._schedule(own.t, "common.climb", {"altitude": climb}, facility, delay=False,
+                       on_issue=lambda: self._assign(altitude_ft=climb))
         return True
 
     def _vectors_for_descent(self: Any, own: OwnshipState, facility: "Facility") -> bool:

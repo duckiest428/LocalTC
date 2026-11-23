@@ -1239,6 +1239,7 @@ class AppController:
         if not CLIPS.enabled:
             CLIPS.clear()
         discord_changed = cfg.ui.discord != self.cfg.ui.discord
+        await self._apply_devices(cfg)
         self.cfg = cfg
         if discord_changed and cfg.account.sync:
             asyncio.create_task(self.pilot.sync())  # the account's admin panel says whether Discord Rich Presence is on
@@ -1246,7 +1247,7 @@ class AppController:
         self.apply_on_top()
         self._apply_mixer(cfg)
         self._push_state()
-        return {"saved": str(path), "restart": live_now}
+        return {"saved": str(path), "restart": live_now and not applied_live(changes)}
 
     def _copilot_voice(self, cfg: Config) -> None:
         """The copilot's voice for its personality, on the flight's voice from its next line."""
@@ -1264,6 +1265,25 @@ class AppController:
         piper = next((p.synth for p in getattr(speaker.voices, "providers", ()) if p.id == "piper"), None)
         if piper is not None:
             speaker.crew_speaker = crew_speaker(sex, speaker.crew_pick, piper.speakers, cfg.tts.voice)
+
+    async def _apply_devices(self, cfg: Config) -> None:
+        """Another microphone or output picked in flight: used at once (they waited for the flight to be restarted)."""
+        live = self.live
+        if live is None:
+            return
+        if cfg.tts.output_device != self.cfg.tts.output_device and live.speaker is not None:
+            name = await asyncio.to_thread(live.speaker.player.set_output, cfg.tts.output_device or None)
+            self.system(f"Voices now on {name}")
+        if cfg.voice.input_device != self.cfg.voice.input_device and live.voice is not None:
+            capture = live.voice.capture
+            capture.spec = cfg.voice.input_device or None
+            try:
+                name = await asyncio.to_thread(capture.refresh)
+            except Exception as exc:  # noqa: BLE001 - the old microphone's gone too: said, and tried again at the next press
+                log.warning("Microphone not reopened: %s", exc)
+                self.system(f"The microphone didn't open: {exc}", "warn")
+            else:
+                self.system(f"Microphone now {name}")
 
     def _apply_mixer(self, cfg: Config) -> None:
         """The mixer's volumes and the microphone's gain on the flight's voice and microphone, at once."""
@@ -1777,6 +1797,40 @@ def _ollama_models(cfg) -> dict:
             "error": status.error, "loaded": f"Now loaded: {where.describe()}." if where else ""}
 
 
+# What a flight takes up as it's changed: the rest waits for the flight to be restarted ("Restart flight to apply" showed
+# after every change, a volume or the microphone too, and the restart never got past Whisper).
+LIVE_SETTINGS = {"mixer": None, "ui": None, "account": None, "tts": {"volume", "output_device"},
+                 "voice": {"input_device"}, "crew": {"verbosity", "hands", "repeat_atc", "personality", "beyond_facts"},
+                 "llm": {"beyond_facts"}, "traffic": {"enabled"},
+                 "atc": {"taxi_guide", "online_integration", "online_network"}}
+
+
+def applied_live(changes: dict) -> bool:
+    """Every setting in ``changes`` ({section: {name: value}}) is taken up by the flight as it is."""
+    for section, names in changes.items():
+        if section not in LIVE_SETTINGS:
+            return False
+        live = LIVE_SETTINGS[section]
+        if live is not None and (not isinstance(names, dict) or set(names) - live):
+            return False
+    return True
+
+
+MME_NAME = 31  # the most letters of a device's name in Windows's oldest list
+
+
+def once_each(devices: list[tuple[int, str, int]], listed, hostapi: int) -> list[tuple[int, str, str]]:
+    """(index, name, label) of each device once: Windows lists every one four times (MME, DirectSound, WASAPI, WDM-KS),
+    so only the default host API's are shown, the one a name picks first. Its names are cut at 31 letters (MME): the
+    label is the whole name from another of the lists."""
+    mine = [(i, n) for i, n, _ in devices if listed[i]["hostapi"] == hostapi]
+    if not mine:
+        return [(i, n, n) for i, n, _ in devices]
+    names = [n for _, n, _ in devices]
+    return [(i, n, max((other for other in names if other.startswith(n)), key=len) if len(n) >= MME_NAME else n)
+            for i, n in mine]
+
+
 def _devices() -> dict:
     try:
         import sounddevice as sd
@@ -1785,8 +1839,11 @@ def _devices() -> dict:
         from localtc.tts.player import output_devices
 
         default_in, default_out = sd.default.device
-        return {"inputs": [{"index": i, "name": n, "default": i == default_in} for i, n, _ in input_devices()],
-                "outputs": [{"index": i, "name": n, "default": i == default_out} for i, n, _ in output_devices()]}
+        listed = sd.query_devices()
+        return {"inputs": [{"index": i, "name": n, "label": label, "default": i == default_in}
+                           for i, n, label in once_each(input_devices(), listed, sd.default.hostapi)],
+                "outputs": [{"index": i, "name": n, "label": label, "default": i == default_out}
+                            for i, n, label in once_each(output_devices(), listed, sd.default.hostapi)]}
     except Exception as exc:
         return {"inputs": [], "outputs": [], "error": str(exc)}
 

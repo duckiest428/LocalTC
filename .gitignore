@@ -29,3 +29,8 @@ config/localtc.toml
 # Built by tools/build_installer.py (too big for git: it goes on the GitHub release)
 /installer/*.exe
 .claude/launch.json
+
+# The sim panel built from MSFS 2024's Project Editor (tools/build_sim_panel.py copies it into simpkg)
+/tools/sim_panel/Packages/
+/tools/sim_panel/_PackageInt/
+/tools/sim_panel/*.xml.user

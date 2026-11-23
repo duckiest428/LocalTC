@@ -1,4 +1,5 @@
-<AssetPackage Name="localtc-panel" Version="1.0.0">
+<?xml version="1.0" encoding="utf-8"?>
+<AssetPackage Version="1.0.0">
 	<ItemSettings>
 		<ContentType>MISC</ContentType>
 		<Title>LocalTC Panel</Title>
@@ -9,9 +10,10 @@
 		<VisibleInStore>false</VisibleInStore>
 		<CanBeReferenced>false</CanBeReferenced>
 	</Flags>
+	<PackageOrderHint>UI_PATCH</PackageOrderHint>
 	<AssetGroups>
 		<AssetGroup Name="Copy_html_ui">
-			<Type>Copy</Type>
+			<Type Version="0">Copy</Type>
 			<Flags>
 				<FSXCompatibility>false</FSXCompatibility>
 			</Flags>
@@ -19,7 +21,7 @@
 			<OutputDir>html_ui\</OutputDir>
 		</AssetGroup>
 		<AssetGroup Name="InGamePanels_LocalTC">
-			<Type>SPB</Type>
+			<Type Version="0">SPB</Type>
 			<Flags>
 				<FSXCompatibility>false</FSXCompatibility>
 			</Flags>
@@ -28,3 +30,4 @@
 		</AssetGroup>
 	</AssetGroups>
 </AssetPackage>
+

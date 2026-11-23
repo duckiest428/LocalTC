@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = ROOT / "tools" / "sim_panel" / "localtc-panel.xml"
 TARGET = ROOT / "src" / "localtc" / "simpkg" / "localtc-panel"
+IN_SIM = ROOT / "tools" / "sim_panel" / "Packages" / "localtc-panel"  # built from the sim's Project Editor
 SDK = Path(os.environ.get("MSFS2024_SDK", r"C:\MSFS 2024 SDK"))
 
 
@@ -31,8 +32,14 @@ def main() -> int:
         print(run.stdout[-3000:], run.stderr[-2000:])
         built = next(Path(out).rglob("localtc-panel/manifest.json"), None)
         if built is None or not any(built.parent.rglob("*.spb")):
-            print("Nothing built: start MSFS 2024 first (the package tool builds through the sim), then run this again.")
-            return 1
+            # The package tool hands the build to the sim and comes back with nothing: in MSFS 2024 the project is
+            # built from Developer Mode (File, Open project: tools/sim_panel/localtc-panel.xml, then "Build All in
+            # project"), into tools/sim_panel/Packages. That build is taken when it's there.
+            built = IN_SIM / "manifest.json"
+            if not built.exists() or not any(IN_SIM.rglob("*.spb")):
+                print("Nothing built. In MSFS 2024's Developer Mode: File, Open project, " f"{PROJECT}, then "
+                      "\"Build All in project\"; then run this again.")
+                return 1
         if TARGET.exists():
             shutil.rmtree(TARGET)
         shutil.copytree(built.parent, TARGET, ignore=shutil.ignore_patterns("layout.json"))

@@ -91,7 +91,8 @@ a new minor version adds features, a patch fixes them.
 ### Fixed
 - **The LocalTC button on the sim's toolbar is there:** the toolbar panel (the radio log and the radios inside the
   sim, for VR) had never been built into the app, so no button ever showed. It's built now and goes into the sims'
-  Community folders when the app starts; the button shows from the sim's next start.
+  Community folders when the app starts; the button shows from the sim's next start. Quick Settings, ATC, "LocalTC
+  button on the sim's toolbar" turns it off (out of the Community folders) and on again.
 - **Iran's controllers don't sound Indian:** the voices for Iran, the Arab states and Turkey were half Kokoro's Hindi
   voices, and Tabriz sounded Indian. They're Mediterranean voices now, with the region's accent on their English.
   Tehran's radar sectors ("Tehran North Radar") had no country at all and spoke American; they're Iran's now, and so

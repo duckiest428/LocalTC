@@ -1227,6 +1227,15 @@ class AppController:
             if await asyncio.to_thread(simpkg.install):
                 self.system("Taxi guidance: its arrows are in the sim's Community folder. Restart the sim to see them",
                             "warn")
+        if cfg.ui.sim_panel != self.cfg.ui.sim_panel:
+            from localtc import simpkg
+
+            if cfg.ui.sim_panel and await asyncio.to_thread(simpkg.install_panel):
+                self.system("The LocalTC button is in the sim's Community folder: restart the sim to see it on its toolbar",
+                            "warn")
+            elif not cfg.ui.sim_panel and await asyncio.to_thread(simpkg.uninstall_panel):
+                self.system("The LocalTC button is out of the sim's Community folder: gone from its toolbar from the "
+                            "sim's next start", "warn")
         if (guide := getattr(self.live, "guide", None) if self.live is not None else None) is not None:
             await guide.set_enabled(cfg.atc.taxi_guide)
         if self.live is not None and online_network(cfg) != online_network(self.cfg):

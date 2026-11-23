@@ -58,7 +58,8 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
                 log.info("The sim's LocalTC panel at %sstatic/panel.html", panel.url)
                 from localtc import simpkg
 
-                await asyncio.to_thread(simpkg.install_panel)  # its button on the sim's toolbar (from the sim's next start)
+                if controller.cfg.ui.sim_panel:  # its button on the sim's toolbar (from the sim's next start)
+                    await asyncio.to_thread(simpkg.install_panel)
             except OSError as exc:
                 log.warning("The sim's LocalTC panel has no port %d (%s): it shows nothing", controller.cfg.ui.panel_port, exc)
                 panel = None

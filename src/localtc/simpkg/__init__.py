@@ -69,6 +69,21 @@ def install_panel(roots: list[Path] | None = None) -> list[Path]:
     return install(roots, PANEL, "The sim's LocalTC panel")
 
 
+def uninstall_panel(roots: list[Path] | None = None) -> list[Path]:
+    """The toolbar panel taken out of every Community folder (turned off in Quick Settings); the folders it left."""
+    gone = []
+    for community in community_folders(roots):
+        target = community / PANEL.name
+        if target.is_dir():
+            try:
+                shutil.rmtree(target)
+            except OSError as exc:
+                log.warning("The sim's LocalTC panel: couldn't take it out of %s: %s", community, exc)
+                continue
+            gone.append(target)
+    return gone
+
+
 def installed(roots: list[Path] | None = None) -> bool:
     """The package is in a Community folder."""
     return any((c / PACKAGE.name / "layout.json").exists() for c in community_folders(roots))

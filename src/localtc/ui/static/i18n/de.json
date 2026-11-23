@@ -1645,5 +1645,6 @@
 "ATC's language": "Sprache der Flugsicherung",
 "Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Rufen Sie die Flugsicherung in Ihrer Sprache und sie antwortet in ihr: die Lotsen, die Funksprüche des Copiloten und die Bodencrew. Ihre Rücklesungen darin werden wie englische geprüft. Rufen Sie auf Englisch, ist es wieder Englisch.",
 "English only": "Nur Englisch",
-"Yours: the copilot's language, else the window's": "Ihre: die Sprache des Copiloten, sonst die des Fensters"
+"Yours: the copilot's language, else the window's": "Ihre: die Sprache des Copiloten, sonst die des Fensters",
+"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "LocalTC-Schaltfläche in der Symbolleiste des Simulators: das Funkprotokoll und die Funkgeräte in einem Fenster im Simulator, für VR. Ihr Paket kommt in den Community-Ordner des Simulators; die Schaltfläche erscheint ab dem nächsten Start des Simulators, während LocalTC läuft"
 }

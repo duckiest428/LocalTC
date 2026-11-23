@@ -1645,5 +1645,6 @@
 "ATC's language": "Taal van de verkeersleiding",
 "Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Roep de verkeersleiding op in uw taal en zij antwoorden in die taal: de verkeersleiders, de radio-oproepen van de copiloot en het platformpersoneel. Uw teruglezingen erin worden gecontroleerd zoals Engelse. Roep in het Engels en het is weer Engels.",
 "English only": "Alleen Engels",
-"Yours: the copilot's language, else the window's": "Die van u: de taal van de copiloot, anders die van het venster"
+"Yours: the copilot's language, else the window's": "Die van u: de taal van de copiloot, anders die van het venster",
+"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "LocalTC-knop op de werkbalk van de simulator: het radiologboek en de radio's in een venster in de simulator, voor VR. Het pakket komt in de Community-map van de simulator; de knop verschijnt vanaf de volgende start van de simulator, terwijl LocalTC draait"
 }

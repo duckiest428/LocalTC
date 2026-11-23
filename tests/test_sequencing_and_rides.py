@@ -227,3 +227,18 @@ def test_the_panel_isnt_installed_before_its_built(tmp_path):
         assert simpkg.install_panel([tmp_path]) == []
     else:
         assert simpkg.install_panel([tmp_path]) == [tmp_path / "Community" / "localtc-panel"]
+
+
+def test_the_panel_is_built_and_comes_out_when_turned_off(tmp_path):
+    """The LocalTC button on the sim's toolbar: built (its .spb), put in the Community folder, and taken out by Quick
+    Settings' switch."""
+    from localtc import simpkg
+    from localtc.config import UiConfig
+
+    assert any(simpkg.PANEL.rglob("*.spb"))
+    assert UiConfig().sim_panel
+    (tmp_path / "Community").mkdir()
+    put = simpkg.install_panel([tmp_path])
+    assert put == [tmp_path / "Community" / "localtc-panel"] and (put[0] / "layout.json").exists()
+    assert simpkg.uninstall_panel([tmp_path]) == put and not put[0].exists()
+    assert simpkg.uninstall_panel([tmp_path]) == []

@@ -2278,6 +2278,7 @@ const Settings = {
         <label class="check-row"><input type="checkbox" id="s-humanize" ${st.atc.humanize !== false ? "checked" : ""}> Natural speech: controllers and the other pilots now and then say "uh" as people do (more from a conversational controller, hardly any from a strict one or on a busy frequency). Only in what's said, never inside a number or in anything urgent</label>
         <label class="check-row"><input type="checkbox" id="s-callsign-check" ${st.atc.callsign_check ? "checked" : ""}> Callsign check: another flight's callsign gets "say again your callsign"</label>
         <label class="check-row"><input type="checkbox" id="s-taxi-ribbon" ${st.atc.taxi_guide ? "checked" : ""}> Taxi guidance: green arrows on the ground along the route ground gave you, a red stop bar short of a runway you aren't cleared onto or across. LocalTC puts its arrows in the sim's Community folder when you turn this on; they show from the sim's next start</label>
+        <label class="check-row"><input type="checkbox" id="s-sim-panel" ${st.ui.sim_panel !== false ? "checked" : ""}> LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running</label>
         <label class="check-row"><input type="checkbox" id="s-auto-stop" ${st.session.auto_stop_at_gate ? "checked" : ""}> Stop the flight at the gate: once parked at a gate or stand at the destination (stopped, taxi done), the flight ends as if you pressed Stop</label>
         <div class="row"><label>Phraseology
           <select id="s-phraseology">${[["auto", "By region: FAA in the US and Canada, ICAO elsewhere"], ["faa", "FAA everywhere"], ["icao", "ICAO everywhere"]]
@@ -2589,6 +2590,7 @@ const Settings = {
     on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-taxi-ribbon", "change", (e) => this.save("atc", "taxi_guide", e.target.checked));
+    on("#s-sim-panel", "change", (e) => this.save("ui", "sim_panel", e.target.checked));
     on("#s-beyond-facts", "change", (e) => this.save("llm", "beyond_facts", e.target.checked));
     this.bindCloud();
     on("#s-keepalive", "change", () => this.save("llm", "keep_alive", val("#s-keepalive")));

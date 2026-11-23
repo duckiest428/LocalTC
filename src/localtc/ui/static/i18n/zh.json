@@ -1645,5 +1645,6 @@
 "ATC's language": "管制语言",
 "Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "用你的语言呼叫管制，他们就用这种语言回答：管制员、副驾驶的无线电呼叫和地勤。你用这种语言的复诵会像英语一样被检查。用英语呼叫，就又变回英语。",
 "English only": "仅英语",
-"Yours: the copilot's language, else the window's": "你的：副驾驶的语言，否则是窗口的语言"
+"Yours: the copilot's language, else the window's": "你的：副驾驶的语言，否则是窗口的语言",
+"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "模拟器工具栏上的 LocalTC 按钮：在模拟器内的窗口中显示无线电记录和无线电，适用于 VR。其插件包放入模拟器的 Community 文件夹；按钮从模拟器下次启动起显示，需 LocalTC 正在运行"
 }

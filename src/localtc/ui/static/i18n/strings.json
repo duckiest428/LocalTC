@@ -633,6 +633,7 @@
 "Loading ...",
 "Loading the flight ...",
 "LocalTC",
+"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running",
 "LocalTC clears you as filed: put in your SimBrief username and",
 "LocalTC is free. If it made a flight better, a coffee keeps it going. (Click once and this goes away.)",
 "LocalTC isn't answering",

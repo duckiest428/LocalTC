@@ -41,6 +41,7 @@ a new minor version adds features, a patch fixes them.
   At Punta Cana an Air Canada 787 taxied before its "ready to taxi", crossed a runway untold and lined up on its own.
 
 ### Changed
+- **"LocalTC" in the app's top bar is white** (the theme's brightest text), no longer green.
 - **Clearance delivery is "Delivery" outside the US and Canada:** "Incheon Delivery", "Heathrow Delivery", as it's
   called there; "Boston Clearance" in the US and Canada as before, and in Puerto Rico and the US Virgin Islands too
   ("San Juan Clearance"; it was "San Juan Delivery"). San Juan's centre is "San Juan Center", as the FAA's is called.

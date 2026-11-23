@@ -31,9 +31,28 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   to each chapter. A YouTube link on a line of its own in a post is shown as the video, which is loaded from YouTube
   only once its play button is pressed (the cookie and privacy pages say so).
 
+- **Live Flights draws the path flown:** a solid line from where the flight started (the taxi too) to the aircraft,
+  and the way still to go dashed from the aircraft, through the filed route's fixes still ahead or straight to the
+  destination. The map opens on the whole world, and zooms in close enough to see an airport's taxiways.
+- **The home page's app window can be used:** its tabs (ATC, Quick Settings, Live Map, EFB, Airport Lookup, Logbook)
+  open by a click or the arrow keys, each with a look at that part of the app; Quick Settings' switches switch, and
+  Airport Lookup finds a few airports by their codes.
+
 ### Changed
 - **The privacy policy on stopping Live Flights:** in the app's Settings or on the dashboard (the app's "Sharing live"
   badge is gone).
+- **The home page's top:** "Free AI ATC for MSFS, completely locally." on its own, larger, over one photo that stays
+  put (the slideshow, the line above the headline and the four chips under the buttons are gone). "Download for
+  Free", with the Windows logo, downloads the installer.
+- **"LocalTC" is white** beside the tower logo, on every page.
+- **The home page's status and features** list what's come since: VATSIM and IVAO controllers, the arrival sequence,
+  apron controllers, the turnaround timeline, cabin incidents, traffic that waits for its clearances, taxi arrows,
+  the panel on the sim's toolbar and Live Flights. The install section says what the setup guide adds after the
+  installer (the models, Ollama, GPU support).
+
+### Removed
+- **The "Is this a free AI ATC for MSFS?" section and the comparison page (free-atc-msfs):** search engines know
+  LocalTC by name now.
 
 ## [0.5.8] - 2026-11-17
 

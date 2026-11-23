@@ -41,6 +41,7 @@ describe("the admin panel", () => {
     expect(shown).not.toHaveProperty("fixes");
     const route = await data(await call("GET", `/v1/sky/flights/${flight_id}/route`));
     expect(route.fixes.map((f: any) => f.ident)).toEqual(["MDPC", "MELLA", "TJSJ"]);
+    expect(route.trail).toEqual([[18.6, -68.2]]);
   });
 
   it("pauses Live Flights for everyone, and turns it back on", async () => {

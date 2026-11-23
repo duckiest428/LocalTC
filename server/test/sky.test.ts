@@ -40,7 +40,7 @@ describe("Live Flights' heartbeat", () => {
     expect(f.name).toBe("Duck");
     expect(f.lat).toBe(48.1235);
     expect(f.route).toBe("PAE3 ARRIE");
-    expect(Object.keys(f).sort()).toEqual(["alt", "callsign", "delay_min", "from", "from_ll", "ground", "gs", "hdg", "id", "lat", "lon",
+    expect(Object.keys(f).sort()).toEqual(["alt", "callsign", "delay_min", "from", "from_ll", "ground", "gs", "has_track", "hdg", "id", "lat", "lon",
       "mhz", "name", "phase", "route", "rules", "station", "to", "to_ll", "type"]);
     expect(JSON.stringify(await map())).not.toMatch(/@example\.com|voice|secret/);
   });
@@ -138,6 +138,32 @@ describe("the map's memory", () => {
     const fresh = new Sky();
     fresh.beat("u2", "ip", d, flight, 0);
     expect(fresh.snapshot(60_000).flights).toHaveLength(0);
+  });
+
+  it("keeps the path flown for the card, cut at the delay and never when the route is hidden", () => {
+    const sky = new Sky();
+    let id = "";
+    for (let t = 0; t <= 60_000; t += 10_000) id = sky.beat("u1", "ip", meta, { ...flight, lat: 48 + t / 600_000 }, t);
+    // standing still adds nothing
+    sky.beat("u1", "ip", meta, { ...flight, lat: 48.1 }, 70_000);
+    const r = sky.routeOf(id, 70_000)!;
+    expect(r.trail).toHaveLength(7);
+    expect(r.trail[0]).toEqual([48, -122.9877]);
+    expect(r.fixes).toBeNull();
+    expect(sky.snapshot(70_000).flights[0].has_track).toBe(true);
+    // on the ground, a point every dozen metres keeps the taxi's turns
+    const taxi = new Sky();
+    const tid = taxi.beat("u2", "ip", meta, { ...flight, ground: true, lat: 48 }, 0);
+    taxi.beat("u2", "ip", meta, { ...flight, ground: true, lat: 48.0002 }, 10_000);
+    expect(taxi.routeOf(tid, 10_000)!.trail).toHaveLength(2);
+    // a delay shows only where it had been by then
+    const late = new Sky();
+    const lid = late.beat("u3", "ip", { ...meta, delayMin: 5 }, flight, 0);
+    for (let m = 1; m <= 5; m++) late.beat("u3", "ip", { ...meta, delayMin: 5 }, { ...flight, lat: 48 + m / 10 }, m * 60_000);
+    expect(late.routeOf(lid, 5 * 60_000)!.trail).toHaveLength(1);
+    sky.setMeta("u1", { hideRoute: true });
+    expect(sky.routeOf(id, 70_000)).toBeNull();
+    expect(sky.snapshot(70_000).flights[0]).not.toHaveProperty("has_track");
   });
 
   it("limits how often an account and an address may send", () => {

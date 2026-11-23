@@ -27,6 +27,11 @@ export type Mode = (typeof MODES)[number];
 const MAX_BODY = 16384; // a heartbeat with the route's fixes in it
 const MAX_FIXES = 150;
 const HISTORY_EVERY_MS = 10_000; // a delayed flight's positions are kept one per this long
+// The path flown, as the app's map keeps it: a point every ~0.3 nm in the air and ~12 m on the ground, so the taxi keeps
+// its turns. Past MAX_TRAIL points the older half is thinned to every other point.
+const TRAIL_AIR_NM = 0.3;
+const TRAIL_GROUND_NM = 0.0065;
+const MAX_TRAIL = 1500;
 export const PHASES = ["parked", "taxi", "takeoff", "climb", "cruise", "descent", "approach", "landing", "landed"] as const;
 
 /** Everything a heartbeat may carry. The pilot's name is the server's own (users.display_name), never the app's. */
@@ -134,10 +139,31 @@ const MOVING = ["lat", "lon", "alt", "gs", "hdg", "ground", "phase", "station", 
 export interface Held {
   id: string; uid: string; meta: Meta; flight: SkyFlight; last: number; started: number;
   history: { t: number; at: Moving }[]; // for a delay: where it was, one point per HISTORY_EVERY_MS
+  trail?: [number, number, number][]; // the path flown: [time, lat, lon]
+}
+
+const nmBetween = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const r = Math.PI / 180, dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2;
+  return 3440 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+/** A point added to the path flown when the aircraft has moved far enough from the last one. */
+function addTrail(held: Held, f: SkyFlight, now: number): void {
+  if (!Number.isFinite(f.lat) || !Number.isFinite(f.lon)) return;
+  const trail = (held.trail ??= []);
+  const last = trail[trail.length - 1];
+  const step = f.ground ? TRAIL_GROUND_NM : TRAIL_AIR_NM;
+  if (last && nmBetween(last[1], last[2], f.lat, f.lon) < step) return;
+  trail.push([now, Math.round(f.lat * 1e5) / 1e5, Math.round(f.lon * 1e5) / 1e5]);
+  if (trail.length > MAX_TRAIL) {
+    const half = Math.floor(trail.length / 2);
+    held.trail = [...trail.slice(0, half).filter((_, i) => i % 2 === 0), ...trail.slice(half)];
+  }
 }
 
 /** What the map shows of one flight. No account id, no email: a random id made for this flight. */
-export interface Shown extends Partial<SkyFlight> { id: string; name: string; delay_min: number; tags?: Tag[]; has_route?: boolean }
+export interface Shown extends Partial<SkyFlight> { id: string; name: string; delay_min: number; tags?: Tag[]; has_route?: boolean; has_track?: boolean }
 
 /** The map's flights, kept in memory. Pure, with the time passed in, so the tests can run the clock. */
 export class Sky {
@@ -209,6 +235,7 @@ export class Sky {
     else top.at = at; // the newest point stays the latest position
     const keep = now - (Math.max(...DELAYS) + 1) * 60_000;
     while (held.history.length > 1 && held.history[1].t <= keep) held.history.shift();
+    addTrail(held, flight, now);
     return held.id;
   }
 
@@ -246,10 +273,14 @@ export class Sky {
     for (const [ip, h] of this.ipHits) if (h.minute !== minute) this.ipHits.delete(ip);
   }
 
-  /** A flight's filed route, fix by fix, unless the pilot hides it. */
-  routeOf(id: string): Fix[] | null {
+  /** A flight's filed route, fix by fix, and the path flown so far (as far as the delay shows it), unless the pilot
+   * hides the route. */
+  routeOf(id: string, now: number): { fixes: Fix[] | null; trail: [number, number][] } | null {
     const held = this.flights.get(id);
-    return held && !held.meta.hideRoute && held.flight.fixes ? held.flight.fixes : null;
+    if (!held || held.meta.hideRoute) return null;
+    const cut = now - held.meta.delayMin * 60_000;
+    const trail = (held.trail ?? []).filter((p) => p[0] <= cut).map((p) => [p[1], p[2]] as [number, number]);
+    return { fixes: held.flight.fixes ?? null, trail };
   }
 
   /** Whether the account's flight here has its fixes (else the app is asked for them). */
@@ -289,6 +320,7 @@ export class Sky {
       for (const k of ["type", "airline", "from", "to"] as const) if (flight[k]) shown[k] = flight[k];
       if (meta.tags?.length) shown.tags = meta.tags;
       if (!meta.hideRoute && flight.fixes) shown.has_route = true;
+      if (!meta.hideRoute) shown.has_track = true;
       if (flight.from_ll) shown.from_ll = flight.from_ll;
       if (flight.to_ll) shown.to_ll = flight.to_ll;
       if (!meta.hideRoute && flight.route) shown.route = flight.route;
@@ -373,8 +405,8 @@ export class SkyRoom extends DurableObject<Env> {
     }
     const route = /^\/route\/([0-9a-f]{16})$/.exec(url.pathname);
     if (route && request.method === "GET") {
-      const fixes = this.sky.routeOf(route[1]);
-      return fixes ? json({ fixes }) : json({ error: "No route for that flight." }, 404);
+      const out = this.sky.routeOf(route[1], now);
+      return out ? json(out) : json({ error: "No route for that flight." }, 404);
     }
     return json({ error: "Not found." }, 404);
   }
@@ -492,10 +524,12 @@ export async function flights(env: Env, request: Request): Promise<Response> {
   return out;
 }
 
-/** GET /v1/sky/flights/:id/route: a flight's filed route, fix by fix (unless the pilot hides it), for its card. */
+/** GET /v1/sky/flights/:id/route: a flight's filed route, fix by fix, and the path it has flown (unless the pilot
+ * hides the route), for its card. The path grows, so it's cached only as long as the snapshot. */
 export async function route(env: Env, id: string): Promise<Response> {
   const res = await send(env, "GET", `/route/${id}`);
-  return json(await res.json(), res.status, { "Cache-Control": "public, max-age=60", "Access-Control-Allow-Origin": "*" });
+  const ttl = Math.max(0, Number(env.SKY_CACHE_S ?? 10));
+  return json(await res.json(), res.status, { "Cache-Control": `public, max-age=${ttl}`, "Access-Control-Allow-Origin": "*" });
 }
 
 /** For the admin panel (src/admin.ts): the flights on the map with their accounts, and pausing it all. */

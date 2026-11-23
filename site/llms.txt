@@ -9,7 +9,6 @@
 
 ## Links
 - [Home](https://localtc.tech/)
-- [Free ATC for MSFS: the options compared](https://localtc.tech/free-atc-msfs)
 - [Download](https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe)
 - [Live Flights: LocalTC pilots who chose to share their flight](https://localtc.tech/live)
 - [Changelog](https://localtc.tech/changelog)

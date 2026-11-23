@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LocalTC: free ATC for Microsoft Flight Simulator 2020 and 2024</title>
+<title>LocalTC: free AI ATC for Microsoft Flight Simulator 2020 and 2024</title>
 <meta name="description" content="Free, open-source air traffic control and a copilot for MSFS 2020 and 2024. Local by default: speech recognition, voices and the language model run on your PC. Bring your own key for a cloud model if you want it. No subscription, ever.">
-<meta property="og:title" content="LocalTC: free ATC for MSFS 2020 and 2024">
+<meta property="og:title" content="LocalTC: free AI ATC for MSFS 2020 and 2024">
 <meta property="og:description" content="Real ATC and a copilot, on your own machine. Free forever, local by default, bring your own key if you want a cloud model.">
 <link rel="canonical" href="https://localtc.tech/">
 <meta property="og:type" content="website">
@@ -33,7 +33,7 @@
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": ["Voice ATC from clearance delivery to the gate", "SIDs, STARs, vectors and approaches", "AI copilot with callouts and checklists", "Voice-controlled ground crew with GSX support", "Cabin crew announcements", "Works offline", "Ten languages for the crew", "Companion iPhone app and live web tracker"],
+  "featureList": ["Voice ATC from clearance delivery to the gate", "SIDs, STARs, vectors and approaches", "AI copilot with callouts and checklists", "Voice-controlled ground crew with GSX support", "Cabin crew announcements", "Works offline", "Ten languages for the crew", "VATSIM and IVAO controllers where online", "Companion iPhone app and live web tracker", "Public Live Flights map"],
   "sameAs": ["https://github.com/duckiest428/LocalTC", "https://discord.gg/fDKfMxfC9a"]
 }
 </script>
@@ -63,17 +63,12 @@
 <section class="hero">
   <div class="hero-slides" aria-hidden="true">
     <img class="on" src="img/hero-runway.jpg" srcset="img/hero-runway-960.jpg 960w, img/hero-runway.jpg 1920w" sizes="100vw" alt="" fetchpriority="high">
-    <img data-src="img/hero-tail.jpg" data-srcset="img/hero-tail-960.jpg 960w, img/hero-tail.jpg 1920w" sizes="100vw" alt="">
-    <img data-src="img/hero-sunset.jpg" data-srcset="img/hero-sunset-960.jpg 960w, img/hero-sunset.jpg 1920w" sizes="100vw" alt="">
-    <img data-src="img/hero-rouge.jpg" data-srcset="img/hero-rouge-960.jpg 960w, img/hero-rouge.jpg 1920w" sizes="100vw" alt="">
-    <img data-src="img/hero-dusk.jpg" data-srcset="img/hero-dusk-960.jpg 960w, img/hero-dusk.jpg 1920w" sizes="100vw" alt="">
   </div>
   <div class="hero-shade" aria-hidden="true"></div>
   <div class="scope" aria-hidden="true"><span class="sweep"></span></div>
   <div class="hero-inner">
     <div class="hero-copy">
-      <p class="eyebrow">Free ATC for MSFS 2020 and 2024 &middot; Windows</p>
-      <h1 class="split">Free ATC for MSFS, on your own computer.</h1>
+      <h1 class="split">Free AI ATC for MSFS, completely locally.</h1>
       <p class="lede">
         Talk to controllers from clearance delivery to the gate, with a first officer beside you on the
         intercom and a ground crew on the ramp. Real phraseology, readbacks that are checked, a voice and a
@@ -81,22 +76,16 @@
       </p>
       <p class="lede lede-strong">Free forever. Local by default. Bring your own key if you want a cloud model.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="#install">Install it free</a>
+        <a class="btn btn-primary" href="https://github.com/duckiest428/LocalTC/releases/latest/download/LocalTC-Setup.exe"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5.1 10.4 4v7.3H3V5.1Zm0 13.8 7.4 1.1v-7.2H3v6.1Zm8.2 1.2L21 21.5v-8.7h-9.8v7.3Zm0-16.2v7.4H21V2.5l-9.8 1.4Z"/></svg>Download for Free</a>
         <a class="btn btn-coffee" href="https://buymeacoffee.com/petey1" rel="noopener">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 7h13a3 3 0 0 1 0 6h-1.1l-.5 4.2A3 3 0 0 1 12.4 20H8.6a3 3 0 0 1-3-2.8L4 7Zm12 2v2h1a1 1 0 0 0 0-2h-1ZM5 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3ZM8 3.8c0-.6.9-1.3 1.3-.6.3.5 0 .8-.2 1.1-.3.4-.5.6-.3 1.1.1.3-.6.6-.8.1-.3-.7 0-1.1.1-1.4.1-.2.1-.2-.1-.3Z"/></svg>
           Buy me a coffee
         </a>
       </div>
-      <ul class="hero-facts">
-        <li><b>$0</b> forever</li>
-        <li><b>Local</b> by default</li>
-        <li><b>BYOK</b> optional</li>
-        <li><b>Open source</b></li>
-      </ul>
     </div>
 
-    <!-- a working mock of the app's radio log -->
-    <div class="window" aria-label="The LocalTC radio log">
+    <!-- a working mock of the app: its tabs can be clicked -->
+    <div class="window" role="region" aria-label="A preview of the LocalTC app">
       <div class="window-bar">
         <span class="logo"><img src="logo.svg" alt="" width="18" height="18">LocalTC</span>
         <span class="lcd">
@@ -106,39 +95,108 @@
         </span>
         <span class="pill live"><i></i>Flying</span>
       </div>
-      <div class="window-tabs">
-        <span class="wtab active">ATC</span><span class="wtab">Quick Settings</span>
-        <span class="wtab">Live Map</span><span class="wtab">Airport Lookup</span>
+      <div class="window-tabs" role="tablist" aria-label="The app's tabs">
+        <button type="button" class="wtab" role="tab" id="wt-atc" aria-controls="wp-atc" aria-selected="true">ATC</button>
+        <button type="button" class="wtab" role="tab" id="wt-settings" aria-controls="wp-settings" aria-selected="false" tabindex="-1">Quick Settings</button>
+        <button type="button" class="wtab" role="tab" id="wt-map" aria-controls="wp-map" aria-selected="false" tabindex="-1">Live Map</button>
+        <button type="button" class="wtab" role="tab" id="wt-efb" aria-controls="wp-efb" aria-selected="false" tabindex="-1">EFB</button>
+        <button type="button" class="wtab" role="tab" id="wt-lookup" aria-controls="wp-lookup" aria-selected="false" tabindex="-1">Airport Lookup</button>
+        <button type="button" class="wtab" role="tab" id="wt-logbook" aria-controls="wp-logbook" aria-selected="false" tabindex="-1">Logbook</button>
       </div>
-      <div class="strip">
-        <div><i>Dest</i><b>CYYC</b></div><div><i>Squawk</i><b>4512</b></div>
-        <div><i>Alt</i><b>FL350</b></div><div><i>Rwy</i><b>08R</b></div>
+
+      <div class="wpanel" role="tabpanel" id="wp-atc" aria-labelledby="wt-atc">
+        <div class="strip">
+          <div><i>Dest</i><b>CYYC</b></div><div><i>Squawk</i><b>4512</b></div>
+          <div><i>Alt</i><b>FL350</b></div><div><i>Rwy</i><b>08R</b></div>
+        </div>
+        <ol class="log" id="log" aria-live="off"></ol>
+        <div class="ptt"><span class="key">Right Ctrl</span> held, talking<span class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
       </div>
-      <ol class="log" id="log"></ol>
-      <div class="ptt"><span class="key">Right Ctrl</span> held, talking<span class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></div>
+
+      <div class="wpanel" role="tabpanel" id="wp-settings" aria-labelledby="wt-settings" hidden>
+        <div class="wp-scroll">
+          <p class="wp-h">ATC</p>
+          <label class="wp-row"><span>How ATC uses the language model<small>Every call checked against the script</small></span>
+            <select><option>Auto</option><option>Fully scripted</option><option>Semi LLM</option><option selected>Mostly LLM</option><option>Fully LLM</option></select></label>
+          <label class="wp-row"><span>Phraseology</span><select><option>ICAO</option><option selected>FAA</option></select></label>
+          <label class="wp-row"><span>Taxi guidance<small>Arrows on the ground in the sim</small></span><input type="checkbox" class="wp-switch" checked></label>
+          <label class="wp-row"><span>VATSIM and IVAO controllers<small>Their controllers where they're online</small></span><input type="checkbox" class="wp-switch"></label>
+          <p class="wp-h">Copilot</p>
+          <label class="wp-row"><span>Callouts and checklists</span><input type="checkbox" class="wp-switch" checked></label>
+          <label class="wp-row"><span>Its own hands<small>Lights, gear and flaps</small></span><input type="checkbox" class="wp-switch" checked></label>
+          <p class="wp-h">Crew</p>
+          <label class="wp-row"><span>Ground crew<small>GSX, or the sim's tug and jetway</small></span><input type="checkbox" class="wp-switch" checked></label>
+          <label class="wp-row"><span>Cabin crew language</span><select><option selected>English</option><option>Deutsch</option><option>Français</option><option>Español</option><option>Italiano</option></select></label>
+          <label class="wp-row"><span>Show my flight on Live Flights</span><input type="checkbox" class="wp-switch"></label>
+        </div>
+      </div>
+
+      <div class="wpanel" role="tabpanel" id="wp-map" aria-labelledby="wt-map" hidden>
+        <svg class="wp-map" viewBox="0 0 480 360" role="img" aria-label="The Live Map: the route flown and still to go, Vancouver's approach area, and the traffic around">
+          <rect width="480" height="360" class="m-sea"/>
+          <path class="m-land" d="M0 120 C60 110 90 150 140 140 S230 90 290 100 360 70 480 60 V360 H0Z"/>
+          <path class="m-coast" d="M0 120 C60 110 90 150 140 140 S230 90 290 100 360 70 480 60"/>
+          <circle cx="118" cy="214" r="78" class="m-zone"/>
+          <circle cx="118" cy="214" r="34" class="m-tower"/>
+          <text x="118" y="128" class="m-zlabel">VANCOUVER APP 126.125</text>
+          <path class="m-flown" d="M112 218 C140 204 168 186 196 170 S250 140 276 128"/>
+          <path class="m-ahead" d="M276 128 L334 104 L392 84 L452 58"/>
+          <g class="m-fix"><circle cx="334" cy="104" r="3"/><text x="340" y="100">MERYT</text></g>
+          <g class="m-fix"><circle cx="392" cy="84" r="3"/><text x="398" y="80">ARRIE</text></g>
+          <rect x="108" y="210" width="10" height="3" rx="1" class="m-rwy" transform="rotate(-8 113 211)"/>
+          <text x="96" y="232" class="m-apt">CYVR</text>
+          <g class="m-own" transform="translate(276 128) rotate(62)"><path d="M0-10 2-3 9 1V3L2 1 1 7 4 9V10L0 9-4 10V9L-1 7-2 1-9 3V1L-2-3Z"/></g>
+          <g class="m-tfc" transform="translate(190 250) rotate(250)"><path d="M0-8 1.6-2.4 7 .8V2.4L1.6.8.8 5.6 3.2 7.2V8L0 7.2-3.2 8V7.2L-.8 5.6-1.6.8-7 2.4V.8L-1.6-2.4Z"/></g>
+          <g class="m-tfc" transform="translate(60 160) rotate(110)"><path d="M0-8 1.6-2.4 7 .8V2.4L1.6.8.8 5.6 3.2 7.2V8L0 7.2-3.2 8V7.2L-.8 5.6-1.6.8-7 2.4V.8L-1.6-2.4Z"/></g>
+          <g class="m-gnd" transform="translate(126 222) rotate(80)"><path d="M0-7 1.4-2 6 .7V2L1.4.7.7 4.9 2.8 6.3V7L0 6.3-2.8 7V6.3L-.7 4.9-1.4.7-6 2V.7L-1.4-2Z"/></g>
+          <g class="m-tfc" transform="translate(360 210) rotate(300)"><path d="M0-8 1.6-2.4 7 .8V2.4L1.6.8.8 5.6 3.2 7.2V8L0 7.2-3.2 8V7.2L-.8 5.6-1.6.8-7 2.4V.8L-1.6-2.4Z"/></g>
+          <text x="368" y="230" class="m-tlabel">WJA184 FL240</text>
+          <text x="198" y="270" class="m-tlabel">JZA562 4,000</text>
+        </svg>
+        <div class="wp-legend"><span><i class="lg-flown"></i>Flown</span><span><i class="lg-ahead"></i>Still to go</span><span><i class="lg-zone"></i>ATC zones</span><span><i class="lg-tfc"></i>Traffic</span></div>
+      </div>
+
+      <div class="wpanel" role="tabpanel" id="wp-efb" aria-labelledby="wt-efb" hidden>
+        <div class="wp-scroll">
+          <p class="wp-h">Airport Ops &middot; CYVR gate 52</p>
+          <ol class="wp-turn">
+            <li class="done"><b>Parked</b><span>08:12</span></li>
+            <li class="done"><b>Doors open, deboarding</b><span>08:14</span></li>
+            <li class="done"><b>Catering</b><span>08:21</span></li>
+            <li class="now"><b>Fuel, 9,400 kg to load</b><span>08:31</span></li>
+            <li><b>Boarding</b><span>08:38</span></li>
+            <li><b>Doors closed</b><span>08:58</span></li>
+            <li><b>Push and start</b><span>09:05</span></li>
+          </ol>
+          <p class="wp-note">On time for the 09:05 off-block. The ramp calls you when each one's done.</p>
+        </div>
+      </div>
+
+      <div class="wpanel" role="tabpanel" id="wp-lookup" aria-labelledby="wt-lookup" hidden>
+        <div class="wp-scroll">
+          <label class="wp-search"><span class="sr-only">Airport</span><input id="wp-q" type="text" value="CYVR" placeholder="ICAO, e.g. KSEA" autocomplete="off" spellcheck="false" maxlength="4"></label>
+          <div id="wp-apt" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="wpanel" role="tabpanel" id="wp-logbook" aria-labelledby="wt-logbook" hidden>
+        <div class="wp-scroll">
+          <table class="wp-table">
+            <thead><tr><th>Date</th><th>Route</th><th>Aircraft</th><th>Time</th></tr></thead>
+            <tbody>
+              <tr><td>Today</td><td>CYVR &rarr; CYYC</td><td>A321</td><td>1:12</td></tr>
+              <tr><td>Nov 20</td><td>LSZH &rarr; LEPA</td><td>A320</td><td>1:54</td></tr>
+              <tr><td>Nov 18</td><td>KSFO &rarr; KDEN</td><td>B738</td><td>2:21</td></tr>
+              <tr><td>Nov 15</td><td>LFPG &rarr; LIRF</td><td>A220</td><td>1:58</td></tr>
+              <tr><td>Nov 12</td><td>EGLL &rarr; EDDM</td><td>A320</td><td>1:31</td></tr>
+            </tbody>
+          </table>
+          <p class="wp-note">Every flight kept, with a replay you can rewatch and share.</p>
+        </div>
+      </div>
     </div>
   </div>
   <a class="scroll-cue" href="#legs" aria-label="Scroll to the flight"><span></span></a>
-</section>
-
-<!-- ---------------------------------------------------------------- answer -->
-<section id="what" class="band answer">
-  <h2 class="section-title">Is this a free AI ATC for MSFS?</h2>
-  <p class="section-lede answer-text">
-    Yes. <b>LocalTC is a free, open-source voice ATC add-on for Microsoft Flight Simulator 2020 and 2024.</b>
-    You talk on push-to-talk and controllers answer from clearance delivery to the gate: SIDs, STARs, vectors,
-    approaches, real traffic on the frequency. It adds an AI copilot, a ground crew you call by voice (with GSX
-    support) and a cabin crew. Speech recognition, the voices and the language model run on your own PC, so it
-    works offline, with no subscription, account or usage limit. A cloud model with your own free key is optional.
-  </p>
-  <ul class="answer-facts">
-    <li><b>$0</b><span>no subscription, ever</span></li>
-    <li><b>2020 + 2024</b><span>both versions of MSFS</span></li>
-    <li><b>Offline</b><span>runs on your PC</span></li>
-    <li><b>10 languages</b><span>for the crew</span></li>
-    <li><b>AGPL</b><span>open source on GitHub</span></li>
-  </ul>
-  <p class="answer-more"><a href="free-atc-msfs">How it compares with the other ATC add-ons &rarr;</a></p>
 </section>
 
 <!-- -------------------------------------------------------------------- legs -->
@@ -207,6 +265,10 @@
         <h3>Off script</h3><p>Ask for a runway, a shortcut, the weather. A real answer, or a real <span class="q">"unable"</span>.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M32 8l24 34H8z"/><path d="M32 20v10M32 35v.5"/></svg>
         <h3>When it goes wrong</h3><p>Mayday and pan-pan, the nearest suitable airport, ATC starting things itself.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="20" cy="24" r="12"/><circle cx="44" cy="24" r="12"/><path d="M32 16v16"/></svg>
+        <h3>VATSIM and IVAO too</h3><p>Fly hybrid: real controllers where they're online, LocalTC everywhere else, handed over on the radio.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 40h44"/><path d="M18 32l8-8-8-8M32 32l8-8-8-8" class="o"/><path d="M50 14v20" stroke-width="4"/></svg>
+        <h3>Taxi guidance</h3><p>Arrows on the ground in the sim along the route ground gave you, a stop bar short of a runway.</p></article>
   </div>
     </div>
   </div>
@@ -241,7 +303,7 @@
       <img src="img/ch-ground-960.jpg" srcset="img/ch-ground-960.jpg 960w, img/ch-ground.jpg 1920w" sizes="(max-width: 900px) 100vw, 46vw" alt="" loading="lazy" data-parallax="0.08">
     </figure>
     <div class="chapter-body">
-      <p class="chapter-kicker">New &middot; The crew</p>
+      <p class="chapter-kicker">The crew</p>
       <h3 class="chapter-title" id="feat-crew">On the ramp and in the cabin</h3>
       <p class="chapter-lede">The turnaround, the push and the passengers, by voice and with no menus.</p>
 <div class="tiles">
@@ -299,6 +361,10 @@
         <h3>Live tracker</h3><p>Your flight full screen on the web: the map, the radio, the copilot.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="8" y="10" width="48" height="28" rx="4"/><path d="M28 18l10 6-10 6z" class="f"/><path d="M8 44h48"/><circle cx="20" cy="44" r="2" class="f"/></svg>
         <h3>Logbook and replays</h3><p>Rewatch any flight, share it, and Wrapped: your year in flying.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="32" cy="24" r="18"/><path d="M14 24h36M32 6c7 6 7 30 0 36M32 6c-7 6-7 30 0 36"/><circle cx="42" cy="16" r="3" class="f"/></svg>
+        <h3>Live Flights</h3><p>If you choose, your flight on the public map at <a href="live">localtc.tech/live</a>, with its route and track.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="52" height="32" rx="4"/><rect x="38" y="14" width="14" height="20" rx="2"/><path d="M42 20h6M42 25h6M42 30h4"/></svg>
+        <h3>Inside the sim</h3><p>A LocalTC panel on the sim's toolbar with the radio log and radios, for VR too.</p></article>
   </div>
     </div>
   </div>
@@ -327,8 +393,9 @@
         nothing else. Never your audio.</span>
     </div>
   </div>
-  <p class="fineprint">LocalTC itself has no server your flight goes through. The optional account copies your logbook and
-    feeds the phone and the tracker, only if you sign in. <a href="privacy">Privacy, in plain words</a>.</p>
+  <p class="fineprint">LocalTC itself has no server your flight goes through. The optional account copies your logbook,
+    feeds the phone and the tracker, and puts your flight on <a href="live">Live Flights</a> only if you choose to share
+    it. <a href="privacy">Privacy, in plain words</a>.</p>
 </section>
 
 <!-- -------------------------------------------------------------------- why -->
@@ -356,7 +423,6 @@
         <tr><th scope="row">Usage limits</th><td class="us yes">None, it's your hardware</td><td class="no">Often tiered by hours</td></tr>
       </tbody>
     </table>
-    <p class="fineprint"><a href="free-atc-msfs">LocalTC beside BeyondATC, SayIntentions, Pilot2ATC and the sim's own ATC &rarr;</a></p>
   </div>
 
   <div class="calc" id="calc">
@@ -393,8 +459,9 @@
   <div class="band-bg" aria-hidden="true"><img src="img/bg-cruise-960.jpg" srcset="img/bg-cruise-960.jpg 960w, img/bg-cruise.jpg 1920w" sizes="100vw" alt="" loading="lazy" data-parallax="0.15"></div>
   <h2 class="section-title">Install</h2>
   <p class="section-lede">
-    Windows, with MSFS 2020 or 2024. One installer does the lot: Python, LocalTC, Whisper, Piper, Ollama,
-    CUDA if you have an NVIDIA card, and the models sized for your machine. No git, no admin rights.
+    Windows 10 or 11, with MSFS 2020 or 2024. One installer carries LocalTC and its own Python; on first start its
+    setup guide adds the rest, each when you say so: the voices and speech recognition, a local model (Ollama), and GPU
+    support if you have an NVIDIA card. No git, no admin rights.
   </p>
 
   <ol class="steps" id="steps">
@@ -409,7 +476,8 @@
       <span class="num">2</span>
       <h3>Run it</h3>
       <p>It installs to your user folder. When LocalTC opens, its setup guide downloads the models once, picking the
-      <i>light</i>, <i>balanced</i> or <i>quality</i> set from your RAM and graphics card. After that, flights work offline.</p>
+      <i>light</i>, <i>balanced</i> or <i>quality</i> set from your RAM and graphics card, and offers Ollama and GPU
+      support. After that, flights work offline.</p>
       <p class="hint">The installer isn't code-signed yet, so Windows may say it's from an unknown publisher:
       <b>More info → Run anyway</b>. LocalTC then updates itself, when you say so, and never mid-flight.</p>
     </li>
@@ -453,15 +521,16 @@
       <h3 class="ok"><span class="status-dot"></span>Working today</h3>
       <ul>
         <li>IFR and VFR, clearance delivery to the gate, FAA and ICAO phraseology</li>
-        <li>SIDs, STARs, vectors, approaches, holds, go-arounds</li>
-        <li>Controllers with their own voices and manners, other traffic on the frequency</li>
+        <li>SIDs, STARs, vectors, approaches, holds, go-arounds, the arrival sequence</li>
+        <li>Controllers with their own voices and manners, apron where the airport has one, other traffic on the frequency</li>
+        <li>VATSIM and IVAO controllers where they're online, LocalTC's everywhere else</li>
         <li>A copilot on the intercom: callouts, checklists, watches, its own side of the cockpit</li>
         <li>Your own key for a cloud model, or the local one, or none</li>
-        <li>The app, the phone, the live tracker, a logbook with replays and Wrapped</li>
-        <li>A ground crew by voice, with GSX or the sim's own tug and jetway</li>
-        <li>A cabin crew: boarding, announcements, the cabin-ready call</li>
-        <li>Real traffic around you, ATC on COM1 or COM2, your flight on Discord</li>
-        <li>The crew in ten languages besides English</li>
+        <li>A ground crew by voice and a turnaround timeline, with GSX or the sim's own tug and jetway</li>
+        <li>A cabin crew: boarding, announcements, the cabin-ready call, cabin incidents if you want them</li>
+        <li>Real traffic around you that waits for its clearances, taxi arrows in the sim</li>
+        <li>The app, a panel in the sim's toolbar, the phone, the live tracker, a logbook with replays and Wrapped</li>
+        <li>Live Flights, your flight on Discord, the crew in ten languages besides English</li>
       </ul>
     </div>
     <div class="status-col">
@@ -470,7 +539,7 @@
         <li>ATC in languages other than English</li>
         <li>Airline operations: dispatch, ACARS, company messages</li>
         <li>Careers and missions</li>
-        <li>Shared ATC in multiplayer</li>
+        <li>LocalTC's own ATC shared between pilots in multiplayer</li>
         <li>Other sims, and macOS or Linux at the controls (they're for development)</li>
       </ul>
     </div>

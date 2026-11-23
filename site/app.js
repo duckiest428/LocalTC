@@ -1,4 +1,4 @@
-/* The home page's motion, no dependencies: the header and the photos as you scroll, the hero's slides and its
+/* The home page's motion, no dependencies: the header and the photos as you scroll, the hero's photo and its
    headline, the radio log typing itself, the flight leg by leg, the subscription sum, the copy
    buttons. Everything that moves stands still for prefers-reduced-motion. */
 
@@ -73,29 +73,7 @@ window.addEventListener("scroll", () => {
 window.addEventListener("resize", onScroll);
 onScroll();
 
-// --- the hero: slides, the headline word by word, the window leaning toward the pointer --------------
-function heroSlideshow() {
-  const slides = [...document.querySelectorAll(".hero-slides img")];
-  if (slides.length < 2 || quiet) return;
-  const load = (img) => {
-    if (!img.dataset.src) return;
-    img.srcset = img.dataset.srcset;
-    img.src = img.dataset.src;
-    delete img.dataset.src;
-  };
-  setTimeout(() => slides.slice(1).forEach(load), 2500);  // the first photo first; the others once it's up
-  let at = 0;
-  setInterval(() => {
-    const next = slides[(at + 1) % slides.length];
-    if (document.hidden || !next.complete || !next.naturalWidth) return;
-    const prev = slides[at];
-    prev.classList.replace("on", "out");
-    next.classList.add("on");
-    at = slides.indexOf(next);
-    setTimeout(() => prev.classList.remove("out"), 2000);
-  }, 8000);
-}
-heroSlideshow();
+// --- the hero: the headline word by word, the window leaning toward the pointer --------------
 
 for (const h of document.querySelectorAll("h1.split")) {
   if (quiet) break;
@@ -207,6 +185,83 @@ async function playRadio() {
   }
 }
 playRadio();
+
+// --- the app's tabs, in the hero's window -------------------------------------------------------------------
+// A tab list as the app has it: a click or the arrow keys pick a tab, and only the picked one is in the tab order.
+function appTabs() {
+  const tabs = [...document.querySelectorAll(".window-tabs .wtab")];
+  if (!tabs.length) return;
+  const show = (tab, focus) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", String(on));
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+    if (focus) tab.focus();
+    // the tab row scrolls sideways on a phone: the picked tab brought into it, the page left where it is
+    const row = tab.parentElement;
+    if (tab.offsetLeft < row.scrollLeft) row.scrollLeft = tab.offsetLeft - 14;
+    else if (tab.offsetLeft + tab.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = tab.offsetLeft + tab.offsetWidth - row.clientWidth + 14;
+  };
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => show(t));
+    t.addEventListener("keydown", (e) => {
+      const n = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (n === undefined) return;
+      e.preventDefault();
+      show(tabs[(n + tabs.length) % tabs.length], true);
+    });
+  });
+}
+appTabs();
+
+// Airport Lookup, with a few airports baked in (the app looks up every airport in the sim).
+const AIRPORTS = {
+  CYVR: { name: "Vancouver International", metar: "CYVR 221800Z 09008KT 30SM FEW040 BKN120 08/03 A2992",
+    rwys: "08L/26R, 08R/26L, 13/31", freqs: [["ATIS", "124.600"], ["Delivery", "121.400"], ["Ground", "121.700"], ["Tower", "118.700"], ["Departure", "126.125"]] },
+  KSEA: { name: "Seattle-Tacoma International", metar: "KSEA 221753Z 17011KT 10SM -RA BKN025 OVC045 09/07 A2987",
+    rwys: "16L/34R, 16C/34C, 16R/34L", freqs: [["ATIS", "118.000"], ["Clearance", "128.000"], ["Ground", "121.700"], ["Tower", "119.900"]] },
+  KSFO: { name: "San Francisco International", metar: "KSFO 221756Z 29014KT 10SM FEW012 16/11 A3002",
+    rwys: "01L/19R, 01R/19L, 10L/28R, 10R/28L", freqs: [["ATIS", "118.850"], ["Clearance", "118.200"], ["Ground", "121.800"], ["Tower", "120.500"]] },
+  EGLL: { name: "London Heathrow", metar: "EGLL 221750Z 24012KT 9999 SCT032 11/06 Q1014",
+    rwys: "09L/27R, 09R/27L", freqs: [["ATIS", "128.075"], ["Delivery", "121.975"], ["Ground", "121.900"], ["Tower", "118.500"]] },
+  LSZH: { name: "Zurich", metar: "LSZH 221750Z 06006KT 9999 FEW045 07/01 Q1022",
+    rwys: "10/28, 14/32, 16/34", freqs: [["ATIS", "128.525"], ["Delivery", "121.930"], ["Ground", "121.900"], ["Tower", "118.100"]] },
+};
+function lookup() {
+  const q = document.getElementById("wp-q"), out = document.getElementById("wp-apt");
+  if (!q || !out) return;
+  const render = () => {
+    const code = q.value.trim().toUpperCase();
+    const a = AIRPORTS[code];
+    out.replaceChildren();
+    if (!a) {
+      const p = document.createElement("p");
+      p.className = "wp-note";
+      p.textContent = code.length < 4 ? "Type an ICAO code: CYVR, KSEA, KSFO, EGLL or LSZH here. The app knows every airport in the sim."
+        : `${code} isn't in this preview. Try CYVR, KSEA, KSFO, EGLL or LSZH; the app knows every airport in the sim.`;
+      out.append(p);
+      return;
+    }
+    const h = document.createElement("h4");
+    h.textContent = `${code} · ${a.name}`;
+    const m = document.createElement("p");
+    m.className = "wp-metar";
+    m.textContent = a.metar;
+    const dl = document.createElement("dl");
+    for (const [k, v] of [["Runways", a.rwys], ...a.freqs]) {
+      const dt = document.createElement("dt"), dd = document.createElement("dd");
+      dt.textContent = k;
+      dd.textContent = v;
+      dl.append(dt, dd);
+    }
+    out.append(h, m, dl);
+  };
+  q.addEventListener("input", render);
+  render();
+}
+lookup();
 
 // --- the flight, leg by leg ---------------------------------------------------------------------
 // Each leg's bar fills (CSS), and when it's full the next leg comes up. Off screen, or with the pointer on the photo,

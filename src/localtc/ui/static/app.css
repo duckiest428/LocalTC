@@ -93,7 +93,7 @@ a { color: var(--cyan); }
 
 /* --- top bar --- */
 .topbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-2); border-bottom: 1px solid var(--edge); }
-.logo { display: inline-flex; align-items: center; gap: 7px; color: var(--green); font-weight: 700;
+.logo { display: inline-flex; align-items: center; gap: 7px; color: var(--text-strong, #fff); font-weight: 700;
   font-size: 15px; letter-spacing: .02em; flex: none; }
 .logo img { display: block; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
 .radios { display: flex; align-items: center; gap: 14px; background: var(--lcd); border: 1px solid #000; box-shadow: inset 0 0 0 1px #2b2f34;

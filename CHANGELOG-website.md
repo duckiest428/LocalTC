@@ -3,7 +3,11 @@
 Every version of localtc.tech, newest first. It carries the same version as LocalTC; the website's changelog page
 (Website) is built from this file.
 
-## [0.5.9] - Upcoming
+## [0.6.1] - Upcoming
+
+Nothing yet.
+
+## [0.6.0] - 2026-11-23
 
 ### Added
 - **Live Flights (localtc.tech/live):** a public map of the LocalTC pilots flying right now who chose to share their

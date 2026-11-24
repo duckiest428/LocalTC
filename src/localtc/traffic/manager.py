@@ -249,6 +249,7 @@ APPROACH_TTL_S = 25 * 60.0
 APPROACH_TRIES = 2  # sent around, it comes round for another approach this many times at most
 RUNWAY_SHORT_M = 1500.0  # an airliner's airport has a runway this long at least (not the strip beside the hub)
 LINE_UP_CLEAR_NM = 4.0  # a departure doesn't line up with one of LocalTC's arrivals this close in on that runway
+HEAD_ON_NM = 15.0  # ... nor go off the other end of the user's landing runway with the user this close to it
 OCCUPIED_NM = 1.0  # an arrival this close in with another of LocalTC's on the runway: sent around
 LAND_CALL_CLEAR_NM = 3.0  # ... and this close in, not cleared to land while the runway is still taken
 REJOIN_TTL_S = 15 * 60.0  # a departure off ATC's runway flies to the real one's track this long at most
@@ -310,6 +311,9 @@ class AtcLink:
     closed: Callable[[str], tuple[frozenset[str], frozenset[int]]] = lambda icao: (frozenset(), frozenset())
     # The user's own callsign: the real flight of that number (flying the same route today) isn't shown as well.
     user_callsign: Callable[[], str] = lambda: ""
+    # The user arriving: (airport, the runway end ATC gave it), in the air for it; None otherwise. No departure off the
+    # other end of that runway towards it (Fort Lauderdale's went off 10L into the user's landing on 28R).
+    user_arrival: Callable[[], tuple[str, str] | None] = lambda: None
 
 
 @dataclass
@@ -1900,6 +1904,18 @@ class TrafficManager:
                 return True
         return False
 
+    def _user_head_on(self, geo: AirportGeometry, end, own: OwnshipState | None) -> bool:
+        """The user coming in to land on ``end``'s runway the other way, within HEAD_ON_NM: a departure off ``end``
+        would go straight at it. (Behind the user the same way is a normal departure before an arrival.)"""
+        arrival = self.atc.user_arrival()
+        if arrival is None or own is None or own.on_ground or arrival[0] != geo.icao:
+            return False
+        theirs = geo.end(arrival[1])
+        if theirs is None or theirs.runway is not end.runway or theirs is end:
+            return False
+        lat, lon = geo.frame.to_latlon(*theirs.threshold)
+        return haversine_nm(own.lat, own.lon, lat, lon) <= HEAD_ON_NM
+
     def _runway_taken(self, plane: Plane, geo: AirportGeometry, end) -> bool:
         """Another of LocalTC's on ``end``'s runway: lined up, rolling, or not off it yet after landing."""
         for p in self.planes.values():
@@ -2277,7 +2293,8 @@ class TrafficManager:
                 real.gs_kt >= 30 and geo.runway_at(real.lat, real.lon, 10.0) is not None)
             end = geo.end(ident)
             busy = end is not None and (self._users_runway_at(geo, *geo.frame.to_latlon(*end.threshold), now)
-                                        or self._arrival_close(geo, end))  # (one of LocalTC's coming in to it)
+                                        or self._arrival_close(geo, end)  # (one of LocalTC's coming in to it)
+                                        or self._user_head_on(geo, end, self.own))
             waited = now - loc.stage_t >= HOLD_SHORT_MAX_S
             ready = (rolling or waited) and not busy and now - self._released_t >= self._wake_gap(plane, TAKEOFF_GAP_S)
             if ready and "takeoff" not in plane.said and self._calls_on(plane):

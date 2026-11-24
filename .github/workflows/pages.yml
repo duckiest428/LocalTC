@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # to see the uploaded artifact listed before deploying it
   pages: write
   id-token: write
 
@@ -39,5 +40,17 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      # GitHub can take a while to list an artifact that's just been uploaded, and deploy-pages looks once: "Found 0
+      # artifact(s)" with the upload finalized a second before. Wait until it's listed.
+      - name: Wait for the artifact to be listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 30); do
+            n=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=github-pages" --jq '.total_count' || echo 0)
+            if [ "${n:-0}" -ge 1 ]; then echo "Listed after $((i * 5 - 5)) s"; exit 0; fi
+            sleep 5
+          done
+          echo "Still not listed after 150 s; deploying anyway"
       - uses: actions/deploy-pages@v4
         id: deploy

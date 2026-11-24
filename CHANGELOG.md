@@ -89,9 +89,28 @@ a new minor version adds features, a patch fixes them.
   were turned away and the script's said instead (the same instruction) shows in dev mode only.
 
 ### Fixed
+- **No departure head-on into your landing:** Fort Lauderdale's ATIS says "DEPG RWYS RWY 28R AND 28L"; the doubled
+  word wasn't read, the first runways in it were taken instead (10L, from "RY 10L ALS OTS"), and LocalTC's departures
+  went off 10L straight at the arrivals on 28R. One passed over you at 600 ft after tower had cleared you to land.
+  The ATIS is read right; tower never clears a landing with an aircraft on the runway coming the other way (it sends
+  you around); and none of LocalTC's departures goes off the other end of the runway you're landing on with you
+  within 15 miles.
+- **Holds only when the runway can't take the ones ahead first:** five arrivals anywhere ahead held you, Miami's and
+  Palm Beach's counted as Fort Lauderdale's, and your number went from 6 back to 10. Now only the arrivals landing
+  there count, a hold comes only when they need more runway time than your own minutes to the field (and five more),
+  and your number only goes down: arrivals since go behind you.
+- **Back from the ATIS, still checked in:** tuned to the ATIS and back, Miami Center answered a check-in nobody made
+  ("roger, descend via the OLAHS3 arrival").
+- **The copilot sets the Fenix's FCU altitude right:** asked for 17,000 it left 0100: the Fenix takes each turn of
+  its encoder and puts the counter back, and the second turn was worked out from the counter before. Each turn is from
+  the counter as it is.
+- **"Line-up checklist?" at the runway you take off from,** not at one you're holding short of to cross.
+- **No "when able" ATC didn't mean:** the model added it to the push, a runway crossing and a descent ("cross runway 09
+  when able"), giving you your own time where the controller gave none. It's taken out unless the instruction has it.
 - **The LocalTC button on the sim's toolbar is there:** the toolbar panel (the radio log and the radios inside the
   sim, for VR) had never been built into the app, so no button ever showed. It's built now and goes into the sims'
-  Community folders when the app starts; the button shows from the sim's next start. Quick Settings, ATC, "LocalTC
+  Community folders when the app starts; the button shows from the sim's next start, with LocalTC's control tower
+  for its icon. Quick Settings, ATC, "LocalTC
   button on the sim's toolbar" turns it off (out of the Community folders) and on again. Its window no longer says
   "LocalTC isn't running" with LocalTC flying: its first question to LocalTC was one LocalTC couldn't read.
 - **Iran's controllers don't sound Indian:** the voices for Iran, the Arab states and Turkey were half Kokoro's Hindi

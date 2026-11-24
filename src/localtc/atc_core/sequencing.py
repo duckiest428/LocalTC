@@ -102,6 +102,11 @@ class SequenceMixin:
         if end is None:
             return []
         mine = geo.distance_nm(own.lat, own.lon)
+        # LocalTC's arrivals there (given a landing runway by ATC): only they, or one already on this final, land here.
+        # Miami's and Palm Beach's counted too, and Fort Lauderdale's approach said "number 8" to a flight just let out
+        # of the hold as number 2.
+        dest = self.state.flight.destination
+        landing_here = {key for (icao, key, landing) in getattr(self, "_others_runway", {}) if icao == dest and landing}
         ahead = []
         for target in self._traffic.values():
             if target.on_ground or target.gs_kt < 60 or self._climbing(target):
@@ -112,6 +117,8 @@ class SequenceMixin:
             final = geo.final_approach(target.lat, target.lon, target.hdg_true)
             if final is not None and final.end.ident != end.ident and final.distance_nm < 12:
                 continue  # on another runway's final
+            if landing_here and target.atc_id not in landing_here and (final is None or final.end.ident != end.ident):
+                continue  # another airport's, passing by
             towards = abs(((bearing_deg(target.lat, target.lon, geo.airport.lat, geo.airport.lon) - target.hdg_true + 540) % 360) - 180)
             if (final is not None and final.end.ident == end.ident) or towards < 110 or d < 10:
                 ahead.append((final.distance_nm if final is not None and final.end.ident == end.ident else d, target))

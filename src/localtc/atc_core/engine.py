@@ -512,6 +512,7 @@ AREA_RECHECK_S = 5.0  # how often the aircraft's position is checked against the
 HANDOFF_SPARE_NM = 15.0  # an arrival handed to approach with this much more than its descent needs
 APPROACH_CEILING_FT = 17000.0  # inside the destination's approach area and below this, approach takes the arrival
 LEVEL_MARGIN_FT = 500.0  # ... or at the level the centre gave it, within this
+STEPPED_OFF_S = 300.0  # off to the ATIS (no controller) and back to the same one within this: still with it
 CONTROLLER_WORDS = {"clearance": "clearance", "delivery": "clearance", "ground": "ground", "tower": "tower",
                     "departure": "departure", "center": "center", "approach": "approach"}
 
@@ -674,6 +675,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         self._traffic_called: dict[int, float] = {}  # object id -> when ATC last called it
         self._last_traffic: tuple[float, str] | None = None  # (when, "2 o'clock, 3 miles, ...") of the last call
         self._tuned_since = 0.0
+        self._stepped_off: tuple[str, float, float] | None = None  # (station, its _tuned_since, when) left for no one
         self._last_handoff: tuple[float, Facility, Facility] | None = None  # (when, from, to) of the last handoff
         self._crossings: tuple[str, ...] = ()  # runways the taxi route goes across
         self._ran_onto: str | None = None  # the runway taxied onto without a clearance, not yet left
@@ -1631,7 +1633,18 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         if (st.comms.tuned_mhz, st.comms.tuned, self._atis_tuned) != previous or self._ramp_tuned != ramp_was:
             self._tuned_t = own.t
             tuned = st.comms.tuned
-            self._tuned_since = own.t
+            if previous[1] is not None and tuned is None:
+                self._stepped_off = (previous[1].station, self._tuned_since, own.t)
+            back = self._stepped_off
+            if tuned is not None and back is not None and back[0] == tuned.station and own.t - back[2] <= STEPPED_OFF_S:
+                # Back from the ATIS (or a frequency nobody's on) to the controller it was with: still with them, not a
+                # new check-in. Miami Center answered a check-in nobody made ("roger, descend via the OLAHS3 arrival")
+                # 47 s after the pilot listened to Fort Lauderdale's ATIS and came back.
+                self._tuned_since = back[1]
+            else:
+                self._tuned_since = own.t
+            if tuned is not None:
+                self._stepped_off = None
             early = None
             if previous[1] is not None and tuned is not None and tuned.station != previous[1].station:
                 self._left_at[previous[1].station] = own.t  # off to another controller: back, it's a new check-in
@@ -3518,7 +3531,7 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
         ux, uy = math.sin(math.radians(end.heading_true)), math.cos(math.radians(end.heading_true))
         own_xy = geo.xy(own.lat, own.lon)
         for target in self._traffic.values():
-            if not target.on_ground or target.gs_kt > RUNWAY_CLEAR_KT:
+            if not target.on_ground:
                 continue
             on = geo.runway_at(target.lat, target.lon)
             if on is None or on.name != end.runway.name:
@@ -3528,6 +3541,12 @@ class AtcEngine(VfrMixin, DiversionMixin, ConditionsMixin, HoldsMixin, RoutingMi
             along, lateral = dx * ux + dy * uy, abs(dx * uy - dy * ux)
             if lateral > end.runway.half_width:
                 continue  # beside the pavement (LAX's 737 at a holding point by the 25R threshold): not on it
+            if abs(((target.hdg_true - end.heading_true) % 360) - 180) < 45 and target.gs_kt >= RUNWAY_VACATING_KT:
+                # Moving the other way down this runway, at any speed: a takeoff roll head-on (Fort Lauderdale, an A320
+                # rolling on 10L as this one was cleared to land 28R, over it at 600 ft), never "getting off it".
+                return target
+            if target.gs_kt > RUNWAY_CLEAR_KT:
+                continue  # rolling fast this way: airborne or off it before this one is there
             if along > LANDING_ZONE_M and target.gs_kt >= RUNWAY_VACATING_KT:
                 continue  # rolling out well down the runway (Las Vegas's A321, 2 km on at 40 kt): off it in time
             away = abs(((target.hdg_true - end.heading_true + 540) % 360) - 180) < 45

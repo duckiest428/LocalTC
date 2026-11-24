@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- LocalTC on the toolbar: a headset's microphone and the radio's waves, in the toolbar's white. -->
-  <g fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 34 v-6 a18 18 0 0 1 36 0 v6"/>
-    <rect x="9" y="32" width="9" height="15" rx="3"/>
-    <rect x="46" y="32" width="9" height="15" rx="3"/>
-    <path d="M50 47 c0 7 -7 9 -14 9"/>
-    <circle cx="33" cy="56" r="2.5" fill="#ffffff"/>
-    <path d="M26 24 a8 8 0 0 1 12 0"/>
-    <path d="M22 19 a14 14 0 0 1 20 0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="35.5 37.5 185 186" width="64" height="64">
+  <!-- LocalTC's logo (ui/static/logo.svg) on the toolbar: its control tower in the toolbar's white, the cab's windows
+       cut out of it, on nothing (the toolbar's own background shows). -->
+  <g transform="translate(0,10)" fill="#ffffff">
+    <path d="M126.2 58 L127.4 30 H128.6 L129.8 58 Z"/>
+    <circle cx="128" cy="27" r="3.5"/>
+    <path d="M100 68 L108 56 H148 L156 68 Z"/>
+    <rect x="84" y="68" width="88" height="8" rx="2"/>
+    <path fill-rule="evenodd" d="M90 76 H166 L150 108 H106 Z M95 80 H161 L153.5 95 H102.5 Z"/>
+    <rect x="110" y="80" width="2.5" height="15"/>
+    <rect x="126.75" y="80" width="2.5" height="15"/>
+    <rect x="143.5" y="80" width="2.5" height="15"/>
+    <path d="M120 108 H136 L139 204 H117 Z"/>
+    <rect x="100" y="204" width="56" height="8" rx="2"/>
   </g>
 </svg>

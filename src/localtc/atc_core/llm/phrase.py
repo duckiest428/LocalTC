@@ -94,6 +94,19 @@ THANKS = re.compile(r",?\s*\b(?:thanks(?: a lot| very much)?|thank you(?: very m
                     re.IGNORECASE)
 
 
+# "When able" the model tacks on ("push back and start up approved, tail left when able", "cross runway 09 when able",
+# "descend via OLAHS3 ... when able", "roger, no rush, when able"): the pilot's own time given where the controller gave
+# none. Taken out of an instruction that didn't have it.
+WHEN_ABLE = re.compile(r",?\s*\bwhen (?:able|ready)\b", re.IGNORECASE)
+
+
+def without_when_able(text: str) -> str:
+    out = WHEN_ABLE.sub("", text).strip()
+    out = re.sub(r"\s+([,.!?])", r"\1", out)
+    out = re.sub(r"^[,\s]+|,(?=[.!?]?$)", "", out).strip()
+    return out if re.search(r"[a-z0-9]", out, re.IGNORECASE) else text
+
+
 def without_thanks(text: str) -> str:
     """``text`` with the thank-yous taken out ("taxi to runway 24R via F, thanks." -> "taxi to runway 24R via F."); as
     it was when that's all there is ("Thank you.")."""
@@ -228,7 +241,7 @@ def check_reply(raw: str, facts: dict[str, str], callsigns: tuple[str, ...], req
     "here and now"): a reply that gives other numbers than its own, or another runway, answers something else.
     ``beyond_facts``: what the facts don't cover may come from the model ([llm] beyond_facts); the safety checks (no
     instruction, short, the data's own answer when there is one) stay."""
-    text = without_thanks(_reply_text(raw, callsigns))
+    text = without_when_able(without_thanks(_reply_text(raw, callsigns)))
     if facts.get("phase") in ON_THE_GROUND:
         text = AS_FILED.sub("", text).strip(" ,.")  # (nothing to continue: "unable, continue as filed" at the gate, to "can we go")
     if re.search(r"\btraffic\b", text, re.IGNORECASE) and not any("traffic" in f"{k} {v}".lower() for k, v in facts.items()):
@@ -425,6 +438,8 @@ def check_reworded(raw: str, scripted: str, callsigns: tuple[str, ...]) -> str:
     text = digits_from_words(_reply_text(raw, callsigns).replace("**", ""))
     if not THANKS.search(scripted):
         text = without_thanks(text)
+    if not WHEN_ABLE.search(scripted):
+        text = without_when_able(text)
     said, got = _plain(scripted), _plain(text)
     if said.startswith("negative") and "negative" not in got and not (NEGATIONS - {"negative"}) & set(got.split()):
         # A correction whose word for it was left out ("switch to 125.1"): the model's words, opening with what they are.

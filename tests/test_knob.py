@@ -133,3 +133,39 @@ def test_a_lever_that_doesnt_move_is_tried_with_its_other_code():
             break
         now += 0.01
     assert turn.flip and value == 0.0
+
+
+def test_each_turn_is_from_the_counter_as_it_is_then(monkeypatch):
+    """The Fenix takes a turn of its FCU encoder and puts the counter back to 0: "-600 then +17" written as one running
+    total (-600, then -583) turned it down twice, and the FCU read 0100 for 17,000. Each turn is from the counter
+    read again."""
+    import struct
+
+    from localtc.sim_bridge import simconnect_source as src
+
+    class Fenix:
+        counter, knob = 0.0, 17000.0
+        reads: list[int] = []
+
+        def set_data_on_sim_object(self, handle, define_id, obj, data):
+            turn = struct.unpack("<d", data)[0] - self.counter
+            self.knob = min(49000.0, max(100.0, self.knob + 1000.0 * turn))
+            self.counter = 0.0  # taken, and put back
+
+        def request_data_on_sim_object(self, handle, request, define_id, obj, period):
+            self.reads.append(define_id)
+
+    fenix = Fenix()
+    source = object.__new__(src.SimConnectSource)
+    source._nudges, source._nudge_at, source._nudge_wait = {7: [-600.0, 17.0]}, {}, {}
+    clock = [100.0]
+    monkeypatch.setattr(src.time, "monotonic", lambda: clock[0])
+    source._on_nudge(7, fenix.counter)
+    for _ in range(6):
+        source._nudge(fenix, 0)
+        if fenix.reads:
+            fenix.reads.clear()
+            source._on_nudge(7, fenix.counter)
+        clock[0] += 0.2
+    assert fenix.knob == 17100.0  # past the stop to 100, then up 17 thousand
+    assert not source._nudges.get(7)

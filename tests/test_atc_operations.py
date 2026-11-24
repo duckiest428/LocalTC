@@ -145,16 +145,25 @@ def test_arrival_demand_holds_the_flight_with_its_place_in_the_sequence():
     apt = geo.airport
     engine.route = type(engine.route)((RouteFix("BLAKO", apt.lat + 0.5, apt.lon), ))
     own = _own(engine, 100.0, lat=apt.lat + 1.2, lon=apt.lon, hdg_true=180.0, on_ground=False, alt=12000.0)
-    # Six arrivals ahead, on their way in from the north.
-    traffic = tuple(TrafficTarget(object_id=100 + i, atc_id=f"ASA{i}", atc_model="B738", lat=apt.lat + 0.1 + 0.1 * i,
-                                  lon=apt.lon, alt_ft=4000 + 1000 * i, hdg_true=180.0, gs_kt=250, on_ground=False)
-                    for i in range(6))
-    engine.handle(TrafficSnapshot(t=99.0, targets=traffic))
+    def arrivals(n: int, every: float) -> tuple[TrafficTarget, ...]:  # on their way in from the north
+        return tuple(TrafficTarget(object_id=100 + i, atc_id=f"ASA{i}", atc_model="B738", lat=apt.lat + 0.1 + every * i,
+                                   lon=apt.lon, alt_ft=4000 + 500 * i, hdg_true=180.0, gs_kt=250, on_ground=False)
+                     for i in range(n))
+
+    # Six ahead in the 36 miles in front of a flight 72 miles out (17 minutes): landed before it's there. No hold
+    # (Fort Lauderdale held one as "number 8" with the stream ahead flowing).
+    engine.handle(TrafficSnapshot(t=99.0, targets=arrivals(6, 0.1)))
+    engine._traffic_before = {}
+    assert engine._hold_reason(own) is None
+    # Twelve ahead: 24 minutes of the runway's, more than the flight's 17 and the slack. It holds, number 13.
+    engine.handle(TrafficSnapshot(t=99.5, targets=arrivals(12, 0.05)))
     engine._traffic_before = {}
     why = engine._hold_reason(own)
-    assert why == ("arrival traffic", 7)
+    assert why == ("arrival traffic", 13)
     assert engine._give_hold(own, CENTER, *why, 100.0)
-    assert engine.hold.position == 7 and engine.hold.delay_min == 12 and "number 7" in engine._hold_message(engine.hold).display
+    assert engine.hold.position == 13 and engine.hold.delay_min == 24
+    assert "number 13" in engine._hold_message(engine.hold).display
+    assert engine.hold.ahead == frozenset(f"ASA{i}" for i in range(12))
 
 
 def test_hold_to_json_for_the_maps():

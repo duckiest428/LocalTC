@@ -626,7 +626,12 @@ class Monitor(WatchMixin):
             return
         with regions.speaking(self._region()):
             if phase == "RUNWAY_HOLD":
-                self._prompt_checklist("line_up", t=t)
+                # At the runway it's leaving from, not one it's crossing on the way (Punta Cana: held short of 09 to
+                # cross it for 08, "Line-up checklist?").
+                runway = st.assignments.departure_runway if st is not None else None
+                at_it = getattr(self.engine, "_at_departure_runway", None)
+                if not (runway and at_it is not None and not at_it(runway)):
+                    self._prompt_checklist("line_up", t=t)
             elif phase == "TAXI_OUT":
                 self._prompt_checklist("after_start", "taxi", t=t + 5)
             elif phase == "ARRIVAL" and previous == "CRUISE":

@@ -327,6 +327,7 @@ class SimConnectSource:
         self._simvar_definitions: dict[str, int] = {}
         self._nudges: dict[int, list[float]] = {}  # an encoder's definition -> the amounts still to add (NudgeVar)
         self._nudge_at: dict[int, tuple[float, float]] = {}  # ... -> its value as read and added to, the next write
+        self._nudge_wait: dict[int, float] = {}  # ... -> when the next amount goes, once the counter's read again
         # The copilot's hands do one thing at a time: knobs turned and clickspots clicked in turn (TurnKnob,
         # ClickSequence), the one in hand with its variable's definition (a knob) or its clicks still to send.
         self._hands: deque[SimCommand] = deque()
@@ -934,7 +935,7 @@ class SimConnectSource:
             log.warning("Copilot couldn't turn %s: %s", command.name, exc)
 
     def _on_nudge(self, define_id: int, value: float) -> None:
-        self._nudge_at[define_id] = (value, 0.0)
+        self._nudge_at[define_id] = (value, self._nudge_wait.pop(define_id, 0.0))
 
     def _nudge(self, dll: SimConnectApi, handle: int) -> None:
         """The counters read: add the next amount, each its own write a little apart (the add-on sees the counter
@@ -949,12 +950,21 @@ class SimConnectSource:
             if now < next_t:
                 continue
             value += deltas.pop(0)
-            self._nudge_at[define_id] = (value, now + NUDGE_GAP_S)
             try:
                 dll.set_data_on_sim_object(handle, define_id, OBJECT_ID_USER, struct.pack("<d", value))
+                if deltas:
+                    # The next amount from the counter as it is then, read again: the Fenix takes a turn and puts its
+                    # counter back, and "-600 then +17" written as one running total turned it down twice (FCU 0100).
+                    del self._nudge_at[define_id]
+                    self._nudge_wait[define_id] = now + NUDGE_GAP_S
+                    dll.request_data_on_sim_object(handle, KNOB_READ_REQUEST + define_id, define_id, OBJECT_ID_USER,
+                                                   Period.ONCE)
+                else:
+                    self._nudge_at[define_id] = (value, now + NUDGE_GAP_S)
             except SimConnectError as exc:
                 log.warning("Copilot couldn't turn an encoder: %s", exc)
                 self._nudges.pop(define_id, None)
+                self._nudge_at.pop(define_id, None)
 
     def _on_input_events(self, msg: InputEventList) -> None:
         for name, hash_, _kind in msg.events:

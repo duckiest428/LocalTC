@@ -57,6 +57,9 @@ class Hold:
     entered_t: float | None = None
     last_said_position: int = 0
     first_position: int = 0  # where it was when held: the sequence moves up no faster than the runway lands them
+    # The ones ahead when it was held (their callsigns): only they are. Arrivals since go behind it, even passing
+    # nearer the field than the hold (Fort Lauderdale's "number 6" for half an hour, every new arrival counted ahead).
+    ahead: frozenset[str] = frozenset()
     tas_kt: float = 230.0
     history: list[tuple[float, str]] = field(default_factory=list)
 

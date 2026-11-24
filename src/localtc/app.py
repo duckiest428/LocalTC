@@ -195,6 +195,14 @@ def traffic_atc(engine) -> "AtcLink":
                 return icao, a.departure_runway, "takeoff"
         return None
 
+    def user_arrival() -> tuple[str, str] | None:
+        """In the air for the destination with a runway given: (airport, runway end)."""
+        st = engine.state
+        own, dest, runway = st.aircraft, st.flight.destination, st.assignments.arrival_runway
+        if own is None or own.on_ground or not dest or not runway or engine.geometry(dest) is None:
+            return None
+        return dest, runway
+
     def reserved() -> list[tuple[float, float]]:
         out = []
         if (gate := engine.assigned_gate_position()) is not None:
@@ -232,7 +240,8 @@ def traffic_atc(engine) -> "AtcLink":
     return AtcLink(user_runway=user_runway, reserved=reserved, say=say,
                    destination=lambda: engine.state.flight.destination or "", call=call, hears=hears, managed=managed,
                    runway_in_use=runway_in_use, runway_for=runway_for, closed=closed,
-                   user_callsign=lambda: str(engine.state.flight.callsign.ident) if engine.state.flight.callsign else "")
+                   user_callsign=lambda: str(engine.state.flight.callsign.ident) if engine.state.flight.callsign else "",
+                   user_arrival=user_arrival)
 
 
 _OPS = None

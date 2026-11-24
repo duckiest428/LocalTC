@@ -216,7 +216,9 @@ def _runways_after(upper: str, lead: str) -> tuple[str, ...]:
     """The runways named after ``lead``: "LANDING RWYS 26L AND 19R" -> ("26L", "19R")."""
     found: list[str] = []
     # "26L", "RWY 16L", "RWY8"; and how it's used: "1R FULL LENGTH AND 1L AT BRAVO" (the second was lost)
-    item = rf"(?:{RUNWAY}\s*)?\d{{1,2}}[LRC]?\b(?:\s+(?:FULL\s+LENGTH|(?:AT|FROM|INTXN|INT)\s+[A-Z][A-Z0-9]*))?"
+    # ("DEPG RWYS RWY 28R AND 28L", Fort Lauderdale's: the word twice. Not read, the first runways anywhere were taken,
+    # 10L from "RY 10L ALS OTS", and LocalTC's departures went off 10L head-on into arrivals landing 28R.)
+    item = rf"(?:{RUNWAY}\s*){{0,2}}\d{{1,2}}[LRC]?\b(?:\s+(?:FULL\s+LENGTH|(?:AT|FROM|INTXN|INT)\s+[A-Z][A-Z0-9]*))?"
     # (Two runways with only a space between them, "DEPS EXP RWYS 22L 28R": the next a full ident, so "28R FROM
     # NOVEMBER 5" isn't a runway 05.)
     sep = rf"(?:\s*(?:,|AND|OR|/|&)\s*|\s+(?=(?:{RUNWAY}\s*)?\d{{2}}[LRC]?\b(?!\s*(?:FT|THSD))))"

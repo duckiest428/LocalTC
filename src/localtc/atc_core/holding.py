@@ -42,6 +42,8 @@ CAT3_VIS_SM, NON_PRECISION_VIS_SM, NON_PRECISION_CEILING_FT = 0.1, 1.0, 400
 MAX_HOLDS = 2  # a flight is held no more than this many times
 HOLD_FT_PER_NM = 500.0  # a hold further below than this per mile to its fix can't be got down to
 HOLD_AGAIN_S = 900.0  # out of a hold, not held again for this long (held, let out and held again inside a minute)
+HOLD_SLACK_MIN = 5.0  # held only when the ones ahead need this much more runway time than its own minutes to the field
+HOLD_ETA_MIN_KT = 250.0  # ... those minutes at its speed, or this if slower (the arrival speeds up again after)
 
 
 class HoldsMixin:
@@ -59,9 +61,14 @@ class HoldsMixin:
             return []
         apt = geo.airport
         mine = nm(own.lat, own.lon, apt.lat, apt.lon)
+        # LocalTC's own arrivals there, the ones ATC gave a landing runway: only they are landing there. Everything
+        # pointing that way was counted, Miami's and Palm Beach's arrivals too, and Fort Lauderdale had the flight
+        # "number 8, delay 14 minutes" with the approach all but empty.
+        dest = self.state.flight.destination
+        landing_here = {key for (icao, key, landing) in getattr(self, "_others_runway", {}) if icao == dest and landing}
         ahead = []
         for target in self._traffic.values():
-            if target.on_ground:
+            if target.on_ground or (landing_here and target.atc_id not in landing_here):
                 continue
             d = nm(target.lat, target.lon, apt.lat, apt.lon)
             if d >= mine or d > DEMAND_NM or target.alt_ft - apt.elev_ft > 25000 or self._climbing(target):
@@ -86,8 +93,14 @@ class HoldsMixin:
             if low_vis or low_cloud:
                 return "weather", 1
         ahead = self._arrivals_ahead(own)
-        if len(ahead) >= HOLD_DEMAND:
-            return "arrival traffic", len(ahead) + 1
+        if len(ahead) >= HOLD_DEMAND and geo is not None:
+            # Only when the runway can't take them all before this one gets there: the ones ahead each take their
+            # slot, and the flight's own minutes to the field (with some slack) already make room for them. Fort
+            # Lauderdale held a flight 40 miles out as "number 8" with the arrival stream in front of it flowing.
+            mine_nm = nm(own.lat, own.lon, geo.airport.lat, geo.airport.lon)
+            eta_min = mine_nm / max(own.gs_kt, HOLD_ETA_MIN_KT) * 60.0
+            if delay_minutes(len(ahead) + 1) > eta_min + HOLD_SLACK_MIN:
+                return "arrival traffic", len(ahead) + 1
         return None
 
     def _hold_fix(self, own: OwnshipState) -> tuple[str, float, float] | None:
@@ -141,6 +154,8 @@ class HoldsMixin:
         if fix is None:
             return False
         hold = self._build_hold(own, fix, reason, position, t)
+        if reason == "arrival traffic":
+            hold.ahead = frozenset(target.atc_id for _, target in self._arrivals_ahead(own) if target.atc_id)
         self.hold = hold
         self._holds_given += 1
         self._ops_changed = True
@@ -211,10 +226,15 @@ class HoldsMixin:
         still = why is not None and why[0] == hold.reason
         if hold.reason == "arrival traffic":
             position = why[1] if still else 1
+            if hold.ahead:
+                position = 1 + sum(1 for _, target in self._arrivals_ahead(own) if target.atc_id in hold.ahead)
             # The aircraft ahead counted again (a snapshot with fewer of them, a turn) can't jump the flight from number
             # six to two: the runway lands one every two minutes, and the sequence moves up no faster.
             landed = int((t - hold.issued_t) * ARRIVAL_RATE_PER_H / 3600.0)
             position = max(position, (hold.first_position or hold.position) - landed)
+            # ... nor back: a flight in the hold keeps its place, the ones arriving since go behind it ("now number 6",
+            # then "number 10, delay 18 minutes" with a new EFC).
+            position = min(position, hold.position)
             if position <= LEAVE_POSITION:
                 return self._leave_hold(own, facility)
             if position != hold.position:

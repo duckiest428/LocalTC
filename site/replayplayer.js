@@ -163,7 +163,7 @@ class ReplayPlayer {
   drawMap(el, tiles) {
     this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0.5, zoomDelta: 0.5, wheelPxPerZoomLevel: 120 });
     if (tiles) {
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { referrerPolicy: "strict-origin-when-cross-origin", maxZoom: 16,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         updateWhenIdle: false, keepBuffer: 4 }).addTo(this.map);  // tiles load while it moves, and stay around it
     }

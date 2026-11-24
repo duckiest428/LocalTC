@@ -5,7 +5,10 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
 
 ## [0.6.1] - Upcoming
 
-Nothing yet.
+### Fixed
+- **The maps show again:** Live Flights, the Flight Tracker and the dashboard's maps were squares of "Access blocked":
+  their pages send no referrer, and OpenStreetMap's tile servers now refuse a tile asked for without one. The tiles
+  go with the site's address (localtc.tech, never the page's); everything else still sends none.
 
 ## [0.6.0] - 2026-11-23
 

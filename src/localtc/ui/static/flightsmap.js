@@ -11,7 +11,7 @@ class FlightsMap {
     this.onRoute = onRoute;
     this.map = L.map(el, { attributionControl: tiles, zoomSnap: 0.5 }).setView([30, -40], 2);
     if (tiles) {
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 12,
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { referrerPolicy: "strict-origin-when-cross-origin", maxZoom: 12,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
     }
     el.classList.add("flights-map", tiles ? "fm-tiles" : "fm-plain");

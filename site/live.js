@@ -39,7 +39,7 @@
   // The whole world first, wherever the flights are; close enough in to see an airport's taxiways and the path taxied.
   const map = L.map("lf-map", { zoomControl: false, worldCopyJump: true, minZoom: 2, maxZoom: 18, keyboard: true })
     .setView([25, 0], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18,
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { referrerPolicy: "strict-origin-when-cross-origin", maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
   el("lf-map").tabIndex = 0;
   el("lf-zin").onclick = () => map.zoomIn();

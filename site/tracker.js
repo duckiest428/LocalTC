@@ -129,7 +129,7 @@ const Tracker = {
     if (this.map) { setTimeout(() => this.map.invalidateSize(), 0); return; }
     this.map = L.map("tr-map").setView([39, -98], 4);  // no world-copy jumping: atcmap.js keeps it all in one copy
     this.map.on("zoomend", () => this.declutter());
-    this.tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 16,
+    this.tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { referrerPolicy: "strict-origin-when-cross-origin", maxZoom: 16,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(this.map);
     // Bottom to top, as in the app: the zones, the runways, the route, the path flown, then the aircraft.
     this.zoneLayer = L.layerGroup().addTo(this.map);

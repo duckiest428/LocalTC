@@ -4,7 +4,7 @@
 
 - Controllers from clearance delivery to the gate: SIDs, STARs, vectors, approaches, go-arounds, real traffic on the frequency, FAA and ICAO phraseology, checked readbacks.
 - Local by default: Whisper speech recognition, Piper voices, an Ollama language model. Optional cloud model with the user's own free key.
-- Copilot, ground crew and cabin crew in English and ten other languages.
+- ATC, copilot, ground crew and cabin crew in English and ten other languages (ATC answers in the language you call in, in its own radiotelephony).
 - Companion iPhone app, live web tracker, logbook with replays.
 
 ## Links

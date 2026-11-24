@@ -33,7 +33,7 @@
   "license": "https://www.gnu.org/licenses/agpl-3.0.html",
   "isAccessibleForFree": true,
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": ["Voice ATC from clearance delivery to the gate", "SIDs, STARs, vectors and approaches", "AI copilot with callouts and checklists", "Voice-controlled ground crew with GSX support", "Cabin crew announcements", "Works offline", "Ten languages for the crew", "VATSIM and IVAO controllers where online", "Companion iPhone app and live web tracker", "Public Live Flights map"],
+  "featureList": ["Voice ATC from clearance delivery to the gate", "SIDs, STARs, vectors and approaches", "AI copilot with callouts and checklists", "Voice-controlled ground crew with GSX support", "Cabin crew announcements", "Works offline", "ATC, copilot and crews in ten languages besides English", "VATSIM and IVAO controllers where online", "Companion iPhone app and live web tracker", "Public Live Flights map"],
   "sameAs": ["https://github.com/duckiest428/LocalTC", "https://discord.gg/fDKfMxfC9a"]
 }
 </script>
@@ -119,6 +119,7 @@
           <label class="wp-row"><span>How ATC uses the language model<small>Every call checked against the script</small></span>
             <select><option>Auto</option><option>Fully scripted</option><option>Semi LLM</option><option selected>Mostly LLM</option><option>Fully LLM</option></select></label>
           <label class="wp-row"><span>Phraseology</span><select><option>ICAO</option><option selected>FAA</option></select></label>
+          <label class="wp-row"><span>ATC's language<small>Call in it and ATC answers in it</small></span><select><option selected>Yours</option><option>English only</option><option>Deutsch</option><option>Français</option><option>Español</option><option>Italiano</option><option>Português</option><option>Nederlands</option><option>Polski</option><option>Svenska</option><option>Русский</option><option>中文</option></select></label>
           <label class="wp-row"><span>Taxi guidance<small>Arrows on the ground in the sim</small></span><input type="checkbox" class="wp-switch" checked></label>
           <label class="wp-row"><span>VATSIM and IVAO controllers<small>Their controllers where they're online</small></span><input type="checkbox" class="wp-switch"></label>
           <p class="wp-h">Copilot</p>
@@ -245,6 +246,8 @@
         <h3>Off script</h3><p>Ask for a runway, a shortcut, the weather. A real answer, or a real <span class="q">"unable"</span>.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M32 8l24 34H8z"/><path d="M32 20v10M32 35v.5"/></svg>
         <h3>When it goes wrong</h3><p>Mayday and pan-pan, the nearest suitable airport, ATC starting things itself.</p></article>
+      <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><rect x="6" y="8" width="24" height="16" rx="5"/><path d="M12 24l-2 6 7-6"/><rect x="34" y="20" width="24" height="16" rx="5"/><path d="M52 36l2 6-7-6"/><path d="M12 16h12M40 28h12"/></svg>
+        <h3>ATC in your language</h3><p>Call in German, French, Spanish or seven more, and ATC answers in it: its own radio words, a native voice, readbacks checked.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="20" cy="24" r="12"/><circle cx="44" cy="24" r="12"/><path d="M32 16v16"/></svg>
         <h3>VATSIM and IVAO too</h3><p>Fly hybrid: real controllers where they're online, LocalTC everywhere else, handed over on the radio.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 40h44"/><path d="M18 32l8-8-8-8M32 32l8-8-8-8" class="o"/><path d="M50 14v20" stroke-width="4"/></svg>
@@ -296,7 +299,7 @@
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M10 30V18l24-8v28l-24-8z"/><path d="M34 14c6 2 8 6 8 10s-2 8-8 10M44 10c8 3 12 8 12 14s-4 11-12 14"/></svg>
         <h3>A cabin crew</h3><p>Boarding, the welcome, the safety briefing and the cabin-ready call, with lines that fit the moment.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><circle cx="32" cy="24" r="16"/><path d="M16 24h32M32 8c6 5 6 27 0 32M32 8c-6 5-6 27 0 32"/></svg>
-        <h3>In your language</h3><p>The copilot, ground crew and cabin crew in German, French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish, Russian and Mandarin.</p></article>
+        <h3>In your language</h3><p>ATC, the copilot, ground crew and cabin crew in German, French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish, Russian and Mandarin.</p></article>
       <article class="tile"><svg class="tile-art" viewBox="0 0 64 48" aria-hidden="true"><path d="M6 24l20-4 6-12 4 0-2 12 16 0 6-6h4l-2 10 2 10h-4l-6-6H34l2 12h-4l-6-12-20-4z"/></svg>
         <h3>A sky full of real traffic</h3><p>Up to 120 real aircraft around you, sized to your frame rate, and ATC working them on your frequency.</p></article>
   </div>
@@ -503,7 +506,7 @@
         <li>IFR and VFR, clearance delivery to the gate, FAA and ICAO phraseology</li>
         <li>SIDs, STARs, vectors, approaches, holds, go-arounds, the arrival sequence</li>
         <li>Controllers with their own voices and manners, apron where the airport has one, other traffic on the frequency</li>
-        <li>Each country's own ATC voice: a German one at Frankfurt, a French one at Paris, a Japanese one at Tokyo</li>
+        <li>ATC in your own language: German, French, Spanish, Italian, Portuguese, Dutch, Polish, Swedish, Russian or Mandarin, in its own radio words, or English with each country's own voice</li>
         <li>VATSIM and IVAO controllers where they're online, LocalTC's everywhere else</li>
         <li>A copilot on the intercom: callouts, checklists, watches, its own side of the cockpit</li>
         <li>Your own key for a cloud model, or the local one, or none</li>
@@ -511,7 +514,7 @@
         <li>A cabin crew: boarding, announcements, the cabin-ready call, cabin incidents if you want them</li>
         <li>Real traffic around you that waits for its clearances, taxi arrows in the sim</li>
         <li>The app, a panel in the sim's toolbar, the phone, the live tracker, a logbook with replays and Wrapped</li>
-        <li>Live Flights, your flight on Discord, the crew in ten languages besides English</li>
+        <li>Live Flights, your flight on Discord, the copilot and crew in ten languages besides English</li>
       </ul>
     </div>
     <div class="status-col">

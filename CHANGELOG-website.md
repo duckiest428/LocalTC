@@ -10,6 +10,10 @@ Every version of localtc.tech, newest first. It carries the same version as Loca
   their pages send no referrer, and OpenStreetMap's tile servers now refuse a tile asked for without one. The tiles
   go with the site's address (localtc.tech, never the page's); everything else still sends none.
 
+### Changed
+- **The home page says ATC speaks your language:** the status, the features (a tile of its own, and "In your
+  language" with ATC beside the copilot and crews) and the app window's Quick Settings ("ATC's language").
+
 ## [0.6.0] - 2026-11-23
 
 ### Added

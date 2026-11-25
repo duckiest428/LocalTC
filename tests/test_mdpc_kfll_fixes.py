@@ -62,3 +62,33 @@ def test_when_able_isnt_added_to_an_instruction():
     assert check_reworded('{"reply":"cross runway 09 when able"}', "cross runway 09", ("JetBlue 174",)) == "cross runway 09"
     assert "when able" in check_reworded('{"reply":"vacate left B6 when able"}', "vacate left B6 when able",
                                          ("JetBlue 174",))
+
+
+def test_the_star_asked_for_is_flown_without_headings(tmp_path):
+    """"Is there a way to request to follow the published STAR instead of receiving radar vectors?" There wasn't:
+    "request the STAR" was nothing, "can we fly the STAR instead of vectors" asked for vectors. Now it's direct to the
+    arrival's next fix ahead, and no headings on the way there."""
+    import gzip
+
+    from localtc.atc_core.readback import Interpretation
+
+    cut = tmp_path / "arrival"
+    cut.mkdir()
+    with gzip.open(FLIGHT / "session.jsonl.gz", "rt", encoding="utf-8") as src, \
+            gzip.open(cut / "session.jsonl.gz", "wt", encoding="utf-8") as out:
+        for line in src:
+            if '"t":' not in line or float(line.split('"t":', 1)[1].split(",", 1)[0].split("}", 1)[0]) <= 9900.0:
+                out.write(line)
+    cfg = with_recorded(load_config(), Recording(cut).header.config)
+    scenario = Scenario(scenario=ScenarioMeta(recording=str(cut)), flight=cfg.flight, atc=cfg.atc)
+    engine = run(scenario, cut, recording=cut, recorded_pilot=True, copilot="full").engine
+    own, center = engine.state.aircraft, engine.state.comms.tuned
+    assert center is not None and center.controller == "center"
+    star = [f.ident for f in engine.route.procedure(engine.cfg.star, "DSC")]
+    engine._scheduled.clear()
+    engine._star_request(Interpretation(kind="request", intent="request_star", text="request the STAR"), center, own.t, own)
+    said = engine._scheduled[-1]
+    assert said.instruction_id == "common.direct" and said.slots["fix"] in star
+    said.on_issue()
+    assert engine._star_asked is not None and engine._star_asked[0] == said.slots["fix"]
+    assert engine._radar_vectors(own) is False  # no headings on the way to it

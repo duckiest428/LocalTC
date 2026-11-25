@@ -1657,3 +1657,32 @@ def test_boarding_asked_for_ahead_of_the_plan_starts_with_the_reason_for_the_cab
                                   "waive": staticmethod(waived.append)})()
     said = c.called_by_cabin("Boarding", 0.0)
     assert said == "Boarding has to wait for catering." and c._queue == ["Boarding"] and waived == ["Boarding"]
+
+
+def test_two_asks_joined_by_and_lets_are_two():
+    """"Let's get jetway disconnected and let's get some icing": the jetway went, and the de-icing was never asked for
+    (the "disconnect" taken for both, and "icing" no word for it)."""
+    from localtc.ground.grammar import parse
+
+    asks = parse("Let's get jetway disconnected and let's get some icing.")
+    assert [(a.action, a.services) for a in asks] == [("off", ("OperateJetways",)), ("request", ("DeIce",))]
+    assert [(a.action, a.services) for a in parse("disconnect the GPU and get the stairs")] == \
+        [("off", ("GPU",)), ("request", ("OperateStairs",))]
+    assert [(a.action, a.services) for a in parse("cancel catering and fuel")] == [("cancel", ("Catering", "Refueling"))]
+    assert parse("any icing conditions expected?") == ()
+
+
+def test_a_brake_message_while_rolling_back_isnt_the_push_over():
+    """Three seconds into the push, rolling back at 1.3 kt: "Cleared to start engines" and, in the same breath,
+    "Pushback complete. Set parking brake" (GSX's words then were about the brake). Over only once it's stopped."""
+    crew = _push_crew()
+    crew.observe(_own(brake=True))
+    crew.update(_gsx_state(message="Release parking brake"), 1.0)
+    crew.observe(_own(brake=False))
+    crew.update(_gsx_state(message="Release parking brake"), 2.0)
+    crew.observe(_own(brake=False, gs=1.3))
+    said = " ".join(s.text for s in crew.update(_gsx_state(message="Do not set the parking brake"), 3.0) if hasattr(s, "text"))
+    assert "start" in said and "complete" not in said
+    crew.observe(_own(brake=False, gs=0.0))
+    said = " ".join(s.text for s in crew.update(_gsx_state(message="Set parking brake"), 30.0) if hasattr(s, "text"))
+    assert "parking brake" in said

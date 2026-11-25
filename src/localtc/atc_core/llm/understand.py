@@ -101,7 +101,8 @@ intent: request_ifr_clearance, request_pushback (push and start, or engine start
 ready_for_departure (holding short, ready), request_turn, need_time (not ready yet), checkin (first call to a \
 controller: "with you at 6000", "level 110"), report_final ("established", "5 mile final"), position_report \
 (pattern leg), request_option (touch and go, low approach), clear_of_runway, request_taxi_parking, \
-request_altitude (higher, lower, a level), request_direct (fix: the name said), request_vectors, request_runway (another \
+request_altitude (higher, lower, a level), request_direct (fix: the name said), request_vectors, request_star (the filed arrival flown, \
+"own navigation", no more headings), request_runway (another \
 runway or approach: ILS LOC RNAV VOR NDB VISUAL), request_return, request_diversion (fix), going_around (or \
 missed approach), report_conditions (turbulence, icing, the ride: conditions), traffic_report (in sight, \
 looking, no contact), report_standard (altimeter standard, QNE, 29.92, 1013), request_flight_following, \
@@ -117,7 +118,7 @@ KINDS = ["readback", "request", "question", "unintelligible"]
 EXPECT_WORDS = {"expect", "expected", "expecting"}
 INTENTS = ["request_ifr_clearance", "request_pushback", "ready_to_taxi", "request_crossing", "ready_for_departure",
            "request_turn", "need_time", "checkin", "report_final", "position_report", "request_option", "clear_of_runway",
-           "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_runway",
+           "request_taxi_parking", "request_altitude", "request_direct", "request_vectors", "request_star", "request_runway",
            "request_return", "request_diversion", "going_around", "report_conditions", "traffic_report",
            "report_standard", "request_flight_following", "request_class_b", "request_frequency_change", "request_transition",
            "request_closed_traffic", "radio_check", "pleasantry",

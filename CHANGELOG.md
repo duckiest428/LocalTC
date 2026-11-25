@@ -6,7 +6,36 @@ a new minor version adds features, a patch fixes them.
 
 ## [0.6.1] - Upcoming
 
-Nothing yet.
+### Added
+- **Pop a view out:** the button at the end of the tabs puts the view you're on (ATC, the Live Map, the EFB, any of
+  them) in a window of its own, so ATC and the map are both in sight on the taxi and wherever it's busy. The window
+  has the view alone, with the radios and the transmit bar; it closes with LocalTC's. In the browser it's a window of
+  the browser's. In all ten languages.
+- **Ask for the STAR:** "request the STAR", "can we fly the STAR instead of vectors", "request own navigation":
+  approach (or the centre) sends you direct to the filed arrival's next fix ahead, and the headings stop while you fly
+  it. "Can we fly the STAR instead of vectors" had been taken for a request for vectors.
+
+### Fixed
+- **Whisper stays on the graphics card:** the 90 seconds the card has to answer at the start counted the model's
+  download and loading too, so a first start, or a slow card, put Whisper on the CPU every time. Only the card's first
+  words are timed now. And when the graphics card is chosen and Whisper is on the CPU anyway, the start says why
+  (its graphics card part not installed, and where to get it; or what the card said).
+- **Your language on the radio is heard as it:** a call in French mixed with aviation's English words ("demande
+  clearance pour LFPZ") was read as not quite French, heard as English ("Demand clearance to LFPZ", "Charge the wall
+  battery"), and the ramp said "Tu peux répéter ?" round and round. With ATC's language chosen in the settings, or
+  once a call was in it, a less certain reading of it is enough; a clearly English call is English again.
+- **A go-around is a go-around:** going around a couple of miles out, still lined up and climbing, approach took the
+  flight for one joining the final, cleared the approach again, and tower cleared it to land over "going around". Not
+  while it's climbing away, nor for two minutes after.
+- **"Break, break" waits for no readback:** a busy controller's two calls back to back, and the first flight read its
+  handoff back after the second's climb anyway. Only the second answers now.
+- **The ramp hears two asks in one call:** "let's get the jetway disconnected and let's get some icing" disconnected
+  the jetway and never asked for the de-icing ("icing" wasn't a word for it, and "disconnect" was taken for both).
+- **"Pushback complete" when it is:** three seconds into the push, still rolling back, the headset said "Pushback
+  complete. Set parking brake" with "cleared to start engines". GSX's words about the brake end the push only once the
+  aircraft has stopped.
+- **The way off the runway you landed on:** landed on the parallel of the runway cleared for (Punta Cana's 09, cleared
+  08), tower looked for exits along the other one and said only "vacate when able".
 
 ## [0.6.0] - 2026-11-23
 

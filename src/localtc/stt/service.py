@@ -101,6 +101,8 @@ def _radio_of(event: Any) -> int:
 
 
 OWN_LANGUAGE_SURE = 0.95  # French, Spanish, Italian, Portuguese, Mandarin on the radio read 0.99 and up; English in a French accent up to 0.90
+KEPT_LANGUAGE_SURE = 0.8  # ... the pilot's language chosen in the settings, or their last call in it: this sure is enough
+ENGLISH_SURE = 0.8  # a call this surely English puts the radio back in English
 
 
 class VoiceService:
@@ -118,12 +120,15 @@ class VoiceService:
         intercom_language: str = "",  # the copilot talked to in this language ("de"); "" English
         intercom_transcriber: Any = None,  # the model that knows it (None: ``transcriber``); the radio keeps its own
         radio_language: str = "",  # ATC answers in this language when called in it ("fr"); "" English only
+        radio_language_chosen: bool = False,  # picked in the settings ("French"), not "auto"
     ) -> None:
         self.bus, self.now, self.transcriber, self.capture = bus, now, transcriber, capture
         self.recorder, self.hints, self.vocabulary, self.tail_s = recorder, hints, vocabulary, tail_s
         self.intercom_language = intercom_language
         self.intercom_transcriber = intercom_transcriber or transcriber
         self.radio_language = radio_language
+        self.radio_language_chosen = radio_language_chosen
+        self._radio_last = ""  # the language the last radio call was heard in ("en", "fr"; "" none yet)
         self._said_in = ""  # the language of the words being heard ("": English)
         self._inputs = bus.subscribe(PttPressed, PttReleased, IntercomPressed, IntercomReleased)
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -270,6 +275,15 @@ class VoiceService:
             log.warning("Still using %s. Check that it's the right input in your sound settings, or pick one "
                         "with --mic (see: localtc voice devices)", after)
 
+    def _radio_sure(self) -> float:
+        """How sure the language heard must be to take a radio call as in the pilot's own: less sure once they chose it
+        in the settings, or their last call was in it. French on the ramp, mixed with aviation's English words ("demande
+        clearance pour LFPZ"), was read under the bar, heard as English ("Demand clearance to LFPZ", "Charge the wall
+        battery") and every call was "say again", round and round."""
+        if self._radio_last == self.radio_language or (self.radio_language_chosen and self._radio_last != "en"):
+            return KEPT_LANGUAGE_SURE
+        return OWN_LANGUAGE_SURE
+
     async def _transcribe(self, audio) -> Transcript | IntercomHeard:
         audio_s = len(audio) / SAMPLE_RATE
         if audio_s < MIN_CLIP_S:
@@ -293,9 +307,11 @@ class VoiceService:
         if self.radio_language and not in_language and (tell := getattr(self.intercom_transcriber, "language_of", None)):
             # ATC in the pilot's own language: a call in it is heard as it was said, and ATC answers in it.
             code, sure = await asyncio.to_thread(tell, speech)
-            if code == self.radio_language and sure >= OWN_LANGUAGE_SURE:
+            if code == "en" and sure >= ENGLISH_SURE:
+                self._radio_last = "en"
+            if code == self.radio_language and sure >= self._radio_sure():
                 log.info("The radio call was in %s (%.2f): ATC answers in it", code, sure)
-                self._said_in = code
+                self._said_in = self._radio_last = code
                 radio = VocabularyHints(callsign=hints.callsign, callsign_spoken="", stations=hints.stations,
                                         airports=hints.airports, runways=hints.runways, taxiways=hints.taxiways,
                                         procedures=hints.procedures, fixes=hints.fixes,

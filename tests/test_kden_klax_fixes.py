@@ -230,6 +230,30 @@ def test_a_warm_up_that_never_answers_on_the_card_moves_to_the_cpu(monkeypatch):
     assert seconds == 0.1 and t.choice.device == "cpu" and "0 s" in t.moved and time.monotonic() - started < 3
 
 
+def test_loading_the_model_isnt_timed_only_the_cards_first_words():
+    """A model downloading (or a slow card loading it) took longer than the card's limit, and Whisper was put on the
+    CPU at every start: "it says Whisper isn't on the graphics card, and it settles on the CPU"."""
+    from localtc import app
+
+    class Transcriber:
+        def __init__(self) -> None:
+            self.choice = SimpleNamespace(device="cuda")
+            self.moved = ""
+
+        def load(self) -> None:
+            time.sleep(0.5)  # longer than the limit below
+
+        def warm_up(self) -> float:
+            return 0.1
+
+        def to_cpu(self, why: str) -> None:
+            self.moved, self.choice = why, SimpleNamespace(device="cpu")
+
+    t = Transcriber()
+    seconds = asyncio.run(app.warm_whisper(t, wait_s=0.2))
+    assert t.choice.device == "cuda" and not t.moved and seconds >= 0.5
+
+
 # --- the audio devices ---------------------------------------------------------------------------------------------
 
 

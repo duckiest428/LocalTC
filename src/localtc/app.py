@@ -1210,12 +1210,12 @@ async def warm_whisper(transcriber, wait_s: float | None = None) -> float:
     wait_s = WHISPER_CARD_WAIT_S if wait_s is None else wait_s
     loop = asyncio.get_running_loop()
 
-    def run() -> "asyncio.Future[float]":
+    def run(step=None) -> "asyncio.Future[float]":
         done: asyncio.Future[float] = loop.create_future()
 
         def work() -> None:
             try:
-                seconds = transcriber.warm_up()
+                seconds = (step or transcriber.warm_up)()
                 result = lambda: done.done() or done.set_result(seconds)  # noqa: E731
             except BaseException as exc:  # noqa: BLE001 - handed to the flight's start
                 result = lambda: done.done() or done.set_exception(exc)  # noqa: E731
@@ -1229,13 +1229,26 @@ async def warm_whisper(transcriber, wait_s: float | None = None) -> float:
 
     if transcriber.choice.device != "cuda":
         return await run()
+    # The model downloaded and loaded first, however long that takes: only the card's first words are timed. A first
+    # start that downloaded the model, or a slow card loading it, was over the 90 s and put on the CPU every time
+    # ("the startup always says Whisper isn't on the graphics card, and it settles on the CPU").
+    loaded_in = 0.0
+    if hasattr(transcriber, "load"):
+        def load() -> float:
+            started = time.monotonic()
+            transcriber.load()
+            return time.monotonic() - started
+
+        loaded_in = await run(load)
+        if transcriber.choice.device != "cuda":
+            return loaded_in + await run()  # (the card failed loading it: the CPU's own already)
     try:
-        return await asyncio.wait_for(asyncio.shield(run()), wait_s)
+        return loaded_in + await asyncio.wait_for(asyncio.shield(run()), wait_s)
     except asyncio.TimeoutError:
         transcriber.to_cpu(f"no words from it in {wait_s:.0f} s")
         log.warning("Whisper on the graphics card didn't answer in %.0f s: the CPU for this flight (restart the app to "
                     "try the card again)", wait_s, extra=CONSOLE)
-        return await run()
+        return loaded_in + await run()
 
 
 async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, engine) -> VoiceInput:
@@ -1262,6 +1275,15 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     log.info("Loading %s ...", transcriber.description, extra=CONSOLE)
     seconds = await warm_whisper(transcriber)
     log.info("%s ready (%.1f s)", transcriber.description, seconds, extra=CONSOLE)
+    if v.device == "cuda" and transcriber.choice.device != "cuda":
+        # The graphics card picked, and Whisper on the CPU: said why, where the pilot reads it ("the settings say the
+        # card, and it settles on the CPU" was all a pilot could tell).
+        from localtc.stt.whisper import card_failed, cuda_libraries
+
+        why = "its graphics card part isn't installed (Quick Settings, AI & models, Models: \"Whisper on your " \
+            "graphics card\", Download)" \
+            if not cuda_libraries() else f"the graphics card failed it ({card_failed() or 'no NVIDIA card found'})"
+        log.warning("Whisper is on the CPU, not the graphics card: %s", why, extra=CONSOLE)
     if transcriber.stand_in_for:
         log.warning("Whisper %s couldn't be downloaded (no connection to Hugging Face or its mirror): using Whisper "
                     "%s, already on this PC, for this flight", transcriber.stand_in_for, transcriber.choice.model,
@@ -1281,7 +1303,8 @@ async def start_voice(cfg: Config, bus: EventBus, source: SimSource, recorder, e
     service = VoiceService(bus, source.clock.now, transcriber, capture, recorder=recorder, hints=hints,
                            vocabulary=v.vocabulary, tail_s=v.tail_ms / 1000,
                            intercom_language=talked.code if talked is not None else "", intercom_transcriber=talked_to,
-                           radio_language=on_radio)
+                           radio_language=on_radio,
+                           radio_language_chosen=(cfg.atc.language or "").lower() not in ("", "auto", "en", "off", "english"))
     if engine is not None:
         # On a VATSIM/IVAO controller's frequency the pilot talks to them through the network's client: not transcribed.
         service.skip_radio = lambda: getattr(engine, "online_muted", False)

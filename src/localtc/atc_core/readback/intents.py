@@ -442,9 +442,16 @@ def match_intents(tokens: list[Token]) -> list[IntentMatch]:
     place = _divert_to(tokens) if _has_any(tokens, ("vectors",), ("vector",), *DIVERT_WORDS) else None
     diverting = not returning and (_has_any(tokens, *DIVERT_WORDS) or (
         place is not None and not approach and not runways(tokens)))  # "vectors to Yuma": somewhere else to land
+    # "Request the STAR", "follow the published arrival", "can we fly the STAR instead of vectors", "resume own
+    # navigation": the arrival flown as filed, no more headings. (A pilot vectored far off the arrival couldn't ask.)
+    wants_star = (asking or _has_any(tokens, ("resume",), ("follow",), ("fly",), ("rejoin",))) \
+        and _has_any(tokens, ("star",), ("published", "arrival"), ("the", "arrival"), ("own", "navigation")) \
+        and not _has_any(tokens, ("atis",), ("information",), ("frequency",))
+    if wants_star and not diverting:
+        add("request_star")
     if diverting:
         add("request_diversion", fix=place)
-    elif _has_any(tokens, ("vectors",), ("vector",)):
+    elif _has_any(tokens, ("vectors",), ("vector",)) and not wants_star:
         add("request_vectors", runway=next(iter(runways(tokens)), None), approach=approach)
     if asking and returning and not diverting:
         add("request_return")

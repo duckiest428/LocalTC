@@ -1646,5 +1646,7 @@
 "Call ATC in your language and they answer in it: the controllers, the copilot's radio calls and the ramp. Your readbacks in it are checked like English ones. Call in English and it's English again.": "Вызовите диспетчера на своём языке, и он ответит на нём: диспетчеры, радиовызовы второго пилота и наземная служба. Ваши повторы на нём проверяются так же, как английские. Вызовите по-английски, и снова будет английский.",
 "English only": "Только английский",
 "Yours: the copilot's language, else the window's": "Ваш: язык второго пилота, иначе язык окна",
-"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "Кнопка LocalTC на панели инструментов симулятора: журнал радиообмена и радиостанции в окне внутри симулятора, для VR. Её пакет кладётся в папку Community симулятора; кнопка появляется со следующего запуска симулятора при запущенном LocalTC"
+"LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "Кнопка LocalTC на панели инструментов симулятора: журнал радиообмена и радиостанции в окне внутри симулятора, для VR. Её пакет кладётся в папку Community симулятора; кнопка появляется со следующего запуска симулятора при запущенном LocalTC",
+"Pop this view out into a window of its own (ATC and the Live Map side by side)": "Вынести этот вид в отдельное окно (диспетчер и живая карта рядом)",
+"Pop out this view": "Вынести этот вид"
 }

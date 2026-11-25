@@ -78,3 +78,36 @@ def test_the_multilingual_model_tells_the_language_itself():
     whisper._model = Model()  # (loaded: load() leaves it as it is)
     assert whisper.language_of(np.zeros(16000, dtype=np.float32)) == ("de", 0.97)
     assert WhisperTranscriber("base.en", device="cpu", compute_type="int8").language_of(np.zeros(16000, dtype=np.float32)) == ("", 0.0)
+
+
+def radio_service(chosen: bool):
+    radio, own = Ear("radio"), Ear("own")
+    s = VoiceService(EventBus(), lambda: 0.0, radio, Capture(), vocabulary=False, intercom_transcriber=own,
+                     radio_language="fr", radio_language_chosen=chosen)
+    return s, radio, own
+
+
+def test_french_chosen_for_atc_is_heard_as_french_less_sure():
+    """French on the ramp mixed with aviation's English words was read under the bar, heard as English ("Demand
+    clearance to LFPZ", "Charge the wall battery"), and the ramp said "Tu peux répéter ?" round and round."""
+    s, radio, own = radio_service(chosen=True)
+    own.language = ("fr", 0.85)
+    hear(s, 1)
+    assert own.calls == ["fr"] and radio.calls == []
+
+
+def test_auto_is_sure_first_then_keeps_to_the_language_spoken():
+    s, radio, own = radio_service(chosen=False)
+    own.language = ("fr", 0.85)
+    hear(s, 1)
+    assert radio.calls == ["en"]  # the first call, not sure enough: English
+    own.language = ("fr", 0.99)
+    hear(s, 1)
+    own.language = ("fr", 0.85)
+    hear(s, 1)
+    assert own.calls == ["fr", "fr"]  # once a call was in French, the next less sure one is too
+    own.language = ("en", 0.95)
+    hear(s, 1)
+    own.language = ("fr", 0.85)
+    hear(s, 1)
+    assert radio.calls == ["en", "en", "en"]  # a clearly English call: back to English, and sure again

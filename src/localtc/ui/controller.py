@@ -79,6 +79,9 @@ log = logging.getLogger(__name__)
 NETWORK_TRAFFIC_NM = 250.0  # the online network's pilots drawn on the Live Map this far around the flight
 RADIO_HISTORY = 400
 PANEL_LINES = 60  # the radio log's lines the sim's panel shows
+# The views that pop out into a window of their own, and the window's name for each.
+POPOUT_VIEWS = {"atc": "ATC", "map": "Live Map", "efb": "EFB", "lookup": "Airport Lookup", "logbook": "Logbook",
+                "settings": "Quick Settings"}
 COMPONENTS = ("ollama", "gpu", "webview2")  # installed from the app (localtc.components), as the models are
 OWN_EVERY_S = 0.25
 FLIGHT_EVERY_S = 1.0
@@ -158,6 +161,8 @@ class AppController:
         self.companion.set_route(route_view(self.plan))
         self.window_on_top: Callable[[bool], None] | None = None  # set by the app window (ui/__init__.py)
         self.window_show: Callable[[], None] | None = None  # the same: brings it to the front
+        # A view in a window of its own (ui/__init__.py, the app's window): (view, its name) -> opened
+        self.window_popout: Callable[[str, str], bool] | None = None
         self.companion_server: CompanionServer | None = None
         self.pilot = PilotRoutes(lambda: self.cfg, self.publish, hub=self.companion,
                                  on_signed_in=self._companion_on, on_signed_out=self._companion_off)
@@ -183,6 +188,7 @@ class AppController:
             (get, "panel"): self.api_panel,
             (post, "flight/start"): self.api_start,
             (post, "window/show"): self.api_window_show,
+            (post, "window/popout"): self.api_window_popout,
             (post, "flight/stop"): self.api_stop,
             (post, "flight/plan"): self.api_plan,
             (post, "flight/simbrief"): self.api_simbrief,
@@ -1007,6 +1013,18 @@ class AppController:
         if after < 0:
             out["language"] = self.state().get("language") or "en"  # (the first call: the page's words in it)
         return out
+
+    async def api_window_popout(self, args: dict) -> dict:
+        """One of the window's views in a window of its own (``view``: atc, map, efb, ...), to see ATC and the Live Map
+        side by side on the taxi without going from tab to tab. ``{"opened": true}`` when the app opened it; in the
+        browser, ``{"url": ...}`` for the page to open itself."""
+        view = str(args.get("view") or "")
+        if view not in POPOUT_VIEWS:
+            raise HttpError(400, "No such view.")
+        path = f"/?view={view}"
+        if self.window_popout is not None and await asyncio.to_thread(self.window_popout, view, POPOUT_VIEWS[view]):
+            return {"opened": True}
+        return {"url": path}
 
     async def api_window_show(self, args: dict) -> dict:
         """LocalTC started again while it's running: this one's window comes up instead (ui/instance.py)."""

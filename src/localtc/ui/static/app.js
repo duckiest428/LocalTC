@@ -3320,6 +3320,27 @@ const Split = {
 };
 Split.init();
 
+/* ---------- a view in a window of its own ---------- */
+
+// "?view=map": this window shows the one view, popped out of the main window, with no tabs. ATC and the Live Map
+// side by side, on the taxi and wherever it's busy, instead of going from tab to tab.
+const SOLO = (() => {
+  const view = new URLSearchParams(location.search).get("view");
+  return $$(".tab").some((t) => t.dataset.tab === view) ? view : "";
+})();
+if (SOLO) {
+  document.body.classList.add("solo");
+  document.title = ["LocalTC", $$(".tab").find((t) => t.dataset.tab === SOLO).textContent].join(" - ");
+  showTab(SOLO);
+}
+$("#btn-popout").onclick = async () => {
+  const view = $(".tab.active")?.dataset.tab || "atc";
+  try {
+    const r = await api("window/popout", { view });
+    if (r.url) window.open(r.url, `localtc-${view}`, "width=620,height=700"); // (in the browser: its own window)
+  } catch (e) { fail(e); }
+};
+
 /* ---------- start ---------- */
 
 api("state").then(setState).catch(fail);

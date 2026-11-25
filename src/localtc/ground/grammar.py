@@ -24,7 +24,8 @@ SERVICE_WORDS: dict[str, str] = {
     "Refueling": r"re[\s-]?fuel(?:l?ing)?|fuel(?:l?ing)?|bowser",
     "Water": r"(?:potable\s+)?water",
     "Lavatory": r"lav(?:s|atory|atories)?|toilets?|waste",
-    "DeIce": r"de[\s-]?ic(?:e|ing)",
+    # ("let's get some icing"; not "any icing conditions?")
+    "DeIce": r"de[\s-]?ic(?:e|ing)|(?<!anti\s)(?<!anti-)icing(?!\s+(?:conditions?|levels?|reports?|forecast))|glycol",
     "Departure": r"push\s?-?back|push(?:ing)?\b|the\s+tug|a\s+tug",
 }
 _SERVICE = {k: re.compile(rf"\b(?:{v})\b", re.I) for k, v in SERVICE_WORDS.items()}
@@ -57,7 +58,10 @@ _PERCENT = re.compile(r"\b(\d{1,3}|" + "|".join(_TENS) + r")(?:[\s-]+(five))?\s*
 _FILL_UP = re.compile(r"\bfull\s+(?:tanks?|fuel|load)\b|\bfill\s+(?:it|her|them|us|the\s+tanks?)\s+up\b|\bfill\s+up\b", re.I)
 _BREAK = re.compile(r"\bbreaks?\b", re.I)  # (typed, or heard: "parking break")
 # Clauses that ask for different things: "cancel catering but send water". (Not "and": "cancel catering and fuel".)
-_CLAUSES = re.compile(r"\s*(?:[.;!?]+|\bbut\b|\bthen\b|\bafter\s+that\b|\balso\b)\s*", re.I)
+# ... and "and" with a new ask after it: "get the jetway disconnected and let's get some icing" (the de-icing was taken
+# for the jetway's "disconnect", and dropped); "disconnect the GPU and get the stairs".
+_CLAUSES = re.compile(r"\s*(?:[.;!?]+|\bbut\b|\bthen\b|\bafter\s+that\b|\balso\b|\band\s+(?=(?:let'?s|lets|can\s+(?:we|you|i)|"
+                      r"could\s+(?:we|you|i)|we'?d\s+like|i'?d\s+like|please|get|send|bring|call)\b))\s*", re.I)
 
 
 @dataclass(frozen=True)

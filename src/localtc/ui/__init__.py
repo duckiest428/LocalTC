@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 WINDOW_SIZE = (620, 860)
 WINDOW_MIN = (460, 560)
+POPOUT_SIZE = (620, 700)  # a view popped out into a window of its own
+POPOUT_MIN = (360, 320)
 
 
 def run_app(*, config_path: str | None = None, port: int | None = None, browser: bool = False,
@@ -119,6 +121,21 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
             w.on_top = controller.cfg.ui.on_top == "always"
 
     controller.window_show = show
+
+    def popout(view: str, name: str) -> bool:
+        """A view in a window of its own, beside the main one (ATC and the Live Map both in sight on the taxi). False
+        without the app's window (the browser: the page opens one itself)."""
+        if not window:
+            return False
+        import webview
+
+        w = webview.create_window(f"LocalTC - {name}", f"{url.rstrip('/')}/?view={view}", width=POPOUT_SIZE[0],
+                                  height=POPOUT_SIZE[1], min_size=POPOUT_MIN, background_color="#1b1e22",
+                                  on_top=controller.cfg.ui.on_top == "always")
+        w.events.shown += lambda: _set_icon(w)
+        return True
+
+    controller.window_popout = popout
     try:
         if window and _open_window(url, on_top=controller.cfg.ui.on_top == "always"):
             pass  # returns when the window is closed
@@ -150,6 +167,8 @@ def _open_window(url: str, *, on_top: bool = False) -> bool:
         window = webview.create_window("LocalTC", url, width=WINDOW_SIZE[0], height=WINDOW_SIZE[1], min_size=WINDOW_MIN,
                                        background_color="#1b1e22", on_top=on_top)
         window.events.shown += lambda: _set_icon(window)
+        # The views popped out of it close with it: LocalTC ends when its own window does, not when the last is closed.
+        window.events.closed += lambda: [w.destroy() for w in list(webview.windows) if w is not window]
         webview.start(icon=str(ICON))
         return True
     except Exception as exc:  # no WebView2 runtime, no GUI

@@ -443,3 +443,28 @@ def test_a_star_that_doesnt_go_to_the_runway_in_use_is_swapped_for_one_that_does
         engine._star_for_runway("30L")
         assert engine.cfg.star == star
         assert [f.ident for f in engine.route.fixes] == fixes
+
+
+def test_a_go_around_on_the_final_isnt_joining_it_again():
+    """Going around two miles out, still lined up and climbing: approach cleared the approach again (which ended the
+    go-around), and tower cleared the flight to land over the pilot's "going around"."""
+    import msgspec
+
+    engine = engine_at_kbfi()
+    engine.state.flight.destination = "KBFI"
+    geo = engine.geometry("KBFI")
+    end = geo.end("14R")
+    ux, uy = (end.threshold[0] - end.runway.center[0], end.threshold[1] - end.runway.center[1])
+    scale = 3 * 1852.0 / (ux * ux + uy * uy) ** 0.5
+    lat, lon = geo.frame.to_latlon(end.threshold[0] + ux * scale, end.threshold[1] + uy * scale)
+    own = msgspec.structs.replace(_own(engine, 500.0, lat=lat, lon=lon, hdg_true=end.heading_true, on_ground=False,
+                                       alt=1200.0), gs_kt=150.0)
+    assert engine._joining_final(own)  # on the final: the approach is cleared here
+    engine._t = 500.0
+    engine._going_around, engine._go_around_t = True, 500.0
+    climbing = msgspec.structs.replace(own, vs_fpm=1500.0, t=520.0)
+    assert not engine._joining_final(climbing)
+    level_soon = msgspec.structs.replace(own, vs_fpm=0.0, t=560.0)
+    assert not engine._joining_final(level_soon)  # two minutes to settle
+    level_later = msgspec.structs.replace(own, vs_fpm=0.0, t=700.0)
+    assert engine._joining_final(level_later)

@@ -693,7 +693,9 @@ class RampCrew:
             moved = "moved" in push.told
             # ("Release parking brake" is GSX's too: it had "Pushback complete" called before the aircraft moved. So had the
             # service showing "available" while GSX waits on which way to go.)
-            if ("brake" in message and "release" not in message and moved) or svc.state == "completing" \
+            # (Stopped, for the brake: GSX's words about the brake as it rolled back had "Pushback complete. Set parking
+            # brake" said three seconds into the push, in the same breath as "cleared to start engines".)
+            if ("brake" in message and "release" not in message and moved and own.gs_kt < 0.5) or svc.state == "completing" \
                     or (moved and not svc.active and own.gs_kt < 0.5 and self.state.menu is None):
                 push.stage = "set_brake"
         if push.stage == "set_brake":

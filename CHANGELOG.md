@@ -15,6 +15,10 @@ a new minor version adds features, a patch fixes them.
 - **Ask for the STAR:** "request the STAR", "can we fly the STAR instead of vectors", "request own navigation":
   approach (or the centre) sends you direct to the filed arrival's next fix ahead, and the headings stop while you fly
   it. "Can we fly the STAR instead of vectors" had been taken for a request for vectors.
+- **A lighter language model to try, Qwen3 1.7B:** in Quick Settings → Language models, beside Llama 3.2 3B, and
+  downloaded from there. It takes 1.8 GB of memory instead of 2.5 and answers about 30% sooner on the CPU. It
+  answers off-script calls as well as the 3B and reads calls a little less surely. Llama 3.2 3B stays the default
+  for now. Models that think before answering (Qwen3) are told not to: it cost seconds on every call.
 
 ### Fixed
 - **Whisper stays on the graphics card:** the 90 seconds the card has to answer at the start counted the model's

@@ -1648,5 +1648,7 @@
 "Yours: the copilot's language, else the window's": "O seu: o do copiloto, senão o da janela",
 "LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "Botão do LocalTC na barra de ferramentas do simulador: o registo de rádio e os rádios numa janela dentro do simulador, para RV. O seu pacote vai para a pasta Community do simulador; o botão aparece a partir do próximo arranque do simulador, com o LocalTC a funcionar",
 "Pop this view out into a window of its own (ATC and the Live Map side by side)": "Destacar esta vista para uma janela própria (o ATC e o mapa ao vivo lado a lado)",
-"Pop out this view": "Destacar esta vista"
+"Pop out this view": "Destacar esta vista",
+"Lighter and faster than Llama 3.2 3B (1.8 GB of memory, about 30% quicker), on trial to replace it: answers off-script calls as well, reads calls a little less surely.": "Mais leve e mais rápido que o Llama 3.2 3B (1,8 GB de memória, cerca de 30% mais rápido), em teste para o substituir: responde igualmente bem a chamadas fora do guião, entende as chamadas com um pouco menos de certeza.",
+"Qwen3 1.7B": "Qwen3 1.7B"
 }

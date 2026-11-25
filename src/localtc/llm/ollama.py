@@ -112,6 +112,7 @@ class OllamaBackend:
             "messages": [{"role": "system", "content": system}]
             + [{"role": role, "content": content} for role, content in request.messages],
             "stream": False,
+            "think": False,  # a model that thinks first (qwen3) spent seconds on it before every answer; others ignore it
             **({"format": request.schema} if request.schema else {}),  # (no schema: plain text)
             "keep_alive": self.keep_alive,
             "options": {"temperature": 0, "seed": 0, "num_predict": request.max_tokens, **self.load_options(), **self.options},
@@ -188,7 +189,7 @@ class OllamaBackend:
         request = request or self._understand
         if request is None or (self._priming is not None and self._priming.is_alive()):
             return
-        body = {"model": self.model, "stream": False, "keep_alive": self.keep_alive,
+        body = {"model": self.model, "stream": False, "think": False, "keep_alive": self.keep_alive,
                 "messages": [{"role": "system", "content": request.system}]
                 + [{"role": role, "content": content} for role, content in request.messages],
                 "options": {"temperature": 0, "seed": 0, "num_predict": 1, **self.load_options(), **self.options}}

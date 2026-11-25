@@ -35,9 +35,13 @@ class ModelOption:
 
 
 LLM_MODELS = (
-    # One model: the one LocalTC is built and tested around (its prompts, examples and checks are tuned to it).
+    # The one LocalTC is built and tested around (its prompts, examples and checks are tuned to it), and the lighter
+    # one on trial to replace it (LocalTC's cases and pilots' own off-script calls, on a CPU: the 3B 3.3 s a call, 2.5 GB).
     ModelOption("llama3.2:3b", "Llama 3.2 3B", 2000, "fast", "good",
                 "Gets 53 of LocalTC's 54 edge cases, about 2 s per call on a CPU.", tested=True),
+    ModelOption("qwen3:1.7b", "Qwen3 1.7B", 1400, "fast", "good",
+                "Lighter and faster than Llama 3.2 3B (1.8 GB of memory, about 30% quicker), on trial to replace it: "
+                "answers off-script calls as well, reads calls a little less surely.", tested=True),
 )
 WHISPER_MODELS = (
     ModelOption("tiny.en", "Tiny", 75, "instant", "basic", "Misses numbers more often."),

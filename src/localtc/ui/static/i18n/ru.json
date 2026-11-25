@@ -1648,5 +1648,7 @@
 "Yours: the copilot's language, else the window's": "Ваш: язык второго пилота, иначе язык окна",
 "LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "Кнопка LocalTC на панели инструментов симулятора: журнал радиообмена и радиостанции в окне внутри симулятора, для VR. Её пакет кладётся в папку Community симулятора; кнопка появляется со следующего запуска симулятора при запущенном LocalTC",
 "Pop this view out into a window of its own (ATC and the Live Map side by side)": "Вынести этот вид в отдельное окно (диспетчер и живая карта рядом)",
-"Pop out this view": "Вынести этот вид"
+"Pop out this view": "Вынести этот вид",
+"Lighter and faster than Llama 3.2 3B (1.8 GB of memory, about 30% quicker), on trial to replace it: answers off-script calls as well, reads calls a little less surely.": "Легче и быстрее, чем Llama 3.2 3B (1,8 ГБ памяти, примерно на 30% быстрее), проходит испытание на замену: так же хорошо отвечает на вызовы вне сценария, чуть менее уверенно понимает вызовы.",
+"Qwen3 1.7B": "Qwen3 1.7B"
 }

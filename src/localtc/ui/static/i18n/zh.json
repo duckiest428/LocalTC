@@ -1648,5 +1648,7 @@
 "Yours: the copilot's language, else the window's": "你的：副驾驶的语言，否则是窗口的语言",
 "LocalTC button on the sim's toolbar: the radio log and the radios in a window inside the sim, for VR. Its package goes in the sim's Community folder; the button shows from the sim's next start, with LocalTC running": "模拟器工具栏上的 LocalTC 按钮：在模拟器内的窗口中显示无线电记录和无线电，适用于 VR。其插件包放入模拟器的 Community 文件夹；按钮从模拟器下次启动起显示，需 LocalTC 正在运行",
 "Pop this view out into a window of its own (ATC and the Live Map side by side)": "将此视图弹出到独立窗口（管制与实时地图并排显示）",
-"Pop out this view": "弹出此视图"
+"Pop out this view": "弹出此视图",
+"Lighter and faster than Llama 3.2 3B (1.8 GB of memory, about 30% quicker), on trial to replace it: answers off-script calls as well, reads calls a little less surely.": "比 Llama 3.2 3B 更轻更快（占用 1.8 GB 内存，快约 30%），正在试用以替代它：回答脚本之外的呼叫同样出色，理解呼叫的把握稍低。",
+"Qwen3 1.7B": "Qwen3 1.7B"
 }

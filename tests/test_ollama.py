@@ -74,6 +74,7 @@ def test_chat_request_and_answer(server):
     assert [m["role"] for m in body["messages"]] == ["system", "user"] and "Examples" in body["messages"][0]["content"]
     assert body["messages"][-1]["content"] == request().prompt
     assert body["keep_alive"] == "1h" and body["options"]["num_ctx"] == 3072 and body["options"]["num_predict"] == 80
+    assert body["think"] is False  # qwen3 thinks before every answer unless told not to (seconds, for nothing)
 
 
 def test_timeout(server):
@@ -105,7 +106,7 @@ def test_after_a_phrasing_call_the_understanding_prompt_is_read_again(server):
     backend._priming.join(5)
     _, primed = server["requests"][-1]
     assert primed["messages"][0]["content"] == understand.system  # the understanding prompt, again
-    assert primed["options"]["num_predict"] == 1 and "format" not in primed
+    assert primed["options"]["num_predict"] == 1 and "format" not in primed and primed["think"] is False
 
 
 def test_not_running():

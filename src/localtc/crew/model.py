@@ -87,7 +87,9 @@ SCHEMA = {
         "reply": {"type": "string"},
         "english": {"type": "string"},  # talking in another language: the captain's words in English, for the checks
     },
-    "required": ["kind", "reply"],
+    # The action and its value too, "" in a reply: a model that writes only what it must (qwen3) answered "set flaps 1"
+    # with "Flaps 1." and no action, and nothing was set.
+    "required": ["kind", "action", "value", "target", "reply"],
 }
 EXAMPLES = (
     ('Facts:\nphase: cruise\nfuel: 41,300 pounds\nendurance: 6 hours 10 minutes\n\nCaptain: "are we good on gas?"',

@@ -9,10 +9,12 @@ import asyncio
 from contextlib import suppress
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+import urllib.parse
 import zipfile
 from collections import deque
 from collections.abc import Callable
@@ -1021,8 +1023,13 @@ class AppController:
         view = str(args.get("view") or "")
         if view not in POPOUT_VIEWS:
             raise HttpError(400, "No such view.")
-        path = f"/?view={view}"
-        if self.window_popout is not None and await asyncio.to_thread(self.window_popout, view, POPOUT_VIEWS[view]):
+        # Where the main window's map is (centre, zoom, IFR or VFR, following): the pop-out opens on the same.
+        at = args.get("at") if isinstance(args.get("at"), dict) else {}
+        kept = {k: str(at[k]) for k in ("lat", "lon", "z", "mode", "follow") if k in at
+                and re.fullmatch(r"-?\d{1,3}(?:\.\d{1,6})?|ifr|vfr", str(at[k]))}
+        query = urllib.parse.urlencode({"view": view, **kept})
+        path = f"/?{query}"
+        if self.window_popout is not None and await asyncio.to_thread(self.window_popout, query, POPOUT_VIEWS[view]):
             return {"opened": True}
         return {"url": path}
 

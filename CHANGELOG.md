@@ -9,8 +9,9 @@ a new minor version adds features, a patch fixes them.
 ### Added
 - **Pop a view out:** the button at the end of the tabs puts the view you're on (ATC, the Live Map, the EFB, any of
   them) in a window of its own, so ATC and the map are both in sight on the taxi and wherever it's busy. The window
-  has the view alone, with the radios and the transmit bar; it closes with LocalTC's. In the browser it's a window of
-  the browser's. In all ten languages.
+  has the view alone, edge to edge, as the sim's toolbar window has it; the map opens where yours is (the same
+  place, zoom, IFR or VFR, following or not) and as it looks. It closes with LocalTC's. In the browser it's a
+  window of the browser's. In all ten languages.
 - **Ask for the STAR:** "request the STAR", "can we fly the STAR instead of vectors", "request own navigation":
   approach (or the centre) sends you direct to the filed arrival's next fix ahead, and the headings stop while you fly
   it. "Can we fly the STAR instead of vectors" had been taken for a request for vectors.

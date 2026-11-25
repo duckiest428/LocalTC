@@ -86,6 +86,7 @@ function setState(st) {
   applyTheme(st.theme);
   S.state = st;
   setStatus(st);
+  if (typeof showSolo === "function") showSolo();  // (a popped-out view: drawn now, with the state in)
   if (st.flight && Object.keys(st.flight).length) setFlight(st.flight);
   $("#sw-copilot").classList.toggle("on", st.copilot && st.copilot !== "off");
   $("#sw-copilot").setAttribute("aria-checked", String(!!(st.copilot && st.copilot !== "off")));
@@ -3331,12 +3332,31 @@ const SOLO = (() => {
 if (SOLO) {
   document.body.classList.add("solo");
   document.title = ["LocalTC", $$(".tab").find((t) => t.dataset.tab === SOLO).textContent].join(" - ");
+}
+let soloShown = false;
+/** The popped-out view, once LocalTC's state is in (drawn before it, the map was the light one and the switches off),
+    the map where the main window's was: the same place, zoom, IFR or VFR, and following or not. */
+function showSolo() {
+  if (!SOLO || soloShown) return;
+  soloShown = true;
   showTab(SOLO);
+  const q = new URLSearchParams(location.search);
+  if (SOLO === "map" && MapView.map && q.has("lat")) {
+    if (q.get("mode")) MapView.setMode(q.get("mode"));
+    MapView.map.setView([Number(q.get("lat")), Number(q.get("lon"))], Number(q.get("z")) || MapView.map.getZoom());
+    MapView.setFollow(q.get("follow") === "1");
+  }
 }
 $("#btn-popout").onclick = async () => {
   const view = $(".tab.active")?.dataset.tab || "atc";
+  const at = {};
+  if (view === "map" && MapView.map) {  // the pop-out opens where this map is
+    const c = MapView.map.getCenter();
+    Object.assign(at, { lat: c.lat.toFixed(5), lon: c.lng.toFixed(5), z: String(MapView.map.getZoom()), mode: MapView.mode,
+                        follow: MapView.follow ? "1" : "0" });
+  }
   try {
-    const r = await api("window/popout", { view });
+    const r = await api("window/popout", { view, at });
     if (r.url) window.open(r.url, `localtc-${view}`, "width=620,height=700"); // (in the browser: its own window)
   } catch (e) { fail(e); }
 };

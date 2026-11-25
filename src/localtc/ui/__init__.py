@@ -122,14 +122,14 @@ def run_app(*, config_path: str | None = None, port: int | None = None, browser:
 
     controller.window_show = show
 
-    def popout(view: str, name: str) -> bool:
-        """A view in a window of its own, beside the main one (ATC and the Live Map both in sight on the taxi). False
-        without the app's window (the browser: the page opens one itself)."""
+    def popout(query: str, name: str) -> bool:
+        """A view in a window of its own, beside the main one (ATC and the Live Map both in sight on the taxi):
+        ``query`` "view=map&lat=...". False without the app's window (the browser: the page opens one itself)."""
         if not window:
             return False
         import webview
 
-        w = webview.create_window(f"LocalTC - {name}", f"{url.rstrip('/')}/?view={view}", width=POPOUT_SIZE[0],
+        w = webview.create_window(f"LocalTC - {name}", f"{url.rstrip('/')}/?{query}", width=POPOUT_SIZE[0],
                                   height=POPOUT_SIZE[1], min_size=POPOUT_MIN, background_color="#1b1e22",
                                   on_top=controller.cfg.ui.on_top == "always")
         w.events.shown += lambda: _set_icon(w)

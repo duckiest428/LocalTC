@@ -242,10 +242,12 @@ class LlmConfig(_Section):
 
     enabled: bool = True
     base_url: str = "http://127.0.0.1:11434"
-    model: str = "llama3.2:3b"
+    model: str = "qwen3:1.7b"  # models.DEFAULT_LLM (llama3.2:3b before 0.6.1: models.model_move asks about it)
     # How much ATC leans on the model rather than its script, for reading calls and for wording replies (see
     # atc_core.llm.understand.MODES): scripted, semi, mostly_llm, llm, or off (the grammar and templates alone).
-    mode: LlmMode = "mostly_llm"
+    # LocalTC's to decide, not the pilot's: always llm (the app has no setting, and a choice saved before is dropped:
+    # ``MANAGED``). Only this file, for working on LocalTC, can set another.
+    mode: LlmMode = "llm"
     phrasing: bool = True  # the model may word replies at all (off: templates only, whatever the mode)
     # The model's answers may go past what the sim's data says (a number, a closure, a runway it isn't told about):
     # off, a reply saying anything the facts don't is turned away. Instructions are never allowed either way. On by
@@ -262,9 +264,12 @@ class LlmConfig(_Section):
     # a model that has to load mid-flight misses the call.
     keep_alive: str = "1h"
     num_ctx: int = 3072  # a call needs up to about 2,100 tokens (tests/test_llm.py holds it to that); more is memory for nothing
-    # Run the model on the CPU only: the graphics card is left to the sim. Answers take a little longer, so the
-    # timeouts above are doubled. Applies when the model loads (LocalTC reloads it at the next flight).
-    cpu_only: bool = True  # the graphics card and its memory belong to the sim: the model takes the CPU
+    # Run the model on the CPU only: the graphics card is left to the sim. Answers take longer, so the timeouts above
+    # are doubled. Applies when the model loads (LocalTC reloads it at the next flight). Off by default: Qwen3 1.7B
+    # takes 1.6 GB of video memory and answers in half a second there, where on a CPU the sim is using every call took
+    # 4 to 12 s, two or three of them for each thing the pilot said. (Ollama puts on the card what fits; Vulkan has
+    # AMD's cards too.)
+    cpu_only: bool = False
     cpu_threads: int = 0  # CPU threads for the model; 0: Ollama's choice (every physical core)
     replay: Literal["recorded", "live", "off"] = "recorded"  # model answers during a replay
 
@@ -415,7 +420,8 @@ class CrewConfig(_Section):
     # (read back for your "confirm" before it acts).
     llm: Literal["off", "questions", "full"] = "full"  # older setting; ``mode`` decides (kept so old files load)
     # How much the copilot leans on the language model, as ATC's [llm] mode: "auto" (mostly LLM with the cloud model,
-    # fully scripted with the one on this PC), "llm", "mostly_llm", "semi", "scripted", or "off".
+    # fully scripted with the one on this PC), "llm", "mostly_llm", "semi", "scripted", or "off" (the app's "None").
+    # LocalTC's to decide but for "off" (``MANAGED``).
     mode: Literal["auto", "llm", "mostly_llm", "semi", "scripted", "off"] = "llm"
     # Its answers may go past what the copilot knows from the sim and ATC (what's usual, how a system works): they can
     # be wrong. Off: a reply with a number the facts don't have is turned away. Commands are always checked.
@@ -462,7 +468,7 @@ class CabinConfig(_Section):
     incidents: Literal["off", "rare", "normal", "frequent"] = "off"  # problems in the cabin for you to decide on
     # How much they lean on the language model, a cloud one only (without one, the script's words): scripted, semi (only
     # what the script can't answer), mostly_llm (their answers and longer announcements), llm (all but the safety ones).
-    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
+    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "llm"  # LocalTC's to decide (``MANAGED``)
 
 
 class GroundConfig(_Section):
@@ -473,7 +479,7 @@ class GroundConfig(_Section):
     without_gsx: Literal["standalone", "tell", "off"] = "standalone"  # the sim's own tug and jetway, just say so, or no crew
     # How much they lean on the language model, a cloud one only (without one, the grammar and the script): scripted, semi
     # (it reads what the grammar can't), mostly_llm (it words their answers too), llm (it reads everything first).
-    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "mostly_llm"
+    llm: Literal["scripted", "semi", "mostly_llm", "llm"] = "llm"  # LocalTC's to decide (``MANAGED``)
     wait_for_clearance: bool = True  # the push waits for ATC, when there's a controller who'd clear it
     adapter: Literal["auto", "gsx", "standalone", "mock"] = "auto"  # who does the work (mock: a stand-in, for working without a sim)
 
@@ -526,6 +532,7 @@ class UiConfig(_Section):
     updates: Literal["notify", "auto", "off"] = "notify"
     flights_done: int = 0  # flights ended, for the one-time account suggestion
     account_prompted: bool = False  # the account suggestion was shown (once only)
+    model_moved: bool = False  # asked about the new language model (Qwen3 1.7B) and the old one (Llama 3.2 3B), once
     last_flight_end: float = 0.0  # when the last flight ended (Unix time), for ATC's shifts ([atc] shift)
     coffee_clicked: bool = False  # the Buy me a coffee button hides for good once it's been clicked
     welcome_seen: bool = False  # the welcome notes were shown (once, on the first start: existing installs too)
@@ -610,7 +617,7 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] = os.envi
     overlay_path = settings_path() if settings == "default" else settings
     if overlay_path is not None and overlay_path.is_file():
         try:
-            data = merge(data, _migrate(tomllib.loads(overlay_path.read_text(encoding="utf-8"))))
+            data = merge(data, _managed(_migrate(tomllib.loads(overlay_path.read_text(encoding="utf-8")))))
         except (OSError, tomllib.TOMLDecodeError) as exc:
             raise ConfigError(f"{overlay_path}: {exc} (delete it to go back to config/localtc.toml)") from exc
 
@@ -624,6 +631,21 @@ def load_config(path: str | Path | None = None, env: Mapping[str, str] = os.envi
             raise ConfigError(f"LOCALTC_SOURCE must be 'live' or 'replay', got {kind!r}")
         cfg.source.kind = kind
     return cfg
+
+
+# How much ATC, the copilot, the cabin and the ground crew lean on the language model: LocalTC's to decide now (fully
+# LLM), not a setting the pilot has to understand. A choice the app saved before is dropped; the copilot's "off" (the
+# app's "None: the listed commands only") is a choice of whether, not how much, and stays.
+MANAGED = (("llm", "mode"), ("crew", "mode"), ("cabin", "llm"), ("ground", "llm"))
+
+
+def _managed(data: dict) -> dict:
+    """The app's saved settings without what LocalTC decides itself (``MANAGED``)."""
+    for section, key in MANAGED:
+        table = data.get(section)
+        if isinstance(table, dict) and key in table and table[key] != "off":
+            data = {**data, section: {k: v for k, v in table.items() if k != key}}
+    return data
 
 
 def _migrate(data: dict) -> dict:

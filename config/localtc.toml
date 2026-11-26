@@ -56,8 +56,8 @@ airport_dirs = []             # extra folders of <ICAO>.json airport files
 [llm]                         # local language model via Ollama (https://ollama.com); nothing leaves this machine
 enabled = true
 base_url = "http://127.0.0.1:11434"
-model = "llama3.2:3b"         # ollama pull llama3.2:3b
-mode = "mostly_llm"           # how much ATC leans on the model, for reading calls and wording replies:
+model = "qwen3:1.7b"          # ollama pull qwen3:1.7b (llama3.2:3b before 0.6.1)
+mode = "llm"                  # how much ATC leans on the model (LocalTC's choice: the app has no setting for it):
                               #   scripted: the script; the model only for a call the grammar can't read
                               #   semi: the script for clear routine calls; the model for the rest, and its wording off the script
                               #   mostly_llm: the model reads and words most calls; the script takes the clearly routine ones
@@ -71,7 +71,7 @@ patience_s = 15.0             # off-script calls the model missed: one more try 
 max_attempts = 2
 keep_alive = "1h"             # how long the model stays loaded after a flight ("0": unload at once); during one it always stays
 num_ctx = 3072                # the model's working memory, in tokens: a call needs up to about 2,100; more is memory for nothing
-cpu_only = true               # the model on the CPU only, leaving the graphics card to the sim (timeouts doubled); from the next flight
+cpu_only = false              # true: the model on the CPU only, leaving the graphics card to the sim (much slower, timeouts doubled); from the next flight
 cpu_threads = 0               # CPU threads for the model; 0: Ollama's choice
 replay = "recorded"           # in replays: "recorded" answers, "live" model, or "off"
 
@@ -167,7 +167,7 @@ profile = "auto"              # auto (from the airline) | full_service | low_cos
 enabled = false
 verbosity = "standard"        # what they say by themselves: quiet | standard | chatty
 without_gsx = "standalone"    # standalone (the sim's own tug and jetway) | tell | off
-llm = "mostly_llm"            # a cloud model only: scripted | semi | mostly_llm | llm
+llm = "llm"                   # a cloud model only: scripted | semi | mostly_llm | llm (LocalTC's choice, no app setting)
 wait_for_clearance = true     # the push waits for ATC
 adapter = "auto"              # auto | gsx | standalone | mock (a stand-in, for working without a sim)
 

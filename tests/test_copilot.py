@@ -169,3 +169,15 @@ def test_contact_tower_when_established_waits_for_the_localiser():
     assert copilot._when_established is not None and not copilot._queue
     copilot._established_handoff(800.0)  # never established, ten minutes on: over to tower anyway
     assert copilot._when_established is None and [q.kind for q in copilot._queue] == ["tune", "checkin"]
+
+
+def test_a_corrected_taxi_route_is_read_back_as_written():
+    """ "Negative, taxi via I, GATE4, ... LB": the copilot's answer was "Taxi via i, gate4, ... lb" (capitalize()
+    lowercased the rest), and it was heard as a wrong readback."""
+    from types import SimpleNamespace
+
+    engine = AtcEngine(EngineConfig(callsign="N172LT"))
+    copilot = Copilot(engine, mode="full", delay_s=(1.0, 1.0))
+    copilot._evaluated["ground.taxi_out"] = SimpleNamespace(mismatched={"taxi_route": "I"}, missing=[])
+    words = copilot._correction("ground.taxi_out", {"taxi_route": ("I", "GATE4", "LB"), "runway": "32R"})
+    assert words is not None and words.startswith("T") and "I, GATE4, LB" in words, words

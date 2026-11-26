@@ -118,7 +118,7 @@ def test_profiles_follow_the_hardware():
     assert models.recommend(models.Hardware("win32", 4, 8.0)).id == "light"
     cfg = Config()
     models.apply_profile(cfg, models.profile("light"))
-    assert (cfg.llm.model, cfg.voice.model) == ("llama3.2:3b", "tiny.en")  # one language model: the one tested
+    assert (cfg.llm.model, cfg.voice.model) == ("qwen3:1.7b", "tiny.en")  # one language model: the default
     catalog = models.catalog()
     assert {"llm", "whisper", "voice", "profiles"} <= catalog.keys()
     assert all(p["llm"] in {m["id"] for m in catalog["llm"]} for p in catalog["profiles"])
@@ -359,3 +359,77 @@ def test_the_live_maps_drawn_airports_are_not_named_as_its_method():
     source = (Path(__file__).parent.parent / "src" / "localtc" / "ui" / "static" / "app.js").read_text(encoding="utf-8")
     assert "async airports()" in source and "airports: new Set()" not in source.replace("drawnAirports: new Set()", "")
     assert "this.airports.has" not in source and "this.airports.add" not in source
+
+
+def test_a_pilot_with_the_old_model_is_asked_once_about_the_new_one():
+    """Qwen3 1.7B is LocalTC's model now: a pilot who has Llama 3.2 3B (the one before) is asked whether to download the
+    new one and whether to keep the old, once; a new install (no Llama) isn't asked."""
+    from localtc.llm.ollama import OllamaStatus
+
+    cfg = Config()
+    old = OllamaStatus(True, ("llama3.2:3b",), sizes={"llama3.2:3b": 2_019_393_189})
+    move = models.model_move(cfg, old)
+    assert move is not None and move["download"] and (move["new"], move["old"], move["old_gb"]) == ("qwen3:1.7b", "llama3.2:3b", 2.0)
+    assert not models.model_move(cfg, OllamaStatus(True, ("llama3.2:3b", "qwen3:1.7b")))["download"]
+    assert models.model_move(cfg, OllamaStatus(True, ("qwen3:1.7b",))) is None  # nothing to keep or remove
+    assert models.model_move(cfg, OllamaStatus(False)) is None
+    cfg.ui.model_moved = True
+    assert models.model_move(cfg, old) is None  # asked already
+    cfg.ui.model_moved, cfg.llm.model = False, "llama3.2:3b"
+    assert models.model_move(cfg, old) is None  # chose the old one
+
+
+def test_how_much_the_model_is_leaned_on_is_localtcs_to_decide(tmp_path):
+    """The four "how much it leans on it" settings are gone: a choice saved before is dropped (fully LLM), but the
+    copilot's "None" (no model at all) stays."""
+    from localtc.config import load_config
+
+    saved = tmp_path / "settings.toml"
+    saved.write_text('[llm]\nmode = "mostly_llm"\n[crew]\nmode = "scripted"\n[cabin]\nllm = "semi"\n[ground]\nllm = "scripted"\n',
+                     encoding="utf-8")
+    cfg = load_config(settings=saved)
+    assert (cfg.llm.mode, cfg.crew.mode, cfg.cabin.llm, cfg.ground.llm) == ("llm", "llm", "llm", "llm")
+    saved.write_text('[crew]\nmode = "off"\n', encoding="utf-8")
+    assert load_config(settings=saved).crew.mode == "off"
+
+
+def test_the_old_model_goes_only_once_the_new_one_is_in(tmp_path, monkeypatch):
+    import asyncio
+
+    from localtc.llm import OllamaBackend
+    from localtc.llm.ollama import OllamaStatus
+    from localtc.ui import controller as ctl
+
+    monkeypatch.setenv("LOCALTC_SETTINGS", str(tmp_path / "settings.toml"))
+    installed = {"llama3.2:3b"}
+    deleted, pulled = [], []
+
+    def fake_install(cfg, kind, say):
+        pulled.append(cfg.llm.model)
+        return pull_works
+
+    monkeypatch.setattr(OllamaBackend, "status", lambda self, timeout_s=2.0: OllamaStatus(True, tuple(installed)))
+    monkeypatch.setattr(OllamaBackend, "delete", lambda self, model, timeout_s=30.0: deleted.append(model) or True)
+    monkeypatch.setattr(ctl.models, "install", fake_install)
+
+    async def answer(choice):
+        controller = ctl.AppController(Config(), plan_path=tmp_path / "flightplan.json", cache=None)
+        await controller._ask_model_move()
+        assert controller.state()["model_move"]["download"]
+        await controller.api_model_move({"choice": choice})
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+        return controller
+
+    pull_works = False
+    c = asyncio.run(answer("remove"))
+    assert pulled == ["qwen3:1.7b"] and deleted == []  # the download failed: Llama stays
+    assert c.cfg.ui.model_moved and c.state()["model_move"] is None
+    pull_works, pulled = True, []
+    asyncio.run(answer("remove"))
+    assert pulled == ["qwen3:1.7b"] and deleted == ["llama3.2:3b"]
+    deleted.clear()
+    asyncio.run(answer("keep"))
+    assert deleted == []
+    c = asyncio.run(answer("old"))
+    assert c.cfg.llm.model == "llama3.2:3b"

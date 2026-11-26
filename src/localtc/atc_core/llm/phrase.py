@@ -614,19 +614,21 @@ class LlmPhraser:
         template's words stand. ``persona``: the controller's manner (their words, never other values).
         ``language``: ATC speaking the pilot's own ("fr"): ``scripted`` is in it, and so must the reply be."""
         request = replace(reword_request(pilot, scripted, language), persona=persona)
+        # One try: turned away, the script's own words are as good, and a second try was as long again (a 20-taxiway
+        # route reworded twice, 13 s, and both times a taxiway left out).
         if language:
             english = to_english(scripted, language)
             return self._run(request, lambda raw: in_own_words(lambda r: check_reworded(r, english, callsigns), raw,
-                                                               callsigns, language), t, trigger)
-        return self._run(request, lambda raw: check_reworded(raw, scripted, callsigns), t, trigger)
+                                                               callsigns, language), t, trigger, attempts=1)
+        return self._run(request, lambda raw: check_reworded(raw, scripted, callsigns), t, trigger, attempts=1)
 
     def _run(self, request: LlmRequest, check: Callable[[str], str], t: float,
-             trigger: str) -> tuple[str | None, list[LlmExchange]]:
+             trigger: str, *, attempts: int | None = None) -> tuple[str | None, list[LlmExchange]]:
         exchanges: list[LlmExchange] = []
         timeout_s, budget_s = (self.patience_s, self.patience_s) if self.patient else \
             waits(self.backend, self.timeout_s, self.budget_s, self.patience_s)
         deadline = self._clock() + budget_s
-        for attempt in range(1, self.max_attempts + 1):
+        for attempt in range(1, min(self.max_attempts, attempts or self.max_attempts) + 1):
             remaining = deadline - self._clock()
             if remaining < 0.2:
                 break

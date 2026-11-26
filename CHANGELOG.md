@@ -15,12 +15,34 @@ a new minor version adds features, a patch fixes them.
 - **Ask for the STAR:** "request the STAR", "can we fly the STAR instead of vectors", "request own navigation":
   approach (or the centre) sends you direct to the filed arrival's next fix ahead, and the headings stop while you fly
   it. "Can we fly the STAR instead of vectors" had been taken for a request for vectors.
-- **A lighter language model to try, Qwen3 1.7B:** in Quick Settings → Language models, beside Llama 3.2 3B, and
-  downloaded from there. It takes 1.8 GB of memory instead of 2.5 and answers about 30% sooner on the CPU. It
-  answers off-script calls as well as the 3B and reads calls a little less surely. Llama 3.2 3B stays the default
-  for now. Models that think before answering (Qwen3) are told not to: it cost seconds on every call.
+- **Qwen3 1.7B is LocalTC's language model:** lighter and quicker than Llama 3.2 3B (1.8 GB of memory instead of 2.5,
+  about half a second a call on a graphics card) and as good with what pilots say off the script. If you have Llama
+  3.2 3B, LocalTC asks once: download Qwen3 1.7B and remove Llama 3.2 3B (only once Qwen is in, so a failed download
+  leaves you a model to fly with), download it and keep Llama 3.2 3B (still in Quick Settings → Language models), or
+  stay with Llama 3.2 3B. Models that think before answering (Qwen3) are told not to: it cost seconds on every call.
+  In all ten languages.
+
+### Changed
+- **No more "how much it leans on it":** the four settings for how much ATC, the copilot, the cabin crew and the ground
+  crew lean on the language model are gone. LocalTC decides: the model reads and words what's said, as "Fully LLM"
+  did, and everything it says is still checked against the script. A choice saved before is dropped; the copilot's
+  "None" (no model at all) stays.
+- **The language model runs on the graphics card:** on a CPU the sim was using, each call took 4 to 12 seconds, two or
+  three of them for everything you said. On the card Qwen3 1.7B takes 1.6 GB of its memory and answers in about half a
+  second (AMD's cards too, through Ollama's Vulkan). Quick Settings → Language models → "Run it on the CPU only" puts it
+  back on the CPU.
+- **Fewer calls to the model for each thing you say:** a readback the script finds right word for word no longer waits
+  for the model to agree (a clearance read back perfectly took 7 seconds). When the model's version of ATC's reply
+  doesn't say what the script decided, the script's words are said at once, not after a second try. When its reading
+  of your call contradicts your words and the script has one that fits, the script's is used, not a second try.
 
 ### Fixed
+- **"Unable, information not available" to a routine request:** "request clearance to Rome as filed" and "request
+  taxi, we have information C" were both answered "unable": the model's first reading didn't fit the words, and told
+  so, it settled on "something ATC can't do". A request the script recognises wins over that now.
+- **A perfect taxi readback was "negative":** a route with a taxiway named like GATE4, read back "gate four", was
+  heard as ending at "gate", and ATC said "negative" and repeated the whole clearance, three times. The copilot's
+  answer to the "negative" came out "Taxi via i, gate4, lb" (its letters lowercased), and was heard as wrong too.
 - **Whisper stays on the graphics card:** the 90 seconds the card has to answer at the start counted the model's
   download and loading too, so a first start, or a slow card, put Whisper on the CPU every time. Only the card's first
   words are timed now. And when the graphics card is chosen and Whisper is on the CPU anyway, the start says why

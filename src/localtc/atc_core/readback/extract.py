@@ -385,6 +385,8 @@ ROUTE_FILLER = ("and", "then", "hold", "holding", "short", "point", "at", "to")
 def taxi_routes(tokens: list[Token], expected: Any = None) -> list[tuple[str, ...]]:
     names = {str(n).lower() for n in expected} if expected else set()
     names |= {n.split()[0] for n in names if " " in n}  # "link 54": "link" is a taxiway's word (Heathrow's links)
+    # "GATE4" said "gate four": its word too, or the route stopped at "gate" (Barajas, a perfect readback "negative").
+    names |= {m[1] for n in names if (m := re.fullmatch(r"([a-z]{2,})\s*\d{1,2}", n))}
     found = [route for start in _find_phrase(tokens, ("via",)) if (route := _route_at(tokens, start, names)[0])]
     if not found and expected is not None:
         # "Taxi runway 27, B, B6, C6, C, C1": read back without "via". With a route to compare against, every

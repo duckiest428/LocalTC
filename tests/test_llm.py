@@ -348,15 +348,38 @@ def test_what_a_small_model_gets_half_right_is_read_the_way_it_meant():
 
 
 def test_bad_answer_is_retried_with_the_problem_named():
-    backend = ScriptedBackend({"tower DP69 holding short zero six left": [
+    said = "tower DP69 we are all set to go at zero six left"  # nothing the grammar reads
+    backend = ScriptedBackend({said: [
         "Sure! The pilot is holding short.",
         {"kind": "request", "intent": "ready_for_departure", "runway": "06L"},
     ]})
-    result = LlmInterpreter(backend).interpret("tower DP69 holding short zero six left", None, DP69)
+    result = LlmInterpreter(backend).interpret(said, None, DP69)
     assert (result.intent, result.values, result.source) == ("ready_for_departure", {"runway": "06L"}, "llm")
     assert [e.outcome for e in result.exchanges] == ["invalid", "used"]
     assert "can't be used: not valid JSON" in backend.requests[1].messages[-1][1]
     assert backend.requests[1].messages[-2] == ("assistant", "Sure! The pilot is holding short.")
+
+
+def test_a_bad_answer_isnt_retried_when_the_grammar_has_the_call():
+    """Told its first answer contradicted the words, the model fell back on "other" (Barajas: "request clearance to Rome
+    as filed" read as a class B request, then "unable"), the second try as long as the first. The grammar's reading is
+    the answer instead."""
+    backend = ScriptedBackend({"tower DP69 holding short zero six left": [
+        "Sure! The pilot is holding short.",
+        {"kind": "request", "intent": "other"},
+    ]})
+    result = LlmInterpreter(backend).interpret("tower DP69 holding short zero six left", None, DP69)
+    assert (result.intent, result.source) == ("ready_for_departure", "grammar")
+    assert [e.outcome for e in result.exchanges] == ["invalid"] and len(backend.requests) == 1
+
+
+def test_the_models_other_after_a_correction_gives_way_to_the_grammars_request():
+    ground = InterpretContext(callsign=Callsign("WZZ6014", telephony="Wizzair", flight_number="6014"), phase="PARKED",
+                              station="Barajas Ground")
+    said = "Ground, Wizzair 6014 Request Taxi. We have information C."
+    backend = ScriptedBackend({said: [{"kind": "request", "intent": "say_again"}, {"kind": "request", "intent": "other"}]})
+    result = LlmInterpreter(backend).interpret(said, None, ground)
+    assert (result.kind, result.intent) == ("request", "ready_to_taxi")  # never "unable, information not available"
 
 
 def test_timeout_uses_the_grammar_and_does_not_retry():
@@ -367,7 +390,7 @@ def test_timeout_uses_the_grammar_and_does_not_retry():
     assert [(e.outcome, e.trigger) for e in result.exchanges] == [("timeout", "")]
 
 
-@pytest.mark.parametrize("mode", ["scripted", "semi", "mostly_llm"])
+@pytest.mark.parametrize("mode", ["scripted", "semi", "mostly_llm", "llm"])
 def test_a_correct_readback_never_waits_for_the_model(mode):
     """The model shares the PC with the sim: a readback the grammar finds correct is the script, read back."""
     backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
@@ -376,9 +399,12 @@ def test_a_correct_readback_never_waits_for_the_model(mode):
     assert result.exchanges == () and backend.requests == []
 
 
-def test_fully_llm_reads_even_a_correct_readback_and_the_grammar_stands_in_when_it_fails():
-    backend = ScriptedBackend({"Runway 06L, cleared for takeoff, DP69": TIMEOUT})
-    result = LlmInterpreter(backend, mode="llm").interpret("Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
+def test_fully_llm_reads_a_readback_the_grammar_isnt_sure_of_and_the_grammar_stands_in_when_it_fails():
+    said = "Runway 06L, cleared for takeoff, DP69"
+    assert LlmInterpreter(ScriptedBackend({said: TIMEOUT}), mode="llm").interpret(said, _takeoff_pending(), DP69).exchanges == ()
+    said = "Runway 06L, cleared for takeoff, and can we do the thing with the bells, DP69"  # riding along: the model reads it
+    backend = ScriptedBackend({said: TIMEOUT})
+    result = LlmInterpreter(backend, mode="llm").interpret(said, _takeoff_pending(), DP69)
     assert (result.kind, result.status, result.source) == ("readback", "correct", "grammar")
     assert [e.outcome for e in result.exchanges] == ["timeout"]
     assert result.fallback.startswith("model gave no usable reading (timeout")
@@ -588,8 +614,10 @@ def test_llm_exchanges_record_the_whole_flight(mode):
     decisions = [o for o in outputs if isinstance(o, AtcDecision)]
     # A call on the old frequency after the handoff was read back is sent on again ("contact departure"), unread.
     reminded = {d.t for d in decisions if d.decision == "common.contact" and d.used == "grammar"}
+    # A readback the grammar finds correct, with nothing odd about it, never waits for the model.
+    correct = {d.t for d in decisions if d.grammar.startswith("readback correct") and not d.trigger}
     if mode == "llm":
-        assert read == {t.t for t in transcripts} - reminded  # every other transmission
+        assert read == {t.t for t in transcripts} - reminded - correct  # every other transmission
     else:
         assert read < {t.t for t in transcripts}  # all but the routine calls the grammar is sure of
     assert len(decisions) == len(transcripts) and all(d.mode == mode for d in decisions)

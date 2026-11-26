@@ -454,13 +454,13 @@ Pick the source in `config/localtc.toml` (`[source] kind = "live" | "replay"`) o
 
 ## Language model (Phase 2)
 
-1. Install [Ollama](https://ollama.com/download) and pull the model: `ollama pull llama3.2:3b`. It runs locally; nothing leaves the machine.
+1. Install [Ollama](https://ollama.com/download) and pull the model: `ollama pull qwen3:1.7b` (before 0.6.1, `llama3.2:3b`). It runs locally; nothing leaves the machine.
 2. `localtc llm check`: is Ollama running, is the model installed, how fast does it answer.
 3. `localtc llm eval`: runs the seeded edge cases (`src/localtc/llm/eval_cases.toml`) against your model and shows what it got right, what it got wrong and how long it took.
 
 Without Ollama, LocalTC logs a warning and runs on the grammar alone, exactly as in Phase 1. `--no-llm` does the same on purpose.
 
-With llama3.2:3b on a CPU the edge cases (54 of them, several from real flights) pass 54/54, at about 2 s per call (median; the p95 is about 4 s including retries). If `llm check` shows slower answers on your machine, raise `[llm] timeout_s` and `budget_s`. Keep `base_url` on `127.0.0.1`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every call.
+With qwen3:1.7b the edge cases (54 of them, several from real flights) take about 0.5 s per call on a graphics card and about 2 s on an idle CPU (llama3.2:3b, the model before it, passed 53 of 54 at 3 s). A CPU the sim is using is several times slower: the model runs on the graphics card unless `[llm] cpu_only` is on. If `llm check` shows slower answers on your machine, raise `[llm] timeout_s` and `budget_s`. Keep `base_url` on `127.0.0.1`: on Windows, `localhost` tries IPv6 first and adds about 2 s to every call.
 
 **The grammar decides, the model only listens.** Every call goes to the grammar first. The model is asked only when the grammar can't place the call confidently among the ones expected right now, and it answers with a small JSON form: the kind of call, the intent, and the values the pilot said. It never talks to the pilot, never issues a clearance and never picks an instruction: the engine (the state machine) acts on the form exactly as on the grammar's reading. "Say again" only comes once the model couldn't make the call out either.
 
@@ -627,7 +627,7 @@ And ATC starts things too (`[atc] unscripted`, on by default):
 
 The copilot answers these too ("looking", "loud and clear").
 
-`localtc llm eval` has 48 cases, including the new requests: all 48 pass with llama3.2:3b, at about 1.2-1.7 s per call.
+`localtc llm eval` had 48 cases then, including the new requests: all 48 passed with llama3.2:3b, at about 1.2-1.7 s per call.
 
 ## Readback strictness
 

@@ -106,7 +106,8 @@ Left/Tail Right"), and the stages from what it describes. The first real push sh
 
 ## The language model
 
-**Without a cloud model, the grammar and nothing else.** With one (`[ground] llm`, gated like the cabin's):
+**Without a cloud model, the grammar and nothing else.** With one (`[ground] llm`, gated like the cabin's; `llm` since 0.6.1,
+and no longer a setting in the app: only `config/localtc.toml` sets another):
 
 | Mode | The model |
 |---|---|

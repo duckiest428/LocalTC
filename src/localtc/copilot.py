@@ -493,7 +493,9 @@ class Copilot(CallWords):
         parts = []
         for element in dict.fromkeys(elements):
             if element in slots:
-                parts.append(self.engine.library.fragment(element, slots).display.capitalize())
+                words = self.engine.library.fragment(element, slots).display
+                # Its first letter up, the rest as written: capitalize() made "via I, GATE4, LB" "via i, gate4, lb".
+                parts.append(words[:1].upper() + words[1:])
         return ", ".join(parts) + f", {self._callsign()}" if parts else None
 
     # --- calls the copilot starts (full mode) ------------------------------------------------------------

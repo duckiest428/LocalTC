@@ -108,6 +108,7 @@ function setState(st) {
     if (st.welcome && !S.welcomed) { S.welcomed = true; Popups.want("welcome"); }
     if (st.whats_new && !S.whatsNew) { S.whatsNew = true; Popups.want("whatsnew"); }
     if (st.account_prompt && !S.accountAsked) { S.accountAsked = true; Popups.want("account"); }
+    if (st.model_move && !S.modelAsked) { S.modelAsked = true; Popups.want("model"); }
     UpdatePopup.update(st.update);
   }
   $("#btn-ptt").classList.toggle("off", !st.voice);
@@ -901,8 +902,8 @@ $("#dlg-language").addEventListener("close", () => {
 
 const Popups = {
   // The order they come in when more than one is due: the setup (a new install), the language (once), the welcome
-  // notes (once), what's new (after an update), the account (after the third flight).
-  ORDER: ["setup", "language", "welcome", "whatsnew", "update", "account"],
+  // notes (once), what's new (after an update), the new language model (once), the account (after the third flight).
+  ORDER: ["setup", "language", "welcome", "whatsnew", "model", "update", "account"],
   wanted: new Set(),
   want(id) { this.wanted.add(id); this.next(); },
   drop(...ids) { ids.forEach((id) => this.wanted.delete(id)); },
@@ -923,10 +924,36 @@ const Popups = {
         $("#dlg-whatsnew").showModal();
       },
       update: () => (UpdatePopup.due() ? UpdatePopup.open() : this.next()),
+      model: () => (S.state?.model_move ? ModelMove.open(S.state.model_move) : this.next()),
       account: () => (S.state?.account_prompt ? $("#dlg-account").showModal() : this.next()),
     })[id]();
   },
 };
+
+/* ---------- The new language model: Qwen3 1.7B for Llama 3.2 3B, asked once (controller.api_model_move) ---------- */
+
+const ModelMove = {
+  open(m) {
+    const fetch = m.download ? ` It's a ${m.new_mb / 1000} GB download, once.` : "";
+    $("#mm-body").innerHTML = `<p>LocalTC now uses ${esc(m.new_label)}: lighter and quicker than ${esc(m.old_label)}, the
+      one it used before, and as good at what pilots say off the script.${fetch}</p>
+      <p>${esc(m.old_label)} is still on this PC (${m.old_gb} GB). Keep it to go back to it in Settings, or remove it.</p>
+      <div class="row welcome-go"><button class="btn primary" value="remove">Use ${esc(m.new_label)}, remove ${esc(m.old_label)}</button>
+        <button class="btn" value="keep">Use ${esc(m.new_label)}, keep ${esc(m.old_label)}</button>
+        <button class="btn" value="old">Stay with ${esc(m.old_label)}</button></div>`;
+    $("#dlg-model").showModal();
+  },
+};
+// Answered, never asked again; closed without an answer, asked again the next time LocalTC starts.
+$("#dlg-model").addEventListener("close", () => {
+  const choice = $("#dlg-model").returnValue;
+  if (!["remove", "keep", "old"].includes(choice)) return;
+  if (S.state) S.state.model_move = null;
+  api("models/move", { choice }).then(() => {
+    toast(choice === "old" ? "Staying with Llama 3.2 3B" : choice === "remove" ? "Qwen3 1.7B it is: Llama 3.2 3B goes once it's in"
+      : "Qwen3 1.7B it is: Llama 3.2 3B kept");
+  }).catch(fail);
+});
 
 /* ---------- The update popup: a new version found, said in a window of its own (Settings > Updates has it too) ---------- */
 
@@ -2048,8 +2075,8 @@ const Settings = {
       <div class="card" id="llm-card" data-section="models">
         <h3>Language models</h3>
         <p class="muted small">How ATC and the copilot understand what you say and word what they say back: the model on this
-          PC, a <a href="#cloud-card" class="jump">cloud model</a> (recommended for quality, below), and how much each of them
-          leans on it.</p>
+          PC, or a <a href="#cloud-card" class="jump">cloud model</a> (recommended for quality, below). LocalTC decides
+          what each call needs: the model reads and words them, and everything it says is checked against the script.</p>
         <p class="sub-h">The model on this PC</p>
         <div class="row"><label>Language model (reads your calls)
           <select id="s-llm"><option value="__off" ${llmCur === "__off" ? "selected" : ""}>Off: grammar only (fastest, strict phrasing)</option>${opt(cat.llm, llmCur)}
@@ -2057,7 +2084,7 @@ const Settings = {
           <span class="hint">${note(cat.llm, st.llm.model)}${m.ollama.running ? "" : " Ollama isn't running."}</span></label>
           <div>${st.llm.enabled ? status("llm") : ""}</div></div>
         <div class="progress" id="p-llm" hidden><div></div></div>
-        <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run it on the CPU only: leaves the graphics card and its memory to the sim. Answers take a little longer (its timeouts are doubled). From the next flight</label>
+        <label class="check-row"><input type="checkbox" id="s-cpu-only" ${st.llm.cpu_only ? "checked" : ""}> Run it on the CPU only: leaves the graphics card and its memory to the sim. Answers take several times longer (its timeouts are doubled). From the next flight</label>
         <div class="row"><label>After a flight, keep the language model loaded for
           <select id="s-keepalive">${["0", "5m", "30m", "1h", "24h"].map((v) => `<option value="${v}" ${st.llm.keep_alive === v ? "selected" : ""}>${{ "0": "Unload it at once", "5m": "5 minutes", "30m": "30 minutes", "1h": "1 hour", "24h": "All day" }[v]}</option>`).join("")}</select>
           <span class="hint">During a flight it always stays loaded: a model that has to load mid-flight misses the call. <span>${esc(m.ollama.loaded || "")}</span></span></label></div>
@@ -2071,16 +2098,6 @@ const Settings = {
           <span class="hint">How long ATC waits for the model before answering without it. Longer is more patient with
             a busy PC (the app shows the controller thinking meanwhile); shorter answers sooner. On the CPU the first two are
             doubled. The app tells you whenever the model runs out of time. From the next flight.</span></div>
-        <div class="row"><label>Script or model
-          <select id="s-llm-mode">${[
-            ["mostly_llm", "Mostly LLM: the model reads and words most calls; the script takes the clearly routine ones (recommended)"],
-            ["llm", "Fully LLM: the model reads and words every call (slowest; the script checks it and steps in when it fails)"],
-            ["semi", "Semi script/LLM: the script for clear routine calls, the model for the rest and for wording off the script"],
-            ["scripted", "Fully scripted: standard phraseology; the model only for a call the script can't read (lightest)"],
-          ].map(([v, t]) => `<option value="${v}" ${st.llm.mode === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">How much ATC leans on the language model, for understanding you and for the words of its replies.
-            Whatever the model says is checked first: a clearance keeps every number and instruction the script decided, and
-            anything that fails the checks is said in the script's words.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-beyond-facts" ${st.llm.beyond_facts ? "checked" : ""}> Let the model answer beyond the sim's data: its answers may use what it knows itself (a runway length, an airport's layout, what's usual), not only what the sim tells it. They can be wrong. It still never gives an instruction, and a clearance is still checked against the script</label>
 
         <p class="sub-h">Copilot</p>
@@ -2091,15 +2108,6 @@ const Settings = {
             <option value="none" ${crewNone ? "selected" : ""}>None: the listed commands and common questions only</option></select>
           <span class="hint">${crewNone ? "" : st.cloud?.enabled ? "The cloud language model is on." : 'The cloud language model is off (<a href="#cloud-card" class="jump">Cloud language model</a>): the copilot uses the model on this PC either way.'}</span></label></div>
         <div ${crewNone ? "hidden" : ""}>
-        <div class="row"><label>How much it leans on it<select id="s-crew-mode">${[
-            ["auto", "Automatic: mostly LLM with the cloud model, fully scripted with the model on this PC"],
-            ["llm", "Fully LLM: the model reads everything you say and words everything it says but the safety calls"],
-            ["mostly_llm", "Mostly LLM: short clear commands straight away; the rest, and its own calls, the model's"],
-            ["semi", "Semi script/LLM: the listed commands from the script; everything else you say to the model"],
-            ["scripted", "Fully scripted: the listed commands and common questions; the model only when nothing else understood"],
-          ].map(([v, t]) => `<option value="${v}" ${(st.crew.mode && st.crew.mode !== "off" ? st.crew.mode : "auto") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-          <span class="hint">As ATC's setting does. A command it reads from your own words that the script didn't read the
-            same is said back for "confirm" first; checklists, callouts and safety calls never wait on the model.</span></label></div>
         <label class="check-row"><input type="checkbox" id="s-crew-beyond" ${st.crew.beyond_facts ? "checked" : ""}> Let it answer beyond what it knows from the sim and ATC: its answers may use what a first officer would know (how a system works, what's usual). They can be wrong. Commands are still read back and checked</label>
         <div class="row llm-timing"><label>Wait for an answer
           <input id="s-crew-timeout" type="number" min="1" max="60" step="0.5" value="${st.crew.timeout_s}"> s</label>
@@ -2204,12 +2212,6 @@ const Settings = {
         <div class="row"><label>Cabin incidents<select id="s-cabin-incidents" title="Occasional problems in the cabin for you to decide on, played by the cabin crew. When they come depends on the flight, and a replay has the same ones.">${[
           ["off", "Off"], ["rare", "Rare"], ["normal", "Normal"], ["frequent", "Frequent"]]
           .map(([v, t]) => `<option value="${v}" ${(st.cabin.incidents || "off") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
-        <div class="row"><label>How they use the language model<select id="s-cabin-llm" ${this.hasCloud(st) ? "" : "disabled"}>${[
-          ["scripted", "Fully scripted: the script's words only"],
-          ["semi", "Semi script/LLM: the model answers only what the script can't"],
-          ["mostly_llm", "Mostly LLM: the model words their answers and longer announcements (recommended)"],
-          ["llm", "Fully LLM: the model words all they say, except the safety announcements"]]
-          .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.cabin.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they use the script's words.</span>
         <span class="hint">Their name and accent follow the airline: on Lufthansa a German crew, on Air France a French one, each announcing in the airline's languages, then in yours (the copilot's language). To you they always talk in yours.</span>
         <div class="row"><label>Your name, for the welcome<input id="s-cabin-captain" value="${esc(st.cabin.captain || "")}" placeholder="Reyes" autocomplete="off" spellcheck="false"></label></div>
@@ -2242,12 +2244,6 @@ const Settings = {
         <div class="row"><label>Without GSX<select id="s-ground-nogsx">${[
           ["standalone", "The sim's own tug and jetway"], ["tell", "Just say there's no GSX"], ["off", "No ground crew"]]
           .map(([v, t]) => `<option value="${v}" ${st.ground.without_gsx === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
-        <div class="row"><label>How they use the language model<select id="s-ground-llm" ${this.hasCloud(st) ? "" : "disabled"}>${[
-          ["scripted", "Fully scripted: only what the grammar understands"],
-          ["semi", "Semi script/LLM: the model reads what the grammar can't"],
-          ["mostly_llm", "Mostly LLM: the model also words their answers (recommended)"],
-          ["llm", "Fully LLM: the model reads and words everything, except the push's safety calls"]]
-          .map(([v, t]) => `<option value="${v}" ${(this.hasCloud(st) ? st.ground.llm : "scripted") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>
         <span class="hint" ${this.hasCloud(st) ? "hidden" : ""}>Needs a cloud language model. Without one, they understand the grammar's phrases only.</span>
         <div class="row"><label>Turnaround schedule<select id="s-turn-mode">${[
           ["off", "Off"], ["advisory", "Times and reminders only"], ["realistic", "Realistic: services keep to their slots"]]
@@ -2494,7 +2490,7 @@ const Settings = {
       if (v === "none") await this.save("crew", "llm", "off");
       else {
         if (crew.llm === "off") await this.save("crew", "llm", "full");
-        if (crew.mode === "off") await this.save("crew", "mode", "auto");
+        if (crew.mode === "off") await this.save("crew", "mode", "llm");
         await this.save("cloud", "copilot", v === "cloud");
       }
       this.render();
@@ -2507,10 +2503,6 @@ const Settings = {
         this.save("crew", key, value);
       });
     on("#s-crew-sex", "change", () => this.save("crew", "voice_sex", val("#s-crew-sex")));
-    on("#s-crew-mode", "change", async () => {
-      const v = val("#s-crew-mode");
-      this.save("crew", "mode", v);
-    });
     on("#s-crew-verbosity", "change", () => this.save("crew", "verbosity", val("#s-crew-verbosity")));
     on("#s-crew-hands", "change", (e) => this.save("crew", "hands", e.target.checked ? "pm" : "calls"));
     on("#s-crew-pick", "change", () => this.save("crew", "voice_pick", Number(val("#s-crew-pick"))));
@@ -2541,9 +2533,7 @@ const Settings = {
     on("#s-ground", "change", (e) => { this.save("ground", "enabled", e.target.checked); $("#ground-opts")?.classList.toggle("off", !e.target.checked); });
     on("#s-ground-verbosity", "change", () => this.save("ground", "verbosity", val("#s-ground-verbosity")));
     on("#s-ground-nogsx", "change", () => this.save("ground", "without_gsx", val("#s-ground-nogsx")));
-    on("#s-ground-llm", "change", () => this.save("ground", "llm", val("#s-ground-llm")));
     on("#s-ground-clearance", "change", (e) => this.save("ground", "wait_for_clearance", e.target.checked));
-    on("#s-cabin-llm", "change", () => this.save("cabin", "llm", val("#s-cabin-llm")));
     on("#s-cabin-incidents", "change", () => this.save("cabin", "incidents", val("#s-cabin-incidents")));
     on("#s-turn-mode", "change", () => this.save("turnaround", "mode", val("#s-turn-mode")));
     on("#s-turn-profile", "change", () => this.save("turnaround", "profile", val("#s-turn-profile")));
@@ -2588,7 +2578,6 @@ const Settings = {
     on("#s-atis-source", "change", () => this.save("atc", "atis_source", val("#s-atis-source")));
     on("#s-phraseology", "change", () => this.save("atc", "phraseology", val("#s-phraseology")));
     on("#s-atc-language", "change", () => this.save("atc", "language", val("#s-atc-language")));
-    on("#s-llm-mode", "change", () => this.save("llm", "mode", val("#s-llm-mode")));
     on("#s-auto-stop", "change", (e) => this.save("session", "auto_stop_at_gate", e.target.checked));
     on("#s-taxi-ribbon", "change", (e) => this.save("atc", "taxi_guide", e.target.checked));
     on("#s-sim-panel", "change", (e) => this.save("ui", "sim_panel", e.target.checked));

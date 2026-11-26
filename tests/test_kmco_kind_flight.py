@@ -336,10 +336,12 @@ def test_a_sliver_of_video_memory_is_still_the_cpu():
     assert Placement(size=2_600_000_000, size_vram=2_600_000_000).gpu
 
 
-def test_the_model_is_on_the_cpu_by_default():
+def test_the_model_takes_the_graphics_card_by_default():
+    """Once the CPU by default (the card left to the sim): with Qwen3 1.7B, 1.6 GB on the card answers in half a second,
+    where a CPU the sim was using took 4 to 12 s a call, two or three calls to each thing the pilot said."""
     from localtc.config import LlmConfig
 
-    assert LlmConfig().cpu_only
+    assert not LlmConfig().cpu_only
 
 
 def test_no_alerts_but_the_ones_that_happened(recorded):

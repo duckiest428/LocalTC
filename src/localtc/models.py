@@ -35,14 +35,18 @@ class ModelOption:
 
 
 LLM_MODELS = (
-    # The one LocalTC is built and tested around (its prompts, examples and checks are tuned to it), and the lighter
-    # one on trial to replace it (LocalTC's cases and pilots' own off-script calls, on a CPU: the 3B 3.3 s a call, 2.5 GB).
-    ModelOption("llama3.2:3b", "Llama 3.2 3B", 2000, "fast", "good",
-                "Gets 53 of LocalTC's 54 edge cases, about 2 s per call on a CPU.", tested=True),
+    # The one LocalTC is built around now, and the one it was before 0.6.1 (its prompts and checks were tuned to it, and it
+    # reads calls a little more surely). Measured on LocalTC's cases and pilots' own off-script calls: Qwen3 1.7B 1.8 GB
+    # and about 30% quicker on a CPU, 0.5 s a call on a graphics card.
     ModelOption("qwen3:1.7b", "Qwen3 1.7B", 1400, "fast", "good",
-                "Lighter and faster than Llama 3.2 3B (1.8 GB of memory, about 30% quicker), on trial to replace it: "
-                "answers off-script calls as well, reads calls a little less surely.", tested=True),
+                "Recommended: light and quick (1.8 GB of memory, about half a second per call on a graphics card). "
+                "Answers off-script calls well; the script checks every reading.", tested=True),
+    ModelOption("llama3.2:3b", "Llama 3.2 3B", 2000, "fast", "good",
+                "LocalTC's model before Qwen3 1.7B: reads calls a little more surely, bigger (2.5 GB) and slower.",
+                tested=True),
 )
+DEFAULT_LLM = LLM_MODELS[0].id
+FORMER_LLM = "llama3.2:3b"  # the default before 0.6.1: a pilot who has it is asked once whether to keep it (``model_move``)
 WHISPER_MODELS = (
     ModelOption("tiny.en", "Tiny", 75, "instant", "basic", "Misses numbers more often."),
     ModelOption("base.en", "Base", 145, "fast", "good", "Recommended without an NVIDIA GPU. About 1 s per call.",
@@ -68,11 +72,11 @@ class Profile:
 
 
 PROFILES = (
-    Profile("light", "Light", "llama3.2:3b", "tiny.en", "en_US-libritts_r-medium",
+    Profile("light", "Light", DEFAULT_LLM, "tiny.en", "en_US-libritts_r-medium",
             "Older or busy computers: the quickest speech recognition, a few more misheard calls."),
-    Profile("balanced", "Balanced", "llama3.2:3b", "base.en", "en_US-libritts_r-medium",
+    Profile("balanced", "Balanced", DEFAULT_LLM, "base.en", "en_US-libritts_r-medium",
             "Most computers: what LocalTC is tested with."),
-    Profile("quality", "Quality", "llama3.2:3b", "small.en", "en_US-libritts_r-medium",
+    Profile("quality", "Quality", DEFAULT_LLM, "small.en", "en_US-libritts_r-medium",
             "An NVIDIA GPU: Whisper hears more accurately at the same speed."),
 )
 
@@ -286,6 +290,18 @@ def install(cfg, kind: str, progress: Progress | None = None) -> bool:
             return True
         return backend.pull(on_progress=lambda text, fraction: say(f"{cfg.llm.model}: {text}", fraction))
     raise ValueError(f"unknown model kind {kind!r}")
+
+
+def model_move(cfg, state) -> dict | None:
+    """What to ask a pilot whose LocalTC moved from Llama 3.2 3B to Qwen3 1.7B, once (``[ui] model_moved``): whether to
+    download the new one (when it isn't there) and whether to keep the old one. None: nothing to ask (asked already, the
+    model chosen isn't the new default, Ollama can't say, or the old one isn't installed)."""
+    if cfg.ui.model_moved or not cfg.llm.enabled or cfg.llm.model != DEFAULT_LLM or not state.reachable             or not state.has(FORMER_LLM):
+        return None
+    new = next(m for m in LLM_MODELS if m.id == DEFAULT_LLM)
+    return {"new": new.id, "new_label": new.label, "new_mb": new.size_mb, "download": not state.has(DEFAULT_LLM),
+            "old": FORMER_LLM, "old_label": "Llama 3.2 3B",
+            "old_gb": round((state.sizes.get(FORMER_LLM) or 2_019_000_000) / 1e9, 1)}
 
 
 def _ollama(cfg):

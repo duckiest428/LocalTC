@@ -51,8 +51,9 @@ def test_each_mode_sends_the_calls_it_should_to_the_model(mode, routine, off_scr
 
 
 @pytest.mark.parametrize("mode", MODES)
-def test_a_correct_readback_goes_to_the_model_only_when_it_reads_every_call(mode):
-    assert asked(mode, "Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69) == (mode == "llm")
+def test_a_correct_readback_never_goes_to_the_model(mode):
+    """Even reading every call: a clearance read back word for word waited 7 s for the model to agree."""
+    assert not asked(mode, "Runway 06L, cleared for takeoff, DP69", _takeoff_pending(), DP69)
 
 
 def test_the_old_settings_are_the_nearest_modes():
@@ -200,7 +201,7 @@ def test_a_reworded_reply_that_changes_the_clearance_is_said_as_the_script_has_i
     [reply] = [o for o in out if isinstance(o, AtcTransmission)]
     assert (reply.text, reply.worded_by) == (f"DP69, {TAXI}.", "template")
     rewords = [e for e in out if isinstance(e, LlmExchange) and e.purpose == "reword"]
-    assert [e.outcome for e in rewords] == ["invalid", "invalid"] and why.split(",")[0] in rewords[0].detail
+    assert [e.outcome for e in rewords] == ["invalid"] and why.split(",")[0] in rewords[0].detail  # one try
     [decision] = [o for o in out if isinstance(o, AtcDecision)]
     assert decision.wording == "template" and "the model's words for ground.taxi_out_at were turned away (invalid" \
         in decision.fallback and "ATC said the same in the script's words" in decision.fallback
@@ -275,18 +276,17 @@ def test_every_pilot_call_gets_a_decision_record_in_the_recording():
 # --- the setting --------------------------------------------------------------------------------------------------------
 
 
-def test_mostly_llm_is_the_default_and_old_settings_carry_over(tmp_path):
+def test_fully_llm_is_the_default_and_localtcs_to_decide(tmp_path):
     empty = tmp_path / "empty.toml"
     empty.write_text("", encoding="utf-8")
-    assert load_config(empty, env={}, settings=None).llm.mode == "mostly_llm"
-    assert load_config(env={}, settings=None).llm.mode == "mostly_llm"  # config/localtc.toml says so too
+    assert load_config(empty, env={}, settings=None).llm.mode == "llm"
+    assert load_config(env={}, settings=None).llm.mode == "llm"  # config/localtc.toml says so too
     config = tmp_path / "localtc.toml"
-    config.write_text('[llm]\nmode = "semi"\n', encoding="utf-8")
+    config.write_text('[llm]\nmode = "semi"\n', encoding="utf-8")  # (working on LocalTC: the config file still can)
     saved = tmp_path / "settings.toml"
-    saved.write_text('[llm]\nunderstanding = "primary"\n', encoding="utf-8")  # "the model reads every call"
-    assert load_config(config, env={}, settings=saved).llm.mode == "llm"  # the pilot's saved choice wins
-    saved.write_text('[llm]\nunderstanding = "fallback"\n', encoding="utf-8")
-    assert load_config(config, env={}, settings=saved).llm.mode == "semi"
+    for old in ('understanding = "primary"', 'understanding = "fallback"', 'mode = "mostly_llm"'):
+        saved.write_text(f"[llm]\n{old}\n", encoding="utf-8")
+        assert load_config(config, env={}, settings=saved).llm.mode == "semi"  # the app's saved choice: dropped
     config.write_text('[llm]\nunderstanding = "off"\n', encoding="utf-8")
     assert load_config(config, env={}, settings=None).llm.mode == "off"
 

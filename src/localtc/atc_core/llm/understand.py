@@ -159,6 +159,7 @@ class Answer:
     topic: str = ""
     values: dict[str, Any] = field(default_factory=dict)  # typed, and every one was said
     guessed: bool = False  # not the model's answer: inferred from the words after its answers failed
+    corrected: bool = False  # its answer only after being told its first contradicted the words
     note: str = ""  # how the checks read it, when not as the model wrote it
 
 
@@ -587,11 +588,14 @@ class LlmInterpreter:
         reason = find_trigger(grammar, text, context.confidence, context=context)
         if not self.asks_model(grammar, text, pending, reason):
             return replace(self._grammar_only(grammar, text, pending, context, reason), grammar_read=reading(grammar))
-        answer, exchanges = self._ask(text, pending, context, reason)
         # The grammar's reading counts when it makes sense here: a check-in heard on the ground isn't one.
         grammar_knows = grammar.kind != "unknown" and not grammar.needs_fallback and (
             grammar.kind == "readback" or is_expected(grammar.intent, context.station_role or role_of(context.station),
                                                       context.phase))
+        # With a reading of its own, the grammar's is the answer when the model's first one contradicts the words: no
+        # second try. Told it was wrong, the model fell back on "other" ("request clearance to Rome as filed" read as a
+        # class B request, then "unable"), and the second try was as long again on a busy PC.
+        answer, exchanges = self._ask(text, pending, context, reason, retry=not grammar_knows)
         # A guess that it's a request ATC can't do ("other": "unable") loses to any request the grammar made out that fits
         # here, sure of it or not ("tail left, actually, can we get a tail right?": the pushback, tail right).
         grammar_guess = grammar.kind == "request" and bool(grammar.intent) and grammar.intent not in (EMERGENCY, "acknowledge") \
@@ -604,7 +608,7 @@ class LlmInterpreter:
         if converted:
             result = self._grammar_only(grammar, text, pending, context, reason)
             fallback = f"the model's reading ({answer.note}) gave way to the grammar's {grammar.intent}"
-        elif answer is not None and answer.guessed and answer.intent == "other" and grammar_guess and not grammar_knows:
+        elif answer is not None and (answer.guessed or answer.corrected) and answer.intent == "other" and grammar_guess                 and not grammar_knows:
             result = replace(grammar, needs_fallback=False)  # the grammar's best reading, unsure as it is, not "unable"
             fallback = "model gave no usable reading; the grammar's reading used, though it wasn't sure"
         elif answer is None or (answer.guessed and grammar_knows):
@@ -626,14 +630,14 @@ class LlmInterpreter:
         enough (``reason``, a trigger)."""
         if self.mode == "off":
             return False
+        # A readback the grammar finds correct is the script read back: nothing for the model to add (unless
+        # something rides along with it: then ``reason`` is "compound"), in any mode. Every call to the model costs
+        # the sim frames (it shares the machine) and seconds of waiting: 7 s for a clearance read back word for word.
+        correct_readback = pending is not None and grammar.kind == "readback" and grammar.status == "correct"
         if self.mode == "llm":
-            return True
+            return not (reason is None and correct_readback)
         if self.mode == "scripted":
             return reason in CANNOT_READ
-        # A readback the grammar finds correct is the script read back: nothing for the model to add (unless
-        # something rides along with it: then ``reason`` is "compound"). Every call to the model costs the sim
-        # frames (it shares the machine) and seconds of waiting.
-        correct_readback = pending is not None and grammar.kind == "readback" and grammar.status == "correct"
         if self.mode == "semi":
             return reason is not None
         # Mostly LLM: the model, unless the grammar is sure this is a routine call.
@@ -645,7 +649,7 @@ class LlmInterpreter:
     # -- asking ---------------------------------------------------------------------------------------
 
     def _ask(self, text: str, pending: PendingReadback | None, context: InterpretContext,
-             reason: str | None) -> tuple[Answer | None, list[LlmExchange]]:
+             reason: str | None, *, retry: bool = True) -> tuple[Answer | None, list[LlmExchange]]:
         assert self.backend is not None
         tokens = without_callsign(normalize(text), context.callsign)  # its digits are not values
         # Asked something, and nothing done: "how long is runway 24R?" (never "can we get 24R?").
@@ -682,13 +686,15 @@ class LlmInterpreter:
             except AnswerError as exc:
                 intent_errors += isinstance(exc, IntentError)
                 record("invalid", str(exc))
+                if not retry:
+                    break
                 request = replace(request, messages=(
                     *request.messages, ("assistant", reply.text),
                     ("user", f"That answer can't be used: {exc}. Reply with the corrected JSON only."),
                 ))
                 continue
             record("used", answer.note)
-            return answer, exchanges
+            return (replace(answer, corrected=True) if attempt > 1 else answer), exchanges
         words = {t.text for t in tokens}
         if exchanges and (topic := question_topic(text)) is not None:
             return Answer(kind="question", topic=topic, guessed=True), exchanges  # "say the winds": clear enough

@@ -82,7 +82,7 @@ class OllamaStatus:
 
 @dataclass
 class OllamaBackend:
-    model: str = "llama3.2:3b"
+    model: str = "qwen3:1.7b"
     base_url: str = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first and costs ~2 s a call
     keep_alive: str = "1h"  # keep the model loaded between transmissions
     num_ctx: int = 3072
@@ -274,6 +274,22 @@ class OllamaBackend:
             report(f"failed: {exc}")
             return False
         return self.status().has(self.model)
+
+    def delete(self, model: str, timeout_s: float = 30.0) -> bool:
+        """Remove ``model`` from Ollama (``ollama rm``), freeing its disk space. True when it's gone."""
+        req = urllib.request.Request(self.base_url.rstrip("/") + "/api/delete", data=json.dumps({"model": model}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="DELETE")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s):
+                pass
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:  # (not there: gone already)
+                log.warning("Couldn't remove %s from Ollama: HTTP %s", model, exc.code)
+                return False
+        except (urllib.error.URLError, OSError) as exc:
+            log.warning("Couldn't remove %s from Ollama: %s", model, getattr(exc, "reason", exc))
+            return False
+        return not self.status().has(model)
 
     def _post(self, path: str, body: dict, timeout_s: float) -> dict:
         req = urllib.request.Request(self.base_url.rstrip("/") + path, data=json.dumps(body).encode(),

@@ -67,7 +67,7 @@ def test_chat_request_and_answer(server):
     reply = backend.complete(request(), timeout_s=5)
     assert reply.text == server["answer"] and reply.error == "" and reply.latency_ms > 0
     path, body = server["requests"][0]
-    assert path == "/api/chat" and body["model"] == "llama3.2:3b" and body["stream"] is False
+    assert path == "/api/chat" and body["model"] == "qwen3:1.7b" and body["stream"] is False
     assert body["format"] == request().schema  # the answer is forced into the form
     assert body["options"]["temperature"] == 0 and body["options"]["seed"] == 0
     # The rules and the examples in one system message, the same on every call; then the moment.
@@ -143,7 +143,7 @@ def test_a_call_that_found_the_model_unloaded_says_so(server, caplog):
 def test_where_the_model_is_loaded(server):
     backend = OllamaBackend(base_url=server["url"])
     assert backend.placement() is None
-    server["ps"] = [{"name": "llama3.2:3b", "size": 2_550_000_000, "size_vram": 2_550_000_000, "context_length": 4096}]
+    server["ps"] = [{"name": "qwen3:1.7b", "size": 2_550_000_000, "size_vram": 2_550_000_000, "context_length": 4096}]
     assert "all on the graphics card" in backend.placement().describe()
     server["ps"][0]["size_vram"] = 0
     assert backend.placement().describe().endswith("on the CPU")
@@ -158,7 +158,7 @@ def test_kept_warm_through_the_flight_then_left_as_the_pilot_says(server):
     backend.stop_keeping("0")
     pings = [b for p, b in server["requests"] if p == "/api/generate" and "prompt" not in b and b["keep_alive"] == "30m"]
     assert pings and pings[0]["options"]["num_gpu"] == 0  # loads it where it belongs, if it had gone
-    assert server["requests"][-1] == ("/api/generate", {"model": "llama3.2:3b", "keep_alive": 0})  # "0": unloaded now
+    assert server["requests"][-1] == ("/api/generate", {"model": "qwen3:1.7b", "keep_alive": 0})  # "0": unloaded now
     count = len(server["requests"])
     time.sleep(0.15)
     assert len(server["requests"]) == count  # stopped

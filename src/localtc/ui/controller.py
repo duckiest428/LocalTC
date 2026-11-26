@@ -148,6 +148,7 @@ class AppController:
         self.online_view: dict = {}  # the online network's controllers, for the ATC tab (``_online``)
         self._network_shown = False  # the network's pilots are on the Live Map (``_network_traffic``)
         self.account_prompt = False
+        self.model_move: dict | None = None  # the new language model to ask about, once (models.model_move)
         self._notes: str | None = None  # this version's CHANGELOG section, read once for "what's new"
         self.traffic_control: dict | None = None  # EXPERIMENTAL traffic control's last status  # show the one-time account suggestion (after the third flight)
         self._task: asyncio.Task | None = None
@@ -205,6 +206,7 @@ class AppController:
             (post, "radio/copilot"): self.api_copilot,
             (post, "radio/mute"): self.api_mute,
             (post, "account/prompt"): self.api_account_prompt,
+            (post, "models/move"): self.api_model_move,
             (get, "settings"): self.api_settings,
             (post, "settings"): self.api_save_settings,
             (get, "models"): self.api_models,
@@ -246,6 +248,7 @@ class AppController:
         loop.create_task(self._companion_on())
         loop.call_later(3.0, lambda: asyncio.ensure_future(self.pilot.recover(self._recording_now())))
         loop.call_later(4.0, lambda: asyncio.ensure_future(self.pilot.refresh_sharing()))  # Live Flights' choices
+        loop.call_later(2.0, lambda: asyncio.ensure_future(self._ask_model_move()))
         self._discord_task = loop.create_task(self._discord_loop())
         if self.cfg.ui.updates != "off":
             loop.call_later(5.0, lambda: asyncio.ensure_future(self.updates.check()))  # after the window is up
@@ -396,6 +399,7 @@ class AppController:
             "version": __version__, "update": self.updates.view(), "update_skipped": self.cfg.ui.update_skipped,
             "coffee_clicked": self.cfg.ui.coffee_clicked,
             "account_prompt": self.account_prompt, "traffic_control": self.traffic_control,
+            "model_move": self.model_move,
             "welcome": not self.cfg.ui.welcome_seen,
             # A new install: the setup guide (in place of the welcome notes, which it holds). Never on an install
             # that has seen the welcome already.
@@ -435,6 +439,55 @@ class AppController:
             await asyncio.to_thread(save_settings, self.cfg, base=load_config(self.config_path, settings=None))
         except Exception as exc:  # noqa: BLE001 - a count not saved never spoils the end of a flight
             log.info("Couldn't save the flight count: %s", exc)
+
+    async def _ask_model_move(self) -> None:
+        """LocalTC's language model is Qwen3 1.7B now: a pilot who has Llama 3.2 3B (the one before) is asked, once,
+        whether to download the new one and whether to keep the old (models.model_move)."""
+        try:
+            state = await asyncio.to_thread(lambda: models._ollama(self.cfg).status())
+            self.model_move = models.model_move(self.cfg, state)
+        except Exception as exc:  # noqa: BLE001 - a question not asked spoils nothing
+            log.info("Couldn't check the language models: %s", exc)
+            return
+        if self.model_move is not None:
+            self._push_state()
+
+    async def api_model_move(self, args: dict) -> dict:
+        """The answer to ``model_move``: "remove" (Qwen3 1.7B, and Llama 3.2 3B removed once Qwen is in), "keep"
+        (Qwen3 1.7B, Llama 3.2 3B kept and still in the list) or "old" (staying with Llama 3.2 3B). Asked once,
+        whatever the answer."""
+        choice = str(args.get("choice") or "")
+        if choice not in ("remove", "keep", "old"):
+            raise HttpError(400, f"unknown choice {choice!r}")
+        move, self.model_move = self.model_move or models.model_move(self.cfg, await asyncio.to_thread(
+            lambda: models._ollama(self.cfg).status())), None
+        self.cfg.ui.model_moved = True
+        if choice == "old":
+            self.cfg.llm.model = models.FORMER_LLM
+        await asyncio.to_thread(save_settings, self.cfg, base=load_config(self.config_path, settings=None))
+        if choice != "old" and move is not None:
+            asyncio.create_task(self._move_model(move, remove=choice == "remove"))
+        self._push_state()
+        return {"model": self.cfg.llm.model}
+
+    async def _move_model(self, move: dict, *, remove: bool) -> None:
+        """The new model downloaded if it isn't there, then the old one removed if asked: never before the new one is
+        in, so a failed download leaves the pilot a model to fly with."""
+        if move.get("download"):
+            if self.jobs.get("llm", {}).get("state") != "running":
+                self.jobs["llm"] = {"state": "running", "message": "Starting ...", "fraction": None}
+                self.publish("jobs", self.jobs)
+                await self._install("llm")
+            if self.jobs.get("llm", {}).get("state") != "done":
+                self.system(f"{move['new_label']} didn't download: Quick Settings > Models has it to try again"
+                            + (f", and {move['old_label']} is still there" if remove else ""), "warn")
+                return
+        if remove:
+            from localtc.llm import OllamaBackend
+
+            gone = await asyncio.to_thread(OllamaBackend(base_url=self.cfg.llm.base_url).delete, move["old"])
+            self.system(f"{move['old_label']} removed ({move['old_gb']} GB freed)" if gone
+                        else f"Couldn't remove {move['old_label']}: Ollama still has it", "info" if gone else "warn")
 
     async def api_account_prompt(self, args: dict) -> dict:
         """The account suggestion answered (either way): not shown again."""

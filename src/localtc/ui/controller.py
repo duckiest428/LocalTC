@@ -775,9 +775,9 @@ class AppController:
     def _en_route(self, engine, snap) -> dict | None:
         """Between the departure's area and the destination's, the flight's status where the airport box is: the
         destination's frequencies came up at cruise, hours before they were any use. None near either airport."""
-        from localtc.atc_core.airlines import TELEPHONY
+        from localtc.atc_core.airlines import TELEPHONY, known
         from localtc.atc_core.phraseology import speech
-        from localtc.ops.airline_codes import IATA_TO_ICAO
+        from localtc.ops.airline_codes import iata_for
         from localtc.sim_api.geo import haversine_nm
 
         own = engine.state.aircraft
@@ -792,7 +792,7 @@ class AppController:
             if origin is not None else to_go
         callsign = snap.callsign or ""
         code = callsign[:3].upper() if len(callsign) > 3 and callsign[:3].isalpha() and callsign[3:4].isdigit() else ""
-        iata = next((k for k, v in IATA_TO_ICAO.items() if v == code), "") if code else ""
+        iata = iata_for(code) if code else ""
         number = callsign[3:] if code else ""
         kind = getattr(engine.state.flight, "aircraft_type", None) or ""
         gs = max(own.gs_kt, 1.0)
@@ -803,7 +803,8 @@ class AppController:
         name = lambda g: (self.airports.get(g.airport.icao).name if self.airports.get(g.airport.icao) else g.airport.name)  # noqa: E731
         return {
             "airline": TELEPHONY.get(code, "") if code else "", "airline_icao": code, "iata": iata,
-            "logo": f"/api/logo?iata={iata}" if iata else "",  # (through the app: the page clears its white)
+            # (Through the app, so the page can clear its white; a defunct airline's from Wikimedia Commons.)
+            "logo": f"/api/logo?icao={code}" if code and (iata or getattr(known(code), "logo", "")) else "",
             "flight": f"{iata or code} {number}".strip() if code else callsign, "callsign": callsign,
             "aircraft": speech.aircraft_type(kind)[0] or kind, "type": kind,
             "origin": snap.origin, "origin_name": name(origin) if origin is not None else "",
@@ -906,25 +907,48 @@ class AppController:
         return False
 
     async def api_logo(self, args: dict) -> Raw:
-        """An airline's logo (pics.avs.io's PNG by its IATA code), passed through, so the page can clear the white round
-        it (a picture from another site can't be read). Kept for the session."""
+        """An airline's logo, passed through, so the page can clear the white round it (a picture from another site
+        can't be read): by its ICAO code (``icao``), pics.avs.io's PNG by the two letters it flies under today, else
+        its logo on Wikimedia Commons (a defunct airline's: its two letters are another's now); by ``iata``, pics.avs.io's.
+        Kept for the session."""
         import re
+        import urllib.parse
         import urllib.request
 
-        iata = str(args.get("iata", "")).upper()
-        if not re.fullmatch(r"[A-Z0-9]{2}", iata):
-            raise HttpError(404, "No such airline code.")
+        from localtc.atc_core.airlines import known
+        from localtc.ops.airline_codes import iata_for
+
+        icao = str(args.get("icao", "")).upper()
+        iata = str(args.get("iata", "")).upper() if not icao else iata_for(icao) if re.fullmatch(r"[A-Z]{3}", icao) else ""
+        airline = known(icao) if re.fullmatch(r"[A-Z]{3}", icao) else None
+        commons = airline.logo if airline is not None else ""
+        if not re.fullmatch(r"[A-Z0-9]{2}", iata) and not commons:
+            raise HttpError(404, "No logo for that airline.")
+        key = icao or iata
         cache = self.__dict__.setdefault("_logos", {})
-        if iata not in cache:
-            def fetch() -> bytes:
-                req = urllib.request.Request(f"https://pics.avs.io/200/60/{iata}.png", headers={"User-Agent": "LocalTC"})
-                with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 - a fixed https host
-                    return r.read(500_000)
-            try:
-                cache[iata] = await asyncio.to_thread(fetch)
-            except Exception as exc:  # noqa: BLE001 - no logo, no harm: the badge shows instead
-                raise HttpError(404, f"No logo: {exc}") from exc
-        return Raw("image/png", cache[iata])
+        if key not in cache:
+            def fetch(url: str) -> tuple[str, bytes]:
+                req = urllib.request.Request(url, headers={"User-Agent": "LocalTC (flight simulator ATC; airline logos)"})
+                with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 - fixed https hosts
+                    return r.headers.get_content_type(), r.read(800_000)
+
+            urls = [f"https://pics.avs.io/200/60/{iata}.png"] if re.fullmatch(r"[A-Z0-9]{2}", iata) else []
+            if commons:
+                urls.append(f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(commons)}?width=240")
+            error: Exception | None = None
+            for url in urls:
+                try:
+                    kind, body = await asyncio.to_thread(fetch, url)
+                except Exception as exc:  # noqa: BLE001 - the next, or no logo: the badge shows instead
+                    error = exc
+                    continue
+                if kind.startswith("image/"):
+                    cache[key] = (kind, body)
+                    break
+            if key not in cache:
+                raise HttpError(404, f"No logo: {error}")
+        kind, body = cache[key]
+        return Raw(kind, body)
 
     async def api_clip(self, args: dict) -> Raw:
         """A kept transmission's audio (8 kHz WAV), by its radio line's ``audio`` id."""
@@ -1750,13 +1774,14 @@ def online_network(cfg: Config) -> str:
 
 
 def airline_iata(callsign: str | None) -> str | None:
-    """The airline's IATA code from an ICAO callsign ("FFT38" -> "F9"), for its logo; None for anything else."""
-    from localtc.ops.airline_codes import IATA_TO_ICAO
+    """The airline's IATA code from an ICAO callsign ("FFT38" -> "F9"), for its logo; None for anything else (a defunct
+    airline's two letters are another's now)."""
+    from localtc.ops.airline_codes import iata_for
 
     cs = (callsign or "").upper()
     if len(cs) < 4 or not cs[:3].isalpha() or not cs[3].isdigit():
         return None
-    return next((k for k, v in IATA_TO_ICAO.items() if v == cs[:3]), None)
+    return iata_for(cs[:3]) or None
 
 
 def own_view(ev: OwnshipState) -> dict:

@@ -104,7 +104,7 @@ def test_an_airline_code_is_read_as_the_airline():
 
 def test_a_registration_is_still_a_registration():
     assert not Callsign.named("N172LT").is_airline
-    assert not Callsign.named("XYZ99").is_airline  # a code nobody knows keeps its letters
+    assert not Callsign.named("QXZ99").is_airline  # a code nobody has keeps its letters
 
 
 def test_the_flight_is_called_air_canada(replay):

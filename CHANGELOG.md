@@ -21,6 +21,20 @@ a new minor version adds features, a patch fixes them.
   leaves you a model to fly with), download it and keep Llama 3.2 3B (still in Quick Settings → Language models), or
   stay with Llama 3.2 3B. Models that think before answering (Qwen3) are told not to: it cost seconds on every call.
   In all ten languages.
+- **Every airline in the world, flying today or gone:** about 5,900 ICAO airline codes, up from 250, each with its
+  radio callsign, so a flight plan's callsign is said the way ATC says it ("PAA123" is "Clipper 123", "NWA44"
+  "Northwest 44", "TRS801" "Citrus 801") and another flight calling with one is heard as another flight. A code given
+  again goes to the airline flying with it today. Callsigns that are also words said on the radio ("Speed", "Line")
+  or a light aircraft's name ("Baron", "Citation") are left out, so a readback isn't taken for another flight calling.
+- **The cabin crew know every airline:** about 150 more by hand with their loyalty programmes and alliances (Gulf
+  Air's Falconflyer, Royal Jordanian's Royal Club, Scoot's KrisFlyer, Cebu Pacific's Go Rewards, Allegiant's Allways
+  Rewards…), and the airlines of retro liveries as they were (Pan Am's WorldPass, TWA's Aviators, Continental's
+  OnePass, Northwest's WorldPerks, Alitalia's MilleMiglia, Air Berlin's topbonus, Varig's Smiles, Malév's Duna Club,
+  Ansett's Global Rewards…). Any other airline is welcomed aboard by its name, with crews from its country speaking its
+  language where LocalTC's voices do. An airline they didn't know used to be announced by its three-letter code.
+- **Logos for far more airlines, and for gone ones:** the en-route card's logo for any airline flying today with a
+  two-letter code, and for about 800 more, defunct ones among them, from Wikimedia Commons. A defunct airline never
+  shows the logo of whoever has its two letters now (Pan Am's "PA" is airblue's).
 
 ### Changed
 - **No more "how much it leans on it":** the four settings for how much ATC, the copilot, the cabin crew and the ground
@@ -37,6 +51,11 @@ a new minor version adds features, a patch fixes them.
   of your call contradicts your words and the script has one that fits, the script's is used, not a second try.
 
 ### Fixed
+- **Airline callsigns that were wrong:** Air Malta (AMC) was called "Afrigiya" (Afriqiyah's is AAW), Tunisair was
+  under another airline's code (it's TAR), Batik Air was "Bektas", STARLUX "Starjet" (it's "Starwalker"), Scoot "Go
+  Cat" (Tigerair's, before Scoot took its code: "Scooter"), AirAsia "Asian Express" (it's "Red Cap"), Thai AirAsia
+  "Red Phoenix" ("Thai Asia"), Transaero "Transo" ("Transoviet"), BA Euroflyer "Rednose" ("Griffin"), and Norwegian's
+  NAX and NSZ had each other's ("Norshuttle", "Rednose"). Sunwing was under West Atlantic Sweden's code (SWN; it's SWG).
 - **"Unable, information not available" to a routine request:** "request clearance to Rome as filed" and "request
   taxi, we have information C" were both answered "unable": the model's first reading didn't fit the words, and told
   so, it settled on "something ATC can't do". A request the script recognises wins over that now.

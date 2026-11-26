@@ -18,3 +18,20 @@ IATA_TO_ICAO = {
     "OO": "SKW", "9E": "EDV", "YX": "RPA", "MQ": "ENY", "OH": "JIA", "YV": "ASH", "ZW": "AWI", "PT": "PDT",
     "QX": "QXE", "C5": "UCA", "G7": "GJS", "CP": "CPZ", "MW": "MUA",
 }
+
+
+def iata_for(icao: str) -> str:
+    """The IATA code the airline flying under ``icao`` has today, for its logo ("FFT" -> "F9"): the table's, else the
+    world list's when no other airline flying today has it. "" for a defunct airline (its two letters went to
+    another, whose logo it isn't) or one with none."""
+    from localtc.atc_core.airlines import known, world
+
+    code = icao.strip().upper()
+    for iata, holder in IATA_TO_ICAO.items():
+        if holder == code:
+            return iata
+    k = known(code)
+    if k is None or k.defunct or not k.iata or k.iata in IATA_TO_ICAO:
+        return ""
+    others = [c for c, rows in world().items() if c != code and rows[0].iata == k.iata and not rows[0].defunct]
+    return "" if others else k.iata

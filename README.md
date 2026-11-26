@@ -861,6 +861,10 @@ Real gate names are © OpenStreetMap contributors, available under the Open Data
 The cabin's boarding music is "Airport Lounge", "Lobby Time", "Local Forecast - Elevator", "Bossa Antigua", "Smooth
 Lovin" and "Easy Lemon" by Kevin MacLeod (incompetech.com), licensed under Creative Commons: By Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/); its chime is "Airplane Chime Sound Effect"
 by Sharelk (CC0, Wikimedia Commons). The Live Map's airports are OurAirports' (public domain).
+The world's airlines (their ICAO and IATA codes, callsigns, names and countries,
+[`src/localtc/atc_core/airlines.tsv.gz`](tools/make_airlines.py)) are from Wikipedia's "List of airline codes", CC BY-SA
+4.0; which logo is an airline's is Wikidata's (CC0), and a logo shown for an airline no logo service has is fetched from
+Wikimedia Commons under that file's own licence.
 
 
 _Shamelessly vibecoded_

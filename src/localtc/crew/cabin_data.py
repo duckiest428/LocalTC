@@ -2,13 +2,17 @@
 programme and alliance, the languages it announces in, whether drinks are free), the crew's names where the airline is
 from, the aircraft's doors, and the destination (its city, from Natural Earth's places, and a word about it).
 
-An airline that isn't here is announced by the name ATC calls it, in its country's English; a flight that isn't an
+An airline that isn't here is any other of the world's (atc_core/airlines.tsv.gz, flying today or gone): announced by
+its name, its crews from its country, in its country's language where LocalTC's voices speak it. A flight that isn't an
 airline's (a private jet, a Cessna) has no cabin crew at all.
 """
 
+import re
 import zlib
 from dataclasses import dataclass
 
+from localtc.atc_core.airlines import known
+from localtc.atc_core.region import accent
 from localtc.crew.places import places
 from localtc.sim_api.geo import haversine_nm
 
@@ -127,6 +131,113 @@ AIRLINES: dict[str, Airline] = {
     "AZU": Airline("Azul", "SB", "TudoAzul", languages=("pt", "en")),
     "AVA": Airline("Avianca", "SK", "lifemiles", STAR, ("es", "en")),
     "ARG": Airline("Aerolíneas Argentinas", "SA", "Aerolíneas Plus", SKYTEAM, ("es", "en")),
+    # More of today's: the Americas
+    "AAY": Airline("Allegiant", "K", "Allways Rewards", low_cost=True),
+    "MXY": Airline("Breeze Airways", "K", "BreezePoints"), "VXP": Airline("Avelo Airlines", "K", low_cost=True),
+    "FLE": Airline("Flair Airlines", "C", languages=("en", "fr"), low_cost=True),
+    "SWG": Airline("Sunwing", "C", languages=("en", "fr")),
+    "LPE": Airline("LATAM", "SP", "LATAM Pass", languages=("es", "en")),
+    "JAT": Airline("JetSMART", "SC", languages=("es", "en"), low_cost=True),
+    "SKU": Airline("SKY Airline", "SC", languages=("es", "en"), low_cost=True),
+    "DWI": Airline("Arajet", "MD", languages=("es", "en"), low_cost=True),
+    "BOV": Airline("Boliviana de Aviación", "SL", languages=("es", "en")),
+    "BWA": Airline("Caribbean Airlines", "TT", "Caribbean Miles"),
+    "CAY": Airline("Cayman Airways", "MW", "Sir Turtle Rewards"), "BHS": Airline("Bahamasair", "MY"),
+    # Europe
+    "EXS": Airline("Jet2", "EG", low_cost=True), "TOM": Airline("TUI", "EG", low_cost=True),
+    "LOG": Airline("Loganair", "EG", "Clan Loganair"),
+    "EFW": Airline("British Airways", "EG", "British Airways Club", ONEWORLD),
+    "BCY": Airline("CityJet", "EI"), "WIF": Airline("Widerøe", "EN"),
+    "BTI": Airline("airBaltic", "EV", "airBaltic Club"),
+    "CTN": Airline("Croatia Airlines", "LD", "Miles & More", STAR),
+    "ROT": Airline("TAROM", "LR", "Flying Blue", SKYTEAM), "LZB": Airline("Bulgaria Air", "LB"),
+    "ASL": Airline("Air Serbia", "LY"), "LGL": Airline("Luxair", "EL", languages=("fr", "en")),
+    "DLA": Airline("Air Dolomiti", "LI", "Miles & More", languages=("it", "en")),
+    "OAW": Airline("Helvetic Airways", "LS", languages=("de", "en")),
+    "EDW": Airline("Edelweiss", "LS", "Miles & More", languages=("de", "en")),
+    "OAL": Airline("Olympic Air", "LG", "Miles+Bonus"),
+    "SXS": Airline("SunExpress", "LT", low_cost=True),
+    "AHY": Airline("Azerbaijan Airlines", "UB"), "KZR": Airline("Air Astana", "UA", "Nomad Club"),
+    "BRU": Airline("Belavia", "UM", languages=("ru", "en")),
+    "AUI": Airline("Ukraine International Airlines", "UK", "Panorama Club"),
+    "SDM": Airline("Rossiya", "U", "Aeroflot Bonus", languages=("ru", "en")),
+    "SVR": Airline("Ural Airlines", "U", languages=("ru", "en")), "UTA": Airline("UTair", "U", languages=("ru", "en")),
+    "ISR": Airline("Israir", "LL"),
+    # The Middle East and Africa
+    "GFA": Airline("Gulf Air", "OB", "Falconflyer"), "OMA": Airline("Oman Air", "OO", "Sindbad"),
+    "RJA": Airline("Royal Jordanian", "OJ", "Royal Club", ONEWORLD),
+    "MEA": Airline("Middle East Airlines", "OL", "Cedar Miles", SKYTEAM, ("en", "fr")),
+    "KAC": Airline("Kuwait Airways", "OK", "Oasis Club"), "JZR": Airline("Jazeera Airways", "OK", low_cost=True),
+    "KNE": Airline("flynas", "OE", "nasmiles", low_cost=True), "FAD": Airline("flyadeal", "OE", low_cost=True),
+    "RXI": Airline("Riyadh Air", "OE"), "ABY": Airline("Air Arabia", "OM", "Air Rewards", low_cost=True),
+    "IRA": Airline("Iran Air", "OI"), "IRM": Airline("Mahan Air", "OI"), "IAW": Airline("Iraqi Airways", "OR"),
+    "SYR": Airline("Syrian Air", "OS"),
+    "MAU": Airline("Air Mauritius", "FI", "Kestrel Flyer"), "RWD": Airline("RwandAir", "HR", "Dream Miles"),
+    "DAH": Airline("Air Algérie", "DA", languages=("fr", "en")),
+    "TAR": Airline("Tunisair", "DT", "Fidelys", languages=("fr", "en")),
+    "AZW": Airline("Air Zimbabwe", "FV"), "ATC": Airline("Air Tanzania", "HT"), "UGD": Airline("Uganda Airlines", "HU"),
+    "VRE": Airline("Air Côte d'Ivoire", "DI", languages=("fr", "en")),
+    "SZN": Airline("Air Senegal", "GO", languages=("fr", "en")),
+    "DTA": Airline("TAAG Angola Airlines", "FN", languages=("pt", "en")),
+    # Asia and the Pacific
+    "CHH": Airline("Hainan Airlines", "Z", "Fortune Wings Club", languages=("zh", "en")),
+    "CSC": Airline("Sichuan Airlines", "Z", "Golden Panda", languages=("zh", "en")),
+    "CXA": Airline("Xiamen Airlines", "Z", "Egret Club", SKYTEAM, ("zh", "en")),
+    "CSZ": Airline("Shenzhen Airlines", "Z", "PhoenixMiles", STAR, ("zh", "en")),
+    "CSH": Airline("Shanghai Airlines", "Z", "Eastern Miles", languages=("zh", "en")),
+    "DKH": Airline("Juneyao Air", "Z", languages=("zh", "en")),
+    "CQH": Airline("Spring Airlines", "Z", languages=("zh", "en"), low_cost=True),
+    "CRK": Airline("Hong Kong Airlines", "VH", "Fortune Wings Club"), "HKE": Airline("HK Express", "VH", low_cost=True),
+    "AMU": Airline("Air Macau", "VM", languages=("zh", "en")),
+    "SJX": Airline("STARLUX", "RC", "COSMILE", languages=("zh", "en")),
+    "TTW": Airline("Tigerair Taiwan", "RC", languages=("zh", "en"), low_cost=True),
+    "APJ": Airline("Peach", "RJ", low_cost=True), "TZP": Airline("ZIPAIR", "RJ", low_cost=True),
+    "JJP": Airline("Jetstar Japan", "RJ", low_cost=True), "SKY": Airline("Skymark", "RJ"),
+    "ADO": Airline("AIRDO", "RJ"), "SFJ": Airline("StarFlyer", "RJ"),
+    "CEB": Airline("Cebu Pacific", "RP", "Go Rewards", low_cost=True),
+    "TGW": Airline("Scoot", "WS", "KrisFlyer", low_cost=True),
+    "BKP": Airline("Bangkok Airways", "VT", "FlyerBonus"),
+    "AIQ": Airline("Thai AirAsia", "VT", low_cost=True), "NOK": Airline("Nok Air", "VT", low_cost=True),
+    "VJC": Airline("Vietjet", "VV", low_cost=True), "BAV": Airline("Bamboo Airways", "VV"),
+    "LNI": Airline("Lion Air", "WI", low_cost=True), "BTK": Airline("Batik Air", "WI"),
+    "CTV": Airline("Citilink", "WI", low_cost=True),
+    "AXB": Airline("Air India Express", "VI", low_cost=True), "AKJ": Airline("Akasa Air", "VI", low_cost=True),
+    "SEJ": Airline("SpiceJet", "VI", "SpiceClub", low_cost=True),
+    "ALK": Airline("SriLankan Airlines", "VC", "FlySmiLes", ONEWORLD),
+    "PIA": Airline("Pakistan International Airlines", "OP"), "BBC": Airline("Biman Bangladesh Airlines", "VG"),
+    "UBG": Airline("US-Bangla Airlines", "VG"), "RNA": Airline("Nepal Airlines", "VN"), "DRK": Airline("Drukair", "VQ"),
+    "MGL": Airline("MIAT Mongolian Airlines", "ZM"),
+    "ANG": Airline("Air Niugini", "AY"), "FJI": Airline("Fiji Airways", "NF"), "RXA": Airline("Rex", "Y"),
+    "THT": Airline("Air Tahiti Nui", "NT", languages=("fr", "en")),
+    "ACI": Airline("Aircalin", "NW", languages=("fr", "en")),
+    # Gone: flown in a retro livery, announced as they were, with the programme and alliance they had at the end
+    "PAA": Airline("Pan Am", "K", "WorldPass"), "TWA": Airline("TWA", "K", "Aviators"),
+    "COA": Airline("Continental Airlines", "K", "OnePass", STAR),
+    "NWA": Airline("Northwest Airlines", "K", "WorldPerks", SKYTEAM),
+    "AWE": Airline("US Airways", "K", "Dividend Miles", STAR), "EAL": Airline("Eastern Air Lines", "K"),
+    "BNF": Airline("Braniff", "K"), "TRS": Airline("AirTran Airways", "K", "A+ Rewards"),
+    "VRD": Airline("Virgin America", "K", "Elevate"), "MEP": Airline("Midwest Airlines", "K", "Midwest Miles"),
+    "AAH": Airline("Aloha Airlines", "PH", "AlohaPass"), "AMT": Airline("ATA Airlines", "K"),
+    "CDN": Airline("Canadian Airlines", "C", "Canadian Plus", ONEWORLD, ("en", "fr")),
+    "WSW": Airline("Swoop", "C", languages=("en", "fr"), low_cost=True),
+    "MXA": Airline("Mexicana", "MM", "Mexicana Frecuenta", ONEWORLD, ("es", "en")),
+    "AIJ": Airline("Interjet", "MM", languages=("es", "en"), low_cost=True),
+    "VRG": Airline("Varig", "SB", "Smiles", STAR, ("pt", "en")),
+    "AZA": Airline("Alitalia", "LI", "MilleMiglia", SKYTEAM, ("it", "en")),
+    "BER": Airline("Air Berlin", "ED", "topbonus", ONEWORLD, ("de", "en")),
+    "LTU": Airline("LTU", "ED", languages=("de", "en")), "GMI": Airline("Germania", "ED", languages=("de", "en")),
+    "MON": Airline("Monarch", "EG"), "BEE": Airline("Flybe", "EG"),
+    "TCX": Airline("Thomas Cook Airlines", "EG", low_cost=True),
+    "MAH": Airline("Malév Hungarian Airlines", "LH", "Duna Club", ONEWORLD),
+    "JKK": Airline("Spanair", "LE", alliance=STAR, languages=("es", "en")),
+    "ADR": Airline("Adria Airways", "LJ", "Miles & More", STAR),
+    "AMC": Airline("Air Malta", "LM"), "TSO": Airline("Transaero", "U", languages=("ru", "en")),
+    "WOW": Airline("WOW air", "BI", low_cost=True), "FPY": Airline("PLAY", "BI", low_cost=True),
+    "KFR": Airline("Kingfisher Airlines", "VI", "King Club"), "JAI": Airline("Jet Airways", "VI", "JetPrivilege"),
+    "VTI": Airline("Vistara", "VI", "Club Vistara"), "GOW": Airline("Go First", "VI", low_cost=True),
+    "HDA": Airline("Cathay Dragon", "VH", "Asia Miles"), "SLK": Airline("SilkAir", "WS", "KrisFlyer"),
+    "AAA": Airline("Ansett Australia", "Y", "Global Rewards", STAR),
+    "NMB": Airline("Air Namibia", "FY"), "MNO": Airline("Mango", "FA", low_cost=True),
 }
 # The regionals flying for a mainline airline: announced as its partner ("Delta Connection").
 REGIONALS = {"SKW": "DAL", "EDV": "DAL", "RPA": "AAL", "ENY": "AAL", "PDT": "AAL", "JIA": "AAL", "GJS": "UAL",
@@ -332,7 +443,27 @@ def airline_of(callsign: str) -> tuple[str, Airline | None]:
     if parent in AIRLINES:
         main = AIRLINES[parent]
         return code, Airline(CONNECTION.get(parent, main.name), main.home, main.program, main.alliance, main.languages)
+    other = known(code)
+    if other is not None and other.name:
+        language = accent(other.home)[:2]
+        return code, Airline(passenger_name(other.name), other.home,
+                             languages=(language, "en") if language in VOICED else ("en",))
     return code, None
+
+
+# The languages the cabin crew announce in besides English.
+VOICED = ("de", "fr", "es", "it", "pt", "nl", "sv", "pl", "ru", "zh")
+_COMPANY = re.compile(r",?\s+(?:inc|ltd|limited|llc|plc|gmbh|ag|s\.?a\.?(?:\s+de\s+c\.?v\.?)?|s\.?p\.?a|s\.?r\.?l|"
+                      r"s\.?r\.?o|jsc|ojsc|pjsc|cjsc|llp|pty|pvt|co|corp|corporation|company|b\.?v|n\.?v|a/s|as|ab|oy)\.?$",
+                      re.IGNORECASE)
+
+
+def passenger_name(company: str) -> str:
+    """ "Air Lincoln, Inc." -> "Air Lincoln": the company's name without its legal form, as its passengers say it."""
+    name = re.sub(r"\s*\([^)]*\)$", "", company.strip())
+    while (shorter := _COMPANY.sub("", name).strip(" ,")) != name and shorter:
+        name = shorter
+    return name
 
 
 def flight_number(callsign: str) -> str:

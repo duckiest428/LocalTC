@@ -19,8 +19,10 @@ from localtc.atc_core.values import Callsign
 
 Verdict = Literal["ours", "absent", "close", "other"]
 
-# Airline names as heard, longest first so "Air Canada" wins over a stray "Air": the words of each.
-_AIRLINES: list[tuple[str, ...]] = sorted({tuple(name.lower().split()) for name in TELEPHONY.values()}, key=len, reverse=True)
+# Airline names as heard, by their first word, longest first so "Air Canada" wins over a stray "Air": the words of each.
+_AIRLINES: dict[str, list[tuple[str, ...]]] = {}
+for _name in sorted({tuple(name.lower().split()) for name in TELEPHONY.values() if name.strip()}, key=len, reverse=True):
+    _AIRLINES.setdefault(_name[0], []).append(_name)
 
 
 # Airline names that are also spelling-alphabet words: the normaliser has made them letters ("Delta" -> D).
@@ -69,7 +71,7 @@ def judge(tokens: list[Token], expected: Callsign | None) -> Verdict:
     words = _words(tokens)
     verdict: Verdict = "absent"
     for i in range(len(words)):
-        for name in _AIRLINES:
+        for name in _AIRLINES.get(words[i], ()):
             if tuple(words[i : i + len(name)]) != name:
                 continue
             heard = _flight_number(tokens, i + len(name))
@@ -100,7 +102,7 @@ def _judge_registration(tokens: list[Token], expected: Callsign | None) -> Verdi
     """A registration (N172LT): only another airline's callsign is recognisably somebody else."""
     words = _words(tokens)
     for i in range(len(words)):
-        for name in _AIRLINES:
+        for name in _AIRLINES.get(words[i], ()):
             heard = _flight_number(tokens, i + len(name))
             if tuple(words[i : i + len(name)]) == name and heard is not None and (tokens[i].kind != "letter" or len(heard) >= 3):
                 return "other"
